@@ -92,6 +92,7 @@ import {reorderParams} from './pg/pg-translate.js';
 import {SqlParseCache} from './sql-parse-cache.js';
 import {AddressManager} from '../address/address-manager.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+import {hasLiveTransportEvidence} from '../control-plane/live-transport-evidence.js';
 import {
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
@@ -432,6 +433,7 @@ export const SQL_QUERY_ENGINE_SHARED = {
   getSchemaByTableName,
   getSystemTableMutationRoutingGapBlocker,
   hasActiveAddressedPartitionService,
+  hasLiveTransportEvidence,
   isNodeRecordReady,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,

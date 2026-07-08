@@ -12,6 +12,7 @@ const {
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
   TABLES,
+  hasLiveTransportEvidence,
   isNodeRecordReady,
 } = SQL_QUERY_ENGINE_SHARED;
 
@@ -253,7 +254,19 @@ class SQLQueryEngineProvisioningMethods {
       const isConnectionReady =
         connectionState === CONNECTION_STATE_CONNECTED ||
         connectionState === CONNECTION_STATE_READY;
-      const connectionEligible = !hasConnectionState || isConnectionReady;
+      // Monotone live-transport rescue (spec node-liveness-veto-consolidation,
+      // stage 2): the cached `connection_state` column is CDC-lagged, so a
+      // populated-but-stale-negative value wrongly excludes a live,
+      // transport-connected node from provisioning targets — the MODE-A shape
+      // (`a79b3728`) that stranded a table at reduced replication. OR-rescue with
+      // the shared live-transport atom: it can only WIDEN eligibility (never
+      // remove a node, never admit a genuinely-disconnected one — the atom fails
+      // closed on a missing/severed router), so it repairs the stale-negative
+      // without inverting the gate's safety.
+      const connectionEligible =
+        !hasConnectionState ||
+        isConnectionReady ||
+        hasLiveTransportEvidence(nodeId, {messageRouter: this.messageRouter});
       const isNodeReady = hasReadyLease ?
         isNodeRecordReady(row, {requireActiveStatus: true}) :
         true;
@@ -475,19 +488,6 @@ class SQLQueryEngineProvisioningMethods {
     const normalizedReplicaCount =
       Number.isInteger(replicaCount) && replicaCount > 0 ? replicaCount : 1;
     return Math.floor(normalizedReplicaCount / 2) + 1;
-  }
-
-  /**
-   * Get active node IDs from local system cache.
-   * Prefers strict readiness and uses degraded service-backed fallback only
-   * when strict candidates are insufficient for the requested cohort size.
-   * @param {number} requestedReplicaCount
-   * @return {Array<string>}
-   * @private
-   */
-  getActiveNodeIdsFromCache(requestedReplicaCount) {
-    return this.resolveProvisionTargetNodeDiagnostics(requestedReplicaCount)
-      .selectedNodeIds;
   }
 }
 

@@ -63,13 +63,21 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
  *     stale secondary signal, and not a declared consumer of the atom;
  *   - DDL provisioning target selection
  *     (`query/sql-query-engine-provisioning-methods.js` — `connectionEligible`
- *     from the cached `connection_state` column) — a cache-only consumer with NO
- *     live `messageRouter` in scope, structurally identical to the membership
- *     projection (R2.4): it cannot route through the atom without first threading
- *     in a live-router dependency. Excluded on the same grounds. NOTE (future
- *     work): it is a latent MODE-A shape (a stale cached `connection_state` can
- *     wrongly exclude a live node); giving it a live router + the atom would fix
- *     that, but that is a behavior change, not this no-op DRY.
+ *     from the cached `connection_state` column) — a cache-column consumer. It
+ *     was excluded from stage 1 because that stage was a strict no-op DRY and
+ *     routing this gate is a BEHAVIOR change (it repairs a latent MODE-A shape:
+ *     a stale cached `connection_state` wrongly excludes a live node). Stage 2
+ *     (`solve/changes/hysteresis-consolidation/stage2-ddl-provisioning-liveness-repoint-design.md`)
+ *     shipped that behavior change as a MONOTONE OR-rescue at
+ *     `sql-query-engine-provisioning-methods.js` (`... || hasLiveTransportEvidence`),
+ *     using the live `messageRouter` the engine already holds
+ *     (`sql-query-engine-instance-initializer.js:40`) — so the earlier
+ *     "no live router in scope" rationale was mistaken. It is NOT added to the
+ *     SCAN_SET here: its gate keeps the permissive cached default as one arm of
+ *     the OR (a deliberate cache read co-existing with an atom-routed live term),
+ *     which this file's cached-column detectors would flag; the provisioning
+ *     module has its own red-on-revert coverage
+ *     (`test/query/provision-target-live-transport-rescue.test.js`).
  */
 const SCAN_SET = [
   'src/control-plane/control-plane-readiness-node-service-rows.js',
