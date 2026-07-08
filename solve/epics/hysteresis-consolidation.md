@@ -92,6 +92,12 @@ This epic EXTENDS that: the FD (P1) is consolidated, but P2 (node-trust-retentio
 5-way fragmentation above. That's the actual remaining consolidation work.
 
 ## Status
-Design research only. Warrants a spec if the pattern recurs or a third P2 fragment is about to be added.
-The MODE-A fix (`a79b3728`) deliberately reused the existing lease-sweep pattern rather than block on
-this refactor — pragmatic, but it is the 5th P2 copy and its own best argument for stage 1.
+Design research. **Stage 1 spec written + verified: `solve/specs/node-liveness-veto-consolidation/`**
+(3 adversarial review passes; ACCEPTABLE). The spec narrows stage 1 per the prior audit
+(`failure-detector-consolidation-scope.md`): it does NOT re-consolidate the already-single-owner
+projection or unify windows; it extracts the one live-transport atom (`hasLiveTransportEvidence`) shared
+by the three already-live-strict eligibility sites (readiness `:529-530`, lease-sweep `:278-289`,
+rebalancer live term `:306-312`) as a pure no-op DRY + a static guard against the cached-column MODE-A
+mistake. The MODE-A fix (`a79b3728`) reused the lease-sweep pattern rather than block on this — it is the
+concrete argument for the spec. Remaining stages (self-disruption→LHM wiring, P5 formation-blip grace)
+stay at epic level until scoped.
