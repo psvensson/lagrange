@@ -1,5 +1,6 @@
 import {REBALANCER_MOVE_TYPE as MoveType} from './rebalancer-constants.js';
 import {ReplicaStatus} from './replica-status.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 
 // Single authoritative in-flight-aware replica accounting for one partition.
@@ -31,6 +32,40 @@ const ADD_TRANSITIONAL_STATUSES = new Set([
   ReplicaStatus.CREATING,
   ReplicaStatus.SYNCING,
 ]);
+
+// A replica row is "not live" for voter accounting once it is failing or being
+// torn down. Mirrors the promotion guard's isLiveReplicaServiceRowForPromotion
+// (partition-service-learner-promotion-methods.js) so the two reads agree.
+const NON_LIVE_STATUSES = new Set([
+  ReplicaStatus.FAILED,
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.REMOVED,
+]);
+
+// Authoritative raft VOTER roles — the promotion guard's ACTIVE_VOTER_ROLES
+// (partition-service-shared.js). A LEARNER is a non-voting catch-up member and
+// is excluded; a promoted voter carries one of these roles the instant it is
+// promoted, BEFORE its status column catches up to ACTIVE.
+const VOTER_RAFT_ROLES = new Set([
+  RAFT_ROLE.LEADER,
+  RAFT_ROLE.FOLLOWER,
+  RAFT_ROLE.CANDIDATE,
+]);
+
+// True when a committed row is an authoritative raft voter: live (not
+// failed/removing/removed) AND holding a voter raft_role. This is the SAME
+// predicate the learner-promotion guard enforces on (countActiveVoters), so a
+// read built on it cannot disagree with the guard by construction. Crucially it
+// does NOT require status === ACTIVE: a just-promoted voter reads
+// raft_role=follower while its status still lags at creating/syncing, and that
+// row IS a voter for quorum/target purposes.
+function isLiveVoterRow(replica, normalizedStatus) {
+  if (NON_LIVE_STATUSES.has(normalizedStatus)) {
+    return false;
+  }
+  const role = trimmedString(replica?.raft_role).toLowerCase();
+  return VOTER_RAFT_ROLES.has(role);
+}
 
 function trimmedString(value) {
   return String(value || '').trim();
@@ -85,6 +120,7 @@ function isAddTransitional(operation) {
  * @param {string|null} options.partitionId restrict ops to this partition (null = all given)
  * @return {{
  *   activeCount: number,
+ *   activeVoterCount: number,
  *   occupiedCount: number,
  *   inFlightAddCount: number,
  *   inFlightReplaceInCreationCount: number,
@@ -99,6 +135,11 @@ export function computeInFlightAwareReplicaAccounting({
 } = {}) {
   const targetPartition = trimmedString(partitionId);
   const activeReplicaIds = new Set();
+  // Authoritative raft-voter set (raft_role based), counted separately from the
+  // status===ACTIVE set so an over-target decision can read the SAME voters the
+  // promotion guard enforces on and stop under-counting a just-promoted voter
+  // whose status column still lags at creating/syncing.
+  const activeVoterReplicaIds = new Set();
   const occupiedReplicaIds = new Set();
   // Materialized-but-not-yet-active replica rows (durable learners) indexed by
   // node, so a drain-phase REPLACE can be row-op-linked to the specific
@@ -115,6 +156,9 @@ export function computeInFlightAwareReplicaAccounting({
     const status = trimmedString(replica?.status || ReplicaStatus.ACTIVE).toLowerCase();
     if (status === ReplicaStatus.ACTIVE) {
       activeReplicaIds.add(replicaId);
+    }
+    if (isLiveVoterRow(replica, status)) {
+      activeVoterReplicaIds.add(replicaId);
     }
     if (OCCUPIED_STATUSES.has(status)) {
       occupiedReplicaIds.add(replicaId);
@@ -213,6 +257,12 @@ export function computeInFlightAwareReplicaAccounting({
   const activeCount = activeReplicaIds.size;
   return {
     activeCount,
+    // Authoritative voter count by raft_role (guard-parity). Differs from
+    // activeCount exactly during the promotion window, where a promoted voter
+    // reads raft_role=follower but status=creating/syncing: activeCount misses
+    // it, activeVoterCount sees it. Used by the over-creation cap so the cap
+    // fires on the SAME surplus the promotion guard is blocked by.
+    activeVoterCount: activeVoterReplicaIds.size,
     occupiedCount: occupiedReplicaIds.size,
     inFlightAddCount,
     inFlightReplaceInCreationCount,

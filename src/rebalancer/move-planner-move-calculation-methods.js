@@ -326,16 +326,40 @@ class MovePlannerMoveCalculationMethods {
     // batch and provisioning fan-out are legitimate (they transiently exceed
     // target by design as sources drain), so they are untouched; only the
     // surplus that has not drained must stop growing so existing voters settle.
+    //
+    // The surplus is counted by the AUTHORITATIVE raft-voter count
+    // (activeVoterCount), not the status===ACTIVE count (activeCount). A
+    // just-promoted voter reads raft_role=follower while its status column still
+    // lags at creating/syncing; the status read misses it, so the cap stayed
+    // blind during the promotion window and kept minting replacements that piled
+    // the group past the voter target until learner promotion dead-locked (the
+    // voter-ready-60s stall). activeVoterCount reads the SAME voters the
+    // promotion guard is blocked by (countActiveVoters), closing that read
+    // disagreement. Take the MAX of the two so the cap is strictly
+    // non-regressive: it never fires LESS than the status-only read did, and
+    // fires MORE (earlier) exactly when raft_role reveals a hidden surplus voter.
+    const surplusVoterCount = Math.max(
+      inFlightAccounting.activeCount,
+      inFlightAccounting.activeVoterCount,
+    );
     if (
       !cleanupOnlyWhilePending &&
       addMoves.length > 0 &&
       this.isControlPlanePriorityPartition() &&
-      inFlightAccounting.activeCount > targetReplicaCount
+      surplusVoterCount > targetReplicaCount
     ) {
       this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
         entityId: this.entityId,
         targetReplicaCount,
         activeCount: inFlightAccounting.activeCount,
+        // Authoritative voter count and whether it, not the status read, is what
+        // tripped the cap — the A/B discriminator: a fire where
+        // activeVoterCount > target while activeCount <= target is one the
+        // status-only cap would have MISSED (the promotion-window catch).
+        activeVoterCount: inFlightAccounting.activeVoterCount,
+        raftRoleAuthoritativeFire:
+          inFlightAccounting.activeVoterCount > targetReplicaCount &&
+          inFlightAccounting.activeCount <= targetReplicaCount,
         creationEffectiveCount: inFlightAccounting.creationEffectiveCount,
         inFlightReplaceInCreationCount:
           inFlightAccounting.inFlightReplaceInCreationCount,

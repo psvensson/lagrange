@@ -53,7 +53,24 @@ function createMoveStateProvider({currentReplicas = [], inFlightOperations = []}
 }
 
 function active(replicaId, nodeId) {
-  return {replica_id: replicaId, node_id: nodeId, status: ReplicaStatus.ACTIVE};
+  return {
+    replica_id: replicaId,
+    node_id: nodeId,
+    status: ReplicaStatus.ACTIVE,
+    raft_role: 'follower',
+  };
+}
+
+// A voter that has just been promoted (raft_role=follower) but whose status
+// column still lags at creating — the read-disagreement row. status===ACTIVE
+// counting MISSES it; the authoritative raft-voter count SEES it.
+function promotedVoterStatusLagging(replicaId, nodeId) {
+  return {
+    replica_id: replicaId,
+    node_id: nodeId,
+    status: ReplicaStatus.CREATING,
+    raft_role: 'follower',
+  };
 }
 
 function plannerFor(provider) {
@@ -99,6 +116,39 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
       );
       t.same(addLike, [],
         'no new ADD/REPLACE while a surplus of committed voters has not drained');
+    },
+  );
+
+  await t.test(
+    'promotion-window surplus (raft_role voter, status still lagging) trips ' +
+    'the cap that status===ACTIVE counting misses',
+    async (t) => {
+      // The voter-ready-60s stall. Authoritative voters = 4 for target 3
+      // (r1/r2/r3 active + r4 just promoted: raft_role=follower, status=creating),
+      // but status===ACTIVE counting sees only 3, so the status-only cap stayed
+      // blind and kept minting the replacement onto empty node-3 — piling the
+      // group further over target until learner promotion dead-locked. node-3 is
+      // unoccupied, so without the raft_role read the planner emits an over-target
+      // add-like move. RED before the raft_role cap (activeCount=3, not >3 -> no
+      // cap); GREEN after (activeVoterCount=4 > 3 -> cap fires).
+      const currentReplicas = [
+        active('r1', 'node-1'),
+        active('r2', 'node-2'),
+        active('r3', 'node-1'),
+        promotedVoterStatusLagging('r4', 'node-2'),
+      ];
+      const planner = plannerFor(createMoveStateProvider({currentReplicas}));
+
+      const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
+
+      const addLike = moves.filter(
+        (m) =>
+          m.type === REBALANCER_MOVE_TYPE.ADD ||
+          m.type === REBALANCER_MOVE_TYPE.REPLACE,
+      );
+      t.same(addLike, [],
+        'no new add-like move while the authoritative raft-voter count is over ' +
+        'target, even though status===ACTIVE reads at target');
     },
   );
 

@@ -131,6 +131,54 @@ test('in-flight-aware replica accounting (single-owner count)', async (t) => {
     t.end();
   });
 
+  await t.test(
+    'activeVoterCount reads raft_role (guard-parity), not status===ACTIVE',
+    (t) => {
+      // The promotion window: a just-promoted voter carries raft_role=follower
+      // the instant it is promoted, while its status column still lags at
+      // creating. status===ACTIVE (activeCount) MISSES it; the authoritative
+      // raft-voter count (activeVoterCount) SEES it — the read disagreement the
+      // over-creation cap must resolve toward the guard's own count.
+      const acc = computeInFlightAwareReplicaAccounting({
+        currentReplicas: [
+          {replica_id: 'r1', node_id: 'n1', status: ReplicaStatus.ACTIVE, raft_role: 'leader', partition_id: PARTITION},
+          {replica_id: 'r2', node_id: 'n2', status: ReplicaStatus.ACTIVE, raft_role: 'follower', partition_id: PARTITION},
+          {replica_id: 'r3', node_id: 'n3', status: ReplicaStatus.ACTIVE, raft_role: 'follower', partition_id: PARTITION},
+          {replica_id: 'r4', node_id: 'n4', status: ReplicaStatus.CREATING, raft_role: 'follower', partition_id: PARTITION},
+        ],
+        inFlightOperations: [],
+        partitionId: PARTITION,
+      });
+      t.equal(acc.activeCount, 3, 'status===ACTIVE misses the lagging promoted voter');
+      t.equal(acc.activeVoterCount, 4, 'raft_role count sees all four voters');
+      t.end();
+    },
+  );
+
+  await t.test(
+    'activeVoterCount excludes learners, non-live rows, and role-less rows',
+    (t) => {
+      const acc = computeInFlightAwareReplicaAccounting({
+        currentReplicas: [
+          {replica_id: 'r1', node_id: 'n1', status: ReplicaStatus.ACTIVE, raft_role: 'leader', partition_id: PARTITION},
+          // a non-voting catch-up learner is NOT a voter
+          {replica_id: 'r2', node_id: 'n2', status: ReplicaStatus.SYNCING, raft_role: 'learner', partition_id: PARTITION},
+          // a voter-role row being torn down is not live
+          {replica_id: 'r3', node_id: 'n3', status: ReplicaStatus.REMOVING, raft_role: 'follower', partition_id: PARTITION},
+          // an ACTIVE row whose raft_role is not yet reported is counted by
+          // activeCount but NOT activeVoterCount — which is exactly why the cap
+          // takes MAX(activeCount, activeVoterCount) and never fires less.
+          {replica_id: 'r4', node_id: 'n4', status: ReplicaStatus.ACTIVE, partition_id: PARTITION},
+        ],
+        inFlightOperations: [],
+        partitionId: PARTITION,
+      });
+      t.equal(acc.activeVoterCount, 1, 'only the live voter-role row counts as a voter');
+      t.equal(acc.activeCount, 2, 'activeCount still counts the role-less ACTIVE row');
+      t.end();
+    },
+  );
+
   await t.test('dispatch-sending workflow step counts as add-transitional', (t) => {
     // The dispatch step is the raw enum value "SENDING" (uppercase), as the
     // planner's own classifier compares it.
