@@ -184,6 +184,62 @@ test('isClusterMemberHealthy denies a stale-heartbeat remote peer when the ' +
   t.end();
 });
 
+// Spec node-liveness-veto-consolidation, Task 5.2 red-on-revert. The live
+// veto now routes through hasLiveTransportEvidence, which compares CONNECTED
+// ONLY — dropping the inline block's inert `|| routerState === READY` disjunct.
+// The live transport state machine (CONNECTION_STATE) has no `ready` state, so
+// over the real domain this is a no-op; the sole distinguishing input, proving
+// the atom is the live term at this call site, is a non-physical live router
+// value of 'ready': the old inline block graced it into membership, the atom
+// fails closed. Reverting the src (restoring the `|| READY` disjunct) turns
+// this assertion RED. This mirrors the lease-sweep out-of-domain-ready pin and
+// the parity characterization's documented `|| READY`-drop divergence.
+test('isClusterMemberHealthy drops the inert || READY disjunct: a live router ' +
+  'state of "ready" (out of the live transport domain) is NOT membership ' +
+  'evidence and fails closed ' +
+  '(uses ControlPlaneReadinessService.getNodeReadiness)', async (t) => {
+  const now = 500000;
+  const nodeId = 'node-live-router-ready';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now - 195000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 2000,
+    }],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      // Non-physical: getConnectionState returns connection.state, never
+      // 'ready'. Exercises the atom's dropped `|| READY` disjunct only.
+      getConnectionState() {
+        return STATE.READY;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {nodeId, budgetBytes: 1000, pressureState: 'normal'},
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'an out-of-domain live router "ready" is not CONNECTED live-transport ' +
+    'evidence → the stale-heartbeat peer fails closed (atom drops || READY; ' +
+    'the old inline block would have graced it true — red-on-revert)');
+  t.end();
+});
+
 test('load-lane readiness forces fresh evaluation on cache invalidation ' +
   'instead of serving stale snapshot ' +
   '(uses ControlPlaneReadinessService.getNodeReadiness, ' +

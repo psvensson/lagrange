@@ -291,3 +291,96 @@ test('UnifiedRebalancer does not use local startup bypass as placement readiness
   );
   t.end();
 });
+
+test('the live-transport veto routes through hasLiveTransportEvidence: its ' +
+  'lowercasing fold is load-bearing at the placement-eligibility call site',
+async (t) => {
+  // Spec node-liveness-veto-consolidation, Task 4.2 red-on-revert. The switch
+  // from the raw `getConnectionState(nodeId) !== STATE.CONNECTED` compare to
+  // `!hasLiveTransportEvidence(...)` is a no-op over the canonical (lowercase)
+  // live domain — so the ONLY input that distinguishes the atom from the old
+  // inline term, proving the call now truly routes through it, is the
+  // documented same-or-safer mixed-case fold: on a live router value of
+  // 'Connected' the old raw compare VETOES the node (mixed case !== 'connected')
+  // while the atom lowercases and admits it. This pins that the atom is the
+  // live term, so reverting the src (restoring the raw compare) fails this test.
+  initEnv();
+  const cache = createCache();
+  const rebalancer = new UnifiedRebalancer({
+    entityId: 'control_plane_publications-p1',
+    entityType: EntityType.PARTITION,
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cdcIntegrationService: {
+      insertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    tablePolicyService: {
+      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
+    },
+    messageRouter: {
+      // Non-physical mixed-case value: the live transport machine only ever
+      // emits lowercase CONNECTION_STATE, so this exercises the atom's fold,
+      // never a real state — see live-transport-evidence-parity char test.
+      getConnectionState: () => 'Connected',
+      isOutboundQueueAvailable: () => true,
+      getConnectedNodes: () => [],
+    },
+    rebalanceCoordinator: {
+      getMoveSafetyError: () => null,
+      createOperation: async () => ({}),
+      executeOperation: async () => ({success: true}),
+      canStartAddOperation: async () => true,
+      canStartRemoveOperation: async () => true,
+      getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
+      storageAccountingService: {estimateReplicaBytes: () => 1},
+      storageAdmissionService: {
+        checkAdd: async () => ({decision: 'allow'}),
+        checkReplace: async () => ({decision: 'allow'}),
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: []};
+      },
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+              false,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+          },
+          reasons: [],
+        };
+      },
+      getStartupAuthoritySnapshotSync() {
+        return {
+          authorityAvailable: true,
+          canonicalStartupNodeIds: ['seed-node', 'node-2'],
+        };
+      },
+    },
+  });
+
+  // node-2 is a startup-authority peer, active, cached-connected — the cached
+  // conjunct passes, so the live-transport veto is the sole remaining gate.
+  const node = {
+    node_id: 'node-2',
+    status: 'active',
+    connection_state: 'connected',
+  };
+  t.equal(
+    rebalancer.isStartupAuthorityControlPlanePlacementEligibleNode(
+      node,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    ),
+    true,
+    'atom folds mixed-case live "Connected" to connected → node stays eligible ' +
+      '(raw compare would veto it — red-on-revert)',
+  );
+  t.end();
+});

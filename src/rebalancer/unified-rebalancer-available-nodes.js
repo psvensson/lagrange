@@ -3,6 +3,9 @@ import {UnifiedRebalancerLifecycleBase} from './unified-rebalancer-lifecycle-bas
 import {
   applyUnifiedRebalancerCriticalTopologyMethods,
 } from './unified-rebalancer-critical-topology-methods.js';
+import {
+  hasLiveTransportEvidence,
+} from '../control-plane/live-transport-evidence.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -306,7 +309,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     if (
       this.messageRouter &&
       typeof this.messageRouter.getConnectionState === 'function' &&
-      this.messageRouter.getConnectionState(nodeId) !== STATE.CONNECTED
+      !hasLiveTransportEvidence(nodeId, {messageRouter: this.messageRouter})
     ) {
       return false;
     }

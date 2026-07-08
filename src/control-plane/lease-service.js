@@ -22,6 +22,9 @@ import {
   readAuthoritativeControlPlaneRows,
 } from './control-plane-system-table-gateway.js';
 import {
+  hasLiveTransportEvidence,
+} from './live-transport-evidence.js';
+import {
   LEASE_CONFIG_KEY,
   LEASE_DEFAULT_OPTIONS,
   LEASE_EMPTY_QUERY_PARAMS,
@@ -276,16 +279,9 @@ class LeaseService extends EventEmitter {
    * @return {boolean} True when the router reports the node connected.
    */
   isNodeTransportConnected(nodeId) {
-    if (!this.messageRouter ||
-        typeof this.messageRouter.getConnectionState !==
-          'function') {
-      return false;
-    }
-    const routerState = String(
-      this.messageRouter.getConnectionState(nodeId) || '',
-    ).toLowerCase();
-    return routerState === STATE.CONNECTED ||
-      routerState === STATE.READY;
+    return hasLiveTransportEvidence(nodeId, {
+      messageRouter: this.messageRouter,
+    });
   }
 
   /**

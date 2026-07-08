@@ -1,5 +1,8 @@
 import {ControlPlaneReadinessStartupAuthorityHealth} from './control-plane-readiness-startup-authority-health.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
+import {
+  hasLiveTransportEvidence,
+} from './live-transport-evidence.js';
 
 const {
   COLUMN,
@@ -526,8 +529,9 @@ class ControlPlaneReadinessNodeServiceRows extends
     // peer still fails closed — death detection is delegated to the transport
     // ACK-timeout quarantine (message-router-reconnect-behaviors.js), which tears
     // the connection down (routerState leaves CONNECTED) for a cleanly-dead peer.
-    const {routerState} = this.getNodeTransportState(nodeId, nodeRow);
-    return routerState === STATE.CONNECTED || routerState === STATE.READY;
+    return hasLiveTransportEvidence(nodeId, {
+      messageRouter: this.messageRouter,
+    });
   }
 
   static compactSnapshotSummary(snapshot, decisionDimension = null) {

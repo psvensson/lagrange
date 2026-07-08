@@ -221,8 +221,18 @@ test('lease sweep disconnects nodes with null/unknown router state ' +
   }
 });
 
-test('lease sweep skips disconnect for transport-ready nodes ' +
-  '(§1.4.12 ready state)', async (t) => {
+test('lease sweep fails closed on an out-of-domain "ready" router state ' +
+  '(§1.4.12 atom drops the inert || READY disjunct)', async (t) => {
+  // Spec node-liveness-veto-consolidation: the guard now routes through the
+  // hasLiveTransportEvidence atom, which compares CONNECTED only. The live
+  // transport state machine (CONNECTION_STATE: disconnected/connecting/
+  // connected/reconnecting/closed) has NO `ready` state — getConnectionState
+  // returns connection.state, never 'ready' — so the old inline `|| READY`
+  // disjunct was inert over the real live domain. On a hypothetical (non-
+  // physical) 'ready' router value the atom is STRICTER (fails closed → the
+  // node is swept), a documented, bounded divergence pinned in
+  // live-transport-evidence-parity.characterization.test.js. This test locks
+  // that fail-closed behavior so the atom stays load-bearing at this site.
   initEnv();
 
   const disconnectedNodeIds = [];
@@ -258,13 +268,13 @@ test('lease sweep skips disconnect for transport-ready nodes ' +
 
     t.same(
       disconnectedNodeIds,
-      [],
-      'transport-ready node should not be disconnected',
+      [NODE_ID_CONNECTED],
+      'out-of-domain "ready" is not live transport evidence → node is swept',
     );
     t.same(
       expiredIds,
-      [],
-      'transport-ready node should not appear in expired list',
+      [NODE_ID_CONNECTED],
+      'out-of-domain "ready" node appears in the expired list',
     );
   } finally {
     service.stop();
