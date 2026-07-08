@@ -541,6 +541,13 @@ test('SQLQueryEngine - provisionInitialTablePartition probes admission ' +
     rebalanceCoordinator,
     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
     tablePartitionProvisioningPollIntervalMs: 1,
+    // Admission is PERMANENTLY deferred here (decisionType 'deferred' means
+    // "retry later"), so provisioning correctly polls until the OVERALL
+    // provisioning budget — not just the 1 ms convergence sub-timeout — is
+    // exhausted. Bound that overall budget explicitly; the default is 30 s
+    // (TABLE_CREATE_PROVISION_TIMEOUT_MS), which exceeds the test-harness
+    // per-test timeout and would hang. Sibling admit-path tests set it too.
+    tablePartitionProvisioningTimeoutMs: 200,
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
