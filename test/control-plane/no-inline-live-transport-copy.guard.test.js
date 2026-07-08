@@ -60,7 +60,16 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
  *     through the atom here would contradict R3.1;
  *   - node-local self-readiness gates (`node/node-readiness-policy.js`) — a node
  *     grading its OWN readiness, not a peer-eligibility transport veto over a
- *     stale secondary signal, and not a declared consumer of the atom.
+ *     stale secondary signal, and not a declared consumer of the atom;
+ *   - DDL provisioning target selection
+ *     (`query/sql-query-engine-provisioning-methods.js` — `connectionEligible`
+ *     from the cached `connection_state` column) — a cache-only consumer with NO
+ *     live `messageRouter` in scope, structurally identical to the membership
+ *     projection (R2.4): it cannot route through the atom without first threading
+ *     in a live-router dependency. Excluded on the same grounds. NOTE (future
+ *     work): it is a latent MODE-A shape (a stale cached `connection_state` can
+ *     wrongly exclude a live node); giving it a live router + the atom would fix
+ *     that, but that is a behavior change, not this no-op DRY.
  */
 const SCAN_SET = [
   'src/control-plane/control-plane-readiness-node-service-rows.js',
