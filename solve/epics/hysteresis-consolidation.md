@@ -92,6 +92,18 @@ This epic EXTENDS that: the FD (P1) is consolidated, but P2 (node-trust-retentio
 5-way fragmentation above. That's the actual remaining consolidation work.
 
 ## Status
+**Stage 1 SHIPPED** (commits `d29bcbee` atom+parity → `52f25c5f` 3-site switch → `4c7da847` guards →
+`4d282144` scope nit): the `hasLiveTransportEvidence` atom now backs the readiness veto, lease-sweep,
+and rebalancer live term (pure no-op DRY, parity + red-on-revert proven, 573+ tests green), with a
+static guard (negative-control-proven) preventing a new cached-`connection_state` transport veto — the
+MODE-A shape. Implemented by dependency-ordered subagents (foundation → switches → guards) + an
+adversarial verification subagent (verdict: correct & complete; surfaced the DDL-provisioning cache-gate
+as an excluded cache-only consumer, now documented + future-work-noted). Stage 1 spec + verification:
+`solve/specs/node-liveness-veto-consolidation/`.
+
+Remaining stages stay at epic level (self-disruption→LHM wiring [C2], P5 formation-blip grace) until scoped.
+
+## (historical) Status
 Design research. **Stage 1 spec written + verified: `solve/specs/node-liveness-veto-consolidation/`**
 (3 adversarial review passes; ACCEPTABLE). The spec narrows stage 1 per the prior audit
 (`failure-detector-consolidation-scope.md`): it does NOT re-consolidate the already-single-owner
