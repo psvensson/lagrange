@@ -84,6 +84,106 @@ test('isClusterMemberHealthy returns true for transport-connected ready ' +
   t.end();
 });
 
+// ── Remote-peer "slow, not dead" grace (§1.4.12 lease-sweep parity) ──
+// Reproduces run1 MODE-A: a coordinator with lagging heartbeat INGESTION
+// (its own "Heartbeat failing repeatedly") sees a healthy, transport-
+// connected, connection-ready peer as ~195s heartbeat-stale and denies all
+// placement onto it — zeroing the eligible-node set and stranding a data
+// table at 1/3. Live router state must veto the stale INGESTED heartbeat.
+test('isClusterMemberHealthy grants remote membership on live transport ' +
+  'when the ingested heartbeat is stale (CDC ingest-lag parity with ' +
+  'lease-sweep) ' +
+  '(uses ControlPlaneReadinessService.getNodeReadiness, verifies the ' +
+  'remote-peer slow-not-dead grace)', async (t) => {
+  const now = 500000;
+  const nodeId = 'node-ingest-lag-remote';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now - 195000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 2000,
+    }],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {nodeId, budgetBytes: 1000, pressureState: 'normal'},
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, true,
+    'a transport-connected, connection-ready remote peer with a stale ' +
+    'INGESTED heartbeat must stay cluster-member-healthy (live router ' +
+    'vetoes the stale cached heartbeat)');
+  t.equal(readiness.dimensions.provisioningEligible, true,
+    'the live-transport grace must restore provisioning eligibility so ' +
+    'placement is not stranded by an ingest-lag transient');
+  t.end();
+});
+
+test('isClusterMemberHealthy denies a stale-heartbeat remote peer when the ' +
+  'LIVE router state is absent (cached connection_state=ready alone is ' +
+  'insufficient — the grace fails closed) ' +
+  '(uses ControlPlaneReadinessService.getNodeReadiness)', async (t) => {
+  const now = 500000;
+  const nodeId = 'node-no-live-router';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now - 195000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 2000,
+    }],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      // No live router entry for the peer: the cached rowState=ready still
+      // passes the transport-connected fallback, but the grace must require
+      // the LIVE routerState, so a genuinely-untracked peer fails closed.
+      getConnectionState() {
+        return '';
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {nodeId, budgetBytes: 1000, pressureState: 'normal'},
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'without live router evidence, a stale-heartbeat peer must not be ' +
+    'graced into cluster membership on a cached connection_state alone');
+  t.end();
+});
+
 test('load-lane readiness forces fresh evaluation on cache invalidation ' +
   'instead of serving stale snapshot ' +
   '(uses ControlPlaneReadinessService.getNodeReadiness, ' +

@@ -511,7 +511,23 @@ class ControlPlaneReadinessNodeServiceRows extends
       return false;
     }
 
-    return this.isRecentHeartbeat(nodeRow);
+    if (this.isRecentHeartbeat(nodeRow)) {
+      return true;
+    }
+
+    // §1.4.12 "slow, not dead" remote-peer parity with the lease-sweep grace
+    // (lease-service.js:196-230, CL-007): a transport-connected, connection-ready
+    // remote peer whose INGESTED heartbeat row is stale is a coordinator-side CDC
+    // ingest-lag artifact (observed live: a coordinator with lagging heartbeat
+    // ingestion sees healthy peers as ~195s stale and denies all placement onto
+    // them), not a dead peer. Trust the LIVE router state over the stale cached
+    // heartbeat, mirroring the self-node fast path above. Require the LIVE
+    // routerState (not the cached rowState fallback) so a genuinely disconnected
+    // peer still fails closed — death detection is delegated to the transport
+    // ACK-timeout quarantine (message-router-reconnect-behaviors.js), which tears
+    // the connection down (routerState leaves CONNECTED) for a cleanly-dead peer.
+    const {routerState} = this.getNodeTransportState(nodeId, nodeRow);
+    return routerState === STATE.CONNECTED || routerState === STATE.READY;
   }
 
   static compactSnapshotSummary(snapshot, decisionDimension = null) {
