@@ -491,3 +491,94 @@ test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draini
   t.equal(sqlEngine.getOperations().length, 0, 'the held churn create persists no replica operation');
   coordinator.shutdown();
 });
+
+// --- s14: orphaned-row census (topology-guard raft_role awareness) ---
+// An orphan = status=active, NON-voter raft_role, no live in-flight ADD-like op:
+// the phantom a lost promotion-to-voter write-back leaves (its REPLACE completed
+// but raft_role never advanced). It must NOT count toward the target-count
+// census, or it blocks the spread ADD that would mint a real replacement voter
+// (the interlock, raft_role-aware, correctly sees the group under-replicated) —
+// a self-referential formation deadlock.
+function orphanRow(replicaId, nodeId) {
+  return {...critRow(replicaId, nodeId), raft_role: 'learner', status: 'active'};
+}
+
+test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) ' +
+  'on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED ' +
+  '(RED on the status-only-census head)', async (t) => {
+  initializeTestEnvironment();
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+    orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  await coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-4',
+    replicaId: CRIT_PARTITION_ID + '-r5',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  });
+  t.equal(
+    sqlEngine.getOperations().length,
+    1,
+    'orphan excluded from the count-census (voters=2 < target 3) -> spread ADD admitted',
+  );
+  coordinator.shutdown();
+});
+
+test('s14 orphan census: a CATCHING-UP learner (status=creating) still counts, ' +
+  'so a redundant 4th ADD is HELD — over-creation is not admitted', async (t) => {
+  initializeTestEnvironment();
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+    // pre-active transitional (not an orphan): a legitimate voter-to-be.
+    {...critRow(CRIT_PARTITION_ID + '-r3', 'node-3'), raft_role: 'learner', status: 'creating'},
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-4',
+    replicaId: CRIT_PARTITION_ID + '-r5',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+  t.ok(error, 'catching-up learner counts (3 nodes == target) -> redundant ADD held');
+  t.equal(sqlEngine.getOperations().length, 0, 'no over-creating replica operation persisted');
+  coordinator.shutdown();
+});
+
+test('s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — ' +
+  'an add-like create targeting the ORPHAN\'s node is still blocked (no double-placement)', async (t) => {
+  initializeTestEnvironment();
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+    orphanRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-3',
+    replicaId: CRIT_PARTITION_ID + '-r6',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+  t.ok(error, 'target node already occupied (full-occupancy check intact) -> blocked');
+  t.equal(sqlEngine.getOperations().length, 0, 'no double-placement on the orphan node');
+  coordinator.shutdown();
+});

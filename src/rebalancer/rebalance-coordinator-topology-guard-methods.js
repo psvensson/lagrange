@@ -1,4 +1,5 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {VOTER_RAFT_ROLES} from '../raft/constants.js';
 
 const {
   OperationType,
@@ -106,6 +107,80 @@ class RebalanceCoordinatorTopologyGuardMethods {
     return !TOPOLOGY_GUARD_IGNORED_SERVICE_STATUSES.has(normalizedStatus);
   }
 
+  /**
+   * An ORPHANED occupancy: a row that reached status=active but is NOT an
+   * authoritative raft voter and has NO live in-flight ADD-like operation
+   * bringing it toward voter membership. This is the phantom a lost
+   * promotion-to-voter write-back leaves behind (its REPLACE completed, the
+   * source drained, yet raft_role never advanced) — it occupies a node in
+   * placement but can never contribute a quorum vote or complete a spread.
+   *
+   * Such a row must NOT count toward the TARGET_REPLICA_COUNT_SATISFIED census,
+   * otherwise it blocks the very spread ADD that would mint a real replacement
+   * voter (the interlock, which counts raft voters, correctly sees the group
+   * under-replicated and concentrated — a self-referential formation deadlock).
+   *
+   * Conservative by construction: a row still catching up
+   * (status pending/creating/syncing) OR one with a live in-flight ADD-like op
+   * is NOT an orphan (it is a legitimate in-flight voter-to-be and still counts,
+   * so a redundant fourth ADD is not admitted). Only a status=active,
+   * non-voter, no-in-flight-op row is dropped. Durable over-creation is
+   * independently capped planner-side by the raft_role voter count.
+   * @param {Object} row
+   * @param {Set<string>} liveAddTargetNodeIds distinct target nodes of live
+   *   in-flight ADD-like operations for this entity
+   * @return {boolean}
+   */
+  isTopologyGuardOrphanedServiceRow(row, liveAddTargetNodeIds) {
+    const normalizedRaftRole = String(row?.raft_role || '')
+      .trim()
+      .toLowerCase();
+    if (VOTER_RAFT_ROLES.has(normalizedRaftRole)) {
+      return false;
+    }
+    const normalizedStatus = String(
+      row?.status ?? TOPOLOGY_GUARD_DEFAULT_SERVICE_STATUS,
+    ).toLowerCase();
+    if (normalizedStatus !== ReplicaStatus.ACTIVE) {
+      return false;
+    }
+    const nodeId = String(row?.node_id || row?.nodeId || '').trim();
+    return !liveAddTargetNodeIds.has(nodeId);
+  }
+
+  /**
+   * Distinct target nodes of the entity's live (non-terminal) ADD-like
+   * operations — the nodes that are actively being brought toward a voter.
+   * @param {Object} options
+   * @return {Set<string>}
+   */
+  resolveTopologyGuardLiveAddTargetNodeIds({entityType, entityId}) {
+    const liveOperationRows =
+      this.getEntityInFlightOperationRows({entityType, entityId}) || [];
+    const targetNodeIds = new Set();
+    for (const operation of liveOperationRows) {
+      const normalizedType = this.normalizeMoveType(
+        operation?.type ||
+          operation?.operation_type ||
+          operation?.operationType,
+      );
+      if (!TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(normalizedType)) {
+        continue;
+      }
+      const targetNodeId = String(
+        operation?.target_node_id ||
+          operation?.targetNodeId ||
+          operation?.node_id ||
+          operation?.nodeId ||
+          '',
+      ).trim();
+      if (targetNodeId.length > 0) {
+        targetNodeIds.add(targetNodeId);
+      }
+    }
+    return targetNodeIds;
+  }
+
   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
     if (entityType !== SERVICE_TYPE.PARTITION) {
       return null;
@@ -178,9 +253,35 @@ class RebalanceCoordinatorTopologyGuardMethods {
     const topologyBlockingServiceRows = mergedServiceRows.filter((row) =>
       this.isTopologyGuardBlockingServiceRow(row),
     );
+    // Full occupancy set — one row per node, ANY non-removed status/role. Backs
+    // the TARGET_NODE_OCCUPIED check (one-node-per-replica), which must stay
+    // status-inclusive so an orphaned row still forbids double-placing its node.
     const observedDistinctNodeIds = [
       ...new Set(
         topologyBlockingServiceRows
+          .map((row) => String(row?.node_id || row?.nodeId || '').trim())
+          .filter((nodeId) => nodeId.length > 0),
+      ),
+    ];
+    // Count-census set — excludes orphaned rows (status=active, non-voter, no
+    // live in-flight ADD-like op). A dropped orphan lets the spread ADD that
+    // would mint a real replacement voter through; catching-up learners and
+    // in-flight targets still count, so over-creation is not admitted. Backs the
+    // TARGET_REPLICA_COUNT_SATISFIED check only.
+    const liveAddTargetNodeIds = this.resolveTopologyGuardLiveAddTargetNodeIds({
+      entityType,
+      entityId,
+    });
+    const countedDistinctNodeIds = [
+      ...new Set(
+        topologyBlockingServiceRows
+          .filter(
+            (row) =>
+              !this.isTopologyGuardOrphanedServiceRow(
+                row,
+                liveAddTargetNodeIds,
+              ),
+          )
           .map((row) => String(row?.node_id || row?.nodeId || '').trim())
           .filter((nodeId) => nodeId.length > 0),
       ),
@@ -200,7 +301,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
         matches:
           this.isTopologyGuardTargetCountOperationType(normalizedMoveType) &&
           Number.isFinite(targetReplicaCount) &&
-          observedDistinctNodeIds.length >= targetReplicaCount,
+          countedDistinctNodeIds.length >= targetReplicaCount,
         state: TOPOLOGY_GUARD_STATE.TARGET_REPLICA_COUNT_SATISFIED,
         blockingReason:
           TOPOLOGY_GUARD_REASON.TARGET_REPLICA_COUNT_ALREADY_SATISFIED,
