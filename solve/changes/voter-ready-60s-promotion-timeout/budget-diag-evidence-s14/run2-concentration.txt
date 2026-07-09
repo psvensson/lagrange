@@ -1,0 +1,2 @@
+      2 "totalVoters":2,"maxVotersOnOneNode":2
+      1 "totalVoters":2,"maxVotersOnOneNode":1

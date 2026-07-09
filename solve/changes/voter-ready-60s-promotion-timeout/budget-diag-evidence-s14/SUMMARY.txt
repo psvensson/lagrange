@@ -1,0 +1,22 @@
+=== BUDGET-DIAG RUN 1 start 09:01:12 ===
+RUN 1 rc=1 end 09:08:14
+  abort: Unable to satisfy minimum routable provisioning cohort for partition tbl-1babe43f-14d0-4e4d-8bc6-343a324981fe-p1: required=2, provisionable=0, target=3, rejecte
+  result: <none printed>
+  quorum_concentrated events: 204 ; voter-ready timeouts: 10 ; re-wait fires: 1
+  concentration distinct (count 'totalVoters,maxOnOneNode'):
+           6 "totalVoters":2,"maxVotersOnOneNode":1
+           2 "totalVoters":2,"maxVotersOnOneNode":2
+           1 "totalVoters":1,"maxVotersOnOneNode":1
+  -> snapshots showing spread progressed (max<=2): 3 distinct
+
+=== BUDGET-DIAG RUN 2 start 09:08:14 ===
+RUN 2 rc=1 end 09:17:19
+  abort: <none — did not hit provisionable=0>
+  result: <none printed>
+  quorum_concentrated events: 69 ; voter-ready timeouts: 0 ; re-wait fires: 0
+  concentration distinct (count 'totalVoters,maxOnOneNode'):
+           2 "totalVoters":2,"maxVotersOnOneNode":2
+           1 "totalVoters":2,"maxVotersOnOneNode":1
+  -> snapshots showing spread progressed (max<=2): 2 distinct
+
+=== BUDGET-DIAG DONE 09:17:19 ===
