@@ -709,22 +709,77 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       return null;
     }
     const admissionConvergence = options.admissionConvergence || null;
+    const baseWaitMs = this.tablePartitionProvisioningTimeoutMs;
+    const ceilingMs =
+      baseWaitMs *
+      QUERY_DEFAULTS.TABLE_CREATE_PROVISION_PROGRESS_REWAIT_CEILING_MULTIPLE;
+    const stallWindows =
+      QUERY_DEFAULTS.TABLE_CREATE_PROVISION_PROGRESS_STALL_WINDOWS;
     this.logger.warn(QUERY_LOG_MSG.TABLE_PARTITION_TRANSIENT_HOLD_WAIT, {
       partitionId: options.partitionId || null,
       requiredReplicaCount: options.requiredReplicaCount || null,
       rejectedTargetNodePlans:
         admissionConvergence?.rejectedTargetNodePlans || [],
-      maxWaitMs: this.tablePartitionProvisioningTimeoutMs,
+      maxWaitMs: baseWaitMs,
+      progressRewaitCeilingMs: ceilingMs,
     });
-    return this.waitForProvisionTargetNodeIds({
-      partitionId: options.partitionId,
-      requiredReplicaCount: options.requiredReplicaCount,
-      timeoutBudget: options.timeoutBudget,
-      failOnTimeout: false,
-      maxWaitMs: this.tablePartitionProvisioningTimeoutMs,
-      explicitTargetNodeIds: options.explicitTargetNodeIds || [],
-      allowAdaptiveAdmissionConvergenceWait: false,
-    });
+    // Progress-gated re-wait. A cold-bootstrap ledger spread (voters colocated on
+    // the seed) cures via TWO serialized REPLACEs and legitimately outlasts the
+    // base budget. Extend up to the ceiling in base-width windows WHILE the
+    // ledger quorum concentration is measurably improving (the SAME measure the
+    // hold gates on, read from the authoritative placement rows), and fail fast
+    // once it stalls for `stallWindows` windows — a genuine wedge, not a slow
+    // cure. Each window uses a FRESH budget (the shared top-level timeoutBudget
+    // is already drawn down and would clamp the loop to zero extra time) and is
+    // bounded by the per-call 30s cap, so the ceiling is the only thing that
+    // raises effective provisioning time, and only while the cure progresses.
+    let lastResult = null;
+    let elapsedMs = 0;
+    let bestConcentration = null;
+    let windowsSinceProgress = 0;
+    while (elapsedMs < ceilingMs) {
+      const windowResult = await this.waitForProvisionTargetNodeIds({
+        partitionId: options.partitionId,
+        requiredReplicaCount: options.requiredReplicaCount,
+        timeoutBudget: this.createControlPlaneTimeoutBudget(baseWaitMs),
+        failOnTimeout: false,
+        maxWaitMs: baseWaitMs,
+        explicitTargetNodeIds: options.explicitTargetNodeIds || [],
+        allowAdaptiveAdmissionConvergenceWait: false,
+      });
+      lastResult = windowResult;
+      elapsedMs += baseWaitMs;
+      const provisionable =
+        windowResult?.admissionProbe?.maximumProvisionableReplicaCount;
+      if (Number.isInteger(provisionable) && provisionable > 0) {
+        return windowResult;
+      }
+      const snapshot =
+        typeof this.rebalanceCoordinator
+          ?.resolveOperationLedgerConcentrationProgressSnapshot === 'function' ?
+          this.rebalanceCoordinator.resolveOperationLedgerConcentrationProgressSnapshot() :
+          null;
+      if (!snapshot || snapshot.holdEngaged === false) {
+        // Concentration cleared (or unobservable) but admission has not yet
+        // re-opened this window — grant another probe window rather than bail.
+        windowsSinceProgress = 0;
+        continue;
+      }
+      const worst = snapshot.worstConcentration;
+      if (
+        Number.isInteger(worst) &&
+        (bestConcentration === null || worst < bestConcentration)
+      ) {
+        bestConcentration = worst;
+        windowsSinceProgress = 0;
+      } else {
+        windowsSinceProgress += 1;
+        if (windowsSinceProgress >= stallWindows) {
+          break;
+        }
+      }
+    }
+    return lastResult;
   }
 
   buildProvisioningCompletionSummary(options = {}) {
