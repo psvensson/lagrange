@@ -1,0 +1,13 @@
+=== POSTFIX RUN 1 start 09:41:20 ===
+RUN 1 rc=1 end 09:51:22
+  reached stage: [2/4] ; [2/4] abort reason: <none — cleared [2/4]>
+  transient-hold re-wait fires: 1 ; quorum_concentrated events: 422
+  replica_operations-p1 maxVotersOnOneNode hist:      19 "maxVotersOnOneNode":1       2 "maxVotersOnOneNode":2 
+
+=== POSTFIX RUN 2 start 09:51:22 ===
+RUN 2 rc=1 end 10:05:44
+  reached stage: [4/4] ; [2/4] abort reason: <none — cleared [2/4]>
+  transient-hold re-wait fires: 0 ; quorum_concentrated events: 2543
+  replica_operations-p1 maxVotersOnOneNode hist:      27 "maxVotersOnOneNode":1       1 "maxVotersOnOneNode":2 
+
+=== POSTFIX A/B DONE 10:05:44 ===
