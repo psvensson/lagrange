@@ -370,44 +370,6 @@ async function evaluateRemoveSafety(context, operation) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  // Critical replica rows + current voter-ready set, hoisted above the concurrent-
-  // partition-operation serialization check so the CL-045 over-count surplus-drain
-  // relief (below) can consult the live voter-ready count. Both are cache reads and
-  // are reused by every downstream floor check.
-  const criticalReplicaRows = await context.getCriticalReplicaRowsForSafety(
-    operation.partitionId,
-  );
-  const removeSafetyReadiness = {
-    partitionId: operation.partitionId,
-    decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
-    participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  };
-  const currentVoterReadyRows = Array.isArray(criticalReplicaRows) ?
-    criticalReplicaRows.filter((row) =>
-      context.isVoterReadyRoutableReplica(row, removeSafetyReadiness),
-    ) :
-    [];
-  const minReplicaCount = await context.getCriticalMinReplicaCount(
-    operation.partitionId,
-  );
-
-  // CL-045 (over-count surplus-drain serialization relief). Sibling to CL-043/CL-044
-  // below: those relax the concurrent-op serialization for a STALE or UNCONTACTABLE
-  // concurrent op; this relaxes it for the CURRENT op when it drains a genuine
-  // voter-ready SURPLUS. When a REPLACE source-removal targets a critical partition
-  // that already holds MORE voter-ready replicas than the minimum, the concurrent-op
-  // serialization is DEADLOCKING rather than protecting: the surplus voter blocks the
-  // paired learner promotion (the voter-ready-60s timeout), whose ~1s promotion-retry
-  // churn keeps a concurrent op alive on the partition (so CL-043's stale-timeout
-  // relief never fires), which defers this very drain — and draining the surplus is
-  // exactly what breaks the deadlock. Draining ONE surplus voter cannot violate the
-  // floor (currentVoterReady > min => projectedVoterReady >= min), and the independent
-  // floor / published-membership / leader-handoff checks below STILL run — so, exactly
-  // like CL-043/CL-044, this is a serialization relief, not a quorum-protection bypass.
-  const isVoterReadySurplusReplaceDrain =
-    isReplaceRemoveInitialDispatch &&
-    currentVoterReadyRows.length > minReplicaCount;
-
   // Concurrent partition operation check
   const allOps = await context.repository.getOperationsByEntity(
     'partition',
@@ -444,27 +406,16 @@ async function evaluateRemoveSafety(context, operation) {
     concurrentActiveOp = op;
     break;
   }
-  if (concurrentActiveOp && !isVoterReadySurplusReplaceDrain) {
+  if (concurrentActiveOp) {
     return context.buildDeferredRemoveSafetyEvaluationForOperation(
       operation,
       `Quorum check failed: concurrent partition operation ${concurrentActiveOp.operationId} is active`,
     );
   }
-  if (concurrentActiveOp && context.logger && typeof context.logger.info === 'function') {
-    // A/B discriminator: the drain that CL-045 let past the serialization guard.
-    context.logger.info(
-      'Over-count surplus-drain relaxing concurrent-op serialization (CL-045)',
-      {
-        partitionId: operation.partitionId,
-        operationId: operation.operationId,
-        concurrentOperationId: concurrentActiveOp.operationId,
-        voterReadyCount: currentVoterReadyRows.length,
-        minReplicaCount,
-        surplusDrainSerializationRelief: true,
-      },
-    );
-  }
 
+  const criticalReplicaRows = await context.getCriticalReplicaRowsForSafety(
+    operation.partitionId,
+  );
   if (
     !Array.isArray(criticalReplicaRows) ||
     criticalReplicaRows.length === 0
@@ -474,6 +425,15 @@ async function evaluateRemoveSafety(context, operation) {
         OPERATION_WORKFLOW_OWNER_LITERAL.SAFETY_CHECK_UNAVAILABLE,
     );
   }
+
+  const removeSafetyReadiness = {
+    partitionId: operation.partitionId,
+    decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
+    participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+  };
+  const currentVoterReadyRows = criticalReplicaRows.filter((row) =>
+    context.isVoterReadyRoutableReplica(row, removeSafetyReadiness),
+  );
 
   const operationReplicaId =
     operation.type === OperationType.REPLACE ?
@@ -577,6 +537,9 @@ async function evaluateRemoveSafety(context, operation) {
     }
   }
 
+  const minReplicaCount = await context.getCriticalMinReplicaCount(
+    operation.partitionId,
+  );
   const projectedVoterReadyRows = currentVoterReadyRows.filter(
     (row) =>
       !context.isOperationReplicaRow(row, {
