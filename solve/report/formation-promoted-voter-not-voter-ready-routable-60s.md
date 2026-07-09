@@ -22,6 +22,7 @@
 - Latest evidence: none
 - Selected theory: none
 - Next move: continue supervised step for formation-promoted-voter-not-voter-ready-routable-60s-main
+- No longer current: RUNG-1 ROUTING-axis fix as the current binding lever (would_drop/isVoterReadyRoutableReplica path does not fire on HEAD)
 
 ## Continuation
 - Status: allowed
@@ -41,6 +42,7 @@
 
 ## Findings
 - **formation-promoted-voter-not-voter-ready-routable-60s-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
+- **formation-promoted-voter-not-voter-ready-routable-60s-main**: RUNG-2 (instrumented live reproduction, 12 runs: 5 local + 7 docker, converged+failed): the quest's sealed target symptom does NOT reproduce on HEAD. voter-ready-60s timeouts=0/12, drain-floor would-drop-voter-ready-below-minimum=0/12, TEMP-VDIAG-RUNG2 routing-axis-block=0/12 (instrumentation on the real isVoterReadyRoutableReplica, reverted). The over-target 4-voter surplus still forms intermittently (would_exceed 13x on replica_operations-p1, one docker run) but resolves within the window without a timeout; when it forms its voters are routable. Demo's actual binding blocker on HEAD = operation_ledger_quorum_concentrated (20-219x/docker run) under REPLACE churn = over-target/concentration domain (EXHAUSTED sibling), NOT voter-ready-routability. RUNG-1 ROUTING axis was inferred from the phase2 345+318 co-firing; the would_drop half does not materialize on HEAD so its premise is absent. Shipped s14 fixes (Part-1 bf535665, orphan-census 1ff668b8) appear to have closed the routability wedge. GOALPOST: sealed symptom not reproducing -> user decision pending (park+pivot-to-concentration vs bigger-batch vs defensive-fix). (rules out: RUNG-1 ROUTING-axis fix as the current binding lever (would_drop/isVoterReadyRoutableReplica path does not fire on HEAD)) [solve/changes/formation-promoted-voter-not-voter-ready-routable-60s/rung2-symptom-not-reproducing-on-head.md]
 
 ## Theories
 _(none recorded)_

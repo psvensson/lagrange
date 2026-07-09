@@ -1,0 +1,40 @@
+{
+  "id": "formation-ledger-quorum-concentrated-replace-churn-60s",
+  "statement": "SEALED RESULT (DRAFT — refine before run): on cold formation of the MovieLens access-affinity demo, the operation-ledger critical partition (canonically replica_operations-p1 / sql_transactions-p1) never remains quorum-concentrated: the operation_ledger_quorum_concentrated deferral (a voter co-location / concentration signal) stops firing under REPLACE churn and the dependent [2/4] ratings-load provisioning completes with no interlock / progress-write amplification. This is the ACTUAL binding blocker on HEAD per the parent quest's RUNG-2 (formation-promoted-voter-not-voter-ready-routable-60s, c7057af4, evidence solve/changes/formation-promoted-voter-not-voter-ready-routable-60s/rung2-symptom-not-reproducing-on-head.md): across 12 instrumented demo runs (5 local + 7 docker) the voter-ready-routability symptom the parent was sealed against did NOT reproduce (voter-ready-60s timeouts 0/12, would-drop-below-min 0/12), while operation_ledger_quorum_concentrated fired 20-219x per docker run and is what aborts the demo. The over-target 4-voter surplus still forms intermittently via would_exceed_target but resolves routable within the window; the residual failure is that REPLACE churn keeps the ledger's voters CONCENTRATED rather than spread, so quorum-conditioned moves defer. RUNG 1 (mandatory, DT-first, discovery NEVER on the live demo) must deterministically reproduce operation_ledger_quorum_concentrated firing under REPLACE churn and disambiguate WHY the ledger stays concentrated: (a) the planner plans no drain/spread for the concentrated voters (planner-plans-no-drain, the over-target-drain domain the EXHAUSTED sibling formation-ledger-over-target-surplus-drain-coupled-removal circled), OR (b) REPLACE churn re-forms the surplus/concentration faster than spread completes (churn-outpaces-spread), OR (c) the concentration predicate itself reads a stale/co-location signal. Do NOT seal a fix lever until the binding cause is confirmed against the deterministic reproduction. NOTE the already-SOLVED prior art formation-ledger-quorum-spread-first (leadership-only self-move root) and formation-ledger-over-target-accounting-drain-phase-replace-blind-spot (spurious count-increasing ADD during a promoting-not-visible REPLACE) — confirm whether this is residual-of-those or a distinct cause before authoring a lever. VETTED-DEAD / do-NOT-retread (inherited): app-tier coupled removal at the CL-043 serialization layer (== reverted CL-045); relaxing the drain floor or promotion guard; raising the 60s voter-ready or any provisioning/admission budget (TEST-0021/masking); reading targets instead of authoritative actuals (ARCH-0080/0084). doneWhen (machine oracle) = a deterministic in-process reproduction red-on-reverts the concentration fix AND operation_ledger_quorum_concentrated stops firing so the dependent ledger moves proceed, reproduced by scenario-harness 3x consecutive. LIVE-VALIDATION SIGNAL (necessary-not-sufficient, NOT part of the seal): a 2-pre/2-post affinity-demo A/B shows operation_ledger_quorum_concentrated collapse to ~0 and [2/4] ratings load complete.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "formation-promoted-voter-not-voter-ready-routable-60s",
+    "planDoc": "solve/changes/formation-promoted-voter-not-voter-ready-routable-60s/rung2-symptom-not-reproducing-on-head.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "formation-ledger-quorum-concentrated-replace-churn-60s",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-ledger-quorum-concentrated-replace-churn-60s-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "formation-ledger-quorum-concentrated-replace-churn-60s",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
