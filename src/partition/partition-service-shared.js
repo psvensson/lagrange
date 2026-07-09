@@ -50,7 +50,10 @@ import {
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
-import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
+import {
+  VOTER_RAFT_ROLES,
+  resolveRaftTransportDeliveryOptions,
+} from '../raft/constants.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
@@ -198,11 +201,10 @@ const CONTROL_PLANE_PARTITION_IDS = new Set(
   Object.values(INITIAL_PARTITION_IDS),
 );
 const CDCOperation = CDC_OPERATION;
-const ACTIVE_VOTER_ROLES = /* @__PURE__ */ new Set([
-  PARTITION_RAFT_ROLE.LEADER,
-  PARTITION_RAFT_ROLE.FOLLOWER,
-  PARTITION_RAFT_ROLE.CANDIDATE,
-]);
+// Promotion-guard voter roles = the shared VOTER_RAFT_ROLES (raft/constants.js);
+// PARTITION_RAFT_ROLE is an alias of RAFT_ROLE, so this is the identical Set,
+// now with one author instead of three.
+const ACTIVE_VOTER_ROLES = VOTER_RAFT_ROLES;
 const ADD_LIKE_REPLICA_OPERATION_TYPES = /* @__PURE__ */ new Set([
   OperationType.ADD,
   OperationType.REPLACE,

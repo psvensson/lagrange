@@ -33,6 +33,16 @@ const RAFT_ROLE = Object.freeze({
   LEARNER: 'learner', // Non-voting member during catch-up phase
 });
 
+// Authoritative raft VOTER roles — the single source for "does this row hold a
+// voting raft role". A LEARNER is a non-voting catch-up member and is excluded.
+// Previously triplicated as VOTER_RAFT_ROLES (in-flight-aware-replica-count),
+// QUORUM_VOTER_RAFT_ROLES (operation-ledger-quorum-concentration) and
+// ACTIVE_VOTER_ROLES (partition-service-shared) — identical Sets that could
+// silently drift; unified here so the count invariant has one role author.
+const VOTER_RAFT_ROLES = Object.freeze(
+  new Set([RAFT_ROLE.LEADER, RAFT_ROLE.FOLLOWER, RAFT_ROLE.CANDIDATE]),
+);
+
 const RAFT_EVENT = Object.freeze({
   LEADER: RAFT_ROLE.LEADER,
   FOLLOWER: RAFT_ROLE.FOLLOWER,
@@ -373,6 +383,7 @@ export {
   RAFT_PACKET_TYPES,
   RAFT_EVENT,
   RAFT_ROLE,
+  VOTER_RAFT_ROLES,
   RAFT_ERROR_NAME,
   RAFT_TRANSPORT_DELIVERY_OPTIONS,
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,

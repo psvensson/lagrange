@@ -1,6 +1,6 @@
 import {REBALANCER_MOVE_TYPE as MoveType} from './rebalancer-constants.js';
 import {ReplicaStatus} from './replica-status.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+import {VOTER_RAFT_ROLES} from '../raft/constants.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
 
 // Single authoritative in-flight-aware replica accounting for one partition.
@@ -42,15 +42,11 @@ const NON_LIVE_STATUSES = new Set([
   ReplicaStatus.REMOVED,
 ]);
 
-// Authoritative raft VOTER roles — the promotion guard's ACTIVE_VOTER_ROLES
-// (partition-service-shared.js). A LEARNER is a non-voting catch-up member and
-// is excluded; a promoted voter carries one of these roles the instant it is
-// promoted, BEFORE its status column catches up to ACTIVE.
-const VOTER_RAFT_ROLES = new Set([
-  RAFT_ROLE.LEADER,
-  RAFT_ROLE.FOLLOWER,
-  RAFT_ROLE.CANDIDATE,
-]);
+// Authoritative raft VOTER roles are the shared VOTER_RAFT_ROLES (raft/constants
+// .js) — the same Set the promotion guard's ACTIVE_VOTER_ROLES and the quorum
+// interlock's QUORUM_VOTER_RAFT_ROLES now alias. A LEARNER is a non-voting
+// catch-up member and is excluded; a promoted voter carries one of these roles
+// the instant it is promoted, BEFORE its status column catches up to ACTIVE.
 
 // True when a committed row is an authoritative raft voter: live (not
 // failed/removing/removed) AND holding a voter raft_role. This is the SAME
