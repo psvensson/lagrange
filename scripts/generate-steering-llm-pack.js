@@ -245,13 +245,17 @@ const APHORISM_ADMONITION_PATTERN =
 const APHORISM_ALLCAPS_LABEL_PATTERN = /^[A-Z][A-Z\s]{1,30}[A-Z]\s*[-—:]\s/u;
 // Sentence-leading pronoun + verb (including copulas/possession: is/are/was/
 // were/has/have/had) with no antecedent in the rule text — the rule cannot be
-// understood standalone. Expletive normative constructions ("It is FORBIDDEN
-// to ...", "It is REQUIRED to ...") are exempt: there the "It" is a dummy
+// understood standalone. The verb group matches case-insensitively: this
+// corpus's house style UPPERCASES modals ("This MUST be respected."), and a
+// case-sensitive verb list made exactly those danglers invisible. An optional
+// NEVER/ALWAYS adverb between pronoun and verb is covered for the same reason.
+// Expletive normative constructions ("It is FORBIDDEN to ...", "It is
+// REQUIRED to ...") are exempt in any casing: there the "It" is a dummy
 // subject, not a dangling reference.
 const APHORISM_EXPLETIVE_NORMATIVE_PATTERN =
-  /^It\s+is\s+(?:NOT\s+)?(?:FORBIDDEN|REQUIRED|MANDATORY)\b/u;
+  /^It\s+is\s+(?:not\s+)?(?:forbidden|required|mandatory)\b/iu;
 const APHORISM_DANGLING_PRONOUN_PATTERN =
-  /^(?:They|It|This|That|These|Those)\s+(?:is|are|was|were|has|have|had|do|does|did|must|should|shall|will|can|cannot|may|might|need|needs|require|requires|replace|replaces|prevent|prevents|apply|applies|run|runs|use|uses|fail|fails|own|owns|hold|holds|enforce|enforces)\b/u;
+  /^(?:They|It|This|That|These|Those)\s+(?:(?:never|always)\s+)?(?:is|are|was|were|has|have|had|do|does|did|must|should|shall|will|can|cannot|may|might|need|needs|require|requires|replace|replaces|prevent|prevents|apply|applies|run|runs|use|uses|fail|fails|own|owns|hold|holds|enforce|enforces)\b/iu;
 
 function classifyAphoristicText(text = '') {
   const normalized = normalizeWhitespace(text);
