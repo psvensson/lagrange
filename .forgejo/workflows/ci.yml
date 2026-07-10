@@ -1,12 +1,11 @@
 # Forgejo Actions CI — runs on Codeberg.
 # Syntax is GitHub-Actions-compatible. `runs-on: docker` targets the
 # self-hosted runner from ci/forgejo-runner/ (capacity 1, shares the machine
-# with local dev work), so per-push cost is kept deliberately low.
+# with local dev work).
 #
 # Tiered gating:
-#   * push / PR         -> this workflow: static lane only (lint, knip,
-#                          depcruise, complexity/duplication ratchets, audits,
-#                          steering pack drift). A few minutes.
+#   * push / PR         -> this workflow: complete test:gate (fail-closed fast
+#                          tests, static analysis, model contracts).
 #   * nightly / manual  -> full-gate.yml: complete test:gate (fast test fleet
 #                          + static + TLC model contracts).
 #   * v* tag            -> release.yml: full test:ci + release artifacts.
@@ -33,7 +32,7 @@ on:
     branches: [main]
 
 jobs:
-  static:
+  gate:
     runs-on: docker
     container:
       image: node:22-bookworm
@@ -41,10 +40,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # test:static is node/eslint/knip/depcruise/git only — none of the
-      # rg/jq/java CLI tools the test fleet needs, so no apt step here.
+      - name: Install gate CLI tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Static lane (test:static)
-        run: npm run test:static
+      - name: Full gate (test:gate)
+        run: npm run test:gate

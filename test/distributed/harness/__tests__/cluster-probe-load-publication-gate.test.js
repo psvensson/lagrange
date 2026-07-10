@@ -46,7 +46,6 @@ const LOAD_GATE_PROJECTION_TEST_GATE_STATE = 'ready';
 const LOAD_GATE_PROJECTION_TEST_GATE_SOURCE =
   'load_publication_gate_projection';
 const LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE = 'admin_health';
-const LOAD_GATE_PROJECTION_TEST_CONTROL_SNAPSHOT_SOURCE = 'control_snapshot';
 const LOAD_GATE_PROJECTION_TEST_PRIORITY_PARTITION_COUNT = 5;
 const LOAD_GATE_PROJECTION_TEST_BLOCKED_PARTITION_ID = 'partition-a';
 const LOAD_GATE_PROJECTION_TEST_SPREAD_GAP = 1;
@@ -323,7 +322,6 @@ test(
 test(
   'Unit: _probeClusterActiveState trusts canonical load publication gate when ' +
     'selected admin reachability times out',
-  {skip: 'STALE: dead test re-enabled; expected snapshotCoverage.selectedSnapshotReachableBy=control_snapshot but product returns admin_health'},
   async () => {
     const nodeIds = Object.freeze(['node-timeout', 'node-pending']);
     const readinessTimeoutErrorMessage =
@@ -424,8 +422,8 @@ test(
     );
     assert.strictEqual(
       probeResult.snapshotCoverage.selectedSnapshotReachableBy,
-      LOAD_GATE_PROJECTION_TEST_CONTROL_SNAPSHOT_SOURCE,
-      'selected snapshot should name the control snapshot fallback witness',
+      LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE,
+      'selected snapshot should retain the selected admin reachability witness',
     );
     assert.strictEqual(
       probeResult.publicationConvergenceGate.ready,

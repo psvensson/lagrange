@@ -29,6 +29,7 @@ import {
   PGWIRE_AUTH_AUDIT_MSG,
   PGWIRE_AUTH_ERROR_MSG,
   PGWIRE_AUTH_LOG_TAG,
+  PGWIRE_AUTH_HANDLER_MODE,
 } from './pgwire-auth-constants.js';
 
 /**
@@ -42,15 +43,31 @@ class PgWireAuthHandler {
    * @param {Object} options
    * @param {Function} [options.authenticator] - async (credentials)
    *   => {authenticated: boolean, roles?: string[]}.
-   *   When null, trust-mode authentication is used (maps user/db
-   *   directly to context without credential verification).
+   * @param {string} [options.mode] - Explicit `trust` for loopback-only
+   *   deployments. Omit only when an authenticator is supplied.
    * @param {Object} [options.policy] - Policy object with
-   *   {allowedActions: Set|'*'}. Defaults to wildcard (allow all).
+   *   {allowedActions: Set|'*'}. Required.
    * @param {Object} [options.logger] - Logger instance.
    */
   constructor(options = {}) {
     this._authenticator = options.authenticator || null;
-    this._policy = options.policy || null;
+    this._mode = options.mode || null;
+    if (
+      !this._authenticator &&
+      this._mode !== PGWIRE_AUTH_HANDLER_MODE.TRUST
+    ) {
+      throw new Error(PGWIRE_AUTH_ERROR_MSG.MODE_REQUIRED);
+    }
+    if (
+      this._mode &&
+      this._mode !== PGWIRE_AUTH_HANDLER_MODE.TRUST
+    ) {
+      throw new Error(PGWIRE_AUTH_ERROR_MSG.MODE_UNSUPPORTED);
+    }
+    if (!options.policy) {
+      throw new Error(PGWIRE_AUTH_ERROR_MSG.POLICY_REQUIRED);
+    }
+    this._policy = options.policy;
     this._logger = options.logger || console;
   }
 
@@ -156,18 +173,6 @@ class PgWireAuthHandler {
         auditRecord,
         error: validation.error,
       };
-    }
-
-    // If no policy configured, allow all (wildcard)
-    if (!this._policy) {
-      const auditRecord = createSecurityAuditRecord(
-        PGWIRE_AUTH_AUDIT_MSG.AUTHZ_GRANTED,
-        PGWIRE_AUTH_DECISION.AUTHORIZED,
-        securityContext,
-        effectiveAction,
-      );
-      this._logger.info(PGWIRE_AUTH_LOG_TAG, auditRecord);
-      return {authorized: true, auditRecord};
     }
 
     // Delegate to admin-auth-middleware authorizeAction

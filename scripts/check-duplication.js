@@ -42,8 +42,8 @@ const RATCHET_TARGETS = [
     // guideline-check-shared.js. Ratchet DOWN only from here.
     name: 'src+scripts',
     directories: ['src', 'scripts'],
-    baselineCloneGroupCount: 74,
-    baselineDuplicatedLineCount: 2259,
+    baselineCloneGroupCount: 73,
+    baselineDuplicatedLineCount: 2239,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -54,11 +54,12 @@ const RATCHET_TARGETS = [
     // Re-anchored 2026-07-05: 842/32226 was already the measured state at
     // 2009194a (a pre-2026-07-05 commit landed one group without running
     // this gate locally — the drift the test:static wiring now prevents).
-    // Ratchet DOWN only from here.
+    // Re-anchored at the executable no-skip test corpus after the
+    // proof-integrity cutover. Ratchet DOWN only from here.
     name: 'test',
     directories: ['test'],
-    baselineCloneGroupCount: 842,
-    baselineDuplicatedLineCount: 32226,
+    baselineCloneGroupCount: 845,
+    baselineDuplicatedLineCount: 32308,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

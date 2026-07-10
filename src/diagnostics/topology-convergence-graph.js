@@ -68,11 +68,6 @@ import {
 } from './topology-convergence-owner-witness.js';
 
 import {
-  buildTopologyConvergenceReplayFixture,
-  replayTopologyConvergenceFixture,
-} from './topology-convergence-replay.js';
-
-import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   selectPublicationActiveGateHandoffContract as selectControlPlanePublicationActiveGateHandoffContract,
 } from '../control-plane/publication-active-gate-handoff-contract.js';
@@ -784,8 +779,6 @@ export {
   REASON,
   buildTopologyConvergenceOwnerPresentation,
   buildTopologyConvergenceOwnerWitness,
-  buildTopologyConvergenceReplayFixture,
-  replayTopologyConvergenceFixture,
   selectTopologyConvergenceDominantWitness,
   flattenEvidencePath,
 };

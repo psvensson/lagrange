@@ -23,7 +23,7 @@ import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerE
 import {buildPriorityRecoveryConditionsContract, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-observation.js';
 import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-actuation.js';
 import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract, buildPriorityRecoveryPublicationNodeDecisions, isPriorityRecoverySnapshotObject, resolvePriorityRecoveryDecisionPublicationConvergence, resolvePriorityRecoveryDecisionReadinessByNodeId} from './priority-recovery-snapshot-burndown.js';
-import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-closure.js';
+import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-partition-assessment.js';
 
 function resolvePriorityRecoveryDecisionOperationOwnerOutcome(
   options,

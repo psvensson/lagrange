@@ -11,7 +11,9 @@ import {
   isPriorityRecoverySpreadSatisfyingOperationContext,
   isPriorityRecoveryTrackedPartitionId,
 } from './priority-recovery-snapshot-ingress.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
+import {
+  isPriorityRecoveryOperationContextTerminal,
+} from './priority-recovery-operation-context-state.js';
 
 function isPriorityRecoveryOrdinarySerialLanePartitionId(partitionId) {
   return (

@@ -9,7 +9,9 @@ import {
   resolvePriorityRecoveryDecisionSnapshotFreshnessMs,
   resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs,
 } from './priority-recovery-snapshot-eligibility.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
+import {
+  isPriorityRecoveryOperationContextTerminal,
+} from './priority-recovery-operation-context-state.js';
 
 function resolvePriorityRecoveryDecisionSnapshotSummarySortTimestamp(snapshot) {
   const progressFreshnessMs =

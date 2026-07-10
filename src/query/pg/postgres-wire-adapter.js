@@ -19,31 +19,37 @@ import {
   ADAPTER_LOG_MSG,
 } from '../sql-adapter-constants.js';
 
+const ANONYMOUS_PRINCIPAL = 'anonymous';
+
 
 /**
  * PostgresWireAdapter maps authenticated protocol sessions to
  * tenant/service policy and delegates SQL execution to SqlCore.
  *
- * This adapter does NOT implement the full PostgreSQL wire protocol
- * byte-level parsing (that is a future convergence goal). It provides
- * the session-to-SqlCore bridge so that when wire-level parsing is
- * added, it plugs into this adapter rather than creating a second
- * SQL execution path.
+ * The byte-level handler delegates here so session security and canonical
+ * SqlRequest construction remain below one protocol boundary.
  */
 class PostgresWireAdapter {
   /**
    * @param {Object} options
    * @param {Object} options.sqlCore - SQLQueryEngine instance (SqlCore).
-   * @param {Function} [options.authenticator] - async (credentials) => session
+   * @param {Object} options.authHandler - Authentication/authorization owner.
    */
   constructor(options = {}) {
     if (!options.sqlCore) {
       throw new Error(ADAPTER_ERROR_MSG.SQL_CORE_REQUIRED);
     }
+    if (
+      !options.authHandler ||
+      typeof options.authHandler.authenticate !== 'function' ||
+      typeof options.authHandler.authorizeQuery !== 'function'
+    ) {
+      throw new Error(ADAPTER_ERROR_MSG.AUTH_HANDLER_REQUIRED);
+    }
     this.sqlCore = options.sqlCore;
-    this.authenticator = options.authenticator || null;
+    this.authHandler = options.authHandler;
     this.sessions = new Map();
-    this.logger = this.initLogger();
+    this.logger = options.logger || this.initLogger();
   }
 
   /**
@@ -88,12 +94,15 @@ class PostgresWireAdapter {
       throw new Error(ADAPTER_ERROR_MSG.TENANT_ID_REQUIRED);
     }
 
-    // Delegate to pluggable authenticator if provided
-    if (this.authenticator) {
-      const authResult = await this.authenticator(credentials);
-      if (!authResult || !authResult.authenticated) {
-        throw new Error(PG_WIRE_ERROR_MSG.AUTHENTICATION_FAILED);
-      }
+    const authResult = await this.authHandler.authenticate({
+      user: credentials.user || ANONYMOUS_PRINCIPAL,
+      database: credentials.tenantId,
+      password: credentials.password,
+    });
+    if (!authResult || !authResult.authenticated || !authResult.context) {
+      throw new Error(
+        authResult?.error || PG_WIRE_ERROR_MSG.AUTHENTICATION_FAILED,
+      );
     }
 
     const session = {
@@ -102,6 +111,7 @@ class PostgresWireAdapter {
       user: credentials.user || null,
       state: PG_SESSION_STATE.AUTHENTICATED,
       createdAt: Date.now(),
+      securityContext: authResult.context,
     };
 
     this.sessions.set(sessionId, session);
@@ -138,6 +148,14 @@ class PostgresWireAdapter {
     }
     if (session.state === PG_SESSION_STATE.CLOSED) {
       throw new Error(PG_WIRE_ERROR_MSG.SESSION_CLOSED);
+    }
+    const authorization = this.authHandler.authorizeQuery(
+      session.securityContext,
+    );
+    if (!authorization?.authorized) {
+      throw new Error(
+        authorization?.error || PG_WIRE_ERROR_MSG.AUTHORIZATION_FAILED,
+      );
     }
 
     const request = createSqlRequest({

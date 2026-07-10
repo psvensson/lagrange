@@ -4,7 +4,7 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot-rebalancer.js';
 import {
   buildPriorityRecoveryReplicaOperationContext,
-} from '../../src/control-plane/priority-recovery-snapshot-workflow.js';
+} from '../../src/control-plane/priority-recovery-snapshot-rebalancer.js';
 
 const NOW_MS = 1000000;
 const CREATED_AT_MS = 1000;

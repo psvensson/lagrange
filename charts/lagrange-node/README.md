@@ -34,6 +34,9 @@ For local builds, build and push your own image and pass
   restPort. The pgwire SQL endpoint is a managed service started on demand —
   no 5432 boot listener.
 - **Probes**: liveness `/health`, readiness `/readyz` on the REST port.
+- **Admin exposure**: the chart explicitly opts into the loopback-safe
+  runtime's insecure external bind so the ClusterIP service can reach it.
+  Use authenticated ingress before exposing that service publicly.
 - **Storage**: one PVC per pod mounted at `/data`, passed as `--data-dir`.
 
 ## Key values
@@ -44,6 +47,7 @@ For local builds, build and push your own image and pass
 | `image.repository` / `image.tag` | `codeberg.org/psvensson/lagrange` / appVersion | Runtime image |
 | `node.restPort` | `8080` | REST port; transport WS = +2, admin WS fixed at 8081 |
 | `node.maxOldSpaceSizeMb` | `1536` | V8 heap cap; keep under the memory limit |
+| `admin.websocketHost` / `admin.allowInsecureExternalBind` | `0.0.0.0` / `true` | Explicit chart-local admin exposure; secure it with ingress |
 | `node.extraEnv` | `[]` | Extra env (see `ENV_MAPPINGS` in `src/config/config-constants.js`) |
 | `persistence.size` | `10Gi` | Per-pod volume |
 | `resources` | 1 CPU / 2Gi | Per-pod resources |

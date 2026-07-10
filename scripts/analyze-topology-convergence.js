@@ -7,13 +7,15 @@ import {
   EDGE_ID,
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceDecisionTable,
-  buildTopologyConvergenceReplayFixture,
   buildTopologyConvergenceGraphFromArtifacts,
   buildTopologyConvergenceGlossary,
   buildTopologyConvergenceOwnerPresentation,
   buildTopologyConvergenceOwnerWitness,
   selectTopologyConvergenceDominantWitness,
 } from '../src/diagnostics/topology-convergence-graph.js';
+import {
+  buildTopologyConvergenceReplayFixture,
+} from '../src/diagnostics/topology-convergence-replay.js';
 import {
   readArtifactWithSidecarsSync,
 } from './artifact-sidecar-loader.js';

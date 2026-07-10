@@ -20,5 +20,4 @@ echo "========================================"
 printf ' - %s\n' "${TEST_FILES[@]}"
 echo ""
 
-npx tap "${TEST_FILES[@]}"
-
+node scripts/run-test-files.js --jobs=1 "${TEST_FILES[@]}"

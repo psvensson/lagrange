@@ -9,8 +9,10 @@
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {RECOVERY_PROTOCOL_STATE} from './membership-lifecycle-constants.js';
 import {buildPriorityRecoveryPressureConditions} from './priority-recovery-helpers.js';
-import {buildTrackedPriorityRecoveryDecisionSnapshots} from
-  './priority-recovery-snapshot.js';
+import {
+  buildPriorityRecoveryClosureWitness,
+  buildTrackedPriorityRecoveryDecisionSnapshots,
+} from './priority-recovery-snapshot.js';
 import {LOCAL_EMPTY_LIST, PRIORITY_RECOVERY_CURRENT_SUMMARY_SCOPE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryInvariantSummary, resolvePendingRequiredAckNodeIds} from './priority-recovery-observation-normalization.js';
 import {buildPriorityRecoveryPartitionWitnesses} from './priority-recovery-observation-partition-witness.js';
 import {hasSelectedMissingPublishedEvidence, resolveObservationActiveGateContext, resolveObservationClosureField, resolveObservationPriorityPartitionSummary, resolveObservationPriorityRecoveryBlockedPartitionIds, resolveObservationPriorityRecoveryClosureWitness, resolveObservationPriorityRecoveryReasonCodes, resolveObservationPublicationConvergenceGate, resolveProjectionDiagnostics, resolveSelectedMissingPublishedEvidence, shouldApplyObservationClosureWitness} from './priority-recovery-observation-gate-resolution.js';
@@ -38,19 +40,56 @@ function resolveObservationRecoveryProtocolState(
     null;
 }
 
+function resolveObservationInputClosureWitness(
+  options,
+  publicationConvergence,
+  trackedDecisionSnapshots,
+) {
+  if (isRecord(options.priorityRecoveryClosureWitness)) {
+    return options.priorityRecoveryClosureWitness;
+  }
+  if (isRecord(trackedDecisionSnapshots?.closureWitness)) {
+    return trackedDecisionSnapshots.closureWitness;
+  }
+  if (isRecord(options.publicationConvergenceGate?.priorityRecoveryClosureWitness)) {
+    return options.publicationConvergenceGate.priorityRecoveryClosureWitness;
+  }
+  if (isRecord(publicationConvergence?.priorityRecoveryClosureWitness)) {
+    return publicationConvergence.priorityRecoveryClosureWitness;
+  }
+  return buildPriorityRecoveryClosureWitness({
+    decisionSnapshots: trackedDecisionSnapshots,
+    priorityPartitionSummary:
+      options.publicationConvergenceGate?.priorityPartitionSummary ||
+      publicationConvergence?.priorityPartitionSummary,
+  });
+}
+
 function buildPriorityRecoveryObservationSnapshot(options = {}) {
   const publicationConvergence = isRecord(options.publicationConvergence) ?
     options.publicationConvergence :
     null;
-  const publicationConvergenceGate = resolveObservationPublicationConvergenceGate(
-    options,
-    publicationConvergence,
-    options.publicationConvergenceGate,
-  );
   const trackedPriorityRecoveryDecisionSnapshots =
     buildTrackedPriorityRecoveryDecisionSnapshots(
       options.priorityRecoveryDecisionSnapshots,
     );
+  const priorityRecoveryClosureWitness =
+    resolveObservationInputClosureWitness(
+      options,
+      publicationConvergence,
+      trackedPriorityRecoveryDecisionSnapshots,
+    );
+  const observationOptions = {
+    ...options,
+    priorityRecoveryDecisionSnapshots:
+      trackedPriorityRecoveryDecisionSnapshots,
+    priorityRecoveryClosureWitness,
+  };
+  const publicationConvergenceGate = resolveObservationPublicationConvergenceGate(
+    observationOptions,
+    publicationConvergence,
+    options.publicationConvergenceGate,
+  );
   const priorityRecoveryCurrentSummary = Object.freeze({
     scope:
       PRIORITY_RECOVERY_CURRENT_SUMMARY_SCOPE.TRACKED_PRIORITY_PARTITIONS,
@@ -61,26 +100,26 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
   const priorityRecoveryInvariants = normalizePriorityRecoveryInvariantSummary(
     options.priorityRecoveryInvariants,
   );
-  const priorityRecoveryClosureWitness =
+  const resolvedPriorityRecoveryClosureWitness =
     resolveObservationPriorityRecoveryClosureWitness(
-      options,
+      observationOptions,
       publicationConvergence,
       publicationConvergenceGate,
     );
   const applyClosureWitness =
-    shouldApplyObservationClosureWitness(priorityRecoveryClosureWitness);
+    shouldApplyObservationClosureWitness(resolvedPriorityRecoveryClosureWitness);
   const priorityPartitionSummary = resolveObservationPriorityPartitionSummary(
     publicationConvergence,
     publicationConvergenceGate,
-    priorityRecoveryClosureWitness,
+    resolvedPriorityRecoveryClosureWitness,
   );
   const priorityRecoveryReasonCodes =
     resolveObservationPriorityRecoveryReasonCodes(
       publicationConvergence,
       publicationConvergenceGate,
-      priorityRecoveryClosureWitness,
+      resolvedPriorityRecoveryClosureWitness,
     );
-  const activeGateContext = resolveObservationActiveGateContext(options);
+  const activeGateContext = resolveObservationActiveGateContext(observationOptions);
   const priorityRecoveryUnresolvedPartitionIds =
     priorityRecoveryCurrentSummary.blockedPartitionIds;
   const priorityRecoveryBlockedPartitionIds =
@@ -246,20 +285,20 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
       ),
     ),
     closureRecordId: resolveObservationClosureField(
-      options,
+      observationOptions,
       PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD.RECORD_ID,
-      priorityRecoveryClosureWitness,
+      resolvedPriorityRecoveryClosureWitness,
       activeGateContext,
     ),
     closureWitnessClass: resolveObservationClosureField(
-      options,
+      observationOptions,
       PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD.WITNESS_CLASS,
-      priorityRecoveryClosureWitness,
+      resolvedPriorityRecoveryClosureWitness,
       activeGateContext,
     ),
     priorityRecoveryClosureState:
-      typeof priorityRecoveryClosureWitness?.state === 'string' ?
-        priorityRecoveryClosureWitness.state :
+      typeof resolvedPriorityRecoveryClosureWitness?.state === 'string' ?
+        resolvedPriorityRecoveryClosureWitness.state :
         null,
     ...(activeGateContext.activeGateProgress ?
       {activeGateProgress: activeGateContext.activeGateProgress} :

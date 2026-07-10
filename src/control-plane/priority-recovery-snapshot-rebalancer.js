@@ -4,11 +4,6 @@ import {
   normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
 import {
-  OperationType,
-  isTerminalStep as isTerminalReplicaOperationStep,
-  isValidWorkflowStep as isValidReplicaOperationStep,
-} from '../rebalancer/replica-status.js';
-import {
   normalizeReplicaOperationRecord,
   resolveStepTimeoutMs,
 } from '../rebalancer/replica-operation-liveness.js';
@@ -18,11 +13,13 @@ import {
 import {
   LOCAL_STR_EMPTY,
   PRIORITY_RECOVERY_RAFT_ROLE_LEARNER,
+  PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_COMPLETED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_OPERATION_TIMELINE_BY_ID,
+  PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_ROWS,
   PRIORITY_RECOVERY_SERVICE_FIELD_ADDRESS,
   PRIORITY_RECOVERY_SERVICE_FIELD_CREATEDAT,
   PRIORITY_RECOVERY_SERVICE_FIELD_CREATED_AT,
@@ -46,11 +43,213 @@ import {
   PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
   PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET,
-  STATUS_ACTIVE,
 } from './priority-recovery-snapshot-contract.js';
 import {readFirstIntegerField, readFirstStringField} from './priority-recovery-snapshot-ingress.js';
 import {buildPriorityRecoveryTargetServiceRowIndex, selectPriorityRecoveryTargetServiceRowsFromIndex} from './priority-recovery-target-service-row-index.js';
-import {buildPriorityRecoveryReplicaOperationContext, buildPriorityRecoveryReplicaOperationSourceRows, normalizePriorityRecoveryReplicaOperationContextBuildOptions} from './priority-recovery-snapshot-workflow.js';
+export {
+  isPriorityRecoveryCompletedAddOperationContext,
+  isPriorityRecoveryCompletedPlacementOperationContext,
+  isPriorityRecoveryCompletedReplaceOperationContext,
+  isPriorityRecoveryOperationContextTerminal,
+  resolvePriorityRecoveryOperationStepTerminalState,
+} from './priority-recovery-operation-context-state.js';
+
+function normalizePriorityRecoveryReplicaOperationContextBuildOptions(
+  options = {},
+) {
+  return {
+    nowMs: normalizePriorityRecoveryInteger(options.nowMs),
+    stepTimeoutMsByWorkflowStep:
+      options.stepTimeoutMsByWorkflowStep &&
+      typeof options.stepTimeoutMsByWorkflowStep === 'object' ?
+        options.stepTimeoutMsByWorkflowStep :
+        null,
+  };
+}
+
+function resolvePriorityRecoveryOperationTimeline(
+  operationTimelineById,
+  operationId,
+) {
+  return Array.isArray(operationTimelineById[operationId]) ?
+    operationTimelineById[operationId] :
+    [];
+}
+
+function buildPriorityRecoveryReplicaOperationContext(
+  replicaOperationRow,
+  operationTimelineById,
+  serviceRows,
+  options = {},
+) {
+  const normalizedReplicaOperation = normalizeReplicaOperationRecord(
+    replicaOperationRow,
+    {
+      ...(Number.isFinite(options.nowMs) ? {nowMs: options.nowMs} : {}),
+    },
+  );
+  const operationId = String(
+    normalizedReplicaOperation.operationId ||
+      readFirstStringField(
+        replicaOperationRow,
+        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
+        'operationId',
+      ) ||
+      '',
+  ).trim();
+  if (operationId.length === 0) {
+    return null;
+  }
+  const entityType = String(
+    normalizedReplicaOperation.entityType ||
+      PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION,
+  ).toLowerCase();
+  if (
+    entityType !== PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION
+  ) {
+    return null;
+  }
+  const partitionId = String(
+    normalizedReplicaOperation.partitionId ||
+      normalizedReplicaOperation.partitionGroupId ||
+      normalizedReplicaOperation.entityId ||
+      '',
+  ).trim();
+  if (partitionId.length === 0) {
+    return null;
+  }
+  const timeline = resolvePriorityRecoveryOperationTimeline(
+    operationTimelineById,
+    operationId,
+  );
+  const timelineSteps = normalizePriorityRecoveryStringList(
+    timeline.map((entry) => String(entry?.step || '').trim()),
+  );
+  const latestTimelineEntry =
+    timeline.length > 0 ? timeline[timeline.length - 1] : null;
+  const {currentStepEnteredAtMs, stepAgeMs} = resolvePriorityRecoveryStepAge(
+    parsePriorityRecoveryStepsHistory(
+      replicaOperationRow.stepsHistory ?? replicaOperationRow.steps_history,
+    ),
+    options.nowMs,
+  );
+  const targetServiceEvidence = buildPriorityRecoveryTargetServiceEvidence({
+    operationContext: normalizedReplicaOperation,
+    serviceRows,
+    targetServiceRowIndex: options.targetServiceRowIndex,
+  });
+  const context = {
+    operationId,
+    partitionId,
+    tableName: inferPriorityRecoveryTableNameFromPartitionId(partitionId),
+    type: String(normalizedReplicaOperation.type || '').toUpperCase(),
+    status: String(normalizedReplicaOperation.status || '').toLowerCase(),
+    workflowStep: String(
+      normalizedReplicaOperation.workflowStep || '',
+    ).toUpperCase(),
+    sourceNodeId: normalizedReplicaOperation.sourceNodeId || null,
+    targetNodeId: normalizedReplicaOperation.targetNodeId || null,
+    replicaId: normalizedReplicaOperation.replicaId || null,
+    createdAtMs: normalizePriorityRecoveryInteger(
+      normalizedReplicaOperation.createdAt ??
+        replicaOperationRow[
+          PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT
+        ] ??
+        replicaOperationRow.createdAt,
+    ),
+    updatedAtMs: normalizePriorityRecoveryInteger(
+      normalizedReplicaOperation.updatedAt ??
+        replicaOperationRow[
+          PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT
+        ] ??
+        replicaOperationRow.updatedAt,
+    ),
+    completedAtMs: normalizePriorityRecoveryInteger(
+      normalizedReplicaOperation.completedAt ??
+        replicaOperationRow[
+          PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_COMPLETED_AT
+        ] ??
+        replicaOperationRow.completedAt,
+    ),
+    ageMs: normalizePriorityRecoveryInteger(normalizedReplicaOperation.ageMs),
+    stepTimeoutMs: normalizePriorityRecoveryInteger(
+      resolveStepTimeoutMs(normalizedReplicaOperation.workflowStep, {
+        stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
+      }),
+    ),
+    timelineLength: timeline.length,
+    timelineStepCount: timelineSteps.length,
+    latestTimelineStep:
+      String(latestTimelineEntry?.step || '').toUpperCase() || null,
+    latestTimelineStatus:
+      String(latestTimelineEntry?.status || '').toLowerCase() || null,
+    latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
+    currentStepEnteredAtMs,
+    stepAgeMs,
+    targetVisibilityState: targetServiceEvidence.visibilityState,
+    targetServiceTerminalState: targetServiceEvidence.terminalState,
+    ...(Number.isFinite(targetServiceEvidence.progressAtMs) ?
+      {targetServiceProgressAtMs: targetServiceEvidence.progressAtMs} :
+      {}),
+  };
+  return {operationId, partitionId, context};
+}
+
+function resolvePriorityRecoveryReplicaOperationSummaryRows(
+  replicaOperationsSummary = null,
+) {
+  const summaryRows =
+    replicaOperationsSummary?.[
+      PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_ROWS
+    ];
+  return Array.isArray(summaryRows) ? summaryRows : [];
+}
+
+function buildPriorityRecoveryReplicaOperationSourceRows(
+  replicaOperationRows = [],
+  replicaOperationsSummary = null,
+) {
+  const sourceRows = [];
+  const sourceRowIndexByOperationId = {};
+  const appendSourceRow = (sourceRow) => {
+    if (!sourceRow || typeof sourceRow !== 'object') {
+      return;
+    }
+    const operationId = String(
+      readFirstStringField(
+        sourceRow,
+        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
+        'operationId',
+      ) || '',
+    ).trim();
+    if (operationId.length === 0) {
+      sourceRows.push(sourceRow);
+      return;
+    }
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        sourceRowIndexByOperationId,
+        operationId,
+      )
+    ) {
+      sourceRowIndexByOperationId[operationId] = sourceRows.length;
+      sourceRows.push(sourceRow);
+      return;
+    }
+    sourceRows[sourceRowIndexByOperationId[operationId]] = sourceRow;
+  };
+  for (const replicaOperationRow of Array.isArray(replicaOperationRows) ?
+    replicaOperationRows :
+    []) {
+    appendSourceRow(replicaOperationRow);
+  }
+  for (const summaryRow of resolvePriorityRecoveryReplicaOperationSummaryRows(
+    replicaOperationsSummary,
+  )) {
+    appendSourceRow(summaryRow);
+  }
+  return sourceRows;
+}
 
 function buildPriorityRecoveryReplicaOperationContexts(
   replicaOperationRows = [],
@@ -527,212 +726,20 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
   };
 }
 
-const PRIORITY_RECOVERY_OPERATION_STEP_TERMINAL_STATE = Object.freeze({
-  UNKNOWN: 'operation_step_terminal_unknown',
-});
-
-// Reconcile the two recorded truths about a drain op's progress. A drain op's
-// record-level `workflowStep` column can lag behind its already-terminal timeline
-// (write-through lag, CL-016/CL-035 family): the row still reads `STOPPING` while the
-// operation timeline has reached `REMOVED/removed`. The classifier below consults the
-// record step first, so a stale non-terminal `false` short-circuits and the finished op
-// is wrongly counted active → `hasActiveOperationContexts` stays true → the partition is
-// pinned in `spread_satisfied_in_flight` and operation_drain never closes. The
-// reconciliation honors a terminal timeline step over a stale non-terminal record step,
-// scoped to removal-completing REMOVE/REPLACE ops (ADD never retires here; REPLACE still
-// requires its target ACTIVE_OPERATIONAL so a still-building replacement is never dropped,
-// and an in-flight timeline entry blocks promotion).
-
-function resolvePriorityRecoveryOperationStepTerminalState(
-  operationType,
-  workflowStep,
-) {
-  const normalizedOperationType = String(operationType || '').toUpperCase();
-  const normalizedWorkflowStep = String(workflowStep || '').toUpperCase();
-  if (
-    normalizedOperationType.length === 0 ||
-    normalizedWorkflowStep.length === 0 ||
-    !isValidReplicaOperationStep(
-      normalizedOperationType,
-      normalizedWorkflowStep,
-    )
-  ) {
-    return PRIORITY_RECOVERY_OPERATION_STEP_TERMINAL_STATE.UNKNOWN;
-  }
-  return isTerminalReplicaOperationStep(
-    normalizedOperationType,
-    normalizedWorkflowStep,
-  );
-}
-
-// The single seam where the record `workflowStep` and the timeline `latestTimelineStep`
-// disagree (the CL-016/CL-035 write-through lag) is reconciled: honor a terminal timeline
-// step over a stale non-terminal record step, scoped so a still-building replacement is
-// never dropped (ADD never retires here; REPLACE requires its target ACTIVE_OPERATIONAL).
-// Reconciled in exactly one place so the over-removal fix has a single edit point instead
-// of an inline clause in the precedence cascade.
-function shouldRetireOnTerminalTimelineDespiteStaleStep(
-  operationContext,
-  operationType,
-  workflowStepTerminalState,
-  latestTimelineStepTerminalState,
-) {
-  return (
-    workflowStepTerminalState === false &&
-    latestTimelineStepTerminalState === true &&
-    operationContext.latestTimelineInFlight !== true &&
-    operationType !== OperationType.ADD &&
-    (operationType !== OperationType.REPLACE ||
-      operationContext.targetVisibilityState ===
-        PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL)
-  );
-}
-
-function isPriorityRecoveryOperationContextTerminal(operationContext) {
-  if (!operationContext || typeof operationContext !== 'object') {
-    return false;
-  }
-  const operationType = String(operationContext.type || '').toUpperCase();
-  const workflowStepTerminalState =
-    resolvePriorityRecoveryOperationStepTerminalState(
-      operationType,
-      operationContext.workflowStep,
-    );
-  if (workflowStepTerminalState === true) {
-    return true;
-  }
-  const latestTimelineStepTerminalState =
-    resolvePriorityRecoveryOperationStepTerminalState(
-      operationType,
-      operationContext.latestTimelineStep,
-    );
-  if (
-    shouldRetireOnTerminalTimelineDespiteStaleStep(
-      operationContext,
-      operationType,
-      workflowStepTerminalState,
-      latestTimelineStepTerminalState,
-    )
-  ) {
-    return true;
-  }
-  if (typeof workflowStepTerminalState === 'boolean') {
-    return workflowStepTerminalState;
-  }
-  if (typeof latestTimelineStepTerminalState === 'boolean') {
-    return latestTimelineStepTerminalState;
-  }
-  if (operationContext.latestTimelineInFlight === true) {
-    return false;
-  }
-  const status = String(operationContext.status || '').toLowerCase();
-  if (status.length === 0) {
-    return false;
-  }
-  if (status === STATUS_ACTIVE) {
-    return operationType !== OperationType.REPLACE;
-  }
-  return PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET.has(status);
-}
-
-function isPriorityRecoveryCompletedAddOperationContext(operationContext) {
-  if (!operationContext || typeof operationContext !== 'object') {
-    return false;
-  }
-  const operationType = String(operationContext.type || '').toUpperCase();
-  if (operationType !== OperationType.ADD) {
-    return false;
-  }
-  const workflowStep = String(
-    operationContext.workflowStep || '',
-  ).toUpperCase();
-  if (
-    workflowStep === PRIORITY_RECOVERY_SNAPSHOT_LITERAL.ACTIVE &&
-    resolvePriorityRecoveryOperationStepTerminalState(
-      operationType,
-      workflowStep,
-    ) === true
-  ) {
-    return true;
-  }
-  const latestTimelineStep = String(
-    operationContext.latestTimelineStep || '',
-  ).toUpperCase();
-  return (
-    latestTimelineStep === PRIORITY_RECOVERY_SNAPSHOT_LITERAL.ACTIVE &&
-    operationContext.latestTimelineInFlight !== true &&
-    resolvePriorityRecoveryOperationStepTerminalState(
-      operationType,
-      latestTimelineStep,
-    ) === true
-  );
-}
-
-function isPriorityRecoveryCompletedReplaceOperationContext(operationContext) {
-  if (!operationContext || typeof operationContext !== 'object') {
-    return false;
-  }
-  const operationType = String(operationContext.type || '').toUpperCase();
-  if (operationType !== OperationType.REPLACE) {
-    return false;
-  }
-  if (
-    operationContext.targetVisibilityState !==
-    PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL
-  ) {
-    return false;
-  }
-  if (isPriorityRecoveryOperationContextTerminal(operationContext)) {
-    return true;
-  }
-  const workflowStep = String(
-    operationContext.workflowStep || '',
-  ).toUpperCase();
-  if (
-    workflowStep.length > 0 &&
-    resolvePriorityRecoveryOperationStepTerminalState(
-      operationType,
-      workflowStep,
-    ) === true
-  ) {
-    return true;
-  }
-  const latestTimelineStep = String(
-    operationContext.latestTimelineStep || '',
-  ).toUpperCase();
-  return (
-    latestTimelineStep.length > 0 &&
-    operationContext.latestTimelineInFlight !== true &&
-    resolvePriorityRecoveryOperationStepTerminalState(
-      operationType,
-      latestTimelineStep,
-    ) === true
-  );
-}
-
-function isPriorityRecoveryCompletedPlacementOperationContext(
-  operationContext,
-) {
-  return (
-    isPriorityRecoveryCompletedAddOperationContext(operationContext) ||
-    isPriorityRecoveryCompletedReplaceOperationContext(operationContext)
-  );
-}
-
 export {
   _resolvePriorityRecoveryTargetVisibilityState,
   buildPriorityRecoveryOperationContextFromRecord,
-  resolvePriorityRecoveryStepAge,
+  buildPriorityRecoveryReplicaOperationContext,
   buildPriorityRecoveryReplicaOperationContexts,
+  buildPriorityRecoveryReplicaOperationSourceRows,
   buildPriorityRecoveryTargetServiceEvidence,
   doesPriorityRecoveryServiceRowMatchOperationTarget,
-  isPriorityRecoveryCompletedAddOperationContext,
-  isPriorityRecoveryCompletedPlacementOperationContext,
-  isPriorityRecoveryCompletedReplaceOperationContext,
-  isPriorityRecoveryOperationContextTerminal,
   isPriorityRecoveryTargetServiceRowProgressing,
+  normalizePriorityRecoveryReplicaOperationContextBuildOptions,
   parsePriorityRecoveryStepsHistory,
-  resolvePriorityRecoveryOperationStepTerminalState,
+  resolvePriorityRecoveryOperationTimeline,
+  resolvePriorityRecoveryReplicaOperationSummaryRows,
+  resolvePriorityRecoveryStepAge,
   resolvePriorityRecoveryTargetServiceRowProgressTimestampMs,
   resolvePriorityRecoveryTargetServiceRowStatus,
   resolvePriorityRecoveryTargetServiceRowVisibilityState,

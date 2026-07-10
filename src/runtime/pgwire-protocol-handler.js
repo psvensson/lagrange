@@ -112,6 +112,7 @@ class PgWireProtocolHandler {
     this._phase = HANDLER_PHASE.STARTUP;
     this._session = null;
     this._buffer = Buffer.alloc(0);
+    this._processing = Promise.resolve();
     this._pid = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
     this._secretKey = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
 
@@ -160,7 +161,9 @@ class PgWireProtocolHandler {
   _onData(chunk) {
     if (this._phase === HANDLER_PHASE.CLOSED) return;
     this._buffer = Buffer.concat([this._buffer, chunk]);
-    this._processBuffer();
+    this._processing = this._processing
+      .then(() => this._processBuffer())
+      .catch((error) => this._handleProcessingError(error));
   }
 
   /** @private */
@@ -180,11 +183,12 @@ class PgWireProtocolHandler {
   // --- Buffer processing ---
 
   /** @private */
-  _processBuffer() {
+  async _processBuffer() {
     if (this._phase === HANDLER_PHASE.STARTUP) {
-      this._processStartup();
-    } else if (this._phase === HANDLER_PHASE.NORMAL) {
-      this._processMessages();
+      await this._processStartup();
+    }
+    if (this._phase === HANDLER_PHASE.NORMAL) {
+      await this._processMessages();
     }
   }
 
@@ -192,11 +196,19 @@ class PgWireProtocolHandler {
    * Process startup phase: read startup message (no type byte).
    * @private
    */
-  _processStartup() {
+  async _processStartup() {
     if (this._buffer.length < PG_BUFFER_LIMIT.STARTUP_HEADER_SIZE) {
       return;
     }
     const msgLen = this._buffer.readInt32BE(0);
+    if (msgLen < PG_BUFFER_LIMIT.STARTUP_HEADER_SIZE * 2) {
+      this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
+      return;
+    }
+    if (msgLen > PG_BUFFER_LIMIT.MAX_MESSAGE_SIZE) {
+      this._failProtocol(PG_HANDLER_ERROR.MESSAGE_TOO_LARGE);
+      return;
+    }
     if (this._buffer.length < msgLen) return;
 
     const msgBuf = this._buffer.subarray(0, msgLen);
@@ -232,7 +244,7 @@ class PgWireProtocolHandler {
       database: params.database,
     });
 
-    this._handleStartup(params);
+    await this._handleStartup(params);
   }
 
   /**
@@ -291,21 +303,24 @@ class PgWireProtocolHandler {
 
     this._phase = HANDLER_PHASE.NORMAL;
     this._logger.debug(PG_HANDLER_LOG.AUTH_OK, {sessionId});
-
-    // Process any remaining buffered data
-    if (this._buffer.length > 0) {
-      this._processMessages();
-    }
   }
 
   /**
    * Process normal-phase messages (type + length + payload).
    * @private
    */
-  _processMessages() {
+  async _processMessages() {
     while (this._buffer.length >= PG_BUFFER_LIMIT.MSG_HEADER_SIZE) {
       const type = this._buffer[0];
       const msgLen = this._buffer.readInt32BE(1);
+      if (msgLen < PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE) {
+        this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
+        return;
+      }
+      if (msgLen > PG_BUFFER_LIMIT.MAX_MESSAGE_SIZE) {
+        this._failProtocol(PG_HANDLER_ERROR.MESSAGE_TOO_LARGE);
+        return;
+      }
       const totalLen = 1 + msgLen;
 
       if (this._buffer.length < totalLen) break;
@@ -315,7 +330,10 @@ class PgWireProtocolHandler {
       );
       this._buffer = this._buffer.subarray(totalLen);
 
-      this._dispatchMessage(type, payload);
+      await this._dispatchMessage(type, payload);
+      if (this._phase === HANDLER_PHASE.CLOSED) {
+        return;
+      }
     }
   }
 
@@ -326,10 +344,10 @@ class PgWireProtocolHandler {
    * @param {Buffer} payload - Message payload.
    * @private
    */
-  _dispatchMessage(type, payload) {
+  async _dispatchMessage(type, payload) {
     switch (type) {
     case PG_FRONTEND_MSG.QUERY:
-      this._handleSimpleQuery(payload);
+      await this._handleSimpleQuery(payload);
       break;
     case PG_FRONTEND_MSG.PARSE:
       this._handleParse(payload);
@@ -341,7 +359,7 @@ class PgWireProtocolHandler {
       this._handleDescribe(payload);
       break;
     case PG_FRONTEND_MSG.EXECUTE:
-      this._handleExecute(payload);
+      await this._handleExecute(payload);
       break;
     case PG_FRONTEND_MSG.SYNC:
       this._handleSync();
@@ -627,18 +645,18 @@ class PgWireProtocolHandler {
    */
   async _executeAndSend(query, params) {
     const upper = query.trimStart().toUpperCase();
-
-    // Track transaction state transitions
-    if (upper.startsWith(LOCAL_STR_BEGIN)) {
-      this._session.setTransactionState(
-        PG_TRANSACTION_STATE.IN_TRANSACTION,
-      );
-    }
+    this._applyTransactionStart(upper);
 
     try {
       const result = await this._adapter.execute(
         this._session.sessionId, query, params,
       );
+      if (result?.success === false) {
+        throw new Error(
+          result.error || result.message ||
+          PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED,
+        );
+      }
 
       // Send result set for SELECT-like queries
       const columns = extractColumns(result);
@@ -653,27 +671,41 @@ class PgWireProtocolHandler {
       const tag = deriveCommandTag(result, query);
       this._socket.write(buildCommandComplete(tag));
 
-      // Update transaction state on COMMIT/ROLLBACK
-      if (upper.startsWith(LOCAL_STR_COMMIT) ||
-          upper.startsWith(LOCAL_STR_ROLLBACK)) {
-        this._session.setTransactionState(
-          PG_TRANSACTION_STATE.IDLE,
-        );
-      }
+      this._applyTransactionCompletion(upper);
     } catch (err) {
-      // On error in a transaction, mark as failed
-      if (this._session.getTransactionState() ===
-          PG_TRANSACTION_STATE.IN_TRANSACTION) {
-        this._session.setTransactionState(
-          PG_TRANSACTION_STATE.FAILED,
-        );
-      }
-
+      this._applyTransactionFailure();
       this._sendError(
         PG_SEVERITY.ERROR,
         PG_ERROR_CODE.INTERNAL_ERROR,
         err.message,
       );
+    }
+  }
+
+  /** @private */
+  _applyTransactionStart(upperQuery) {
+    if (upperQuery.startsWith(LOCAL_STR_BEGIN)) {
+      this._session.setTransactionState(PG_TRANSACTION_STATE.IN_TRANSACTION);
+    }
+  }
+
+  /** @private */
+  _applyTransactionCompletion(upperQuery) {
+    if (
+      upperQuery.startsWith(LOCAL_STR_COMMIT) ||
+      upperQuery.startsWith(LOCAL_STR_ROLLBACK)
+    ) {
+      this._session.setTransactionState(PG_TRANSACTION_STATE.IDLE);
+    }
+  }
+
+  /** @private */
+  _applyTransactionFailure() {
+    if (
+      this._session.getTransactionState() ===
+      PG_TRANSACTION_STATE.IN_TRANSACTION
+    ) {
+      this._session.setTransactionState(PG_TRANSACTION_STATE.FAILED);
     }
   }
 
@@ -689,6 +721,28 @@ class PgWireProtocolHandler {
    */
   _sendError(severity, code, message) {
     this._socket.write(buildErrorResponse(severity, code, message));
+  }
+
+  /** @private */
+  _failProtocol(message) {
+    this._sendError(
+      PG_SEVERITY.FATAL,
+      PG_ERROR_CODE.PROTOCOL_VIOLATION,
+      message,
+    );
+    this._phase = HANDLER_PHASE.CLOSED;
+    this._socket.end();
+  }
+
+  /** @private */
+  _handleProcessingError(error) {
+    if (this._phase === HANDLER_PHASE.CLOSED) {
+      return;
+    }
+    this._logger.debug(PG_HANDLER_LOG.CONNECTION_ERROR, {
+      error: error.message,
+    });
+    this._failProtocol(error.message);
   }
 }
 

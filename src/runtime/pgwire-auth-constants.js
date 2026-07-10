@@ -41,6 +41,16 @@ const PGWIRE_AUTH_ERROR_MSG = Object.freeze({
   AUTHORIZATION_DENIED: 'Authorization denied for action',
   SESSION_NOT_AUTHENTICATED:
     'Session must be authenticated before authorization',
+  MODE_REQUIRED:
+    'PG wire authentication requires an explicit mode or authenticator',
+  MODE_UNSUPPORTED:
+    'Unsupported PG wire authentication mode',
+  POLICY_REQUIRED:
+    'PG wire authorization requires an explicit policy',
+});
+
+const PGWIRE_AUTH_HANDLER_MODE = Object.freeze({
+  TRUST: 'trust',
 });
 
 // --- Log tag for auth audit entries ---
@@ -53,4 +63,5 @@ export {
   PGWIRE_AUTH_AUDIT_MSG,
   PGWIRE_AUTH_ERROR_MSG,
   PGWIRE_AUTH_LOG_TAG,
+  PGWIRE_AUTH_HANDLER_MODE,
 };

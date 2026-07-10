@@ -14,6 +14,53 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import fs from 'fs';
 import path from 'path';
+import {parse} from 'espree';
+
+function isTestRegistrationCall(node) {
+  if (node?.type !== 'CallExpression') {
+    return false;
+  }
+  if (node.callee?.type === 'Identifier') {
+    return node.callee.name === 'test';
+  }
+  return node.callee?.type === 'MemberExpression' &&
+    node.callee.computed !== true &&
+    node.callee.object?.type === 'Identifier' &&
+    node.callee.object.name === 't' &&
+    node.callee.property?.type === 'Identifier' &&
+    node.callee.property.name === 'test';
+}
+
+function hasSkippedTestOption(content) {
+  const syntaxTree = parse(content, {
+    ecmaVersion: 'latest',
+    sourceType: 'module',
+  });
+  const pending = [syntaxTree];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (isTestRegistrationCall(node)) {
+      const hasSkipOption = node.arguments.some((argument) =>
+        argument?.type === 'ObjectExpression' &&
+        argument.properties.some((property) =>
+          property?.type === 'Property' &&
+          property.computed !== true &&
+          (property.key?.name === 'skip' || property.key?.value === 'skip'),
+        ));
+      if (hasSkipOption) {
+        return true;
+      }
+    }
+    for (const value of Object.values(node || {})) {
+      if (Array.isArray(value)) {
+        pending.push(...value.filter((entry) => entry && typeof entry === 'object'));
+      } else if (value && typeof value === 'object') {
+        pending.push(value);
+      }
+    }
+  }
+  return false;
+}
 
 /**
  * Get all property test files in the test directory.
@@ -158,8 +205,8 @@ test('Property 9: Test Configuration Compliance', async (t) => {
   /**
    * Property: No skipped tests in test files.
    *
-   * For any test file, there SHALL be no occurrences of .skip(),
-   * xit(), xdescribe(), or xtest().
+   * For any test file, there SHALL be no skipped test option, .skip(), xit(),
+   * xdescribe(), or xtest().
    *
    * **Validates: Requirements 11.4**
    */
@@ -173,7 +220,7 @@ test('Property 9: Test Configuration Compliance', async (t) => {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           walkDir(fullPath);
-        } else if (entry.name.endsWith('.test.js')) {
+        } else if (entry.name.endsWith('.js')) {
           testFiles.push(fullPath);
         }
       }
@@ -198,6 +245,14 @@ test('Property 9: Test Configuration Compliance', async (t) => {
       }
 
       const content = fs.readFileSync(filePath, 'utf-8');
+
+      if (hasSkippedTestOption(content)) {
+        filesWithSkips.push({
+          file: path.relative(process.cwd(), filePath),
+          pattern: 'test options object with skip property',
+        });
+        continue;
+      }
 
       for (const pattern of skipPatterns) {
         if (pattern.test(content)) {

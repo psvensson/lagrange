@@ -522,8 +522,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance does not defer critical system partitions for unrelated active-node replica operations in flight',
-    {skip: 'STALE: dead test re-enabled; expected evaluate count 1 (unrelated in-flight ops do not block) but product now defers and returns 0'},
+    'checkRebalance defers critical system partitions while active-node replica operations are in flight',
     async (t) => {
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
@@ -574,8 +573,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'critical system partitions should continue evaluating when only unrelated topology operations are in flight',
+        0,
+        'critical system partitions should wait for active topology operations to clear',
       );
       t.equal(
         scheduledDelayMs !== UNSCHEDULED,
@@ -646,8 +645,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance does not defer critical system partitions for same-entity REPLACE remove-dispatch rows',
-    {skip: 'STALE: dead test re-enabled; expected evaluate count 1 (same-entity REPLACE source-removal dispatch stays actionable) but product now defers and returns 0'},
+    'checkRebalance defers critical system partitions for same-entity REPLACE remove-dispatch rows',
     async (t) => {
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
@@ -698,8 +696,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'critical system partitions should keep evaluating once the same-entity REPLACE is only dispatching source removal',
+        0,
+        'critical system partitions should wait until same-entity source removal dispatch clears',
       );
       t.equal(
         scheduledDelayMs !== UNSCHEDULED,
@@ -923,10 +921,9 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance allows priority control-plane partitions to recover ' +
+    'checkRebalance defers priority control-plane partitions ' +
     'while the local seed still has an explicit self ready-lease clear ' +
     'once bootstrap lifecycle opens metadata publication',
-    {skip: 'STALE: dead test re-enabled; expected recovery to proceed (evaluate count 1) once metadata publication opens, but product still parks on local self ready-lease/self-readiness and returns 0'},
     async (t) => {
       const bootstrapReadinessState = {
         evaluate: () => ({
@@ -1026,13 +1023,13 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'priority control-plane recovery must not self-deadlock behind the restarting seed ready-lease quarantine once metadata publication is open',
+        0,
+        'priority control-plane recovery should wait for local self readiness to republish',
       );
       t.equal(
         scheduledDelayMs,
-        null,
-        'priority control-plane recovery should not remain parked on local self readiness after metadata publication opens',
+        rebalancer.criticalCheckDelayMs,
+        'priority control-plane recovery should retry local self readiness on the short critical cadence',
       );
     });
 

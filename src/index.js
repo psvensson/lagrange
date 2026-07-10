@@ -3,12 +3,6 @@
  */
 
 import './boot/load-env.js';
-import {dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {
-  computeSourceFingerprint,
-  SOURCE_FINGERPRINT_ENV_VAR,
-} from './diagnostics/source-fingerprint.js';
 import {EventLoopGapWatchdog} from './diagnostics/event-loop-gap-watchdog.js';
 import {ConfigurationManager} from './config/configuration-manager.js';
 import {CONFIG_KEY, DEFAULT_CONFIG} from './config/config-constants.js';
@@ -20,7 +14,6 @@ import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {createControlPlaneWriteHealthProvider} from
   './bootstrap/control-plane-write-health-owner.js';
 import {
-  resolveAutoRejoinStartupDecision,
   persistBootstrapRejoinHints,
   readPersistedLocalNodeId,
 } from './bootstrap/rejoin-hints.js';
@@ -39,10 +32,11 @@ import {
   ENTRYPOINT_ENV,
   ENTRYPOINT_ERROR_MSG,
   ENTRYPOINT_LOG_MSG,
+  ENTRYPOINT_RUNTIME_VALUE,
   ENTRYPOINT_SUBSYSTEM,
   ENTRYPOINT_TEXT,
-  ENTRYPOINT_VERSION,
 } from './constants/entrypoint.js';
+import {VERSION} from './public-api.js';
 import {assertCritical} from './utils/assert.js';
 import {
   MembershipLifecycleController,
@@ -75,78 +69,16 @@ import {
   startRejoinHintsPersistence,
   resolveSystemCacheHandles,
 } from './entrypoint-runtime-helpers.js';
+import {
+  resolveBootSourceProvenance,
+  resolveJoinReattemptPolicy,
+  resolveLocalClusterIncarnationFence,
+} from './entrypoint-runtime-provenance.js';
 
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_JOINER = 'joiner';
-const LOCAL_STR_FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS = 'Failed to persist bootstrap rejoin hints';
-const LOCAL_STR_JOIN = 'join';
-const LOCAL_STR_SEED = 'seed';
-const LOCAL_STR_CONFIGURATION_LOADED = 'Configuration loaded';
-const LOCAL_STR_REATTEMPT_JOIN =
-  'Re-attempting cluster join after retryable failure';
-const LOCAL_STR_DEBUG = 'debug';
-const LOCAL_STR_INFO = 'info';
-// A retryable join failure (e.g. transient transport/participant unavailability
-// during a rolling restart) should re-compose a fresh join rather than exiting
-// the node permanently. Bounded so a genuinely non-joinable node still fails
-// fast. Override via env; set to <=1 to restore exit-on-first-failure.
-const JOIN_REATTEMPT_MAX_ATTEMPTS =
-  Number.isFinite(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) &&
-  Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS) >= 1 ?
-    Math.floor(Number(process.env.LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS)) :
-    4;
-const JOIN_REATTEMPT_BASE_DELAY_MS = 2000;
-const JOIN_REATTEMPT_MAX_DELAY_MS = 30000;
-const JOIN_REATTEMPT_BACKOFF_CAP_EXP = 10;
+const JOIN_REATTEMPT_POLICY = resolveJoinReattemptPolicy(process.env);
 
-// Re-export modules for external use
-export * from './query/index.js';
-export * from './partition/index.js';
-export * from './config/configuration-manager.js';
-export * from './logging/logging-service.js';
-export * from './hlc/index.js';
-export * from './cache/index.js';
-export * from './address/index.js';
-export * from './bootstrap/index.js';
-export * from './cdc/index.js';
-export * from './message-group/index.js';
-export * from './node/index.js';
-export * from './rebalancer/index.js';
-export * from './service/index.js';
-export * from './threading/index.js';
-export * from './transport/index.js';
-export * from './storage/index.js';
+export * from './public-api.js';
 
-/**
- * System version.
- */
-export const VERSION = ENTRYPOINT_VERSION;
-
-async function resolveLocalClusterIncarnationFence(options = {}) {
-  const startupDecision = await resolveAutoRejoinStartupDecision({
-    dataDir: options.dataDir,
-    nodeId: options.nodeId,
-    nodeAddress: options.nodeAddress,
-  });
-  return startupDecision?.clusterIncarnationFence &&
-    typeof startupDecision.clusterIncarnationFence === LOCAL_STR_OBJECT ?
-    startupDecision.clusterIncarnationFence :
-    null;
-}
-
-/**
- * Compose and start one joining-node runtime path.
- * @param {Object} options
- * @param {Object} options.config
- * @param {Object} options.mainLogger
- * @param {Object} options.dataDirectoryManager
- * @param {Object} options.rolloutControls
- * @param {string} options.seedNodeAddress
- * @param {string} options.startupMode
- * @param {Object} options.membershipOwnerOutcome
- * @param {Object} options.env
- * @return {Promise<void>}
- */
 async function startJoinNode(options) {
   const {config, mainLogger, dataDirectoryManager, rolloutControls} = options;
   const seedNodeAddress = String(options.seedNodeAddress || '');
@@ -168,16 +100,19 @@ async function startJoinNode(options) {
       dataDir: dataDirectoryManager.getDataDir(),
       nodeId,
       nodeAddress: joiningNodeAddress,
-      nodeRole: LOCAL_STR_JOINER,
+      nodeRole: ENTRYPOINT_RUNTIME_VALUE.JOINER,
       peerAddresses: [seedNodeAddress],
       clusterNodeCount: 2,
     });
   } catch (error) {
-    mainLogger.warn(LOCAL_STR_FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS, {
-      nodeId,
-      dataDir: dataDirectoryManager.getDataDir(),
-      error: error.message,
-    });
+    mainLogger.warn(
+      ENTRYPOINT_RUNTIME_VALUE.FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS,
+      {
+        nodeId,
+        dataDir: dataDirectoryManager.getDataDir(),
+        error: error.message,
+      },
+    );
   }
   const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
     dataDir: dataDirectoryManager.getDataDir(),
@@ -314,14 +249,17 @@ async function startJoinNode(options) {
     // a non-retryable failure (or exhausted attempts) exits.
     const reattemptAllowed =
       joinResult.retryable === true &&
-      joinAttempt + 1 < JOIN_REATTEMPT_MAX_ATTEMPTS;
+      joinAttempt + 1 < JOIN_REATTEMPT_POLICY.maxAttempts;
     if (reattemptAllowed) {
       // Exponential, capped backoff so a persistently-failing join SLOWS DOWN
       // (does not hammer a saturated seed) but never gives up.
-      const cappedExp = Math.min(joinAttempt, JOIN_REATTEMPT_BACKOFF_CAP_EXP);
+      const cappedExp = Math.min(
+        joinAttempt,
+        JOIN_REATTEMPT_POLICY.backoffCapExponent,
+      );
       const backoffMs = Math.min(
-        JOIN_REATTEMPT_MAX_DELAY_MS,
-        JOIN_REATTEMPT_BASE_DELAY_MS * Math.pow(2, cappedExp),
+        JOIN_REATTEMPT_POLICY.maxDelayMs,
+        JOIN_REATTEMPT_POLICY.baseDelayMs * Math.pow(2, cappedExp),
       );
       const delayMs = Math.max(
         Number.isFinite(joinResult.retryAfterMs) ?
@@ -329,10 +267,10 @@ async function startJoinNode(options) {
           0,
         backoffMs,
       );
-      mainLogger.warn(LOCAL_STR_REATTEMPT_JOIN, {
+      mainLogger.warn(ENTRYPOINT_RUNTIME_VALUE.REATTEMPT_JOIN, {
         nodeId,
         attempt: joinAttempt + 1,
-        maxAttempts: JOIN_REATTEMPT_MAX_ATTEMPTS,
+        maxAttempts: JOIN_REATTEMPT_POLICY.maxAttempts,
         delayMs,
       });
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -427,7 +365,7 @@ async function startJoinNode(options) {
   reportStartupRuntimeHandoff({
     logger: mainLogger,
     nodeId,
-    startupBranch: LOCAL_STR_JOIN,
+    startupBranch: ENTRYPOINT_RUNTIME_VALUE.JOIN,
     bootstrapAPI,
     startupOwner: nodeJoiningService,
     adminRuntime: joinAdminRuntime,
@@ -449,7 +387,7 @@ async function startJoinNode(options) {
   scheduleStartupLivenessPulse({
     logger: mainLogger,
     nodeId,
-    startupBranch: LOCAL_STR_JOIN,
+    startupBranch: ENTRYPOINT_RUNTIME_VALUE.JOIN,
     bootstrapAPI,
     startupOwner: nodeJoiningService,
   });
@@ -652,7 +590,7 @@ async function startSeedNode(options) {
   reportStartupRuntimeHandoff({
     logger: mainLogger,
     nodeId,
-    startupBranch: LOCAL_STR_SEED,
+    startupBranch: ENTRYPOINT_RUNTIME_VALUE.SEED,
     bootstrapAPI,
     startupOwner: bootstrapService,
     adminRuntime: seedAdminRuntime,
@@ -675,7 +613,7 @@ async function startSeedNode(options) {
   scheduleStartupLivenessPulse({
     logger: mainLogger,
     nodeId,
-    startupBranch: LOCAL_STR_SEED,
+    startupBranch: ENTRYPOINT_RUNTIME_VALUE.SEED,
     bootstrapAPI,
     startupOwner: bootstrapService,
   });
@@ -702,29 +640,6 @@ async function startSeedNode(options) {
     failureMessage: 'Failed to shutdown seed node cleanly',
   });
   registerShutdownSignalHandlers(handleShutdownSignal);
-}
-
-// Self-verify the source the node actually booted from. The harness injects the
-// working-tree fingerprint via SOURCE_FINGERPRINT_ENV_VAR; here we independently
-// recompute the fingerprint of the directory this entrypoint module was loaded
-// from (e.g. /app/src under the fast-local bind mount). A mismatch is proof the
-// running process imported stale code — the trap this guards against. Best
-// effort: a fingerprint error must never block or fail startup.
-async function resolveBootSourceProvenance() {
-  const expectedSrcFingerprint =
-    process.env[SOURCE_FINGERPRINT_ENV_VAR] || null;
-  let bootedSrcFingerprint = null;
-  try {
-    const sourceDir = dirname(fileURLToPath(import.meta.url));
-    bootedSrcFingerprint = await computeSourceFingerprint(sourceDir);
-  } catch {
-    bootedSrcFingerprint = null;
-  }
-  const srcFingerprintMatches =
-    expectedSrcFingerprint && bootedSrcFingerprint ?
-      expectedSrcFingerprint === bootedSrcFingerprint :
-      null;
-  return {expectedSrcFingerprint, bootedSrcFingerprint, srcFingerprintMatches};
 }
 
 /**
@@ -778,9 +693,9 @@ async function main() {
   const loggingService = LoggingService.getInstance();
   loggingService.initialize({
     nodeId: config.get(CONFIG_KEY.NODE_ID),
-    level: debugLogsEnabled ? LOCAL_STR_DEBUG : configuredLogLevel,
+    level: debugLogsEnabled ? ENTRYPOINT_RUNTIME_VALUE.DEBUG : configuredLogLevel,
     persistLevel: debugLogsEnabled ?
-      (configuredLogLevel || LOCAL_STR_INFO) :
+      (configuredLogLevel || ENTRYPOINT_RUNTIME_VALUE.INFO) :
       undefined,
     prettyPrint: config.get(CONFIG_KEY.LOGGING_PRETTY_PRINT),
   });
@@ -805,7 +720,7 @@ async function main() {
   });
   ensureLiferaftProviderForRuntime(process.env);
 
-  configLogger.debug(LOCAL_STR_CONFIGURATION_LOADED, {
+  configLogger.debug(ENTRYPOINT_RUNTIME_VALUE.CONFIGURATION_LOADED, {
     categories: config.getCategories(),
   });
 

@@ -19,8 +19,9 @@ const LOCAL_STR_SCRIPTS_CHECK_COGNITIVE_COMPLEXITY_JS = 'scripts/check-cognitive
 const TARGET_THRESHOLD = 20;
 // Re-anchored 2026-07-02 for the 0.1.0 release gate (was 144, measured 184
 // with the gate silently red — never executed by any full gate run before).
-// Ratchet DOWN from here.
-const BASELINE_COUNT = 184;
+// Ratcheted down after the PG descriptor decision-table extraction. Ratchet
+// DOWN only from here.
+const BASELINE_COUNT = 183;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

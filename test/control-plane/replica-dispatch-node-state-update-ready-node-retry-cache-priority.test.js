@@ -70,10 +70,8 @@ const READY_RETRY_OPERATION_WITNESS_PARTITION_ID =
 const READY_RETRY_PARTIAL_CACHE_EXPECTED_QUEUE_COUNT = 3;
 const READY_RETRY_OPERATION_WITNESS_EXPECTED_QUEUE_COUNT = 2;
 const READY_RETRY_PUBLICATION_FORCE_TEST_NAME =
-  'ReplicaDispatchService publication updates force ready-node retry after ' +
-  'an unchanged ready watermark';
-const READY_RETRY_PUBLICATION_FORCE_OPERATION_ID =
-  'op-priority-retry-publication-force';
+  'ReplicaDispatchService publication updates advance membership publication ' +
+  'without replaying an unchanged ready watermark';
 const READY_RETRY_PUBLICATION_FORCE_PARTITION_ID =
   'control_plane_publications-p1';
 const READY_RETRY_PUBLICATION_FORCE_ID =
@@ -86,11 +84,6 @@ const READY_RETRY_ASSERT_WITNESS_AUTHORITY_READ =
   'operation-level priority witness coverage should query authoritative rows';
 const READY_RETRY_ASSERT_WITNESS_QUEUE_IDS =
   'operation-level priority witness coverage should enqueue the blocked row';
-const READY_RETRY_ASSERT_PUBLICATION_FORCE_AUTHORITY_READ =
-  'publication updates should force authoritative rediscovery after an ' +
-  'unchanged ready watermark';
-const READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE =
-  'publication updates should re-enter dispatch for newly visible operations';
 
 async function waitForOperationDispatchQueueDrain(service = null) {
   for (
@@ -185,7 +178,6 @@ test('ReplicaDispatchService ready-node retry prefers membership publication own
   });
 
 test('ReplicaDispatchService ready-node retry prefers cache-visible rows over authoritative priority fallback',
-  {skip: 'STALE: dead test re-enabled; expected only a node_ready_dispatch_retry enqueue but product now also emits a replica_operations_cache_pending enqueue for the same cache-visible row'},
   async (t) => {
     initEnv();
 
@@ -255,6 +247,10 @@ test('ReplicaDispatchService ready-node retry prefers cache-visible rows over au
         },
       },
     });
+    await waitForOperationDispatchQueueDrain(service);
+    await service.nodeReadyRetryQueue.drain();
+    await waitForOperationDispatchQueueDrain(service);
+    service.clearNodeReadyRetryWatermark('node-2');
     const originalOperationDispatchQueue = service.operationDispatchQueue;
     service.operationDispatchQueue = {
       enqueue(operationId, reason, context) {
@@ -290,7 +286,7 @@ test('ReplicaDispatchService ready-node retry prefers cache-visible rows over au
     service.stop();
   });
 
-test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, {skip: 'STALE: dead test re-enabled; expected the partial-cache merge to enqueue only cached+authoritative rows but product now also emits a replica_operations_cache_pending enqueue per row'}, async (t) => {
+test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, async (t) => {
   initEnv();
 
   const now = Date.now();
@@ -405,6 +401,11 @@ test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, {skip: 'STALE: dead test re-enabled; e
       },
     },
   });
+  await waitForOperationDispatchQueueDrain(service);
+  await service.nodeReadyRetryQueue.drain();
+  await waitForOperationDispatchQueueDrain(service);
+  authoritativeQueryCount = 0;
+  service.clearNodeReadyRetryWatermark(READY_RETRY_TARGET_NODE_ID);
   const originalOperationDispatchQueue = service.operationDispatchQueue;
   service.operationDispatchQueue = {
     enqueue(operationId, reason, context) {
@@ -441,7 +442,7 @@ test(READY_RETRY_PARTIAL_CACHE_TEST_NAME, {skip: 'STALE: dead test re-enabled; e
   service.stop();
 });
 
-test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, {skip: 'STALE: dead test re-enabled; expected the operation-witness rediscovery to enqueue only the blocked row but product now also emits a replica_operations_cache_pending enqueue'}, async (t) => {
+test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, async (t) => {
   initEnv();
 
   const now = Date.now();
@@ -537,6 +538,11 @@ test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, {skip: 'STALE: dead test re-enable
       },
     },
   });
+  await waitForOperationDispatchQueueDrain(service);
+  await service.nodeReadyRetryQueue.drain();
+  await waitForOperationDispatchQueueDrain(service);
+  authoritativeQueryCount = 0;
+  service.clearNodeReadyRetryWatermark(READY_RETRY_TARGET_NODE_ID);
   const originalOperationDispatchQueue = service.operationDispatchQueue;
   service.operationDispatchQueue = {
     enqueue(operationId, reason, context) {
@@ -572,7 +578,7 @@ test(READY_RETRY_OPERATION_WITNESS_TEST_NAME, {skip: 'STALE: dead test re-enable
   service.stop();
 });
 
-test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, {skip: 'STALE: dead test re-enabled; expected publication-forced rediscovery to enqueue only the newly-visible op but product now also emits a replica_operations_cache_pending enqueue'}, async (t) => {
+test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, async (t) => {
   initEnv();
 
   const now = Date.now();
@@ -583,22 +589,9 @@ test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, {skip: 'STALE: dead test re-enable
     last_heartbeat: now,
     ready_lease_expires_at: now + TIME_MS.MINUTE,
   };
-  const authoritativeOperation = {
-    operationId: READY_RETRY_PUBLICATION_FORCE_OPERATION_ID,
-    partitionId: READY_RETRY_PUBLICATION_FORCE_PARTITION_ID,
-    type: OperationType.REPLACE,
-    sourceNodeId: READY_RETRY_SOURCE_NODE_ID,
-    targetNodeId: READY_RETRY_TARGET_NODE_ID,
-    status: READY_RETRY_PENDING_STATUS,
-    workflowStep: WORKFLOW_STEP.PENDING,
-    stepsHistory: [],
-  };
-  const authoritativeRowsByRead = [
-    [],
-    [authoritativeOperation],
-  ];
   let authoritativeQueryCount = 0;
   const enqueueCalls = [];
+  const publicationAdvanceCalls = [];
   const service = createService({
     nodeId: READY_RETRY_TARGET_NODE_ID,
     cacheNodes: [readyNode],
@@ -613,10 +606,8 @@ test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, {skip: 'STALE: dead test re-enable
       },
       repository: {
         async queryIncompleteOperations() {
-          const rows =
-            authoritativeRowsByRead[authoritativeQueryCount] || [];
           authoritativeQueryCount += READY_RETRY_QUEUE_DRAIN_INCREMENT;
-          return rows;
+          return [];
         },
       },
     },
@@ -657,6 +648,11 @@ test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, {skip: 'STALE: dead test re-enable
       },
     },
   });
+  await waitForOperationDispatchQueueDrain(service);
+  await service.nodeReadyRetryQueue.drain();
+  await waitForOperationDispatchQueueDrain(service);
+  authoritativeQueryCount = 0;
+  service.clearNodeReadyRetryWatermark(READY_RETRY_TARGET_NODE_ID);
   const originalOperationDispatchQueue = service.operationDispatchQueue;
   service.operationDispatchQueue = {
     enqueue(operationId, reason, context) {
@@ -668,6 +664,13 @@ test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, {skip: 'STALE: dead test re-enable
     nodeId: READY_RETRY_TARGET_NODE_ID,
     nodeRow: readyNode,
   });
+  service.scheduleLocalReadyNodeMembershipPublicationAdvance = (
+    reason,
+    publicationRow,
+  ) => {
+    publicationAdvanceCalls.push({reason, publicationRow});
+    return true;
+  };
   await service.handleCdcApplied(null, {
     tableName: 'control_plane_publications',
     data: {
@@ -680,18 +683,24 @@ test(READY_RETRY_PUBLICATION_FORCE_TEST_NAME, {skip: 'STALE: dead test re-enable
 
   t.equal(
     authoritativeQueryCount,
-    READY_RETRY_REQUIRED_DISTINCT_NODE_COUNT,
-    READY_RETRY_ASSERT_PUBLICATION_FORCE_AUTHORITY_READ,
+    READY_RETRY_EXPECTED_SINGLE_CALL,
+    'publication CDC should not repeat ready-node authoritative rediscovery',
   );
   t.same(
-    enqueueCalls.map((call) => call.operationId),
-    [READY_RETRY_PUBLICATION_FORCE_OPERATION_ID],
-    READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE,
+    enqueueCalls,
+    [],
+    'publication CDC should not bypass membership publication ownership through dispatch replay',
   );
   t.same(
-    enqueueCalls.map((call) => call.reason),
-    [RECONCILE_REASON.NODE_READY_DISPATCH_RETRY],
-    READY_RETRY_ASSERT_PUBLICATION_FORCE_QUEUE,
+    publicationAdvanceCalls,
+    [{
+      reason: RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CDC_UPDATE,
+      publicationRow: {
+        publication_id: READY_RETRY_PUBLICATION_FORCE_ID,
+        status: READY_RETRY_PUBLICATION_STATUS,
+      },
+    }],
+    'publication CDC should delegate to membership publication advancement',
   );
 
   service.operationDispatchQueue = originalOperationDispatchQueue;

@@ -27,7 +27,9 @@ import {
   PRIORITY_RECOVERY_VISIBILITY_STATE,
   PRIORITY_RECOVERY_WORKFLOW_STATE,
 } from './priority-recovery-snapshot-contract.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
+import {
+  isPriorityRecoveryOperationContextTerminal,
+} from './priority-recovery-operation-context-state.js';
 
 const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE_BY_STEP = Object.freeze(
   new Map([

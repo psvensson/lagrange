@@ -31,6 +31,11 @@ const META_FACTORY_SUBSYSTEM = 'meta-service-factory';
 // (observed starving unrelated runtime-service placement). Scale up
 // deliberately if/when real lifecycle modules exist.
 const META_SERVICE_SHIP_REPLICA_COUNT = 0;
+const POSTGRES_WIRE_RUNTIME_CONFIG = Object.freeze({
+  host: '127.0.0.1',
+  authMode: 'trust',
+  tlsMode: 'disable',
+});
 
 const META_FACTORY_LOG_MSG = Object.freeze({
   WASM_META_CREATED: 'Created sys-wasm-meta service definition',
@@ -109,7 +114,7 @@ function createPostgresWireDefinition() {
     safetyIntervalMs: WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
     runtimeKind: RUNTIME_KIND.NATIVE_JS,
     runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
-    runtimeConfig: null,
+    runtimeConfig: JSON.stringify(POSTGRES_WIRE_RUNTIME_CONFIG),
     protocol: WASM_SERVICE_PROTOCOL.POSTGRESQL,
   };
 }

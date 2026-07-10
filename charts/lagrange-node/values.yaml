@@ -15,6 +15,13 @@ image:
 joiners:
   replicas: 2
 
+# The chart publishes the admin service, so it opts into the runtime's
+# explicit insecure external-bind posture. Put authenticated ingress in front
+# of this service before exposing it outside the cluster.
+admin:
+  websocketHost: 0.0.0.0
+  allowInsecureExternalBind: true
+
 node:
   # REST API port (env REST_API_PORT). Transport WS is restPort+2 (derived by
   # the runtime). The admin WS port is a hardcoded runtime constant 8081 and

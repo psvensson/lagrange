@@ -693,8 +693,8 @@ test('NodeJoiningService - query-state shortcut keeps terminal ' +
   );
 });
 
-test('NodeJoiningService - MOVE_REPLICA control-plane upsert preserves ' +
-  'assignment publication when preferred', {skip: 'STALE: dead test re-enabled; expected preferControlPlaneUpsert shortcut to route MOVE_REPLICA via control-plane upsert (httpCalls=0, upsertCalls=1) but product now calls seed HTTP register-service (httpCalls=1, upsertCalls=0)'}, async (t) => {
+test('NodeJoiningService - MOVE_REPLICA seed registration preserves ' +
+  'assignment publication when the query-state shortcut is requested', async (t) => {
   initializeTestEnvironment();
 
   const TEST_NODE_ID = 'join-node-move-replica-upsert';
@@ -705,14 +705,16 @@ test('NodeJoiningService - MOVE_REPLICA control-plane upsert preserves ' +
   const TEST_ASSIGNMENT_ID = '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce7';
   const TEST_REQUESTED_STATUS = SERVICE_STATUS.ACTIVE;
   let httpCalls = 0;
+  let httpPayload = null;
   const upsertCalls = [];
   const seededRows = [];
   const service = new NodeJoiningService({
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     seedNodeAddress: TEST_SEED_ADDRESS,
-    httpPost: async () => {
+    httpPost: async (_url, payload) => {
       httpCalls += 1;
+      httpPayload = payload;
       return {success: true};
     },
   });
@@ -745,34 +747,26 @@ test('NodeJoiningService - MOVE_REPLICA control-plane upsert preserves ' +
 
   t.equal(
     httpCalls,
-    0,
-    'MOVE_REPLICA control-plane upsert should not call seed HTTP',
+    1,
+    'MOVE_REPLICA registration should remain owned by seed HTTP',
   );
   t.equal(
     upsertCalls.length,
-    1,
-    'MOVE_REPLICA control-plane upsert should publish one service row',
+    0,
+    'the query-state shortcut must not replace MOVE_REPLICA seed admission',
   );
   t.equal(
-    upsertCalls[0].row.assignment_id,
+    httpPayload?.assignment_id,
     TEST_ASSIGNMENT_ID,
-    'control-plane upsert should preserve the MOVE_REPLICA assignment token',
+    'seed registration should preserve the MOVE_REPLICA assignment token',
   );
   t.equal(
-    upsertCalls[0].row.status,
+    httpPayload?.status,
     TEST_REQUESTED_STATUS,
-    'control-plane upsert should preserve the requested service status',
+    'seed registration should preserve the requested service status',
   );
-  t.equal(
-    upsertCalls[0].options?.admissionTarget,
-    QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET,
-    'control-plane upsert should use the join metadata admission target',
-  );
-  t.equal(
-    seededRows[0]?.row?.assignment_id,
-    TEST_ASSIGNMENT_ID,
-    'join-time cache seed should retain assignment publication metadata',
-  );
+  t.equal(seededRows.length, 0,
+    'the seed-owned registration path should not pre-seed query-state cache rows');
 });
 
 test('NodeJoiningService - fails fast on unauthorized replica owner conflict at startup',

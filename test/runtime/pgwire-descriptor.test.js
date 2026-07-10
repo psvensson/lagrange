@@ -24,6 +24,15 @@ import {
 import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {META_SERVICE_RUNTIME_REF} from '../../src/constants/wasm-meta.js';
 
+function buildSecureConfig(overrides = {}) {
+  return JSON.stringify({
+    host: '127.0.0.1',
+    authMode: PGWIRE_AUTH_MODE.TRUST,
+    tlsMode: PGWIRE_TLS_MODE.DISABLE,
+    ...overrides,
+  });
+}
+
 describe('pgwire-descriptor', () => {
   describe('constants', () => {
     it('should export frozen PGWIRE_CONFIG_FIELD', () => {
@@ -53,10 +62,7 @@ describe('pgwire-descriptor', () => {
     });
 
     it('should have ALLOWED_AUTH_MODES matching enum', () => {
-      assert.equal(ALLOWED_AUTH_MODES.size, 3);
-      for (const mode of Object.values(PGWIRE_AUTH_MODE)) {
-        assert.ok(ALLOWED_AUTH_MODES.has(mode));
-      }
+      assert.deepEqual([...ALLOWED_AUTH_MODES], [PGWIRE_AUTH_MODE.TRUST]);
     });
 
     it('should export frozen PGWIRE_TLS_MODE', () => {
@@ -67,10 +73,7 @@ describe('pgwire-descriptor', () => {
     });
 
     it('should have ALLOWED_TLS_MODES matching enum', () => {
-      assert.equal(ALLOWED_TLS_MODES.size, 3);
-      for (const mode of Object.values(PGWIRE_TLS_MODE)) {
-        assert.ok(ALLOWED_TLS_MODES.has(mode));
-      }
+      assert.deepEqual([...ALLOWED_TLS_MODES], [PGWIRE_TLS_MODE.DISABLE]);
     });
 
     it('should export frozen PGWIRE_DESCRIPTOR_ERROR', () => {
@@ -94,30 +97,27 @@ describe('pgwire-descriptor', () => {
   });
 
   describe('validatePgwireRuntimeConfig', () => {
-    it('should accept null config (optional)', () => {
+    it('should reject null config without an explicit auth posture', () => {
       const result = validatePgwireRuntimeConfig(null);
-      assert.equal(result.valid, true);
+      assert.equal(result.valid, false);
     });
 
-    it('should accept undefined config (optional)', () => {
+    it('should reject undefined config without an explicit auth posture', () => {
       const result = validatePgwireRuntimeConfig(undefined);
-      assert.equal(result.valid, true);
+      assert.equal(result.valid, false);
     });
 
-    it('should accept empty JSON object', () => {
+    it('should reject an empty JSON object', () => {
       const result = validatePgwireRuntimeConfig('{}');
-      assert.equal(result.valid, true);
+      assert.equal(result.valid, false);
     });
 
     it('should accept valid full config', () => {
-      const cfg = JSON.stringify({
-        host: '0.0.0.0',
+      const cfg = buildSecureConfig({
         port: 5432,
         portRangeStart: 30000,
         portRangeEnd: 39999,
         maxSessions: 100,
-        authMode: 'scram-sha-256',
-        tlsMode: 'prefer',
       });
       const result = validatePgwireRuntimeConfig(cfg);
       assert.equal(result.valid, true);
@@ -143,13 +143,13 @@ describe('pgwire-descriptor', () => {
 
     describe('host validation', () => {
       it('should accept valid host string', () => {
-        const cfg = JSON.stringify({host: '127.0.0.1'});
+        const cfg = buildSecureConfig({host: '127.0.0.1'});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, true);
       });
 
       it('should reject non-string host', () => {
-        const cfg = JSON.stringify({host: 123});
+        const cfg = buildSecureConfig({host: 123});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -158,7 +158,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject empty host', () => {
-        const cfg = JSON.stringify({host: ''});
+        const cfg = buildSecureConfig({host: ''});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -167,36 +167,46 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject whitespace-only host', () => {
-        const cfg = JSON.stringify({host: '   '});
+        const cfg = buildSecureConfig({host: '   '});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
           PGWIRE_DESCRIPTOR_ERROR.HOST_EMPTY,
         ));
       });
+
+      it('rejects trust authentication on an external bind', () => {
+        const result = validatePgwireRuntimeConfig(buildSecureConfig({
+          host: '0.0.0.0',
+        }));
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          PGWIRE_DESCRIPTOR_ERROR.TRUST_REQUIRES_LOOPBACK,
+        ));
+      });
     });
 
     describe('port validation', () => {
       it('should accept valid port', () => {
-        const cfg = JSON.stringify({port: 5432});
+        const cfg = buildSecureConfig({port: 5432});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, true);
       });
 
       it('should accept port 1 (min)', () => {
-        const cfg = JSON.stringify({port: 1});
+        const cfg = buildSecureConfig({port: 1});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, true);
       });
 
       it('should accept port 65535 (max)', () => {
-        const cfg = JSON.stringify({port: 65535});
+        const cfg = buildSecureConfig({port: 65535});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, true);
       });
 
       it('should reject zero port', () => {
-        const cfg = JSON.stringify({port: 0});
+        const cfg = buildSecureConfig({port: 0});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -205,7 +215,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject negative port', () => {
-        const cfg = JSON.stringify({port: -1});
+        const cfg = buildSecureConfig({port: -1});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -214,7 +224,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject non-integer port', () => {
-        const cfg = JSON.stringify({port: 5432.5});
+        const cfg = buildSecureConfig({port: 5432.5});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -223,7 +233,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject string port', () => {
-        const cfg = JSON.stringify({port: '5432'});
+        const cfg = buildSecureConfig({port: '5432'});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -234,7 +244,7 @@ describe('pgwire-descriptor', () => {
 
     describe('port range validation', () => {
       it('should accept valid port range', () => {
-        const cfg = JSON.stringify({
+        const cfg = buildSecureConfig({
           portRangeStart: 30000,
           portRangeEnd: 39999,
         });
@@ -243,7 +253,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should accept equal start and end', () => {
-        const cfg = JSON.stringify({
+        const cfg = buildSecureConfig({
           portRangeStart: 5432,
           portRangeEnd: 5432,
         });
@@ -252,7 +262,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject inverted range', () => {
-        const cfg = JSON.stringify({
+        const cfg = buildSecureConfig({
           portRangeStart: 40000,
           portRangeEnd: 30000,
         });
@@ -264,7 +274,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject non-integer portRangeStart', () => {
-        const cfg = JSON.stringify({portRangeStart: 'abc'});
+        const cfg = buildSecureConfig({portRangeStart: 'abc'});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -273,7 +283,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject non-integer portRangeEnd', () => {
-        const cfg = JSON.stringify({portRangeEnd: 1.5});
+        const cfg = buildSecureConfig({portRangeEnd: 1.5});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -284,13 +294,13 @@ describe('pgwire-descriptor', () => {
 
     describe('maxSessions validation', () => {
       it('should accept valid maxSessions', () => {
-        const cfg = JSON.stringify({maxSessions: 100});
+        const cfg = buildSecureConfig({maxSessions: 100});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, true);
       });
 
       it('should reject zero maxSessions', () => {
-        const cfg = JSON.stringify({maxSessions: 0});
+        const cfg = buildSecureConfig({maxSessions: 0});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -299,7 +309,7 @@ describe('pgwire-descriptor', () => {
       });
 
       it('should reject non-integer maxSessions', () => {
-        const cfg = JSON.stringify({maxSessions: 10.5});
+        const cfg = buildSecureConfig({maxSessions: 10.5});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
@@ -310,65 +320,87 @@ describe('pgwire-descriptor', () => {
 
     describe('authMode validation', () => {
       it('should accept trust', () => {
-        const cfg = JSON.stringify({authMode: 'trust'});
+        const cfg = buildSecureConfig({authMode: 'trust'});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, true);
       });
 
-      it('should accept password', () => {
-        const cfg = JSON.stringify({authMode: 'password'});
+      it('should reject password until its wire exchange exists', () => {
+        const cfg = buildSecureConfig({authMode: 'password'});
         const result = validatePgwireRuntimeConfig(cfg);
-        assert.equal(result.valid, true);
+        assert.equal(result.valid, false);
       });
 
-      it('should accept scram-sha-256', () => {
-        const cfg = JSON.stringify({authMode: 'scram-sha-256'});
+      it('should reject SCRAM until its wire exchange exists', () => {
+        const cfg = buildSecureConfig({authMode: 'scram-sha-256'});
         const result = validatePgwireRuntimeConfig(cfg);
-        assert.equal(result.valid, true);
+        assert.equal(result.valid, false);
       });
 
       it('should reject invalid authMode', () => {
-        const cfg = JSON.stringify({authMode: 'md5'});
+        const cfg = buildSecureConfig({authMode: 'md5'});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
           PGWIRE_DESCRIPTOR_ERROR.AUTH_MODE_INVALID,
         ));
       });
+
+      it('requires an explicit authMode', () => {
+        const result = validatePgwireRuntimeConfig(JSON.stringify({
+          host: '127.0.0.1',
+          tlsMode: 'disable',
+        }));
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          PGWIRE_DESCRIPTOR_ERROR.AUTH_MODE_REQUIRED,
+        ));
+      });
     });
 
     describe('tlsMode validation', () => {
       it('should accept disable', () => {
-        const cfg = JSON.stringify({tlsMode: 'disable'});
+        const cfg = buildSecureConfig({tlsMode: 'disable'});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, true);
       });
 
-      it('should accept prefer', () => {
-        const cfg = JSON.stringify({tlsMode: 'prefer'});
+      it('should reject prefer until TLS negotiation exists', () => {
+        const cfg = buildSecureConfig({tlsMode: 'prefer'});
         const result = validatePgwireRuntimeConfig(cfg);
-        assert.equal(result.valid, true);
+        assert.equal(result.valid, false);
       });
 
-      it('should accept require', () => {
-        const cfg = JSON.stringify({tlsMode: 'require'});
+      it('should reject require until TLS negotiation exists', () => {
+        const cfg = buildSecureConfig({tlsMode: 'require'});
         const result = validatePgwireRuntimeConfig(cfg);
-        assert.equal(result.valid, true);
+        assert.equal(result.valid, false);
       });
 
       it('should reject invalid tlsMode', () => {
-        const cfg = JSON.stringify({tlsMode: 'verify-full'});
+        const cfg = buildSecureConfig({tlsMode: 'verify-full'});
         const result = validatePgwireRuntimeConfig(cfg);
         assert.equal(result.valid, false);
         assert.ok(result.errors.includes(
           PGWIRE_DESCRIPTOR_ERROR.TLS_MODE_INVALID,
         ));
       });
+
+      it('requires an explicit tlsMode', () => {
+        const result = validatePgwireRuntimeConfig(JSON.stringify({
+          host: '127.0.0.1',
+          authMode: 'trust',
+        }));
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          PGWIRE_DESCRIPTOR_ERROR.TLS_MODE_REQUIRED,
+        ));
+      });
     });
 
     describe('multiple errors', () => {
       it('should collect errors from multiple fields', () => {
-        const cfg = JSON.stringify({
+        const cfg = buildSecureConfig({
           host: 123,
           port: -1,
           authMode: 'bad',
@@ -383,10 +415,11 @@ describe('pgwire-descriptor', () => {
 
   describe('integration with validateRuntimeDescriptor', () => {
     it('should accept pgwire descriptor with valid config', () => {
-      const cfg = JSON.stringify({
-        host: '0.0.0.0',
+      const cfg = buildSecureConfig({
+        host: '127.0.0.1',
         port: 5432,
-        authMode: 'scram-sha-256',
+        authMode: 'trust',
+        tlsMode: 'disable',
       });
       const result = validateRuntimeDescriptor({
         runtimeKind: RUNTIME_KIND.NATIVE_JS,
@@ -396,17 +429,17 @@ describe('pgwire-descriptor', () => {
       assert.equal(result.valid, true);
     });
 
-    it('should accept pgwire descriptor with null config', () => {
+    it('should reject pgwire descriptor with null config', () => {
       const result = validateRuntimeDescriptor({
         runtimeKind: RUNTIME_KIND.NATIVE_JS,
         runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
         runtimeConfig: null,
       });
-      assert.equal(result.valid, true);
+      assert.equal(result.valid, false);
     });
 
     it('should reject pgwire descriptor with invalid config', () => {
-      const cfg = JSON.stringify({
+      const cfg = buildSecureConfig({
         port: -1,
         authMode: 'bad',
       });
@@ -425,7 +458,7 @@ describe('pgwire-descriptor', () => {
     });
 
     it('should not run pgwire validation for other refs', () => {
-      const cfg = JSON.stringify({port: -1});
+      const cfg = buildSecureConfig({port: -1});
       const result = validateRuntimeDescriptor({
         runtimeKind: RUNTIME_KIND.NATIVE_JS,
         runtimeRef: 'admin-handler',
@@ -456,7 +489,7 @@ describe('pgwire-descriptor', () => {
             fc.integer({min: 65536, max: 100000}),
           ),
           (port) => {
-            const cfg = JSON.stringify({port});
+            const cfg = buildSecureConfig({port});
             const result = validatePgwireRuntimeConfig(cfg);
             assert.equal(result.valid, false);
           },
@@ -470,7 +503,7 @@ describe('pgwire-descriptor', () => {
         fc.property(
           fc.integer({min: 1, max: 65535}),
           (port) => {
-            const cfg = JSON.stringify({port});
+            const cfg = buildSecureConfig({port});
             const result = validatePgwireRuntimeConfig(cfg);
             assert.equal(result.valid, true);
           },

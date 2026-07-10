@@ -1,9 +1,6 @@
 import {
-  PRIORITY_RECOVERY_ACTUATION_STATE,
-  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PRESSURE_STATE,
-  PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from './priority-recovery-diagnostics-constants.js';
 import {
@@ -11,7 +8,28 @@ import {
   buildPriorityRecoveryPressureConditions,
 } from './priority-recovery-helpers.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
-import {LOCAL_EMPTY_LIST, LOCAL_NUM_ONE, LOCAL_NUM_TWO, LOCAL_NUM_ZERO, LOCAL_STR_BLOCKERREASONCODES, LOCAL_STR_EMPTY, LOCAL_STR_SEMANTICSTATEIDS, PRIORITY_RECOVERY_OPERATION_ID_FIELD, PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD, buildPriorityRecoveryExplicitSemanticStateByPartitionId, collectPriorityRecoveryPartitionIndexes, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryBlockedClassIds, normalizePriorityRecoveryObservationStateValue, normalizePriorityRecoverySemanticStatePartitions, resolvePriorityRecoverySnapshotSemanticState} from './priority-recovery-observation-normalization.js';
+import {
+  LOCAL_EMPTY_LIST,
+  LOCAL_STR_BLOCKERREASONCODES,
+  LOCAL_STR_EMPTY,
+  LOCAL_STR_SEMANTICSTATEIDS,
+  buildPriorityRecoveryExplicitSemanticStateByPartitionId,
+  collectPriorityRecoveryPartitionIndexes,
+  isRecord,
+  normalizeDistinctStringArray,
+  normalizeNonNegativeInteger,
+  normalizePriorityRecoveryBlockedClassIds,
+  normalizePriorityRecoveryObservationStateValue,
+  normalizePriorityRecoverySemanticStatePartitions,
+  resolvePriorityRecoveryProgressOwnerActionRank,
+  resolvePriorityRecoverySnapshotEvidenceRank,
+  resolvePriorityRecoverySnapshotOperationIds,
+  resolvePriorityRecoverySnapshotSemanticState,
+  resolvePriorityRecoverySnapshotSortEpoch,
+  resolvePriorityRecoverySnapshotSortProgressTimestamp,
+  resolvePriorityRecoverySnapshotSortTimestamp,
+  selectLatestPriorityRecoveryPartitionSnapshot,
+} from './priority-recovery-observation-normalization.js';
 
 function cloneJsonValue(value) {
   if (value === null || value === undefined) {
@@ -69,196 +87,6 @@ function buildPriorityRecoveryPartitionHistory(
   );
 }
 
-function resolvePriorityRecoverySnapshotSortProgressTimestamp(snapshot) {
-  const operation = isRecord(snapshot?.coordinator?.operation) ?
-    snapshot.coordinator.operation :
-    {};
-  const progressTimestampCandidates = [
-    operation[PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.COMPLETED_AT_MS],
-    operation[PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.UPDATED_AT_MS],
-    operation[
-      PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.TARGET_SERVICE_PROGRESS_AT_MS
-    ],
-    snapshot?.progress?.[
-      PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.LAST_PROGRESS_AT_MS
-    ],
-    operation[PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.CREATED_AT_MS],
-  ]
-    .map((candidate) => normalizeNonNegativeInteger(candidate))
-    .filter((candidate) =>
-      Number.isFinite(candidate) && candidate > 0,
-    );
-  return progressTimestampCandidates.length > 0 ?
-    Math.max(...progressTimestampCandidates) :
-    0;
-}
-
-function resolvePriorityRecoverySnapshotSortTimestamp(
-  snapshot,
-  decisionSnapshots,
-) {
-  const progressTimestamp =
-    resolvePriorityRecoverySnapshotSortProgressTimestamp(snapshot);
-  if (progressTimestamp > 0) {
-    return progressTimestamp;
-  }
-  return Number(
-    snapshot?.observation?.provenance?.capturedAt ??
-      decisionSnapshots?.capturedAt ??
-      0,
-  );
-}
-
-function resolvePriorityRecoverySnapshotEvidenceRank(snapshot) {
-  const operationCount = normalizeNonNegativeInteger(
-    snapshot?.coordinator?.operationCount,
-  );
-  if (
-    (Number.isFinite(operationCount) && operationCount > 0) ||
-    resolvePriorityRecoverySnapshotOperationIds(snapshot).length > 0
-  ) {
-    return LOCAL_NUM_TWO;
-  }
-  const workflowState = normalizePriorityRecoveryObservationStateValue(
-    snapshot?.observation?.workflowState,
-    LOCAL_STR_EMPTY,
-  );
-  const visibilityState = normalizePriorityRecoveryObservationStateValue(
-    snapshot?.observation?.visibilityState,
-    LOCAL_STR_EMPTY,
-  );
-  if (
-    (workflowState.length > 0 &&
-      workflowState !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE) ||
-    (visibilityState.length > 0 &&
-      visibilityState !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE)
-  ) {
-    return LOCAL_NUM_ONE;
-  }
-  return LOCAL_NUM_ZERO;
-}
-
-function resolvePriorityRecoverySnapshotSortEpoch(
-  snapshot,
-  decisionSnapshots,
-) {
-  return normalizeNonNegativeInteger(
-    snapshot?.epoch ?? decisionSnapshots?.publicationEpoch,
-  ) ?? 0;
-}
-
-function resolvePriorityRecoveryExplicitSemanticStateMatchRank(
-  snapshot,
-  explicitSemanticStateByPartitionId = null,
-) {
-  const partitionId = String(snapshot?.partitionId || LOCAL_STR_EMPTY).trim();
-  if (
-    partitionId.length === 0 ||
-    !(explicitSemanticStateByPartitionId instanceof Map)
-  ) {
-    return LOCAL_NUM_ZERO;
-  }
-  const explicitSemanticState =
-    explicitSemanticStateByPartitionId.get(partitionId) || null;
-  if (typeof explicitSemanticState !== 'string') {
-    return LOCAL_NUM_ZERO;
-  }
-  const snapshotSemanticState = resolvePriorityRecoverySnapshotSemanticState(
-    snapshot,
-    normalizeDistinctStringArray(snapshot?.blockerReasons),
-    null,
-    true,
-  );
-  return snapshotSemanticState === explicitSemanticState ?
-    LOCAL_NUM_ONE :
-    LOCAL_NUM_ZERO;
-}
-
-function resolvePriorityRecoveryProgressOwnerActionRank(snapshot) {
-  const progress = isRecord(snapshot?.progress) ? snapshot.progress : {};
-  const actuation = isRecord(snapshot?.actuation) ? snapshot.actuation : {};
-  const nextRequiredAction = String(
-    progress.nextRequiredAction || LOCAL_STR_EMPTY,
-  ).trim();
-  const workflowOwnedProgress =
-    progress.currentOwner ===
-      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
-    nextRequiredAction.length > LOCAL_NUM_ZERO &&
-    nextRequiredAction !== PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.NONE;
-  if (workflowOwnedProgress) {
-    return LOCAL_NUM_TWO;
-  }
-  const workflowOwnedActuation =
-    actuation.owner ===
-      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
-    actuation.state !== PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_FAILED &&
-    actuation.state !== PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_COMPLETED;
-  return workflowOwnedActuation ? LOCAL_NUM_ONE : LOCAL_NUM_ZERO;
-}
-
-function selectLatestPriorityRecoveryPartitionSnapshot(
-  partitionSnapshots = [],
-  decisionSnapshots = null,
-  explicitSemanticStateByPartitionId = null,
-) {
-  return partitionSnapshots
-    .filter((snapshot) => isRecord(snapshot))
-    .sort((left, right) => {
-      const leftEpoch = resolvePriorityRecoverySnapshotSortEpoch(
-        left,
-        decisionSnapshots,
-      );
-      const rightEpoch = resolvePriorityRecoverySnapshotSortEpoch(
-        right,
-        decisionSnapshots,
-      );
-      if (leftEpoch !== rightEpoch) {
-        return rightEpoch - leftEpoch;
-      }
-      const leftExplicitMatchRank =
-        resolvePriorityRecoveryExplicitSemanticStateMatchRank(
-          left,
-          explicitSemanticStateByPartitionId,
-        );
-      const rightExplicitMatchRank =
-        resolvePriorityRecoveryExplicitSemanticStateMatchRank(
-          right,
-          explicitSemanticStateByPartitionId,
-        );
-      if (leftExplicitMatchRank !== rightExplicitMatchRank) {
-        return rightExplicitMatchRank - leftExplicitMatchRank;
-      }
-      const leftProgressOwnerActionRank =
-        resolvePriorityRecoveryProgressOwnerActionRank(left);
-      const rightProgressOwnerActionRank =
-        resolvePriorityRecoveryProgressOwnerActionRank(right);
-      if (leftProgressOwnerActionRank !== rightProgressOwnerActionRank) {
-        return rightProgressOwnerActionRank - leftProgressOwnerActionRank;
-      }
-      const leftEvidenceRank =
-        resolvePriorityRecoverySnapshotEvidenceRank(left);
-      const rightEvidenceRank =
-        resolvePriorityRecoverySnapshotEvidenceRank(right);
-      if (leftEvidenceRank !== rightEvidenceRank) {
-        return rightEvidenceRank - leftEvidenceRank;
-      }
-      const leftUpdatedAtMs = resolvePriorityRecoverySnapshotSortTimestamp(
-        left,
-        decisionSnapshots,
-      );
-      const rightUpdatedAtMs = resolvePriorityRecoverySnapshotSortTimestamp(
-        right,
-        decisionSnapshots,
-      );
-      if (leftUpdatedAtMs !== rightUpdatedAtMs) {
-        return rightUpdatedAtMs - leftUpdatedAtMs;
-      }
-      return String(right?.correlationKey || LOCAL_STR_EMPTY).localeCompare(
-        String(left?.correlationKey || LOCAL_STR_EMPTY),
-      );
-    })[LOCAL_NUM_ZERO] || null;
-}
-
 function collectPriorityRecoveryRelatedSnapshots(
   snapshots = [],
   partitionId,
@@ -266,15 +94,6 @@ function collectPriorityRecoveryRelatedSnapshots(
   return snapshots.filter((snapshot) => {
     return String(snapshot?.partitionId || LOCAL_STR_EMPTY).trim() === partitionId;
   });
-}
-
-function resolvePriorityRecoverySnapshotOperationIds(snapshot = null) {
-  return normalizeDistinctStringArray([
-    snapshot?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.CAMEL],
-    snapshot?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.SNAKE],
-    snapshot?.coordinator?.operation?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.CAMEL],
-    snapshot?.coordinator?.operation?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.SNAKE],
-  ]);
 }
 
 function resolvePriorityRecoveryOperationIds(relatedSnapshots = []) {

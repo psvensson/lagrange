@@ -31,11 +31,21 @@ import {
   HEALTH_STATUS,
 } from './runtime-driver.js';
 import {classifyBindError} from './pgwire-port-allocator.js';
+import {PostgresWireAdapter} from '../query/pg/postgres-wire-adapter.js';
+import {PgWireProtocolHandler} from './pgwire-protocol-handler.js';
+import {PgWireAuthHandler} from './pgwire-auth-handler.js';
+import {
+  PGWIRE_AUTH_ACTION,
+} from './pgwire-auth-constants.js';
+import {
+  PGWIRE_AUTH_MODE,
+  PGWIRE_LOOPBACK_HOSTS,
+} from './pgwire-descriptor.js';
 
 // --- Default configuration values ---
 
 const PGWIRE_DEFAULT = Object.freeze({
-  HOST: '0.0.0.0',
+  HOST: '127.0.0.1',
   PORT: 5432,
   MAX_SESSIONS: 100,
 });
@@ -61,6 +71,10 @@ const PGWIRE_MODULE_ERROR = Object.freeze({
     'TCP listener bind failed',
   LISTENER_NOT_ACCEPTING:
     'TCP listener is not accepting connections',
+  SQL_REQUEST_EXECUTOR_REQUIRED:
+    'replicaContext.sqlRequestExecutor is required',
+  TRUST_REQUIRES_LOOPBACK:
+    'trust authentication may only bind to a loopback host',
 });
 
 // --- Module state constants ---
@@ -79,6 +93,12 @@ const PGWIRE_EVENT = Object.freeze({
 const PGWIRE_CONTEXT_FIELD = Object.freeze({
   SERVICE_ID: 'serviceId',
   SERVICE_ID_LEGACY: 'service_id',
+});
+
+const PGWIRE_CONFIG_OVERRIDE_FIELD = Object.freeze({
+  HOST: 'host',
+  PORT: 'port',
+  MAX_SESSIONS: 'maxSessions',
 });
 
 const PGWIRE_RESULT_FIELD = Object.freeze({
@@ -114,6 +134,13 @@ function buildPgwireServiceScopedError(baseMessage, serviceId) {
  *   context (e.g. dynamic port allocation).
  * @return {{host: string, port: number, maxSessions: number}}
  */
+function resolveConfigValue(overrides, overrideKey, parsed, configKey, fallback) {
+  if (overrides?.[overrideKey] !== undefined) {
+    return overrides[overrideKey];
+  }
+  return parsed[configKey] ?? fallback;
+}
+
 function resolveConfig(definition, overrides) {
   const raw = definition.runtimeConfig ??
     definition.runtime_config;
@@ -124,15 +151,29 @@ function resolveConfig(definition, overrides) {
     parsed = raw;
   }
   return {
-    host: overrides?.host ??
-      parsed[PGWIRE_CONFIG_FIELD.HOST] ??
+    host: resolveConfigValue(
+      overrides,
+      PGWIRE_CONFIG_OVERRIDE_FIELD.HOST,
+      parsed,
+      PGWIRE_CONFIG_FIELD.HOST,
       PGWIRE_DEFAULT.HOST,
-    port: overrides?.port ??
-      parsed[PGWIRE_CONFIG_FIELD.PORT] ??
+    ),
+    port: resolveConfigValue(
+      overrides,
+      PGWIRE_CONFIG_OVERRIDE_FIELD.PORT,
+      parsed,
+      PGWIRE_CONFIG_FIELD.PORT,
       PGWIRE_DEFAULT.PORT,
-    maxSessions: overrides?.maxSessions ??
-      parsed[PGWIRE_CONFIG_FIELD.MAX_SESSIONS] ??
+    ),
+    maxSessions: resolveConfigValue(
+      overrides,
+      PGWIRE_CONFIG_OVERRIDE_FIELD.MAX_SESSIONS,
+      parsed,
+      PGWIRE_CONFIG_FIELD.MAX_SESSIONS,
       PGWIRE_DEFAULT.MAX_SESSIONS,
+    ),
+    authMode: parsed[PGWIRE_CONFIG_FIELD.AUTH_MODE],
+    tlsMode: parsed[PGWIRE_CONFIG_FIELD.TLS_MODE],
   };
 }
 
@@ -144,12 +185,21 @@ function resolveConfig(definition, overrides) {
  * service gets a TCP server and connection tracking.
  */
 class PostgresWireRuntimeModule {
-  constructor() {
+  constructor(options = {}) {
     /** @type {Map<string, Object>} Prepared config by serviceId */
     this._prepared = new Map();
 
     /** @type {Map<string, Object>} Running state by serviceId */
     this._running = new Map();
+    this._logger = options.logger || console;
+    this._authHandlerFactory = options.authHandlerFactory ||
+      ((config) => new PgWireAuthHandler({
+        mode: config.authMode,
+        policy: {
+          allowedActions: new Set([PGWIRE_AUTH_ACTION.EXECUTE_QUERY]),
+        },
+        logger: this._logger,
+      }));
   }
 
   /**
@@ -195,9 +245,7 @@ class PostgresWireRuntimeModule {
   /**
    * Bind a TCP listener and return endpoint intent.
    *
-   * The listener accepts PostgreSQL client connections. Actual
-   * protocol handling is wired externally (Task 12); this module
-   * owns only the listener lifecycle.
+   * The listener owns protocol handlers and their authenticated sessions.
    *
    * @param {Object} replicaContext - Must include {serviceId}.
    * @return {Promise<{status: string, endpointIntent?: Object,
@@ -252,8 +300,34 @@ class PostgresWireRuntimeModule {
       maxSessions: replicaContext.maxSessions,
     };
     const config = resolveConfig(prepared.definition, overrides);
+    if (
+      config.authMode === PGWIRE_AUTH_MODE.TRUST &&
+      !PGWIRE_LOOPBACK_HOSTS.has(config.host)
+    ) {
+      return buildStatusResult(
+        START_STATUS.FAILED,
+        PGWIRE_RESULT_FIELD.ERROR,
+        undefined,
+        PGWIRE_MODULE_ERROR.TRUST_REQUIRES_LOOPBACK,
+      );
+    }
+    if (typeof replicaContext.sqlRequestExecutor !== 'function') {
+      return buildStatusResult(
+        START_STATUS.FAILED,
+        PGWIRE_RESULT_FIELD.ERROR,
+        undefined,
+        PGWIRE_MODULE_ERROR.SQL_REQUEST_EXECUTOR_REQUIRED,
+      );
+    }
+    const authHandler = this._authHandlerFactory(config, replicaContext);
+    const adapter = new PostgresWireAdapter({
+      sqlCore: {executeRequest: replicaContext.sqlRequestExecutor},
+      authHandler,
+      logger: this._logger,
+    });
     const server = net.createServer();
     const connections = new Set();
+    const handlers = new Map();
 
     server.on(PGWIRE_EVENT.CONNECTION, (socket) => {
       if (connections.size >= config.maxSessions) {
@@ -261,7 +335,18 @@ class PostgresWireRuntimeModule {
         return;
       }
       connections.add(socket);
-      socket.on(PGWIRE_EVENT.CLOSE, () => connections.delete(socket));
+      const handler = new PgWireProtocolHandler({
+        adapter,
+        socket,
+        logger: this._logger,
+      });
+      handlers.set(socket, handler);
+      socket.on(PGWIRE_EVENT.CLOSE, () => {
+        handler.destroy();
+        handlers.delete(socket);
+        connections.delete(socket);
+      });
+      handler.start();
     });
 
     const boundPort = await new Promise((resolve, reject) => {
@@ -283,7 +368,9 @@ class PostgresWireRuntimeModule {
 
     this._running.set(serviceId, {
       server,
+      adapter,
       connections,
+      handlers,
       config,
       endpointIntent,
       state: LISTENER_STATE.BOUND,
@@ -324,7 +411,10 @@ class PostgresWireRuntimeModule {
       return;
     }
 
-    // Destroy all active connections first
+    for (const handler of entry.handlers.values()) {
+      handler.destroy();
+    }
+    entry.handlers.clear();
     for (const socket of entry.connections) {
       socket.destroy();
     }

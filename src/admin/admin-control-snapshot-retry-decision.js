@@ -51,7 +51,6 @@ const RETRYABLE_ERROR_CODES = Object.freeze([
   ERR_CODE_CONTROL_PLANE_PRESSURE_DEGRADED,
 ]);
 
-const OBS_STATE_DEFERRED_REFRESH = 'deferred_refresh';
 const OBS_STATE_FAILED = 'failed';
 const REASON_SUBSTR_PRESSURE = 'pressure';
 const REASON_SUBSTR_TIMEOUT = 'timeout';
@@ -113,7 +112,6 @@ function hasPressureObservation(resultOrError) {
 
   const observation = snapshot.snapshotObservation;
   return (
-    observation?.state === OBS_STATE_DEFERRED_REFRESH ||
     observation?.state === OBS_STATE_FAILED ||
     (Array.isArray(observation?.reasonCodes) &&
       observation.reasonCodes.some((code) =>

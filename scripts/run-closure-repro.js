@@ -13,7 +13,7 @@
 // tests (the CL-035/CL-038 pattern). See docs/deterministic-repro-tier.md.
 //
 // Usage:
-//   node scripts/run-closure-repro.js CL-038        # run its repro via tap
+//   node scripts/run-closure-repro.js CL-038        # run its deterministic repro
 //   node scripts/run-closure-repro.js --list        # list mapped repros
 //   node scripts/run-closure-repro.js --check       # warn-only coverage report
 //
@@ -22,10 +22,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {parseClosureLedger} from './closure-ledger-state.js';
+import {runTestFileSync} from './run-test-files.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -65,10 +65,8 @@ function runOne(id) {
     return EXIT_MISSING;
   }
   process.stdout.write(`repro ${id} -> ${repro}\n`);
-  const result = spawnSync(
-    'npx', ['tap', '--disable-coverage', repro],
-    {cwd: ROOT, stdio: 'inherit'});
-  return result.status === null ? EXIT_MISSING : result.status;
+  const result = runTestFileSync(repro, {cwd: ROOT});
+  return result.ok ? EXIT_OK : EXIT_MISSING;
 }
 
 function listRepros() {

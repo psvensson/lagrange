@@ -60,9 +60,13 @@ const ADMIN_DEFAULT = Object.freeze({
   WEBSOCKET_PORT: 8081,
   QUERY_TIMEOUT_MS: 30000,
   CACHE_DUMP_TIMEOUT_MS: 5000,
-  HOST: '0.0.0.0',
-  ENFORCEMENT_MODE: 'observe',
+  HOST: '127.0.0.1',
+  ENFORCEMENT_MODE: 'enforce',
 });
+
+const ADMIN_LOOPBACK_HOSTS = Object.freeze(
+  new Set(['127.0.0.1', '::1', 'localhost']),
+);
 
 const ADMIN_STANDALONE_DEFAULT = Object.freeze({
   HOST: '127.0.0.1',
@@ -213,6 +217,9 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
     'SQL diagnostics unavailable because system cache is not configured',
   SERVICE_DISCOVERY_UNAVAILABLE:
     'Service discovery unavailable because system cache is not configured',
+  EXTERNAL_BIND_REQUIRES_EXPLICIT_TRUST:
+    'External admin bind requires allowInsecureExternalBind=true; place ' +
+    'authenticated ingress in front of the listener',
   LIVE_QUERY_MANAGER_UNAVAILABLE:
     'Live query manager not available',
   LIVE_QUERY_MISSING_SUBSCRIPTION_ID:
@@ -352,6 +359,7 @@ export {
   ADMIN_ERROR_MATCH,
   ADMIN_ERROR_MESSAGE,
   ADMIN_LIMIT,
+  ADMIN_LOOPBACK_HOSTS,
   ADMIN_LOG_MSG,
   ADMIN_MESSAGE_TYPE,
   ADMIN_HEADER,

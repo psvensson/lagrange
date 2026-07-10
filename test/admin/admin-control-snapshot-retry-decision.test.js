@@ -163,7 +163,7 @@ test('control snapshot retry decision retries deferred convergence results',
     );
   });
 
-test('control snapshot retry decision retries pressure observations',
+test('control snapshot retry decision retries only evidenced pressure observations',
   async (t) => {
     const deferredObservationDecision = evaluateControlSnapshotRetryDecision(
       {},
@@ -179,13 +179,13 @@ test('control snapshot retry decision retries pressure observations',
 
     t.equal(
       deferredObservationDecision.outcome,
-      CONTROL_SNAPSHOT_RETRY_DECISION.RETRY,
-      'deferred refresh observations should retry',
+      CONTROL_SNAPSHOT_RETRY_DECISION.STOP_SUCCESS,
+      'ordinary deferred owner work should not delay a local observation',
     );
     t.equal(
       deferredObservationDecision.reason,
-      REASON_SNAPSHOT_OBSERVATION_PRESSURE,
-      'deferred refresh observations should keep the pressure reason',
+      REASON_ADMITTED_SUCCESSFULLY,
+      'ordinary deferred owner work should remain a successful observation',
     );
 
     const reasonCodeDecision = evaluateControlSnapshotRetryDecision(
@@ -309,7 +309,7 @@ test('admin websocket control snapshot query retries pressure observations',
           ...CONTROL_SNAPSHOT_ROW,
           snapshotObservation: {
             state: OBSERVATION_STATE_DEFERRED_REFRESH,
-            reasonCodes: [],
+            reasonCodes: [OBSERVATION_REASON_PRESSURE],
           },
         });
       }
@@ -397,4 +397,3 @@ test('closeStaleSnapshotLaneSockets protects active client and open sockets', (t
 
   t.end();
 });
-

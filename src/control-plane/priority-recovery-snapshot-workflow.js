@@ -5,25 +5,10 @@ import {
   PRIORITY_RECOVERY_EMERGENCY_PARTITION_TABLE_IDS,
 } from './priority-recovery-admission-constants.js';
 import {
-  inferPriorityRecoveryTableNameFromPartitionId,
   normalizePriorityRecoveryInteger,
-  normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
-import {
-  normalizeReplicaOperationRecord,
-  resolveStepTimeoutMs,
-} from '../rebalancer/replica-operation-liveness.js';
-import {
-  PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION,
-  PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_COMPLETED_AT,
-  PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT,
-  PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
-  PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT,
-  PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_ROWS,
-} from './priority-recovery-snapshot-contract.js';
-import {buildPriorityRecoveryBlockedPartitions, hasPriorityRecoverySpreadGap, readFirstStringField} from './priority-recovery-snapshot-ingress.js';
+import {buildPriorityRecoveryBlockedPartitions, hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot-ingress.js';
 import {buildPriorityRecoveryEmergencyBudgetOwnerIds, resolvePriorityPartitionSummaryFromPublication} from './priority-recovery-snapshot-active-gate.js';
-import {buildPriorityRecoveryTargetServiceEvidence, parsePriorityRecoveryStepsHistory, resolvePriorityRecoveryStepAge} from './priority-recovery-snapshot-rebalancer.js';
 
 function buildPriorityRecoveryAdmissionPlan(options = {}) {
   const maxConcurrentAdds = Math.max(
@@ -335,152 +320,6 @@ function buildPriorityRecoveryAdmissionPlanResult(
   };
 }
 
-function normalizePriorityRecoveryReplicaOperationContextBuildOptions(
-  options = {},
-) {
-  return {
-    nowMs: normalizePriorityRecoveryInteger(options.nowMs),
-    stepTimeoutMsByWorkflowStep:
-      options.stepTimeoutMsByWorkflowStep &&
-      typeof options.stepTimeoutMsByWorkflowStep === 'object' ?
-        options.stepTimeoutMsByWorkflowStep :
-        null,
-  };
-}
-
-function resolvePriorityRecoveryOperationTimeline(
-  operationTimelineById,
-  operationId,
-) {
-  return Array.isArray(operationTimelineById[operationId]) ?
-    operationTimelineById[operationId] :
-    [];
-}
-
-function buildPriorityRecoveryReplicaOperationContext(
-  replicaOperationRow,
-  operationTimelineById,
-  serviceRows,
-  options = {},
-) {
-  const normalizedReplicaOperation = normalizeReplicaOperationRecord(
-    replicaOperationRow,
-    {
-      ...(Number.isFinite(options.nowMs) ? {nowMs: options.nowMs} : {}),
-    },
-  );
-  const operationId = String(
-    normalizedReplicaOperation.operationId ||
-      readFirstStringField(
-        replicaOperationRow,
-        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
-        'operationId',
-      ) ||
-      '',
-  ).trim();
-  if (operationId.length === 0) {
-    return null;
-  }
-  const entityType = String(
-    normalizedReplicaOperation.entityType ||
-      PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION,
-  ).toLowerCase();
-  if (
-    entityType !== PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION
-  ) {
-    return null;
-  }
-  const partitionId = String(
-    normalizedReplicaOperation.partitionId ||
-      normalizedReplicaOperation.partitionGroupId ||
-      normalizedReplicaOperation.entityId ||
-      '',
-  ).trim();
-  if (partitionId.length === 0) {
-    return null;
-  }
-  const timeline = resolvePriorityRecoveryOperationTimeline(
-    operationTimelineById,
-    operationId,
-  );
-  const timelineSteps = normalizePriorityRecoveryStringList(
-    timeline.map((entry) => String(entry?.step || '').trim()),
-  );
-  const latestTimelineEntry =
-    timeline.length > 0 ? timeline[timeline.length - 1] : null;
-  // Stall signal from the raw steps_history (NOT the operationTimelineById entries,
-  // whose synthetic current-state entry is timestamped with the churning updatedAt).
-  // Computed via the shared helper so this closure builder and the per-partition
-  // builder agree on whether a remove-dispatch op is stalled (else the spread
-  // un-mask would silently re-mask on the serve-eligibility / closure path).
-  const {currentStepEnteredAtMs, stepAgeMs} = resolvePriorityRecoveryStepAge(
-    parsePriorityRecoveryStepsHistory(
-      replicaOperationRow.stepsHistory ?? replicaOperationRow.steps_history,
-    ),
-    options.nowMs,
-  );
-  const targetServiceEvidence = buildPriorityRecoveryTargetServiceEvidence({
-    operationContext: normalizedReplicaOperation,
-    serviceRows,
-    targetServiceRowIndex: options.targetServiceRowIndex,
-  });
-  const context = {
-    operationId,
-    partitionId,
-    tableName: inferPriorityRecoveryTableNameFromPartitionId(partitionId),
-    type: String(normalizedReplicaOperation.type || '').toUpperCase(),
-    status: String(normalizedReplicaOperation.status || '').toLowerCase(),
-    workflowStep: String(
-      normalizedReplicaOperation.workflowStep || '',
-    ).toUpperCase(),
-    sourceNodeId: normalizedReplicaOperation.sourceNodeId || null,
-    targetNodeId: normalizedReplicaOperation.targetNodeId || null,
-    replicaId: normalizedReplicaOperation.replicaId || null,
-    createdAtMs: normalizePriorityRecoveryInteger(
-      normalizedReplicaOperation.createdAt ??
-        replicaOperationRow[
-          PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT
-        ] ??
-        replicaOperationRow.createdAt,
-    ),
-    updatedAtMs: normalizePriorityRecoveryInteger(
-      normalizedReplicaOperation.updatedAt ??
-        replicaOperationRow[
-          PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT
-        ] ??
-        replicaOperationRow.updatedAt,
-    ),
-    completedAtMs: normalizePriorityRecoveryInteger(
-      normalizedReplicaOperation.completedAt ??
-        replicaOperationRow[
-          PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_COMPLETED_AT
-        ] ??
-        replicaOperationRow.completedAt,
-    ),
-    ageMs: normalizePriorityRecoveryInteger(normalizedReplicaOperation.ageMs),
-    stepTimeoutMs: normalizePriorityRecoveryInteger(
-      resolveStepTimeoutMs(normalizedReplicaOperation.workflowStep, {
-        stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
-      }),
-    ),
-    timelineLength: timeline.length,
-    timelineStepCount: timelineSteps.length,
-    latestTimelineStep:
-      String(latestTimelineEntry?.step || '').toUpperCase() || null,
-    latestTimelineStatus:
-      String(latestTimelineEntry?.status || '').toLowerCase() || null,
-    latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
-    currentStepEnteredAtMs,
-    stepAgeMs,
-    targetVisibilityState: targetServiceEvidence.visibilityState,
-    targetServiceTerminalState: targetServiceEvidence.terminalState,
-    ...(Number.isFinite(targetServiceEvidence.progressAtMs) ?
-      {targetServiceProgressAtMs: targetServiceEvidence.progressAtMs} :
-      {}),
-  };
-  return {operationId, partitionId, context};
-}
-
 function resolveTrackedPriorityRecoveryAdmissionPlan(options = {}) {
   const tracker =
     options.tracker && typeof options.tracker === 'object' ?
@@ -508,72 +347,10 @@ function resolveTrackedPriorityRecoveryAdmissionPlan(options = {}) {
   return resolvedAdmission.admissionPlan;
 }
 
-function resolvePriorityRecoveryReplicaOperationSummaryRows(
-  replicaOperationsSummary = null,
-) {
-  const summaryRows =
-    replicaOperationsSummary?.[
-      PRIORITY_RECOVERY_REPLICA_OPERATION_SUMMARY_FIELD_ROWS
-    ];
-  return Array.isArray(summaryRows) ? summaryRows : [];
-}
-
-function buildPriorityRecoveryReplicaOperationSourceRows(
-  replicaOperationRows = [],
-  replicaOperationsSummary = null,
-) {
-  const sourceRows = [];
-  const sourceRowIndexByOperationId = {};
-  const appendSourceRow = (sourceRow) => {
-    if (!sourceRow || typeof sourceRow !== 'object') {
-      return;
-    }
-    const operationId = String(
-      readFirstStringField(
-        sourceRow,
-        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
-        'operationId',
-      ) || '',
-    ).trim();
-    if (operationId.length === 0) {
-      sourceRows.push(sourceRow);
-      return;
-    }
-    if (
-      !Object.prototype.hasOwnProperty.call(
-        sourceRowIndexByOperationId,
-        operationId,
-      )
-    ) {
-      sourceRowIndexByOperationId[operationId] = sourceRows.length;
-      sourceRows.push(sourceRow);
-      return;
-    }
-    sourceRows[sourceRowIndexByOperationId[operationId]] = sourceRow;
-  };
-  for (const replicaOperationRow of Array.isArray(replicaOperationRows) ?
-    replicaOperationRows :
-    []) {
-    appendSourceRow(replicaOperationRow);
-  }
-  // Canonical liveness-summary rows may be fresher than lagging raw cache rows.
-  for (const summaryRow of resolvePriorityRecoveryReplicaOperationSummaryRows(
-    replicaOperationsSummary,
-  )) {
-    appendSourceRow(summaryRow);
-  }
-  return sourceRows;
-}
-
 export {
   buildPriorityRecoveryAdmissionPlan,
   buildPriorityRecoveryAdmissionPlanResult,
-  buildPriorityRecoveryReplicaOperationContext,
-  buildPriorityRecoveryReplicaOperationSourceRows,
-  normalizePriorityRecoveryReplicaOperationContextBuildOptions,
   resolvePriorityRecoveryAdmissionPlanFromPublication,
-  resolvePriorityRecoveryOperationTimeline,
-  resolvePriorityRecoveryReplicaOperationSummaryRows,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   withPriorityRecoveryAdmissionSource,
 };

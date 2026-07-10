@@ -31,7 +31,7 @@ import {
   buildPriorityRecoverySpreadCompletion,
   isPriorityRecoverySpreadSatisfyingOperationContext,
 } from '../../src/control-plane/priority-recovery-snapshot-ingress.js';
-import {buildPriorityRecoveryReplicaOperationContext} from '../../src/control-plane/priority-recovery-snapshot-workflow.js';
+import {buildPriorityRecoveryReplicaOperationContext} from '../../src/control-plane/priority-recovery-snapshot-rebalancer.js';
 
 const ELIGIBLE = ['nodeB'];
 // Mirrors PRIORITY_RECOVERY_REPLACE_REMOVE_DISPATCH_SPREAD_STALL_BUDGET_MS (60s).

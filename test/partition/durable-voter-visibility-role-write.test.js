@@ -162,6 +162,15 @@ function createRoleHelperForReplica({replicaId, cache, store, warns}) {
     partitionId: LEDGER_PARTITION_ID,
     systemTableCache: cache,
     cdcIntegrationService: store.cdcIntegrationService,
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: (tableName, sql, params, options) =>
+        store.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+          options,
+        ),
+    },
     pendingRoleUpdate: null,
     logger: {
       warn: (msg, ctx) => warns.push({msg, ctx}),

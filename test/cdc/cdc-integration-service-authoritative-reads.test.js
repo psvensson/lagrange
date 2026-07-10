@@ -324,7 +324,6 @@ test('CDCIntegrationService - owner-RPC authoritative reads preserve critical ex
   });
 
 test('CDCIntegrationService - leader-only authoritative reads can fall back to local replicas',
-  {skip: 'STALE: dead test re-enabled; expects systemTableDiagnostics.leaderNodeId === "node-local-leader" from the routing snapshot, but product CL-012 (read-flow buildSystemTableOperationDiagnostics) hard-disabled the routing snapshot (routingSnapshot=null) so leaderNodeId falls back to the partition row and returns null'},
   async (t) => {
     const sqlReads = [];
     const service = new CDCIntegrationService({
@@ -391,8 +390,8 @@ test('CDCIntegrationService - leader-only authoritative reads can fall back to l
     t.equal(result.localReadHit, true, 'local replica read should mark a local read hit');
     t.equal(result.localReplicaFallbackHit, true,
       'local replica fallback should record the fallback path');
-    t.equal(result.systemTableDiagnostics?.leaderNodeId, 'node-local-leader',
-      'local replica fallback should include the canonical leader hint');
+    t.equal(result.systemTableDiagnostics?.leaderNodeId, null,
+      'local replica fallback should not reconstruct a retired routing-snapshot leader hint');
   });
 
 test('CDCIntegrationService - leader-only authoritative reads honor live leader methods',

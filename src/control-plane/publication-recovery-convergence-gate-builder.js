@@ -2,6 +2,9 @@ import {
   buildPublicationRecoveryGateSnapshot,
 } from
   './publication-recovery-gate.js';
+import {
+  buildPriorityRecoveryClosureWitness,
+} from './priority-recovery-snapshot-active-gate.js';
 
 import {
   isRecord,
@@ -49,6 +52,30 @@ import {
   PUBLICATION_RECOVERY_PROTOCOL_STATE,
 } from './publication-recovery-evidence-normalizers.js';
 
+function resolveCanonicalPriorityPartitionSummary(context) {
+  if (context.rawPublicationConvergenceGate?.priorityPartitionSummary) {
+    return context.rawPublicationConvergenceGate.priorityPartitionSummary;
+  }
+  if (context.publicationConvergence?.priorityPartitionSummary) {
+    return context.publicationConvergence.priorityPartitionSummary;
+  }
+  return context.priorityRecoveryObservation?.priorityPartitionSummary || null;
+}
+
+function resolveCanonicalPriorityRecoveryClosureWitness(context) {
+  const {
+    providedPriorityRecoveryClosureWitness,
+    priorityRecoveryDecisionSnapshots,
+  } = context;
+  if (providedPriorityRecoveryClosureWitness) {
+    return providedPriorityRecoveryClosureWitness;
+  }
+  return buildPriorityRecoveryClosureWitness({
+    decisionSnapshots: priorityRecoveryDecisionSnapshots,
+    priorityPartitionSummary: resolveCanonicalPriorityPartitionSummary(context),
+  });
+}
+
 function buildCanonicalPublicationConvergenceGate(options = {}) {
   const publicationConvergence = isRecord(options.publicationConvergence) ?
     options.publicationConvergence :
@@ -67,7 +94,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
     publicationConvergence,
     options.publicationConvergenceGate,
   );
-  const priorityRecoveryClosureWitness = isRecord(
+  const providedPriorityRecoveryClosureWitness = isRecord(
     options.priorityRecoveryClosureWitness,
   ) ?
     options.priorityRecoveryClosureWitness :
@@ -76,6 +103,14 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       rawPublicationConvergenceGate,
       priorityRecoveryDecisionSnapshots,
     );
+  const priorityRecoveryClosureWitness =
+    resolveCanonicalPriorityRecoveryClosureWitness({
+      providedPriorityRecoveryClosureWitness,
+      priorityRecoveryDecisionSnapshots,
+      rawPublicationConvergenceGate,
+      publicationConvergence,
+      priorityRecoveryObservation,
+    });
   const activeGateProgressRecords = normalizeActiveGateProgressRecords({
     activeGate:
       options.activeGate ||

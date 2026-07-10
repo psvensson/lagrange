@@ -48,7 +48,6 @@ import {
   normalizeStringList,
   resolveCarriedAcknowledgedNodeIds,
 } from './membership-publication-row-helpers.js';
-import {closeAcknowledgedMetadataRefreshRow} from './membership-publication-acknowledgement.js';
 
 function normalizeTableRowsResult(result) {
   if (Array.isArray(result)) {
@@ -413,6 +412,64 @@ const MEMBERSHIP_PUBLICATION_PLANNING_HELPERS = Object.freeze({
   resolveObservedActiveNodeIds,
 });
 
+function closeAcknowledgedMetadataRefreshRow(options = {}) {
+  const publicationRow = options.publicationRow;
+  if (!publicationRow || typeof publicationRow !== 'object') {
+    return publicationRow;
+  }
+  const closureDecision = buildPublicationMetadataRefreshDecision({
+    publicationRow,
+  });
+  if (closureDecision.shouldClose !== true) {
+    return publicationRow;
+  }
+  const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
+  const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
+  const existingHistory = Array.isArray(publicationRow.transition_history) ?
+    publicationRow.transition_history :
+    normalizedPublication.transitionHistory;
+  const publishedNodeIdsForState =
+    normalizedPublication.publishedActiveNodeIds.length > 0 ?
+      normalizedPublication.publishedActiveNodeIds :
+      normalizedPublication.requiredAckNodeIds;
+  const membershipLifecycleSummary = buildMembershipLifecycleSummary({
+    lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+    publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
+    projectedServingNodeIds:
+      normalizedPublication.membershipLifecycleSummary?.projectedServingNodeIds,
+    locallyEligibleNodeIds:
+      normalizedPublication.membershipLifecycleSummary?.locallyEligibleNodeIds,
+    suspectedOrTransitioningNodeIds:
+      normalizedPublication.membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
+    memberStatesByNodeId: buildServingMemberStatesByNodeId(
+      normalizedPublication.membershipLifecycleSummary?.memberStatesByNodeId,
+      publishedNodeIdsForState,
+    ),
+    recoveryEpochByNodeId:
+      normalizedPublication.membershipLifecycleSummary?.recoveryEpochByNodeId,
+    membershipFreeze: normalizedPublication.membershipLifecycleSummary?.membershipFreeze,
+    projectionDiagnostics:
+      normalizedPublication.membershipLifecycleSummary?.projectionDiagnostics,
+  });
+  return {
+    ...publicationRow,
+    status: closureDecision.nextStatus,
+    updated_at: nowMs,
+    published_at: publicationRow.published_at || nowMs,
+    closed_at: publicationRow.closed_at || nowMs,
+    membership_lifecycle_summary: membershipLifecycleSummary,
+    membershipLifecycleSummary,
+    transition_history: [
+      ...existingHistory,
+      buildTransitionHistoryEntry({
+        state: closureDecision.nextStatus,
+        reasonCode: closureDecision.reasonCode,
+        at: nowMs,
+      }),
+    ],
+  };
+}
+
 function buildPublicationMetadataRefreshRow(options = {}) {
   const refreshedRow = buildPublicationMetadataRefreshRowCore(
     options,
@@ -613,6 +670,7 @@ export {
   buildPublicationReadOptions,
   buildServingMemberStatesByNodeId,
   comparePlanningEvidenceRows,
+  closeAcknowledgedMetadataRefreshRow,
   countPlanningEvidenceRowFields,
   deriveMembershipPublicationCandidate,
   deriveMembershipPublicationId,

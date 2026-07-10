@@ -32,7 +32,7 @@ export {buildPriorityRecoveryClosureWitness} from './priority-recovery-snapshot-
 export {buildPriorityRecoveryLearnerPromotion} from './priority-recovery-snapshot-burndown.js';
 export {buildPriorityRecoveryOperationAssessment} from './priority-recovery-snapshot-closure.js';
 export {buildPriorityRecoveryOperationContextFromRecord} from './priority-recovery-snapshot-rebalancer.js';
-export {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-closure.js';
+export {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-partition-assessment.js';
 export {buildPriorityRecoveryBlockedPartitionIds} from './priority-recovery-snapshot-ingress.js';
 export {buildPriorityRecoveryBlockedPartitions} from './priority-recovery-snapshot-ingress.js';
 export {buildPriorityRecoveryCorrelationKey};

@@ -6,9 +6,11 @@ import {
 } from '../../src/control-plane/control-plane-snapshot-owner.js';
 import {
   buildTopologyConvergenceGraph,
+} from '../../src/diagnostics/topology-convergence-graph.js';
+import {
   buildTopologyConvergenceReplayFixture,
   replayTopologyConvergenceFixture,
-} from '../../src/diagnostics/topology-convergence-graph.js';
+} from '../../src/diagnostics/topology-convergence-replay.js';
 import * as ACTIVE_GATE_SNAPSHOT_TEST_STATE from './admin-control-snapshot-active-gate-fixture-state.js';
 
 

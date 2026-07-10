@@ -13,6 +13,16 @@ import {OperationType} from '../../src/rebalancer/replica-status.js';
 const OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH =
   'refreshRowBeforeDispatch';
 
+async function waitForStartupReplay(service) {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await service.nodeReadyRetryQueue.drain();
+  if (Array.isArray(service.operationDispatchQueues)) {
+    await Promise.all(
+      service.operationDispatchQueues.map((queue) => queue.drain()),
+    );
+  }
+}
+
 export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
   createService,
   initEnv,
@@ -632,7 +642,6 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
   });
 
   test('ReplicaDispatchService retries SENDING operations for ready target nodes',
-    {skip: 'STALE: dead test re-enabled; expected one ready-node retry enqueue but product now also emits a replica_operations_cache_pending enqueue for the same SENDING row'},
     async (t) => {
       initEnv();
 
@@ -683,6 +692,8 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
           },
         },
       });
+      await waitForStartupReplay(service);
+      service.clearNodeReadyRetryWatermark('node-1');
       const originalQueue = service.operationDispatchQueue;
       service.operationDispatchQueue = {
         enqueue(...args) {
@@ -727,7 +738,6 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
 
   test('ReplicaDispatchService retries CREATING system-table operations for ' +
     'ready target nodes',
-  {skip: 'STALE: dead test re-enabled; expected one ready-node retry enqueue but product now also emits a replica_operations_cache_pending enqueue for the same CREATING row'},
   async (t) => {
     initEnv();
 
@@ -789,6 +799,8 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         },
       },
     });
+    await waitForStartupReplay(service);
+    service.clearNodeReadyRetryWatermark(READY_TARGET_NODE_ID);
     const originalQueue = service.operationDispatchQueue;
     service.operationDispatchQueue = {
       enqueue(...args) {
@@ -830,7 +842,6 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
 
   test('ReplicaDispatchService retries ACTIVE priority REPLACE source-removal ' +
     'operations for ready source nodes',
-  {skip: 'STALE: dead test re-enabled; expected one ready-node retry enqueue but product now also emits a replica_operations_cache_pending enqueue for the same REPLACE source-removal row'},
   async (t) => {
     initEnv();
 
@@ -885,6 +896,8 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         },
       },
     });
+    await waitForStartupReplay(service);
+    service.clearNodeReadyRetryWatermark(READY_SOURCE_NODE_ID);
     const originalQueue = service.operationDispatchQueue;
     service.operationDispatchQueue = {
       enqueue(...args) {
@@ -933,7 +946,6 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
 
   test('ReplicaDispatchService retries ACTIVE priority REPLACE source-removal ' +
     'operations for ready owner nodes',
-  {skip: 'STALE: dead test re-enabled; expected one ready-node retry enqueue but product now also emits a replica_operations_cache_pending enqueue for the same REPLACE owner row'},
   async (t) => {
     initEnv();
 
@@ -989,6 +1001,8 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         },
       },
     });
+    await waitForStartupReplay(service);
+    service.clearNodeReadyRetryWatermark(READY_OWNER_NODE_ID);
     const originalQueue = service.operationDispatchQueue;
     service.operationDispatchQueue = {
       enqueue(...args) {

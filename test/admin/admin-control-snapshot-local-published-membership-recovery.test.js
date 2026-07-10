@@ -129,8 +129,8 @@ test(
     t.equal(result.success, true, 'snapshot lane query should succeed');
     t.same(
       readiness.publishedReadOptions,
-      [{readProfile: 'diagnostics'}],
-      'snapshot lane should not perform authoritative published-membership recovery',
+      [],
+      'snapshot lane should remain cache-local and bounded',
     );
     t.match(
       result.rows?.[0]?.controlPlaneDiagnostics?.publishedMembershipObservation,

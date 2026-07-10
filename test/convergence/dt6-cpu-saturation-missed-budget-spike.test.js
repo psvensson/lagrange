@@ -8,6 +8,9 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 
 const {INCOMPLETE_OPERATION_OBSERVATION_STATE, WORKFLOW_STEP} = SHARED;
+const TEST_FILE_TIMEOUT_MS = 60_000;
+
+t.setTimeout(TEST_FILE_TIMEOUT_MS);
 
 // ============================================================================
 // DT6 fidelity-spike: the rolling-restart CPU-SATURATION missed-budget kill-gate

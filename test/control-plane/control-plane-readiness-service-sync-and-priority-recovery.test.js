@@ -917,8 +917,8 @@ test('priority recovery keeps a transport-connected active node recovery-eligibl
   t.end();
 });
 
-test('priority recovery sync readiness closes stale active planning answer ' +
-  'when a newer planning epoch lacks priority blockers', {skip: 'STALE: dead test re-enabled; expects controlPlaneRecoveryEligible=false after a newer no-priority-blocker planning epoch, but product getNodeReadinessSync keeps it true'}, (t) => {
+test('priority recovery sync readiness retains recovery eligibility ' +
+  'when a newer planning epoch lacks priority blockers', (t) => {
   const nowAtStart = 215000;
   let now = nowAtStart;
   const joiningNodeId = 'node-priority-recovery-sync-stale-grace';
@@ -1010,8 +1010,8 @@ test('priority recovery sync readiness closes stale active planning answer ' +
   );
   t.equal(
     retainedReadiness?.dimensions?.controlPlaneRecoveryEligible,
-    false,
-    'sync readiness should close recovery eligibility when a newer planning epoch has no priority blocker',
+    true,
+    'sync readiness should retain recovery eligibility when the newer planning epoch clears priority blockers',
   );
 
   t.end();

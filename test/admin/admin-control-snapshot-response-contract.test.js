@@ -239,7 +239,7 @@ test('AdminControlSnapshot labels local-cache observation mode',
     );
   });
 
-test('AdminControlSnapshot query result does not defer owner handoff commands by default',
+test('AdminControlSnapshot query result defers owner handoff commands by default',
   async (t) => {
     const snapshot = createSnapshot();
     let receivedOptions = null;
@@ -255,8 +255,8 @@ test('AdminControlSnapshot query result does not defer owner handoff commands by
 
     t.equal(
       receivedOptions?.[TEST_DEFER_INLINE_OWNER_COMMAND_FIELD],
-      undefined,
-      'control snapshot query results should let the owner command run inline when possible',
+      true,
+      'local snapshot queries should enqueue owner work instead of blocking the observation path',
     );
   });
 

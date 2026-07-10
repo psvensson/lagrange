@@ -222,8 +222,12 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         // so drivers and lifecycle modules can query tables through
         // the standard SQL execution path.
         if (this._queryExecutorFactory) {
-          replicaContext.queryExecutor =
-          this._queryExecutorFactory(serviceId);
+          const queryExecutor = this._queryExecutorFactory(serviceId);
+          replicaContext.queryExecutor = queryExecutor;
+          if (typeof queryExecutor?.executeRequest === 'function') {
+            replicaContext.sqlRequestExecutor =
+              queryExecutor.executeRequest.bind(queryExecutor);
+          }
           this.emit(
             QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
             {runtimeKind, serviceId},

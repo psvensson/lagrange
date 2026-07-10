@@ -36,7 +36,7 @@ const PGWIRE_AUTH_MODE = Object.freeze({
 });
 
 const ALLOWED_AUTH_MODES = Object.freeze(
-  new Set(Object.values(PGWIRE_AUTH_MODE)),
+  new Set([PGWIRE_AUTH_MODE.TRUST]),
 );
 
 // --- Allowed TLS mode values ---
@@ -48,7 +48,11 @@ const PGWIRE_TLS_MODE = Object.freeze({
 });
 
 const ALLOWED_TLS_MODES = Object.freeze(
-  new Set(Object.values(PGWIRE_TLS_MODE)),
+  new Set([PGWIRE_TLS_MODE.DISABLE]),
+);
+
+const PGWIRE_LOOPBACK_HOSTS = Object.freeze(
+  new Set(['127.0.0.1', '::1', 'localhost']),
 );
 
 // --- PG wire descriptor error messages ---
@@ -58,6 +62,8 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
     'runtime_config must be a string when provided',
   CONFIG_INVALID_JSON:
     'runtime_config must be valid JSON when provided',
+  CONFIG_NOT_OBJECT:
+    'runtime_config JSON must contain an object',
   HOST_NOT_STRING:
     'host must be a string when provided',
   HOST_EMPTY:
@@ -79,9 +85,15 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
   MAX_SESSIONS_NOT_INTEGER:
     'maxSessions must be a positive integer',
   AUTH_MODE_INVALID:
-    'authMode must be one of: trust, password, scram-sha-256',
+    'authMode must be trust until credential exchange is implemented',
+  AUTH_MODE_REQUIRED:
+    'authMode must be explicitly configured',
   TLS_MODE_INVALID:
-    'tlsMode must be one of: disable, prefer, require',
+    'tlsMode must be disable until TLS negotiation is implemented',
+  TLS_MODE_REQUIRED:
+    'tlsMode must be explicitly configured',
+  TRUST_REQUIRES_LOOPBACK:
+    'trust authMode may only bind to a loopback host',
 });
 
 // --- Validation functions ---
@@ -97,12 +109,128 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
 function validatePort(val, notIntError, rangeError) {
   if (typeof val !== 'number' ||
       !Number.isInteger(val) || val <= 0) {
-    return notIntError;
+    return {valid: false, error: notIntError};
   }
   if (val < MIN_PORT || val > MAX_PORT) {
-    return rangeError;
+    return {valid: false, error: rangeError};
   }
-  return null;
+  return {valid: true};
+}
+
+function parsePgwireRuntimeConfig(configStr) {
+  if (configStr === undefined || configStr === null) {
+    return {
+      valid: false,
+      errors: [
+        PGWIRE_DESCRIPTOR_ERROR.AUTH_MODE_REQUIRED,
+        PGWIRE_DESCRIPTOR_ERROR.TLS_MODE_REQUIRED,
+      ],
+    };
+  }
+  if (typeof configStr !== 'string') {
+    return {
+      valid: false,
+      errors: [PGWIRE_DESCRIPTOR_ERROR.CONFIG_NOT_STRING],
+    };
+  }
+  try {
+    const config = JSON.parse(configStr);
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      return {
+        valid: false,
+        errors: [PGWIRE_DESCRIPTOR_ERROR.CONFIG_NOT_OBJECT],
+      };
+    }
+    return {valid: true, config};
+  } catch (_error) {
+    return {
+      valid: false,
+      errors: [PGWIRE_DESCRIPTOR_ERROR.CONFIG_INVALID_JSON],
+    };
+  }
+}
+
+function validateHostConfig(config) {
+  if (!(PGWIRE_CONFIG_FIELD.HOST in config)) {
+    return [];
+  }
+  const host = config[PGWIRE_CONFIG_FIELD.HOST];
+  if (typeof host !== 'string') {
+    return [PGWIRE_DESCRIPTOR_ERROR.HOST_NOT_STRING];
+  }
+  return host.trim().length === 0 ?
+    [PGWIRE_DESCRIPTOR_ERROR.HOST_EMPTY] :
+    [];
+}
+
+function validateOptionalPortConfig(config, field, notIntegerError, rangeError) {
+  if (!(field in config)) {
+    return [];
+  }
+  const result = validatePort(config[field], notIntegerError, rangeError);
+  return result.valid ? [] : [result.error];
+}
+
+function validatePortRangeOrder(config) {
+  const start = config[PGWIRE_CONFIG_FIELD.PORT_RANGE_START];
+  const end = config[PGWIRE_CONFIG_FIELD.PORT_RANGE_END];
+  const validStart = validatePort(
+    start,
+    PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_START_NOT_INTEGER,
+    PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_START_OUT_OF_RANGE,
+  ).valid;
+  const validEnd = validatePort(
+    end,
+    PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_END_NOT_INTEGER,
+    PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_END_OUT_OF_RANGE,
+  ).valid;
+  if (!validStart || !validEnd || end >= start) {
+    return [];
+  }
+  return [PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_INVERTED];
+}
+
+function validateMaxSessionsConfig(config) {
+  if (!(PGWIRE_CONFIG_FIELD.MAX_SESSIONS in config)) {
+    return [];
+  }
+  const maxSessions = config[PGWIRE_CONFIG_FIELD.MAX_SESSIONS];
+  return typeof maxSessions === 'number' &&
+    Number.isInteger(maxSessions) && maxSessions > 0 ?
+    [] :
+    [PGWIRE_DESCRIPTOR_ERROR.MAX_SESSIONS_NOT_INTEGER];
+}
+
+function validateAuthConfig(config) {
+  if (!(PGWIRE_CONFIG_FIELD.AUTH_MODE in config)) {
+    return [PGWIRE_DESCRIPTOR_ERROR.AUTH_MODE_REQUIRED];
+  }
+  return ALLOWED_AUTH_MODES.has(config[PGWIRE_CONFIG_FIELD.AUTH_MODE]) ?
+    [] :
+    [PGWIRE_DESCRIPTOR_ERROR.AUTH_MODE_INVALID];
+}
+
+function validateTlsConfig(config) {
+  if (!(PGWIRE_CONFIG_FIELD.TLS_MODE in config)) {
+    return [PGWIRE_DESCRIPTOR_ERROR.TLS_MODE_REQUIRED];
+  }
+  return ALLOWED_TLS_MODES.has(config[PGWIRE_CONFIG_FIELD.TLS_MODE]) ?
+    [] :
+    [PGWIRE_DESCRIPTOR_ERROR.TLS_MODE_INVALID];
+}
+
+function validateTrustBindConfig(config) {
+  const usesTrust =
+    config[PGWIRE_CONFIG_FIELD.AUTH_MODE] === PGWIRE_AUTH_MODE.TRUST;
+  const host = config[PGWIRE_CONFIG_FIELD.HOST];
+  if (
+    !usesTrust ||
+    !(PGWIRE_CONFIG_FIELD.HOST in config) ||
+    PGWIRE_LOOPBACK_HOSTS.has(host)
+  ) {
+    return [];
+  }
+  return [PGWIRE_DESCRIPTOR_ERROR.TRUST_REQUIRES_LOOPBACK];
 }
 
 /**
@@ -115,108 +243,42 @@ function validatePort(val, notIntError, rangeError) {
  * @return {{valid: boolean, errors?: string[], config?: Object}}
  */
 function validatePgwireRuntimeConfig(configStr) {
-  if (configStr === undefined || configStr === null) {
-    return {valid: true};
+  const parseResult = parsePgwireRuntimeConfig(configStr);
+  if (!parseResult.valid) {
+    return parseResult;
   }
-  if (typeof configStr !== 'string') {
-    return {
-      valid: false,
-      errors: [PGWIRE_DESCRIPTOR_ERROR.CONFIG_NOT_STRING],
-    };
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(configStr);
-  } catch (_e) {
-    return {
-      valid: false,
-      errors: [PGWIRE_DESCRIPTOR_ERROR.CONFIG_INVALID_JSON],
-    };
-  }
-  const errors = [];
-
-  // --- host ---
-  if (PGWIRE_CONFIG_FIELD.HOST in parsed) {
-    const val = parsed[PGWIRE_CONFIG_FIELD.HOST];
-    if (typeof val !== 'string') {
-      errors.push(PGWIRE_DESCRIPTOR_ERROR.HOST_NOT_STRING);
-    } else if (val.trim().length === 0) {
-      errors.push(PGWIRE_DESCRIPTOR_ERROR.HOST_EMPTY);
-    }
-  }
-
-  // --- port ---
-  if (PGWIRE_CONFIG_FIELD.PORT in parsed) {
-    const err = validatePort(
-      parsed[PGWIRE_CONFIG_FIELD.PORT],
+  const config = parseResult.config;
+  const errors = [
+    ...validateHostConfig(config),
+    ...validateOptionalPortConfig(
+      config,
+      PGWIRE_CONFIG_FIELD.PORT,
       PGWIRE_DESCRIPTOR_ERROR.PORT_NOT_INTEGER,
       PGWIRE_DESCRIPTOR_ERROR.PORT_OUT_OF_RANGE,
-    );
-    if (err) errors.push(err);
-  }
-
-  // --- portRangeStart ---
-  if (PGWIRE_CONFIG_FIELD.PORT_RANGE_START in parsed) {
-    const err = validatePort(
-      parsed[PGWIRE_CONFIG_FIELD.PORT_RANGE_START],
+    ),
+    ...validateOptionalPortConfig(
+      config,
+      PGWIRE_CONFIG_FIELD.PORT_RANGE_START,
       PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_START_NOT_INTEGER,
       PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_START_OUT_OF_RANGE,
-    );
-    if (err) errors.push(err);
-  }
-
-  // --- portRangeEnd ---
-  if (PGWIRE_CONFIG_FIELD.PORT_RANGE_END in parsed) {
-    const err = validatePort(
-      parsed[PGWIRE_CONFIG_FIELD.PORT_RANGE_END],
+    ),
+    ...validateOptionalPortConfig(
+      config,
+      PGWIRE_CONFIG_FIELD.PORT_RANGE_END,
       PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_END_NOT_INTEGER,
       PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_END_OUT_OF_RANGE,
-    );
-    if (err) errors.push(err);
-  }
-
-  // --- portRangeStart <= portRangeEnd ---
-  if (PGWIRE_CONFIG_FIELD.PORT_RANGE_START in parsed &&
-      PGWIRE_CONFIG_FIELD.PORT_RANGE_END in parsed &&
-      !errors.some((e) =>
-        e === PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_START_NOT_INTEGER ||
-        e === PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_START_OUT_OF_RANGE ||
-        e === PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_END_NOT_INTEGER ||
-        e === PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_END_OUT_OF_RANGE)) {
-    const start = parsed[PGWIRE_CONFIG_FIELD.PORT_RANGE_START];
-    const end = parsed[PGWIRE_CONFIG_FIELD.PORT_RANGE_END];
-    if (end < start) {
-      errors.push(PGWIRE_DESCRIPTOR_ERROR.PORT_RANGE_INVERTED);
-    }
-  }
-
-  // --- maxSessions ---
-  if (PGWIRE_CONFIG_FIELD.MAX_SESSIONS in parsed) {
-    const val = parsed[PGWIRE_CONFIG_FIELD.MAX_SESSIONS];
-    if (typeof val !== 'number' ||
-        !Number.isInteger(val) || val <= 0) {
-      errors.push(PGWIRE_DESCRIPTOR_ERROR.MAX_SESSIONS_NOT_INTEGER);
-    }
-  }
-
-  // --- authMode ---
-  if (PGWIRE_CONFIG_FIELD.AUTH_MODE in parsed) {
-    if (!ALLOWED_AUTH_MODES.has(parsed[PGWIRE_CONFIG_FIELD.AUTH_MODE])) {
-      errors.push(PGWIRE_DESCRIPTOR_ERROR.AUTH_MODE_INVALID);
-    }
-  }
-
-  // --- tlsMode ---
-  if (PGWIRE_CONFIG_FIELD.TLS_MODE in parsed) {
-    if (!ALLOWED_TLS_MODES.has(parsed[PGWIRE_CONFIG_FIELD.TLS_MODE])) {
-      errors.push(PGWIRE_DESCRIPTOR_ERROR.TLS_MODE_INVALID);
-    }
-  }
+    ),
+    ...validatePortRangeOrder(config),
+    ...validateMaxSessionsConfig(config),
+    ...validateAuthConfig(config),
+    ...validateTlsConfig(config),
+    ...validateTrustBindConfig(config),
+  ];
 
   if (errors.length > 0) {
     return {valid: false, errors};
   }
-  return {valid: true, config: parsed};
+  return {valid: true, config};
 }
 
 /**
@@ -236,6 +298,7 @@ export {
   PGWIRE_TLS_MODE,
   ALLOWED_TLS_MODES,
   PGWIRE_DESCRIPTOR_ERROR,
+  PGWIRE_LOOPBACK_HOSTS,
   validatePgwireRuntimeConfig,
   isPgwireRuntimeRef,
 };

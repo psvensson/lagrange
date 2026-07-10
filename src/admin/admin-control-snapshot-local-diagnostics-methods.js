@@ -40,14 +40,16 @@ function resolveBoundedSnapshotProbeDeadlineMs(queryTimeoutMs) {
 }
 
 function buildControlSnapshotResolveOptions(options = {}) {
+  const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
   return {
-    ...(options.forceAuthoritativeRepair === true ?
+    ...(forceAuthoritativeRepair ?
       {forceAuthoritativeRepair: true} :
       {}),
     allowAuthoritativeRepair: options.allowAuthoritativeRepair,
-    ...(options[CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD] === true ?
+    ...(!forceAuthoritativeRepair ?
       {[CONTROL_SNAPSHOT_DEFER_INLINE_OWNER_COMMAND_FIELD]: true} :
       {}),
+    boundedObservationProbe: !forceAuthoritativeRepair,
     queryTimeoutMs: options.queryTimeoutMs,
     allowAuthoritativeReadinessRefresh:
         options.allowAuthoritativeReadinessRefresh,

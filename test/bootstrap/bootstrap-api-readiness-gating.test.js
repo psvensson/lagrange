@@ -44,6 +44,18 @@ function createSatisfiedControlPlaneReadinessService() {
     }),
   });
   return {
+    async getPriorityControlPlaneRecoveryHealth() {
+      return this.getPriorityControlPlaneRecoveryHealthSync();
+    },
+    getPriorityControlPlaneRecoveryHealthSync() {
+      return {
+        healthy: true,
+        reasonCode: null,
+        details: {
+          priorityPartitionSummary: diagnostics.priorityPartitionSummary,
+        },
+      };
+    },
     async getMembershipPublicationDiagnostics() {
       return diagnostics;
     },
@@ -59,6 +71,20 @@ function createMutableControlPlaneReadinessService(initialDiagnostics) {
     setDiagnostics(nextDiagnostics) {
       diagnostics = nextDiagnostics;
     },
+    async getPriorityControlPlaneRecoveryHealth() {
+      return this.getPriorityControlPlaneRecoveryHealthSync();
+    },
+    getPriorityControlPlaneRecoveryHealthSync() {
+      const priorityPartitionSummary = diagnostics?.priorityPartitionSummary;
+      const healthy = priorityPartitionSummary?.satisfied === true;
+      return {
+        healthy,
+        reasonCode: healthy ?
+          null :
+          LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        details: {priorityPartitionSummary},
+      };
+    },
     async getMembershipPublicationDiagnostics() {
       return diagnostics;
     },
@@ -69,7 +95,6 @@ function createMutableControlPlaneReadinessService(initialDiagnostics) {
 }
 
 test('BootstrapAPI - readiness stays gated until startup dependencies and stable window complete',
-  {skip: 'STALE: dead test re-enabled; expected readyz to promote to 200/ready=true after the stable window but product keeps returning 503/ready=false'},
   async (t) => {
     initializeTestEnvironment();
 
@@ -206,7 +231,6 @@ test('BootstrapAPI - readiness stays gated until startup dependencies and stable
   });
 
 test('BootstrapAPI - readyz demotes immediately when priority recovery regresses',
-  {skip: 'STALE: dead test re-enabled; expected readyz to start healthy (200) while priority spread is satisfied but product returns 503'},
   async (t) => {
     initializeTestEnvironment();
 
@@ -328,7 +352,6 @@ test('BootstrapAPI - readyz demotes immediately when priority recovery regresses
   });
 
 test('BootstrapAPI - readyz blocks on local query transport readiness before promotion',
-  {skip: 'STALE: dead test re-enabled; expected readyz to enter the stable window and promote to 200/ready=true once local query transport recovers but product keeps returning 503/ready=false'},
   async (t) => {
     initializeTestEnvironment();
 
@@ -448,7 +471,6 @@ test('BootstrapAPI - readyz blocks on local query transport readiness before pro
   });
 
 test('BootstrapAPI - readyz treats unknown local query transport state as not ready',
-  {skip: 'STALE: dead test re-enabled; expected readyz to enter the stable window and promote to 200/ready=true after explicit transport readiness but product keeps returning 503/ready=false'},
   async (t) => {
     initializeTestEnvironment();
 
@@ -753,7 +775,7 @@ test('BootstrapAPI - liveness remains true while readiness degrades on repeated 
     await api.shutdown();
   });
 
-test('BootstrapAPI - bootstrap conflict detection', {skip: 'STALE: dead test re-enabled; expected first bootstrap to return 200 then duplicate to return 409 but product returns 503 bootstrap-not-ready, so the conflict path is never reached'}, async (t) => {
+test('BootstrapAPI - bootstrap conflict detection', async (t) => {
   initializeTestEnvironment();
 
   // Create a mock system table cache that tracks registered nodes
@@ -893,7 +915,7 @@ test('BootstrapAPI - returns bootstrap not ready before touching cache', async (
 
 registerBootstrapRequestAdmissionTests();
 
-test('BootstrapAPI - returns bootstrap not ready while partition leaders are still settling', {skip: 'STALE: dead test re-enabled; expected the not-ready bootstrap response to expose a leaderReadiness object (ready/missingPartitionLeaders) but product no longer returns that field (body.leaderReadiness is undefined)'}, async (t) => {
+test('BootstrapAPI - returns bootstrap not ready while partition leaders are still settling', async (t) => {
   initializeTestEnvironment();
 
   const mockSystemTableCache = {

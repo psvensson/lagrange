@@ -4,7 +4,7 @@
  *
  * Each runner declares a `{scenario: [guardTestFile, ...]}` map and calls
  * `runGuardTestScenarios(SCENARIOS)`. Every scenario's guard files are
- * executed via tap and a scenario-harness report is written into
+ * executed via the fail-closed test runner and a scenario-harness report is written into
  * `test-output/reports/` in the shape the Solver's `scenario-harness`
  * probe reads (`scripts/solve/probes/scenario-harness.js`):
  *   - standardSummary.scenarios[].current.passed / verdict
@@ -18,23 +18,21 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {runTestFileSync} from '../run-test-files.js';
 
 const REPORT_DIR = 'test-output/reports';
 const GUARD_FILE_TIMEOUT_MS = 300000;
 
 function runGuardFile(file) {
-  const result = spawnSync('npx', ['tap', file, '--disable-coverage'], {
-    encoding: 'utf8',
-    timeout: GUARD_FILE_TIMEOUT_MS,
+  const result = runTestFileSync(file, {
+    print: false,
+    timeoutMs: GUARD_FILE_TIMEOUT_MS,
   });
-  const out = `${result.stdout || ''}${result.stderr || ''}`;
-  const totals = out.match(/# \{ total: (\d+), pass: (\d+) \}/);
   return {
     file,
-    passed: result.status === 0,
-    assertions: totals ? Number(totals[1]) : null,
-    assertionsPassed: totals ? Number(totals[2]) : null,
+    passed: result.ok,
+    assertions: result.assertions,
+    assertionsPassed: result.ok ? result.assertions : 0,
   };
 }
 

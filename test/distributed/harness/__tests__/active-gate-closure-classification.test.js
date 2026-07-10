@@ -10,10 +10,12 @@ import {
 } from '../active-gate-closure-classification.js';
 import {
   buildTopologyConvergenceGraph,
-  buildTopologyConvergenceReplayFixture,
   EDGE_ID,
-  replayTopologyConvergenceFixture,
 } from '../../../../src/diagnostics/topology-convergence-graph.js';
+import {
+  buildTopologyConvergenceReplayFixture,
+  replayTopologyConvergenceFixture,
+} from '../../../../src/diagnostics/topology-convergence-replay.js';
 import {
   PUBLICATION_ACTIVE_GATE_HANDOFF_NEXT_ACTION,
   PUBLICATION_ACTIVE_GATE_HANDOFF_REASON,

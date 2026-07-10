@@ -10,10 +10,10 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  PostgresWireAdapter,
-  PG_SESSION_STATE,
-} from '../../src/query/pg/postgres-wire-adapter.js';
+import {PG_SESSION_STATE} from
+  '../../src/query/pg/postgres-wire-adapter.js';
+import {createTestPostgresWireAdapter} from
+  '../helpers/pgwire-auth-handler.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
@@ -130,7 +130,7 @@ function createAdapterWithEngine(opts = {}) {
     messageRouter: createMockMessageRouter(),
   });
 
-  const adapter = new PostgresWireAdapter({
+  const adapter = createTestPostgresWireAdapter({
     sqlCore: engine,
     authenticator: opts.authenticator,
   });
@@ -337,7 +337,7 @@ test('integration: tenant policy from authentication flows to engine',
       },
     };
 
-    const adapter = new PostgresWireAdapter({sqlCore: trackingEngine});
+    const adapter = createTestPostgresWireAdapter({sqlCore: trackingEngine});
     await adapter.authenticate('ws-9', {
       tenantId: 'tenant-policy-1',
       user: 'admin',
@@ -356,7 +356,7 @@ test('integration: custom authenticator gates session creation',
     const authenticator = async (creds) => {
       authCalled = true;
       // Only allow tenant-allowed
-      return {authenticated: creds.tenantId === 'tenant-allowed'};
+      return {authenticated: creds.database === 'tenant-allowed'};
     };
 
     const {adapter} = createAdapterWithEngine({authenticator});
@@ -507,7 +507,7 @@ test('integration: sqlCore exception propagates through wire adapter',
       },
     };
 
-    const adapter = new PostgresWireAdapter({sqlCore: failingEngine});
+    const adapter = createTestPostgresWireAdapter({sqlCore: failingEngine});
     await adapter.authenticate('ws-17', {tenantId: 'tenant-m'});
 
     try {
@@ -540,7 +540,7 @@ test('integration: bind parameters pass through wire adapter to engine',
       },
     };
 
-    const adapter = new PostgresWireAdapter({sqlCore: trackingEngine});
+    const adapter = createTestPostgresWireAdapter({sqlCore: trackingEngine});
     await adapter.authenticate('ws-18', {tenantId: 'tenant-n'});
 
     await adapter.execute('ws-18', 'SELECT * FROM t WHERE id = ?', [42]);

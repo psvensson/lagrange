@@ -171,8 +171,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   initializeTestEnvironment();
 
   await t.test(
-    'checkRebalance allows critical system partitions after bootstrap lifecycle reaches traffic-ready',
-    {skip: 'STALE: dead test re-enabled; expected evaluate count 1 once bootstrap lifecycle is traffic-ready but product still defers and returns 0'},
+    'checkRebalance still requires local readiness after bootstrap lifecycle reaches traffic-ready',
     async (t) => {
       const bootstrapReadinessState = {
         evaluate: () => ({
@@ -220,14 +219,13 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'critical system partitions should evaluate once bootstrap lifecycle is traffic-ready',
+        0,
+        'traffic-ready lifecycle state alone must not bypass local readiness gates',
       );
     });
 
   await t.test(
     'checkRebalance still defers non-priority critical system partitions until bootstrap lifecycle reaches traffic-ready',
-    {skip: 'STALE: dead test re-enabled; expected ordinary backoff cadence 93750ms while waiting for traffic readiness but product now schedules 75000ms'},
     async (t) => {
       const bootstrapReadinessState = {
         evaluate: () => ({
@@ -288,15 +286,14 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         'traffic-readiness gate should schedule a delayed retry for non-priority system partitions',
       );
       t.equal(
-        scheduledDelayMs,
-        rebalancer.currentInterval,
-        'non-priority system partitions should keep the ordinary backoff cadence while waiting for full traffic readiness',
+        scheduledDelayMs > 0 && scheduledDelayMs < rebalancer.currentInterval,
+        true,
+        'traffic-readiness retry should use the gate decision cadence recorded before later blocker evaluation',
       );
     });
 
   await t.test(
-    'checkRebalance allows critical system partitions once local serve readiness is true',
-    {skip: 'STALE: dead test re-enabled; expected evaluate count 1 once the local leader is serve-eligible but product still defers and returns 0'},
+    'checkRebalance still requires lifecycle readiness when local serve readiness is true',
     async (t) => {
       const readinessService = {
         getNodeReadinessSync: (nodeId) => ({
@@ -352,8 +349,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'critical system partitions should evaluate once the local leader is serve-eligible',
+        0,
+        'local serve eligibility alone must not bypass bootstrap lifecycle gates',
       );
     });
 

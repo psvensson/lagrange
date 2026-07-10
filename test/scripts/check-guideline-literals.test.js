@@ -182,8 +182,6 @@ test('baseline filtering keeps only new literal violations', async (t) => {
     new Set([
       JSON.stringify([
         inheritedViolation.filePath,
-        inheritedViolation.line,
-        inheritedViolation.column,
         inheritedViolation.value,
         inheritedViolation.kind,
       ]),

@@ -173,6 +173,8 @@ const DEFAULT_CONFIG = {
     queryTimeoutMs: 30000, // Query timeout (30 seconds)
     cacheDumpTimeoutMs: 5000, // Cache dump timeout (5 seconds)
     websocketPort: 8081, // Admin WebSocket port (matches ADMIN_DEFAULT.WEBSOCKET_PORT)
+    websocketHost: '127.0.0.1',
+    allowInsecureExternalBind: false,
   },
   latency: {
     // Operator-pinned latency group (zone label). Empty string means

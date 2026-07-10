@@ -392,7 +392,6 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
   );
 
   await t.test('derives priority spread blocker from the sync planning answer owner',
-    {skip: 'STALE: dead test re-enabled; expected blockedPartitions entry without exclusionReasonCounts but product now includes exclusionReasonCounts: null'},
     async (t) => {
       const readinessService = {
         ...createMockReadinessService(createMockCache([
@@ -444,6 +443,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
             readyReplicaCount: null,
             readyDistinctNodeCount: 0,
             spreadGap: 1,
+            exclusionReasonCounts: null,
           }],
         },
         'priority gating should be driven by the canonical sync planning answer',

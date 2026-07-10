@@ -1,4 +1,5 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const ABSENT_VISIBILITY_VALUE = null;
 
 function assignReplicaOperationRepositoryMutationPersistenceMethods(
   ReplicaOperationRepository,
@@ -499,7 +500,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       this.clearAuthoritativeOperationVisibilityOutcome();
       const deadlineMs =
         Date.now() + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
-      let deferredOutcome = null;
+      let deferredOutcome = ABSENT_VISIBILITY_VALUE;
       let sawVisibilityMismatch = false;
       while (true) {
         const localObservation =
@@ -523,12 +524,12 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             confirmationState:
               REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED,
             operation: localObservation.operation,
-            deferredOutcome: null,
+            deferredOutcome: ABSENT_VISIBILITY_VALUE,
           };
         }
         if (localObservation.operation) {
           sawVisibilityMismatch = true;
-          deferredOutcome = null;
+          deferredOutcome = ABSENT_VISIBILITY_VALUE;
         }
         if (localObservation.deferredOutcome) {
           deferredOutcome = localObservation.deferredOutcome;
@@ -556,12 +557,12 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             confirmationState:
               REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED,
             operation: authorityObservation.operation,
-            deferredOutcome: null,
+            deferredOutcome: ABSENT_VISIBILITY_VALUE,
           };
         }
         if (authorityObservation.operation) {
           sawVisibilityMismatch = true;
-          deferredOutcome = null;
+          deferredOutcome = ABSENT_VISIBILITY_VALUE;
         }
         if (authorityObservation.deferredOutcome) {
           deferredOutcome = authorityObservation.deferredOutcome;
@@ -574,15 +575,15 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
             return {
               confirmationState:
                 REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED,
-              operation: null,
+              operation: ABSENT_VISIBILITY_VALUE,
               deferredOutcome,
             };
           }
           return {
             confirmationState:
               REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.MISSING,
-            operation: null,
-            deferredOutcome: null,
+            operation: ABSENT_VISIBILITY_VALUE,
+            deferredOutcome: ABSENT_VISIBILITY_VALUE,
           };
         }
         await this.waitForReplicaOperationVisibilityRetry(

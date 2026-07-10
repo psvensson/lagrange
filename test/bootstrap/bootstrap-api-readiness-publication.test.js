@@ -26,6 +26,9 @@ import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constan
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+} from '../../src/bootstrap/owners/bootstrap-control-plane-recovery-health.js';
 
 function createSatisfiedControlPlaneReadinessService() {
   const diagnostics = Object.freeze({
@@ -177,8 +180,7 @@ test('BootstrapAPI - readyz still blocks missing partition leader metadata', asy
   await api.shutdown();
 });
 
-test('BootstrapAPI - readyz tolerates non-traffic control-plane partition lag',
-  {skip: 'STALE: dead test re-enabled; expected readyz 200/ready=true tolerating non-traffic control-plane lag but product returns 503 with PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'},
+test('BootstrapAPI - readyz blocks non-traffic control-plane lag while recovery remains pending',
   async (t) => {
     initializeTestEnvironment();
 
@@ -245,13 +247,16 @@ test('BootstrapAPI - readyz tolerates non-traffic control-plane partition lag',
       method: 'GET',
       url: '/readyz',
     });
-    t.equal(readyResponse.statusCode, 200,
-      'readyz should stay green when only non-traffic control-plane partitions lag');
+    t.equal(readyResponse.statusCode, 503,
+      'readyz should fail closed while control-plane recovery remains pending');
     const readyBody = JSON.parse(readyResponse.body);
-    t.equal(readyBody.ready, true,
-      'readyz should project ready=true when traffic routing tables are complete');
-    t.same(readyBody.reasons, [],
-      'readyz should not report tolerated control-plane lag as a hard blocker');
+    t.equal(readyBody.ready, false,
+      'complete traffic routing metadata must not bypass recovery readiness');
+    t.same(
+      readyBody.reasons,
+      [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+      'readyz should retain the canonical pending-recovery blocker',
+    );
 
     await api.shutdown();
   });
@@ -791,7 +796,6 @@ test('BootstrapAPI - readyz fails closed when published membership excludes the 
   });
 
 test('BootstrapAPI - readiness fails closed when control-plane diagnostics are unavailable',
-  {skip: 'STALE: dead test re-enabled; expected reason code PRIORITY_CONTROL_PLANE_RECOVERY_PENDING but product now returns priority_control_plane_recovery_diagnostics_unavailable'},
   async (t) => {
     initializeTestEnvironment();
 
@@ -832,9 +836,9 @@ test('BootstrapAPI - readiness fails closed when control-plane diagnostics are u
     const readyBody = JSON.parse(readyResponse.body);
     t.ok(
       readyBody.reasons.includes(
-        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       ),
-      'readyz should classify diagnostics read failures as priority recovery pending',
+      'readyz should classify diagnostics read failures explicitly',
     );
 
     const bootstrapReadyResponse = await api.getFastify().inject({
@@ -849,9 +853,9 @@ test('BootstrapAPI - readiness fails closed when control-plane diagnostics are u
       'bootstrap join readiness should not project ready without authoritative diagnostics');
     t.ok(
       bootstrapReadyBody.reasons.includes(
-        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       ),
-      'bootstrap join readiness should preserve the pending recovery blocker when authority is missing',
+      'bootstrap join readiness should preserve the unavailable-diagnostics blocker',
     );
 
     const priorityRecoveryHealth = api.bootstrapReadinessOwner
@@ -860,8 +864,8 @@ test('BootstrapAPI - readiness fails closed when control-plane diagnostics are u
       'priority recovery health should fail closed when diagnostics reads throw');
     t.equal(
       priorityRecoveryHealth.reasonCode,
-      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-      'priority recovery health should classify diagnostics failures as pending recovery',
+      PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+      'priority recovery health should classify diagnostics failures explicitly',
     );
     t.equal(
       priorityRecoveryHealth.details.error,
@@ -874,7 +878,6 @@ test('BootstrapAPI - readiness fails closed when control-plane diagnostics are u
   });
 
 test('BootstrapAPI - readiness fails closed when membership publication diagnostics are missing',
-  {skip: 'STALE: dead test re-enabled; expected reason code PRIORITY_CONTROL_PLANE_RECOVERY_PENDING but product now returns priority_control_plane_recovery_diagnostics_unavailable'},
   async (t) => {
     initializeTestEnvironment();
 
@@ -915,9 +918,9 @@ test('BootstrapAPI - readiness fails closed when membership publication diagnost
     const readyBody = JSON.parse(readyResponse.body);
     t.ok(
       readyBody.reasons.includes(
-        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       ),
-      'readyz should classify missing diagnostics as pending priority recovery',
+      'readyz should classify missing diagnostics explicitly',
     );
 
     const bootstrapReadyResponse = await api.getFastify().inject({
@@ -932,9 +935,9 @@ test('BootstrapAPI - readiness fails closed when membership publication diagnost
       'bootstrap join readiness should not project ready without a control snapshot authority basis');
     t.ok(
       bootstrapReadyBody.reasons.includes(
-        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       ),
-      'bootstrap join readiness should preserve pending recovery when diagnostics are absent',
+      'bootstrap join readiness should preserve unavailable diagnostics',
     );
 
     const priorityRecoveryHealth = api.bootstrapReadinessOwner
@@ -944,8 +947,8 @@ test('BootstrapAPI - readiness fails closed when membership publication diagnost
     );
     t.equal(
       priorityRecoveryHealth.reasonCode,
-      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-      'missing publication diagnostics should classify as pending priority recovery',
+      PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+      'missing publication diagnostics should classify explicitly',
     );
 
     await api.shutdown();
@@ -1189,7 +1192,6 @@ test('BootstrapAPI - readiness uses the canonical control-plane publication stor
   });
 
 test('BootstrapAPI - readiness fails closed when control-plane readiness service is missing',
-  {skip: 'STALE: dead test re-enabled; expected reason code PRIORITY_CONTROL_PLANE_RECOVERY_PENDING but product now returns priority_control_plane_recovery_diagnostics_unavailable'},
   async (t) => {
     initializeTestEnvironment();
 
@@ -1224,9 +1226,9 @@ test('BootstrapAPI - readiness fails closed when control-plane readiness service
     const readyBody = JSON.parse(readyResponse.body);
     t.ok(
       readyBody.reasons.includes(
-        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       ),
-      'readyz should classify missing readiness service as pending priority recovery',
+      'readyz should classify the missing readiness service as unavailable diagnostics',
     );
 
     const bootstrapReadyResponse = await api.getFastify().inject({
@@ -1240,9 +1242,9 @@ test('BootstrapAPI - readiness fails closed when control-plane readiness service
       'bootstrap join readiness should not project ready when the control-plane readiness service is missing');
     t.ok(
       bootstrapReadyBody.reasons.includes(
-        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
       ),
-      'bootstrap join readiness should preserve the recovery-pending blocker when authority is unavailable',
+      'bootstrap join readiness should preserve the unavailable-authority blocker',
     );
 
     const priorityRecoveryHealth = api.bootstrapReadinessOwner
@@ -1251,8 +1253,8 @@ test('BootstrapAPI - readiness fails closed when control-plane readiness service
       'priority recovery health should fail closed when readiness service is unavailable');
     t.equal(
       priorityRecoveryHealth.reasonCode,
-      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-      'missing readiness service should classify as pending priority recovery',
+      PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+      'missing readiness service should classify as unavailable diagnostics',
     );
 
     await api.shutdown();

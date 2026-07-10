@@ -2,13 +2,8 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {
-  AUTHORITATIVE_REPAIR_TRIGGER,
   deriveAuthoritativeRepairTables,
 } from './admin-authoritative-repair-policy.js';
-
-const DEFAULT_AUTO_REPAIR_TRIGGER_CODES = Object.freeze([
-  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
-]);
 
 function normalizeAuthoritativeRepairTriggerCodes(triggerCodes = []) {
   return [...new Set(
@@ -56,19 +51,8 @@ function shouldAttemptAuthoritativeRepair(options = {}) {
   if (options.repairEvaluation?.shouldRepair !== true) {
     return false;
   }
-  if (options.forceAuthoritativeRepair === true ||
-      options.allowAuthoritativeRepair === true) {
-    return true;
-  }
-
-  const autoRepairTriggerCodes =
-    normalizeAuthoritativeRepairTriggerCodes(
-      options.autoRepairTriggerCodes ||
-      DEFAULT_AUTO_REPAIR_TRIGGER_CODES,
-    );
-  return autoRepairTriggerCodes.some((triggerCode) =>
-    hasAuthoritativeRepairTrigger(options.repairEvaluation, triggerCode),
-  );
+  return options.forceAuthoritativeRepair === true ||
+    options.allowAuthoritativeRepair === true;
 }
 
 export {

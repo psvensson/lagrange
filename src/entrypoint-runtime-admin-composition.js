@@ -504,10 +504,20 @@ async function startAdminRuntimeComposition(options) {
   });
   const adminAPI = adminStartup.adminAPI;
   const liveQueryWiring = adminStartup.liveQueryWiring;
+  const configurationManager = ConfigurationManager.getInstance();
   const adminPort =
-    ConfigurationManager.getInstance().get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) ??
+    configurationManager.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) ??
     ADMIN_DEFAULT.WEBSOCKET_PORT;
-  await adminAPI.initialize(adminPort);
+  const adminHost =
+    configurationManager.get(CONFIG_KEY.ADMIN_WEBSOCKET_HOST) ??
+    ADMIN_DEFAULT.HOST;
+  const allowInsecureExternalBind =
+    configurationManager.get(CONFIG_KEY.ADMIN_ALLOW_INSECURE_EXTERNAL_BIND) ===
+    true;
+  await adminAPI.initialize(adminPort, {
+    host: adminHost,
+    allowInsecureExternalBind,
+  });
   const logger = options.owner?.logger;
   if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
     logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_STARTED, {

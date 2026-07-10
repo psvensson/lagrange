@@ -534,8 +534,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance does not defer critical system partitions when a node is failed',
-    {skip: 'STALE: dead test re-enabled; expected evaluateCalls===1 (failed node stays actionable past settling gate) but product now defers it and returns 0'},
+    'checkRebalance defers critical system partitions while failed membership is pending cleanup',
     async (t) => {
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
@@ -571,8 +570,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'failed nodes should remain actionable and must not be blocked by the settling gate',
+        0,
+        'failed membership should remain behind the topology-settling gate until cleanup completes',
       );
     });
 

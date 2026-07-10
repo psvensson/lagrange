@@ -105,6 +105,11 @@ function createHandler(overrides = {}) {
         service_type: 'runtime_service',
         runtime_kind: 'native_js',
         runtime_ref: 'postgres-wire-runtime',
+        runtime_config: JSON.stringify({
+          host: '127.0.0.1',
+          authMode: 'trust',
+          tlsMode: 'disable',
+        }),
       },
     ],
     replica_operations: overrides.operations || [],

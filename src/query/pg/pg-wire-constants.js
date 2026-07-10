@@ -24,6 +24,7 @@ const PG_WIRE_ERROR_MSG = Object.freeze({
     'Session must be authenticated before executing queries',
   SESSION_CLOSED: 'Session is closed',
   AUTHENTICATION_FAILED: 'Authentication failed',
+  AUTHORIZATION_FAILED: 'Query authorization failed',
 });
 
 export {PG_SESSION_STATE, PG_WIRE_ERROR_MSG};

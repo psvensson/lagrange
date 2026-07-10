@@ -60,6 +60,7 @@ const RAFT_STATE_COMMITTED_INDEX_KEY = 'committedIndex';
 const SELECT_DURABLE_COMMITTED_INDEX =
   'SELECT value FROM _raft_state WHERE key = ?';
 const MEMORY_DB_PATH = ':memory:';
+const ABSENT_DURABILITY_TIMESTAMP = null;
 
 class PartitionServiceDurabilityFitnessMethods {
   getLeaderDurabilityFitnessState() {
@@ -71,7 +72,7 @@ class PartitionServiceDurabilityFitnessMethods {
         unfit: false,
         activeReason: null,
         handoffRequestedWhileLeader: false,
-        successorlessUnfitSinceMs: null,
+        successorlessUnfitSinceMs: ABSENT_DURABILITY_TIMESTAMP,
         readonlyWatermarkDb: null,
         readonlyWatermarkUnavailable: false,
         readonlyWatermarkErrorDeclaredIndex: 0,
@@ -136,10 +137,11 @@ class PartitionServiceDurabilityFitnessMethods {
    */
   shouldDemoteSuccessorlessUnfitLeader(nowMs, state, isLeader) {
     if (!isLeader || this.isSoloReplicaGroup?.() !== false) {
-      state.successorlessUnfitSinceMs = null;
+      state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
       return false;
-    }
-    if (state.successorlessUnfitSinceMs === null) {
+    } else if (
+      state.successorlessUnfitSinceMs === ABSENT_DURABILITY_TIMESTAMP
+    ) {
       state.successorlessUnfitSinceMs = nowMs;
     }
     return (
@@ -233,7 +235,7 @@ class PartitionServiceDurabilityFitnessMethods {
       state.unfit = false;
       state.activeReason = null;
       state.handoffRequestedWhileLeader = false;
-      state.successorlessUnfitSinceMs = null;
+      state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
       this.isLeaderDurabilityUnfit = false;
       if (wasUnfit) {
         this.logger.info(
@@ -356,7 +358,7 @@ class PartitionServiceDurabilityFitnessMethods {
       this.raft?.deferCandidacy?.();
     }
     if (successorViable) {
-      state.successorlessUnfitSinceMs = null;
+      state.successorlessUnfitSinceMs = ABSENT_DURABILITY_TIMESTAMP;
     } else if (
       !this.shouldDemoteSuccessorlessUnfitLeader(nowMs, state, isLeader)
     ) {

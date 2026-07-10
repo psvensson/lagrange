@@ -108,6 +108,10 @@ volumeMounts:
   value: {{ .Values.node.restPort | quote }}
 - name: LOG_LEVEL
   value: {{ .Values.node.logLevel | quote }}
+- name: ADMIN_WEBSOCKET_HOST
+  value: {{ .Values.admin.websocketHost | quote }}
+- name: ADMIN_ALLOW_INSECURE_EXTERNAL_BIND
+  value: {{ .Values.admin.allowInsecureExternalBind | quote }}
 # Bind wide, advertise + register the stable per-pod DNS name (name-first
 # addressing). NODE_ADDRESS must be unique per node — the default would
 # register every pod as localhost:<restPort> and collide at join admission.

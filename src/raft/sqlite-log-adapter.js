@@ -9,6 +9,7 @@ import {
   isCanonicalLogEntryShape,
   normalizeLogEntry,
 } from './sqlite-log-entry-shape.js';
+import {STRING} from '../constants/strings.js';
 
 const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
 const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
@@ -17,6 +18,9 @@ const LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX = 'DELETE FROM _raft_log WH
 const LOCAL_STR_UPDATE_RAFT_LOG_SET_COMMAND_WHERE_LOG_IN = 'UPDATE _raft_log SET command = ? WHERE log_index = ?';
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_1JYKG = 'DELETE FROM _raft_log WHERE log_index > ?';
+const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
+  'Refused raft log truncation into the committed prefix ' +
+  '(committed-entry-loss prevented)';
 const LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_STATE_KEY_VA = 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)';
 const LOCAL_STR_COMMITTEDINDEX = 'committedIndex';
 const LOCAL_STR_CURRENTTERM = 'currentTerm';
@@ -593,12 +597,11 @@ class SQLiteLogAdapter {
       };
       if (this.logger && typeof this.logger.error === 'function') {
         this.logger.error(
-          'Refused raft log truncation into the committed prefix ' +
-            '(committed-entry-loss prevented)',
+          LOCAL_STR_COMMITTED_TRUNCATION_REFUSED,
           {
             requestedIndex: index,
             committedIndex,
-            address: this.node ? this.node.address : 'unknown',
+            address: this.node ? this.node.address : STRING.UNKNOWN,
           },
         );
       }

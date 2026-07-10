@@ -10,6 +10,7 @@ test/rebalancer/runtime-service-entity.test.js
 test/rebalancer/move-planner-runtime-service.test.js
 test/bootstrap/pgwire-startup-safety-gate.test.js
 test/runtime/pgwire-protocol-handler.test.js
+test/runtime/pgwire-protocol-ordering.test.js
 test/runtime/pgwire-session.test.js
 test/runtime/pgwire-auth-handler.test.js
 test/runtime/pgwire-port-allocator.test.js

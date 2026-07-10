@@ -60,6 +60,8 @@ const ADAPTER_ERROR_MSG = Object.freeze({
     'runtime replica state projection requires the control-plane ' +
     'system-table gateway',
   SQL_CORE_REQUIRED: 'SqlCore (SQLQueryEngine) instance is required',
+  AUTH_HANDLER_REQUIRED:
+    'PostgresWireAdapter requires an authentication owner',
   STATEMENT_REQUIRED: 'SQL statement string is required',
   STATEMENT_MUST_BE_STRING: 'SQL statement must be a string',
   PARAMETERS_MUST_BE_ARRAY: 'SQL parameters must be an array',

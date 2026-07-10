@@ -154,6 +154,12 @@ const PG_HANDLER_ERROR = Object.freeze({
     'Empty query string',
   SESSION_CREATION_FAILED:
     'Failed to create session',
+  INVALID_MESSAGE_LENGTH:
+    'Invalid PostgreSQL frontend message length',
+  MESSAGE_TOO_LARGE:
+    'PostgreSQL frontend message exceeds the maximum size',
+  QUERY_EXECUTION_FAILED:
+    'PostgreSQL query execution failed',
 });
 
 // --- Protocol handler log messages ---

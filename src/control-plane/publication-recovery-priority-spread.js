@@ -15,10 +15,11 @@ import {
   normalizeOptionalString,
 } from './publication-recovery-stream-evidence.js';
 import {
-  buildPriorityRecoveryClosureWitness,
   hasPriorityRecoverySpreadGap,
+} from './priority-recovery-planning-intent.js';
+import {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
-} from './priority-recovery-snapshot.js';
+} from './priority-recovery-snapshot-contract.js';
 
 function normalizePriorityPartitionSummary(value) {
   return value && typeof value === 'object' ?
@@ -157,10 +158,7 @@ function buildPrioritySpreadDecision(options = {}) {
     );
   const rawPriorityRecoveryClosureWitness = normalizePriorityRecoveryClosureWitness(
     options.priorityRecoveryClosureWitness,
-  ) || decisionSnapshotClosureWitness || buildPriorityRecoveryClosureWitness({
-    decisionSnapshots: options.priorityRecoveryDecisionSnapshots,
-    priorityPartitionSummary: durablePriorityPartitionSummary,
-  });
+  ) || decisionSnapshotClosureWitness;
   const priorityRecoveryClosureWitness =
     normalizePriorityClosureWitnessForDurableSummary(
       rawPriorityRecoveryClosureWitness,

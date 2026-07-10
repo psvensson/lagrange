@@ -8,9 +8,8 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  PostgresWireAdapter,
-} from '../../src/query/pg/postgres-wire-adapter.js';
+import {createTestPostgresWireAdapter} from
+  '../helpers/pgwire-auth-handler.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
@@ -98,7 +97,7 @@ function createMockRouter() {
 test('PostgresWireAdapter - execute passes dialect=postgresql ' +
   'in SqlRequest', async (t) => {
   const mock = createCapturingSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await adapter.authenticate('s1', {tenantId: 'tenant-a'});
   await adapter.execute('s1', 'SELECT 1');
@@ -119,7 +118,7 @@ test('PostgresWireAdapter - execute passes dialect=postgresql ' +
 test('PostgresWireAdapter - dialect is present alongside other ' +
   'SqlRequest fields', async (t) => {
   const mock = createCapturingSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await adapter.authenticate('s2', {tenantId: 'tenant-b'});
   await adapter.execute('s2', 'SELECT $1', [42]);

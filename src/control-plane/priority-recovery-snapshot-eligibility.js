@@ -18,7 +18,9 @@ import {
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from './priority-recovery-snapshot-contract.js';
 import {normalizePriorityRecoveryDecisionSnapshotSemanticState, resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-ingress.js';
-import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-rebalancer.js';
+import {
+  isPriorityRecoveryOperationContextTerminal,
+} from './priority-recovery-operation-context-state.js';
 
 function normalizePriorityRecoveryDecisionSnapshotOperationIds(snapshot) {
   return normalizePriorityRecoveryStringList([

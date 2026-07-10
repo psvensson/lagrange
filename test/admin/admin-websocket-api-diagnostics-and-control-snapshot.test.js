@@ -574,7 +574,6 @@ test(
 );
 
 test('AdminWebSocketAPI - local control snapshot exposes structured control-plane diagnostics',
-  {skip: 'STALE: dead test re-enabled; expected publicationConvergence.pendingAckNodeIds=["node-2"] but product returns []'},
   async (t) => {
     const workflowId = 'split-table-1-partition-1-v2';
     const readinessRequests = [];

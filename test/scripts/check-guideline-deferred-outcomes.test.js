@@ -68,8 +68,9 @@ test('tracks the bounded deferred-outcome hotspot set explicitly', async (t) => 
     [
       'src/control-plane/control-plane-mutation-readiness.js',
       'src/control-plane/priority-recovery-completion.js',
-      'test/distributed/harness/cluster.js',
-      'test/distributed/scenarios/table-distribution-helpers.js',
+      'test/distributed/harness/cluster-base-layer.js',
+      'test/distributed/harness/cluster-node-handle-layer.js',
+      'test/distributed/scenarios/table-distribution-helpers-load-node-planning.js',
     ],
   );
 });

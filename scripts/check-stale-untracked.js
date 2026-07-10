@@ -14,21 +14,38 @@
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 
-const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
+const GIT_EXECUTABLE = 'git';
+const GIT_UNTRACKED_ARGUMENTS = Object.freeze([
+  'ls-files',
+  '--others',
+  '--exclude-standard',
+  '--',
+]);
+const TEXT_ENCODING = 'utf8';
+const CHILD_PROCESS_STDIO = Object.freeze(['ignore', 'pipe', 'ignore']);
+const LINE_SEPARATOR = '\n';
+const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
+const STALE_AFTER_MS = 12 * MILLISECONDS_PER_HOUR;
 const WATCHED_ROOTS = ['src', 'scripts', 'test'];
+const STALE_WARNING =
+  'stale-untracked check (warn-only): possibly finished work from a previous ' +
+  'session left uncommitted - commit it (local gates first) or delete it.';
 
 let output;
 try {
   output = execFileSync(
-    'git', ['ls-files', '--others', '--exclude-standard', '--', ...WATCHED_ROOTS],
-    {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']});
+    GIT_EXECUTABLE,
+    [...GIT_UNTRACKED_ARGUMENTS, ...WATCHED_ROOTS],
+    {encoding: TEXT_ENCODING, stdio: CHILD_PROCESS_STDIO},
+  );
 } catch {
   process.exit(0); // Not a repo / git unavailable — nothing to check.
 }
 
 const now = Date.now();
 const stale = [];
-for (const file of output.split('\n').map((line) => line.trim()).filter(Boolean)) {
+for (const file of output.split(LINE_SEPARATOR)
+  .map((line) => line.trim()).filter(Boolean)) {
   let stat;
   try {
     stat = fs.statSync(file);
@@ -37,16 +54,16 @@ for (const file of output.split('\n').map((line) => line.trim()).filter(Boolean)
   }
   const ageMs = now - stat.mtimeMs;
   if (ageMs > STALE_AFTER_MS) {
-    stale.push({file, hours: Math.round(ageMs / (60 * 60 * 1000))});
+    stale.push({file, hours: Math.round(ageMs / MILLISECONDS_PER_HOUR)});
   }
 }
 
 if (stale.length > 0) {
-  process.stdout.write(
-    'stale-untracked check (warn-only): possibly finished work from a previous ' +
-    'session left uncommitted — commit it (local gates first) or delete it.\n');
+  process.stdout.write(`${STALE_WARNING}${LINE_SEPARATOR}`);
   for (const entry of stale) {
-    process.stdout.write(`  - ${entry.file} (untracked for ~${entry.hours}h)\n`);
+    process.stdout.write(
+      `  - ${entry.file} (untracked for ~${entry.hours}h)${LINE_SEPARATOR}`,
+    );
   }
 }
 process.exit(0);

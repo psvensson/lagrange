@@ -21,7 +21,7 @@ import {createSnapshotWorktree, removeWorktree} from './session-worktree.js';
 const DEFAULT_ENCODING = 'utf8';
 const ARTIFACT_DIR = path.join('solve', 'changes', 'dt-prove');
 const NODE_BIN = process.execPath;
-const TAP_BIN = path.join('node_modules', '.bin', 'tap');
+const TEST_RUNNER = path.join('scripts', 'run-test-files.js');
 
 const VERDICT_FIX_NOT_PASSING = 'fix-not-passing';
 const VERDICT_REVERT_NOOP = 'revert-noop';
@@ -73,11 +73,10 @@ function parseArgs(argv) {
   return parsed;
 }
 
-// Run the test INSIDE the worktree (cwd = worktree, repo-relative test path) so tap reads
-// the worktree's .taprc, resolves the symlinked node_modules, and writes its output dirs
-// within the throwaway tree. The test's relative imports load the worktree's src.
+// Run the test INSIDE the worktree so relative imports load the worktree's src
+// and the fail-closed runner writes its evidence there.
 function runTap(worktreePath, testFile) {
-  const result = spawnSync(NODE_BIN, [TAP_BIN, '--disable-coverage', testFile],
+  const result = spawnSync(NODE_BIN, [TEST_RUNNER, '--jobs=1', testFile],
     {cwd: worktreePath, encoding: DEFAULT_ENCODING, env: process.env});
   return typeof result.status === 'number' ? result.status : 1;
 }

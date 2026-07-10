@@ -42,7 +42,11 @@ import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 function makeDefinition(overrides = {}) {
   return {
     serviceId: META_SERVICE_ID.POSTGRES_WIRE,
-    runtimeConfig: null,
+    runtimeConfig: JSON.stringify({
+      host: '127.0.0.1',
+      authMode: 'trust',
+      tlsMode: 'disable',
+    }),
     ...overrides,
   };
 }
@@ -57,6 +61,7 @@ function makeContext(overrides = {}) {
     serviceId: META_SERVICE_ID.POSTGRES_WIRE,
     host: '127.0.0.1',
     port: 0,
+    sqlRequestExecutor: async () => ({success: true, rows: []}),
     ...overrides,
   };
 }
@@ -147,12 +152,13 @@ describe('pgwire-runtime-module', () => {
       ));
     });
 
-    it('should accept null runtime config', async () => {
+    it('should reject implicit authentication configuration', async () => {
       const mod = new PostgresWireRuntimeModule();
       const result = await mod.prepare(
         makeDefinition({runtimeConfig: null}),
       );
-      assert.equal(result.status, PREPARE_STATUS.READY);
+      assert.equal(result.status, PREPARE_STATUS.FAILED);
+      assert.match(result.error, /authMode must be explicitly configured/u);
     });
 
     it('should be idempotent (re-prepare updates config)',
@@ -160,7 +166,12 @@ describe('pgwire-runtime-module', () => {
         const mod = new PostgresWireRuntimeModule();
         await mod.prepare(makeDefinition());
         const def2 = makeDefinition({
-          runtimeConfig: JSON.stringify({maxSessions: 42}),
+          runtimeConfig: JSON.stringify({
+            host: '127.0.0.1',
+            maxSessions: 42,
+            authMode: 'trust',
+            tlsMode: 'disable',
+          }),
         });
         const result = await mod.prepare(def2);
         assert.equal(result.status, PREPARE_STATUS.READY);
@@ -214,6 +225,24 @@ describe('pgwire-runtime-module', () => {
       assert.ok(result.error.includes(
         PGWIRE_MODULE_ERROR.NOT_PREPARED,
       ));
+    });
+
+    it('fails closed without the canonical SqlRequest executor', async () => {
+      const mod = new PostgresWireRuntimeModule();
+      await mod.prepare(makeDefinition());
+      const result = await mod.start(makeContext({
+        sqlRequestExecutor: undefined,
+      }));
+      assert.equal(result.status, START_STATUS.FAILED);
+      assert.match(result.error, /sqlRequestExecutor is required/u);
+    });
+
+    it('rejects an external trust-mode override', async () => {
+      const mod = new PostgresWireRuntimeModule();
+      await mod.prepare(makeDefinition());
+      const result = await mod.start(makeContext({host: '0.0.0.0'}));
+      assert.equal(result.status, START_STATUS.FAILED);
+      assert.match(result.error, /loopback host/u);
     });
 
     it('should be idempotent (second start returns same intent)',
@@ -444,7 +473,7 @@ describe('pgwire-runtime-module', () => {
 
     it('should export frozen PGWIRE_DEFAULT', () => {
       assert.ok(Object.isFrozen(PGWIRE_DEFAULT));
-      assert.equal(PGWIRE_DEFAULT.HOST, '0.0.0.0');
+      assert.equal(PGWIRE_DEFAULT.HOST, '127.0.0.1');
       assert.equal(PGWIRE_DEFAULT.PORT, 5432);
       assert.equal(PGWIRE_DEFAULT.MAX_SESSIONS, 100);
     });

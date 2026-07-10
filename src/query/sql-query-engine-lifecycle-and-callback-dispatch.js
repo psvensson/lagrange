@@ -325,13 +325,16 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     if (!lifecycle || typeof lifecycle.setQueryExecutorFactory !== LOCAL_STR_FUNCTION) {
       return;
     }
-    lifecycle.setQueryExecutorFactory(
-      (serviceId) => async (sql, params) =>
+    lifecycle.setQueryExecutorFactory((serviceId) => {
+      const queryExecutor = async (sql, params) =>
         this.executeQuery(sql, params, {
           sessionId: serviceId,
           issuingServiceId: serviceId,
-        }),
-    );
+        });
+      queryExecutor.executeRequest = (request) =>
+        this.executeRequest(request);
+      return queryExecutor;
+    });
   }
 
   /**

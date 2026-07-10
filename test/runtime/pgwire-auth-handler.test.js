@@ -14,6 +14,7 @@ import {
   PGWIRE_AUTH_ACTION,
   PGWIRE_AUTH_AUDIT_MSG,
   PGWIRE_AUTH_ERROR_MSG,
+  PGWIRE_AUTH_HANDLER_MODE,
 } from '../../src/runtime/pgwire-auth-constants.js';
 
 /** Silent logger for tests. */
@@ -24,10 +25,38 @@ const silentLogger = {
   error() {},
 };
 
+const trustPolicy = Object.freeze({allowedActions: '*'});
+
+function createAuthHandler(options = {}) {
+  return new PgWireAuthHandler({
+    mode: PGWIRE_AUTH_HANDLER_MODE.TRUST,
+    policy: trustPolicy,
+    ...options,
+  });
+}
+
 describe('PgWireAuthHandler', () => {
+  describe('construction', () => {
+    it('requires an explicit authentication mode', () => {
+      assert.throws(
+        () => new PgWireAuthHandler(),
+        new RegExp(PGWIRE_AUTH_ERROR_MSG.MODE_REQUIRED, 'u'),
+      );
+    });
+
+    it('requires an explicit authorization policy', () => {
+      assert.throws(
+        () => new PgWireAuthHandler({
+          mode: PGWIRE_AUTH_HANDLER_MODE.TRUST,
+        }),
+        new RegExp(PGWIRE_AUTH_ERROR_MSG.POLICY_REQUIRED, 'u'),
+      );
+    });
+  });
+
   describe('authenticate', () => {
     it('maps user/database to tenant/principal context', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = await handler.authenticate({
         user: 'alice',
         database: 'mydb',
@@ -41,7 +70,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('produces frozen context object', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = await handler.authenticate({
         user: 'bob',
         database: 'testdb',
@@ -51,7 +80,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('emits audit record on successful auth', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = await handler.authenticate({
         user: 'alice',
         database: 'mydb',
@@ -74,7 +103,7 @@ describe('PgWireAuthHandler', () => {
         authenticated: true,
         roles: ['admin', 'reader'],
       });
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         authenticator,
         logger: silentLogger,
       });
@@ -88,7 +117,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('fails closed when credentials are null', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = await handler.authenticate(null);
 
       assert.equal(result.authenticated, false);
@@ -100,7 +129,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('fails closed when user is missing', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = await handler.authenticate({
         database: 'mydb',
       });
@@ -114,7 +143,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('fails closed when database is missing', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = await handler.authenticate({
         user: 'alice',
       });
@@ -129,7 +158,7 @@ describe('PgWireAuthHandler', () => {
 
     it('fails closed when authenticator rejects', async () => {
       const authenticator = async () => ({authenticated: false});
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         authenticator,
         logger: silentLogger,
       });
@@ -150,7 +179,7 @@ describe('PgWireAuthHandler', () => {
       const authenticator = async () => {
         throw new Error('backend unavailable');
       };
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         authenticator,
         logger: silentLogger,
       });
@@ -166,7 +195,7 @@ describe('PgWireAuthHandler', () => {
 
     it('emits audit record on failed auth', async () => {
       const authenticator = async () => ({authenticated: false});
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         authenticator,
         logger: silentLogger,
       });
@@ -188,7 +217,7 @@ describe('PgWireAuthHandler', () => {
 
     it('does not create context on auth failure', async () => {
       const authenticator = async () => ({authenticated: false});
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         authenticator,
         logger: silentLogger,
       });
@@ -210,7 +239,7 @@ describe('PgWireAuthHandler', () => {
         warn() {},
         error() {},
       };
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         logger: capturingLogger,
       });
       await handler.authenticate({
@@ -226,7 +255,7 @@ describe('PgWireAuthHandler', () => {
 
   describe('authorizeQuery', () => {
     it('authorizes with valid context and no policy', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const context = {
         tenantId: 'mydb',
         principal: 'alice',
@@ -243,7 +272,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('uses EXECUTE_QUERY as default action', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const context = {
         tenantId: 'mydb',
         principal: 'alice',
@@ -263,7 +292,7 @@ describe('PgWireAuthHandler', () => {
           PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
         ]),
       };
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         policy,
         logger: silentLogger,
       });
@@ -279,7 +308,7 @@ describe('PgWireAuthHandler', () => {
 
     it('authorizes when policy uses wildcard', () => {
       const policy = {allowedActions: '*'};
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         policy,
         logger: silentLogger,
       });
@@ -297,7 +326,7 @@ describe('PgWireAuthHandler', () => {
       const policy = {
         allowedActions: new Set(['other.action']),
       };
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         policy,
         logger: silentLogger,
       });
@@ -321,7 +350,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('denies when context is missing tenantId', () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = handler.authorizeQuery({
         principal: 'alice',
       });
@@ -331,7 +360,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('denies when context is missing principal', () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = handler.authorizeQuery({
         tenantId: 'mydb',
       });
@@ -341,7 +370,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('denies when context is null', () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const result = handler.authorizeQuery(null);
 
       assert.equal(result.authorized, false);
@@ -352,7 +381,7 @@ describe('PgWireAuthHandler', () => {
       const policy = {
         allowedActions: new Set(['custom.action']),
       };
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         policy,
         logger: silentLogger,
       });
@@ -374,7 +403,7 @@ describe('PgWireAuthHandler', () => {
 
     it('emits audit record on authorization denial', () => {
       const policy = {allowedActions: new Set()};
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         policy,
         logger: silentLogger,
       });
@@ -403,7 +432,7 @@ describe('PgWireAuthHandler', () => {
         warn() {},
         error() {},
       };
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         logger: capturingLogger,
       });
       handler.authorizeQuery({
@@ -423,7 +452,7 @@ describe('PgWireAuthHandler', () => {
         authenticated: true,
         roles: ['user'],
       });
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         authenticator,
         logger: silentLogger,
       });
@@ -442,7 +471,7 @@ describe('PgWireAuthHandler', () => {
 
     it('failed auth prevents authorization', async () => {
       const authenticator = async () => ({authenticated: false});
-      const handler = new PgWireAuthHandler({
+      const handler = createAuthHandler({
         authenticator,
         logger: silentLogger,
       });
@@ -462,7 +491,7 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('all audit records have timestamps', async () => {
-      const handler = new PgWireAuthHandler({logger: silentLogger});
+      const handler = createAuthHandler({logger: silentLogger});
       const authResult = await handler.authenticate({
         user: 'alice',
         database: 'mydb',

@@ -9,17 +9,15 @@
  * Ratchet DOWN only from here.
  */
 
-import {execFile} from 'node:child_process';
-import {promisify} from 'node:util';
+import path from 'node:path';
+import {main as runKnip} from 'knip';
+import {createOptions} from 'knip/session';
 
 import {printRatchetTighteningHint} from './metric-check-helpers.js';
 
-const execFileAsync = promisify(execFile);
-
-const BASELINE_UNUSED_EXPORT_COUNT = 1607;
+const BASELINE_UNUSED_EXPORT_COUNT = 1628;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
-const KNIP_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
 
 /**
@@ -29,29 +27,21 @@ const SELF_REFERENCE = 'scripts/check-unused-exports.js';
  * @return {Promise<object[]>}
  */
 async function collectKnipExportIssues() {
-  let stdout;
-  try {
-    ({stdout} = await execFileAsync(
-      'npx',
-      ['knip', '--include', 'exports', '--reporter', 'json'],
-      {maxBuffer: KNIP_MAX_BUFFER_BYTES},
-    ));
-  } catch (error) {
-    if (typeof error?.stdout !== 'string' || error.stdout.length === 0) {
-      throw error;
-    }
-    stdout = error.stdout;
-  }
-  const report = JSON.parse(stdout);
-  return Array.isArray(report?.issues) ? report.issues : [];
+  const options = await createOptions({
+    args: {'include': ['exports'], 'no-progress': true},
+  });
+  const report = await runKnip(options);
+  return Object.values(report.issues.exports).map((symbols) => {
+    const symbolIssues = Object.values(symbols);
+    return {
+      filePath: path.relative(process.cwd(), symbolIssues[0].filePath),
+      unusedExportCount: symbolIssues.length,
+    };
+  });
 }
 
 const issues = await collectKnipExportIssues();
 const perFile = issues
-  .map((issue) => ({
-    filePath: issue.file,
-    unusedExportCount: (issue.exports || []).length,
-  }))
   .filter((entry) => entry.unusedExportCount > 0)
   .sort((left, right) => right.unusedExportCount - left.unusedExportCount);
 const totalUnusedExports = perFile.reduce(

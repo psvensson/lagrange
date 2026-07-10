@@ -17,10 +17,8 @@ import {
 
 
 const TARGET_THRESHOLD = 12;
-// Re-anchored 2026-07-02 for the 0.1.0 release gate: measured 1857 with the
-// gate silently red (baseline 308 long eroded; complexity was not in the
-// morning re-anchor batch). Ratchet DOWN from here.
-const BASELINE_COUNT = 1856;
+// Measured after the proof-integrity cutover. Ratchet DOWN only from here.
+const BASELINE_COUNT = 1855;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

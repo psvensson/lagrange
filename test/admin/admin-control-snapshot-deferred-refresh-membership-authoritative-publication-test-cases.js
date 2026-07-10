@@ -5,7 +5,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
-test('AdminControlSnapshot auto-repaired snapshots use authoritative membership publication without acknowledging',
+test('AdminControlSnapshot queues repair without an inline authoritative membership read',
   async (t) => {
     let authoritativeLatestPublicationReadOptions = null;
     let acknowledgePublicationRow = null;
@@ -73,17 +73,13 @@ test('AdminControlSnapshot auto-repaired snapshots use authoritative membership 
 
     t.same(
       authoritativeLatestPublicationReadOptions,
-      {
-        preferAuthoritativeRead: true,
-        readProfile: 'diagnostics',
-        deliveryPriority: 'readiness',
-      },
-      'post-repair control snapshots should bypass stale cached publication observations before acknowledging',
+      null,
+      'ordinary control snapshots should not block on authoritative publication reads',
     );
     t.equal(
       authoritativeRepairQueueEvents.length,
-      0,
-      'post-repair control snapshots should not use the read path as publication catch-up',
+      1,
+      'ordinary control snapshots should hand repair work to the owner queue',
     );
     t.equal(
       acknowledgePublicationRow,

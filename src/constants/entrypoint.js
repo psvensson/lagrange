@@ -49,6 +49,25 @@ const ENTRYPOINT_DEFAULT = Object.freeze({
   AUTO_REJOIN_PROBE_TIMEOUT_MS: 1000,
 });
 
+const ENTRYPOINT_REJOIN_DEFAULT = Object.freeze({
+  MAX_ATTEMPTS: 4,
+  BASE_DELAY_MS: 2000,
+  MAX_DELAY_MS: 30000,
+  BACKOFF_CAP_EXPONENT: 10,
+});
+
+const ENTRYPOINT_RUNTIME_VALUE = Object.freeze({
+  JOINER: 'joiner',
+  FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS:
+    'Failed to persist bootstrap rejoin hints',
+  JOIN: 'join',
+  SEED: 'seed',
+  CONFIGURATION_LOADED: 'Configuration loaded',
+  REATTEMPT_JOIN: 'Re-attempting cluster join after retryable failure',
+  DEBUG: 'debug',
+  INFO: 'info',
+});
+
 const ENTRYPOINT_SUBSYSTEM = Object.freeze({
   MAIN: 'main',
   CONFIG: 'config',
@@ -143,6 +162,8 @@ export {
   ENTRYPOINT_ENV,
   ENTRYPOINT_FLAG,
   ENTRYPOINT_LOG_MSG,
+  ENTRYPOINT_REJOIN_DEFAULT,
+  ENTRYPOINT_RUNTIME_VALUE,
   ENTRYPOINT_SUBSYSTEM,
   ENTRYPOINT_TEXT,
   ENTRYPOINT_VERSION,

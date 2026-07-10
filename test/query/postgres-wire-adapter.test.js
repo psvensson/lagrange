@@ -11,6 +11,8 @@ import {
   PostgresWireAdapter,
   PG_SESSION_STATE,
 } from '../../src/query/pg/postgres-wire-adapter.js';
+import {createTestPostgresWireAdapter} from
+  '../helpers/pgwire-auth-handler.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
 
 /**
@@ -36,9 +38,17 @@ test('PostgresWireAdapter - throws when sqlCore is missing', (t) => {
   t.end();
 });
 
+test('PostgresWireAdapter - requires an authentication owner', (t) => {
+  t.throws(
+    () => new PostgresWireAdapter({sqlCore: createMockSqlCore()}),
+    /authentication owner/u,
+  );
+  t.end();
+});
+
 test('PostgresWireAdapter - authenticate creates session', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   const session = await adapter.authenticate('sess-1', {
     tenantId: 'tenant-a',
@@ -54,7 +64,7 @@ test('PostgresWireAdapter - authenticate creates session', async (t) => {
 
 test('PostgresWireAdapter - authenticate requires tenantId', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await t.rejects(
     adapter.authenticate('sess-1', {user: 'alice'}),
@@ -65,7 +75,7 @@ test('PostgresWireAdapter - authenticate requires tenantId', async (t) => {
 
 test('PostgresWireAdapter - authenticate requires sessionId', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await t.rejects(
     adapter.authenticate('', {tenantId: 'tenant-a'}),
@@ -76,7 +86,7 @@ test('PostgresWireAdapter - authenticate requires sessionId', async (t) => {
 
 test('PostgresWireAdapter - custom authenticator rejects', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({
+  const adapter = createTestPostgresWireAdapter({
     sqlCore: mock,
     authenticator: async () => ({authenticated: false}),
   });
@@ -91,7 +101,7 @@ test('PostgresWireAdapter - custom authenticator rejects', async (t) => {
 
 test('PostgresWireAdapter - custom authenticator accepts', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({
+  const adapter = createTestPostgresWireAdapter({
     sqlCore: mock,
     authenticator: async () => ({authenticated: true}),
   });
@@ -106,7 +116,7 @@ test('PostgresWireAdapter - custom authenticator accepts', async (t) => {
 
 test('PostgresWireAdapter - execute delegates to sqlCore', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await adapter.authenticate('sess-1', {tenantId: 'tenant-a'});
   const result = await adapter.execute('sess-1', 'SELECT 1');
@@ -123,7 +133,7 @@ test('PostgresWireAdapter - execute delegates to sqlCore', async (t) => {
 
 test('PostgresWireAdapter - execute rejects unauthenticated', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await t.rejects(
     adapter.execute('unknown-sess', 'SELECT 1'),
@@ -134,7 +144,7 @@ test('PostgresWireAdapter - execute rejects unauthenticated', async (t) => {
 
 test('PostgresWireAdapter - execute rejects closed session', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await adapter.authenticate('sess-1', {tenantId: 'tenant-a'});
   adapter.closeSession('sess-1');
@@ -148,7 +158,7 @@ test('PostgresWireAdapter - execute rejects closed session', async (t) => {
 
 test('PostgresWireAdapter - negotiateFeatures reports unsupported', (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   const result = adapter.negotiateFeatures('sess-1', [
     'prepared_statements',
@@ -165,7 +175,7 @@ test('PostgresWireAdapter - negotiateFeatures reports unsupported', (t) => {
 
 test('PostgresWireAdapter - closeSession removes session', async (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await adapter.authenticate('sess-1', {tenantId: 'tenant-a'});
   t.ok(adapter.hasSession('sess-1'));
@@ -177,7 +187,7 @@ test('PostgresWireAdapter - closeSession removes session', async (t) => {
 
 test('PostgresWireAdapter - closeSession is idempotent', (t) => {
   const mock = createMockSqlCore();
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   // Closing a non-existent session should not throw
   adapter.closeSession('nonexistent');
@@ -191,7 +201,7 @@ test('PostgresWireAdapter - propagates sqlCore errors', async (t) => {
       throw new Error('table not found');
     },
   };
-  const adapter = new PostgresWireAdapter({sqlCore: mock});
+  const adapter = createTestPostgresWireAdapter({sqlCore: mock});
 
   await adapter.authenticate('sess-1', {tenantId: 'tenant-a'});
 

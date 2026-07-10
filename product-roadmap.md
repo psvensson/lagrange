@@ -255,7 +255,7 @@ Enterprise
 
 | Item | Status |
 |------|--------|
-| PG authentication | ✅ |
+| PG authentication | 🔧 | Loopback-only explicit trust is live; password/SCRAM exchange remains unimplemented |
 | Admin auth middleware | ✅ |
 | Service authorization | ✅ |
 | Audit context | ✅ |

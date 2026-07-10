@@ -251,6 +251,16 @@ function buildLiteralViolationIdentity(violation) {
   ]);
 }
 
+function applyMagicLiteralBaseline(report, baseline) {
+  const countBaseline = baseline instanceof Map ?
+    baseline :
+    new Map([...baseline].map((identity) => [identity, LOCAL_NUM_ONE]));
+  return applyCountBaseline(
+    report,
+    countBaseline,
+    buildLiteralViolationIdentity,
+  );
+}
 
 async function collectMagicLiteralViolationsWithBaseline(
   pathsToScan,
@@ -263,7 +273,7 @@ async function collectMagicLiteralViolationsWithBaseline(
       buildLiteralViolationIdentity,
     ),
   ]);
-  return applyCountBaseline(report, baseline, buildLiteralViolationIdentity);
+  return applyMagicLiteralBaseline(report, baseline);
 }
 
 function formatHumanSummary(report) {
@@ -304,6 +314,7 @@ runGuidelineCheckWhenDirect(import.meta.url, main);
 export {
   FILE_CLASS,
   RULE_REFERENCE,
+  applyMagicLiteralBaseline,
   buildLiteralViolationIdentity,
   classifyFilePath,
   collectMagicLiteralViolations,

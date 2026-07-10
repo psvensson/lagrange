@@ -13,6 +13,7 @@ const {
   ADMIN_ERROR_MESSAGE,
   ADMIN_LOCAL_DISPATCH,
   ADMIN_LOG_MSG,
+  ADMIN_LOOPBACK_HOSTS,
   ADMIN_ROUTE,
   ADMIN_SERVICE_OPERATION,
   ADMIN_STATUS,
@@ -68,6 +69,44 @@ const ADMIN_LOAD_LANE_READINESS_LIMIT_MS =
   LOAD_LANE_READINESS_CACHE_MAX_AGE_MS;
 const ADMIN_LOAD_LANE_TABLE_ADMISSION_LIMIT_MS =
   LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS;
+
+function assertAdminBindAllowed(shouldListen, listenHost, options) {
+  if (
+    shouldListen &&
+    !ADMIN_LOOPBACK_HOSTS.has(listenHost) &&
+    options.allowInsecureExternalBind !== true
+  ) {
+    throw new Error(
+      ADMIN_ERROR_MESSAGE.EXTERNAL_BIND_REQUIRES_EXPLICIT_TRUST,
+    );
+  }
+}
+
+async function startAdminListener(api, shouldListen, listenPort, listenHost) {
+  if (!shouldListen) {
+    await api.fastify.ready();
+    api.listening = false;
+    return;
+  }
+  try {
+    await api.fastify.listen({port: listenPort, host: listenHost});
+    api.listening = true;
+  } catch (error) {
+    if (
+      error &&
+      (error.code === ERRNO.EPERM || error.code === ERRNO.EACCES)
+    ) {
+      await api.fastify.ready();
+      api.listening = false;
+      return;
+    }
+    if (error?.code === ERRNO.EADDRINUSE) {
+      // Startup join retry treats a still-draining prior listener as transient.
+      error.retryable = true;
+    }
+    throw error;
+  }
+}
 const ADMIN_SERVICE_ENVELOPE_HANDLER = Object.freeze({
   [ADMIN_SERVICE_OPERATION.EXECUTE_QUERY]: async (api, payload, context) => ({
     queryResult: await api.executeLocalQueryEnvelope(payload, context),
@@ -260,6 +299,7 @@ class AdminWebSocketAPIBase {
     const listenPort = port !== undefined ? port : this.port;
     const shouldListen = options.listen !== false;
     const listenHost = options.host || ADMIN_DEFAULT.HOST;
+    assertAdminBindAllowed(shouldListen, listenHost, options);
 
     this.fastify = Fastify({
       logger: false,
@@ -267,31 +307,7 @@ class AdminWebSocketAPIBase {
     await this.fastify.register(websocket);
     this.registerRoutes();
 
-    if (shouldListen) {
-      try {
-        await this.fastify.listen({port: listenPort, host: listenHost});
-        this.listening = true;
-      } catch (err) {
-        if (err && (err.code === ERRNO.EPERM || err.code === ERRNO.EACCES)) {
-          await this.fastify.ready();
-          this.listening = false;
-        } else {
-          if (err && err.code === ERRNO.EADDRINUSE) {
-            // A still-draining prior listener on this admin port is transient:
-            // tag the bind conflict retryable so the join re-attempt loop backs
-            // off and rebinds once the OS releases the socket, instead of
-            // classifying the bind as fatal and exiting the node — which drops
-            // the rejoiner from membership and surfaces downstream as
-            // publication_missing_active_node for that node.
-            err.retryable = true;
-          }
-          throw err;
-        }
-      }
-    } else {
-      await this.fastify.ready();
-      this.listening = false;
-    }
+    await startAdminListener(this, shouldListen, listenPort, listenHost);
 
     this.initialized = true;
 

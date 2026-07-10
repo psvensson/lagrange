@@ -73,12 +73,12 @@ jobs:
       # (model:contracts runs TLC via tla2tools.jar), helm (test:ci ends with
       # test:chart:endpoint-sync, which renders/lints the endpoint-sync chart —
       # installing helm only in the later packaging step fails the gate).
-      - name: Install gate CLI tools (ripgrep, jq, java, helm)
+      - name: Install gate CLI tools (ripgrep, jq, java, psql, helm)
         # helm comes from helm's own CDN (get.helm.sh), not github.com. Bump
         # HELM_VERSION to adopt a newer helm; the URL accepts any released tag.
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless curl tar
+          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client curl tar
           HELM_VERSION=v3.16.3
           curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
             | tar -xz --strip-components=1 -C /usr/local/bin linux-amd64/helm

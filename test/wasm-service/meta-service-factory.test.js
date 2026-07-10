@@ -179,9 +179,13 @@ describe('meta-service-factory', () => {
       );
     });
 
-    it('should have null runtime config', () => {
+    it('should explicitly configure loopback trust mode', () => {
       const def = createPostgresWireDefinition();
-      assert.equal(def.runtimeConfig, null);
+      assert.deepEqual(JSON.parse(def.runtimeConfig), {
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      });
     });
 
     it('should use postgresql protocol', () => {
@@ -215,7 +219,11 @@ describe('meta-service-factory', () => {
         row[RUNTIME_FIELD.RUNTIME_REF],
         META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
       );
-      assert.equal(row[RUNTIME_FIELD.RUNTIME_CONFIG], null);
+      assert.deepEqual(JSON.parse(row[RUNTIME_FIELD.RUNTIME_CONFIG]), {
+        host: '127.0.0.1',
+        authMode: 'trust',
+        tlsMode: 'disable',
+      });
     });
 
     it('should persist postgresql protocol in serialized row', () => {

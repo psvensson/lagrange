@@ -57,6 +57,22 @@ PG Client (psql, pg driver, ORM)
         (PG wire result encoding)
 ```
 
+### Current Security Posture
+
+- Runtime configuration must explicitly select `authMode: "trust"` and
+  `tlsMode: "disable"`; implicit trust is rejected.
+- Trust mode may bind only to `127.0.0.1`, `::1`, or `localhost`. A remote
+  endpoint is unavailable until a real credential exchange is implemented.
+- Password, SCRAM, TLS-prefer, and TLS-require descriptors fail validation.
+  They are not advertised as working modes while the protocol handler cannot
+  perform those exchanges.
+- Every authenticated session carries a security context, and every query is
+  authorized before the adapter constructs and dispatches its `SqlRequest`.
+- The admin WebSocket also defaults to loopback. External admin binding is
+  rejected unless `ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true` accompanies an
+  external `ADMIN_WEBSOCKET_HOST`; deployments must put authenticated ingress
+  in front of that explicit insecure-trust posture.
+
 ### PostgreSQL Wire Scale Operations
 
 Scaling `sys-postgres-wire` follows the unified rebalancer model:
@@ -134,10 +150,11 @@ All resolution decisions are audit-logged via `ModuleAuditLogger`.
 - No fallback or alternate SQL execution path exists
 - Owns the query executor factory for service replicas: during construction
   or via `setServiceRuntimeLifecycle()`, wires a `queryExecutorFactory` into
-  `ServiceRuntimeLifecycle` so service replicas receive a service-scoped
-  `queryExecutor` closure that routes through `executeQuery()`. This is the
-  single owner of query execution for both user functions (`ctx.call()`) and
-  service replicas (`replicaContext.queryExecutor`).
+  `ServiceRuntimeLifecycle` so service replicas receive both the compatible
+  service-scoped `queryExecutor` closure and its canonical
+  `sqlRequestExecutor`. PG wire uses the latter to preserve session, tenant,
+  dialect, and execution-mode fields through `executeRequest()`. This remains
+  the single owner of query execution for user functions and service replicas.
 
 ### SQL Adapter Layer
 Three adapters normalize different entrypoints into canonical `SqlRequest`

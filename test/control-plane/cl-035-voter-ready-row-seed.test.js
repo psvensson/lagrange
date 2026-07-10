@@ -184,6 +184,7 @@ t.test('CL-035 wiring: voter-ready activation seeds the role before returning', 
     logger: {info: () => {}, warn: () => {}},
     throwIfShuttingDown: () => {},
     isReplicaVoterReady: () => true,
+    getTrackedService: () => null,
     seedLocalPriorityReplicaRaftRole: (replicaId, partitionId) => {
       calls.push({replicaId, partitionId});
       return true;

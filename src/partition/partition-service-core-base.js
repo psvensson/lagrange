@@ -1,11 +1,13 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  createLeaderNodeMutationHelper,
+  createRoleMutationHelper,
+} from './partition-service-metadata-mutation-helpers.js';
 
 const {
   AddressManager,
-  AuthoritativeRowMutationHelper,
   CDCEventBuffer,
   CDCPipelineMetrics,
-  COLUMN,
   CONFIG_KEY,
   ConfigurationManager,
   ENTITY_TYPE,
@@ -23,7 +25,6 @@ const {
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
   PARTITION_SUBSYSTEM,
-  PRESSURE_WORK_CLASS,
   PartitionCDCDelivery,
   PartitionCDCGenerator,
   PartitionState,
@@ -32,7 +33,6 @@ const {
   RaftRole,
   SERVICE_TYPE,
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
-  SYSTEM_TABLE_NAME,
   TABLES,
   TIMEOUT_BUDGET_DEFAULT,
   assertRaftProviderContract,
@@ -41,7 +41,6 @@ const {
   getTrafficReadinessSnapshot,
   isBackgroundWorkLifecycleReady,
   isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
 
@@ -578,199 +577,10 @@ class PartitionServiceCoreBase extends EventEmitter {
     );
   }
   createRoleMutationHelper() {
-    return new AuthoritativeRowMutationHelper({
-      tableName: SYSTEM_TABLE_NAME.SERVICES,
-      buildWhereClause: (_role, context = {}) => {
-        const whereClause = {service_id: this.replicaId};
-        // Guard from the authoritative row when the flush observed one: the
-        // merged cache row can carry the CL-035 local voter-ready seed
-        // (newer updated_at, stale-guard protected), and CAS-guarding on it
-        // zero-rows against the durable row forever — the affinity-demo
-        // run-27 lost-promotion class.
-        const guardRow = context.authoritativeRow || context.cachedRow;
-        if (
-          typeof guardRow?.raft_role === 'string' &&
-          guardRow.raft_role.length > 0
-        ) {
-          whereClause.raft_role = guardRow.raft_role;
-        }
-        if (Number.isFinite(guardRow?.updated_at)) {
-          whereClause.updated_at = guardRow.updated_at;
-        }
-        return whereClause;
-      },
-      buildUpdateData: (role, updatedAt) => ({
-        raft_role: role,
-        updated_at: updatedAt,
-      }),
-      // Priority control-plane partitions' voter visibility feeds the
-      // quorum-spread admission hold and the spread planner; their role
-      // writes must not be pressure-deferred during exactly the formation
-      // churn they describe (run-27). Everything else stays BACKGROUND.
-      buildUpdateOptions: () => {
-        const priorityPartition = isPriorityControlPlanePartition({
-          partitionId: this.partitionId,
-        });
-        return {
-          deliveryPriority: priorityPartition ?
-            PARTITION_SERVICE_LITERAL.CRITICAL :
-            PARTITION_SERVICE_LITERAL.BACKGROUND,
-          workClass: priorityPartition ?
-            PRESSURE_WORK_CLASS.CRITICAL :
-            PRESSURE_WORK_CLASS.BACKGROUND,
-          allowPressureDefer: !priorityPartition,
-          routingReadinessDimension:
-            this.getMetadataPublicationReadinessDimension(),
-        };
-      },
-      buildExpectedCacheFields: (role) => ({raft_role: role}),
-      prepareFlush: () => ({
-        skip: false,
-        clearPending: false,
-        reason: PARTITION_SERVICE_LITERAL.READY,
-      }),
-      readRowFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
-      readValueFromCache: (systemTableCache) => {
-        const cached = systemTableCache?.get?.(TABLES.SERVICES, this.replicaId);
-        return cached?.raft_role || null;
-      },
-      isWriteReady: () => this.isServicesLeaderAvailable(),
-      systemTableCache: this.systemTableCache,
-      cdcIntegrationService: this.cdcIntegrationService,
-      refreshObservedRow: () =>
-        this.refreshMetadataPublicationGuardRow(
-          SYSTEM_TABLE_NAME.SERVICES,
-          this.replicaId,
-        ),
-      // READ-ONLY authoritative point read for the helper's honest dedup +
-      // CAS guard (never a cache refresh: the merged cache can hold the
-      // CL-035 local seed, which out-versions the durable row). Capability
-      // reported at call time — transport-shim integrations without the
-      // read fall back to the legacy cache dedup.
-      readAuthoritativeRow: async () => {
-        const cdcIntegrationService = this.cdcIntegrationService;
-        if (
-          typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
-          PARTITION_SERVICE_LITERAL.FUNCTION
-        ) {
-          return {supported: false, available: false, row: null};
-        }
-        const readResult =
-          await cdcIntegrationService.executeAuthoritativeSystemTableRead(
-            SYSTEM_TABLE_NAME.SERVICES,
-            PARTITION_SERVICE_LITERAL.SERVICES_ROW_POINT_READ_SQL,
-            [this.replicaId],
-          );
-        if (readResult?.success !== true) {
-          return {supported: true, available: false, row: null};
-        }
-        const row = Array.isArray(readResult.rows) ?
-          readResult.rows[0] || null :
-          null;
-        return {supported: true, available: true, row};
-      },
-      onObservedStateChanged: (context = {}) => {
-        this.logger.warn(
-          PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,
-          {
-            tableName: SYSTEM_TABLE_NAME.SERVICES,
-            partitionId: this.partitionId,
-            replicaId: this.replicaId,
-            role: context.value ?? this.pendingRoleUpdate,
-            retryAttemptCount: context.retryAttemptCount,
-          },
-        );
-      },
-      onAsyncError: (error, context = {}) => {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.PERSIST_RAFT_ROLE_FAILED, {
-          partitionId: this.partitionId,
-          replicaId: this.replicaId,
-          role: context.value ?? this.pendingRoleUpdate,
-          error: error.message,
-        });
-      },
-    });
+    return createRoleMutationHelper(this);
   }
   createLeaderNodeMutationHelper() {
-    return new AuthoritativeRowMutationHelper({
-      tableName: SYSTEM_TABLE_NAME.PARTITIONS,
-      buildWhereClause: (_leaderNodeId, context = {}) => {
-        const whereClause = {[COLUMN.PARTITION_ID]: this.partitionId};
-        const cachedRow = context.cachedRow;
-        if (
-          typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
-          cachedRow[COLUMN.LEADER_NODE_ID].length > 0
-        ) {
-          whereClause[COLUMN.LEADER_NODE_ID] = cachedRow[COLUMN.LEADER_NODE_ID];
-        }
-        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
-          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
-        }
-        return whereClause;
-      },
-      buildUpdateData: (leaderNodeId, updatedAt) => ({
-        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-        [COLUMN.UPDATED_AT]: updatedAt,
-      }),
-      buildUpdateOptions: () => ({
-        deliveryPriority: this.getMetadataPublicationDeliveryPriority(),
-        workClass: this.getMetadataPublicationWorkClass(),
-        allowPressureDefer: this.shouldMetadataPublicationAllowPressureDefer(),
-        routingReadinessDimension:
-          this.getMetadataPublicationReadinessDimension(),
-      }),
-      buildExpectedCacheFields: (leaderNodeId) => ({
-        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-      }),
-      readRowFromCache: (systemTableCache) =>
-        systemTableCache?.get?.(TABLES.PARTITIONS, this.partitionId) || null,
-      readValueFromCache: (systemTableCache) => {
-        const cached = systemTableCache?.get?.(
-          TABLES.PARTITIONS,
-          this.partitionId,
-        );
-        return cached?.[COLUMN.LEADER_NODE_ID] || null;
-      },
-      prepareFlush: () => ({
-        skip: !this.isLeader,
-        clearPending: !this.isLeader,
-        reason: !this.isLeader ?
-          PARTITION_SERVICE_LITERAL.NOT_OWNER :
-          PARTITION_SERVICE_LITERAL.READY,
-      }),
-      isWriteReady: () => this.isPartitionsLeaderAvailable(),
-      systemTableCache: this.systemTableCache,
-      cdcIntegrationService: this.cdcIntegrationService,
-      refreshObservedRow: () =>
-        this.refreshMetadataPublicationGuardRow(
-          SYSTEM_TABLE_NAME.PARTITIONS,
-          this.partitionId,
-        ),
-      onObservedStateChanged: (context = {}) => {
-        this.logger.warn(
-          PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,
-          {
-            tableName: SYSTEM_TABLE_NAME.PARTITIONS,
-            partitionId: this.partitionId,
-            replicaId: this.replicaId,
-            leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
-            retryAttemptCount: context.retryAttemptCount,
-          },
-        );
-      },
-      onAsyncError: (error, context = {}) => {
-        this.logger.warn(
-          PARTITION_SERVICE_ERROR_MSG.PERSIST_PARTITION_LEADER_FAILED,
-          {
-            partitionId: this.partitionId,
-            replicaId: this.replicaId,
-            leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
-            error: error.message,
-          },
-        );
-      },
-    });
+    return createLeaderNodeMutationHelper(this);
   }
   /**
    * Get the unified address for this service.

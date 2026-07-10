@@ -482,7 +482,6 @@ test('ReplicaDispatchService defers missing-row NODE_STATE_UPDATE misses for ' +
 });
 
 test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
-  {skip: 'STALE: dead test re-enabled; expected a single node_ready_dispatch_retry enqueue but product now also emits a replica_operations_cache_pending enqueue for the same PENDING row'},
   async (t) => {
     initEnv();
 
@@ -530,6 +529,10 @@ test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
         },
       },
     });
+    await waitForOperationDispatchQueueDrain(service);
+    await service.nodeReadyRetryQueue.drain();
+    await waitForOperationDispatchQueueDrain(service);
+    service.clearNodeReadyRetryWatermark('node-2');
     cacheReplicaOperations.push(pendingRow);
     const originalOperationDispatchQueue = service.operationDispatchQueue;
     service.operationDispatchQueue = {
@@ -1228,4 +1231,3 @@ test(READY_RETRY_OWNER_DEFERRED_TEST_NAME, async (t) => {
   service.operationDispatchQueue = originalOperationDispatchQueue;
   service.stop();
 });
-
