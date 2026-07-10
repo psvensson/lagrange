@@ -22,6 +22,9 @@ releases without a compatibility guarantee.
 ### Removed
 - The broken `test:coverage` npm script (`tap test/` exceeds the OS argument
   limit; use the sharded `test:*` scripts instead).
+- Helm chart publication of the unauthenticated admin listener. Chart-managed
+  pods now bind admin to loopback and reject the original insecure values;
+  REST `/health` and `/readyz` remain available through the Services.
 
 ## [0.1.0] — 2026-07-02
 

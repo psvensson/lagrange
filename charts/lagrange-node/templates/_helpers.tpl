@@ -42,6 +42,26 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
+Fail closed even when an operator skips values.schema.json validation. The
+chart does not provide authenticated admin ingress, so neither first-class
+values nor extraEnv may make the pod-local admin listener externally reachable.
+*/}}
+{{- define "lagrange-node.validateAdminSafety" -}}
+{{- if ne (toString .Values.admin.websocketHost) "127.0.0.1" -}}
+{{- fail "admin.websocketHost must remain 127.0.0.1 (loopback)" -}}
+{{- end -}}
+{{- if .Values.admin.allowInsecureExternalBind -}}
+{{- fail "admin.allowInsecureExternalBind must remain false" -}}
+{{- end -}}
+{{- range .Values.node.extraEnv -}}
+{{- $name := toString .name -}}
+{{- if or (eq $name "ADMIN_WEBSOCKET_HOST") (eq $name "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND") (eq $name "ADMIN_WEBSOCKET_PORT") -}}
+{{- fail (printf "node.extraEnv name %s is reserved by the admin safety policy" $name) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Shared container spec for a node. The runtime image is distroless with
 ENTRYPOINT /nodejs/bin/node, so `args` supplies everything node receives.
 Per-pod stable DNS identity is composed with Kubernetes $(VAR) env expansion
@@ -62,10 +82,6 @@ args:
 ports:
   - name: rest
     containerPort: {{ int .Values.node.restPort }}
-  # The admin WS port is a hardcoded constant in the runtime
-  # (src/admin/admin-constants.js WEBSOCKET_PORT), independent of restPort.
-  - name: admin-ws
-    containerPort: 8081
   - name: transport-ws
     containerPort: {{ add (int .Values.node.restPort) 2 }}
 livenessProbe:
@@ -93,6 +109,7 @@ volumeMounts:
 
 {{/* Env vars shared by seed and joiner pods */}}
 {{- define "lagrange-node.envCommon" -}}
+{{- include "lagrange-node.validateAdminSafety" . -}}
 - name: POD_NAME
   valueFrom:
     fieldRef:

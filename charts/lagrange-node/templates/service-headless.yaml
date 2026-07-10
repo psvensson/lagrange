@@ -17,8 +17,5 @@ spec:
   ports:
     - name: rest
       port: {{ int .Values.node.restPort }}
-    # Admin WS is a hardcoded runtime constant, independent of restPort.
-    - name: admin-ws
-      port: 8081
     - name: transport-ws
       port: {{ add (int .Values.node.restPort) 2 }}

@@ -15,12 +15,12 @@ image:
 joiners:
   replicas: 2
 
-# The chart publishes the admin service, so it opts into the runtime's
-# explicit insecure external-bind posture. Put authenticated ingress in front
-# of this service before exposing it outside the cluster.
+# The chart has no authenticated admin ingress, so admin remains pod-local.
+# Wildcard binding and the runtime's insecure external-bind opt-in are rejected
+# by both values.schema.json and a template guard (including extraEnv bypasses).
 admin:
-  websocketHost: 0.0.0.0
-  allowInsecureExternalBind: true
+  websocketHost: 127.0.0.1
+  allowInsecureExternalBind: false
 
 node:
   # REST API port (env REST_API_PORT). Transport WS is restPort+2 (derived by
@@ -43,7 +43,7 @@ persistence:
   mountPath: /data
 
 service:
-  # Client-facing service (REST + admin WS) in front of all nodes.
+  # Client-facing REST service in front of all nodes.
   type: ClusterIP
 
 resources:

@@ -29,14 +29,15 @@ For local builds, build and push your own image and pass
 - **Durable identity.** `NODE_ID` is not set: join admission requires a UUID,
   so the runtime mints one on first boot and restores it from the data
   directory (rejoin hints) on restart. Identity rides the PVC.
-- **Ports**: REST `node.restPort` (default 8080), transport WS restPort+2;
-  admin WS is a hardcoded runtime constant `8081` that does not move with
-  restPort. The pgwire SQL endpoint is a managed service started on demand —
-  no 5432 boot listener.
+- **Ports**: REST `node.restPort` (default 8080) and transport WS restPort+2.
+  Admin WS remains pod-local on loopback at the runtime's fixed port `8081`;
+  it is absent from Services and container-port declarations. The pgwire SQL
+  endpoint is a managed service started on demand — no 5432 boot listener.
 - **Probes**: liveness `/health`, readiness `/readyz` on the REST port.
-- **Admin exposure**: the chart explicitly opts into the loopback-safe
-  runtime's insecure external bind so the ClusterIP service can reach it.
-  Use authenticated ingress before exposing that service publicly.
+- **Admin exposure**: none. The chart enforces loopback binding and rejects
+  wildcard/insecure values, including `node.extraEnv` overrides. External
+  admin access remains unsupported until an authenticated proxy or runtime
+  handshake is designed and tested.
 - **Storage**: one PVC per pod mounted at `/data`, passed as `--data-dir`.
 
 ## Key values
@@ -47,12 +48,19 @@ For local builds, build and push your own image and pass
 | `image.repository` / `image.tag` | `codeberg.org/psvensson/lagrange` / appVersion | Runtime image |
 | `node.restPort` | `8080` | REST port; transport WS = +2, admin WS fixed at 8081 |
 | `node.maxOldSpaceSizeMb` | `1536` | V8 heap cap; keep under the memory limit |
-| `admin.websocketHost` / `admin.allowInsecureExternalBind` | `0.0.0.0` / `true` | Explicit chart-local admin exposure; secure it with ingress |
+| `admin.websocketHost` / `admin.allowInsecureExternalBind` | `127.0.0.1` / `false` | Fixed pod-local admin posture; insecure overrides fail rendering |
 | `node.extraEnv` | `[]` | Extra env (see `ENV_MAPPINGS` in `src/config/config-constants.js`) |
 | `persistence.size` | `10Gi` | Per-pod volume |
 | `resources` | 1 CPU / 2Gi | Per-pod resources |
 
 ## Caveats (0.1)
+
+- **Migration from the original chart defaults:** values files containing
+  `admin.websocketHost: 0.0.0.0` or
+  `admin.allowInsecureExternalBind: true` now fail rendering. Remove those
+  overrides. The chart no longer publishes port 8081; use REST health and
+  readiness endpoints for orchestration. There is intentionally no insecure
+  compatibility flag.
 
 - Rolling-restart convergence is statistical, not bounded-time — see the
   repository `CHANGELOG.md` Known limitations before operating this in

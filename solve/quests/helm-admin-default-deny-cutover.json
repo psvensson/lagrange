@@ -1,0 +1,41 @@
+{
+  "id": "helm-admin-default-deny-cutover",
+  "statement": "Default and legacy-insecure Helm values cannot render a cluster-published admin listener; pods bind the admin listener to loopback, REST health and readiness remain independently available, and a live node started from the rendered admin environment refuses an admin connection from a sibling network namespace.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W5",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+    "sealedAtCommit": "ce18db2ef36782d6d9fa2fd74eb21532e68ca76d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "helm-admin-default-deny-cutover",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "helm-admin-default-deny-cutover-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "helm-admin-default-deny-cutover",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

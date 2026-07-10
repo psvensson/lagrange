@@ -136,6 +136,8 @@ docker run -d -v lagrange-data:/app/data \
 The repository ships a Helm chart (1 seed + N joiner StatefulSets, name-first
 addressing, per-pod PVCs) that deploys this image:
 [charts/lagrange-node](https://codeberg.org/psvensson/lagrange/src/branch/main/charts/lagrange-node).
+The chart publishes REST and transport only; its unauthenticated admin listener
+is fixed to pod-local loopback and cannot be enabled through chart values.
 
 ## Memory
 
