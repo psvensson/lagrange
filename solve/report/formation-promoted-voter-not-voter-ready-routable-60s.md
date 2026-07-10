@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -26,7 +26,7 @@
 
 ## Continuation
 - Status: allowed
-- Next action: continue supervised step for formation-promoted-voter-not-voter-ready-routable-60s-main
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
@@ -38,7 +38,7 @@
 - Signals: none
 
 ## Frontiers
-- **formation-promoted-voter-not-voter-ready-routable-60s-main** [open] rung 0, attempts 1, metric ? -> ?
+- **formation-promoted-voter-not-voter-ready-routable-60s-main** [parked {exhausted}] rung 0, attempts 1, metric ? -> ? — Operator PARK-AND-PIVOT (2026-07-09 decision, recorded in the altitude reflection): RUNG-2 (c7057af4, 12 instrumented runs, both transports) proved the sealed symptom (voter-ready-60s timeout wedging the drain floor) does not reproduce on HEAD — 0/12 on all three sealed signals; the shipped s14 fixes (bf535665, 1ff668b8) closed the routability wedge. No honest remaining move exists within this seal; the demo's actual binding blocker (operation_ledger_quorum_concentrated under REPLACE churn) is a different owner boundary, pursued by successor quest formation-ledger-quorum-concentrated-replace-churn-60s.
 
 ## Findings
 - **formation-promoted-voter-not-voter-ready-routable-60s-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
