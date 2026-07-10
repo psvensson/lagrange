@@ -40,7 +40,10 @@ any distributed-harness or convergence work:
   red on revert — NOT when a gate happens to pass. If you reach for the docker
   statistical gate (`scripts/rolling-restart-stat-gate.sh`), first write down the
   exact question and why no in-process test can answer it; if you can't, you are
-  not ready to gate.
+  not ready to gate. The runnable preflight is
+  `npm run gate:preflight -- --question "<exact question>" --why-not-deterministic "<one-liner>"`
+  — it refuses without both answers, runs the `analyze:latent-blockers` census,
+  and prints the N-calibration table plus the three allowed gate categories.
   - **Run a gate ONLY when the claim is irreducibly statistical** and no
     deterministic test can stand in. Three named cases qualify: (1) a true
     pass-*rate* / variance question; (2) a one-time milestone certification of a

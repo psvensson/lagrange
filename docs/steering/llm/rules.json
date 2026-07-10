@@ -164,7 +164,7 @@
     "exportedRuleCount": 407,
     "aliasRuleCount": 4,
     "masterRuleCount": 403,
-    "estimatedAllRulesTokens": 18304
+    "estimatedAllRulesTokens": 18436
   },
   "rules": [
     {
@@ -1925,7 +1925,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 132,
+          "line": 141,
           "section": "Testing — Regression Policy > Bug-Cluster Escalation Policy"
         }
       ]
@@ -1940,7 +1940,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 188,
+          "line": 197,
           "section": "Testing — Regression Policy > Deterministic Control-Loop Regression Policy"
         }
       ]
@@ -1987,7 +1987,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 367,
+          "line": 376,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -2002,7 +2002,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 368,
+          "line": 377,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -2017,7 +2017,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 398,
+          "line": 407,
           "section": "Testing — Regression Policy > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -2032,7 +2032,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 404,
+          "line": 413,
           "section": "Testing — Regression Policy > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -2490,7 +2490,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 373,
+          "line": 382,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         },
         {
@@ -2515,7 +2515,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 379,
+          "line": 388,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -2747,7 +2747,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 134,
+          "line": 143,
           "section": "Testing — Regression Policy > Bug-Cluster Escalation Policy"
         }
       ]
@@ -2784,7 +2784,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 343,
+          "line": 352,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy > Test structure"
         }
       ]
@@ -3300,7 +3300,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 44,
+          "line": 47,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -3315,7 +3315,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 56,
+          "line": 59,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -3330,7 +3330,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 70,
+          "line": 73,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -3348,7 +3348,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 110,
+          "line": 113,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -3365,7 +3365,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 125,
+          "line": 128,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -3382,7 +3382,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 145,
+          "line": 148,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -3461,8 +3461,10 @@
       "id": "TEST-0052",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [],
-      "rule": "Soft-warning two-strikes. The SAME soft warning (a load-flake, a tolerated timeout, a \"known transient\") appearing in two consecutive runs of the same scenario MUST be treated as a failing assertion, not background noise: before the third run, open a finding and either fix the cause, re-derive the threshold with evidence, or promote it to a hard failure — NEVER carry the same \"proceeding anyway\" past run 2.",
+      "tags": [
+        "style"
+      ],
+      "rule": "Soft-warning two-strikes. The SAME soft warning (a load-flake, a tolerated timeout, a \"known transient\") appearing in two consecutive runs of the same scenario MUST be treated as a failing assertion, not background noise: before the third run, open a finding and either fix the cause, re-derive the threshold with evidence, or promote it to a hard failure — NEVER carry the same \"proceeding anyway\" past run 2. Strike identity is precise: the same warning CODE (a softBreaches[].reasonCode/invariantId or an assertion-policy softWarnings[].code such as insufficient_evidence) plus the same scenario id, in the two most recent consecutive runs of that scenario, regardless of which session produced them; a code absent from either of those two runs does not strike. The machine check is npm run analyze:soft-warning-strikes (optionally -- --scenario <id>): it scans the run-report corpus and exits nonzero naming each striking code+scenario.",
       "score": 212,
       "sources": [
         {
@@ -3860,7 +3862,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 113,
+          "line": 122,
           "section": "Testing — Regression Policy > Bug-Cluster Escalation Policy"
         }
       ]
@@ -3878,7 +3880,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 139,
+          "line": 148,
           "section": "Testing — Regression Policy > Owner-Path Regression Policy"
         }
       ]
@@ -3893,7 +3895,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 164,
+          "line": 173,
           "section": "Testing — Regression Policy > Gateway Boundary Regression Policy"
         }
       ]
@@ -3910,7 +3912,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 180,
+          "line": 189,
           "section": "Testing — Regression Policy > Deterministic Control-Loop Regression Policy"
         }
       ]
@@ -3928,7 +3930,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 230,
+          "line": 239,
           "section": "Testing — Regression Policy > Continuity And Lifetime Regression Policy"
         }
       ]
@@ -4009,7 +4011,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 266,
+          "line": 275,
           "section": "Testing — Regression Policy > Structured Deferred-Outcome Regression Policy"
         }
       ]
@@ -4026,7 +4028,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 288,
+          "line": 297,
           "section": "Testing — Regression Policy > Read-Side Repair Separation Regression Policy"
         }
       ]
@@ -4043,7 +4045,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 309,
+          "line": 318,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy"
         }
       ]
@@ -4060,7 +4062,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 362,
+          "line": 371,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -5004,7 +5006,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 135,
+          "line": 138,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -5036,7 +5038,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 105,
+          "line": 114,
           "section": "Testing — Regression Policy > Two-Strikes Escalation Tripwires"
         }
       ]
@@ -5098,7 +5100,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 323,
+          "line": 332,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy > Required coverage patterns"
         }
       ]
@@ -5576,7 +5578,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 208,
+          "line": 217,
           "section": "Testing — Regression Policy > Temporal Witness Replay Policy"
         }
       ]
@@ -5890,7 +5892,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 159,
+          "line": 168,
           "section": "Testing — Regression Policy > Owner-Path Regression Policy"
         }
       ]
@@ -6346,7 +6348,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 307,
+          "line": 316,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy"
         }
       ]
@@ -6528,7 +6530,7 @@
       "sources": [
         {
           "file": "operational-ground-truth.md",
-          "line": 154,
+          "line": 157,
           "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
@@ -6711,5 +6713,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-10T11:33:14.764Z"
+  "generatedAt": "2026-07-10T11:44:03.581Z"
 }

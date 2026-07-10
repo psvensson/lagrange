@@ -181,6 +181,8 @@
     "test:distributed:checkpoint:7node:transaction-recovery": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery",
     "analyze:causal-model": "node scripts/analyze-causal-model.js",
     "analyze:latent-blockers": "node scripts/analyze-latent-blockers.js",
+    "analyze:soft-warning-strikes": "node scripts/analyze-soft-warning-strikes.js",
+    "gate:preflight": "node scripts/gate-preflight.js",
     "audit:guideline:silent-catch": "node scripts/check-guideline-silent-catch.js",
     "audit:guideline:deferred-outcomes": "node scripts/check-guideline-deferred-outcomes.js",
     "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch"

@@ -49,6 +49,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `analyze:replace-ghost-retirements` — `node scripts/analyze-replace-ghost-retirements.js`
 - `analyze:replace-safety-blocks` — `node scripts/analyze-replace-safety-blocks.js`
 - `analyze:rolling-restart-liveness` — Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.
+- `analyze:soft-warning-strikes` — `node scripts/analyze-soft-warning-strikes.js`
 - `analyze:topology-convergence` — Render topology convergence evidence from report or playback artifacts.
 
 ## audit
@@ -107,6 +108,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## frontier
 
 - `frontier:write` — Write the durable frontier board to solve/FRONTIER.generated.md.
+
+## gate
+
+- `gate:preflight` — `node scripts/gate-preflight.js`
 
 ## guard
 
@@ -261,4 +266,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-168 scripts indexed; 66 have a curated description, 102 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+170 scripts indexed; 66 have a curated description, 104 fall back to their raw command. Improve coverage in the two sources named in the header comment.

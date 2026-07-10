@@ -102,6 +102,15 @@ autonomous work — the tripwire converts it into a bounded cost.
    background noise: before the third run, open a finding and either fix the
    cause, re-derive the threshold with evidence, or promote it to a hard
    failure — NEVER carry the same "proceeding anyway" past run 2.
+   **Strike identity is precise:** the same warning CODE (a
+   `softBreaches[].reasonCode`/`invariantId` or an assertion-policy
+   `softWarnings[].code` such as `insufficient_evidence`) plus the same
+   scenario id, in the two most recent consecutive runs of that scenario,
+   regardless of which session produced them; a code absent from either of
+   those two runs does not strike. The machine check is
+   `npm run analyze:soft-warning-strikes` (optionally
+   `-- --scenario <id>`): it scans the run-report corpus and exits nonzero
+   naming each striking code+scenario.
 2. **Live-refutation two-strikes.** When live/measured evidence contradicts
    a sealed statement or a fix claim TWICE, the framing — not the next patch
    — is what must change: EXHAUST and re-author, widen the class, or
