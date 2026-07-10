@@ -15,10 +15,31 @@
 
 import {execFileSync} from 'node:child_process';
 
+import {RETREAD_LOOKBACK_DAYS} from './constants.js';
 import {readRulesOutFindings} from './store.js';
 import {loadAllQuests} from './portfolio.js';
 
-export const REVERT_WINDOW_DAYS = 45;
+const REVERT_WINDOW_DAYS = RETREAD_LOOKBACK_DAYS;
+
+export {REVERT_WINDOW_DAYS};
+
+const GIT_EXECUTABLE = 'git';
+const GIT_REVERT_LOG_ARGUMENTS = Object.freeze([
+  'log',
+  '--grep=^revert(',
+  '--grep=^Revert "',
+  `--since=${RETREAD_LOOKBACK_DAYS}.days`,
+  '--name-only',
+  '--format=%H%x09%s',
+]);
+const TEXT_ENCODING = 'utf8';
+const CHILD_PROCESS_STDIO = Object.freeze(['ignore', 'pipe', 'ignore']);
+const LINE_SEPARATOR = '\n';
+const SHORT_SHA_LENGTH = 8;
+const REVERTED_LEVER_WARNING_SUFFIX =
+  'one before spending a rung on it';
+const LINEAGE_RULES_OUT_HEADER =
+  'Lineage rulesOut (already-refuted levers - do not re-derive):';
 
 // Path-shaped tokens (src/..., scripts/..., ...) plus bare source basenames like
 // `operation-workflow-remove-safety-evaluator.js:378-412` — statements often cite a
@@ -53,13 +74,14 @@ export const REVERT_SUBJECT = /^(?:revert\(|Revert ")/;
 function gitRevertLog(root) {
   try {
     return execFileSync(
-      'git', ['log', '--grep=^revert(', '--grep=^Revert "',
-        `--since=${REVERT_WINDOW_DAYS}.days`,
-        '--name-only', '--format=%H%x09%s'], {
+      GIT_EXECUTABLE,
+      GIT_REVERT_LOG_ARGUMENTS,
+      {
         cwd: root,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
+        encoding: TEXT_ENCODING,
+        stdio: CHILD_PROCESS_STDIO,
+      },
+    );
   } catch {
     return null;
   }
@@ -72,7 +94,7 @@ function gitRevertLog(root) {
  */
 export function parseRevertLog(raw) {
   const commits = [];
-  for (const line of String(raw || '').split('\n')) {
+  for (const line of String(raw || '').split(LINE_SEPARATOR)) {
     if (!line.trim()) continue;
     const headerMatch = /^([0-9a-f]{7,40})\t(.*)$/.exec(line);
     if (headerMatch) {
@@ -91,7 +113,7 @@ function revertOverlap(commit, tokens) {
     .filter((id) => tokens.closureIds.has(id));
   if (overlappingFiles.length === 0 && subjectClosureIds.length === 0) return null;
   return {
-    sha: commit.sha.slice(0, 8),
+    sha: commit.sha.slice(0, SHORT_SHA_LENGTH),
     subject: commit.subject,
     files: overlappingFiles,
     closureIds: subjectClosureIds,
@@ -172,10 +194,11 @@ export function renderRetreadLines(overlaps, inherited) {
     lines.push(
       `RETREAD WARNING: revert ${overlap.sha} "${overlap.subject}" touched ` +
       `${via}, cited in this statement — confirm the lever is not the reverted ` +
-      'one before spending a rung on it');
+      REVERTED_LEVER_WARNING_SUFFIX,
+    );
   }
   if (inherited.length > 0) {
-    lines.push('Lineage rulesOut (already-refuted levers — do not re-derive):');
+    lines.push(LINEAGE_RULES_OUT_HEADER);
     for (const entry of inherited) {
       lines.push(`- [${entry.questId}] ${entry.rulesOut}`);
     }

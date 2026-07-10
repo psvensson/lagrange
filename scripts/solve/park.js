@@ -28,6 +28,7 @@ import {
   EVENT_QUEST,
   EVENT_REFLECTION,
   PARK_KIND_EXHAUSTED,
+  PARK_PROVENANCE_OPERATOR,
   STATUS_EXHAUSTED,
   STATUS_OPEN,
   STATUS_PARKED,
@@ -37,7 +38,21 @@ import {REFLECTION_KIND_ALTITUDE} from './reflection.js';
 import {pendingFilePath} from './step.js';
 import {writeReport} from './report.js';
 
-export const PARK_PROVENANCE_OPERATOR = 'operator';
+export {PARK_PROVENANCE_OPERATOR};
+
+const PARK_ERROR_PENDING_STEP =
+  'a pending supervised step exists; commit or abort it first ' +
+  '(solve step --commit | --abort)';
+const PARK_ERROR_ALTITUDE_REFLECTION_REQUIRED =
+  'no altitude reflection recorded on this quest; record the ' +
+  'frame-questioning decision first (solve reflect --altitude --note ...)';
+const PARK_ERROR_QUEST_ID_REQUIRED = 'park: --id <questId> is required';
+const PARK_ERROR_REASON_REQUIRED =
+  'park: --reason <text> is required to justify the park';
+const PARK_ERROR_FRONTIER_REQUIRED =
+  'park: --frontier <id> is required (no single open frontier to default to)';
+const PARK_OUTPUT_NEWLINE = '\n';
+const ABSENT_PARK_EXPLANATION = null;
 
 // The sanctioning altitude reflection: the most recent frame-questioning note
 // recorded on the quest. Its absence means the operator decision was never
@@ -68,46 +83,44 @@ export function assessPark(root, quest, frontierId) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
   const frontierState = state.frontiers.find((f) => f.id === frontierId);
+  let explanation = ABSENT_PARK_EXPLANATION;
   if (!frontierState) {
-    return {ok: false, reason: `frontier ${frontierId} not found`};
-  }
-  if (frontierState.status !== STATUS_OPEN) {
-    return {
-      ok: false,
-      reason: `frontier ${frontierId} is ${frontierState.status}, not open`,
-    };
-  }
-  if (fs.existsSync(pendingFilePath(root, quest.id))) {
-    return {
-      ok: false,
-      reason: 'a pending supervised step exists; commit or abort it first ' +
-        '(solve step --commit | --abort)',
-    };
+    explanation = `frontier ${frontierId} not found`;
+  } else if (frontierState.status !== STATUS_OPEN) {
+    explanation =
+      `frontier ${frontierId} is ${frontierState.status}, not open`;
+  } else if (fs.existsSync(pendingFilePath(root, quest.id))) {
+    explanation = PARK_ERROR_PENDING_STEP;
   }
   const reflection = latestAltitudeReflection(log);
-  if (!reflection) {
+  if (!explanation && !reflection) {
+    explanation = PARK_ERROR_ALTITUDE_REFLECTION_REQUIRED;
+  }
+  if (explanation) {
     return {
       ok: false,
-      reason: 'no altitude reflection recorded on this quest; record the ' +
-        'frame-questioning decision first (solve reflect --altitude --note ...)',
+      reason: explanation,
     };
   }
-  return {ok: true, frontierId, reflection, reason: null};
+  return {
+    ok: true,
+    frontierId,
+    reflection,
+    reason: ABSENT_PARK_EXPLANATION,
+  };
 }
 
 export function parkFrontier(root, args = {}) {
   const id = args.id || args._?.[0];
-  if (!id) throw new Error('park: --id <questId> is required');
+  if (!id) throw new Error(PARK_ERROR_QUEST_ID_REQUIRED);
   if (typeof args.reason !== 'string' || args.reason.trim().length === 0) {
-    throw new Error('park: --reason <text> is required to justify the park');
+    throw new Error(PARK_ERROR_REASON_REQUIRED);
   }
   const quest = loadQuest(root, id);
   const state = projectState(quest, readLog(root, id));
   const frontierId = args.frontier || defaultOpenFrontier(state);
   if (!frontierId) {
-    throw new Error(
-      'park: --frontier <id> is required (no single open frontier to default to)',
-    );
+    throw new Error(PARK_ERROR_FRONTIER_REQUIRED);
   }
   const assessment = assessPark(root, quest, frontierId);
   if (!assessment.ok) {
@@ -150,5 +163,5 @@ export function runParkCommand(root, args) {
       `quest ${result.questId} is now EXHAUSTED (every frontier parked exhausted)` :
       `quest ${result.questId} remains open (other frontiers still active)`,
     `reason: ${result.event.reason}`,
-  ].join('\n') + '\n';
+  ].join(PARK_OUTPUT_NEWLINE) + PARK_OUTPUT_NEWLINE;
 }

@@ -2,10 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  EVENT_ATTEMPT,
   EVENT_EVIDENCE_INGESTED,
-  EVENT_QUEST,
-  EVENT_SOLVED,
   EVENT_THEORY_RESULT,
   THEORY_RESULT_FALSIFIED,
   THEORY_RESULT_NEEDS_RERUN,
@@ -35,15 +32,14 @@ import {
   readLog,
 } from './store.js';
 import {writeReport} from './report.js';
-import {
-  buildEvidenceIdentity,
-  evidenceIdentityMatchesEvent,
-} from './evidence-identity.js';
+import {buildEvidenceIdentity} from './evidence-identity.js';
 import {
   isFrontierProbeEvent,
   metricKindFromProbeSpec,
   stableProbeKey,
 } from './probe-spec.js';
+
+export {detectUnrecordedEvidence} from './evidence-detection.js';
 
 function parseJsonFile(filePath) {
   try {
@@ -51,63 +47,6 @@ function parseJsonFile(filePath) {
   } catch (_err) {
     return null;
   }
-}
-
-export function detectUnrecordedEvidence(root, questId, options = {}) {
-  try {
-    const quest = loadQuest(root, questId);
-    const log = readLog(root, questId);
-    const measuredEvents = log.filter((event) =>
-      event.type === EVENT_ATTEMPT ||
-      event.type === EVENT_EVIDENCE_INGESTED ||
-      event.type === EVENT_SOLVED ||
-      event.type === EVENT_QUEST);
-    if (measuredEvents.length === 0 && options.requiresMeasuredHistory) {
-      return null;
-    }
-    for (const spec of questProbeSpecs(quest, options.kind || 'all')) {
-      const probe = evaluate(spec.probeSpec, {root});
-      if (!probe.evidence || probe.evidenceIdentity?.exists !== true) continue;
-      const alreadyIngested = measuredEvents.some((event) =>
-        evidenceIdentityMatchesEvent(probe.evidenceIdentity, event, {
-          requireProbeSpec: true,
-        }),
-      );
-      if (alreadyIngested) continue;
-      const probeFlag = spec.scope === 'doneWhen' ? ' --probe doneWhen' : '';
-      return {
-        frontier: spec.frontier,
-        probeScope: spec.scope,
-        evidence: probe.evidence,
-        evidenceFingerprint: probe.evidenceFingerprint,
-        command: `node scripts/solve.js ingest-evidence --id ${questId} ` +
-          `--frontier ${spec.frontier}${probeFlag} --evidence ${probe.evidence}`,
-      };
-    }
-  } catch (_err) {
-    // best-effort: a missing/unreadable probe surfaces no command, not a hard failure
-  }
-  return null;
-}
-
-function questProbeSpecs(quest, kind = 'all') {
-  const fallbackFrontier = quest.frontiers[0]?.id || `${quest.id}-main`;
-  const specs = [];
-  if (kind !== 'frontier') {
-    specs.push({
-      frontier: fallbackFrontier,
-      scope: 'doneWhen',
-      probeSpec: quest.doneWhen,
-    });
-  }
-  if (kind !== 'closure') {
-    specs.push(...quest.frontiers.map((frontier) => ({
-      frontier: frontier.id,
-      scope: 'frontier',
-      probeSpec: frontier.metric,
-    })));
-  }
-  return specs.filter((entry) => entry.probeSpec);
 }
 
 function frontierProbeSpec(quest, frontierId, probeScope = 'frontier') {

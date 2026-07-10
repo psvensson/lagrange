@@ -23,7 +23,7 @@ import {
   THEORY_RESULT_SUPPORTED,
   THEORY_RESULT_SUPERSEDED,
 } from './constants.js';
-import {detectUnrecordedEvidence} from './evidence.js';
+import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {eventEvidenceFingerprint} from './evidence-identity.js';
 import {
   inspectChangeArtifact,

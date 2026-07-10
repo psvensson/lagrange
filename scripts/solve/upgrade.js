@@ -1,7 +1,8 @@
 import {
   EVENT_QUEST_UPGRADED,
 } from './constants.js';
-import {detectUnrecordedEvidence, ingestEvidence} from './evidence.js';
+import {detectUnrecordedEvidence} from './evidence-detection.js';
+import {ingestEvidence} from './evidence.js';
 import {writeReport} from './report.js';
 import {appendEvent, loadQuest, readLog} from './store.js';
 

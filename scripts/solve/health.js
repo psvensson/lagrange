@@ -14,7 +14,7 @@ import {rungName as ladderRungName} from './ladder.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
 import {projectState, readLog} from './store.js';
-import {detectUnrecordedEvidence} from './evidence.js';
+import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {modelGuidanceForQuest} from './model-guidance.js';
 import {
   buildCurrentBlocker,

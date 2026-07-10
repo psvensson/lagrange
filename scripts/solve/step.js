@@ -19,7 +19,7 @@ import {readLog, projectState, assertSafeQuestId} from './store.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
 import {stepTheoryGateProblems} from './theory.js';
-import {detectUnrecordedEvidence} from './evidence.js';
+import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {
   SOLVE_DATA_DIR,
   STATE_SUBDIR,

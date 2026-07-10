@@ -200,11 +200,11 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## test
 
 - `test:analysis` — `npm run test:unused && npm run test:deps && npm run test:complexity && npm run test:metrics`
-- `test:bootstrap:1` — `tap $(cat test/shards/bootstrap-1.txt)`
-- `test:bootstrap:2` — `tap $(cat test/shards/bootstrap-2.txt)`
+- `test:bootstrap:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/bootstrap-1.txt)`
+- `test:bootstrap:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/bootstrap-2.txt)`
 - `test:chart:endpoint-sync` — `node scripts/check-endpoint-sync-chart.js`
 - `test:ci` — `npm run test:safety-pregate && bash scripts/run-test-ci-overlapped.sh`
-- `test:cli` — `tap test/cli/**/*.test.js`
+- `test:cli` — `find test/cli -type f -name '*.test.js' -print0 | sort -z | xargs -0 node scripts/run-test-files.js`
 - `test:complexity` — `node scripts/check-complexity.js`
 - `test:complexity:cognitive` — `node scripts/check-cognitive-complexity.js`
 - `test:complexity:cognitive:scoped` — `node scripts/check-cognitive-complexity.js --scoped`
@@ -213,29 +213,30 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:complexity:scoped` — `node scripts/check-complexity.js --scoped`
 - `test:complexity:scoped:strict` — `node scripts/check-complexity.js --scoped --strict`
 - `test:complexity:strict` — `node scripts/check-complexity.js --strict`
-- `test:convergence-probes` — `tap $(cat test/shards/convergence-probes.txt)`
+- `test:convergence-probes` — `node scripts/run-test-files.js $(cat test/shards/convergence-probes.txt)`
 - `test:cycles` — `node scripts/check-circular-dependencies.js`
 - `test:cycles:strict` — `node scripts/check-circular-dependencies.js --strict`
-- `test:deps` — `depcruise --config dependency-cruiser.config.cjs --ignore-known .dependency-cruiser-known-violations.json src test`
+- `test:deps` — `depcruise --config dependency-cruiser.config.cjs src scripts test`
 - `test:distributed:boundary:transition` — `node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js`
 - `test:distributed:checkpoint:7node:transaction-recovery` — `node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery`
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
 - `test:fast` — Run non-bootstrap, non-integration TAP tests.
+- `test:file` — `node scripts/run-test-files.js`
 - `test:gate` — `npm run test:fast && npm run test:static && npm run model:contracts`
-- `test:integration:1` — `tap $(cat test/shards/integration-1.txt)`
-- `test:integration:2` — `tap $(cat test/shards/integration-2.txt)`
-- `test:integration:3` — `tap $(cat test/shards/integration-3.txt)`
+- `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
+- `test:integration:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-2.txt)`
+- `test:integration:3` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-3.txt)`
 - `test:metadata-gateway:audit` — `node scripts/check-unified-system-metadata-gateway.js`
 - `test:metrics` — `npm run test:complexity:cognitive && npm run test:cycles && npm run test:duplication`
 - `test:metrics:scoped` — Run scoped cyclomatic and cognitive complexity ratchets.
 - `test:metrics:scoped:strict` — `node scripts/check-scoped-ratchets.js --strict`
 - `test:mutation` — `stryker run`
-- `test:pgwire` — `tap $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
-- `test:pgwire:integration` — `tap $(cat test/shards/pgwire-integration.txt)`
-- `test:pgwire:unit` — `tap $(cat test/shards/pgwire-unit.txt)`
+- `test:pgwire` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
+- `test:pgwire:integration` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/pgwire-integration.txt)`
+- `test:pgwire:unit` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt)`
 - `test:quality` — `npm run test:static && npm run test:mutation`
-- `test:safety-pregate` — `tap $(cat test/shards/safety-pregate.txt)`
+- `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
 - `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
 - `test:static` — Run unused, dependency, complexity, metadata, and runtime grammar checks.
@@ -243,7 +244,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
 - `test:topology-failure-gates` — Run topology failure gates against operation, publication, and coverage invariants.
-- `test:unit` — `find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -r -n 100 tap`
+- `test:unit` — `find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js`
 - `test:unused` — `knip --exclude exports,duplicates`
 - `test:unused:exports` — `knip --include exports`
 - `test:unused:prod` — `knip --production --include dependencies`
@@ -260,4 +261,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-167 scripts indexed; 66 have a curated description, 101 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+168 scripts indexed; 66 have a curated description, 102 fall back to their raw command. Improve coverage in the two sources named in the header comment.

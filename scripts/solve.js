@@ -49,6 +49,10 @@ import {
   continuationOverridable,
 } from './solve/continuation.js';
 
+const INHERITED_RULESOUT_ABSENT_CLAIM = '(no claim)';
+const INHERITED_RULESOUT_FINDING_KIND = 'inherited-rulesout';
+const LINE_SEPARATOR = '\n';
+
 function parseArgs(argv) {
   const args = {_: []};
   for (let i = 0; i < argv.length; i += 1) {
@@ -154,8 +158,9 @@ function inheritRulesOutFindings(root, quest, parentId) {
     seen.add(finding.rulesOut);
     appendFinding(root, quest.id, {
       frontier,
-      claim: `inherited from ${parentId}: ${finding.claim || '(no claim)'}`,
-      kind: 'inherited-rulesout',
+      claim: `inherited from ${parentId}: ${
+        finding.claim || INHERITED_RULESOUT_ABSENT_CLAIM}`,
+      kind: INHERITED_RULESOUT_FINDING_KIND,
       evidence: finding.evidence,
       rulesOut: finding.rulesOut,
     });
@@ -843,7 +848,7 @@ function cmdInvariants(root, args) {
     const lines = fired.transitions.map((t) => `${t.from} -> ${t.to}  ${t.id}`);
     process.stdout.write(
       `on-touched-owner re-verification (${fired.transitions.length} invariant(s)):\n` +
-      `${lines.join('\n') || '(none matched the changed files)'}\n`);
+      `${lines.join(LINE_SEPARATOR) || '(none matched the changed files)'}\n`);
     return;
   }
   const out = runInvariantsCommand(root, args);

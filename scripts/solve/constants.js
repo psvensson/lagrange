@@ -7,6 +7,8 @@ export const LOG_SUBDIR = 'log';
 export const STATE_SUBDIR = 'state';
 export const REPORT_SUBDIR = 'report';
 export const CONFIG_FILE = 'config.json';
+export const RETREAD_LOOKBACK_DAYS = 45;
+export const REPRO_ON_HEAD_FINDING_KIND = 'repro-on-head';
 
 // Event types written to the append-only log.
 export const EVENT_QUEST_DECLARED = 'quest-declared';
@@ -356,6 +358,7 @@ export const HARNESS_NONMEASURING_PARK_THRESHOLD = 3;
 //                   bound itself so it cannot oscillate against a never-measuring park.
 export const PARK_KIND_EXHAUSTED = 'exhausted';
 export const PARK_KIND_CANNOT_MEASURE = 'cannot_measure';
+export const PARK_PROVENANCE_OPERATOR = 'operator';
 
 // Non-measuring-sample retry bound. A positively-classified non-measuring sample
 // (invalidSample === true) is not evidence of a stall: the harness produced no
