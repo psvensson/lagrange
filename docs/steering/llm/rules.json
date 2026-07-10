@@ -4398,7 +4398,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 553,
+          "line": 556,
           "section": "Quest Workflow > Evidence And Change References"
         }
       ]
@@ -4413,7 +4413,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 583,
+          "line": 586,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -4428,7 +4428,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 594,
+          "line": 597,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -4443,7 +4443,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 596,
+          "line": 599,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -4460,7 +4460,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 603,
+          "line": 606,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -4477,7 +4477,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 643,
+          "line": 646,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -4492,7 +4492,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 645,
+          "line": 648,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -4507,7 +4507,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 750,
+          "line": 753,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -4522,7 +4522,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 841,
+          "line": 844,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
@@ -4537,7 +4537,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 898,
+          "line": 901,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -4552,7 +4552,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 936,
+          "line": 939,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -4567,23 +4567,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 957,
+          "line": 960,
           "section": "Quest Workflow > Keep-Alive Supervisor"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0052",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not rely on solve/state/ as durable memory.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 997,
-          "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
@@ -4631,6 +4616,21 @@
           "file": "doctrine/state-encoding.md",
           "line": 97,
           "section": "Doctrine — State And Lifetime > 10. Normalize Evidence Before Adjudicating Decisions"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0052",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Do not rely on solve/state/ as durable memory.",
+      "score": 202,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 1000,
+          "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
@@ -4922,7 +4922,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 707,
+          "line": 710,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -4973,7 +4973,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 954,
+          "line": 957,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
@@ -5192,7 +5192,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 695,
+          "line": 698,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -5207,7 +5207,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 710,
+          "line": 713,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
@@ -5293,7 +5293,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 832,
+          "line": 835,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
@@ -5385,7 +5385,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 560,
+          "line": 563,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -5400,7 +5400,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 562,
+          "line": 565,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -5415,7 +5415,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 685,
+          "line": 688,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -5526,7 +5526,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 882,
+          "line": 885,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -5670,7 +5670,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 574,
+          "line": 577,
           "section": "Quest Workflow > Source Change Verification"
         }
       ]
@@ -5688,7 +5688,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 600,
+          "line": 603,
           "section": "Quest Workflow > Git Handoff"
         }
       ]
@@ -5703,7 +5703,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 660,
+          "line": 663,
           "section": "Quest Workflow > Findings Log"
         }
       ]
@@ -5718,7 +5718,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 735,
+          "line": 738,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Operator park (decision terminal)"
         }
       ]
@@ -5753,7 +5753,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 889,
+          "line": 892,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -5768,7 +5768,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 906,
+          "line": 909,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -5783,7 +5783,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1021,
+          "line": 1024,
           "section": "Quest Workflow > Ledger Consistency"
         }
       ]
@@ -6049,7 +6049,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 757,
+          "line": 760,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -6205,7 +6205,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 655,
+          "line": 658,
           "section": "Quest Workflow > Findings Log"
         }
       ]
@@ -6222,7 +6222,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 548,
+          "line": 551,
           "section": "Quest Workflow > Evidence And Change References"
         }
       ]
@@ -6237,7 +6237,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 675,
+          "line": 678,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -6254,7 +6254,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 680,
+          "line": 683,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -6269,7 +6269,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 727,
+          "line": 730,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Operator park (decision terminal)"
         }
       ]
@@ -6470,7 +6470,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 677,
+          "line": 680,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -6515,7 +6515,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 765,
+          "line": 768,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
@@ -6658,7 +6658,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 996,
+          "line": 999,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -6673,7 +6673,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 869,
+          "line": 872,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -6690,7 +6690,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 828,
+          "line": 831,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
@@ -6713,5 +6713,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-10T11:47:18.922Z"
+  "generatedAt": "2026-07-10T12:09:51.499Z"
 }

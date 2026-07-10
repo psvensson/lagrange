@@ -538,7 +538,10 @@ node scripts/solve.js step --id <questId> --commit \
 
 The artifact must live under `solve/changes/<questId>/`, end in `.diff`, and
 contain a unified hunk — the change-artifact inspector enforces all three
-machine-side.
+machine-side. Alternatively, `step --commit --auto-diff` captures the
+working-tree diff since step begin into
+`solve/changes/<questId>/attempt-<n>.diff` and records the changeRef in one
+move (an explicit `--changeRef` takes precedence).
 
 Commit SHAs are useful in release notes, pull requests, or human audit trails,
 but they are not Solver truth. A SHA says where code landed; it does not prove

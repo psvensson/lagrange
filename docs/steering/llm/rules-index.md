@@ -281,10 +281,10 @@ Total rules: 407 (403 masters + 4 cross-domain aliases; alias rows say "alias of
 | GOV-0049 | must_not | governance | — | Reflection is additive and reversible: it produces a recorded note and resets a cadence c… |
 | GOV-0050 | must_not | governance | — | Advisories are read-only and never block; they fire on the same conditions the autonomous… |
 | GOV-0051 | must_not | governance | — | Every supervisor outcome is NON-terminal: the supervisor never closes a quest, only hones… |
-| GOV-0052 | must_not | governance | — | Do not rely on solve/state/ as durable memory. |
 | ARCH-0137 | must_not | architecture | — | Do not begin a new local patch on the same architectural boundary while the current Quest… |
 | ARCH-0138 | must_not | architecture | — | Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and… |
 | ARCH-0139 | must_not | architecture | — | Targets — intent: replica_count, planned placement, configured cohort sizes. A target mus… |
+| GOV-0052 | must_not | governance | — | Do not rely on solve/state/ as durable memory. |
 | TEST-0073 | must_not | testing | — | The expensive non-deterministic statistical gate (the docker rolling-restart stat-gate an… |
 | GOV-0053 | must_not | governance | — | Metadata is part of the diff. When you substantively change a body / decision-log (a memo… |
 | ARCH-0140 | must | architecture | — | Scenario-driven Quests must maintain scenario causal closure across the whole chain, not … |

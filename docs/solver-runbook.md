@@ -116,7 +116,7 @@ execution and measure before and after in one process:
 ```sh
 node scripts/solve.js attempt --id rolling-restart --frontier rolling-restart-core \
   --changeRef diff:solve/changes/rolling-restart/core.diff \
-  --summary "tightened restart backpressure guard" -- npm test -- test/path.test.js
+  --summary "tightened restart backpressure guard" -- npm run test:file -- test/path.test.js
 ```
 
 ## Recording A Finding
@@ -495,8 +495,9 @@ One line each; see `docs/steering/llm/solve-commands.md` and
   `provenance: operator` (requires a prior altitude reflection and `--reason`).
 - `step-pending` — print the pending supervised step (the pinned baseline
   awaiting a commit) as JSON.
-- `handoff --checkpoint` — squashable mid-quest save via the scope-safe
-  pathspec.
+- `handoff` — print the mid-quest handoff dossier (`--commit` records it).
+  Squashable mid-quest checkpoint saves are made automatically by the run
+  loop's auto-commit, not by a handoff flag.
 - Soft-first quorum — inferential theory gates soften to advisories until
   `GUARD_QUORUM` occurrences since last progress; autonomous loop only (see
   solver-quests.md "Soft-first / quorum before escalation").
