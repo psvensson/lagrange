@@ -18,18 +18,29 @@
 // solve.js cannot be imported here: it calls main() unconditionally at module load,
 // so importing it would execute the CLI. We parse its source text instead.
 
-import {readFileSync, writeFileSync} from 'node:fs';
+import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {dirname, join} from 'node:path';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(SCRIPT_DIR, '..');
 const SOLVE_JS_PATH = join(REPO_ROOT, 'scripts/solve.js');
+const SOLVE_MODULES_DIR = join(REPO_ROOT, 'scripts/solve');
 const SIDECAR_PATH = join(REPO_ROOT, 'docs/steering/solve-commands.json');
 const OUTPUT_PATH = join(REPO_ROOT, 'docs/steering/llm/solve-commands.md');
 
 const NEWLINE = '\n';
 const UNDOCUMENTED = '(undocumented — add an entry to `docs/steering/solve-commands.json`)';
+const SOURCE_FILE_EXTENSION = '.js';
+const TEXT_ENCODING = 'utf8';
+const REGEXP_ESCAPE_REPLACEMENT = '\\$&';
+const SOLVE_SOURCE_TREE_LOCATION = 'in scripts/solve.js or scripts/solve/*.js';
+const STALE_FLAG_FAILURE_HEADER =
+  'gen-solve-commands-index: stale sidecar usage flags:\n  - ';
+const FAILURE_LIST_SEPARATOR = '\n  - ';
+const STALE_FLAG_REMEDIATION =
+  '\n  Fix the row in docs/steering/solve-commands.json (or add the flag ' +
+  'to that entry\'s flagCheckExempt array if it is a passthrough flag).';
 
 // Pull the registered subcommand names out of the `const COMMANDS = { ... }`
 // dispatch map. Each entry maps a (quoted) name to a `cmd*` handler; matching on
@@ -50,7 +61,86 @@ function registeredCommands(source) {
 }
 
 function loadSidecar() {
-  return JSON.parse(readFileSync(SIDECAR_PATH, 'utf8'));
+  return JSON.parse(readFileSync(SIDECAR_PATH, TEXT_ENCODING));
+}
+
+// Concatenated handler source: solve.js plus every module under scripts/solve/.
+// Handlers are spread across these files, so flag existence is checked against
+// the whole tree (lenient by design — a flag that appears NOWHERE is certainly
+// a stale sidecar row; per-handler precision would risk false positives).
+function loadSolveSourceTree() {
+  const chunks = [readFileSync(SOLVE_JS_PATH, TEXT_ENCODING)];
+  for (const name of readdirSync(SOLVE_MODULES_DIR)) {
+    if (name.endsWith(SOURCE_FILE_EXTENSION)) {
+      chunks.push(readFileSync(join(SOLVE_MODULES_DIR, name), TEXT_ENCODING));
+    }
+  }
+  return chunks.join(NEWLINE);
+}
+
+// Extract `--flag` tokens from a sidecar usage row. `<...>` placeholder and
+// `[...]`-free-text spans can legitimately mention pseudo-flags (e.g. probe's
+// "[probe-specific args...]"), so placeholders are stripped before scanning;
+// real optional flags like `[--max 20]` survive because the token itself is
+// outside any `<...>` span.
+function usageFlags(usage) {
+  const withoutPlaceholders = String(usage || '').replace(/<[^>]*>/gu, ' ');
+  const flags = new Set();
+  const flagPattern = /--([A-Za-z][A-Za-z0-9-]*)/gu;
+  let match;
+  while ((match = flagPattern.exec(withoutPlaceholders)) !== null) {
+    flags.add(match[1]);
+  }
+  return [...flags];
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(
+    /[.*+?^${}()|[\]\\]/gu,
+    REGEXP_ESCAPE_REPLACEMENT,
+  );
+}
+
+// A flag is "known" when the solve source tree references it in any of the
+// shapes its parseArgs produces: `args.<flag>` / `args['<flag>']` /
+// `args["<flag>"]`, or the literal `--<flag>` (help text, string dispatch).
+function flagKnownToSource(source, flag) {
+  const escaped = escapeRegExp(flag);
+  const pattern = new RegExp(
+    `args\\.${escaped}\\b|args\\[['"]${escaped}['"]\\]|--${escaped}(?![A-Za-z0-9-])`,
+    'u',
+  );
+  return pattern.test(source);
+}
+
+// Verify every `--flag` in every sidecar usage row against the actual solve
+// source tree. Command-name coverage is already checked both directions by the
+// render step; this closes the remaining gap (rows documenting flags no handler
+// reads). A sidecar entry may declare `flagCheckExempt: ["flag", ...]` for
+// passthrough flags that are intentionally not read by solve.js itself.
+function validateSidecarUsageFlags(commands, sidecar, solveSource) {
+  const staleFlags = [];
+  for (const name of commands) {
+    const doc = sidecar[name];
+    if (!doc || typeof doc.usage !== 'string') continue;
+    const exempt = new Set(doc.flagCheckExempt || []);
+    for (const flag of usageFlags(doc.usage)) {
+      if (exempt.has(flag)) continue;
+      if (!flagKnownToSource(solveSource, flag)) {
+        staleFlags.push(
+          `sidecar row "${name}" documents --${flag}, which appears nowhere ` +
+          SOLVE_SOURCE_TREE_LOCATION,
+        );
+      }
+    }
+  }
+  if (staleFlags.length > 0) {
+    throw new Error(
+      STALE_FLAG_FAILURE_HEADER +
+      staleFlags.join(FAILURE_LIST_SEPARATOR) +
+      STALE_FLAG_REMEDIATION,
+    );
+  }
 }
 
 function render(commands, sidecar) {
@@ -117,7 +207,9 @@ function render(commands, sidecar) {
 function main() {
   const source = readFileSync(SOLVE_JS_PATH, 'utf8');
   const commands = registeredCommands(source);
-  const output = render(commands, loadSidecar());
+  const sidecar = loadSidecar();
+  validateSidecarUsageFlags(commands, sidecar, loadSolveSourceTree());
+  const output = render(commands, sidecar);
   writeFileSync(OUTPUT_PATH, output);
   process.stdout.write(`Wrote ${OUTPUT_PATH}${NEWLINE}`);
 }

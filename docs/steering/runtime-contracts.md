@@ -4,7 +4,7 @@ status: canonical
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/architecture.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-06-29
 ---
 
 > **Canonical source.** Detail expands `system-guidelines.md`. Regenerate packs with `npm run steering:llm:pack`.

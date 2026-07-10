@@ -77,8 +77,8 @@ test-friendly fork of it works.
 
 The "No Test-Only Code Paths" rule above forbids a flag that *only a test* reads.
 This section governs the inverse: a *production* feature flag that a test couples
-to. The two together close the loop — neither tests nor production may smuggle a
-flag into the proof.
+to. The test-only-paths rule and this flag-coupling rule together close the loop —
+neither tests nor production may smuggle a flag into the proof.
 
 - A test MUST assert the real, unconditional production behavior, and MUST NEVER
   set, branch on, or pin a feature flag to make an assertion pass. A green test

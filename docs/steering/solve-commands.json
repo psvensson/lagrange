@@ -33,8 +33,8 @@
     "usage": "node scripts/solve.js trace --row <id> | --cl <CL-#> | --spec <ref> | --quest <id>"
   },
   "handoff": {
-    "summary": "Compute the scope-safe git pathspec for committing exactly one Quest's work; dry-run by default, `--commit` executes, `--checkpoint` makes a squashable mid-quest save.",
-    "usage": "node scripts/solve.js handoff --id <id> [--commit] [--checkpoint]"
+    "summary": "Compute the scope-safe git pathspec for committing exactly one Quest's work; dry-run by default, `--commit` executes. (Squashable mid-quest checkpoint saves are made by the autonomous run loop's auto-commit, not by a handoff flag.)",
+    "usage": "node scripts/solve.js handoff --id <id> [--commit]"
   },
   "invariants": {
     "summary": "Tier-2 live-evidence verification of architecture invariants (the standing dual of doneWhen): derive HELD/BREACHED/UNGUARDED for entries in architecture/contracts/invariants.json that carry a liveEvidence block, as a fold over the Solver event log. Always active (unconditional).",

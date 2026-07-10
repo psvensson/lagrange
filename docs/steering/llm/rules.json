@@ -33,9 +33,9 @@
       "priority": 120
     },
     {
-      "file": "architecture.md",
-      "domain": "architecture",
-      "priority": 100
+      "file": "operational-ground-truth.md",
+      "domain": "testing",
+      "priority": 130
     },
     {
       "file": "testing-guidelines/harness.md",
@@ -159,12 +159,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 352,
-    "dedupedRuleCount": 343,
-    "exportedRuleCount": 343,
+    "candidateCount": 415,
+    "dedupedRuleCount": 406,
+    "exportedRuleCount": 406,
     "aliasRuleCount": 4,
-    "masterRuleCount": 339,
-    "estimatedAllRulesTokens": 14812
+    "masterRuleCount": 402,
+    "estimatedAllRulesTokens": 18230
   },
   "rules": [
     {
@@ -235,6 +235,72 @@
       "id": "ARCH-0005",
       "domain": "architecture",
       "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden: duplicate helpers, wrappers, caches, snapshots, fields, or aliases for the same semantic concern",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 135,
+          "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0006",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership",
+        "lifecycle",
+        "readiness"
+      ],
+      "rule": "Forbidden: shadow state for owner-managed lifecycle or readiness",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 137,
+          "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0007",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden: fallback paths that reconstruct owner decisions from secondary evidence",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 138,
+          "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0008",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden: transitional delegators without a removal task and structural guard",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 139,
+          "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0009",
+      "domain": "architecture",
+      "strength": "must_not",
       "tags": [
         "cache"
       ],
@@ -249,7 +315,72 @@
       ]
     },
     {
-      "id": "ARCH-0006",
+      "id": "ARCH-0010",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden: \"try the new path, then the old path\" logic",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 160,
+          "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0011",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden: feature flags that keep two implementations alive for one semantic",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 161,
+          "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0012",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Forbidden: decision branches that mix cache and SQL as equivalent truth for one meaning",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 162,
+          "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0013",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "lifecycle",
+        "readiness"
+      ],
+      "rule": "Forbidden: bags of independent if statements around readiness, admission, retry, phase, lifecycle, or outcome classification",
+      "score": 256,
+      "sources": [
+        {
+          "file": "system-guidelines.md",
+          "line": 163,
+          "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0014",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -264,7 +395,7 @@
       ]
     },
     {
-      "id": "ARCH-0007",
+      "id": "ARCH-0015",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -277,10 +408,10 @@
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
-      "canonical_of": "STYLE-0010"
+      "canonical_of": "STYLE-0003"
     },
     {
-      "id": "ARCH-0008",
+      "id": "ARCH-0016",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -296,7 +427,7 @@
       "canonical_of": "STYLE-0001"
     },
     {
-      "id": "ARCH-0009",
+      "id": "ARCH-0017",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -313,12 +444,11 @@
       ]
     },
     {
-      "id": "ARCH-0010",
+      "id": "ARCH-0018",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
-        "lifecycle",
-        "governance"
+        "lifecycle"
       ],
       "rule": "Bootstrap shortcuts are phase-scoped exceptions only; they must not remain reachable from steady-state runtime code.",
       "score": 256,
@@ -331,7 +461,7 @@
       ]
     },
     {
-      "id": "ARCH-0011",
+      "id": "ARCH-0019",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -353,7 +483,7 @@
       ]
     },
     {
-      "id": "ARCH-0012",
+      "id": "ARCH-0020",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -370,7 +500,7 @@
       ]
     },
     {
-      "id": "ARCH-0013",
+      "id": "ARCH-0021",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -387,7 +517,7 @@
       ]
     },
     {
-      "id": "ARCH-0014",
+      "id": "ARCH-0022",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -404,7 +534,7 @@
       ]
     },
     {
-      "id": "ARCH-0015",
+      "id": "ARCH-0023",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -419,7 +549,7 @@
       ]
     },
     {
-      "id": "ARCH-0016",
+      "id": "ARCH-0024",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -434,7 +564,7 @@
       ]
     },
     {
-      "id": "ARCH-0017",
+      "id": "ARCH-0025",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -451,7 +581,7 @@
       ]
     },
     {
-      "id": "ARCH-0018",
+      "id": "ARCH-0026",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -466,7 +596,7 @@
       ]
     },
     {
-      "id": "ARCH-0019",
+      "id": "ARCH-0027",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -481,7 +611,7 @@
       ]
     },
     {
-      "id": "ARCH-0020",
+      "id": "ARCH-0028",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -499,7 +629,7 @@
       ]
     },
     {
-      "id": "ARCH-0021",
+      "id": "ARCH-0029",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -514,7 +644,7 @@
       ]
     },
     {
-      "id": "ARCH-0022",
+      "id": "ARCH-0030",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -529,7 +659,7 @@
       ]
     },
     {
-      "id": "ARCH-0023",
+      "id": "ARCH-0031",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -546,7 +676,7 @@
       ]
     },
     {
-      "id": "ARCH-0024",
+      "id": "ARCH-0032",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -563,12 +693,233 @@
       ]
     },
     {
-      "id": "ARCH-0025",
+      "id": "ARCH-0033",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden runtime patterns: local replacement logic when a composition-root owner is available",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 46,
+          "section": "Runtime Contracts Detail > Owner And Path Detail"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0034",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden runtime patterns: owner-unavailable branches that reconstruct equivalent decisions",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 47,
+          "section": "Runtime Contracts Detail > Owner And Path Detail"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0035",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
         "cache"
       ],
+      "rule": "Forbidden runtime patterns: feature-local implementations of existing cache/read/write/retry primitives",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 48,
+          "section": "Runtime Contracts Detail > Owner And Path Detail"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0036",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "lifecycle",
+        "readiness",
+        "routing"
+      ],
+      "rule": "Forbidden runtime patterns: shadow state for lifecycle, readiness, admission, leader, or routing truth",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 49,
+          "section": "Runtime Contracts Detail > Owner And Path Detail"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0037",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "lifecycle"
+      ],
+      "rule": "Forbidden patterns: INSERT OR REPLACE for steady-state lifecycle/status updates",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 68,
+          "section": "Runtime Contracts Detail > System-Table Row Lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0038",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "lifecycle"
+      ],
+      "rule": "Forbidden patterns: full-row replacement for existing lifecycle rows",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 69,
+          "section": "Runtime Contracts Detail > System-Table Row Lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0039",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: recreating missing rows inside updater code",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 70,
+          "section": "Runtime Contracts Detail > System-Table Row Lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0040",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "cdc"
+      ],
+      "rule": "Forbidden patterns: broad UPDATE or DELETE statements as the primary CDC mutation path",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 71,
+          "section": "Runtime Contracts Detail > System-Table Row Lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0041",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "lifecycle"
+      ],
+      "rule": "Forbidden patterns: one persisted field carrying unrelated claim, lease, workflow, and entity lifecycle semantics",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 72,
+          "section": "Runtime Contracts Detail > System-Table Row Lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0042",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership",
+        "cache"
+      ],
+      "rule": "Forbidden patterns: ad-hoc Maps, Sets, or objects that cache system data outside the declared owner or SystemTableCache",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 93,
+          "section": "Runtime Contracts Detail > Cache And Read Models"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0043",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership",
+        "cache"
+      ],
+      "rule": "Forbidden patterns: copying owner-managed fields from cache into unrelated write paths",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 95,
+          "section": "Runtime Contracts Detail > Cache And Read Models"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0044",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Forbidden patterns: completing executor-owned topology phases from cache visibility alone",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 96,
+          "section": "Runtime Contracts Detail > Cache And Read Models"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0045",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Forbidden patterns: mixing cache and SQL fallbacks inside one semantic decision path",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 97,
+          "section": "Runtime Contracts Detail > Cache And Read Models"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0046",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
       "rule": "Reader-local caches do not memoize stale or deferred blocked answers as fresh observations.",
       "score": 241,
       "sources": [
@@ -580,7 +931,251 @@
       ]
     },
     {
-      "id": "ARCH-0026",
+      "id": "ARCH-0047",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: snapshot repair consuming the same effective lane as critical convergence",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 138,
+          "section": "Runtime Contracts Detail > Critical Convergence Priority"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0048",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Forbidden patterns: treating mild pressure as permission to publish cache-only emptiness",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 139,
+          "section": "Runtime Contracts Detail > Critical Convergence Priority"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0049",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: reopening broad repair from readers on the same stressed path needed to finish convergence",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 140,
+          "section": "Runtime Contracts Detail > Critical Convergence Priority"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0050",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: deriving canonical leader identity from replica row iteration order",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 156,
+          "section": "Runtime Contracts Detail > Canonical Owner Rows"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0051",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden patterns: treating replica rows as alternative truth when the owner row is present",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 157,
+          "section": "Runtime Contracts Detail > Canonical Owner Rows"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0052",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden patterns: collapsing owner-row mismatch and replica-role mismatch into one generic error",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 158,
+          "section": "Runtime Contracts Detail > Canonical Owner Rows"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0053",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden patterns: raw system-table mutation helper calls from runtime feature code when a gateway owner exists",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 215,
+          "section": "Runtime Contracts Detail > Runtime Shared-Metadata Gateways"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0054",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Forbidden patterns: second runtime read ingress with equivalent cache/SQL decisions",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 217,
+          "section": "Runtime Contracts Detail > Runtime Shared-Metadata Gateways"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0055",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: bootstrap helper paths reachable from steady-state runtime code",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 218,
+          "section": "Runtime Contracts Detail > Runtime Shared-Metadata Gateways"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0056",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: tearing down the only live subscriber, bridge, dissemination path, or repair route",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 235,
+          "section": "Runtime Contracts Detail > Bootstrap And Phase Handoff"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0057",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership",
+        "timeout"
+      ],
+      "rule": "Forbidden patterns: hiding missing handoff ownership behind fallback reads, broad repairs, or timeout inflation",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 237,
+          "section": "Runtime Contracts Detail > Bootstrap And Phase Handoff"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0058",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "cache"
+      ],
+      "rule": "Forbidden patterns: inferring handoff from elapsed time or \"good enough\" cache visibility",
+      "score": 241,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 239,
+          "section": "Runtime Contracts Detail > Bootstrap And Phase Handoff"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0059",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "readiness"
+      ],
+      "rule": "Forbidden patterns: treating producer publication and consumer readiness as independently fixed when representative evidence alternates between them",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 259,
+          "section": "Runtime Contracts Detail > Producer Consumer Handoff Invariants"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0060",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden patterns: letting a consumer select, repair, or admit from an owner stream that has not published the required durable handoff edge",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 261,
+          "section": "Runtime Contracts Detail > Producer Consumer Handoff Invariants"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0061",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: proving the producer and consumer with separate focused tests while no replayable handoff fixture or missing-edge probe covers their interaction",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 263,
+          "section": "Runtime Contracts Detail > Producer Consumer Handoff Invariants"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0062",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -598,7 +1193,54 @@
       ]
     },
     {
-      "id": "ARCH-0027",
+      "id": "ARCH-0063",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden patterns: ad-hoc cross-owner write ordering to emulate atomicity",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 305,
+          "section": "Runtime Contracts Detail > Durable Workflow And Transaction Boundaries"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0064",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: sequential fallback branches for atomic topology cut points",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 306,
+          "section": "Runtime Contracts Detail > Durable Workflow And Transaction Boundaries"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0065",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: a second control-plane workflow engine when DurableWorkflowCoordinator owns the contract",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 307,
+          "section": "Runtime Contracts Detail > Durable Workflow And Transaction Boundaries"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0066",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -614,11 +1256,11 @@
         }
       ],
       "aliases": [
-        "ARCH-0047"
+        "ARCH-0102"
       ]
     },
     {
-      "id": "ARCH-0028",
+      "id": "ARCH-0067",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -633,7 +1275,255 @@
       ]
     },
     {
-      "id": "ARCH-0029",
+      "id": "ARCH-0068",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: grouped-path diagnostics while grouped mode is disabled",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 362,
+          "section": "Runtime Contracts Detail > Modes And Status Taxonomy"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0069",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: status checks that bypass declared active/terminal sets",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 363,
+          "section": "Runtime Contracts Detail > Modes And Status Taxonomy"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0070",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "ownership"
+      ],
+      "rule": "Forbidden patterns: expiry sweeps that rewrite another owner's terminal workflow outcome",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 364,
+          "section": "Runtime Contracts Detail > Modes And Status Taxonomy"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0071",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: nested waits using fresh full budgets after time has already elapsed",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 381,
+          "section": "Runtime Contracts Detail > Timeout And Invariant Rules"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0072",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "timeout"
+      ],
+      "rule": "Forbidden patterns: generic timeout strings for semantic control-plane outcomes",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 382,
+          "section": "Runtime Contracts Detail > Timeout And Invariant Rules"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0073",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "timeout"
+      ],
+      "rule": "Forbidden patterns: treating routine timeout under moderate load as operational tuning",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 383,
+          "section": "Runtime Contracts Detail > Timeout And Invariant Rules"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0074",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: unbounded in-flight work",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 405,
+          "section": "Runtime Contracts Detail > Pressure, Backpressure, And Resource Lifetime"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0075",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: hidden local priority queues outside the shared pressure contract",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 406,
+          "section": "Runtime Contracts Detail > Pressure, Backpressure, And Resource Lifetime"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0076",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [
+        "timeout"
+      ],
+      "rule": "Forbidden patterns: callers discovering overload only by timeout",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 407,
+          "section": "Runtime Contracts Detail > Pressure, Backpressure, And Resource Lifetime"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0077",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: resource cleanup that depends on process lifetime or scenario end",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 408,
+          "section": "Runtime Contracts Detail > Pressure, Backpressure, And Resource Lifetime"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0078",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: direct local handler calls, ad-hoc sockets, admin forwarding, or service-to-service in-process bypasses for data-plane traffic",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 426,
+          "section": "Runtime Contracts Detail > Query Routing And Transport"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0079",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: non-replicated fast paths for performance",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 428,
+          "section": "Runtime Contracts Detail > Query Routing And Transport"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0080",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: hard query failure while retryable replicas exist",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 429,
+          "section": "Runtime Contracts Detail > Query Routing And Transport"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0081",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: indefinite query queues waiting for topology transitions",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 430,
+          "section": "Runtime Contracts Detail > Query Routing And Transport"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0082",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: receiver logic that depends on caller discipline to avoid duplicates",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 445,
+          "section": "Runtime Contracts Detail > Idempotency"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0083",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: retryable paths that use non-idempotent counters or append-only writes without deduplication",
+      "score": 240,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 446,
+          "section": "Runtime Contracts Detail > Idempotency"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0084",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -650,7 +1540,7 @@
       ]
     },
     {
-      "id": "ARCH-0030",
+      "id": "ARCH-0085",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -669,7 +1559,7 @@
       ]
     },
     {
-      "id": "ARCH-0031",
+      "id": "ARCH-0086",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -686,12 +1576,10 @@
       ]
     },
     {
-      "id": "ARCH-0032",
+      "id": "ARCH-0087",
       "domain": "architecture",
       "strength": "must",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "Before closure, perform the affected-area deep dive required by workflow-guidelines/INDEX.md and testing-guidelines/INDEX.md.",
       "score": 237,
       "sources": [
@@ -703,7 +1591,7 @@
       ]
     },
     {
-      "id": "ARCH-0033",
+      "id": "ARCH-0088",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -720,7 +1608,7 @@
       ]
     },
     {
-      "id": "ARCH-0034",
+      "id": "ARCH-0089",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -738,9 +1626,7 @@
       "id": "STYLE-0001",
       "domain": "style",
       "strength": "must_not",
-      "tags": [
-        "readiness"
-      ],
+      "tags": [],
       "rule": "Do not create new files with ordinal, segment, or grab-bag names such as part-2, segment, misc, helpers, or utils unless that term is already an established domain concept in the repository.",
       "score": 236,
       "sources": [
@@ -751,7 +1637,7 @@
         }
       ],
       "aliases": [
-        "ARCH-0008"
+        "ARCH-0016"
       ]
     },
     {
@@ -769,7 +1655,8 @@
           "line": 89,
           "section": "Code Style Guidelines > Constants And Naming"
         }
-      ]
+      ],
+      "machine_check": "npm run audit:guideline:literals"
     },
     {
       "id": "STYLE-0003",
@@ -784,6 +1671,9 @@
           "line": 101,
           "section": "Code Style Guidelines > Constants And Naming"
         }
+      ],
+      "aliases": [
+        "ARCH-0015"
       ]
     },
     {
@@ -853,9 +1743,7 @@
       "id": "TEST-0003",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "Do not comment out tests to avoid running them",
       "score": 236,
       "sources": [
@@ -887,9 +1775,7 @@
       "id": "TEST-0005",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "It is FORBIDDEN to: Add if (process.env.NODE_ENV === 'test') or similar environment checks that change runtime behavior for tests.",
       "score": 236,
       "sources": [
@@ -921,9 +1807,7 @@
       "id": "TEST-0007",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "It is FORBIDDEN to: Create alternate constructors, factory methods, or initialization paths that only tests call.",
       "score": 236,
       "sources": [
@@ -955,9 +1839,7 @@
       "id": "TEST-0009",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "It is FORBIDDEN to: Export internal implementation details solely so tests can reach them.",
       "score": 236,
       "sources": [
@@ -1144,9 +2026,7 @@
       "id": "TEST-0021",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "timeout"
-      ],
+      "tags": [],
       "rule": "Treat timeouts as hard correctness failures by default. Do not raise product, harness, or scenario timeouts as a fix until a deterministic root-cause reproduction exists.",
       "score": 235,
       "sources": [
@@ -1158,7 +2038,7 @@
       ]
     },
     {
-      "id": "ARCH-0035",
+      "id": "ARCH-0090",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1176,7 +2056,7 @@
       ]
     },
     {
-      "id": "ARCH-0036",
+      "id": "ARCH-0091",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1191,7 +2071,7 @@
       ]
     },
     {
-      "id": "ARCH-0037",
+      "id": "ARCH-0092",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1206,7 +2086,7 @@
       ]
     },
     {
-      "id": "ARCH-0038",
+      "id": "ARCH-0093",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1225,7 +2105,7 @@
       ]
     },
     {
-      "id": "ARCH-0039",
+      "id": "ARCH-0094",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1240,7 +2120,7 @@
       ]
     },
     {
-      "id": "ARCH-0040",
+      "id": "ARCH-0095",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1258,7 +2138,7 @@
       ]
     },
     {
-      "id": "ARCH-0041",
+      "id": "ARCH-0096",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1273,7 +2153,7 @@
       ]
     },
     {
-      "id": "ARCH-0042",
+      "id": "ARCH-0097",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -1293,7 +2173,7 @@
       ]
     },
     {
-      "id": "ARCH-0043",
+      "id": "ARCH-0098",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1308,7 +2188,7 @@
       ]
     },
     {
-      "id": "ARCH-0044",
+      "id": "ARCH-0099",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1323,7 +2203,7 @@
       ]
     },
     {
-      "id": "ARCH-0045",
+      "id": "ARCH-0100",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1340,7 +2220,7 @@
       ]
     },
     {
-      "id": "ARCH-0046",
+      "id": "ARCH-0101",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1355,7 +2235,7 @@
       ]
     },
     {
-      "id": "ARCH-0047",
+      "id": "ARCH-0102",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -1370,10 +2250,10 @@
           "section": "Doctrine — State And Lifetime > 10. Normalize Evidence Before Adjudicating Decisions"
         }
       ],
-      "canonical_of": "ARCH-0027"
+      "canonical_of": "ARCH-0066"
     },
     {
-      "id": "ARCH-0048",
+      "id": "ARCH-0103",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1521,9 +2401,7 @@
       "id": "TEST-0025",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "Production code must never contain alternate code paths, branches, or special-case logic that exist solely to make tests pass.",
       "score": 226,
       "sources": [
@@ -1539,7 +2417,6 @@
       "domain": "testing",
       "strength": "must_not",
       "tags": [
-        "timeout",
         "testing"
       ],
       "rule": "Mechanical test edits (renames, import updates, timeout adjustments, formatting) do NOT trigger this gate.",
@@ -1659,7 +2536,7 @@
       ]
     },
     {
-      "id": "ARCH-0049",
+      "id": "ARCH-0104",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1676,7 +2553,7 @@
       ]
     },
     {
-      "id": "ARCH-0050",
+      "id": "ARCH-0105",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -1693,28 +2570,10 @@
       ]
     },
     {
-      "id": "ARCH-0051",
-      "domain": "architecture",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "Forbidden patterns: letting a consumer select, repair, or admit from an owner stream that has not published the required durable handoff edge",
-      "score": 222,
-      "sources": [
-        {
-          "file": "runtime-contracts.md",
-          "line": 261,
-          "section": "Runtime Contracts Detail > Producer Consumer Handoff Invariants"
-        }
-      ]
-    },
-    {
       "id": "STYLE-0008",
       "domain": "style",
       "strength": "must",
       "tags": [
-        "testing",
         "governance"
       ],
       "rule": "New or newly edited source-code files must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js (currently src ≤ 800, test ≤ 1500 lines; run npm run audit:file-size to confirm).",
@@ -1728,7 +2587,8 @@
       ],
       "aliases": [
         "TEST-0036"
-      ]
+      ],
+      "machine_check": "npm run audit:file-size"
     },
     {
       "id": "STYLE-0009",
@@ -1760,9 +2620,6 @@
           "line": 84,
           "section": "Code Style Guidelines > Constants And Naming"
         }
-      ],
-      "aliases": [
-        "ARCH-0007"
       ]
     },
     {
@@ -1785,7 +2642,6 @@
       "domain": "testing",
       "strength": "must",
       "tags": [
-        "testing",
         "governance"
       ],
       "rule": "Tests added during the change must match the Quest concern rather than an unrelated umbrella scope.",
@@ -1802,9 +2658,7 @@
       "id": "TEST-0034",
       "domain": "testing",
       "strength": "must",
-      "tags": [
-        "governance"
-      ],
+      "tags": [],
       "rule": "After the Quest validation surface is green, perform the required closure deep dive across the affected area before claiming SOLVED (scope and stop condition defined under \"Closure deep dive — scope\" below).",
       "score": 218,
       "sources": [
@@ -1835,7 +2689,6 @@
       "domain": "testing",
       "strength": "must",
       "tags": [
-        "testing",
         "governance"
       ],
       "rule": "New or newly edited source-code files must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js (currently src ≤ 800, test ≤ 1500 lines).",
@@ -1847,7 +2700,8 @@
           "section": "Testing — Proof Ladders & Static Guardrails > File-Size Ratchet Policy"
         }
       ],
-      "canonical_of": "STYLE-0008"
+      "canonical_of": "STYLE-0008",
+      "machine_check": "npm run audit:file-size"
     },
     {
       "id": "TEST-0037",
@@ -1924,9 +2778,7 @@
       "id": "TEST-0041",
       "domain": "testing",
       "strength": "must",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "Pressure tests MUST respect the standard duration limits (2s unit, 30s integration). Use mocked time and injected latency, not real delays.",
       "score": 217,
       "sources": [
@@ -1938,7 +2790,7 @@
       ]
     },
     {
-      "id": "ARCH-0052",
+      "id": "ARCH-0106",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -1953,12 +2805,10 @@
       ]
     },
     {
-      "id": "ARCH-0053",
+      "id": "ARCH-0107",
       "domain": "architecture",
       "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "Do not treat hot-path green tests as analysis closure while the original scenario now fails for a different named reason.",
       "score": 216,
       "sources": [
@@ -1970,12 +2820,11 @@
       ]
     },
     {
-      "id": "ARCH-0054",
+      "id": "ARCH-0108",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
-        "ownership",
-        "timeout"
+        "ownership"
       ],
       "rule": "Quests must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness.",
       "score": 216,
@@ -1988,7 +2837,7 @@
       ]
     },
     {
-      "id": "ARCH-0055",
+      "id": "ARCH-0109",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2005,7 +2854,7 @@
       ]
     },
     {
-      "id": "ARCH-0056",
+      "id": "ARCH-0110",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2022,7 +2871,7 @@
       ]
     },
     {
-      "id": "ARCH-0057",
+      "id": "ARCH-0111",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2037,7 +2886,7 @@
       ]
     },
     {
-      "id": "ARCH-0058",
+      "id": "ARCH-0112",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2055,7 +2904,7 @@
       ]
     },
     {
-      "id": "ARCH-0059",
+      "id": "ARCH-0113",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2070,12 +2919,10 @@
       ]
     },
     {
-      "id": "ARCH-0060",
+      "id": "ARCH-0114",
       "domain": "architecture",
       "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
+      "tags": [],
       "rule": "There may be multiple semantic owners, but there must not be many equivalent runtime ingress paths.",
       "score": 216,
       "sources": [
@@ -2087,7 +2934,7 @@
       ]
     },
     {
-      "id": "ARCH-0061",
+      "id": "ARCH-0115",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2104,12 +2951,10 @@
       ]
     },
     {
-      "id": "ARCH-0062",
+      "id": "ARCH-0116",
       "domain": "architecture",
       "strength": "must_not",
-      "tags": [
-        "cache"
-      ],
+      "tags": [],
       "rule": "Do not let observed, published, retained, cached, repaired, or fast-path variants drift into several interchangeable authorities.",
       "score": 216,
       "sources": [
@@ -2121,7 +2966,7 @@
       ]
     },
     {
-      "id": "ARCH-0063",
+      "id": "ARCH-0117",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2136,7 +2981,7 @@
       ]
     },
     {
-      "id": "ARCH-0064",
+      "id": "ARCH-0118",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2151,7 +2996,7 @@
       ]
     },
     {
-      "id": "ARCH-0065",
+      "id": "ARCH-0119",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2166,7 +3011,7 @@
       ]
     },
     {
-      "id": "ARCH-0066",
+      "id": "ARCH-0120",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2184,7 +3029,7 @@
       ]
     },
     {
-      "id": "ARCH-0067",
+      "id": "ARCH-0121",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2199,7 +3044,7 @@
       ]
     },
     {
-      "id": "ARCH-0068",
+      "id": "ARCH-0122",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2214,7 +3059,7 @@
       ]
     },
     {
-      "id": "ARCH-0069",
+      "id": "ARCH-0123",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -2229,7 +3074,22 @@
       ]
     },
     {
-      "id": "ARCH-0070",
+      "id": "ARCH-0124",
+      "domain": "architecture",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Forbidden patterns: allowing a publication recovery producer to stall or wait on unknown publication deficits when a downstream active-gate reconcile handoff is already pending, as this introduces structural deadlocks during rolling restarts under pressure.",
+      "score": 216,
+      "sources": [
+        {
+          "file": "runtime-contracts.md",
+          "line": 265,
+          "section": "Runtime Contracts Detail > Producer Consumer Handoff Invariants"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0125",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -2270,9 +3130,7 @@
       "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "Tests never pin a flag (see testing-guidelines/fixtures.md \"No Flag-Coupled Tests\").",
       "score": 216,
       "sources": [
@@ -2287,9 +3145,7 @@
       "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
+      "tags": [],
       "rule": "after audit passes, commit every Quest-scoped change (the Solver never pushes; see \"Regular Commit (No Push)\" below).",
       "score": 216,
       "sources": [
@@ -2320,7 +3176,7 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "They have different jobs and MUST NOT duplicate each other; duplication is how the same \"truth\" drifts into three conflicting copies.",
+      "rule": "The in-repo and external memory systems have different jobs and MUST NOT duplicate each other; duplication is how the same \"truth\" drifts into three conflicting copies.",
       "score": 214,
       "sources": [
         {
@@ -2331,22 +3187,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Override-tagged advisories are excluded from soft-first quorum counting, so an override never silently spends the quorum ramp.",
-      "score": 213,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 820,
-          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
-        }
-      ]
-    },
-    {
-      "id": "ARCH-0071",
+      "id": "ARCH-0126",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2369,12 +3210,10 @@
       ]
     },
     {
-      "id": "ARCH-0072",
+      "id": "ARCH-0127",
       "domain": "architecture",
       "strength": "must",
-      "tags": [
-        "ownership"
-      ],
+      "tags": [],
       "rule": "Runtime shared-metadata access must cross canonical ingress owners.",
       "score": 213,
       "sources": [
@@ -2386,7 +3225,7 @@
       ]
     },
     {
-      "id": "ARCH-0073",
+      "id": "ARCH-0128",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2403,7 +3242,7 @@
       ]
     },
     {
-      "id": "ARCH-0074",
+      "id": "ARCH-0129",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2438,11 +3277,7 @@
       "id": "STYLE-0012",
       "domain": "style",
       "strength": "must_not",
-      "tags": [
-        "readiness",
-        "rebalancing",
-        "testing"
-      ],
+      "tags": [],
       "rule": "terminalize is not a word: in NEW or newly edited identifiers, comments, commit messages, and steering prose, MUST use terminate, never terminalize (an operation/handoff terminates; the terminal state is reached by terminating). Inherited terminalize usages exist (e.g. in scripts/solve/, src/rebalancer/, and some test names); they are known debt, not license — do not imitate them, and rename them when other work already touches that line or file (no standalone mass-rename is required).",
       "score": 212,
       "sources": [
@@ -2460,6 +3295,105 @@
       "tags": [
         "testing"
       ],
+      "rule": "Run a gate ONLY when the claim is irreducibly statistical and no deterministic test can stand in. Three named cases qualify: (1) a true pass-rate / variance question; (2) a one-time milestone certification of a landed, already-DT-proven improvement against a sealed bar; (3) hot failure-path aggregate A/B validation — a change to a hot failure-handling path ships only with a controlled live A/B of N≥2 runs fixed vs N≥2 runs reverted (see findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md); this IS an irreducibly-statistical claim, so it is an allowed gate use, and the analyze:latent-blockers pre-step below applies to it like any other gate. Mechanism, classification, recovery, and red-on-revert are deterministic questions — answer them in-process, never with a gate.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 44,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0043",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "A gate is never the iteration loop. Do not gate to \"see if it helped\", to discover the next blocker, or to re-confirm a mechanism a DT already shows. Each run is non-deterministic and costs ~5–10 min of wall-clock you can't get back; a multi-headed run masks every reason but the dominant one.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 56,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0044",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "rolling-restart-core-stability's doneWhen is the sealed variance-aware metric in docs/convergence-donewhen-metric.md (Wilson 95% lower-bound passRate ≥ T(N_nodes) + a hard SAFE floor), NOT \"3 consecutive PASS\". Its convergence axis is met by construction at the hardware floor, and the passRate baseline is sealed once — so a routine change costs ZERO gate-hours and is validated deterministically; you spend one N≥15 gate only to deliberately certify a latency-tail improvement against the sealed bar (and re-seal T upward only if the new Wilson lower bound clears the old one). BEFORE queuing any gate, run npm run analyze:latent-blockers: the gate is a serial max-frequency oracle that shows only the single dominant reason and masks the rest, so do not spend a gate to learn the next layer the corpus already reveals.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 70,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0045",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "ownership",
+        "testing"
+      ],
+      "rule": "Research existing mechanisms first — and verify they are WIRED, not half-built. Before writing new machinery, search for an existing owner-boundary solution — parallel machinery has been built here by accident. But an existing mechanism may be HALF-WIRED, and looks intentional: a hollow intent recorder whose old path is still authoritative, a projection of a projection with no single owner, an escape hatch that quietly bypasses the guard, or evidence/state that is computed but never consumed. Before concluding a mechanism is missing, AND before building anything alongside an existing one, prove its wiring state — that it is the sole authority and actually fires — with an engagement analyzer (e.g. analyze:fix-engagement for distributed drive paths), a red-on-revert deterministic/directed test, or a code trace. When a mechanism is half-wired, the fix is to FINISH it to authority (retire the old path, close the bypass, consume the evidence), NEVER to add a parallel path around it.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 110,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0046",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Never-exercised path → full-chain engagement audit UP FRONT. Before the first live/iterative debug run of a path that has never executed end-to-end in a real cluster (a first demo, a first cutover, a first engagement of a \"designed\" flow), trace the ENTIRE intended chain in one pass — every setter/registry/projection/subscription the design mentions — and list which links have zero production callers. Fix or scope them BEFORE the first run. One code-trace pass costs minutes; discovering the same links serially through live-run failures costs a run each (the demo found FOUR on one path: an unassembled handler map, a reconcile never triggered on change, a field-name contract break, and an unwired state projection).",
+      "score": 212,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 125,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0047",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "testing"
+      ],
+      "rule": "Source fix whose theory depends on a live precondition → precondition witness BEFORE commit. A green DT on an injected seam proves the test, not the fix: two wrong legs (fba0b477/96a0917f, a9344058/066bf78d) each shipped on a green DT whose precondition never occurs on the live path and were reverted after costly live runs. Before committing such a fix, record an engagement/precondition witness — analyze:fix-engagement, analyze:precondition-recurrence, a red-on-revert directed test through the REAL seam, or a code trace proving the live path reaches the change (see solver-quests.md \"Evidence And Change References\").",
+      "score": 212,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 145,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0048",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "testing"
+      ],
       "rule": "A test MUST assert the real, unconditional production behavior, and MUST NEVER set, branch on, or pin a feature flag to make an assertion pass. A green test that only holds while a flag is in one position proves the flag, not the behavior.",
       "score": 212,
       "sources": [
@@ -2471,13 +3405,11 @@
       ]
     },
     {
-      "id": "TEST-0043",
+      "id": "TEST-0049",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
-        "lifecycle",
-        "testing",
-        "governance"
+        "testing"
       ],
       "rule": "Production feature flags are within-session scaffolds only — NO flag survives the session that lands it (user directive 2026-06-26, re-affirmed 2026-07-02). By the end of the session a flag MUST be either baked in unconditionally (the flag deleted and the new behavior made the only path) or removed together with the functionality it gated; a flag MUST NOT linger as a production toggle, owned or otherwise — there is no enrolled multi-session regime. Flags inherited from before this rule are recorded debt, not license (see roadmap.md \"Feature Flag Lifecycle\" for how they are retired). Whichever way the flag resolves, the tests assert the real production behavior — bake the chosen behavior in first, then update the test to assert that unconditional behavior; a test never pins a flag either way.",
       "score": 212,
@@ -2490,7 +3422,7 @@
       ]
     },
     {
-      "id": "TEST-0044",
+      "id": "TEST-0050",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2509,7 +3441,7 @@
       ]
     },
     {
-      "id": "TEST-0045",
+      "id": "TEST-0051",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2526,12 +3458,10 @@
       ]
     },
     {
-      "id": "TEST-0046",
+      "id": "TEST-0052",
       "domain": "testing",
       "strength": "must_not",
-      "tags": [
-        "timeout"
-      ],
+      "tags": [],
       "rule": "Soft-warning two-strikes. The SAME soft warning (a load-flake, a tolerated timeout, a \"known transient\") appearing in two consecutive runs of the same scenario MUST be treated as a failing assertion, not background noise: before the third run, open a finding and either fix the cause, re-derive the threshold with evidence, or promote it to a hard failure — NEVER carry the same \"proceeding anyway\" past run 2.",
       "score": 212,
       "sources": [
@@ -2543,7 +3473,7 @@
       ]
     },
     {
-      "id": "ARCH-0075",
+      "id": "ARCH-0130",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2558,7 +3488,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2573,7 +3503,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2588,7 +3518,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2603,7 +3533,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2618,7 +3548,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2633,7 +3563,7 @@
       ]
     },
     {
-      "id": "ARCH-0076",
+      "id": "ARCH-0131",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2648,12 +3578,11 @@
       ]
     },
     {
-      "id": "ARCH-0077",
+      "id": "ARCH-0132",
       "domain": "architecture",
       "strength": "must",
       "tags": [
-        "lifecycle",
-        "governance"
+        "lifecycle"
       ],
       "rule": "A phase-scoped bridge must either become a runtime-owned bridge or be replaced before teardown.",
       "score": 208,
@@ -2666,7 +3595,7 @@
       ]
     },
     {
-      "id": "ARCH-0078",
+      "id": "ARCH-0133",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -2683,7 +3612,7 @@
       ]
     },
     {
-      "id": "ARCH-0079",
+      "id": "ARCH-0134",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2698,7 +3627,7 @@
       ]
     },
     {
-      "id": "ARCH-0080",
+      "id": "ARCH-0135",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -2713,12 +3642,10 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "readiness"
-      ],
+      "tags": [],
       "rule": "Every fix design and quest report MUST carry a visible REUSED vs EXTENDED vs NEW comparison: which existing mechanism each piece rides, and for anything NEW, evidence that no existing mechanism already covers it.",
       "score": 208,
       "sources": [
@@ -2730,7 +3657,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2747,7 +3674,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2764,7 +3691,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2779,7 +3706,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2813,7 +3740,22 @@
       ]
     },
     {
-      "id": "TEST-0047",
+      "id": "TEST-0053",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [],
+      "rule": "AGENTS.md points to this file rather than restating the traps, and the external auto-memory must link to this file rather than duplicate the traps (see memory-boundary.md).",
+      "score": 208,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 3,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0054",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2830,12 +3772,10 @@
       ]
     },
     {
-      "id": "TEST-0048",
+      "id": "TEST-0055",
       "domain": "testing",
       "strength": "must",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "Tests must exercise the real production code paths.",
       "score": 208,
       "sources": [
@@ -2847,7 +3787,7 @@
       ]
     },
     {
-      "id": "TEST-0049",
+      "id": "TEST-0056",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2864,13 +3804,10 @@
       ]
     },
     {
-      "id": "TEST-0050",
+      "id": "TEST-0057",
       "domain": "testing",
       "strength": "must",
-      "tags": [
-        "timeout",
-        "testing"
-      ],
+      "tags": [],
       "rule": "Timeouts in control-plane logic are hard correctness bugs and must be tested as typed outcomes, not generic strings.",
       "score": 208,
       "sources": [
@@ -2882,7 +3819,7 @@
       ]
     },
     {
-      "id": "TEST-0051",
+      "id": "TEST-0058",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2897,7 +3834,7 @@
       ]
     },
     {
-      "id": "TEST-0052",
+      "id": "TEST-0059",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2914,7 +3851,7 @@
       ]
     },
     {
-      "id": "TEST-0053",
+      "id": "TEST-0060",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2929,13 +3866,12 @@
       ]
     },
     {
-      "id": "TEST-0054",
+      "id": "TEST-0061",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "ownership",
-        "lifecycle",
-        "testing"
+        "lifecycle"
       ],
       "rule": "When a bug involves component ownership, lifecycle persistence, or system-table row mutation, tests must prove that the canonical owner is actually used.",
       "score": 208,
@@ -2948,12 +3884,10 @@
       ]
     },
     {
-      "id": "TEST-0055",
+      "id": "TEST-0062",
       "domain": "testing",
       "strength": "must",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "When a change touches shared metadata reads or writes, tests and CI checks must prove the canonical gateway boundary is still the only runtime ingress.",
       "score": 208,
       "sources": [
@@ -2965,14 +3899,11 @@
       ]
     },
     {
-      "id": "TEST-0056",
+      "id": "TEST-0063",
       "domain": "testing",
       "strength": "must",
       "tags": [
-        "ownership",
-        "rebalancing",
-        "timeout",
-        "testing"
+        "ownership"
       ],
       "rule": "When a change touches control-plane progression (dispatch, rebalance, split, admission progression, operation timeout handling), tests must prove deterministic owner-path behavior rather than only eventual convergence.",
       "score": 208,
@@ -2985,13 +3916,12 @@
       ]
     },
     {
-      "id": "TEST-0057",
+      "id": "TEST-0064",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "lifecycle",
-        "cdc",
-        "testing"
+        "cdc"
       ],
       "rule": "When a change touches CDC propagation, watches, subscriptions, reconnect loops, buffers, queues, or phase-to-runtime handoff, tests must prove continuity and bounded lifetime, not just eventual correctness.",
       "score": 208,
@@ -3004,7 +3934,7 @@
       ]
     },
     {
-      "id": "TEST-0058",
+      "id": "TEST-0065",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3021,7 +3951,7 @@
       ]
     },
     {
-      "id": "TEST-0059",
+      "id": "TEST-0066",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3038,7 +3968,7 @@
       ]
     },
     {
-      "id": "TEST-0060",
+      "id": "TEST-0067",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -3053,7 +3983,7 @@
       ]
     },
     {
-      "id": "TEST-0061",
+      "id": "TEST-0068",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -3068,12 +3998,11 @@
       ]
     },
     {
-      "id": "TEST-0062",
+      "id": "TEST-0069",
       "domain": "testing",
       "strength": "must",
       "tags": [
-        "ownership",
-        "testing"
+        "ownership"
       ],
       "rule": "When an owner path is intentionally unresolved under pressure, publication establishment, or recovery completion, tests must prove the caller receives a structured deferred outcome rather than ambiguous absence.",
       "score": 207,
@@ -3086,12 +4015,11 @@
       ]
     },
     {
-      "id": "TEST-0063",
+      "id": "TEST-0070",
       "domain": "testing",
       "strength": "must",
       "tags": [
-        "readiness",
-        "testing"
+        "readiness"
       ],
       "rule": "When a change touches startup, readiness, admin snapshot, service discovery, or another shared control-plane truth surface, tests must prove readers observe and schedule repair instead of repairing inline.",
       "score": 207,
@@ -3104,7 +4032,7 @@
       ]
     },
     {
-      "id": "TEST-0064",
+      "id": "TEST-0071",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3121,7 +4049,7 @@
       ]
     },
     {
-      "id": "TEST-0065",
+      "id": "TEST-0072",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3138,7 +4066,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3153,7 +4081,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3168,7 +4096,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3183,7 +4111,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3198,7 +4126,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3213,7 +4141,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3230,7 +4158,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3245,12 +4173,10 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "readiness"
-      ],
+      "tags": [],
       "rule": "When a frontier has already parked as cannot_measure (its samples never measured), the verdict rests on untrustworthy data.",
       "score": 206,
       "sources": [
@@ -3262,7 +4188,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3277,7 +4203,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3292,7 +4218,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3307,7 +4233,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3324,7 +4250,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3339,7 +4265,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3354,7 +4280,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3369,7 +4295,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3384,7 +4310,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3399,7 +4325,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3414,7 +4340,7 @@
       ]
     },
     {
-      "id": "ARCH-0081",
+      "id": "ARCH-0136",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -3429,7 +4355,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3446,7 +4372,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3461,7 +4387,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3476,7 +4402,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3491,7 +4417,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3506,7 +4432,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3521,13 +4447,13 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
         "governance"
       ],
-      "rule": "It is a dry run by default; --commit executes the printed git add/commit for the in-scope paths only (it never pushes).",
+      "rule": "The handoff command is a dry run by default; --commit executes the printed git add/commit for the in-scope paths only (it never pushes).",
       "score": 204,
       "sources": [
         {
@@ -3538,7 +4464,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3549,7 +4475,22 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 631,
+          "line": 632,
+          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0046",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress.",
+      "score": 204,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 634,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
         }
       ]
@@ -3559,13 +4500,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "A confirmed or refuted discrimination is investigative progress only; it never satisfies doneWhen and never substitutes for measured product progress.",
+      "rule": "A guard never silently halts a run.",
       "score": 204,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 633,
-          "section": "Quest Workflow > Strategy Ladder > Falsification As Progress"
+          "line": 739,
+          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
@@ -3574,13 +4515,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "A guard never silently halts a run.",
-      "score": 204,
+      "rule": "The override changes the response to a recorded signal; it never mutates a detector verdict, threshold, or doneWhen.",
+      "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 738,
-          "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
+          "line": 830,
+          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     },
@@ -3589,13 +4530,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "The override changes the response to a recorded signal; it never mutates a detector verdict, threshold, or doneWhen.",
+      "rule": "Reflection is additive and reversible: it produces a recorded note and resets a cadence counter; it never changes a verdict, threshold, or doneWhen.",
       "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 826,
-          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
+          "line": 887,
+          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
@@ -3604,13 +4545,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Reflection is additive and reversible: it produces a recorded note and resets a cadence counter; it never changes a verdict, threshold, or doneWhen.",
+      "rule": "Advisories are read-only and never block; they fire on the same conditions the autonomous loop acts on, so supervised and autonomous drivers converge on the same recorded memory.",
       "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 883,
-          "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
+          "line": 925,
+          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
     },
@@ -3619,13 +4560,13 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Advisories are read-only and never block; they fire on the same conditions the autonomous loop acts on, so supervised and autonomous drivers converge on the same recorded memory.",
+      "rule": "Every supervisor outcome is NON-terminal: the supervisor never closes a quest, only honest SOLVED / EXHAUSTED do.",
       "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 921,
-          "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
+          "line": 946,
+          "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
     },
@@ -3634,33 +4575,18 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Every supervisor outcome is NON-terminal: the supervisor never closes a quest, only honest SOLVED / EXHAUSTED do.",
-      "score": 203,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 942,
-          "section": "Quest Workflow > Keep-Alive Supervisor"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0053",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
       "rule": "Do not rely on solve/state/ as durable memory.",
       "score": 203,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 981,
+          "line": 986,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
     },
     {
-      "id": "ARCH-0082",
+      "id": "ARCH-0137",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -3677,7 +4603,7 @@
       ]
     },
     {
-      "id": "ARCH-0083",
+      "id": "ARCH-0138",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3692,7 +4618,7 @@
       ]
     },
     {
-      "id": "ARCH-0084",
+      "id": "ARCH-0139",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
@@ -3707,7 +4633,7 @@
       ]
     },
     {
-      "id": "TEST-0066",
+      "id": "TEST-0073",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -3722,7 +4648,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3737,7 +4663,7 @@
       ]
     },
     {
-      "id": "ARCH-0085",
+      "id": "ARCH-0140",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3752,7 +4678,7 @@
       ]
     },
     {
-      "id": "ARCH-0086",
+      "id": "ARCH-0141",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3769,7 +4695,7 @@
       ]
     },
     {
-      "id": "ARCH-0087",
+      "id": "ARCH-0142",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3786,12 +4712,10 @@
       ]
     },
     {
-      "id": "ARCH-0088",
+      "id": "ARCH-0143",
       "domain": "architecture",
       "strength": "must",
-      "tags": [
-        "ownership"
-      ],
+      "tags": [],
       "rule": "After repeated bugs at one boundary, the next fix must reduce the number of paths, states, or owners that can cross it.",
       "score": 198,
       "sources": [
@@ -3803,7 +4727,7 @@
       ]
     },
     {
-      "id": "ARCH-0089",
+      "id": "ARCH-0144",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3820,7 +4744,7 @@
       ]
     },
     {
-      "id": "ARCH-0090",
+      "id": "ARCH-0145",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3837,7 +4761,7 @@
       ]
     },
     {
-      "id": "ARCH-0091",
+      "id": "ARCH-0146",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3854,11 +4778,10 @@
       ]
     },
     {
-      "id": "ARCH-0092",
+      "id": "ARCH-0147",
       "domain": "architecture",
       "strength": "must",
       "tags": [
-        "ownership",
         "lifecycle"
       ],
       "rule": "Bootstrap, join, and recovery phases may initialize runtime mechanisms, but they must hand off to steady-state owners before phase completion.",
@@ -3877,7 +4800,7 @@
       ]
     },
     {
-      "id": "ARCH-0093",
+      "id": "ARCH-0148",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -3894,7 +4817,7 @@
       ]
     },
     {
-      "id": "ARCH-0094",
+      "id": "ARCH-0149",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3909,7 +4832,7 @@
       ]
     },
     {
-      "id": "ARCH-0095",
+      "id": "ARCH-0150",
       "domain": "architecture",
       "strength": "must",
       "tags": [],
@@ -3924,7 +4847,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3939,7 +4862,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3956,7 +4879,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3971,7 +4894,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3988,22 +4911,7 @@
       ]
     },
     {
-      "id": "ARCH-0096",
-      "domain": "architecture",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Do not treat this pointer as a co-equal source of architecture > policy.",
-      "score": 196,
-      "sources": [
-        {
-          "file": "architecture.md",
-          "line": 10,
-          "section": "root"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0059",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4012,17 +4920,16 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 695,
+          "line": 696,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
     {
-      "id": "ARCH-0097",
+      "id": "ARCH-0151",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
-        "ownership",
         "lifecycle"
       ],
       "rule": "The services row is the canonical example of non-overlapping field owners on one row: identity, lifecycle (ReplicaStateMachine), and raft_role (PartitionService / MessageGroupService) are written by different components on disjoint field subsets — permitted precisely because the subsets do not overlap.",
@@ -4036,7 +4943,7 @@
       ]
     },
     {
-      "id": "ARCH-0098",
+      "id": "ARCH-0152",
       "domain": "architecture",
       "strength": "must_not",
       "tags": [
@@ -4055,7 +4962,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4064,18 +4971,16 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 939,
+          "line": 943,
           "section": "Quest Workflow > Keep-Alive Supervisor"
         }
       ]
     },
     {
-      "id": "ARCH-0099",
+      "id": "ARCH-0153",
       "domain": "architecture",
       "strength": "should",
-      "tags": [
-        "routing"
-      ],
+      "tags": [],
       "rule": "All service communication that should be a message goes through the MessageRouter.",
       "score": 195,
       "sources": [
@@ -4087,11 +4992,28 @@
       ]
     },
     {
-      "id": "TEST-0067",
+      "id": "TEST-0074",
       "domain": "testing",
       "strength": "must",
       "tags": [
         "ownership",
+        "timeout"
+      ],
+      "rule": "Failure matches a known class → ledger lookup BEFORE the fix. When a live failure's signature matches a recorded class — budget_exceeded starvation, join-exits-instead-of-degrading, a gate rejecting on a stale view while fresher evidence exists, formation-vs-steady-state circularity — grep solve/theory-ledger.md and the closure-ledger.md index FIRST. The recorded theory/closure usually names the owner, the intended mechanism, and the refuted fixes; a bespoke patch written without that lookup re-derives (or contradicts) settled work. The fix write-up must state what it reuses or finishes, or why nothing recorded applies.",
+      "score": 194,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 135,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0075",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
         "governance"
       ],
       "rule": "Existing violations in touched files must be fixed when they are part of the same semantic boundary (one owner / one concern, per system-guidelines §2 One Semantic Owner Per Concern). If they are genuinely outside scope, the Quest must name the excluded boundary and record a follow-on Quest/frontier before closure.",
@@ -4105,7 +5027,7 @@
       ]
     },
     {
-      "id": "TEST-0068",
+      "id": "TEST-0076",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4120,7 +5042,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4137,7 +5059,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4152,7 +5074,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4167,7 +5089,7 @@
       ]
     },
     {
-      "id": "TEST-0069",
+      "id": "TEST-0077",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4182,13 +5104,10 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "lifecycle",
-        "governance"
-      ],
+      "tags": [],
       "rule": "A building-block Quest — landing a safe mechanism validated behind a temporary lever — closes legitimately when its OWN sealed doneWhen is met (e.g. \"the lever is SAFE and engages under a flag-on repro\"); the cutover bar above must not block it. But the validation flag is a within-session scaffold only: before the session that landed it ends, the lever is either promoted (baked in unconditionally, flag deleted) or removed with its functionality — NO flag survives the session (see the feature-flag lifecycle in roadmap.md). The Quest may close on its own doneWhen; the flag may not outlive the session.",
       "score": 192,
       "sources": [
@@ -4200,12 +5119,10 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "ownership"
-      ],
+      "tags": [],
       "rule": "Oscillation detection: returning the frontier to a previously-abandoned blocker (owner / boundary / dominantReason) is classified oscillating, never theory support, and is treated as a stall that climbs the ladder. Surfaced as the high-severity blocker-oscillation health signal.",
       "score": 191,
       "sources": [
@@ -4217,7 +5134,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4232,7 +5149,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4247,7 +5164,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4264,7 +5181,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4273,35 +5190,31 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 683,
+          "line": 684,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [
-        "governance"
-      ],
+      "tags": [],
       "rule": "BLOCKED (non-terminal): a recoverable precondition gate (scope pressure, regression-restore, measurement gap, unrecorded/divergent evidence) stopped the current move. The stop is recorded and carries an actionable next command; it never closes the Quest.",
       "score": 190,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 698,
+          "line": 699,
           "section": "Quest Workflow > Terminal And Blocking Conditions"
         }
       ]
     },
     {
-      "id": "ARCH-0100",
+      "id": "ARCH-0154",
       "domain": "architecture",
       "strength": "may",
-      "tags": [
-        "ownership"
-      ],
+      "tags": [],
       "rule": "A shared row may have several field owners only when the owned subsets are explicit and non-overlapping.",
       "score": 190,
       "sources": [
@@ -4318,7 +5231,7 @@
       ]
     },
     {
-      "id": "ARCH-0101",
+      "id": "ARCH-0155",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4335,12 +5248,11 @@
       ]
     },
     {
-      "id": "ARCH-0102",
+      "id": "ARCH-0156",
       "domain": "architecture",
       "strength": "may",
       "tags": [
-        "ownership",
-        "cache"
+        "ownership"
       ],
       "rule": "Consumers may not maintain parallel system-data caches outside the declared owner or SystemTableCache.",
       "score": 190,
@@ -4353,7 +5265,7 @@
       ]
     },
     {
-      "id": "ARCH-0103",
+      "id": "ARCH-0157",
       "domain": "architecture",
       "strength": "may",
       "tags": [
@@ -4370,7 +5282,22 @@
       ]
     },
     {
-      "id": "ARCH-0104",
+      "id": "GOV-0070",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Override-tagged advisories are excluded from soft-first quorum counting (the GUARD_QUORUM advisory ramp described under \"Soft-first / quorum before escalation\", which counts the advisories recorded since the frontier last made progress before a softened gate hard-escalates), so an override never silently spends that quorum ramp.",
+      "score": 189,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 821,
+          "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
+        }
+      ]
+    },
+    {
+      "id": "ARCH-0158",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -4388,9 +5315,7 @@
       "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "governance"
-      ],
+      "tags": [],
       "rule": "Product quests must carry at least one planning link at creation: planDoc for the epic/spec page they advance, parentQuest for quest lineage, or closesCL/specRef/roadmapRow where applicable.",
       "score": 188,
       "sources": [
@@ -4488,7 +5413,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 673,
+          "line": 674,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -4497,10 +5422,7 @@
       "id": "STYLE-0014",
       "domain": "style",
       "strength": "should",
-      "tags": [
-        "readiness",
-        "testing"
-      ],
+      "tags": [],
       "rule": "When a boundary already owns a named mode vocabulary, call sites and tests should use that vocabulary directly instead of restating legacy boolean preferences.",
       "score": 186,
       "sources": [
@@ -4512,7 +5434,7 @@
       ]
     },
     {
-      "id": "TEST-0070",
+      "id": "TEST-0078",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4529,7 +5451,7 @@
       ]
     },
     {
-      "id": "TEST-0071",
+      "id": "TEST-0079",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4546,7 +5468,7 @@
       ]
     },
     {
-      "id": "TEST-0072",
+      "id": "TEST-0080",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4561,7 +5483,7 @@
       ]
     },
     {
-      "id": "TEST-0073",
+      "id": "TEST-0081",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4578,7 +5500,7 @@
       ]
     },
     {
-      "id": "TEST-0074",
+      "id": "TEST-0082",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4602,13 +5524,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 867,
+          "line": 871,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
     {
-      "id": "ARCH-0105",
+      "id": "ARCH-0159",
       "domain": "architecture",
       "strength": "must",
       "tags": [
@@ -4625,7 +5547,7 @@
       ]
     },
     {
-      "id": "TEST-0075",
+      "id": "TEST-0083",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4642,7 +5564,7 @@
       ]
     },
     {
-      "id": "TEST-0076",
+      "id": "TEST-0084",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4690,6 +5612,21 @@
       ]
     },
     {
+      "id": "TEST-0085",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [],
+      "rule": "Cite immutable artifacts, not mutable active directories. Findings that cite live/demo logs by file:line rot silently when the runner's fixed active directory (e.g. data/examples/service-data-affinity-demo/) is wiped by the next run — and bounded archives age out. Every finding that cites a live artifact must name an immutable run identity (the timestamped archive path, a per-run report dir, or a copied excerpt under solve/changes/<quest>/); if the runner only has a mutable active dir, archive it (or copy the cited slices) before the next run and cite that. Subagents reading a shared active dir must first confirm the artifact's mtime/run-window matches the run they were asked about.",
+      "score": 182,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 21,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
+        }
+      ]
+    },
+    {
       "id": "GOV-0081",
       "domain": "governance",
       "strength": "must_not",
@@ -4729,7 +5666,7 @@
         "testing",
         "governance"
       ],
-      "rule": "It runs the audit and refuses on failure, derives the in-scope set purely from the Quest's sealed solve/ artifacts plus the source/test files named inside its own diffs, and lists every other dirty file as out-of-scope so it is never swept in.",
+      "rule": "The handoff command runs the audit and refuses on failure, derives the in-scope set purely from the Quest's sealed solve/ artifacts plus the source/test files named inside its own diffs, and lists every other dirty file as out-of-scope so unrelated work is never swept in.",
       "score": 180,
       "sources": [
         {
@@ -4749,7 +5686,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 648,
+          "line": 649,
           "section": "Quest Workflow > Findings Log"
         }
       ]
@@ -4764,17 +5701,16 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 723,
+          "line": 724,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Operator park (decision terminal)"
         }
       ]
     },
     {
-      "id": "ARCH-0106",
+      "id": "ARCH-0160",
       "domain": "architecture",
       "strength": "may",
       "tags": [
-        "lifecycle",
         "readiness",
         "rebalancing"
       ],
@@ -4800,7 +5736,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 874,
+          "line": 878,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
@@ -4815,7 +5751,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 891,
+          "line": 895,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers"
         }
       ]
@@ -4830,18 +5766,16 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1005,
+          "line": 1010,
           "section": "Quest Workflow > Ledger Consistency"
         }
       ]
     },
     {
-      "id": "TEST-0077",
+      "id": "TEST-0086",
       "domain": "testing",
       "strength": "should",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "No other tests should break",
       "score": 178,
       "sources": [
@@ -4853,7 +5787,7 @@
       ]
     },
     {
-      "id": "ARCH-0107",
+      "id": "ARCH-0161",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -4870,7 +5804,7 @@
       ]
     },
     {
-      "id": "ARCH-0108",
+      "id": "ARCH-0162",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4885,7 +5819,7 @@
       ]
     },
     {
-      "id": "ARCH-0109",
+      "id": "ARCH-0163",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -4900,7 +5834,7 @@
       ]
     },
     {
-      "id": "TEST-0078",
+      "id": "TEST-0087",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4915,12 +5849,11 @@
       ]
     },
     {
-      "id": "TEST-0079",
+      "id": "TEST-0088",
       "domain": "testing",
       "strength": "should",
       "tags": [
-        "ownership",
-        "readiness"
+        "ownership"
       ],
       "rule": "Runtime Quests that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.",
       "score": 176,
@@ -4933,12 +5866,10 @@
       ]
     },
     {
-      "id": "TEST-0080",
+      "id": "TEST-0089",
       "domain": "testing",
       "strength": "should",
-      "tags": [
-        "testing"
-      ],
+      "tags": [],
       "rule": "These tests should be small and targeted.",
       "score": 176,
       "sources": [
@@ -4950,7 +5881,7 @@
       ]
     },
     {
-      "id": "TEST-0081",
+      "id": "TEST-0090",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -5057,7 +5988,7 @@
       ]
     },
     {
-      "id": "TEST-0082",
+      "id": "TEST-0091",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -5072,11 +6003,10 @@
       ]
     },
     {
-      "id": "TEST-0083",
+      "id": "TEST-0092",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
-        "ownership",
         "readiness",
         "cache"
       ],
@@ -5102,13 +6032,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 745,
+          "line": 746,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
         }
       ]
     },
     {
-      "id": "TEST-0084",
+      "id": "TEST-0093",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5123,7 +6053,7 @@
       ]
     },
     {
-      "id": "TEST-0085",
+      "id": "TEST-0094",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5138,7 +6068,7 @@
       ]
     },
     {
-      "id": "TEST-0086",
+      "id": "TEST-0095",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5153,7 +6083,7 @@
       ]
     },
     {
-      "id": "ARCH-0110",
+      "id": "ARCH-0164",
       "domain": "architecture",
       "strength": "should",
       "tags": [
@@ -5170,7 +6100,7 @@
       ]
     },
     {
-      "id": "ARCH-0111",
+      "id": "ARCH-0165",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5185,7 +6115,7 @@
       ]
     },
     {
-      "id": "ARCH-0112",
+      "id": "ARCH-0166",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5258,7 +6188,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 643,
+          "line": 644,
           "section": "Quest Workflow > Findings Log"
         }
       ]
@@ -5290,7 +6220,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 663,
+          "line": 664,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -5307,7 +6237,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 668,
+          "line": 669,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -5322,7 +6252,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 715,
+          "line": 716,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Operator park (decision terminal)"
         }
       ]
@@ -5358,13 +6288,13 @@
       ]
     },
     {
-      "id": "TEST-0087",
+      "id": "TEST-0096",
       "domain": "testing",
       "strength": "may",
       "tags": [
         "testing"
       ],
-      "rule": "The two together close the loop — neither tests nor production may smuggle a flag into the proof.",
+      "rule": "The test-only-paths rule and this flag-coupling rule together close the loop — neither tests nor production may smuggle a flag into the proof.",
       "score": 160,
       "sources": [
         {
@@ -5375,7 +6305,7 @@
       ]
     },
     {
-      "id": "TEST-0088",
+      "id": "TEST-0097",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -5392,7 +6322,7 @@
       ]
     },
     {
-      "id": "TEST-0089",
+      "id": "TEST-0098",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5410,8 +6340,10 @@
       "id": "GOV-0106",
       "domain": "governance",
       "strength": "should",
-      "tags": [],
-      "rule": "It is advisory rather than terminal, but a high-severity signal should usually produce a finding, a narrower theory, or a split Quest before more code is changed.",
+      "tags": [
+        "governance"
+      ],
+      "rule": "Scope pressure is advisory rather than terminal, but a high-severity signal should usually produce a finding, a narrower theory, or a split Quest before more code is changed.",
       "score": 155,
       "sources": [
         {
@@ -5455,9 +6387,7 @@
       "id": "GOV-0109",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "readiness"
-      ],
+      "tags": [],
       "rule": "Before re-deriving an expensive analysis by hand, you MUST first sort the candidate artifacts by modification time and read the freshest precomputed result, reusing a costly scan already on disk rather than re-running it for a different slice.",
       "score": 154,
       "sources": [
@@ -5472,10 +6402,7 @@
       "id": "GOV-0110",
       "domain": "governance",
       "strength": "must",
-      "tags": [
-        "testing",
-        "style"
-      ],
+      "tags": [],
       "rule": "Any steering rule that can be enforced by a machine check (lint rule, ratchet, guard script, probe) MUST become one, wired into an existing gate (test:static, pre-commit, steering:check), with the prose demoted to a pointer at the check.",
       "score": 154,
       "sources": [
@@ -5526,7 +6453,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 665,
+          "line": 666,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers"
         }
       ]
@@ -5547,7 +6474,7 @@
       ]
     },
     {
-      "id": "ARCH-0113",
+      "id": "ARCH-0167",
       "domain": "architecture",
       "strength": "may",
       "tags": [],
@@ -5571,8 +6498,23 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 753,
+          "line": 754,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0099",
+      "domain": "testing",
+      "strength": "may",
+      "tags": [],
+      "rule": "A SERIES OF REFUTALS is a signal to widen research, not to invent a cleverer variant. When several candidate fixes have each been adversarially killed for a different reason (the whack-a-mole / rotating-dominant-residual / coupled-invariant signature above), the likeliest truth is that the whole fix class is wrong — and the phenomenon is almost always one the field (and often this repo) has already named and solved. Before committing effort to the next bespoke variant, STOP and triangulate prior art across THREE sources, in this order, capturing each in the change dir as a cited report: - This codebase's own history — grep git log, solve/theory-ledger.md, the per-file closure ledger, and external memory for a prior fix to the same class (not just the same symptom). Parallel machinery gets built here by accident; a shipped TLA+-modeled fix for the identical oscillation shape may already exist.; - Comparable production systems — how do CockroachDB, TiKV/PD, etcd/raft, Consul, KRaft, Kubernetes solve this class? The canonical mechanism usually has a name (a ReadIndex/lease freshness read, a self-revert/undo-simulation deadband, Pre-Vote, learner-first membership, an HPA stabilization window). Adopt the named wheel instead of hand-rolling a worse one.; - Theory / papers — reduce the bug to its canonical form (e.g. relay input + lagging sensor + no-deadband discrete decision = a relay-feedback limit cycle) so you can see the independent cuts that each break it, and pick the cut with the best precedent — not the first patch that moves a metric. This pass is cheap relative to one live gate run and routinely reveals that the surviving bespoke path (a) reinvents a wheel the repo lacks raw materials for, while a cheaper, better-precedented cut already exists. Fold the result into the coupled-invariant step-back reflection above; the exemplar is solve/changes/formation-ledger-self-move-blocks-cluster-ops/research-SYNTHESIS.md.",
+      "score": 146,
+      "sources": [
+        {
+          "file": "operational-ground-truth.md",
+          "line": 154,
+          "section": "Operational Ground Truth (distributed work — don't get fooled)"
         }
       ]
     },
@@ -5580,8 +6522,10 @@
       "id": "GOV-0116",
       "domain": "governance",
       "strength": "may",
-      "tags": [],
-      "rule": "It is git-ignored and may be rebuilt from the Quest plus event log.",
+      "tags": [
+        "cache"
+      ],
+      "rule": "The derived cache is git-ignored and may be rebuilt from the Quest plus event log.",
       "score": 145,
       "sources": [
         {
@@ -5607,7 +6551,7 @@
       ]
     },
     {
-      "id": "ARCH-0114",
+      "id": "ARCH-0168",
       "domain": "architecture",
       "strength": "should",
       "tags": [],
@@ -5697,7 +6641,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 980,
+          "line": 985,
           "section": "Quest Workflow > Tracked Versus Regenerable"
         }
       ]
@@ -5712,28 +6656,13 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 854,
+          "line": 858,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn"
         }
       ]
     },
     {
       "id": "GOV-0124",
-      "domain": "governance",
-      "strength": "may",
-      "tags": [],
-      "rule": "Illustrative example — may be stale, not policy. The following is a concrete > worked example of framing a system theory, tied to one live Quest.",
-      "score": 125,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 955,
-          "section": "Quest Workflow > Known System-Theory Hypothesis (rolling-restart)"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0125",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -5744,18 +6673,17 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 816,
+          "line": 817,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch"
         }
       ]
     },
     {
-      "id": "GOV-0126",
+      "id": "GOV-0125",
       "domain": "governance",
       "strength": "should",
       "tags": [
-        "ownership",
-        "testing"
+        "ownership"
       ],
       "rule": "When choosing how to solve a problem, you SHOULD prioritize correctness and systemic, owner-boundary-aligned thinking over the fewest-lines or fastest-to-write change, because the thorough solution is cheaper here over the life of the system.",
       "score": 122,
@@ -5768,5 +6696,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-10T10:40:36.103Z"
+  "generatedAt": "2026-07-10T11:09:29.903Z"
 }

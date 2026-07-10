@@ -1,8 +1,9 @@
 # Operational Ground Truth (distributed work — don't get fooled)
 
-This is the **single canonical home** for the distributed-work traps. `AGENTS.md`
-points here rather than restating them, and the external auto-memory must link here
-rather than duplicate them (see [`memory-boundary.md`](memory-boundary.md)).
+This file is the **single canonical home** for the distributed-work traps.
+`AGENTS.md` points to this file rather than restating the traps, and the external
+auto-memory must link to this file rather than duplicate the traps (see
+[`memory-boundary.md`](memory-boundary.md)).
 
 These traps repeatedly cost agents large amounts of time. Internalize them before
 any distributed-harness or convergence work:

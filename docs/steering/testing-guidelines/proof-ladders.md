@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-06-29
 ---
 
 > **Canonical source.** Quest-driven validation, static guardrail preflight, file-size ratchet. Index: [`INDEX.md`](INDEX.md).

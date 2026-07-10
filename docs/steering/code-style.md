@@ -4,7 +4,7 @@ status: canonical
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/style.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-02
 ---
 
 > **Canonical source.** Lint, formatting, naming. Regenerate the style pack with `npm run steering:llm:pack`.

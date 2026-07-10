@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
-last_reviewed: 2026-06-01
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** The Solver is the repository work system. Its unit of
@@ -252,9 +252,9 @@ Do not keep patching under a theory whose owner path is no longer current.
 `health` and `report` also project **Scope Pressure** from the Quest's recorded
 `diff:<path>` attempt artifacts. Scope pressure flags broad owner areas, large
 diff stacks, mixed runtime/workflow changes, and mixed runtime/harness changes.
-It is advisory rather than terminal, but a high-severity signal should usually
-produce a finding, a narrower theory, or a split Quest before more code is
-changed.
+Scope pressure is advisory rather than terminal, but a high-severity signal
+should usually produce a finding, a narrower theory, or a split Quest before
+more code is changed.
 
 ## Regular Commit (No Push)
 
@@ -586,11 +586,12 @@ then `git commit -m "<quest>: <summary>"`. Do not push (see "Regular Commit
 (No Push)" above).
 
 `node scripts/solve.js handoff --id <quest>` computes this scope-safe pathspec.
-It runs the audit and refuses on failure, derives the in-scope set purely from
-the Quest's sealed `solve/` artifacts plus the source/test files named inside its
-own diffs, and lists every other dirty file as out-of-scope so it is never
-swept in. It is a dry run by default; `--commit` executes the printed
-`git add`/`commit` for the in-scope paths only (it never pushes).
+The `handoff` command runs the audit and refuses on failure, derives the in-scope
+set purely from the Quest's sealed `solve/` artifacts plus the source/test files
+named inside its own diffs, and lists every other dirty file as out-of-scope so
+unrelated work is never swept in. The `handoff` command is a dry run by default;
+`--commit` executes the printed `git add`/`commit` for the in-scope paths only
+(it never pushes).
 
 ## Strategy Ladder
 
@@ -817,8 +818,11 @@ Semantics:
   `BLOCKED_SCOPE`. The command **refuses** to override honesty/integrity
   invariants — regression-restore, measurement, unrecorded-evidence, and
   metric-projection guards cannot be bypassed this way.
-- Override-tagged advisories are **excluded** from soft-first quorum counting, so
-  an override never silently spends the quorum ramp.
+- Override-tagged advisories are **excluded** from soft-first quorum counting
+  (the `GUARD_QUORUM` advisory ramp described under "Soft-first / quorum before
+  escalation", which counts the advisories recorded since the frontier last made
+  progress before a softened gate hard-escalates), so an override never silently
+  spends that quorum ramp.
 - A reason is **mandatory** (`--reason` non-empty); the override is itself a
   recorded event (`guard-override`) in the append-only log, so every bypass is
   auditable.
@@ -952,10 +956,11 @@ it only re-invokes the same executor through the generic file contract.
 
 ## Known System-Theory Hypothesis (rolling-restart)
 
-> **Illustrative example — may be stale, not policy.** The following is a concrete
-> worked example of framing a system theory, tied to one live Quest. It is a
-> hypothesis-to-validate, not a steering rule; verify it against a current measured
-> run before relying on it, and expect it to drift as that Quest progresses.
+> **Illustrative example — a possibly-stale snapshot, not policy.** The following
+> is a concrete worked example of framing a system theory, tied to one live Quest.
+> Treat it as a hypothesis-to-validate, not a steering rule; verify it against a
+> current measured run before relying on it, and expect it to drift as that Quest
+> progresses.
 
 For the rolling-restart core-stability quest, repeated coupled-invariant
 oscillation (rr-D) between the `publication_converged` / `priority_spread_settled`

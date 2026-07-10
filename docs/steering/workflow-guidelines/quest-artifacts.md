@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
-last_reviewed: 2026-06-01
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Quest artifact ownership and tracked data. Index:
@@ -37,8 +37,8 @@ Track `solve/log/` because it is the append-only source of truth for attempts,
 findings, and terminal events. Track `solve/report/` and `solve/changes/` when
 they document committed Quest progress or closure.
 
-`solve/state/` is derived cache. It is git-ignored and may be rebuilt from the
-Quest plus event log.
+`solve/state/` is derived cache. The derived cache is git-ignored and may be
+rebuilt from the Quest plus event log.
 
 ## Artifact Boundaries
 

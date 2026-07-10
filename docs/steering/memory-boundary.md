@@ -1,8 +1,8 @@
 # Memory boundary — in-repo steering vs external auto-memory
 
-Two memory systems serve this project. They have different jobs and MUST NOT
-duplicate each other; duplication is how the same "truth" drifts into three
-conflicting copies.
+Two memory systems serve this project. The in-repo and external memory systems
+have different jobs and MUST NOT duplicate each other; duplication is how the
+same "truth" drifts into three conflicting copies.
 
 ## The two systems
 

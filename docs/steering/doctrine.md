@@ -3,7 +3,7 @@ scope: architecture
 status: pointer
 always_load: false
 moved_to: docs/steering/doctrine/INDEX.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-06-26
 ---
 
 > **Pointer.** The Lagrange Engineering Doctrine has been split into a topical sub-directory. See [`doctrine/INDEX.md`](doctrine/INDEX.md). The LLM pack generator now reads rules directly from the doctrine sub-files.

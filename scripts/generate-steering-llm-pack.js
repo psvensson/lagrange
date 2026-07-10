@@ -49,6 +49,43 @@ const LOCAL_STR_UNKNOWN_RULE = '<unknown-rule>';
 const LOCAL_STR_UNKNOWN_OUTPUT = '<unknown-output>';
 const LOCAL_STR_MANUAL = 'manual';
 const LOCAL_STR_GENERATED = 'generated';
+const LOCAL_STR_REGEX_FLAGS_CASE_INSENSITIVE_UNICODE = 'iu';
+const LOCAL_STR_CANONICAL = 'canonical';
+const LOCAL_STR_ALIAS = 'alias';
+const LOCAL_STR_FRONTMATTER_DELIMITER = '---';
+const LOCAL_STR_ALIAS_MATCH_REQUIREMENT =
+  'Every ruleAliases ref must carry a match substring of the rule text ' +
+  'so a shifted line anchor fails loudly instead of silently repointing.';
+const LOCAL_STR_ALIAS_ANCHOR_DRIFT =
+  're-locate the rule in the source file and update llm-pack.config.json.';
+const LOCAL_STR_PIN_MATCH_UPDATE =
+  'to the current rule text in that source file.';
+const LOCAL_STR_RULE_MATCH_UPDATE =
+  'rule text in that source file.';
+const LOCAL_STR_SOURCE_CONTRIBUTION_HEADER =
+  'Per-source contribution (master rules: in >=1 pack / below cap):';
+const LOCAL_STR_SOURCE_BELOW_CAP_WARNING =
+  'Its rules are queryable via `npm run rule` but never pack-loaded; ' +
+  'raise its priority or take a quota decision if that is not intended.';
+const LOCAL_STR_SOURCE_WITHOUT_RULES_WARNING =
+  'extracted rules; its prose has no recognized normative sentences ' +
+  '(or every candidate deduped into another source).';
+const LOCAL_STR_POINTER = 'pointer';
+const LOCAL_STR_POINTER_SOURCE_WARNING =
+  '(frontmatter `status: pointer`; pointers route lookups and are ' +
+  'not rule sources; remove it from llm-pack.config.json sources).';
+const LOCAL_STR_ALIAS_REFERENCE_FAILURE =
+  'ruleAliases references not found (line anchor drifted or rule text ' +
+  'no longer extracted):\n  - ';
+const LOCAL_STR_LIST_ITEM_SEPARATOR = '\n  - ';
+const LOCAL_STR_FULL_RULE_CORPUS = 'full rule corpus';
+const LOCAL_STR_MANUAL_OUTPUT_DEAD_KEYS =
+  'its maxRules/domainCaps are never read; remove the dead keys ' +
+  'from llm-pack.config.json.';
+const FRONTMATTER_STATUS_MISSING = Object.freeze({
+  found: false,
+  status: '',
+});
 
 const DEFAULT_CONFIG_PATH = path.join(
   'docs',
@@ -78,8 +115,16 @@ const EXIT_CODE_FAILURE = 1;
 const JSON_INDENT_SPACES = 2;
 const DEFAULT_RULE_PREFIX = 'RULE';
 
-const NORMATIVE_PATTERN =
-  /\b(MUST\s+NOT|SHALL\s+NOT|MUST|SHALL|NEVER|SHOULD|MAY|REQUIRED|DO\s+NOT)\b|^ONLY\b|\b(?:IS|ARE|BE)\s+FORBIDDEN\b|\bFORBIDDEN\s+TO\b/iu;
+// FORBIDDEN is recognized in every authoring shape findings/README.md promises:
+// "is/are/be FORBIDDEN", "FORBIDDEN TO", "FORBIDDEN:", "FORBIDDEN —", and bare
+// FORBIDDEN as the sentence lead ("FORBIDDEN: do X").
+const FORBIDDEN_PATTERN =
+  /\b(?:IS|ARE|BE)\s+FORBIDDEN\b|\bFORBIDDEN\s+TO\b|\bFORBIDDEN\s*[:—–-]|^FORBIDDEN\b/iu;
+const NORMATIVE_PATTERN = new RegExp(
+  '\\b(MUST\\s+NOT|SHALL\\s+NOT|MUST|SHALL|NEVER|SHOULD|MAY|REQUIRED|DO\\s+NOT)\\b|^ONLY\\b|' +
+  FORBIDDEN_PATTERN.source,
+  'iu',
+);
 const CONTEXT_DEPENDENT_NORMATIVE_PATTERN =
   /\bthere\b/iu;
 
@@ -104,6 +149,30 @@ const DOMAIN_TAG_KEYWORDS = Object.freeze({
   style: ['eslint', 'lint', 'naming', 'magic values', 'constants'],
   governance: ['roadmap', 'edition', 'scope', 'agpl'],
 });
+
+// Word-boundary matchers for DOMAIN_TAG_KEYWORDS. Substring matching misfiled
+// rules ('ready' matched "already", 'test' matched "test ≤ 1500"), which put
+// them under the wrong pack section heading. Multi-word keywords tolerate any
+// whitespace run between words.
+function buildKeywordPattern(keyword) {
+  const escaped = String(keyword)
+    .split(/\s+/u)
+    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
+    .join('\\s+');
+  return new RegExp(
+    `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`,
+    LOCAL_STR_REGEX_FLAGS_CASE_INSENSITIVE_UNICODE,
+  );
+}
+
+const DOMAIN_TAG_PATTERNS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(DOMAIN_TAG_KEYWORDS).map(([tag, keywords]) => [
+      tag,
+      keywords.map(buildKeywordPattern),
+    ]),
+  ),
+);
 
 const NON_RULE_SECTION_HEADINGS = new Set([
   'document role',
@@ -174,8 +243,15 @@ function isIncompleteRuleText(text = '') {
 const APHORISM_ADMONITION_PATTERN =
   /^(?:STOP|DO\s+NOT\s+IGNORE|DO\s+NOT\s+DEFER|ANALYZE|ANALYSE|INVESTIGATE|VERIFY|FIX|WARNING|CAUTION|NOTE)\b\s*[-—:]/u;
 const APHORISM_ALLCAPS_LABEL_PATTERN = /^[A-Z][A-Z\s]{1,30}[A-Z]\s*[-—:]\s/u;
+// Sentence-leading pronoun + verb (including copulas/possession: is/are/was/
+// were/has/have/had) with no antecedent in the rule text — the rule cannot be
+// understood standalone. Expletive normative constructions ("It is FORBIDDEN
+// to ...", "It is REQUIRED to ...") are exempt: there the "It" is a dummy
+// subject, not a dangling reference.
+const APHORISM_EXPLETIVE_NORMATIVE_PATTERN =
+  /^It\s+is\s+(?:NOT\s+)?(?:FORBIDDEN|REQUIRED|MANDATORY)\b/u;
 const APHORISM_DANGLING_PRONOUN_PATTERN =
-  /^(?:They|It|This|That|These|Those)\s+(?:do|does|did|must|should|shall|will|can|cannot|may|might|need|needs|require|requires|replace|replaces|prevent|prevents|apply|applies|run|runs|use|uses|fail|fails|own|owns|hold|holds|enforce|enforces)\b/u;
+  /^(?:They|It|This|That|These|Those)\s+(?:is|are|was|were|has|have|had|do|does|did|must|should|shall|will|can|cannot|may|might|need|needs|require|requires|replace|replaces|prevent|prevents|apply|applies|run|runs|use|uses|fail|fails|own|owns|hold|holds|enforce|enforces)\b/u;
 
 function classifyAphoristicText(text = '') {
   const normalized = normalizeWhitespace(text);
@@ -188,7 +264,10 @@ function classifyAphoristicText(text = '') {
   if (APHORISM_ALLCAPS_LABEL_PATTERN.test(normalized)) {
     return 'allcaps_label';
   }
-  if (APHORISM_DANGLING_PRONOUN_PATTERN.test(normalized)) {
+  if (
+    APHORISM_DANGLING_PRONOUN_PATTERN.test(normalized) &&
+    !APHORISM_EXPLETIVE_NORMATIVE_PATTERN.test(normalized)
+  ) {
     return 'dangling_pronoun';
   }
   return null;
@@ -241,7 +320,7 @@ function inferStrength(text) {
   const normalized = String(text || '').toUpperCase();
   if (
     /(MUST\s+NOT|SHALL\s+NOT|NEVER|DO\s+NOT)/u.test(normalized) ||
-    /\b(?:IS|ARE|BE)\s+FORBIDDEN\b|\bFORBIDDEN\s+TO\b/u.test(normalized)
+    FORBIDDEN_PATTERN.test(normalized)
   ) {
     return LOCAL_STR_MUST_NOT;
   }
@@ -257,11 +336,25 @@ function inferStrength(text) {
   return LOCAL_STR_INFO;
 }
 
+// Parenthesized asides ("(e.g. in scripts/solve/, src/rebalancer/, and some
+// test names)") illustrate a rule; they do not define its subject. Keywords
+// inside them misfile rules under unrelated pack section headings, so strip
+// them before tag inference. Repeats until stable to unwrap nesting.
+function stripParentheticalAsides(text) {
+  let current = String(text || '');
+  let previous;
+  do {
+    previous = current;
+    current = current.replace(/\([^()]*\)/gu, LOCAL_STR_SPACE);
+  } while (current !== previous);
+  return current;
+}
+
 function inferTags(text) {
-  const normalized = String(text || '').toLowerCase();
+  const normalized = stripParentheticalAsides(text);
   const tags = [];
-  for (const [tag, keywords] of Object.entries(DOMAIN_TAG_KEYWORDS)) {
-    if (keywords.some((keyword) => normalized.includes(keyword))) {
+  for (const [tag, patterns] of Object.entries(DOMAIN_TAG_PATTERNS)) {
+    if (patterns.some((pattern) => pattern.test(normalized))) {
       tags.push(tag);
     }
   }
@@ -869,6 +962,29 @@ function locateRuleBySourceRef(rules = [], target = {}) {
   return null;
 }
 
+// Line anchors rot silently when a source doc gains or loses lines above the
+// anchored rule (a doc edit once repointed the "synonyms ban" alias at an
+// unrelated rule). Every alias ref therefore carries a REQUIRED `match`
+// substring of the rule text, asserted here at generation time.
+function assertAliasMatch(rule, ref = {}, role, note) {
+  const where = `${ref.file || '<no file>'}:${ref.line ?? '<no line>'}`;
+  const label = note ? ` ("${note}")` : '';
+  if (typeof ref.match !== 'string' || ref.match.length === 0) {
+    throw new Error(
+      `ruleAliases ${role} ref ${where}${label} has no \`match\` field. ` +
+      LOCAL_STR_ALIAS_MATCH_REQUIREMENT,
+    );
+  }
+  if (!rule.text.includes(ref.match)) {
+    throw new Error(
+      `ruleAliases ${role} ref ${where}${label} resolved to a rule that does ` +
+      `not contain its \`match\` substring.\n  expected match: "${ref.match}"` +
+      `\n  actual rule text: "${rule.text}"\n  The line anchor has drifted — ` +
+      LOCAL_STR_ALIAS_ANCHOR_DRIFT,
+    );
+  }
+}
+
 function applyRuleAliases(allRules = [], ruleAliases = []) {
   const aliasStats = {pairs: 0, missing: []};
   for (const entry of ruleAliases) {
@@ -877,12 +993,19 @@ function applyRuleAliases(allRules = [], ruleAliases = []) {
       aliasStats.missing.push({role: 'canonical', ref: entry.canonical || null});
       continue;
     }
+    assertAliasMatch(
+      canonicalRule,
+      entry.canonical,
+      LOCAL_STR_CANONICAL,
+      entry.note,
+    );
     for (const aliasRef of entry.aliases || []) {
       const aliasRule = locateRuleBySourceRef(allRules, aliasRef);
       if (!aliasRule) {
         aliasStats.missing.push({role: 'alias', ref: aliasRef});
         continue;
       }
+      assertAliasMatch(aliasRule, aliasRef, LOCAL_STR_ALIAS, entry.note);
       if (aliasRule.id === canonicalRule.id) {
         continue;
       }
@@ -897,13 +1020,41 @@ function applyRuleAliases(allRules = [], ruleAliases = []) {
   return aliasStats;
 }
 
+// Pins reference file + match substring (NOT rule IDs, which renumber across
+// regens). A pin that matches nothing is a hard failure: pins exist because
+// the rule is load-bearing, so it must never drop out silently.
+function resolvePinnedRules(allRules = [], output = {}) {
+  const resolved = [];
+  for (const pin of output.pinnedRules || []) {
+    const rule = allRules.find((candidate) =>
+      !candidate.canonical_of &&
+      (output.domains || []).includes(candidate.domain) &&
+      (candidate.sources || []).some((source) => source.file === pin.file) &&
+      candidate.text.includes(pin.match));
+    if (!rule) {
+      throw new Error(
+        `pinnedRules entry for output "${output.name}" matched no rule: ` +
+        `file=${pin.file} match="${pin.match}". Update the match substring ` +
+        LOCAL_STR_RULE_MATCH_UPDATE,
+      );
+    }
+    if (!resolved.includes(rule)) {
+      resolved.push(rule);
+    }
+  }
+  return resolved;
+}
+
 function selectOutputRules(allRules = [], output = {}) {
   const domains = new Set(output.domains || []);
   const maxRules = Number.isFinite(output.maxRules) ? output.maxRules : 80;
   const domainCaps = output.domainCaps || {};
+  const pinned = new Set(resolvePinnedRules(allRules, output));
+  const remainderBudget = Math.max(0, maxRules - pinned.size);
 
   const selected = [];
   const countsByDomain = new Map();
+  let remainderCount = 0;
 
   for (const rule of allRules) {
     if (!domains.has(rule.domain)) {
@@ -913,8 +1064,15 @@ function selectOutputRules(allRules = [], output = {}) {
       continue;
     }
 
-    if (selected.length >= maxRules) {
-      break;
+    // Pinned rules are force-included regardless of maxRules/domainCaps;
+    // the caps apply to the remainder.
+    if (pinned.has(rule)) {
+      selected.push(rule);
+      continue;
+    }
+
+    if (remainderCount >= remainderBudget) {
+      continue;
     }
 
     const currentCount = countsByDomain.get(rule.domain) || 0;
@@ -927,10 +1085,32 @@ function selectOutputRules(allRules = [], output = {}) {
     }
 
     selected.push(rule);
+    remainderCount += RULE_COUNT_INCREMENT;
     countsByDomain.set(rule.domain, currentCount + RULE_COUNT_INCREMENT);
   }
 
   return selected;
+}
+
+// Attach a `machine_check` marker to every rule matched by a config
+// machineChecks entry (file + match substring -> the command that actually
+// enforces the rule). Zero matches is a hard failure so entries cannot rot.
+function applyMachineChecks(allRules = [], machineChecks = []) {
+  for (const entry of machineChecks) {
+    const matched = allRules.filter((rule) =>
+      (rule.sources || []).some((source) => source.file === entry.file) &&
+      rule.text.includes(entry.match));
+    if (matched.length === 0) {
+      throw new Error(
+        `machineChecks entry matched no rule: file=${entry.file} ` +
+        `match="${entry.match}". Update the match substring to the current ` +
+        LOCAL_STR_PIN_MATCH_UPDATE,
+      );
+    }
+    for (const rule of matched) {
+      rule.machine_check = entry.check;
+    }
+  }
 }
 
 function validateCompleteRules(rules = [], outputName = LOCAL_STR_UNKNOWN_OUTPUT) {
@@ -984,7 +1164,12 @@ function countMarkdownRules(content = '') {
     .length;
 }
 
-function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
+function renderPackMarkdown(
+  output = {},
+  rules = [],
+  domainTotal = null,
+  domainTotalWithAliases = null,
+) {
   validateCompleteRules(rules, output.name);
   validateRulesHaveTriggerAndCitation(rules, output.name);
 
@@ -1041,6 +1226,16 @@ function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
   }
 
   const sourceForScope = output.name || 'pack';
+  // rules-index.md lists every rule INCLUDING canonical_of aliases, while pack
+  // totals count masters only. Surface both so the two artifacts reconcile by
+  // inspection (e.g. "40 of 111 architecture rules (114 incl. cross-domain
+  // aliases)" vs 114 architecture rows in the index).
+  const aliasSuffix =
+    (Number.isFinite(domainTotalWithAliases) &&
+      Number.isFinite(domainTotal) &&
+      domainTotalWithAliases > domainTotal) ?
+      ` (${domainTotalWithAliases} incl. cross-domain aliases; alias rows are marked in \`rules-index.md\`)` :
+      '';
   const body = [
     '---',
     `scope: ${sourceForScope}`,
@@ -1059,8 +1254,8 @@ function renderPackMarkdown(output = {}, rules = [], domainTotal = null) {
     'Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.',
     '',
     (Number.isFinite(domainTotal) && domainTotal > rules.length) ?
-      `> **Priority subset — showing ${rules.length} of ${domainTotal} ${sourceForScope} rules** (capped per \`maxRules\` in \`llm-pack.config.json\`). The IDs below are NOT gapless: ${domainTotal - rules.length} lower-priority rules are omitted. For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :
-      `> **Complete pack.** All ${rules.length} ${sourceForScope} rules are included below.`,
+      `> **Priority subset — showing ${rules.length} of ${domainTotal} ${sourceForScope} rules**${aliasSuffix} (capped per \`maxRules\` in \`llm-pack.config.json\`). The IDs below are NOT gapless: ${domainTotal - rules.length} lower-priority rules are omitted. For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :
+      `> **Complete pack.** All ${rules.length} ${sourceForScope} rules are included below${aliasSuffix}.`,
     '',
     '## Rules',
     '',
@@ -1172,6 +1367,20 @@ function renderReadme(manifestEntries = []) {
   return lines.join(LOCAL_STR_NEWLINE);
 }
 
+// Extract `status:` from a leading YAML frontmatter block, if any.
+function frontmatterStatus(content = '') {
+  const text = String(content || '');
+  if (!text.startsWith(LOCAL_STR_FRONTMATTER_DELIMITER)) {
+    return FRONTMATTER_STATUS_MISSING;
+  }
+  const end = text.indexOf('\n---', 3);
+  if (end === -1) {
+    return FRONTMATTER_STATUS_MISSING;
+  }
+  const match = text.slice(0, end).match(/^status:\s*(\S+)\s*$/mu);
+  return match ? {found: true, status: match[1]} : FRONTMATTER_STATUS_MISSING;
+}
+
 async function readJson(filePath) {
   const raw = await fs.readFile(filePath, 'utf8');
   return JSON.parse(raw);
@@ -1230,6 +1439,44 @@ function stableGeneratedAt(existingPayload, nextPayload) {
     new Date().toISOString();
 }
 
+// Per-source visibility: how many master rules each configured source landed
+// in at least one pack, and how many sit below every cap. A source whose rules
+// ALL sit below cap is loudly flagged — it is configured but invisible in the
+// always-loaded packs (still queryable via `npm run rule`).
+function reportPerSourceContribution(sources, allRules, selectedByOutput) {
+  const selectedAnywhere = new Set();
+  for (const rules of selectedByOutput.values()) {
+    for (const rule of rules) {
+      selectedAnywhere.add(rule);
+    }
+  }
+  console.log(LOCAL_STR_SOURCE_CONTRIBUTION_HEADER);
+  for (const source of sources) {
+    const sourceRules = allRules.filter((rule) =>
+      !rule.canonical_of &&
+      (rule.sources || []).some((ref) => ref.file === source.file));
+    const emitted = sourceRules.filter((rule) => selectedAnywhere.has(rule)).length;
+    const belowCap = sourceRules.length - emitted;
+    console.log(
+      `- ${source.file}: ${emitted} in packs, ${belowCap} below cap ` +
+      `(${sourceRules.length} rules total)`,
+    );
+    if (sourceRules.length > 0 && emitted === 0) {
+      console.warn(
+        `steering:llm:pack: WARN source ${source.file} contributes ZERO ` +
+        `rules to every pack (${sourceRules.length} rules, all below cap). ` +
+        LOCAL_STR_SOURCE_BELOW_CAP_WARNING,
+      );
+    }
+    if (sourceRules.length === 0) {
+      console.warn(
+        `steering:llm:pack: WARN source ${source.file} yielded ZERO ` +
+        LOCAL_STR_SOURCE_WITHOUT_RULES_WARNING,
+      );
+    }
+  }
+}
+
 async function main() {
   const arg = process.argv[2];
   if (arg === LOCAL_STR_HELP || arg === LOCAL_STR_H) {
@@ -1248,9 +1495,19 @@ async function main() {
   const llmDir = ensureRelativePath(workspaceRoot, config.llmDir);
 
   const candidates = [];
+  const ruleSources = [];
   for (const source of config.sources || []) {
     const absoluteFilePath = path.join(sourceDir, source.file);
     const content = await fs.readFile(absoluteFilePath, 'utf8');
+    const frontmatter = frontmatterStatus(content);
+    if (frontmatter.found && frontmatter.status === LOCAL_STR_POINTER) {
+      console.warn(
+        `steering:llm:pack: WARN skipping pointer source ${source.file} ` +
+        LOCAL_STR_POINTER_SOURCE_WARNING,
+      );
+      continue;
+    }
+    ruleSources.push(source);
     const sourceCandidates = parseMarkdownCandidates(content, {
       file: source.file,
       domain: source.domain,
@@ -1262,13 +1519,22 @@ async function main() {
   const deduped = dedupeCandidates(candidates).sort(compareRules);
   const {allRules} = assignRuleIds(deduped, config.domainPrefixes || {});
   const aliasStats = applyRuleAliases(allRules, config.ruleAliases || []);
-  for (const missing of aliasStats.missing) {
-    const ref = missing.ref || {};
-    console.warn(
-      `steering:llm:pack: ruleAliases ${missing.role} reference not found: ` +
-      `${ref.file || '<no file>'}:${ref.line ?? '<no line>'}`,
+  if (aliasStats.missing.length > 0) {
+    const details = aliasStats.missing.map((missing) => {
+      const ref = missing.ref || {};
+      return `${missing.role}: ${ref.file || '<no file>'}:${ref.line ?? '<no line>'}`;
+    });
+    throw new Error(
+      LOCAL_STR_ALIAS_REFERENCE_FAILURE +
+      details.join(LOCAL_STR_LIST_ITEM_SEPARATOR),
     );
   }
+  applyMachineChecks(allRules, config.machineChecks || []);
+
+  // Corpus-wide aphorism/citation lint: every extracted rule must be
+  // self-contained, not only the pack-selected subset (below-cap rules are
+  // still queryable via `npm run rule` and equally binding).
+  validateRulesHaveTriggerAndCitation(allRules, LOCAL_STR_FULL_RULE_CORPUS);
 
   await fs.mkdir(llmDir, {recursive: true});
 
@@ -1276,6 +1542,12 @@ async function main() {
   const manualContentByOutput = new Map();
   for (const output of config.outputs || []) {
     if (output.manual) {
+      if (output.maxRules !== undefined || output.domainCaps !== undefined) {
+        console.warn(
+          `steering:llm:pack: WARN output "${output.name}" is manual; ` +
+          LOCAL_STR_MANUAL_OUTPUT_DEAD_KEYS,
+        );
+      }
       const manualPath = path.join(llmDir, `${output.name}.md`);
       const manualContent = await fs.readFile(manualPath, LOCAL_STR_UTF8);
       manualContentByOutput.set(output.name, manualContent);
@@ -1289,12 +1561,22 @@ async function main() {
     const domainTotal = allRules.filter(
       (rule) => (output.domains || []).includes(rule.domain) && !rule.canonical_of,
     ).length;
-    const markdown = renderPackMarkdown(output, selected, domainTotal);
+    const domainTotalWithAliases = allRules.filter(
+      (rule) => (output.domains || []).includes(rule.domain),
+    ).length;
+    const markdown = renderPackMarkdown(
+      output,
+      selected,
+      domainTotal,
+      domainTotalWithAliases,
+    );
     await writeTextIfChanged(
       path.join(llmDir, `${output.name}.md`),
       `${markdown}`,
     );
   }
+
+  reportPerSourceContribution(ruleSources, allRules, selectedByOutput);
 
   const manifestEntries = buildManifest(
     config.outputs || [],
@@ -1306,7 +1588,7 @@ async function main() {
   const rulesJson = {
     sourceDir: config.sourceDir,
     llmDir: config.llmDir,
-    sourceFiles: (config.sources || []).map((entry) => ({
+    sourceFiles: ruleSources.map((entry) => ({
       file: entry.file,
       domain: entry.domain,
       priority: entry.priority,
@@ -1336,6 +1618,9 @@ async function main() {
       }
       if (rule.aliases && rule.aliases.length > 0) {
         entry.aliases = [...rule.aliases];
+      }
+      if (rule.machine_check) {
+        entry.machine_check = rule.machine_check;
       }
       return entry;
     }),

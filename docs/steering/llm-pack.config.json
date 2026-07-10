@@ -39,9 +39,9 @@
       "priority": 120
     },
     {
-      "file": "architecture.md",
-      "domain": "architecture",
-      "priority": 100
+      "file": "operational-ground-truth.md",
+      "domain": "testing",
+      "priority": 130
     },
     {
       "file": "testing-guidelines/harness.md",
@@ -175,14 +175,7 @@
         "testing",
         "style",
         "governance"
-      ],
-      "maxRules": 48,
-      "domainCaps": {
-        "architecture": 28,
-        "testing": 8,
-        "style": 6,
-        "governance": 6
-      }
+      ]
     },
     {
       "name": "architecture",
@@ -200,7 +193,19 @@
       "domains": [
         "testing"
       ],
-      "maxRules": 35
+      "maxRules": 35,
+      "pinnedRules": [
+        {
+          "note": "two-strikes tripwire 1: same soft warning in two consecutive runs = failing assertion",
+          "file": "testing-guidelines/regression-policy.md",
+          "match": "appearing in two consecutive runs of the same scenario MUST be treated as a failing assertion"
+        },
+        {
+          "note": "two-strikes tripwire 2: live evidence contradicts a sealed statement/fix claim TWICE = change the framing",
+          "file": "testing-guidelines/regression-policy.md",
+          "match": "contradicts a sealed statement or a fix claim TWICE"
+        }
+      ]
     },
     {
       "name": "style",
@@ -226,12 +231,14 @@
       "note": "synonyms ban: code-style canonical (code/file naming home); suppress system-guidelines restatement",
       "canonical": {
         "file": "code-style.md",
-        "line": 84
+        "line": 101,
+        "match": "Do not introduce synonyms for an existing concept"
       },
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 180
+          "line": 180,
+          "match": "Do not add synonyms for existing concepts"
         }
       ]
     },
@@ -239,12 +246,14 @@
       "note": "ordinal/grab-bag filenames: code-style canonical; suppress system-guidelines restatement",
       "canonical": {
         "file": "code-style.md",
-        "line": 66
+        "line": 66,
+        "match": "Do not create new files with ordinal, segment, or grab-bag names"
       },
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 183
+          "line": 183,
+          "match": "Do not introduce ordinal, segment, or grab-bag source filenames"
         }
       ]
     },
@@ -252,12 +261,14 @@
       "note": "file-size ratchet (byte-identical): code-style canonical; suppress proof-ladders copy",
       "canonical": {
         "file": "code-style.md",
-        "line": 58
+        "line": 58,
+        "match": "must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js"
       },
       "aliases": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 128
+          "line": 128,
+          "match": "must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js"
         }
       ]
     },
@@ -265,14 +276,36 @@
       "note": "degraded-evidence (same architecture domain): runtime-contracts canonical; suppress state-encoding restatement",
       "canonical": {
         "file": "runtime-contracts.md",
-        "line": 324
+        "line": 324,
+        "match": "Degraded or cross-plane evidence may explain or defer, but must not upgrade"
       },
       "aliases": [
         {
           "file": "doctrine/state-encoding.md",
-          "line": 90
+          "line": 90,
+          "match": "Never let degraded evidence promote a blocked entity"
         }
       ]
+    }
+  ],
+  "machineChecks": [
+    {
+      "note": "file-size ratchet is enforced by scripts/check-file-size-thresholds.js",
+      "file": "code-style.md",
+      "match": "must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js",
+      "check": "npm run audit:file-size"
+    },
+    {
+      "note": "proof-ladders copy of the file-size ratchet (alias of the code-style rule)",
+      "file": "testing-guidelines/proof-ladders.md",
+      "match": "must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js",
+      "check": "npm run audit:file-size"
+    },
+    {
+      "note": "inline domain/runtime scalar literals are flagged by scripts/check-guideline-literals.js",
+      "file": "code-style.md",
+      "match": "Do not inline domain/runtime scalars",
+      "check": "npm run audit:guideline:literals"
     }
   ]
 }

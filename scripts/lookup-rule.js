@@ -73,9 +73,11 @@ function renderRule(rule) {
     `\n  alias-of: ${rule.canonical_of}` :
     (rule.aliases && rule.aliases.length > 0 ?
       `\n  aliases: ${rule.aliases.join(', ')}` : '');
+  const machineCheckLine = rule.machine_check ?
+    `\n  machine-check: ${rule.machine_check}` : '';
   return `${rule.id}  [${rule.strength} · ${rule.domain}` +
     `${rule.tags && rule.tags.length ? ` · ${rule.tags.join(',')}` : ''}]` +
-    `${aliasLine}\n  ${rule.rule}\n  sources:\n    ${sources}`;
+    `${aliasLine}${machineCheckLine}\n  ${rule.rule}\n  sources:\n    ${sources}`;
 }
 
 function summarize(text) {
@@ -85,6 +87,7 @@ function summarize(text) {
 }
 
 export function renderIndex(rules) {
+  const aliasCount = rules.filter((rule) => rule.canonical_of).length;
   const lines = [
     '# Rule index (generated — do not edit)',
     '',
@@ -93,15 +96,22 @@ export function renderIndex(rules) {
     '`--strength`, or free-text terms). Regenerate with',
     '`node scripts/lookup-rule.js --write-index`.',
     '',
-    `Total rules: ${rules.length}`,
+    `Total rules: ${rules.length} (${rules.length - aliasCount} masters + ` +
+    `${aliasCount} cross-domain aliases; alias rows say "alias of <ID>" and ` +
+    'are suppressed from the per-domain packs, so pack banners count masters ' +
+    'only). machine_check names the command that enforces the rule, or —.',
     '',
-    '| id | strength | domain | summary |',
-    '| --- | --- | --- | --- |',
+    '| id | strength | domain | machine_check | summary |',
+    '| --- | --- | --- | --- | --- |',
   ];
   for (const rule of rules) {
+    const aliasNote = rule.canonical_of ?
+      ` _(alias of ${rule.canonical_of})_` : '';
+    const machineCheck = rule.machine_check ?
+      `\`${rule.machine_check}\`` : '—';
     lines.push(
-      `| ${rule.id} | ${rule.strength} | ${rule.domain} | ` +
-      `${summarize(rule.rule).replace(/\|/g, '\\|')} |`,
+      `| ${rule.id} | ${rule.strength} | ${rule.domain} | ${machineCheck} | ` +
+      `${summarize(rule.rule).replace(/\|/g, '\\|')}${aliasNote} |`,
     );
   }
   return `${lines.join('\n')}\n`;
