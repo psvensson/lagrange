@@ -411,6 +411,23 @@ tap.test('P6 non-measuring samples hold the rung and park as cannot_measure', as
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-p6-'));
     const file = path.join(root, 'flag.json');
     fs.writeFileSync(file, JSON.stringify({metric: 5, invalid: true}));
+    const changeFile = path.join(
+      root,
+      'solve',
+      'changes',
+      'p6',
+      'doc-only.diff',
+    );
+    fs.mkdirSync(path.dirname(changeFile), {recursive: true});
+    fs.writeFileSync(changeFile, [
+      'diff --git a/docs/p6.md b/docs/p6.md',
+      '--- a/docs/p6.md',
+      '+++ b/docs/p6.md',
+      '@@ -1 +1 @@',
+      '-before',
+      '+after',
+      '',
+    ].join('\n'));
     const quest = {
       id: 'p6',
       statement: 'non-measuring hygiene',
@@ -427,7 +444,7 @@ tap.test('P6 non-measuring samples hold the rung and park as cannot_measure', as
     const state = projectState(quest, readLog(root, quest.id));
     const pick = {def: quest.frontiers[0], state: state.frontiers[0]};
     const ctx = makeRunContext({
-      changeRef: 'diff:doc-only.diff',
+      changeRef: 'diff:solve/changes/p6/doc-only.diff',
       changeRefResolves: () => true,
       inspectChangeRef: () => ({valid: true, problems: []}),
       autoCommit: false,
@@ -435,7 +452,8 @@ tap.test('P6 non-measuring samples hold the rung and park as cannot_measure', as
     ctx.probeCtx = {root};
     const before = {metric: 5, evidence: quest.frontiers[0].metric.args.file};
     return finalizeAttempt(root, quest, ctx, pick, before,
-      {changeRef: 'diff:doc-only.diff', summary: 'non-measuring attempt'});
+      {changeRef: 'diff:solve/changes/p6/doc-only.diff',
+        summary: 'non-measuring attempt'});
   }
 
   t.test('holds the rung and emits an advisory before the budget runs out', (t) => {
@@ -475,14 +493,15 @@ tap.test('P6 non-measuring samples hold the rung and park as cannot_measure', as
     const state0 = projectState(quest, readLog(root, quest.id));
     const pick = {def: quest.frontiers[0], state: state0.frontiers[0]};
     const ctx = makeRunContext({
-      changeRef: 'diff:doc-only.diff',
+      changeRef: 'diff:solve/changes/p6/doc-only.diff',
       changeRefResolves: () => true,
       inspectChangeRef: () => ({valid: true, problems: []}),
       autoCommit: false,
     });
     ctx.probeCtx = {root};
     finalizeAttempt(root, quest, ctx, pick, {metric: 5},
-      {changeRef: 'diff:doc-only.diff', summary: 'measuring progress'});
+      {changeRef: 'diff:solve/changes/p6/doc-only.diff',
+        summary: 'measuring progress'});
     fs.writeFileSync(file, JSON.stringify({metric: 4, invalid: true}));
     attempt(root, quest);
     const state = projectState(quest, readLog(root, quest.id));
