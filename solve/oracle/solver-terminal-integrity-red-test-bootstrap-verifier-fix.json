@@ -1,0 +1,18 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "w0_verifier_findings_closed",
+  "evidence": {
+    "path": "test-output/reports/solver-terminal-integrity-red-test-bootstrap.report.json",
+    "sha256": "f44360d1d4a5926b5da7874a907f08a3537a53de86790c85e6995fb325f325b3",
+    "testedHead": "28959e02a34dc60c4a839696464415bc7cf9b906",
+    "requiredGuardCount": 10,
+    "staleReportReusePrevented": true,
+    "exactRejectedAttemptFailureObserved": true,
+    "exactRejectedSolvedFailureObserved": true,
+    "nextProjectionCovered": true,
+    "nonMeasurementCovered": true,
+    "legacyHistoryCovered": true
+  }
+}

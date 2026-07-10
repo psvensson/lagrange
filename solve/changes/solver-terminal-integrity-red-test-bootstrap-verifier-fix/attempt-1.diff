@@ -1,0 +1,849 @@
+diff --git a/scripts/run-solver-terminal-integrity-cutover-scenarios.js b/scripts/run-solver-terminal-integrity-cutover-scenarios.js
+new file mode 100644
+index 00000000..f611378f
+--- /dev/null
++++ b/scripts/run-solver-terminal-integrity-cutover-scenarios.js
+@@ -0,0 +1,11 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'solver-terminal-integrity-cutover': [
++    'test/solve/solver-terminal-integrity-cutover.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/solve/changes/solver-terminal-integrity-red-test-bootstrap/attempt-1.diff b/solve/changes/solver-terminal-integrity-red-test-bootstrap/attempt-1.diff
+new file mode 100644
+index 00000000..88891848
+--- /dev/null
++++ b/solve/changes/solver-terminal-integrity-red-test-bootstrap/attempt-1.diff
+@@ -0,0 +1,327 @@
++diff --git a/scripts/run-solver-terminal-integrity-cutover-scenarios.js b/scripts/run-solver-terminal-integrity-cutover-scenarios.js
++new file mode 100644
++index 00000000..f611378f
++--- /dev/null
+++++ b/scripts/run-solver-terminal-integrity-cutover-scenarios.js
++@@ -0,0 +1,11 @@
+++#!/usr/bin/env node
+++
+++import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
+++
+++const SCENARIOS = {
+++  'solver-terminal-integrity-cutover': [
+++    'test/solve/solver-terminal-integrity-cutover.test.js',
+++  ],
+++};
+++
+++runGuardTestScenarios(SCENARIOS);
++diff --git a/solve/oracle/solver-terminal-integrity-red-test-bootstrap.json b/solve/oracle/solver-terminal-integrity-red-test-bootstrap.json
++new file mode 100644
++index 00000000..d5fb0c4e
++--- /dev/null
+++++ b/solve/oracle/solver-terminal-integrity-red-test-bootstrap.json
++@@ -0,0 +1,17 @@
+++{
+++  "metric": 0,
+++  "target": 0,
+++  "done": true,
+++  "classification": "terminal_integrity_red_test_observed",
+++  "evidence": {
+++    "path": "test-output/reports/solver-terminal-integrity-red-test-bootstrap.report.json",
+++    "sha256": "80547e1f69cf3cd93821b35571a454206382e2e58baf991cc5d7cc8bb4465361",
+++    "testedHead": "28959e02a34dc60c4a839696464415bc7cf9b906",
+++    "classification": "invalid_attempt_persisted_and_solved",
+++    "requiredGuardCount": 5,
+++    "observedGuardCount": 5,
+++    "guardExitStatus": 1,
+++    "runnerExitStatus": 1
+++  },
+++  "detail": "Fresh meta-test evidence proves every W1 guard is red on the pre-fix HEAD with the expected invalid-attempt/SOLVED signature."
+++}
++diff --git a/solve/quests/solver-terminal-integrity-red-test-bootstrap.json b/solve/quests/solver-terminal-integrity-red-test-bootstrap.json
++new file mode 100644
++index 00000000..7ae6e194
++--- /dev/null
+++++ b/solve/quests/solver-terminal-integrity-red-test-bootstrap.json
++@@ -0,0 +1,38 @@
+++{
+++  "id": "solver-terminal-integrity-red-test-bootstrap",
+++  "statement": "Fresh Quest-specific evidence executes the future Solver terminal-integrity guards against pre-fix code, records every required guard ID and the exact invalid-attempt/SOLVED failure signature with tested HEAD and artifact identity, and establishes a valid failing scenario baseline before the terminal-integrity cutover is sealed.",
+++  "priority": 1,
+++  "class": "process",
+++  "links": {
+++    "roadmapRow": null,
+++    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W0",
+++    "closesCL": [],
+++    "parentQuest": null,
+++    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+++    "sealedAtCommit": "28959e02a34dc60c4a839696464415bc7cf9b906"
+++  },
+++  "doneWhen": {
+++    "probe": "oracle",
+++    "args": {
+++      "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap.json"
+++    }
+++  },
+++  "frontiers": [
+++    {
+++      "id": "solver-terminal-integrity-red-test-bootstrap-main",
+++      "priority": 1,
+++      "metric": {
+++        "probe": "oracle",
+++        "args": {
+++          "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap.json"
+++        }
+++      }
+++    }
+++  ],
+++  "constraints": [
+++    {
+++      "id": "source-change-subagent-verification",
+++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+++    }
+++  ]
+++}
++diff --git a/test/solve/solver-terminal-integrity-cutover.test.js b/test/solve/solver-terminal-integrity-cutover.test.js
++new file mode 100644
++index 00000000..4ed51778
++--- /dev/null
+++++ b/test/solve/solver-terminal-integrity-cutover.test.js
++@@ -0,0 +1,139 @@
+++import fs from 'node:fs';
+++import os from 'node:os';
+++import path from 'node:path';
+++
+++import tap from 'tap';
+++
+++import {auditQuest} from '../../scripts/solve/audit.js';
+++import {
+++  EVENT_ATTEMPT,
+++  EVENT_QUEST,
+++  EVENT_SOLVED,
+++  EVENT_VIOLATION,
+++  STATUS_SOLVED,
+++} from '../../scripts/solve/constants.js';
+++import {
+++  finalizeAttempt,
+++  makeRunContext,
+++} from '../../scripts/solve/loop.js';
+++import {registerProbe} from '../../scripts/solve/probe.js';
+++import {buildReport} from '../../scripts/solve/report.js';
+++import {
+++  appendEvent,
+++  projectState,
+++  readLog,
+++  saveQuest,
+++} from '../../scripts/solve/store.js';
+++
+++const PROBE_NAME = 'terminal-integrity-cutover-guard';
+++
+++registerProbe(PROBE_NAME, {
+++  name: PROBE_NAME,
+++  measure(args) {
+++    const data = JSON.parse(fs.readFileSync(args.file, 'utf8'));
+++    return {
+++      metric: data.metric,
+++      done: data.done === true,
+++      evidence: args.file,
+++    };
+++  },
+++});
+++
+++function setup() {
+++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solver-terminal-integrity-'));
+++  const evidence = path.join(root, 'evidence.json');
+++  fs.writeFileSync(evidence, JSON.stringify({metric: 0, done: true}));
+++  const metric = {probe: PROBE_NAME, args: {file: evidence}};
+++  const quest = {
+++    id: 'terminal-integrity-guard',
+++    statement: 'terminal state requires accepted evidence',
+++    class: 'process',
+++    priority: 1,
+++    links: {},
+++    doneWhen: metric,
+++    frontiers: [{id: 'main', priority: 1, metric}],
+++  };
+++  saveQuest(root, quest);
+++  return {root, evidence, quest};
+++}
+++
+++tap.test('rejected evidence cannot become an attempt or terminal transition', (t) => {
+++  const {root, evidence, quest} = setup();
+++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+++  const state = projectState(quest, []);
+++  const pick = {def: quest.frontiers[0], state: state.frontiers[0]};
+++  const ctx = makeRunContext({
+++    autoCommit: false,
+++    changeRefResolves: () => true,
+++    inspectChangeRef: () => ({valid: true, problems: []}),
+++  });
+++  ctx.probeCtx = {root};
+++
+++  finalizeAttempt(
+++    root,
+++    quest,
+++    ctx,
+++    pick,
+++    {metric: null, evidence},
+++    {changeRef: 'diff:solve/changes/terminal-integrity-guard/change.diff'},
+++  );
+++
+++  const log = readLog(root, quest.id);
+++  t.equal(
+++    log.filter((event) => event.type === EVENT_VIOLATION).length,
+++    1,
+++    'W1-GUARD-VIOLATION-RECORDED',
+++  );
+++  t.equal(
+++    log.filter((event) => event.type === EVENT_ATTEMPT).length,
+++    0,
+++    'W1-GUARD-REJECTED-NOT-ATTEMPT',
+++  );
+++  t.equal(
+++    log.filter((event) => event.type === EVENT_SOLVED).length,
+++    0,
+++    'W1-GUARD-REJECTED-NOT-SOLVED',
+++  );
+++  t.end();
+++});
+++
+++tap.test('audit names an unresolved integrity violation', (t) => {
+++  const {root, quest} = setup();
+++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+++  appendEvent(root, quest.id, {
+++    type: EVENT_VIOLATION,
+++    frontier: 'main',
+++    violationId: 'terminal-integrity-guard:main:metric-before-null',
+++    violations: ['metricBefore must be a finite number'],
+++  });
+++  appendEvent(root, quest.id, {
+++    type: EVENT_QUEST,
+++    status: STATUS_SOLVED,
+++  });
+++
+++  const audit = auditQuest(root, quest);
+++  t.ok(
+++    audit.problems.some((item) =>
+++      /unresolved integrity violation/iu.test(item.message)),
+++    'W1-GUARD-AUDIT-UNRESOLVED-VIOLATION',
+++  );
+++  t.end();
+++});
+++
+++tap.test('terminal report omits active-only blocker and continuation sections', (t) => {
+++  const {root, quest} = setup();
+++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+++  appendEvent(root, quest.id, {
+++    type: EVENT_QUEST,
+++    status: STATUS_SOLVED,
+++    evidence: 'evidence.json',
+++  });
+++  const log = readLog(root, quest.id);
+++  const report = buildReport(quest, log, projectState(quest, log), root);
+++  t.notMatch(
+++    report,
+++    /## Current Blocker|## Continuation/u,
+++    'W1-GUARD-TERMINAL-PROJECTION',
+++  );
+++  t.end();
+++});
++diff --git a/test/solve/solver-terminal-integrity-red-test-bootstrap.test.js b/test/solve/solver-terminal-integrity-red-test-bootstrap.test.js
++new file mode 100644
++index 00000000..ad4204f4
++--- /dev/null
+++++ b/test/solve/solver-terminal-integrity-red-test-bootstrap.test.js
++@@ -0,0 +1,92 @@
+++import {execFileSync, spawnSync} from 'node:child_process';
+++import {createHash} from 'node:crypto';
+++import fs from 'node:fs';
+++import path from 'node:path';
+++
+++import tap from 'tap';
+++
+++const QUEST_ID = 'solver-terminal-integrity-red-test-bootstrap';
+++const W1_SCENARIO = 'solver-terminal-integrity-cutover';
+++const REPORT_DIR = path.join('test-output', 'reports');
+++const EVIDENCE_PATH = path.join(
+++  REPORT_DIR,
+++  `${QUEST_ID}.report.json`,
+++);
+++const REQUIRED_GUARD_IDS = Object.freeze([
+++  'W1-GUARD-VIOLATION-RECORDED',
+++  'W1-GUARD-REJECTED-NOT-ATTEMPT',
+++  'W1-GUARD-REJECTED-NOT-SOLVED',
+++  'W1-GUARD-AUDIT-UNRESOLVED-VIOLATION',
+++  'W1-GUARD-TERMINAL-PROJECTION',
+++]);
+++const EXPECTED_SIGNATURE = 'invalid_attempt_persisted_and_solved';
+++
+++function sha256(value) {
+++  return createHash('sha256').update(value).digest('hex');
+++}
+++
+++function latestScenarioReport() {
+++  const reports = fs.readdirSync(REPORT_DIR)
+++    .filter((name) => name.startsWith(`${W1_SCENARIO}-`) &&
+++      name.endsWith('.report.json'))
+++    .map((name) => path.join(REPORT_DIR, name))
+++    .map((file) => ({file, mtimeMs: fs.statSync(file).mtimeMs}))
+++    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+++  return reports[0]?.file || null;
+++}
+++
+++tap.test('W0-META fresh pre-fix terminal-integrity evidence', (t) => {
+++  const testedHead = execFileSync('git', ['rev-parse', 'HEAD'], {
+++    encoding: 'utf8',
+++  }).trim();
+++  const childEnv = {...process.env};
+++  delete childEnv.NODE_TEST_CONTEXT;
+++  const guardResult = spawnSync(
+++    process.execPath,
+++    ['--test', 'test/solve/solver-terminal-integrity-cutover.test.js'],
+++    {encoding: 'utf8', env: childEnv},
+++  );
+++  const output = `${guardResult.stdout || ''}\n${guardResult.stderr || ''}`;
+++  const runnerResult = spawnSync(
+++    process.execPath,
+++    ['scripts/run-solver-terminal-integrity-cutover-scenarios.js'],
+++    {encoding: 'utf8', env: childEnv},
+++  );
+++
+++  t.equal(guardResult.status, 1, 'W0-META-W1-GUARDS-ARE-RED');
+++  t.equal(runnerResult.status, 1, 'W0-META-W1-RUNNER-IS-RED');
+++  for (const guardId of REQUIRED_GUARD_IDS) {
+++    t.match(output, new RegExp(guardId, 'u'), `W0-META-OBSERVED-${guardId}`);
+++  }
+++  t.match(
+++    output,
+++    /REJECTED-NOT-ATTEMPT|REJECTED-NOT-SOLVED/u,
+++    'W0-META-EXACT-PREFIX-FAILURE-SIGNATURE',
+++  );
+++
+++  const baselineReport = latestScenarioReport();
+++  t.ok(baselineReport, 'W0-META-W1-BASELINE-REPORT-WRITTEN');
+++  const baseline = JSON.parse(fs.readFileSync(baselineReport, 'utf8'));
+++  t.equal(baseline.scenario, W1_SCENARIO, 'W0-META-W1-BASELINE-SCENARIO');
+++  t.equal(baseline.summary.failed, 1, 'W0-META-W1-BASELINE-FAILS');
+++
+++  const evidence = {
+++    questId: QUEST_ID,
+++    metaTestId: 'W0-META',
+++    classification: EXPECTED_SIGNATURE,
+++    timestamp: new Date().toISOString(),
+++    testedHead,
+++    requiredGuardIds: REQUIRED_GUARD_IDS,
+++    observedGuardIds: REQUIRED_GUARD_IDS.filter((id) => output.includes(id)),
+++    guardExitStatus: guardResult.status,
+++    runnerExitStatus: runnerResult.status,
+++    runnerOutputSha256: sha256(output),
+++    baselineReport,
+++    baselineReportSha256: sha256(fs.readFileSync(baselineReport)),
+++  };
+++  fs.mkdirSync(REPORT_DIR, {recursive: true});
+++  fs.writeFileSync(EVIDENCE_PATH, JSON.stringify(evidence, null, 2));
+++  t.equal(evidence.observedGuardIds.length, REQUIRED_GUARD_IDS.length,
+++    'W0-META-ALL-REQUIRED-GUARDS-OBSERVED');
+++  t.end();
+++});
+diff --git a/solve/oracle/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json b/solve/oracle/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json
+new file mode 100644
+index 00000000..69314a69
+--- /dev/null
++++ b/solve/oracle/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json
+@@ -0,0 +1,18 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "w0_verifier_findings_closed",
++  "evidence": {
++    "path": "test-output/reports/solver-terminal-integrity-red-test-bootstrap.report.json",
++    "sha256": "16b03980ab4671a093deaa4d2875fc67666d74d50d2acbac88287fc4d232f53e",
++    "testedHead": "28959e02a34dc60c4a839696464415bc7cf9b906",
++    "requiredGuardCount": 10,
++    "staleReportReusePrevented": true,
++    "exactRejectedAttemptFailureObserved": true,
++    "exactRejectedSolvedFailureObserved": true,
++    "nextProjectionCovered": true,
++    "nonMeasurementCovered": true,
++    "legacyHistoryCovered": true
++  }
++}
+diff --git a/solve/oracle/solver-terminal-integrity-red-test-bootstrap.json b/solve/oracle/solver-terminal-integrity-red-test-bootstrap.json
+new file mode 100644
+index 00000000..569c4e59
+--- /dev/null
++++ b/solve/oracle/solver-terminal-integrity-red-test-bootstrap.json
+@@ -0,0 +1,17 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "terminal_integrity_red_test_observed",
++  "evidence": {
++    "path": "test-output/reports/solver-terminal-integrity-red-test-bootstrap.report.json",
++    "sha256": "16b03980ab4671a093deaa4d2875fc67666d74d50d2acbac88287fc4d232f53e",
++    "testedHead": "28959e02a34dc60c4a839696464415bc7cf9b906",
++    "classification": "invalid_attempt_persisted_and_solved",
++    "requiredGuardCount": 10,
++    "observedGuardCount": 10,
++    "guardExitStatus": 1,
++    "runnerExitStatus": 1
++  },
++  "detail": "Fresh meta-test evidence proves every W1 guard is red on the pre-fix HEAD with the expected invalid-attempt/SOLVED signature."
++}
+diff --git a/solve/quests/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json b/solve/quests/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json
+new file mode 100644
+index 00000000..0d58cdcb
+--- /dev/null
++++ b/solve/quests/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json
+@@ -0,0 +1,38 @@
++{
++  "id": "solver-terminal-integrity-red-test-bootstrap-verifier-fix",
++  "statement": "The W0 bootstrap consumes only the report emitted by the current runner invocation, derives the exact rejected-attempt-and-SOLVED signature from both failing guard IDs, covers the terminal next/non-measurement/operator-resolution/legacy-history surfaces, and records fresh tested-HEAD and artifact identities approved by an independent verifier.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W0",
++    "closesCL": [],
++    "parentQuest": "solver-terminal-integrity-red-test-bootstrap",
++    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
++    "sealedAtCommit": "28959e02a34dc60c4a839696464415bc7cf9b906"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-terminal-integrity-red-test-bootstrap-verifier-fix-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap-verifier-fix.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/solve/quests/solver-terminal-integrity-red-test-bootstrap.json b/solve/quests/solver-terminal-integrity-red-test-bootstrap.json
+new file mode 100644
+index 00000000..7ae6e194
+--- /dev/null
++++ b/solve/quests/solver-terminal-integrity-red-test-bootstrap.json
+@@ -0,0 +1,38 @@
++{
++  "id": "solver-terminal-integrity-red-test-bootstrap",
++  "statement": "Fresh Quest-specific evidence executes the future Solver terminal-integrity guards against pre-fix code, records every required guard ID and the exact invalid-attempt/SOLVED failure signature with tested HEAD and artifact identity, and establishes a valid failing scenario baseline before the terminal-integrity cutover is sealed.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W0",
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
++    "sealedAtCommit": "28959e02a34dc60c4a839696464415bc7cf9b906"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-terminal-integrity-red-test-bootstrap-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/test/solve/solver-terminal-integrity-cutover.test.js b/test/solve/solver-terminal-integrity-cutover.test.js
+new file mode 100644
+index 00000000..4b154f3f
+--- /dev/null
++++ b/test/solve/solver-terminal-integrity-cutover.test.js
+@@ -0,0 +1,247 @@
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++
++import tap from 'tap';
++
++import {auditQuest} from '../../scripts/solve/audit.js';
++import {
++  EVENT_ATTEMPT,
++  EVENT_QUEST,
++  EVENT_SOLVED,
++  EVENT_VIOLATION,
++  STATUS_SOLVED,
++} from '../../scripts/solve/constants.js';
++import {
++  finalizeAttempt,
++  makeRunContext,
++} from '../../scripts/solve/loop.js';
++import {buildNextLines} from '../../scripts/solve/next.js';
++import {registerProbe} from '../../scripts/solve/probe.js';
++import {buildReport} from '../../scripts/solve/report.js';
++import {
++  appendEvent,
++  projectState,
++  readLog,
++  saveQuest,
++} from '../../scripts/solve/store.js';
++
++const PROBE_NAME = 'terminal-integrity-cutover-guard';
++
++registerProbe(PROBE_NAME, {
++  name: PROBE_NAME,
++  measure(args) {
++    const data = JSON.parse(fs.readFileSync(args.file, 'utf8'));
++    return {
++      metric: data.metric,
++      done: data.done === true,
++      invalidSample: data.invalidSample === true,
++      evidence: args.file,
++    };
++  },
++});
++
++function setup() {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solver-terminal-integrity-'));
++  const evidence = path.join(root, 'evidence.json');
++  fs.writeFileSync(evidence, JSON.stringify({metric: 0, done: true}));
++  const metric = {probe: PROBE_NAME, args: {file: evidence}};
++  const quest = {
++    id: 'terminal-integrity-guard',
++    statement: 'terminal state requires accepted evidence',
++    class: 'process',
++    priority: 1,
++    links: {},
++    doneWhen: metric,
++    frontiers: [{id: 'main', priority: 1, metric}],
++  };
++  saveQuest(root, quest);
++  return {root, evidence, quest};
++}
++
++tap.test('rejected evidence cannot become an attempt or terminal transition', (t) => {
++  const {root, evidence, quest} = setup();
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  const state = projectState(quest, []);
++  const pick = {def: quest.frontiers[0], state: state.frontiers[0]};
++  const ctx = makeRunContext({
++    autoCommit: false,
++    changeRefResolves: () => true,
++    inspectChangeRef: () => ({valid: true, problems: []}),
++  });
++  ctx.probeCtx = {root};
++
++  finalizeAttempt(
++    root,
++    quest,
++    ctx,
++    pick,
++    {metric: null, evidence},
++    {changeRef: 'diff:solve/changes/terminal-integrity-guard/change.diff'},
++  );
++
++  const log = readLog(root, quest.id);
++  t.equal(
++    log.filter((event) => event.type === EVENT_VIOLATION).length,
++    1,
++    'W1-GUARD-VIOLATION-RECORDED',
++  );
++  t.equal(
++    log.filter((event) => event.type === EVENT_ATTEMPT).length,
++    0,
++    'W1-GUARD-REJECTED-NOT-ATTEMPT',
++  );
++  t.equal(
++    log.filter((event) => event.type === EVENT_SOLVED).length,
++    0,
++    'W1-GUARD-REJECTED-NOT-SOLVED',
++  );
++  t.end();
++});
++
++tap.test('audit names an unresolved integrity violation', (t) => {
++  const {root, quest} = setup();
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  appendEvent(root, quest.id, {
++    type: EVENT_VIOLATION,
++    frontier: 'main',
++    violationId: 'terminal-integrity-guard:main:metric-before-null',
++    violations: ['metricBefore must be a finite number'],
++  });
++  appendEvent(root, quest.id, {
++    type: EVENT_QUEST,
++    status: STATUS_SOLVED,
++  });
++
++  const audit = auditQuest(root, quest);
++  t.ok(
++    audit.problems.some((item) =>
++      /unresolved integrity violation/iu.test(item.message)),
++    'W1-GUARD-AUDIT-UNRESOLVED-VIOLATION',
++  );
++  t.end();
++});
++
++tap.test('terminal report omits active-only blocker and continuation sections', (t) => {
++  const {root, quest} = setup();
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  appendEvent(root, quest.id, {
++    type: EVENT_QUEST,
++    status: STATUS_SOLVED,
++    evidence: 'evidence.json',
++  });
++  const log = readLog(root, quest.id);
++  const report = buildReport(quest, log, projectState(quest, log), root);
++  t.notMatch(
++    report,
++    /## Current Blocker|## Continuation/u,
++    'W1-GUARD-TERMINAL-PROJECTION',
++  );
++  t.end();
++});
++
++tap.test('terminal next projection omits an active blocker card', (t) => {
++  const {root, quest} = setup();
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  appendEvent(root, quest.id, {
++    type: EVENT_QUEST,
++    status: STATUS_SOLVED,
++    evidence: 'evidence.json',
++  });
++  const lines = buildNextLines(root, quest.id);
++  t.notOk(
++    lines.some((line) => line.startsWith('blocker:')),
++    'W1-GUARD-TERMINAL-NEXT-PROJECTION',
++  );
++  t.end();
++});
++
++tap.test('honest invalid samples use a dedicated non-measurement event', (t) => {
++  const {root, evidence, quest} = setup();
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  fs.writeFileSync(evidence, JSON.stringify({
++    metric: null,
++    done: false,
++    invalidSample: true,
++  }));
++  const state = projectState(quest, []);
++  const pick = {def: quest.frontiers[0], state: state.frontiers[0]};
++  const ctx = makeRunContext({
++    autoCommit: false,
++    changeRefResolves: () => true,
++    inspectChangeRef: () => ({valid: true, problems: []}),
++  });
++  ctx.probeCtx = {root};
++  finalizeAttempt(
++    root,
++    quest,
++    ctx,
++    pick,
++    {metric: 5, evidence},
++    {changeRef: 'diff:solve/changes/terminal-integrity-guard/change.diff'},
++  );
++  const log = readLog(root, quest.id);
++  t.equal(
++    log.filter((event) => event.type === 'non-measurement').length,
++    1,
++    'W1-GUARD-NON-MEASUREMENT-EVENT',
++  );
++  t.equal(
++    log.filter((event) => event.type === EVENT_ATTEMPT).length,
++    0,
++    'W1-GUARD-NON-MEASUREMENT-NOT-ATTEMPT',
++  );
++  t.end();
++});
++
++tap.test('operator-authored resolution cannot launder a violation', (t) => {
++  const {root, quest} = setup();
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  const violationId = 'terminal-integrity-guard:main:identity-mismatch';
++  appendEvent(root, quest.id, {
++    type: EVENT_VIOLATION,
++    eventSchemaVersion: 2,
++    frontier: 'main',
++    violationId,
++    violations: ['evidence identity mismatch'],
++  });
++  appendEvent(root, quest.id, {
++    type: 'violation-resolved',
++    frontier: 'main',
++    violationId,
++    reason: 'operator says fixed',
++  });
++  const audit = auditQuest(root, quest);
++  t.ok(
++    audit.problems.some((item) =>
++      item.message.includes(violationId) &&
++      /unresolved integrity violation/iu.test(item.message)),
++    'W1-GUARD-OPERATOR-CANNOT-RESOLVE-VIOLATION',
++  );
++  t.end();
++});
++
++tap.test('legacy accepted-after-violation history is explicitly unverifiable', (t) => {
++  const {root, quest} = setup();
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  appendEvent(root, quest.id, {
++    type: EVENT_VIOLATION,
++    frontier: 'main',
++    violations: ['legacy metric identity failure'],
++  });
++  appendEvent(root, quest.id, {
++    type: EVENT_ATTEMPT,
++    frontier: 'main',
++    metricBefore: 1,
++    metricAfter: 0,
++    evidence: 'legacy-evidence.json',
++    changeRef: null,
++  });
++  const audit = auditQuest(root, quest);
++  t.ok(
++    audit.problems.some((item) =>
++      /legacy_integrity_unverifiable/iu.test(item.message)),
++    'W1-GUARD-LEGACY-HISTORY-UNVERIFIABLE',
++  );
++  t.end();
++});
+diff --git a/test/solve/solver-terminal-integrity-red-test-bootstrap.test.js b/test/solve/solver-terminal-integrity-red-test-bootstrap.test.js
+new file mode 100644
+index 00000000..94464004
+--- /dev/null
++++ b/test/solve/solver-terminal-integrity-red-test-bootstrap.test.js
+@@ -0,0 +1,105 @@
++import {execFileSync, spawnSync} from 'node:child_process';
++import {createHash} from 'node:crypto';
++import fs from 'node:fs';
++import path from 'node:path';
++
++import tap from 'tap';
++
++const QUEST_ID = 'solver-terminal-integrity-red-test-bootstrap';
++const W1_SCENARIO = 'solver-terminal-integrity-cutover';
++const REPORT_DIR = path.join('test-output', 'reports');
++const EVIDENCE_PATH = path.join(
++  REPORT_DIR,
++  `${QUEST_ID}.report.json`,
++);
++const REQUIRED_GUARD_IDS = Object.freeze([
++  'W1-GUARD-VIOLATION-RECORDED',
++  'W1-GUARD-REJECTED-NOT-ATTEMPT',
++  'W1-GUARD-REJECTED-NOT-SOLVED',
++  'W1-GUARD-AUDIT-UNRESOLVED-VIOLATION',
++  'W1-GUARD-TERMINAL-PROJECTION',
++  'W1-GUARD-TERMINAL-NEXT-PROJECTION',
++  'W1-GUARD-NON-MEASUREMENT-EVENT',
++  'W1-GUARD-NON-MEASUREMENT-NOT-ATTEMPT',
++  'W1-GUARD-OPERATOR-CANNOT-RESOLVE-VIOLATION',
++  'W1-GUARD-LEGACY-HISTORY-UNVERIFIABLE',
++]);
++const EXPECTED_SIGNATURE = 'invalid_attempt_persisted_and_solved';
++
++function sha256(value) {
++  return createHash('sha256').update(value).digest('hex');
++}
++
++function emittedReportPath(stdout) {
++  const match = String(stdout || '').match(/^report: (.+\.report\.json)$/mu);
++  return match ? match[1] : null;
++}
++
++function failedGuardIds(output) {
++  return REQUIRED_GUARD_IDS.filter((guardId) =>
++    new RegExp(`not ok \\d+ - ${guardId}(?:\\s|$)`, 'u').test(output));
++}
++
++tap.test('W0-META fresh pre-fix terminal-integrity evidence', (t) => {
++  const testedHead = execFileSync('git', ['rev-parse', 'HEAD'], {
++    encoding: 'utf8',
++  }).trim();
++  const childEnv = {...process.env};
++  delete childEnv.NODE_TEST_CONTEXT;
++  const guardResult = spawnSync(
++    process.execPath,
++    ['--test', 'test/solve/solver-terminal-integrity-cutover.test.js'],
++    {encoding: 'utf8', env: childEnv},
++  );
++  const output = `${guardResult.stdout || ''}\n${guardResult.stderr || ''}`;
++  const runnerStartedAtMs = Date.now();
++  const runnerResult = spawnSync(
++    process.execPath,
++    ['scripts/run-solver-terminal-integrity-cutover-scenarios.js'],
++    {encoding: 'utf8', env: childEnv},
++  );
++
++  t.equal(guardResult.status, 1, 'W0-META-W1-GUARDS-ARE-RED');
++  t.equal(runnerResult.status, 1, 'W0-META-W1-RUNNER-IS-RED');
++  for (const guardId of REQUIRED_GUARD_IDS) {
++    t.match(output, new RegExp(guardId, 'u'), `W0-META-OBSERVED-${guardId}`);
++  }
++  const failedIds = failedGuardIds(output);
++  t.ok(failedIds.includes('W1-GUARD-REJECTED-NOT-ATTEMPT'),
++    'W0-META-EXACT-REJECTED-ATTEMPT-FAILURE');
++  t.ok(failedIds.includes('W1-GUARD-REJECTED-NOT-SOLVED'),
++    'W0-META-EXACT-REJECTED-SOLVED-FAILURE');
++
++  const baselineReport = emittedReportPath(runnerResult.stdout);
++  t.ok(baselineReport, 'W0-META-W1-BASELINE-REPORT-WRITTEN');
++  t.ok(fs.statSync(baselineReport).mtimeMs >= runnerStartedAtMs,
++    'W0-META-W1-BASELINE-REPORT-IS-FRESH');
++  const baseline = JSON.parse(fs.readFileSync(baselineReport, 'utf8'));
++  t.equal(baseline.scenario, W1_SCENARIO, 'W0-META-W1-BASELINE-SCENARIO');
++  t.equal(baseline.summary.failed, 1, 'W0-META-W1-BASELINE-FAILS');
++
++  const evidence = {
++    questId: QUEST_ID,
++    metaTestId: 'W0-META',
++    classification: EXPECTED_SIGNATURE,
++    timestamp: new Date().toISOString(),
++    testedHead,
++    requiredGuardIds: REQUIRED_GUARD_IDS,
++    observedGuardIds: REQUIRED_GUARD_IDS.filter((id) => output.includes(id)),
++    guardExitStatus: guardResult.status,
++    runnerExitStatus: runnerResult.status,
++    failedGuardIds: failedIds,
++    guardOutputSha256: sha256(output),
++    runnerOutputSha256: sha256(
++      `${runnerResult.stdout || ''}\n${runnerResult.stderr || ''}`,
++    ),
++    baselineReport,
++    baselineReportTimestamp: baseline.timestamp,
++    baselineReportSha256: sha256(fs.readFileSync(baselineReport)),
++  };
++  fs.mkdirSync(REPORT_DIR, {recursive: true});
++  fs.writeFileSync(EVIDENCE_PATH, JSON.stringify(evidence, null, 2));
++  t.equal(evidence.observedGuardIds.length, REQUIRED_GUARD_IDS.length,
++    'W0-META-ALL-REQUIRED-GUARDS-OBSERVED');
++  t.end();
++});
