@@ -1,0 +1,38 @@
+{
+  "id": "solver-terminal-integrity-red-test-bootstrap",
+  "statement": "Fresh Quest-specific evidence executes the future Solver terminal-integrity guards against pre-fix code, records every required guard ID and the exact invalid-attempt/SOLVED failure signature with tested HEAD and artifact identity, and establishes a valid failing scenario baseline before the terminal-integrity cutover is sealed.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W0",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+    "sealedAtCommit": "28959e02a34dc60c4a839696464415bc7cf9b906"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-terminal-integrity-red-test-bootstrap-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-terminal-integrity-red-test-bootstrap.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
