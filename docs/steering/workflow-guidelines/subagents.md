@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Delegated worker policy for Quest attempts. Index:

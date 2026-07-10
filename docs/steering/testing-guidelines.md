@@ -3,7 +3,7 @@ scope: testing
 status: pointer
 always_load: false
 source_of_truth: testing-guidelines/INDEX.md
-last_reviewed: 2026-06-26
+last_reviewed: 2026-07-10
 ---
 
 # Testing Guidelines (moved)

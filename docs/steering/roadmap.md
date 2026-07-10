@@ -4,7 +4,7 @@ status: canonical
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Roadmap and edition-scope pointer.
