@@ -643,6 +643,7 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
   async executeCreateTable(ast, _sessionId, options = {}) {
     return this.tableCreationService.createTable(ast, {
       timeoutBudget: options?.timeoutBudget,
+      cancellationToken: options?.cancellationToken || null,
     });
   }
 

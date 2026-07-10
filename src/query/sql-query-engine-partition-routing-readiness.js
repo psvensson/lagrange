@@ -1,6 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineInitialPartitionProvisioning} from './sql-query-engine-initial-partition-provisioning.js';
 import {createSQLQueryEngineRoutingMetadataMethods} from './sql-query-engine-routing-metadata-methods.js';
+import {throwIfCancellationRequested} from './query-cancellation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STEADY_STATE = 'steady_state';
@@ -204,7 +205,9 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     tableId,
     partitionId,
     timeoutBudget = null,
+    waitOptions = {},
   ) {
+    throwIfCancellationRequested(waitOptions.cancellationToken);
     const hasTableAndPartitionMetadata = () => {
       const hasPartitionRecord =
         this.queryExecutor &&
@@ -264,6 +267,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         );
       }
       await Promise.all(waits);
+      throwIfCancellationRequested(waitOptions.cancellationToken);
       return;
     }
 
@@ -274,6 +278,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       QUERY_ERROR_MSG.TABLE_PARTITION_METADATA_TIMEOUT_PREFIX + partitionId,
       {
         timeoutBudget: effectiveBudget,
+        cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
         nestedOperation: LOCAL_STR_TABLE_PARTITION_METADATA_WAIT,
       },
@@ -286,11 +291,17 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
    * @return {Promise<void>}
    * @private
    */
-  async waitForRoutablePartitionService(partitionId, timeoutBudget = null) {
+  async waitForRoutablePartitionService(
+    partitionId,
+    timeoutBudget = null,
+    waitOptions = {},
+  ) {
     await this.waitForRoutablePartitionServiceCount(
       partitionId,
       1,
       timeoutBudget,
+      this.queryExecutor?.defaultRoutingReadinessDimension,
+      waitOptions,
     );
   }
 
@@ -301,7 +312,12 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
    * @return {Promise<void>}
    * @private
    */
-  async waitForPartitionServiceMetadata(replicaId, timeoutBudget = null) {
+  async waitForPartitionServiceMetadata(
+    replicaId,
+    timeoutBudget = null,
+    waitOptions = {},
+  ) {
+    throwIfCancellationRequested(waitOptions.cancellationToken);
     const conditionFn = () => this.hasServiceMetadata(replicaId);
     if (conditionFn()) {
       return;
@@ -339,6 +355,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
           timeoutMs: waitBudgetMs,
         },
       );
+      throwIfCancellationRequested(waitOptions.cancellationToken);
       if (this.hasServiceMetadata(replicaId)) {
         return;
       }
@@ -352,6 +369,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         replicaId,
       {
         timeoutBudget: effectiveBudget,
+        cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
         nestedOperation,
       },
@@ -374,7 +392,9 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     timeoutBudget = null,
     routingReadinessDimension = this.queryExecutor
       ?.defaultRoutingReadinessDimension,
+    waitOptions = {},
   ) {
+    throwIfCancellationRequested(waitOptions.cancellationToken);
     const uniqueReplicaIds = [
       ...new Set(
         (Array.isArray(replicaIds) ? replicaIds : []).filter(
@@ -387,6 +407,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     }
 
     for (const replicaId of uniqueReplicaIds) {
+      throwIfCancellationRequested(waitOptions.cancellationToken);
       if (
         this.getRoutablePartitionServiceNodeIds(
           partitionId,
@@ -396,8 +417,11 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         return;
       }
       try {
-        await this.waitForPartitionServiceMetadata(replicaId, timeoutBudget);
+        await this.waitForPartitionServiceMetadata(replicaId, timeoutBudget, {
+          cancellationToken: waitOptions.cancellationToken || null,
+        });
       } catch (_error) {
+        throwIfCancellationRequested(waitOptions.cancellationToken);
         // Best-effort hydration: aggregate routable-count wait is authoritative.
       }
     }
@@ -416,7 +440,9 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     timeoutBudget = null,
     routingReadinessDimension = this.queryExecutor
       ?.defaultRoutingReadinessDimension,
+    waitOptions = {},
   ) {
+    throwIfCancellationRequested(waitOptions.cancellationToken);
     const requiredCount =
       Number.isInteger(minimumCount) && minimumCount > 0 ? minimumCount : 1;
     const hasRequiredRoutableCount = () =>
@@ -455,6 +481,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
       {
         timeoutBudget: effectiveBudget,
+        cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
         nestedOperation: LOCAL_STR_PARTITION_ROUTING_WAIT,
       },
@@ -513,6 +540,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
     timeoutBudget = null,
     options = {},
   ) {
+    throwIfCancellationRequested(options.cancellationToken);
     const routingReadinessDimension =
       typeof options?.routingReadinessDimension === 'string' &&
       options.routingReadinessDimension.length > 0 ?
@@ -552,6 +580,7 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       QUERY_ERROR_MSG.TABLE_PARTITION_LEADER_TIMEOUT_PREFIX + partitionId,
       {
         timeoutBudget: effectiveBudget,
+        cancellationToken: options.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
         nestedOperation: LOCAL_STR_PARTITION_LEADER_WAIT,
       },

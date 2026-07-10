@@ -1,20 +1,10 @@
 /**
  * Quest voter-ready-60s / ledger-concentration blocker (s14).
  *
- * The MovieLens demo's CREATE TABLE aborts at [2/4] with provisionable=0 while
- * `replica_operations-p1` is bootstrap-concentrated (all voters on the seed).
- * The cure is a ledger self-move REPLACE spread off the seed; it legitimately
- * takes TWO serialized REPLACEs (~25-40s) — longer than the base provisioning
- * budget — so the existing single-window transient re-wait times out and the
- * create fails, even though the spread is actively progressing (diagnostic:
- * budget-bound, raising the budget greens it).
- *
- * Contract under test: the whole-cluster transient re-wait extends past the
- * base window WHILE the ledger quorum concentration is measurably improving
- * (progress-gated, ceiling-bounded), tolerates the STATIC gap between the two
- * serialized spread REPLACEs, and fails fast on a genuine wedge (no progress).
- * The progress signal is the coordinator's authoritative concentration measure,
- * NOT a raised unconditional timeout (that is vetted-dead masking).
+ * Contract after W6: a whole-cluster transient hold may consume the remaining
+ * caller-owned provisioning budget, but progress never creates a fresh budget.
+ * Progress inside the deadline succeeds, a late cure cannot resurrect CREATE,
+ * and a wedge stops exactly at the parent deadline.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -46,49 +36,36 @@ const ADMIT = Object.freeze({
 function createClusterFixture({nodeIds}) {
   const nodes = nodeIds.map((nodeId) => ({node_id: nodeId, status: 'active'}));
   const services = [];
+  const rowsByTable = new Map([
+    [TABLES.NODES, nodes],
+    [TABLES.SERVICES, services],
+  ]);
   const cache = {
     onCacheChange() {},
     offCacheChange() {},
     filter(type, predicate) {
-      if (type === TABLES.NODES) {
-        return nodes.filter(predicate);
-      }
-      if (type === TABLES.SERVICES) {
-        return services.filter(predicate);
-      }
-      return [];
+      return (rowsByTable.get(type) || []).filter(predicate);
     },
     getAll(type) {
-      if (type === TABLES.NODES) {
-        return nodes;
-      }
-      if (type === TABLES.SERVICES) {
-        return services;
-      }
-      return [];
+      return rowsByTable.get(type) || [];
     },
   };
   return {nodes, services, cache};
 }
 
 /**
- * A coordinator whose ledger spread is driven by a scripted per-window
- * concentration trajectory. `checkProvisioningAdmission` admits once the spread
- * has cleared (`admitAtWindow` snapshots taken); `resolveOperation...Snapshot`
- * yields the next scripted concentration reading, one per re-wait window.
+ * A coordinator whose ledger spread becomes admissible at a virtual timestamp.
  */
 function createProgressCoordinator({
-  concentrationByWindow,
-  admitAtWindow,
+  clock,
+  admitAtMs,
   services,
   createdTargetNodeIds,
   localNodeId,
-  omitSnapshotMethod = false,
 }) {
-  let snapshotCalls = 0;
-  const coordinator = {
+  return {
     async checkProvisioningAdmission() {
-      return snapshotCalls >= admitAtWindow ? ADMIT :
+      return clock.nowMs >= admitAtMs ? ADMIT :
         QUORUM_CONCENTRATED_REJECTION;
     },
     async createOperation(move) {
@@ -112,65 +89,51 @@ function createProgressCoordinator({
       return {success: true};
     },
   };
-  if (!omitSnapshotMethod) {
-    coordinator.resolveOperationLedgerConcentrationProgressSnapshot = () => {
-      const reading =
-        concentrationByWindow[
-          Math.min(snapshotCalls, concentrationByWindow.length - 1)
-        ];
-      snapshotCalls += 1;
-      if (reading === null) {
-        return {holdEngaged: false, worstConcentration: null};
-      }
-      return {holdEngaged: true, worstConcentration: reading};
-    };
-  } else {
-    // Advance the spread anyway so admission can clear, without a snapshot.
-    coordinator.checkProvisioningAdmission = async () => {
-      const admit = snapshotCalls >= admitAtWindow;
-      snapshotCalls += 1;
-      return admit ? ADMIT : QUORUM_CONCENTRATED_REJECTION;
-    };
-  }
-  return coordinator;
 }
 
-function createEngineFixture({rebalanceCoordinator, cache, localNodeId}) {
+function createEngineFixture({rebalanceCoordinator, cache, localNodeId, clock}) {
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    // Compressed geometry: base window small; ceiling = 3x base.
+    // Compressed geometry: one 40ms parent budget shared by every wait.
     tablePartitionProvisioningTimeoutMs: 40,
     tablePartitionProvisioningPollIntervalMs: 1,
     tablePartitionTargetNodeConvergenceTimeoutMs: 5,
+    nowFn: () => clock.nowMs,
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
-  engine.sleep = async () => {};
+  engine.sleep = async (durationMs) => {
+    clock.nowMs += durationMs;
+  };
   return engine;
 }
 
-test('s14: a PROGRESSING ledger spread that outlasts the base window is ' +
-  'waited out — the create succeeds (RED on the single-window head)',
+test('s14/W6: a progressing ledger spread inside the parent deadline is ' +
+  'waited out and CREATE succeeds',
 async (t) => {
   const partitionId = 'tbl-s14-progressing-spread-p1';
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
+  const clock = {nowMs: 0};
   const {services, cache} = createClusterFixture({
     nodeIds: ['node-a', 'node-b', 'node-c'],
   });
-  // Two serialized REPLACEs: worst-concentration 3 -> 2 (REPLACE-1), then
-  // cleared (REPLACE-2). Admits after 2 windows of progress.
   const rebalanceCoordinator = createProgressCoordinator({
-    concentrationByWindow: [2, null],
-    admitAtWindow: 2,
+    clock,
+    admitAtMs: 20,
     services,
     createdTargetNodeIds,
     localNodeId,
   });
-  const engine = createEngineFixture({rebalanceCoordinator, cache, localNodeId});
+  const engine = createEngineFixture({
+    rebalanceCoordinator,
+    cache,
+    localNodeId,
+    clock,
+  });
 
   await engine.provisionInitialTablePartition({
     partitionId,
@@ -182,29 +145,33 @@ async (t) => {
   t.same(
     createdTargetNodeIds.sort(),
     ['node-a', 'node-b', 'node-c'],
-    'all three replicas provisioned once the progressing spread cleared — ' +
-      'the create extended past the base window instead of failing',
+    'all three replicas provisioned once the in-budget spread cleared',
   );
+  t.equal(clock.nowMs, 20, 'the cure completed inside the 40ms parent budget');
 });
 
-test('s14: the STATIC gap between the two serialized spread REPLACEs does NOT ' +
-  'look like a wedge — the create still succeeds', async (t) => {
+test('s14/W6: progress near expiry still succeeds without extending the ' +
+  'deadline', async (t) => {
   const partitionId = 'tbl-s14-inter-move-gap-p1';
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
+  const clock = {nowMs: 0};
   const {services, cache} = createClusterFixture({
     nodeIds: ['node-a', 'node-b', 'node-c'],
   });
-  // worst: 2 (REPLACE-1 done), 2 (STATIC — REPLACE-2 being planned), then
-  // admits. The one static window must be tolerated (stallWindows=2).
   const rebalanceCoordinator = createProgressCoordinator({
-    concentrationByWindow: [2, 2, null],
-    admitAtWindow: 2,
+    clock,
+    admitAtMs: 39,
     services,
     createdTargetNodeIds,
     localNodeId,
   });
-  const engine = createEngineFixture({rebalanceCoordinator, cache, localNodeId});
+  const engine = createEngineFixture({
+    rebalanceCoordinator,
+    cache,
+    localNodeId,
+    clock,
+  });
 
   await engine.provisionInitialTablePartition({
     partitionId,
@@ -216,8 +183,9 @@ test('s14: the STATIC gap between the two serialized spread REPLACEs does NOT ' 
   t.same(
     createdTargetNodeIds.sort(),
     ['node-a', 'node-b', 'node-c'],
-    'the inter-REPLACE static window was tolerated; the create did not bail',
+    'the near-expiry in-budget cure remains usable',
   );
+  t.equal(clock.nowMs, 39, 'the shared deadline was not reset');
 });
 
 test('control: a genuine WEDGE (concentration never improves) fails fast, ' +
@@ -225,18 +193,23 @@ test('control: a genuine WEDGE (concentration never improves) fails fast, ' +
   const partitionId = 'tbl-s14-wedge-p1';
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
+  const clock = {nowMs: 0};
   const {services, cache} = createClusterFixture({
     nodeIds: ['node-a', 'node-b', 'node-c'],
   });
-  // Concentration STATIC at 3 forever; admission never clears.
   const rebalanceCoordinator = createProgressCoordinator({
-    concentrationByWindow: [3],
-    admitAtWindow: Number.POSITIVE_INFINITY,
+    clock,
+    admitAtMs: Number.POSITIVE_INFINITY,
     services,
     createdTargetNodeIds,
     localNodeId,
   });
-  const engine = createEngineFixture({rebalanceCoordinator, cache, localNodeId});
+  const engine = createEngineFixture({
+    rebalanceCoordinator,
+    cache,
+    localNodeId,
+    clock,
+  });
 
   await t.rejects(
     engine.provisionInitialTablePartition({
@@ -249,4 +222,5 @@ test('control: a genuine WEDGE (concentration never improves) fails fast, ' +
     'a wedge (no spread progress) still surfaces the canonical typed failure',
   );
   t.same(createdTargetNodeIds, [], 'nothing was planned under the wedge');
+  t.equal(clock.nowMs, 40, 'the wedge stops at the parent deadline');
 });

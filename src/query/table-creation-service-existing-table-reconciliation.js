@@ -104,6 +104,7 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
           replicaCount :
           this.defaultReplicaCount,
       timeoutBudget: options?.timeoutBudget,
+      cancellationToken: options?.cancellationToken || null,
     });
     const completion = resolveTableCreationCompletion({
       visibilityState,

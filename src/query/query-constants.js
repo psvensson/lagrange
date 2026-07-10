@@ -425,17 +425,6 @@ const QUERY_DEFAULTS = Object.freeze({
   CONTROL_PLANE_NO_HANDLER_ADDRESS_QUARANTINE_MS:
     TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   TABLE_CREATE_PROVISION_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
-  // Progress-gated ceiling for the whole-cluster quorum-concentration re-wait:
-  // a cold-bootstrap ledger spread (voters colocated on the seed → ≤1/node, two
-  // serialized REPLACEs) can legitimately outlast the base provisioning budget.
-  // The re-wait extends up to this multiple of the base budget WHILE the ledger
-  // concentration is measurably improving, and fails fast on a wedge — never an
-  // unconditional longer wait.
-  TABLE_CREATE_PROVISION_PROGRESS_REWAIT_CEILING_MULTIPLE: NUM.THREE,
-  // Consecutive no-spread-progress re-wait windows tolerated before declaring a
-  // wedge and failing fast. >1 so the legitimate static gap BETWEEN the two
-  // serialized spread REPLACEs does not look like a wedge.
-  TABLE_CREATE_PROVISION_PROGRESS_STALL_WINDOWS: NUM.TWO,
   TABLE_CREATE_PROVISION_POLL_INTERVAL_MS: NUM.FIVE * NUM.TEN,
   TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS: TIME_MS.SECOND,
 

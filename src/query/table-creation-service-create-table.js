@@ -48,6 +48,7 @@ const tableCreationCreateTableMethods = {
           existingTable,
           {
             timeoutBudget: options?.timeoutBudget,
+            cancellationToken: options?.cancellationToken || null,
           },
         );
         const visibilityState = String(
@@ -181,6 +182,7 @@ const tableCreationCreateTableMethods = {
         partitionMetadata,
         replicaCount: partitionMetadata.replica_count,
         timeoutBudget: options?.timeoutBudget,
+        cancellationToken: options?.cancellationToken || null,
       });
       await this.evaluateSplitMergeLifecycle();
       this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
@@ -220,6 +222,7 @@ const tableCreationCreateTableMethods = {
       partitionMetadata,
       replicaCount: partitionMetadata.replica_count,
       timeoutBudget: options?.timeoutBudget,
+      cancellationToken: options?.cancellationToken || null,
     });
     await this.evaluateSplitMergeLifecycle();
     this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {

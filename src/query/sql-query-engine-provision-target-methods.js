@@ -1,4 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {throwIfCancellationRequested} from './query-cancellation.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
@@ -87,6 +88,8 @@ class SQLQueryEngineProvisionTargetMethods {
    * @private
    */
   async waitForProvisionTargetNodeIds(options = {}) {
+    const cancellationToken = options.cancellationToken;
+    throwIfCancellationRequested(cancellationToken);
     const requiredReplicaCount =
       Number.isInteger(options.requiredReplicaCount) &&
       options.requiredReplicaCount > 0 ?
@@ -128,6 +131,7 @@ class SQLQueryEngineProvisionTargetMethods {
       Math.min(effectiveMaxWaitMs, this.tablePartitionProvisioningTimeoutMs),
     );
     const refreshResolution = async () => {
+      throwIfCancellationRequested(cancellationToken);
       resolution =
         this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount);
       lastDiagnostics = resolution.diagnostics;
@@ -170,12 +174,14 @@ class SQLQueryEngineProvisionTargetMethods {
           partitionId,
         {
           timeoutBudget: options.timeoutBudget || null,
+          cancellationToken,
           classification:
             TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
           nestedOperation: TABLE_PARTITION_TARGET_NODE_WAIT,
         },
       );
     } catch (error) {
+      throwIfCancellationRequested(cancellationToken);
       timedOut = true;
       const timeoutLogPayload = {
         partitionId,

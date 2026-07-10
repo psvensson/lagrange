@@ -4,6 +4,7 @@ import {SERVICE_PARTITION_ACCESS_KIND} from '../constants/index.js';
 import {
   createSQLQueryEngineProvisioningMethods,
 } from './sql-query-engine-provisioning-methods.js';
+import {throwIfCancellationRequested} from './query-cancellation.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -80,6 +81,8 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     timeoutError,
     timeoutOptions = {},
   ) {
+    const cancellationToken = timeoutOptions.cancellationToken;
+    throwIfCancellationRequested(cancellationToken);
     if (await predicate()) {
       return;
     }
@@ -101,6 +104,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.createControlPlaneTimeoutBudget(timeoutMs);
 
     while (true) {
+      throwIfCancellationRequested(cancellationToken);
       if (await predicate()) {
         return;
       }
@@ -111,8 +115,10 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         break;
       }
       await this.sleep(Math.min(intervalMs, remainingMs));
+      throwIfCancellationRequested(cancellationToken);
     }
 
+    throwIfCancellationRequested(cancellationToken);
     if (await predicate()) {
       return;
     }

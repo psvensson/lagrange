@@ -113,19 +113,24 @@ function createHoldingRebalanceCoordinator({
 }
 
 function createEngineFixture(t, {rebalanceCoordinator, cache, localNodeId}) {
+  const clock = {nowMs: 0};
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
-    // Compressed real geometry: convergence window << provisioning budget.
+    // Compressed virtual geometry: convergence window << provisioning budget.
     tablePartitionProvisioningTimeoutMs: 400,
     tablePartitionProvisioningPollIntervalMs: 1,
     tablePartitionTargetNodeConvergenceTimeoutMs: 10,
+    nowFn: () => clock.nowMs,
   });
+  engine.sleep = async (durationMs) => {
+    clock.nowMs += durationMs;
+  };
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
-  return engine;
+  return {clock, engine};
 }
 
 test('run-24: CREATE TABLE survives a whole-cluster transient ' +
@@ -147,13 +152,15 @@ test('run-24: CREATE TABLE survives a whole-cluster transient ' +
     services,
     localNodeId,
   });
-  const engine = createEngineFixture(t, {
+  const {clock, engine} = createEngineFixture(t, {
     rebalanceCoordinator,
     cache,
     localNodeId,
   });
-  engine.sleep = async () => {
+  const originalSleep = engine.sleep.bind(engine);
+  engine.sleep = async (durationMs) => {
     sleepCalls += 1;
+    return originalSleep(durationMs);
   };
 
   // The REAL CREATE TABLE geometry (table-creation-service): a defaulted
@@ -178,6 +185,11 @@ test('run-24: CREATE TABLE survives a whole-cluster transient ' +
     'all three replicas provisioned once the ledger hold cleared — the ' +
       'client never saw the transient',
   );
+  t.ok(
+    clock.nowMs > 10 && clock.nowMs < 400,
+    'the hold outlasted the inner convergence window and cleared before the ' +
+      `parent deadline (${clock.nowMs}ms)`,
+  );
 });
 
 test('control: a transient hold that NEVER clears still fails within the ' +
@@ -194,7 +206,7 @@ test('control: a transient hold that NEVER clears still fails within the ' +
     services,
     localNodeId,
   });
-  const engine = createEngineFixture(t, {
+  const {engine} = createEngineFixture(t, {
     rebalanceCoordinator,
     cache,
     localNodeId,
@@ -237,7 +249,7 @@ test('control: a NON-transient whole-cluster rejection fails fast without ' +
       },
     },
   });
-  const engine = createEngineFixture(t, {
+  const {engine} = createEngineFixture(t, {
     rebalanceCoordinator,
     cache,
     localNodeId,

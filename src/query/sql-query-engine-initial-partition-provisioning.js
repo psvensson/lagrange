@@ -3,6 +3,13 @@ import {SQLQueryEngineStatementExecution} from './sql-query-engine-statement-exe
 import {
   createSQLQueryEngineProvisioningAdmissionMethods,
 } from './sql-query-engine-provisioning-admission-methods.js';
+import {
+  createSQLQueryEngineProvisioningDeadlineMethods,
+} from './sql-query-engine-provisioning-deadline-methods.js';
+import {
+  resolveQueryCancellationToken,
+  throwIfCancellationRequested,
+} from './query-cancellation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -29,6 +36,8 @@ const {
 
 class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatementExecution {
   async provisionInitialTablePartition(context) {
+    const cancellationToken = resolveQueryCancellationToken(context);
+    throwIfCancellationRequested(cancellationToken);
     const partitionId = context?.partitionId;
     const requestedReplicaCount =
       Number.isInteger(context?.replicaCount) && context.replicaCount > 0 ?
@@ -152,6 +161,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         allowAdaptiveAdmissionConvergenceWait:
           this.tablePartitionTargetNodeConvergenceTimeoutMs ===
           QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS,
+        cancellationToken,
       });
       admissionConvergence = convergenceResult.admissionProbe || null;
       const transientHoldRewaitResult =
@@ -162,6 +172,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           explicitTargetNodeIds,
           hasExplicitMinimumRoutableReplicaCount,
           admissionConvergence,
+          cancellationToken,
         });
       if (transientHoldRewaitResult) {
         convergenceResult = transientHoldRewaitResult;
@@ -283,6 +294,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       );
     }
     for (const targetNodeId of candidateTargetNodeIds) {
+      throwIfCancellationRequested(cancellationToken);
       if (precheckedTargetNodeIds.has(targetNodeId)) {
         continue;
       }
@@ -399,6 +411,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     }
 
     for (const targetNodeId of admittedTargetNodeIds) {
+      throwIfCancellationRequested(cancellationToken);
       if (plannedOperations.length >= requiredNewReplicaCount) {
         break;
       }
@@ -542,6 +555,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     const metadataWaitReplicaIds = [];
     for (const operation of plannedOperations) {
+      throwIfCancellationRequested(cancellationToken);
       operation[ReplicaOperationField.REPLICA_IDS] =
         bootstrapTopology.replicaIds;
       operation[ReplicaOperationField.PEER_ADDRESSES] =
@@ -586,6 +600,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         typeof this.rebalanceCoordinator.executeOperation === 'function' ?
           await this.rebalanceCoordinator.executeOperation(operation) :
           await this.rebalanceCoordinator.dispatchOperation(operation);
+      throwIfCancellationRequested(cancellationToken);
 
       if (
         executionResult &&
@@ -620,7 +635,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         });
         await Promise.all(
           uniqueMetadataWaitReplicaIds.map((replicaId) =>
-            this.waitForPartitionServiceMetadata(replicaId, timeoutBudget),
+            this.waitForPartitionServiceMetadata(replicaId, timeoutBudget, {
+              cancellationToken,
+            }),
           ),
         );
       } else {
@@ -639,8 +656,10 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           minimumRoutableReplicaCount,
           timeoutBudget,
           routingReadinessDimension,
+          {cancellationToken},
         );
       }
+      throwIfCancellationRequested(cancellationToken);
     }
 
     await this.waitForRoutablePartitionServiceCount(
@@ -648,12 +667,16 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       minimumRoutableReplicaCount,
       timeoutBudget,
       routingReadinessDimension,
+      {cancellationToken},
     );
+    throwIfCancellationRequested(cancellationToken);
     await this.waitForPartitionLeaderService(partitionId, timeoutBudget, {
       partitionMetadata: bootstrapPartitionMetadata,
       bootstrapLeaderNodeId,
       routingReadinessDimension,
+      cancellationToken,
     });
+    throwIfCancellationRequested(cancellationToken);
     const finalRoutableNodeIds = this.getRoutablePartitionServiceNodeIds(
       partitionId,
       routingReadinessDimension,
@@ -668,150 +691,6 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       reasonCodes: provisioningReasonCodes,
       retryAfterMs: provisioningRetryAfterMs,
     });
-  }
-
-  /**
-   * Wait out a WHOLE-CLUSTER transient provisioning hold under the full
-   * provisioning budget (run-24): when the short convergence window expires
-   * with ZERO provisionable targets and EVERY rejection is a transient
-   * ledger-interlock/health reason, the hold is an internal formation
-   * window — failing the client's CREATE at the convergence window's edge
-   * violates internal-pacing-not-client-fidelity while the governing
-   * provisioning budget still has headroom. This is honest budget
-   * attribution, not a raised timeout: the client-facing budget
-   * (tablePartitionProvisioningTimeoutMs / the caller's timeoutBudget)
-   * always governed the create; only the inner window's early throw is
-   * removed. Hard (non-transient) rejections and explicit caller minimums
-   * never take this path.
-   * @param {Object} options
-   * @return {Promise<Object|null>} The re-wait convergence result, or null
-   *   when the extended wait does not apply.
-   * @private
-   */
-  isWholeClusterTransientProvisioningHold(options = {}) {
-    const admissionConvergence = options.admissionConvergence || null;
-    const maximumProvisionableReplicaCount = Number.isInteger(
-      admissionConvergence?.maximumProvisionableReplicaCount,
-    ) ?
-      admissionConvergence.maximumProvisionableReplicaCount :
-      null;
-    return (
-      maximumProvisionableReplicaCount === 0 &&
-      options.hasExplicitMinimumRoutableReplicaCount !== true &&
-      this.hasOnlyTransientProvisioningShortfall(
-        admissionConvergence?.rejectedTargetNodePlans,
-      )
-    );
-  }
-
-  async waitOutWholeClusterTransientProvisioningHold(options = {}) {
-    if (!this.isWholeClusterTransientProvisioningHold(options)) {
-      return null;
-    }
-    const baseWaitMs = this.tablePartitionProvisioningTimeoutMs;
-    const ceilingMs =
-      baseWaitMs *
-      QUERY_DEFAULTS.TABLE_CREATE_PROVISION_PROGRESS_REWAIT_CEILING_MULTIPLE;
-    this.logTransientProvisioningHoldWait(options, baseWaitMs, ceilingMs);
-    // Progress-gated re-wait. A cold-bootstrap ledger spread (voters colocated on
-    // the seed) cures via TWO serialized REPLACEs and legitimately outlasts the
-    // base budget. Extend up to the ceiling in base-width windows WHILE the
-    // ledger quorum concentration is measurably improving (the SAME measure the
-    // hold gates on, read from the authoritative placement rows), and fail fast
-    // once it stalls for `stallWindows` windows — a genuine wedge, not a slow
-    // cure. Each window uses a FRESH budget (the shared top-level timeoutBudget
-    // is already drawn down and would clamp the loop to zero extra time) and is
-    // bounded by the per-call 30s cap, so the ceiling is the only thing that
-    // raises effective provisioning time, and only while the cure progresses.
-    let lastResult = null;
-    let elapsedMs = 0;
-    const tracker = {bestConcentration: null, windowsSinceProgress: 0};
-    while (elapsedMs < ceilingMs) {
-      const windowResult = await this.waitForProvisionTargetNodeIds({
-        partitionId: options.partitionId,
-        requiredReplicaCount: options.requiredReplicaCount,
-        timeoutBudget: this.createControlPlaneTimeoutBudget(baseWaitMs),
-        failOnTimeout: false,
-        maxWaitMs: baseWaitMs,
-        explicitTargetNodeIds: options.explicitTargetNodeIds || [],
-        allowAdaptiveAdmissionConvergenceWait: false,
-      });
-      lastResult = windowResult;
-      elapsedMs += baseWaitMs;
-      const provisionable =
-        windowResult?.admissionProbe?.maximumProvisionableReplicaCount;
-      if (Number.isInteger(provisionable) && provisionable > 0) {
-        return windowResult;
-      }
-      if (this.concentrationProgressStalled(tracker)) {
-        break;
-      }
-    }
-    return lastResult;
-  }
-
-  /**
-   * Log the whole-cluster transient-hold re-wait entry (run-24 evidence
-   * trail: which partition is held, why, and the governing budgets).
-   * @param {Object} options The re-wait options.
-   * @param {number} baseWaitMs
-   * @param {number} ceilingMs
-   * @private
-   */
-  logTransientProvisioningHoldWait(options, baseWaitMs, ceilingMs) {
-    const admissionConvergence = options.admissionConvergence || null;
-    this.logger.warn(QUERY_LOG_MSG.TABLE_PARTITION_TRANSIENT_HOLD_WAIT, {
-      partitionId: options.partitionId || null,
-      requiredReplicaCount: options.requiredReplicaCount || null,
-      rejectedTargetNodePlans:
-        admissionConvergence?.rejectedTargetNodePlans || [],
-      maxWaitMs: baseWaitMs,
-      progressRewaitCeilingMs: ceilingMs,
-    });
-  }
-
-  /**
-   * Read the coordinator's ledger-concentration progress snapshot, or null
-   * when the coordinator (or the resolver) is not available.
-   * @return {Object|null}
-   * @private
-   */
-  resolveLedgerConcentrationProgressSnapshot() {
-    const coordinator = this.rebalanceCoordinator;
-    return typeof coordinator
-      ?.resolveOperationLedgerConcentrationProgressSnapshot === 'function' ?
-      coordinator.resolveOperationLedgerConcentrationProgressSnapshot() :
-      null;
-  }
-
-  /**
-   * Advance the re-wait progress tracker one window and report whether the
-   * concentration cure has stalled. Progress = the worst observed
-   * concentration strictly improved; a cleared (or unobservable) hold also
-   * resets the stall count — admission simply has not re-opened yet, so the
-   * loop grants another probe window rather than bailing.
-   * @param {Object} tracker Mutable {bestConcentration, windowsSinceProgress}.
-   * @return {boolean} True when progress stalled for the configured windows.
-   * @private
-   */
-  concentrationProgressStalled(tracker) {
-    const snapshot = this.resolveLedgerConcentrationProgressSnapshot();
-    if (!snapshot || snapshot.holdEngaged === false) {
-      tracker.windowsSinceProgress = 0;
-      return false;
-    }
-    const worst = snapshot.worstConcentration;
-    const improved = Number.isInteger(worst) &&
-      (tracker.bestConcentration === null ||
-        worst < tracker.bestConcentration);
-    if (improved) {
-      tracker.bestConcentration = worst;
-      tracker.windowsSinceProgress = 0;
-      return false;
-    }
-    tracker.windowsSinceProgress += 1;
-    return tracker.windowsSinceProgress >=
-      QUERY_DEFAULTS.TABLE_CREATE_PROVISION_PROGRESS_STALL_WINDOWS;
   }
 
   buildProvisioningCompletionSummary(options = {}) {
@@ -887,6 +766,10 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 Object.defineProperties(
   SQLQueryEngineInitialPartitionProvisioning.prototype,
   createSQLQueryEngineProvisioningAdmissionMethods(),
+);
+Object.defineProperties(
+  SQLQueryEngineInitialPartitionProvisioning.prototype,
+  createSQLQueryEngineProvisioningDeadlineMethods(),
 );
 
 export {SQLQueryEngineInitialPartitionProvisioning};
