@@ -1,0 +1,38 @@
+{
+  "id": "solver-terminal-integrity-cutover-exhaustion-fix",
+  "statement": "Both Solver terminal statuses, SOLVED and EXHAUSTED, use the same fail-closed integrity predicate as audit, so unresolved, malformed, or tampered accepted history emits neither terminal status.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W1",
+    "closesCL": [],
+    "parentQuest": "solver-terminal-integrity-cutover-fail-closed-fix",
+    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+    "sealedAtCommit": "fe2c28f35908eb17b94b45a8403c87bdd362a873"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-terminal-integrity-cutover-exhaustion-fix.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-terminal-integrity-cutover-exhaustion-fix-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-terminal-integrity-cutover-exhaustion-fix.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
