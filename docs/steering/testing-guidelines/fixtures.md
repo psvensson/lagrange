@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** System-table mutation requirements and test-only code path rules. Index: [`INDEX.md`](INDEX.md).
@@ -96,17 +96,20 @@ flag into the proof.
   behavior in first, then update the test to assert that unconditional behavior;
   a test never pins a flag either way.
 
-## System Guideline Conformance Gate for New and Existing Tests
+## System Guideline Conformance Gate for New and Behavior-Meaningful Tests
 
-When adding new tests or changing existing tests for production code, you must
+When adding a new test file, or making a behavior-meaningful change to an
+existing test — new or changed assertions about production behavior — you must
 also audit the code under test for System Guidelines violations and fix them as
-part of the same change. This requirement applies equally to new test files and
-edits to existing test files.
+part of the same change. Mechanical test edits (renames, import updates,
+timeout adjustments, formatting) do NOT trigger this gate.
 
 Required workflow:
 
-1. Identify the production files touched by the new or modified test and their
-   direct owner collaborators.
+1. Identify the audit scope: the production files exercised by the new or
+   modified test plus their direct owner collaborators — the same bounded set
+   as the closure deep dive defined in [`proof-ladders.md`](proof-ladders.md)
+   ("Closure deep dive — scope"). Do not widen beyond that set.
 2. Check those files against `docs/steering/system-guidelines.md` with special
    focus on:
    - owner dependency routing

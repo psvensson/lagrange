@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Test execution strategy, harness rules, output management. Index: [`INDEX.md`](INDEX.md).
@@ -122,7 +122,11 @@ When running tests during task execution:
 1. **Run targeted tests only** - Don't run the full test suite except at checkpoints
 2. **Focus on relevant tests** - Only run tests related to the feature/file being modified
 3. **Run failing tests first** - When fixing issues, run only the specific failing test(s)
-4. **Use test filtering** - Use patterns like `npm test -- --grep "pattern"` or similar to filter tests
+4. **Invoke targeted tests via tap directly** - `npx tap <test-file...>` (tap is
+   the suite runner; the sharded `test:*` scripts shell out to it). Do NOT use
+   `npm test -- <file>` or `npm test -- --grep "pattern"`: the `test` script is
+   the full sharded suite and silently ignores extra arguments, so those forms
+   run everything while appearing filtered.
 
 This targeted-run guidance governs *iteration*. It does NOT relax the closure bar:
 before closing a Quest or task, the static-guardrail and owner-boundary audits in
@@ -135,6 +139,21 @@ Only run the complete test suite (`npm test`) at:
 - Checkpoint tasks explicitly marked in the active Quest's `doneWhen` or frontier list
 - Final integration verification
 - When explicitly requested by the user
+
+## Before Any Commit
+
+A git pre-commit hook exists at `.githooks/pre-commit` (activated via
+`core.hooksPath=.githooks`) and runs automatically on every commit. It covers
+the fast structural guards (<2s): `npm run audit:file-size`,
+`npm run audit:guideline:hot-path-diagnostics`,
+`node scripts/check-staged-constant-names.js`, and eslint (with cache) on the
+staged JS files under `src/`, `test/`, and `scripts/`. `git commit --no-verify`
+bypasses it — emergencies only.
+
+The hook is a floor, not the bar. The manual minimum before every commit —
+Quest or not — is `npm run lint`, `npm run test:complexity`, plus targeted
+tests (`npx tap <test-file...>`) for the code touched. The whole-repo static
+gate lives in `test:static` and runs in CI.
 
 ## Full Test Suite Execution
 Full-suite local execution procedure lives in `test/README.local.md`.

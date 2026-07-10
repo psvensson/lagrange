@@ -198,12 +198,12 @@ Focus shifts to developer experience.
 | `RM-0.5-cde-node-start` | `lagrange node start` | 🔲 |
 | `RM-0.5-cde-cluster-join` | `lagrange cluster join` | 🔲 |
 | `RM-0.5-cde-docker-compose` | `docker-compose` cluster | 🔲 |
-| `RM-0.5-cde-helm-chart` | Kubernetes Helm chart | 🔧 |
+| `RM-0.5-cde-helm-chart` | Kubernetes Helm chart | ✅ |
 
-`Kubernetes Helm chart` is approved scope in this section. Further
-implementation work stays tied to a deployment description that covers values
-surface, networking, storage, bootstrap flow, and upgrade behavior before more
-task expansion begins.
+The Kubernetes Helm chart shipped: `charts/lagrange-node/` exists and the
+release pipeline packages it. Further hardening of the chart stays tied to a
+deployment description that covers values surface, networking, storage,
+bootstrap flow, and upgrade behavior before more task expansion begins.
 
 ### 2. Developer Workflow
 

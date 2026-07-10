@@ -75,8 +75,8 @@ in-repo-steering vs external-memory split.
 1. Read this file (`AGENTS.md`).
 2. Read [`docs/steering/llm/core.md`](docs/steering/llm/core.md).
 3. Read [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md).
-4. Load the smallest relevant domain pack: architecture, testing, style, or
-   governance.
+4. Load the smallest relevant domain pack(s): architecture, testing, style, or
+   governance. Cross-cutting work loads each relevant pack, not just one.
 5. For non-trivial implementation work, create or select a Quest and let the
    Solver record attempts, findings, state, and terminal report.
 6. Consult source steering under [`docs/steering/`](docs/steering/) only for
@@ -95,13 +95,10 @@ those packs and add cited detail; they are not a separate runtime override path.
 
 Prefer these canonical tools before raw JSON, log slicing, or ad-hoc queries:
 
-- **Quest scaffold**: `node scripts/solve.js new --id <id> --statement "<sealed result>"`
-- **Quest status**: `node scripts/solve.js status --id <id>`
-- **Quest supervised step**: `node scripts/solve.js step --id <id>`
-- **Quest autonomous run**: `node scripts/solve.js run --id <id> --executor agent --yes --keep-alive` (bare `run --id <id>` is the no-op `dry` executor)
-- **Quest report**: `node scripts/solve.js report --id <id>`
-- **Quest probe**: `node scripts/solve.js probe ...`
-- **Full command reference**: [`docs/steering/llm/solve-commands.md`](docs/steering/llm/solve-commands.md) (generated; every `solve.js` subcommand)
+- **Quest lifecycle commands** (`new` / `step` / `run` / `report`): the
+  canonical invocations — including the autonomous-run incantation and its
+  dry-executor warning — are stated once, under "Working Model" above.
+- **Full command reference**: [`docs/steering/llm/solve-commands.md`](docs/steering/llm/solve-commands.md) (generated; every `solve.js` subcommand, including `status` and `probe`)
 - **Steering Pack Refresh**: `npm run steering:llm:pack` after editing any
   source listed in `docs/steering/llm-pack.config.json`, including nested
   `docs/steering/**/*.md` files.

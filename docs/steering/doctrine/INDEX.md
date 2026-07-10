@@ -3,8 +3,8 @@ scope: architecture
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: docs/steering/llm/architecture.md
-last_reviewed: 2026-05-23
+compiled_pack: rules.json corpus (below architecture pack cap; query via npm run rule)
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source — index.** This is the navigation index for the Lagrange Engineering Doctrine. Rule content lives in the sub-files; the LLM pack generator reads them via `llm-pack.config.json`.

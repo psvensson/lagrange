@@ -6,7 +6,7 @@ source_of_truth: self
 compiled_pack: docs/steering/llm/architecture.md
 llm_load: represented_by_compact_packs
 inclusion: represented_by_llm_core_and_architecture_pack
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Generated packs at `docs/steering/llm/` derive rules from this file. Regenerate with `npm run steering:llm:pack` after edits.
@@ -62,7 +62,11 @@ Use focused steering files for detail:
 
 These rules are non-negotiable. The compact packs derived from this file
 carry the same authority during a session; the detailed source files explain
-proof and procedure but do not weaken this contract.
+proof and procedure but do not weaken this contract. Note the packs are a
+priority-ranked subset under a per-pack `maxRules` cap, not the full corpus:
+rules that fall below a pack's cap remain binding when their scope is touched
+and are queryable via `npm run rule` /
+[`llm/rules-index.md`](llm/rules-index.md).
 
 The system is called lagrange.
 

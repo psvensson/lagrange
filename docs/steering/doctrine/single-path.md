@@ -3,9 +3,9 @@ scope: architecture
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: docs/steering/llm/architecture.md
+compiled_pack: rules.json corpus (below architecture pack cap; query via npm run rule)
 parent_index: ../doctrine/INDEX.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Doctrine sub-file: single path / single contract shape. Index: [`INDEX.md`](INDEX.md).

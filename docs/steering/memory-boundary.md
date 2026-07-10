@@ -31,8 +31,12 @@ conflicting copies.
 - Durable operational ground truth has exactly one canonical home,
   [`operational-ground-truth.md`](operational-ground-truth.md). `AGENTS.md` and the
   external auto-memory MUST link to it rather than restate it.
-- When external memory and in-repo steering disagree, in-repo steering wins (it is
-  shared and CI-gated); fix the external note.
+- When external memory and in-repo steering disagree, in-repo steering wins for
+  rules and ground truth (it is shared and CI-gated). One exception outranks both
+  channels: a directly-recorded USER DIRECTIVE is Level-1 authority per boot.md
+  "Authority Order" regardless of which channel records it — an external-memory
+  note that records a user directive is not demoted by this rule. Either way,
+  fix the stale note so the two channels stop disagreeing.
 - **Metadata is part of the diff.** When you substantively change a body / decision-log
   (a memory file, an epic, a quest), refresh that file's summary metadata — frontmatter
   `description:`/`status:` AND its index hook (`MEMORY.md` / `MEMORY-ARCHIVE.md` line) — in

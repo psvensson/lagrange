@@ -137,7 +137,12 @@ One carve-out: the Quest workflow canon (`AGENTS.md`,
 [solver-quests.md](../workflow-guidelines/solver-quests.md), and the active Quest
 file) is execution-time authority in its own right at Level 2 of boot.md's
 Authority Order — above the domain packs — even though solver-quests.md also
-feeds the generated governance pack. Do not demote it to "pack source".
+feeds the generated governance pack. Do not demote it to "pack source". The same
+applies to the runtime-primary source docs AGENTS.md mandates directly:
+[operational-ground-truth.md](../operational-ground-truth.md) (required reading
+BEFORE any distributed-harness or convergence work) and
+[memory-boundary.md](../memory-boundary.md) are read as sources in their own
+right, not only to chase cited detail or repair drift.
 
 ## 30-Second Must-Not Checklist
 

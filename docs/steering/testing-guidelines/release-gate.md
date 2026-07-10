@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
-last_reviewed: 2026-06-01
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Scenario and release-gate Quest proof policy. Index:
@@ -18,6 +18,10 @@ last_reviewed: 2026-06-01
 When a Quest exists because a distributed, integration, load, or scenario
 failure must be resolved, the Quest must keep one named reference scenario or
 probe as its `doneWhen`.
+
+This does not conflict with the gate-last-resort policy: the reference scenario
+is executed once, at closure, after the deterministic ladder is green — its role
+is certification of the sealed `doneWhen`, not iteration.
 
 Required workflow:
 
@@ -62,15 +66,17 @@ Use this order for scenario Quests:
 
 The expensive non-deterministic statistical gate (the docker rolling-restart
 stat-gate and equivalent multi-run scenario reruns) is a last resort, reached
-only after deterministic in-process proof. A fix is validated by a deterministic
-reproduction that goes red on revert, not by a passing gate run. Run a gate only
-when the claim is irreducibly statistical — a true pass-rate or variance question
-no deterministic test can answer, or a one-time milestone certification of an
-already-deterministically-proven change against a sealed bar — and even then
-minimize the run count, starting at the smallest informative N. A gate must never
-be the iteration loop: do not gate to see whether a change helped, to discover
-the next blocker, or to re-confirm a mechanism a deterministic test already
-demonstrates.
+only after deterministic in-process proof: a fix is validated by a deterministic
+reproduction that goes red on revert, not by a passing gate run, and a gate is
+never the iteration loop. The gate policy itself is single-homed in
+[`operational-ground-truth.md`](../operational-ground-truth.md) (per the
+AGENTS.md single-canonical-home rule) — consult it before queuing any gate run
+for: the admission criteria (the named irreducibly-statistical cases, including
+hot failure-path aggregate A/B validation), the mandatory
+`npm run analyze:latent-blockers` pre-gate step, the sealed-metric detail, and
+the N calibration table (mechanistic N=3–4 / rate or variance N≥8 / sealed-bar
+certification N≥15). This file only fixes the rerun-ladder ordering above; it
+does not restate those criteria.
 
 ## Deterministic Proof Must Move the Binding Observable
 

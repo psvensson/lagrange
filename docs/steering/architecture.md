@@ -4,14 +4,18 @@ status: pointer
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/architecture.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-10
 ---
 
 > **Pointer — not a rule source.** This file only routes architecture-document
 > lookups to the canonical tree; it carries no implementation rules of its own.
-> The architecture *policy* rules live in `runtime-contracts.md` and the
-> `doctrine/` sub-files (which is where the architecture pack's rules come from).
-> Do not treat this pointer as a co-equal source of architecture policy.
+> The architecture *policy* rules live in `system-guidelines.md`,
+> `runtime-contracts.md`, and the `doctrine/` sub-files. The compiled
+> architecture pack is currently filled from `system-guidelines.md` and
+> `runtime-contracts.md`; the doctrine rules live in the rule corpus
+> (`rules.json`, query via `npm run rule`) below the pack cap and are equally
+> binding. Do not treat this pointer as a co-equal source of architecture
+> policy.
 
 # Architecture Steering Pointer
 

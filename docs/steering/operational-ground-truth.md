@@ -41,10 +41,17 @@ any distributed-harness or convergence work:
   exact question and why no in-process test can answer it; if you can't, you are
   not ready to gate.
   - **Run a gate ONLY when the claim is irreducibly statistical** and no
-    deterministic test can stand in: a true pass-*rate* / variance question, or a
-    one-time milestone certification of a landed, already-DT-proven improvement
-    against a sealed bar. Mechanism, classification, recovery, and red-on-revert
-    are deterministic questions — answer them in-process, never with a gate.
+    deterministic test can stand in. Three named cases qualify: (1) a true
+    pass-*rate* / variance question; (2) a one-time milestone certification of a
+    landed, already-DT-proven improvement against a sealed bar; (3) **hot
+    failure-path aggregate A/B validation** — a change to a hot failure-handling
+    path ships only with a controlled live A/B of N≥2 runs fixed vs N≥2 runs
+    reverted (see
+    [`findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md`](findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md));
+    this IS an irreducibly-statistical claim, so it is an allowed gate use, and
+    the `analyze:latent-blockers` pre-step below applies to it like any other
+    gate. Mechanism, classification, recovery, and red-on-revert are
+    deterministic questions — answer them in-process, never with a gate.
   - **A gate is never the iteration loop.** Do not gate to "see if it helped", to
     discover the next blocker, or to re-confirm a mechanism a DT already shows.
     Each run is non-deterministic and costs ~5–10 min of wall-clock you can't get
@@ -53,6 +60,12 @@ any distributed-harness or convergence work:
     informative N and escalate only when the result forces it (a borderline mixed
     rate, or a rate-promotion verdict where the statistic itself is the claim).
     Never conclude a *rate* from N=1; never default to a large N every iteration.
+    Calibrate N to the question:
+    | Question | N |
+    | --- | --- |
+    | Mechanistic / does-it-engage | N=3–4 |
+    | Rate or variance verdict | N≥8 |
+    | Sealed-bar certification | N≥15 (the one-time certification in the sealed-metric bullet below) |
   - `rolling-restart-core-stability`'s `doneWhen` is the sealed variance-aware
     metric in [`docs/convergence-donewhen-metric.md`](../../docs/convergence-donewhen-metric.md)
     (Wilson 95% lower-bound passRate ≥ `T(N_nodes)` + a hard SAFE floor), NOT
@@ -105,7 +118,7 @@ any distributed-harness or convergence work:
   distributed drive paths), a red-on-revert deterministic/directed test, or a code trace.
   When a mechanism is half-wired, the fix is to FINISH it to authority (retire the old
   path, close the bypass, consume the evidence), NEVER to add a parallel path around it.
-- **Two hard triggers the research-first rule MUST fire on (learned the expensive
+- **Three hard triggers the research-first rule MUST fire on (learned the expensive
   way — the affinity demo paid one 10-minute live run per half-wired link it could
   have found in a single audit):**
   1. **Never-exercised path → full-chain engagement audit UP FRONT.** Before the
@@ -164,4 +177,6 @@ any distributed-harness or convergence work:
   step-back reflection above; the exemplar is
   [`solve/changes/formation-ledger-self-move-blocks-cluster-ops/research-SYNTHESIS.md`](../../solve/changes/formation-ledger-self-move-blocks-cluster-ops/research-SYNTHESIS.md).
 - **Independently verify after implementing.** After a change, have a separate
-  subagent independently verify it before relying on or reporting it.
+  subagent independently verify it before relying on or reporting it. Arm the
+  verifier with the attack checklist matching the change category from
+  [`verification-templates/INDEX.md`](verification-templates/INDEX.md).

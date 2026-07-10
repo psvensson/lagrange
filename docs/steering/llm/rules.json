@@ -159,12 +159,12 @@
     }
   ],
   "stats": {
-    "candidateCount": 349,
-    "dedupedRuleCount": 340,
-    "exportedRuleCount": 340,
+    "candidateCount": 352,
+    "dedupedRuleCount": 343,
+    "exportedRuleCount": 343,
     "aliasRuleCount": 4,
-    "masterRuleCount": 336,
-    "estimatedAllRulesTokens": 14572
+    "masterRuleCount": 339,
+    "estimatedAllRulesTokens": 14812
   },
   "rules": [
     {
@@ -177,7 +177,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 98,
+          "line": 102,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
@@ -192,7 +192,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 102,
+          "line": 106,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
@@ -209,7 +209,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 119,
+          "line": 123,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -226,7 +226,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 121,
+          "line": 125,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -243,7 +243,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 145,
+          "line": 149,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -258,7 +258,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 173,
+          "line": 177,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ]
@@ -273,7 +273,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 176,
+          "line": 180,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
@@ -289,7 +289,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 179,
+          "line": 183,
           "section": "System Guidelines — Mandatory Implementation Contract > 4. Scalars, State, And Naming Have Owners"
         }
       ],
@@ -307,7 +307,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 217,
+          "line": 221,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -325,7 +325,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 224,
+          "line": 228,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -342,7 +342,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 242,
+          "line": 246,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         },
         {
@@ -360,11 +360,11 @@
         "lifecycle"
       ],
       "rule": "Phase completion removes temporary scaffolding only, never the sole live dissemination, observation, admission, or repair path.",
-      "score": 256,
+      "score": 255,
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 249,
+          "line": 253,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -381,7 +381,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 267,
+          "line": 271,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -398,7 +398,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 272,
+          "line": 276,
           "section": "System Guidelines — Mandatory Implementation Contract > 8. Control-Plane Work Uses Shared Primitives"
         }
       ]
@@ -413,7 +413,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 285,
+          "line": 289,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -428,7 +428,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 286,
+          "line": 290,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -445,7 +445,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 290,
+          "line": 294,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -460,7 +460,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 291,
+          "line": 295,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -475,7 +475,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 307,
+          "line": 311,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
@@ -493,7 +493,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 332,
+          "line": 336,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -508,7 +508,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 200,
+          "line": 204,
           "section": "System Guidelines — Mandatory Implementation Contract > 5. Shared Runtime Contracts Have One Shape"
         }
       ]
@@ -523,7 +523,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 228,
+          "line": 232,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -540,7 +540,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 234,
+          "line": 238,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -644,7 +644,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 219,
+          "line": 223,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -663,7 +663,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 239,
+          "line": 243,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -680,7 +680,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 356,
+          "line": 360,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -697,7 +697,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 358,
+          "line": 362,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -714,7 +714,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 361,
+          "line": 365,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -729,7 +729,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 369,
+          "line": 373,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -980,8 +980,8 @@
       "sources": [
         {
           "file": "testing-guidelines/fixtures.md",
-          "line": 117,
-          "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Existing Tests"
+          "line": 120,
+          "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Behavior-Meaningful Tests"
         }
       ]
     },
@@ -1043,7 +1043,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 128,
+          "line": 132,
           "section": "Testing — Regression Policy > Bug-Cluster Escalation Policy"
         }
       ]
@@ -1058,7 +1058,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 184,
+          "line": 188,
           "section": "Testing — Regression Policy > Deterministic Control-Loop Regression Policy"
         }
       ]
@@ -1073,7 +1073,7 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 28,
+          "line": 32,
           "section": "Testing — Scenario And Release-Gate Quests > Reference Scenario Policy"
         }
       ]
@@ -1088,7 +1088,7 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 86,
+          "line": 92,
           "section": "Testing — Scenario And Release-Gate Quests > Deterministic Proof Must Move the Binding Observable"
         }
       ]
@@ -1105,7 +1105,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 363,
+          "line": 367,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -1120,7 +1120,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 364,
+          "line": 368,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -1135,7 +1135,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 394,
+          "line": 398,
           "section": "Testing — Regression Policy > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1152,7 +1152,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 400,
+          "line": 404,
           "section": "Testing — Regression Policy > Baseline-Discovered Bug Closure Policy"
         }
       ]
@@ -1200,7 +1200,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 88,
+          "line": 92,
           "section": "System Guidelines — Mandatory Implementation Contract > 1. Work Starts From One Bounded Quest"
         }
       ]
@@ -1219,7 +1219,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 111,
+          "line": 115,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         }
       ]
@@ -1234,7 +1234,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 139,
+          "line": 143,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -1252,7 +1252,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 227,
+          "line": 231,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -1267,7 +1267,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 280,
+          "line": 284,
           "section": "System Guidelines — Mandatory Implementation Contract > 9. Load May Slow The System, Not Break It"
         }
       ]
@@ -1282,7 +1282,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 315,
+          "line": 319,
           "section": "System Guidelines — Mandatory Implementation Contract > 11. Mutations Are Idempotent"
         },
         {
@@ -1539,6 +1539,24 @@
       "domain": "testing",
       "strength": "must_not",
       "tags": [
+        "timeout",
+        "testing"
+      ],
+      "rule": "Mechanical test edits (renames, import updates, timeout adjustments, formatting) do NOT trigger this gate.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "testing-guidelines/fixtures.md",
+          "line": 104,
+          "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Behavior-Meaningful Tests"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0027",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
         "testing"
       ],
       "rule": "Do not reclassify a slow unit test as \"integration\" to dodge the hard error — move the file into the integration set only if it genuinely needs the integration harness.",
@@ -1552,7 +1570,7 @@
       ]
     },
     {
-      "id": "TEST-0027",
+      "id": "TEST-0028",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1569,7 +1587,7 @@
       ]
     },
     {
-      "id": "TEST-0028",
+      "id": "TEST-0029",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1580,24 +1598,6 @@
           "file": "testing-guidelines/harness.md",
           "line": 68,
           "section": "Testing — Harness & Execution > Test Duration Hard Limit"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0029",
-      "domain": "testing",
-      "strength": "must_not",
-      "tags": [
-        "readiness",
-        "testing"
-      ],
-      "rule": "A gate must never be the iteration loop: do not gate to see whether a change helped, to discover the next blocker, or to re-confirm a mechanism a deterministic test already demonstrates.",
-      "score": 226,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 63,
-          "section": "Testing — Scenario And Release-Gate Quests > Representative Rerun Order"
         }
       ]
     },
@@ -1613,7 +1613,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 369,
+          "line": 373,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         },
         {
@@ -1638,7 +1638,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 375,
+          "line": 379,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -1893,7 +1893,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 130,
+          "line": 134,
           "section": "Testing — Regression Policy > Bug-Cluster Escalation Policy"
         }
       ]
@@ -1910,7 +1910,7 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 32,
+          "line": 36,
           "section": "Testing — Scenario And Release-Gate Quests > Reference Scenario Policy"
         },
         {
@@ -1932,7 +1932,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 339,
+          "line": 343,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy > Test structure"
         }
       ]
@@ -2397,7 +2397,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 348,
+          "line": 352,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -2412,7 +2412,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 363,
+          "line": 367,
           "section": "System Guidelines — Mandatory Implementation Contract > 13. Closure Requires Proof, Review, And Truth Repair"
         }
       ]
@@ -2494,6 +2494,42 @@
       "domain": "testing",
       "strength": "must_not",
       "tags": [
+        "ownership",
+        "testing",
+        "governance"
+      ],
+      "rule": "Identify the audit scope: the production files exercised by the new or modified test plus their direct owner collaborators — the same bounded set as the closure deep dive defined in proof-ladders.md (\"Closure deep dive — scope\"). Do not widen beyond that set.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "testing-guidelines/fixtures.md",
+          "line": 109,
+          "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Behavior-Meaningful Tests"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0045",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
+        "testing"
+      ],
+      "rule": "Invoke targeted tests via tap directly - npx tap <test-file...> (tap is the suite runner; the sharded test:* scripts shell out to it). Do NOT use npm test -- <file> or npm test -- --grep \"pattern\": the test script is the full sharded suite and silently ignores extra arguments, so those forms run everything while appearing filtered.",
+      "score": 212,
+      "sources": [
+        {
+          "file": "testing-guidelines/harness.md",
+          "line": 125,
+          "section": "Testing — Harness & Execution > Test Execution Strategy"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0046",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [
         "timeout"
       ],
       "rule": "Soft-warning two-strikes. The SAME soft warning (a load-flake, a tolerated timeout, a \"known transient\") appearing in two consecutive runs of the same scenario MUST be treated as a failing assertion, not background noise: before the third run, open a finding and either fix the cause, re-derive the threshold with evidence, or promote it to a hard failure — NEVER carry the same \"proceeding anyway\" past run 2.",
@@ -2501,7 +2537,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 95,
+          "line": 99,
           "section": "Testing — Regression Policy > Two-Strikes Escalation Tripwires"
         }
       ]
@@ -2777,7 +2813,7 @@
       ]
     },
     {
-      "id": "TEST-0045",
+      "id": "TEST-0047",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2794,7 +2830,7 @@
       ]
     },
     {
-      "id": "TEST-0046",
+      "id": "TEST-0048",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2811,7 +2847,7 @@
       ]
     },
     {
-      "id": "TEST-0047",
+      "id": "TEST-0049",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2828,24 +2864,7 @@
       ]
     },
     {
-      "id": "TEST-0048",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "testing"
-      ],
-      "rule": "When adding new tests or changing existing tests for production code, you must also audit the code under test for System Guidelines violations and fix them as part of the same change.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "testing-guidelines/fixtures.md",
-          "line": 101,
-          "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Existing Tests"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0049",
+      "id": "TEST-0050",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2863,7 +2882,7 @@
       ]
     },
     {
-      "id": "TEST-0050",
+      "id": "TEST-0051",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2878,7 +2897,7 @@
       ]
     },
     {
-      "id": "TEST-0051",
+      "id": "TEST-0052",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2895,7 +2914,7 @@
       ]
     },
     {
-      "id": "TEST-0052",
+      "id": "TEST-0053",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2904,13 +2923,13 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 109,
+          "line": 113,
           "section": "Testing — Regression Policy > Bug-Cluster Escalation Policy"
         }
       ]
     },
     {
-      "id": "TEST-0053",
+      "id": "TEST-0054",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2923,13 +2942,13 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 135,
+          "line": 139,
           "section": "Testing — Regression Policy > Owner-Path Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0054",
+      "id": "TEST-0055",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2940,13 +2959,13 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 160,
+          "line": 164,
           "section": "Testing — Regression Policy > Gateway Boundary Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0055",
+      "id": "TEST-0056",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2960,13 +2979,13 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 176,
+          "line": 180,
           "section": "Testing — Regression Policy > Deterministic Control-Loop Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0056",
+      "id": "TEST-0057",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2979,13 +2998,13 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 226,
+          "line": 230,
           "section": "Testing — Regression Policy > Continuity And Lifetime Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0057",
+      "id": "TEST-0058",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3002,7 +3021,7 @@
       ]
     },
     {
-      "id": "TEST-0058",
+      "id": "TEST-0059",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3013,23 +3032,8 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 38,
+          "line": 42,
           "section": "Testing — Scenario And Release-Gate Quests > Fixture Versus Runtime Proof"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0059",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [],
-      "rule": "A deterministic proof MUST move the real in-cluster binding observable that the doneWhen is about — not merely the internal math or return value of the mechanism the fix introduces.",
-      "score": 208,
-      "sources": [
-        {
-          "file": "testing-guidelines/release-gate.md",
-          "line": 77,
-          "section": "Testing — Scenario And Release-Gate Quests > Deterministic Proof Must Move the Binding Observable"
         }
       ]
     },
@@ -3038,18 +3042,33 @@
       "domain": "testing",
       "strength": "must",
       "tags": [],
-      "rule": "When a delegated worker reviews a scenario Quest, it must compare current probe evidence with the Quest's selected frontier and findings.",
+      "rule": "A deterministic proof MUST move the real in-cluster binding observable that the doneWhen is about — not merely the internal math or return value of the mechanism the fix introduces.",
       "score": 208,
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 92,
-          "section": "Testing — Scenario And Release-Gate Quests > Delegated Review"
+          "line": 83,
+          "section": "Testing — Scenario And Release-Gate Quests > Deterministic Proof Must Move the Binding Observable"
         }
       ]
     },
     {
       "id": "TEST-0061",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [],
+      "rule": "When a delegated worker reviews a scenario Quest, it must compare current probe evidence with the Quest's selected frontier and findings.",
+      "score": 208,
+      "sources": [
+        {
+          "file": "testing-guidelines/release-gate.md",
+          "line": 98,
+          "section": "Testing — Scenario And Release-Gate Quests > Delegated Review"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0062",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3061,13 +3080,13 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 262,
+          "line": 266,
           "section": "Testing — Regression Policy > Structured Deferred-Outcome Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0062",
+      "id": "TEST-0063",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3079,25 +3098,8 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 284,
+          "line": 288,
           "section": "Testing — Regression Policy > Read-Side Repair Separation Regression Policy"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0063",
-      "domain": "testing",
-      "strength": "must",
-      "tags": [
-        "testing"
-      ],
-      "rule": "Tests MUST verify this property at the unit and integration layers, not only in the distributed harness.",
-      "score": 207,
-      "sources": [
-        {
-          "file": "testing-guidelines/regression-policy.md",
-          "line": 305,
-          "section": "Testing — Regression Policy > Availability Under Pressure Test Policy"
         }
       ]
     },
@@ -3108,12 +3110,29 @@
       "tags": [
         "testing"
       ],
+      "rule": "Tests MUST verify this property at the unit and integration layers, not only in the distributed harness.",
+      "score": 207,
+      "sources": [
+        {
+          "file": "testing-guidelines/regression-policy.md",
+          "line": 309,
+          "section": "Testing — Regression Policy > Availability Under Pressure Test Policy"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0065",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
+        "testing"
+      ],
       "rule": "Failures discovered in the touched area, or discovered by the test runs chosen for the current change, must be resolved before the task closes.",
       "score": 207,
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 358,
+          "line": 362,
           "section": "Testing — Regression Policy > Fix Failing Tests Immediately"
         }
       ]
@@ -3404,7 +3423,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 336,
+          "line": 340,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -3688,6 +3707,21 @@
       ]
     },
     {
+      "id": "TEST-0066",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "The expensive non-deterministic statistical gate (the docker rolling-restart stat-gate and equivalent multi-run scenario reruns) is a last resort, reached only after deterministic in-process proof: a fix is validated by a deterministic reproduction that goes red on revert, not by a passing gate run, and a gate is never the iteration loop.",
+      "score": 202,
+      "sources": [
+        {
+          "file": "testing-guidelines/release-gate.md",
+          "line": 67,
+          "section": "Testing — Scenario And Release-Gate Quests > Representative Rerun Order"
+        }
+      ]
+    },
+    {
       "id": "GOV-0054",
       "domain": "governance",
       "strength": "must_not",
@@ -3697,7 +3731,7 @@
       "sources": [
         {
           "file": "memory-boundary.md",
-          "line": 36,
+          "line": 40,
           "section": "Memory boundary — in-repo steering vs external auto-memory > Rules"
         }
       ]
@@ -3958,7 +3992,7 @@
       "domain": "architecture",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not treat this pointer as a co-equal source of architecture policy.",
+      "rule": "Do not treat this pointer as a co-equal source of architecture > policy.",
       "score": 196,
       "sources": [
         {
@@ -4047,13 +4081,13 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 301,
+          "line": 305,
           "section": "System Guidelines — Mandatory Implementation Contract > 10. Communication Has One Replicated Data Path"
         }
       ]
     },
     {
-      "id": "TEST-0065",
+      "id": "TEST-0067",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4071,7 +4105,7 @@
       ]
     },
     {
-      "id": "TEST-0066",
+      "id": "TEST-0068",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4080,7 +4114,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 101,
+          "line": 105,
           "section": "Testing — Regression Policy > Two-Strikes Escalation Tripwires"
         }
       ]
@@ -4133,7 +4167,7 @@
       ]
     },
     {
-      "id": "TEST-0067",
+      "id": "TEST-0069",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4142,7 +4176,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 319,
+          "line": 323,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy > Required coverage patterns"
         }
       ]
@@ -4273,7 +4307,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 124,
+          "line": 128,
           "section": "System Guidelines — Mandatory Implementation Contract > 2. One Semantic Owner Per Concern"
         },
         {
@@ -4295,7 +4329,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 151,
+          "line": 155,
           "section": "System Guidelines — Mandatory Implementation Contract > 3. One Path Per Semantic Decision"
         }
       ]
@@ -4313,7 +4347,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 222,
+          "line": 226,
           "section": "System Guidelines — Mandatory Implementation Contract > 6. Tables, Cache, And Metadata Follow One Authority Chain"
         }
       ]
@@ -4330,7 +4364,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 244,
+          "line": 248,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -4345,7 +4379,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 334,
+          "line": 338,
           "section": "System Guidelines — Mandatory Implementation Contract > 12. User-Facing Model Stays Small"
         }
       ]
@@ -4478,7 +4512,7 @@
       ]
     },
     {
-      "id": "TEST-0068",
+      "id": "TEST-0070",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4495,7 +4529,7 @@
       ]
     },
     {
-      "id": "TEST-0069",
+      "id": "TEST-0071",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4512,7 +4546,7 @@
       ]
     },
     {
-      "id": "TEST-0070",
+      "id": "TEST-0072",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4527,7 +4561,7 @@
       ]
     },
     {
-      "id": "TEST-0071",
+      "id": "TEST-0073",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4544,7 +4578,7 @@
       ]
     },
     {
-      "id": "TEST-0072",
+      "id": "TEST-0074",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4553,7 +4587,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 78,
+          "line": 82,
           "section": "Testing — Regression Policy > Reuse-First Fix Strategy > Periodic architecture check"
         }
       ]
@@ -4591,7 +4625,24 @@
       ]
     },
     {
-      "id": "TEST-0073",
+      "id": "TEST-0075",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
+        "testing"
+      ],
+      "rule": "When adding a new test file, or making a behavior-meaningful change to an existing test — new or changed assertions about production behavior — you must also audit the code under test for System Guidelines violations and fix them as part of the same change.",
+      "score": 184,
+      "sources": [
+        {
+          "file": "testing-guidelines/fixtures.md",
+          "line": 101,
+          "section": "Testing — Fixtures & Mutation Requirements > System Guideline Conformance Gate for New and Behavior-Meaningful Tests"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0076",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4603,7 +4654,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 204,
+          "line": 208,
           "section": "Testing — Regression Policy > Temporal Witness Replay Policy"
         }
       ]
@@ -4732,7 +4783,7 @@
       "sources": [
         {
           "file": "system-guidelines.md",
-          "line": 233,
+          "line": 237,
           "section": "System Guidelines — Mandatory Implementation Contract > 7. Phase Code Must Hand Off To Runtime Owners"
         }
       ]
@@ -4785,7 +4836,7 @@
       ]
     },
     {
-      "id": "TEST-0074",
+      "id": "TEST-0077",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4849,7 +4900,7 @@
       ]
     },
     {
-      "id": "TEST-0075",
+      "id": "TEST-0078",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4864,7 +4915,7 @@
       ]
     },
     {
-      "id": "TEST-0076",
+      "id": "TEST-0079",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4882,7 +4933,7 @@
       ]
     },
     {
-      "id": "TEST-0077",
+      "id": "TEST-0080",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4893,13 +4944,13 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 155,
+          "line": 159,
           "section": "Testing — Regression Policy > Owner-Path Regression Policy"
         }
       ]
     },
     {
-      "id": "TEST-0078",
+      "id": "TEST-0081",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4908,7 +4959,7 @@
       "sources": [
         {
           "file": "testing-guidelines/release-gate.md",
-          "line": 93,
+          "line": 99,
           "section": "Testing — Scenario And Release-Gate Quests > Delegated Review"
         }
       ]
@@ -5006,7 +5057,7 @@
       ]
     },
     {
-      "id": "TEST-0079",
+      "id": "TEST-0082",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -5021,7 +5072,7 @@
       ]
     },
     {
-      "id": "TEST-0080",
+      "id": "TEST-0083",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -5057,7 +5108,7 @@
       ]
     },
     {
-      "id": "TEST-0081",
+      "id": "TEST-0084",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5072,7 +5123,7 @@
       ]
     },
     {
-      "id": "TEST-0082",
+      "id": "TEST-0085",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5087,7 +5138,7 @@
       ]
     },
     {
-      "id": "TEST-0083",
+      "id": "TEST-0086",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5096,7 +5147,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 82,
+          "line": 86,
           "section": "Testing — Regression Policy > Reuse-First Fix Strategy > Periodic architecture check"
         }
       ]
@@ -5307,7 +5358,7 @@
       ]
     },
     {
-      "id": "TEST-0084",
+      "id": "TEST-0087",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -5324,7 +5375,7 @@
       ]
     },
     {
-      "id": "TEST-0085",
+      "id": "TEST-0088",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -5335,13 +5386,13 @@
       "sources": [
         {
           "file": "testing-guidelines/harness.md",
-          "line": 134,
+          "line": 138,
           "section": "Testing — Harness & Execution > When to Run Full Test Suite"
         }
       ]
     },
     {
-      "id": "TEST-0086",
+      "id": "TEST-0089",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5350,7 +5401,7 @@
       "sources": [
         {
           "file": "testing-guidelines/regression-policy.md",
-          "line": 303,
+          "line": 307,
           "section": "Testing — Regression Policy > Availability Under Pressure Test Policy"
         }
       ]
@@ -5717,5 +5768,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-10T10:28:50.672Z"
+  "generatedAt": "2026-07-10T10:40:36.103Z"
 }

@@ -4,7 +4,7 @@ status: canonical
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/testing.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source — index.** This is the navigation index for testing policy. Rule content lives in the sub-files; the LLM pack generator reads them via `llm-pack.config.json`.
@@ -38,3 +38,7 @@ Do not use this tree for:
 | [`regression-policy.md`](regression-policy.md) | Test-first/reuse-first fix, bug-cluster escalation, owner-path/gateway/control-loop/temporal/continuity/memory/deferred-outcome/read-side-repair regression policies, availability under pressure, baseline-discovered closure. |
 | [`release-gate.md`](release-gate.md) | Scenario-driven Quest failure migration, distributed validation ladder, artifact-first triage, boundary-transition scenario layer, delegated validation handoff. |
 | [`proof-ladders.md`](proof-ladders.md) | Quest-driven validation, static guardrail preflight & closure, file-size ratchet. |
+
+Adversarial verification attack checklists, organized by change category, live
+in [`../verification-templates/INDEX.md`](../verification-templates/INDEX.md) —
+use them when independently verifying an implemented change.

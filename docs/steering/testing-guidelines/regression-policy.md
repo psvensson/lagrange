@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
-last_reviewed: 2026-05-23
+last_reviewed: 2026-07-10
 ---
 
 > **Canonical source.** Bug-fix regression policies and owner-path regression rules. Index: [`INDEX.md`](INDEX.md).
@@ -73,7 +73,11 @@ This applies to both the fix itself and the test that reproduces it.
 
 ### Periodic architecture check
 
-During any multi-step fix or feature, pause at least once to consider:
+This check is anchored to existing machinery rather than an unenforceable
+"pause at least once": for Quest work it is satisfied by the mandatory
+`reflect --altitude` turn in the Quest loop (see solver-quests.md "Mandatory
+Step-Back Reflection Turn"); for non-Quest work it applies once, before
+commit. At that point, consider:
 
 - Is the current problem a repeated pattern? If so, is there a shared
   abstraction that should exist but does not?

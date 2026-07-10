@@ -47,8 +47,12 @@ rm /tmp/test-output.txt
 
 ## Example Commands
 
+Targeted runs invoke tap (the suite runner) directly. Do NOT pass extra
+arguments to `npm test` — the `test` script is the full sharded suite and
+silently ignores them, so `npm test -- <file>` and `npm test -- --grep ...`
+run everything while appearing filtered.
+
 ```bash
-npm test -- test/storage/partition.test.js
-npm test -- --grep "should insert"
-npm test -- --grep "exact test name"
+npx tap test/storage/partition.test.js
+npx tap test/storage/partition.test.js test/storage/table.test.js
 ```
