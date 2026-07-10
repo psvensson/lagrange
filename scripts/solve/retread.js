@@ -39,13 +39,22 @@ export function extractStatementTokens(statement) {
   return {basenames, closureIds};
 }
 
+// A revert commit SUBJECT in either convention this repo demonstrably uses:
+// conventional `revert(scope): ...` and git-default `Revert "..."`. Applied as a
+// post-filter because `git log --grep` also matches commit BODY lines — a commit
+// merely discussing a revert must not raise a warning (false positives train
+// operators to ignore the check).
+export const REVERT_SUBJECT = /^(?:revert\(|Revert ")/;
+
 // Default git runner: recent revert commits with the files each touched. Output
 // format is one `<sha>\t<subject>` line per commit followed by its file list.
-// Returns null on any git failure so the check degrades to silence.
+// Multiple --grep flags are OR'd. Returns null on any git failure so the check
+// degrades to silence.
 function gitRevertLog(root) {
   try {
     return execFileSync(
-      'git', ['log', '--grep=^revert(', `--since=${REVERT_WINDOW_DAYS}.days`,
+      'git', ['log', '--grep=^revert(', '--grep=^Revert "',
+        `--since=${REVERT_WINDOW_DAYS}.days`,
         '--name-only', '--format=%H%x09%s'], {
         cwd: root,
         encoding: 'utf8',
@@ -101,6 +110,7 @@ export function findRevertOverlaps(statement, options) {
   const raw = (options.revertLog || gitRevertLog)(options.root);
   if (raw === null) return [];
   return parseRevertLog(raw)
+    .filter((commit) => REVERT_SUBJECT.test(commit.subject))
     .map((commit) => revertOverlap(commit, tokens))
     .filter(Boolean);
 }

@@ -115,16 +115,41 @@ test('counter harvest counts every counter per node via the cluster ' +
       {nodeId: 'node-1', text: 'no signals here'},
     ],
   };
-  const counters = await harvestDeferralCounters(handle);
+  const harvest = await harvestDeferralCounters(handle);
+  t.equal(harvest.available, true);
+  t.equal(harvest.error, null);
+  const counters = harvest.counters;
   t.equal(counters.operation_ledger_quorum_concentrated.total, 2);
   t.same(counters.operation_ledger_quorum_concentrated.perNode,
     {'node-0': 2, 'node-1': 0});
   t.equal(counters.would_drop_voter_ready_below_minimum.total, 1);
   t.equal(counters.would_exceed_target_replica_count.total, 0);
 
-  const noAccessor = await harvestDeferralCounters({});
-  t.equal(noAccessor.operation_ledger_quorum_concentrated.total, 0,
-    'a handle without getNodeLogs (external mode) harvests zero');
+  const noAccessor = await harvestDeferralCounters({mode: 'external'});
+  t.equal(noAccessor.available, false,
+    'a mode without log access reports unavailable, never hard zeros');
+  t.equal(noAccessor.counters, null);
+  t.match(noAccessor.error, /external/);
+
+  const failing = await harvestDeferralCounters({
+    getNodeLogs: async () => {
+      throw new Error('docker logs unreachable');
+    },
+  });
+  t.equal(failing.available, false,
+    'a harvest failure degrades to unavailable instead of aborting the run');
+  t.match(failing.error, /docker logs unreachable/);
+
+  const partial = await harvestDeferralCounters({
+    getNodeLogs: async () => [
+      {nodeId: 'node-0', text: quorum},
+      {nodeId: 'node-1', text: '', readError: 'ENOENT node-1.log'},
+    ],
+  });
+  t.equal(partial.available, true);
+  t.match(partial.error, /node-1: ENOENT/,
+    'per-node read errors are surfaced, not silently counted as zero');
+  t.equal(partial.counters.operation_ledger_quorum_concentrated.total, 1);
 
   t.equal(countOccurrences('aXbXc', 'X'), 2);
   t.end();

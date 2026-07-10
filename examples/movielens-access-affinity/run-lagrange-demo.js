@@ -224,19 +224,26 @@ async function startLocalCluster(nodeCount, dataRoot, target) {
 }
 
 /**
- * Read the per-node log files a local cluster writes (plain text).
+ * Read the per-node log files a local cluster writes (plain text). One
+ * unreadable log must not fail the whole harvest — the entry degrades to
+ * empty text with a readError the consumer can surface.
  * @param {Object[]} nodes
  * @param {string} dataRoot
- * @return {Promise<Array<{nodeId: string, text: string}>>}
+ * @return {Promise<Array<{nodeId: string, text: string,
+ *   readError?: string}>>}
  */
 async function readLocalNodeLogs(nodes, dataRoot) {
-  return Promise.all(nodes.map(async (node) => ({
-    nodeId: `node-${node.index}`,
-    text: await readFile(
-      resolve(dataRoot, `node-${node.index}.log`),
-      'utf8',
-    ),
-  })));
+  return Promise.all(nodes.map(async (node) => {
+    const nodeId = `node-${node.index}`;
+    try {
+      return {
+        nodeId,
+        text: await readFile(resolve(dataRoot, `${nodeId}.log`), 'utf8'),
+      };
+    } catch (error) {
+      return {nodeId, text: '', readError: error?.message || String(error)};
+    }
+  }));
 }
 
 async function startDockerCluster(nodeCount) {
@@ -266,10 +273,17 @@ async function startDockerCluster(nodeCount) {
     mode: 'docker',
     target: `ws://${seed.ip}:${DOCKER_ADMIN_PORT}/api/admin/stream`,
     clusterFormationMs,
-    getNodeLogs: () => Promise.all(cluster.getNodes().map(async (node) => ({
-      nodeId: node.id,
-      text: await node.getLogs(),
-    }))),
+    getNodeLogs: () => Promise.all(cluster.getNodes().map(async (node) => {
+      try {
+        return {nodeId: node.id, text: await node.getLogs()};
+      } catch (error) {
+        return {
+          nodeId: node.id,
+          text: '',
+          readError: error?.message || String(error),
+        };
+      }
+    })),
     stop: () => cluster.stop(),
   };
 }

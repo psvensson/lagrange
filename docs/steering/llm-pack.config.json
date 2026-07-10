@@ -156,12 +156,12 @@
     {
       "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
       "domain": "testing",
-      "priority": 100
+      "priority": 130
     },
     {
       "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
       "domain": "governance",
-      "priority": 100
+      "priority": 130
     }
   ],
   "outputs": [

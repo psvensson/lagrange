@@ -2,6 +2,7 @@ import {execFileSync} from 'node:child_process';
 import {appendFile, mkdir} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
+import {fileURLToPath} from 'node:url';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {CREATE_RATINGS_SQL} from './shared.js';
 import {queryRows, startCluster} from './run-lagrange-demo.js';
@@ -40,7 +41,12 @@ const PROBE_RESULT = Object.freeze({
   TIMEOUT: 'TIMEOUT',
   CREATE_TABLE_FAILED: 'CREATE_TABLE_FAILED',
 });
-const ARCHIVE_PATH = resolve('solve/report/formation-probe-runs.ndjson');
+// Anchor the archive and git stamps to the repo root (two levels up from this
+// file), never the invoker's cwd — a direct invocation from elsewhere must not
+// scatter solve/report/ dirs or stamp a foreign repo's HEAD.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const ARCHIVE_PATH =
+  resolve(REPO_ROOT, 'solve/report/formation-probe-runs.ndjson');
 
 /**
  * Parse probe CLI flags: the demo's --local plus --mode local|docker.
@@ -169,14 +175,34 @@ function countOccurrences(text, needle) {
 /**
  * Harvest the deferral counters from every node's logs via the cluster
  * handle (plain files in local mode, live `docker logs` in docker mode —
- * no gzipped gate-playback artifacts are involved).
+ * no gzipped gate-playback artifacts are involved). A mode without log
+ * access (external/--no-start) or a failed log read reports
+ * `available: false` — never hard zeros, which would be indistinguishable
+ * from a genuinely clean measured run. A log read failure must also never
+ * abort the probe after minutes of cluster work.
  * @param {Object} clusterHandle
- * @return {Promise<Object>} counterName -> {total, perNode}
+ * @return {Promise<{available: boolean, error: string|null,
+ *   counters: Object|null}>} counters: counterName -> {total, perNode}
  */
 async function harvestDeferralCounters(clusterHandle) {
-  const nodeLogs = typeof clusterHandle?.getNodeLogs === 'function' ?
-    await clusterHandle.getNodeLogs() :
-    [];
+  if (typeof clusterHandle?.getNodeLogs !== 'function') {
+    return {
+      available: false,
+      error: `node logs are not accessible in ${clusterHandle?.mode ||
+        'this'} mode`,
+      counters: null,
+    };
+  }
+  let nodeLogs;
+  try {
+    nodeLogs = await clusterHandle.getNodeLogs();
+  } catch (error) {
+    return {
+      available: false,
+      error: `node log harvest failed: ${error?.message || error}`,
+      counters: null,
+    };
+  }
   const counters = {};
   for (const [name, needle] of Object.entries(DEFERRAL_COUNTER_STRINGS)) {
     const perNode = {};
@@ -188,7 +214,14 @@ async function harvestDeferralCounters(clusterHandle) {
     }
     counters[name] = {total, perNode};
   }
-  return counters;
+  const readErrors = nodeLogs
+    .filter((entry) => entry.readError)
+    .map((entry) => `${entry.nodeId}: ${entry.readError}`);
+  return {
+    available: true,
+    error: readErrors.length ? readErrors.join('; ') : null,
+    counters,
+  };
 }
 
 /**
@@ -198,8 +231,8 @@ async function harvestDeferralCounters(clusterHandle) {
 function resolveGitStamps() {
   const revParse = (ref) => {
     try {
-      return execFileSync('git', ['rev-parse', ref], {encoding: 'utf8'})
-        .trim();
+      return execFileSync('git', ['rev-parse', ref],
+        {cwd: REPO_ROOT, encoding: 'utf8'}).trim();
     } catch {
       return null;
     }
@@ -256,7 +289,7 @@ async function runFormationProbe(options = null) {
     // Poll even after a create timeout: the DDL may land server-side.
     const partitions = await pollRatingsPartitionsReady(target);
     console.log('Harvesting deferral counters from node logs...');
-    const counters = await harvestDeferralCounters(clusterHandle);
+    const harvest = await harvestDeferralCounters(clusterHandle);
     const result = resolveProbeResult(createTable, partitions);
     return {
       probe: PROBE_ID,
@@ -265,7 +298,9 @@ async function runFormationProbe(options = null) {
       clusterFormationMs: clusterHandle.clusterFormationMs,
       createTable,
       partitions,
-      counters,
+      counters: harvest.counters,
+      countersAvailable: harvest.available,
+      countersError: harvest.error,
       result,
     };
   } finally {

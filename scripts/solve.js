@@ -622,7 +622,7 @@ function cmdHealth(root, args) {
   if (!id) throw new Error('health: --id <questId> is required');
   const quest = loadQuest(root, id);
   const health = analyzeQuestHealth(root, quest);
-  const advisories = buildAdvisories(quest, health, readLog(root, id));
+  const advisories = questAdvisories(root, quest, readLog(root, id));
   if (args.json) {
     process.stdout.write(`${JSON.stringify({...health, advisories}, null, 2)}\n`);
   } else {

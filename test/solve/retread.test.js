@@ -53,6 +53,29 @@ tap.test('findRevertOverlaps flags the cited-file revert only', (t) => {
   t.end();
 });
 
+tap.test('findRevertOverlaps catches git-default `Revert "..."` subjects', (t) => {
+  const log =
+    'cccccccccccccccccccccccccccccccccccccccc\tRevert "feat: add the std-lever"\n' +
+    'src/rebalancer/operation-workflow-remove-safety-evaluator.js\n';
+  const overlaps = findRevertOverlaps(STATEMENT,
+    {root: '/nowhere', revertLog: () => log});
+  t.equal(overlaps.length, 1, 'capital-R Revert convention is covered');
+  t.equal(overlaps[0].sha, 'cccccccc');
+  t.end();
+});
+
+tap.test('findRevertOverlaps ignores body-line grep hits on non-reverts', (t) => {
+  // `git log --grep` matches body lines too; a commit DISCUSSING a revert must
+  // not warn — only a commit whose SUBJECT is a revert.
+  const log =
+    'dddddddddddddddddddddddddddddddddddddddd\tfeat: totally normal change\n' +
+    'src/rebalancer/operation-workflow-remove-safety-evaluator.js\n';
+  t.same(findRevertOverlaps(STATEMENT,
+    {root: '/nowhere', revertLog: () => log}),
+  [], 'non-revert subject filtered even when git returned the commit');
+  t.end();
+});
+
 tap.test('findRevertOverlaps matches a CL id in the revert subject', (t) => {
   const overlaps = findRevertOverlaps('re-attempt the CL-045 lever',
     {root: '/nowhere', revertLog: () => REVERT_LOG});

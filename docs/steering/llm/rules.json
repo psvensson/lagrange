@@ -150,21 +150,21 @@
     {
       "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
       "domain": "testing",
-      "priority": 100
+      "priority": 130
     },
     {
       "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
       "domain": "governance",
-      "priority": 100
+      "priority": 130
     }
   ],
   "stats": {
-    "candidateCount": 346,
-    "dedupedRuleCount": 337,
-    "exportedRuleCount": 337,
+    "candidateCount": 347,
+    "dedupedRuleCount": 338,
+    "exportedRuleCount": 338,
     "aliasRuleCount": 4,
-    "masterRuleCount": 333,
-    "estimatedAllRulesTokens": 14506
+    "masterRuleCount": 334,
+    "estimatedAllRulesTokens": 14364
   },
   "rules": [
     {
@@ -1391,6 +1391,21 @@
       "id": "GOV-0001",
       "domain": "governance",
       "strength": "must_not",
+      "tags": [],
+      "rule": "Parallel or duplicated machinery discovered on contact MUST be recorded as a consolidation candidate, never silently worked around.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
+          "line": 7,
+          "section": "root"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0002",
+      "domain": "governance",
+      "strength": "must_not",
       "tags": [
         "governance"
       ],
@@ -1405,7 +1420,7 @@
       ]
     },
     {
-      "id": "GOV-0002",
+      "id": "GOV-0003",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -1459,6 +1474,36 @@
       "id": "TEST-0022",
       "domain": "testing",
       "strength": "must_not",
+      "tags": [],
+      "rule": "NEVER ship a change to a hot failure-handling path (retry, recovery, failure-classification, backoff) without a controlled live A/B: N≥2 runs fixed vs N≥2 reverted, comparing aggregate error counts and outcome.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
+          "line": 5,
+          "section": "root"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0023",
+      "domain": "testing",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "You MUST NOT convert a defer/backoff on a hot failure path into advance-now work (extra reads, re-inserts) without that live A/B proof — a defer during churn is often the load-shedding that lets prerequisites settle.",
+      "score": 226,
+      "sources": [
+        {
+          "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
+          "line": 7,
+          "section": "root"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0024",
+      "domain": "testing",
+      "strength": "must_not",
       "tags": [
         "testing"
       ],
@@ -1473,7 +1518,7 @@
       ]
     },
     {
-      "id": "TEST-0023",
+      "id": "TEST-0025",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1490,7 +1535,7 @@
       ]
     },
     {
-      "id": "TEST-0024",
+      "id": "TEST-0026",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1507,7 +1552,7 @@
       ]
     },
     {
-      "id": "TEST-0025",
+      "id": "TEST-0027",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1524,7 +1569,7 @@
       ]
     },
     {
-      "id": "TEST-0026",
+      "id": "TEST-0028",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1539,7 +1584,7 @@
       ]
     },
     {
-      "id": "TEST-0027",
+      "id": "TEST-0029",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1557,7 +1602,7 @@
       ]
     },
     {
-      "id": "TEST-0028",
+      "id": "TEST-0030",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -1584,7 +1629,7 @@
       ]
     },
     {
-      "id": "TEST-0029",
+      "id": "TEST-0031",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -1599,7 +1644,7 @@
       ]
     },
     {
-      "id": "GOV-0003",
+      "id": "GOV-0004",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1665,7 +1710,7 @@
       ]
     },
     {
-      "id": "GOV-0004",
+      "id": "GOV-0005",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -1697,7 +1742,7 @@
         }
       ],
       "aliases": [
-        "TEST-0034"
+        "TEST-0036"
       ]
     },
     {
@@ -1736,7 +1781,7 @@
       ]
     },
     {
-      "id": "TEST-0030",
+      "id": "TEST-0032",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1751,7 +1796,7 @@
       ]
     },
     {
-      "id": "TEST-0031",
+      "id": "TEST-0033",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1769,7 +1814,7 @@
       ]
     },
     {
-      "id": "TEST-0032",
+      "id": "TEST-0034",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1786,7 +1831,7 @@
       ]
     },
     {
-      "id": "TEST-0033",
+      "id": "TEST-0035",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1801,7 +1846,7 @@
       ]
     },
     {
-      "id": "TEST-0034",
+      "id": "TEST-0036",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1820,7 +1865,7 @@
       "canonical_of": "STYLE-0008"
     },
     {
-      "id": "TEST-0035",
+      "id": "TEST-0037",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1837,7 +1882,7 @@
       ]
     },
     {
-      "id": "TEST-0036",
+      "id": "TEST-0038",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1854,7 +1899,7 @@
       ]
     },
     {
-      "id": "TEST-0037",
+      "id": "TEST-0039",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -1869,7 +1914,7 @@
       ]
     },
     {
-      "id": "TEST-0038",
+      "id": "TEST-0040",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -1891,7 +1936,7 @@
       ]
     },
     {
-      "id": "TEST-0039",
+      "id": "TEST-0041",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2217,7 +2262,7 @@
       ]
     },
     {
-      "id": "GOV-0005",
+      "id": "GOV-0006",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2237,7 +2282,7 @@
       ]
     },
     {
-      "id": "GOV-0006",
+      "id": "GOV-0007",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2254,7 +2299,7 @@
       ]
     },
     {
-      "id": "GOV-0007",
+      "id": "GOV-0008",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -2271,7 +2316,7 @@
       ]
     },
     {
-      "id": "GOV-0008",
+      "id": "GOV-0009",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2286,7 +2331,7 @@
       ]
     },
     {
-      "id": "GOV-0009",
+      "id": "GOV-0010",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2301,7 +2346,7 @@
       ]
     },
     {
-      "id": "GOV-0010",
+      "id": "GOV-0011",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2424,7 +2469,7 @@
       ]
     },
     {
-      "id": "TEST-0040",
+      "id": "TEST-0042",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2441,7 +2486,7 @@
       ]
     },
     {
-      "id": "TEST-0041",
+      "id": "TEST-0043",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2460,7 +2505,7 @@
       ]
     },
     {
-      "id": "TEST-0042",
+      "id": "TEST-0044",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -2492,7 +2537,7 @@
       ]
     },
     {
-      "id": "GOV-0011",
+      "id": "GOV-0012",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2507,7 +2552,7 @@
       ]
     },
     {
-      "id": "GOV-0012",
+      "id": "GOV-0013",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2522,7 +2567,7 @@
       ]
     },
     {
-      "id": "GOV-0013",
+      "id": "GOV-0014",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2537,7 +2582,7 @@
       ]
     },
     {
-      "id": "GOV-0014",
+      "id": "GOV-0015",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2552,7 +2597,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -2647,7 +2692,24 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0017",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [
+        "readiness"
+      ],
+      "rule": "Every fix design and quest report MUST carry a visible REUSED vs EXTENDED vs NEW comparison: which existing mechanism each piece rides, and for anything NEW, evidence that no existing mechanism already covers it.",
+      "score": 208,
+      "sources": [
+        {
+          "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
+          "line": 5,
+          "section": "root"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2664,7 +2726,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2681,7 +2743,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -2696,7 +2758,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -2730,7 +2792,7 @@
       ]
     },
     {
-      "id": "TEST-0043",
+      "id": "TEST-0045",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2747,7 +2809,7 @@
       ]
     },
     {
-      "id": "TEST-0044",
+      "id": "TEST-0046",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2764,7 +2826,7 @@
       ]
     },
     {
-      "id": "TEST-0045",
+      "id": "TEST-0047",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2781,7 +2843,7 @@
       ]
     },
     {
-      "id": "TEST-0046",
+      "id": "TEST-0048",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2798,7 +2860,7 @@
       ]
     },
     {
-      "id": "TEST-0047",
+      "id": "TEST-0049",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2816,7 +2878,7 @@
       ]
     },
     {
-      "id": "TEST-0048",
+      "id": "TEST-0050",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2831,7 +2893,7 @@
       ]
     },
     {
-      "id": "TEST-0049",
+      "id": "TEST-0051",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2848,7 +2910,7 @@
       ]
     },
     {
-      "id": "TEST-0050",
+      "id": "TEST-0052",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2863,7 +2925,7 @@
       ]
     },
     {
-      "id": "TEST-0051",
+      "id": "TEST-0053",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2882,7 +2944,7 @@
       ]
     },
     {
-      "id": "TEST-0052",
+      "id": "TEST-0054",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2899,7 +2961,7 @@
       ]
     },
     {
-      "id": "TEST-0053",
+      "id": "TEST-0055",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2919,7 +2981,7 @@
       ]
     },
     {
-      "id": "TEST-0054",
+      "id": "TEST-0056",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2938,7 +3000,7 @@
       ]
     },
     {
-      "id": "TEST-0055",
+      "id": "TEST-0057",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2955,7 +3017,7 @@
       ]
     },
     {
-      "id": "TEST-0056",
+      "id": "TEST-0058",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -2972,7 +3034,7 @@
       ]
     },
     {
-      "id": "TEST-0057",
+      "id": "TEST-0059",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -2987,7 +3049,7 @@
       ]
     },
     {
-      "id": "TEST-0058",
+      "id": "TEST-0060",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -3002,7 +3064,7 @@
       ]
     },
     {
-      "id": "TEST-0059",
+      "id": "TEST-0061",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3020,7 +3082,7 @@
       ]
     },
     {
-      "id": "TEST-0060",
+      "id": "TEST-0062",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3038,7 +3100,7 @@
       ]
     },
     {
-      "id": "TEST-0061",
+      "id": "TEST-0063",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3055,7 +3117,7 @@
       ]
     },
     {
-      "id": "TEST-0062",
+      "id": "TEST-0064",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -3072,7 +3134,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3087,7 +3149,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3102,7 +3164,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3117,7 +3179,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3132,7 +3194,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3147,7 +3209,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3164,7 +3226,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3179,7 +3241,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3196,7 +3258,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3211,7 +3273,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3226,7 +3288,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3241,7 +3303,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3258,7 +3320,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3273,7 +3335,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3288,7 +3350,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3303,7 +3365,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3318,7 +3380,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3333,7 +3395,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3363,7 +3425,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3380,7 +3442,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3395,7 +3457,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3410,7 +3472,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3425,7 +3487,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3440,7 +3502,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3455,7 +3517,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3472,7 +3534,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -3489,7 +3551,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3504,7 +3566,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3519,7 +3581,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3534,7 +3596,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3549,7 +3611,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3564,7 +3626,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3579,7 +3641,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3641,7 +3703,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -3843,7 +3905,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3858,7 +3920,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3875,7 +3937,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3890,7 +3952,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -3922,7 +3984,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -3974,7 +4036,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4006,7 +4068,7 @@
       ]
     },
     {
-      "id": "TEST-0063",
+      "id": "TEST-0065",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4024,7 +4086,7 @@
       ]
     },
     {
-      "id": "TEST-0064",
+      "id": "TEST-0066",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4039,7 +4101,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4056,7 +4118,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4071,7 +4133,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4086,7 +4148,7 @@
       ]
     },
     {
-      "id": "TEST-0065",
+      "id": "TEST-0067",
       "domain": "testing",
       "strength": "must",
       "tags": [],
@@ -4101,7 +4163,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4119,7 +4181,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4136,7 +4198,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4151,7 +4213,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4166,7 +4228,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4183,7 +4245,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4198,7 +4260,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4304,7 +4366,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4321,7 +4383,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4336,7 +4398,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4351,7 +4413,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4368,7 +4430,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4383,7 +4445,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4416,7 +4478,7 @@
       ]
     },
     {
-      "id": "TEST-0066",
+      "id": "TEST-0068",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4433,7 +4495,7 @@
       ]
     },
     {
-      "id": "TEST-0067",
+      "id": "TEST-0069",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4450,7 +4512,7 @@
       ]
     },
     {
-      "id": "TEST-0068",
+      "id": "TEST-0070",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4465,7 +4527,7 @@
       ]
     },
     {
-      "id": "TEST-0069",
+      "id": "TEST-0071",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4482,7 +4544,7 @@
       ]
     },
     {
-      "id": "TEST-0070",
+      "id": "TEST-0072",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4497,7 +4559,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4529,7 +4591,7 @@
       ]
     },
     {
-      "id": "TEST-0071",
+      "id": "TEST-0073",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -4547,7 +4609,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4562,7 +4624,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4577,7 +4639,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4594,7 +4656,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4609,7 +4671,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4627,7 +4689,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4661,7 +4723,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4678,7 +4740,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4693,7 +4755,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4708,24 +4770,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [
-        "ownership"
-      ],
-      "rule": "8 retry-timer registries in one owner class — so the reuse comparison must be visible in the deliverable, not implicit in the process.)",
-      "score": 178,
-      "sources": [
-        {
-          "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
-          "line": 5,
-          "section": "root"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0072",
+      "id": "TEST-0074",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4789,7 +4834,7 @@
       ]
     },
     {
-      "id": "TEST-0073",
+      "id": "TEST-0075",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4804,7 +4849,7 @@
       ]
     },
     {
-      "id": "TEST-0074",
+      "id": "TEST-0076",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4822,7 +4867,7 @@
       ]
     },
     {
-      "id": "TEST-0075",
+      "id": "TEST-0077",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -4839,7 +4884,7 @@
       ]
     },
     {
-      "id": "TEST-0076",
+      "id": "TEST-0078",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -4854,7 +4899,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4869,7 +4914,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4884,7 +4929,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4899,7 +4944,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4916,7 +4961,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4931,7 +4976,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4946,24 +4991,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [
-        "readiness"
-      ],
-      "rule": "Every fix design and every quest report MUST carry an explicit, visible REUSED vs EXTENDED vs NEW comparison — which existing mechanism each piece rides, and for anything NEW, the evidence that no existing mechanism (wired or half-built) already covers it; parallel or duplicated machinery discovered on contact MUST be recorded as a consolidation candidate, never silently worked around.",
-      "score": 172,
-      "sources": [
-        {
-          "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
-          "line": 5,
-          "section": "root"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0077",
+      "id": "TEST-0079",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -4978,7 +5006,7 @@
       ]
     },
     {
-      "id": "TEST-0078",
+      "id": "TEST-0080",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -4991,23 +5019,6 @@
       "sources": [
         {
           "file": "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
-          "line": 5,
-          "section": "root"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0079",
-      "domain": "testing",
-      "strength": "must_not",
-      "tags": [
-        "testing"
-      ],
-      "rule": "Before shipping any change to a hot failure-handling path — code invoked per transient error during formation churn or retry storms (retry, recovery, failure-classification, backoff) — you MUST validate it with a controlled live A/B (N≥2 runs on the fixed source vs N≥2 on the reverted source, back-to-back on the same machine, comparing aggregate error counts on the touched path AND the end-to-end outcome), because a unit-correct, DT-red-on-revert-proven, adversarially verified SHIP fix can still regress the live cluster through aggregate read/write amplification a single-firing deterministic test cannot sample; and you MUST NOT convert a defer/backoff on such a path into advance-now work (extra reads, re-inserts) without that live proof — a defer during churn is often the load-shedding that lets prerequisites settle.",
-      "score": 172,
-      "sources": [
-        {
-          "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
           "line": 5,
           "section": "root"
         }
@@ -5031,7 +5042,7 @@
       ]
     },
     {
-      "id": "TEST-0080",
+      "id": "TEST-0081",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5046,7 +5057,7 @@
       ]
     },
     {
-      "id": "TEST-0081",
+      "id": "TEST-0082",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5061,7 +5072,7 @@
       ]
     },
     {
-      "id": "TEST-0082",
+      "id": "TEST-0083",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5266,7 +5277,7 @@
       ]
     },
     {
-      "id": "TEST-0083",
+      "id": "TEST-0084",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -5283,7 +5294,7 @@
       ]
     },
     {
-      "id": "TEST-0084",
+      "id": "TEST-0085",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -5300,7 +5311,7 @@
       ]
     },
     {
-      "id": "TEST-0085",
+      "id": "TEST-0086",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -5676,5 +5687,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-10T07:43:25.262Z"
+  "generatedAt": "2026-07-10T08:46:46.305Z"
 }
