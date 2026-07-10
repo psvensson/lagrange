@@ -1,0 +1,18 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "w1_verifier_findings_closed",
+  "evidence": {
+    "parentQuest": "solver-terminal-integrity-cutover",
+    "path": "test-output/reports/solver-terminal-integrity-cutover-2026-07-10T13-20-20-851Z.report.json",
+    "sha256": "6b4278b13ee2beee3a7d30ecbd14e89b93a2185fa93f887cd2178f88ea6b8c93",
+    "testedHead": "fe2c28f35908eb17b94b45a8403c87bdd362a873",
+    "guardAssertions": 36,
+    "consecutivePasses": 3,
+    "historicalViolationTerminalBypassBlocked": true,
+    "missingEvidenceTerminalBypassBlocked": true,
+    "strictUpgradeLegacyLaunderingBlocked": true,
+    "changeRefReplacementDetected": true
+  }
+}

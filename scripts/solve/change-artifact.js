@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 
 import {
   QUEST_CLASS_PRODUCT,
@@ -91,6 +92,40 @@ export function changeArtifactPath(root, questId, changeRef) {
   if (!rawPath) return null;
   const {absolute} = workspaceRelative(root, rawPath);
   return absolute;
+}
+
+export function changeArtifactIdentity(root, questId, changeRef) {
+  const filePath = changeArtifactPath(root, questId, changeRef);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return {
+      path: filePath ? normalizeSlash(path.relative(root, filePath)) : null,
+      exists: false,
+      size: null,
+      sha256: null,
+    };
+  }
+  const content = fs.readFileSync(filePath);
+  return {
+    path: normalizeSlash(path.relative(root, filePath)),
+    exists: true,
+    size: content.length,
+    sha256: createHash('sha256').update(content).digest('hex'),
+  };
+}
+
+export function changeArtifactIdentityMatches(recorded, current) {
+  return changeArtifactIdentityIsSealed(recorded) &&
+    changeArtifactIdentityIsSealed(current) &&
+    recorded.path === current.path &&
+    recorded.size === current.size &&
+    recorded.sha256 === current.sha256;
+}
+
+export function changeArtifactIdentityIsSealed(identity) {
+  return identity?.exists === true &&
+    typeof identity.path === 'string' && identity.path.length > 0 &&
+    Number.isInteger(identity.size) && identity.size >= 0 &&
+    typeof identity.sha256 === 'string' && identity.sha256.length > 0;
 }
 
 export function expectedChangeDir(root, questId) {
