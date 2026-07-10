@@ -122,8 +122,13 @@ When running tests during task execution:
 1. **Run targeted tests only** - Don't run the full test suite except at checkpoints
 2. **Focus on relevant tests** - Only run tests related to the feature/file being modified
 3. **Run failing tests first** - When fixing issues, run only the specific failing test(s)
-4. **Invoke targeted tests via tap directly** - `npx tap <test-file...>` (tap is
-   the suite runner; the sharded `test:*` scripts shell out to it). Do NOT use
+4. **Invoke targeted tests via the committed runner or tap directly** -
+   `npm run test:file -- <test-file...>` (the committed
+   `scripts/run-test-files.js` fail-closed runner: empty TAP streams, skips,
+   and todos all fail; `--filter <substring>` narrows the provided file list
+   by path substring and fails closed when nothing matches). `npx tap
+   <test-file...>` is the equivalent direct invocation (tap is the suite
+   runner; the sharded `test:*` scripts shell out to it). Do NOT use
    `npm test -- <file>` or `npm test -- --grep "pattern"`: the `test` script is
    the full sharded suite and silently ignores extra arguments, so those forms
    run everything while appearing filtered.

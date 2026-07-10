@@ -47,12 +47,19 @@ rm /tmp/test-output.txt
 
 ## Example Commands
 
-Targeted runs invoke tap (the suite runner) directly. Do NOT pass extra
-arguments to `npm test` — the `test` script is the full sharded suite and
-silently ignores them, so `npm test -- <file>` and `npm test -- --grep ...`
-run everything while appearing filtered.
+Targeted runs use the committed fail-closed runner (`npm run test:file`) or
+invoke tap (the suite runner) directly — the two are equivalent for green
+runs; the runner additionally fails closed on empty TAP streams, skips, and
+todos. Do NOT pass extra arguments to `npm test` — the `test` script is the
+full sharded suite and silently ignores them, so `npm test -- <file>` and
+`npm test -- --grep ...` run everything while appearing filtered.
 
 ```bash
+npm run test:file -- test/storage/partition.test.js
+npm run test:file -- --filter partition test/storage/*.test.js
 npx tap test/storage/partition.test.js
 npx tap test/storage/partition.test.js test/storage/table.test.js
 ```
+
+`--filter <substring>` narrows the provided file list by path substring and
+fails closed (nonzero) when nothing matches.

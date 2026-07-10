@@ -30,6 +30,8 @@ const NO_FAILURE_REASONS = Object.freeze([]);
 const TEST_PROCESS_NOT_STARTED = 'not_started';
 
 const CLI_OPTION = Object.freeze({
+  FILTER: '--filter',
+  FILTER_PREFIX: '--filter=',
   JOBS: '--jobs',
   JOBS_PREFIX: '--jobs=',
   PREFIX: '-',
@@ -51,6 +53,7 @@ const PROCESS_EVENT = Object.freeze({
 const FAILURE_REASON = Object.freeze({
   ASSERTIONS_FAILED: 'TAP assertions failed',
   NO_ASSERTIONS: 'no assertions executed',
+  NO_FILTER_MATCHES: 'no test files matched --filter',
   NO_STATUS: 'without a status',
   NO_TEST_FILES: 'no test files provided',
   STREAM_INCOMPLETE: 'TAP stream did not complete',
@@ -74,15 +77,30 @@ function parsePositiveInteger(value, option) {
   return parsed;
 }
 
+function requireOptionValue(value, option) {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${option} requires a non-empty value`);
+  }
+  return value;
+}
+
 function parseOptions(argv) {
   const options = {
     files: [],
+    filter: null,
     jobs: DEFAULT_JOBS,
     timeoutMs: DEFAULT_TIMEOUT_MS,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument.startsWith(CLI_OPTION.JOBS_PREFIX)) {
+    if (argument.startsWith(CLI_OPTION.FILTER_PREFIX)) {
+      options.filter = requireOptionValue(
+        argument.slice(CLI_OPTION.FILTER_PREFIX.length),
+        CLI_OPTION.FILTER,
+      );
+    } else if (argument === CLI_OPTION.FILTER) {
+      options.filter = requireOptionValue(argv[++index], CLI_OPTION.FILTER);
+    } else if (argument.startsWith(CLI_OPTION.JOBS_PREFIX)) {
       options.jobs = parsePositiveInteger(
         argument.slice(CLI_OPTION.JOBS_PREFIX.length),
         CLI_OPTION.JOBS,
@@ -352,6 +370,14 @@ async function runTestFiles(files, options = {}) {
   };
 }
 
+// Substring filter over the provided test file paths (`--filter <substring>`).
+// Filtering an explicit non-empty file list down to nothing fails closed —
+// a typo in the filter must never look like a passing empty run.
+function filterTestFiles(files, filter) {
+  if (!filter) return files;
+  return files.filter((file) => file.includes(filter));
+}
+
 async function main() {
   let options;
   try {
@@ -360,7 +386,12 @@ async function main() {
     process.stderr.write(`${error.message}\n`);
     return FAILURE_EXIT_CODE;
   }
-  const summary = await runTestFiles(options.files, options);
+  const files = filterTestFiles(options.files, options.filter);
+  if (options.filter && options.files.length > 0 && files.length === 0) {
+    process.stderr.write(`${FAILURE_REASON.NO_FILTER_MATCHES}\n`);
+    return FAILURE_EXIT_CODE;
+  }
+  const summary = await runTestFiles(files, options);
   if (summary.reasons.length > 0) {
     process.stderr.write(`${summary.reasons.join(REASON_SEPARATOR)}\n`);
   }
@@ -376,6 +407,7 @@ if (IS_MAIN) process.exitCode = await main();
 
 export {
   analyzeTapOutput,
+  filterTestFiles,
   parseOptions,
   runTestFile,
   runTestFileSync,

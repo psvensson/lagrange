@@ -209,7 +209,7 @@ Total rules: 407 (403 masters + 4 cross-domain aliases; alias rows say "alias of
 | TEST-0048 | must_not | testing | — | A test MUST assert the real, unconditional production behavior, and MUST NEVER set, branc… |
 | TEST-0049 | must_not | testing | — | Production feature flags are within-session scaffolds only — NO flag survives the session… |
 | TEST-0050 | must_not | testing | — | Identify the audit scope: the production files exercised by the new or modified test plus… |
-| TEST-0051 | must_not | testing | — | Invoke targeted tests via tap directly - npx tap <test-file...> (tap is the suite runner;… |
+| TEST-0051 | must_not | testing | — | Invoke targeted tests via the committed runner or tap directly - npm run test:file -- <te… |
 | TEST-0052 | must_not | testing | — | Soft-warning two-strikes. The SAME soft warning (a load-flake, a tolerated timeout, a "kn… |
 | ARCH-0130 | must | architecture | — | The system may slow under pressure, but it must remain correct. |
 | GOV-0010 | must_not | governance | — | Do not treat symptom movement as SOLVED. |

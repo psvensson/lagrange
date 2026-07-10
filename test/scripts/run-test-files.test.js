@@ -5,6 +5,7 @@ import path from 'node:path';
 import {afterEach, describe, it} from 'node:test';
 import {
   analyzeTapOutput,
+  filterTestFiles,
   parseOptions,
   runTestFiles,
 } from '../../scripts/run-test-files.js';
@@ -43,9 +44,40 @@ describe('run-test-files', () => {
       TAP_PASS_FIXTURE,
     ]), {
       files: [TAP_PASS_FIXTURE],
+      filter: null,
       jobs: 3,
       timeoutMs: 1200,
     });
+  });
+
+  it('parses --filter in both option styles and rejects an empty value', () => {
+    assert.equal(parseOptions(['--filter', 'tap-pass', TAP_PASS_FIXTURE]).filter,
+      'tap-pass');
+    assert.equal(parseOptions(['--filter=node-test', TAP_PASS_FIXTURE]).filter,
+      'node-test');
+    assert.throws(() => parseOptions(['--filter']),
+      /--filter requires a non-empty value/);
+    assert.throws(() => parseOptions(['--filter=']),
+      /--filter requires a non-empty value/);
+  });
+
+  it('filters test files by path substring', () => {
+    const files = [TAP_PASS_FIXTURE, NODE_TEST_PASS_FIXTURE];
+    assert.deepEqual(filterTestFiles(files, 'node-test'),
+      [NODE_TEST_PASS_FIXTURE]);
+    assert.deepEqual(filterTestFiles(files, null), files,
+      'no filter keeps every file');
+    assert.deepEqual(filterTestFiles(files, 'no-such-substring'), [],
+      'a non-matching filter selects nothing (main fails closed on this)');
+  });
+
+  it('runs only the files selected by the filter', async () => {
+    const summary = await runFixtures(
+      filterTestFiles([TAP_PASS_FIXTURE, NODE_TEST_FAILURE_FIXTURE], 'tap-pass'));
+
+    assert.equal(summary.ok, true);
+    assert.equal(summary.total, 1);
+    assert.equal(summary.results[0].file, TAP_PASS_FIXTURE);
   });
 
   it('runs Tap and node:test files with assertions and Tap plugins intact', async () => {
