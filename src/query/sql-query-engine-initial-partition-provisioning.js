@@ -708,21 +708,11 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     if (!this.isWholeClusterTransientProvisioningHold(options)) {
       return null;
     }
-    const admissionConvergence = options.admissionConvergence || null;
     const baseWaitMs = this.tablePartitionProvisioningTimeoutMs;
     const ceilingMs =
       baseWaitMs *
       QUERY_DEFAULTS.TABLE_CREATE_PROVISION_PROGRESS_REWAIT_CEILING_MULTIPLE;
-    const stallWindows =
-      QUERY_DEFAULTS.TABLE_CREATE_PROVISION_PROGRESS_STALL_WINDOWS;
-    this.logger.warn(QUERY_LOG_MSG.TABLE_PARTITION_TRANSIENT_HOLD_WAIT, {
-      partitionId: options.partitionId || null,
-      requiredReplicaCount: options.requiredReplicaCount || null,
-      rejectedTargetNodePlans:
-        admissionConvergence?.rejectedTargetNodePlans || [],
-      maxWaitMs: baseWaitMs,
-      progressRewaitCeilingMs: ceilingMs,
-    });
+    this.logTransientProvisioningHoldWait(options, baseWaitMs, ceilingMs);
     // Progress-gated re-wait. A cold-bootstrap ledger spread (voters colocated on
     // the seed) cures via TWO serialized REPLACEs and legitimately outlasts the
     // base budget. Extend up to the ceiling in base-width windows WHILE the
@@ -735,8 +725,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     // raises effective provisioning time, and only while the cure progresses.
     let lastResult = null;
     let elapsedMs = 0;
-    let bestConcentration = null;
-    let windowsSinceProgress = 0;
+    const tracker = {bestConcentration: null, windowsSinceProgress: 0};
     while (elapsedMs < ceilingMs) {
       const windowResult = await this.waitForProvisionTargetNodeIds({
         partitionId: options.partitionId,
@@ -754,32 +743,75 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       if (Number.isInteger(provisionable) && provisionable > 0) {
         return windowResult;
       }
-      const snapshot =
-        typeof this.rebalanceCoordinator
-          ?.resolveOperationLedgerConcentrationProgressSnapshot === 'function' ?
-          this.rebalanceCoordinator.resolveOperationLedgerConcentrationProgressSnapshot() :
-          null;
-      if (!snapshot || snapshot.holdEngaged === false) {
-        // Concentration cleared (or unobservable) but admission has not yet
-        // re-opened this window — grant another probe window rather than bail.
-        windowsSinceProgress = 0;
-        continue;
-      }
-      const worst = snapshot.worstConcentration;
-      if (
-        Number.isInteger(worst) &&
-        (bestConcentration === null || worst < bestConcentration)
-      ) {
-        bestConcentration = worst;
-        windowsSinceProgress = 0;
-      } else {
-        windowsSinceProgress += 1;
-        if (windowsSinceProgress >= stallWindows) {
-          break;
-        }
+      if (this.concentrationProgressStalled(tracker)) {
+        break;
       }
     }
     return lastResult;
+  }
+
+  /**
+   * Log the whole-cluster transient-hold re-wait entry (run-24 evidence
+   * trail: which partition is held, why, and the governing budgets).
+   * @param {Object} options The re-wait options.
+   * @param {number} baseWaitMs
+   * @param {number} ceilingMs
+   * @private
+   */
+  logTransientProvisioningHoldWait(options, baseWaitMs, ceilingMs) {
+    const admissionConvergence = options.admissionConvergence || null;
+    this.logger.warn(QUERY_LOG_MSG.TABLE_PARTITION_TRANSIENT_HOLD_WAIT, {
+      partitionId: options.partitionId || null,
+      requiredReplicaCount: options.requiredReplicaCount || null,
+      rejectedTargetNodePlans:
+        admissionConvergence?.rejectedTargetNodePlans || [],
+      maxWaitMs: baseWaitMs,
+      progressRewaitCeilingMs: ceilingMs,
+    });
+  }
+
+  /**
+   * Read the coordinator's ledger-concentration progress snapshot, or null
+   * when the coordinator (or the resolver) is not available.
+   * @return {Object|null}
+   * @private
+   */
+  resolveLedgerConcentrationProgressSnapshot() {
+    const coordinator = this.rebalanceCoordinator;
+    return typeof coordinator
+      ?.resolveOperationLedgerConcentrationProgressSnapshot === 'function' ?
+      coordinator.resolveOperationLedgerConcentrationProgressSnapshot() :
+      null;
+  }
+
+  /**
+   * Advance the re-wait progress tracker one window and report whether the
+   * concentration cure has stalled. Progress = the worst observed
+   * concentration strictly improved; a cleared (or unobservable) hold also
+   * resets the stall count — admission simply has not re-opened yet, so the
+   * loop grants another probe window rather than bailing.
+   * @param {Object} tracker Mutable {bestConcentration, windowsSinceProgress}.
+   * @return {boolean} True when progress stalled for the configured windows.
+   * @private
+   */
+  concentrationProgressStalled(tracker) {
+    const snapshot = this.resolveLedgerConcentrationProgressSnapshot();
+    if (!snapshot || snapshot.holdEngaged === false) {
+      tracker.windowsSinceProgress = 0;
+      return false;
+    }
+    const worst = snapshot.worstConcentration;
+    const improved = Number.isInteger(worst) &&
+      (tracker.bestConcentration === null ||
+        worst < tracker.bestConcentration);
+    if (improved) {
+      tracker.bestConcentration = worst;
+      tracker.windowsSinceProgress = 0;
+      return false;
+    }
+    tracker.windowsSinceProgress += 1;
+    return tracker.windowsSinceProgress >=
+      QUERY_DEFAULTS.TABLE_CREATE_PROVISION_PROGRESS_STALL_WINDOWS;
   }
 
   buildProvisioningCompletionSummary(options = {}) {

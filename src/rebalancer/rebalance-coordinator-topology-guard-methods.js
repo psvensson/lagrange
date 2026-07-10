@@ -159,26 +159,35 @@ class RebalanceCoordinatorTopologyGuardMethods {
       this.getEntityInFlightOperationRows({entityType, entityId}) || [];
     const targetNodeIds = new Set();
     for (const operation of liveOperationRows) {
-      const normalizedType = this.normalizeMoveType(
-        operation?.type ||
-          operation?.operation_type ||
-          operation?.operationType,
-      );
-      if (!TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(normalizedType)) {
-        continue;
-      }
-      const targetNodeId = String(
-        operation?.target_node_id ||
-          operation?.targetNodeId ||
-          operation?.node_id ||
-          operation?.nodeId ||
-          '',
-      ).trim();
-      if (targetNodeId.length > 0) {
+      const targetNodeId =
+        this.resolveTopologyGuardAddTargetNodeId(operation);
+      if (targetNodeId !== null) {
         targetNodeIds.add(targetNodeId);
       }
     }
     return targetNodeIds;
+  }
+
+  /**
+   * The target node of one live ADD-like operation row, or null when the
+   * operation is not ADD-like (or names no target node).
+   * @param {Object} operation
+   * @return {string|null}
+   * @private
+   */
+  resolveTopologyGuardAddTargetNodeId(operation) {
+    const row = operation || {};
+    const normalizedType = this.normalizeMoveType(
+      row.type || row.operation_type || row.operationType,
+    );
+    if (!TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(normalizedType)) {
+      return null;
+    }
+    const targetNodeId = String(
+      row.target_node_id || row.targetNodeId || row.node_id || row.nodeId ||
+        '',
+    ).trim();
+    return targetNodeId.length > 0 ? targetNodeId : null;
   }
 
   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
