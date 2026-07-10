@@ -164,6 +164,7 @@ function applyFinding(frontier, event) {
   if (!frontier) return;
   frontier.findings.push({
     claim: event.claim || null,
+    kind: event.kind || null,
     evidence: event.evidence || null,
     rulesOut: event.rulesOut || null,
     regressionClassification: event.regressionClassification || null,
@@ -428,6 +429,9 @@ export function appendFinding(root, questId, finding) {
     type: EVENT_FINDING,
     frontier: finding.frontier,
     claim: finding.claim,
+    // kind: optional machine-readable tag ('repro-on-head', 'inherited-rulesout', ...)
+    // so advisories and dossiers can key off a finding class without parsing claims.
+    kind: finding.kind || null,
     evidence: finding.evidence || null,
     rulesOut: finding.rulesOut || null,
     regressionClassification: finding.regressionClassification || null,
@@ -441,8 +445,25 @@ export function readFindings(root, questId, frontierId) {
     .filter((e) => e.type === EVENT_FINDING && e.frontier === frontierId)
     .map((e) => ({
       claim: e.claim || null,
+      kind: e.kind || null,
       evidence: e.evidence || null,
       rulesOut: e.rulesOut || null,
+      ts: e.ts || null,
+    }));
+}
+
+// Read every finding that rules a lever out, across all frontiers of one quest.
+// Used to inherit a lineage's dead levers into a successor quest and to print
+// them in the retread check; bounded to one quest's log, never a corpus scan.
+export function readRulesOutFindings(root, questId) {
+  return readLog(root, questId)
+    .filter((e) => e.type === EVENT_FINDING && e.rulesOut)
+    .map((e) => ({
+      frontier: e.frontier || null,
+      claim: e.claim || null,
+      kind: e.kind || null,
+      evidence: e.evidence || null,
+      rulesOut: e.rulesOut,
       ts: e.ts || null,
     }));
 }

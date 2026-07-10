@@ -21,6 +21,11 @@ conflicting copies.
   steering via `node scripts/solve.js promote-finding` (see
   [`docs/steering/findings/README.md`](findings/README.md)), NOT left only in
   external memory.
+- Adding a new Working-directive line to the external `MEMORY.md` index REQUIRES, in
+  the same edit, either promoting the directive into in-repo steering (a
+  `docs/steering/findings/` file plus its `llm-pack.config.json` sources entry, or a
+  normative sentence in the existing steering home) or marking the line explicitly as
+  user-personal-not-promoted.
 - Session/narrative state (current blocker, handoff notes, working hypotheses) stays
   in external memory and MUST NOT be copied into in-repo steering.
 - Durable operational ground truth has exactly one canonical home,

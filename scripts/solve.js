@@ -15,8 +15,10 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePath,
-  appendGuardOverride, appendReflection, readFindings}
+  appendGuardOverride, appendReflection, readFindings, readRulesOutFindings}
   from './solve/store.js';
+import {buildSealFreshnessAdvisory} from './solve/seal-freshness.js';
+import {retreadCheckLines} from './solve/retread.js';
 import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
 import {runLoop, runSupervised} from './solve/loop.js';
@@ -96,6 +98,10 @@ function questTemplate(id, statement) {
       // and rationale (e.g. "solve/epics/<id>.md"). Narrative belongs there, not in
       // the Quest; this is just the pointer.
       planDoc: null,
+      // sealedAtCommit: the HEAD sha when the quest was drafted (stamped by `new`,
+      // null outside a git work tree). The seal-freshness advisory diffs src/
+      // against it to demand a reproduce-on-HEAD check before rung work.
+      sealedAtCommit: null,
     },
     // done_when: the binary, artifact-bound success predicate. Sealed once declared.
     doneWhen: {
@@ -123,6 +129,41 @@ function questTemplate(id, statement) {
   };
 }
 
+// The commit the quest is sealed at, so the seal-freshness advisory can detect src/
+// drift between the seal evidence and later work. Null outside a git work tree
+// (unit-test tmpdirs) — readers already treat the links block as optional.
+function resolveHeadCommit(root) {
+  const out = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  if (out.status !== 0 || typeof out.stdout !== 'string') return null;
+  const sha = out.stdout.trim();
+  return /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+}
+
+// Copy the parent quest's rulesOut findings onto the new quest as day-0 findings, so
+// the lineage's already-refuted levers ride the existing finding/dossier machinery
+// (statements stay a sealed result predicate; dead levers are findings, not prose).
+function inheritRulesOutFindings(root, quest, parentId) {
+  const frontier = quest.frontiers?.[0]?.id || `${quest.id}-main`;
+  const seen = new Set();
+  let copied = 0;
+  for (const finding of readRulesOutFindings(root, parentId)) {
+    if (seen.has(finding.rulesOut)) continue;
+    seen.add(finding.rulesOut);
+    appendFinding(root, quest.id, {
+      frontier,
+      claim: `inherited from ${parentId}: ${finding.claim || '(no claim)'}`,
+      kind: 'inherited-rulesout',
+      evidence: finding.evidence,
+      rulesOut: finding.rulesOut,
+    });
+    copied += 1;
+  }
+  return copied;
+}
+
 function cmdNew(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('new: --id <questId> is required');
@@ -132,9 +173,36 @@ function cmdNew(root, args) {
   }
   const quest = questTemplate(id, typeof args.statement === 'string' ?
     args.statement : null);
+  quest.links.sealedAtCommit = resolveHeadCommit(root);
+  const parentId = typeof args['inherit-rulesout-from'] === 'string' ?
+    args['inherit-rulesout-from'] : null;
+  if (parentId) {
+    loadQuest(root, parentId); // Fail before writing anything if the parent is unknown.
+    quest.links.parentQuest = parentId;
+  }
   const written = saveQuest(root, quest);
-  process.stdout.write(`created ${written}\nEdit it, then: solve run --id ${id}\n`);
+  const inherited = parentId ? inheritRulesOutFindings(root, quest, parentId) : 0;
+  const inheritedLine = inherited ?
+    `inherited ${inherited} rulesOut finding(s) from ${parentId}\n` : '';
+  process.stdout.write(
+    `created ${written}\n${inheritedLine}Edit it, then: solve run --id ${id}\n`);
+  emitRetreadWarnings(root, quest);
   refreshFrontierBoard(root);
+}
+
+// Draft-time retread check (and again on each supervised pin): warn when the
+// statement cites files/CL-ids touched by a recent revert, and surface the
+// lineage's recorded dead levers. Purely advisory; must never fail the command.
+function emitRetreadWarnings(root, quest) {
+  let lines;
+  try {
+    lines = retreadCheckLines(root, quest);
+  } catch (err) {
+    process.stderr.write(`retread check skipped: ${err.message}\n`);
+    return;
+  }
+  if (lines.length === 0) return;
+  process.stdout.write(`${lines.join('\n')}\n`);
 }
 
 function buildRunOptions(root, id, args) {
@@ -213,7 +281,11 @@ function buildExecutor(root, id, args) {
 
 function questAdvisories(root, quest, log) {
   const health = analyzeQuestHealth(root, quest);
-  return buildAdvisories(quest, health, log || readLog(root, quest.id));
+  const questLog = log || readLog(root, quest.id);
+  const advisories = buildAdvisories(quest, health, questLog);
+  const sealFreshness = buildSealFreshnessAdvisory(quest, questLog, {root});
+  if (sealFreshness) advisories.push(sealFreshness);
+  return advisories;
 }
 
 // Print the workflow advisories (reflection-due / override-available) for a quest, so a
@@ -302,6 +374,7 @@ function cmdFinding(root, args) {
   const stamped = appendFinding(root, id, {
     frontier: args.frontier,
     claim: args.claim,
+    kind: typeof args.kind === 'string' ? args.kind : null,
     evidence: typeof args.evidence === 'string' ? args.evidence : null,
     rulesOut: typeof args.rulesOut === 'string' ? args.rulesOut : null,
     regressionClassification,
@@ -505,6 +578,7 @@ function cmdStep(root, args) {
       `next: node scripts/solve.js step --id ${id} --commit ` +
       '--changeRef diff:<path> --summary "<what changed>"\n',
     );
+    emitRetreadWarnings(root, quest);
     emitAdvisories(root, quest);
     return;
   }

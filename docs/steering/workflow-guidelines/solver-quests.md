@@ -88,6 +88,32 @@ for the epic/spec page they advance, `parentQuest` for quest lineage, or
 `closesCL`/`specRef`/`roadmapRow` where applicable. An unlinked product quest
 is invisible to `trace`/`frontier` and is a defect to backfill before handoff.
 
+### Successor Quests (park-and-pivot lineage)
+
+When a quest is drafted as the successor of a parked/exhausted one, the same
+statement-is-a-result-predicate rule applies with a specific division of
+content — do not carry the lineage's narrative into the new seal:
+
+- **Statement** = the sealed result predicate + oracle only.
+- **Dead levers** (the lineage's vetted-dead list) = day-0 `rulesOut` findings
+  on the new quest, not statement prose. Use
+  `solve.js new --inherit-rulesout-from <parentQuest>` to copy them from the
+  parent's log; they then render in the report/ladder and replay in every rung
+  dossier, and the draft-time retread check dedups against them.
+- **Hypotheses** = theory records (falsifiable, supersedable), never fields of
+  the sealed file.
+- **Prior art / evidence trail** = `links` (`parentQuest`, `planDoc`), where
+  `trace` can join it.
+
+`new` stamps `links.sealedAtCommit` and prints retread warnings when the
+statement cites files or CL ids touched by a recent `revert(...)` commit —
+treat such a warning as a mandatory confirm-not-the-reverted-lever check
+before the first rung. Because a successor is sealed against the PARENT's
+evidence, the seal-freshness advisory will demand a `repro-on-head` finding
+(`solve.js finding --kind repro-on-head ...`) once `src/` drifts: reproduce
+the sealed symptom on current HEAD before spending any disambiguation rung —
+a symptom already fixed in the meantime exhausts the quest immediately.
+
 ### Closure Fidelity (live-visible classes)
 
 Within MEASURED closures there are fidelity tiers: deterministic guard

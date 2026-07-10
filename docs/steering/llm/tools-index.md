@@ -83,11 +83,16 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## check
 
 - `check:memory-index` — `node scripts/check-memory-index.js`
+- `check:stale-untracked` — `node scripts/check-stale-untracked.js`
 
 ## debug
 
 - `debug:admin:ws` — `node scripts/debug/admin-ws-connection-check.mjs`
 - `debug:logs:parse` — `node scripts/debug/parse-json-log-lines.cjs`
+
+## demo
+
+- `demo:formation-probe` — `node examples/movielens-access-affinity/run-formation-probe.js`
 
 ## distributed
 
@@ -255,4 +260,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-165 scripts indexed; 66 have a curated description, 99 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+167 scripts indexed; 66 have a curated description, 101 fall back to their raw command. Improve coverage in the two sources named in the header comment.

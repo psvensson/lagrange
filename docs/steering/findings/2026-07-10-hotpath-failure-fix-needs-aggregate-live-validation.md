@@ -1,0 +1,5 @@
+---
+source: operator-directive#hotpath-live-ab
+---
+
+Before shipping any change to a hot failure-handling path — code invoked per transient error during formation churn or retry storms (retry, recovery, failure-classification, backoff) — you MUST validate it with a controlled live A/B (N≥2 runs on the fixed source vs N≥2 on the reverted source, back-to-back on the same machine, comparing aggregate error counts on the touched path AND the end-to-end outcome), because a unit-correct, DT-red-on-revert-proven, adversarially verified SHIP fix can still regress the live cluster through aggregate read/write amplification a single-firing deterministic test cannot sample; and you MUST NOT convert a defer/backoff on such a path into advance-now work (extra reads, re-inserts) without that live proof — a defer during churn is often the load-shedding that lets prerequisites settle. (Witness: `1ce80391`, unit-green + DT-proven + 5417 tests green, caused a ~14x participant-failure storm and aborted 2/2 live runs; reverted `692c9dbb`.)

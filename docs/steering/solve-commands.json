@@ -1,8 +1,8 @@
 {
   "_comment": "Curated descriptions for the solve.js CLI subcommands. Consumed by scripts/gen-solve-commands-index.js (run via `npm run steering:llm:pack`) to emit docs/steering/llm/solve-commands.md. Keys MUST match the COMMANDS map in scripts/solve.js: a registered command missing here renders as `(undocumented)` and a key here that is not registered renders under `Documented but not registered`, so `npm run steering:check` fails on either drift. Add or correct entries here, not in the generated markdown.",
   "new": {
-    "summary": "Create a Quest draft (a sealed goal under solve/quests/<id>.json).",
-    "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\""
+    "summary": "Create a Quest draft (a sealed goal under solve/quests/<id>.json). Stamps links.sealedAtCommit for the seal-freshness advisory, runs the draft-time retread check against recent revert(...) commits, and --inherit-rulesout-from copies a parent quest's rulesOut findings as day-0 findings.",
+    "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--inherit-rulesout-from <parentQuestId>]"
   },
   "run": {
     "summary": "Run the Quest loop to a terminal (SOLVED/EXHAUSTED). Bare `run --id <id>` uses the default `dry` executor (a no-op skeleton); real autonomous work needs `--executor agent --yes`, plus `--keep-alive` to survive non-terminal gates via the supervisor.",
@@ -45,8 +45,8 @@
     "usage": "node scripts/solve.js probe --id <id> [--frontier <f>] [--probe doneWhen]"
   },
   "finding": {
-    "summary": "Record a durable finding (a tested learning or ruled-out approach) into the Quest event log.",
-    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\""
+    "summary": "Record a durable finding (a tested learning or ruled-out approach) into the Quest event log. --kind tags a machine-readable class (repro-on-head silences the seal-freshness advisory; inherited-rulesout marks levers copied from a parent quest).",
+    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head] [--rulesOut \"<lever>\"] [--evidence <ref>]"
   },
   "promote-finding": {
     "summary": "Promote a recorded finding into in-repo steering as a rule (then regenerate with `npm run steering:llm:pack`).",

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-06T19:25:22.406Z",
+  "generatedAt": "2026-07-10T07:43:25.284Z",
   "packs": [
     {
       "name": "core",
@@ -53,7 +53,7 @@
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
       "ruleCount": 30,
-      "estimatedTokens": 927,
+      "estimatedTokens": 930,
       "domains": [
         "governance"
       ],

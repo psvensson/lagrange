@@ -94,8 +94,10 @@ autonomous work — the tripwire converts it into a bounded cost.
 
 1. **Soft-warning two-strikes.** The SAME soft warning (a load-flake, a
    tolerated timeout, a "known transient") appearing in two consecutive runs
-   is a failing assertion, not background noise: open a lead or quest for
-   it, or fix it, before relying on the next run's result.
+   of the same scenario MUST be treated as a failing assertion, not
+   background noise: before the third run, open a finding and either fix the
+   cause, re-derive the threshold with evidence, or promote it to a hard
+   failure — NEVER carry the same "proceeding anyway" past run 2.
 2. **Live-refutation two-strikes.** When live/measured evidence contradicts
    a sealed statement or a fix claim TWICE, the framing — not the next patch
    — is what must change: EXHAUST and re-author, widen the class, or
