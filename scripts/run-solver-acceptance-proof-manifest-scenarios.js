@@ -5,6 +5,6 @@ import {
 } from './run-project-hardening-acceptance.js';
 
 const result = runProjectHardeningAcceptance({
-  scenario: 'project-hardening-proof-integrity-cutover',
+  scenario: 'solver-acceptance-proof-manifest',
 });
 process.exitCode = result.run.passed ? 0 : 1;

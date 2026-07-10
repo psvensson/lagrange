@@ -18,6 +18,22 @@ function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-'));
 }
 
+const NO_OP_CHANGE_NAME = 'no-op';
+
+function writeSourceChangeArtifact(root, questId, name) {
+  const diff = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
+  fs.mkdirSync(path.dirname(diff), {recursive: true});
+  fs.writeFileSync(diff, [
+    'diff --git a/src/oracle.js b/src/oracle.js',
+    '--- a/src/oracle.js',
+    '+++ b/src/oracle.js',
+    '@@ -1 +1 @@',
+    '-before',
+    '+after',
+  ].join('\n'));
+  return `diff:${diff}`;
+}
+
 const TASK = {
   quest: {id: 'g', statement: 's', constraints: ['x']},
   frontierDef: {id: 'f', metric: {probe: 'oracle', args: {file: 'o', metric: 'priority'}}},
@@ -128,17 +144,8 @@ tap.test('agent executor (P4)', async (t) => {
       const data = JSON.parse(fs.readFileSync(oracle, 'utf8'));
       data.metric = Math.max(0, data.metric - 1);
       fs.writeFileSync(oracle, JSON.stringify(data));
-      const diff = path.join(root, 'solve', 'changes', quest.id, `c-${data.metric}.diff`);
-      fs.mkdirSync(path.dirname(diff), {recursive: true});
-      fs.writeFileSync(diff, [
-        'diff --git a/src/oracle.js b/src/oracle.js',
-        '--- a/src/oracle.js',
-        '+++ b/src/oracle.js',
-        '@@ -1 +1 @@',
-        '-before',
-        '+after',
-      ].join('\n'));
-      fs.writeFileSync(args[1], JSON.stringify({changeRef: `diff:${diff}`, summary: 'step'}));
+      const changeRef = writeSourceChangeArtifact(root, quest.id, `c-${data.metric}`);
+      fs.writeFileSync(args[1], JSON.stringify({changeRef, summary: 'step'}));
       return {status: 0};
     };
     const executor = makeAgentExecutor(root, {config: CONFIG, spawn});
@@ -162,12 +169,14 @@ tap.test('agent executor (P4)', async (t) => {
         metric: {probe: 'oracle', args: {file: oracle, metric: 'priority'}}}],
     };
     saveQuest(root, quest);
-    // Agent never changes anything. The no-op climbs observe -> local-fix ->
+    // Agent never changes the metric, but reports a sealed patch artifact. The no-op
+    // climbs observe -> local-fix ->
     // widen-scope, where soft-first grants ONE exploratory attempt; that no-op stall
     // climbs into the model rung, whose model/system theory gate is excluded from
     // soft-first and hard-stops before invoking the agent again.
     const spawn = (cmd, args) => {
-      fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'no-op'}));
+      const changeRef = writeSourceChangeArtifact(root, quest.id, NO_OP_CHANGE_NAME);
+      fs.writeFileSync(args[1], JSON.stringify({changeRef, summary: 'no-op'}));
       return {status: 0};
     };
     const executor = makeAgentExecutor(root, {config: CONFIG, spawn});

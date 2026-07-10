@@ -57,6 +57,13 @@ export const EVENT_GUARD_OVERRIDE = 'guard-override';
 // append-only; it carries the trigger (cadence/oscillation/scope-pressure) and the note.
 export const EVENT_REFLECTION = 'reflection';
 
+// Terminal-integrity event vocabulary. These values cross the event-store and
+// closure-gate boundary, so the shared constants owner defines them.
+export const INTEGRITY_SCOPE_ATTEMPT = 'attempt-integrity';
+export const INTEGRITY_SCOPE_GOALPOSTS = 'goalposts';
+export const INTEGRITY_RESOLUTION_FRESH_SAMPLE = 'fresh-accepted-sample';
+export const INTEGRITY_RESOLUTION_NEW_QUEST = 'new-quest-only';
+
 // Frontier / quest status values.
 export const STATUS_OPEN = 'open';
 export const STATUS_SOLVED = 'solved';

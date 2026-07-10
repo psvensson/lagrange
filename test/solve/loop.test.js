@@ -18,6 +18,7 @@ import {registerProbe} from '../../scripts/solve/probe.js';
 import {ingestEvidence} from '../../scripts/solve/evidence.js';
 import {
   EVENT_ATTEMPT,
+  EVENT_VIOLATION,
   EVENT_PARK,
   EVENT_FINDING,
   EVENT_GATE_DECISION,
@@ -44,6 +45,8 @@ import {
   OUTCOME_SUPERVISOR_STALLED,
   OUTCOME_SUPERVISOR_BUDGET,
 } from '../../scripts/solve/constants.js';
+
+const INVALID_MODEL_REF = 'tla:does-not-exist.tla';
 
 function setup({metric, target = 0, frontiers = ['f1']}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-'));
@@ -225,7 +228,7 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
 
   t.test('autonomous loop takes a soft-first exploratory attempt on the model rung ' +
     'before escalating for model evidence', (t) => {
-    const {root, quest} = setup({metric: 5, target: 0});
+    const {root, quest, changeDir} = setup({metric: 5, target: 0});
     quest.statement = 'lifecycle owner-boundary model contract needs proof';
     saveQuest(root, quest);
     ingestEvidence(root, {
@@ -271,25 +274,32 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     });
 
     let executorCalls = 0;
+    const inner = makeDryExecutor({changeDir, stallFrontiers: ['f1']});
     const res = runLoop(root, quest, {
       executor: {
-        run() {
+        run(task) {
           executorCalls += 1;
-          return {changeRef: null, summary: 'model attempt'};
+          return {...inner.run(task), modelRef: INVALID_MODEL_REF};
         },
       },
       maxCycles: 1,
     });
-    const advisories = readLog(root, quest.id).filter((event) =>
+    const log = readLog(root, quest.id);
+    const advisories = log.filter((event) =>
       event.type === EVENT_GATE_DECISION &&
       event.disposition === DISPOSITION_ADVISORY &&
       event.code === CONTINUATION_BLOCKED_THEORY);
+    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
     // P5b: model evidence is over-eager as an immediate stop. Soft-first now grants the
     // model rung a bounded exploratory attempt to PRODUCE evidence; the hard requirement
     // is still enforced at commit time by auditModelEvidence.
     t.not(res.outcome, OUTCOME_THEORY_REQUIRED, 'model evidence does not hard-stop on first sight');
     t.equal(executorCalls, 1, 'executor was invoked under the soft-first advisory');
     t.equal(advisories.length, 1, 'one model-evidence advisory recorded for the cycle');
+    t.match(violations.at(-1).violations.join('\n'), /modelRef target does not exist/u,
+      'model-evidence advisory cannot suppress invalid modelRef validation');
+    t.equal(log.filter((event) => event.type === EVENT_ATTEMPT).length, 1,
+      'invalid modelRef attempt cannot advance the rung');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

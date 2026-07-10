@@ -41,6 +41,8 @@ import {
 } from './constants.js';
 import {isFrontierProbeEvent} from './probe-spec.js';
 
+const UNKNOWN_METRIC = '?';
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, {recursive: true});
 }
@@ -138,7 +140,8 @@ function applyAttempt(frontierState, event) {
 function applyNonMeasurement(frontierState, event) {
   if (!frontierState) return;
   frontierState.nonMeasurements += 1;
-  frontierState.reason = `measurement unavailable (retry ${event.retryOrdinal || '?'})`;
+  frontierState.reason =
+    `measurement unavailable (retry ${event.retryOrdinal || UNKNOWN_METRIC})`;
 }
 
 function applySolved(frontier) {

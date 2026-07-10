@@ -57,6 +57,21 @@ import {
 const INHERITED_RULESOUT_ABSENT_CLAIM = '(no claim)';
 const INHERITED_RULESOUT_FINDING_KIND = 'inherited-rulesout';
 const LINE_SEPARATOR = '\n';
+const DRY_EXECUTOR_NOTICE =
+  'run: default `dry` executor — a no-op skeleton that makes no real ' +
+  'edits; real autonomous work needs --executor agent --yes\n';
+const AUTO_DIFF_ARGUMENT = 'auto-diff';
+const AUTO_DIFF_REQUIRES_COMMIT = 'step --auto-diff requires --commit';
+const AUTO_DIFF_IGNORED_NOTICE =
+  'step: --auto-diff ignored — an explicit --changeRef takes precedence\n';
+const STEP_CHANGE_REF_REQUIRED =
+  'step --commit requires --changeRef diff:<path> (or --auto-diff)';
+const STEP_NEXT_ARGUMENTS =
+  '--changeRef diff:<path> --summary "<what changed>" ' +
+  '(--auto-diff snapshots the working tree as the changeRef)\n';
+const NEXT_ID_REQUIRED = 'next: --id <questId> is required';
+const COMMAND_SEPARATOR = '|';
+const USAGE_ARGUMENTS = '[--id <questId>] [...]\n';
 
 function parseArgs(argv) {
   const args = {_: []};
@@ -285,9 +300,7 @@ function cmdRun(root, args) {
 function buildExecutor(root, id, args) {
   const kind = args.executor || 'dry';
   if (kind === 'dry') {
-    process.stderr.write(
-      'run: default `dry` executor — a no-op skeleton that makes no real ' +
-      'edits; real autonomous work needs --executor agent --yes\n');
+    process.stderr.write(DRY_EXECUTOR_NOTICE);
     return makeDryExecutor({
       changeDir: path.join(root, SOLVE_DATA_DIR, 'changes', id),
       step: Number(args.step) || 1,
@@ -563,19 +576,18 @@ function cmdStep(root, args) {
   if (args.changeRef && !args.commit) {
     throw new Error('step commit requires --commit with --changeRef');
   }
-  if (args['auto-diff'] && !args.commit) {
-    throw new Error('step --auto-diff requires --commit');
+  if (args[AUTO_DIFF_ARGUMENT] && !args.commit) {
+    throw new Error(AUTO_DIFF_REQUIRES_COMMIT);
   }
-  if (args['auto-diff'] && args.changeRef) {
-    process.stderr.write(
-      'step: --auto-diff ignored — an explicit --changeRef takes precedence\n');
+  if (args[AUTO_DIFF_ARGUMENT] && args.changeRef) {
+    process.stderr.write(AUTO_DIFF_IGNORED_NOTICE);
   }
-  if (args.commit && !args.changeRef && !args['auto-diff']) {
-    throw new Error('step --commit requires --changeRef diff:<path> (or --auto-diff)');
+  if (args.commit && !args.changeRef && !args[AUTO_DIFF_ARGUMENT]) {
+    throw new Error(STEP_CHANGE_REF_REQUIRED);
   }
   const r = runStep(root, quest, {
     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
-    autoDiff: Boolean(args['auto-diff']),
+    autoDiff: Boolean(args[AUTO_DIFF_ARGUMENT]),
     summary: typeof args.summary === 'string' ? args.summary : undefined,
     force: Boolean(args.force),
     ...theoryCommitArgs(args),
@@ -609,8 +621,7 @@ function cmdStep(root, args) {
       `pinned ${r.frontier}: metric ${r.before.metric}\n` +
       `pending: ${r.pendingFile}\n` +
       `next: node scripts/solve.js step --id ${id} --commit ` +
-      '--changeRef diff:<path> --summary "<what changed>" ' +
-      '(--auto-diff snapshots the working tree as the changeRef)\n',
+      STEP_NEXT_ARGUMENTS,
     );
     emitRetreadWarnings(root, quest);
     emitAdvisories(root, quest);
@@ -618,7 +629,7 @@ function cmdStep(root, args) {
   }
   const moved = r.progressed ? 'PROGRESS' : 'flat';
   const viol = r.violations.length ? ` violations: ${r.violations.join('; ')}` : '';
-  const autoDiffLine = args['auto-diff'] && r.changeRef ?
+  const autoDiffLine = args[AUTO_DIFF_ARGUMENT] && r.changeRef ?
     `changeRef: ${r.changeRef}\n` : '';
   const templateLines = (r.verificationTemplates || [])
     .map((t) => `suggested verification template: ${t.template}\n`).join('');
@@ -634,7 +645,7 @@ function cmdStep(root, args) {
 // gate stops, current blocker, advisories). Derives nothing new; see solve/next.js.
 function cmdNext(root, args) {
   const id = args.id || args._[0];
-  if (!id) throw new Error('next: --id <questId> is required');
+  if (!id) throw new Error(NEXT_ID_REQUIRED);
   process.stdout.write(runNextCommand(root, id));
 }
 
@@ -949,7 +960,8 @@ function main() {
   const handler = COMMANDS[command];
   if (!handler) {
     process.stderr.write(
-      `usage: solve <${Object.keys(COMMANDS).join('|')}> [--id <questId>] [...]\n`);
+      `usage: solve <${Object.keys(COMMANDS).join(COMMAND_SEPARATOR)}> ` +
+      USAGE_ARGUMENTS);
     process.exit(command ? 1 : 0);
     return;
   }

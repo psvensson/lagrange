@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
+import {appendEvent} from '../../scripts/solve/store.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {buildNextLines, runNextCommand} from '../../scripts/solve/next.js';
+import {makeOracleQuest} from './solve-test-quest-fixture.js';
 import {
   EVENT_GATE_DECISION,
   EVENT_QUEST,
@@ -17,27 +18,10 @@ function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'solve-next-'));
 }
 
-function makeQuest(root, id = 'demo') {
-  const oracle = path.join(root, 'oracle.json');
-  fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
-  const quest = {
-    id,
-    statement: 'Drive the oracle metric to zero.',
-    priority: 1,
-    doneWhen: {probe: 'oracle', args: {file: oracle}},
-    frontiers: [
-      {id: `${id}-main`, priority: 1,
-        metric: {probe: 'oracle', args: {file: oracle}}},
-    ],
-  };
-  saveQuest(root, quest);
-  return {quest, oracle};
-}
-
 tap.test('solve next', async (t) => {
   t.test('always leads with a single imperative Next: line', (t) => {
     const root = tmp();
-    makeQuest(root);
+    makeOracleQuest(root);
     const lines = buildNextLines(root, 'demo');
     t.match(lines[0], /^Next: /u);
     t.ok(lines.length >= 3, 'a handful of context lines follow');
@@ -47,7 +31,7 @@ tap.test('solve next', async (t) => {
 
   t.test('surfaces a pending supervised step as commit-or-abort', (t) => {
     const root = tmp();
-    const {quest} = makeQuest(root);
+    const {quest} = makeOracleQuest(root);
     runStep(root, quest);
 
     const out = runNextCommand(root, 'demo');
@@ -60,7 +44,7 @@ tap.test('solve next', async (t) => {
 
   t.test('surfaces the last gate stop nextCommand', (t) => {
     const root = tmp();
-    makeQuest(root);
+    makeOracleQuest(root);
     appendEvent(root, 'demo', {
       type: EVENT_GATE_DECISION,
       frontier: 'demo-main',
@@ -80,7 +64,7 @@ tap.test('solve next', async (t) => {
 
   t.test('a terminal quest says so instead of prescribing work', (t) => {
     const root = tmp();
-    makeQuest(root);
+    makeOracleQuest(root);
     appendEvent(root, 'demo', {
       type: EVENT_QUEST,
       status: STATUS_SOLVED,

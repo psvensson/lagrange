@@ -24,13 +24,11 @@ behavior and fail closed when evidence is absent.
 
 ## Proof
 
-1. `node scripts/run-project-hardening-proof-integrity-cutover-scenarios.js`
-2. `npm run test:static`
-3. `npm run model:contracts`
-4. `npm run test:fast`
+Run `npm run test:project-hardening` (the same executor used by `test:gate` and
+the Solver scenario). Its sole command inventory is the versioned manifest at
+`test/manifests/project-hardening-proof-manifest.json`; the spec intentionally
+does not repeat that ordered command list.
 
-The guard scenario owns the Quest report and covers the focused assertions for
-test registration, live PostgreSQL client behavior, dependency acyclicity,
-quality baselines, CI/documentation agreement, network defaults, and package
-entrypoint behavior. Three consecutive PASS reports satisfy the Quest.
-
+The manifest runner records per-command status and content identity, rejects
+missing or stale artifacts and manifest drift, and writes the Quest report.
+Three consecutive PASS reports satisfy the Quest.

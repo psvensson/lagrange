@@ -23,6 +23,22 @@ const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const FLAG_QUESTION = '--question';
 const FLAG_WHY_NOT_DETERMINISTIC = '--why-not-deterministic';
+const PREFLIGHT_HEADER = '# Gate preflight\n\n';
+const LATENT_BLOCKER_HEADER =
+  '## Latent-blocker census (do not spend a gate to learn what the ' +
+  'corpus already reveals)\n\n';
+const ALLOWED_CATEGORIES_HEADER =
+  '\n## Allowed gate categories (all others: use a ' +
+  'deterministic in-process test)\n';
+const CALIBRATION_HEADER =
+  '\n## N calibration (smallest informative N; ' +
+  'escalate only when the result forces it)\n';
+const OPERATIONAL_GROUND_TRUTH_SOURCE =
+  '\nSource: docs/steering/operational-ground-truth.md ' +
+  '("Deterministic-first; the gate is a LAST RESORT ONLY").\n';
+const LATENT_BLOCKER_FAILURE =
+  'gate:preflight: analyze:latent-blockers failed — resolve that before ' +
+  'queuing any gate.\n';
 
 const USAGE =
   'usage: npm run gate:preflight -- ' +
@@ -81,36 +97,28 @@ function main() {
     return EXIT_FAILURE;
   }
 
-  process.stdout.write('# Gate preflight\n\n');
+  process.stdout.write(PREFLIGHT_HEADER);
   process.stdout.write(`question: ${options.question.trim()}\n`);
   process.stdout.write(
     `why-not-deterministic: ${options.whyNotDeterministic.trim()}\n\n`);
 
-  process.stdout.write(
-    '## Latent-blocker census (do not spend a gate to learn what the ' +
-    'corpus already reveals)\n\n');
+  process.stdout.write(LATENT_BLOCKER_HEADER);
   const census = spawnSync('npm', ['run', 'analyze:latent-blockers'], {
     stdio: 'inherit',
   });
 
-  process.stdout.write('\n## Allowed gate categories (all others: use a ' +
-    'deterministic in-process test)\n');
+  process.stdout.write(ALLOWED_CATEGORIES_HEADER);
   for (const category of ALLOWED_GATE_CATEGORIES) {
     process.stdout.write(`${category}\n`);
   }
-  process.stdout.write('\n## N calibration (smallest informative N; ' +
-    'escalate only when the result forces it)\n');
+  process.stdout.write(CALIBRATION_HEADER);
   for (const row of N_CALIBRATION_TABLE) {
     process.stdout.write(`${row}\n`);
   }
-  process.stdout.write(
-    '\nSource: docs/steering/operational-ground-truth.md ' +
-    '("Deterministic-first; the gate is a LAST RESORT ONLY").\n');
+  process.stdout.write(OPERATIONAL_GROUND_TRUTH_SOURCE);
 
   if (census.status !== 0) {
-    process.stderr.write(
-      'gate:preflight: analyze:latent-blockers failed — resolve that before ' +
-      'queuing any gate.\n');
+    process.stderr.write(LATENT_BLOCKER_FAILURE);
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

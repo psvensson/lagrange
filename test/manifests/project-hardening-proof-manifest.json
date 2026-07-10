@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "project-hardening-proof-integrity-cutover",
+  "environment": {
+    "inherit": true,
+    "set": {
+      "FORCE_COLOR": "0"
+    }
+  },
+  "commands": [
+    {
+      "id": "focused-contracts",
+      "executable": "node",
+      "argv": [
+        "scripts/run-test-files.js",
+        "--jobs=1",
+        "test/scripts/run-test-files.test.js",
+        "test/scripts/acceptance-proof-manifest-runner.test.js",
+        "test/release/public-api-side-effect-boundary.test.js",
+        "test/release/project-hardening-contracts.test.js",
+        "test/admin/admin-websocket-external-bind-policy.test.js",
+        "test/runtime/pgwire-protocol-ordering.test.js",
+        "test/compatibility/pgwire-client-compat.test.js"
+      ],
+      "timeoutMs": 600000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/project-hardening/focused-contracts.json"
+      }
+    },
+    {
+      "id": "static-analysis",
+      "executable": "npm",
+      "argv": ["run", "test:static"],
+      "timeoutMs": 1800000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/project-hardening/static-analysis.json"
+      }
+    },
+    {
+      "id": "model-contracts",
+      "executable": "npm",
+      "argv": ["run", "model:contracts"],
+      "timeoutMs": 1800000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/project-hardening/model-contracts.json"
+      }
+    },
+    {
+      "id": "fast-tests",
+      "executable": "npm",
+      "argv": ["run", "test:fast"],
+      "timeoutMs": 3600000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/project-hardening/fast-tests.json"
+      }
+    }
+  ]
+}

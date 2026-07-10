@@ -291,8 +291,8 @@ test('applyRuleAliases marks aliases with canonical_of and master with aliases l
   ];
   const stats = applyRuleAliases(allRules, [
     {
-      canonical: {file: 'system-guidelines.md', line: 100},
-      aliases: [{file: 'code-style.md', line: 50}],
+      canonical: {file: 'system-guidelines.md', line: 100, match: 'master rule text'},
+      aliases: [{file: 'code-style.md', line: 50, match: 'paraphrased master rule'}],
     },
   ]);
 
@@ -315,12 +315,12 @@ test('applyRuleAliases records missing references without crashing', (t) => {
   ];
   const stats = applyRuleAliases(allRules, [
     {
-      canonical: {file: 'system-guidelines.md', line: 100},
-      aliases: [{file: 'missing.md', line: 1}],
+      canonical: {file: 'system-guidelines.md', line: 100, match: 'master'},
+      aliases: [{file: 'missing.md', line: 1, match: 'missing rule'}],
     },
     {
-      canonical: {file: 'nope.md', line: 1},
-      aliases: [{file: 'system-guidelines.md', line: 100}],
+      canonical: {file: 'nope.md', line: 1, match: 'absent rule'},
+      aliases: [{file: 'system-guidelines.md', line: 100, match: 'master'}],
     },
   ]);
 

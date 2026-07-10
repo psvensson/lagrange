@@ -20,6 +20,7 @@ import {
 import {
   EVENT_GATE_DECISION,
   EVENT_ATTEMPT,
+  EVENT_NON_MEASUREMENT,
   EVENT_GUARD_OVERRIDE,
   EXPLORE_BUDGET,
   GUARD_QUORUM,
@@ -253,6 +254,27 @@ tap.test('soft-first / quorum (P5)', async (t) => {
     t.end();
   });
 
+  t.test('a non-measurement closes the advisory cycle without resetting quorum', (t) => {
+    const root = tmp();
+    const log = [
+      advisory(),
+      {type: EVENT_NON_MEASUREMENT, frontier: FRONTIER},
+    ];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
+      {log, frontier: FRONTIER, rungIndex: 1, softFirst: true},
+    );
+    t.equal(decision.disposition, DISPOSITION_ADVISORY,
+      'remaining quorum still permits the next cycle');
+    t.equal(readLog(root, QUEST.id).filter((event) =>
+      event.type === EVENT_GATE_DECISION).length, 1,
+    'a new cycle records its own advisory');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('convergence-forcing theory problems are excluded from soft-first', (t) => {
     const root = tmp();
     for (const problem of [
@@ -418,6 +440,29 @@ tap.test('recorded-reason override escape hatch', async (t) => {
     );
     t.not(unmatched.disposition, DISPOSITION_ADVISORY,
       'an unrelated theory block is not bypassed by a targeted override');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a targeted override cannot bypass an unrelated co-occurring problem', (t) => {
+    const root = tmp();
+    const targetedProblem = 'model evidence required: lifecycle_model';
+    const residualProblem = 'system theory required after repeated same-frontier stalls';
+    const log = [overrideEvent(
+      CONTINUATION_BLOCKED_THEORY,
+      'narrow',
+      targetedProblem,
+    )];
+    const decision = resolveGateDecision(
+      root,
+      QUEST,
+      blocked(CONTINUATION_BLOCKED_THEORY, [targetedProblem, residualProblem]),
+      {log, frontier: FRONTIER, rungIndex: 3},
+    );
+    t.not(decision.disposition, DISPOSITION_ADVISORY,
+      'residual problem keeps the combined continuation gated');
+    t.equal(readLog(root, QUEST.id).some((event) => event.override), false,
+      'partial match does not consume or record the override');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

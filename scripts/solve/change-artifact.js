@@ -9,6 +9,8 @@ import {
 
 const DIFF_PREFIX = 'diff:';
 const DIFF_EXTENSION = '.diff';
+const HASH_ALGORITHM = 'sha256';
+const HASH_ENCODING = 'hex';
 const PATH_LINE_PREFIXES = Object.freeze([
   'diff --git ',
   '--- ',
@@ -109,7 +111,7 @@ export function changeArtifactIdentity(root, questId, changeRef) {
     path: normalizeSlash(path.relative(root, filePath)),
     exists: true,
     size: content.length,
-    sha256: createHash('sha256').update(content).digest('hex'),
+    sha256: createHash(HASH_ALGORITHM).update(content).digest(HASH_ENCODING),
   };
 }
 

@@ -20,6 +20,11 @@ import {
 } from './constants.js';
 
 const TERMINAL_STATUSES = Object.freeze([STATUS_SOLVED, STATUS_EXHAUSTED]);
+const PENDING_COMMIT_SUFFIX =
+  '--summary "<what changed>" (or --changeRef diff:<path>; ';
+const FILE_NOT_FOUND_CODE = 'ENOENT';
+const UNKNOWN_METRIC = '?';
+const LINE_SEPARATOR = '\n';
 
 // The last event, when it is a recorded non-terminal gate stop (an advisory
 // gate-decision means the run continued, so it is not a stop). Anything after
@@ -35,7 +40,7 @@ function lastEventGateStop(log) {
 
 function pendingCommitCommand(questId) {
   return `node scripts/solve.js step --id ${questId} --commit --auto-diff ` +
-    '--summary "<what changed>" (or --changeRef diff:<path>; ' +
+    PENDING_COMMIT_SUFFIX +
     `step --id ${questId} --abort discards)`;
 }
 
@@ -54,7 +59,7 @@ export function buildNextLines(root, questId) {
   try {
     quest = loadQuest(root, questId);
   } catch (error) {
-    if (error && error.code === 'ENOENT') {
+    if (error && error.code === FILE_NOT_FOUND_CODE) {
       throw new Error(`quest not found: ${questId}`);
     }
     throw error;
@@ -76,7 +81,7 @@ export function buildNextLines(root, questId) {
   ];
   if (pending) {
     lines.push(`pending step: ${pending.frontier} pinned at metric ` +
-      `${pending.before?.metric ?? '?'} — commit or abort it before a new step`);
+      `${pending.before?.metric ?? UNKNOWN_METRIC} — commit or abort it before a new step`);
   }
   if (gateStop) {
     const problem = (gateStop.problems || [])[0];
@@ -93,5 +98,5 @@ export function buildNextLines(root, questId) {
 }
 
 export function runNextCommand(root, questId) {
-  return `${buildNextLines(root, questId).join('\n')}\n`;
+  return `${buildNextLines(root, questId).join(LINE_SEPARATOR)}${LINE_SEPARATOR}`;
 }

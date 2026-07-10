@@ -44,6 +44,15 @@ const FLAG_JSON = '--json';
 const FLAG_SCENARIO = '--scenario';
 const FLAG_REPORT_DIR = '--report-dir';
 const MINIMUM_RUNS_FOR_STRIKE = 2;
+const DOT_PREFIX = '.';
+const FLAG_PREFIX = '-';
+const TEXT_ENCODING = 'utf8';
+const RUN_TIMESTAMP_SEPARATOR = ', ';
+const STRIKE_MESSAGE_PREFIX =
+  'two-strikes: treat as failing assertion — soft warning ';
+const STRIKE_MESSAGE_REMEDIATION =
+  'finding and fix the cause, re-derive the threshold with evidence, ' +
+  'or promote it to a hard failure before the next run\n';
 
 function softWarningCodesForScenarioEntry(entry) {
   const codes = new Set();
@@ -133,7 +142,7 @@ export function discoverReportFiles(reportDir) {
   if (!fs.existsSync(reportDir)) return [];
   const files = [];
   for (const entry of fs.readdirSync(reportDir, {withFileTypes: true})) {
-    if (entry.name.startsWith('.')) continue;
+    if (entry.name.startsWith(DOT_PREFIX)) continue;
     const entryPath = path.join(reportDir, entry.name);
     if (entry.isDirectory()) {
       files.push(...discoverReportFiles(entryPath));
@@ -159,7 +168,7 @@ function parseArgs(argv) {
       options.scenario = argv[++index] || null;
     } else if (argument === FLAG_REPORT_DIR) {
       options.reportDir = argv[++index] || DEFAULT_REPORT_DIR;
-    } else if (argument.startsWith('-')) {
+    } else if (argument.startsWith(FLAG_PREFIX)) {
       throw new Error(`unknown option: ${argument}`);
     } else {
       options.files.push(argument);
@@ -174,7 +183,7 @@ export function analyzeSoftWarningStrikes(files, {scenario = null} = {}) {
   for (const file of files) {
     let report;
     try {
-      report = JSON.parse(fs.readFileSync(file, 'utf8'));
+      report = JSON.parse(fs.readFileSync(file, TEXT_ENCODING));
     } catch (error) {
       errors.push(`unreadable report ${file}: ${error.message}`);
       continue;
@@ -217,12 +226,11 @@ function main() {
   for (const error of result.errors) process.stderr.write(`WARN ${error}\n`);
   for (const strike of result.strikes) {
     process.stdout.write(
-      'two-strikes: treat as failing assertion — soft warning ' +
+      STRIKE_MESSAGE_PREFIX +
       `"${strike.code}" appeared in the two most recent consecutive runs ` +
       `of scenario "${strike.scenario}" ` +
-      `(${strike.runs.map((run) => run.timestamp).join(', ')}); open a ` +
-      'finding and fix the cause, re-derive the threshold with evidence, ' +
-      'or promote it to a hard failure before the next run\n');
+      `(${strike.runs.map((run) => run.timestamp).join(RUN_TIMESTAMP_SEPARATOR)}); open a ` +
+      STRIKE_MESSAGE_REMEDIATION);
   }
   process.stdout.write(
     `# soft-warning-strikes scenarios=${result.scenariosSeen} ` +

@@ -11,6 +11,15 @@
 
 import fs from 'node:fs';
 
+const DONE_WHEN_SAMPLE_REJECTED =
+  'doneWhen evidence is not an accepted measured sample';
+const FRONTIER_INTEGRITY_UNRESOLVED =
+  'frontier evidence is done but integrity violations remain unresolved';
+const CHANGE_IDENTITY_UNSEALABLE =
+  'changeRef artifact is missing a sealable content identity';
+const INTEGRITY_SCOPE_REGRESSION = 'regression';
+const INTEGRITY_SCOPE_THEORY_GATE = 'theory-gate';
+
 import {
   EVENT_QUEST_DECLARED,
   EVENT_ATTEMPT,
@@ -20,6 +29,7 @@ import {
   EVENT_QUEST,
   EVENT_VIOLATION,
   EVENT_FINDING,
+  EVENT_GATE_DECISION,
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
   LADDER,
@@ -45,6 +55,7 @@ import {
   SUPERVISOR_MAX_RESTARTS,
   SUPERVISOR_STALL_WINDOW,
   DISPOSITION_PARK_RESUMABLE,
+  DISPOSITION_ADVISORY,
   EVENT_THEORY_SYSTEM_DECLARED,
   EVENT_REFLECTION,
   EVENT_EVIDENCE_INGESTED,
@@ -105,6 +116,7 @@ import {
 import {
   resolveGateDecision,
   theoryGateContinuation,
+  theoryGateProblemAuthorizationKey,
   decisionContinues,
 } from './gate.js';
 import {
@@ -168,7 +180,7 @@ function runOneCycle(root, quest, ctx) {
       const integrityProblems = terminalIntegrityProblems(root, quest, log)
         .map((item) => item.message);
       if (!terminalSampleIsAccepted(questDone)) {
-        integrityProblems.push('doneWhen evidence is not an accepted measured sample');
+        integrityProblems.push(DONE_WHEN_SAMPLE_REJECTED);
       }
       return {
         terminal: OUTCOME_BLOCKED,
@@ -207,7 +219,7 @@ function runOneCycle(root, quest, ctx) {
         terminal: OUTCOME_BLOCKED,
         evidence: before.evidence,
         frontier: pick.def.id,
-        problems: ['frontier evidence is done but integrity violations remain unresolved'],
+        problems: [FRONTIER_INTEGRITY_UNRESOLVED],
       };
     }
     appendEvent(root, quest.id, {
@@ -248,7 +260,7 @@ function applyAttempt(root, quest, ctx, pick, before) {
     if (!decisionContinues(decision)) {
       appendEvent(root, quest.id, {
         type: EVENT_VIOLATION,
-        scope: 'theory-gate',
+        scope: INTEGRITY_SCOPE_THEORY_GATE,
         frontier: pick.def.id,
         rung: LADDER[rungIndex],
         rungIndex,
@@ -287,6 +299,40 @@ function applyAttempt(root, quest, ctx, pick, before) {
   const outcome = finalizeAttempt(root, quest, ctx, pick, before, result);
   maybeCommitAttempt(root, quest, ctx, pick, outcome);
   return {terminal: null};
+}
+
+// A recorded advisory is the durable authorization to bypass that classified gate for
+// the current cycle. Finalization re-checks the theory gate after the harness runs, whose
+// wording can differ from the begin-phase wording; without replaying the advisory by its
+// narrow problem-family key, the same softened gate would become a hard integrity violation
+// and the rung could never advance. Explicit overrides remain problem-specific. The last
+// accepted attempt or non-measurement closes the cycle, so older advisories cannot leak.
+function currentCycleAdvisoryAuthorization(log, frontierId, rungIndex) {
+  let lastCycleBoundaryIndex = -1;
+  for (let index = 0; index < log.length; index += 1) {
+    const event = log[index];
+    if ((event.type === EVENT_ATTEMPT || event.type === EVENT_NON_MEASUREMENT) &&
+      event.frontier === frontierId) {
+      lastCycleBoundaryIndex = index;
+    }
+  }
+  const problemKeys = new Set();
+  const overrideProblems = new Set();
+  for (let index = lastCycleBoundaryIndex + 1; index < log.length; index += 1) {
+    const event = log[index];
+    if (event.type !== EVENT_GATE_DECISION || event.frontier !== frontierId ||
+      event.rungIndex !== rungIndex || event.disposition !== DISPOSITION_ADVISORY) {
+      continue;
+    }
+    if (event.override) {
+      for (const problem of event.problems || []) overrideProblems.add(problem);
+    } else {
+      for (const problem of event.problems || []) {
+        problemKeys.add(theoryGateProblemAuthorizationKey(problem));
+      }
+    }
+  }
+  return {problemKeys, overrideProblems};
 }
 
 // Record one attempt's outcome: re-measure the metric, build + honesty-check the
@@ -359,9 +405,14 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   if (!event.invalidSample &&
     !changeArtifactIdentityIsSealed(event.changeRefIdentity)) {
     honestyViolations.push(
-      'changeRef artifact is missing a sealable content identity',
+      CHANGE_IDENTITY_UNSEALABLE,
     );
   }
+  const advisory = currentCycleAdvisoryAuthorization(
+    log,
+    pick.def.id,
+    rungIndex,
+  );
   const gateViolations = stepTheoryGateProblems({
     log,
     state,
@@ -370,6 +421,10 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     theoryRef: event.theoryRef,
     modelRef: event.modelRef,
     modelNotApplicable: event.modelNotApplicable,
+  }).filter((problem) => {
+    const problemKey = theoryGateProblemAuthorizationKey(problem);
+    return !advisory.problemKeys.has(problemKey) &&
+      !advisory.overrideProblems.has(problem);
   });
   const violations = [...honestyViolations, ...gateViolations];
   if (honestyViolations.length > 0) {
@@ -398,7 +453,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   if (gateViolations.length > 0) {
     appendEvent(root, quest.id, {
       type: EVENT_VIOLATION,
-      scope: 'theory-gate',
+      scope: INTEGRITY_SCOPE_THEORY_GATE,
       frontier: pick.def.id,
       violations: gateViolations,
       attempt: event,
@@ -455,13 +510,13 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     appendEvent(root, quest.id, {
       type: EVENT_VIOLATION,
       eventSchemaVersion: INTEGRITY_EVENT_SCHEMA_VERSION,
-      scope: 'regression',
+      scope: INTEGRITY_SCOPE_REGRESSION,
       frontier: pick.def.id,
       violationId: integrityViolationId({
         quest,
         generation: declared?.ts || quest.links?.sealedAtCommit,
         frontier: pick.def.id,
-        scope: 'regression',
+        scope: INTEGRITY_SCOPE_REGRESSION,
         violations: regressionViolations,
         attempt: event,
       }),
@@ -891,7 +946,7 @@ export function runLoop(root, quest, options = {}) {
           if (executionHealth.continuation.status === CONTINUATION_BLOCKED_THEORY) {
             appendEvent(root, quest.id, {
               type: EVENT_VIOLATION,
-              scope: 'theory-gate',
+              scope: INTEGRITY_SCOPE_THEORY_GATE,
               frontier: executionHealth.frontier,
               rung: Number.isInteger(executionHealth.rungIndex) ?
                 LADDER[executionHealth.rungIndex] :

@@ -47,6 +47,10 @@ const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
 const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
 const AUTO_DIFF_ARTIFACT_PATTERN = /^attempt-(\d+)\.diff$/u;
 const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+const UNKNOWN_GIT_ERROR = 'unknown error';
+const AUTO_DIFF_EMPTY_ERROR =
+  'auto-diff: git diff is empty — nothing changed since the step began; ' +
+  'make the change first (or pass an explicit --changeRef diff:<path>)';
 
 // Solver-owned GENERATED bookkeeping the step/loop machinery itself writes
 // between step begin and commit: the pending file (solve/state, stepBegin),
@@ -100,14 +104,11 @@ function createAutoDiffChangeRef(root, quest, pending) {
   });
   if (out.status !== 0 || typeof out.stdout !== 'string') {
     throw new Error(
-      `auto-diff: git diff ${pin} failed: ${(out.stderr || 'unknown error').trim()}`,
+      `auto-diff: git diff ${pin} failed: ${(out.stderr || UNKNOWN_GIT_ERROR).trim()}`,
     );
   }
   if (out.stdout.trim() === '') {
-    throw new Error(
-      'auto-diff: git diff is empty — nothing changed since the step began; ' +
-      'make the change first (or pass an explicit --changeRef diff:<path>)',
-    );
+    throw new Error(AUTO_DIFF_EMPTY_ERROR);
   }
   const file = nextAutoDiffArtifactPath(root, quest.id);
   fs.writeFileSync(file, out.stdout);

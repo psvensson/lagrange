@@ -33,6 +33,13 @@ const MARKDOWN_EXTENSION = '.md';
 const FRONTMATTER_CATEGORIES_PATTERN = /^categories:\s*\[([^\]]*)\]\s*$/mu;
 const HARNESS_PATH_PATTERN = /^test\//u;
 const NO_MATCH_MESSAGE = 'no verification template matched\n';
+const CATEGORY_SEPARATOR = ',';
+const LINE_SEPARATOR = '\n';
+const ADDED_LINE_PREFIX = '+';
+const REMOVED_LINE_PREFIX = '-';
+const ADDED_FILE_HEADER = '+++';
+const REMOVED_FILE_HEADER = '---';
+const TEXT_ENCODING = 'utf8';
 
 const CATEGORY_KEYWORD_RULES = Object.freeze({
   'admission-gating':
@@ -63,10 +70,10 @@ export function loadTemplateCategories(root) {
   }
   for (const name of names) {
     if (!name.endsWith(MARKDOWN_EXTENSION) || name === INDEX_BASENAME) continue;
-    const content = fs.readFileSync(path.join(dir, name), 'utf8');
+    const content = fs.readFileSync(path.join(dir, name), TEXT_ENCODING);
     const match = FRONTMATTER_CATEGORIES_PATTERN.exec(content);
     if (!match) continue;
-    for (const raw of match[1].split(',')) {
+    for (const raw of match[1].split(CATEGORY_SEPARATOR)) {
       const category = raw.trim().replace(/^['"]|['"]$/gu, '');
       if (category) byCategory.set(category, `${TEMPLATE_DIR_REL}/${name}`);
     }
@@ -77,9 +84,9 @@ export function loadTemplateCategories(root) {
 // Changed (+/-) content lines only; header/context lines are excluded so a
 // mention in unchanged surrounding code does not fire a suggestion.
 function changedContentLines(diffContent) {
-  return String(diffContent || '').split('\n').filter((line) =>
-    (line.startsWith('+') || line.startsWith('-')) &&
-    !line.startsWith('+++') && !line.startsWith('---'));
+  return String(diffContent || '').split(LINE_SEPARATOR).filter((line) =>
+    (line.startsWith(ADDED_LINE_PREFIX) || line.startsWith(REMOVED_LINE_PREFIX)) &&
+    !line.startsWith(ADDED_FILE_HEADER) && !line.startsWith(REMOVED_FILE_HEADER));
 }
 
 export function suggestVerificationTemplates(root, diffContent) {
@@ -99,8 +106,8 @@ export function suggestVerificationTemplates(root, diffContent) {
 }
 
 function readDiffInput(argv) {
-  if (argv[0]) return fs.readFileSync(argv[0], 'utf8');
-  return fs.readFileSync(0, 'utf8'); // stdin
+  if (argv[0]) return fs.readFileSync(argv[0], TEXT_ENCODING);
+  return fs.readFileSync(0, TEXT_ENCODING); // stdin
 }
 
 function main() {

@@ -228,7 +228,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
 - `test:fast` — Run non-bootstrap, non-integration TAP tests.
 - `test:file` — `node scripts/run-test-files.js`
-- `test:gate` — `npm run test:fast && npm run test:static && npm run model:contracts`
+- `test:gate` — `node scripts/run-project-hardening-acceptance.js`
 - `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
 - `test:integration:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-2.txt)`
 - `test:integration:3` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-3.txt)`
@@ -240,6 +240,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:pgwire` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
 - `test:pgwire:integration` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/pgwire-integration.txt)`
 - `test:pgwire:unit` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt)`
+- `test:project-hardening` — `node scripts/run-project-hardening-acceptance.js`
 - `test:quality` — `npm run test:static && npm run test:mutation`
 - `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
@@ -266,4 +267,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-170 scripts indexed; 66 have a curated description, 104 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+171 scripts indexed; 66 have a curated description, 105 fall back to their raw command. Improve coverage in the two sources named in the header comment.

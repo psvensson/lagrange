@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 
 import {saveQuest} from '../../scripts/solve/store.js';
 import {runStep, stepPending} from '../../scripts/solve/step.js';
+import {makeOracleQuest} from './solve-test-quest-fixture.js';
 
 const CLI = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '../../scripts/solve.js');
@@ -32,27 +33,10 @@ function gitRoot() {
   return root;
 }
 
-function makeQuest(root, id = 'demo') {
-  const oracle = path.join(root, 'oracle.json');
-  fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
-  const quest = {
-    id,
-    statement: 'Drive the oracle metric to zero.',
-    priority: 1,
-    doneWhen: {probe: 'oracle', args: {file: oracle}},
-    frontiers: [
-      {id: `${id}-main`, priority: 1,
-        metric: {probe: 'oracle', args: {file: oracle}}},
-    ],
-  };
-  saveQuest(root, quest);
-  return {quest, oracle};
-}
-
 tap.test('step --commit --auto-diff', async (t) => {
   t.test('snapshots the working-tree diff as the changeRef artifact', (t) => {
     const root = gitRoot();
-    const {quest, oracle} = makeQuest(root);
+    const {quest, oracle} = makeOracleQuest(root);
 
     const begin = runStep(root, quest);
     t.equal(begin.terminal, null);
@@ -78,7 +62,7 @@ tap.test('step --commit --auto-diff', async (t) => {
 
   t.test('errors out when the diff is empty (nothing changed)', (t) => {
     const root = gitRoot();
-    const {quest} = makeQuest(root);
+    const {quest} = makeOracleQuest(root);
     runStep(root, quest);
 
     t.throws(
@@ -92,7 +76,7 @@ tap.test('step --commit --auto-diff', async (t) => {
 
   t.test('allocates the next free attempt-<n>.diff', (t) => {
     const root = gitRoot();
-    const {quest, oracle} = makeQuest(root);
+    const {quest, oracle} = makeOracleQuest(root);
     const changeDir = path.join(root, 'solve', 'changes', 'demo');
     fs.mkdirSync(changeDir, {recursive: true});
     fs.writeFileSync(path.join(changeDir, 'attempt-3.diff'), 'placeholder\n');
@@ -114,7 +98,7 @@ tap.test('step --commit --auto-diff', async (t) => {
     // product-quest auto-diff with "workflow changes must be recorded in a
     // workflow/Quest tooling Quest".
     const root = gitRoot();
-    const {quest, oracle} = makeQuest(root);
+    const {quest, oracle} = makeOracleQuest(root);
     fs.mkdirSync(path.join(root, 'solve', 'log'), {recursive: true});
     fs.mkdirSync(path.join(root, 'solve', 'report'), {recursive: true});
     fs.writeFileSync(path.join(root, 'solve', 'FRONTIER.generated.md'), 'board v1\n');
@@ -187,7 +171,7 @@ tap.test('step --commit --auto-diff', async (t) => {
     // orphan attempt-<n>.diff behind, so numbering skipped (attempt-1 orphan,
     // next success became attempt-2).
     const root = gitRoot();
-    const {quest, oracle} = makeQuest(root);
+    const {quest, oracle} = makeOracleQuest(root);
     fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
     fs.writeFileSync(path.join(root, 'scripts', 'quest-context.js'), 'v1\n');
     git(root, ['add', 'scripts']);
@@ -222,7 +206,7 @@ tap.test('step --commit --auto-diff', async (t) => {
   t.test('CLI warns that --auto-diff is ignored beside --changeRef', (t) => {
     // FAULT-3 regression: both flags used to silently prefer --changeRef.
     const root = gitRoot();
-    const {oracle} = makeQuest(root);
+    const {oracle} = makeOracleQuest(root);
     const file = path.join(root, 'solve', 'changes', 'demo', 'manual.diff');
     fs.mkdirSync(path.dirname(file), {recursive: true});
     fs.writeFileSync(file, [
@@ -250,7 +234,7 @@ tap.test('step --commit --auto-diff', async (t) => {
 
   t.test('an explicit --changeRef wins over --auto-diff', (t) => {
     const root = gitRoot();
-    const {quest, oracle} = makeQuest(root);
+    const {quest, oracle} = makeOracleQuest(root);
     const file = path.join(root, 'solve', 'changes', 'demo', 'manual.diff');
     fs.mkdirSync(path.dirname(file), {recursive: true});
     fs.writeFileSync(file, [

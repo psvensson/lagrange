@@ -47,6 +47,14 @@ describe('project hardening contracts', () => {
     assert.match(packageJson.scripts['test:fast'], /run-test-files\.js/u);
     assert.doesNotMatch(packageJson.scripts['test:fast'], /xargs[^|]*\s-r(?:\s|$)/u);
     assert.doesNotMatch(packageJson.scripts['test:deps'], /ignore-known/u);
+    assert.equal(
+      packageJson.scripts['test:gate'],
+      packageJson.scripts['test:project-hardening'],
+    );
+    assert.match(
+      packageJson.scripts['test:gate'],
+      /run-project-hardening-acceptance\.js/u,
+    );
     assert.match(ciText, /npm run test:gate/u);
     assert.match(ciText, /postgresql-client/u);
     assert.match(releaseText, /npm run test:gate/u);

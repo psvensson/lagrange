@@ -1,0 +1,2453 @@
+diff --git a/docs/steering/llm/tools-index.md b/docs/steering/llm/tools-index.md
+index b1d4e5e5..57c0efb4 100644
+--- a/docs/steering/llm/tools-index.md
++++ b/docs/steering/llm/tools-index.md
+@@ -228,7 +228,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
+ - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
+ - `test:fast` — Run non-bootstrap, non-integration TAP tests.
+ - `test:file` — `node scripts/run-test-files.js`
+-- `test:gate` — `npm run test:fast && npm run test:static && npm run model:contracts`
++- `test:gate` — `node scripts/run-project-hardening-acceptance.js`
+ - `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
+ - `test:integration:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-2.txt)`
+ - `test:integration:3` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-3.txt)`
+@@ -240,6 +240,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
+ - `test:pgwire` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
+ - `test:pgwire:integration` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/pgwire-integration.txt)`
+ - `test:pgwire:unit` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt)`
++- `test:project-hardening` — `node scripts/run-project-hardening-acceptance.js`
+ - `test:quality` — `npm run test:static && npm run test:mutation`
+ - `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
+ - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
+@@ -266,4 +267,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
+ 
+ ---
+ 
+-170 scripts indexed; 66 have a curated description, 104 fall back to their raw command. Improve coverage in the two sources named in the header comment.
++171 scripts indexed; 66 have a curated description, 105 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+diff --git a/package.json b/package.json
+index 09ccf711..ad736868 100644
+--- a/package.json
++++ b/package.json
+@@ -80,7 +80,8 @@
+     "test:static": "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run steering:check && npm run lint:scripts && npm run lint",
+     "test:quality": "npm run test:static && npm run test:mutation",
+     "test:chart:endpoint-sync": "node scripts/check-endpoint-sync-chart.js",
+-    "test:gate": "npm run test:fast && npm run test:static && npm run model:contracts",
++    "test:project-hardening": "node scripts/run-project-hardening-acceptance.js",
++    "test:gate": "node scripts/run-project-hardening-acceptance.js",
+     "test:ci": "npm run test:safety-pregate && bash scripts/run-test-ci-overlapped.sh",
+     "lint": "eslint src/ test/ --ignore-pattern 'test/.gitkeep'",
+     "lint:scripts": "eslint scripts/",
+diff --git a/scripts/analyze-soft-warning-strikes.js b/scripts/analyze-soft-warning-strikes.js
+index ecf12822..62debcd7 100644
+--- a/scripts/analyze-soft-warning-strikes.js
++++ b/scripts/analyze-soft-warning-strikes.js
+@@ -44,6 +44,15 @@ const FLAG_JSON = '--json';
+ const FLAG_SCENARIO = '--scenario';
+ const FLAG_REPORT_DIR = '--report-dir';
+ const MINIMUM_RUNS_FOR_STRIKE = 2;
++const DOT_PREFIX = '.';
++const FLAG_PREFIX = '-';
++const TEXT_ENCODING = 'utf8';
++const RUN_TIMESTAMP_SEPARATOR = ', ';
++const STRIKE_MESSAGE_PREFIX =
++  'two-strikes: treat as failing assertion — soft warning ';
++const STRIKE_MESSAGE_REMEDIATION =
++  'finding and fix the cause, re-derive the threshold with evidence, ' +
++  'or promote it to a hard failure before the next run\n';
+ 
+ function softWarningCodesForScenarioEntry(entry) {
+   const codes = new Set();
+@@ -133,7 +142,7 @@ export function discoverReportFiles(reportDir) {
+   if (!fs.existsSync(reportDir)) return [];
+   const files = [];
+   for (const entry of fs.readdirSync(reportDir, {withFileTypes: true})) {
+-    if (entry.name.startsWith('.')) continue;
++    if (entry.name.startsWith(DOT_PREFIX)) continue;
+     const entryPath = path.join(reportDir, entry.name);
+     if (entry.isDirectory()) {
+       files.push(...discoverReportFiles(entryPath));
+@@ -159,7 +168,7 @@ function parseArgs(argv) {
+       options.scenario = argv[++index] || null;
+     } else if (argument === FLAG_REPORT_DIR) {
+       options.reportDir = argv[++index] || DEFAULT_REPORT_DIR;
+-    } else if (argument.startsWith('-')) {
++    } else if (argument.startsWith(FLAG_PREFIX)) {
+       throw new Error(`unknown option: ${argument}`);
+     } else {
+       options.files.push(argument);
+@@ -174,7 +183,7 @@ export function analyzeSoftWarningStrikes(files, {scenario = null} = {}) {
+   for (const file of files) {
+     let report;
+     try {
+-      report = JSON.parse(fs.readFileSync(file, 'utf8'));
++      report = JSON.parse(fs.readFileSync(file, TEXT_ENCODING));
+     } catch (error) {
+       errors.push(`unreadable report ${file}: ${error.message}`);
+       continue;
+@@ -217,12 +226,11 @@ function main() {
+   for (const error of result.errors) process.stderr.write(`WARN ${error}\n`);
+   for (const strike of result.strikes) {
+     process.stdout.write(
+-      'two-strikes: treat as failing assertion — soft warning ' +
++      STRIKE_MESSAGE_PREFIX +
+       `"${strike.code}" appeared in the two most recent consecutive runs ` +
+       `of scenario "${strike.scenario}" ` +
+-      `(${strike.runs.map((run) => run.timestamp).join(', ')}); open a ` +
+-      'finding and fix the cause, re-derive the threshold with evidence, ' +
+-      'or promote it to a hard failure before the next run\n');
++      `(${strike.runs.map((run) => run.timestamp).join(RUN_TIMESTAMP_SEPARATOR)}); open a ` +
++      STRIKE_MESSAGE_REMEDIATION);
+   }
+   process.stdout.write(
+     `# soft-warning-strikes scenarios=${result.scenariosSeen} ` +
+diff --git a/scripts/checks/acceptance-proof-manifest-constants.js b/scripts/checks/acceptance-proof-manifest-constants.js
+new file mode 100644
+index 00000000..be8658dd
+--- /dev/null
++++ b/scripts/checks/acceptance-proof-manifest-constants.js
+@@ -0,0 +1,35 @@
++export const ACCEPTANCE_MANIFEST_SCHEMA_VERSION = 1;
++export const DEFAULT_ACCEPTANCE_MANIFEST =
++  'test/manifests/project-hardening-proof-manifest.json';
++
++export const ACCEPTANCE_PROOF = Object.freeze({
++  HASH_ALGORITHM: 'sha256',
++  HASH_ENCODING: 'hex',
++  PARENT_SEGMENT: '..',
++  SKIPPED_STATUS: 'skipped',
++  COMMAND_FIELD: 'command',
++  SHELL_FIELD: 'shell',
++  MAX_EXIT_CODE: 255,
++  MANIFEST_OBJECT_REQUIRED: 'manifest must be an object',
++  MANIFEST_ID_REQUIRED: 'id must be a non-empty string',
++  ENVIRONMENT_CONTRACT_REQUIRED:
++    'environment must declare inherit:boolean and string set values',
++  COMMANDS_REQUIRED: 'commands must be a non-empty ordered array',
++  TEXT_ENCODING: 'utf8',
++  MISSING_ERROR: 'missing',
++  TIMEOUT_ERROR_CODE: 'ETIMEDOUT',
++  TERMINATION_SIGNAL: 'SIGTERM',
++  MANIFEST_DRIFT_REASON: 'manifest drifted while the proof run was active',
++  STATUS_PASS: 'PASS',
++  STATUS_FAIL: 'FAIL',
++  STATUS_NOT_RUN: 'NOT_RUN',
++  PRIOR_COMMAND_FAILED: 'a prior manifest command failed',
++  PATH_SEPARATOR: '/',
++  PRODUCER: 'acceptance-proof-manifest-runner',
++  FIDELITY: 'deterministic-acceptance-manifest',
++  FALLBACK_MANIFEST_ID: 'acceptance-manifest',
++  INVALID_MANIFEST_ID: 'invalid-acceptance-manifest',
++  FLAG_MANIFEST: '--manifest',
++  FLAG_SCENARIO: '--scenario',
++  FLAG_RECEIPT_DIR: '--receipt-dir',
++});
+diff --git a/scripts/checks/acceptance-proof-manifest-runner.js b/scripts/checks/acceptance-proof-manifest-runner.js
+new file mode 100644
+index 00000000..1e70ab22
+--- /dev/null
++++ b/scripts/checks/acceptance-proof-manifest-runner.js
+@@ -0,0 +1,413 @@
++import {spawnSync} from 'node:child_process';
++import {createHash} from 'node:crypto';
++import fs from 'node:fs';
++import path from 'node:path';
++
++import {
++  ACCEPTANCE_MANIFEST_SCHEMA_VERSION,
++  ACCEPTANCE_PROOF,
++  DEFAULT_ACCEPTANCE_MANIFEST,
++} from './acceptance-proof-manifest-constants.js';
++
++export {
++  ACCEPTANCE_MANIFEST_SCHEMA_VERSION,
++  DEFAULT_ACCEPTANCE_MANIFEST,
++};
++
++const CAPTURED_OUTPUT = 'captured-output';
++const EXTERNAL_ARTIFACT = 'external';
++const ARTIFACT_MODES = Object.freeze([CAPTURED_OUTPUT, EXTERNAL_ARTIFACT]);
++const FORBIDDEN_SHELL_EXECUTABLES = Object.freeze([
++  'bash',
++  'cmd',
++  'cmd.exe',
++  'dash',
++  'fish',
++  'ksh',
++  'powershell',
++  'pwsh',
++  'sh',
++  'zsh',
++]);
++const MAX_TIMEOUT_MS = 60 * 60 * 1000;
++const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
++const NO_COMMAND_FAILURE_REASONS = Object.freeze([]);
++const ARTIFACT_NOT_PRODUCED_PREFIX =
++  'required artifact is stale or was not produced or updated: ';
++
++function sha256(value) {
++  return createHash(ACCEPTANCE_PROOF.HASH_ALGORITHM)
++    .update(value)
++    .digest(ACCEPTANCE_PROOF.HASH_ENCODING);
++}
++
++function rootRelativePath(root, value) {
++  if (typeof value !== 'string' || value.length === 0) return null;
++  const absolute = path.isAbsolute(value) ? path.normalize(value) : path.resolve(root, value);
++  const relative = path.relative(root, absolute).replaceAll(path.sep, '/');
++  if (!relative || relative.startsWith(ACCEPTANCE_PROOF.PARENT_SEGMENT) ||
++    path.isAbsolute(relative)) return null;
++  return {absolute, relative};
++}
++
++function validEnvironmentContract(environment) {
++  if (!environment || typeof environment !== 'object' ||
++    Array.isArray(environment)) {
++    return false;
++  }
++  if (typeof environment.inherit !== 'boolean') return false;
++  if (!environment.set || typeof environment.set !== 'object' ||
++    Array.isArray(environment.set)) {
++    return false;
++  }
++  return Object.entries(environment.set).every(([key, value]) =>
++    /^[A-Z_][A-Z0-9_]*$/u.test(key) && typeof value === 'string');
++}
++
++function validateCommand(command, index, seenIds, seenArtifacts) {
++  const label = `commands[${index}]`;
++  const problems = [];
++  if (!command || typeof command !== 'object' || Array.isArray(command)) {
++    return [`${label} must be an object`];
++  }
++  if (typeof command.id !== 'string' || command.id.length === 0) {
++    problems.push(`${label}.id must be a non-empty string`);
++  } else if (seenIds.has(command.id)) {
++    problems.push(`${label}.id is duplicated: ${command.id}`);
++  } else {
++    seenIds.add(command.id);
++  }
++  if (command.skip === true || command.enabled === false ||
++    command.status === ACCEPTANCE_PROOF.SKIPPED_STATUS) {
++    problems.push(`${label} must not be skipped or disabled`);
++  }
++  if (Object.hasOwn(command, ACCEPTANCE_PROOF.COMMAND_FIELD) ||
++    Object.hasOwn(command, ACCEPTANCE_PROOF.SHELL_FIELD)) {
++    problems.push(`${label} must use executable + argv, not a shell string`);
++  }
++  if (typeof command.executable !== 'string' || command.executable.length === 0) {
++    problems.push(`${label}.executable must be a non-empty string`);
++  } else if (FORBIDDEN_SHELL_EXECUTABLES.includes(
++    path.basename(command.executable).toLowerCase(),
++  )) {
++    problems.push(`${label}.executable must not be a shell interpreter`);
++  }
++  if (!Array.isArray(command.argv) ||
++    !command.argv.every((value) => typeof value === 'string')) {
++    problems.push(`${label}.argv must be an array of strings`);
++  }
++  if (!Number.isInteger(command.timeoutMs) || command.timeoutMs <= 0 ||
++    command.timeoutMs > MAX_TIMEOUT_MS) {
++    problems.push(`${label}.timeoutMs must be an integer from 1 to ${MAX_TIMEOUT_MS}`);
++  }
++  if (!Array.isArray(command.acceptableExitCodes) ||
++    command.acceptableExitCodes.length === 0 ||
++    !command.acceptableExitCodes.every((value) =>
++      Number.isInteger(value) && value >= 0 &&
++        value <= ACCEPTANCE_PROOF.MAX_EXIT_CODE)) {
++    problems.push(`${label}.acceptableExitCodes must contain exit codes from 0 to 255`);
++  }
++  const artifact = command.requiredArtifact;
++  if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) {
++    problems.push(`${label}.requiredArtifact must be an object`);
++  } else {
++    if (!ARTIFACT_MODES.includes(artifact.mode)) {
++      problems.push(`${label}.requiredArtifact.mode is invalid`);
++    }
++    if (typeof artifact.path !== 'string' || artifact.path.length === 0 ||
++      path.isAbsolute(artifact.path) ||
++      artifact.path.split(/[\\/]/u).includes(ACCEPTANCE_PROOF.PARENT_SEGMENT)) {
++      problems.push(`${label}.requiredArtifact.path must stay inside the workspace`);
++    } else if (seenArtifacts.has(artifact.path)) {
++      problems.push(`${label}.requiredArtifact.path is duplicated: ${artifact.path}`);
++    } else {
++      seenArtifacts.add(artifact.path);
++    }
++  }
++  return problems;
++}
++
++export function validateAcceptanceManifest(manifest) {
++  const problems = [];
++  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
++    return [ACCEPTANCE_PROOF.MANIFEST_OBJECT_REQUIRED];
++  }
++  if (manifest.schemaVersion !== ACCEPTANCE_MANIFEST_SCHEMA_VERSION) {
++    problems.push(
++      `schemaVersion must be ${ACCEPTANCE_MANIFEST_SCHEMA_VERSION}`,
++    );
++  }
++  if (typeof manifest.id !== 'string' || manifest.id.length === 0) {
++    problems.push(ACCEPTANCE_PROOF.MANIFEST_ID_REQUIRED);
++  }
++  if (!validEnvironmentContract(manifest.environment)) {
++    problems.push(ACCEPTANCE_PROOF.ENVIRONMENT_CONTRACT_REQUIRED);
++  }
++  if (!Array.isArray(manifest.commands) || manifest.commands.length === 0) {
++    problems.push(ACCEPTANCE_PROOF.COMMANDS_REQUIRED);
++    return problems;
++  }
++  const seenIds = new Set();
++  const seenArtifacts = new Set();
++  manifest.commands.forEach((command, index) => {
++    problems.push(...validateCommand(command, index, seenIds, seenArtifacts));
++  });
++  return problems;
++}
++
++export function acceptanceArtifactIdentity(root, artifactPath) {
++  const resolved = rootRelativePath(root, artifactPath);
++  if (!resolved || !fs.existsSync(resolved.absolute) ||
++    !fs.statSync(resolved.absolute).isFile()) {
++    return {
++      path: artifactPath || null,
++      exists: false,
++      size: null,
++      mtimeMs: null,
++      sha256: null,
++    };
++  }
++  const content = fs.readFileSync(resolved.absolute);
++  const stat = fs.statSync(resolved.absolute);
++  return {
++    path: resolved.relative,
++    exists: true,
++    size: content.length,
++    mtimeMs: stat.mtimeMs,
++    sha256: sha256(content),
++  };
++}
++
++function commandEnvironment(manifestEnvironment) {
++  const base = manifestEnvironment.inherit ? {...process.env} : {};
++  return {...base, ...manifestEnvironment.set};
++}
++
++function defaultExecute(command, options) {
++  return spawnSync(command.executable, command.argv, {
++    cwd: options.root,
++    env: options.env,
++    encoding: ACCEPTANCE_PROOF.TEXT_ENCODING,
++    timeout: command.timeoutMs,
++    maxBuffer: MAX_BUFFER_BYTES,
++  });
++}
++
++function captureCommandOutput(root, command, execution, startedAt) {
++  const resolved = rootRelativePath(root, command.requiredArtifact.path);
++  if (!resolved) return;
++  fs.mkdirSync(path.dirname(resolved.absolute), {recursive: true});
++  fs.writeFileSync(resolved.absolute, JSON.stringify({
++    schemaVersion: 1,
++    commandId: command.id,
++    startedAt,
++    finishedAt: new Date().toISOString(),
++    executable: command.executable,
++    argv: command.argv,
++    exitCode: Number.isInteger(execution.status) ? execution.status : null,
++    signal: execution.signal || null,
++    error: execution.error ? {
++      code: execution.error.code || null,
++      message: execution.error.message || String(execution.error),
++    } : null,
++    stdout: execution.stdout || '',
++    stderr: execution.stderr || '',
++  }, null, 2));
++}
++
++function manifestSnapshot(root, manifestPath) {
++  const resolved = rootRelativePath(root, manifestPath);
++  if (!resolved || !fs.existsSync(resolved.absolute)) {
++    return {
++      resolved,
++      content: null,
++      sha256: null,
++      manifest: null,
++      error: ACCEPTANCE_PROOF.MISSING_ERROR,
++    };
++  }
++  try {
++    const content = fs.readFileSync(resolved.absolute);
++    return {
++      resolved,
++      content,
++      sha256: sha256(content),
++      manifest: JSON.parse(content.toString(ACCEPTANCE_PROOF.TEXT_ENCODING)),
++      error: null,
++    };
++  } catch (error) {
++    return {
++      resolved,
++      content: null,
++      sha256: null,
++      manifest: null,
++      error: error.message,
++    };
++  }
++}
++
++function artifactIdentityChanged(before, after) {
++  if (!after.exists) return false;
++  if (!before.exists) return true;
++  return before.size !== after.size ||
++    before.mtimeMs !== after.mtimeMs ||
++    before.sha256 !== after.sha256;
++}
++
++function commandFailureReasons(command, execution, beforeIdentity, identity) {
++  const reasons = Array.from(NO_COMMAND_FAILURE_REASONS);
++  if (execution.error?.code === ACCEPTANCE_PROOF.TIMEOUT_ERROR_CODE ||
++    execution.signal === ACCEPTANCE_PROOF.TERMINATION_SIGNAL) {
++    reasons.push(`timed out after ${command.timeoutMs}ms`);
++  } else if (execution.error) {
++    reasons.push(`execution failed: ${execution.error.message}`);
++  }
++  if (!command.acceptableExitCodes.includes(execution.status)) {
++    reasons.push(`exit status ${execution.status} is not acceptable`);
++  }
++  if (!identity.exists) {
++    reasons.push(`required artifact is missing: ${command.requiredArtifact.path}`);
++  } else if (!artifactIdentityChanged(beforeIdentity, identity)) {
++    reasons.push(ARTIFACT_NOT_PRODUCED_PREFIX + command.requiredArtifact.path);
++  }
++  return reasons;
++}
++
++function executeManifestCommand({
++  root,
++  manifestPath,
++  manifestSha256,
++  command,
++  env,
++  execute,
++}) {
++  const artifactPath = rootRelativePath(root, command.requiredArtifact.path);
++  const beforeIdentity = acceptanceArtifactIdentity(
++    root,
++    command.requiredArtifact.path,
++  );
++  if (command.requiredArtifact.mode === CAPTURED_OUTPUT && artifactPath) {
++    fs.rmSync(artifactPath.absolute, {force: true});
++  }
++  const startedAtMs = Date.now();
++  const startedAt = new Date(startedAtMs).toISOString();
++  let execution;
++  try {
++    execution = execute(command, {root, env});
++  } catch (error) {
++    execution = {status: null, signal: null, stdout: '', stderr: '', error};
++  }
++  if (command.requiredArtifact.mode === CAPTURED_OUTPUT) {
++    try {
++      captureCommandOutput(root, command, execution, startedAt);
++    } catch (error) {
++      execution = {...execution, error: execution.error || error};
++    }
++  }
++  const identity = acceptanceArtifactIdentity(root, command.requiredArtifact.path);
++  const reasons = commandFailureReasons(
++    command,
++    execution,
++    beforeIdentity,
++    identity,
++  );
++  if (manifestSnapshot(root, manifestPath).sha256 !== manifestSha256) {
++    reasons.push(ACCEPTANCE_PROOF.MANIFEST_DRIFT_REASON);
++  }
++  const passed = reasons.length === 0;
++  return {
++    id: command.id,
++    status: passed ? ACCEPTANCE_PROOF.STATUS_PASS : ACCEPTANCE_PROOF.STATUS_FAIL,
++    executable: command.executable,
++    argv: command.argv,
++    timeoutMs: command.timeoutMs,
++    exitCode: Number.isInteger(execution.status) ? execution.status : null,
++    signal: execution.signal || null,
++    startedAt,
++    finishedAt: new Date().toISOString(),
++    reasons,
++    artifactBeforeIdentity: beforeIdentity,
++    artifactIdentity: identity,
++  };
++}
++
++function notRunCommand(command) {
++  return {
++    id: command.id,
++    status: ACCEPTANCE_PROOF.STATUS_NOT_RUN,
++    reasons: [ACCEPTANCE_PROOF.PRIOR_COMMAND_FAILED],
++    artifactIdentity: null,
++  };
++}
++
++function commandSummary(commands) {
++  return {
++    total: commands.length,
++    passed: commands.filter((command) =>
++      command.status === ACCEPTANCE_PROOF.STATUS_PASS).length,
++    failed: commands.filter((command) =>
++      command.status === ACCEPTANCE_PROOF.STATUS_FAIL).length,
++    notRun: commands.filter((command) =>
++      command.status === ACCEPTANCE_PROOF.STATUS_NOT_RUN).length,
++  };
++}
++
++export function runAcceptanceManifest(options = {}) {
++  const root = path.resolve(options.root || process.cwd());
++  const manifestPath = options.manifestPath || DEFAULT_ACCEPTANCE_MANIFEST;
++  const initial = manifestSnapshot(root, manifestPath);
++  const validationProblems = initial.manifest ?
++    validateAcceptanceManifest(initial.manifest) :
++    [`manifest cannot be read: ${initial.error || manifestPath}`];
++  const timestamp = new Date().toISOString();
++  const report = {
++    schemaVersion: 1,
++    timestamp,
++    manifest: {
++      id: initial.manifest?.id || null,
++      path: initial.resolved?.relative || manifestPath,
++      sha256: initial.sha256,
++      schemaVersion: initial.manifest?.schemaVersion || null,
++    },
++    validationProblems,
++    environment: initial.manifest?.environment || null,
++    commands: [],
++    summary: {total: 0, passed: 0, failed: 0, notRun: 0},
++    passed: false,
++  };
++  if (validationProblems.length > 0) return report;
++
++  const execute = options.execute || defaultExecute;
++  const env = commandEnvironment(initial.manifest.environment);
++  let stopped = false;
++  for (const command of initial.manifest.commands) {
++    if (stopped) {
++      report.commands.push(notRunCommand(command));
++      continue;
++    }
++    const result = executeManifestCommand({
++      root,
++      manifestPath,
++      manifestSha256: initial.sha256,
++      command,
++      env,
++      execute,
++    });
++    report.commands.push(result);
++    stopped = result.status !== ACCEPTANCE_PROOF.STATUS_PASS;
++  }
++  report.summary = commandSummary(report.commands);
++  report.passed = report.summary.total > 0 &&
++    report.summary.passed === report.summary.total;
++  return report;
++}
++
++export function writeAcceptanceReport(root, report, directory, prefix) {
++  const absoluteDir = path.resolve(root, directory);
++  fs.mkdirSync(absoluteDir, {recursive: true});
++  const stamp = report.timestamp.replace(/[:.]/gu, '-');
++  const file = path.join(absoluteDir, `${prefix}-${stamp}.report.json`);
++  fs.writeFileSync(file, JSON.stringify(report, null, 2));
++  return path.relative(root, file)
++    .replaceAll(path.sep, ACCEPTANCE_PROOF.PATH_SEPARATOR);
++}
+diff --git a/scripts/gate-preflight.js b/scripts/gate-preflight.js
+index cd020919..4a765f29 100644
+--- a/scripts/gate-preflight.js
++++ b/scripts/gate-preflight.js
+@@ -23,6 +23,22 @@ const EXIT_SUCCESS = 0;
+ const EXIT_FAILURE = 1;
+ const FLAG_QUESTION = '--question';
+ const FLAG_WHY_NOT_DETERMINISTIC = '--why-not-deterministic';
++const PREFLIGHT_HEADER = '# Gate preflight\n\n';
++const LATENT_BLOCKER_HEADER =
++  '## Latent-blocker census (do not spend a gate to learn what the ' +
++  'corpus already reveals)\n\n';
++const ALLOWED_CATEGORIES_HEADER =
++  '\n## Allowed gate categories (all others: use a ' +
++  'deterministic in-process test)\n';
++const CALIBRATION_HEADER =
++  '\n## N calibration (smallest informative N; ' +
++  'escalate only when the result forces it)\n';
++const OPERATIONAL_GROUND_TRUTH_SOURCE =
++  '\nSource: docs/steering/operational-ground-truth.md ' +
++  '("Deterministic-first; the gate is a LAST RESORT ONLY").\n';
++const LATENT_BLOCKER_FAILURE =
++  'gate:preflight: analyze:latent-blockers failed — resolve that before ' +
++  'queuing any gate.\n';
+ 
+ const USAGE =
+   'usage: npm run gate:preflight -- ' +
+@@ -81,36 +97,28 @@ function main() {
+     return EXIT_FAILURE;
+   }
+ 
+-  process.stdout.write('# Gate preflight\n\n');
++  process.stdout.write(PREFLIGHT_HEADER);
+   process.stdout.write(`question: ${options.question.trim()}\n`);
+   process.stdout.write(
+     `why-not-deterministic: ${options.whyNotDeterministic.trim()}\n\n`);
+ 
+-  process.stdout.write(
+-    '## Latent-blocker census (do not spend a gate to learn what the ' +
+-    'corpus already reveals)\n\n');
++  process.stdout.write(LATENT_BLOCKER_HEADER);
+   const census = spawnSync('npm', ['run', 'analyze:latent-blockers'], {
+     stdio: 'inherit',
+   });
+ 
+-  process.stdout.write('\n## Allowed gate categories (all others: use a ' +
+-    'deterministic in-process test)\n');
++  process.stdout.write(ALLOWED_CATEGORIES_HEADER);
+   for (const category of ALLOWED_GATE_CATEGORIES) {
+     process.stdout.write(`${category}\n`);
+   }
+-  process.stdout.write('\n## N calibration (smallest informative N; ' +
+-    'escalate only when the result forces it)\n');
++  process.stdout.write(CALIBRATION_HEADER);
+   for (const row of N_CALIBRATION_TABLE) {
+     process.stdout.write(`${row}\n`);
+   }
+-  process.stdout.write(
+-    '\nSource: docs/steering/operational-ground-truth.md ' +
+-    '("Deterministic-first; the gate is a LAST RESORT ONLY").\n');
++  process.stdout.write(OPERATIONAL_GROUND_TRUTH_SOURCE);
+ 
+   if (census.status !== 0) {
+-    process.stderr.write(
+-      'gate:preflight: analyze:latent-blockers failed — resolve that before ' +
+-      'queuing any gate.\n');
++    process.stderr.write(LATENT_BLOCKER_FAILURE);
+     return EXIT_FAILURE;
+   }
+   return EXIT_SUCCESS;
+diff --git a/scripts/run-project-hardening-acceptance.js b/scripts/run-project-hardening-acceptance.js
+new file mode 100644
+index 00000000..62c4fe03
+--- /dev/null
++++ b/scripts/run-project-hardening-acceptance.js
+@@ -0,0 +1,109 @@
++#!/usr/bin/env node
++
++import {fileURLToPath} from 'node:url';
++import path from 'node:path';
++
++import {
++  DEFAULT_ACCEPTANCE_MANIFEST,
++  acceptanceArtifactIdentity,
++  runAcceptanceManifest,
++  writeAcceptanceReport,
++} from './checks/acceptance-proof-manifest-runner.js';
++import {ACCEPTANCE_PROOF} from './checks/acceptance-proof-manifest-constants.js';
++
++const RECEIPT_DIR = 'test-output/acceptance';
++const SCENARIO_REPORT_DIR = 'test-output/reports';
++
++function scenarioReport(run, scenario, receiptIdentity) {
++  const commandFailures = run.summary.failed + run.summary.notRun;
++  const runLevelFailures = !run.passed && commandFailures === 0 ? 1 : 0;
++  const failed = commandFailures + runLevelFailures;
++  return {
++    timestamp: run.timestamp,
++    scenario,
++    producer: ACCEPTANCE_PROOF.PRODUCER,
++    fidelity: ACCEPTANCE_PROOF.FIDELITY,
++    manifest: run.manifest,
++    receipt: receiptIdentity,
++    summary: {
++      total: run.summary.total + runLevelFailures,
++      passed: run.summary.passed,
++      failed,
++    },
++    optimizationSummary: {totalPriorityItems: failed},
++    standardSummary: {
++      scenarios: [{
++        scenario,
++        passed: run.passed,
++        current: {
++          passed: run.passed,
++          verdict: run.passed ?
++            ACCEPTANCE_PROOF.STATUS_PASS : ACCEPTANCE_PROOF.STATUS_FAIL,
++        },
++        detail: {
++          manifest: run.manifest,
++          validationProblems: run.validationProblems,
++          commands: run.commands,
++          receipt: receiptIdentity,
++        },
++      }],
++    },
++  };
++}
++
++export function runProjectHardeningAcceptance(options = {}) {
++  const root = path.resolve(options.root || process.cwd());
++  const run = runAcceptanceManifest({
++    root,
++    manifestPath: options.manifestPath || DEFAULT_ACCEPTANCE_MANIFEST,
++    execute: options.execute,
++  });
++  const receiptPath = writeAcceptanceReport(
++    root,
++    run,
++    options.receiptDir || RECEIPT_DIR,
++    run.manifest.id || ACCEPTANCE_PROOF.INVALID_MANIFEST_ID,
++  );
++  const receiptIdentity = acceptanceArtifactIdentity(root, receiptPath);
++  let scenarioPath = null;
++  if (options.scenario) {
++    scenarioPath = writeAcceptanceReport(
++      root,
++      scenarioReport(run, options.scenario, receiptIdentity),
++      options.scenarioReportDir || SCENARIO_REPORT_DIR,
++      options.scenario,
++    );
++  }
++  process.stdout.write(
++    `${run.manifest.id || ACCEPTANCE_PROOF.FALLBACK_MANIFEST_ID}: ` +
++    `${run.passed ? ACCEPTANCE_PROOF.STATUS_PASS : ACCEPTANCE_PROOF.STATUS_FAIL} — ` +
++    `${run.summary.passed}/` +
++    `${run.summary.total} commands passed\nreceipt: ${receiptPath}\n` +
++    (scenarioPath ? `report: ${scenarioPath}\n` : ''),
++  );
++  return {run, receiptPath, scenarioPath};
++}
++
++function parseArgs(argv) {
++  const options = {};
++  for (let index = 0; index < argv.length; index += 1) {
++    const arg = argv[index];
++    if (arg === ACCEPTANCE_PROOF.FLAG_MANIFEST) options.manifestPath = argv[++index];
++    else if (arg === ACCEPTANCE_PROOF.FLAG_SCENARIO) options.scenario = argv[++index];
++    else if (arg === ACCEPTANCE_PROOF.FLAG_RECEIPT_DIR) {
++      options.receiptDir = argv[++index];
++    } else throw new Error(`unknown argument: ${arg}`);
++  }
++  return options;
++}
++
++const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
++if (invokedPath === fileURLToPath(import.meta.url)) {
++  try {
++    const result = runProjectHardeningAcceptance(parseArgs(process.argv.slice(2)));
++    process.exitCode = result.run.passed ? 0 : 1;
++  } catch (error) {
++    process.stderr.write(`${error.message}\n`);
++    process.exitCode = 2;
++  }
++}
+diff --git a/scripts/run-project-hardening-proof-integrity-cutover-scenarios.js b/scripts/run-project-hardening-proof-integrity-cutover-scenarios.js
+index 33c73017..cd55c503 100644
+--- a/scripts/run-project-hardening-proof-integrity-cutover-scenarios.js
++++ b/scripts/run-project-hardening-proof-integrity-cutover-scenarios.js
+@@ -1,18 +1,10 @@
+ #!/usr/bin/env node
+ 
+ import {
+-  runGuardTestScenarios,
+-} from './checks/guard-test-scenario-runner.js';
++  runProjectHardeningAcceptance,
++} from './run-project-hardening-acceptance.js';
+ 
+-const SCENARIOS = {
+-  'project-hardening-proof-integrity-cutover': [
+-    'test/scripts/run-test-files.test.js',
+-    'test/release/public-api-side-effect-boundary.test.js',
+-    'test/release/project-hardening-contracts.test.js',
+-    'test/admin/admin-websocket-external-bind-policy.test.js',
+-    'test/runtime/pgwire-protocol-ordering.test.js',
+-    'test/compatibility/pgwire-client-compat.test.js',
+-  ],
+-};
+-
+-runGuardTestScenarios(SCENARIOS);
++const result = runProjectHardeningAcceptance({
++  scenario: 'project-hardening-proof-integrity-cutover',
++});
++process.exitCode = result.run.passed ? 0 : 1;
+diff --git a/scripts/run-solver-acceptance-proof-manifest-scenarios.js b/scripts/run-solver-acceptance-proof-manifest-scenarios.js
+new file mode 100644
+index 00000000..828b6c06
+--- /dev/null
++++ b/scripts/run-solver-acceptance-proof-manifest-scenarios.js
+@@ -0,0 +1,10 @@
++#!/usr/bin/env node
++
++import {
++  runProjectHardeningAcceptance,
++} from './run-project-hardening-acceptance.js';
++
++const result = runProjectHardeningAcceptance({
++  scenario: 'solver-acceptance-proof-manifest',
++});
++process.exitCode = result.run.passed ? 0 : 1;
+diff --git a/scripts/solve.js b/scripts/solve.js
+index 0afdf5f4..a67e84cd 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -57,6 +57,21 @@ import {
+ const INHERITED_RULESOUT_ABSENT_CLAIM = '(no claim)';
+ const INHERITED_RULESOUT_FINDING_KIND = 'inherited-rulesout';
+ const LINE_SEPARATOR = '\n';
++const DRY_EXECUTOR_NOTICE =
++  'run: default `dry` executor — a no-op skeleton that makes no real ' +
++  'edits; real autonomous work needs --executor agent --yes\n';
++const AUTO_DIFF_ARGUMENT = 'auto-diff';
++const AUTO_DIFF_REQUIRES_COMMIT = 'step --auto-diff requires --commit';
++const AUTO_DIFF_IGNORED_NOTICE =
++  'step: --auto-diff ignored — an explicit --changeRef takes precedence\n';
++const STEP_CHANGE_REF_REQUIRED =
++  'step --commit requires --changeRef diff:<path> (or --auto-diff)';
++const STEP_NEXT_ARGUMENTS =
++  '--changeRef diff:<path> --summary "<what changed>" ' +
++  '(--auto-diff snapshots the working tree as the changeRef)\n';
++const NEXT_ID_REQUIRED = 'next: --id <questId> is required';
++const COMMAND_SEPARATOR = '|';
++const USAGE_ARGUMENTS = '[--id <questId>] [...]\n';
+ 
+ function parseArgs(argv) {
+   const args = {_: []};
+@@ -285,9 +300,7 @@ function cmdRun(root, args) {
+ function buildExecutor(root, id, args) {
+   const kind = args.executor || 'dry';
+   if (kind === 'dry') {
+-    process.stderr.write(
+-      'run: default `dry` executor — a no-op skeleton that makes no real ' +
+-      'edits; real autonomous work needs --executor agent --yes\n');
++    process.stderr.write(DRY_EXECUTOR_NOTICE);
+     return makeDryExecutor({
+       changeDir: path.join(root, SOLVE_DATA_DIR, 'changes', id),
+       step: Number(args.step) || 1,
+@@ -563,19 +576,18 @@ function cmdStep(root, args) {
+   if (args.changeRef && !args.commit) {
+     throw new Error('step commit requires --commit with --changeRef');
+   }
+-  if (args['auto-diff'] && !args.commit) {
+-    throw new Error('step --auto-diff requires --commit');
++  if (args[AUTO_DIFF_ARGUMENT] && !args.commit) {
++    throw new Error(AUTO_DIFF_REQUIRES_COMMIT);
+   }
+-  if (args['auto-diff'] && args.changeRef) {
+-    process.stderr.write(
+-      'step: --auto-diff ignored — an explicit --changeRef takes precedence\n');
++  if (args[AUTO_DIFF_ARGUMENT] && args.changeRef) {
++    process.stderr.write(AUTO_DIFF_IGNORED_NOTICE);
+   }
+-  if (args.commit && !args.changeRef && !args['auto-diff']) {
+-    throw new Error('step --commit requires --changeRef diff:<path> (or --auto-diff)');
++  if (args.commit && !args.changeRef && !args[AUTO_DIFF_ARGUMENT]) {
++    throw new Error(STEP_CHANGE_REF_REQUIRED);
+   }
+   const r = runStep(root, quest, {
+     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
+-    autoDiff: Boolean(args['auto-diff']),
++    autoDiff: Boolean(args[AUTO_DIFF_ARGUMENT]),
+     summary: typeof args.summary === 'string' ? args.summary : undefined,
+     force: Boolean(args.force),
+     ...theoryCommitArgs(args),
+@@ -609,8 +621,7 @@ function cmdStep(root, args) {
+       `pinned ${r.frontier}: metric ${r.before.metric}\n` +
+       `pending: ${r.pendingFile}\n` +
+       `next: node scripts/solve.js step --id ${id} --commit ` +
+-      '--changeRef diff:<path> --summary "<what changed>" ' +
+-      '(--auto-diff snapshots the working tree as the changeRef)\n',
++      STEP_NEXT_ARGUMENTS,
+     );
+     emitRetreadWarnings(root, quest);
+     emitAdvisories(root, quest);
+@@ -618,7 +629,7 @@ function cmdStep(root, args) {
+   }
+   const moved = r.progressed ? 'PROGRESS' : 'flat';
+   const viol = r.violations.length ? ` violations: ${r.violations.join('; ')}` : '';
+-  const autoDiffLine = args['auto-diff'] && r.changeRef ?
++  const autoDiffLine = args[AUTO_DIFF_ARGUMENT] && r.changeRef ?
+     `changeRef: ${r.changeRef}\n` : '';
+   const templateLines = (r.verificationTemplates || [])
+     .map((t) => `suggested verification template: ${t.template}\n`).join('');
+@@ -634,7 +645,7 @@ function cmdStep(root, args) {
+ // gate stops, current blocker, advisories). Derives nothing new; see solve/next.js.
+ function cmdNext(root, args) {
+   const id = args.id || args._[0];
+-  if (!id) throw new Error('next: --id <questId> is required');
++  if (!id) throw new Error(NEXT_ID_REQUIRED);
+   process.stdout.write(runNextCommand(root, id));
+ }
+ 
+@@ -949,7 +960,8 @@ function main() {
+   const handler = COMMANDS[command];
+   if (!handler) {
+     process.stderr.write(
+-      `usage: solve <${Object.keys(COMMANDS).join('|')}> [--id <questId>] [...]\n`);
++      `usage: solve <${Object.keys(COMMANDS).join(COMMAND_SEPARATOR)}> ` +
++      USAGE_ARGUMENTS);
+     process.exit(command ? 1 : 0);
+     return;
+   }
+diff --git a/scripts/solve/change-artifact.js b/scripts/solve/change-artifact.js
+index 61d97f7e..ea04ffa5 100644
+--- a/scripts/solve/change-artifact.js
++++ b/scripts/solve/change-artifact.js
+@@ -9,6 +9,8 @@ import {
+ 
+ const DIFF_PREFIX = 'diff:';
+ const DIFF_EXTENSION = '.diff';
++const HASH_ALGORITHM = 'sha256';
++const HASH_ENCODING = 'hex';
+ const PATH_LINE_PREFIXES = Object.freeze([
+   'diff --git ',
+   '--- ',
+@@ -109,7 +111,7 @@ export function changeArtifactIdentity(root, questId, changeRef) {
+     path: normalizeSlash(path.relative(root, filePath)),
+     exists: true,
+     size: content.length,
+-    sha256: createHash('sha256').update(content).digest('hex'),
++    sha256: createHash(HASH_ALGORITHM).update(content).digest(HASH_ENCODING),
+   };
+ }
+ 
+diff --git a/scripts/solve/constants.js b/scripts/solve/constants.js
+index ce897ab3..0f3f3678 100644
+--- a/scripts/solve/constants.js
++++ b/scripts/solve/constants.js
+@@ -57,6 +57,13 @@ export const EVENT_GUARD_OVERRIDE = 'guard-override';
+ // append-only; it carries the trigger (cadence/oscillation/scope-pressure) and the note.
+ export const EVENT_REFLECTION = 'reflection';
+ 
++// Terminal-integrity event vocabulary. These values cross the event-store and
++// closure-gate boundary, so the shared constants owner defines them.
++export const INTEGRITY_SCOPE_ATTEMPT = 'attempt-integrity';
++export const INTEGRITY_SCOPE_GOALPOSTS = 'goalposts';
++export const INTEGRITY_RESOLUTION_FRESH_SAMPLE = 'fresh-accepted-sample';
++export const INTEGRITY_RESOLUTION_NEW_QUEST = 'new-quest-only';
++
+ // Frontier / quest status values.
+ export const STATUS_OPEN = 'open';
+ export const STATUS_SOLVED = 'solved';
+diff --git a/scripts/solve/gate.js b/scripts/solve/gate.js
+index 93eb0049..c1006bd1 100644
+--- a/scripts/solve/gate.js
++++ b/scripts/solve/gate.js
+@@ -15,6 +15,7 @@
+ 
+ import {
+   EVENT_ATTEMPT,
++  EVENT_NON_MEASUREMENT,
+   EVENT_GATE_DECISION,
+   EVENT_GUARD_OVERRIDE,
+   EXPLORE_BUDGET,
+@@ -80,6 +81,14 @@ export function exploreBudgetRemaining(log, frontierId) {
+ // modelRef or a later model-evidence finding). Matched on the recorded problem text.
+ const SOFT_FIRST_EXCLUDED_PROBLEM =
+   /coupled[- ]invariant|system theory required/i;
++const FRONTIER_THEORY_REQUIRED_PATTERN = /^frontier theory required(?: for| at rung|$)/iu;
++const SELECTED_THEORY_STALE_PATTERN = /^selected theory(?: .* is)? stale|^selected theory stale/iu;
++const MODEL_EVIDENCE_REQUIRED_PATTERN =
++  /^model evidence required|^model evidence or modelNotApplicable is required|^model reference is required/iu;
++const THEORY_GATE_FAMILY_FRONTIER = 'frontier-theory-required';
++const THEORY_GATE_FAMILY_SELECTED_STALE = 'selected-theory-stale';
++const THEORY_GATE_FAMILY_MODEL_EVIDENCE = 'model-evidence-required';
++const EXACT_PROBLEM_PREFIX = 'exact:';
+ 
+ // Soft-first eligibility (P5). Only the INFERENTIAL "produce a theory artifact" family of
+ // theory gates is eligible for a soft-first advisory ramp: a plain frontier/selected-stale/
+@@ -116,8 +125,9 @@ function softAdvisoriesSpent(log, frontierId, code) {
+ // bypass records an ADVISORY gate decision tagged `override`, which is counted here as a
+ // consumption. Both counters reset on honest progress (lastProgressIndex), mirroring the
+ // explore/soft-first budgets, so an override can never permanently disable a guard. When a
+-// recorded override pins a specific `problem` substring it only matches a block whose
+-// problems include it; an untargeted override matches any block of the same code.
++// recorded override pins a specific `problem` substring it only authorizes matching
++// problems, and a co-occurring residual problem keeps the combined continuation gated;
++// an untargeted override matches every problem in a block of the same code.
+ function activeOverride(log, frontierId, code, problems = []) {
+   const since = lastProgressIndex(log, frontierId);
+   const overrides = [];
+@@ -136,7 +146,15 @@ function activeOverride(log, frontierId, code, problems = []) {
+     }
+   }
+   if (overrides.length > consumed) {
+-    return {reason: overrides[overrides.length - 1].reason};
++    const active = overrides[overrides.length - 1];
++    const authorizedProblems = active.problem ?
++      problems.filter((problem) => String(problem).includes(active.problem)) :
++      [...problems];
++    return {
++      reason: active.reason,
++      problems: authorizedProblems,
++      coversAllProblems: authorizedProblems.length === problems.length,
++    };
+   }
+   return null;
+ }
+@@ -155,14 +173,15 @@ export function softFirstWouldDefer(log, continuation, frontierId) {
+ // theory condition; the first to fire records the single advisory and the second observes
+ // this and does not double-count. A new attempt closes the cycle and resets the window.
+ function softAdvisoryRecordedThisCycle(log, frontierId, code) {
+-  let lastAttempt = -1;
++  let lastCycleBoundary = -1;
+   for (let i = 0; i < log.length; i += 1) {
+     const event = log[i];
+-    if (event.type === EVENT_ATTEMPT && event.frontier === frontierId) {
+-      lastAttempt = i;
++    if ((event.type === EVENT_ATTEMPT || event.type === EVENT_NON_MEASUREMENT) &&
++      event.frontier === frontierId) {
++      lastCycleBoundary = i;
+     }
+   }
+-  for (let i = lastAttempt + 1; i < log.length; i += 1) {
++  for (let i = lastCycleBoundary + 1; i < log.length; i += 1) {
+     const event = log[i];
+     if (event.type === EVENT_GATE_DECISION && event.frontier === frontierId &&
+       event.disposition === DISPOSITION_ADVISORY && event.code === code &&
+@@ -212,7 +231,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
+   // soft-first delay — so it does not depend on context.softFirst.
+   if (continuationOverridable(continuation)) {
+     const override = activeOverride(log, frontier, code, problems);
+-    if (override) {
++    if (override?.coversAllProblems) {
+       appendEvent(root, quest.id, {
+         type: EVENT_GATE_DECISION,
+         frontier,
+@@ -221,7 +240,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
+         code,
+         outcome: OUTCOME_CONTINUE,
+         override: override.reason,
+-        problems,
++        problems: override.problems,
+         nextCommand: null,
+       });
+       return {
+@@ -229,7 +248,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
+         code,
+         outcome: OUTCOME_CONTINUE,
+         override: override.reason,
+-        problems,
++        problems: override.problems,
+         nextCommand: null,
+         frontier,
+         rungIndex,
+@@ -334,6 +353,24 @@ function classifyTheoryProblem(problem) {
+   return CONTINUATION_BLOCKED_THEORY;
+ }
+ 
++// Begin-phase health signals and commit-phase validation can describe the same gate with
++// different context (for example "for <frontier>" versus "at rung <n>"). This key is
++// deliberately narrower than the continuation code: it joins only equivalent gate
++// families, so a model-evidence advisory can never suppress an invalid modelRef.
++export function theoryGateProblemAuthorizationKey(problem) {
++  const value = String(problem || '');
++  if (FRONTIER_THEORY_REQUIRED_PATTERN.test(value)) {
++    return THEORY_GATE_FAMILY_FRONTIER;
++  }
++  if (SELECTED_THEORY_STALE_PATTERN.test(value)) {
++    return THEORY_GATE_FAMILY_SELECTED_STALE;
++  }
++  if (MODEL_EVIDENCE_REQUIRED_PATTERN.test(value)) {
++    return THEORY_GATE_FAMILY_MODEL_EVIDENCE;
++  }
++  return `${EXACT_PROBLEM_PREFIX}${value}`;
++}
++
+ export function theoryGateContinuation(problems) {
+   if (!problems || problems.length === 0) {
+     return {status: CONTINUATION_ALLOWED, code: null, problems: []};
+diff --git a/scripts/solve/integrity.js b/scripts/solve/integrity.js
+index 0f6ff478..b33919a0 100644
+--- a/scripts/solve/integrity.js
++++ b/scripts/solve/integrity.js
+@@ -3,6 +3,10 @@ import {createHash} from 'node:crypto';
+ import {
+   EVENT_ATTEMPT,
+   EVENT_VIOLATION,
++  INTEGRITY_RESOLUTION_FRESH_SAMPLE,
++  INTEGRITY_RESOLUTION_NEW_QUEST,
++  INTEGRITY_SCOPE_ATTEMPT,
++  INTEGRITY_SCOPE_GOALPOSTS,
+ } from './constants.js';
+ import {
+   changeArtifactIdentity,
+@@ -11,10 +15,33 @@ import {
+ } from './change-artifact.js';
+ 
+ export const INTEGRITY_EVENT_SCHEMA_VERSION = 2;
+-export const INTEGRITY_SCOPE_ATTEMPT = 'attempt-integrity';
+-export const INTEGRITY_SCOPE_GOALPOSTS = 'goalposts';
+-export const INTEGRITY_RESOLUTION_FRESH_SAMPLE = 'fresh-accepted-sample';
+-export const INTEGRITY_RESOLUTION_NEW_QUEST = 'new-quest-only';
++
++export {
++  INTEGRITY_RESOLUTION_FRESH_SAMPLE,
++  INTEGRITY_RESOLUTION_NEW_QUEST,
++  INTEGRITY_SCOPE_ATTEMPT,
++  INTEGRITY_SCOPE_GOALPOSTS,
++};
++
++const HASH_ALGORITHM = 'sha256';
++const HASH_ENCODING = 'hex';
++const VIOLATION_ID_DIGEST_LENGTH = 20;
++const UNVERSIONED_GENERATION = 'unversioned';
++const QUEST_LEVEL_FRONTIER = 'quest';
++const VIOLATION_ID_SEPARATOR = ':';
++const REASON_MISSING_VIOLATION_ID = 'missing violationId';
++const REASON_MISSING_SCOPE = 'missing scope';
++const REASON_INVALID_RESOLUTION_POLICY = 'invalid resolutionPolicy';
++const REASON_MISSING_VIOLATIONS = 'missing violations';
++const REASON_MISSING_REPLACEMENT_FRONTIER = 'missing replacement frontier';
++const REASON_MISSING_REPLACEMENT_PROBE = 'missing replacement probe identity';
++const REASON_MISSING_FAILED_EVIDENCE = 'missing failed evidence identity';
++const MISSING_ACCEPTED_CHANGE_IDENTITY =
++  'accepted changeRef is missing a sealed content identity';
++const LEGACY_INTEGRITY_UNVERIFIABLE =
++  'legacy_integrity_unverifiable: a pre-v2 violation was followed ' +
++  'by an accepted attempt; provide replacement evidence in a new migration Quest';
++const NO_MALFORMED_REASONS = Object.freeze([]);
+ 
+ const INTEGRITY_RESOLUTION_POLICIES = Object.freeze([
+   INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+@@ -22,10 +49,10 @@ const INTEGRITY_RESOLUTION_POLICIES = Object.freeze([
+ ]);
+ 
+ function digest(value) {
+-  return createHash('sha256')
++  return createHash(HASH_ALGORITHM)
+     .update(JSON.stringify(value))
+-    .digest('hex')
+-    .slice(0, 20);
++    .digest(HASH_ENCODING)
++    .slice(0, VIOLATION_ID_DIGEST_LENGTH);
+ }
+ 
+ export function integrityViolationId({
+@@ -38,15 +65,15 @@ export function integrityViolationId({
+ }) {
+   return [
+     quest.id,
+-    generation || quest.links?.sealedAtCommit || 'unversioned',
++    generation || quest.links?.sealedAtCommit || UNVERSIONED_GENERATION,
+     scope,
+-    frontier || 'quest',
++    frontier || QUEST_LEVEL_FRONTIER,
+     digest({
+       violations,
+       probeKey: attempt?.probeKey || null,
+       evidenceFingerprint: attempt?.evidenceFingerprint || null,
+     }),
+-  ].join(':');
++  ].join(VIOLATION_ID_SEPARATOR);
+ }
+ 
+ export function acceptedReplacementViolationIds(log, attempt) {
+@@ -90,32 +117,32 @@ export function unresolvedIntegrityViolations(log) {
+ export function malformedIntegrityViolationReasons(event) {
+   if (event?.type !== EVENT_VIOLATION ||
+     event.eventSchemaVersion !== INTEGRITY_EVENT_SCHEMA_VERSION) {
+-    return [];
++    return NO_MALFORMED_REASONS;
+   }
+-  const reasons = [];
++  const reasons = Array.from(NO_MALFORMED_REASONS);
+   if (typeof event.violationId !== 'string' || event.violationId.length === 0) {
+-    reasons.push('missing violationId');
++    reasons.push(REASON_MISSING_VIOLATION_ID);
+   }
+   if (typeof event.scope !== 'string' || event.scope.length === 0) {
+-    reasons.push('missing scope');
++    reasons.push(REASON_MISSING_SCOPE);
+   }
+   if (!INTEGRITY_RESOLUTION_POLICIES.includes(event.resolutionPolicy)) {
+-    reasons.push('invalid resolutionPolicy');
++    reasons.push(REASON_INVALID_RESOLUTION_POLICY);
+   }
+   if (!Array.isArray(event.violations) || event.violations.length === 0) {
+-    reasons.push('missing violations');
++    reasons.push(REASON_MISSING_VIOLATIONS);
+   }
+   if (event.resolutionPolicy === INTEGRITY_RESOLUTION_FRESH_SAMPLE) {
+     if (typeof event.frontier !== 'string' || event.frontier.length === 0) {
+-      reasons.push('missing replacement frontier');
++      reasons.push(REASON_MISSING_REPLACEMENT_FRONTIER);
+     }
+     if (typeof event.replacementProbeKey !== 'string' ||
+       event.replacementProbeKey.length === 0) {
+-      reasons.push('missing replacement probe identity');
++      reasons.push(REASON_MISSING_REPLACEMENT_PROBE);
+     }
+     if (typeof event.failedEvidenceFingerprint !== 'string' ||
+       event.failedEvidenceFingerprint.length === 0) {
+-      reasons.push('missing failed evidence identity');
++      reasons.push(REASON_MISSING_FAILED_EVIDENCE);
+     }
+   }
+   return reasons;
+@@ -147,7 +174,7 @@ export function acceptedChangeArtifactViolations(root, quest, log) {
+     if (!changeArtifactIdentityIsSealed(event.changeRefIdentity)) {
+       violations.push({
+         event,
+-        message: 'accepted changeRef is missing a sealed content identity',
++        message: MISSING_ACCEPTED_CHANGE_IDENTITY,
+       });
+       continue;
+     }
+@@ -180,8 +207,7 @@ export function terminalIntegrityProblems(root, quest, log) {
+   for (const event of legacyIntegrityViolations(log)) {
+     problems.push({
+       event,
+-      message: 'legacy_integrity_unverifiable: a pre-v2 violation was followed ' +
+-        'by an accepted attempt; provide replacement evidence in a new migration Quest',
++      message: LEGACY_INTEGRITY_UNVERIFIABLE,
+     });
+   }
+   problems.push(...acceptedChangeArtifactViolations(root, quest, log));
+diff --git a/scripts/solve/loop.js b/scripts/solve/loop.js
+index 15734877..d752ace6 100644
+--- a/scripts/solve/loop.js
++++ b/scripts/solve/loop.js
+@@ -11,6 +11,15 @@
+ 
+ import fs from 'node:fs';
+ 
++const DONE_WHEN_SAMPLE_REJECTED =
++  'doneWhen evidence is not an accepted measured sample';
++const FRONTIER_INTEGRITY_UNRESOLVED =
++  'frontier evidence is done but integrity violations remain unresolved';
++const CHANGE_IDENTITY_UNSEALABLE =
++  'changeRef artifact is missing a sealable content identity';
++const INTEGRITY_SCOPE_REGRESSION = 'regression';
++const INTEGRITY_SCOPE_THEORY_GATE = 'theory-gate';
++
+ import {
+   EVENT_QUEST_DECLARED,
+   EVENT_ATTEMPT,
+@@ -20,6 +29,7 @@ import {
+   EVENT_QUEST,
+   EVENT_VIOLATION,
+   EVENT_FINDING,
++  EVENT_GATE_DECISION,
+   STATUS_SOLVED,
+   STATUS_EXHAUSTED,
+   LADDER,
+@@ -45,6 +55,7 @@ import {
+   SUPERVISOR_MAX_RESTARTS,
+   SUPERVISOR_STALL_WINDOW,
+   DISPOSITION_PARK_RESUMABLE,
++  DISPOSITION_ADVISORY,
+   EVENT_THEORY_SYSTEM_DECLARED,
+   EVENT_REFLECTION,
+   EVENT_EVIDENCE_INGESTED,
+@@ -105,6 +116,7 @@ import {
+ import {
+   resolveGateDecision,
+   theoryGateContinuation,
++  theoryGateProblemAuthorizationKey,
+   decisionContinues,
+ } from './gate.js';
+ import {
+@@ -168,7 +180,7 @@ function runOneCycle(root, quest, ctx) {
+       const integrityProblems = terminalIntegrityProblems(root, quest, log)
+         .map((item) => item.message);
+       if (!terminalSampleIsAccepted(questDone)) {
+-        integrityProblems.push('doneWhen evidence is not an accepted measured sample');
++        integrityProblems.push(DONE_WHEN_SAMPLE_REJECTED);
+       }
+       return {
+         terminal: OUTCOME_BLOCKED,
+@@ -207,7 +219,7 @@ function runOneCycle(root, quest, ctx) {
+         terminal: OUTCOME_BLOCKED,
+         evidence: before.evidence,
+         frontier: pick.def.id,
+-        problems: ['frontier evidence is done but integrity violations remain unresolved'],
++        problems: [FRONTIER_INTEGRITY_UNRESOLVED],
+       };
+     }
+     appendEvent(root, quest.id, {
+@@ -248,7 +260,7 @@ function applyAttempt(root, quest, ctx, pick, before) {
+     if (!decisionContinues(decision)) {
+       appendEvent(root, quest.id, {
+         type: EVENT_VIOLATION,
+-        scope: 'theory-gate',
++        scope: INTEGRITY_SCOPE_THEORY_GATE,
+         frontier: pick.def.id,
+         rung: LADDER[rungIndex],
+         rungIndex,
+@@ -289,6 +301,40 @@ function applyAttempt(root, quest, ctx, pick, before) {
+   return {terminal: null};
+ }
+ 
++// A recorded advisory is the durable authorization to bypass that classified gate for
++// the current cycle. Finalization re-checks the theory gate after the harness runs, whose
++// wording can differ from the begin-phase wording; without replaying the advisory by its
++// narrow problem-family key, the same softened gate would become a hard integrity violation
++// and the rung could never advance. Explicit overrides remain problem-specific. The last
++// accepted attempt or non-measurement closes the cycle, so older advisories cannot leak.
++function currentCycleAdvisoryAuthorization(log, frontierId, rungIndex) {
++  let lastCycleBoundaryIndex = -1;
++  for (let index = 0; index < log.length; index += 1) {
++    const event = log[index];
++    if ((event.type === EVENT_ATTEMPT || event.type === EVENT_NON_MEASUREMENT) &&
++      event.frontier === frontierId) {
++      lastCycleBoundaryIndex = index;
++    }
++  }
++  const problemKeys = new Set();
++  const overrideProblems = new Set();
++  for (let index = lastCycleBoundaryIndex + 1; index < log.length; index += 1) {
++    const event = log[index];
++    if (event.type !== EVENT_GATE_DECISION || event.frontier !== frontierId ||
++      event.rungIndex !== rungIndex || event.disposition !== DISPOSITION_ADVISORY) {
++      continue;
++    }
++    if (event.override) {
++      for (const problem of event.problems || []) overrideProblems.add(problem);
++    } else {
++      for (const problem of event.problems || []) {
++        problemKeys.add(theoryGateProblemAuthorizationKey(problem));
++      }
++    }
++  }
++  return {problemKeys, overrideProblems};
++}
++
+ // Record one attempt's outcome: re-measure the metric, build + honesty-check the
+ // attempt event, persist it, and run the keep/climb/park decision. Shared by the
+ // autonomous loop and the manual `step` flow so both obey identical honesty rules.
+@@ -359,9 +405,14 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+   if (!event.invalidSample &&
+     !changeArtifactIdentityIsSealed(event.changeRefIdentity)) {
+     honestyViolations.push(
+-      'changeRef artifact is missing a sealable content identity',
++      CHANGE_IDENTITY_UNSEALABLE,
+     );
+   }
++  const advisory = currentCycleAdvisoryAuthorization(
++    log,
++    pick.def.id,
++    rungIndex,
++  );
+   const gateViolations = stepTheoryGateProblems({
+     log,
+     state,
+@@ -370,6 +421,10 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+     theoryRef: event.theoryRef,
+     modelRef: event.modelRef,
+     modelNotApplicable: event.modelNotApplicable,
++  }).filter((problem) => {
++    const problemKey = theoryGateProblemAuthorizationKey(problem);
++    return !advisory.problemKeys.has(problemKey) &&
++      !advisory.overrideProblems.has(problem);
+   });
+   const violations = [...honestyViolations, ...gateViolations];
+   if (honestyViolations.length > 0) {
+@@ -398,7 +453,7 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+   if (gateViolations.length > 0) {
+     appendEvent(root, quest.id, {
+       type: EVENT_VIOLATION,
+-      scope: 'theory-gate',
++      scope: INTEGRITY_SCOPE_THEORY_GATE,
+       frontier: pick.def.id,
+       violations: gateViolations,
+       attempt: event,
+@@ -455,13 +510,13 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
+     appendEvent(root, quest.id, {
+       type: EVENT_VIOLATION,
+       eventSchemaVersion: INTEGRITY_EVENT_SCHEMA_VERSION,
+-      scope: 'regression',
++      scope: INTEGRITY_SCOPE_REGRESSION,
+       frontier: pick.def.id,
+       violationId: integrityViolationId({
+         quest,
+         generation: declared?.ts || quest.links?.sealedAtCommit,
+         frontier: pick.def.id,
+-        scope: 'regression',
++        scope: INTEGRITY_SCOPE_REGRESSION,
+         violations: regressionViolations,
+         attempt: event,
+       }),
+@@ -891,7 +946,7 @@ export function runLoop(root, quest, options = {}) {
+           if (executionHealth.continuation.status === CONTINUATION_BLOCKED_THEORY) {
+             appendEvent(root, quest.id, {
+               type: EVENT_VIOLATION,
+-              scope: 'theory-gate',
++              scope: INTEGRITY_SCOPE_THEORY_GATE,
+               frontier: executionHealth.frontier,
+               rung: Number.isInteger(executionHealth.rungIndex) ?
+                 LADDER[executionHealth.rungIndex] :
+diff --git a/scripts/solve/next.js b/scripts/solve/next.js
+index e5f77f7f..8220dd62 100644
+--- a/scripts/solve/next.js
++++ b/scripts/solve/next.js
+@@ -20,6 +20,11 @@ import {
+ } from './constants.js';
+ 
+ const TERMINAL_STATUSES = Object.freeze([STATUS_SOLVED, STATUS_EXHAUSTED]);
++const PENDING_COMMIT_SUFFIX =
++  '--summary "<what changed>" (or --changeRef diff:<path>; ';
++const FILE_NOT_FOUND_CODE = 'ENOENT';
++const UNKNOWN_METRIC = '?';
++const LINE_SEPARATOR = '\n';
+ 
+ // The last event, when it is a recorded non-terminal gate stop (an advisory
+ // gate-decision means the run continued, so it is not a stop). Anything after
+@@ -35,7 +40,7 @@ function lastEventGateStop(log) {
+ 
+ function pendingCommitCommand(questId) {
+   return `node scripts/solve.js step --id ${questId} --commit --auto-diff ` +
+-    '--summary "<what changed>" (or --changeRef diff:<path>; ' +
++    PENDING_COMMIT_SUFFIX +
+     `step --id ${questId} --abort discards)`;
+ }
+ 
+@@ -54,7 +59,7 @@ export function buildNextLines(root, questId) {
+   try {
+     quest = loadQuest(root, questId);
+   } catch (error) {
+-    if (error && error.code === 'ENOENT') {
++    if (error && error.code === FILE_NOT_FOUND_CODE) {
+       throw new Error(`quest not found: ${questId}`);
+     }
+     throw error;
+@@ -76,7 +81,7 @@ export function buildNextLines(root, questId) {
+   ];
+   if (pending) {
+     lines.push(`pending step: ${pending.frontier} pinned at metric ` +
+-      `${pending.before?.metric ?? '?'} — commit or abort it before a new step`);
++      `${pending.before?.metric ?? UNKNOWN_METRIC} — commit or abort it before a new step`);
+   }
+   if (gateStop) {
+     const problem = (gateStop.problems || [])[0];
+@@ -93,5 +98,5 @@ export function buildNextLines(root, questId) {
+ }
+ 
+ export function runNextCommand(root, questId) {
+-  return `${buildNextLines(root, questId).join('\n')}\n`;
++  return `${buildNextLines(root, questId).join(LINE_SEPARATOR)}${LINE_SEPARATOR}`;
+ }
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index 3686d152..a41f4769 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -47,6 +47,10 @@ const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
+ const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
+ const AUTO_DIFF_ARTIFACT_PATTERN = /^attempt-(\d+)\.diff$/u;
+ const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
++const UNKNOWN_GIT_ERROR = 'unknown error';
++const AUTO_DIFF_EMPTY_ERROR =
++  'auto-diff: git diff is empty — nothing changed since the step began; ' +
++  'make the change first (or pass an explicit --changeRef diff:<path>)';
+ 
+ // Solver-owned GENERATED bookkeeping the step/loop machinery itself writes
+ // between step begin and commit: the pending file (solve/state, stepBegin),
+@@ -100,14 +104,11 @@ function createAutoDiffChangeRef(root, quest, pending) {
+   });
+   if (out.status !== 0 || typeof out.stdout !== 'string') {
+     throw new Error(
+-      `auto-diff: git diff ${pin} failed: ${(out.stderr || 'unknown error').trim()}`,
++      `auto-diff: git diff ${pin} failed: ${(out.stderr || UNKNOWN_GIT_ERROR).trim()}`,
+     );
+   }
+   if (out.stdout.trim() === '') {
+-    throw new Error(
+-      'auto-diff: git diff is empty — nothing changed since the step began; ' +
+-      'make the change first (or pass an explicit --changeRef diff:<path>)',
+-    );
++    throw new Error(AUTO_DIFF_EMPTY_ERROR);
+   }
+   const file = nextAutoDiffArtifactPath(root, quest.id);
+   fs.writeFileSync(file, out.stdout);
+diff --git a/scripts/solve/store.js b/scripts/solve/store.js
+index 8ab59fe2..80a16ce6 100644
+--- a/scripts/solve/store.js
++++ b/scripts/solve/store.js
+@@ -41,6 +41,8 @@ import {
+ } from './constants.js';
+ import {isFrontierProbeEvent} from './probe-spec.js';
+ 
++const UNKNOWN_METRIC = '?';
++
+ function ensureDir(dir) {
+   fs.mkdirSync(dir, {recursive: true});
+ }
+@@ -138,7 +140,8 @@ function applyAttempt(frontierState, event) {
+ function applyNonMeasurement(frontierState, event) {
+   if (!frontierState) return;
+   frontierState.nonMeasurements += 1;
+-  frontierState.reason = `measurement unavailable (retry ${event.retryOrdinal || '?'})`;
++  frontierState.reason =
++    `measurement unavailable (retry ${event.retryOrdinal || UNKNOWN_METRIC})`;
+ }
+ 
+ function applySolved(frontier) {
+diff --git a/scripts/solve/verification-template-suggest.js b/scripts/solve/verification-template-suggest.js
+index 1d8d7097..39e3dc9d 100644
+--- a/scripts/solve/verification-template-suggest.js
++++ b/scripts/solve/verification-template-suggest.js
+@@ -33,6 +33,13 @@ const MARKDOWN_EXTENSION = '.md';
+ const FRONTMATTER_CATEGORIES_PATTERN = /^categories:\s*\[([^\]]*)\]\s*$/mu;
+ const HARNESS_PATH_PATTERN = /^test\//u;
+ const NO_MATCH_MESSAGE = 'no verification template matched\n';
++const CATEGORY_SEPARATOR = ',';
++const LINE_SEPARATOR = '\n';
++const ADDED_LINE_PREFIX = '+';
++const REMOVED_LINE_PREFIX = '-';
++const ADDED_FILE_HEADER = '+++';
++const REMOVED_FILE_HEADER = '---';
++const TEXT_ENCODING = 'utf8';
+ 
+ const CATEGORY_KEYWORD_RULES = Object.freeze({
+   'admission-gating':
+@@ -63,10 +70,10 @@ export function loadTemplateCategories(root) {
+   }
+   for (const name of names) {
+     if (!name.endsWith(MARKDOWN_EXTENSION) || name === INDEX_BASENAME) continue;
+-    const content = fs.readFileSync(path.join(dir, name), 'utf8');
++    const content = fs.readFileSync(path.join(dir, name), TEXT_ENCODING);
+     const match = FRONTMATTER_CATEGORIES_PATTERN.exec(content);
+     if (!match) continue;
+-    for (const raw of match[1].split(',')) {
++    for (const raw of match[1].split(CATEGORY_SEPARATOR)) {
+       const category = raw.trim().replace(/^['"]|['"]$/gu, '');
+       if (category) byCategory.set(category, `${TEMPLATE_DIR_REL}/${name}`);
+     }
+@@ -77,9 +84,9 @@ export function loadTemplateCategories(root) {
+ // Changed (+/-) content lines only; header/context lines are excluded so a
+ // mention in unchanged surrounding code does not fire a suggestion.
+ function changedContentLines(diffContent) {
+-  return String(diffContent || '').split('\n').filter((line) =>
+-    (line.startsWith('+') || line.startsWith('-')) &&
+-    !line.startsWith('+++') && !line.startsWith('---'));
++  return String(diffContent || '').split(LINE_SEPARATOR).filter((line) =>
++    (line.startsWith(ADDED_LINE_PREFIX) || line.startsWith(REMOVED_LINE_PREFIX)) &&
++    !line.startsWith(ADDED_FILE_HEADER) && !line.startsWith(REMOVED_FILE_HEADER));
+ }
+ 
+ export function suggestVerificationTemplates(root, diffContent) {
+@@ -99,8 +106,8 @@ export function suggestVerificationTemplates(root, diffContent) {
+ }
+ 
+ function readDiffInput(argv) {
+-  if (argv[0]) return fs.readFileSync(argv[0], 'utf8');
+-  return fs.readFileSync(0, 'utf8'); // stdin
++  if (argv[0]) return fs.readFileSync(argv[0], TEXT_ENCODING);
++  return fs.readFileSync(0, TEXT_ENCODING); // stdin
+ }
+ 
+ function main() {
+diff --git a/solve/quests/solver-acceptance-proof-manifest.json b/solve/quests/solver-acceptance-proof-manifest.json
+new file mode 100644
+index 00000000..0d96f9a0
+--- /dev/null
++++ b/solve/quests/solver-acceptance-proof-manifest.json
+@@ -0,0 +1,41 @@
++{
++  "id": "solver-acceptance-proof-manifest",
++  "statement": "One versioned machine-readable manifest owns every project-hardening proof command, and the Quest scenario and public acceptance command execute the same fail-closed runner with per-command status and artifact identity.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W2",
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
++    "sealedAtCommit": "7876a2b324356bf85d6c33313db25983230998f9"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "solver-acceptance-proof-manifest",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-acceptance-proof-manifest-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "solver-acceptance-proof-manifest",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/solve/specs/project-hardening-proof-integrity-cutover/README.md b/solve/specs/project-hardening-proof-integrity-cutover/README.md
+index 17cadc68..b7aee9d9 100644
+--- a/solve/specs/project-hardening-proof-integrity-cutover/README.md
++++ b/solve/specs/project-hardening-proof-integrity-cutover/README.md
+@@ -24,13 +24,11 @@ behavior and fail closed when evidence is absent.
+ 
+ ## Proof
+ 
+-1. `node scripts/run-project-hardening-proof-integrity-cutover-scenarios.js`
+-2. `npm run test:static`
+-3. `npm run model:contracts`
+-4. `npm run test:fast`
+-
+-The guard scenario owns the Quest report and covers the focused assertions for
+-test registration, live PostgreSQL client behavior, dependency acyclicity,
+-quality baselines, CI/documentation agreement, network defaults, and package
+-entrypoint behavior. Three consecutive PASS reports satisfy the Quest.
+-
++Run `npm run test:project-hardening` (the same executor used by `test:gate` and
++the Solver scenario). Its sole command inventory is the versioned manifest at
++`test/manifests/project-hardening-proof-manifest.json`; the spec intentionally
++does not repeat that ordered command list.
++
++The manifest runner records per-command status and content identity, rejects
++missing or stale artifacts and manifest drift, and writes the Quest report.
++Three consecutive PASS reports satisfy the Quest.
+diff --git a/test/manifests/project-hardening-proof-manifest.json b/test/manifests/project-hardening-proof-manifest.json
+new file mode 100644
+index 00000000..2f737415
+--- /dev/null
++++ b/test/manifests/project-hardening-proof-manifest.json
+@@ -0,0 +1,66 @@
++{
++  "schemaVersion": 1,
++  "id": "project-hardening-proof-integrity-cutover",
++  "environment": {
++    "inherit": true,
++    "set": {
++      "FORCE_COLOR": "0"
++    }
++  },
++  "commands": [
++    {
++      "id": "focused-contracts",
++      "executable": "node",
++      "argv": [
++        "scripts/run-test-files.js",
++        "--jobs=1",
++        "test/scripts/run-test-files.test.js",
++        "test/scripts/acceptance-proof-manifest-runner.test.js",
++        "test/release/public-api-side-effect-boundary.test.js",
++        "test/release/project-hardening-contracts.test.js",
++        "test/admin/admin-websocket-external-bind-policy.test.js",
++        "test/runtime/pgwire-protocol-ordering.test.js",
++        "test/compatibility/pgwire-client-compat.test.js"
++      ],
++      "timeoutMs": 600000,
++      "acceptableExitCodes": [0],
++      "requiredArtifact": {
++        "mode": "captured-output",
++        "path": "test-output/acceptance/project-hardening/focused-contracts.json"
++      }
++    },
++    {
++      "id": "static-analysis",
++      "executable": "npm",
++      "argv": ["run", "test:static"],
++      "timeoutMs": 1800000,
++      "acceptableExitCodes": [0],
++      "requiredArtifact": {
++        "mode": "captured-output",
++        "path": "test-output/acceptance/project-hardening/static-analysis.json"
++      }
++    },
++    {
++      "id": "model-contracts",
++      "executable": "npm",
++      "argv": ["run", "model:contracts"],
++      "timeoutMs": 1800000,
++      "acceptableExitCodes": [0],
++      "requiredArtifact": {
++        "mode": "captured-output",
++        "path": "test-output/acceptance/project-hardening/model-contracts.json"
++      }
++    },
++    {
++      "id": "fast-tests",
++      "executable": "npm",
++      "argv": ["run", "test:fast"],
++      "timeoutMs": 3600000,
++      "acceptableExitCodes": [0],
++      "requiredArtifact": {
++        "mode": "captured-output",
++        "path": "test-output/acceptance/project-hardening/fast-tests.json"
++      }
++    }
++  ]
++}
+diff --git a/test/release/project-hardening-contracts.test.js b/test/release/project-hardening-contracts.test.js
+index 55bb8a11..5bd069e1 100644
+--- a/test/release/project-hardening-contracts.test.js
++++ b/test/release/project-hardening-contracts.test.js
+@@ -47,6 +47,14 @@ describe('project hardening contracts', () => {
+     assert.match(packageJson.scripts['test:fast'], /run-test-files\.js/u);
+     assert.doesNotMatch(packageJson.scripts['test:fast'], /xargs[^|]*\s-r(?:\s|$)/u);
+     assert.doesNotMatch(packageJson.scripts['test:deps'], /ignore-known/u);
++    assert.equal(
++      packageJson.scripts['test:gate'],
++      packageJson.scripts['test:project-hardening'],
++    );
++    assert.match(
++      packageJson.scripts['test:gate'],
++      /run-project-hardening-acceptance\.js/u,
++    );
+     assert.match(ciText, /npm run test:gate/u);
+     assert.match(ciText, /postgresql-client/u);
+     assert.match(releaseText, /npm run test:gate/u);
+diff --git a/test/scripts/acceptance-proof-manifest-runner.test.js b/test/scripts/acceptance-proof-manifest-runner.test.js
+new file mode 100644
+index 00000000..e93a9143
+--- /dev/null
++++ b/test/scripts/acceptance-proof-manifest-runner.test.js
+@@ -0,0 +1,315 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++
++import {
++  ACCEPTANCE_MANIFEST_SCHEMA_VERSION,
++  runAcceptanceManifest,
++  validateAcceptanceManifest,
++} from '../../scripts/checks/acceptance-proof-manifest-runner.js';
++import {
++  runProjectHardeningAcceptance,
++} from '../../scripts/run-project-hardening-acceptance.js';
++
++function command(id = 'proof', overrides = {}) {
++  return {
++    id,
++    executable: 'node',
++    argv: ['-e', 'process.exit(0)'],
++    timeoutMs: 1000,
++    acceptableExitCodes: [0],
++    requiredArtifact: {
++      mode: 'captured-output',
++      path: `artifacts/${id}.json`,
++    },
++    ...overrides,
++  };
++}
++
++function manifest(commands = [command()]) {
++  return {
++    schemaVersion: ACCEPTANCE_MANIFEST_SCHEMA_VERSION,
++    id: 'test-acceptance-manifest',
++    environment: {inherit: true, set: {PROOF_TEST: '1'}},
++    commands,
++  };
++}
++
++function setup(data = manifest()) {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'acceptance-manifest-'));
++  const manifestPath = 'proof-manifest.json';
++  fs.writeFileSync(
++    path.join(root, manifestPath),
++    JSON.stringify(data, null, 2),
++  );
++  return {root, manifestPath};
++}
++
++function successfulExecution() {
++  return {status: 0, signal: null, stdout: 'ok\n', stderr: '', error: null};
++}
++
++describe('acceptance proof manifest runner', () => {
++  it('rejects empty manifests and explicit skip controls', () => {
++    assert.match(
++      validateAcceptanceManifest(manifest([])).join('\n'),
++      /non-empty ordered array/u,
++    );
++    assert.match(
++      validateAcceptanceManifest(manifest([command('skipped', {skip: true})]))
++        .join('\n'),
++      /must not be skipped/u,
++    );
++  });
++
++  it('rejects shell strings and shell interpreter executables', () => {
++    assert.match(
++      validateAcceptanceManifest(manifest([
++        command('string', {command: 'npm run test:fast'}),
++      ])).join('\n'),
++      /not a shell string/u,
++    );
++    assert.match(
++      validateAcceptanceManifest(manifest([
++        command('shell', {executable: 'bash', argv: ['-c', 'true']}),
++      ])).join('\n'),
++      /shell interpreter/u,
++    );
++  });
++
++  it('fails on non-zero status and records a fresh output identity', () => {
++    const fixture = setup(manifest([
++      command('nonzero', {argv: ['-e', 'process.exit(7)']}),
++    ]));
++    const report = runAcceptanceManifest(fixture);
++    assert.equal(report.passed, false);
++    assert.equal(report.commands[0].exitCode, 7);
++    assert.match(report.commands[0].reasons.join('\n'), /not acceptable/u);
++    assert.equal(report.commands[0].artifactIdentity.exists, true);
++    assert.match(report.commands[0].artifactIdentity.sha256, /^[a-f0-9]{64}$/u);
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('fails closed on timeout', () => {
++    const fixture = setup(manifest([
++      command('timeout', {
++        argv: ['-e', 'setTimeout(() => {}, 5000)'],
++        timeoutMs: 20,
++      }),
++    ]));
++    const report = runAcceptanceManifest(fixture);
++    assert.equal(report.passed, false);
++    assert.match(report.commands[0].reasons.join('\n'), /timed out/u);
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('fails when an external artifact is missing or stale', () => {
++    const missingFixture = setup(manifest([
++      command('missing', {
++        requiredArtifact: {mode: 'external', path: 'artifacts/missing.json'},
++      }),
++    ]));
++    const missing = runAcceptanceManifest(missingFixture);
++    assert.match(missing.commands[0].reasons.join('\n'), /artifact is missing/u);
++    fs.rmSync(missingFixture.root, {recursive: true, force: true});
++
++    const staleFixture = setup(manifest([
++      command('stale', {
++        requiredArtifact: {mode: 'external', path: 'artifacts/stale.json'},
++      }),
++    ]));
++    const stalePath = path.join(staleFixture.root, 'artifacts/stale.json');
++    fs.mkdirSync(path.dirname(stalePath), {recursive: true});
++    fs.writeFileSync(stalePath, '{}');
++    const old = new Date(Date.now() - 60000);
++    fs.utimesSync(stalePath, old, old);
++    const stale = runAcceptanceManifest(staleFixture);
++    assert.match(stale.commands[0].reasons.join('\n'), /artifact is stale/u);
++    fs.rmSync(staleFixture.root, {recursive: true, force: true});
++  });
++
++  it('requires an external artifact to change during the command', () => {
++    const fixture = setup(manifest([
++      command('external', {
++        requiredArtifact: {mode: 'external', path: 'artifacts/external.json'},
++      }),
++    ]));
++    const artifactPath = path.join(fixture.root, 'artifacts/external.json');
++    fs.mkdirSync(path.dirname(artifactPath), {recursive: true});
++    fs.writeFileSync(artifactPath, '{"before":true}');
++
++    const unchanged = runAcceptanceManifest({
++      ...fixture,
++      execute: successfulExecution,
++    });
++    assert.equal(unchanged.passed, false);
++    assert.match(
++      unchanged.commands[0].reasons.join('\n'),
++      /not produced or updated/u,
++    );
++
++    const updated = runAcceptanceManifest({
++      ...fixture,
++      execute() {
++        fs.writeFileSync(artifactPath, '{"after":true}');
++        return successfulExecution();
++      },
++    });
++    assert.equal(updated.passed, true);
++    assert.notEqual(
++      updated.commands[0].artifactBeforeIdentity.sha256,
++      updated.commands[0].artifactIdentity.sha256,
++    );
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('passes argv literally without shell expansion', () => {
++    const fixture = setup();
++    const marker = path.join(fixture.root, 'injected');
++    const data = manifest([
++      command('argv', {
++        argv: ['-e', 'process.exit(0)', `$(touch ${marker})`],
++      }),
++    ]);
++    fs.writeFileSync(
++      path.join(fixture.root, fixture.manifestPath),
++      JSON.stringify(data, null, 2),
++    );
++    const report = runAcceptanceManifest(fixture);
++    assert.equal(report.passed, true);
++    assert.equal(fs.existsSync(marker), false);
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('detects manifest drift during command execution', () => {
++    const fixture = setup();
++    const report = runAcceptanceManifest({
++      ...fixture,
++      execute() {
++        fs.appendFileSync(
++          path.join(fixture.root, fixture.manifestPath),
++          '\n',
++        );
++        return successfulExecution();
++      },
++    });
++    assert.equal(report.passed, false);
++    assert.match(report.commands[0].reasons.join('\n'), /manifest drifted/u);
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('runs every ordered command and records per-command artifact identity', () => {
++    const fixture = setup(manifest([command('first'), command('second')]));
++    const observed = [];
++    const report = runAcceptanceManifest({
++      ...fixture,
++      execute(entry, options) {
++        observed.push({id: entry.id, proofTest: options.env.PROOF_TEST});
++        return successfulExecution();
++      },
++    });
++    assert.equal(report.passed, true);
++    assert.deepEqual(observed, [
++      {id: 'first', proofTest: '1'},
++      {id: 'second', proofTest: '1'},
++    ]);
++    assert.equal(report.commands.every((entry) =>
++      entry.status === 'PASS' && entry.artifactIdentity.exists), true);
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('writes Solver scenario evidence from the same public executor', () => {
++    const fixture = setup();
++    const result = runProjectHardeningAcceptance({
++      ...fixture,
++      execute: successfulExecution,
++      scenario: 'test-scenario',
++      receiptDir: 'receipts',
++      scenarioReportDir: 'reports',
++    });
++    const scenario = JSON.parse(fs.readFileSync(
++      path.join(fixture.root, result.scenarioPath),
++      'utf8',
++    ));
++    assert.equal(result.run.passed, true);
++    assert.equal(scenario.producer, 'acceptance-proof-manifest-runner');
++    assert.equal(scenario.standardSummary.scenarios[0].passed, true);
++    assert.equal(scenario.receipt.path, result.receiptPath);
++    assert.match(scenario.receipt.sha256, /^[a-f0-9]{64}$/u);
++    assert.equal(scenario.receipt.size > 0, true);
++    assert.match(
++      scenario.standardSummary.scenarios[0]
++        .detail.commands[0].artifactIdentity.sha256,
++      /^[a-f0-9]{64}$/u,
++    );
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('projects invalid manifest validation as a non-zero scenario failure', () => {
++    const fixture = setup(manifest([]));
++    const result = runProjectHardeningAcceptance({
++      ...fixture,
++      execute() {
++        throw new Error('invalid manifest must not execute commands');
++      },
++      scenario: 'invalid-manifest-scenario',
++      receiptDir: 'receipts',
++      scenarioReportDir: 'reports',
++    });
++    const scenario = JSON.parse(fs.readFileSync(
++      path.join(fixture.root, result.scenarioPath),
++      'utf8',
++    ));
++    assert.equal(result.run.passed, false);
++    assert.deepEqual(scenario.summary, {total: 1, passed: 0, failed: 1});
++    assert.equal(scenario.optimizationSummary.totalPriorityItems, 1);
++    assert.equal(scenario.standardSummary.scenarios[0].passed, false);
++    assert.match(scenario.receipt.sha256, /^[a-f0-9]{64}$/u);
++    fs.rmSync(fixture.root, {recursive: true, force: true});
++  });
++
++  it('keeps one complete command inventory and one public gate executor', () => {
++    const actual = JSON.parse(fs.readFileSync(
++      'test/manifests/project-hardening-proof-manifest.json',
++      'utf8',
++    ));
++    assert.deepEqual(actual.commands.map((entry) => entry.id), [
++      'focused-contracts',
++      'static-analysis',
++      'model-contracts',
++      'fast-tests',
++    ]);
++    const focused = actual.commands[0].argv;
++    for (const required of [
++      'test/scripts/run-test-files.test.js',
++      'test/scripts/acceptance-proof-manifest-runner.test.js',
++      'test/release/public-api-side-effect-boundary.test.js',
++      'test/release/project-hardening-contracts.test.js',
++      'test/admin/admin-websocket-external-bind-policy.test.js',
++      'test/runtime/pgwire-protocol-ordering.test.js',
++      'test/compatibility/pgwire-client-compat.test.js',
++    ]) {
++      assert.equal(focused.includes(required), true, `${required} is engaged`);
++    }
++    const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
++    assert.equal(
++      packageJson.scripts['test:gate'],
++      packageJson.scripts['test:project-hardening'],
++    );
++    assert.match(
++      packageJson.scripts['test:gate'],
++      /run-project-hardening-acceptance\.js/u,
++    );
++    for (const script of [
++      'scripts/run-solver-acceptance-proof-manifest-scenarios.js',
++      'scripts/run-project-hardening-proof-integrity-cutover-scenarios.js',
++    ]) {
++      assert.match(
++        fs.readFileSync(script, 'utf8'),
++        /runProjectHardeningAcceptance/u,
++      );
++    }
++  });
++});
+diff --git a/test/scripts/generate-steering-llm-pack.test.js b/test/scripts/generate-steering-llm-pack.test.js
+index f91b14f9..66eea7b5 100644
+--- a/test/scripts/generate-steering-llm-pack.test.js
++++ b/test/scripts/generate-steering-llm-pack.test.js
+@@ -291,8 +291,8 @@ test('applyRuleAliases marks aliases with canonical_of and master with aliases l
+   ];
+   const stats = applyRuleAliases(allRules, [
+     {
+-      canonical: {file: 'system-guidelines.md', line: 100},
+-      aliases: [{file: 'code-style.md', line: 50}],
++      canonical: {file: 'system-guidelines.md', line: 100, match: 'master rule text'},
++      aliases: [{file: 'code-style.md', line: 50, match: 'paraphrased master rule'}],
+     },
+   ]);
+ 
+@@ -315,12 +315,12 @@ test('applyRuleAliases records missing references without crashing', (t) => {
+   ];
+   const stats = applyRuleAliases(allRules, [
+     {
+-      canonical: {file: 'system-guidelines.md', line: 100},
+-      aliases: [{file: 'missing.md', line: 1}],
++      canonical: {file: 'system-guidelines.md', line: 100, match: 'master'},
++      aliases: [{file: 'missing.md', line: 1, match: 'missing rule'}],
+     },
+     {
+-      canonical: {file: 'nope.md', line: 1},
+-      aliases: [{file: 'system-guidelines.md', line: 100}],
++      canonical: {file: 'nope.md', line: 1, match: 'absent rule'},
++      aliases: [{file: 'system-guidelines.md', line: 100, match: 'master'}],
+     },
+   ]);
+ 
+diff --git a/test/solve/agent-executor.test.js b/test/solve/agent-executor.test.js
+index 4560ecd3..73f0af18 100644
+--- a/test/solve/agent-executor.test.js
++++ b/test/solve/agent-executor.test.js
+@@ -18,6 +18,22 @@ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-'));
+ }
+ 
++const NO_OP_CHANGE_NAME = 'no-op';
++
++function writeSourceChangeArtifact(root, questId, name) {
++  const diff = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
++  fs.mkdirSync(path.dirname(diff), {recursive: true});
++  fs.writeFileSync(diff, [
++    'diff --git a/src/oracle.js b/src/oracle.js',
++    '--- a/src/oracle.js',
++    '+++ b/src/oracle.js',
++    '@@ -1 +1 @@',
++    '-before',
++    '+after',
++  ].join('\n'));
++  return `diff:${diff}`;
++}
++
+ const TASK = {
+   quest: {id: 'g', statement: 's', constraints: ['x']},
+   frontierDef: {id: 'f', metric: {probe: 'oracle', args: {file: 'o', metric: 'priority'}}},
+@@ -128,17 +144,8 @@ tap.test('agent executor (P4)', async (t) => {
+       const data = JSON.parse(fs.readFileSync(oracle, 'utf8'));
+       data.metric = Math.max(0, data.metric - 1);
+       fs.writeFileSync(oracle, JSON.stringify(data));
+-      const diff = path.join(root, 'solve', 'changes', quest.id, `c-${data.metric}.diff`);
+-      fs.mkdirSync(path.dirname(diff), {recursive: true});
+-      fs.writeFileSync(diff, [
+-        'diff --git a/src/oracle.js b/src/oracle.js',
+-        '--- a/src/oracle.js',
+-        '+++ b/src/oracle.js',
+-        '@@ -1 +1 @@',
+-        '-before',
+-        '+after',
+-      ].join('\n'));
+-      fs.writeFileSync(args[1], JSON.stringify({changeRef: `diff:${diff}`, summary: 'step'}));
++      const changeRef = writeSourceChangeArtifact(root, quest.id, `c-${data.metric}`);
++      fs.writeFileSync(args[1], JSON.stringify({changeRef, summary: 'step'}));
+       return {status: 0};
+     };
+     const executor = makeAgentExecutor(root, {config: CONFIG, spawn});
+@@ -162,12 +169,14 @@ tap.test('agent executor (P4)', async (t) => {
+         metric: {probe: 'oracle', args: {file: oracle, metric: 'priority'}}}],
+     };
+     saveQuest(root, quest);
+-    // Agent never changes anything. The no-op climbs observe -> local-fix ->
++    // Agent never changes the metric, but reports a sealed patch artifact. The no-op
++    // climbs observe -> local-fix ->
+     // widen-scope, where soft-first grants ONE exploratory attempt; that no-op stall
+     // climbs into the model rung, whose model/system theory gate is excluded from
+     // soft-first and hard-stops before invoking the agent again.
+     const spawn = (cmd, args) => {
+-      fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'no-op'}));
++      const changeRef = writeSourceChangeArtifact(root, quest.id, NO_OP_CHANGE_NAME);
++      fs.writeFileSync(args[1], JSON.stringify({changeRef, summary: 'no-op'}));
+       return {status: 0};
+     };
+     const executor = makeAgentExecutor(root, {config: CONFIG, spawn});
+diff --git a/test/solve/gate.test.js b/test/solve/gate.test.js
+index 9c42a769..f79b7560 100644
+--- a/test/solve/gate.test.js
++++ b/test/solve/gate.test.js
+@@ -20,6 +20,7 @@ import {
+ import {
+   EVENT_GATE_DECISION,
+   EVENT_ATTEMPT,
++  EVENT_NON_MEASUREMENT,
+   EVENT_GUARD_OVERRIDE,
+   EXPLORE_BUDGET,
+   GUARD_QUORUM,
+@@ -253,6 +254,27 @@ tap.test('soft-first / quorum (P5)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('a non-measurement closes the advisory cycle without resetting quorum', (t) => {
++    const root = tmp();
++    const log = [
++      advisory(),
++      {type: EVENT_NON_MEASUREMENT, frontier: FRONTIER},
++    ];
++    const decision = resolveGateDecision(
++      root,
++      QUEST,
++      blocked(CONTINUATION_BLOCKED_THEORY, ['frontier theory required']),
++      {log, frontier: FRONTIER, rungIndex: 1, softFirst: true},
++    );
++    t.equal(decision.disposition, DISPOSITION_ADVISORY,
++      'remaining quorum still permits the next cycle');
++    t.equal(readLog(root, QUEST.id).filter((event) =>
++      event.type === EVENT_GATE_DECISION).length, 1,
++    'a new cycle records its own advisory');
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('convergence-forcing theory problems are excluded from soft-first', (t) => {
+     const root = tmp();
+     for (const problem of [
+@@ -422,6 +444,29 @@ tap.test('recorded-reason override escape hatch', async (t) => {
+     t.end();
+   });
+ 
++  t.test('a targeted override cannot bypass an unrelated co-occurring problem', (t) => {
++    const root = tmp();
++    const targetedProblem = 'model evidence required: lifecycle_model';
++    const residualProblem = 'system theory required after repeated same-frontier stalls';
++    const log = [overrideEvent(
++      CONTINUATION_BLOCKED_THEORY,
++      'narrow',
++      targetedProblem,
++    )];
++    const decision = resolveGateDecision(
++      root,
++      QUEST,
++      blocked(CONTINUATION_BLOCKED_THEORY, [targetedProblem, residualProblem]),
++      {log, frontier: FRONTIER, rungIndex: 3},
++    );
++    t.not(decision.disposition, DISPOSITION_ADVISORY,
++      'residual problem keeps the combined continuation gated');
++    t.equal(readLog(root, QUEST.id).some((event) => event.override), false,
++      'partial match does not consume or record the override');
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('the override advisory is not counted toward the soft-first quorum', (t) => {
+     // An override-tagged advisory must not consume the separate soft-first budget. After one
+     // override bypass (and the progress it implies is absent), a fresh theory block on a
+diff --git a/test/solve/loop.test.js b/test/solve/loop.test.js
+index 2573581c..b62b55b2 100644
+--- a/test/solve/loop.test.js
++++ b/test/solve/loop.test.js
+@@ -18,6 +18,7 @@ import {registerProbe} from '../../scripts/solve/probe.js';
+ import {ingestEvidence} from '../../scripts/solve/evidence.js';
+ import {
+   EVENT_ATTEMPT,
++  EVENT_VIOLATION,
+   EVENT_PARK,
+   EVENT_FINDING,
+   EVENT_GATE_DECISION,
+@@ -45,6 +46,8 @@ import {
+   OUTCOME_SUPERVISOR_BUDGET,
+ } from '../../scripts/solve/constants.js';
+ 
++const INVALID_MODEL_REF = 'tla:does-not-exist.tla';
++
+ function setup({metric, target = 0, frontiers = ['f1']}) {
+   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-'));
+   const oracleDir = path.join(root, 'oracle');
+@@ -225,7 +228,7 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
+ 
+   t.test('autonomous loop takes a soft-first exploratory attempt on the model rung ' +
+     'before escalating for model evidence', (t) => {
+-    const {root, quest} = setup({metric: 5, target: 0});
++    const {root, quest, changeDir} = setup({metric: 5, target: 0});
+     quest.statement = 'lifecycle owner-boundary model contract needs proof';
+     saveQuest(root, quest);
+     ingestEvidence(root, {
+@@ -271,25 +274,32 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
+     });
+ 
+     let executorCalls = 0;
++    const inner = makeDryExecutor({changeDir, stallFrontiers: ['f1']});
+     const res = runLoop(root, quest, {
+       executor: {
+-        run() {
++        run(task) {
+           executorCalls += 1;
+-          return {changeRef: null, summary: 'model attempt'};
++          return {...inner.run(task), modelRef: INVALID_MODEL_REF};
+         },
+       },
+       maxCycles: 1,
+     });
+-    const advisories = readLog(root, quest.id).filter((event) =>
++    const log = readLog(root, quest.id);
++    const advisories = log.filter((event) =>
+       event.type === EVENT_GATE_DECISION &&
+       event.disposition === DISPOSITION_ADVISORY &&
+       event.code === CONTINUATION_BLOCKED_THEORY);
++    const violations = log.filter((event) => event.type === EVENT_VIOLATION);
+     // P5b: model evidence is over-eager as an immediate stop. Soft-first now grants the
+     // model rung a bounded exploratory attempt to PRODUCE evidence; the hard requirement
+     // is still enforced at commit time by auditModelEvidence.
+     t.not(res.outcome, OUTCOME_THEORY_REQUIRED, 'model evidence does not hard-stop on first sight');
+     t.equal(executorCalls, 1, 'executor was invoked under the soft-first advisory');
+     t.equal(advisories.length, 1, 'one model-evidence advisory recorded for the cycle');
++    t.match(violations.at(-1).violations.join('\n'), /modelRef target does not exist/u,
++      'model-evidence advisory cannot suppress invalid modelRef validation');
++    t.equal(log.filter((event) => event.type === EVENT_ATTEMPT).length, 1,
++      'invalid modelRef attempt cannot advance the rung');
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
+diff --git a/test/solve/next.test.js b/test/solve/next.test.js
+index f6767e42..9d4f159f 100644
+--- a/test/solve/next.test.js
++++ b/test/solve/next.test.js
+@@ -3,9 +3,10 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import os from 'node:os';
+ 
+-import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
++import {appendEvent} from '../../scripts/solve/store.js';
+ import {runStep} from '../../scripts/solve/step.js';
+ import {buildNextLines, runNextCommand} from '../../scripts/solve/next.js';
++import {makeOracleQuest} from './solve-test-quest-fixture.js';
+ import {
+   EVENT_GATE_DECISION,
+   EVENT_QUEST,
+@@ -17,27 +18,10 @@ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'solve-next-'));
+ }
+ 
+-function makeQuest(root, id = 'demo') {
+-  const oracle = path.join(root, 'oracle.json');
+-  fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+-  const quest = {
+-    id,
+-    statement: 'Drive the oracle metric to zero.',
+-    priority: 1,
+-    doneWhen: {probe: 'oracle', args: {file: oracle}},
+-    frontiers: [
+-      {id: `${id}-main`, priority: 1,
+-        metric: {probe: 'oracle', args: {file: oracle}}},
+-    ],
+-  };
+-  saveQuest(root, quest);
+-  return {quest, oracle};
+-}
+-
+ tap.test('solve next', async (t) => {
+   t.test('always leads with a single imperative Next: line', (t) => {
+     const root = tmp();
+-    makeQuest(root);
++    makeOracleQuest(root);
+     const lines = buildNextLines(root, 'demo');
+     t.match(lines[0], /^Next: /u);
+     t.ok(lines.length >= 3, 'a handful of context lines follow');
+@@ -47,7 +31,7 @@ tap.test('solve next', async (t) => {
+ 
+   t.test('surfaces a pending supervised step as commit-or-abort', (t) => {
+     const root = tmp();
+-    const {quest} = makeQuest(root);
++    const {quest} = makeOracleQuest(root);
+     runStep(root, quest);
+ 
+     const out = runNextCommand(root, 'demo');
+@@ -60,7 +44,7 @@ tap.test('solve next', async (t) => {
+ 
+   t.test('surfaces the last gate stop nextCommand', (t) => {
+     const root = tmp();
+-    makeQuest(root);
++    makeOracleQuest(root);
+     appendEvent(root, 'demo', {
+       type: EVENT_GATE_DECISION,
+       frontier: 'demo-main',
+@@ -80,7 +64,7 @@ tap.test('solve next', async (t) => {
+ 
+   t.test('a terminal quest says so instead of prescribing work', (t) => {
+     const root = tmp();
+-    makeQuest(root);
++    makeOracleQuest(root);
+     appendEvent(root, 'demo', {
+       type: EVENT_QUEST,
+       status: STATUS_SOLVED,
+diff --git a/test/solve/solve-test-quest-fixture.js b/test/solve/solve-test-quest-fixture.js
+new file mode 100644
+index 00000000..e6e62320
+--- /dev/null
++++ b/test/solve/solve-test-quest-fixture.js
+@@ -0,0 +1,19 @@
++import fs from 'node:fs';
++import path from 'node:path';
++
++import {saveQuest} from '../../scripts/solve/store.js';
++
++export function makeOracleQuest(root, id = 'demo') {
++  const oracle = path.join(root, 'oracle.json');
++  fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
++  const metric = {probe: 'oracle', args: {file: oracle}};
++  const quest = {
++    id,
++    statement: 'Drive the oracle metric to zero.',
++    priority: 1,
++    doneWhen: metric,
++    frontiers: [{id: `${id}-main`, priority: 1, metric}],
++  };
++  saveQuest(root, quest);
++  return {quest, oracle};
++}
+diff --git a/test/solve/step-auto-diff.test.js b/test/solve/step-auto-diff.test.js
+index cf86168a..06d05279 100644
+--- a/test/solve/step-auto-diff.test.js
++++ b/test/solve/step-auto-diff.test.js
+@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
+ 
+ import {saveQuest} from '../../scripts/solve/store.js';
+ import {runStep, stepPending} from '../../scripts/solve/step.js';
++import {makeOracleQuest} from './solve-test-quest-fixture.js';
+ 
+ const CLI = path.resolve(
+   path.dirname(fileURLToPath(import.meta.url)), '../../scripts/solve.js');
+@@ -32,27 +33,10 @@ function gitRoot() {
+   return root;
+ }
+ 
+-function makeQuest(root, id = 'demo') {
+-  const oracle = path.join(root, 'oracle.json');
+-  fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+-  const quest = {
+-    id,
+-    statement: 'Drive the oracle metric to zero.',
+-    priority: 1,
+-    doneWhen: {probe: 'oracle', args: {file: oracle}},
+-    frontiers: [
+-      {id: `${id}-main`, priority: 1,
+-        metric: {probe: 'oracle', args: {file: oracle}}},
+-    ],
+-  };
+-  saveQuest(root, quest);
+-  return {quest, oracle};
+-}
+-
+ tap.test('step --commit --auto-diff', async (t) => {
+   t.test('snapshots the working-tree diff as the changeRef artifact', (t) => {
+     const root = gitRoot();
+-    const {quest, oracle} = makeQuest(root);
++    const {quest, oracle} = makeOracleQuest(root);
+ 
+     const begin = runStep(root, quest);
+     t.equal(begin.terminal, null);
+@@ -78,7 +62,7 @@ tap.test('step --commit --auto-diff', async (t) => {
+ 
+   t.test('errors out when the diff is empty (nothing changed)', (t) => {
+     const root = gitRoot();
+-    const {quest} = makeQuest(root);
++    const {quest} = makeOracleQuest(root);
+     runStep(root, quest);
+ 
+     t.throws(
+@@ -92,7 +76,7 @@ tap.test('step --commit --auto-diff', async (t) => {
+ 
+   t.test('allocates the next free attempt-<n>.diff', (t) => {
+     const root = gitRoot();
+-    const {quest, oracle} = makeQuest(root);
++    const {quest, oracle} = makeOracleQuest(root);
+     const changeDir = path.join(root, 'solve', 'changes', 'demo');
+     fs.mkdirSync(changeDir, {recursive: true});
+     fs.writeFileSync(path.join(changeDir, 'attempt-3.diff'), 'placeholder\n');
+@@ -114,7 +98,7 @@ tap.test('step --commit --auto-diff', async (t) => {
+     // product-quest auto-diff with "workflow changes must be recorded in a
+     // workflow/Quest tooling Quest".
+     const root = gitRoot();
+-    const {quest, oracle} = makeQuest(root);
++    const {quest, oracle} = makeOracleQuest(root);
+     fs.mkdirSync(path.join(root, 'solve', 'log'), {recursive: true});
+     fs.mkdirSync(path.join(root, 'solve', 'report'), {recursive: true});
+     fs.writeFileSync(path.join(root, 'solve', 'FRONTIER.generated.md'), 'board v1\n');
+@@ -187,7 +171,7 @@ tap.test('step --commit --auto-diff', async (t) => {
+     // orphan attempt-<n>.diff behind, so numbering skipped (attempt-1 orphan,
+     // next success became attempt-2).
+     const root = gitRoot();
+-    const {quest, oracle} = makeQuest(root);
++    const {quest, oracle} = makeOracleQuest(root);
+     fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+     fs.writeFileSync(path.join(root, 'scripts', 'quest-context.js'), 'v1\n');
+     git(root, ['add', 'scripts']);
+@@ -222,7 +206,7 @@ tap.test('step --commit --auto-diff', async (t) => {
+   t.test('CLI warns that --auto-diff is ignored beside --changeRef', (t) => {
+     // FAULT-3 regression: both flags used to silently prefer --changeRef.
+     const root = gitRoot();
+-    const {oracle} = makeQuest(root);
++    const {oracle} = makeOracleQuest(root);
+     const file = path.join(root, 'solve', 'changes', 'demo', 'manual.diff');
+     fs.mkdirSync(path.dirname(file), {recursive: true});
+     fs.writeFileSync(file, [
+@@ -250,7 +234,7 @@ tap.test('step --commit --auto-diff', async (t) => {
+ 
+   t.test('an explicit --changeRef wins over --auto-diff', (t) => {
+     const root = gitRoot();
+-    const {quest, oracle} = makeQuest(root);
++    const {quest, oracle} = makeOracleQuest(root);
+     const file = path.join(root, 'solve', 'changes', 'demo', 'manual.diff');
+     fs.mkdirSync(path.dirname(file), {recursive: true});
+     fs.writeFileSync(file, [

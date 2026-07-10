@@ -15,6 +15,7 @@
 
 import {
   EVENT_ATTEMPT,
+  EVENT_NON_MEASUREMENT,
   EVENT_GATE_DECISION,
   EVENT_GUARD_OVERRIDE,
   EXPLORE_BUDGET,
@@ -80,6 +81,14 @@ export function exploreBudgetRemaining(log, frontierId) {
 // modelRef or a later model-evidence finding). Matched on the recorded problem text.
 const SOFT_FIRST_EXCLUDED_PROBLEM =
   /coupled[- ]invariant|system theory required/i;
+const FRONTIER_THEORY_REQUIRED_PATTERN = /^frontier theory required(?: for| at rung|$)/iu;
+const SELECTED_THEORY_STALE_PATTERN = /^selected theory(?: .* is)? stale|^selected theory stale/iu;
+const MODEL_EVIDENCE_REQUIRED_PATTERN =
+  /^model evidence required|^model evidence or modelNotApplicable is required|^model reference is required/iu;
+const THEORY_GATE_FAMILY_FRONTIER = 'frontier-theory-required';
+const THEORY_GATE_FAMILY_SELECTED_STALE = 'selected-theory-stale';
+const THEORY_GATE_FAMILY_MODEL_EVIDENCE = 'model-evidence-required';
+const EXACT_PROBLEM_PREFIX = 'exact:';
 
 // Soft-first eligibility (P5). Only the INFERENTIAL "produce a theory artifact" family of
 // theory gates is eligible for a soft-first advisory ramp: a plain frontier/selected-stale/
@@ -116,8 +125,9 @@ function softAdvisoriesSpent(log, frontierId, code) {
 // bypass records an ADVISORY gate decision tagged `override`, which is counted here as a
 // consumption. Both counters reset on honest progress (lastProgressIndex), mirroring the
 // explore/soft-first budgets, so an override can never permanently disable a guard. When a
-// recorded override pins a specific `problem` substring it only matches a block whose
-// problems include it; an untargeted override matches any block of the same code.
+// recorded override pins a specific `problem` substring it only authorizes matching
+// problems, and a co-occurring residual problem keeps the combined continuation gated;
+// an untargeted override matches every problem in a block of the same code.
 function activeOverride(log, frontierId, code, problems = []) {
   const since = lastProgressIndex(log, frontierId);
   const overrides = [];
@@ -136,7 +146,15 @@ function activeOverride(log, frontierId, code, problems = []) {
     }
   }
   if (overrides.length > consumed) {
-    return {reason: overrides[overrides.length - 1].reason};
+    const active = overrides[overrides.length - 1];
+    const authorizedProblems = active.problem ?
+      problems.filter((problem) => String(problem).includes(active.problem)) :
+      [...problems];
+    return {
+      reason: active.reason,
+      problems: authorizedProblems,
+      coversAllProblems: authorizedProblems.length === problems.length,
+    };
   }
   return null;
 }
@@ -155,14 +173,15 @@ export function softFirstWouldDefer(log, continuation, frontierId) {
 // theory condition; the first to fire records the single advisory and the second observes
 // this and does not double-count. A new attempt closes the cycle and resets the window.
 function softAdvisoryRecordedThisCycle(log, frontierId, code) {
-  let lastAttempt = -1;
+  let lastCycleBoundary = -1;
   for (let i = 0; i < log.length; i += 1) {
     const event = log[i];
-    if (event.type === EVENT_ATTEMPT && event.frontier === frontierId) {
-      lastAttempt = i;
+    if ((event.type === EVENT_ATTEMPT || event.type === EVENT_NON_MEASUREMENT) &&
+      event.frontier === frontierId) {
+      lastCycleBoundary = i;
     }
   }
-  for (let i = lastAttempt + 1; i < log.length; i += 1) {
+  for (let i = lastCycleBoundary + 1; i < log.length; i += 1) {
     const event = log[i];
     if (event.type === EVENT_GATE_DECISION && event.frontier === frontierId &&
       event.disposition === DISPOSITION_ADVISORY && event.code === code &&
@@ -212,7 +231,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   // soft-first delay — so it does not depend on context.softFirst.
   if (continuationOverridable(continuation)) {
     const override = activeOverride(log, frontier, code, problems);
-    if (override) {
+    if (override?.coversAllProblems) {
       appendEvent(root, quest.id, {
         type: EVENT_GATE_DECISION,
         frontier,
@@ -221,7 +240,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
         code,
         outcome: OUTCOME_CONTINUE,
         override: override.reason,
-        problems,
+        problems: override.problems,
         nextCommand: null,
       });
       return {
@@ -229,7 +248,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
         code,
         outcome: OUTCOME_CONTINUE,
         override: override.reason,
-        problems,
+        problems: override.problems,
         nextCommand: null,
         frontier,
         rungIndex,
@@ -332,6 +351,24 @@ function classifyTheoryProblem(problem) {
     return CONTINUATION_BLOCKED_REGRESSION;
   }
   return CONTINUATION_BLOCKED_THEORY;
+}
+
+// Begin-phase health signals and commit-phase validation can describe the same gate with
+// different context (for example "for <frontier>" versus "at rung <n>"). This key is
+// deliberately narrower than the continuation code: it joins only equivalent gate
+// families, so a model-evidence advisory can never suppress an invalid modelRef.
+export function theoryGateProblemAuthorizationKey(problem) {
+  const value = String(problem || '');
+  if (FRONTIER_THEORY_REQUIRED_PATTERN.test(value)) {
+    return THEORY_GATE_FAMILY_FRONTIER;
+  }
+  if (SELECTED_THEORY_STALE_PATTERN.test(value)) {
+    return THEORY_GATE_FAMILY_SELECTED_STALE;
+  }
+  if (MODEL_EVIDENCE_REQUIRED_PATTERN.test(value)) {
+    return THEORY_GATE_FAMILY_MODEL_EVIDENCE;
+  }
+  return `${EXACT_PROBLEM_PREFIX}${value}`;
 }
 
 export function theoryGateContinuation(problems) {
