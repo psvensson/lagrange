@@ -566,6 +566,10 @@ function cmdStep(root, args) {
   if (args['auto-diff'] && !args.commit) {
     throw new Error('step --auto-diff requires --commit');
   }
+  if (args['auto-diff'] && args.changeRef) {
+    process.stderr.write(
+      'step: --auto-diff ignored — an explicit --changeRef takes precedence\n');
+  }
   if (args.commit && !args.changeRef && !args['auto-diff']) {
     throw new Error('step --commit requires --changeRef diff:<path> (or --auto-diff)');
   }

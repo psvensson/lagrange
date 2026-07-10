@@ -50,7 +50,15 @@ function nextImperative({questId, state, pending, gateStop, blocker}) {
 }
 
 export function buildNextLines(root, questId) {
-  const quest = loadQuest(root, questId);
+  let quest;
+  try {
+    quest = loadQuest(root, questId);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      throw new Error(`quest not found: ${questId}`);
+    }
+    throw error;
+  }
   const log = readLog(root, questId);
   const state = projectState(quest, log);
   const pending = stepPending(root, questId);
@@ -61,6 +69,7 @@ export function buildNextLines(root, questId) {
   const sealFreshness = buildSealFreshnessAdvisory(quest, log, {root});
   if (sealFreshness) advisories.push(sealFreshness);
 
+  const terminal = TERMINAL_STATUSES.includes(state.questStatus);
   const lines = [
     `Next: ${nextImperative({questId, state, pending, gateStop, blocker})}`,
     `quest: ${questId} (${state.questStatus})`,
@@ -74,7 +83,11 @@ export function buildNextLines(root, questId) {
     lines.push(`last stop: ${gateStop.code || gateStop.outcome} ` +
       `(${gateStop.disposition})${problem ? ` — ${problem}` : ''}`);
   }
-  lines.push(`blocker: ${blockerLabel(blocker)} — ${blocker.movementSummary}`);
+  // A terminal quest has no current blocker by definition; printing the stale
+  // (often "unknown") blocker card next to "quest is SOLVED" is contradictory.
+  if (!terminal) {
+    lines.push(`blocker: ${blockerLabel(blocker)} — ${blocker.movementSummary}`);
+  }
   lines.push(...renderAdvisoryLines(advisories));
   return lines;
 }

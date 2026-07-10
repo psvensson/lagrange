@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {describe, it, after} from 'node:test';
@@ -7,6 +7,7 @@ import {describe, it, after} from 'node:test';
 import {
   analyzeSoftWarningStrikes,
   detectStrikes,
+  discoverReportFiles,
   extractScenarioRuns,
   groupRunsByScenario,
 } from '../../scripts/analyze-soft-warning-strikes.js';
@@ -117,6 +118,39 @@ describe('analyze-soft-warning-strikes', () => {
     const grouped = groupRunsByScenario(runs);
     assert.equal(grouped.get('s').length, 2,
       'the latest copy collapses into its timestamped original');
+  });
+
+  it('discovers reports recursively, skipping model reports and dot-dirs', () => {
+    // FAULT-4 regression: discovery was non-recursive, silently skipping
+    // per-run subdirectories like test-output/reports/<run-id>/*.report.json.
+    const discoveryDir = mkdtempSync(path.join(tmpdir(), 'strike-discovery-'));
+    try {
+      mkdirSync(path.join(discoveryDir, 'run-20260710T100000Z'), {recursive: true});
+      mkdirSync(path.join(discoveryDir, '.playback', 'run-x'), {recursive: true});
+      const report = reportFixture({
+        timestamp: '2026-07-10T10:00:00.000Z',
+        scenario: 'rolling-restart',
+      });
+      writeFileSync(path.join(discoveryDir, 'top.report.json'),
+        JSON.stringify(report));
+      writeFileSync(
+        path.join(discoveryDir, 'run-20260710T100000Z', 'nested.report.json'),
+        JSON.stringify(report));
+      writeFileSync(path.join(discoveryDir, 'checker.model.report.json'),
+        JSON.stringify(report));
+      writeFileSync(
+        path.join(discoveryDir, '.playback', 'run-x', 'copy.report.json'),
+        JSON.stringify(report));
+
+      const found = discoverReportFiles(discoveryDir).map((file) =>
+        path.relative(discoveryDir, file));
+      assert.deepEqual(found, [
+        'run-20260710T100000Z/nested.report.json',
+        'top.report.json',
+      ]);
+    } finally {
+      rmSync(discoveryDir, {recursive: true, force: true});
+    }
   });
 
   it('end-to-end over report files exits with strikes and honors --scenario', () => {

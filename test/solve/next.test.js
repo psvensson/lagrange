@@ -90,6 +90,16 @@ tap.test('solve next', async (t) => {
     const lines = buildNextLines(root, 'demo');
     t.match(lines[0], /^Next: nothing to execute — quest is SOLVED/u);
     t.match(lines[0], /report --id demo/u);
+    t.notOk(lines.some((line) => line.startsWith('blocker:')),
+      'a terminal quest prints no (contradictory) blocker line');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an unknown quest id reports quest-not-found, not raw ENOENT', (t) => {
+    const root = tmp();
+    t.throws(() => buildNextLines(root, 'no-such-quest'),
+      /quest not found: no-such-quest/u);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

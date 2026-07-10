@@ -26,7 +26,11 @@ import {
   STATE_SUBDIR,
   STATUS_SOLVED,
 } from './constants.js';
-import {expectedChangeDir, inspectChangeArtifact} from './change-artifact.js';
+import {
+  changeArtifactPath,
+  expectedChangeDir,
+  inspectChangeArtifact,
+} from './change-artifact.js';
 import {suggestVerificationTemplates} from './verification-template-suggest.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReport} from './report.js';
@@ -43,6 +47,22 @@ const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
 const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
 const AUTO_DIFF_ARTIFACT_PATTERN = /^attempt-(\d+)\.diff$/u;
 const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+
+// Solver-owned GENERATED bookkeeping the step/loop machinery itself writes
+// between step begin and commit: the pending file (solve/state, stepBegin),
+// event-log appends (solve/log — gate decisions fire at begin time), the
+// regenerated report (solve/report), and the frontier board refresh
+// (solve/FRONTIER.generated.md). Sweeping these into an --auto-diff artifact
+// self-poisons a product quest: the change-artifact honesty gate classifies
+// solve/ paths as workflow changes and rejects the attempt. Only these
+// generated paths are excluded — the operator's INTENTIONAL edits under
+// solve/ (quest JSON, epics, specs) are still captured.
+const AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS = Object.freeze([
+  'solve/FRONTIER.generated.md',
+  'solve/state',
+  'solve/log',
+  'solve/report',
+].map((bookkeepingPath) => `:(exclude)${bookkeepingPath}`));
 
 // The HEAD sha at step-begin time, recorded into the pending file so --auto-diff can
 // snapshot exactly what changed during the attempt (null outside a git work tree).
@@ -71,7 +91,9 @@ function nextAutoDiffArtifactPath(root, questId) {
 // operator-provided diff. An empty diff is an operator error, not a silent no-op.
 function createAutoDiffChangeRef(root, quest, pending) {
   const pin = pending.headCommit || 'HEAD';
-  const out = spawnSync('git', ['diff', pin], {
+  const out = spawnSync('git', [
+    'diff', pin, '--', '.', ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,
+  ], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
@@ -227,8 +249,26 @@ function stepCommit(root, quest, options = {}) {
       'or run `solve step --id <quest>` before manual work',
     );
   }
-  const changeRef = options.changeRef ||
+  const autoDiffRef = options.changeRef ?
+    null :
     createAutoDiffChangeRef(root, quest, pending);
+  const changeRef = options.changeRef || autoDiffRef;
+  // A rejected commit (invalid changeRef, missing frontier, or a theory-gate
+  // stop) records no attempt, so a generated auto-diff artifact must not
+  // survive it: an orphan attempt-<n>.diff would accumulate and skip numbers.
+  let attemptRecorded = false;
+  try {
+    const result = commitPendingAttempt(root, quest, pending, changeRef, options);
+    attemptRecorded = !result.terminal;
+    return result;
+  } finally {
+    if (autoDiffRef && !attemptRecorded) {
+      fs.rmSync(changeArtifactPath(root, quest.id, autoDiffRef), {force: true});
+    }
+  }
+}
+
+function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
   const changeInspection = ctx.honestyCtx.inspectChangeRef(changeRef);

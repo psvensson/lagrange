@@ -126,11 +126,22 @@ function isRunReportFile(name) {
   return name.endsWith(REPORT_SUFFIX) && !name.endsWith(MODEL_REPORT_SUFFIX);
 }
 
-function discoverReportFiles(reportDir) {
+// Recursive: per-run report subdirectories (e.g.
+// test-output/reports/<run-id>/<scenario>.report.json) are part of the run
+// history. Dot-directories (.playback full-log bundles) are skipped.
+export function discoverReportFiles(reportDir) {
   if (!fs.existsSync(reportDir)) return [];
-  return fs.readdirSync(reportDir)
-    .filter(isRunReportFile)
-    .map((name) => path.join(reportDir, name));
+  const files = [];
+  for (const entry of fs.readdirSync(reportDir, {withFileTypes: true})) {
+    if (entry.name.startsWith('.')) continue;
+    const entryPath = path.join(reportDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...discoverReportFiles(entryPath));
+    } else if (isRunReportFile(entry.name)) {
+      files.push(entryPath);
+    }
+  }
+  return files.sort();
 }
 
 function parseArgs(argv) {

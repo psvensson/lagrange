@@ -61,7 +61,7 @@
     "usage": "node scripts/solve.js reflect --id <id> --note \"<text>\" [--frontier <fid>] [--altitude]"
   },
   "step": {
-    "summary": "Begin a supervised attempt: pins the frontier and prints the rung dossier. Records nothing until `--commit` (or `--abort` to discard the pending attempt). At commit time, `--auto-diff` snapshots `git diff` against the pin recorded at step begin into solve/changes/<id>/attempt-<n>.diff and uses it as the changeRef (errors if nothing changed).",
+    "summary": "Begin a supervised attempt: pins the frontier and prints the rung dossier. Records nothing until `--commit` (or `--abort` to discard the pending attempt). At commit time, `--auto-diff` snapshots `git diff` against the pin recorded at step begin into solve/changes/<id>/attempt-<n>.diff and uses it as the changeRef (errors if nothing changed; solver-generated bookkeeping — solve/FRONTIER.generated.md, solve/state, solve/log, solve/report — is excluded from the snapshot; an explicit --changeRef takes precedence and prints a warning that --auto-diff was ignored).",
     "usage": "node scripts/solve.js step --id <id> [--commit (--changeRef diff:<path> | --auto-diff) --summary \"<what changed>\" | --abort]"
   },
   "step-pending": {
