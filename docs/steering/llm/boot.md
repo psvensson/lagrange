@@ -4,7 +4,7 @@ status: manual-pack
 always_load: true
 source_of_truth: self
 canonical_rules: docs/steering/workflow-guidelines/solver-quests.md
-last_reviewed: 2026-06-19
+last_reviewed: 2026-07-10
 ---
 
 > **Manual pack - edit here directly.** Load order is owned by
@@ -36,8 +36,12 @@ projection of the event log and terminal state.
 
 ## First Commands
 
-For a new task, default to an autonomous, self-resuming run (drive to a true
-terminal; see core.md "Default Posture: Autonomy"):
+First apply the Quest-or-not threshold (AGENTS.md "Quest or not?"): below it —
+a single-sitting fix, doc edit, or mechanical change with an obvious proof —
+just do the work and commit it, with no Quest.
+
+For a new task above the threshold, default to an autonomous, self-resuming run
+(drive to a true terminal; see core.md "Default Posture: Autonomy"):
 
 ```sh
 node scripts/solve.js new --id <id> --statement "<sealed result>"

@@ -41,8 +41,8 @@
     "usage": "node scripts/solve.js invariants [--evaluate] [--json] [--changed a,b | --since <ref>] [--score] [--export [--out <path>]]"
   },
   "probe": {
-    "summary": "Run a probe over real artifacts to answer a frontier metric or the Quest doneWhen; the Solver trusts probes, not self-report.",
-    "usage": "node scripts/solve.js probe --id <id> [--frontier <f>] [--probe doneWhen]"
+    "summary": "Run a registered probe directly over real artifacts and print its JSON result; the Solver trusts probes, not self-report. Takes no --id and does no quest resolution — every argument other than --probe is passed through to the probe itself.",
+    "usage": "node scripts/solve.js probe --probe <scenario-harness|oracle|invariantHeld> [probe-specific args...]"
   },
   "finding": {
     "summary": "Record a durable finding (a tested learning or ruled-out approach) into the Quest event log. --kind tags a machine-readable class (repro-on-head silences the seal-freshness advisory; inherited-rulesout marks levers copied from a parent quest).",
@@ -69,7 +69,7 @@
     "usage": "node scripts/solve.js step-pending --id <id>"
   },
   "theory": {
-    "summary": "Two-layer (system + frontier) theory management used to break a stall: declare, option, select, record, supersede, list, card, import-ledger.",
+    "summary": "Two-layer (system + frontier) theory management used to break a stall: system, option, select, record, supersede, list, card, import-ledger.",
     "usage": "node scripts/solve.js theory <system|option|select|record|supersede|list|card|import-ledger> --id <id> ..."
   },
   "health": {
@@ -89,12 +89,12 @@
     "usage": "node scripts/solve.js audit --id <id>"
   },
   "upgrade": {
-    "summary": "Migrate a Quest file to the current schema.",
-    "usage": "node scripts/solve.js upgrade --id <id>"
+    "summary": "Idempotently append a `quest-upgraded` strict-audit baseline event to the Quest log, ingest any unrecorded evidence, and regenerate the report.",
+    "usage": "node scripts/solve.js upgrade --id <id> [--reason \"<text>\"]"
   },
   "reopen": {
-    "summary": "Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. `--reason` is required to justify the reopen.",
-    "usage": "node scripts/solve.js reopen --id <id> --frontier <f> --reason \"<why>\""
+    "summary": "Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. `--reason` is required to justify the reopen; `--frontier` defaults when exactly one frontier is parked.",
+    "usage": "node scripts/solve.js reopen --id <id> [--frontier <f>] --reason \"<why>\""
   },
   "park": {
     "summary": "Operator-decision terminal: park an open frontier as `exhausted` with provenance `operator` when an altitude reflection concluded PARK/EXHAUST-AND-PIVOT (frame refuted or sealed symptom absent on HEAD). Requires a prior `reflect --altitude` on the quest and a falsifiable --reason; appends the quest-level EXHAUSTED terminal when every frontier is parked exhausted.",

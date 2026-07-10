@@ -4,7 +4,7 @@ status: manual-pack
 always_load: true
 source_of_truth: self
 canonical_rules: docs/steering/workflow-guidelines/solver-quests.md
-last_reviewed: 2026-06-19
+last_reviewed: 2026-07-10
 ---
 
 > **Manual pack - edit here directly.** This file is the always-load operating
@@ -29,7 +29,7 @@ canonical first-read glossary; `boot.md` points here.
 | Attempt | One measured try against a frontier, recorded with a `changeRef`. |
 | Finding | A durable recorded result: tested hypothesis, ruled-out approach, or decision. |
 | Theory | A testable causal explanation (system- or frontier-level) selected to break a stall. |
-| Park / parked | A frontier set aside with no honest remaining local move; the scheduler redirects elsewhere. |
+| Park / parked | A frontier set aside with no honest remaining local move; the scheduler redirects elsewhere. Classified by kind × provenance: kind `exhausted` (counts toward EXHAUSTED) vs `cannot_measure` (resumable measurement park; never closes a quest), and ladder (measured, no provenance field) vs operator (`provenance: operator` via `solve.js park`, a recorded decision). |
 | Rung | A position on the strategy ladder for an attempt (`observe`, `local-fix`, `widen-scope`, `model`, `change-approach`, `park`); a stalled frontier climbs rungs. |
 | Dossier | The pinned-frontier attempt bundle `solve.js step` prints (rung, metric, evidence) and that a delegated worker is handed. |
 | Owner / owner boundary | The single component that owns a semantic decision or resource; others observe (cache), they do not re-derive it. |
@@ -37,6 +37,7 @@ canonical first-read glossary; `boot.md` points here.
 | Subagent | A spawned worker that produces verification or research; recorded as evidence `subagent:<id>`. |
 | SOLVED / EXHAUSTED | Terminal Solver states: `doneWhen` met, or every frontier parked with no honest move. |
 | MAX_CYCLES / THEORY_REQUIRED / BLOCKED | Non-terminal run gates the executor resolves and resumes (not handoff points). |
+| Gate | Disambiguation — four unrelated uses: (a) non-terminal run stops (MAX_CYCLES / THEORY_REQUIRED / BLOCKED; prefer "non-terminal stops"); (b) the graded-guard gate-decision machinery (advisory → reroute → explore → park-resumable → terminal); (c) commit/checkpoint gates in the Quest audit; (d) live distributed release-gate runs (unrelated to the Solver). |
 
 ## North Star
 

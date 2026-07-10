@@ -24,7 +24,8 @@ Use this tree for:
 - creating or selecting a Quest;
 - choosing supervised `step` versus autonomous `run`;
 - recording attempts and findings;
-- interpreting SOLVED, EXHAUSTED, and MAX_CYCLES;
+- interpreting the terminals (SOLVED, EXHAUSTED) and the non-terminal stops
+  (MAX_CYCLES, THEORY_REQUIRED, BLOCKED);
 - keeping Quest evidence tied to probe artifacts.
 
 Do not use this tree for:

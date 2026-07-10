@@ -24,7 +24,10 @@ contract** (recorded under `architecture/` or in an active spec — changing the
 contract, not merely editing owner-owned code). Below that threshold — a
 single-sitting fix, doc edit, or mechanical change with an obvious proof — do
 the work directly and commit it (core.md "Default Posture: Commit On
-Completion"); the Solver records nothing.
+Completion"); the Solver records nothing. When genuinely unsure whether work
+clears the threshold, author the Quest: a Quest that closes SOLVED in one
+attempt costs one command, while untracked multi-attempt work loses its whole
+evidence trail.
 
 A Quest must:
 
@@ -482,12 +485,20 @@ which reads as a stall. The optional `--max <N>` caps cycles per run; reaching i
 raises the resumable MAX_CYCLES gate, not a terminal closure (omit it to use the
 default cap).
 
-For supervised work:
+For supervised work, one attempt is a three-phase flow:
 
-1. Do the work and rerun the relevant harness/probe.
-2. `node scripts/solve.js step --id <id> --commit --changeRef diff:<path> --summary "<hypothesis>"`
-   measures, validates the attempt, updates the strategy ladder, and records the log
-   event synchronously without intermediate pending files or pauses.
+1. **Begin**: `node scripts/solve.js step --id <id>` pins the frontier, prints
+   the rung dossier, and writes the pending-attempt baseline to
+   `solve/state/<id>.pending.json`. Nothing is recorded in the event log yet.
+2. **Work**: do the work and rerun the relevant harness/probe so fresh evidence
+   exists.
+3. **Commit**: `node scripts/solve.js step --id <id> --commit --changeRef
+   diff:<path> --summary "<hypothesis>"` measures against the pinned baseline,
+   validates the attempt, updates the strategy ladder, records the log event,
+   and clears the pending file. The commit itself is atomic: it records the
+   attempt in one synchronous log append. `step --abort` discards the pending
+   attempt without recording anything; beginning a second step while one is
+   pending is an error (commit or abort it first).
 
 The agent executor writes a request dossier, runs the configured command, and
 reads back `{changeRef, summary, notes?}`. The agent reports only what changed.
@@ -516,6 +527,18 @@ patch artifact:
 ```text
 diff:<path>
 ```
+
+The concrete incantation for one attempt:
+
+```sh
+git diff > solve/changes/<questId>/attempt-<n>.diff
+node scripts/solve.js step --id <questId> --commit \
+  --changeRef diff:solve/changes/<questId>/attempt-<n>.diff --summary "..."
+```
+
+The artifact must live under `solve/changes/<questId>/`, end in `.diff`, and
+contain a unified hunk — the change-artifact inspector enforces all three
+machine-side.
 
 Commit SHAs are useful in release notes, pull requests, or human audit trails,
 but they are not Solver truth. A SHA says where code landed; it does not prove
@@ -657,8 +680,11 @@ two results are TRUE terminals that close a Quest; every other stop is a
 recoverable gate that leaves the Quest open and resumable:
 
 - **SOLVED** (terminal): `doneWhen` is satisfied against live evidence.
-- **EXHAUSTED** (terminal): every frontier is parked **as `exhausted`** — each
-  had at least one honestly-measured sample and no honest remaining move exists.
+- **EXHAUSTED** (terminal): every frontier is parked **as `exhausted`**, either
+  by the finite strategy ladder (measured — the frontier had at least one
+  honestly-measured sample and no honest remaining move exists) or by a
+  recorded operator decision (`provenance: operator`, requiring a prior
+  altitude reflection and a `--reason`; see "Operator park" below).
   A `cannot_measure` park (every contributing sample was non-measuring; the
   harness never measured anything) does NOT count toward this terminal: it is a
   resumable measurement park, so a Quest with any `cannot_measure` park stays
@@ -673,6 +699,39 @@ recoverable gate that leaves the Quest open and resumable:
   regression-restore, measurement gap, unrecorded/divergent evidence) stopped the
   current move. The stop is recorded and carries an actionable next command; it
   never closes the Quest.
+
+### Operator park (decision terminal)
+
+The autonomous loop can only reach a park by climbing the strategy ladder on
+measured attempts. When an altitude reflection concludes EXHAUST-AND-PIVOT —
+the frame itself is refuted, or the sealed symptom no longer exists on HEAD —
+there is no honest remaining move *within the seal*, and no measured sample can
+prove that. For that case:
+
+```sh
+node scripts/solve.js park --id <id> [--frontier <f>] --reason "<why no honest remaining move exists>"
+```
+
+parks the frontier as kind `exhausted` with `provenance: 'operator'`. Guards:
+the command refuses without a prior `reflect --altitude` on the quest (the
+frame-questioning note is the evidence the decision cites), `--reason` is
+required, a pending supervised step must be committed or aborted first, and no
+measured sample is required. When the operator park leaves every frontier
+parked as `exhausted`, the quest-level EXHAUSTED terminal is appended too, so
+`status`/`report`/`frontier` project the true terminal.
+
+Provenance honesty (mirroring CLOSURE_MEASURED vs CLOSURE_DECISION): a ladder
+park is a MEASURED verdict and carries no provenance field; an operator park is
+a recorded DECISION and carries `provenance: 'operator'` plus a pointer to the
+sanctioning altitude reflection, so a reader can never mistake one for the
+other.
+
+Park kind × provenance, and what each means for quest closure:
+
+| | Ladder (measured) | Operator (decision) |
+| --- | --- | --- |
+| `exhausted` | Honestly-measured samples, metric never moved; counts toward the EXHAUSTED terminal. | Recorded exhaust-and-pivot decision (`provenance: operator`); counts toward the EXHAUSTED terminal. |
+| `cannot_measure` | Harness verdict — only non-measuring samples; never closes a quest (resumable measurement park; fix the harness, then `reopen`). | Does not exist — the operator park always records kind `exhausted` (`cannot_measure` parks never close a quest). |
 
 ### Graded Guard Response
 

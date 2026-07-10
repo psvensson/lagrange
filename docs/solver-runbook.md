@@ -414,34 +414,42 @@ node scripts/solve.js run --id <quest> --no-commit
 ## Convergence Guards
 
 A narrowing Quest can otherwise shuffle the same blocker between owners forever
-and call it progress. These guards keep the loop honest and converging:
+and call it progress. Guards keep the loop honest and converging. **This is a
+summary; the canonical and complete guard list — including the invariant
+ledger, coupled-invariant oscillation, the coupled-reconcile gate, the
+regression-restore gate, the scope-pressure terminal bound, gradient
+refinement, and the harness-not-measuring gate — lives in
+`docs/steering/workflow-guidelines/solver-quests.md` §Convergence Guards**,
+which wins on any divergence. Representative examples:
 
-- **Oscillation detection.** The blocker history is tracked frontier-wide, not
-  just last-vs-current. When an attempt returns the frontier to a
-  previously-abandoned blocker (owner / boundary / dominantReason), that revisit
-  is classified `oscillating` — never theory support — and is treated as a stall
-  that climbs the ladder (local-fix → widen → model) instead of patching the
-  same cycle again. Surfaced as the high-severity `blocker-oscillation` health
-  signal.
-- **Invariant ratchet.** Each measured report contributes its set of satisfied
-  sub-invariants to a per-frontier high-water mark. If a later measured attempt
-  drops an invariant that was previously green, the Solver records a
-  `regression` violation, the attempt does not count as progress, and the
-  offending diff stays committed so it can be bisected and reverted.
-- **Distance metric.** Beyond the binary priority count, a Quest may opt into a
-  `metric: "distance"` frontier gradient — a lower-is-better weighted sum of
-  outstanding priority items, missing publications, pending priority spread,
-  distinct failing invariants, and the remaining clean-run streak — so the
-  ladder steers on a real gradient instead of a flapping 0/1.
-- **Streak-aware next move.** When the single-run metric reaches 0 but `doneWhen`
-  still requires N consecutive clean runs, health routes the next move to running
-  the consecutive proof rather than selecting another theory for a flap.
+- **Oscillation detection.** Returning the frontier to a previously-abandoned
+  blocker is classified `oscillating` — never theory support — and climbs the
+  ladder instead of patching the same cycle again.
+- **Invariant ratchet.** Dropping a previously-green sub-invariant records a
+  `regression` violation and the attempt does not count as progress.
+- **Distance metric.** A Quest may opt into the `metric: "distance"` gradient
+  so the ladder steers on a real gradient instead of a flapping 0/1.
+- **Streak-aware next move.** A metric at 0 with a consecutive-clean-runs
+  `doneWhen` routes the next move to the streak proof, not another theory.
 - **Measured promotion only.** A theory is promoted exclusively by a measured
-  post-patch evidence report. A subagent approval finding may inform but never
-  promote; audit flags any selected theory approved by a finding with no later
-  measured report.
+  post-patch evidence report; a subagent approval finding may inform but never
+  promote.
 
 ## Autonomous Run
+
+The canonical autonomous invocation:
+
+```sh
+node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
+```
+
+- `--executor agent`: the real-edit executor (the default `dry` executor is a
+  no-op skeleton).
+- `--yes`: non-interactive confirmation that the agent executor may edit the
+  tree.
+- `--keep-alive`: survives non-terminal stops (MAX_CYCLES, THEORY_REQUIRED,
+  recoverable BLOCKED) via the supervisor — without it the run returns at the
+  first non-terminal stop, which reads as a stall.
 
 ```sh
 node scripts/solve.js run --id my-quest
@@ -473,6 +481,25 @@ re-measured from artifacts after the command exits. Timeout, non-zero exit, or
 malformed response is recorded as a no-op attempt and the ladder escalates.
 If the selected rung needs theory, autonomous run stops at `theory-required`
 before invoking the executor; record or select the missing theory, then resume.
+
+## Other Operator Commands
+
+One line each; see `docs/steering/llm/solve-commands.md` and
+`docs/steering/workflow-guidelines/solver-quests.md` for detail:
+
+- `reflect --altitude` — record a frame-questioning reflection (no attempt, no
+  metric claim); prerequisite for an operator park.
+- `override` — recorded-reason bypass of one overridable heuristic guard
+  (never honesty/integrity invariants).
+- `park` — operator decision terminal: park a frontier as `exhausted` with
+  `provenance: operator` (requires a prior altitude reflection and `--reason`).
+- `step-pending` — print the pending supervised step (the pinned baseline
+  awaiting a commit) as JSON.
+- `handoff --checkpoint` — squashable mid-quest save via the scope-safe
+  pathspec.
+- Soft-first quorum — inferential theory gates soften to advisories until
+  `GUARD_QUORUM` occurrences since last progress; autonomous loop only (see
+  solver-quests.md "Soft-first / quorum before escalation").
 
 ## Tracked Versus Regenerable
 

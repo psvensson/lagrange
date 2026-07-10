@@ -18,11 +18,15 @@ last_reviewed: 2026-06-01
 Every non-trivial task follows this lifecycle:
 
 1. **Author or select a Quest.** Use `node scripts/solve.js new --id <id>` when
-   no existing Quest matches the requested outcome. Omitting `--class` defaults to
-   `product` (a MEASURED goal); pass `--class process` only for decision/scaffolding
-   Quests that close on a recorded decision rather than a measured artifact.
-2. **Seal the goal.** Define `doneWhen` before implementation begins. Do not
-   change it after the first attempt has been recorded.
+   no existing Quest matches the requested outcome. The template writes
+   `class: "product"` (a MEASURED goal); for a decision/scaffolding Quest that
+   closes on a recorded decision rather than a measured artifact, edit the
+   `class` field to `"process"` in the quest JSON right after `new`, before the
+   first `run`/`step` (the field is consumed by the closure-kind and portfolio
+   machinery).
+2. **Seal the goal.** Define `doneWhen` before implementation begins. The goal
+   is sealed at the first `run` or `step` invocation — the first Solver
+   declaration; before that, the quest file is a refinable draft.
 3. **Default to autonomous execution.** Run
    `run --executor agent --yes --keep-alive` for non-trivial work — drive to a true
    terminal without pausing (see core.md "Default Posture: Autonomy"). Reach for
@@ -67,4 +71,5 @@ Use the Solver vocabulary in handoffs and final reports:
 - `climb(frontier, rung)` when a stall escalates the strategy ladder;
 - `park(frontier)` when a frontier has no honest remaining local move;
 - `solved(quest)` when `doneWhen` is satisfied;
-- `exhausted(quest)` when every frontier is parked.
+- `exhausted(quest)` when every frontier is parked **as `exhausted`** (a
+  `cannot_measure` park keeps the quest open).

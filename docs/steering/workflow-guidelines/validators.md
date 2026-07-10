@@ -34,6 +34,9 @@ The first Solver declaration seals:
 - each frontier id;
 - each frontier metric.
 
+The first declaration happens at the first `run`/`step` begin, not at `new` —
+until then the quest file is a refinable draft.
+
 Later attempts must use the same sealed goalposts. If the desired result
 changes, stop the current Quest as EXHAUSTED or author a new Quest.
 
@@ -50,4 +53,7 @@ event log. The report projection must not invent terminal status, synthetic
 attempts, or unmeasured progress.
 
 SOLVED requires live `doneWhen` evidence. EXHAUSTED requires every frontier to
-be parked by the finite strategy ladder.
+be parked as `exhausted` — either by the finite strategy ladder (measured — at
+least one honestly-measured sample) or by a recorded operator decision
+(`provenance: operator`, requiring a prior altitude reflection and a reason;
+see solver-quests.md "Operator park").
