@@ -33,6 +33,7 @@ import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
 import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
+import {runParkCommand} from './solve/park.js';
 import {runPortfolioCommand, buildPortfolio, loadAllQuests} from './solve/portfolio.js';
 import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runOverviewCommand, writeOverview} from './solve/overview.js';
@@ -614,6 +615,10 @@ function cmdReopen(root, args) {
   process.stdout.write(runReopenCommand(root, args));
 }
 
+function cmdPark(root, args) {
+  process.stdout.write(runParkCommand(root, args));
+}
+
 // Portfolio is a cross-quest governance view and deliberately takes no --id.
 function cmdPortfolio(root) {
   process.stdout.write(runPortfolioCommand(root));
@@ -814,6 +819,7 @@ const COMMANDS = {
   'audit': cmdAudit,
   'upgrade': cmdUpgrade,
   'reopen': cmdReopen,
+  'park': cmdPark,
 };
 
 function main() {

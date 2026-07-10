@@ -95,5 +95,9 @@
   "reopen": {
     "summary": "Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. `--reason` is required to justify the reopen.",
     "usage": "node scripts/solve.js reopen --id <id> --frontier <f> --reason \"<why>\""
+  },
+  "park": {
+    "summary": "Operator-decision terminal: park an open frontier as `exhausted` with provenance `operator` when an altitude reflection concluded PARK/EXHAUST-AND-PIVOT (frame refuted or sealed symptom absent on HEAD). Requires a prior `reflect --altitude` on the quest and a falsifiable --reason; appends the quest-level EXHAUSTED terminal when every frontier is parked exhausted.",
+    "usage": "node scripts/solve.js park --id <id> [--frontier <f>] --reason \"<why no honest remaining move exists>\""
   }
 }

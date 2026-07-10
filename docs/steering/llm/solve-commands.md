@@ -42,7 +42,8 @@ guardrail command map.
 | `audit` | Run the Quest audit (scope and evidence-honesty checks) that gates a git handoff. | `node scripts/solve.js audit --id <id>` |
 | `upgrade` | Migrate a Quest file to the current schema. | `node scripts/solve.js upgrade --id <id>` |
 | `reopen` | Reopen a parked frontier whose exhaustion verdict was driven by non-measuring (invalid) samples; resets it to the first rung for honestly-measured attempts. `--reason` is required to justify the reopen. | `node scripts/solve.js reopen --id <id> --frontier <f> --reason "<why>"` |
+| `park` | Operator-decision terminal: park an open frontier as `exhausted` with provenance `operator` when an altitude reflection concluded PARK/EXHAUST-AND-PIVOT (frame refuted or sealed symptom absent on HEAD). Requires a prior `reflect --altitude` on the quest and a falsifiable --reason; appends the quest-level EXHAUSTED terminal when every frontier is parked exhausted. | `node scripts/solve.js park --id <id> [--frontier <f>] --reason "<why no honest remaining move exists>"` |
 
 ---
 
-24 subcommands registered; 24 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
+25 subcommands registered; 25 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
