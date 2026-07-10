@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import {
   EVENT_QUEST_DECLARED,
   EVENT_ATTEMPT,
+  EVENT_NON_MEASUREMENT,
   EVENT_SOLVED,
   EVENT_PARK,
   EVENT_QUEST,
@@ -48,6 +49,18 @@ import {
   EVENT_REFLECTION,
   EVENT_EVIDENCE_INGESTED,
 } from './constants.js';
+import {
+  INTEGRITY_EVENT_SCHEMA_VERSION,
+  INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+  INTEGRITY_RESOLUTION_NEW_QUEST,
+  INTEGRITY_SCOPE_ATTEMPT,
+  INTEGRITY_SCOPE_GOALPOSTS,
+  acceptedReplacementViolationIds,
+  integrityViolationId,
+  terminalIntegrityAllowsClosure,
+  terminalIntegrityProblems,
+  terminalSampleIsAccepted,
+} from './integrity.js';
 import {appendEvent, readLog, projectState, rebuildState, invariantHighWater} from './store.js';
 import {frontierHasValidSample} from './sample-validity.js';
 import {autoCommitQuest} from './handoff.js';
@@ -69,7 +82,11 @@ import {
 } from './theory.js';
 import {diagnosticMovementFor, detectOscillation} from './current-blocker.js';
 import {detectUnrecordedEvidence} from './evidence.js';
-import {inspectChangeArtifact} from './change-artifact.js';
+import {
+  changeArtifactIdentity,
+  changeArtifactIdentityIsSealed,
+  inspectChangeArtifact,
+} from './change-artifact.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus, coupledLocalFixBlocked} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
@@ -145,6 +162,20 @@ function finish(root, quest, outcome, evidence, evidenceIdentity = null,
 function runOneCycle(root, quest, ctx) {
   const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
   if (questDone.done) {
+    const log = readLog(root, quest.id);
+    if (!terminalSampleIsAccepted(questDone) ||
+      !terminalIntegrityAllowsClosure(root, quest, log)) {
+      const integrityProblems = terminalIntegrityProblems(root, quest, log)
+        .map((item) => item.message);
+      if (!terminalSampleIsAccepted(questDone)) {
+        integrityProblems.push('doneWhen evidence is not an accepted measured sample');
+      }
+      return {
+        terminal: OUTCOME_BLOCKED,
+        evidence: questDone.evidence,
+        problems: integrityProblems,
+      };
+    }
     return {
       terminal: OUTCOME_SOLVED,
       evidence: questDone.evidence,
@@ -152,12 +183,33 @@ function runOneCycle(root, quest, ctx) {
       evidenceFingerprint: questDone.evidenceFingerprint || null,
     };
   }
-  const state = projectState(quest, readLog(root, quest.id));
+  const activeLog = readLog(root, quest.id);
+  const state = projectState(quest, activeLog);
   const pick = pickFrontier(quest, state, ctx.scoreFn);
-  if (!pick) return {terminal: OUTCOME_EXHAUSTED, evidence: null};
+  if (!pick) {
+    const integrityProblems = terminalIntegrityProblems(root, quest, activeLog)
+      .map((item) => item.message);
+    if (integrityProblems.length > 0) {
+      return {
+        terminal: OUTCOME_BLOCKED,
+        evidence: null,
+        problems: integrityProblems,
+      };
+    }
+    return {terminal: OUTCOME_EXHAUSTED, evidence: null};
+  }
 
   const before = evaluate(pick.def.metric, ctx.probeCtx);
   if (before.done) {
+    if (!terminalSampleIsAccepted(before) ||
+      !terminalIntegrityAllowsClosure(root, quest, readLog(root, quest.id))) {
+      return {
+        terminal: OUTCOME_BLOCKED,
+        evidence: before.evidence,
+        frontier: pick.def.id,
+        problems: ['frontier evidence is done but integrity violations remain unresolved'],
+      };
+    }
     appendEvent(root, quest.id, {
       type: EVENT_SOLVED,
       frontier: pick.def.id,
@@ -298,22 +350,94 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     nodeExit: after.nodeExit?.present ? after.nodeExit : null,
     discrimination: normalizeDiscrimination(result.discrimination || ctx.discrimination || null),
   };
-  const violations = [
-    ...validateAttempt(event, ctx.honestyCtx),
-    ...stepTheoryGateProblems({
-      log,
-      state,
-      frontierId: pick.def.id,
-      rungIndex,
-      theoryRef: event.theoryRef,
-      modelRef: event.modelRef,
-      modelNotApplicable: event.modelNotApplicable,
-    }),
-  ];
-  if (violations.length > 0) {
+  const honestyViolations = validateAttempt(event, ctx.honestyCtx);
+  event.changeRefIdentity = changeArtifactIdentity(
+    root,
+    quest.id,
+    event.changeRef,
+  );
+  if (!event.invalidSample &&
+    !changeArtifactIdentityIsSealed(event.changeRefIdentity)) {
+    honestyViolations.push(
+      'changeRef artifact is missing a sealable content identity',
+    );
+  }
+  const gateViolations = stepTheoryGateProblems({
+    log,
+    state,
+    frontierId: pick.def.id,
+    rungIndex,
+    theoryRef: event.theoryRef,
+    modelRef: event.modelRef,
+    modelNotApplicable: event.modelNotApplicable,
+  });
+  const violations = [...honestyViolations, ...gateViolations];
+  if (honestyViolations.length > 0) {
+    const declared = [...log].reverse()
+      .find((item) => item.type === EVENT_QUEST_DECLARED);
     appendEvent(root, quest.id, {
-      type: EVENT_VIOLATION, frontier: pick.def.id, violations, attempt: event,
+      type: EVENT_VIOLATION,
+      eventSchemaVersion: INTEGRITY_EVENT_SCHEMA_VERSION,
+      scope: INTEGRITY_SCOPE_ATTEMPT,
+      frontier: pick.def.id,
+      violationId: integrityViolationId({
+        quest,
+        generation: declared?.ts || quest.links?.sealedAtCommit,
+        frontier: pick.def.id,
+        scope: INTEGRITY_SCOPE_ATTEMPT,
+        violations: honestyViolations,
+        attempt: event,
+      }),
+      resolutionPolicy: INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+      replacementProbeKey: event.probeKey,
+      failedEvidenceFingerprint: event.evidenceFingerprint || null,
+      violations: honestyViolations,
+      attempt: event,
     });
+  }
+  if (gateViolations.length > 0) {
+    appendEvent(root, quest.id, {
+      type: EVENT_VIOLATION,
+      scope: 'theory-gate',
+      frontier: pick.def.id,
+      violations: gateViolations,
+      attempt: event,
+    });
+  }
+  if (violations.length > 0) {
+    appendTheoryResultForAttempt(root, quest, event, false, violations);
+    return {
+      event,
+      after,
+      violations,
+      progressed: false,
+      accepted: false,
+      nonMeasuring: false,
+      oscillation: {oscillating: false},
+      regressed: [],
+      nodeExit: null,
+    };
+  }
+  if (event.invalidSample) {
+    const nonMeasurement = recordNonMeasurement(root, quest, pick, event);
+    appendTheoryResultForAttempt(root, quest, nonMeasurement, false, []);
+    return {
+      event: nonMeasurement,
+      after,
+      violations: [],
+      progressed: false,
+      accepted: false,
+      nonMeasuring: true,
+      oscillation: {oscillating: false},
+      regressed: [],
+      nodeExit: null,
+    };
+  }
+  event.integrityAccepted = true;
+  event.eventSchemaVersion = INTEGRITY_EVENT_SCHEMA_VERSION;
+  const replacesViolationIds = acceptedReplacementViolationIds(log, event);
+  if (replacesViolationIds.length > 0) {
+    event.replacesViolationIds = replacesViolationIds;
   }
   // R2/R3 convergence gates: a measured attempt that returns to a previously-left
   // blocker (oscillation) or drops a previously-satisfied invariant (regression)
@@ -324,10 +448,27 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   const regressed = measured ?
     highWater.filter((label) => !satisfiedInvariants.includes(label)) : [];
   if (regressed.length > 0) {
+    const regressionViolations = regressed
+      .map((label) => `previously satisfied invariant regressed: ${label}`);
+    const declared = [...log].reverse()
+      .find((item) => item.type === EVENT_QUEST_DECLARED);
     appendEvent(root, quest.id, {
       type: EVENT_VIOLATION,
+      eventSchemaVersion: INTEGRITY_EVENT_SCHEMA_VERSION,
       scope: 'regression',
       frontier: pick.def.id,
+      violationId: integrityViolationId({
+        quest,
+        generation: declared?.ts || quest.links?.sealedAtCommit,
+        frontier: pick.def.id,
+        scope: 'regression',
+        violations: regressionViolations,
+        attempt: event,
+      }),
+      resolutionPolicy: INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+      replacementProbeKey: event.probeKey,
+      failedEvidenceFingerprint: event.evidenceFingerprint || null,
+      violations: regressionViolations,
       regressed,
       attempt: event,
     });
@@ -359,10 +500,23 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   }
   const forceStall = (measured && oscillation.oscillating) || regressed.length > 0 ||
     coupledBlocked || Boolean(nodeExit);
+  const decisionViolations = regressed
+    .map((label) => `previously satisfied invariant regressed: ${label}`);
   const progressed = decideAndRecord(
-    root, quest, pick, event, after, violations, forceStall);
-  appendTheoryResultForAttempt(root, quest, event, progressed, violations);
-  return {event, after, violations, progressed, oscillation, regressed, nodeExit};
+    root, quest, pick, event, after, decisionViolations, forceStall);
+  appendTheoryResultForAttempt(
+    root, quest, event, progressed, decisionViolations);
+  return {
+    event,
+    after,
+    violations: decisionViolations,
+    progressed,
+    accepted: true,
+    nonMeasuring: false,
+    oscillation,
+    regressed,
+    nodeExit,
+  };
 }
 
 function normalizeDiscrimination(value) {
@@ -391,11 +545,44 @@ function trailingNonMeasuringRun(log, frontierId) {
   let count = 0;
   for (let i = log.length - 1; i >= 0; i--) {
     const e = log[i];
-    if (e.type !== EVENT_ATTEMPT || e.frontier !== frontierId) continue;
-    if (e.invalidSample === true) count += 1;
-    else break;
+    if (e.frontier !== frontierId) continue;
+    if (e.type === EVENT_NON_MEASUREMENT ||
+      (e.type === EVENT_ATTEMPT && e.invalidSample === true)) {
+      count += 1;
+    } else if (e.type === EVENT_ATTEMPT) {
+      break;
+    }
   }
   return count;
+}
+
+function recordNonMeasurement(root, quest, pick, attempt) {
+  const log = readLog(root, quest.id);
+  const retryOrdinal = trailingNonMeasuringRun(log, attempt.frontier) + 1;
+  const event = appendEvent(root, quest.id, {
+    ...attempt,
+    type: EVENT_NON_MEASUREMENT,
+    eventSchemaVersion: INTEGRITY_EVENT_SCHEMA_VERSION,
+    retryOrdinal,
+  });
+  if (retryOrdinal >= CANNOT_MEASURE_RETRY_BUDGET) {
+    appendEvent(root, quest.id, {
+      type: EVENT_PARK,
+      frontier: pick.def.id,
+      kind: PARK_KIND_CANNOT_MEASURE,
+      reason: PARK_REASON_CANNOT_MEASURE,
+      finalMetric: attempt.metricAfter,
+    });
+  } else {
+    appendEvent(root, quest.id, {
+      type: EVENT_FINDING,
+      frontier: pick.def.id,
+      claim: `non-measuring sample (${retryOrdinal}/${CANNOT_MEASURE_RETRY_BUDGET}): ` +
+        'harness produced no trustworthy metric; holding the rung for retry rather than ' +
+        'climbing toward an unearned exhausted park',
+    });
+  }
+  return event;
 }
 
 function decideAndRecord(root, quest, pick, event, after, violations,
@@ -419,40 +606,19 @@ function decideAndRecord(root, quest, pick, event, after, violations,
     Boolean(event.theoryRef) &&
     !creditedTheories.has(event.theoryRef) &&
     creditedTheories.size < INVESTIGATION_BUDGET;
-  // Invalid-sample hygiene: a positively-classified non-measuring sample is not a stall.
-  // A sample the harness could not trust is not evidence that the rung's strategy failed,
-  // so it must not climb the ladder toward an `exhausted` park it never earned. Instead it
-  // HOLDS the rung and retries, emitting an advisory diagnostic that points at the harness.
-  // The retry is bounded: once CANNOT_MEASURE_RETRY_BUDGET consecutive samples fail to
-  // measure, the frontier parks as cannot_measure (a harness verdict), never as exhausted.
-  const nonMeasuring = event.invalidSample === true;
-  const nonMeasuringRun = nonMeasuring ?
-    trailingNonMeasuringRun(log, event.frontier) + 1 : 0;
-  const measurementExhausted = nonMeasuring &&
-    nonMeasuringRun >= CANNOT_MEASURE_RETRY_BUDGET;
-  const holdForRetry = nonMeasuring && !measurementExhausted;
-  // A rung is escalated on a stall or on untrusted (violating) data. It is kept on
-  // honest metric progress, held (not climbed) on a credited discrimination, and held on
-  // ANY non-measuring sample — climbing the ladder requires a trustworthy observation, so
-  // a sample the harness could not measure never advances (or parks via) the strategy
-  // ladder; it parks, if at all, as cannot_measure once the retry budget is spent.
-  const nextRung = (progressed || investigative || nonMeasuring) ? event.rungIndex :
+  const nextRung = (progressed || investigative) ? event.rungIndex :
     Math.min(event.rungIndex + 1, PARK_RUNG_INDEX);
   appendEvent(root, quest.id, {
     ...event,
     rungIndex: nextRung,
     investigative: investigative || undefined,
   });
-  if (holdForRetry) {
-    appendEvent(root, quest.id, {
-      type: EVENT_FINDING,
-      frontier: pick.def.id,
-      claim: `non-measuring sample (${nonMeasuringRun}/${CANNOT_MEASURE_RETRY_BUDGET}): ` +
-        'harness produced no trustworthy metric; holding the rung for retry rather than ' +
-        'climbing toward an unearned exhausted park',
-    });
-  }
-  if (after.done) {
+  if (terminalSampleIsAccepted(after) && violations.length === 0 &&
+    !forceStall && terminalIntegrityAllowsClosure(
+    root,
+    quest,
+    readLog(root, quest.id),
+  )) {
     appendEvent(root, quest.id, {
       type: EVENT_SOLVED,
       frontier: pick.def.id,
@@ -460,15 +626,7 @@ function decideAndRecord(root, quest, pick, event, after, violations,
       evidenceIdentity: after.evidenceIdentity || null,
       evidenceFingerprint: after.evidenceFingerprint || null,
     });
-  } else if (measurementExhausted) {
-    appendEvent(root, quest.id, {
-      type: EVENT_PARK,
-      frontier: pick.def.id,
-      kind: PARK_KIND_CANNOT_MEASURE,
-      reason: PARK_REASON_CANNOT_MEASURE,
-      finalMetric: after.metric,
-    });
-  } else if (!progressed && !nonMeasuring && nextRung >= PARK_RUNG_INDEX) {
+  } else if (!progressed && nextRung >= PARK_RUNG_INDEX) {
     const kind = classifyParkKind(root, quest, pick.def);
     appendEvent(root, quest.id, {
       type: EVENT_PARK,
@@ -555,16 +713,29 @@ export function ensureSealedGoal(root, quest) {
   const goalpostViolations = validateGoalpostsImmutable(quest, declared);
   if (goalpostViolations.length > 0) {
     appendEvent(root, quest.id, {
-      type: EVENT_VIOLATION, scope: 'goalposts', violations: goalpostViolations,
+      type: EVENT_VIOLATION,
+      eventSchemaVersion: INTEGRITY_EVENT_SCHEMA_VERSION,
+      scope: INTEGRITY_SCOPE_GOALPOSTS,
+      violationId: integrityViolationId({
+        quest,
+        generation: declared?.ts || quest.links?.sealedAtCommit,
+        scope: INTEGRITY_SCOPE_GOALPOSTS,
+        violations: goalpostViolations,
+      }),
+      resolutionPolicy: INTEGRITY_RESOLUTION_NEW_QUEST,
+      violations: goalpostViolations,
     });
     throw new Error(`goalpost violation: ${goalpostViolations.join('; ')}`);
   }
   return declared;
 }
 
-export function recordQuestSolvedIfDone(root, quest, ctx) {
+export function recordQuestSolvedIfDone(root, quest, ctx, options = {}) {
   const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
-  if (!questDone.done) return {done: false, evidence: questDone.evidence};
+  if (!terminalSampleIsAccepted(questDone) || options.accepted !== true ||
+    !terminalIntegrityAllowsClosure(root, quest, readLog(root, quest.id))) {
+    return {done: false, evidence: questDone.evidence};
+  }
   const alreadySolved = [...readLog(root, quest.id)].reverse()
     .some((e) => e.type === EVENT_QUEST && e.status === STATUS_SOLVED);
   if (!alreadySolved) {

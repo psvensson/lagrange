@@ -36,8 +36,11 @@ function frontierLine(f) {
   const reason = f.reason ? ` — ${f.reason}` : '';
   const kind = f.status === STATUS_PARKED && f.parkKind ? ` {${f.parkKind}}` : '';
   const reopened = f.reopenCount ? `, reopened ${f.reopenCount}` : '';
+  const nonMeasurements = f.nonMeasurements ?
+    `, non-measurements ${f.nonMeasurements}` : '';
   return `- **${f.id}** [${f.status}${kind}] rung ${f.rungIndex}, ` +
-    `attempts ${f.attempts}${reopened}, metric ${base} -> ${metric}${reason}`;
+    `attempts ${f.attempts}${nonMeasurements}${reopened}, ` +
+    `metric ${base} -> ${metric}${reason}`;
 }
 
 // Render the optional `links` block. Returns [] when the quest declares no links
@@ -146,6 +149,19 @@ export function buildReport(quest, log, state, root = process.cwd()) {
   const currentBlocker = buildCurrentBlocker({quest, log, state});
   const scopePressure = analyzeScopePressure(root, quest, log);
   const health = analyzeQuestHealth(root, quest, {state});
+  const terminal = [STATUS_SOLVED, STATUS_EXHAUSTED]
+    .includes(state.questStatus);
+  const activeStateLines = terminal ? [] : [
+    ...renderCurrentBlocker(currentBlocker),
+    '',
+    '## Continuation',
+    `- Status: ${health.continuation?.status || 'allowed'}`,
+    `- Next action: ${health.nextAction}`,
+    ...(health.continuation?.problems?.length > 0 ?
+      health.continuation.problems.map((item) => `- Blocker: ${item}`) :
+      ['- Blocker: none']),
+    '',
+  ];
   const theories = [
     ...(state.theories?.system || []),
     ...(state.theories?.frontier || []),
@@ -162,15 +178,7 @@ export function buildReport(quest, log, state, root = process.cwd()) {
     `**Attempts:** ${attempts.length}`,
     '',
     ...linkLines(quest),
-    ...renderCurrentBlocker(currentBlocker),
-    '',
-    '## Continuation',
-    `- Status: ${health.continuation?.status || 'allowed'}`,
-    `- Next action: ${health.nextAction}`,
-    ...(health.continuation?.problems?.length > 0 ?
-      health.continuation.problems.map((item) => `- Blocker: ${item}`) :
-      ['- Blocker: none']),
-    '',
+    ...activeStateLines,
     ...renderScopePressure(scopePressure),
     '',
     '## Frontiers',

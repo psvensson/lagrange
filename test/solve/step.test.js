@@ -236,9 +236,13 @@ tap.test('synchronous runStep (P3)', async (t) => {
       result.violations.some((item) => item.includes('same probe identity')),
       'actual before/after probe identity mismatch is not hidden',
     );
-    const attemptEvent = readLog(root, quest.id)
-      .find((event) => event.type === 'attempt');
-    t.not(attemptEvent.beforeProbeKey, attemptEvent.afterProbeKey);
+    const log = readLog(root, quest.id);
+    t.equal(log.filter((event) => event.type === 'attempt').length, 0,
+      'rejected evidence is not persisted as an ordinary attempt');
+    const violationEvent = log.find((event) => event.type === 'violation');
+    t.not(violationEvent.attempt.beforeProbeKey,
+      violationEvent.attempt.afterProbeKey,
+      'violation evidence retains both mismatched probe identities');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

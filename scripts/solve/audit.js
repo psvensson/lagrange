@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   EVENT_ATTEMPT,
+  EVENT_NON_MEASUREMENT,
   EVENT_EVIDENCE_INGESTED,
   EVENT_FINDING,
   EVENT_QUEST,
@@ -23,6 +24,9 @@ import {
   THEORY_RESULT_SUPPORTED,
   THEORY_RESULT_SUPERSEDED,
 } from './constants.js';
+import {
+  terminalIntegrityProblems,
+} from './integrity.js';
 import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {eventEvidenceFingerprint} from './evidence-identity.js';
 import {
@@ -73,10 +77,12 @@ function strictAuditStartIndex(log) {
 function auditChangeRefs(root, quest, log, startIndex) {
   const problems = [];
   for (const [index, event] of log.entries()) {
-    if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
-    const inspection = inspectChangeArtifact(root, quest, event.changeRef);
-    for (const changeProblem of inspection.problems) {
-      problems.push(problem(changeProblem, event));
+    if (![EVENT_ATTEMPT, EVENT_NON_MEASUREMENT].includes(event.type)) continue;
+    if (index >= startIndex) {
+      const inspection = inspectChangeArtifact(root, quest, event.changeRef);
+      for (const changeProblem of inspection.problems) {
+        problems.push(problem(changeProblem, event));
+      }
     }
   }
   return problems;
@@ -87,6 +93,7 @@ function auditEvidenceIdentity(log, startIndex) {
     .filter((event, index) =>
       index >= startIndex &&
       (event.type === EVENT_ATTEMPT ||
+        event.type === EVENT_NON_MEASUREMENT ||
         event.type === EVENT_EVIDENCE_INGESTED ||
         event.type === EVENT_SOLVED ||
         event.type === EVENT_QUEST) &&
@@ -96,6 +103,11 @@ function auditEvidenceIdentity(log, startIndex) {
       `evidence event is missing fingerprint identity: ${event.evidence}`,
       event,
     ));
+}
+
+function auditIntegrityViolations(root, quest, log) {
+  return terminalIntegrityProblems(root, quest, log)
+    .map((item) => problem(item.message, item.event));
 }
 
 function auditTheoryUse(log, startIndex) {
@@ -398,6 +410,7 @@ export function commitGate(root, quest) {
       'quest has not finished (no SOLVED or EXHAUSTED terminal recorded)',
     ));
   }
+  problems.push(...auditIntegrityViolations(root, quest, log));
   problems.push(...auditSourceChangeVerification(root, quest, log, startIndex));
   return {
     questId: quest.id,
@@ -415,7 +428,10 @@ export function commitGate(root, quest) {
 export function checkpointGate(root, quest) {
   const log = readLog(root, quest.id);
   const startIndex = strictAuditStartIndex(log);
-  const problems = auditSourceChangeVerification(root, quest, log, startIndex);
+  const problems = [
+    ...auditIntegrityViolations(root, quest, log),
+    ...auditSourceChangeVerification(root, quest, log, startIndex),
+  ];
   return {
     questId: quest.id,
     ready: problems.length === 0,
@@ -429,6 +445,7 @@ export function auditQuest(root, quest) {
   const state = projectState(quest, log);
   const startIndex = strictAuditStartIndex(log);
   const problems = [
+    ...auditIntegrityViolations(root, quest, log),
     ...auditChangeRefs(root, quest, log, startIndex),
     ...auditEvidenceIdentity(log, startIndex),
     ...auditTheoryUse(log, startIndex),

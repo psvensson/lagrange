@@ -9,6 +9,7 @@ import {
   EVENT_VIOLATION,
   EVENT_FINDING,
   EVENT_ATTEMPT,
+  EVENT_NON_MEASUREMENT,
   EVENT_EVIDENCE_INGESTED,
   COUPLED_OSC_SWAP_THRESHOLD,
   SCOPE_PRESSURE_FILE_LIMIT,
@@ -309,12 +310,14 @@ export function harnessNotMeasuringStatus(log, frontierId = null) {
     if (frontierId && event.frontier !== frontierId) continue;
     const isFrontierSample =
       event.type === EVENT_ATTEMPT ||
+      event.type === EVENT_NON_MEASUREMENT ||
       (event.type === EVENT_EVIDENCE_INGESTED && isFrontierProbeEvent(event));
     if (!isFrontierSample) continue;
     const verdictReason = event.verdictReason ||
       (event.current && event.current.verdictReason) || null;
     const nonMeasuringVerdict = NON_MEASURING_VERDICT_REASONS.includes(verdictReason);
-    const measuring = !nonMeasuringVerdict &&
+    const measuring = event.type !== EVENT_NON_MEASUREMENT &&
+      !nonMeasuringVerdict &&
       event.invalidSample !== true && event.metric !== null &&
       !(event.type === EVENT_ATTEMPT && event.metricAfter === null &&
         event.metricBefore === null);

@@ -14,6 +14,10 @@ export const REPRO_ON_HEAD_FINDING_KIND = 'repro-on-head';
 export const EVENT_QUEST_DECLARED = 'quest-declared';
 export const EVENT_QUEST_UPGRADED = 'quest-upgraded';
 export const EVENT_ATTEMPT = 'attempt';
+// Honest harness runs that cannot produce a trustworthy metric. Kept separate
+// from EVENT_ATTEMPT so they consume the bounded measurement retry budget but
+// cannot advance a rung, resolve a theory, or terminalize a Quest.
+export const EVENT_NON_MEASUREMENT = 'non-measurement';
 export const EVENT_SOLVED = 'solved';
 export const EVENT_PARK = 'park';
 // Reopens a parked frontier when its exhaustion verdict was driven by non-measuring

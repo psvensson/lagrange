@@ -14,6 +14,7 @@ import {
   LOG_SUBDIR,
   STATE_SUBDIR,
   EVENT_ATTEMPT,
+  EVENT_NON_MEASUREMENT,
   EVENT_SOLVED,
   EVENT_PARK,
   EVENT_FRONTIER_REOPENED,
@@ -108,6 +109,7 @@ function initialFrontierState(frontier) {
     status: STATUS_OPEN,
     rungIndex: FIRST_RUNG_INDEX,
     attempts: 0,
+    nonMeasurements: 0,
     parkedCount: 0,
     reopenCount: 0,
     autoReopenCount: 0,
@@ -131,6 +133,12 @@ function applyAttempt(frontierState, event) {
   if (Number.isInteger(event.rungIndex)) {
     frontierState.rungIndex = event.rungIndex;
   }
+}
+
+function applyNonMeasurement(frontierState, event) {
+  if (!frontierState) return;
+  frontierState.nonMeasurements += 1;
+  frontierState.reason = `measurement unavailable (retry ${event.retryOrdinal || '?'})`;
 }
 
 function applySolved(frontier) {
@@ -291,6 +299,7 @@ function applyTheorySuperseded(theories, event) {
 
 const FRONTIER_HANDLERS = {
   [EVENT_ATTEMPT]: applyAttempt,
+  [EVENT_NON_MEASUREMENT]: applyNonMeasurement,
   [EVENT_SOLVED]: applySolved,
   [EVENT_PARK]: applyPark,
   [EVENT_FRONTIER_REOPENED]: applyReopen,

@@ -15,6 +15,7 @@
 
 import {
   EVENT_ATTEMPT,
+  EVENT_NON_MEASUREMENT,
   EVENT_FRONTIER_REOPENED,
   STATUS_PARKED,
   PARK_KIND_CANNOT_MEASURE,
@@ -39,11 +40,14 @@ function changedSinceLastReopen(root, quest, log, frontierId, frontierDef) {
   if (lastReopenIndex === -1) return true;
   const after = log
     .slice(lastReopenIndex + 1)
-    .filter((e) => e.type === EVENT_ATTEMPT && e.frontier === frontierId);
+    .filter((e) =>
+      [EVENT_ATTEMPT, EVENT_NON_MEASUREMENT].includes(e.type) &&
+      e.frontier === frontierId);
   return after.some((a) => {
     const resolvedChange = Boolean(a.changeRef) &&
       inspectChangeArtifact(root, quest, a.changeRef).valid;
-    return resolvedChange || !attemptIsNonMeasuring(root, a, frontierDef);
+    return resolvedChange ||
+      (a.type === EVENT_ATTEMPT && !attemptIsNonMeasuring(root, a, frontierDef));
   });
 }
 
@@ -62,9 +66,11 @@ export function assessReopen(root, quest, frontierId) {
     };
   }
   const attempts = log.filter((e) =>
-    e.type === EVENT_ATTEMPT && e.frontier === frontierId);
-  const invalidAttempts = attempts.filter(
-    (a) => attemptIsNonMeasuring(root, a, frontierDef));
+    [EVENT_ATTEMPT, EVENT_NON_MEASUREMENT].includes(e.type) &&
+    e.frontier === frontierId);
+  const invalidAttempts = attempts.filter((a) =>
+    a.type === EVENT_NON_MEASUREMENT ||
+    attemptIsNonMeasuring(root, a, frontierDef));
   // Honest-park refusal: with zero non-measuring samples the frontier was genuinely
   // measured at every rung and simply did not move, so the exhaustion verdict stands.
   // A park that counted even one non-measuring sample left at least one rung untested,

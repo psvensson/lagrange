@@ -311,7 +311,9 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     modelNotApplicable: options.modelNotApplicable || null,
     discrimination: options.discrimination || null,
   });
-  const questOutcome = recordQuestSolvedIfDone(root, quest, ctx);
+  const questOutcome = recordQuestSolvedIfDone(root, quest, ctx, {
+    accepted: outcome.accepted === true,
+  });
   clearPending(root, quest.id);
   writeReport(root, quest.id);
   // Persist the Quest's own scope-clean work. Once the Quest finishes (R1) this is the
@@ -320,8 +322,9 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   // supervised attempt is never left to accumulate in the dirty tree. Auto-commit is a
   // no-op outside a git work tree and refuses until its gate is met, so it is safe to
   // call unconditionally. It commits only — it never pushes.
-  const commit = outcome.violations.length > 0 ?
-    {committed: false, skipped: 'attempt-violations'} :
+  const commit = outcome.violations.length > 0 || outcome.accepted !== true ?
+    {committed: false, skipped: outcome.nonMeasuring ?
+      'non-measuring-sample' : 'attempt-violations'} :
     autoCommitQuest(root, quest.id, {checkpoint: !questOutcome.done});
   return {
     frontier: def.id,
