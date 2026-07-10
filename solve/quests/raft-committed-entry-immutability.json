@@ -1,0 +1,41 @@
+{
+  "id": "raft-committed-entry-immutability",
+  "statement": "Every production-usable Raft adapter preserves the index, term, and command identity of committed entries across conflict truncation, append, save, and overwrite paths while retaining ordinary uncommitted-tail replacement, and incoming conflicting AppendEntries is rejected without ACK or commit advancement.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W3",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+    "sealedAtCommit": "7bc1af309a03295edb0ad1fa3a771cfc06c9f15a"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "raft-committed-entry-immutability",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "raft-committed-entry-immutability-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "raft-committed-entry-immutability",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -10,6 +10,10 @@ import {
   normalizeLogEntry,
 } from './sqlite-log-entry-shape.js';
 import {STRING} from '../constants/strings.js';
+import {
+  COMMITTED_ENTRY_WRITE_OUTCOME,
+  guardCommittedEntryWrite,
+} from './committed-entry-guard.js';
 
 const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
 const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
@@ -134,17 +138,40 @@ class SQLiteLogAdapter {
   }
 
   /**
+   * Resolve one entry write against fresh durable committed state.
+   * @param {Object} entry
+   * @return {{guard: Object, normalizedEntry: Object}}
+   * @private
+   */
+  resolveEntryWrite(entry) {
+    const committedIndex = this.refreshCommittedIndexCacheFromStore();
+    const normalizedEntry = this.normalizeEntry(entry, {
+      index: entry?.index,
+      term: entry?.term,
+      committedIndex,
+    });
+    const existing = normalizedEntry.index <= committedIndex ?
+      this.get(normalizedEntry.index) :
+      null;
+    const guard = guardCommittedEntryWrite(
+      existing,
+      normalizedEntry,
+      committedIndex,
+    );
+    return {guard, normalizedEntry};
+  }
+
+  /**
    * Persist one entry using the canonical serialized shape.
    * @param {Object} entry
    * @return {Object}
    * @private
    */
   persistEntry(entry) {
-    const normalizedEntry = this.normalizeEntry(entry, {
-      index: entry?.index,
-      term: entry?.term,
-      committedIndex: this.getCommittedIndex(),
-    });
+    const {guard, normalizedEntry} = this.resolveEntryWrite(entry);
+    if (guard.outcome === COMMITTED_ENTRY_WRITE_OUTCOME.IDEMPOTENT) {
+      return guard.entry;
+    }
     this.db.prepare(
       LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_LOG_LOG_INDE,
     ).run(
@@ -223,7 +250,7 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
-    this.persistEntry(entry);
+    return this.persistEntry(entry);
   }
 
   /**
@@ -235,7 +262,8 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
-    this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX).run(index);
+    this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
+      .run(this.safeInclusiveTruncationIndex(index));
   }
 
   /**
@@ -302,11 +330,7 @@ class SQLiteLogAdapter {
     };
 
     // Store in SQLite (only if database is open)
-    if (this.isOpen()) {
-      this.persistEntry(entry);
-    }
-
-    return entry;
+    return this.isOpen() ? this.persistEntry(entry) : entry;
   }
 
   /**
@@ -587,29 +611,43 @@ class SQLiteLogAdapter {
     // Raft response, not obeying it. truncateConflictingSameIndexTail already
     // guards its own call (liferaft.js), but the invariant belongs at the
     // adapter so EVERY caller — including base liferaft — is covered.
-    const committedIndex = this.getCommittedIndex();
-    if (Number.isFinite(index) && index < committedIndex) {
-      this.committedTruncationBlockedCount += 1;
-      this.lastCommittedTruncationBlocked = {
-        requestedIndex: index,
-        committedIndex,
-        atMs: Date.now(),
-      };
-      if (this.logger && typeof this.logger.error === 'function') {
-        this.logger.error(
-          LOCAL_STR_COMMITTED_TRUNCATION_REFUSED,
-          {
-            requestedIndex: index,
-            committedIndex,
-            address: this.node ? this.node.address : STRING.UNKNOWN,
-          },
-        );
-      }
+    this.db.prepare(LOCAL_STR_1JYKG)
+      .run(this.safeExclusiveTruncationIndex(index));
+  }
+
+  recordCommittedTruncationBlock(requestedIndex, committedIndex) {
+    this.committedTruncationBlockedCount += 1;
+    this.lastCommittedTruncationBlocked = {
+      requestedIndex,
+      committedIndex,
+      atMs: Date.now(),
+    };
+    if (this.logger && typeof this.logger.error === 'function') {
+      this.logger.error(
+        LOCAL_STR_COMMITTED_TRUNCATION_REFUSED,
+        {
+          requestedIndex,
+          committedIndex,
+          address: this.node ? this.node.address : STRING.UNKNOWN,
+        },
+      );
     }
-    const safeIndex = Number.isFinite(index) ?
-      Math.max(index, committedIndex) :
-      index;
-    this.db.prepare(LOCAL_STR_1JYKG).run(safeIndex);
+  }
+
+  safeExclusiveTruncationIndex(index) {
+    const committedIndex = this.refreshCommittedIndexCacheFromStore();
+    if (Number.isFinite(index) && index < committedIndex) {
+      this.recordCommittedTruncationBlock(index, committedIndex);
+    }
+    return Number.isFinite(index) ? Math.max(index, committedIndex) : index;
+  }
+
+  safeInclusiveTruncationIndex(index) {
+    const committedIndex = this.refreshCommittedIndexCacheFromStore();
+    if (Number.isFinite(index) && index <= committedIndex) {
+      this.recordCommittedTruncationBlock(index, committedIndex);
+    }
+    return Number.isFinite(index) ? Math.max(index, committedIndex + 1) : index;
   }
 
   /**
@@ -622,8 +660,9 @@ class SQLiteLogAdapter {
     }
     // CL-018: liferaft reads committedIndex on every packet build; a
     // sqlite SELECT per read is measurable on a saturated seed. The
-    // adapter is the only writer of this key, so an in-memory cache over
-    // the persisted value is safe.
+    // SQLiteLogAdapter is the only writer class, but more than one facade can
+    // hold an adapter over the same database. Mutation paths refresh this
+    // cache from durable state before making a safety decision.
     if (Number.isFinite(this._committedIndexCache)) {
       return this._committedIndexCache;
     }
@@ -657,7 +696,7 @@ class SQLiteLogAdapter {
     // acks at OLD indexes, which used to REGRESS the persisted watermark
     // until the next head ack (CL-015 adjacent finding #2). Clamp here so
     // every caller is monotonic.
-    const current = this.getCommittedIndex();
+    const current = this.refreshCommittedIndexCacheFromStore();
     if (Number.isFinite(index) && index <= current) {
       return;
     }
@@ -681,23 +720,9 @@ class SQLiteLogAdapter {
     try {
       // Use INSERT OR REPLACE to handle duplicate indices gracefully
       // This can happen during Raft log replication when entries are re-sent
-      const sql = 'INSERT OR REPLACE INTO _raft_log ' +
-        '(log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
-      const stmt = this.db.prepare(sql);
-
       const insertMany = this.db.transaction((entries) => {
         for (const entry of entries) {
-          const normalizedEntry = this.normalizeEntry(entry, {
-            index: entry?.index,
-            term: entry?.term,
-            committedIndex: this.getCommittedIndex(),
-          });
-          stmt.run(
-            normalizedEntry.index,
-            normalizedEntry.term,
-            JSON.stringify(normalizedEntry),
-            Date.now(),
-          );
+          this.persistEntry(entry);
         }
       });
 
@@ -770,7 +795,8 @@ class SQLiteLogAdapter {
       return;
     }
     try {
-      this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX).run(fromIndex);
+      this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
+        .run(this.safeInclusiveTruncationIndex(fromIndex));
       callback(null);
     } catch (error) {
       callback(error);

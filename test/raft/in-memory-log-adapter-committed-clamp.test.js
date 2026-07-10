@@ -1,17 +1,14 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 
-// DT6 item 8 — committedIndex-clamp hygiene (CL-042 readout anomaly). removeEntriesAfter recomputes
-// lastIndex but historically never lowered committedIndex, so truncating below the committed point
-// left committedIndex > lastIndex — a misleading readout. The clamp keeps committedIndex <= the
-// surviving log tail. In correct raft the log is never truncated below the committed point, so the
-// clamp is a no-op on every safe path (covered by the second test).
+// A conflict truncation may delete only the uncommitted suffix. Lowering committedIndex to match a
+// destructive truncation launders committed-entry loss into a superficially consistent readout.
 
 function mockNode(address = 'n1', term = 1) {
   return {address, term};
 }
 
-test('removeEntriesAfter clamps committedIndex to the surviving log tail (CL-042 hygiene)',
+test('removeEntriesAfter preserves the committed prefix and monotonic watermark',
   async (t) => {
     const adapter = new InMemoryLogAdapter(mockNode());
     await adapter.saveCommand('c1', 1);
@@ -24,11 +21,9 @@ test('removeEntriesAfter clamps committedIndex to the surviving log tail (CL-042
     // Truncate below the committed point (the anomalous case).
     await adapter.removeEntriesAfter(1);
 
-    t.equal(adapter.lastIndex, 1, 'lastIndex recomputed to the surviving tail');
-    t.equal(adapter.committedIndex, 1,
-      'committedIndex was clamped down to the surviving tail (no committedIndex > lastIndex)');
-    t.ok(adapter.committedIndex <= adapter.lastIndex,
-      'committedIndex never exceeds lastIndex after truncation');
+    t.equal(adapter.lastIndex, 3, 'committed log tail survives');
+    t.equal(adapter.committedIndex, 3, 'committedIndex never regresses');
+    t.same((await adapter.get(3)).command, 'c3', 'committed entry survives');
   });
 
 test('a truncation at/above the committed point leaves committedIndex unchanged (clamp is a no-op)',

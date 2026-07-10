@@ -115,7 +115,10 @@ describe('PartitionRaftStorage', () => {
       const row = db.prepare('SELECT * FROM _raft_log WHERE log_index = 1').get();
       assert.ok(row);
       assert.strictEqual(row.log_index, 1);
-      assert.deepStrictEqual(JSON.parse(row.command), {op: 'write', key: 'test'});
+      assert.deepStrictEqual(
+        JSON.parse(row.command).command,
+        {op: 'write', key: 'test'},
+      );
     });
 
     it('should include timestamp in entry', () => {

@@ -282,7 +282,12 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     this.db = new Database(this.dbPath);
     this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
     this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
-    this.storage = new PartitionRaftStorage(this.db, this.partitionId);
+    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
+    this.storage = new PartitionRaftStorage(
+      this.db,
+      this.partitionId,
+      this.logAdapter,
+    );
     if (this.schema) {
       this.createTable();
     }
@@ -366,7 +371,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           .catch((err) => callback(err));
       }
     }
-    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
     // Restart recovery reloads committed state from the durable DB without
     // re-applying entries through applyCommittedEntry, so a fresh HLC clock would
     // not witness already-committed HLCs and could regress below a value this node

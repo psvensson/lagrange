@@ -1,3 +1,8 @@
+import {
+  COMMITTED_ENTRY_WRITE_OUTCOME,
+  guardCommittedEntryWrite,
+} from './committed-entry-guard.js';
+
 /**
  * InMemoryLogAdapter - In-memory log storage for liferaft.
  * Used by MessageGroupService for ephemeral message routing state.
@@ -54,12 +59,29 @@ class InMemoryLogAdapter {
       command,
     };
 
+    const {guard} = this.resolveEntryWrite(entry);
+    if (guard.outcome === COMMITTED_ENTRY_WRITE_OUTCOME.IDEMPOTENT) {
+      return guard.entry;
+    }
+
     this.entries.set(index, entry);
     if (index > this.lastIndex) {
       this.lastIndex = index;
     }
 
     return entry;
+  }
+
+  resolveEntryWrite(entry) {
+    const existing = this.entries.get(entry.index) || null;
+    return {
+      guard: guardCommittedEntryWrite(
+        existing,
+        entry,
+        this.committedIndex,
+      ),
+      normalizedEntry: entry,
+    };
   }
 
   /**
@@ -121,8 +143,11 @@ class InMemoryLogAdapter {
    * @return {Promise<void>}
    */
   async removeEntriesAfter(index) {
+    const safeIndex = Number.isFinite(index) ?
+      Math.max(index, this.committedIndex) :
+      index;
     for (const [key] of this.entries) {
-      if (key > index) {
+      if (key > safeIndex) {
         this.entries.delete(key);
       }
     }
@@ -132,14 +157,6 @@ class InMemoryLogAdapter {
       if (key > this.lastIndex) {
         this.lastIndex = key;
       }
-    }
-    // CL-042 hygiene: a truncation must not leave committedIndex above the surviving log tail,
-    // else a truncated follower reports committedIndex > lastIndex (the seed-21 readout anomaly).
-    // In correct raft operation the log is never truncated below the committed point (Leader
-    // Completeness), so committedIndex <= lastIndex already holds and this clamp is a no-op on every
-    // safe path; it only repairs the readout if a conflicting tail ever reaches below it.
-    if (this.committedIndex > this.lastIndex) {
-      this.committedIndex = this.lastIndex;
     }
   }
 
@@ -250,7 +267,7 @@ class InMemoryLogAdapter {
       };
     }
     entry.committed = true;
-    this.committedIndex = index;
+    this.committedIndex = Math.max(this.committedIndex, index);
     this.entries.set(index, entry);
     this.compactCommittedEntries();
     return entry;

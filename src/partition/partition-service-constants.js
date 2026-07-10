@@ -42,22 +42,8 @@ const PARTITION_SERVICE_SQL = Object.freeze({
         value TEXT
       )
     `,
-  CREATE_RAFT_LOG_TABLE: `
-      CREATE TABLE IF NOT EXISTS _raft_log (
-        log_index INTEGER PRIMARY KEY,
-        term INTEGER NOT NULL,
-        command TEXT NOT NULL,
-        timestamp INTEGER NOT NULL
-      )
-    `,
   SELECT_RAFT_STATE_VALUE: 'SELECT value FROM _raft_state WHERE key = ?',
-  SELECT_RAFT_LOGS:
-    'SELECT log_index, term, command, timestamp FROM _raft_log ORDER BY log_index',
   UPSERT_RAFT_STATE: 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-  UPSERT_RAFT_LOG:
-    'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) ' +
-    'VALUES (?, ?, ?, ?)',
-  DELETE_RAFT_LOG_FROM: 'DELETE FROM _raft_log WHERE log_index >= ?',
   BEGIN_IMMEDIATE: 'BEGIN IMMEDIATE',
   SAVEPOINT_PREPARE: 'SAVEPOINT prepare_transaction',
   COMMIT: 'COMMIT',

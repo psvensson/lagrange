@@ -1,0 +1,1679 @@
+diff --git a/scripts/run-raft-committed-entry-immutability-scenarios.js b/scripts/run-raft-committed-entry-immutability-scenarios.js
+new file mode 100644
+index 00000000..db1a5533
+--- /dev/null
++++ b/scripts/run-raft-committed-entry-immutability-scenarios.js
+@@ -0,0 +1,17 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'raft-committed-entry-immutability': [
++    'test/raft/committed-entry-immutability-contract.test.js',
++    'test/raft/committed-entry-immutability.property.test.js',
++    'test/raft/sqlite-log-adapter-committed-write-paths.test.js',
++    'test/raft/raft-log-write-owner.test.js',
++    'test/raft/liferaft-committed-entry-conflict.test.js',
++    'test/raft/in-memory-log-adapter-committed-clamp.test.js',
++    'test/raft/sqlite-log-adapter-committed-truncation-guard.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/partition/partition-raft-storage.js b/src/partition/partition-raft-storage.js
+index e5b03dc0..a3a0858c 100644
+--- a/src/partition/partition-raft-storage.js
++++ b/src/partition/partition-raft-storage.js
+@@ -6,6 +6,7 @@
+ 
+ import {NUM} from '../constants/numbers.js';
+ import {STRING} from '../constants/strings.js';
++import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
+ import {
+   PARTITION_SERVICE_SQL,
+   PARTITION_SERVICE_STATE_KEY,
+@@ -46,17 +47,14 @@ class PartitionRaftStorage {
+    * Create a new Raft storage instance.
+    * @param {Database} db - SQLite database instance.
+    * @param {string} partitionId - Partition ID.
++   * @param {SQLiteLogAdapter|null} logAdapter - Canonical Raft log owner.
+    */
+-  constructor(db, partitionId) {
++  constructor(db, partitionId, logAdapter = null) {
+     this.db = db;
+     this.partitionId = partitionId;
++    this.logAdapter = logAdapter || new SQLiteLogAdapter(db);
+     this.currentTerm = 0;
+     this.votedFor = null;
+-    this.commitIndex = 0;
+-    this.lastApplied = 0;
+-
+-    // In-memory log for Raft entries
+-    this.log = [];
+ 
+     this.initializeRaftTables();
+   }
+@@ -70,9 +68,6 @@ class PartitionRaftStorage {
+     // Create Raft state table
+     this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_STATE_TABLE);
+ 
+-    // Create Raft log table
+-    this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_LOG_TABLE);
+-
+     // Load persisted state
+     this.loadPersistedState();
+   }
+@@ -96,22 +91,14 @@ class PartitionRaftStorage {
+     if (votedRow) {
+       this.votedFor = votedRow.value;
+     }
++  }
+ 
+-    // Load log entries
+-    const entries = this.db.prepare(
+-      PARTITION_SERVICE_SQL.SELECT_RAFT_LOGS,
+-    ).all();
+-
+-    this.log = entries.map((row) => new PartitionRaftLogEntry(
+-      row.term,
+-      row.log_index,
+-      JSON.parse(row.command),
+-    ));
++  get commitIndex() {
++    return this.logAdapter.refreshCommittedIndexCacheFromStore();
++  }
+ 
+-    if (this.log.length > 0) {
+-      this.commitIndex = this.log[this.log.length - 1].index;
+-      this.lastApplied = this.commitIndex;
+-    }
++  get lastApplied() {
++    return this.logAdapter.refreshCommittedIndexCacheFromStore();
+   }
+ 
+   /**
+@@ -138,16 +125,9 @@ class PartitionRaftStorage {
+    * @return {PartitionRaftLogEntry} The appended entry.
+    */
+   appendEntry(data) {
+-    const index = this.log.length + 1;
+-    const entry = new PartitionRaftLogEntry(this.currentTerm, index, data);
+-    this.log.push(entry);
+-
+-    // Persist to SQLite - use INSERT OR REPLACE to handle edge cases gracefully
+-    this.db.prepare(
+-      PARTITION_SERVICE_SQL.UPSERT_RAFT_LOG,
+-    ).run(entry.index, entry.term, JSON.stringify(entry.data), entry.timestamp);
+-
+-    return entry;
++    return this.toPartitionEntry(
++      this.logAdapter.saveCommand(data, this.currentTerm),
++    );
+   }
+ 
+   /**
+@@ -156,10 +136,9 @@ class PartitionRaftStorage {
+    * @return {Array<PartitionRaftLogEntry>} Log entries.
+    */
+   getEntriesFrom(startIndex) {
+-    if (startIndex < 1) {
+-      return [...this.log];
+-    }
+-    return this.log.slice(startIndex - 1);
++    const previousIndex = startIndex < 1 ? 0 : startIndex - 1;
++    return this.logAdapter.getEntriesAfter(previousIndex)
++      .map((entry) => this.toPartitionEntry(entry));
+   }
+ 
+   /**
+@@ -167,7 +146,10 @@ class PartitionRaftStorage {
+    * @return {PartitionRaftLogEntry|null} Last entry or null.
+    */
+   getLastEntry() {
+-    return this.log.length > 0 ? this.log[this.log.length - 1] : null;
++    const lastInfo = this.logAdapter.getLastInfo();
++    return lastInfo.index > 0 ?
++      this.toPartitionEntry(this.logAdapter.get(lastInfo.index)) :
++      null;
+   }
+ 
+   /**
+@@ -176,10 +158,7 @@ class PartitionRaftStorage {
+    * @return {PartitionRaftLogEntry|null} Entry or null.
+    */
+   getEntry(index) {
+-    if (index < 1 || index > this.log.length) {
+-      return null;
+-    }
+-    return this.log[index - 1];
++    return index < 1 ? null : this.toPartitionEntry(this.logAdapter.get(index));
+   }
+ 
+   /**
+@@ -188,11 +167,8 @@ class PartitionRaftStorage {
+    * @param {number} fromIndex - Index to truncate from (1-based).
+    */
+   truncateFrom(fromIndex) {
+-    if (fromIndex >= 1 && fromIndex <= this.log.length) {
+-      this.log = this.log.slice(0, fromIndex - 1);
+-
+-      // Truncate in SQLite
+-      this.db.prepare(PARTITION_SERVICE_SQL.DELETE_RAFT_LOG_FROM).run(fromIndex);
++    if (fromIndex >= 1 && fromIndex <= this.getLastIndex()) {
++      this.logAdapter.removeFrom(fromIndex);
+     }
+   }
+ 
+@@ -201,7 +177,7 @@ class PartitionRaftStorage {
+    * @return {number} Number of entries.
+    */
+   getLogLength() {
+-    return this.log.length;
++    return this.logAdapter.getEntriesAfter(0).length;
+   }
+ 
+   /**
+@@ -221,6 +197,19 @@ class PartitionRaftStorage {
+     const lastEntry = this.getLastEntry();
+     return lastEntry ? lastEntry.term : 0;
+   }
++
++  /**
++   * Convert the canonical SQLite adapter entry into the legacy partition API.
++   * The partition facade owns no independent index, term, or command state.
++   * @param {Object|null} entry - Canonical Raft log entry.
++   * @return {PartitionRaftLogEntry|null} Partition-facing entry.
++   * @private
++   */
++  toPartitionEntry(entry) {
++    return entry ?
++      new PartitionRaftLogEntry(entry.term, entry.index, entry.command) :
++      null;
++  }
+ }
+ 
+ export {
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index baa39d41..db80be53 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -42,22 +42,8 @@ const PARTITION_SERVICE_SQL = Object.freeze({
+         value TEXT
+       )
+     `,
+-  CREATE_RAFT_LOG_TABLE: `
+-      CREATE TABLE IF NOT EXISTS _raft_log (
+-        log_index INTEGER PRIMARY KEY,
+-        term INTEGER NOT NULL,
+-        command TEXT NOT NULL,
+-        timestamp INTEGER NOT NULL
+-      )
+-    `,
+   SELECT_RAFT_STATE_VALUE: 'SELECT value FROM _raft_state WHERE key = ?',
+-  SELECT_RAFT_LOGS:
+-    'SELECT log_index, term, command, timestamp FROM _raft_log ORDER BY log_index',
+   UPSERT_RAFT_STATE: 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
+-  UPSERT_RAFT_LOG:
+-    'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) ' +
+-    'VALUES (?, ?, ?, ?)',
+-  DELETE_RAFT_LOG_FROM: 'DELETE FROM _raft_log WHERE log_index >= ?',
+   BEGIN_IMMEDIATE: 'BEGIN IMMEDIATE',
+   SAVEPOINT_PREPARE: 'SAVEPOINT prepare_transaction',
+   COMMIT: 'COMMIT',
+diff --git a/src/partition/partition-service-raft-init-base.js b/src/partition/partition-service-raft-init-base.js
+index 200c12ab..01aa294c 100644
+--- a/src/partition/partition-service-raft-init-base.js
++++ b/src/partition/partition-service-raft-init-base.js
+@@ -282,7 +282,12 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+     this.db = new Database(this.dbPath);
+     this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
+     this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
+-    this.storage = new PartitionRaftStorage(this.db, this.partitionId);
++    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
++    this.storage = new PartitionRaftStorage(
++      this.db,
++      this.partitionId,
++      this.logAdapter,
++    );
+     if (this.schema) {
+       this.createTable();
+     }
+@@ -366,7 +371,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+           .catch((err) => callback(err));
+       }
+     }
+-    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
+     // Restart recovery reloads committed state from the durable DB without
+     // re-applying entries through applyCommittedEntry, so a fresh HLC clock would
+     // not witness already-committed HLCs and could regress below a value this node
+diff --git a/src/raft/committed-entry-guard.js b/src/raft/committed-entry-guard.js
+new file mode 100644
+index 00000000..bbbe37a3
+--- /dev/null
++++ b/src/raft/committed-entry-guard.js
+@@ -0,0 +1,57 @@
++import {isDeepStrictEqual} from 'node:util';
++
++import {RAFT_ERROR_CODE} from './constants.js';
++
++const CONFLICT_ERROR_NAME = 'RaftCommittedEntryConflictError';
++const CONFLICT_MESSAGE = 'Refused to replace committed Raft entry identity';
++const RAFT_COMMITTED_ENTRY_CONFLICT_CODE =
++  RAFT_ERROR_CODE.COMMITTED_ENTRY_CONFLICT;
++const COMMITTED_ENTRY_WRITE_OUTCOME = Object.freeze({
++  WRITE: 'write',
++  IDEMPOTENT: 'idempotent',
++});
++
++class RaftCommittedEntryConflictError extends Error {
++  constructor(existing, incoming, committedIndex) {
++    super(
++      `${CONFLICT_MESSAGE}: index=${incoming?.index} committedIndex=${committedIndex}`,
++    );
++    this.name = CONFLICT_ERROR_NAME;
++    this.code = RAFT_COMMITTED_ENTRY_CONFLICT_CODE;
++    this.index = incoming?.index ?? null;
++    this.committedIndex = committedIndex;
++    this.existingTerm = existing?.term ?? null;
++    this.incomingTerm = incoming?.term ?? null;
++  }
++}
++
++function committedEntryIdentityMatches(existing, incoming) {
++  return existing?.index === incoming?.index &&
++    existing?.term === incoming?.term &&
++    isDeepStrictEqual(existing?.command, incoming?.command);
++}
++
++function guardCommittedEntryWrite(existing, incoming, committedIndex) {
++  if (!Number.isFinite(incoming?.index) ||
++    !Number.isFinite(committedIndex) ||
++    incoming.index > committedIndex) {
++    return {outcome: COMMITTED_ENTRY_WRITE_OUTCOME.WRITE};
++  } else if (existing && committedEntryIdentityMatches(existing, incoming)) {
++    return {
++      outcome: COMMITTED_ENTRY_WRITE_OUTCOME.IDEMPOTENT,
++      entry: existing,
++    };
++  }
++  throw new RaftCommittedEntryConflictError(existing, incoming, committedIndex);
++}
++
++function isRaftCommittedEntryConflict(error) {
++  return error?.code === RAFT_COMMITTED_ENTRY_CONFLICT_CODE;
++}
++
++export {
++  COMMITTED_ENTRY_WRITE_OUTCOME,
++  RAFT_COMMITTED_ENTRY_CONFLICT_CODE,
++  guardCommittedEntryWrite,
++  isRaftCommittedEntryConflict,
++};
+diff --git a/src/raft/constants.js b/src/raft/constants.js
+index 28b7334b..ecc5c7c6 100644
+--- a/src/raft/constants.js
++++ b/src/raft/constants.js
+@@ -56,6 +56,10 @@ const RAFT_ERROR_NAME = Object.freeze({
+   NOT_FOUND: 'NotFoundError',
+ });
+ 
++const RAFT_ERROR_CODE = Object.freeze({
++  COMMITTED_ENTRY_CONFLICT: 'RAFT_COMMITTED_ENTRY_CONFLICT',
++});
++
+ const RAFT_ELECTION_TIMING = Object.freeze({
+   HEARTBEAT_DEFAULT_MS: 150,
+   ELECTION_MIN_DEFAULT_MS: 1000,
+@@ -385,6 +389,7 @@ export {
+   RAFT_ROLE,
+   VOTER_RAFT_ROLES,
+   RAFT_ERROR_NAME,
++  RAFT_ERROR_CODE,
+   RAFT_TRANSPORT_DELIVERY_OPTIONS,
+   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+   resolveRaftTransportDeliveryOptions,
+diff --git a/src/raft/in-memory-log-adapter.js b/src/raft/in-memory-log-adapter.js
+index 3256e412..e645d7c1 100644
+--- a/src/raft/in-memory-log-adapter.js
++++ b/src/raft/in-memory-log-adapter.js
+@@ -1,3 +1,8 @@
++import {
++  COMMITTED_ENTRY_WRITE_OUTCOME,
++  guardCommittedEntryWrite,
++} from './committed-entry-guard.js';
++
+ /**
+  * InMemoryLogAdapter - In-memory log storage for liferaft.
+  * Used by MessageGroupService for ephemeral message routing state.
+@@ -54,6 +59,11 @@ class InMemoryLogAdapter {
+       command,
+     };
+ 
++    const {guard} = this.resolveEntryWrite(entry);
++    if (guard.outcome === COMMITTED_ENTRY_WRITE_OUTCOME.IDEMPOTENT) {
++      return guard.entry;
++    }
++
+     this.entries.set(index, entry);
+     if (index > this.lastIndex) {
+       this.lastIndex = index;
+@@ -62,6 +72,18 @@ class InMemoryLogAdapter {
+     return entry;
+   }
+ 
++  resolveEntryWrite(entry) {
++    const existing = this.entries.get(entry.index) || null;
++    return {
++      guard: guardCommittedEntryWrite(
++        existing,
++        entry,
++        this.committedIndex,
++      ),
++      normalizedEntry: entry,
++    };
++  }
++
+   /**
+    * Get the last entry info.
+    * @return {Promise<Object>} {index, term, committedIndex}
+@@ -121,8 +143,11 @@ class InMemoryLogAdapter {
+    * @return {Promise<void>}
+    */
+   async removeEntriesAfter(index) {
++    const safeIndex = Number.isFinite(index) ?
++      Math.max(index, this.committedIndex) :
++      index;
+     for (const [key] of this.entries) {
+-      if (key > index) {
++      if (key > safeIndex) {
+         this.entries.delete(key);
+       }
+     }
+@@ -133,14 +158,6 @@ class InMemoryLogAdapter {
+         this.lastIndex = key;
+       }
+     }
+-    // CL-042 hygiene: a truncation must not leave committedIndex above the surviving log tail,
+-    // else a truncated follower reports committedIndex > lastIndex (the seed-21 readout anomaly).
+-    // In correct raft operation the log is never truncated below the committed point (Leader
+-    // Completeness), so committedIndex <= lastIndex already holds and this clamp is a no-op on every
+-    // safe path; it only repairs the readout if a conflicting tail ever reaches below it.
+-    if (this.committedIndex > this.lastIndex) {
+-      this.committedIndex = this.lastIndex;
+-    }
+   }
+ 
+   /**
+@@ -250,7 +267,7 @@ class InMemoryLogAdapter {
+       };
+     }
+     entry.committed = true;
+-    this.committedIndex = index;
++    this.committedIndex = Math.max(this.committedIndex, index);
+     this.entries.set(index, entry);
+     this.compactCommittedEntries();
+     return entry;
+diff --git a/src/raft/liferaft.js b/src/raft/liferaft.js
+index 29d85250..c72eb7fd 100644
+--- a/src/raft/liferaft.js
++++ b/src/raft/liferaft.js
+@@ -1,4 +1,9 @@
+ import BaseLifeRaft from '@markwylde/liferaft';
++import {
++  guardCommittedEntryWrite,
++  isRaftCommittedEntryConflict,
++} from './committed-entry-guard.js';
++import {RAFT_PACKET_TYPE} from './constants.js';
+ import {VirtualTick} from './virtual-tick.js';
+ 
+ const NUMERIC_ONE = 1;
+@@ -12,13 +17,6 @@ const RAFT_EVENT = Object.freeze({
+   DATA: 'data',
+ });
+ 
+-const RAFT_PACKET_TYPE = Object.freeze({
+-  APPEND: 'append',
+-  APPEND_ACK: 'append ack',
+-  APPEND_FAIL: 'append fail',
+-  VOTE: 'vote',
+-});
+-
+ function hasFiniteNumber(value) {
+   return typeof value === LOCAL_STR_NUMBER && Number.isFinite(value);
+ }
+@@ -80,6 +78,27 @@ function resolveFollowerLastIndex(packet) {
+     null;
+ }
+ 
++function applyIncomingAppendPreamble(raft, packet) {
++  if (packet.term > raft.term) {
++    raft.change({
++      leader: packet.state === BaseLifeRaft.LEADER ?
++        packet.address :
++        packet.leader || raft.leader,
++      state: BaseLifeRaft.FOLLOWER,
++      term: packet.term,
++    });
++  }
++  if (packet.state === BaseLifeRaft.LEADER) {
++    if (raft.state !== BaseLifeRaft.FOLLOWER) {
++      raft.change({state: BaseLifeRaft.FOLLOWER});
++    }
++    if (packet.address !== raft.leader) {
++      raft.change({leader: packet.address});
++    }
++    raft.heartbeat(raft.timeout());
++  }
++}
++
+ // Raft §5.3 (Log Matching / State-Machine Safety): an inbound append references the leader's log
+ // at `packet.last` (the leader's last entry on a heartbeat, or prevLog on an entry-append). If we
+ // hold our OWN, UNCOMMITTED entry at that index with a DIFFERENT term, that is a conflicting entry
+@@ -111,6 +130,28 @@ async function truncateConflictingSameIndexTail(raft, packet) {
+   }
+ }
+ 
++async function validateCommittedPrevLogIdentity(raft, packet) {
++  if (!raft.log || typeof raft.log.get !== LOCAL_STR_FUNCTION) {
++    return;
++  }
++  const lastIndex = packet?.last?.index;
++  const committedIndex = getCommittedIndex(raft);
++  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
++      lastIndex > committedIndex) {
++    return;
++  }
++  const existing = await raft.log.get(lastIndex);
++  guardCommittedEntryWrite(
++    existing,
++    {
++      index: lastIndex,
++      term: packet?.last?.term,
++      command: existing?.command,
++    },
++    committedIndex,
++  );
++}
++
+ async function readCatchupEntries(raft, startIndex, endIndex) {
+   if (typeof raft.log.getRange === LOCAL_STR_FUNCTION) {
+     const entries = await raft.log.getRange(startIndex, endIndex);
+@@ -129,6 +170,17 @@ async function readCatchupEntries(raft, startIndex, endIndex) {
+   return entries;
+ }
+ 
++async function validateCommittedBatchEntries(log, entries, committedIndex) {
++  if (typeof log.resolveEntryWrite !== LOCAL_STR_FUNCTION) {
++    return;
++  }
++  for (const entry of entries) {
++    if (isRecoverableAppendEntry(entry) && entry.index <= committedIndex) {
++      await log.resolveEntryWrite(entry);
++    }
++  }
++}
++
+ function patchIncomingDataListener(raft) {
+   const listeners = raft.listeners(RAFT_EVENT.DATA);
+   const originalListener = Array.isArray(listeners) ? listeners[0] : null;
+@@ -147,6 +199,37 @@ function patchIncomingDataListener(raft) {
+   // so suppression can never wedge — worst case is base-speed catch-up.
+   const inflightBatchByAddress = new Map();
+ 
++  const rejectCommittedEntryConflict = async (error, write) => {
++    raft.message(
++      BaseLifeRaft.LEADER,
++      await raft.packet(RAFT_PACKET_TYPE.APPEND_FAIL, {
++        term: error.incomingTerm,
++        index: error.index,
++        code: error.code,
++      }),
++    );
++    write();
++    return undefined;
++  };
++
++  const runAppendWithConflictRejection = async (
++    operation,
++    write,
++    packet = null,
++  ) => {
++    try {
++      return await operation();
++    } catch (error) {
++      if (!isRaftCommittedEntryConflict(error)) {
++        throw error;
++      }
++      if (packet) {
++        applyIncomingAppendPreamble(raft, packet);
++      }
++      return rejectCommittedEntryConflict(error, write);
++    }
++  };
++
+   // CL-041: base liferaft's `vote` handler has a check-then-act race — the
+   // `await raft.log.getLastInfo()` (present only when a log adapter is configured) sits BETWEEN
+   // the "have I already voted this term?" check (`if (raft.votes.for && ...)`) and the assignment
+@@ -230,6 +313,16 @@ function patchIncomingDataListener(raft) {
+   };
+ 
+   const handleFollowerAppendBatch = async (packet, write) => {
++    const committedIndex = getCommittedIndex(raft);
++    // Validate the complete committed portion before either ACKing the first
++    // item or applying the stale-batch drop. saveCommand is non-mutating for
++    // same-identity committed replays and throws the shared typed conflict for
++    // every other replacement.
++    await validateCommittedBatchEntries(
++      raft.log,
++      packet.data,
++      committedIndex,
++    );
+     // Stale-batch guard: a delayed batch whose precondition precedes our
+     // committed prefix must never truncate committed entries (the base
+     // single-entry path has a narrower pre-existing exposure; a 64-wide
+@@ -253,22 +346,20 @@ function patchIncomingDataListener(raft) {
+     if (!willAccept) {
+       return result;
+     }
+-    const committedIndex = getCommittedIndex(raft);
+     let lastAppliedEntry = null;
+     for (const entry of packet.data.slice(1)) {
+       if (!isRecoverableAppendEntry(entry)) {
+         break;
+       }
+-      if (entry.index <= committedIndex) {
+-        continue;
+-      }
+       // saveCommand rebuilds follower-local bookkeeping
+       // ({committed:false, responses:[self]}) exactly like the base
+       // handler; the adapter's bulk append() must NOT be used here (it
+       // would persist the leader's committed flags and break commit
+       // emission on the follower).
+       await raft.log.saveCommand(entry.command, entry.term, entry.index);
+-      lastAppliedEntry = entry;
++      if (entry.index > committedIndex) {
++        lastAppliedEntry = entry;
++      }
+     }
+     if (lastAppliedEntry) {
+       raft.message(
+@@ -327,12 +418,26 @@ function patchIncomingDataListener(raft) {
+     }
+ 
+     if (packet?.type === RAFT_PACKET_TYPE.APPEND) {
++      if (packet.term < raft.term) {
++        return originalListener(packet, write);
++      }
+       // CL-040: repair a same-index/different-term conflict before the base handler's commit
+       // catch-up can stale-commit our own entry; converts the conflict into the append-fail path.
+       // Guarded SYNCHRONOUSLY on log presence so a logless node (no `Log` option) adds no microtask
+       // hop here — keeping its append timing byte-identical (the truncation is a real-log concern).
+       if (raft.log && typeof raft.log.get === LOCAL_STR_FUNCTION) {
+-        await truncateConflictingSameIndexTail(raft, packet);
++        const preconditionAccepted = await runAppendWithConflictRejection(
++          async () => {
++            await validateCommittedPrevLogIdentity(raft, packet);
++            await truncateConflictingSameIndexTail(raft, packet);
++            return true;
++          },
++          write,
++          packet,
++        );
++        if (preconditionAccepted !== true) {
++          return undefined;
++        }
+       }
+       const hasEntries = Array.isArray(packet?.data) &&
+         packet.data.length > 0;
+@@ -341,7 +446,11 @@ function patchIncomingDataListener(raft) {
+         return write();
+       }
+       if (hasEntries && packet.data.length > 1) {
+-        return handleFollowerAppendBatch(packet, write);
++        return runAppendWithConflictRejection(
++          () => handleFollowerAppendBatch(packet, write),
++          write,
++          packet,
++        );
+       }
+     }
+ 
+@@ -356,7 +465,12 @@ function patchIncomingDataListener(raft) {
+       }
+     }
+ 
+-    const result = await originalListener(packet, write);
++    const result = packet?.type === RAFT_PACKET_TYPE.APPEND ?
++      await runAppendWithConflictRejection(
++        () => originalListener(packet, write),
++        write,
++      ) :
++      await originalListener(packet, write);
+     const committedIndexAfter = getCommittedIndex(raft);
+ 
+     if (packet?.type === RAFT_PACKET_TYPE.APPEND_ACK &&
+diff --git a/src/raft/sqlite-log-adapter.js b/src/raft/sqlite-log-adapter.js
+index cf027be6..1648f971 100644
+--- a/src/raft/sqlite-log-adapter.js
++++ b/src/raft/sqlite-log-adapter.js
+@@ -10,6 +10,10 @@ import {
+   normalizeLogEntry,
+ } from './sqlite-log-entry-shape.js';
+ import {STRING} from '../constants/strings.js';
++import {
++  COMMITTED_ENTRY_WRITE_OUTCOME,
++  guardCommittedEntryWrite,
++} from './committed-entry-guard.js';
+ 
+ const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
+ const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
+@@ -134,17 +138,40 @@ class SQLiteLogAdapter {
+   }
+ 
+   /**
+-   * Persist one entry using the canonical serialized shape.
++   * Resolve one entry write against fresh durable committed state.
+    * @param {Object} entry
+-   * @return {Object}
++   * @return {{guard: Object, normalizedEntry: Object}}
+    * @private
+    */
+-  persistEntry(entry) {
++  resolveEntryWrite(entry) {
++    const committedIndex = this.refreshCommittedIndexCacheFromStore();
+     const normalizedEntry = this.normalizeEntry(entry, {
+       index: entry?.index,
+       term: entry?.term,
+-      committedIndex: this.getCommittedIndex(),
++      committedIndex,
+     });
++    const existing = normalizedEntry.index <= committedIndex ?
++      this.get(normalizedEntry.index) :
++      null;
++    const guard = guardCommittedEntryWrite(
++      existing,
++      normalizedEntry,
++      committedIndex,
++    );
++    return {guard, normalizedEntry};
++  }
++
++  /**
++   * Persist one entry using the canonical serialized shape.
++   * @param {Object} entry
++   * @return {Object}
++   * @private
++   */
++  persistEntry(entry) {
++    const {guard, normalizedEntry} = this.resolveEntryWrite(entry);
++    if (guard.outcome === COMMITTED_ENTRY_WRITE_OUTCOME.IDEMPOTENT) {
++      return guard.entry;
++    }
+     this.db.prepare(
+       LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_LOG_LOG_INDE,
+     ).run(
+@@ -223,7 +250,7 @@ class SQLiteLogAdapter {
+     if (!this.isOpen()) {
+       return;
+     }
+-    this.persistEntry(entry);
++    return this.persistEntry(entry);
+   }
+ 
+   /**
+@@ -235,7 +262,8 @@ class SQLiteLogAdapter {
+     if (!this.isOpen()) {
+       return;
+     }
+-    this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX).run(index);
++    this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
++      .run(this.safeInclusiveTruncationIndex(index));
+   }
+ 
+   /**
+@@ -302,11 +330,7 @@ class SQLiteLogAdapter {
+     };
+ 
+     // Store in SQLite (only if database is open)
+-    if (this.isOpen()) {
+-      this.persistEntry(entry);
+-    }
+-
+-    return entry;
++    return this.isOpen() ? this.persistEntry(entry) : entry;
+   }
+ 
+   /**
+@@ -587,29 +611,43 @@ class SQLiteLogAdapter {
+     // Raft response, not obeying it. truncateConflictingSameIndexTail already
+     // guards its own call (liferaft.js), but the invariant belongs at the
+     // adapter so EVERY caller — including base liferaft — is covered.
+-    const committedIndex = this.getCommittedIndex();
++    this.db.prepare(LOCAL_STR_1JYKG)
++      .run(this.safeExclusiveTruncationIndex(index));
++  }
++
++  recordCommittedTruncationBlock(requestedIndex, committedIndex) {
++    this.committedTruncationBlockedCount += 1;
++    this.lastCommittedTruncationBlocked = {
++      requestedIndex,
++      committedIndex,
++      atMs: Date.now(),
++    };
++    if (this.logger && typeof this.logger.error === 'function') {
++      this.logger.error(
++        LOCAL_STR_COMMITTED_TRUNCATION_REFUSED,
++        {
++          requestedIndex,
++          committedIndex,
++          address: this.node ? this.node.address : STRING.UNKNOWN,
++        },
++      );
++    }
++  }
++
++  safeExclusiveTruncationIndex(index) {
++    const committedIndex = this.refreshCommittedIndexCacheFromStore();
+     if (Number.isFinite(index) && index < committedIndex) {
+-      this.committedTruncationBlockedCount += 1;
+-      this.lastCommittedTruncationBlocked = {
+-        requestedIndex: index,
+-        committedIndex,
+-        atMs: Date.now(),
+-      };
+-      if (this.logger && typeof this.logger.error === 'function') {
+-        this.logger.error(
+-          LOCAL_STR_COMMITTED_TRUNCATION_REFUSED,
+-          {
+-            requestedIndex: index,
+-            committedIndex,
+-            address: this.node ? this.node.address : STRING.UNKNOWN,
+-          },
+-        );
+-      }
++      this.recordCommittedTruncationBlock(index, committedIndex);
+     }
+-    const safeIndex = Number.isFinite(index) ?
+-      Math.max(index, committedIndex) :
+-      index;
+-    this.db.prepare(LOCAL_STR_1JYKG).run(safeIndex);
++    return Number.isFinite(index) ? Math.max(index, committedIndex) : index;
++  }
++
++  safeInclusiveTruncationIndex(index) {
++    const committedIndex = this.refreshCommittedIndexCacheFromStore();
++    if (Number.isFinite(index) && index <= committedIndex) {
++      this.recordCommittedTruncationBlock(index, committedIndex);
++    }
++    return Number.isFinite(index) ? Math.max(index, committedIndex + 1) : index;
+   }
+ 
+   /**
+@@ -622,8 +660,9 @@ class SQLiteLogAdapter {
+     }
+     // CL-018: liferaft reads committedIndex on every packet build; a
+     // sqlite SELECT per read is measurable on a saturated seed. The
+-    // adapter is the only writer of this key, so an in-memory cache over
+-    // the persisted value is safe.
++    // SQLiteLogAdapter is the only writer class, but more than one facade can
++    // hold an adapter over the same database. Mutation paths refresh this
++    // cache from durable state before making a safety decision.
+     if (Number.isFinite(this._committedIndexCache)) {
+       return this._committedIndexCache;
+     }
+@@ -657,7 +696,7 @@ class SQLiteLogAdapter {
+     // acks at OLD indexes, which used to REGRESS the persisted watermark
+     // until the next head ack (CL-015 adjacent finding #2). Clamp here so
+     // every caller is monotonic.
+-    const current = this.getCommittedIndex();
++    const current = this.refreshCommittedIndexCacheFromStore();
+     if (Number.isFinite(index) && index <= current) {
+       return;
+     }
+@@ -681,23 +720,9 @@ class SQLiteLogAdapter {
+     try {
+       // Use INSERT OR REPLACE to handle duplicate indices gracefully
+       // This can happen during Raft log replication when entries are re-sent
+-      const sql = 'INSERT OR REPLACE INTO _raft_log ' +
+-        '(log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
+-      const stmt = this.db.prepare(sql);
+-
+       const insertMany = this.db.transaction((entries) => {
+         for (const entry of entries) {
+-          const normalizedEntry = this.normalizeEntry(entry, {
+-            index: entry?.index,
+-            term: entry?.term,
+-            committedIndex: this.getCommittedIndex(),
+-          });
+-          stmt.run(
+-            normalizedEntry.index,
+-            normalizedEntry.term,
+-            JSON.stringify(normalizedEntry),
+-            Date.now(),
+-          );
++          this.persistEntry(entry);
+         }
+       });
+ 
+@@ -770,7 +795,8 @@ class SQLiteLogAdapter {
+       return;
+     }
+     try {
+-      this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX).run(fromIndex);
++      this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
++        .run(this.safeInclusiveTruncationIndex(fromIndex));
+       callback(null);
+     } catch (error) {
+       callback(error);
+diff --git a/test/partition/partition-raft-storage.test.js b/test/partition/partition-raft-storage.test.js
+index bd22106b..832f768b 100644
+--- a/test/partition/partition-raft-storage.test.js
++++ b/test/partition/partition-raft-storage.test.js
+@@ -115,7 +115,10 @@ describe('PartitionRaftStorage', () => {
+       const row = db.prepare('SELECT * FROM _raft_log WHERE log_index = 1').get();
+       assert.ok(row);
+       assert.strictEqual(row.log_index, 1);
+-      assert.deepStrictEqual(JSON.parse(row.command), {op: 'write', key: 'test'});
++      assert.deepStrictEqual(
++        JSON.parse(row.command).command,
++        {op: 'write', key: 'test'},
++      );
+     });
+ 
+     it('should include timestamp in entry', () => {
+diff --git a/test/raft/committed-entry-immutability-contract.js b/test/raft/committed-entry-immutability-contract.js
+new file mode 100644
+index 00000000..93e3c976
+--- /dev/null
++++ b/test/raft/committed-entry-immutability-contract.js
+@@ -0,0 +1,173 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  RAFT_COMMITTED_ENTRY_CONFLICT_CODE,
++} from '../../src/raft/committed-entry-guard.js';
++
++const BASE_TERM = 7;
++const INDEX = Object.freeze({
++  COMMITTED: 3,
++  UNCOMMITTED: 4,
++  EXTENDED: 5,
++});
++const TEST_TEXT = Object.freeze({
++  COMMAND_TYPE: 'contract-command',
++  REJECT_CASE: 'committed identity rejects term and command replacement',
++  REJECT_TERM: 'same index and command with a different term is rejected',
++  DIFFERENT: 'different',
++  REJECT_COMMAND: 'same index and term with a different command is rejected',
++  TERM_UNCHANGED: 'committed term is unchanged',
++  COMMAND_UNCHANGED: 'committed command is unchanged',
++  WATERMARK_UNCHANGED: 'committed watermark is unchanged',
++  REPLAY_CASE: 'same-identity committed replay is idempotent',
++  REPLAY_ENTRY: 'replay returns the existing committed entry',
++  REPLAY_WATERMARK: 'replay cannot move the watermark',
++  REPLAY_COMMAND: 'replay preserves the canonical committed command',
++  BELOW: 'below',
++  EQUAL: 'equal',
++  ABOVE: 'above',
++  SUFFIX_REMOVED: 'only the permitted uncommitted suffix is removed',
++  BOUNDARY_SURVIVES: 'committed boundary entry survives',
++  WATERMARK_MONOTONIC: 'committed watermark never regresses',
++  REPLACEMENT_CASE: 'ordinary uncommitted-tail replacement remains allowed',
++  REPLACEMENT: 'replacement',
++  TERM_REPLACED: 'uncommitted term is replaced',
++  COMMAND_REPLACED: 'uncommitted command is replaced',
++  REPLACEMENT_COMMIT: 'replacement does not move commit',
++  MONOTONIC_CASE: 'commit watermark is monotonic',
++  OLDER_COMMIT: 'older commit cannot lower watermark',
++});
++
++function command(value) {
++  return {type: TEST_TEXT.COMMAND_TYPE, value};
++}
++
++async function seed(adapter, count) {
++  for (let index = 1; index <= count; index += 1) {
++    await adapter.saveCommand(command(index), BASE_TERM, index);
++  }
++}
++
++async function expectCommittedConflict(t, action, message) {
++  await t.rejects(
++    Promise.resolve().then(action),
++    {code: RAFT_COMMITTED_ENTRY_CONFLICT_CODE},
++    message,
++  );
++}
++
++function registerCommittedEntryImmutabilityContract(name, createAdapter) {
++  test(`${name} committed-entry immutability contract`, async (t) => {
++    await t.test(TEST_TEXT.REJECT_CASE, async (t) => {
++      const fixture = createAdapter();
++      const {adapter} = fixture;
++      try {
++        await seed(adapter, INDEX.UNCOMMITTED);
++        await adapter.commit(INDEX.COMMITTED);
++        const before = await adapter.get(2);
++
++        await expectCommittedConflict(
++          t,
++          () => adapter.saveCommand(command(2), BASE_TERM + 1, 2),
++          TEST_TEXT.REJECT_TERM,
++        );
++        await expectCommittedConflict(
++          t,
++          () => adapter.saveCommand(command(TEST_TEXT.DIFFERENT), BASE_TERM, 2),
++          TEST_TEXT.REJECT_COMMAND,
++        );
++
++        const after = await adapter.get(2);
++        t.equal(after.term, before.term, TEST_TEXT.TERM_UNCHANGED);
++        t.same(after.command, before.command, TEST_TEXT.COMMAND_UNCHANGED);
++        t.equal(adapter.committedIndex, INDEX.COMMITTED,
++          TEST_TEXT.WATERMARK_UNCHANGED);
++      } finally {
++        fixture.close();
++      }
++    });
++
++    await t.test(TEST_TEXT.REPLAY_CASE, async (t) => {
++      const fixture = createAdapter();
++      const {adapter} = fixture;
++      try {
++        await seed(adapter, INDEX.COMMITTED);
++        await adapter.commit(INDEX.COMMITTED);
++        const before = await adapter.get(2);
++        const replay = await adapter.saveCommand(
++          {value: 2, type: TEST_TEXT.COMMAND_TYPE},
++          BASE_TERM,
++          2,
++        );
++        t.same(replay, before, TEST_TEXT.REPLAY_ENTRY);
++        t.equal(adapter.committedIndex, INDEX.COMMITTED,
++          TEST_TEXT.REPLAY_WATERMARK);
++        t.same((await adapter.get(2)).command, command(2),
++          TEST_TEXT.REPLAY_COMMAND);
++      } finally {
++        fixture.close();
++      }
++    });
++
++    for (const [label, truncateAfter, expectedLastIndex] of [
++      [TEST_TEXT.BELOW, 1, INDEX.COMMITTED],
++      [TEST_TEXT.EQUAL, INDEX.COMMITTED, INDEX.COMMITTED],
++      [TEST_TEXT.ABOVE, INDEX.UNCOMMITTED, INDEX.UNCOMMITTED],
++    ]) {
++      await t.test(`truncation ${label} committed boundary preserves prefix`, async (t) => {
++        const fixture = createAdapter();
++        const {adapter} = fixture;
++        try {
++          await seed(adapter, INDEX.EXTENDED);
++          await adapter.commit(INDEX.COMMITTED);
++          const committed = await adapter.get(INDEX.COMMITTED);
++          await adapter.removeEntriesAfter(truncateAfter);
++
++          t.equal((await adapter.getLastInfo()).index, expectedLastIndex,
++            TEST_TEXT.SUFFIX_REMOVED);
++          t.same((await adapter.get(INDEX.COMMITTED)).command, committed.command,
++            TEST_TEXT.BOUNDARY_SURVIVES);
++          t.equal(adapter.committedIndex, INDEX.COMMITTED,
++            TEST_TEXT.WATERMARK_MONOTONIC);
++        } finally {
++          fixture.close();
++        }
++      });
++    }
++
++    await t.test(TEST_TEXT.REPLACEMENT_CASE, async (t) => {
++      const fixture = createAdapter();
++      const {adapter} = fixture;
++      try {
++        await seed(adapter, INDEX.UNCOMMITTED);
++        await adapter.commit(2);
++        await adapter.saveCommand(
++          command(TEST_TEXT.REPLACEMENT),
++          BASE_TERM + 1,
++          INDEX.UNCOMMITTED,
++        );
++        const replaced = await adapter.get(INDEX.UNCOMMITTED);
++        t.equal(replaced.term, BASE_TERM + 1, TEST_TEXT.TERM_REPLACED);
++        t.same(replaced.command, command(TEST_TEXT.REPLACEMENT),
++          TEST_TEXT.COMMAND_REPLACED);
++        t.equal(adapter.committedIndex, 2, TEST_TEXT.REPLACEMENT_COMMIT);
++      } finally {
++        fixture.close();
++      }
++    });
++
++    await t.test(TEST_TEXT.MONOTONIC_CASE, async (t) => {
++      const fixture = createAdapter();
++      const {adapter} = fixture;
++      try {
++        await seed(adapter, INDEX.UNCOMMITTED);
++        await adapter.commit(INDEX.COMMITTED);
++        await adapter.commit(2);
++        t.equal(adapter.committedIndex, INDEX.COMMITTED, TEST_TEXT.OLDER_COMMIT);
++      } finally {
++        fixture.close();
++      }
++    });
++  });
++}
++
++export {registerCommittedEntryImmutabilityContract};
+diff --git a/test/raft/committed-entry-immutability-contract.test.js b/test/raft/committed-entry-immutability-contract.test.js
+new file mode 100644
+index 00000000..2e69d068
+--- /dev/null
++++ b/test/raft/committed-entry-immutability-contract.test.js
+@@ -0,0 +1,21 @@
++import Database from 'better-sqlite3';
++
++import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
++import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
++import {
++  registerCommittedEntryImmutabilityContract,
++} from './committed-entry-immutability-contract.js';
++
++function memoryFixture() {
++  const adapter = new InMemoryLogAdapter({address: 'memory-node', term: 1});
++  return {adapter, close: () => adapter.end()};
++}
++
++function sqliteFixture() {
++  const db = new Database(':memory:');
++  const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node', term: 1});
++  return {adapter, close: () => db.close()};
++}
++
++registerCommittedEntryImmutabilityContract('in-memory adapter', memoryFixture);
++registerCommittedEntryImmutabilityContract('SQLite adapter', sqliteFixture);
+diff --git a/test/raft/committed-entry-immutability.property.test.js b/test/raft/committed-entry-immutability.property.test.js
+new file mode 100644
+index 00000000..a320852f
+--- /dev/null
++++ b/test/raft/committed-entry-immutability.property.test.js
+@@ -0,0 +1,156 @@
++import Database from 'better-sqlite3';
++import fc from 'fast-check';
++import {test} from '../../src/test-helpers/tap.js';
++
++import {
++  isRaftCommittedEntryConflict,
++} from '../../src/raft/committed-entry-guard.js';
++import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
++import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
++
++const PROPERTY_SEED = 0x5a17c0de;
++const PROPERTY_RUNS = 40;
++const INITIAL_TERM = 1;
++const INITIAL_ENTRY_COUNT = 5;
++const INITIAL_COMMITTED_INDEX = 3;
++
++function command(value) {
++  return {type: 'property-command', value};
++}
++
++const operationArbitrary = fc.record({
++  kind: fc.constantFrom('save', 'commit', 'truncate'),
++  index: fc.integer({min: 1, max: 8}),
++  term: fc.integer({min: 1, max: 4}),
++  value: fc.integer({min: 0, max: 20}),
++});
++
++function memoryFixture() {
++  const adapter = new InMemoryLogAdapter({address: 'memory-node', term: 1});
++  return {adapter, close: () => adapter.end()};
++}
++
++function sqliteFixture() {
++  const db = new Database(':memory:');
++  const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node', term: 1});
++  return {adapter, close: () => db.close()};
++}
++
++async function seed(adapter) {
++  for (let index = 1; index <= INITIAL_ENTRY_COUNT; index += 1) {
++    await adapter.saveCommand(command(index), INITIAL_TERM, index);
++  }
++  await adapter.commit(INITIAL_COMMITTED_INDEX);
++}
++
++function canCommitPrefix(model, committedIndex, targetIndex) {
++  if (targetIndex <= committedIndex || !model.has(targetIndex)) return false;
++  for (let index = committedIndex + 1; index <= targetIndex; index += 1) {
++    if (!model.has(index)) return false;
++  }
++  return true;
++}
++
++async function applySave(adapter, model, committedIdentity, operation) {
++  const incoming = {
++    index: operation.index,
++    term: operation.term,
++    command: command(operation.value),
++  };
++  const committed = committedIdentity.get(operation.index);
++  const sameIdentity = committed &&
++    committed.term === incoming.term &&
++    committed.command.value === incoming.command.value;
++  try {
++    await adapter.saveCommand(incoming.command, incoming.term, incoming.index);
++    if (committed && !sameIdentity) return false;
++    if (!committed) model.set(incoming.index, incoming);
++  } catch (error) {
++    if (!committed || sameIdentity || !isRaftCommittedEntryConflict(error)) {
++      throw error;
++    }
++  }
++  return true;
++}
++
++async function applyOperation(adapter, model, state, operation) {
++  if (operation.kind === 'save') {
++    return applySave(adapter, model, state.committedIdentity, operation);
++  }
++  if (operation.kind === 'commit' &&
++    canCommitPrefix(model, state.committedIndex, operation.index)) {
++    await adapter.commit(operation.index);
++    for (let index = state.committedIndex + 1; index <= operation.index; index += 1) {
++      state.committedIdentity.set(index, model.get(index));
++    }
++    state.committedIndex = operation.index;
++  } else if (operation.kind === 'truncate') {
++    await adapter.removeEntriesAfter(operation.index);
++    const safeLast = Math.max(operation.index, state.committedIndex);
++    for (const index of model.keys()) {
++      if (index > safeLast) model.delete(index);
++    }
++  }
++  return true;
++}
++
++async function committedIdentityStillHolds(adapter, state) {
++  if (adapter.committedIndex !== state.committedIndex) return false;
++  for (const [index, expected] of state.committedIdentity) {
++    const actual = await adapter.get(index);
++    if (!actual || actual.term !== expected.term ||
++      actual.command?.value !== expected.command.value) {
++      return false;
++    }
++  }
++  return true;
++}
++
++function registerProperty(name, createFixture) {
++  test(`${name} seeded operation sequences preserve committed identity`, async (t) => {
++    try {
++      await fc.assert(
++        fc.asyncProperty(
++          fc.array(operationArbitrary, {minLength: 1, maxLength: 80}),
++          async (operations) => {
++            const fixture = createFixture();
++            const {adapter} = fixture;
++            try {
++              await seed(adapter);
++              const model = new Map();
++              const committedIdentity = new Map();
++              for (let index = 1; index <= INITIAL_ENTRY_COUNT; index += 1) {
++                const entry = {index, term: INITIAL_TERM, command: command(index)};
++                model.set(index, entry);
++                if (index <= INITIAL_COMMITTED_INDEX) {
++                  committedIdentity.set(index, entry);
++                }
++              }
++              const state = {
++                committedIndex: INITIAL_COMMITTED_INDEX,
++                committedIdentity,
++              };
++              for (const operation of operations) {
++                if (!await applyOperation(adapter, model, state, operation)) return false;
++                if (!await committedIdentityStillHolds(adapter, state)) return false;
++              }
++              return true;
++            } finally {
++              fixture.close();
++            }
++          },
++        ),
++        {seed: PROPERTY_SEED, numRuns: PROPERTY_RUNS, verbose: 2},
++      );
++      t.pass(`seed=${PROPERTY_SEED} runs=${PROPERTY_RUNS}`);
++    } catch (error) {
++      throw new Error(
++        `${name} committed-entry property failed seed=${PROPERTY_SEED}: ${error.message}`,
++        {cause: error},
++      );
++    }
++  });
++}
++
++registerProperty('in-memory adapter', memoryFixture);
++registerProperty('SQLite adapter', sqliteFixture);
+diff --git a/test/raft/in-memory-log-adapter-committed-clamp.test.js b/test/raft/in-memory-log-adapter-committed-clamp.test.js
+index da06c14f..3db615c9 100644
+--- a/test/raft/in-memory-log-adapter-committed-clamp.test.js
++++ b/test/raft/in-memory-log-adapter-committed-clamp.test.js
+@@ -1,17 +1,14 @@
+ import {test} from '../../src/test-helpers/tap.js';
+ import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
+ 
+-// DT6 item 8 — committedIndex-clamp hygiene (CL-042 readout anomaly). removeEntriesAfter recomputes
+-// lastIndex but historically never lowered committedIndex, so truncating below the committed point
+-// left committedIndex > lastIndex — a misleading readout. The clamp keeps committedIndex <= the
+-// surviving log tail. In correct raft the log is never truncated below the committed point, so the
+-// clamp is a no-op on every safe path (covered by the second test).
++// A conflict truncation may delete only the uncommitted suffix. Lowering committedIndex to match a
++// destructive truncation launders committed-entry loss into a superficially consistent readout.
+ 
+ function mockNode(address = 'n1', term = 1) {
+   return {address, term};
+ }
+ 
+-test('removeEntriesAfter clamps committedIndex to the surviving log tail (CL-042 hygiene)',
++test('removeEntriesAfter preserves the committed prefix and monotonic watermark',
+   async (t) => {
+     const adapter = new InMemoryLogAdapter(mockNode());
+     await adapter.saveCommand('c1', 1);
+@@ -24,11 +21,9 @@ test('removeEntriesAfter clamps committedIndex to the surviving log tail (CL-042
+     // Truncate below the committed point (the anomalous case).
+     await adapter.removeEntriesAfter(1);
+ 
+-    t.equal(adapter.lastIndex, 1, 'lastIndex recomputed to the surviving tail');
+-    t.equal(adapter.committedIndex, 1,
+-      'committedIndex was clamped down to the surviving tail (no committedIndex > lastIndex)');
+-    t.ok(adapter.committedIndex <= adapter.lastIndex,
+-      'committedIndex never exceeds lastIndex after truncation');
++    t.equal(adapter.lastIndex, 3, 'committed log tail survives');
++    t.equal(adapter.committedIndex, 3, 'committedIndex never regresses');
++    t.same((await adapter.get(3)).command, 'c3', 'committed entry survives');
+   });
+ 
+ test('a truncation at/above the committed point leaves committedIndex unchanged (clamp is a no-op)',
+diff --git a/test/raft/liferaft-committed-entry-conflict.test.js b/test/raft/liferaft-committed-entry-conflict.test.js
+new file mode 100644
+index 00000000..d14119db
+--- /dev/null
++++ b/test/raft/liferaft-committed-entry-conflict.test.js
+@@ -0,0 +1,175 @@
++import Database from 'better-sqlite3';
++import {test} from '../../src/test-helpers/tap.js';
++
++import {
++  RAFT_COMMITTED_ENTRY_CONFLICT_CODE,
++} from '../../src/raft/committed-entry-guard.js';
++import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
++import LifeRaft from '../../src/raft/liferaft.js';
++import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
++import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
++
++const HEARTBEAT = '10s';
++const ELECTION_MIN = '20s';
++const ELECTION_MAX = '30s';
++
++function command(value) {
++  return {type: 'incoming-conflict', value};
++}
++
++function createProviderNode(address, Log) {
++  const provider = new LiferaftProvider();
++  const RaftNode = provider.createNodeClass({
++    resolvePeerAddress: (peerAddress) => peerAddress,
++    deliverPacket: async () => null,
++  });
++  return new RaftNode(address, {
++    'heartbeat': HEARTBEAT,
++    'election min': ELECTION_MIN,
++    'election max': ELECTION_MAX,
++    'Log': Log,
++  });
++}
++
++function createInMemoryRaft() {
++  const raft = createProviderNode('memory-follower', InMemoryLogAdapter);
++  return {raft, close: () => raft.end()};
++}
++
++function createSQLiteRaft() {
++  const db = new Database(':memory:');
++  const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-follower', term: 1});
++  function SQLiteLogFactory() {
++    return adapter;
++  }
++  const raft = createProviderNode('sqlite-follower', SQLiteLogFactory);
++  return {
++    raft,
++    close() {
++      raft.end();
++      db.close();
++    },
++  };
++}
++
++function conflictingAppendPacket(data = [
++  {index: 2, term: 2, command: command('conflict')},
++], last = {index: 1, term: 1, committedIndex: 2}) {
++  return {
++    type: 'append',
++    term: 2,
++    state: LifeRaft.LEADER,
++    address: 'leader-node',
++    leader: 'leader-node',
++    last,
++    data,
++  };
++}
++
++function conflictingPrevLogPacket() {
++  return {
++    ...conflictingAppendPacket([
++      {index: 3, term: 2, command: command('must-not-append')},
++    ]),
++    last: {index: 2, term: 99, committedIndex: 2},
++  };
++}
++
++function higherTermConflictingHeartbeat() {
++  return {
++    type: 'append',
++    term: 7,
++    state: LifeRaft.LEADER,
++    address: 'higher-term-leader',
++    leader: 'higher-term-leader',
++    last: {index: 1, term: 99, committedIndex: 1},
++  };
++}
++
++async function assertConflictRejected(t, createRaft, packet) {
++  const fixture = createRaft();
++  const {raft} = fixture;
++  const outgoing = [];
++  raft.message = (who, packet) => {
++    outgoing.push({who, packet});
++    return raft;
++  };
++  try {
++    await raft.log.saveCommand(command('committed-1'), 1, 1);
++    await raft.log.saveCommand(command('committed-2'), 1, 2);
++    await raft.log.commit(2);
++    const before = await raft.log.get(2);
++    const incoming = raft.listeners('data')[0];
++
++    let processingError = null;
++    try {
++      await incoming(packet, () => {});
++    } catch (error) {
++      processingError = error;
++    }
++
++    t.equal(processingError, null, 'typed conflict is handled as a protocol rejection');
++    t.equal(outgoing.some(({packet}) => packet.type === 'append ack'), false,
++      'conflicting committed entry is never ACKed');
++    const rejection = outgoing.find(({packet}) => packet.type === 'append fail');
++    t.ok(rejection, 'leader receives append-fail rejection');
++    t.equal(rejection?.packet?.data?.code, RAFT_COMMITTED_ENTRY_CONFLICT_CODE,
++      'rejection carries typed committed-conflict code');
++    t.equal(raft.log.committedIndex, 2, 'commit watermark does not advance or regress');
++    const after = await raft.log.get(2);
++    t.equal(after.term, before.term, 'committed term is unchanged');
++    t.same(after.command, before.command, 'committed command is unchanged');
++    t.equal(await raft.log.get(3), null,
++      'conflicting packet cannot partially append an uncommitted entry');
++  } finally {
++    fixture.close();
++  }
++}
++
++function registerIncomingConflictTest(name, createRaft) {
++  test(`${name} rejects conflicting committed AppendEntries without ACK`, async (t) => {
++    await assertConflictRejected(t, createRaft, conflictingAppendPacket());
++  });
++
++  test(`${name} rejects a committed conflict before batch ACK`, async (t) => {
++    await assertConflictRejected(t, createRaft, conflictingAppendPacket([
++      {index: 2, term: 2, command: command('conflict')},
++      {index: 3, term: 2, command: command('must-not-append')},
++    ]));
++  });
++
++  test(`${name} rejects a conflicting committed prevLogTerm`, async (t) => {
++    await assertConflictRejected(t, createRaft, conflictingPrevLogPacket());
++  });
++
++  test(`${name} applies higher-term leader state before conflict rejection`,
++    async (t) => {
++      const fixture = createRaft();
++      const {raft} = fixture;
++      const outgoing = [];
++      raft.message = (_who, packet) => {
++        outgoing.push(packet);
++        return raft;
++      };
++      try {
++        await raft.log.saveCommand(command('committed-1'), 1, 1);
++        await raft.log.commit(1);
++        await raft.listeners('data')[0](higherTermConflictingHeartbeat(), () => {});
++
++        const rejection = outgoing.find((packet) => packet.type === 'append fail');
++        t.equal(raft.term, 7, 'follower adopts the higher leader term');
++        t.equal(raft.state, LifeRaft.FOLLOWER, 'follower steps down before rejecting');
++        t.equal(raft.leader, 'higher-term-leader', 'follower records the current leader');
++        t.equal(rejection?.term, 7, 'rejection packet carries the current term');
++        t.equal(rejection?.state, LifeRaft.FOLLOWER,
++          'rejection packet carries the transitioned state');
++        t.equal(rejection?.leader, 'higher-term-leader',
++          'rejection packet carries the current leader');
++      } finally {
++        fixture.close();
++      }
++    });
++}
++
++registerIncomingConflictTest('LiferaftProvider in-memory binding', createInMemoryRaft);
++registerIncomingConflictTest('LiferaftProvider SQLite binding', createSQLiteRaft);
+diff --git a/test/raft/raft-log-write-owner.test.js b/test/raft/raft-log-write-owner.test.js
+new file mode 100644
+index 00000000..51f2e4dc
+--- /dev/null
++++ b/test/raft/raft-log-write-owner.test.js
+@@ -0,0 +1,93 @@
++import Database from 'better-sqlite3';
++import fs from 'node:fs';
++import path from 'node:path';
++
++import {PartitionRaftStorage} from
++  '../../src/partition/partition-raft-storage.js';
++import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
++import {test} from '../../src/test-helpers/tap.js';
++
++const SOURCE_ROOT = path.resolve('src');
++const CANONICAL_WRITE_OWNER = path.resolve(
++  'src',
++  'raft',
++  'sqlite-log-adapter.js',
++);
++const RAFT_LOG_MUTATION_PATTERN =
++  /\b(?:INSERT(?:\s+OR\s+REPLACE)?\s+INTO|UPDATE|DELETE\s+FROM)\s+_raft_log\b/i;
++
++function collectJavaScriptFiles(directory) {
++  const files = [];
++  for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
++    const entryPath = path.join(directory, entry.name);
++    if (entry.isDirectory()) {
++      files.push(...collectJavaScriptFiles(entryPath));
++    } else if (entry.isFile() && entry.name.endsWith('.js')) {
++      files.push(entryPath);
++    }
++  }
++  return files;
++}
++
++test('SQLiteLogAdapter is the only _raft_log SQL mutation owner', async (t) => {
++  const owners = collectJavaScriptFiles(SOURCE_ROOT)
++    .filter((filePath) => RAFT_LOG_MUTATION_PATTERN.test(
++      fs.readFileSync(filePath, 'utf8').replaceAll(/\s+/g, ' '),
++    ));
++  t.same(owners, [CANONICAL_WRITE_OWNER],
++    'no partition or service facade can introduce a second SQL writer');
++});
++
++test('PartitionRaftStorage delegates append and truncate to the shared owner',
++  async (t) => {
++    const db = new Database(':memory:');
++    const adapter = new SQLiteLogAdapter(db, {address: 'owner-node'});
++    const storage = new PartitionRaftStorage(db, 'owner-partition', adapter);
++    try {
++      for (let index = 1; index <= 5; index += 1) {
++        adapter.saveCommand({type: 'committed', value: index}, 7, index);
++      }
++      adapter.commit(5);
++      const before = adapter.get(1);
++
++      const appended = storage.appendEntry({type: 'delegated-write'});
++      t.equal(storage.logAdapter, adapter, 'partition facade shares the canonical owner');
++      t.equal(appended.index, 6, 'delegated append derives index from durable owner state');
++      t.equal(adapter.get(1).term, before.term, 'committed term is preserved');
++      t.same(adapter.get(1).command, before.command, 'committed command is preserved');
++
++      storage.truncateFrom(1);
++      t.equal(adapter.committedIndex, 5, 'delegated truncation keeps commit monotonic');
++      t.ok(adapter.get(5), 'delegated truncation preserves committed boundary');
++      t.equal(adapter.get(6), null, 'delegated truncation removes only uncommitted tail');
++    } finally {
++      db.close();
++    }
++  });
++
++test('independent adapter facades refresh durable commit state before mutation',
++  async (t) => {
++    const db = new Database(':memory:');
++    const storage = new PartitionRaftStorage(db, 'stale-facade-partition');
++    const adapter = new SQLiteLogAdapter(db, {address: 'external-owner-node'});
++    try {
++      t.equal(storage.commitIndex, 0, 'partition facade initially observes empty state');
++      for (let index = 1; index <= 5; index += 1) {
++        adapter.saveCommand({type: 'external-commit', value: index}, 7, index);
++      }
++      adapter.commit(5);
++      const before = adapter.get(1);
++
++      const appended = storage.appendEntry({type: 'fresh-durable-index'});
++      t.equal(appended.index, 6, 'stale facade derives the next durable index');
++      t.same(adapter.get(1).command, before.command,
++        'stale facade cannot overwrite committed identity');
++
++      storage.truncateFrom(1);
++      t.equal(adapter.committedIndex, 5, 'stale facade cannot regress durable commit');
++      t.ok(adapter.get(5), 'stale facade cannot truncate committed boundary');
++      t.equal(adapter.get(6), null, 'stale facade can truncate uncommitted tail');
++    } finally {
++      db.close();
++    }
++  });
+diff --git a/test/raft/sqlite-log-adapter-committed-write-paths.test.js b/test/raft/sqlite-log-adapter-committed-write-paths.test.js
+new file mode 100644
+index 00000000..97bdf2ae
+--- /dev/null
++++ b/test/raft/sqlite-log-adapter-committed-write-paths.test.js
+@@ -0,0 +1,101 @@
++import Database from 'better-sqlite3';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {test} from '../../src/test-helpers/tap.js';
++
++import {
++  RAFT_COMMITTED_ENTRY_CONFLICT_CODE,
++} from '../../src/raft/committed-entry-guard.js';
++import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
++
++const TERM = 4;
++
++function command(value) {
++  return {type: 'sqlite-write-path', value};
++}
++
++function append(adapter, entries) {
++  return new Promise((resolve, reject) => {
++    adapter.append(entries, (error) => error ? reject(error) : resolve());
++  });
++}
++
++async function seed(adapter, count = 5) {
++  for (let index = 1; index <= count; index += 1) {
++    adapter.saveCommand(command(index), TERM, index);
++  }
++  adapter.commit(3);
++}
++
++test('SQLite committed identity is guarded on put and bulk append', async (t) => {
++  const db = new Database(':memory:');
++  const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
++  try {
++    await seed(adapter);
++    t.throws(
++      () => adapter.put({index: 2, term: TERM + 1, command: command(2)}),
++      {code: RAFT_COMMITTED_ENTRY_CONFLICT_CODE},
++      'put rejects committed replacement',
++    );
++    await t.rejects(
++      append(adapter, [
++        {index: 4, term: TERM + 1, command: command('safe-uncommitted')},
++        {index: 2, term: TERM, command: command('conflict')},
++      ]),
++      {code: RAFT_COMMITTED_ENTRY_CONFLICT_CODE},
++      'bulk append rejects the whole transaction on committed conflict',
++    );
++    t.same(adapter.get(2).command, command(2), 'committed row is unchanged');
++    t.same(adapter.get(4).command, command(4),
++      'earlier bulk item rolls back atomically');
++  } finally {
++    db.close();
++  }
++});
++
++test('SQLite inclusive truncation APIs clamp above committed boundary', async (t) => {
++  for (const method of ['removeFrom', 'truncateFrom']) {
++    const db = new Database(':memory:');
++    const adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
++    try {
++      await seed(adapter);
++      if (method === 'removeFrom') {
++        adapter.removeFrom(2);
++      } else {
++        await new Promise((resolve, reject) => {
++          adapter.truncateFrom(2, (error) => error ? reject(error) : resolve());
++        });
++      }
++      t.ok(adapter.get(3), `${method} preserves committed boundary`);
++      t.notOk(adapter.get(4), `${method} removes uncommitted suffix`);
++      t.equal(adapter.committedIndex, 3, `${method} keeps commit monotonic`);
++    } finally {
++      db.close();
++    }
++  }
++});
++
++test('SQLite committed identity remains guarded after reopen', async (t) => {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-immutability-'));
++  const dbPath = path.join(root, 'raft.db');
++  let db = new Database(dbPath);
++  let adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
++  await seed(adapter, 3);
++  db.close();
++
++  db = new Database(dbPath);
++  adapter = new SQLiteLogAdapter(db, {address: 'sqlite-node'});
++  try {
++    t.equal(adapter.committedIndex, 3, 'committed watermark survives reopen');
++    t.throws(
++      () => adapter.saveCommand(command('reopen-conflict'), TERM, 2),
++      {code: RAFT_COMMITTED_ENTRY_CONFLICT_CODE},
++      'reopened adapter rejects committed replacement',
++    );
++    t.same(adapter.get(2).command, command(2), 'durable committed row survives');
++  } finally {
++    db.close();
++    fs.rmSync(root, {recursive: true, force: true});
++  }
++});

@@ -6,6 +6,7 @@
 
 import {NUM} from '../constants/numbers.js';
 import {STRING} from '../constants/strings.js';
+import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {
   PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_STATE_KEY,
@@ -46,17 +47,14 @@ class PartitionRaftStorage {
    * Create a new Raft storage instance.
    * @param {Database} db - SQLite database instance.
    * @param {string} partitionId - Partition ID.
+   * @param {SQLiteLogAdapter|null} logAdapter - Canonical Raft log owner.
    */
-  constructor(db, partitionId) {
+  constructor(db, partitionId, logAdapter = null) {
     this.db = db;
     this.partitionId = partitionId;
+    this.logAdapter = logAdapter || new SQLiteLogAdapter(db);
     this.currentTerm = 0;
     this.votedFor = null;
-    this.commitIndex = 0;
-    this.lastApplied = 0;
-
-    // In-memory log for Raft entries
-    this.log = [];
 
     this.initializeRaftTables();
   }
@@ -69,9 +67,6 @@ class PartitionRaftStorage {
   initializeRaftTables() {
     // Create Raft state table
     this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_STATE_TABLE);
-
-    // Create Raft log table
-    this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_LOG_TABLE);
 
     // Load persisted state
     this.loadPersistedState();
@@ -96,22 +91,14 @@ class PartitionRaftStorage {
     if (votedRow) {
       this.votedFor = votedRow.value;
     }
+  }
 
-    // Load log entries
-    const entries = this.db.prepare(
-      PARTITION_SERVICE_SQL.SELECT_RAFT_LOGS,
-    ).all();
+  get commitIndex() {
+    return this.logAdapter.refreshCommittedIndexCacheFromStore();
+  }
 
-    this.log = entries.map((row) => new PartitionRaftLogEntry(
-      row.term,
-      row.log_index,
-      JSON.parse(row.command),
-    ));
-
-    if (this.log.length > 0) {
-      this.commitIndex = this.log[this.log.length - 1].index;
-      this.lastApplied = this.commitIndex;
-    }
+  get lastApplied() {
+    return this.logAdapter.refreshCommittedIndexCacheFromStore();
   }
 
   /**
@@ -138,16 +125,9 @@ class PartitionRaftStorage {
    * @return {PartitionRaftLogEntry} The appended entry.
    */
   appendEntry(data) {
-    const index = this.log.length + 1;
-    const entry = new PartitionRaftLogEntry(this.currentTerm, index, data);
-    this.log.push(entry);
-
-    // Persist to SQLite - use INSERT OR REPLACE to handle edge cases gracefully
-    this.db.prepare(
-      PARTITION_SERVICE_SQL.UPSERT_RAFT_LOG,
-    ).run(entry.index, entry.term, JSON.stringify(entry.data), entry.timestamp);
-
-    return entry;
+    return this.toPartitionEntry(
+      this.logAdapter.saveCommand(data, this.currentTerm),
+    );
   }
 
   /**
@@ -156,10 +136,9 @@ class PartitionRaftStorage {
    * @return {Array<PartitionRaftLogEntry>} Log entries.
    */
   getEntriesFrom(startIndex) {
-    if (startIndex < 1) {
-      return [...this.log];
-    }
-    return this.log.slice(startIndex - 1);
+    const previousIndex = startIndex < 1 ? 0 : startIndex - 1;
+    return this.logAdapter.getEntriesAfter(previousIndex)
+      .map((entry) => this.toPartitionEntry(entry));
   }
 
   /**
@@ -167,7 +146,10 @@ class PartitionRaftStorage {
    * @return {PartitionRaftLogEntry|null} Last entry or null.
    */
   getLastEntry() {
-    return this.log.length > 0 ? this.log[this.log.length - 1] : null;
+    const lastInfo = this.logAdapter.getLastInfo();
+    return lastInfo.index > 0 ?
+      this.toPartitionEntry(this.logAdapter.get(lastInfo.index)) :
+      null;
   }
 
   /**
@@ -176,10 +158,7 @@ class PartitionRaftStorage {
    * @return {PartitionRaftLogEntry|null} Entry or null.
    */
   getEntry(index) {
-    if (index < 1 || index > this.log.length) {
-      return null;
-    }
-    return this.log[index - 1];
+    return index < 1 ? null : this.toPartitionEntry(this.logAdapter.get(index));
   }
 
   /**
@@ -188,11 +167,8 @@ class PartitionRaftStorage {
    * @param {number} fromIndex - Index to truncate from (1-based).
    */
   truncateFrom(fromIndex) {
-    if (fromIndex >= 1 && fromIndex <= this.log.length) {
-      this.log = this.log.slice(0, fromIndex - 1);
-
-      // Truncate in SQLite
-      this.db.prepare(PARTITION_SERVICE_SQL.DELETE_RAFT_LOG_FROM).run(fromIndex);
+    if (fromIndex >= 1 && fromIndex <= this.getLastIndex()) {
+      this.logAdapter.removeFrom(fromIndex);
     }
   }
 
@@ -201,7 +177,7 @@ class PartitionRaftStorage {
    * @return {number} Number of entries.
    */
   getLogLength() {
-    return this.log.length;
+    return this.logAdapter.getEntriesAfter(0).length;
   }
 
   /**
@@ -220,6 +196,19 @@ class PartitionRaftStorage {
   getLastTerm() {
     const lastEntry = this.getLastEntry();
     return lastEntry ? lastEntry.term : 0;
+  }
+
+  /**
+   * Convert the canonical SQLite adapter entry into the legacy partition API.
+   * The partition facade owns no independent index, term, or command state.
+   * @param {Object|null} entry - Canonical Raft log entry.
+   * @return {PartitionRaftLogEntry|null} Partition-facing entry.
+   * @private
+   */
+  toPartitionEntry(entry) {
+    return entry ?
+      new PartitionRaftLogEntry(entry.term, entry.index, entry.command) :
+      null;
   }
 }
 
