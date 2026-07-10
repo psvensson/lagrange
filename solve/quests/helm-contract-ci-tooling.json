@@ -1,0 +1,38 @@
+{
+  "id": "helm-contract-ci-tooling",
+  "statement": "Every Forgejo lane that executes the Helm chart contract test installs the same pinned Helm release before dependencies and tests, while the release lane retains the same tool version.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W5",
+    "closesCL": [],
+    "parentQuest": "helm-admin-default-deny-cutover",
+    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+    "sealedAtCommit": "ce18db2ef36782d6d9fa2fd74eb21532e68ca76d"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/helm-contract-ci-tooling.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "helm-contract-ci-tooling-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/helm-contract-ci-tooling.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

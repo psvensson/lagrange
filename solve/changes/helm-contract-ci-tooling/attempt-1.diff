@@ -1,0 +1,41 @@
+diff --git a/.forgejo/workflows/ci.yml b/.forgejo/workflows/ci.yml
+index b3fa713e..6fc47d3e 100644
+--- a/.forgejo/workflows/ci.yml
++++ b/.forgejo/workflows/ci.yml
+@@ -43,7 +43,11 @@ jobs:
+       - name: Install gate CLI tools
+         run: |
+           apt-get update
+-          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client
++          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client curl tar
++          HELM_VERSION=v3.16.3
++          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
++            | tar -xz --strip-components=1 -C /usr/local/bin linux-amd64/helm
++          helm version --short
+ 
+       - name: Install dependencies
+         run: npm ci
+diff --git a/.forgejo/workflows/full-gate.yml b/.forgejo/workflows/full-gate.yml
+index e2d26b74..c474ed15 100644
+--- a/.forgejo/workflows/full-gate.yml
++++ b/.forgejo/workflows/full-gate.yml
+@@ -33,11 +33,16 @@ jobs:
+ 
+       # Tools the gate shells out to that node:22-bookworm does not ship:
+       # rg (spec-led-runtime-legacy-deletion-guard test), jq (failure-report
+-      # shell scripts), java (model:contracts runs TLC via tla2tools.jar).
+-      - name: Install gate CLI tools (ripgrep, jq, java, psql)
++      # shell scripts), java (model:contracts runs TLC via tla2tools.jar), and
++      # Helm (the fast fleet parses the real lagrange-node chart render).
++      - name: Install gate CLI tools (ripgrep, jq, java, psql, helm)
+         run: |
+           apt-get update
+-          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client
++          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client curl tar
++          HELM_VERSION=v3.16.3
++          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
++            | tar -xz --strip-components=1 -C /usr/local/bin linux-amd64/helm
++          helm version --short
+ 
+       - name: Install dependencies
+         run: npm ci

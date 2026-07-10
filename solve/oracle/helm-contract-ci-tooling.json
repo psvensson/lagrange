@@ -1,0 +1,8 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "helm_contract_tooling_aligned",
+  "verification": "ci.yml, full-gate.yml, and release.yml parse as YAML; every test lane that can execute the Helm contract installs Helm v3.16.3 before npm dependencies/tests; the final full static gate passed",
+  "revalidatedAt": "2026-07-10T18:06:16Z"
+}

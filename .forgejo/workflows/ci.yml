@@ -43,7 +43,11 @@ jobs:
       - name: Install gate CLI tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client
+          apt-get install -y --no-install-recommends ripgrep jq default-jre-headless postgresql-client curl tar
+          HELM_VERSION=v3.16.3
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin linux-amd64/helm
+          helm version --short
 
       - name: Install dependencies
         run: npm ci
