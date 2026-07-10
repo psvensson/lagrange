@@ -7,6 +7,7 @@
 import {NUM} from '../constants/numbers.js';
 import {STRING} from '../constants/strings.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
+import {isValidRaftLogIndex} from '../raft/log-index.js';
 import {
   PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_STATE_KEY,
@@ -167,7 +168,8 @@ class PartitionRaftStorage {
    * @param {number} fromIndex - Index to truncate from (1-based).
    */
   truncateFrom(fromIndex) {
-    if (fromIndex >= 1 && fromIndex <= this.getLastIndex()) {
+    if (isValidRaftLogIndex(fromIndex) &&
+        fromIndex >= 1 && fromIndex <= this.getLastIndex()) {
       this.logAdapter.removeFrom(fromIndex);
     }
   }

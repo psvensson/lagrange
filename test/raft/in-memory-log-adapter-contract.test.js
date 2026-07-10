@@ -1,8 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
-import {
-  IN_MEMORY_LOG_COMPACTION_RETENTION,
-} from '../../src/raft/in-memory-log-adapter.js';
 
 function createMockNode(address = 'test-node', term = 1) {
   return {address, term};
@@ -42,14 +39,11 @@ test('getEntryInfoBefore returns default when entry is null ' +
     'null entry should return default info with committedIndex');
 });
 
-test('InMemoryLogAdapter - commit compacts entries below retention ' +
-    'window to bound memory (uses compactCommittedEntries)',
+test('InMemoryLogAdapter - commit retains the full committed prefix ' +
+    'until snapshot transfer exists',
 async (t) => {
-  // Regression: under sustained load the in-memory raft log for message
-  // groups grew unboundedly because committed entries were never removed.
-  // commit() must compact entries older than the retention window.
   const adapter = new InMemoryLogAdapter(createMockNode('n1', 1));
-  const totalEntries = IN_MEMORY_LOG_COMPACTION_RETENTION + 50;
+  const totalEntries = 1050;
 
   for (let i = 1; i <= totalEntries; i++) {
     await adapter.saveCommand({data: i}, 1, i);
@@ -57,15 +51,14 @@ async (t) => {
   t.equal(adapter.entries.size, totalEntries,
     'all entries should exist before compaction');
 
-  // Commit all entries — this should trigger compaction
+  // A committed prefix cannot be physically removed until snapshot install
+  // gives a lagging follower another recovery path.
   for (let i = 1; i <= totalEntries; i++) {
     await adapter.commit(i);
   }
 
-  t.ok(adapter.entries.size <= IN_MEMORY_LOG_COMPACTION_RETENTION,
-    'entries map should be bounded by retention window after commit; ' +
-    'actual=' + adapter.entries.size +
-    ' retention=' + IN_MEMORY_LOG_COMPACTION_RETENTION);
+  t.equal(adapter.entries.size, totalEntries,
+    'every committed entry remains available for AppendEntries catch-up');
   t.equal(adapter.committedIndex, totalEntries,
     'committedIndex should reflect the last committed entry');
   t.equal(adapter.lastIndex, totalEntries,
@@ -76,14 +69,12 @@ async (t) => {
   t.ok(lastEntry, 'last entry should still be accessible');
   t.equal(lastEntry.index, totalEntries);
 
-  // Entries well below the retention window should be compacted
+  // The oldest committed identity remains available.
   const veryOldEntry = await adapter.get(1);
-  t.equal(veryOldEntry, null,
-    'entries below retention window should be compacted');
+  t.ok(veryOldEntry, 'oldest committed entry remains available');
 });
 
-test('InMemoryLogAdapter - commit does not compact when below ' +
-    'retention threshold', async (t) => {
+test('InMemoryLogAdapter - explicit compaction is typed unsupported', async (t) => {
   const adapter = new InMemoryLogAdapter(createMockNode('n1', 1));
   const count = 10;
 
@@ -92,6 +83,10 @@ test('InMemoryLogAdapter - commit does not compact when below ' +
     await adapter.commit(i);
   }
 
-  t.equal(adapter.entries.size, count,
-    'should not compact when entry count is below retention threshold');
+  const outcome = adapter.compactCommittedEntries();
+  t.same(outcome, {
+    outcome: 'snapshot_protocol_unavailable',
+    changed: false,
+  });
+  t.equal(adapter.entries.size, count, 'explicit compaction changes no entries');
 });

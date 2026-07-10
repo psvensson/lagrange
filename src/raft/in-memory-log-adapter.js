@@ -2,6 +2,8 @@ import {
   COMMITTED_ENTRY_WRITE_OUTCOME,
   guardCommittedEntryWrite,
 } from './committed-entry-guard.js';
+import {unsupportedRaftCompactionResult} from './compaction-policy.js';
+import {isValidRaftLogIndex} from './log-index.js';
 
 /**
  * InMemoryLogAdapter - In-memory log storage for liferaft.
@@ -12,15 +14,11 @@ import {
 
 
 /**
- * Number of committed entries to retain after compaction.
- * Keeps a window for slow followers to catch up via getEntriesAfter.
- * @type {number}
- */
-const IN_MEMORY_LOG_COMPACTION_RETENTION = 1000;
-
-/**
  * In-memory log adapter for liferaft.
  * Implements the liferaft Log interface with async methods.
+ * State is intentionally ephemeral across process restart, but committed
+ * identity remains immutable for this adapter's lifetime. No committed prefix
+ * is removed while snapshot transfer/install is unavailable.
  */
 class InMemoryLogAdapter {
   /**
@@ -143,9 +141,10 @@ class InMemoryLogAdapter {
    * @return {Promise<void>}
    */
   async removeEntriesAfter(index) {
-    const safeIndex = Number.isFinite(index) ?
-      Math.max(index, this.committedIndex) :
-      index;
+    if (!isValidRaftLogIndex(index)) {
+      return;
+    }
+    const safeIndex = Math.max(index, this.committedIndex);
     for (const [key] of this.entries) {
       if (key > safeIndex) {
         this.entries.delete(key);
@@ -269,30 +268,15 @@ class InMemoryLogAdapter {
     entry.committed = true;
     this.committedIndex = Math.max(this.committedIndex, index);
     this.entries.set(index, entry);
-    this.compactCommittedEntries();
     return entry;
   }
 
   /**
-   * Remove committed entries older than the retention window.
-   * Keeps the most recent IN_MEMORY_LOG_COMPACTION_RETENTION entries
-   * so slow followers can still catch up via getEntriesAfter.
-   * @private
+   * Refuse committed-prefix compaction until snapshot recovery exists.
+   * @return {{outcome: string, changed: boolean}} Typed no-change result.
    */
   compactCommittedEntries() {
-    if (this.entries.size <= IN_MEMORY_LOG_COMPACTION_RETENTION) {
-      return;
-    }
-    const cutoff =
-      this.committedIndex - IN_MEMORY_LOG_COMPACTION_RETENTION;
-    if (cutoff <= 0) {
-      return;
-    }
-    for (const key of this.entries.keys()) {
-      if (key <= cutoff) {
-        this.entries.delete(key);
-      }
-    }
+    return unsupportedRaftCompactionResult();
   }
 
   /**
@@ -305,15 +289,6 @@ class InMemoryLogAdapter {
     this.committedIndex = 0;
     return true;
   }
-
-  /**
-   * Reset all state (for testing).
-   */
-  reset() {
-    this.entries.clear();
-    this.lastIndex = 0;
-    this.committedIndex = 0;
-  }
 }
 
-export {InMemoryLogAdapter, IN_MEMORY_LOG_COMPACTION_RETENTION};
+export {InMemoryLogAdapter};

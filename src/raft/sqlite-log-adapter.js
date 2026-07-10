@@ -14,6 +14,13 @@ import {
   COMMITTED_ENTRY_WRITE_OUTCOME,
   guardCommittedEntryWrite,
 } from './committed-entry-guard.js';
+import {unsupportedRaftCompactionResult} from './compaction-policy.js';
+import {isValidRaftLogIndex} from './log-index.js';
+import {
+  installSQLiteLogAdapterCallbackApi,
+  SQLITE_RAFT_STATE_KEY,
+  SQLITE_RAFT_STATE_UPSERT_SQL,
+} from './sqlite-log-adapter-callback-api.js';
 
 const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
 const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
@@ -25,11 +32,6 @@ const LOCAL_STR_1JYKG = 'DELETE FROM _raft_log WHERE log_index > ?';
 const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
   'Refused raft log truncation into the committed prefix ' +
   '(committed-entry-loss prevented)';
-const LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_STATE_KEY_VA = 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)';
-const LOCAL_STR_COMMITTEDINDEX = 'committedIndex';
-const LOCAL_STR_CURRENTTERM = 'currentTerm';
-const LOCAL_STR_VOTEDFOR = 'votedFor';
-const LOCAL_STR_COMMITINDEX = 'commitIndex';
 
 /**
  * SQLite log adapter for liferaft.
@@ -262,8 +264,12 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
+    if (!isValidRaftLogIndex(index)) {
+      return;
+    }
+    const safeIndex = this.safeInclusiveTruncationIndex(index);
     this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
-      .run(this.safeInclusiveTruncationIndex(index));
+      .run(safeIndex);
   }
 
   /**
@@ -611,8 +617,19 @@ class SQLiteLogAdapter {
     // Raft response, not obeying it. truncateConflictingSameIndexTail already
     // guards its own call (liferaft.js), but the invariant belongs at the
     // adapter so EVERY caller — including base liferaft — is covered.
-    this.db.prepare(LOCAL_STR_1JYKG)
-      .run(this.safeExclusiveTruncationIndex(index));
+    if (!isValidRaftLogIndex(index)) {
+      return;
+    }
+    const safeIndex = this.safeExclusiveTruncationIndex(index);
+    this.db.prepare(LOCAL_STR_1JYKG).run(safeIndex);
+  }
+
+  /**
+   * Refuse committed-prefix compaction until snapshot recovery exists.
+   * @return {{outcome: string, changed: boolean}} Typed no-change result.
+   */
+  compactCommittedEntries() {
+    return unsupportedRaftCompactionResult();
   }
 
   recordCommittedTruncationBlock(requestedIndex, committedIndex) {
@@ -636,18 +653,18 @@ class SQLiteLogAdapter {
 
   safeExclusiveTruncationIndex(index) {
     const committedIndex = this.refreshCommittedIndexCacheFromStore();
-    if (Number.isFinite(index) && index < committedIndex) {
+    if (index < committedIndex) {
       this.recordCommittedTruncationBlock(index, committedIndex);
     }
-    return Number.isFinite(index) ? Math.max(index, committedIndex) : index;
+    return Math.max(index, committedIndex);
   }
 
   safeInclusiveTruncationIndex(index) {
     const committedIndex = this.refreshCommittedIndexCacheFromStore();
-    if (Number.isFinite(index) && index <= committedIndex) {
+    if (index <= committedIndex) {
       this.recordCommittedTruncationBlock(index, committedIndex);
     }
-    return Number.isFinite(index) ? Math.max(index, committedIndex + 1) : index;
+    return Math.max(index, committedIndex + 1);
   }
 
   /**
@@ -691,18 +708,21 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
+    if (!isValidRaftLogIndex(index)) {
+      return;
+    }
     // CL-018: the raft committedIndex is monotonic by definition. The
     // leader's commandAck calls this for EVERY ack — including catch-up
     // acks at OLD indexes, which used to REGRESS the persisted watermark
     // until the next head ack (CL-015 adjacent finding #2). Clamp here so
     // every caller is monotonic.
     const current = this.refreshCommittedIndexCacheFromStore();
-    if (Number.isFinite(index) && index <= current) {
+    if (index <= current) {
       return;
     }
     this.db.prepare(
-      LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_STATE_KEY_VA,
-    ).run(LOCAL_STR_COMMITTEDINDEX, String(index));
+      SQLITE_RAFT_STATE_UPSERT_SQL,
+    ).run(SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX, String(index));
     this._committedIndexCache = index;
   }
 
@@ -734,56 +754,6 @@ class SQLiteLogAdapter {
   }
 
   /**
-   * Get entries from a starting index.
-   * Requirements: 4.3
-   * @param {number} startIndex - Starting index
-   * @param {Function} callback - Callback with entries
-   */
-  getEntriesFrom(startIndex, callback) {
-    if (!this.isOpen()) {
-      callback(null, []);
-      return;
-    }
-    try {
-      const committedIndex = this.getCommittedIndex();
-      const entries = this.db.prepare(
-        'SELECT log_index, term, command FROM _raft_log WHERE log_index >= ? ORDER BY log_index',
-      ).all(startIndex);
-
-      callback(
-        null,
-        entries.map((row) => this.readEntryRow(row, committedIndex)),
-      );
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
-   * Get the last log entry (callback version).
-   * @param {Function} callback - Callback with entry
-   */
-  getLastEntryCallback(callback) {
-    if (!this.isOpen()) {
-      callback(null, null);
-      return;
-    }
-    try {
-      const row = this.db.prepare(
-        'SELECT log_index, term, command FROM _raft_log ORDER BY log_index DESC LIMIT 1',
-      ).get();
-
-      if (row) {
-        callback(null, this.readEntryRow(row));
-      } else {
-        callback(null, null);
-      }
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
    * Truncate log from a specific index.
    * Requirements: 4.4
    * @param {number} fromIndex - Index to truncate from
@@ -795,142 +765,17 @@ class SQLiteLogAdapter {
       return;
     }
     try {
+      if (!isValidRaftLogIndex(fromIndex)) {
+        callback(null);
+        return;
+      }
+      const safeIndex = this.safeInclusiveTruncationIndex(fromIndex);
       this.db.prepare(LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX)
-        .run(this.safeInclusiveTruncationIndex(fromIndex));
+        .run(safeIndex);
       callback(null);
     } catch (error) {
       callback(error);
     }
-  }
-
-  /**
-   * Get log length.
-   * @param {Function} callback - Callback with length
-   */
-  getLength(callback) {
-    if (!this.isOpen()) {
-      callback(null, 0);
-      return;
-    }
-    try {
-      const row = this.db.prepare('SELECT COUNT(*) as count FROM _raft_log').get();
-      callback(null, row.count);
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
-   * Get persistent Raft state.
-   * Requirements: 4.1, 4.2
-   * @param {string} key - State key (e.g., 'currentTerm', 'votedFor')
-   * @param {Function} callback - Callback with value
-   */
-  getState(key, callback) {
-    if (!this.isOpen()) {
-      callback(null, null);
-      return;
-    }
-    try {
-      const row = this.db.prepare('SELECT value FROM _raft_state WHERE key = ?').get(key);
-      callback(null, row ? row.value : null);
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
-   * Set persistent Raft state.
-   * Requirements: 4.1, 4.2
-   * @param {string} key - State key
-   * @param {string} value - State value
-   * @param {Function} callback - Completion callback
-   */
-  setState(key, value, callback) {
-    if (!this.isOpen()) {
-      callback(null);
-      return;
-    }
-    try {
-      this.db.prepare(LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_STATE_KEY_VA)
-        .run(key, value);
-      callback(null);
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  /**
-   * Get current term.
-   * Requirements: 4.1
-   * @param {Function} callback - Callback with term
-   */
-  getTerm(callback) {
-    this.getState(LOCAL_STR_CURRENTTERM, (err, value) => {
-      if (err) {
-        callback(err);
-      } else {
-        callback(null, value ? parseInt(value, 10) : 0);
-      }
-    });
-  }
-
-  /**
-   * Set current term.
-   * Requirements: 4.1
-   * @param {number} term - Term to set
-   * @param {Function} callback - Completion callback
-   */
-  setTerm(term, callback) {
-    this.setState(LOCAL_STR_CURRENTTERM, String(term), callback);
-  }
-
-  /**
-   * Get votedFor.
-   * Requirements: 4.2
-   * @param {Function} callback - Callback with votedFor
-   */
-  getVotedFor(callback) {
-    this.getState(LOCAL_STR_VOTEDFOR, (err, value) => {
-      if (err) {
-        callback(err);
-      } else {
-        callback(null, value || null);
-      }
-    });
-  }
-
-  /**
-   * Set votedFor.
-   * Requirements: 4.2
-   * @param {string|null} candidateId - Candidate ID or null
-   * @param {Function} callback - Completion callback
-   */
-  setVotedFor(candidateId, callback) {
-    this.setState(LOCAL_STR_VOTEDFOR, candidateId || '', callback);
-  }
-
-  /**
-   * Get commit index.
-   * @param {Function} callback - Callback with commit index
-   */
-  getCommitIndex(callback) {
-    this.getState(LOCAL_STR_COMMITINDEX, (err, value) => {
-      if (err) {
-        callback(err);
-      } else {
-        callback(null, value ? parseInt(value, 10) : 0);
-      }
-    });
-  }
-
-  /**
-   * Set commit index.
-   * @param {number} index - Commit index to set
-   * @param {Function} callback - Completion callback
-   */
-  setCommitIndex(index, callback) {
-    this.setState(LOCAL_STR_COMMITINDEX, String(index), callback);
   }
 
   /**
@@ -943,5 +788,7 @@ class SQLiteLogAdapter {
     // The database will be closed when PartitionService.shutdown() is called
   }
 }
+
+installSQLiteLogAdapterCallbackApi(SQLiteLogAdapter);
 
 export {SQLiteLogAdapter};

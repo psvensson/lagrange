@@ -62,6 +62,16 @@ Entity types:
 - Replicated service groups (`wasm_service`, `runtime_service`):
   SQLite log adapter (persistent)
 
+The in-memory adapter is ephemeral across process restart; that weaker
+durability contract does not permit deleting committed entries while the
+adapter is live. Neither adapter currently implements snapshot create,
+transfer, or install, so both retain the complete committed prefix needed by a
+lagging follower's ordinary AppendEntries recovery. Explicit compaction returns
+the typed `snapshot_protocol_unavailable` no-change outcome. Clearing an
+in-memory adapter during lifecycle teardown is whole-instance destruction, not
+live log compaction. Physical prefix removal remains gated on the separately
+planned [Raft snapshot transfer/install protocol](future/raft-snapshot-transfer-install.md).
+
 ## Rebalancing
 
 ### UnifiedRebalancer
