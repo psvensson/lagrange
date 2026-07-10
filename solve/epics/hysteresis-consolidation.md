@@ -1,3 +1,10 @@
+---
+id: hysteresis-consolidation
+roadmapRow: null
+status: active
+graduatesTo: null
+---
+
 # Epic: consolidate the fragmented hysteresis mechanisms
 
 Session s12 (2026-07-08). Design research: 5 parallel subagents (C0 first-principles floor, C1 liveness
