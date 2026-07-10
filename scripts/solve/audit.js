@@ -169,13 +169,21 @@ function auditReportOrdering(root, quest, log) {
   return [];
 }
 
+// First-class machine-readable tag for a subagent verification finding
+// (`finding --kind verifier-approval`): the matcher keys on the kind, so the
+// verification claim's prose no longer has to hit the legacy keyword regex.
+// The prose regex remains as the fallback for findings recorded without a kind.
+const VERIFIER_APPROVAL_FINDING_KIND = 'verifier-approval';
+
 function isSubagentVerificationFinding(event, frontier) {
-  return event.type === EVENT_FINDING &&
-    event.frontier === frontier &&
-    typeof event.evidence === 'string' &&
-    event.evidence.startsWith('subagent:') &&
-    /source|code|change|quest|intent|guideline|doctrine|verif/iu
-      .test(String(event.claim || ''));
+  if (event.type !== EVENT_FINDING || event.frontier !== frontier) return false;
+  if (typeof event.evidence !== 'string' ||
+    !event.evidence.startsWith('subagent:')) {
+    return false;
+  }
+  if (event.kind === VERIFIER_APPROVAL_FINDING_KIND) return true;
+  return /source|code|change|quest|intent|guideline|doctrine|verif/iu
+    .test(String(event.claim || ''));
 }
 
 function auditSourceChangeVerification(root, quest, log, startIndex) {

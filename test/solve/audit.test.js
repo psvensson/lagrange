@@ -254,6 +254,45 @@ tap.test('Quest audit', async (t) => {
     t.end();
   });
 
+  t.test('accepts --kind verifier-approval regardless of claim prose', (t) => {
+    const root = tmp();
+    const {quest, oracle} = makeQuest(root, 'workflow-kind-verifier');
+    saveQuest(root, quest);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'source', 'scripts/quest-context.js'),
+      summary: 'source change requiring verifier',
+    });
+
+    // A claim with NONE of the legacy prose keywords: without the kind tag the
+    // matcher must reject it; with kind verifier-approval it must match.
+    appendEvent(root, quest.id, {
+      type: 'finding',
+      frontier: 'workflow-kind-verifier-main',
+      claim: 'green across the board',
+      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
+    });
+    let audit = auditQuest(root, quest);
+    t.match(
+      audit.problems.map((item) => item.message).join('\n'),
+      /source code changes require a later subagent verification finding/u,
+    );
+
+    appendEvent(root, quest.id, {
+      type: 'finding',
+      frontier: 'workflow-kind-verifier-main',
+      kind: 'verifier-approval',
+      claim: 'green across the board',
+      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
+    });
+    writeReport(root, quest.id);
+    audit = auditQuest(root, quest);
+    t.equal(audit.status, 'pass');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('requires model evidence after architecture model changes', (t) => {
     const root = tmp();
     const {quest, oracle} = makeQuest(root, 'model-contract-demo');

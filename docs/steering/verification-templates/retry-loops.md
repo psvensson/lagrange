@@ -1,3 +1,7 @@
+---
+categories: [retry-loops]
+---
+
 # Verification Template: Retry / Re-drive / Follow-up Loops
 
 For changes to retry registration, follow-up timers, rearm logic, or

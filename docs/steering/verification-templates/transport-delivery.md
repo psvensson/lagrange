@@ -1,3 +1,7 @@
+---
+categories: [transport-delivery]
+---
+
 # Verification Template: Transport / Delivery / Wake Semantics
 
 For changes touching messageRouter delivery, wakes, dispatch handoffs, or

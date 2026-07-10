@@ -1,3 +1,7 @@
+---
+categories: [formation-circularity]
+---
+
 # Verification Template: Formation-vs-Steady-state Circularity
 
 For changes to control-plane subsystems that other machinery depends on

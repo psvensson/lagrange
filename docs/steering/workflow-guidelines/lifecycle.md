@@ -18,12 +18,13 @@ last_reviewed: 2026-07-10
 Every non-trivial task follows this lifecycle:
 
 1. **Author or select a Quest.** Use `node scripts/solve.js new --id <id>` when
-   no existing Quest matches the requested outcome. The template writes
-   `class: "product"` (a MEASURED goal); for a decision/scaffolding Quest that
-   closes on a recorded decision rather than a measured artifact, edit the
-   `class` field to `"process"` in the quest JSON right after `new`, before the
-   first `run`/`step` (the field is consumed by the closure-kind and portfolio
-   machinery).
+   no existing Quest matches the requested outcome. The default class is
+   `product` (a MEASURED goal); for a decision/scaffolding Quest that closes on
+   a recorded decision rather than a measured artifact, pass
+   `--class process` at draft time (the field is consumed by the closure-kind
+   and portfolio machinery). For an existing draft, editing the `class` field
+   to `"process"` in the quest JSON before the first `run`/`step` remains
+   equivalent.
 2. **Seal the goal.** Define `doneWhen` before implementation begins. The goal
    is sealed at the first `run` or `step` invocation — the first Solver
    declaration; before that, the quest file is a refinable draft.

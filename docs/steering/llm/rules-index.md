@@ -5,7 +5,7 @@ citations: `npm run rule -- --id <ID>` (or `--tag`, `--domain`,
 `--strength`, or free-text terms). Regenerate with
 `node scripts/lookup-rule.js --write-index`.
 
-Total rules: 406 (402 masters + 4 cross-domain aliases; alias rows say "alias of <ID>" and are suppressed from the per-domain packs, so pack banners count masters only). machine_check names the command that enforces the rule, or —.
+Total rules: 407 (403 masters + 4 cross-domain aliases; alias rows say "alias of <ID>" and are suppressed from the per-domain packs, so pack banners count masters only). machine_check names the command that enforces the rule, or —.
 
 | id | strength | domain | machine_check | summary |
 | --- | --- | --- | --- | --- |
@@ -349,13 +349,14 @@ Total rules: 406 (402 masters + 4 cross-domain aliases; alias rows say "alias of
 | TEST-0085 | must | testing | — | Cite immutable artifacts, not mutable active directories. Findings that cite live/demo lo… |
 | GOV-0081 | must_not | governance | — | Each auto-commit refuses when its gate is not met — the mid-quest checkpoint gate require… |
 | GOV-0082 | must_not | governance | — | Pushing is a separate, outward-facing action — for Quest and ad-hoc work alike, a never-b… |
-| GOV-0083 | must_not | governance | — | The handoff command runs the audit and refuses on failure, derives the in-scope set purel… |
-| GOV-0084 | must_not | governance | — | When a finding materially falsifies or constrains ANOTHER declared quest's premise, route… |
-| GOV-0085 | must_not | governance | — | Provenance honesty (mirroring CLOSURE_MEASURED vs CLOSURE_DECISION): a ladder park is a M… |
+| GOV-0083 | must_not | governance | — | The verifier-approval kind is the first-class machine-readable tag the audit matcher keys… |
+| GOV-0084 | must_not | governance | — | The handoff command runs the audit and refuses on failure, derives the in-scope set purel… |
+| GOV-0085 | must_not | governance | — | When a finding materially falsifies or constrains ANOTHER declared quest's premise, route… |
+| GOV-0086 | must_not | governance | — | Provenance honesty (mirroring CLOSURE_MEASURED vs CLOSURE_DECISION): a ladder park is a M… |
 | ARCH-0160 | may | architecture | — | Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize … |
-| GOV-0086 | must_not | governance | — | The production reflection path runs only when the executor exposes a reflect() method (th… |
-| GOV-0087 | must_not | governance | — | A supervised driver — a human, or any agent that drives the Solver through individual sub… |
-| GOV-0088 | must_not | governance | — | It keys ONLY on structured fields (status, probe type, oracle done, state questStatus) — … |
+| GOV-0087 | must_not | governance | — | The production reflection path runs only when the executor exposes a reflect() method (th… |
+| GOV-0088 | must_not | governance | — | A supervised driver — a human, or any agent that drives the Solver through individual sub… |
+| GOV-0089 | must_not | governance | — | It keys ONLY on structured fields (status, probe type, oracle done, state questStatus) — … |
 | TEST-0086 | should | testing | — | No other tests should break |
 | ARCH-0161 | should | architecture | — | A human idea should first become either: - a sharpened roadmap item; - or a bounded Quest |
 | ARCH-0162 | should | architecture | — | Active implementation should target one executable concern per Quest. |
@@ -364,54 +365,54 @@ Total rules: 406 (402 masters + 4 cross-domain aliases; alias rows say "alias of
 | TEST-0088 | should | testing | — | Runtime Quests that touch already oversized files should record whether they are adding l… |
 | TEST-0089 | should | testing | — | These tests should be small and targeted. |
 | TEST-0090 | should | testing | — | The review should produce candidate findings or risks; the Solver still owns terminal sta… |
-| GOV-0089 | must | governance | — | Before the landing session ends, the flag MUST be resolved: validate the change (determin… |
-| GOV-0090 | must | governance | — | Flags inherited from before this rule are recorded debt, not license: retire or promote e… |
-| GOV-0091 | must | governance | — | class: "product" (default) or "process". Product goals must be MEASURED against a real ar… |
-| GOV-0092 | must | governance | — | Regression-restore gate: once a measured run records an invariant regression, the very ne… |
-| GOV-0093 | must_not | governance | — | Findings promoted into steering MUST be written as a normative sentence containing a reco… |
-| GOV-0094 | must_not | governance | — | When the user asks for a plan, design, or review with no implementation-truth change requ… |
+| GOV-0090 | must | governance | — | Before the landing session ends, the flag MUST be resolved: validate the change (determin… |
+| GOV-0091 | must | governance | — | Flags inherited from before this rule are recorded debt, not license: retire or promote e… |
+| GOV-0092 | must | governance | — | class: "product" (default) or "process". Product goals must be MEASURED against a real ar… |
+| GOV-0093 | must | governance | — | Regression-restore gate: once a measured run records an invariant regression, the very ne… |
+| GOV-0094 | must_not | governance | — | Findings promoted into steering MUST be written as a normative sentence containing a reco… |
+| GOV-0095 | must_not | governance | — | When the user asks for a plan, design, or review with no implementation-truth change requ… |
 | TEST-0091 | must_not | testing | — | A convergence bug MUST be reproduced deterministically in-process BEFORE changing code; t… |
 | TEST-0092 | must_not | testing | — | A convergence-bug repro MUST exercise the layer where the invariant is produced or violat… |
-| GOV-0095 | must | governance | — | explore: open a bounded free-explore rung. A missing theory maps here: the run keeps thin… |
+| GOV-0096 | must | governance | — | explore: open a bounded free-explore rung. A missing theory maps here: the run keeps thin… |
 | TEST-0093 | may | testing | — | Only return to suite-local fixes after the shared runner boundary is shown stable. |
 | TEST-0094 | may | testing | — | Only restore higher parallelism after the aggregate gate is proven stable at the new boun… |
 | TEST-0095 | may | testing | — | Are multiple recent bugs clustering around the same boundary or component? That may indic… |
 | ARCH-0164 | should | architecture | — | Runtime Quests that follow such a model should cite it as their scope basis and proof sur… |
 | ARCH-0165 | should | architecture | — | Implementation work should be as explicit and bounded as the runtime design. |
 | ARCH-0166 | should | architecture | — | Optional real sub-agents should accelerate this sequence, not replace it. |
-| GOV-0096 | should | governance | — | Frontier theory: why the next local intervention should move the selected frontier metric. |
-| GOV-0097 | must | governance | — | Therefore, when authoring a quest whose defect class is visible in a live surface (demo, … |
-| GOV-0098 | must | governance | — | A resume-critical result (a newly pinned binding head, a decided next move) must therefor… |
-| GOV-0099 | should | governance | — | optional rulesOut text for approaches that should not be retried. |
-| GOV-0100 | must | governance | — | For a source-changing attempt whose proof depends on a live/distributed precondition, the… |
-| GOV-0101 | must | governance | — | The default execution posture for a non-trivial Quest is autonomous: the agent SHOULD dri… |
-| GOV-0102 | must | governance | — | The agent MUST stop and request user input only on one of the four canonical core.md stop… |
-| GOV-0103 | must | governance | — | Guards: the command refuses without a prior reflect --altitude on the quest (the frame-qu… |
-| GOV-0104 | should | governance | — | The review should return findings, candidate risks, or suggested frontiers. |
-| GOV-0105 | may | governance | — | A row may move to active implementation only when the intended behavior is sharp enough t… |
+| GOV-0097 | should | governance | — | Frontier theory: why the next local intervention should move the selected frontier metric. |
+| GOV-0098 | must | governance | — | Therefore, when authoring a quest whose defect class is visible in a live surface (demo, … |
+| GOV-0099 | must | governance | — | A resume-critical result (a newly pinned binding head, a decided next move) must therefor… |
+| GOV-0100 | should | governance | — | optional rulesOut text for approaches that should not be retried. |
+| GOV-0101 | must | governance | — | For a source-changing attempt whose proof depends on a live/distributed precondition, the… |
+| GOV-0102 | must | governance | — | The default execution posture for a non-trivial Quest is autonomous: the agent SHOULD dri… |
+| GOV-0103 | must | governance | — | The agent MUST stop and request user input only on one of the four canonical core.md stop… |
+| GOV-0104 | must | governance | — | Guards: the command refuses without a prior reflect --altitude on the quest (the frame-qu… |
+| GOV-0105 | should | governance | — | The review should return findings, candidate risks, or suggested frontiers. |
+| GOV-0106 | may | governance | — | A row may move to active implementation only when the intended behavior is sharp enough t… |
 | TEST-0096 | may | testing | — | The test-only-paths rule and this flag-coupling rule together close the loop — neither te… |
 | TEST-0097 | may | testing | — | Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in t… |
 | TEST-0098 | may | testing | — | System guideline §9 (Load May Slow The System, Not Break It) requires that all subsystems… |
-| GOV-0106 | should | governance | — | Scope pressure is advisory rather than terminal, but a high-severity signal should usuall… |
-| GOV-0107 | should | governance | — | Reach for step only for human-paced or exploratory work — an autonomous agent should almo… |
-| GOV-0108 | must | governance | — | Before presenting any hypothesis, root-cause theory, or proposed lever to the operator, y… |
-| GOV-0109 | must | governance | — | Before re-deriving an expensive analysis by hand, you MUST first sort the candidate artif… |
-| GOV-0110 | must | governance | — | Any steering rule that can be enforced by a machine check (lint rule, ratchet, guard scri… |
-| GOV-0111 | should | governance | — | Independent work within a Quest SHOULD run concurrently: batch independent reads, fan out… |
-| GOV-0112 | should | governance | — | Broad mechanical sweeps SHOULD use the Workflow harness to pipeline the work-list. |
-| GOV-0113 | should | governance | — | Longer work SHOULD use run --keep-alive so the loop survives those gates. |
-| GOV-0114 | should | governance | — | In-repo steering (docs/steering/, the generated packs under docs/steering/llm/, rules.jso… |
+| GOV-0107 | should | governance | — | Scope pressure is advisory rather than terminal, but a high-severity signal should usuall… |
+| GOV-0108 | should | governance | — | Reach for step only for human-paced or exploratory work — an autonomous agent should almo… |
+| GOV-0109 | must | governance | — | Before presenting any hypothesis, root-cause theory, or proposed lever to the operator, y… |
+| GOV-0110 | must | governance | — | Before re-deriving an expensive analysis by hand, you MUST first sort the candidate artif… |
+| GOV-0111 | must | governance | — | Any steering rule that can be enforced by a machine check (lint rule, ratchet, guard scri… |
+| GOV-0112 | should | governance | — | Independent work within a Quest SHOULD run concurrently: batch independent reads, fan out… |
+| GOV-0113 | should | governance | — | Broad mechanical sweeps SHOULD use the Workflow harness to pipeline the work-list. |
+| GOV-0114 | should | governance | — | Longer work SHOULD use run --keep-alive so the loop survives those gates. |
+| GOV-0115 | should | governance | — | In-repo steering (docs/steering/, the generated packs under docs/steering/llm/, rules.jso… |
 | ARCH-0167 | may | architecture | — | Under load, the system may slow down, defer work, or reject new edge work with structured… |
-| GOV-0115 | may | governance | — | terminal: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or deliberately … |
+| GOV-0116 | may | governance | — | terminal: reserved strictly for SOLVED and honest EXHAUSTED. An unmapped or deliberately … |
 | TEST-0099 | may | testing | — | A SERIES OF REFUTALS is a signal to widen research, not to invent a cleverer variant. Whe… |
-| GOV-0116 | may | governance | — | The derived cache is git-ignored and may be rebuilt from the Quest plus event log. |
-| GOV-0117 | may | governance | — | One sanctioned exception: a frontier metric may be sharpened to a strictly harder gradien… |
+| GOV-0117 | may | governance | — | The derived cache is git-ignored and may be rebuilt from the Quest plus event log. |
+| GOV-0118 | may | governance | — | One sanctioned exception: a frontier metric may be sharpened to a strictly harder gradien… |
 | ARCH-0168 | should | architecture | — | Classification-only is a valid result only when the causal chain is still explicit, the f… |
-| GOV-0118 | may | governance | — | When a metric does not improve but the blocker moves owner, boundary, or mechanism, the s… |
-| GOV-0119 | may | governance | — | The archived theory ledger may be imported only as archive memory; imported archive theor… |
-| GOV-0120 | may | governance | — | Architecture documents may mention Pro or Enterprise services only as examples of externa… |
-| GOV-0121 | should | governance | — | Adversarial verification prompts (design vets, implementation verifiers) SHOULD include t… |
-| GOV-0122 | may | governance | — | Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus … |
-| GOV-0123 | should | governance | — | Altitude (framing) reflection (altitudeReflectionDue) — the step-back that questions the … |
-| GOV-0124 | may | governance | — | Only overridable continuation codes are accepted: BLOCKED_THEORY and BLOCKED_SCOPE. The c… |
-| GOV-0125 | should | governance | — | When choosing how to solve a problem, you SHOULD prioritize correctness and systemic, own… |
+| GOV-0119 | may | governance | — | When a metric does not improve but the blocker moves owner, boundary, or mechanism, the s… |
+| GOV-0120 | may | governance | — | The archived theory ledger may be imported only as archive memory; imported archive theor… |
+| GOV-0121 | may | governance | — | Architecture documents may mention Pro or Enterprise services only as examples of externa… |
+| GOV-0122 | should | governance | — | Adversarial verification prompts (design vets, implementation verifiers) SHOULD include t… |
+| GOV-0123 | may | governance | — | Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus … |
+| GOV-0124 | should | governance | — | Altitude (framing) reflection (altitudeReflectionDue) — the step-back that questions the … |
+| GOV-0125 | may | governance | — | Only overridable continuation codes are accepted: BLOCKED_THEORY and BLOCKED_SCOPE. The c… |
+| GOV-0126 | should | governance | — | When choosing how to solve a problem, you SHOULD prioritize correctness and systemic, own… |

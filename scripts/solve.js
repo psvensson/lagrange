@@ -24,7 +24,12 @@ import {makeAgentExecutor} from './solve/agent-executor.js';
 import {runLoop, runSupervised} from './solve/loop.js';
 import {writeReport} from './solve/report.js';
 import {runStep, stepAbort, stepPending} from './solve/step.js';
-import {SOLVE_DATA_DIR} from './solve/constants.js';
+import {runNextCommand} from './solve/next.js';
+import {
+  QUEST_CLASS_PRODUCT,
+  QUEST_CLASSES,
+  SOLVE_DATA_DIR,
+} from './solve/constants.js';
 import {runTheoryCommand, theoryCommitArgs} from './solve/theory.js';
 import {analyzeQuestHealth, renderHealth} from './solve/health.js';
 import {buildAdvisories, renderAdvisoryLines} from './solve/advisories.js';
@@ -79,7 +84,7 @@ function parseArgs(argv) {
   return args;
 }
 
-function questTemplate(id, statement) {
+function questTemplate(id, statement, questClass) {
   return {
     id,
     statement: statement || 'Describe the terminal success condition in one line.',
@@ -87,7 +92,7 @@ function questTemplate(id, statement) {
     // class: "product" (default) goals must be MEASURED against a real artifact;
     // "process" goals are scaffolding/decision records and may close on an oracle.
     // This drives report closure-strength labeling and the audit closure-mismatch warning.
-    class: 'product',
+    class: questClass || QUEST_CLASS_PRODUCT,
     // links: optional, declarative-only cross-references that situate this Quest in
     // the planning graph (roadmap row, spec/task, the closure-ledger records it
     // closes, a parent Quest). Readers MUST treat the whole block as optional
@@ -169,6 +174,17 @@ function inheritRulesOutFindings(root, quest, parentId) {
   return copied;
 }
 
+// The declared quest class is real machinery (closure-kind, change-artifact scope
+// classification, portfolio renderers), so it is settable at draft time instead of
+// requiring a JSON edit after `new`. Anything but product|process is refused.
+function resolveQuestClass(args) {
+  if (args.class === undefined) return QUEST_CLASS_PRODUCT;
+  if (!QUEST_CLASSES.includes(args.class)) {
+    throw new Error(`new: --class must be one of ${QUEST_CLASSES.join('|')}`);
+  }
+  return args.class;
+}
+
 function cmdNew(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('new: --id <questId> is required');
@@ -177,7 +193,7 @@ function cmdNew(root, args) {
     throw new Error(`new: ${file} already exists (use --force to overwrite)`);
   }
   const quest = questTemplate(id, typeof args.statement === 'string' ?
-    args.statement : null);
+    args.statement : null, resolveQuestClass(args));
   quest.links.sealedAtCommit = resolveHeadCommit(root);
   const parentId = typeof args['inherit-rulesout-from'] === 'string' ?
     args['inherit-rulesout-from'] : null;
@@ -190,7 +206,8 @@ function cmdNew(root, args) {
   const inheritedLine = inherited ?
     `inherited ${inherited} rulesOut finding(s) from ${parentId}\n` : '';
   process.stdout.write(
-    `created ${written}\n${inheritedLine}Edit it, then: solve run --id ${id}\n`);
+    `created ${written}\n${inheritedLine}` +
+    `Edit it, then: solve run --id ${id} --executor agent --yes --keep-alive\n`);
   emitRetreadWarnings(root, quest);
   refreshFrontierBoard(root);
 }
@@ -268,6 +285,9 @@ function cmdRun(root, args) {
 function buildExecutor(root, id, args) {
   const kind = args.executor || 'dry';
   if (kind === 'dry') {
+    process.stderr.write(
+      'run: default `dry` executor — a no-op skeleton that makes no real ' +
+      'edits; real autonomous work needs --executor agent --yes\n');
     return makeDryExecutor({
       changeDir: path.join(root, SOLVE_DATA_DIR, 'changes', id),
       step: Number(args.step) || 1,
@@ -543,11 +563,15 @@ function cmdStep(root, args) {
   if (args.changeRef && !args.commit) {
     throw new Error('step commit requires --commit with --changeRef');
   }
-  if (args.commit && !args.changeRef) {
-    throw new Error('step --commit requires --changeRef diff:<path>');
+  if (args['auto-diff'] && !args.commit) {
+    throw new Error('step --auto-diff requires --commit');
+  }
+  if (args.commit && !args.changeRef && !args['auto-diff']) {
+    throw new Error('step --commit requires --changeRef diff:<path> (or --auto-diff)');
   }
   const r = runStep(root, quest, {
     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
+    autoDiff: Boolean(args['auto-diff']),
     summary: typeof args.summary === 'string' ? args.summary : undefined,
     force: Boolean(args.force),
     ...theoryCommitArgs(args),
@@ -576,12 +600,13 @@ function cmdStep(root, args) {
     refreshFrontierBoard(root);
     return;
   }
-  if (!args.changeRef) {
+  if (!args.commit) {
     process.stdout.write(
       `pinned ${r.frontier}: metric ${r.before.metric}\n` +
       `pending: ${r.pendingFile}\n` +
       `next: node scripts/solve.js step --id ${id} --commit ` +
-      '--changeRef diff:<path> --summary "<what changed>"\n',
+      '--changeRef diff:<path> --summary "<what changed>" ' +
+      '(--auto-diff snapshots the working tree as the changeRef)\n',
     );
     emitRetreadWarnings(root, quest);
     emitAdvisories(root, quest);
@@ -589,11 +614,24 @@ function cmdStep(root, args) {
   }
   const moved = r.progressed ? 'PROGRESS' : 'flat';
   const viol = r.violations.length ? ` violations: ${r.violations.join('; ')}` : '';
+  const autoDiffLine = args['auto-diff'] && r.changeRef ?
+    `changeRef: ${r.changeRef}\n` : '';
+  const templateLines = (r.verificationTemplates || [])
+    .map((t) => `suggested verification template: ${t.template}\n`).join('');
   process.stdout.write(
     `recorded attempt on ${r.frontier}: metric ${r.before} -> ${r.after} ` +
-    `(${moved})${r.done ? ' DONE' : ''}${viol}\n${commitLine(r.commit)}`);
+    `(${moved})${r.done ? ' DONE' : ''}${viol}\n${autoDiffLine}${templateLines}` +
+    commitLine(r.commit));
   emitAdvisories(root, quest);
   refreshFrontierBoard(root);
+}
+
+// "What do I do next?" — thin renderer over the existing read-models (pending step,
+// gate stops, current blocker, advisories). Derives nothing new; see solve/next.js.
+function cmdNext(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('next: --id <questId> is required');
+  process.stdout.write(runNextCommand(root, id));
 }
 
 // Keep the generated frontier board (solve/FRONTIER.generated.md) fresh at the
@@ -891,6 +929,7 @@ const COMMANDS = {
   'reflect': cmdReflect,
   'step': cmdStep,
   'step-pending': cmdStepPending,
+  'next': cmdNext,
   'theory': cmdTheory,
   'health': cmdHealth,
   'ingest-evidence': cmdIngestEvidence,

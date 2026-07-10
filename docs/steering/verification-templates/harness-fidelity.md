@@ -1,3 +1,7 @@
+---
+categories: [harness-fidelity]
+---
+
 # Verification Template: Test-harness / Fixture Fidelity
 
 For new DT tests, fixtures, or stubs — and for verifying that a green test

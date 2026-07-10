@@ -1,3 +1,7 @@
+---
+categories: [concurrency-serialization]
+---
+
 # Verification Template: Concurrency / Locking / Single-flight
 
 For changes to single-flight keys, claim CAS, serialization gates, or

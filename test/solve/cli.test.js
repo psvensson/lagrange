@@ -40,7 +40,30 @@ tap.test('solve CLI smoke (P2)', async (t) => {
     const root = tmp();
     const out = run(root, ['new', '--id', 'demo', '--statement', 'hello']);
     t.match(out, /created/);
+    t.match(out, /run --id demo --executor agent --yes --keep-alive/,
+      'next-step points at the real agent executor, not the dry skeleton');
     t.ok(fs.existsSync(path.join(root, 'solve', 'quests', 'demo.json')));
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('new --class sets the quest class and refuses unknown classes', (t) => {
+    const root = tmp();
+    run(root, ['new', '--id', 'demo-process', '--statement', 'decide', '--class', 'process']);
+    const quest = JSON.parse(fs.readFileSync(
+      path.join(root, 'solve', 'quests', 'demo-process.json'), 'utf8'));
+    t.equal(quest.class, 'process');
+
+    run(root, ['new', '--id', 'demo-default', '--statement', 'measure']);
+    const defaulted = JSON.parse(fs.readFileSync(
+      path.join(root, 'solve', 'quests', 'demo-default.json'), 'utf8'));
+    t.equal(defaulted.class, 'product', 'class defaults to product');
+
+    t.throws(
+      () => run(root, ['new', '--id', 'demo-bad', '--statement', 'x',
+        '--class', 'meta']),
+      /--class must be one of product\|process/,
+    );
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

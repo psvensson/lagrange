@@ -8,6 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {spawnSync} from 'node:child_process';
 
 import {
   makeRunContext,
@@ -25,7 +26,8 @@ import {
   STATE_SUBDIR,
   STATUS_SOLVED,
 } from './constants.js';
-import {inspectChangeArtifact} from './change-artifact.js';
+import {expectedChangeDir, inspectChangeArtifact} from './change-artifact.js';
+import {suggestVerificationTemplates} from './verification-template-suggest.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReport} from './report.js';
 import {analyzeQuestHealth} from './health.js';
@@ -36,6 +38,59 @@ import {
   decisionContinues,
 } from './gate.js';
 import {unrecordedEvidenceContinuation} from './continuation.js';
+
+const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
+const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
+const AUTO_DIFF_ARTIFACT_PATTERN = /^attempt-(\d+)\.diff$/u;
+const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+
+// The HEAD sha at step-begin time, recorded into the pending file so --auto-diff can
+// snapshot exactly what changed during the attempt (null outside a git work tree).
+function resolveHeadPin(root) {
+  const out = spawnSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'});
+  if (out.status !== 0 || typeof out.stdout !== 'string') return null;
+  const sha = out.stdout.trim();
+  return /^[0-9a-f]{40}$/u.test(sha) ? sha : null;
+}
+
+function nextAutoDiffArtifactPath(root, questId) {
+  const dir = expectedChangeDir(root, questId);
+  fs.mkdirSync(dir, {recursive: true});
+  let next = 1;
+  for (const name of fs.readdirSync(dir)) {
+    const match = AUTO_DIFF_ARTIFACT_PATTERN.exec(name);
+    if (match) next = Math.max(next, Number(match[1]) + 1);
+  }
+  return path.join(
+    dir, `${AUTO_DIFF_ARTIFACT_PREFIX}${next}${AUTO_DIFF_ARTIFACT_EXTENSION}`);
+}
+
+// --auto-diff: snapshot the working tree (vs the pin recorded at step begin, else HEAD)
+// into solve/changes/<questId>/attempt-<n>.diff and use it as the changeRef. The
+// resulting artifact goes through the same inspectChangeArtifact honesty gate as an
+// operator-provided diff. An empty diff is an operator error, not a silent no-op.
+function createAutoDiffChangeRef(root, quest, pending) {
+  const pin = pending.headCommit || 'HEAD';
+  const out = spawnSync('git', ['diff', pin], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
+  });
+  if (out.status !== 0 || typeof out.stdout !== 'string') {
+    throw new Error(
+      `auto-diff: git diff ${pin} failed: ${(out.stderr || 'unknown error').trim()}`,
+    );
+  }
+  if (out.stdout.trim() === '') {
+    throw new Error(
+      'auto-diff: git diff is empty — nothing changed since the step began; ' +
+      'make the change first (or pass an explicit --changeRef diff:<path>)',
+    );
+  }
+  const file = nextAutoDiffArtifactPath(root, quest.id);
+  fs.writeFileSync(file, out.stdout);
+  return `diff:${path.relative(root, file)}`;
+}
 
 export function pendingFilePath(root, questId) {
   return path.join(
@@ -146,6 +201,7 @@ function stepBegin(root, quest, options = {}) {
   const pending = {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
+    headCommit: resolveHeadPin(root),
     before: {
       metric: before.metric,
       done: before.done,
@@ -171,9 +227,11 @@ function stepCommit(root, quest, options = {}) {
       'or run `solve step --id <quest>` before manual work',
     );
   }
+  const changeRef = options.changeRef ||
+    createAutoDiffChangeRef(root, quest, pending);
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
-  const changeInspection = ctx.honestyCtx.inspectChangeRef(options.changeRef);
+  const changeInspection = ctx.honestyCtx.inspectChangeRef(changeRef);
   if (!changeInspection.valid) {
     throw new Error(
       `invalid changeRef: ${changeInspection.problems.join('; ')}`,
@@ -204,7 +262,7 @@ function stepCommit(root, quest, options = {}) {
   if (gateResult) return gateResult;
 
   const outcome = finalizeAttempt(root, quest, ctx, pick, pending.before, {
-    changeRef: options.changeRef,
+    changeRef,
     summary: options.summary || null,
     theoryRef: options.theoryRef || null,
     expectedMovement: options.expectedMovement || null,
@@ -232,12 +290,28 @@ function stepCommit(root, quest, options = {}) {
     done: questOutcome.done,
     progressed: outcome.progressed,
     violations: outcome.violations,
+    changeRef,
+    verificationTemplates: suggestChangeVerificationTemplates(
+      root, changeInspection),
     commit,
   };
 }
 
+// Surface the matching adversarial-verification template(s) alongside the
+// subagent-verification requirement this commit path enforces (see the
+// source-change-subagent-verification constraint + audit's commit gate).
+// Advisory only — a suggestion failure must never fail the recorded attempt.
+function suggestChangeVerificationTemplates(root, changeInspection) {
+  try {
+    const content = fs.readFileSync(changeInspection.filePath, 'utf8');
+    return suggestVerificationTemplates(root, content);
+  } catch {
+    return [];
+  }
+}
+
 export function runStep(root, quest, options = {}) {
-  if (!options.changeRef) {
+  if (!options.changeRef && !options.autoDiff) {
     return stepBegin(root, quest, options);
   }
   return stepCommit(root, quest, options);

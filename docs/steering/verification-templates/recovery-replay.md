@@ -1,3 +1,7 @@
+---
+categories: [recovery-replay]
+---
+
 # Verification Template: Recovery / Replay / Reconciliation
 
 For changes to restart recovery, cache-vs-authoritative reconciliation, or

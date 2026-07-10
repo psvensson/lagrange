@@ -1,3 +1,7 @@
+---
+categories: [admission-gating]
+---
+
 # Verification Template: Admission / Gating / Hold Predicates
 
 For changes to admission checks, planning gates, hold predicates, or

@@ -561,13 +561,24 @@ Every Quest that changes source code must spawn a subagent verifier after the
 final source diff is ready and before `node scripts/solve.js audit --id <id>`
 is used for handoff. The verifier must inspect the Quest intent, touched source
 diff, system guidelines, and applicable doctrine. Record the result as a Solver
-finding on the active frontier with evidence `subagent:<id>`:
+finding on the active frontier with `--kind verifier-approval` and evidence
+`subagent:<id>`:
 
 ```sh
 node scripts/solve.js finding --id <quest> --frontier <frontier> \
+  --kind verifier-approval \
   --claim "Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine" \
   --evidence subagent:<id>
 ```
+
+The `verifier-approval` kind is the first-class machine-readable tag the audit
+matcher keys on; a finding without it is still recognized when its claim prose
+names the verification (legacy keyword fallback), but new findings SHOULD carry
+the kind so recognition never depends on wording. `step --commit` prints
+`suggested verification template: <path>` when the change diff matches an
+attack checklist under
+[`docs/steering/verification-templates/`](../verification-templates/INDEX.md);
+include the suggested template in the verifier prompt.
 
 If the verifier finds issues, fix them or record a finding that explains why the
 Quest must continue; do not proceed to git handoff from an unresolved verifier

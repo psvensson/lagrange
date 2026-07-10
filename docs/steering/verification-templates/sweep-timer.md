@@ -1,3 +1,7 @@
+---
+categories: [sweep-timer]
+---
+
 # Verification Template: Sweep / Timer / Periodic Enforcement
 
 For changes to periodic sweeps, hold-timeout enforcement, interval-driven
