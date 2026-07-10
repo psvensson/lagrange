@@ -1,6 +1,6 @@
 import {spawn} from 'node:child_process';
 import {createWriteStream} from 'node:fs';
-import {mkdir, rm} from 'node:fs/promises';
+import {mkdir, readFile, rm} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
@@ -218,8 +218,25 @@ async function startLocalCluster(nodeCount, dataRoot, target) {
     mode: 'local-processes',
     target,
     clusterFormationMs,
+    getNodeLogs: () => readLocalNodeLogs(nodes, dataRoot),
     stop: () => stopLocalNodes(nodes),
   };
+}
+
+/**
+ * Read the per-node log files a local cluster writes (plain text).
+ * @param {Object[]} nodes
+ * @param {string} dataRoot
+ * @return {Promise<Array<{nodeId: string, text: string}>>}
+ */
+async function readLocalNodeLogs(nodes, dataRoot) {
+  return Promise.all(nodes.map(async (node) => ({
+    nodeId: `node-${node.index}`,
+    text: await readFile(
+      resolve(dataRoot, `node-${node.index}.log`),
+      'utf8',
+    ),
+  })));
 }
 
 async function startDockerCluster(nodeCount) {
@@ -249,30 +266,49 @@ async function startDockerCluster(nodeCount) {
     mode: 'docker',
     target: `ws://${seed.ip}:${DOCKER_ADMIN_PORT}/api/admin/stream`,
     clusterFormationMs,
+    getNodeLogs: () => Promise.all(cluster.getNodes().map(async (node) => ({
+      nodeId: node.id,
+      text: await node.getLogs(),
+    }))),
     stop: () => cluster.stop(),
   };
 }
 
+/**
+ * Start (or attach to) a demo cluster using the demo's mode selection:
+ * noStart attaches to a running cluster, local starts local node
+ * processes, and the default is the Docker harness.
+ * @param {Object} options
+ * @param {boolean} [options.noStart]
+ * @param {boolean} [options.local]
+ * @param {number} [options.nodeCount]
+ * @param {string} [options.dataDir]
+ * @param {string} [options.target]
+ * @return {Promise<Object>} handle {mode, target, clusterFormationMs,
+ *   getNodeLogs?, stop?}
+ */
+async function startCluster(options = {}) {
+  const nodeCount = options.nodeCount || DEFAULT_NODE_COUNT;
+  if (options.noStart === true) {
+    console.log('Using already-running cluster (--no-start).');
+    const target = options.target || DEFAULT_TARGET;
+    await waitForAdmin(target);
+    return {mode: 'external', target, clusterFormationMs: null};
+  }
+  if (options.local === true) {
+    return startLocalCluster(
+      nodeCount,
+      options.dataDir || CLUSTER_DATA_ROOT,
+      options.target || DEFAULT_TARGET,
+    );
+  }
+  return startDockerCluster(nodeCount);
+}
+
 async function runLagrangeDemo(options = null) {
   const resolvedOptions = options || parseArgs(process.argv.slice(2));
-  const noStart = resolvedOptions.noStart === true;
   const nodeCount = resolvedOptions.nodeCount || DEFAULT_NODE_COUNT;
-  let clusterHandle = null;
-
-  if (noStart) {
-    console.log('Using already-running cluster (--no-start).');
-    const target = resolvedOptions.target || DEFAULT_TARGET;
-    await waitForAdmin(target);
-    clusterHandle = {mode: 'external', target, clusterFormationMs: null};
-  } else if (resolvedOptions.local === true) {
-    clusterHandle = await startLocalCluster(
-      nodeCount,
-      resolvedOptions.dataDir || CLUSTER_DATA_ROOT,
-      resolvedOptions.target || DEFAULT_TARGET,
-    );
-  } else {
-    clusterHandle = await startDockerCluster(nodeCount);
-  }
+  const clusterHandle = await startCluster(resolvedOptions);
 
   try {
     const {target} = clusterHandle;
@@ -323,4 +359,12 @@ if (process.argv[1]?.includes('run-lagrange-demo.js')) {
     });
 }
 
-export {runLagrangeDemo};
+export {
+  queryRows,
+  runLagrangeDemo,
+  startCluster,
+  startDockerCluster,
+  startLocalCluster,
+  waitForAdmin,
+  waitForClusterSize,
+};
