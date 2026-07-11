@@ -1,0 +1,10 @@
+{
+  "id": "service-data-affinity-parallel-reduce-demo-live",
+  "statement": "A live report emitted by examples/service-data-affinity/run-affinity-demo.js proves on a five-node single-latency-domain cluster that the same MovieLens workload first produces a correct centralized top-10, then two placed runtime-service replicas own stable disjoint reduce slots, publish fresh bounded atomic partial snapshots, and merge the exact ranked top-10; changing only the service's read_locality from any to same_group preserves that result while reaching the best production-weighted node-locality placement. The report is PASS with fidelity live, current replica identities equal live slot owners, candidate count no greater than replicas times top-N, and no multi-zone dependency.",
+  "priority": 1,
+  "class": "product",
+  "links": {"roadmapRow": null, "specRef": null, "closesCL": [], "parentQuest": "service-data-affinity-parallel-reduce-demo", "planDoc": "solve/epics/service-data-affinity-placement.md", "sealedAtCommit": "9ebfe678d21ce614afa0047575a58e92d188b5ec"},
+  "doneWhen": {"probe": "scenario-harness", "args": {"scenario": "service-data-affinity-parallel-reduce-demo-live", "consecutive": 3, "metric": "priority"}},
+  "frontiers": [{"id": "service-data-affinity-parallel-reduce-demo-live-main", "priority": 1, "metric": {"probe": "scenario-harness", "args": {"scenario": "service-data-affinity-parallel-reduce-demo-live", "metric": "priority"}}}],
+  "constraints": [{"id": "source-change-subagent-verification", "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."}]
+}

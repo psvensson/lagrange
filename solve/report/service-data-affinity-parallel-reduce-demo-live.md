@@ -1,0 +1,61 @@
+# Solve report: service-data-affinity-parallel-reduce-demo-live
+
+**Goal:** A live report emitted by examples/service-data-affinity/run-affinity-demo.js proves on a five-node single-latency-domain cluster that the same MovieLens workload first produces a correct centralized top-10, then two placed runtime-service replicas own stable disjoint reduce slots, publish fresh bounded atomic partial snapshots, and merge the exact ranked top-10; changing only the service's read_locality from any to same_group preserves that result while reaching the best production-weighted node-locality placement. The report is PASS with fidelity live, current replica identities equal live slot owners, candidate count no greater than replicas times top-N, and no multi-zone dependency.
+
+**Class:** product · **Closure:** MEASURED
+
+**Outcome:** IN PROGRESS (no terminal recorded)
+
+**Attempts:** 1
+
+## Links
+- parent quest: service-data-affinity-parallel-reduce-demo
+- plan: solve/epics/service-data-affinity-placement.md
+
+## Current Blocker
+- Frontier: service-data-affinity-parallel-reduce-demo-live-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: unknown
+- Movement: no evidence recorded
+- Latest evidence: none
+- Selected theory: none
+- Next move: continue supervised step for service-data-affinity-parallel-reduce-demo-live-main
+- No longer current: Replica-id ordinal shard ownership and DELETE-then-INSERT cross-replica partial publication; Repeating the unchanged live demo while the first admin write precondition fails
+
+## Continuation
+- Status: allowed
+- Next action: continue supervised step for service-data-affinity-parallel-reduce-demo-live-main
+- Blocker: none
+
+## Scope Pressure
+- Changed files: 3
+- Change bytes: 40135
+- Owner areas: examples
+- Categories: other
+- Split plan:
+  - examples: 3 file(s)
+- Signals: none
+
+## Frontiers
+- **service-data-affinity-parallel-reduce-demo-live-main** [open] rung 1, attempts 1, metric 1 -> 1
+
+## Findings
+- **service-data-affinity-parallel-reduce-demo-live-main**: inherited from service-data-affinity-parallel-reduce-demo: Adversarial verifier falsified the first cross-replica protocol before commit: runtime-service REPLACE allocates generation ids r3+, so shard ownership keyed directly by replica ordinal fails exactly when affinity moves replicas; independent DELETE/INSERT partial publication also admitted incomplete/stale merges, and driver START_STATUS.FAILED was projected ACTIVE. The replacement design rules out those levers: stable leased slot rows own shards across replica generations, partial and final values are atomic JSON UPDATE snapshots, current/fresh/bounded evidence is required, and failed starts now fail the lifecycle owner. (rules out: Replica-id ordinal shard ownership and DELETE-then-INSERT cross-replica partial publication)
+- **service-data-affinity-parallel-reduce-demo-live-main**: Independent verifier approved the stable leased-slot protocol, atomic bounded snapshots, exact disjoint merge, current/fresh report semantics, canonical attribution and failed-start propagation after reproducing the 202-assertion guard; verifier separately confirmed this does not claim unavailable live closure. [subagent:/root/affinity_parallel_reduce_verify]
+- **service-data-affinity-parallel-reduce-demo-live-main**: Two live five-node runs reached cluster formation but the first MovieLens admin write timed out before service deployment in both runs; this is a non-measurement of the new parallel-reduce path and a third unchanged run is ruled out by the two-strikes rule. (rules out: Repeating the unchanged live demo while the first admin write precondition fails) [solve/changes/service-data-affinity-parallel-reduce-demo/live-validation-attempts.md]
+
+## Theories
+_(none recorded)_
+
+## Selected Theories
+_(none selected)_
+
+## Theory Results
+_(none recorded)_
+
+## Attempt log
+| ts | frontier | rung | metric | result | blocker movement | theory | change |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-07-11T17:31:13.811Z | service-data-affinity-parallel-reduce-demo-live-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/service-data-affinity-parallel-reduce-demo-live/attempt-1.diff.json |
