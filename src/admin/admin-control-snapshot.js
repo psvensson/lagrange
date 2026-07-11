@@ -39,14 +39,6 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
 } from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
-  PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION,
-  buildPriorityRecoveryLearnerPromotionByPartitionId,
-  buildPriorityRecoveryPlannerByPartitionId,
-  buildPriorityRecoveryReplicaOperationContexts,
-  inferPriorityRecoveryTableNameFromPartitionId,
-  resolvePriorityRecoveryReasonCodesFromReadiness,
-} from './admin-control-snapshot-priority-recovery-context.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-control-snapshot-readiness-diagnostics-methods.js';
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';
@@ -323,7 +315,6 @@ assignAdminControlSnapshotReadinessDiagnosticsMethods(AdminControlSnapshot, {
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_CORRELATION_KEY,
-  PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
@@ -334,20 +325,15 @@ assignAdminControlSnapshotReadinessDiagnosticsMethods(AdminControlSnapshot, {
   buildMembershipPublicationReadOptions,
   buildCanonicalPublicationRecoveryEvidence,
   buildPublicationRecoveryGateSnapshot,
-  buildPriorityRecoveryLearnerPromotionByPartitionId,
-  buildPriorityRecoveryPlannerByPartitionId,
-  buildPriorityRecoveryReplicaOperationContexts,
   buildPublicationRecoveryProtocolSnapshot,
   firstStringField,
   hasDurablePublishedMembershipObservation,
   hasOnlyLeaderResolutionGapRepairCause,
   hasPressureOrTimeoutRepairCause,
-  inferPriorityRecoveryTableNameFromPartitionId,
   isRecoverableControlSnapshotPublicationReadError,
   normalizeControlPlanePublicationRow,
   resolveLatestMembershipPublicationRow,
   resolvePublicationOrderingValue,
-  resolvePriorityRecoveryReasonCodesFromReadiness,
   selectDurablePublishedMembershipObservation,
   uniqueSorted,
 });

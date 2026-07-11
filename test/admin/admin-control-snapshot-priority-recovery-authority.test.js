@@ -84,8 +84,10 @@ test('live Admin seam preserves direct and nested publication projections', (t) 
 
 test('one live shared-snapshot chain remains without dormant Admin wiring', async (t) => {
   const admin = fs.readFileSync('src/admin/admin-control-snapshot.js', 'utf8');
-  const context = fs.readFileSync(
-    'src/admin/admin-control-snapshot-priority-recovery-context.js', 'utf8');
+  const contextPath =
+    'src/admin/admin-control-snapshot-priority-recovery-context.js';
+  t.notOk(fs.existsSync(contextPath));
+  const context = '';
   const diagnostics = fs.readFileSync(
     'src/admin/admin-control-snapshot-control-plane-diagnostics.js', 'utf8');
   const snapshot = fs.readFileSync(
