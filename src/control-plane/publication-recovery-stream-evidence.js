@@ -1,6 +1,5 @@
 import {
   EMPTY_STRING,
-  LOCAL_STR_EMPTY,
   PUBLICATION_OWNER_STREAM_VALID_VALUES,
   PUBLICATION_PRIORITY_SPREAD_AUTHORITATIVE_DECISION_SOURCE_SET,
   PUBLICATION_RECOVERY_GATE_EMPTY_LIST,
@@ -22,21 +21,14 @@ import {
 import {
   RECOVERY_PROTOCOL_STATE,
 } from './membership-lifecycle-constants.js';
+import {
+  normalizeDistinctStringArray,
+} from './publication-recovery-evidence-values.js';
 
 function normalizeOptionalString(value) {
   return typeof value === 'string' && value.trim().length > 0 ?
     value.trim() :
     null;
-}
-
-function normalizeDistinctStringArray(values = []) {
-  return Object.freeze(
-    [...new Set(
-      (Array.isArray(values) ? values : [])
-        .map((value) => String(value || LOCAL_STR_EMPTY).trim())
-        .filter((value) => value.length > 0),
-    )],
-  );
 }
 
 function normalizePublicationStatus(status) {
@@ -537,7 +529,6 @@ export {
   buildPublicationStreamCompatibilityEvidence,
   hasPublicationStatusPendingMeaning,
   isPublicationOwnerStreamPendingForRecoveryGate,
-  normalizeDistinctStringArray,
   normalizeNonNegativeInteger,
   normalizeOptionalNonNegativeInteger,
   normalizeOptionalString,

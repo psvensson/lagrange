@@ -11,6 +11,8 @@ import {
 } from './publication-recovery-gate-constants.js';
 import {
   normalizeDistinctStringArray,
+} from './publication-recovery-evidence-values.js';
+import {
   normalizeNonNegativeInteger,
   normalizeOptionalString,
 } from './publication-recovery-stream-evidence.js';

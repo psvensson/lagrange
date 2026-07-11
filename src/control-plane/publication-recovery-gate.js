@@ -17,11 +17,13 @@ import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from './publication-recovery-gate-constants.js';
 import {
+  normalizeDistinctStringArray,
+} from './publication-recovery-evidence-values.js';
+import {
   buildPendingAckEvidence,
   buildPublicationStreamCompatibilityEvidence,
   hasPublicationStatusPendingMeaning,
   isPublicationOwnerStreamPendingForRecoveryGate,
-  normalizeDistinctStringArray,
   normalizeNonNegativeInteger,
   normalizeOptionalString,
   normalizeProvidedPublicationOwnerStream,
