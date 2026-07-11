@@ -27,6 +27,7 @@
 ## Findings
 - **service-affinity-demo-report-evidence-main**: Three consecutive current-HEAD runs of the shared deterministic affinity scenario passed all four guard files and 202 assertions. [test-output/reports/service-data-affinity-parallel-reduce-demo-2026-07-11T17-21-00-853Z.report.json]
 - **service-affinity-demo-report-evidence-main**: Independent verifier approved the complete single-zone parallel-reduce vertical slice, including this bounded owner package, after reproducing the 202-assertion guard and adversarially checking identity, leases, snapshots, chronology, attribution, lifecycle failure, and report semantics. [subagent:/root/affinity_parallel_reduce_verify]
+- **service-affinity-demo-report-evidence-main**: Post-attempt verifier approval applies to the exact example/report package: both phases emit live owners, timestamps, boundedness, current-identity, correctness, and weighted-optimum evidence without multi-zone dependence. [subagent:/root/affinity_parallel_reduce_verify]
 
 ## Theories
 _(none recorded)_
