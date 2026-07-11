@@ -305,6 +305,9 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
       // descriptor validator. Without the handler's camelCase mapping this
       // fails "runtime_kind is required" and no runtime-service replica places.
       const descriptor = lifecycle.calls[0].definition;
+      assert.equal(descriptor.entityId, 'sys-postgres-wire',
+        'placed-replica descriptor preserves the canonical service ' +
+          'identity for routing policy and access attribution');
       assert.equal(descriptor.runtimeKind, 'native_js');
       assert.equal(
         validateRuntimeDescriptor(descriptor).valid, true,

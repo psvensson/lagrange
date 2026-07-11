@@ -1,0 +1,26 @@
+diff --git a/src/node/runtime-service-handler.js b/src/node/runtime-service-handler.js
+index 7259ff33..228e6bd5 100644
+--- a/src/node/runtime-service-handler.js
++++ b/src/node/runtime-service-handler.js
+@@ -275,6 +275,7 @@ class RuntimeServiceHandler extends EventEmitter {
+         serviceId: replicaId,
+         serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+         replicaId,
++        entityId,
+         ...definition,
+         // service_definitions rows are stored snake_case, but the runtime
+         // descriptor validator (and adapter) read camelCase. Provide the
+diff --git a/test/node/runtime-service-handler.test.js b/test/node/runtime-service-handler.test.js
+index fc11575c..0e22187d 100644
+--- a/test/node/runtime-service-handler.test.js
++++ b/test/node/runtime-service-handler.test.js
+@@ -305,6 +305,9 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
+       // descriptor validator. Without the handler's camelCase mapping this
+       // fails "runtime_kind is required" and no runtime-service replica places.
+       const descriptor = lifecycle.calls[0].definition;
++      assert.equal(descriptor.entityId, 'sys-postgres-wire',
++        'placed-replica descriptor preserves the canonical service ' +
++          'identity for routing policy and access attribution');
+       assert.equal(descriptor.runtimeKind, 'native_js');
+       assert.equal(
+         validateRuntimeDescriptor(descriptor).valid, true,

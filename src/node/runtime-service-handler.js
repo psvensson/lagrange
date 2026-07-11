@@ -275,6 +275,7 @@ class RuntimeServiceHandler extends EventEmitter {
         serviceId: replicaId,
         serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
         replicaId,
+        entityId,
         ...definition,
         // service_definitions rows are stored snake_case, but the runtime
         // descriptor validator (and adapter) read camelCase. Provide the
