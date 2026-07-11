@@ -28,6 +28,99 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
     TriggerType,
   } = context;
 
+  test('UnifiedRebalancer puts the concentrated ledger cure through the move limit',
+    async (t) => {
+      initializeTestEnvironment();
+
+      const ledgerPartitionId = 'replica_operations-p1';
+      const nodeIds = [
+        REBALANCER_TEST_NODE_ID_A,
+        REBALANCER_TEST_NODE_ID_B,
+        REBALANCER_TEST_NODE_ID_C,
+        PRIORITY_FOLLOW_UP_NODE_ID_D,
+        'node-e',
+      ];
+      const rebalancer = createTestRebalancer({
+        entityId: ledgerPartitionId,
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        nodes: nodeIds.map((nodeId) => ({
+          node_id: nodeId,
+          status: NodeStatus.ACTIVE,
+        })),
+        partitions: [{
+          partition_id: ledgerPartitionId,
+          table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        }],
+      });
+      const executedMoves = [];
+      const blockedMoves = Array.from({length: 5}, (_, index) => ({
+        type: MoveType.REPLACE,
+        partitionId: `other-critical-p${index + 1}`,
+        replicaId: `other-critical-p${index + 1}-r1`,
+      }));
+      const cureMove = {
+        type: MoveType.REPLACE,
+        replicaId: 'replica_operations-p1-r2',
+      };
+
+      try {
+        rebalancer.controlPlaneReadinessService.membershipPublicationService =
+          createMockMembershipPublicationService(
+            nodeIds,
+            PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+            {priorityPartitionSummary: {satisfied: true}},
+          );
+        rebalancer.setLeader(true);
+        rebalancer.rebalanceCoordinator
+          .isOperationLedgerQuorumConcentratedForPartition = (partitionId) =>
+            partitionId === ledgerPartitionId;
+        rebalancer.getCurrentReplicas = () => nodeIds.slice(0, 3).map(
+          (nodeId, index) => ({
+            replica_id: `replica_operations-p1-r${index + 1}`,
+            node_id: nodeId,
+            status: ReplicaStatus.ACTIVE,
+          }),
+        );
+        rebalancer.getAvailableNodes = () => nodeIds.map(
+          (nodeId) => ({node_id: nodeId}),
+        );
+        rebalancer.movePlanner.calculateTargetState = async () => ({
+          targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        });
+        rebalancer.movePlanner.calculateMoves = () => ([
+          ...blockedMoves,
+          cureMove,
+        ]);
+        rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+        rebalancer.movePlanner.isCriticalState = () => false;
+        rebalancer.maxConcurrentMoves = 5;
+        rebalancer.getConfiguredRebalanceBudget = async () => 5;
+        rebalancer.getGlobalInFlightOperationCount = async () =>
+          NO_GLOBAL_IN_FLIGHT_OPERATIONS;
+        rebalancer.executeRebalancingMoves = async (moves) => {
+          executedMoves.push(...moves);
+          return moves.map((move) => ({success: true, operation: move.type}));
+        };
+
+        await rebalancer.rebalance(TriggerType.PERIODIC, {
+          targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        });
+        t.equal(
+          executedMoves[0],
+          cureMove,
+          'the sixth self REPLACE must cross the five-move slice boundary',
+        );
+        t.same(
+          executedMoves.slice(1),
+          blockedMoves.slice(0, 4),
+          'non-cure planning order remains stable',
+        );
+      } finally {
+        rebalancer.shutdown();
+      }
+    });
+
   test('UnifiedRebalancer prioritizes safe priority cleanup removes when ' +
   'the global budget is saturated', async (t) => {
     initializeTestEnvironment();
@@ -50,6 +143,8 @@ export function registerUnifiedRebalancerBudgetArbitrationCleanupTests(context) 
     });
 
     try {
+      rebalancer.rebalanceCoordinator
+        .isOperationLedgerQuorumConcentratedForPartition = () => true;
       rebalancer.controlPlaneReadinessService.membershipPublicationService =
       createMockMembershipPublicationService(
         [

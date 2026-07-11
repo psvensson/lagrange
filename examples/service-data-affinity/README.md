@@ -51,11 +51,13 @@ npm run demo:movielens
 ```
 
 The command downloads the dataset if needed and runs PostgreSQL first. The
-Lagrange phase bootstraps the ratings and two small coordination tables on its
-seed, loads the dataset once, joins four more nodes, waits for the actual
-operation-ledger quorum to spread, and then waits for the ratings table to
-split across at least two nodes before executing the SQL and service cases. A
-machine-readable live report is written under `test-output/reports/`.
+Lagrange phase bootstraps the ratings schema and two small coordination tables
+on its seed, joins four more nodes, and waits for the actual operation-ledger
+quorum to spread. It then loads the dataset once, waits for the ratings table
+to split across at least two nodes, and executes the SQL and service cases.
+Loading after the expanded control plane is routable avoids manufacturing a
+split retry before the cluster can serve it. A machine-readable live report is written under
+`test-output/reports/`.
 
 To download once without running the comparison:
 

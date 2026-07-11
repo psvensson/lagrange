@@ -264,7 +264,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     );
     const budgetOrderedMoves = shouldPrioritizeBudgetedTopologyCleanup ?
       this.prioritizePriorityTopologyCleanupMoves(moves) :
-      moves;
+      this.prioritizeOperationLedgerQuorumCureMoves(moves);
     const limitedMoves = budgetOrderedMoves.slice(0, moveLimit).map((move) => {
       if (
         !Number.isInteger(planningMembershipPublicationEpoch) ||

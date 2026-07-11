@@ -283,6 +283,26 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     ];
   }
 
+  prioritizeOperationLedgerQuorumCureMoves(moves = []) {
+    const normalizedMoves = Array.isArray(moves) ? moves : [];
+    if (
+      !this.rebalanceCoordinator ||
+      typeof this.rebalanceCoordinator
+        .isOperationLedgerQuorumConcentratedForPartition !== 'function' ||
+      this.rebalanceCoordinator
+        .isOperationLedgerQuorumConcentratedForPartition(this.entityId) !== true
+    ) {
+      return normalizedMoves;
+    }
+    const isCureMove = (move) =>
+      move?.type === MoveType.REPLACE &&
+      String(move?.partitionId || this.entityId) === this.entityId;
+    return [
+      ...normalizedMoves.filter(isCureMove),
+      ...normalizedMoves.filter((move) => !isCureMove(move)),
+    ];
+  }
+
   async getOrdinaryPriorityRecoverySerialGateSnapshot(moves = []) {
     const partitionId = this.resolvePriorityRecoveryBudgetPartitionId(moves);
     if (

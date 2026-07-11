@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 2
+**Attempts:** 4
 
 ## Links
 - parent quest: service-data-affinity-parallel-reduce-demo-live
@@ -17,49 +17,63 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
+- Mechanism: transition_gap
+- Movement: same blocker remains: unknown
+- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json
+- Selected theory: theory-load-after-full-formation-drain
 - Next move: continue supervised step for movielens-three-way-affinity-demo-main
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for movielens-three-way-affinity-demo-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for movielens-three-way-affinity-demo-main
+- Status: allowed
+- Next action: continue supervised step for movielens-three-way-affinity-demo-main
+- Blocker: none
 
 ## Scope Pressure
-- Changed files: 6
-- Change bytes: 71396
+- Changed files: 10
+- Change bytes: 85805
 - Owner areas: examples, src/rebalancer, src/runtime, test/rebalancer
 - Categories: other, runtime
 - Action: land or separate 4 owner areas: examples, src/rebalancer, src/runtime, test/rebalancer
 - Split plan:
-  - examples: 3 file(s)
-  - src/rebalancer: 1 file(s)
+  - examples: 4 file(s)
+  - src/rebalancer: 3 file(s)
+  - test/rebalancer: 2 file(s)
   - src/runtime: 1 file(s)
-  - test/rebalancer: 1 file(s)
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **movielens-three-way-affinity-demo-main** [open] rung 2, attempts 2, metric 1 -> 1
+- **movielens-three-way-affinity-demo-main** [open] rung 2, attempts 4, metric 1 -> 1
 
 ## Findings
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
 - **movielens-three-way-affinity-demo-main**: Independent verifier approved always-on affinity, shared confidence-adjusted ranking with movie-id tie-breaking, and unified demo wiring; live success remains unproven. [subagent:/root/affinity_parallel_reduce_verify]
 - **movielens-three-way-affinity-demo-main**: The sealed live completion symptom still reproduces on HEAD: the second operation-ledger spread is not planned, so the three-way live proof remains incomplete. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-11T19-58-38-986Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T19-58-38-986Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-11T19-58-38-986Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T19-58-38-986Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Independent verifier approved ledger-cure ordering through the real move-limit slice and the saturated cleanup-only composition control. [subagent:/root/affinity_parallel_reduce_verify]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Independent verifier approved the move-limit scheduling patch after its recorded attempt, including saturated cleanup composition. [subagent:/root/affinity_parallel_reduce_verify]
 
 ## Theories
-_(none recorded)_
+- **theory-ledger-cure-move-limit-starvation** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism scheduling_starvation, owner rebalancer_planning_owner, boundary move_limit_ordering, modelGate npm run model:contracts
+- **theory-ledger-cure-move-limit-starvation-v2** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism scheduling_starvation, owner rebalancer_planning_owner, boundary move_limit_ordering, modelGate npm run model:contracts
+- **theory-load-after-full-formation-drain** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism transition_gap, owner demo_bootstrap_owner, boundary formation_to_data_load, modelGate npm run model:contracts
 
 ## Selected Theories
-_(none selected)_
+- **movielens-three-way-affinity-demo-main**: theory-load-after-full-formation-drain
 
 ## Theory Results
-_(none recorded)_
+- **theory-ledger-cure-move-limit-starvation**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T19-58-38-986Z.report.json]
+- **theory-ledger-cure-move-limit-starvation-v2**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
+- **theory-ledger-cure-move-limit-starvation-v2**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
+- **theory-ledger-cure-move-limit-starvation-v2**: supported (scenario=failed, theory=partial, movement=moved_boundary) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
+- **theory-load-after-full-formation-drain**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-11T19:38:52.670Z | movielens-three-way-affinity-demo-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/movielens-three-way-affinity-demo/attempt-1.diff |
 | 2026-07-11T19:47:29.603Z | movielens-three-way-affinity-demo-main | local-fix | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/movielens-three-way-affinity-demo/attempt-2.diff |
+| 2026-07-11T20:06:06.329Z | movielens-three-way-affinity-demo-main | widen-scope | 1 -> 1 | flat | no_previous | theory-ledger-cure-move-limit-starvation-v2 | diff:solve/changes/movielens-three-way-affinity-demo/attempt-3.diff |
+| 2026-07-11T20:50:16.771Z | movielens-three-way-affinity-demo-main | widen-scope | 1 -> 1 | flat | same | theory-load-after-full-formation-drain | diff:solve/changes/movielens-three-way-affinity-demo/attempt-4.diff |

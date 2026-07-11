@@ -9,11 +9,11 @@
  * placement learns the best production-weighted node set.
  *
  * The story:
- *   1. The ratings table and dataset bootstrap on the seed, then four nodes
- *      join (no zone pinning — one latency domain). A deliberately small
- *      split threshold forces several partitions which Lagrange spreads
- *      across the expanded cluster — real parallelism: multiple raft groups
- *      and multiple leaders without reloading the data.
+ *   1. The ratings schema bootstraps on the seed, then four nodes join (no
+ *      zone pinning — one latency domain). Once the expanded control plane is
+ *      routable, the dataset loads and a deliberately small split threshold
+ *      forces several partitions across the cluster — real parallelism:
+ *      multiple raft groups and multiple leaders.
  *   2. The movielens ratings are loaded and split across partitions
  *      whose replicas land on different node subsets. Distributed
  *      grouped SQL emits one AVG/COUNT row per movie and establishes the
@@ -48,6 +48,7 @@ import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {
+  createRatingsTableWithRetry,
   loadRatingsIntoLagrange,
 } from './lagrange-loader.js';
 import {
@@ -88,7 +89,7 @@ const LEDGER_VOTER_ROLES = new Set(['leader', 'follower', 'candidate']);
 // Cluster transitions (formation, data load) leave replica operations
 // running; writes to a partition mid-move can transiently fail, so the
 // demo waits for IN-FLIGHT operations (no completed_at yet) to drain
-// before the next stage. Bounded: proceed anyway on timeout.
+// before the next stage. Bounded and fail-closed on timeout.
 const SETTLE_POLL_INTERVAL_MS = 10000;
 const SETTLE_QUIET_POLLS = 3;
 // Staleness-based settle (same principle as the phase-3 convergence watch):
@@ -199,7 +200,7 @@ async function waitForAdmin() {
   await waitFor('seed admin endpoint', async () => {
     await queryRows('SELECT 1');
     return true;
-  }, 60000);
+  }, CLUSTER_FORM_TIMEOUT_MS);
 }
 
 const MAX_JOIN_RESTARTS = 5;
@@ -270,6 +271,8 @@ async function waitForControlPlaneSettling() {
   let lastCompletedCount = -1;
   let lastLedgerShape = null;
   let lastProgressAt = Date.now();
+  let lastObservedInFlight = null;
+  let lastObservedLedgerSpread = null;
   while (Date.now() - start < SETTLE_HARD_CAP_MS) {
     let inFlight = null;
     let ledgerInFlight = null;
@@ -292,6 +295,8 @@ async function waitForControlPlaneSettling() {
         'SELECT node_id, status, raft_role FROM services WHERE ' +
         `partition_id = ${sqlQuote(OPERATION_LEDGER_PARTITION_ID)}`);
       ledgerSpread = evaluateLedgerSpreadRows(ledgerRows);
+      lastObservedInFlight = inFlight;
+      lastObservedLedgerSpread = ledgerSpread;
     } catch {
       inFlight = null;
     }
@@ -303,6 +308,7 @@ async function waitForControlPlaneSettling() {
     const ledgerChanged = ledgerShape !== null && ledgerShape !== lastLedgerShape;
     lastLedgerShape = ledgerShape;
     if (
+      inFlight === 0 &&
       ledgerInFlight === 0 &&
       partitionsStable &&
       ledgerSpread?.ready === true
@@ -311,7 +317,7 @@ async function waitForControlPlaneSettling() {
       if (quietPolls >= SETTLE_QUIET_POLLS) {
         console.log(
           '      Control plane settled (ledger quorum spread and no ' +
-          'ledger self-move in flight for ' +
+          'formation operation in flight for ' +
           `${Math.round((SETTLE_QUIET_POLLS * SETTLE_POLL_INTERVAL_MS) /
             1000)}s).`);
         return true;
@@ -339,6 +345,13 @@ async function waitForControlPlaneSettling() {
           `spread=${ledgerSpread?.ready === true ? 'yes' : 'no'}`);
       }
       if (Date.now() - lastProgressAt >= SETTLE_STALL_MS) {
+        if (lastObservedLedgerSpread?.ready === true) {
+          throw new Error(
+            'Control plane settling stalled after the operation-ledger ' +
+            `quorum spread with ${lastObservedInFlight ?? '?'} formation ` +
+            `operations still in flight (${Math.round(SETTLE_STALL_MS /
+              1000)}s without operation progress)`);
+        }
         throw new Error(
           'Control plane settling stalled before the operation-ledger ' +
           `quorum spread (${Math.round(SETTLE_STALL_MS / 1000)}s without ` +
@@ -346,6 +359,13 @@ async function waitForControlPlaneSettling() {
       }
     }
     await sleep(SETTLE_POLL_INTERVAL_MS);
+  }
+  if (lastObservedLedgerSpread?.ready === true) {
+    throw new Error(
+      'Control plane did not drain all formation operations after the ' +
+      'operation-ledger quorum spread within ' +
+      `${Math.round(SETTLE_HARD_CAP_MS / 1000)}s ` +
+      `(in flight: ${lastObservedInFlight ?? '?'})`);
   }
   throw new Error(
     'Control plane did not reach a spread operation-ledger quorum within ' +
@@ -670,11 +690,10 @@ async function runAffinityDemo() {
   await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
 
   try {
-    console.log('[1/5] Bootstrapping MovieLens on the seed...');
+    console.log('[1/5] Bootstrapping the MovieLens schema on the seed...');
     nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
     await waitForAdmin();
-    const totalRows = await loadRatingsIntoLagrange({target: TARGET});
-    console.log(`      Loaded ${totalRows} ratings on the seed.`);
+    await createRatingsTableWithRetry({target: TARGET});
     // Bootstrap the two small coordination tables on the seed too. Their
     // schemas then scale out with the cluster instead of exercising unrelated
     // cold multi-node DDL while the example is teaching service affinity.
@@ -691,6 +710,10 @@ async function runAffinityDemo() {
     console.log('      Cluster formed.');
     console.log('      Waiting for formation settling...');
     await waitForControlPlaneSettling();
+
+    console.log('      Loading 100,000 ratings into the routable source...');
+    const totalRows = await loadRatingsIntoLagrange({target: TARGET});
+    console.log(`      Loaded ${totalRows} ratings.`);
 
     console.log('      Waiting for ratings partitions to split and spread...');
     const dataNodes = await waitFor(
