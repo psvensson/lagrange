@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: revision 8, implementation terminal; aggregate audit pending
+Status: revision 9, implementation and aggregate gates terminal; final program audit pending
 
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
@@ -767,3 +767,28 @@ with the independently approved and solved superseding row recorded here.
 The final static ratchet also removed the unused compatibility-barrel aliases
 for the canonical normalizer/input helper and keeps the generator writer
 private; unused exports improve from the 1,628 baseline to 1,627.
+
+Revision 9 records the final aggregate-gate cleanup and current inventory. The
+guideline audit initially exposed 144 new raw-literal violations in the W11-W14
+tooling; named constant ownership and explicit state decisions close all of
+them. Focused reruns then exposed three live consumers still importing
+`normalizeDistinctStringArray` through the retired compatibility barrel. Commit
+`37be0676` moves those consumers directly to the canonical evidence-values
+owner and regenerates the inventory. Production source SHA-256 is now
+`736b8588a7a8218f32de74cb12332ee254b3449f3d02b2de4bf332ae0308d8c9`:
+64 modules, 738 public exports, 283 import/export edges, 91 cross-layer edges,
+largest SCC 1, four visible lower-similarity name signals, zero confirmed exact
+duplicates, and zero migration candidates.
+
+The final aggregate commands are green on commit `37be0676`: `npm run
+test:static`, `npm run test:fast`, `npm run model:contracts`, `npm run
+test:safety-pregate`, and every focused W11-W14 scenario runner. The optional
+`test:convergence-probes` lane was also exercised both at its default
+concurrency and at `--jobs=1`; its three bounded-wall-clock probes retain their
+documented pre-existing formation/ledger stalls. Commits `6fcb6329` and
+`5881bfa0` explicitly removed those hardware-relative statistical probes from
+the blocking gates after proving them red at the pre-release base, so their
+current failure is recorded as residual risk rather than represented as a new
+program regression. The blocking distributed safety pregate is 6/6 files and
+112/112 assertions green, while the fast aggregate includes the deterministic
+distributed-harness and convergence suites.
