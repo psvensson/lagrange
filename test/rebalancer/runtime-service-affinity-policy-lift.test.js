@@ -9,9 +9,10 @@
  *     ACTIVE replica of the accessed partition, writes credit only the
  *     leader's group, weights normalize to best-group=1, stale rows are
  *     ignored, no data yields {}.
- *  2. The policy lift: read_locality=same_group + fresh attribution →
+ *  2. The policy lift: fresh attribution always produces
  *     policy.dataAffinity.groupWeights + preferDataAffinity=true;
- *     read_locality=any, or no attribution, → policy unchanged.
+ *     read_locality remains a routing policy, while no attribution
+ *     leaves placement unchanged.
  *  3. End-to-end: engine records → publisher publishes (fake gateway
  *     lands the row in a mock cache) → policy owner aggregates →
  *     the REAL placement kernel scores DATA_AFFINITY dimensions.
@@ -191,8 +192,8 @@ test('weights derivation: reads credit replica groups, writes credit ' +
   t.end();
 });
 
-test('policy lift: same_group + fresh attribution enables the affinity ' +
-  'policy; any / no attribution leaves the policy unchanged', (t) => {
+test('policy lift: fresh attribution enables affinity independently of ' +
+  'read routing; no attribution leaves policy unchanged', (t) => {
   const freshRow = accessRow({
     nodeId: NODE_B,
     serviceId: SVC_ID,
@@ -219,21 +220,17 @@ test('policy lift: same_group + fresh attribution enables the affinity ' +
     accessRows: [freshRow],
     readLocality: SERVICE_READ_LOCALITY.ANY,
   })).getRuntimeServicePolicy();
-  t.equal(uniformRouting.dataAffinity, undefined,
-    'uniform routing (any) never lifts affinity — planner and router ' +
-      'stay coherent on the same read_locality field');
-  t.equal(
-    uniformRouting.placementConstraints.preferDataAffinity,
-    undefined,
-    'the dimension family stays off for uniform routing',
-  );
+  t.same(uniformRouting.dataAffinity, lifted.dataAffinity,
+    'uniform read routing retains the same placement weights');
+  t.equal(uniformRouting.placementConstraints.preferDataAffinity, true,
+    'data affinity remains intrinsic when routing allows any replica');
 
   const noAttribution = buildPolicyHost(buildClusterCache({
     accessRows: [],
     readLocality: SERVICE_READ_LOCALITY.SAME_GROUP,
   })).getRuntimeServicePolicy();
   t.equal(noAttribution.dataAffinity, undefined,
-    'same_group without fresh attribution leaves the policy unchanged');
+    'a service without fresh attribution leaves placement unchanged');
   t.end();
 });
 

@@ -1,5 +1,4 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {SERVICE_READ_LOCALITY} from '../constants/index.js';
 import {SD_COL} from '../wasm-service/wasm-service-models.js';
 import {
   buildServiceDataAffinityWeights,
@@ -63,13 +62,12 @@ class UnifiedRebalancerPolicySchedulerMethods {
    * (`replica_count = 0`) drive placement. A missing/non-finite/negative value
    * falls back to the static default; an explicit `0` is honored (place none).
    *
-   * Affinity lift (service↔data affinity placement epic): when the
-   * service's routing policy is locality-aware (`read_locality =
-   * same_group` — the SAME field the query router reads, so planner and
-   * router share one read-cost model), the fresh cross-node attribution
-   * rows are aggregated into per-latency-group weights and the
-   * DATA_AFFINITY dimension family is enabled on the policy. With
-   * uniform routing, or no fresh attribution, the policy is unchanged.
+   * Affinity lift (service↔data affinity placement epic): fresh
+   * cross-node attribution rows always become per-node/per-group
+   * placement weights for runtime services. `read_locality` remains a
+   * query-routing choice; it does not disable the placement behavior
+   * that makes replicated services converge toward their data. Before
+   * the service has an access profile, the policy remains unchanged.
    *
    * @return {Object} Runtime service policy.
    */
@@ -85,27 +83,23 @@ class UnifiedRebalancerPolicySchedulerMethods {
     if (Number.isFinite(desiredReplicaCount) && desiredReplicaCount >= 0) {
       policy.targetReplicaCount = desiredReplicaCount;
     }
-    if (
-      definition?.[SD_COL.READ_LOCALITY] === SERVICE_READ_LOCALITY.SAME_GROUP
-    ) {
-      const {nodeWeights, groupWeights} = buildServiceDataAffinityWeights({
-        systemTableCache: this.systemTableCache,
-        serviceId: this.entityId,
-        nowMs: Date.now(),
-      });
-      if (Object.keys(nodeWeights).length > 0 ||
-          Object.keys(groupWeights).length > 0) {
-        policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] = {
-          [PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_NODE_WEIGHTS]:
-            nodeWeights,
-          [PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_GROUP_WEIGHTS]:
-            groupWeights,
-        };
-        policy[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS] = {
-          ...policy[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS],
-          [PLACEMENT_OWNER_POLICY_FIELD.PREFER_DATA_AFFINITY]: true,
-        };
-      }
+    const {nodeWeights, groupWeights} = buildServiceDataAffinityWeights({
+      systemTableCache: this.systemTableCache,
+      serviceId: this.entityId,
+      nowMs: Date.now(),
+    });
+    if (Object.keys(nodeWeights).length > 0 ||
+        Object.keys(groupWeights).length > 0) {
+      policy[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY] = {
+        [PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_NODE_WEIGHTS]:
+          nodeWeights,
+        [PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_GROUP_WEIGHTS]:
+          groupWeights,
+      };
+      policy[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS] = {
+        ...policy[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS],
+        [PLACEMENT_OWNER_POLICY_FIELD.PREFER_DATA_AFFINITY]: true,
+      };
     }
     return policy;
   }

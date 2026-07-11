@@ -3,43 +3,40 @@
  * (solve/epics/service-data-affinity-placement.md): CODE MOVES TO ITS
  * DATA, live — at NODE granularity, inside a single latency group.
  *
- * Latency groups exist for CDC fan-out efficiency; the placement
- * thesis this demo proves is independent of them. The controlled A/B
- * first observes the deployed service with affinity disabled, then
- * changes only read_locality and watches the same replicas converge to
- * the best production-equivalent weighted node placement.
+ * Latency groups exist for CDC fan-out efficiency; the placement thesis
+ * is independent of them. Data affinity is intrinsic: the service starts
+ * without an access history, its normal queries publish attribution, and
+ * placement learns the best production-weighted node set.
  *
  * The story:
- *   1. A 5-node cluster starts (no zone pinning — one latency domain),
- *      with a deliberately small partition split threshold so the
- *      ratings table is FORCED to split into several partitions —
- *      real parallelism: multiple raft groups, multiple leaders,
- *      parallel write targets for the loader.
+ *   1. The ratings table and dataset bootstrap on the seed, then four nodes
+ *      join (no zone pinning — one latency domain). A deliberately small
+ *      split threshold forces several partitions which Lagrange spreads
+ *      across the expanded cluster — real parallelism: multiple raft groups
+ *      and multiple leaders without reloading the data.
  *   2. The movielens ratings are loaded and split across partitions
- *      whose replicas land on different node subsets. A centralized
- *      full-scan/reduce baseline records the 100k-row transfer and the
- *      exact top-10 reference result.
+ *      whose replicas land on different node subsets. Distributed
+ *      grouped SQL emits one AVG/COUNT row per movie and establishes the
+ *      confidence-adjusted top-10 reference result.
  *   3. A REAL runtime service is deployed (service_definitions row,
  *      runtime_kind native_js, runtime_ref sql-query-loop-runtime)
- *      initially with read_locality='any'. Stable leased slot 1 reduces
+ *      with read_locality='any' (routing choice, not an affinity switch).
+ *      Stable leased slot 1 reduces
  *      movie ids <= 1000 and slot 2 reduces ids > 1000. Because group
  *      keys are disjoint, the slot-1 replica can exactly merge the two
  *      atomic partial top-10 snapshots while exchanging at most 20
  *      candidates. Slot ownership survives replica REPLACE generations.
- *   4. After recording the affinity-off placement, the demo switches
- *      the same service to read_locality='same_group'. Every statement
- *      is attributed into
- *      service_partition_access; the runtime-service rebalancer lifts
- *      the per-node weights into a DATA_AFFINITY placement policy; the
- *      planner puts/pulls the service replicas onto the highest-weight
- *      nodes. The result must remain identical to the centralized
- *      reference throughout.
+ *   4. Every statement is attributed into service_partition_access; the
+ *      runtime-service rebalancer always lifts fresh per-node weights
+ *      into DATA_AFFINITY placement. The planner converges service
+ *      replicas onto the highest-weight nodes without a public enable
+ *      toggle. The service result must match distributed SQL.
  *
  * Local processes only (no Docker): the staged bring-up needs process
  * control.
  *
  * Usage:
- *   node examples/movielens-access-affinity/download-movielens.js
+ *   node examples/service-data-affinity/download-movielens.js
  *   node examples/service-data-affinity/run-affinity-demo.js
  */
 
@@ -52,15 +49,17 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {
   loadRatingsIntoLagrange,
-} from '../../examples/movielens-access-affinity/lagrange-loader.js';
-import {
-  computeReduction,
-} from '../../src/runtime/sql-query-loop-runtime-module.js';
+} from './lagrange-loader.js';
 import {
   assessAffinityDemoCompletion,
   buildWeightedLocalitySnapshot,
   topNRowsEqual,
 } from './affinity-demo-evidence.js';
+import {
+  QUALITY_RANKING,
+  RATINGS_AGGREGATE_SQL,
+  rankMovieQuality,
+} from './movie-ranking.js';
 
 const NODE_COUNT = 5;
 const BASE_REST_PORT = 8080;
@@ -68,7 +67,7 @@ const BASE_ADMIN_PORT = 8081;
 const PORT_STRIDE = 4;
 const CLUSTER_DATA_ROOT = 'data/examples/service-data-affinity-demo';
 const REPORT_DIR = 'test-output/reports';
-const LIVE_SCENARIO = 'service-data-affinity-parallel-reduce-demo-live';
+const LIVE_SCENARIO = 'movielens-lagrange-service-affinity-live';
 const TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 2000;
@@ -82,6 +81,9 @@ const OBSERVE_INTERVAL_MS = 10000;
 const CONVERGE_TIMEOUT_MS = 600000;
 const STALL_TIMEOUT_MS = 300000;
 const NODE_STATUS_ACTIVE = 'active';
+const OPERATION_LEDGER_PARTITION_ID = 'replica_operations-p1';
+const LEDGER_VOTER_STATUSES = new Set(['active', 'removing']);
+const LEDGER_VOTER_ROLES = new Set(['leader', 'follower', 'candidate']);
 
 // Cluster transitions (formation, data load) leave replica operations
 // running; writes to a partition mid-move can transiently fail, so the
@@ -104,10 +106,9 @@ const PARTITION_EVAL_INTERVAL_MS = 60000;
 
 const SERVICE_ID = 'svc-movielens-topn';
 const SERVICE_REPLICA_COUNT = 2;
-// The centralized reference scans the whole table. The deployed
-// service splits movie-id groups into two disjoint SQL shards, reduces
-// them concurrently on two replicas, and exchanges only their top-N
-// candidates for the final exact merge.
+// The distributed-SQL reference groups the table to one row per movie.
+// The deployed service runs the richer confidence-adjusted ranking on
+// two disjoint movie-id shards and exchanges only their top-N candidates.
 const SCAN_SQL = 'SELECT movie_id, rating FROM ratings';
 const MOVIE_ID_SHARD_BOUNDARY = 1000;
 const SHARD_SQL_BY_SLOT = Object.freeze({
@@ -241,34 +242,76 @@ function sqlQuote(value) {
   return `'${String(value).replace(/'/g, '\'\'')}'`;
 }
 
+function evaluateLedgerSpreadRows(rows) {
+  const voters = (Array.isArray(rows) ? rows : []).filter((row) =>
+    LEDGER_VOTER_STATUSES.has(String(row?.status || '').toLowerCase()) &&
+    LEDGER_VOTER_ROLES.has(String(row?.raft_role || '').toLowerCase()));
+  if (voters.length < 3) {
+    return {ready: false, voterCount: voters.length, maxOnOneNode: null};
+  }
+  const perNode = new Map();
+  for (const voter of voters) {
+    const nodeId = String(voter?.node_id || '');
+    perNode.set(nodeId, (perNode.get(nodeId) || 0) + 1);
+  }
+  const maxOnOneNode = Math.max(...perNode.values());
+  const majority = Math.floor(voters.length / 2) + 1;
+  return {
+    ready: voters.length - maxOnOneNode >= majority,
+    voterCount: voters.length,
+    maxOnOneNode,
+  };
+}
+
 async function waitForControlPlaneSettling() {
   const start = Date.now();
   let quietPolls = 0;
   let lastPartitionCount = -1;
   let lastCompletedCount = -1;
+  let lastLedgerShape = null;
   let lastProgressAt = Date.now();
   while (Date.now() - start < SETTLE_HARD_CAP_MS) {
     let inFlight = null;
+    let ledgerInFlight = null;
     let completedCount = null;
     let partitionCount = -1;
+    let ledgerSpread = null;
     try {
       const rows = await queryRows(
-        'SELECT operation_id, completed_at FROM replica_operations');
+        'SELECT operation_id, partition_id, completed_at FROM ' +
+        'replica_operations');
       inFlight = rows.filter((r) => !r.completed_at).length;
+      ledgerInFlight = rows.filter((row) =>
+        !row.completed_at &&
+        row.partition_id === OPERATION_LEDGER_PARTITION_ID).length;
       completedCount = rows.length - inFlight;
       const partitions = await queryRows(
         'SELECT partition_id FROM partitions');
       partitionCount = partitions.length;
+      const ledgerRows = await queryRows(
+        'SELECT node_id, status, raft_role FROM services WHERE ' +
+        `partition_id = ${sqlQuote(OPERATION_LEDGER_PARTITION_ID)}`);
+      ledgerSpread = evaluateLedgerSpreadRows(ledgerRows);
     } catch {
       inFlight = null;
     }
     const partitionsStable = partitionCount === lastPartitionCount;
     lastPartitionCount = partitionCount;
-    if (inFlight === 0 && partitionsStable) {
+    const ledgerShape = ledgerSpread ?
+      `${ledgerSpread.voterCount}/${ledgerSpread.maxOnOneNode}/` +
+        `${ledgerSpread.ready}` : null;
+    const ledgerChanged = ledgerShape !== null && ledgerShape !== lastLedgerShape;
+    lastLedgerShape = ledgerShape;
+    if (
+      ledgerInFlight === 0 &&
+      partitionsStable &&
+      ledgerSpread?.ready === true
+    ) {
       quietPolls += 1;
       if (quietPolls >= SETTLE_QUIET_POLLS) {
         console.log(
-          '      Control plane settled (no in-flight operations for ' +
+          '      Control plane settled (ledger quorum spread and no ' +
+          'ledger self-move in flight for ' +
           `${Math.round((SETTLE_QUIET_POLLS * SETTLE_POLL_INTERVAL_MS) /
             1000)}s).`);
         return true;
@@ -281,7 +324,7 @@ async function waitForControlPlaneSettling() {
       // and starved the load phase behind the formation rebalance storm.
       if (
         completedCount !== null &&
-        (completedCount !== lastCompletedCount || inFlight === 0)
+        (completedCount !== lastCompletedCount || ledgerChanged)
       ) {
         lastCompletedCount = completedCount;
         lastProgressAt = Date.now();
@@ -289,21 +332,24 @@ async function waitForControlPlaneSettling() {
       if (inFlight !== null) {
         console.log(
           `      ...${inFlight} operations in flight ` +
-          `(${completedCount} completed)`);
+          `(${ledgerInFlight ?? '?'} ledger, ${completedCount} completed); ` +
+          'ledger voters=' +
+          `${ledgerSpread?.voterCount ?? '?'} max-on-node=` +
+          `${ledgerSpread?.maxOnOneNode ?? '?'} ` +
+          `spread=${ledgerSpread?.ready === true ? 'yes' : 'no'}`);
       }
       if (Date.now() - lastProgressAt >= SETTLE_STALL_MS) {
-        console.log(
-          '      Control plane settling STALLED (no operation completed ' +
-          `for ${Math.round(SETTLE_STALL_MS / 1000)}s) — proceeding anyway.`);
-        return false;
+        throw new Error(
+          'Control plane settling stalled before the operation-ledger ' +
+          `quorum spread (${Math.round(SETTLE_STALL_MS / 1000)}s without ` +
+          'operation or ledger-placement progress)');
       }
     }
     await sleep(SETTLE_POLL_INTERVAL_MS);
   }
-  console.log(
-    '      Control plane still settling after ' +
-    `${Math.round(SETTLE_HARD_CAP_MS / 1000)}s — proceeding anyway.`);
-  return false;
+  throw new Error(
+    'Control plane did not reach a spread operation-ledger quorum within ' +
+    `${Math.round(SETTLE_HARD_CAP_MS / 1000)}s`);
 }
 
 async function deployQueryLoopService() {
@@ -313,9 +359,10 @@ async function deployQueryLoopService() {
     intervalMs: QUERY_INTERVAL_MS,
     reduce: {
       groupBy: 'movie_id',
-      aggregate: 'avg',
+      aggregate: 'confidence_adjusted_avg',
       valueColumn: 'rating',
       limit: TOP_N,
+      ...QUALITY_RANKING,
     },
     resultTable: RESULT_TABLE,
     parallelReduce: PARALLEL_REDUCE_CONFIG,
@@ -341,23 +388,16 @@ async function deployQueryLoopService() {
   );
 }
 
-async function enableNodeAffinity() {
-  await queryRows(
-    'UPDATE service_definitions SET read_locality = \'same_group\', ' +
-    `updated_at = ${Date.now()} WHERE service_id = ${sqlQuote(SERVICE_ID)}`,
-  );
-}
-
 // The nodes that hold an ACTIVE replica of the partitions "near the
 // data" means for this demo: the partitions the service actually
 // accessed (from its attribution rows) when known, else every ratings
 // (tbl-) partition.
 async function describeDataNodes(accessedPartitionIds = null) {
   const partitions = await queryRows(
-    'SELECT partition_id, leader_node_id FROM partitions',
+    'SELECT partition_id, table_name, leader_node_id FROM partitions',
   );
   const ratingsPartitions = partitions.filter((p) =>
-    String(p.partition_id || '').startsWith('tbl-') &&
+    p.table_name === 'ratings' &&
     (!accessedPartitionIds || accessedPartitionIds.has(p.partition_id)));
   const ratingsPartitionIds =
     new Set(ratingsPartitions.map((p) => p.partition_id));
@@ -528,6 +568,18 @@ async function observeDemoPhase(label, referenceTopN, phaseStartedAt, accept) {
   throw new Error(`${label} did not converge within ${CONVERGE_TIMEOUT_MS}ms`);
 }
 
+async function observeInitialPlacement() {
+  const start = Date.now();
+  while (Date.now() - start < CONVERGE_TIMEOUT_MS) {
+    const placements = await describeServicePlacement();
+    if (placements.length === SERVICE_REPLICA_COUNT) {
+      return {placements, observedAt: Date.now()};
+    }
+    await sleep(OBSERVE_INTERVAL_MS);
+  }
+  throw new Error('service replicas were not initially placed');
+}
+
 function summarizeReduceSlots(reduceSlots) {
   return reduceSlots.map((slot) => ({
     slotId: Number(slot.slot_id),
@@ -618,9 +670,20 @@ async function runAffinityDemo() {
   await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
 
   try {
-    console.log(`[1/5] Starting ${NODE_COUNT} nodes (single zone)...`);
+    console.log('[1/5] Bootstrapping MovieLens on the seed...');
     nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
     await waitForAdmin();
+    const totalRows = await loadRatingsIntoLagrange({target: TARGET});
+    console.log(`      Loaded ${totalRows} ratings on the seed.`);
+    // Bootstrap the two small coordination tables on the seed too. Their
+    // schemas then scale out with the cluster instead of exercising unrelated
+    // cold multi-node DDL while the example is teaching service affinity.
+    await queryRows(CREATE_RESULT_TABLE_SQL);
+    await queryRows(CREATE_COORDINATION_TABLE_SQL);
+
+    console.log(
+      `[2/5] Expanding to ${NODE_COUNT} nodes (single zone) and spreading ` +
+      'the existing data...');
     for (let i = 1; i < NODE_COUNT; i += 1) {
       nodes.push(await startNode(i, CLUSTER_DATA_ROOT));
     }
@@ -629,40 +692,38 @@ async function runAffinityDemo() {
     console.log('      Waiting for formation settling...');
     await waitForControlPlaneSettling();
 
-    console.log('[2/5] Loading movielens ratings (replicas land on ' +
-      'SOME of the nodes — that asymmetry is the point)...');
-    const totalRows = await loadRatingsIntoLagrange({target: TARGET});
-    console.log(`      Loaded ${totalRows} ratings.`);
-    console.log('      Waiting for post-load settling...');
-    await waitForControlPlaneSettling();
-    const dataNodes = await describeDataNodes();
+    console.log('      Waiting for ratings partitions to split and spread...');
+    const dataNodes = await waitFor(
+      'ratings partitions on at least two nodes',
+      async () => {
+        const state = await describeDataNodes();
+        return state.partitionCount >= 2 && state.holderNodeIds.size >= 2 ?
+          state : null;
+      },
+      CONVERGE_TIMEOUT_MS,
+    );
     console.log(
       `      Ratings partitions: ${dataNodes.partitionCount}, ` +
       `data on nodes: ${JSON.stringify([...dataNodes.holderNodeIds])}`);
 
-    console.log('[3/5] Running the centralized reference reduce...');
-    const centralizedStart = Date.now();
-    const centralizedRows = await queryRows(SCAN_SQL);
-    const referenceTopN = computeReduction(centralizedRows, {
-      groupBy: 'movie_id',
-      aggregate: 'avg',
-      valueColumn: 'rating',
-      limit: TOP_N,
-    }).map((row, index) => ({
+    console.log('[3/5] Running Lagrange distributed grouped SQL...');
+    const distributedSqlStart = Date.now();
+    const aggregateRows = await queryRows(RATINGS_AGGREGATE_SQL);
+    const referenceTopN = rankMovieQuality(aggregateRows).map((row, index) => ({
       rank: index + 1,
-      group_key: row.groupKey,
-      agg_value: row.aggValue,
+      group_key: row.movieId,
+      agg_value: row.score,
     }));
-    const centralizedElapsedMs = Date.now() - centralizedStart;
+    const distributedSqlElapsedMs = Date.now() - distributedSqlStart;
     console.log(
-      `      Centralized baseline transferred ${centralizedRows.length} ` +
-      `rows and reduced them in ${centralizedElapsedMs}ms.`);
+      `      Lagrange SQL returned ${aggregateRows.length} grouped rows ` +
+      `in ${distributedSqlElapsedMs}ms (rather than ${totalRows} ratings).`);
 
     console.log(
       `[4/5] Deploying the ${SERVICE_ID} runtime service ` +
-      `(${SERVICE_REPLICA_COUNT} replicas, affinity OFF): disjoint ` +
-      'movie-id shards reduce in parallel, publish 10 candidates each, ' +
-      'and the slot-1 replica performs the exact bounded merge)...');
+      `(${SERVICE_REPLICA_COUNT} replicas, intrinsic data affinity): ` +
+      'disjoint movie-id shards compute a confidence-adjusted Bayesian ' +
+      'ranking, publish 10 candidates each, and slot 1 merges them)...');
     await queryRows(CREATE_RESULT_TABLE_SQL);
     await queryRows(CREATE_COORDINATION_TABLE_SQL);
     await queryRows(
@@ -674,70 +735,71 @@ async function runAffinityDemo() {
       '(slot_id, replica_id, lease_expires_at, partial_json, computed_at) ' +
       'VALUES (1, \'\', 0, \'[]\', 0), (2, \'\', 0, \'[]\', 0)',
     );
-    const affinityOffStartedAt = Date.now();
+    const learnedPhaseStartedAt = Date.now();
     await deployQueryLoopService();
-    const affinityOff = await observeDemoPhase(
-      'affinity-off',
-      referenceTopN,
-      affinityOffStartedAt,
-      (state) =>
-        state.placements.length === SERVICE_REPLICA_COUNT &&
-        state.assessment.partialReplicaCount === SERVICE_REPLICA_COUNT &&
-        state.assessment.identitiesCurrent &&
-        state.assessment.partialsFresh &&
-        state.assessment.partialsBounded &&
-        state.assessment.resultFresh &&
-        state.assessment.resultCorrect,
-    );
+    const initial = await observeInitialPlacement();
 
     console.log(
-      '[5/5] Enabling node affinity for the SAME service and workload...');
-    const affinityOnStartedAt = Date.now();
-    await enableNodeAffinity();
-    const affinityOn = await observeDemoPhase(
-      'affinity-on', referenceTopN, affinityOnStartedAt,
+      '[5/5] Waiting for access attribution to teach placement where the ' +
+      'service data is (no affinity switch)...');
+    const learned = await observeDemoPhase(
+      'learned-affinity', referenceTopN, learnedPhaseStartedAt,
       (state) => state.assessment.complete,
     );
-    const improved = affinityOn.weightedLocality.localityRatio >
-      affinityOff.weightedLocality.localityRatio;
-    const retainedOptimum = !improved &&
-      affinityOff.weightedLocality.localityRatio >= 1;
+    const initialWeightedLocality = await describeWeightedLocality(
+      initial.placements, learned.attributionRows,
+    );
+    const improved = learned.weightedLocality.localityRatio >
+      initialWeightedLocality.localityRatio;
+    const initialNodes = new Set(initial.placements.map((row) => row.nodeId));
+    const learnedNodes = new Set(learned.placements.map((row) => row.nodeId));
+    const placementChanged = initialNodes.size !== learnedNodes.size ||
+      [...initialNodes].some((nodeId) => !learnedNodes.has(nodeId));
     console.log(
-      '\n      CONVERGED: affinity-on reached the best achievable weighted ' +
-      `node placement (${improved ? 'improved from baseline' :
-        'baseline was already optimal and was retained'}).`);
+      '\n      CONVERGED: intrinsic affinity reached the best production-' +
+      `weighted placement (${placementChanged ? 'replicas moved' :
+        'initial placement was already optimal'}).`);
     console.log(
       '      Cross-replica exchange was bounded to ' +
-      `${affinityOn.assessment.mergeCandidateCount} partial candidates; ` +
-      `the centralized baseline returned ${centralizedRows.length} ratings ` +
-      'to its caller. The top-10 is identical:\n');
-    for (const row of affinityOn.serviceTopN) {
+      `${learned.assessment.mergeCandidateCount} partial candidates; ` +
+      `distributed SQL returned ${aggregateRows.length} movie aggregates. ` +
+      'The confidence-adjusted top-10 is identical:\n');
+    for (const row of learned.serviceTopN) {
       console.log(
         `        #${row.rank} movie ${row.group_key} ` +
-        `avg=${Number(row.agg_value).toFixed(3)}`);
+        `score=${Number(row.agg_value).toFixed(4)}`);
     }
     console.log('');
     return {
-      converged: affinityOn.assessment.complete,
-      centralized: {
-        transferredRows: centralizedRows.length,
-        elapsedMs: centralizedElapsedMs,
+      converged: learned.assessment.complete,
+      lagrangeDistributedSql: {
+        inputRatings: totalRows,
+        returnedAggregateRows: aggregateRows.length,
+        elapsedMs: distributedSqlElapsedMs,
       },
       parallelReduce: {
         replicas: SERVICE_REPLICA_COUNT,
-        mergeCandidates: affinityOn.assessment.mergeCandidateCount,
-        elapsedToFirstCorrectResultMs: affinityOff.elapsedMs,
+        mergeCandidates: learned.assessment.mergeCandidateCount,
+        elapsedToCorrectOptimalResultMs: learned.elapsedMs,
       },
-      affinityOff: summarizePhase(affinityOff),
-      affinityOn: {
-        ...summarizePhase(affinityOn),
+      initialPlacement: {
+        observedAt: initial.observedAt,
+        placement: initial.placements,
+        weightedLocality: initialWeightedLocality.localityRatio,
+      },
+      learnedAffinity: {
+        ...summarizePhase(learned),
         improved,
-        retainedOptimum,
+        placementChanged,
       },
-      resultCorrect: topNRowsEqual(referenceTopN, affinityOn.serviceTopN),
-      top10: affinityOn.serviceTopN.map((r) =>
-        `#${r.rank} movie ${r.group_key} avg=` +
-        Number(r.agg_value).toFixed(3)),
+      resultCorrect: topNRowsEqual(referenceTopN, learned.serviceTopN),
+      ranking: learned.serviceTopN.map((row) => ({
+        movieId: Number(row.group_key),
+        score: Number(row.agg_value),
+      })),
+      top10: learned.serviceTopN.map((r) =>
+        `#${r.rank} movie ${r.group_key} score=` +
+        Number(r.agg_value).toFixed(4)),
     };
   } finally {
     console.log('Stopping cluster...');
@@ -791,4 +853,4 @@ if (process.argv[1]?.includes('run-affinity-demo.js')) {
     });
 }
 
-export {runAffinityDemo, summarizePhase};
+export {evaluateLedgerSpreadRows, runAffinityDemo, summarizePhase};

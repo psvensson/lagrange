@@ -82,6 +82,7 @@ const SQL_QUERY_LOOP_AGGREGATE = Object.freeze({
   AVG: 'avg',
   SUM: 'sum',
   COUNT: 'count',
+  CONFIDENCE_ADJUSTED_AVG: 'confidence_adjusted_avg',
 });
 
 const SQL_QUERY_LOOP_DEFAULT = Object.freeze({
@@ -109,8 +110,9 @@ const SQL_QUERY_LOOP_ERROR = Object.freeze({
     'non-attributed coordination SQL',
   NOT_PREPARED: 'module has not been prepared for this service',
   REDUCE_INVALID:
-    'runtime_config.reduce must be {groupBy, aggregate avg|sum|count, ' +
-    'valueColumn (avg/sum), limit > 0} when present',
+    'runtime_config.reduce must contain groupBy, aggregate ' +
+    'avg|sum|count|confidence_adjusted_avg, valueColumn when needed, ' +
+    'limit > 0, and valid confidence parameters when present',
   RESULT_TABLE_INVALID:
     'runtime_config.resultTable must be a non-empty string and ' +
     'requires runtime_config.reduce',
@@ -136,8 +138,17 @@ function isValidReduceShape(reduce) {
   if (!Object.values(SQL_QUERY_LOOP_AGGREGATE).includes(reduce.aggregate)) {
     return false;
   }
-  return reduce.aggregate === SQL_QUERY_LOOP_AGGREGATE.COUNT ||
+  const valueShapeValid =
+    reduce.aggregate === SQL_QUERY_LOOP_AGGREGATE.COUNT ||
     isNonEmptyString(reduce.valueColumn);
+  if (!valueShapeValid ||
+      reduce.aggregate !== SQL_QUERY_LOOP_AGGREGATE.CONFIDENCE_ADJUSTED_AVG) {
+    return valueShapeValid;
+  }
+  return Number.isFinite(reduce.priorMean) &&
+    Number.isFinite(reduce.priorWeight) && reduce.priorWeight > 0 &&
+    Number.isFinite(reduce.confidencePenalty) &&
+    reduce.confidencePenalty >= 0;
 }
 
 function validateReduceConfig(parsed) {
@@ -183,7 +194,16 @@ function computeReduction(rows, reduce) {
     if (reduce.aggregate === SQL_QUERY_LOOP_AGGREGATE.SUM) {
       return entry.sum;
     }
-    return entry.count > 0 ? entry.sum / entry.count : 0;
+    const average = entry.count > 0 ? entry.sum / entry.count : 0;
+    if (reduce.aggregate !==
+        SQL_QUERY_LOOP_AGGREGATE.CONFIDENCE_ADJUSTED_AVG) {
+      return average;
+    }
+    const bayesianMean =
+      (entry.sum + reduce.priorMean * reduce.priorWeight) /
+      (entry.count + reduce.priorWeight);
+    return bayesianMean -
+      reduce.confidencePenalty / Math.sqrt(entry.count);
   };
   return [...groups.entries()]
     .map(([key, entry]) => ({groupKey: key, aggValue: aggregateOf(entry)}))
