@@ -71,6 +71,7 @@ import {
   validateRuntimeDescriptor,
 } from '../wasm-service/runtime-descriptor-validator.js';
 import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
+import {START_STATUS} from './runtime-driver.js';
 
 const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_REGISTRY_MUST_BE_AN_INSTANCE_OF_RUNTIMED = 'registry must be an instance of RuntimeDriverRegistry';
@@ -764,6 +765,7 @@ Object.defineProperties(
     LOCAL_STR_VUZ91,
     OperationJournalError,
     QUERY_EXECUTOR_FACTORY_EVENT,
+    START_STATUS,
     RUNTIME_REPLICA_STATUS,
     WASM_OPERATION_STATE,
     getOrCreateCauseId,

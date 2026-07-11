@@ -22,7 +22,7 @@ import {
   UnknownRuntimeKindError,
   EndpointIntentError,
 } from '../../src/runtime/runtime-driver-errors.js';
-import {RUNTIME_KIND, LIFECYCLE_EVENT} from
+import {RUNTIME_KIND, LIFECYCLE_EVENT, RUNTIME_REPLICA_STATUS} from
   '../../src/constants/runtime.js';
 import {
   validateEndpointIntent,
@@ -1083,6 +1083,42 @@ const FACTORY_TEST_SQL = 'SELECT 1';
 const FACTORY_TEST_PARAMS = [42];
 
 describe('ServiceRuntimeLifecycle query executor factory', () => {
+  it('failed driver start rejects and projects FAILED, never ACTIVE', async () => {
+    class FailedStartDriver extends RuntimeDriver {
+      constructor() {
+        super(RUNTIME_KIND.NATIVE_JS);
+      }
+      validateDescriptor() {
+        return {valid: true};
+      }
+      async prepare() {
+        return {status: PREPARE_STATUS.READY};
+      }
+      async start() {
+        return {status: START_STATUS.FAILED, error: 'no reduce slot config'};
+      }
+      async stop() {}
+      async health() {
+        return {status: HEALTH_STATUS.UNHEALTHY};
+      }
+    }
+    const lifecycle = new ServiceRuntimeLifecycle(
+      makeRegistry(new FailedStartDriver()),
+    );
+    const projections = [];
+    lifecycle.setStateProjectionWriter(async (_serviceId, state) => {
+      projections.push(state.status);
+    });
+    const def = nativeDef('svc-failed-start');
+    await lifecycle.prepare(def, {});
+    await assert.rejects(
+      lifecycle.start(replicaCtx(def)),
+      /no reduce slot config/,
+    );
+    assert.equal(projections.at(-1), RUNTIME_REPLICA_STATUS.FAILED);
+    assert.equal(projections.includes(RUNTIME_REPLICA_STATUS.ACTIVE), false);
+  });
+
   it('should reject non-function factory', () => {
     const registry = makeRegistry(new StubNativeDriver());
     const lifecycle = new ServiceRuntimeLifecycle(registry);

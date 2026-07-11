@@ -1,3 +1,5 @@
+const RUNTIME_DRIVER_START_FAILED = 'runtime driver start failed';
+
 function createServiceRuntimeLifecycleOperationMethods(deps) {
   const {
     EndpointIntentError,
@@ -11,12 +13,51 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
     OperationJournalError,
     QUERY_EXECUTOR_FACTORY_EVENT,
     RUNTIME_REPLICA_STATUS,
+    START_STATUS,
     WASM_OPERATION_STATE,
     getOrCreateCauseId,
     resolveRuntimeKind,
     resolveServiceId,
     validateEndpointIntent,
   } = deps;
+
+  function resolveIssuingServiceIdentity(definition, replicaServiceId) {
+    return definition.entityId ??
+      definition.service_id ?? replicaServiceId;
+  }
+
+  function injectServiceQueryExecutor(
+    owner, definition, serviceId, replicaContext, runtimeKind,
+  ) {
+    if (!owner._queryExecutorFactory) {
+      return;
+    }
+    const queryExecutor = owner._queryExecutorFactory(
+      resolveIssuingServiceIdentity(definition, serviceId),
+    );
+    replicaContext.queryExecutor = queryExecutor;
+    if (typeof queryExecutor?.executeRequest === 'function') {
+      replicaContext.sqlRequestExecutor =
+        queryExecutor.executeRequest.bind(queryExecutor);
+    }
+    owner.emit(
+      QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
+      {runtimeKind, serviceId},
+    );
+  }
+
+  function assertDriverStartSucceeded(
+    result, runtimeKind, serviceId, operation,
+  ) {
+    if (result?.status === START_STATUS.FAILED) {
+      throw new LifecycleOrchestrationError(
+        operation,
+        runtimeKind,
+        serviceId,
+        result.error || RUNTIME_DRIVER_START_FAILED,
+      );
+    }
+  }
 
   class ServiceRuntimeLifecycleOperationMethods {
   /**
@@ -220,22 +261,17 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
 
         // Inject service-scoped query executor into replica context
         // so drivers and lifecycle modules can query tables through
-        // the standard SQL execution path.
-        if (this._queryExecutorFactory) {
-          const queryExecutor = this._queryExecutorFactory(serviceId);
-          replicaContext.queryExecutor = queryExecutor;
-          if (typeof queryExecutor?.executeRequest === 'function') {
-            replicaContext.sqlRequestExecutor =
-              queryExecutor.executeRequest.bind(queryExecutor);
-          }
-          this.emit(
-            QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
-            {runtimeKind, serviceId},
-          );
-        }
+        // the standard SQL execution path. A placed replica has its
+        // own lifecycle serviceId (`entity-rN`), but routing policy and
+        // service_partition_access are owned by the canonical runtime
+        // service definition. Attribute queries to that entity id.
+        injectServiceQueryExecutor(
+          this, definition, serviceId, replicaContext, runtimeKind,
+        );
 
         const driver = this._resolveDriver(runtimeKind);
         const result = await driver.start(replicaContext);
+        assertDriverStartSucceeded(result, runtimeKind, serviceId, op);
         const durationMs = Date.now() - start;
 
         // --- Endpoint intent single-write-path handling ---

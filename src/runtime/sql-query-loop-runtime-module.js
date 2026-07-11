@@ -28,12 +28,21 @@
  *                         // written through the SAME service-scoped
  *                         // executor, so the service's output writes
  *                         // are attributed like its reads
+ *   parallelReduce?: {    // optional cross-replica reduce mode
+ *     shardSqlBySlot: Object, // stable leased slot -> disjoint SQL
+ *     coordinationTable: string, // slot lease + atomic partial snapshot
+ *     leaseMs: number,
+ *     coordinatorSlot: number,
+ *     resultId: string
+ *   }
  * }
  *
- * The reduce runs INSIDE the service replica: a full-table scan fans
- * out across every partition in parallel, and only the reduced top-N
- * leaves the service — the epic's "code near data" includes the
- * reducer.
+ * The ordinary reduce runs inside each service replica. In
+ * parallelReduce mode, each replica runs one disjoint group-key shard,
+ * publishes only its partial top-N, and the configured coordinator
+ * merges at most replicas×N candidates. The shard contract requires a
+ * group key to occur in exactly one shard, making the bounded top-N
+ * merge exact rather than approximate.
  *
  * The query loop is shutdown-aware: stop() cancels the pending sleep
  * timer AND wakes the awaited sleep so the loop exits promptly after
@@ -46,6 +55,17 @@ import {
   START_STATUS,
   HEALTH_STATUS,
 } from './runtime-driver.js';
+import {
+  acquireReduceSlot,
+  isValidParallelReduceConfig,
+  mergeDisjointPartialRows,
+  publishPartialSnapshot,
+  publishResultSnapshot,
+  readSlotRows,
+  releaseReduceSlot,
+  resolveCompletePartialSnapshot,
+  UNASSIGNED_SLOT_ID,
+} from './sql-query-loop-parallel-reduce.js';
 
 const SQL_QUERY_LOOP_RUNTIME_REF = 'sql-query-loop-runtime';
 
@@ -55,6 +75,7 @@ const SQL_QUERY_LOOP_CONFIG_FIELD = Object.freeze({
   INTERVAL_MS: 'intervalMs',
   REDUCE: 'reduce',
   RESULT_TABLE: 'resultTable',
+  PARALLEL_REDUCE: 'parallelReduce',
 });
 
 const SQL_QUERY_LOOP_AGGREGATE = Object.freeze({
@@ -65,6 +86,10 @@ const SQL_QUERY_LOOP_AGGREGATE = Object.freeze({
 
 const SQL_QUERY_LOOP_DEFAULT = Object.freeze({
   INTERVAL_MS: 1000,
+});
+
+const SQL_QUERY_LOOP_SQL = Object.freeze({
+  VALUES_SEPARATOR: ', ',
 });
 
 const SQL_QUERY_LOOP_ERROR = Object.freeze({
@@ -79,6 +104,9 @@ const SQL_QUERY_LOOP_ERROR = Object.freeze({
   QUERY_EXECUTOR_REQUIRED:
     'replicaContext.queryExecutor is required (injected by ' +
     'ServiceRuntimeLifecycle when the SQL engine wires the factory)',
+  INTERNAL_QUERY_EXECUTOR_REQUIRED:
+    'parallel reduce requires queryExecutor.executeInternal for ' +
+    'non-attributed coordination SQL',
   NOT_PREPARED: 'module has not been prepared for this service',
   REDUCE_INVALID:
     'runtime_config.reduce must be {groupBy, aggregate avg|sum|count, ' +
@@ -86,6 +114,11 @@ const SQL_QUERY_LOOP_ERROR = Object.freeze({
   RESULT_TABLE_INVALID:
     'runtime_config.resultTable must be a non-empty string and ' +
     'requires runtime_config.reduce',
+  PARALLEL_REDUCE_INVALID:
+    'runtime_config.parallelReduce must contain non-empty ' +
+    'shardSqlBySlot, coordinationTable, resultId, leaseMs, and a valid ' +
+    'coordinatorSlot; it ' +
+    'requires reduce and resultTable',
 });
 
 function isNonEmptyString(value) {
@@ -114,12 +147,17 @@ function validateReduceConfig(parsed) {
       (!isNonEmptyString(resultTable) || reduce === undefined)) {
     return SQL_QUERY_LOOP_ERROR.RESULT_TABLE_INVALID;
   }
-  if (reduce === undefined) {
+  if (reduce !== undefined && !isValidReduceShape(reduce)) {
+    return SQL_QUERY_LOOP_ERROR.REDUCE_INVALID;
+  }
+  const parallel = parsed[SQL_QUERY_LOOP_CONFIG_FIELD.PARALLEL_REDUCE];
+  if (parallel === undefined) {
     return null;
   }
-  return isValidReduceShape(reduce) ?
+  return Boolean(reduce) &&
+    isValidParallelReduceConfig(parallel, resultTable) ?
     null :
-    SQL_QUERY_LOOP_ERROR.REDUCE_INVALID;
+    SQL_QUERY_LOOP_ERROR.PARALLEL_REDUCE_INVALID;
 }
 
 // In-service reduction: group -> aggregate -> top-N descending.
@@ -149,8 +187,18 @@ function computeReduction(rows, reduce) {
   };
   return [...groups.entries()]
     .map(([key, entry]) => ({groupKey: key, aggValue: aggregateOf(entry)}))
-    .sort((a, b) => b.aggValue - a.aggValue)
+    .sort(compareReducedRows)
     .slice(0, reduce.limit);
+}
+
+function compareReducedRows(left, right) {
+  const aggregateOrder = right.aggValue - left.aggValue;
+  if (aggregateOrder !== 0) {
+    return aggregateOrder;
+  }
+  return String(left.groupKey).localeCompare(
+    String(right.groupKey), undefined, {numeric: true},
+  );
 }
 
 function sqlLiteral(value) {
@@ -161,17 +209,23 @@ function sqlLiteral(value) {
 
 async function writeReducedRows(queryExecutor, resultTable, reduced) {
   await queryExecutor(`DELETE FROM ${resultTable}`, []);
+  if (reduced.length === 0) {
+    return;
+  }
   const now = Date.now();
+  const values = [];
   for (let rank = 0; rank < reduced.length; rank += 1) {
     const row = reduced[rank];
-    await queryExecutor(
-      `INSERT INTO ${resultTable} ` +
-      '(rank, group_key, agg_value, computed_at) VALUES ' +
+    values.push(
       `(${rank + 1}, ${sqlLiteral(row.groupKey)}, ` +
-      `${sqlLiteral(row.aggValue)}, ${now})`,
-      [],
-    );
+      `${sqlLiteral(row.aggValue)}, ${now})`);
   }
+  await queryExecutor(
+    `INSERT INTO ${resultTable} ` +
+    '(rank, group_key, agg_value, computed_at) VALUES ' +
+    values.join(SQL_QUERY_LOOP_SQL.VALUES_SEPARATOR),
+    [],
+  );
 }
 
 function parseRawRuntimeConfig(definition) {
@@ -227,6 +281,8 @@ function parseRuntimeConfig(definition) {
       reduce: parsed[SQL_QUERY_LOOP_CONFIG_FIELD.REDUCE] || null,
       resultTable:
         parsed[SQL_QUERY_LOOP_CONFIG_FIELD.RESULT_TABLE] || null,
+      parallelReduce:
+        parsed[SQL_QUERY_LOOP_CONFIG_FIELD.PARALLEL_REDUCE] || null,
     },
   };
 }
@@ -299,6 +355,13 @@ class SqlQueryLoopRuntimeModule {
         error: SQL_QUERY_LOOP_ERROR.QUERY_EXECUTOR_REQUIRED,
       };
     }
+    if (prepared.config.parallelReduce &&
+        typeof replicaContext.queryExecutor.executeInternal !== 'function') {
+      return {
+        status: START_STATUS.FAILED,
+        error: SQL_QUERY_LOOP_ERROR.INTERNAL_QUERY_EXECUTOR_REQUIRED,
+      };
+    }
     const existing = this._running.get(serviceId);
     if (existing && !existing.stopped) {
       return {status: START_STATUS.RUNNING};
@@ -311,13 +374,22 @@ class SqlQueryLoopRuntimeModule {
       queryErrors: 0,
       lastError: null,
       lastReducedRows: 0,
+      lastScannedRows: 0,
+      partialRowsPublished: 0,
+      mergeCandidates: 0,
+      slotId: UNASSIGNED_SLOT_ID,
+      queryExecutor: replicaContext.queryExecutor,
+      coordinationExecutor:
+        replicaContext.queryExecutor.executeInternal || null,
+      config: prepared.config,
+      serviceId,
       loopPromise: null,
     };
     this._running.set(serviceId, state);
     state.loopPromise = this.runQueryLoop(
       state,
       replicaContext.queryExecutor,
-      prepared.config,
+      {...prepared.config, serviceId},
     );
     return {status: START_STATUS.RUNNING};
   }
@@ -333,7 +405,27 @@ class SqlQueryLoopRuntimeModule {
   async runQueryLoop(state, queryExecutor, config) {
     while (!state.stopped) {
       try {
-        const result = await queryExecutor(config.sql, config.params);
+        let executionSql = config.sql;
+        if (config.parallelReduce) {
+          const slot = await acquireReduceSlot(
+            state.slotId,
+            state.coordinationExecutor,
+            config.parallelReduce,
+            config.serviceId,
+          );
+          state.slotId = slot ?
+            Number(slot.slot_id) :
+            UNASSIGNED_SLOT_ID;
+          if (!slot) {
+            await this.waitForNextCycle(state, config.intervalMs);
+            continue;
+          }
+          executionSql = config.parallelReduce
+            .shardSqlBySlot[String(state.slotId)];
+        }
+        const result = await queryExecutor(
+          executionSql, config.params,
+        );
         if (result?.success === false) {
           state.queryErrors += 1;
           state.lastError = result.error ?? null;
@@ -347,19 +439,23 @@ class SqlQueryLoopRuntimeModule {
         state.queryErrors += 1;
         state.lastError = error?.message ?? null;
       }
-      if (state.stopped) {
-        break;
-      }
-      await new Promise((resolve) => {
-        state.wake = resolve;
-        state.timer = setTimeout(resolve, config.intervalMs);
-      });
-      if (state.timer) {
-        clearTimeout(state.timer);
-        state.timer = null;
-      }
-      state.wake = null;
+      await this.waitForNextCycle(state, config.intervalMs);
     }
+  }
+
+  async waitForNextCycle(state, intervalMs) {
+    if (state.stopped) {
+      return;
+    }
+    await new Promise((resolve) => {
+      state.wake = resolve;
+      state.timer = setTimeout(resolve, intervalMs);
+    });
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = false;
+    }
+    state.wake = false;
   }
 
   /**
@@ -376,11 +472,49 @@ class SqlQueryLoopRuntimeModule {
       return;
     }
     const rows = result?.results || result?.rows || [];
+    state.lastScannedRows = rows.length;
     const reduced = computeReduction(rows, config.reduce);
     state.lastReducedRows = reduced.length;
-    if (config.resultTable && reduced.length > 0) {
+    if (config.parallelReduce) {
+      await this.publishAndMergeParallelReduction(
+        state, config, reduced,
+      );
+    } else if (config.resultTable && reduced.length > 0) {
       await writeReducedRows(queryExecutor, config.resultTable, reduced);
     }
+  }
+
+  async publishAndMergeParallelReduction(
+    state, config, reduced,
+  ) {
+    const parallel = config.parallelReduce;
+    await publishPartialSnapshot(
+      state.coordinationExecutor,
+      parallel,
+      config.serviceId,
+      state.slotId,
+      reduced,
+    );
+    state.partialRowsPublished = reduced.length;
+    if (state.slotId !== parallel.coordinatorSlot) {
+      return;
+    }
+    const slotRows = await readSlotRows(
+      state.coordinationExecutor, parallel.coordinationTable,
+    );
+    const snapshot = resolveCompletePartialSnapshot(
+      slotRows, parallel, config.reduce.limit, Date.now(),
+    );
+    if (!snapshot.complete) {
+      return;
+    }
+    state.mergeCandidates = snapshot.candidates.length;
+    await publishResultSnapshot(
+      state.coordinationExecutor,
+      config.resultTable,
+      parallel.resultId,
+      snapshot.merged,
+    );
   }
 
   /**
@@ -403,6 +537,15 @@ class SqlQueryLoopRuntimeModule {
       if (state.wake) {
         state.wake();
         state.wake = null;
+      }
+      if (state.config.parallelReduce) {
+        await releaseReduceSlot(
+          state.slotId,
+          state.coordinationExecutor,
+          state.config.parallelReduce,
+          serviceId,
+        );
+        state.slotId = UNASSIGNED_SLOT_ID;
       }
       this._running.delete(serviceId);
     }
@@ -427,6 +570,9 @@ class SqlQueryLoopRuntimeModule {
       queryErrors: state.queryErrors,
       lastError: state.lastError,
       lastReducedRows: state.lastReducedRows,
+      lastScannedRows: state.lastScannedRows,
+      partialRowsPublished: state.partialRowsPublished,
+      mergeCandidates: state.mergeCandidates,
     };
   }
 }
@@ -434,4 +580,6 @@ class SqlQueryLoopRuntimeModule {
 export {
   SQL_QUERY_LOOP_RUNTIME_REF,
   SqlQueryLoopRuntimeModule,
+  computeReduction,
+  mergeDisjointPartialRows,
 };
