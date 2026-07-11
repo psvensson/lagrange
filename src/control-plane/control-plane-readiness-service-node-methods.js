@@ -1,12 +1,234 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+import {buildNodeTrustState} from './node-trust-state.js';
 
 const {
   COLUMN,
+  MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
   MISSING_NODE_READINESS_STATE,
   TABLES,
   normalizeIsoTimestamp,
   normalizePositiveInteger,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+
+const TRUST_CACHE_STATE_KNOWN = 'known';
+const TRUST_CACHE_STATE_UNKNOWN = 'unknown';
+const TRUST_TRANSPORT_STATE_CONNECTED = 'connected';
+const TRUST_MEMBERSHIP_STATUS_PUBLISHED = 'PUBLISHED';
+const TRUST_ROW_STATUS_ACTIVE = 'active';
+const TRUST_GRACE_KEY_FIELDS = Object.freeze([
+  'lastHeartbeat',
+  'readyLeaseExpiresAt',
+  'rowConnectionState',
+  'status',
+]);
+
+function readTrustCacheRows(service, tableName) {
+  return typeof service.systemTableCache?.getAll === 'function' ?
+    service.systemTableCache.getAll(tableName) || [] :
+    [];
+}
+
+function readTrustCacheWatermark(service, tableName, methodName) {
+  const method = service.systemTableCache?.[methodName];
+  return typeof method === 'function' ?
+    method.call(service.systemTableCache, tableName) :
+    null;
+}
+
+function buildProvisioningCacheWatermark(service) {
+  const watermark = {
+    nodesVersion:
+      readTrustCacheWatermark(service, TABLES.NODES, 'getAppliedSchemaVersion'),
+    servicesVersion:
+      readTrustCacheWatermark(
+        service,
+        TABLES.SERVICES,
+        'getAppliedSchemaVersion',
+      ),
+    nodesAppliedAtMs:
+      readTrustCacheWatermark(service, TABLES.NODES, 'getLastAppliedAtMs'),
+    servicesAppliedAtMs:
+      readTrustCacheWatermark(service, TABLES.SERVICES, 'getLastAppliedAtMs'),
+  };
+  const nodesKnown =
+    watermark.nodesVersion !== null || watermark.nodesAppliedAtMs !== null;
+  const servicesKnown =
+    watermark.servicesVersion !== null ||
+    watermark.servicesAppliedAtMs !== null;
+  return Object.freeze({
+    ...watermark,
+    state: nodesKnown && servicesKnown ?
+      TRUST_CACHE_STATE_KNOWN :
+      TRUST_CACHE_STATE_UNKNOWN,
+  });
+}
+
+function collectProvisioningTrustNodeIds(
+  service,
+  nodeRows,
+  serviceRows,
+  membershipPublication,
+) {
+  return [...new Set([
+    ...nodeRows.map((row) => row?.[COLUMN.NODE_ID]),
+    ...serviceRows.map((row) => row?.[COLUMN.NODE_ID]),
+    ...(Array.isArray(membershipPublication?.publishedActiveNodeIds) ?
+      membershipPublication.publishedActiveNodeIds :
+      []),
+    service.nodeId,
+  ].filter(Boolean))].sort();
+}
+
+function resolveProvisioningTrustTransportState(service, nodeId, readiness) {
+  const observed = String(
+    readiness?.nodeEvidence?.routerConnectionState || '',
+  ).toLowerCase();
+  if (observed) {
+    return observed;
+  }
+  return nodeId === service.nodeId && readiness?.dimensions?.processAlive === true ?
+    TRUST_TRANSPORT_STATE_CONNECTED :
+    TRUST_CACHE_STATE_UNKNOWN;
+}
+
+function isProvisioningTrustHeartbeatStale(readiness) {
+  const heartbeatAgeMs = Number(readiness?.nodeEvidence?.heartbeatAgeMs);
+  const staleHeartbeatLimitMs = Number(
+    readiness?.nodeEvidence?.staleHeartbeatLimitMs,
+  );
+  return Number.isFinite(heartbeatAgeMs) &&
+    Number.isFinite(staleHeartbeatLimitMs) &&
+    heartbeatAgeMs > staleHeartbeatLimitMs;
+}
+
+function isNodeInInstalledMembership(nodeId, membershipPublication) {
+  return String(membershipPublication?.status || '').toUpperCase() ===
+      TRUST_MEMBERSHIP_STATUS_PUBLISHED &&
+    Array.isArray(membershipPublication?.publishedActiveNodeIds) &&
+    membershipPublication.publishedActiveNodeIds.includes(nodeId);
+}
+
+function normalizeOptionalTrustKeyValue(value) {
+  return value === undefined ? null : value;
+}
+
+function buildProvisioningTrustGraceKey(context) {
+  return Object.freeze({
+    lastHeartbeat: normalizeOptionalTrustKeyValue(
+      context.readiness?.nodeEvidence?.lastHeartbeat,
+    ),
+    readyLeaseExpiresAt: normalizeOptionalTrustKeyValue(
+      context.readiness?.nodeEvidence?.readyLeaseExpiresAt,
+    ),
+    rowConnectionState: normalizeOptionalTrustKeyValue(
+      context.readiness?.nodeEvidence?.rowConnectionState,
+    ),
+    status: normalizeOptionalTrustKeyValue(
+      context.readiness?.nodeEvidence?.status,
+    ),
+  });
+}
+
+function areProvisioningTrustGraceKeysEqual(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+  return TRUST_GRACE_KEY_FIELDS.every(
+    (field) => left[field] === right[field],
+  );
+}
+
+function resolveProvisioningTrustGrace(service, context) {
+  const selfRuntimeGrace =
+    context.readiness?.runtimeAuthority?.visibility?.state ===
+      'retained_local_runtime';
+  const graceEligible = [
+    context.transportState === TRUST_TRANSPORT_STATE_CONNECTED,
+    isNodeInInstalledMembership(
+      context.nodeId,
+      context.membershipPublication,
+    ),
+    isProvisioningTrustHeartbeatStale(context.readiness) || selfRuntimeGrace,
+  ].every(Boolean);
+  if (!graceEligible) {
+    service.provisioningTrustGraceByNodeId.delete(context.nodeId);
+    return {selfRuntimeGrace, startedAtMs: null};
+  }
+  const graceKey = buildProvisioningTrustGraceKey(context);
+  const existing = service.provisioningTrustGraceByNodeId.get(context.nodeId);
+  const startedAtMs = areProvisioningTrustGraceKeysEqual(
+    existing?.key,
+    graceKey,
+  ) ?
+    existing.startedAtMs :
+    context.capturedAtMs;
+  service.provisioningTrustGraceByNodeId.set(
+    context.nodeId,
+    {key: graceKey, startedAtMs},
+  );
+  return {selfRuntimeGrace, startedAtMs};
+}
+
+function isActiveTrustRow(row, nodeId) {
+  return row?.[COLUMN.NODE_ID] === nodeId &&
+    String(row?.status || '').toLowerCase() === TRUST_ROW_STATUS_ACTIVE;
+}
+
+function buildProvisioningNodeTrustState(service, nodeId, context, options) {
+  const snapshot = service.getNodeReadinessSync(nodeId, {
+    ...options,
+    membershipPublicationPlanningSource:
+      MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW,
+  });
+  const readiness = snapshot ? {
+    ...snapshot,
+    membershipPublication: context.membershipPublication,
+  } : {
+    nodeId,
+    membershipPublication: context.membershipPublication,
+  };
+  const transportState = resolveProvisioningTrustTransportState(
+    service,
+    nodeId,
+    readiness,
+  );
+  const grace = resolveProvisioningTrustGrace(service, {
+    ...context,
+    nodeId,
+    readiness,
+    transportState,
+  });
+  return buildNodeTrustState(readiness, {
+    observerNodeId: service.nodeId,
+    capturedAtMs: context.capturedAtMs,
+    cacheWatermark: context.cacheWatermark,
+    transport: {
+      state: transportState,
+      observedAtMs:
+        transportState === TRUST_CACHE_STATE_UNKNOWN ?
+          null :
+          context.capturedAtMs,
+    },
+    graceStartedAtMs: grace.startedAtMs,
+    graceLimitMs: service.clusterMemberStaleHeartbeatMaxAgeMs,
+    selfRuntimeGrace: grace.selfRuntimeGrace,
+    activeNodeRow: context.nodeRows.some(
+      (row) => isActiveTrustRow(row, nodeId),
+    ),
+    activeServiceCount: context.serviceRows.filter(
+      (row) => isActiveTrustRow(row, nodeId),
+    ).length,
+  });
+}
+
+function pruneProvisioningTrustGrace(service, nodeIds) {
+  const currentNodeIds = new Set(nodeIds);
+  for (const nodeId of service.provisioningTrustGraceByNodeId.keys()) {
+    if (!currentNodeIds.has(nodeId)) {
+      service.provisioningTrustGraceByNodeId.delete(nodeId);
+    }
+  }
+}
 
 const controlPlaneReadinessNodeMethods = {
   /**
@@ -136,6 +358,35 @@ const controlPlaneReadinessNodeMethods = {
       }
     }
     return readiness;
+  },
+
+  getProvisioningNodeTrustViewSync(options = {}) {
+    const capturedAtMs = this.now();
+    const observedAt = normalizeIsoTimestamp(capturedAtMs);
+    const nodeRows = readTrustCacheRows(this, TABLES.NODES);
+    const serviceRows = readTrustCacheRows(this, TABLES.SERVICES);
+    const membershipPublication =
+      this.getMembershipPublicationDiagnosticsSync(this.nodeId, observedAt);
+    const cacheWatermark = buildProvisioningCacheWatermark(this);
+    const nodeIds = collectProvisioningTrustNodeIds(
+      this,
+      nodeRows,
+      serviceRows,
+      membershipPublication,
+    );
+    pruneProvisioningTrustGrace(this, nodeIds);
+    const context = {
+      capturedAtMs,
+      cacheWatermark,
+      membershipPublication,
+      nodeRows,
+      serviceRows,
+    };
+    return Object.freeze(
+      nodeIds.map((nodeId) =>
+        buildProvisioningNodeTrustState(this, nodeId, context, options),
+      ),
+    );
   },
 
   /**
@@ -347,12 +598,17 @@ const controlPlaneReadinessNodeMethods = {
     // and evidence builds below are only needed when a fresh snapshot is
     // NOT reusable. serviceRows is provided lazily because the background
     // refresh consumes it only on its doubly-gated repair path.
-    const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
-      nodeId,
-      nodeRow,
-      publication,
-      membershipPublication,
-    );
+    const usesDirectPublicationPlanning =
+      options.membershipPublicationPlanningSource ===
+        MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW;
+    const fresherStoredSnapshot = !usesDirectPublicationPlanning ?
+      this.getFresherStoredReadinessSnapshot(
+        nodeId,
+        nodeRow,
+        publication,
+        membershipPublication,
+      ) :
+      null;
 
     if (fresherStoredSnapshot) {
       const readinessService = this;

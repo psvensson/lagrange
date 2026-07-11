@@ -42,6 +42,7 @@ config.initialize();
 import {
   createMockMessageRouter,
   createMockSystemCache,
+  createProvisioningReadyService,
   uniqueNodeIds,
   createAdmittedSplitAdmissionService,
 } from './sql-query-engine-test-support.js';
@@ -606,6 +607,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 40,
@@ -756,6 +758,7 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     cdcIntegrationService,
@@ -1029,6 +1032,7 @@ test('SQLQueryEngine - provisionInitialTablePartition can stop waiting once ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 40,
@@ -1173,6 +1177,7 @@ test('SQLQueryEngine - provisionInitialTablePartition tolerates one failed ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 40,

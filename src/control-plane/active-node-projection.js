@@ -192,7 +192,8 @@ function resolveProjectionReadinessRuntimeAuthorityProjection(
 ) {
   const runtimeAuthority = projectionReadiness.evidence.runtimeAuthority;
   if (
-    runtimeAuthority?.provisioning?.eligible !== true
+    runtimeAuthority?.repairEligible !== true &&
+    runtimeAuthority?.recoveryEligible !== true
   ) {
     return PROJECTION_AUTHORITY_SOURCE.NONE;
   }

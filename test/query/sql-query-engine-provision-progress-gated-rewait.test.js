@@ -15,7 +15,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-import {createMockMessageRouter} from './sql-query-engine-test-support.js';
+import {
+  createMockMessageRouter,
+  createProvisioningReadyService,
+} from './sql-query-engine-test-support.js';
 
 const QUORUM_CONCENTRATED_REJECTION = Object.freeze({
   allowed: false,
@@ -97,6 +100,7 @@ function createEngineFixture({rebalanceCoordinator, cache, localNodeId, clock}) 
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
+    controlPlaneReadinessService: createProvisioningReadyService(cache),
     // Compressed geometry: one 40ms parent budget shared by every wait.
     tablePartitionProvisioningTimeoutMs: 40,
     tablePartitionProvisioningPollIntervalMs: 1,

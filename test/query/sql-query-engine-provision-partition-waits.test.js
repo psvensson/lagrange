@@ -39,6 +39,7 @@ config.initialize();
 
 import {
   createMockMessageRouter,
+  createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
 
 
@@ -145,6 +146,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 500,
@@ -202,6 +204,7 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     tablePartitionProvisioningPollIntervalMs: 5,
   });
@@ -245,6 +248,7 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     tablePartitionProvisioningPollIntervalMs: 5,
     tablePartitionProvisioningTimeoutMs: 15,
@@ -331,6 +335,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active node ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 50,
@@ -459,6 +464,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for admission ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 50,
@@ -581,6 +587,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 5000,
@@ -673,6 +680,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 200,
@@ -808,6 +816,7 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
   });
@@ -887,6 +896,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     cdcIntegrationService: {
@@ -1186,6 +1196,7 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     cdcIntegrationService,

@@ -166,6 +166,10 @@ class ControlPlaneReadinessParticipationBase {
     // needs no explicit clear. See
     // resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync.
     this.membershipPublicationPlanningSnapshotContextMemo = new WeakMap();
+    // Observer-local stale-negative rescue windows used only by the
+    // provisioning trust view. A stable evidence key prevents a continuously
+    // connected socket from renewing grace forever.
+    this.provisioningTrustGraceByNodeId = new Map();
     this.recoveryEpochHistoryLimit =
       Number.isInteger(options.recoveryEpochHistoryLimit) &&
       options.recoveryEpochHistoryLimit > 0 ?

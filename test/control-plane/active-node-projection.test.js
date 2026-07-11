@@ -8,7 +8,6 @@ import {
 } from '../../src/control-plane/active-node-projection.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  PROVISIONING_ELIGIBILITY_STATE,
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -391,10 +390,7 @@ test('active-node projection can include recovery-eligible nodes during publicat
           },
           runtimeAuthority: {
             state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
-            provisioning: {
-              state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
-              eligible: true,
-            },
+            recoveryEligible: true,
             visibility: {
               state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
               published: false,
@@ -547,10 +543,7 @@ test('active-node projection can use runtime authority when dimensions lag',
           nodeId: 'node-1',
           runtimeAuthority: {
             state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
-            provisioning: {
-              state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
-              eligible: true,
-            },
+            repairEligible: true,
             visibility: {
               state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
               published: false,

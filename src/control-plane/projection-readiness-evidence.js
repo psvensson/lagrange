@@ -454,11 +454,6 @@ function buildProjectionReadinessEvidence(source = {}) {
     clusterMemberHealthy,
     repairEligible,
     recoveryEligible,
-    provisioningEligible:
-      runtimeAuthority?.provisioning?.eligible === true ||
-      dimensions[
-        CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE
-      ] === true,
     controlPlaneWritable:
       runtimeAuthority?.writeEligible === true ||
       dimensions[

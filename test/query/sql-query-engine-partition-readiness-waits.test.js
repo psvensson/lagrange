@@ -51,6 +51,7 @@ config.initialize();
 import {
   createMockMessageRouter,
   createMockSystemCache,
+  createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
 
 
@@ -152,6 +153,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active leader ' 
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     tablePartitionProvisioningTimeoutMs: 80,
     tablePartitionProvisioningPollIntervalMs: 5,
   });
@@ -284,6 +286,7 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     tablePartitionProvisioningTimeoutMs: 80,
     tablePartitionProvisioningPollIntervalMs: 5,
   });

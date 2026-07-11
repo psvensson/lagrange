@@ -48,8 +48,7 @@ const PROJECTION_READINESS_REPAIR_BLOCKERS = Object.freeze([
     reason: PROJECTION_READINESS_REASON.REPAIR_NOT_ELIGIBLE,
     matches: (evidence) =>
       evidence.repairEligible !== true &&
-      evidence.recoveryEligible !== true &&
-      evidence.provisioningEligible !== true,
+      evidence.recoveryEligible !== true,
   }),
 ]);
 

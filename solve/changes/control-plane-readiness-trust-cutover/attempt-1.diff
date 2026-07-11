@@ -1,0 +1,1337 @@
+diff --git a/src/control-plane/active-node-projection.js b/src/control-plane/active-node-projection.js
+index f721f791..1f9b53af 100644
+--- a/src/control-plane/active-node-projection.js
++++ b/src/control-plane/active-node-projection.js
+@@ -192,7 +192,8 @@ function resolveProjectionReadinessRuntimeAuthorityProjection(
+ ) {
+   const runtimeAuthority = projectionReadiness.evidence.runtimeAuthority;
+   if (
+-    runtimeAuthority?.provisioning?.eligible !== true
++    runtimeAuthority?.repairEligible !== true &&
++    runtimeAuthority?.recoveryEligible !== true
+   ) {
+     return PROJECTION_AUTHORITY_SOURCE.NONE;
+   }
+diff --git a/src/control-plane/control-plane-readiness-participation-base.js b/src/control-plane/control-plane-readiness-participation-base.js
+index 6e398ecf..d66516cd 100644
+--- a/src/control-plane/control-plane-readiness-participation-base.js
++++ b/src/control-plane/control-plane-readiness-participation-base.js
+@@ -166,6 +166,10 @@ class ControlPlaneReadinessParticipationBase {
+     // needs no explicit clear. See
+     // resolveMemoizedMembershipPublicationPlanningSnapshotForContextSync.
+     this.membershipPublicationPlanningSnapshotContextMemo = new WeakMap();
++    // Observer-local stale-negative rescue windows used only by the
++    // provisioning trust view. A stable evidence key prevents a continuously
++    // connected socket from renewing grace forever.
++    this.provisioningTrustGraceByNodeId = new Map();
+     this.recoveryEpochHistoryLimit =
+       Number.isInteger(options.recoveryEpochHistoryLimit) &&
+       options.recoveryEpochHistoryLimit > 0 ?
+diff --git a/src/control-plane/control-plane-readiness-service-node-methods.js b/src/control-plane/control-plane-readiness-service-node-methods.js
+index 477b1dbb..82447ad2 100644
+--- a/src/control-plane/control-plane-readiness-service-node-methods.js
++++ b/src/control-plane/control-plane-readiness-service-node-methods.js
+@@ -1,13 +1,235 @@
+ import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
++import {buildNodeTrustState} from './node-trust-state.js';
+ 
+ const {
+   COLUMN,
++  MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
+   MISSING_NODE_READINESS_STATE,
+   TABLES,
+   normalizeIsoTimestamp,
+   normalizePositiveInteger,
+ } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+ 
++const TRUST_CACHE_STATE_KNOWN = 'known';
++const TRUST_CACHE_STATE_UNKNOWN = 'unknown';
++const TRUST_TRANSPORT_STATE_CONNECTED = 'connected';
++const TRUST_MEMBERSHIP_STATUS_PUBLISHED = 'PUBLISHED';
++const TRUST_ROW_STATUS_ACTIVE = 'active';
++const TRUST_GRACE_KEY_FIELDS = Object.freeze([
++  'lastHeartbeat',
++  'readyLeaseExpiresAt',
++  'rowConnectionState',
++  'status',
++]);
++
++function readTrustCacheRows(service, tableName) {
++  return typeof service.systemTableCache?.getAll === 'function' ?
++    service.systemTableCache.getAll(tableName) || [] :
++    [];
++}
++
++function readTrustCacheWatermark(service, tableName, methodName) {
++  const method = service.systemTableCache?.[methodName];
++  return typeof method === 'function' ?
++    method.call(service.systemTableCache, tableName) :
++    null;
++}
++
++function buildProvisioningCacheWatermark(service) {
++  const watermark = {
++    nodesVersion:
++      readTrustCacheWatermark(service, TABLES.NODES, 'getAppliedSchemaVersion'),
++    servicesVersion:
++      readTrustCacheWatermark(
++        service,
++        TABLES.SERVICES,
++        'getAppliedSchemaVersion',
++      ),
++    nodesAppliedAtMs:
++      readTrustCacheWatermark(service, TABLES.NODES, 'getLastAppliedAtMs'),
++    servicesAppliedAtMs:
++      readTrustCacheWatermark(service, TABLES.SERVICES, 'getLastAppliedAtMs'),
++  };
++  const nodesKnown =
++    watermark.nodesVersion !== null || watermark.nodesAppliedAtMs !== null;
++  const servicesKnown =
++    watermark.servicesVersion !== null ||
++    watermark.servicesAppliedAtMs !== null;
++  return Object.freeze({
++    ...watermark,
++    state: nodesKnown && servicesKnown ?
++      TRUST_CACHE_STATE_KNOWN :
++      TRUST_CACHE_STATE_UNKNOWN,
++  });
++}
++
++function collectProvisioningTrustNodeIds(
++  service,
++  nodeRows,
++  serviceRows,
++  membershipPublication,
++) {
++  return [...new Set([
++    ...nodeRows.map((row) => row?.[COLUMN.NODE_ID]),
++    ...serviceRows.map((row) => row?.[COLUMN.NODE_ID]),
++    ...(Array.isArray(membershipPublication?.publishedActiveNodeIds) ?
++      membershipPublication.publishedActiveNodeIds :
++      []),
++    service.nodeId,
++  ].filter(Boolean))].sort();
++}
++
++function resolveProvisioningTrustTransportState(service, nodeId, readiness) {
++  const observed = String(
++    readiness?.nodeEvidence?.routerConnectionState || '',
++  ).toLowerCase();
++  if (observed) {
++    return observed;
++  }
++  return nodeId === service.nodeId && readiness?.dimensions?.processAlive === true ?
++    TRUST_TRANSPORT_STATE_CONNECTED :
++    TRUST_CACHE_STATE_UNKNOWN;
++}
++
++function isProvisioningTrustHeartbeatStale(readiness) {
++  const heartbeatAgeMs = Number(readiness?.nodeEvidence?.heartbeatAgeMs);
++  const staleHeartbeatLimitMs = Number(
++    readiness?.nodeEvidence?.staleHeartbeatLimitMs,
++  );
++  return Number.isFinite(heartbeatAgeMs) &&
++    Number.isFinite(staleHeartbeatLimitMs) &&
++    heartbeatAgeMs > staleHeartbeatLimitMs;
++}
++
++function isNodeInInstalledMembership(nodeId, membershipPublication) {
++  return String(membershipPublication?.status || '').toUpperCase() ===
++      TRUST_MEMBERSHIP_STATUS_PUBLISHED &&
++    Array.isArray(membershipPublication?.publishedActiveNodeIds) &&
++    membershipPublication.publishedActiveNodeIds.includes(nodeId);
++}
++
++function normalizeOptionalTrustKeyValue(value) {
++  return value === undefined ? null : value;
++}
++
++function buildProvisioningTrustGraceKey(context) {
++  return Object.freeze({
++    lastHeartbeat: normalizeOptionalTrustKeyValue(
++      context.readiness?.nodeEvidence?.lastHeartbeat,
++    ),
++    readyLeaseExpiresAt: normalizeOptionalTrustKeyValue(
++      context.readiness?.nodeEvidence?.readyLeaseExpiresAt,
++    ),
++    rowConnectionState: normalizeOptionalTrustKeyValue(
++      context.readiness?.nodeEvidence?.rowConnectionState,
++    ),
++    status: normalizeOptionalTrustKeyValue(
++      context.readiness?.nodeEvidence?.status,
++    ),
++  });
++}
++
++function areProvisioningTrustGraceKeysEqual(left, right) {
++  if (!left || !right) {
++    return false;
++  }
++  return TRUST_GRACE_KEY_FIELDS.every(
++    (field) => left[field] === right[field],
++  );
++}
++
++function resolveProvisioningTrustGrace(service, context) {
++  const selfRuntimeGrace =
++    context.readiness?.runtimeAuthority?.visibility?.state ===
++      'retained_local_runtime';
++  const graceEligible = [
++    context.transportState === TRUST_TRANSPORT_STATE_CONNECTED,
++    isNodeInInstalledMembership(
++      context.nodeId,
++      context.membershipPublication,
++    ),
++    isProvisioningTrustHeartbeatStale(context.readiness) || selfRuntimeGrace,
++  ].every(Boolean);
++  if (!graceEligible) {
++    service.provisioningTrustGraceByNodeId.delete(context.nodeId);
++    return {selfRuntimeGrace, startedAtMs: null};
++  }
++  const graceKey = buildProvisioningTrustGraceKey(context);
++  const existing = service.provisioningTrustGraceByNodeId.get(context.nodeId);
++  const startedAtMs = areProvisioningTrustGraceKeysEqual(
++    existing?.key,
++    graceKey,
++  ) ?
++    existing.startedAtMs :
++    context.capturedAtMs;
++  service.provisioningTrustGraceByNodeId.set(
++    context.nodeId,
++    {key: graceKey, startedAtMs},
++  );
++  return {selfRuntimeGrace, startedAtMs};
++}
++
++function isActiveTrustRow(row, nodeId) {
++  return row?.[COLUMN.NODE_ID] === nodeId &&
++    String(row?.status || '').toLowerCase() === TRUST_ROW_STATUS_ACTIVE;
++}
++
++function buildProvisioningNodeTrustState(service, nodeId, context, options) {
++  const snapshot = service.getNodeReadinessSync(nodeId, {
++    ...options,
++    membershipPublicationPlanningSource:
++      MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW,
++  });
++  const readiness = snapshot ? {
++    ...snapshot,
++    membershipPublication: context.membershipPublication,
++  } : {
++    nodeId,
++    membershipPublication: context.membershipPublication,
++  };
++  const transportState = resolveProvisioningTrustTransportState(
++    service,
++    nodeId,
++    readiness,
++  );
++  const grace = resolveProvisioningTrustGrace(service, {
++    ...context,
++    nodeId,
++    readiness,
++    transportState,
++  });
++  return buildNodeTrustState(readiness, {
++    observerNodeId: service.nodeId,
++    capturedAtMs: context.capturedAtMs,
++    cacheWatermark: context.cacheWatermark,
++    transport: {
++      state: transportState,
++      observedAtMs:
++        transportState === TRUST_CACHE_STATE_UNKNOWN ?
++          null :
++          context.capturedAtMs,
++    },
++    graceStartedAtMs: grace.startedAtMs,
++    graceLimitMs: service.clusterMemberStaleHeartbeatMaxAgeMs,
++    selfRuntimeGrace: grace.selfRuntimeGrace,
++    activeNodeRow: context.nodeRows.some(
++      (row) => isActiveTrustRow(row, nodeId),
++    ),
++    activeServiceCount: context.serviceRows.filter(
++      (row) => isActiveTrustRow(row, nodeId),
++    ).length,
++  });
++}
++
++function pruneProvisioningTrustGrace(service, nodeIds) {
++  const currentNodeIds = new Set(nodeIds);
++  for (const nodeId of service.provisioningTrustGraceByNodeId.keys()) {
++    if (!currentNodeIds.has(nodeId)) {
++      service.provisioningTrustGraceByNodeId.delete(nodeId);
++    }
++  }
++}
++
+ const controlPlaneReadinessNodeMethods = {
+   /**
+    * Build readiness for every known node.
+@@ -138,6 +360,35 @@ const controlPlaneReadinessNodeMethods = {
+     return readiness;
+   },
+ 
++  getProvisioningNodeTrustViewSync(options = {}) {
++    const capturedAtMs = this.now();
++    const observedAt = normalizeIsoTimestamp(capturedAtMs);
++    const nodeRows = readTrustCacheRows(this, TABLES.NODES);
++    const serviceRows = readTrustCacheRows(this, TABLES.SERVICES);
++    const membershipPublication =
++      this.getMembershipPublicationDiagnosticsSync(this.nodeId, observedAt);
++    const cacheWatermark = buildProvisioningCacheWatermark(this);
++    const nodeIds = collectProvisioningTrustNodeIds(
++      this,
++      nodeRows,
++      serviceRows,
++      membershipPublication,
++    );
++    pruneProvisioningTrustGrace(this, nodeIds);
++    const context = {
++      capturedAtMs,
++      cacheWatermark,
++      membershipPublication,
++      nodeRows,
++      serviceRows,
++    };
++    return Object.freeze(
++      nodeIds.map((nodeId) =>
++        buildProvisioningNodeTrustState(this, nodeId, context, options),
++      ),
++    );
++  },
++
+   /**
+    * Build readiness for one node.
+    * @readModel READINESS_NODE_STATE - READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
+@@ -347,12 +598,17 @@ const controlPlaneReadinessNodeMethods = {
+     // and evidence builds below are only needed when a fresh snapshot is
+     // NOT reusable. serviceRows is provided lazily because the background
+     // refresh consumes it only on its doubly-gated repair path.
+-    const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
+-      nodeId,
+-      nodeRow,
+-      publication,
+-      membershipPublication,
+-    );
++    const usesDirectPublicationPlanning =
++      options.membershipPublicationPlanningSource ===
++        MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW;
++    const fresherStoredSnapshot = !usesDirectPublicationPlanning ?
++      this.getFresherStoredReadinessSnapshot(
++        nodeId,
++        nodeRow,
++        publication,
++        membershipPublication,
++      ) :
++      null;
+ 
+     if (fresherStoredSnapshot) {
+       const readinessService = this;
+diff --git a/src/control-plane/projection-readiness-decision.js b/src/control-plane/projection-readiness-decision.js
+index c4bd8dfb..58c97864 100644
+--- a/src/control-plane/projection-readiness-decision.js
++++ b/src/control-plane/projection-readiness-decision.js
+@@ -48,8 +48,7 @@ const PROJECTION_READINESS_REPAIR_BLOCKERS = Object.freeze([
+     reason: PROJECTION_READINESS_REASON.REPAIR_NOT_ELIGIBLE,
+     matches: (evidence) =>
+       evidence.repairEligible !== true &&
+-      evidence.recoveryEligible !== true &&
+-      evidence.provisioningEligible !== true,
++      evidence.recoveryEligible !== true,
+   }),
+ ]);
+ 
+diff --git a/src/control-plane/projection-readiness-evidence.js b/src/control-plane/projection-readiness-evidence.js
+index 713a9dd2..c8ebbeca 100644
+--- a/src/control-plane/projection-readiness-evidence.js
++++ b/src/control-plane/projection-readiness-evidence.js
+@@ -454,11 +454,6 @@ function buildProjectionReadinessEvidence(source = {}) {
+     clusterMemberHealthy,
+     repairEligible,
+     recoveryEligible,
+-    provisioningEligible:
+-      runtimeAuthority?.provisioning?.eligible === true ||
+-      dimensions[
+-        CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE
+-      ] === true,
+     controlPlaneWritable:
+       runtimeAuthority?.writeEligible === true ||
+       dimensions[
+diff --git a/src/query/sql-query-engine-provisioning-methods.js b/src/query/sql-query-engine-provisioning-methods.js
+index c0077ed5..006fc857 100644
+--- a/src/query/sql-query-engine-provisioning-methods.js
++++ b/src/query/sql-query-engine-provisioning-methods.js
+@@ -4,16 +4,10 @@ const LOCAL_STR_STRING = 'string';
+ const LOCAL_STR_FUNCTION = 'function';
+ 
+ const {
+-  CONNECTION_STATE_CONNECTED,
+-  CONNECTION_STATE_READY,
+   ConfigurationManager,
+   SERVICE_TYPE,
+-  STATUS_ACTIVE,
+   STORAGE_CAPACITY_CONFIG_KEY,
+   STORAGE_CAPACITY_DEFAULT,
+-  TABLES,
+-  hasLiveTransportEvidence,
+-  isNodeRecordReady,
+ } = SQL_QUERY_ENGINE_SHARED;
+ 
+ class SQLQueryEngineProvisioningMethods {
+@@ -117,12 +111,7 @@ class SQLQueryEngineProvisioningMethods {
+ 
+     const diagnostics =
+       this.resolveProvisionTargetNodeDiagnostics(desiredReplicaCount);
+-    let selectedNodeIds = diagnostics.selectedNodeIds;
+-    if (selectedNodeIds.length === 0) {
+-      selectedNodeIds = [this.nodeId];
+-    } else if (!selectedNodeIds.includes(this.nodeId)) {
+-      selectedNodeIds = [this.nodeId, ...selectedNodeIds];
+-    }
++    const selectedNodeIds = diagnostics.selectedNodeIds;
+ 
+     const orderedNodeIds = this.orderProvisionTargetNodeIds(selectedNodeIds);
+     const cappedNodeIds = orderedNodeIds.slice(
+@@ -157,7 +146,8 @@ class SQLQueryEngineProvisioningMethods {
+   }
+ 
+   /**
+-   * Resolve provision-target diagnostics from local cache state.
++   * Resolve provision-target diagnostics from the readiness owner's
++   * observer-local trust view.
+    * @param {number} requestedReplicaCount
+    * @return {Object}
+    * @private
+@@ -167,7 +157,12 @@ class SQLQueryEngineProvisioningMethods {
+       Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
+         requestedReplicaCount :
+         1;
+-    if (!this.systemCache) {
++    const readinessService = this.controlPlaneReadinessService;
++    if (
++      !readinessService ||
++      typeof readinessService.getProvisioningNodeTrustViewSync !==
++        LOCAL_STR_FUNCTION
++    ) {
+       return {
+         requestedReplicaCount: desiredReplicaCount,
+         activeNodeRowCount: 0,
+@@ -178,146 +173,27 @@ class SQLQueryEngineProvisioningMethods {
+         usedDegradedFallback: false,
+       };
+     }
+-
+-    const activeNodeRows = [];
+-    const serviceRows = [];
+-    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
+-      const filteredRows = this.systemCache.filter(TABLES.NODES, (nodeRow) => {
+-        const status = String(
+-          nodeRow?.status || nodeRow?.state || '',
+-        ).toLowerCase();
+-        return status === STATUS_ACTIVE;
+-      });
+-      if (Array.isArray(filteredRows)) {
+-        activeNodeRows.push(...filteredRows);
+-      }
+-      const filteredServiceRows = this.systemCache.filter(
+-        TABLES.SERVICES,
+-        (serviceRow) => {
+-          const status = String(serviceRow?.status || '').toLowerCase();
+-          const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
+-          return (
+-            status === STATUS_ACTIVE &&
+-            typeof nodeId === 'string' &&
+-            nodeId.length > 0
+-          );
+-        },
+-      );
+-      if (Array.isArray(filteredServiceRows)) {
+-        serviceRows.push(...filteredServiceRows);
+-      }
+-    } else if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
+-      const allRows = this.systemCache.getAll(TABLES.NODES);
+-      if (Array.isArray(allRows)) {
+-        for (const nodeRow of allRows) {
+-          const status = String(
+-            nodeRow?.status || nodeRow?.state || '',
+-          ).toLowerCase();
+-          if (status === STATUS_ACTIVE) {
+-            activeNodeRows.push(nodeRow);
+-          }
+-        }
+-      }
+-      const allServiceRows = this.systemCache.getAll(TABLES.SERVICES);
+-      if (Array.isArray(allServiceRows)) {
+-        for (const serviceRow of allServiceRows) {
+-          const status = String(serviceRow?.status || '').toLowerCase();
+-          const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
+-          if (
+-            status === STATUS_ACTIVE &&
+-            typeof nodeId === LOCAL_STR_STRING &&
+-            nodeId.length > 0
+-          ) {
+-            serviceRows.push(serviceRow);
+-          }
+-        }
+-      }
+-    }
+-
+-    const activeNodeSeenById = new Set();
+-    const activeNodeReadinessById = new Map();
+-    const activeNodeConnectionById = new Map();
+-    for (const row of activeNodeRows) {
+-      const nodeId = row?.node_id || row?.nodeId || row?.id || null;
+-      if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === 0) {
+-        continue;
+-      }
+-      activeNodeSeenById.add(nodeId);
+-      const leaseExpiry = Number(
+-        row?.ready_lease_expires_at ?? row?.readyLeaseExpiresAt,
+-      );
+-      const hasReadyLease = Number.isFinite(leaseExpiry);
+-      const connectionState = String(
+-        row?.connection_state || row?.connectionState || '',
+-      ).toLowerCase();
+-      const hasConnectionState = connectionState.length > 0;
+-      const isConnectionReady =
+-        connectionState === CONNECTION_STATE_CONNECTED ||
+-        connectionState === CONNECTION_STATE_READY;
+-      // Monotone live-transport rescue (spec node-liveness-veto-consolidation,
+-      // stage 2): the cached `connection_state` column is CDC-lagged, so a
+-      // populated-but-stale-negative value wrongly excludes a live,
+-      // transport-connected node from provisioning targets — the MODE-A shape
+-      // (`a79b3728`) that stranded a table at reduced replication. OR-rescue with
+-      // the shared live-transport atom: it can only WIDEN eligibility (never
+-      // remove a node, never admit a genuinely-disconnected one — the atom fails
+-      // closed on a missing/severed router), so it repairs the stale-negative
+-      // without inverting the gate's safety.
+-      const connectionEligible =
+-        !hasConnectionState ||
+-        isConnectionReady ||
+-        hasLiveTransportEvidence(nodeId, {messageRouter: this.messageRouter});
+-      const isNodeReady = hasReadyLease ?
+-        isNodeRecordReady(row, {requireActiveStatus: true}) :
+-        true;
+-      activeNodeReadinessById.set(nodeId, isNodeReady);
+-      activeNodeConnectionById.set(nodeId, connectionEligible);
+-    }
+-
++    const trustView = readinessService.getProvisioningNodeTrustViewSync();
++    const normalizedTrustView = Array.isArray(trustView) ? trustView : [];
+     const strictNodeIds = this.orderProvisionTargetNodeIds(
+-      [...activeNodeReadinessById.entries()]
+-        .filter(
+-          ([nodeId, ready]) =>
+-            ready === true && activeNodeConnectionById.get(nodeId) === true,
+-        )
+-        .map(([nodeId]) => nodeId),
++      normalizedTrustView
++        .filter((entry) => entry?.serveEligible === true)
++        .map((entry) => entry.nodeId)
++        .filter(Boolean),
+     );
+-
+-    const strictServiceNodeIds = [];
+-    const degradedServiceNodeIds = [];
+-    const seenServiceNodeIds = new Set();
+-    for (const row of serviceRows) {
+-      const nodeId = row?.node_id || row?.nodeId || null;
+-      if (
+-        typeof nodeId !== LOCAL_STR_STRING ||
+-        nodeId.length === 0 ||
+-        seenServiceNodeIds.has(nodeId)
+-      ) {
+-        continue;
+-      }
+-      seenServiceNodeIds.add(nodeId);
+-      if (!activeNodeSeenById.has(nodeId)) {
+-        strictServiceNodeIds.push(nodeId);
+-        continue;
+-      }
+-      if (activeNodeReadinessById.get(nodeId) === true) {
+-        strictServiceNodeIds.push(nodeId);
+-        continue;
+-      }
+-      if (activeNodeConnectionById.get(nodeId) === true) {
+-        degradedServiceNodeIds.push(nodeId);
+-      }
+-    }
+-
+-    const mergedStrictNodeIds = this.orderProvisionTargetNodeIds([
+-      ...strictNodeIds,
+-      ...strictServiceNodeIds,
+-    ]);
+-    const strictNodeIdSet = new Set(mergedStrictNodeIds);
++    const strictNodeIdSet = new Set(strictNodeIds);
+     const degradedFallbackNodeIds = this.orderProvisionTargetNodeIds(
+-      degradedServiceNodeIds.filter((nodeId) => !strictNodeIdSet.has(nodeId)),
++      normalizedTrustView
++        .filter(
++          (entry) =>
++            entry?.repairEligible === true &&
++            entry?.serveEligible !== true &&
++            !strictNodeIdSet.has(entry.nodeId),
++        )
++        .map((entry) => entry.nodeId)
++        .filter(Boolean),
+     );
+-    let selectedNodeIds = mergedStrictNodeIds;
++    let selectedNodeIds = strictNodeIds;
+     let usedDegradedFallback = false;
+     if (
+       selectedNodeIds.length < desiredReplicaCount &&
+@@ -332,12 +208,19 @@ class SQLQueryEngineProvisioningMethods {
+ 
+     return {
+       requestedReplicaCount: desiredReplicaCount,
+-      activeNodeRowCount: activeNodeRows.length,
+-      activeServiceRowCount: serviceRows.length,
+-      strictNodeIds: mergedStrictNodeIds,
++      activeNodeRowCount: normalizedTrustView.filter(
++        (entry) => entry?.observerEvidence?.activeNodeRow === true,
++      ).length,
++      activeServiceRowCount: normalizedTrustView.reduce(
++        (count, entry) =>
++          count + (Number(entry?.observerEvidence?.activeServiceCount) || 0),
++        0,
++      ),
++      strictNodeIds,
+       degradedFallbackNodeIds,
+       selectedNodeIds,
+       usedDegradedFallback,
++      nodeTrustStates: normalizedTrustView,
+     };
+   }
+ 
+@@ -357,20 +240,18 @@ class SQLQueryEngineProvisioningMethods {
+   ) {
+     const explicitTargets = this.normalizeTargetNodeIds(explicitTargetNodeIds);
+     if (explicitTargets.length === 0) {
+-      const diagnostics =
++      const hasProvidedDiagnostics =
+         provisionTargetDiagnostics &&
+-        typeof provisionTargetDiagnostics === 'object' ?
+-          provisionTargetDiagnostics :
+-          this.resolveProvisionTargetNodeIdsWithDiagnostics(
+-            requestedReplicaCount,
+-          ).diagnostics;
++        typeof provisionTargetDiagnostics === 'object';
++      const diagnostics = hasProvidedDiagnostics ?
++        provisionTargetDiagnostics :
++        this.resolveProvisionTargetNodeIdsWithDiagnostics(
++          requestedReplicaCount,
++        ).diagnostics;
+       const selectedNodeIds = Array.isArray(diagnostics?.selectedNodeIds) ?
+         diagnostics.selectedNodeIds :
+         [];
+-      if (selectedNodeIds.length > 0) {
+-        return selectedNodeIds;
+-      }
+-      return this.resolveProvisionTargetNodeIds(requestedReplicaCount);
++      return selectedNodeIds;
+     }
+ 
+     return explicitTargets;
+diff --git a/test/control-plane/active-node-projection.test.js b/test/control-plane/active-node-projection.test.js
+index 08238a44..686fdd12 100644
+--- a/test/control-plane/active-node-projection.test.js
++++ b/test/control-plane/active-node-projection.test.js
+@@ -8,7 +8,6 @@ import {
+ } from '../../src/control-plane/active-node-projection.js';
+ import {
+   CONTROL_PLANE_READINESS_DIMENSION,
+-  PROVISIONING_ELIGIBILITY_STATE,
+   RUNTIME_AUTHORITY_STATE,
+   RUNTIME_AUTHORITY_VISIBILITY_STATE,
+ } from '../../src/control-plane/control-plane-readiness-constants.js';
+@@ -391,10 +390,7 @@ test('active-node projection can include recovery-eligible nodes during publicat
+           },
+           runtimeAuthority: {
+             state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
+-            provisioning: {
+-              state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
+-              eligible: true,
+-            },
++            recoveryEligible: true,
+             visibility: {
+               state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+               published: false,
+@@ -547,10 +543,7 @@ test('active-node projection can use runtime authority when dimensions lag',
+           nodeId: 'node-1',
+           runtimeAuthority: {
+             state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
+-            provisioning: {
+-              state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
+-              eligible: true,
+-            },
++            repairEligible: true,
+             visibility: {
+               state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+               published: false,
+diff --git a/test/query/provision-target-live-transport-rescue.test.js b/test/query/provision-target-live-transport-rescue.test.js
+index dd56824e..afc6f498 100644
+--- a/test/query/provision-target-live-transport-rescue.test.js
++++ b/test/query/provision-target-live-transport-rescue.test.js
+@@ -1,109 +1,101 @@
+ /**
+- * Red-on-revert (spec node-liveness-veto-consolidation, stage 2): the DDL
+- * provision-target connection gate must honour LIVE transport evidence over a
+- * CDC-lagged `connection_state` cache column. Before this fix,
+- * `resolveProvisionTargetNodeDiagnostics` derived `connectionEligible` from the
+- * cached column ONLY, so a populated-but-stale-negative column wrongly excluded
+- * a live, transport-connected node from `strictNodeIds` — the MODE-A shape
+- * (`a79b3728`) that stranded a table at reduced replication.
+- *
+- * The fix is a MONOTONE OR-rescue: `... || hasLiveTransportEvidence(nodeId,
+- * {messageRouter})`. It can only WIDEN eligibility. These cases pin all three
+- * corners:
+- *   A. stale-negative column + live-connected router  -> node RESCUED into
+- *      strictNodeIds  (flips RED if the OR-disjunct is reverted).
+- *   B. stale-negative column + genuinely-disconnected router -> STILL excluded
+- *      (the rescue cannot admit a disconnected node; the atom fails closed).
+- *   C. empty column -> STILL eligible (permissive default preserved; guards
+- *      against a wholesale-replace regression that would fail-closed empties).
++ * W7 migration characterization: SQL provisioning consumes the readiness
++ * owner's observer-local trust view and never reconstructs trust from cache or
++ * router state.
+  */
+ 
+ import {test} from '../../src/test-helpers/tap.js';
+-import {TABLES, STATE} from '../../src/constants/index.js';
+ import {
+   createSQLQueryEngineProvisioningMethods,
+ } from '../../src/query/sql-query-engine-provisioning-methods.js';
+ 
+ const METHODS = createSQLQueryEngineProvisioningMethods();
+ 
+-/**
+- * Build a minimal engine `this` carrying only what the provisioning gate reads:
+- * a systemCache (getAll branch), a live messageRouter, a nodeId, and the two
+- * bound provisioning methods under test.
+- * @param {{nodeRows: Array<Object>, liveStateByNode: Object}} opts
+- * @return {Object} A fake engine with the provisioning methods bound.
+- */
+-function makeEngine({nodeRows, liveStateByNode}) {
++function makeEngine(nodeTrustStates) {
++  let readinessCalls = 0;
+   const engine = {
+     nodeId: 'coordinator',
+-    systemCache: {
+-      getAll(table) {
+-        return table === TABLES.NODES ? nodeRows : [];
++    controlPlaneReadinessService: {
++      getProvisioningNodeTrustViewSync() {
++        readinessCalls += 1;
++        return nodeTrustStates;
+       },
+     },
+-    messageRouter: {
+-      getConnectionState(nodeId) {
+-        return liveStateByNode[nodeId] || STATE.DISCONNECTED;
+-      },
++    get systemCache() {
++      throw new Error('SQL provisioning must not read systemCache');
++    },
++    get messageRouter() {
++      throw new Error('SQL provisioning must not read messageRouter');
+     },
+   };
+   engine.orderProvisionTargetNodeIds =
+     METHODS.orderProvisionTargetNodeIds.value;
+   engine.resolveProvisionTargetNodeDiagnostics =
+     METHODS.resolveProvisionTargetNodeDiagnostics.value;
+-  return engine;
++  engine.resolveProvisionTargetNodeIdsWithDiagnostics =
++    METHODS.resolveProvisionTargetNodeIdsWithDiagnostics.value;
++  engine.resolveProvisionTargetNodeIdsForContext =
++    METHODS.resolveProvisionTargetNodeIdsForContext.value;
++  engine.normalizeTargetNodeIds = METHODS.normalizeTargetNodeIds.value;
++  return {engine, getReadinessCalls: () => readinessCalls};
+ }
+ 
+-// A ready active node with NO ready-lease field is `ready === true`
+-// (isNodeRecordReady is only consulted when a lease is present), isolating the
+-// connection gate as the sole variable.
+-function readyNodeRow(nodeId, connectionState) {
+-  const row = {node_id: nodeId, status: 'active'};
+-  if (connectionState !== undefined) {
+-    row.connection_state = connectionState;
+-  }
+-  return row;
+-}
++test('W7: serve-eligible trust is selected strictly through the readiness ' +
++  'owner', (t) => {
++  const fixture = makeEngine([
++    {nodeId: 'node-1', repairEligible: true, serveEligible: true},
++  ]);
++  const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
+ 
+-test('CASE A: a stale-negative connection_state column with a LIVE-connected ' +
+-  'router rescues the node into strictNodeIds (red-on-revert)', async (t) => {
+-  const engine = makeEngine({
+-    nodeRows: [readyNodeRow('node-1', STATE.DISCONNECTED)],
+-    liveStateByNode: {'node-1': STATE.CONNECTED},
+-  });
+-  const {strictNodeIds} = engine.resolveProvisionTargetNodeDiagnostics(1);
+-  t.ok(
+-    strictNodeIds.includes('node-1'),
+-    'node with a stale-disconnected cache column but live transport is ' +
+-      'provision-eligible (reverting the OR-rescue drops it -> RED)',
+-  );
++  t.same(diagnostics.strictNodeIds, ['node-1']);
++  t.same(diagnostics.selectedNodeIds, ['node-1']);
++  t.equal(fixture.getReadinessCalls(), 1,
++    'one readiness-owner view supplies the whole decision');
++  t.end();
+ });
+ 
+-test('CASE B: a stale-negative column with a genuinely-disconnected router ' +
+-  'stays excluded (rescue cannot invert safety)', async (t) => {
+-  const engine = makeEngine({
+-    nodeRows: [readyNodeRow('node-2', STATE.DISCONNECTED)],
+-    liveStateByNode: {'node-2': STATE.DISCONNECTED},
+-  });
+-  const {strictNodeIds} = engine.resolveProvisionTargetNodeDiagnostics(1);
+-  t.notOk(
+-    strictNodeIds.includes('node-2'),
+-    'a node that is disconnected in BOTH the cache and live transport is ' +
+-      'never admitted (atom fails closed)',
+-  );
++test('W7: repair-only trust is an explicit degraded fallback, not a cache ' +
++  'heuristic', (t) => {
++  const fixture = makeEngine([
++    {nodeId: 'node-2', repairEligible: true, serveEligible: false},
++  ]);
++  const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
++
++  t.same(diagnostics.strictNodeIds, []);
++  t.same(diagnostics.degradedFallbackNodeIds, ['node-2']);
++  t.same(diagnostics.selectedNodeIds, ['node-2']);
++  t.equal(diagnostics.usedDegradedFallback, true);
++  t.end();
++});
++
++test('W7: an untrusted node stays excluded and SQL has no local-node escape ' +
++  'hatch', (t) => {
++  const fixture = makeEngine([
++    {nodeId: 'coordinator', repairEligible: false, serveEligible: false},
++  ]);
++  const diagnostics = fixture.engine.resolveProvisionTargetNodeDiagnostics(1);
++
++  t.same(diagnostics.strictNodeIds, []);
++  t.same(diagnostics.degradedFallbackNodeIds, []);
++  t.same(diagnostics.selectedNodeIds, [],
++    'the local SQL node is not admitted outside the readiness owner');
++  t.end();
+ });
+ 
+-test('CASE C: an empty connection_state column stays eligible (permissive ' +
+-  'default preserved; guards against a fail-closed replace regression)',
+-async (t) => {
+-  const engine = makeEngine({
+-    nodeRows: [readyNodeRow('node-3', undefined)],
+-    liveStateByNode: {'node-3': STATE.DISCONNECTED},
+-  });
+-  const {strictNodeIds} = engine.resolveProvisionTargetNodeDiagnostics(1);
+-  t.ok(
+-    strictNodeIds.includes('node-3'),
+-    'a node with no cached connection_state is eligible regardless of the ' +
+-      'live router (the !hasConnectionState default is unchanged)',
++test('W7: an empty owner view is consumed exactly once through full target ' +
++  'resolution', (t) => {
++  const fixture = makeEngine([]);
++  const resolution = fixture.engine
++    .resolveProvisionTargetNodeIdsWithDiagnostics(1);
++  const contextualTargets = fixture.engine.resolveProvisionTargetNodeIdsForContext(
++    null,
++    1,
++    resolution.diagnostics,
+   );
++
++  t.same(resolution.nodeIds, []);
++  t.same(contextualTargets, []);
++  t.equal(fixture.getReadinessCalls(), 1,
++    'empty trust is a real owner answer, not a signal to reconstruct it');
++  t.end();
+ });
+diff --git a/test/query/sql-query-engine-create-table-quorum.test.js b/test/query/sql-query-engine-create-table-quorum.test.js
+index d1e497fd..6822351c 100644
+--- a/test/query/sql-query-engine-create-table-quorum.test.js
++++ b/test/query/sql-query-engine-create-table-quorum.test.js
+@@ -2,7 +2,10 @@ import {test} from '../../src/test-helpers/tap.js';
+ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+ import {TABLES} from '../../src/constants/index.js';
+ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+-import {uniqueNodeIds} from './sql-query-engine-test-support.js';
++import {
++  createProvisioningReadyService,
++  uniqueNodeIds,
++} from './sql-query-engine-test-support.js';
+ 
+ const config = ConfigurationManager.getInstance();
+ config.initialize();
+@@ -107,6 +110,7 @@ test('SQLQueryEngine - default CREATE TABLE quorum can temporarily fall back ' +
+     systemCache: cache,
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
++    controlPlaneReadinessService: createProvisioningReadyService(cache),
+     tablePartitionProvisioningTimeoutMs: 10,
+     tablePartitionProvisioningPollIntervalMs: 1,
+     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
+diff --git a/test/query/sql-query-engine-managed-split-children.test.js b/test/query/sql-query-engine-managed-split-children.test.js
+index 99bdb490..574352d5 100644
+--- a/test/query/sql-query-engine-managed-split-children.test.js
++++ b/test/query/sql-query-engine-managed-split-children.test.js
+@@ -42,6 +42,7 @@ config.initialize();
+ import {
+   createMockMessageRouter,
+   createMockSystemCache,
++  createProvisioningReadyService,
+   uniqueNodeIds,
+   createAdmittedSplitAdmissionService,
+ } from './sql-query-engine-test-support.js';
+@@ -606,6 +607,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 40,
+@@ -756,6 +758,7 @@ test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     cdcIntegrationService,
+@@ -1029,6 +1032,7 @@ test('SQLQueryEngine - provisionInitialTablePartition can stop waiting once ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 40,
+@@ -1173,6 +1177,7 @@ test('SQLQueryEngine - provisionInitialTablePartition tolerates one failed ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 40,
+diff --git a/test/query/sql-query-engine-managed-split.test.js b/test/query/sql-query-engine-managed-split.test.js
+index 528038a5..9f496ad8 100644
+--- a/test/query/sql-query-engine-managed-split.test.js
++++ b/test/query/sql-query-engine-managed-split.test.js
+@@ -26,6 +26,7 @@ import {
+   createMockMessageRouter,
+   createMockSystemCache,
+   createAdmittedSplitAdmissionService,
++  createProvisioningReadyService,
+ } from './sql-query-engine-test-support.js';
+ 
+ 
+@@ -128,6 +129,7 @@ test('SQLQueryEngine - provisionInitialTablePartition includes active-service '
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 500,
+@@ -271,6 +273,9 @@ test('SQLQueryEngine - provisionInitialTablePartition excludes active-service '
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(
++      () => nodes.filter((node) => node.ready_lease_expires_at >= now),
++    ),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 500,
+@@ -417,6 +422,7 @@ test('SQLQueryEngine - provisionInitialTablePartition falls back to active ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 40,
+@@ -499,6 +505,7 @@ test('SQLQueryEngine - provisionInitialTablePartition does not block on stale '
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 500,
+@@ -1038,6 +1045,12 @@ test('SQLQueryEngine - executeManagedSplit provisions child partitions with ' +
+   const engine = new SQLQueryEngine({
+     nodeId: 'node-a',
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(() =>
++      cache.getAll(TABLES.SERVICES).map((row) => ({
++        node_id: row.node_id,
++        status: row.status,
++      })),
++    ),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator: {
+       storageAdmissionService: createAdmittedSplitAdmissionService(),
+@@ -1148,6 +1161,7 @@ async (t) => {
+   const engine = new SQLQueryEngine({
+     nodeId: 'node-a',
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(cache),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator: {
+       storageAdmissionService: createAdmittedSplitAdmissionService(),
+diff --git a/test/query/sql-query-engine-partition-readiness-waits.test.js b/test/query/sql-query-engine-partition-readiness-waits.test.js
+index 3d32fabd..64f0781a 100644
+--- a/test/query/sql-query-engine-partition-readiness-waits.test.js
++++ b/test/query/sql-query-engine-partition-readiness-waits.test.js
+@@ -51,6 +51,7 @@ config.initialize();
+ import {
+   createMockMessageRouter,
+   createMockSystemCache,
++  createProvisioningReadyService,
+ } from './sql-query-engine-test-support.js';
+ 
+ 
+@@ -152,6 +153,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active leader '
+     systemCache: cache,
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     tablePartitionProvisioningTimeoutMs: 80,
+     tablePartitionProvisioningPollIntervalMs: 5,
+   });
+@@ -284,6 +286,7 @@ test('SQLQueryEngine - provisionInitialTablePartition accepts canonical ' +
+     systemCache: cache,
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     tablePartitionProvisioningTimeoutMs: 80,
+     tablePartitionProvisioningPollIntervalMs: 5,
+   });
+diff --git a/test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js b/test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js
+index 75a6da69..8f026bb9 100644
+--- a/test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js
++++ b/test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js
+@@ -31,7 +31,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ const config = ConfigurationManager.getInstance();
+ config.initialize();
+ 
+-import {createMockMessageRouter} from './sql-query-engine-test-support.js';
++import {
++  createMockMessageRouter,
++  createProvisioningReadyService,
++} from './sql-query-engine-test-support.js';
+ 
+ const LEDGER_HOLD_REJECTION = Object.freeze({
+   allowed: false,
+@@ -119,6 +122,7 @@ function createEngineFixture(t, {rebalanceCoordinator, cache, localNodeId}) {
+     systemCache: cache,
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
++    controlPlaneReadinessService: createProvisioningReadyService(cache),
+     // Compressed virtual geometry: convergence window << provisioning budget.
+     tablePartitionProvisioningTimeoutMs: 400,
+     tablePartitionProvisioningPollIntervalMs: 1,
+diff --git a/test/query/sql-query-engine-provision-partition-quorum.test.js b/test/query/sql-query-engine-provision-partition-quorum.test.js
+index cd23cac2..5226b0e0 100644
+--- a/test/query/sql-query-engine-provision-partition-quorum.test.js
++++ b/test/query/sql-query-engine-provision-partition-quorum.test.js
+@@ -37,6 +37,7 @@ config.initialize();
+ 
+ import {
+   createMockMessageRouter,
++  createProvisioningReadyService,
+   uniqueNodeIds,
+ } from './sql-query-engine-test-support.js';
+ 
+@@ -161,6 +162,7 @@ async (t) => {
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 200,
+@@ -284,6 +286,10 @@ test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
+     const engine = new SQLQueryEngine({
+       nodeId: localNodeId,
+       systemCache: cache,
++      controlPlaneReadinessService: createProvisioningReadyService(
++        nodes.filter((node) => ['connected', 'ready']
++          .includes(node.connection_state)),
++      ),
+       messageRouter: createMockMessageRouter(),
+       rebalanceCoordinator,
+       tablePartitionProvisioningTimeoutMs: 500,
+@@ -381,6 +387,7 @@ test('SQLQueryEngine - provisionInitialTablePartition continues planning on ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
+@@ -455,6 +462,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails fast when ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
+@@ -537,6 +545,7 @@ test('SQLQueryEngine - provisionInitialTablePartition probes admission ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
+@@ -662,6 +671,7 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales when ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+   });
+@@ -762,6 +772,7 @@ async (t) => {
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
+@@ -881,6 +892,7 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales RF3 ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+   });
+@@ -987,6 +999,7 @@ test('SQLQueryEngine - provisionInitialTablePartition rejects RF3 ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+   });
+@@ -1090,6 +1103,7 @@ test('SQLQueryEngine - provisionInitialTablePartition aborts provisional ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+   });
+diff --git a/test/query/sql-query-engine-provision-partition-waits.test.js b/test/query/sql-query-engine-provision-partition-waits.test.js
+index 4444ee33..4f18f544 100644
+--- a/test/query/sql-query-engine-provision-partition-waits.test.js
++++ b/test/query/sql-query-engine-provision-partition-waits.test.js
+@@ -39,6 +39,7 @@ config.initialize();
+ 
+ import {
+   createMockMessageRouter,
++  createProvisioningReadyService,
+ } from './sql-query-engine-test-support.js';
+ 
+ 
+@@ -145,6 +146,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 500,
+@@ -202,6 +204,7 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     tablePartitionProvisioningPollIntervalMs: 5,
+   });
+@@ -245,6 +248,7 @@ test('SQLQueryEngine - waitForProvisionTargetNodeIds exposes the shared ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     tablePartitionProvisioningPollIntervalMs: 5,
+     tablePartitionProvisioningTimeoutMs: 15,
+@@ -331,6 +335,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for active node ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 50,
+@@ -459,6 +464,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for admission ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 50,
+@@ -581,6 +587,7 @@ async (t) => {
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 5000,
+@@ -673,6 +680,7 @@ async (t) => {
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     tablePartitionProvisioningTimeoutMs: 200,
+@@ -808,6 +816,7 @@ test('SQLQueryEngine - provisionInitialTablePartition attaches bootstrap ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+   });
+@@ -887,6 +896,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     cdcIntegrationService: {
+@@ -1186,6 +1196,7 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial '
+   const engine = new SQLQueryEngine({
+     nodeId: localNodeId,
+     systemCache: cache,
++    controlPlaneReadinessService: createProvisioningReadyService(nodes),
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
+     cdcIntegrationService,
+diff --git a/test/query/sql-query-engine-provision-progress-gated-rewait.test.js b/test/query/sql-query-engine-provision-progress-gated-rewait.test.js
+index ede89ee8..65d67022 100644
+--- a/test/query/sql-query-engine-provision-progress-gated-rewait.test.js
++++ b/test/query/sql-query-engine-provision-progress-gated-rewait.test.js
+@@ -15,7 +15,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ const config = ConfigurationManager.getInstance();
+ config.initialize();
+ 
+-import {createMockMessageRouter} from './sql-query-engine-test-support.js';
++import {
++  createMockMessageRouter,
++  createProvisioningReadyService,
++} from './sql-query-engine-test-support.js';
+ 
+ const QUORUM_CONCENTRATED_REJECTION = Object.freeze({
+   allowed: false,
+@@ -97,6 +100,7 @@ function createEngineFixture({rebalanceCoordinator, cache, localNodeId, clock})
+     systemCache: cache,
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
++    controlPlaneReadinessService: createProvisioningReadyService(cache),
+     // Compressed geometry: one 40ms parent budget shared by every wait.
+     tablePartitionProvisioningTimeoutMs: 40,
+     tablePartitionProvisioningPollIntervalMs: 1,
+diff --git a/test/query/sql-query-engine-provisioning-parent-deadline.test.js b/test/query/sql-query-engine-provisioning-parent-deadline.test.js
+index a4c38545..60787dfa 100644
+--- a/test/query/sql-query-engine-provisioning-parent-deadline.test.js
++++ b/test/query/sql-query-engine-provisioning-parent-deadline.test.js
+@@ -5,7 +5,10 @@ import {createSqlRequest} from '../../src/query/sql-request.js';
+ import {TABLES} from '../../src/constants/index.js';
+ import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
+ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+-import {createMockMessageRouter} from './sql-query-engine-test-support.js';
++import {
++  createMockMessageRouter,
++  createProvisioningReadyService,
++} from './sql-query-engine-test-support.js';
+ 
+ const config = ConfigurationManager.getInstance();
+ if (!config.isInitialized()) {
+@@ -80,6 +83,8 @@ function createDeadlineFixture(options = {}) {
+     systemCache,
+     messageRouter: createMockMessageRouter(),
+     rebalanceCoordinator,
++    controlPlaneReadinessService:
++      createProvisioningReadyService(systemCache),
+     nowFn: () => nowMs,
+     tablePartitionProvisioningTimeoutMs:
+       options.innerProvisioningTimeoutMs || 90,
+diff --git a/test/query/sql-query-engine-test-support.js b/test/query/sql-query-engine-test-support.js
+index 5bddaf21..ac26e80a 100644
+--- a/test/query/sql-query-engine-test-support.js
++++ b/test/query/sql-query-engine-test-support.js
+@@ -121,3 +121,53 @@ export function createAdmittedSplitAdmissionService() {
+     },
+   };
+ }
++
++/**
++ * Canonical provisioning-owner fixture for tests whose subject is the SQL
++ * workflow rather than readiness evidence. The source may be a node-row array,
++ * a cache exposing getAll('nodes'), or a function returning node rows.
++ */
++export function createProvisioningReadyService(nodeSource) {
++  const getRows = () => {
++    if (typeof nodeSource === 'function') {
++      return nodeSource() || [];
++    }
++    if (Array.isArray(nodeSource)) {
++      return nodeSource;
++    }
++    if (typeof nodeSource?.getAll === 'function') {
++      return nodeSource.getAll('nodes') || [];
++    }
++    return [];
++  };
++  const getNodeIds = () => [...new Set(getRows()
++    .filter((row) => String(row?.status || 'active').toLowerCase() === 'active')
++    .map((row) => row?.node_id || row?.nodeId || row?.id)
++    .filter(Boolean))];
++  const buildReadiness = (nodeId) => ({
++    nodeId,
++    dimensions: {
++      controlPlaneRecoveryEligible: true,
++      repairEligible: true,
++      serveEligible: true,
++    },
++  });
++  return {
++    getProvisioningNodeTrustViewSync() {
++      return getNodeIds().map((nodeId) => ({
++        nodeId,
++        membership: {state: 'member'},
++        observerEvidence: {
++          activeNodeRow: true,
++          activeServiceCount: 0,
++        },
++        repairEligible: true,
++        serveEligible: true,
++      }));
++    },
++    getNodeReadinessSync: buildReadiness,
++    async getNodeReadiness(nodeId) {
++      return buildReadiness(nodeId);
++    },
++  };
++}

@@ -37,6 +37,7 @@ config.initialize();
 
 import {
   createMockMessageRouter,
+  createProvisioningReadyService,
   uniqueNodeIds,
 } from './sql-query-engine-test-support.js';
 
@@ -161,6 +162,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 200,
@@ -284,6 +286,10 @@ test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
     const engine = new SQLQueryEngine({
       nodeId: localNodeId,
       systemCache: cache,
+      controlPlaneReadinessService: createProvisioningReadyService(
+        nodes.filter((node) => ['connected', 'ready']
+          .includes(node.connection_state)),
+      ),
       messageRouter: createMockMessageRouter(),
       rebalanceCoordinator,
       tablePartitionProvisioningTimeoutMs: 500,
@@ -381,6 +387,7 @@ test('SQLQueryEngine - provisionInitialTablePartition continues planning on ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
@@ -455,6 +462,7 @@ test('SQLQueryEngine - provisionInitialTablePartition fails fast when ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
@@ -537,6 +545,7 @@ test('SQLQueryEngine - provisionInitialTablePartition probes admission ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
@@ -662,6 +671,7 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales when ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
   });
@@ -762,6 +772,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
@@ -881,6 +892,7 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales RF3 ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
   });
@@ -987,6 +999,7 @@ test('SQLQueryEngine - provisionInitialTablePartition rejects RF3 ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
   });
@@ -1090,6 +1103,7 @@ test('SQLQueryEngine - provisionInitialTablePartition aborts provisional ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
   });

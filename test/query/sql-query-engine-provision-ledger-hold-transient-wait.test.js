@@ -31,7 +31,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-import {createMockMessageRouter} from './sql-query-engine-test-support.js';
+import {
+  createMockMessageRouter,
+  createProvisioningReadyService,
+} from './sql-query-engine-test-support.js';
 
 const LEDGER_HOLD_REJECTION = Object.freeze({
   allowed: false,
@@ -119,6 +122,7 @@ function createEngineFixture(t, {rebalanceCoordinator, cache, localNodeId}) {
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
+    controlPlaneReadinessService: createProvisioningReadyService(cache),
     // Compressed virtual geometry: convergence window << provisioning budget.
     tablePartitionProvisioningTimeoutMs: 400,
     tablePartitionProvisioningPollIntervalMs: 1,

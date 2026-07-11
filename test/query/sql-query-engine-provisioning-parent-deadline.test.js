@@ -5,7 +5,10 @@ import {createSqlRequest} from '../../src/query/sql-request.js';
 import {TABLES} from '../../src/constants/index.js';
 import {createTimeoutBudget} from '../../src/control-plane/timeout-budget.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {createMockMessageRouter} from './sql-query-engine-test-support.js';
+import {
+  createMockMessageRouter,
+  createProvisioningReadyService,
+} from './sql-query-engine-test-support.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -80,6 +83,8 @@ function createDeadlineFixture(options = {}) {
     systemCache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
+    controlPlaneReadinessService:
+      createProvisioningReadyService(systemCache),
     nowFn: () => nowMs,
     tablePartitionProvisioningTimeoutMs:
       options.innerProvisioningTimeoutMs || 90,

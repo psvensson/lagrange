@@ -121,3 +121,53 @@ export function createAdmittedSplitAdmissionService() {
     },
   };
 }
+
+/**
+ * Canonical provisioning-owner fixture for tests whose subject is the SQL
+ * workflow rather than readiness evidence. The source may be a node-row array,
+ * a cache exposing getAll('nodes'), or a function returning node rows.
+ */
+export function createProvisioningReadyService(nodeSource) {
+  const getRows = () => {
+    if (typeof nodeSource === 'function') {
+      return nodeSource() || [];
+    }
+    if (Array.isArray(nodeSource)) {
+      return nodeSource;
+    }
+    if (typeof nodeSource?.getAll === 'function') {
+      return nodeSource.getAll('nodes') || [];
+    }
+    return [];
+  };
+  const getNodeIds = () => [...new Set(getRows()
+    .filter((row) => String(row?.status || 'active').toLowerCase() === 'active')
+    .map((row) => row?.node_id || row?.nodeId || row?.id)
+    .filter(Boolean))];
+  const buildReadiness = (nodeId) => ({
+    nodeId,
+    dimensions: {
+      controlPlaneRecoveryEligible: true,
+      repairEligible: true,
+      serveEligible: true,
+    },
+  });
+  return {
+    getProvisioningNodeTrustViewSync() {
+      return getNodeIds().map((nodeId) => ({
+        nodeId,
+        membership: {state: 'member'},
+        observerEvidence: {
+          activeNodeRow: true,
+          activeServiceCount: 0,
+        },
+        repairEligible: true,
+        serveEligible: true,
+      }));
+    },
+    getNodeReadinessSync: buildReadiness,
+    async getNodeReadiness(nodeId) {
+      return buildReadiness(nodeId);
+    },
+  };
+}

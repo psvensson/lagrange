@@ -2,7 +2,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {uniqueNodeIds} from './sql-query-engine-test-support.js';
+import {
+  createProvisioningReadyService,
+  uniqueNodeIds,
+} from './sql-query-engine-test-support.js';
 
 const config = ConfigurationManager.getInstance();
 config.initialize();
@@ -107,6 +110,7 @@ test('SQLQueryEngine - default CREATE TABLE quorum can temporarily fall back ' +
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
+    controlPlaneReadinessService: createProvisioningReadyService(cache),
     tablePartitionProvisioningTimeoutMs: 10,
     tablePartitionProvisioningPollIntervalMs: 1,
     tablePartitionTargetNodeConvergenceTimeoutMs: 1,

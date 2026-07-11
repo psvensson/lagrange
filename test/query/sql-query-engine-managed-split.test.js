@@ -26,6 +26,7 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
   createAdmittedSplitAdmissionService,
+  createProvisioningReadyService,
 } from './sql-query-engine-test-support.js';
 
 
@@ -128,6 +129,7 @@ test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 500,
@@ -271,6 +273,9 @@ test('SQLQueryEngine - provisionInitialTablePartition excludes active-service ' 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(
+      () => nodes.filter((node) => node.ready_lease_expires_at >= now),
+    ),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 500,
@@ -417,6 +422,7 @@ test('SQLQueryEngine - provisionInitialTablePartition falls back to active ' +
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 40,
@@ -499,6 +505,7 @@ test('SQLQueryEngine - provisionInitialTablePartition does not block on stale ' 
   const engine = new SQLQueryEngine({
     nodeId: localNodeId,
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(nodes),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     tablePartitionProvisioningTimeoutMs: 500,
@@ -1038,6 +1045,12 @@ test('SQLQueryEngine - executeManagedSplit provisions child partitions with ' +
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(() =>
+      cache.getAll(TABLES.SERVICES).map((row) => ({
+        node_id: row.node_id,
+        status: row.status,
+      })),
+    ),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator: {
       storageAdmissionService: createAdmittedSplitAdmissionService(),
@@ -1148,6 +1161,7 @@ async (t) => {
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
+    controlPlaneReadinessService: createProvisioningReadyService(cache),
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator: {
       storageAdmissionService: createAdmittedSplitAdmissionService(),

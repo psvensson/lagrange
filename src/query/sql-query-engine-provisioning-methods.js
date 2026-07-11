@@ -4,16 +4,10 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
 
 const {
-  CONNECTION_STATE_CONNECTED,
-  CONNECTION_STATE_READY,
   ConfigurationManager,
   SERVICE_TYPE,
-  STATUS_ACTIVE,
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
-  TABLES,
-  hasLiveTransportEvidence,
-  isNodeRecordReady,
 } = SQL_QUERY_ENGINE_SHARED;
 
 class SQLQueryEngineProvisioningMethods {
@@ -117,12 +111,7 @@ class SQLQueryEngineProvisioningMethods {
 
     const diagnostics =
       this.resolveProvisionTargetNodeDiagnostics(desiredReplicaCount);
-    let selectedNodeIds = diagnostics.selectedNodeIds;
-    if (selectedNodeIds.length === 0) {
-      selectedNodeIds = [this.nodeId];
-    } else if (!selectedNodeIds.includes(this.nodeId)) {
-      selectedNodeIds = [this.nodeId, ...selectedNodeIds];
-    }
+    const selectedNodeIds = diagnostics.selectedNodeIds;
 
     const orderedNodeIds = this.orderProvisionTargetNodeIds(selectedNodeIds);
     const cappedNodeIds = orderedNodeIds.slice(
@@ -157,7 +146,8 @@ class SQLQueryEngineProvisioningMethods {
   }
 
   /**
-   * Resolve provision-target diagnostics from local cache state.
+   * Resolve provision-target diagnostics from the readiness owner's
+   * observer-local trust view.
    * @param {number} requestedReplicaCount
    * @return {Object}
    * @private
@@ -167,7 +157,12 @@ class SQLQueryEngineProvisioningMethods {
       Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
         requestedReplicaCount :
         1;
-    if (!this.systemCache) {
+    const readinessService = this.controlPlaneReadinessService;
+    if (
+      !readinessService ||
+      typeof readinessService.getProvisioningNodeTrustViewSync !==
+        LOCAL_STR_FUNCTION
+    ) {
       return {
         requestedReplicaCount: desiredReplicaCount,
         activeNodeRowCount: 0,
@@ -178,146 +173,27 @@ class SQLQueryEngineProvisioningMethods {
         usedDegradedFallback: false,
       };
     }
-
-    const activeNodeRows = [];
-    const serviceRows = [];
-    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
-      const filteredRows = this.systemCache.filter(TABLES.NODES, (nodeRow) => {
-        const status = String(
-          nodeRow?.status || nodeRow?.state || '',
-        ).toLowerCase();
-        return status === STATUS_ACTIVE;
-      });
-      if (Array.isArray(filteredRows)) {
-        activeNodeRows.push(...filteredRows);
-      }
-      const filteredServiceRows = this.systemCache.filter(
-        TABLES.SERVICES,
-        (serviceRow) => {
-          const status = String(serviceRow?.status || '').toLowerCase();
-          const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
-          return (
-            status === STATUS_ACTIVE &&
-            typeof nodeId === 'string' &&
-            nodeId.length > 0
-          );
-        },
-      );
-      if (Array.isArray(filteredServiceRows)) {
-        serviceRows.push(...filteredServiceRows);
-      }
-    } else if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
-      const allRows = this.systemCache.getAll(TABLES.NODES);
-      if (Array.isArray(allRows)) {
-        for (const nodeRow of allRows) {
-          const status = String(
-            nodeRow?.status || nodeRow?.state || '',
-          ).toLowerCase();
-          if (status === STATUS_ACTIVE) {
-            activeNodeRows.push(nodeRow);
-          }
-        }
-      }
-      const allServiceRows = this.systemCache.getAll(TABLES.SERVICES);
-      if (Array.isArray(allServiceRows)) {
-        for (const serviceRow of allServiceRows) {
-          const status = String(serviceRow?.status || '').toLowerCase();
-          const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
-          if (
-            status === STATUS_ACTIVE &&
-            typeof nodeId === LOCAL_STR_STRING &&
-            nodeId.length > 0
-          ) {
-            serviceRows.push(serviceRow);
-          }
-        }
-      }
-    }
-
-    const activeNodeSeenById = new Set();
-    const activeNodeReadinessById = new Map();
-    const activeNodeConnectionById = new Map();
-    for (const row of activeNodeRows) {
-      const nodeId = row?.node_id || row?.nodeId || row?.id || null;
-      if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === 0) {
-        continue;
-      }
-      activeNodeSeenById.add(nodeId);
-      const leaseExpiry = Number(
-        row?.ready_lease_expires_at ?? row?.readyLeaseExpiresAt,
-      );
-      const hasReadyLease = Number.isFinite(leaseExpiry);
-      const connectionState = String(
-        row?.connection_state || row?.connectionState || '',
-      ).toLowerCase();
-      const hasConnectionState = connectionState.length > 0;
-      const isConnectionReady =
-        connectionState === CONNECTION_STATE_CONNECTED ||
-        connectionState === CONNECTION_STATE_READY;
-      // Monotone live-transport rescue (spec node-liveness-veto-consolidation,
-      // stage 2): the cached `connection_state` column is CDC-lagged, so a
-      // populated-but-stale-negative value wrongly excludes a live,
-      // transport-connected node from provisioning targets — the MODE-A shape
-      // (`a79b3728`) that stranded a table at reduced replication. OR-rescue with
-      // the shared live-transport atom: it can only WIDEN eligibility (never
-      // remove a node, never admit a genuinely-disconnected one — the atom fails
-      // closed on a missing/severed router), so it repairs the stale-negative
-      // without inverting the gate's safety.
-      const connectionEligible =
-        !hasConnectionState ||
-        isConnectionReady ||
-        hasLiveTransportEvidence(nodeId, {messageRouter: this.messageRouter});
-      const isNodeReady = hasReadyLease ?
-        isNodeRecordReady(row, {requireActiveStatus: true}) :
-        true;
-      activeNodeReadinessById.set(nodeId, isNodeReady);
-      activeNodeConnectionById.set(nodeId, connectionEligible);
-    }
-
+    const trustView = readinessService.getProvisioningNodeTrustViewSync();
+    const normalizedTrustView = Array.isArray(trustView) ? trustView : [];
     const strictNodeIds = this.orderProvisionTargetNodeIds(
-      [...activeNodeReadinessById.entries()]
-        .filter(
-          ([nodeId, ready]) =>
-            ready === true && activeNodeConnectionById.get(nodeId) === true,
-        )
-        .map(([nodeId]) => nodeId),
+      normalizedTrustView
+        .filter((entry) => entry?.serveEligible === true)
+        .map((entry) => entry.nodeId)
+        .filter(Boolean),
     );
-
-    const strictServiceNodeIds = [];
-    const degradedServiceNodeIds = [];
-    const seenServiceNodeIds = new Set();
-    for (const row of serviceRows) {
-      const nodeId = row?.node_id || row?.nodeId || null;
-      if (
-        typeof nodeId !== LOCAL_STR_STRING ||
-        nodeId.length === 0 ||
-        seenServiceNodeIds.has(nodeId)
-      ) {
-        continue;
-      }
-      seenServiceNodeIds.add(nodeId);
-      if (!activeNodeSeenById.has(nodeId)) {
-        strictServiceNodeIds.push(nodeId);
-        continue;
-      }
-      if (activeNodeReadinessById.get(nodeId) === true) {
-        strictServiceNodeIds.push(nodeId);
-        continue;
-      }
-      if (activeNodeConnectionById.get(nodeId) === true) {
-        degradedServiceNodeIds.push(nodeId);
-      }
-    }
-
-    const mergedStrictNodeIds = this.orderProvisionTargetNodeIds([
-      ...strictNodeIds,
-      ...strictServiceNodeIds,
-    ]);
-    const strictNodeIdSet = new Set(mergedStrictNodeIds);
+    const strictNodeIdSet = new Set(strictNodeIds);
     const degradedFallbackNodeIds = this.orderProvisionTargetNodeIds(
-      degradedServiceNodeIds.filter((nodeId) => !strictNodeIdSet.has(nodeId)),
+      normalizedTrustView
+        .filter(
+          (entry) =>
+            entry?.repairEligible === true &&
+            entry?.serveEligible !== true &&
+            !strictNodeIdSet.has(entry.nodeId),
+        )
+        .map((entry) => entry.nodeId)
+        .filter(Boolean),
     );
-    let selectedNodeIds = mergedStrictNodeIds;
+    let selectedNodeIds = strictNodeIds;
     let usedDegradedFallback = false;
     if (
       selectedNodeIds.length < desiredReplicaCount &&
@@ -332,12 +208,19 @@ class SQLQueryEngineProvisioningMethods {
 
     return {
       requestedReplicaCount: desiredReplicaCount,
-      activeNodeRowCount: activeNodeRows.length,
-      activeServiceRowCount: serviceRows.length,
-      strictNodeIds: mergedStrictNodeIds,
+      activeNodeRowCount: normalizedTrustView.filter(
+        (entry) => entry?.observerEvidence?.activeNodeRow === true,
+      ).length,
+      activeServiceRowCount: normalizedTrustView.reduce(
+        (count, entry) =>
+          count + (Number(entry?.observerEvidence?.activeServiceCount) || 0),
+        0,
+      ),
+      strictNodeIds,
       degradedFallbackNodeIds,
       selectedNodeIds,
       usedDegradedFallback,
+      nodeTrustStates: normalizedTrustView,
     };
   }
 
@@ -357,20 +240,18 @@ class SQLQueryEngineProvisioningMethods {
   ) {
     const explicitTargets = this.normalizeTargetNodeIds(explicitTargetNodeIds);
     if (explicitTargets.length === 0) {
-      const diagnostics =
+      const hasProvidedDiagnostics =
         provisionTargetDiagnostics &&
-        typeof provisionTargetDiagnostics === 'object' ?
-          provisionTargetDiagnostics :
-          this.resolveProvisionTargetNodeIdsWithDiagnostics(
-            requestedReplicaCount,
-          ).diagnostics;
+        typeof provisionTargetDiagnostics === 'object';
+      const diagnostics = hasProvidedDiagnostics ?
+        provisionTargetDiagnostics :
+        this.resolveProvisionTargetNodeIdsWithDiagnostics(
+          requestedReplicaCount,
+        ).diagnostics;
       const selectedNodeIds = Array.isArray(diagnostics?.selectedNodeIds) ?
         diagnostics.selectedNodeIds :
         [];
-      if (selectedNodeIds.length > 0) {
-        return selectedNodeIds;
-      }
-      return this.resolveProvisionTargetNodeIds(requestedReplicaCount);
+      return selectedNodeIds;
     }
 
     return explicitTargets;
