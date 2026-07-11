@@ -340,6 +340,11 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
           sessionId: serviceId,
           issuingServiceId: serviceId,
         });
+      // Runtime-internal coordination must not distort the service's
+      // data-affinity matrix. It shares the normal SQL path and session
+      // but deliberately omits issuingServiceId attribution.
+      queryExecutor.executeInternal = (sql, params) =>
+        this.executeQuery(sql, params, {sessionId: serviceId});
       queryExecutor.executeRequest = (request) =>
         this.executeRequest(request);
       return queryExecutor;

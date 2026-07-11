@@ -27,12 +27,16 @@
  *       (A[service][partition] feed: engine-side read/write recording
  *        for issuing services, delta publisher with failure restore,
  *        service_partition_access system table registered end-to-end)
- *   movielens-affinity-placement-demo
+ *   service-data-affinity-parallel-reduce-demo
  *     - test/runtime/movielens-affinity-demo-wiring.test.js
- *       (zone pinning honored by the LatencyGroupManager without RTT,
- *        sql-query-loop lifecycle module, production native_js handler
- *        map resolving runtime_ref through the real prepare/start path
- *        with service-scoped executor injection)
+ *       (canonical entity attribution from placed replicas, disjoint
+ *        shard selection, partial top-N publication, exact bounded
+ *        merge, production-equivalent node-weight locality evidence,
+ *        and native_js lifecycle wiring)
+ *     - test/runtime/service-runtime-lifecycle.test.js
+ *       (failed driver starts terminate as FAILED, never ACTIVE)
+ *     - test/node/runtime-service-handler.test.js
+ *       (placed replica descriptors preserve canonical entity identity)
  *   runtime-service-affinity-policy-lift
  *     - test/rebalancer/runtime-service-affinity-policy-lift.test.js
  *       (getRuntimeServicePolicy lifts read_locality=same_group +
@@ -63,6 +67,12 @@ const SCENARIOS = {
   ],
   'movielens-affinity-placement-demo': [
     'test/runtime/movielens-affinity-demo-wiring.test.js',
+  ],
+  'service-data-affinity-parallel-reduce-demo': [
+    'test/runtime/movielens-affinity-demo-wiring.test.js',
+    'test/runtime/sql-query-loop-parallel-reduce-sql.test.js',
+    'test/runtime/service-runtime-lifecycle.test.js',
+    'test/node/runtime-service-handler.test.js',
   ],
   'runtime-replica-state-projection': [
     'test/runtime/runtime-replica-state-projection-wiring.test.js',
