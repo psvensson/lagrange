@@ -3,6 +3,14 @@ import {
   countsTowardVoterTarget,
   occupiesNode,
 } from './replica-inventory.js';
+import {
+  REPLICA_INVENTORY_CONSISTENCY,
+  REPLICA_INVENTORY_OBSERVATION_STATE,
+} from './replica-inventory-constants.js';
+import {
+  evaluateOperationLedgerQuorumConcentration,
+  isConcentratedOperationLedgerPartition,
+} from './operation-ledger-quorum-concentration.js';
 
 const {
   OperationType,
@@ -17,6 +25,7 @@ const {
   TOPOLOGY_GUARD_STATE,
   UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
+  isOperationLedgerPartitionTable,
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_STRING = 'string';
@@ -128,6 +137,64 @@ class RebalanceCoordinatorTopologyGuardMethods {
     );
   }
 
+  /**
+   * The operation ledger cannot make its own authoritative services owner
+   * readable until its concentrated quorum spreads. Permit only that
+   * count-neutral cure to use the conservative cache/operation union when the
+   * services owner is unavailable. The source replica must exist in actual
+   * cache rows, operation visibility must remain usable, and the ordinary
+   * occupied-target decision still runs after this exception.
+   * @param {Object} context
+   * @param {Object} inventory
+   * @param {Object} authoritativeObservation
+   * @return {boolean}
+   * @private
+   */
+  isConcentratedLedgerRecoveryReplace(
+    context,
+    inventory,
+    authoritativeObservation,
+  ) {
+    const partitionId = String(context?.partitionId || '').trim();
+    if (
+      context?.normalizedMoveType !== OperationType.REPLACE ||
+      !isOperationLedgerPartitionTable({partitionId}) ||
+      authoritativeObservation?.available !== false ||
+      inventory?.provenance?.consistency !==
+        REPLICA_INVENTORY_CONSISTENCY.SOURCE_UNAVAILABLE ||
+      inventory?.provenance?.committedRowsState !==
+        REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE ||
+      [
+        REPLICA_INVENTORY_OBSERVATION_STATE.UNAVAILABLE,
+        REPLICA_INVENTORY_OBSERVATION_STATE.DEFERRED,
+      ].includes(inventory?.provenance?.inFlightOperationsState) ||
+      inventory?.anomalies?.length > 0
+    ) {
+      return false;
+    }
+    const sourceReplicaId = String(context?.move?.replicaId || '').trim();
+    const sourceReplica = inventory.replicas.find(
+      (replica) => replica.replicaId === sourceReplicaId,
+    );
+    if (
+      !sourceReplica?.voter ||
+      !['active', 'removing'].includes(sourceReplica?.status) ||
+      !sourceReplica?.occupied
+    ) {
+      return false;
+    }
+    const concentration = evaluateOperationLedgerQuorumConcentration(
+      this.systemTableCache,
+    );
+    const concentratedPartition = concentration.concentratedPartitions.find(
+      (partition) => partition.partitionId === partitionId,
+    );
+    return concentration.holdEngaged === true &&
+      concentratedPartition?.spreadActionable === true &&
+      sourceReplica.nodeId === concentratedPartition.hottestNodeId &&
+      isConcentratedOperationLedgerPartition(concentration, partitionId);
+  }
+
   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
     if (entityType !== SERVICE_TYPE.PARTITION) {
       return null;
@@ -226,9 +293,14 @@ class RebalanceCoordinatorTopologyGuardMethods {
         watermarkBefore: cacheStateBefore.committedRows.lastAppliedAtMs,
         watermarkAfter: cacheStateAfter.committedRows.lastAppliedAtMs,
         causeId: cacheStateAfter.committedRows.causeId,
-        observedAtMs:
-          authoritativeObservation.observedAtMs ??
-            cacheStateBefore.capturedAtMs,
+        // A local capture time is not a source observation time. In
+        // particular, two successful sequential owner reads can be slow while
+        // the operation ledger spreads; pairing the first read's local start
+        // with the second read's local end fabricates cross-source skew and
+        // circularly blocks the recovery REPLACE. Preserve null when the
+        // source supplies no timestamp so the inventory reports
+        // revision_unavailable without making an unsupported skew claim.
+        observedAtMs: authoritativeObservation.observedAtMs,
       },
       inFlightOperationObservation: {
         state: operationObservation?.state || 'unavailable',
@@ -263,9 +335,17 @@ class RebalanceCoordinatorTopologyGuardMethods {
         partitionId,
         entityType,
       });
+    const concentratedLedgerRecoveryReplace =
+      this.isConcentratedLedgerRecoveryReplace(
+        context,
+        inventory,
+        authoritativeObservation,
+      );
     const topologyGuardDecisionTable = Object.freeze([
       Object.freeze({
-        matches: !inventory.provenance.topologyIncreaseUsable,
+        matches:
+          !inventory.provenance.topologyIncreaseUsable &&
+          !concentratedLedgerRecoveryReplace,
         state: TOPOLOGY_GUARD_STATE.INVENTORY_UNUSABLE,
         blockingReason: TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
       }),

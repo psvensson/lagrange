@@ -145,7 +145,9 @@ function createSqlEngine(options = {}) {
 
 function createCoordinator(options = {}) {
   const cache = createMockCache({
+    nodes: options.cacheNodes || [],
     services: options.cacheServices || [],
+    partitions: options.cachePartitions || [],
   });
   const sqlEngine = createSqlEngine({
     authoritativeServices: options.authoritativeServices || [],
@@ -190,6 +192,7 @@ function createCoordinator(options = {}) {
       estimateReplicaBytes: () => 1,
     },
     replicaInventoryBuilder: options.replicaInventoryBuilder,
+    nowFn: options.nowFn,
     enableTimeouts: false,
   });
   coordinator.initialize();
@@ -308,6 +311,132 @@ test('RebalanceCoordinator fails topology increase closed when owner rows are un
     t.same(error?.admissionResult?.blockingReasons,
       ['replica_inventory_unusable'],
       'cache presence cannot turn unavailable owner evidence into empty');
+    coordinator.shutdown();
+  },
+);
+
+test(
+  'RebalanceCoordinator does not fabricate inventory skew from slow ' +
+    'successful reads without source timestamps',
+  async (t) => {
+    initializeTestEnvironment();
+    let nowMs = 10_000;
+    const authoritativeServices = [
+      createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
+    ];
+    const slowSuccessfulGateway = {
+      readAuthoritativeRows: async () => {
+        nowMs += 1_500;
+        return {success: true, rows: authoritativeServices};
+      },
+      readRows: async () => ({success: true, rows: authoritativeServices}),
+      executeQuery: async () => ({success: true, rows: []}),
+    };
+    const {coordinator} = createCoordinator({
+      cacheServices: authoritativeServices,
+      controlPlaneSystemTableGateway: slowSuccessfulGateway,
+      nowFn: () => nowMs,
+    });
+
+    const snapshot = await coordinator.buildTopologyGuardSnapshot({
+      normalizedMoveType: TEST_REPLACE_OPERATION_TYPE,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: TEST_PARTITION_ID,
+      partitionId: TEST_PARTITION_ID,
+      move: {
+        nodeId: TEST_TARGET_NODE_ID,
+        enforceConcurrentOperationBudget: true,
+      },
+    });
+
+    t.equal(snapshot.state, 'allowed',
+      'read duration alone cannot make a successful inventory unusable');
+    t.equal(snapshot.admissionResult, null,
+      'the recovery REPLACE remains admissible');
+    coordinator.shutdown();
+  },
+);
+
+test(
+  'RebalanceCoordinator admits only the concentrated-ledger recovery ' +
+    'REPLACE when the services owner is circularly unavailable',
+  async (t) => {
+    initializeTestEnvironment();
+    const ledgerId = 'replica_operations-p1';
+    const seed = 'seed';
+    const spreadNode = 'spread-node';
+    const targetNode = 'target-node';
+    const services = [
+      createServiceRow(`${ledgerId}-r1`, seed, {partitionId: ledgerId}),
+      createServiceRow(`${ledgerId}-r2`, seed, {partitionId: ledgerId}),
+      createServiceRow(`${ledgerId}-r3`, spreadNode, {partitionId: ledgerId}),
+    ];
+    const unavailable = async () => ({
+      success: false,
+      rows: [],
+      error: 'services owner unavailable during ledger recovery',
+    });
+    const ownerRead = async (tableName) =>
+      tableName === 'services' ?
+        unavailable() :
+        {success: true, rows: []};
+    const {coordinator} = createCoordinator({
+      cacheNodes: [seed, spreadNode, targetNode].map((nodeId) => ({
+        node_id: nodeId,
+        connection_state: 'ready',
+      })),
+      cacheServices: services,
+      cachePartitions: [{partition_id: ledgerId, replica_count: 3}],
+      controlPlaneSystemTableGateway: {
+        readAuthoritativeRows: ownerRead,
+        readRows: ownerRead,
+        executeQuery: async () => ({success: true, rows: []}),
+      },
+    });
+    const context = {
+      normalizedMoveType: TEST_REPLACE_OPERATION_TYPE,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: ledgerId,
+      partitionId: ledgerId,
+      move: {
+        nodeId: targetNode,
+        replicaId: `${ledgerId}-r2`,
+        enforceConcurrentOperationBudget: true,
+      },
+    };
+
+    const recovery = await coordinator.buildTopologyGuardSnapshot(context);
+    t.equal(recovery.state, 'allowed',
+      'the count-neutral ledger spread cure breaks the owner-read circularity');
+
+    const occupied = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      move: {...context.move, nodeId: spreadNode},
+    });
+    t.equal(occupied.state, 'target_node_occupied',
+      'the exception never permits two replicas on one node');
+
+    const missingSource = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      move: {...context.move, replicaId: `${ledgerId}-missing`},
+    });
+    t.equal(missingSource.state, 'inventory_unusable',
+      'the recovery REPLACE must be anchored to an actual source row');
+
+    const nonHotSource = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      move: {...context.move, replicaId: `${ledgerId}-r3`},
+    });
+    t.equal(nonHotSource.state, 'inventory_unusable',
+      'a voter off the hottest node is not the quorum-spread cure');
+
+    const genericAdd = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
+      move: {...context.move, replicaId: null},
+    });
+    t.equal(genericAdd.state, 'inventory_unusable',
+      'an owner-unavailable ADD never receives the REPLACE exception');
     coordinator.shutdown();
   },
 );
