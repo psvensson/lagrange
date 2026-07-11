@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: revision 10, implementation and aggregate gates terminal; final program re-audit pending
+Status: revision 10, program complete; final program re-audit approved
 
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
@@ -800,3 +800,9 @@ revision-9 final verifier found no implementation, evidence, test, scope,
 inventory, residual-risk, or invariant blocker; it rejected only the stale
 pre-sealing names in that table and requested this narrow plan-only correction
 before re-audit.
+
+The fresh `/root/final_program_audit` re-audit approved revision 10 at commit
+`8f1d43ef`: the corrected W3/W4 identities reconcile, all Quest audits remain
+green, the current inventory reproduces exactly, all ten program invariants
+have direct evidence, and the unrelated formation report remains untracked and
+absent from program history.
