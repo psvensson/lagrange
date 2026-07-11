@@ -30,7 +30,6 @@ import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/public
 import {buildPublicationRecoveryProtocolSnapshot} from '../control-plane/recovery-protocol-snapshot.js';
 import {buildPublicationRecoveryGateSnapshot} from '../control-plane/publication-recovery-gate.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
-import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../control-plane/priority-recovery-snapshot.js';
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
@@ -42,10 +41,8 @@ import {
 } from '../control-plane/priority-recovery-diagnostics-constants.js';
 import {
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION,
-  buildPriorityRecoveryAdmissionByPartitionId,
   buildPriorityRecoveryLearnerPromotionByPartitionId,
   buildPriorityRecoveryPlannerByPartitionId,
-  buildPriorityRecoveryPublicationNodeDecisions,
   buildPriorityRecoveryReplicaOperationContexts,
   inferPriorityRecoveryTableNameFromPartitionId,
   resolvePriorityRecoveryReasonCodesFromReadiness,
@@ -337,13 +334,10 @@ assignAdminControlSnapshotReadinessDiagnosticsMethods(AdminControlSnapshot, {
   buildMembershipPublicationReadOptions,
   buildCanonicalPublicationRecoveryEvidence,
   buildPublicationRecoveryGateSnapshot,
-  buildPriorityRecoveryAdmissionByPartitionId,
   buildPriorityRecoveryLearnerPromotionByPartitionId,
   buildPriorityRecoveryPlannerByPartitionId,
-  buildPriorityRecoveryPublicationNodeDecisions,
   buildPriorityRecoveryReplicaOperationContexts,
   buildPublicationRecoveryProtocolSnapshot,
-  buildSharedPriorityRecoveryDecisionSnapshots,
   firstStringField,
   hasDurablePublishedMembershipObservation,
   hasOnlyLeaderResolutionGapRepairCause,

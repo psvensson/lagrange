@@ -36,12 +36,6 @@ const PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_SPREAD_GAP =
   'priority_spread_gap';
 const PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING =
   'priority_partition_missing';
-const PRIORITY_RECOVERY_PUBLICATION_INCLUSION_REASON_RECOVERY_ELIGIBLE_PROJECTION_INCLUDED =
-  'recovery_eligible_projection_included';
-const PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_READINESS_PROJECTION_EXCLUDED =
-  'readiness_projection_excluded';
-const PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_CLUSTER_MEMBER_UNHEALTHY =
-  'cluster_member_unhealthy';
 
 function normalizePriorityRecoveryInteger(value) {
   const parsedValue = Number(value);
@@ -281,58 +275,6 @@ function buildPriorityRecoveryReplicaOperationContexts(
   };
 }
 
-function buildPriorityRecoveryAdmissionByPartitionId(
-  workflowAdmissionsByWorkflowId = {},
-) {
-  const admissionByPartitionId = {};
-  for (const workflow of Object.values(workflowAdmissionsByWorkflowId || {})) {
-    if (!workflow || typeof workflow !== 'object') {
-      continue;
-    }
-    const workflowId = String(workflow.workflowId || '').trim();
-    if (workflowId.length === 0) {
-      continue;
-    }
-    const admission =
-      workflow.admission && typeof workflow.admission === 'object' ?
-        workflow.admission :
-        null;
-    const partitionIds = normalizePriorityRecoveryStringList([
-      workflow.sourcePartitionId,
-      ...(Array.isArray(workflow.targetPartitionIds) ?
-        workflow.targetPartitionIds :
-        []),
-    ]);
-    for (const partitionId of partitionIds) {
-      admissionByPartitionId[partitionId] = {
-        workflowId,
-        workflowType: workflow.workflowType || null,
-        transitionState: workflow.transitionState || null,
-        decisionType: admission?.decisionType || null,
-        decisionDimension: admission?.decisionDimension || null,
-        admissionDecisionAt: workflow.admissionDecisionAt || null,
-        eligibleNodeIds: normalizePriorityRecoveryStringList(
-          admission?.eligibleNodeIds,
-        ),
-        ineligibleNodes: Array.isArray(admission?.ineligibleNodes) ?
-          admission.ineligibleNodes
-            .map((entry) => ({
-              nodeId: String(entry?.nodeId || EMPTY_TEXT),
-              reasonCodes: normalizePriorityRecoveryStringList(
-                entry?.reasonCodes,
-              ),
-            }))
-            .filter((entry) => entry.nodeId.length > 0) :
-          [],
-        blockingReasons: normalizePriorityRecoveryStringList(
-          workflow.blockingReasons,
-        ),
-      };
-    }
-  }
-  return admissionByPartitionId;
-}
-
 function buildPriorityRecoveryLearnerPromotionByPartitionId(
   serviceRows = [],
   readinessByNodeId = {},
@@ -424,50 +366,10 @@ function buildPriorityRecoveryLearnerPromotionByPartitionId(
   return learnerPromotionByPartitionId;
 }
 
-function buildPriorityRecoveryPublicationNodeDecisions(publicationConvergence) {
-  const projectionDiagnostics =
-    publicationConvergence?.projectionDiagnostics &&
-    typeof publicationConvergence.projectionDiagnostics === 'object' ?
-      publicationConvergence.projectionDiagnostics :
-      null;
-  const inclusionReasonsByNodeId = {};
-  const exclusionReasonsByNodeId = {};
-  for (const nodeId of normalizePriorityRecoveryStringList(
-    projectionDiagnostics?.recoveryEligibleIncludedNodeIds,
-  )) {
-    inclusionReasonsByNodeId[nodeId] = [
-      PRIORITY_RECOVERY_PUBLICATION_INCLUSION_REASON_RECOVERY_ELIGIBLE_PROJECTION_INCLUDED,
-    ];
-  }
-  for (const nodeId of normalizePriorityRecoveryStringList(
-    projectionDiagnostics?.readinessExcludedNodeIds,
-  )) {
-    exclusionReasonsByNodeId[nodeId] = [
-      PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_READINESS_PROJECTION_EXCLUDED,
-    ];
-  }
-  for (const nodeId of normalizePriorityRecoveryStringList(
-    projectionDiagnostics?.clusterMemberUnhealthyExcludedNodeIds,
-  )) {
-    exclusionReasonsByNodeId[nodeId] = [
-      ...(Array.isArray(exclusionReasonsByNodeId[nodeId]) ?
-        exclusionReasonsByNodeId[nodeId] :
-        []),
-      PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_CLUSTER_MEMBER_UNHEALTHY,
-    ];
-  }
-  return {
-    inclusionReasonsByNodeId,
-    exclusionReasonsByNodeId,
-  };
-}
-
 export {
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION,
-  buildPriorityRecoveryAdmissionByPartitionId,
   buildPriorityRecoveryLearnerPromotionByPartitionId,
   buildPriorityRecoveryPlannerByPartitionId,
-  buildPriorityRecoveryPublicationNodeDecisions,
   buildPriorityRecoveryReplicaOperationContexts,
   inferPriorityRecoveryTableNameFromPartitionId,
   resolvePriorityRecoveryReasonCodesFromReadiness,
