@@ -4,11 +4,10 @@
  * DATA, live — at NODE granularity, inside a single latency group.
  *
  * Latency groups exist for CDC fan-out efficiency; the placement
- * thesis this demo proves is independent of them: a service replica
- * should run ON (or move onto) a node that holds a replica of the
- * partitions it actually accesses. (The multi-zone variant — data
- * pinned to one latency domain, service migrating across domains — is
- * the future latency-group demo quest.)
+ * thesis this demo proves is independent of them. The controlled A/B
+ * first observes the deployed service with affinity disabled, then
+ * changes only read_locality and watches the same replicas converge to
+ * the best production-equivalent weighted node placement.
  *
  * The story:
  *   1. A 5-node cluster starts (no zone pinning — one latency domain),
@@ -17,23 +16,24 @@
  *      real parallelism: multiple raft groups, multiple leaders,
  *      parallel write targets for the loader.
  *   2. The movielens ratings are loaded and split across partitions
- *      whose replicas land on different node subsets. The service's
- *      query reads ONE user's rows, so only the partition(s) serving
- *      that key matter — the demo's data-node set is derived from the
- *      service's OWN attribution rows (which partitions it actually
- *      touched), falling back to all ratings partitions before
- *      attribution exists.
+ *      whose replicas land on different node subsets. A centralized
+ *      full-scan/reduce baseline records the 100k-row transfer and the
+ *      exact top-10 reference result.
  *   3. A REAL runtime service is deployed (service_definitions row,
  *      runtime_kind native_js, runtime_ref sql-query-loop-runtime)
- *      with read_locality='same_group': its replicas run the movielens
- *      top-10 SELECT in a loop through their injected service-scoped
- *      query executor.
- *   4. The demo then just watches the machinery the epic shipped do
- *      its job: every statement is attributed into
+ *      initially with read_locality='any'. Stable leased slot 1 reduces
+ *      movie ids <= 1000 and slot 2 reduces ids > 1000. Because group
+ *      keys are disjoint, the slot-1 replica can exactly merge the two
+ *      atomic partial top-10 snapshots while exchanging at most 20
+ *      candidates. Slot ownership survives replica REPLACE generations.
+ *   4. After recording the affinity-off placement, the demo switches
+ *      the same service to read_locality='same_group'. Every statement
+ *      is attributed into
  *      service_partition_access; the runtime-service rebalancer lifts
  *      the per-node weights into a DATA_AFFINITY placement policy; the
- *      planner puts/pulls the service replicas onto the ratings-holding
- *      nodes — code ON its data.
+ *      planner puts/pulls the service replicas onto the highest-weight
+ *      nodes. The result must remain identical to the centralized
+ *      reference throughout.
  *
  * Local processes only (no Docker): the staged bring-up needs process
  * control.
@@ -45,7 +45,7 @@
 
 import {execFile, spawn} from 'node:child_process';
 import {createWriteStream, existsSync} from 'node:fs';
-import {mkdir, readdir, rm} from 'node:fs/promises';
+import {mkdir, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import {promisify} from 'node:util';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
@@ -53,12 +53,22 @@ import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {
   loadRatingsIntoLagrange,
 } from '../../examples/movielens-access-affinity/lagrange-loader.js';
+import {
+  computeReduction,
+} from '../../src/runtime/sql-query-loop-runtime-module.js';
+import {
+  assessAffinityDemoCompletion,
+  buildWeightedLocalitySnapshot,
+  topNRowsEqual,
+} from './affinity-demo-evidence.js';
 
 const NODE_COUNT = 5;
 const BASE_REST_PORT = 8080;
 const BASE_ADMIN_PORT = 8081;
 const PORT_STRIDE = 4;
 const CLUSTER_DATA_ROOT = 'data/examples/service-data-affinity-demo';
+const REPORT_DIR = 'test-output/reports';
+const LIVE_SCENARIO = 'service-data-affinity-parallel-reduce-demo-live';
 const TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 2000;
@@ -94,17 +104,36 @@ const PARTITION_EVAL_INTERVAL_MS = 60000;
 
 const SERVICE_ID = 'svc-movielens-topn';
 const SERVICE_REPLICA_COUNT = 2;
-// The service scans the WHOLE table — one statement fanned out across
-// every forced partition in parallel — and reduces it in-service to
-// the top-10 movies by average rating, writing only those 10 rows to
-// the result table. 100k rows never leave the service.
+// The centralized reference scans the whole table. The deployed
+// service splits movie-id groups into two disjoint SQL shards, reduces
+// them concurrently on two replicas, and exchanges only their top-N
+// candidates for the final exact merge.
 const SCAN_SQL = 'SELECT movie_id, rating FROM ratings';
+const MOVIE_ID_SHARD_BOUNDARY = 1000;
+const SHARD_SQL_BY_SLOT = Object.freeze({
+  1: `${SCAN_SQL} WHERE movie_id <= ${MOVIE_ID_SHARD_BOUNDARY}`,
+  2: `${SCAN_SQL} WHERE movie_id > ${MOVIE_ID_SHARD_BOUNDARY}`,
+});
 const RESULT_TABLE = 'movielens_top10';
+const COORDINATION_TABLE = 'movielens_top10_reduce_slots';
+const RESULT_ID = 'global-top10';
 const CREATE_RESULT_TABLE_SQL =
   `CREATE TABLE IF NOT EXISTS ${RESULT_TABLE} (` +
-  'rank INTEGER PRIMARY KEY, group_key TEXT, agg_value REAL, ' +
-  'computed_at INTEGER)';
+  'result_id TEXT PRIMARY KEY, result_json TEXT, computed_at INTEGER)';
+const CREATE_COORDINATION_TABLE_SQL =
+  `CREATE TABLE IF NOT EXISTS ${COORDINATION_TABLE} (` +
+  'slot_id INTEGER PRIMARY KEY, replica_id TEXT, ' +
+  'lease_expires_at INTEGER, partial_json TEXT, computed_at INTEGER)';
 const QUERY_INTERVAL_MS = 5000;
+const TOP_N = 10;
+const REDUCE_SLOT_LEASE_MS = 30000;
+const PARALLEL_REDUCE_CONFIG = Object.freeze({
+  shardSqlBySlot: SHARD_SQL_BY_SLOT,
+  coordinationTable: COORDINATION_TABLE,
+  leaseMs: REDUCE_SLOT_LEASE_MS,
+  coordinatorSlot: 1,
+  resultId: RESULT_ID,
+});
 
 async function startNode(index, dataRoot) {
   const restPort = BASE_REST_PORT + index * PORT_STRIDE;
@@ -286,9 +315,10 @@ async function deployQueryLoopService() {
       groupBy: 'movie_id',
       aggregate: 'avg',
       valueColumn: 'rating',
-      limit: 10,
+      limit: TOP_N,
     },
     resultTable: RESULT_TABLE,
+    parallelReduce: PARALLEL_REDUCE_CONFIG,
   });
   const columns = [
     'service_id', 'service_name', 'service_profile',
@@ -300,7 +330,7 @@ async function deployQueryLoopService() {
   const values = [
     sqlQuote(SERVICE_ID), sqlQuote('movielens-topn'), sqlQuote('default'),
     sqlQuote('sql-query-loop'), sqlQuote('strong'), sqlQuote('strong'),
-    sqlQuote('same_group'), String(SERVICE_REPLICA_COUNT),
+    sqlQuote('any'), String(SERVICE_REPLICA_COUNT),
     sqlQuote('websocket'), sqlQuote('{}'),
     '500', sqlQuote('native_js'), sqlQuote('sql-query-loop-runtime'),
     sqlQuote(runtimeConfig), sqlQuote('active'), String(now), String(now),
@@ -308,6 +338,13 @@ async function deployQueryLoopService() {
   await queryRows(
     `INSERT INTO service_definitions (${columns.join(', ')}) ` +
     `VALUES (${values.join(', ')})`,
+  );
+}
+
+async function enableNodeAffinity() {
+  await queryRows(
+    'UPDATE service_definitions SET read_locality = \'same_group\', ' +
+    `updated_at = ${Date.now()} WHERE service_id = ${sqlQuote(SERVICE_ID)}`,
   );
 }
 
@@ -364,18 +401,153 @@ async function describeAttribution() {
   return rows.filter((r) => r.service_id === SERVICE_ID);
 }
 
-function accessedPartitionIdsOf(attributionRows) {
-  const ids = new Set();
-  for (const row of attributionRows) {
-    try {
-      for (const partitionId of Object.keys(JSON.parse(row.access_json))) {
-        ids.add(partitionId);
-      }
-    } catch {
-      // Unparseable attribution rows carry no partition evidence.
+async function describeReduceSlots() {
+  try {
+    return await queryRows(
+      'SELECT slot_id, replica_id, lease_expires_at, partial_json, ' +
+      `computed_at FROM ${COORDINATION_TABLE}`,
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function describeTopN() {
+  try {
+    const rows = await queryRows(
+      `SELECT result_json, computed_at FROM ${RESULT_TABLE} ` +
+      `WHERE result_id = ${sqlQuote(RESULT_ID)}`,
+    );
+    const parsed = JSON.parse(rows[0]?.result_json || '[]');
+    return parsed.map((row, index) => ({
+      rank: index + 1,
+      group_key: row.groupKey,
+      agg_value: row.aggValue,
+      computed_at: rows[0]?.computed_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function describeWeightedLocality(placements, attributionRows) {
+  const [nodes, partitions, services] = await Promise.all([
+    queryRows('SELECT node_id, latency_group_id FROM nodes'),
+    queryRows('SELECT partition_id, leader_node_id FROM partitions'),
+    queryRows(
+      'SELECT partition_id, node_id, service_type, status FROM services',
+    ),
+  ]);
+  return buildWeightedLocalitySnapshot({
+    serviceId: SERVICE_ID,
+    placements,
+    nodes,
+    partitions,
+    services,
+    attributionRows,
+    nowMs: Date.now(),
+  });
+}
+
+async function describeDemoState(referenceTopN, phaseStartedAt) {
+  const [placements, attributionRows, serviceTopN, reduceSlots] =
+    await Promise.all([
+      describeServicePlacement(),
+      describeAttribution(),
+      describeTopN(),
+      describeReduceSlots(),
+    ]);
+  const weightedLocality = await describeWeightedLocality(
+    placements, attributionRows,
+  );
+  const assessment = assessAffinityDemoCompletion({
+    expectedReplicaCount: SERVICE_REPLICA_COUNT,
+    placements,
+    weightedLocality,
+    referenceTopN,
+    serviceTopN,
+    reduceSlots,
+    expectedMergeCandidateCount: SERVICE_REPLICA_COUNT * TOP_N,
+    phaseStartedAt,
+    parallelReduceConfig: PARALLEL_REDUCE_CONFIG,
+    partialLimit: TOP_N,
+  });
+  return {
+    placements,
+    attributionRows,
+    serviceTopN,
+    reduceSlots,
+    weightedLocality,
+    assessment,
+  };
+}
+
+async function observeDemoPhase(label, referenceTopN, phaseStartedAt, accept) {
+  const start = Date.now();
+  let lastProgressSignature = null;
+  let lastProgressAtMs = Date.now();
+  while (Date.now() - start < CONVERGE_TIMEOUT_MS) {
+    await sleep(OBSERVE_INTERVAL_MS);
+    const state = await describeDemoState(referenceTopN, phaseStartedAt);
+    const placementLabel = state.placements.map((placement) =>
+      placement.nodeId.slice(0, 8));
+    console.log(
+      `      ${label} t+${Math.round((Date.now() - start) / 1000)}s ` +
+      `replicas=${state.placements.length} ` +
+      `weightedLocality=${state.weightedLocality.localityRatio.toFixed(3)} ` +
+      `attributionRows=${state.attributionRows.length} ` +
+      `partialReplicas=${state.assessment.partialReplicaCount} ` +
+      `mergeCandidates=${state.assessment.mergeCandidateCount} ` +
+      `top10Correct=${state.assessment.resultCorrect} ` +
+      `placement=${JSON.stringify(placementLabel)}`,
+    );
+    if (accept(state)) {
+      return {
+        ...state,
+        phaseStartedAt,
+        elapsedMs: Date.now() - start,
+      };
+    }
+    const progressSignature = JSON.stringify({
+      placementLabel: placementLabel.sort(),
+      locality: state.weightedLocality.localityRatio,
+      attributionRows: state.attributionRows.length,
+      partialReplicas: state.assessment.partialReplicaCount,
+      resultCorrect: state.assessment.resultCorrect,
+    });
+    if (progressSignature !== lastProgressSignature) {
+      lastProgressSignature = progressSignature;
+      lastProgressAtMs = Date.now();
+    } else if (Date.now() - lastProgressAtMs > STALL_TIMEOUT_MS) {
+      throw new Error(
+        `${label} stalled with no observable progress for ` +
+        `${Math.round(STALL_TIMEOUT_MS / 1000)}s`,
+      );
     }
   }
-  return ids.size > 0 ? ids : null;
+  throw new Error(`${label} did not converge within ${CONVERGE_TIMEOUT_MS}ms`);
+}
+
+function summarizeReduceSlots(reduceSlots) {
+  return reduceSlots.map((slot) => ({
+    slotId: Number(slot.slot_id),
+    replicaId: slot.replica_id,
+    leaseExpiresAt: Number(slot.lease_expires_at),
+    computedAt: Number(slot.computed_at),
+    candidateCount: JSON.parse(slot.partial_json).length,
+  }));
+}
+
+function summarizePhase(state) {
+  return {
+    phaseStartedAt: state.phaseStartedAt,
+    weightedLocality: state.weightedLocality.localityRatio,
+    placement: state.placements,
+    slotOwners: summarizeReduceSlots(state.reduceSlots),
+    resultComputedAt: Number(state.serviceTopN[0]?.computed_at) || 0,
+    assessment: state.assessment,
+    elapsedMs: state.elapsedMs,
+  };
 }
 
 async function stopNodes(nodes) {
@@ -399,6 +571,7 @@ async function stopNodes(nodes) {
 const execFileAsync = promisify(execFile);
 const ARCHIVE_ROOT = `${CLUSTER_DATA_ROOT}-archive`;
 const ARCHIVE_RETENTION = 3;
+const AUTO_ARCHIVE_NAME_PATTERN = /^run-\d{4}-\d{2}-\d{2}T.*\.tar\.gz$/;
 
 /**
  * Archive the previous run's cluster state (logs + SQLite) before wiping —
@@ -425,12 +598,16 @@ async function archivePreviousRun() {
       `      (previous-run archive failed: ${error.message} — proceeding)`);
     return;
   }
-  const entries = (await readdir(ARCHIVE_ROOT))
-    .filter((name) => name.startsWith('run-') && name.endsWith('.tar.gz'))
-    .sort();
+  const archiveNames = (await readdir(ARCHIVE_ROOT))
+    .filter((name) => AUTO_ARCHIVE_NAME_PATTERN.test(name));
+  const entries = await Promise.all(archiveNames.map(async (name) => ({
+    name,
+    mtimeMs: (await stat(resolve(ARCHIVE_ROOT, name))).mtimeMs,
+  })));
+  entries.sort((left, right) => left.mtimeMs - right.mtimeMs);
   while (entries.length > ARCHIVE_RETENTION) {
     const oldest = entries.shift();
-    await rm(resolve(ARCHIVE_ROOT, oldest), {force: true});
+    await rm(resolve(ARCHIVE_ROOT, oldest.name), {force: true});
   }
 }
 
@@ -441,7 +618,7 @@ async function runAffinityDemo() {
   await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
 
   try {
-    console.log(`[1/4] Starting ${NODE_COUNT} nodes (single zone)...`);
+    console.log(`[1/5] Starting ${NODE_COUNT} nodes (single zone)...`);
     nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
     await waitForAdmin();
     for (let i = 1; i < NODE_COUNT; i += 1) {
@@ -452,7 +629,7 @@ async function runAffinityDemo() {
     console.log('      Waiting for formation settling...');
     await waitForControlPlaneSettling();
 
-    console.log('[2/4] Loading movielens ratings (replicas land on ' +
+    console.log('[2/5] Loading movielens ratings (replicas land on ' +
       'SOME of the nodes — that asymmetry is the point)...');
     const totalRows = await loadRatingsIntoLagrange({target: TARGET});
     console.log(`      Loaded ${totalRows} ratings.`);
@@ -463,104 +640,102 @@ async function runAffinityDemo() {
       `      Ratings partitions: ${dataNodes.partitionCount}, ` +
       `data on nodes: ${JSON.stringify([...dataNodes.holderNodeIds])}`);
 
+    console.log('[3/5] Running the centralized reference reduce...');
+    const centralizedStart = Date.now();
+    const centralizedRows = await queryRows(SCAN_SQL);
+    const referenceTopN = computeReduction(centralizedRows, {
+      groupBy: 'movie_id',
+      aggregate: 'avg',
+      valueColumn: 'rating',
+      limit: TOP_N,
+    }).map((row, index) => ({
+      rank: index + 1,
+      group_key: row.groupKey,
+      agg_value: row.aggValue,
+    }));
+    const centralizedElapsedMs = Date.now() - centralizedStart;
     console.log(
-      `[3/4] Deploying the ${SERVICE_ID} runtime service ` +
-      `(${SERVICE_REPLICA_COUNT} replicas, read_locality=same_group): ` +
-      'full-table scan fanned out across all partitions, top-10 ' +
-      'reduced IN-SERVICE, 10-row result written back)...');
-    await queryRows(CREATE_RESULT_TABLE_SQL);
-    await deployQueryLoopService();
+      `      Centralized baseline transferred ${centralizedRows.length} ` +
+      `rows and reduced them in ${centralizedElapsedMs}ms.`);
 
-    console.log('[4/4] Watching code land on / move to its data...');
-    const start = Date.now();
-    let converged = false;
-    let stalled = false;
-    let lastProgressSignature = null;
-    let lastProgressAtMs = Date.now();
-    while (Date.now() - start < CONVERGE_TIMEOUT_MS) {
-      await sleep(OBSERVE_INTERVAL_MS);
-      const placement = await describeServicePlacement();
-      const attribution = await describeAttribution();
-      let resultRows = [];
-      try {
-        resultRows = await queryRows(
-          `SELECT rank, group_key, agg_value FROM ${RESULT_TABLE} ` +
-          'ORDER BY rank');
-      } catch {
-        resultRows = [];
-      }
-      const accessed = accessedPartitionIdsOf(attribution);
-      const {holderNodeIds, partitionCount} =
-        await describeDataNodes(accessed);
-      const onData =
-        placement.filter((r) => holderNodeIds.has(r.nodeId)).length;
-      const placementLabel = placement.map((r) =>
-        `${r.nodeId.slice(0, 8)}${holderNodeIds.has(r.nodeId) ?
-          '(data)' :
-          '(-)'}`);
+    console.log(
+      `[4/5] Deploying the ${SERVICE_ID} runtime service ` +
+      `(${SERVICE_REPLICA_COUNT} replicas, affinity OFF): disjoint ` +
+      'movie-id shards reduce in parallel, publish 10 candidates each, ' +
+      'and the slot-1 replica performs the exact bounded merge)...');
+    await queryRows(CREATE_RESULT_TABLE_SQL);
+    await queryRows(CREATE_COORDINATION_TABLE_SQL);
+    await queryRows(
+      `INSERT INTO ${RESULT_TABLE} (result_id, result_json, computed_at) ` +
+      `VALUES (${sqlQuote(RESULT_ID)}, '[]', 0)`,
+    );
+    await queryRows(
+      `INSERT INTO ${COORDINATION_TABLE} ` +
+      '(slot_id, replica_id, lease_expires_at, partial_json, computed_at) ' +
+      'VALUES (1, \'\', 0, \'[]\', 0), (2, \'\', 0, \'[]\', 0)',
+    );
+    const affinityOffStartedAt = Date.now();
+    await deployQueryLoopService();
+    const affinityOff = await observeDemoPhase(
+      'affinity-off',
+      referenceTopN,
+      affinityOffStartedAt,
+      (state) =>
+        state.placements.length === SERVICE_REPLICA_COUNT &&
+        state.assessment.partialReplicaCount === SERVICE_REPLICA_COUNT &&
+        state.assessment.identitiesCurrent &&
+        state.assessment.partialsFresh &&
+        state.assessment.partialsBounded &&
+        state.assessment.resultFresh &&
+        state.assessment.resultCorrect,
+    );
+
+    console.log(
+      '[5/5] Enabling node affinity for the SAME service and workload...');
+    const affinityOnStartedAt = Date.now();
+    await enableNodeAffinity();
+    const affinityOn = await observeDemoPhase(
+      'affinity-on', referenceTopN, affinityOnStartedAt,
+      (state) => state.assessment.complete,
+    );
+    const improved = affinityOn.weightedLocality.localityRatio >
+      affinityOff.weightedLocality.localityRatio;
+    const retainedOptimum = !improved &&
+      affinityOff.weightedLocality.localityRatio >= 1;
+    console.log(
+      '\n      CONVERGED: affinity-on reached the best achievable weighted ' +
+      `node placement (${improved ? 'improved from baseline' :
+        'baseline was already optimal and was retained'}).`);
+    console.log(
+      '      Cross-replica exchange was bounded to ' +
+      `${affinityOn.assessment.mergeCandidateCount} partial candidates; ` +
+      `the centralized baseline returned ${centralizedRows.length} ratings ` +
+      'to its caller. The top-10 is identical:\n');
+    for (const row of affinityOn.serviceTopN) {
       console.log(
-        `      t+${Math.round((Date.now() - start) / 1000)}s ` +
-        `replicas=${placement.length} onData=${onData} ` +
-        `attributionRows=${attribution.length} ` +
-        `${accessed ? `accessedPartitions=${accessed.size} ` : ''}` +
-        `dataPartitions=${partitionCount} ` +
-        `top10Rows=${resultRows.length} ` +
-        `placement=${JSON.stringify(placementLabel)}`,
-      );
-      const progressSignature = JSON.stringify({
-        placement: placementLabel.sort(),
-        attributionRows: attribution.length,
-        top10Rows: resultRows.length,
-      });
-      if (progressSignature !== lastProgressSignature) {
-        lastProgressSignature = progressSignature;
-        lastProgressAtMs = Date.now();
-      } else if (Date.now() - lastProgressAtMs > STALL_TIMEOUT_MS) {
-        stalled = true;
-        console.log(
-          '\n      STALLED: no observable progress for ' +
-          `${Math.round(STALL_TIMEOUT_MS / 1000)}s ` +
-          `(replicas=${placement.length}, onData=${onData}, ` +
-          `attributionRows=${attribution.length}) — aborting early. ` +
-          'Something in the placement/attribution chain is not ' +
-          'engaging; check the rebalancer and runtime-service-handler ' +
-          'logs under the cluster data dir.\n');
-        break;
-      }
-      if (placement.length >= SERVICE_REPLICA_COUNT &&
-          onData === placement.length &&
-          resultRows.length >= 10) {
-        converged = true;
-        console.log(
-          `\n      CONVERGED: every ${SERVICE_ID} replica now runs ON ` +
-          'a node holding the ratings data it scans, and the ' +
-          'in-service reduce delivered the top-10:\n');
-        for (const row of resultRows) {
-          console.log(
-            `        #${row.rank} movie ${row.group_key} ` +
-            `avg=${Number(row.agg_value).toFixed(3)}`);
-        }
-        console.log('');
-        break;
-      }
+        `        #${row.rank} movie ${row.group_key} ` +
+        `avg=${Number(row.agg_value).toFixed(3)}`);
     }
-    const finalDataNodes = await describeDataNodes();
-    let finalTop10 = [];
-    try {
-      finalTop10 = await queryRows(
-        `SELECT rank, group_key, agg_value FROM ${RESULT_TABLE} ` +
-        'ORDER BY rank');
-    } catch {
-      finalTop10 = [];
-    }
+    console.log('');
     return {
-      converged,
-      stalled,
-      elapsedMs: Date.now() - start,
-      finalPlacement: await describeServicePlacement(),
-      dataNodes: [...finalDataNodes.holderNodeIds],
-      attributionRows: (await describeAttribution()).length,
-      top10: finalTop10.map((r) =>
+      converged: affinityOn.assessment.complete,
+      centralized: {
+        transferredRows: centralizedRows.length,
+        elapsedMs: centralizedElapsedMs,
+      },
+      parallelReduce: {
+        replicas: SERVICE_REPLICA_COUNT,
+        mergeCandidates: affinityOn.assessment.mergeCandidateCount,
+        elapsedToFirstCorrectResultMs: affinityOff.elapsedMs,
+      },
+      affinityOff: summarizePhase(affinityOff),
+      affinityOn: {
+        ...summarizePhase(affinityOn),
+        improved,
+        retainedOptimum,
+      },
+      resultCorrect: topNRowsEqual(referenceTopN, affinityOn.serviceTopN),
+      top10: affinityOn.serviceTopN.map((r) =>
         `#${r.rank} movie ${r.group_key} avg=` +
         Number(r.agg_value).toFixed(3)),
     };
@@ -570,17 +745,50 @@ async function runAffinityDemo() {
   }
 }
 
+async function writeLiveDemoReport(result, error) {
+  const timestamp = new Date().toISOString();
+  const passed = Boolean(result?.converged) && !error;
+  const report = {
+    timestamp,
+    scenario: LIVE_SCENARIO,
+    producer: 'service-data-affinity-demo',
+    fidelity: 'live',
+    summary: {total: 1, passed: passed ? 1 : 0, failed: passed ? 0 : 1},
+    optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
+    standardSummary: {
+      scenarios: [{
+        scenario: LIVE_SCENARIO,
+        passed,
+        current: {passed, verdict: passed ? 'PASS' : 'FAIL'},
+        detail: {
+          result: result || null,
+          error: error?.message || null,
+        },
+      }],
+    },
+  };
+  await mkdir(REPORT_DIR, {recursive: true});
+  const fileStamp = timestamp.replace(/[:.]/g, '-');
+  const reportPath = resolve(
+    REPORT_DIR, `${LIVE_SCENARIO}-${fileStamp}.report.json`,
+  );
+  await writeFile(reportPath, JSON.stringify(report, null, 2));
+  console.log(`Live demo report: ${reportPath}`);
+}
+
 if (process.argv[1]?.includes('run-affinity-demo.js')) {
   runAffinityDemo()
-    .then((result) => {
+    .then(async (result) => {
+      await writeLiveDemoReport(result, null);
       console.log('Affinity demo result:');
       console.log(JSON.stringify(result, null, 2));
       process.exitCode = result.converged ? 0 : 1;
     })
-    .catch((error) => {
+    .catch(async (error) => {
+      await writeLiveDemoReport(null, error);
       console.error(error);
       process.exitCode = 1;
     });
 }
 
-export {runAffinityDemo};
+export {runAffinityDemo, summarizePhase};
