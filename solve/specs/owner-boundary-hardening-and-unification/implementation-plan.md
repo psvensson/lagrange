@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: revision 5, independently reapproved
+Status: revision 6, independently reapproved
 
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
@@ -642,7 +642,7 @@ three review-only migration proposals:
 
 | Draft Quest | Boundary | Authority evidence | Declared pathscope | Review disposition |
 | --- | --- | --- | --- | --- |
-| `priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority` | `admin -> control-plane` | `buildPriorityRecoveryAdmissionByPartitionId` 0.915; `buildPriorityRecoveryPublicationNodeDecisions` 0.928 | runtime: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority.json` | architecture and proof approved; seal product Quest |
+| `priority-recovery-admin-control-plane-admission-publication-single-engaged-authority` | `admin -> control-plane` | `buildPriorityRecoveryAdmissionByPartitionId` 0.915; `buildPriorityRecoveryPublicationNodeDecisions` 0.928 | runtime mutation: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`; read-only engagement trace: `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/priority-recovery-snapshot.js`, `src/control-plane/priority-recovery-snapshot-closure.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-admission-publication-single-engaged-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-admission-publication-single-engaged-authority.json` | architecture and proof approved superseding Quest; seal product Quest |
 | `priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority` | `admin -> control-plane` | `resolvePriorityRecoveryReasonCodesFromReadiness` 0.742 | runtime: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`, `src/control-plane/priority-recovery-snapshot-ingress.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-reason-codes-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority.json` | architecture and proof approved; seal product Quest |
 | `priority-recovery-control-plane-normalize-distinct-string-array-authority` | `control-plane` | `normalizeDistinctStringArray` 0.774 | runtime: `src/control-plane/publication-recovery-evidence-values.js`, `src/control-plane/publication-recovery-stream-evidence.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-priority-spread.js`; proof/support: `scripts/run-priority-recovery-control-plane-normalize-distinct-string-array-authority-scenarios.js`, `test/control-plane/publication-recovery-normalization-authority.test.js`, `solve/quests/priority-recovery-control-plane-normalize-distinct-string-array-authority.json` | architecture and proof approved; seal product Quest |
 
@@ -654,10 +654,13 @@ forwarding/re-export alias; a stable public seam imports the canonical owner
 directly. The engagement attacks are:
 
 - admission/publication: direct and nested publication projections are
-  identical through the stable Admin seam; an admission fixture covers source
-  and target partition fanout, malformed workflow exclusion, eligible-node
-  trim/dedup, normalized ineligible reasons, and blocking reasons; a static
-  declaration/import guard proves both context copies are gone;
+  identical through the live `AdminControlSnapshot` decision-snapshot seam; an
+  admission fixture covers source and multiple target partition fanout,
+  malformed workflow exclusion, eligible-node trim/dedup, normalized
+  ineligible reasons, and blocking reasons. Static guards prove the context
+  declarations/exports and dormant Admin imports/pass-throughs are gone and
+  the sole engaged chain is Admin -> shared priority-recovery snapshot ->
+  snapshot closure -> burndown;
 - readiness reason codes: malformed, blank, and duplicate codes normalize
   identically through direct and learner-hold paths, with one declaration;
 - distinct-string normalization: frozen insertion order, deduplication,
@@ -722,3 +725,16 @@ independently approved by `/root/w14_plan_arch_review` (all three owner
 directions, alias-free scopes, and cycle posture) and
 `/root/w14_plan_proof_review` (all three exact pathscopes, scenario contracts,
 engagement attacks, red-on-revert guards, and deletion predicates).
+
+Revision 6 records one implementation-time correction. The originally sealed
+`priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority`
+Quest is `EXHAUSTED`: independent verification proved its required direct Admin
+imports were dormant options pass-throughs, so satisfying that literal frame
+would preserve dead wiring. `/root/w14_plan_arch_review` and
+`/root/w14_plan_proof_review` independently approve the superseding
+`priority-recovery-admin-control-plane-admission-publication-single-engaged-authority`
+row above. It deletes the same duplicate context authorities and the dormant
+wiring, but proves the already-live shared-snapshot chain through a real
+`AdminControlSnapshot` instance. This is the independently approved
+superseding decision required for the exhausted generated Quest; no generated
+candidate is silently dropped.
