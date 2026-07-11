@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: revision 9, implementation and aggregate gates terminal; final program audit pending
+Status: revision 10, implementation and aggregate gates terminal; final program re-audit pending
 
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
@@ -84,8 +84,8 @@ appropriate to the Quest. An empty/skipped guard list is a failure.
 | W0 | `solver-terminal-integrity-red-test-bootstrap` (process) | `node --test test/solve/solver-terminal-integrity-red-test-bootstrap.test.js` | `oracle` / `solver-terminal-integrity-red-test-bootstrap` | fresh evidence must contain the meta-test ID, every required W1 guard ID, and the exact pre-fix failure signature |
 | W1 | `solver-terminal-integrity-cutover` (process) | `node scripts/run-solver-terminal-integrity-cutover-scenarios.js` | `solver-terminal-integrity-cutover` | red-on-revert tests drive the real loop, audit, report, and next projection |
 | W2 | `solver-acceptance-proof-manifest` (process) | `node scripts/run-solver-acceptance-proof-manifest-scenarios.js` | `solver-acceptance-proof-manifest` | scenario runner invokes the same manifest executor as the public acceptance command |
-| W3 | `raft-committed-entry-immutability-contract` (product) | `node scripts/run-raft-committed-entry-immutability-contract-scenarios.js` | `raft-committed-entry-immutability-contract` | shared suite instantiates both production-usable adapters and MessageGroupService path |
-| W4 | `raft-compaction-disabled-until-snapshot-protocol` (product) | `node scripts/run-raft-compaction-disabled-until-snapshot-protocol-scenarios.js` | `raft-compaction-disabled-until-snapshot-protocol` | real adapter/service paths prove no physical prefix deletion is reachable |
+| W3 | `raft-committed-entry-immutability` (product) | `node scripts/run-raft-committed-entry-immutability-scenarios.js` | `raft-committed-entry-immutability` | shared suite instantiates both production-usable adapters and MessageGroupService path |
+| W4 | `raft-snapshot-gated-compaction` (product) | `node scripts/run-raft-snapshot-gated-compaction-scenarios.js` | `raft-snapshot-gated-compaction` | real adapter/service paths prove no physical prefix deletion is reachable |
 | W5 | `helm-admin-default-deny-cutover` (product) | `node scripts/run-helm-admin-default-deny-live-scenario.js` | `helm-admin-default-deny-cutover` | live report combines real Helm render parsing with sibling-network refusal against a node started from the rendered admin environment |
 | W6 | `provisioning-parent-deadline-cutover` (product) | `node scripts/run-provisioning-parent-deadline-cutover-scenarios.js` | `provisioning-parent-deadline-cutover` | virtual clock executes the real SQL/TableCreationService wait path |
 | W7 | `control-plane-readiness-trust-cutover` (product) | `node scripts/run-control-plane-readiness-trust-cutover-scenarios.js` | `control-plane-readiness-trust-cutover` | trace test proves SQL consumes `ControlPlaneReadinessService` output and never raw cache+router joins |
@@ -792,3 +792,11 @@ current failure is recorded as residual risk rather than represented as a new
 program regression. The blocking distributed safety pregate is 6/6 files and
 112/112 assertions green, while the fast aggregate includes the deterministic
 distributed-harness and convergence suites.
+
+Revision 10 corrects the W3/W4 closure-table identities to the Quest IDs,
+runner names, and scenario identities that were actually sealed and solved:
+`raft-committed-entry-immutability` and `raft-snapshot-gated-compaction`. The
+revision-9 final verifier found no implementation, evidence, test, scope,
+inventory, residual-risk, or invariant blocker; it rejected only the stale
+pre-sealing names in that table and requested this narrow plan-only correction
+before re-audit.
