@@ -178,7 +178,10 @@ class RebalanceCoordinatorTopologyGuardMethods {
     );
     if (
       !sourceReplica?.voter ||
-      !['active', 'removing'].includes(sourceReplica?.status) ||
+      ![
+        ReplicaStatus.ACTIVE,
+        ReplicaStatus.REMOVING,
+      ].includes(sourceReplica?.status) ||
       !sourceReplica?.occupied
     ) {
       return false;

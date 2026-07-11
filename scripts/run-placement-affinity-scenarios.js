@@ -74,6 +74,15 @@ const SCENARIOS = {
     'test/runtime/service-runtime-lifecycle.test.js',
     'test/node/runtime-service-handler.test.js',
   ],
+  'movielens-three-way-affinity-demo': [
+    'test/runtime/movielens-three-way-affinity-demo.test.js',
+    'test/runtime/movielens-affinity-demo-wiring.test.js',
+    'test/runtime/sql-query-loop-parallel-reduce-sql.test.js',
+    'test/runtime/service-runtime-lifecycle.test.js',
+    'test/node/runtime-service-handler.test.js',
+    'test/rebalancer/runtime-service-affinity-policy-lift.test.js',
+    'test/runtime/movielens-formation-probe-wiring.test.js',
+  ],
   'runtime-replica-state-projection': [
     'test/runtime/runtime-replica-state-projection-wiring.test.js',
   ],

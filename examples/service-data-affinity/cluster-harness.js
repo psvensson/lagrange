@@ -4,8 +4,7 @@ import {mkdir, readFile, rm} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
-import {runExamplesCatalog} from '../../scripts/examples/build-upload-run.js';
-import {DEFAULT_TARGET, loadRatingsIntoLagrange} from './lagrange-loader.js';
+import {DEFAULT_TARGET} from './lagrange-loader.js';
 
 const DEFAULT_NODE_COUNT = 5;
 const BASE_REST_PORT = 8080;
@@ -18,21 +17,6 @@ const CLUSTER_DATA_ROOT = 'data/examples/movielens-lagrange-cluster';
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const CLUSTER_POLL_INTERVAL_MS = 2000;
 const NODE_STATUS_ACTIVE = 'active';
-const EXAMPLE_ID = '07-movielens-access-affinity';
-
-function parseArgs(argv) {
-  const args = [...argv];
-  const flags = new Set(args);
-  const nodesIdx = args.indexOf('--nodes');
-  const nodesArg = nodesIdx >= 0 ? Number(args[nodesIdx + 1]) : null;
-  return {
-    noStart: flags.has('--no-start'),
-    local: flags.has('--local'),
-    nodeCount: nodesArg || Number(process.env.LAGRANGE_NODES) || null,
-    target: process.env.LAGRANGE_TARGET,
-    dataDir: process.env.LAGRANGE_DATA_DIR,
-  };
-}
 
 function nodePorts(index) {
   return {
@@ -121,61 +105,6 @@ async function waitForClusterSize(target, expectedCount) {
   );
 }
 
-async function describeRatingsPartitions(target) {
-  try {
-    const rows = await queryRows(
-      target,
-      'SELECT partition_id, leader_node_id, state FROM partitions',
-    );
-    const userPartitions = rows.filter((row) =>
-      String(row.partition_id || '').startsWith('tbl-'),
-    );
-    return {
-      totalPartitionRows: rows.length,
-      ratingsPartitions: userPartitions.length,
-      ratingsPartitionLeaders: userPartitions.map((row) => ({
-        partitionId: row.partition_id,
-        leaderNodeId: row.leader_node_id,
-      })),
-    };
-  } catch (error) {
-    return {error: error.message};
-  }
-}
-
-function extractTopMovies(exampleEntry) {
-  const hostResult = exampleEntry?.hostResult;
-  if (!hostResult) {
-    return null;
-  }
-  const partitionResults =
-    hostResult.partitionResults || hostResult.results || null;
-  if (Array.isArray(partitionResults)) {
-    const returned = partitionResults
-      .map((entry) => entry?.result ?? entry?.value ?? entry)
-      .filter(Boolean);
-    if (returned.length === 1 && Array.isArray(returned[0])) {
-      return returned[0];
-    }
-    return returned;
-  }
-  return hostResult;
-}
-
-async function runExample(target) {
-  const artifact = await runExamplesCatalog({
-    target,
-    include: [EXAMPLE_ID],
-    failOnRequired: false,
-  });
-  console.log(
-    `Examples complete: ${artifact.summary?.passed ?? '?'}/` +
-    `${artifact.summary?.total ?? '?'} passed`,
-  );
-  return (artifact.examples || artifact.results || [])
-    .find((entry) => entry.id === EXAMPLE_ID) || null;
-}
-
 async function stopLocalNodes(nodes) {
   for (const node of nodes) {
     if (node?.process && node.process.exitCode === null) {
@@ -261,7 +190,7 @@ async function startDockerCluster(nodeCount) {
 
   const cluster = createCluster(config);
   if (typeof cluster.setScenarioName === 'function') {
-    cluster.setScenarioName('movielens-access-affinity-demo');
+    cluster.setScenarioName('movielens-service-data-affinity-demo');
   }
   const formationStart = Date.now();
   await cluster.start();
@@ -319,63 +248,8 @@ async function startCluster(options = {}) {
   return startDockerCluster(nodeCount);
 }
 
-async function runLagrangeDemo(options = null) {
-  const resolvedOptions = options || parseArgs(process.argv.slice(2));
-  const nodeCount = resolvedOptions.nodeCount || DEFAULT_NODE_COUNT;
-  const clusterHandle = await startCluster(resolvedOptions);
-
-  try {
-    const {target} = clusterHandle;
-    console.log('Loading ratings into Lagrange...');
-    const loadStart = Date.now();
-    const totalRows = await loadRatingsIntoLagrange({target});
-    const loadDurationMs = Date.now() - loadStart;
-    console.log(`Loaded ${totalRows} ratings into Lagrange.`);
-
-    console.log('Running distributed callback example...');
-    const callbackStart = Date.now();
-    const exampleEntry = await runExample(target);
-    const callbackDurationMs = Date.now() - callbackStart;
-
-    const partitions = await describeRatingsPartitions(target);
-
-    return {
-      mode: clusterHandle.mode,
-      totalRows,
-      loadDurationMs,
-      callbackDurationMs,
-      exampleDurationMs: exampleEntry?.durationMs ?? null,
-      examplePassed: exampleEntry?.passed ?? null,
-      exampleError: exampleEntry?.error ?? null,
-      topMovies: extractTopMovies(exampleEntry),
-      partitions,
-      nodeCount: clusterHandle.mode === 'external' ? null : nodeCount,
-      clusterFormationMs: clusterHandle.clusterFormationMs,
-      target: clusterHandle.target,
-    };
-  } finally {
-    if (typeof clusterHandle?.stop === 'function') {
-      console.log('Stopping cluster...');
-      await clusterHandle.stop();
-    }
-  }
-}
-
-if (process.argv[1]?.includes('run-lagrange-demo.js')) {
-  runLagrangeDemo()
-    .then((metrics) => {
-      console.log('Lagrange demo metrics:');
-      console.log(JSON.stringify(metrics, null, 2));
-    })
-    .catch((error) => {
-      console.error(error);
-      process.exitCode = 1;
-    });
-}
-
 export {
   queryRows,
-  runLagrangeDemo,
   startCluster,
   startDockerCluster,
   startLocalCluster,

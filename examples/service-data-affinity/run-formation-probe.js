@@ -4,8 +4,8 @@ import {dirname, resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
-import {CREATE_RATINGS_SQL} from './shared.js';
-import {queryRows, startCluster} from './run-lagrange-demo.js';
+import {CREATE_RATINGS_SQL} from './movie-ranking.js';
+import {queryRows, startCluster} from './cluster-harness.js';
 
 // Formation + schema-provisioning probe: the cheap single-axis live
 // validation for formation quests. It reuses the affinity demo's cluster

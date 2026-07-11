@@ -18,6 +18,7 @@ import {
 
 const COMPLETE_LOCALITY_RATIO = 1;
 const LOCALITY_EPSILON = 1e-9;
+const RESULT_EPSILON = 1e-9;
 
 function cacheFromRows({nodes, partitions, services, attributionRows}) {
   const rowsByTable = new Map([
@@ -89,7 +90,8 @@ function topNRowsEqual(leftRows, rightRows) {
     const right = rightRows[index];
     return Number(left?.rank) === Number(right?.rank) &&
       String(left?.group_key) === String(right?.group_key) &&
-      Number(left?.agg_value) === Number(right?.agg_value);
+      Math.abs(Number(left?.agg_value) - Number(right?.agg_value)) <=
+        RESULT_EPSILON;
   });
 }
 

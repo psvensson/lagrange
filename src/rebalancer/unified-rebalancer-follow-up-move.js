@@ -706,6 +706,8 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       admissionReason: outcome?.admission?.reason || null,
       admissionBlockingReasonCodes:
         normalizeAdmissionBlockingReasonCodes(outcome),
+      admissionTopologySnapshot:
+        outcome?.admission?.topologySnapshot || null,
     });
   }
 }

@@ -66,13 +66,13 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
-| formation-ledger-quorum-concentrated-replace-churn-60s | product | 0 | 0 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 3 | 0 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
 | formation-runtime-service-create-lane-budget-starvation | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
 | listener-port-model-single-authority | product | 0 | 0 | — |
+| movielens-three-way-affinity-demo | product | 2 | 0 | — |
 | newcomer-onboarding-friction | product | 0 | 0 | — |
 | rebalancer-own-create-memory-duplicate-replace | product | 0 | 0 | — |
 | rolling-restart-core-stability | product | 74 | 13 | CL-001, CL-004, CL-030 |

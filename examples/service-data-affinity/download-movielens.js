@@ -1,5 +1,5 @@
 import {mkdir, stat, writeFile} from 'node:fs/promises';
-import {DATA_DIR, RATINGS_FILE, RATINGS_URL} from './shared.js';
+import {DATA_DIR, RATINGS_FILE, RATINGS_URL} from './movie-ranking.js';
 
 async function fileExists(path) {
   try {
@@ -30,7 +30,11 @@ async function downloadRatings({force = false} = {}) {
 
 const force = process.argv.includes('--force');
 
-downloadRatings({force}).catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (process.argv[1]?.includes('download-movielens.js')) {
+  downloadRatings({force}).catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+export {downloadRatings};

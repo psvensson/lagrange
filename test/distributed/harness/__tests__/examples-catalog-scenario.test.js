@@ -29,9 +29,6 @@ function buildCallbackRows(callbackModuleRef) {
       remotePartitionReplica: true,
     }];
   }
-  if (callbackModuleRef.includes('07-movielens-access-affinity')) {
-    return [{movieId: '1', avgRating: 4.5, ratingCount: 10}];
-  }
   return [];
 }
 
@@ -62,17 +59,17 @@ describe('examples-catalog scenario', () => {
 
       const result = await run(cluster);
 
-      assert.equal(result.exampleResults.total, 7);
-      assert.equal(result.exampleResults.passed, 7);
+      assert.equal(result.exampleResults.total, 6);
+      assert.equal(result.exampleResults.passed, 6);
       assert.equal(result.exampleResults.failed, 0);
       assert.equal(result.exampleResults.requiredFailed, 0);
       assert.equal(Array.isArray(result.examples), true);
-      assert.equal(result.examples.length, 7);
+      assert.equal(result.examples.length, 6);
 
       const artifact = JSON.parse(
         await readFile(result.artifactPath, 'utf8'),
       );
-      assert.equal(artifact.summary.total, 7);
+      assert.equal(artifact.summary.total, 6);
       assert.equal(artifact.summary.failed, 0);
     } finally {
       await rm(outputDir, {recursive: true, force: true});

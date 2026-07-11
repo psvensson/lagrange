@@ -12,9 +12,9 @@ import {
 import {
   CREATE_RATINGS_SQL,
   RATINGS_FILE,
-  RATINGS_SELECT_SQL,
-  computeTopMovies,
-} from './shared.js';
+  RATINGS_AGGREGATE_SQL,
+  rankMovieQuality,
+} from './movie-ranking.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -51,7 +51,7 @@ async function ensureRatingsFile() {
   } catch {
     throw new Error(
       `Ratings file not found at ${RATINGS_FILE}. ` +
-      'Run download-movielens.js first.',
+      'Run examples/service-data-affinity/download-movielens.js first.',
     );
   }
 }
@@ -67,6 +67,8 @@ function buildPsqlCommand(options = {}) {
     `PGPASSWORD='${shellQuote(password)}'`,
     'psql',
     '-v ON_ERROR_STOP=1',
+    '-t',
+    '-A',
     `-h '${shellQuote(host)}'`,
     `-p ${port}`,
     `-U '${shellQuote(user)}'`,
@@ -214,7 +216,6 @@ function buildBaselineConfig() {
   const envReplicationFactor = resolveEnvInteger('PG_BASELINE_REPLICATION_FACTOR');
   const envReadyTimeoutMs = resolveEnvInteger('PG_BASELINE_READY_TIMEOUT_MS');
   const envReadyPollIntervalMs = resolveEnvInteger('PG_BASELINE_READY_POLL_MS');
-  const strictReplication = process.env.PG_BASELINE_STRICT_REPLICATION === 'true';
   return {
     baselineImage: DEFAULT_BASELINE_IMAGE,
     user: DEFAULT_USER,
@@ -226,7 +227,8 @@ function buildBaselineConfig() {
     readyTimeoutMs: envReadyTimeoutMs || DEFAULT_READY_TIMEOUT_MS,
     readyPollIntervalMs: envReadyPollIntervalMs || DEFAULT_READY_POLL_INTERVAL_MS,
     batchSize: DEFAULT_BATCH_SIZE,
-    allowReplicationTimeout: !strictReplication,
+    allowReplicationTimeout:
+      process.env.PG_BASELINE_ALLOW_REPLICATION_TIMEOUT === 'true',
   };
 }
 
@@ -405,8 +407,8 @@ async function runPostgresBaseline() {
     const loadDurationMs = Date.now() - loadStart;
 
     const queryStart = Date.now();
-    const rows = await pool.query(RATINGS_SELECT_SQL);
-    const results = computeTopMovies(rows.rows || []);
+    const rows = await pool.query(RATINGS_AGGREGATE_SQL);
+    const results = rankMovieQuality(rows.rows || []);
     const queryDurationMs = Date.now() - queryStart;
 
     await pool.end();
@@ -415,6 +417,7 @@ async function runPostgresBaseline() {
       totalRows,
       loadDurationMs,
       queryDurationMs,
+      returnedAggregateRows: rows.rows?.length || 0,
       topMovies: results,
       replicationFactor: config.replicationFactor,
       replicationState: baseline.replicationState || null,
@@ -436,4 +439,4 @@ if (process.argv[1]?.includes('run-postgres-baseline.js')) {
     });
 }
 
-export {runPostgresBaseline};
+export {buildBaselineConfig, buildPsqlCommand, runPostgresBaseline};

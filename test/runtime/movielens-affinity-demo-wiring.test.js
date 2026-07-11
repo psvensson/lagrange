@@ -621,7 +621,7 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
   t.end();
 });
 
-test('single-zone A/B evidence uses production node weights and requires ' +
+test('single-zone learned-affinity evidence uses production node weights and requires ' +
   'the best achievable placement', async (t) => {
   const nowMs = 5000;
   const common = {

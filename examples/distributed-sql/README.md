@@ -10,7 +10,6 @@ This directory contains copyable callback examples ordered from basic to advance
 4. `04-nested-bounded-call`
 5. `05-guardrail-failure`
 6. `06-wasm-remote-replica`
-7. `07-movielens-access-affinity`
 
 Each example directory contains:
 

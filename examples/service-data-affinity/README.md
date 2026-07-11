@@ -1,123 +1,124 @@
-# Service↔Data Affinity Demo — code moves to its data
+# MovieLens: distributed SQL and data-affine services
 
-This is the live demonstration of Lagrange's differentiator: a deployed
-**service** whose replicas are placed as near as possible to the
-**data** it accesses (epic:
-[`solve/epics/service-data-affinity-placement.md`](../../solve/epics/service-data-affinity-placement.md)).
+This is the newcomer-facing demonstration of Lagrange's main idea:
+distributed data and replicated application code belong to one placement
+system. You do not enable data affinity. A deployed service publishes its
+normal data access, and Lagrange learns where its replicas should run.
 
-Unlike the [`movielens-access-affinity`](../movielens-access-affinity/)
-benchmark — which ships *compute to data* via partition callbacks —
-this demo deploys a real **runtime service** that issues SQL, and then
-watches the placement machinery move the *service itself* onto the nodes
-with the strongest weighted share of the data it accesses.
+The demo processes the MovieLens 100k ratings three ways:
 
-## What happens
+1. **PostgreSQL grouped SQL** — a primary with two synchronous streaming
+   replicas executes `AVG` and `COUNT` per movie.
+2. **Lagrange distributed grouped SQL** — the same grouped query runs
+   across Lagrange partitions.
+3. **A replicated Lagrange service** — two service replicas compute a
+   confidence-adjusted Bayesian ranking on disjoint movie-id shards. Each
+   publishes at most ten candidates; one replica merges at most twenty.
 
-1. **Five nodes start in one latency domain.** The MovieLens `ratings`
-   table is forced to split, producing multiple independently replicated
-   data partitions with asymmetric node weights.
-2. **A centralized reference runs.** It transfers the full ratings scan
-   to the caller, reduces all rows there, and records the exact top-10.
-3. **A runtime service deploys with affinity disabled**
-   (`service_definitions` row):
-   `runtime_kind: native_js`, `runtime_ref: sql-query-loop-runtime`
-   (the generic query-loop module), `read_locality: 'any'`, and
-   `replica_count: 2`.
-   - leased reduce slot 1 scans movie IDs up to 1000;
-   - leased reduce slot 2 scans movie IDs above 1000;
-   - each replica reduces its disjoint group-key shard to a partial
-     top-10;
-   - the slot-1 replica merges at most 20 partial candidates into the
-     exact global top-10.
+All three paths use the same ranking formula and must return the same
+ordered top ten.
 
-   Reduce slots, not generation-shaped replica IDs such as `r1`/`r3`,
-   own shard identity. Slot leases and partial JSON snapshots share one
-   coordination row, so replacement clears the predecessor snapshot
-   atomically before doing work.
-4. **The demo records the affinity-off baseline**, including replica
-   placement, weighted node-locality, partial-replica count, bounded
-   merge-candidate count, and result correctness.
-5. **Only `read_locality` changes to `same_group`:**
-   - every statement is attributed into the CDC-propagated
-     `service_partition_access` table (per-node delta rows);
-   - the
-     runtime-service rebalancer lifts fresh attribution into
-     `dataAffinity.nodeWeights` and enables the
-     `DATA_AFFINITY` placement dimension;
-   - the MovePlanner migrates replicas when the weighted gain exceeds
-     its incumbent movement cost.
+## Why the service exists
 
-The demo converges only when the two current replica generations occupy
-the best achievable weighted node set, own the complete live slot set,
-have published fresh bounded partial snapshots, and produced a fresh
-merged result identical to the centralized reference.
+An average is easy SQL, so it is not a persuasive service workload. The
+service instead applies an application policy that combines average rating,
+rating support, a prior mean, and a confidence penalty:
 
-## What the comparison means
+```text
+bayesianMean = (average × count + priorMean × priorWeight)
+               / (count + priorWeight)
+score = bayesianMean - confidencePenalty / sqrt(count)
+```
 
-There are two deliberately separate comparisons:
-
-- **Reduce shape:** centralized full-row transfer and reduction versus
-  two service replicas reducing disjoint group-key shards and exchanging
-  only `replicas × topN` merge candidates.
-- **Placement policy:** the same deployed workload with affinity off and
-  then on. Placement quality is computed by the production node-weight
-  owner, not by the weak test "this node holds any accessed partition."
-
-The SQL engine may fan each shard scan across several data partitions;
-that is partition-parallel scan. The two runtime replicas perform the
-reduce shards concurrently; that is service-replica parallel reduce.
-The final bounded candidate merge is a third, explicitly reported stage.
+This deliberately favors movies with strong, well-supported ratings over a
+movie that received a single five-star vote. It is still small enough for a
+new developer to understand, but represents the kind of evolving application
+logic that belongs in deployed code rather than a growing SQL expression.
 
 ## Run it
 
-```sh
-# one-time: fetch the movielens 100k dataset
-node examples/movielens-access-affinity/download-movielens.js
+Prerequisites:
 
-# the demo (local processes only — no Docker)
-node examples/service-data-affinity/run-affinity-demo.js
+- Node.js 22 and `npm install`;
+- Docker, for the PostgreSQL 16 baseline;
+- internet access on the first run, to download MovieLens 100k;
+- enough local resources for PostgreSQL plus five Lagrange processes.
+
+From the repository root:
+
+```sh
+npm run demo:movielens
 ```
 
-Expect a few minutes end to end: attribution publishes periodically, the
-policy owner reads a staleness-bounded window, and the rebalancer plans
-on its periodic cadence. The observation log shows the centralized row
-count, partial candidates, affinity-off/on weighted-locality ratios, and
-the exact result comparison.
+The command downloads the dataset if needed and runs PostgreSQL first. The
+Lagrange phase bootstraps the ratings and two small coordination tables on its
+seed, loads the dataset once, joins four more nodes, waits for the actual
+operation-ledger quorum to spread, and then waits for the ratings table to
+split across at least two nodes before executing the SQL and service cases. A
+machine-readable live report is written under `test-output/reports/`.
 
-## Observe it yourself
+To download once without running the comparison:
 
-While (or after) the demo runs, against the seed admin endpoint:
+```sh
+node examples/service-data-affinity/download-movielens.js
+```
+
+## What to watch
+
+The report separates measurements that are actually comparable:
+
+| Path | Database result crossing its boundary | Additional service exchange |
+| --- | ---: | ---: |
+| PostgreSQL grouped SQL | one aggregate per movie | none |
+| Lagrange grouped SQL | one aggregate per movie | none |
+| Lagrange replicated service | shard scans remain behind service executors | at most `replicas × topN` candidates |
+
+Startup, data loading, and topology differ, so the demo intentionally does
+not print a misleading PostgreSQL-versus-Lagrange speedup ratio. It compares
+correctness, transfer shape, and the placement learned from real service
+access. Use a controlled deployment and repeated steady-state samples for a
+performance claim.
+
+The service starts wherever normal placement chooses because it has no access
+history yet. Its attributed reads populate `service_partition_access`; the
+runtime-service policy then uses the production node weights and converges on
+the best weighted node set. `read_locality` still controls query routing, but
+does not turn placement affinity on or off.
+
+## Follow the implementation
+
+| Concern | File |
+| --- | --- |
+| One-command comparison | `run-comparison.js` |
+| PostgreSQL grouped baseline | `run-postgres-baseline.js` |
+| Shared ranking contract | `movie-ranking.js` |
+| Lagrange cluster, SQL and service orchestration | `run-affinity-demo.js` |
+| Generic replica reduce loop | `src/runtime/sql-query-loop-runtime-module.js` |
+| Stable leases and atomic snapshots | `src/runtime/sql-query-loop-parallel-reduce.js` |
+| Placement evidence | `affinity-demo-evidence.js` |
+| Always-on affinity policy lift | `src/rebalancer/unified-rebalancer-policy-scheduler-methods.js` |
+
+Useful observations while Lagrange runs:
 
 ```sql
--- all nodes remain in one latency domain
 SELECT node_id, latency_group_id FROM nodes;
--- where the data lives
 SELECT partition_id, leader_node_id FROM partitions;
--- the A[service][partition] attribution feed
 SELECT node_id, service_id, access_json FROM service_partition_access;
--- where the service replicas are placed
 SELECT service_id, node_id, status FROM services;
--- stable shard leases plus atomic partial snapshots
 SELECT slot_id, replica_id, lease_expires_at, partial_json, computed_at
 FROM movielens_top10_reduce_slots;
--- atomically published exact global result
 SELECT result_json, computed_at FROM movielens_top10;
 ```
 
-## The knobs this demo exercises
+If the command fails before loading ratings, inspect the emitted failure
+report and the archived node logs under
+`data/examples/service-data-affinity-demo-archive/`. A green deterministic
+guard proves the mechanisms are connected; only a live PASS proves that the
+local cluster completed this demonstration.
 
-| Mechanism | Where |
-| --- | --- |
-| Per-service locality routing | `service_definitions.read_locality` (`src/query/sql-query-engine-table-routing-methods.js`) |
-| Access attribution | `src/query/service-partition-access-{metrics,publisher}.js` → `service_partition_access` |
-| Policy lift | `src/rebalancer/unified-rebalancer-policy-scheduler-methods.js` + `service-data-affinity-weights.js` |
-| Placement dimensions | `DATA_AFFINITY_NODE` plus coarse `DATA_AFFINITY` in `src/rebalancer/placement-owner-decision.js` |
-| The deployed service | `src/runtime/sql-query-loop-runtime-module.js` via the native_js handler map (`src/runtime/runtime-startup-wiring.js`) |
-| Stable reduce-slot owner | `src/runtime/sql-query-loop-parallel-reduce.js` (leased slots, atomic partial/result snapshots) |
-| A/B evidence projection | `examples/service-data-affinity/affinity-demo-evidence.js` reusing the production weight builder |
-
-The script performs the `any` → `same_group` transition itself so the
-cluster, data, replica count, SQL shards, and load remain controlled.
-Multiple zones are intentionally outside this completion claim; they
-would demonstrate cross-domain traffic and CDC topology, a separate
-question from node-granular service/data co-location.
+The readiness message includes total and ledger-specific in-flight operation
+counts plus the ledger voter shape. A quiet operation table is not enough: the
+demo fails closed unless the ledger has at least three voters and no node is
+required for its majority. If that second spread is not planned before the
+no-progress cutoff, the run stops with a formation diagnosis instead of
+starting a schema request that cannot succeed.

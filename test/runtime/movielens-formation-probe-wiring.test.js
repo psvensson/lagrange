@@ -1,6 +1,6 @@
 /**
  * Guard tests for the formation + schema-provisioning probe wiring
- * (examples/movielens-access-affinity/run-formation-probe.js).
+ * (examples/service-data-affinity/run-formation-probe.js).
  *
  * The probe is the cheap single-axis live validation for formation
  * quests: cluster bring-up + CREATE TABLE ratings (partition
@@ -15,13 +15,12 @@ import {readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {
   queryRows,
-  runLagrangeDemo,
   startCluster,
   startDockerCluster,
   startLocalCluster,
   waitForAdmin,
   waitForClusterSize,
-} from '../../examples/movielens-access-affinity/run-lagrange-demo.js';
+} from '../../examples/service-data-affinity/cluster-harness.js';
 import {
   DEFERRAL_COUNTER_STRINGS,
   PROBE_RESULT,
@@ -32,11 +31,11 @@ import {
   resolveProbeResult,
   runFormationProbe,
   summarizeRatingsPartitions,
-} from '../../examples/movielens-access-affinity/run-formation-probe.js';
+} from '../../examples/service-data-affinity/run-formation-probe.js';
 
 const require = createRequire(import.meta.url);
 
-const PROBE_PATH = 'examples/movielens-access-affinity/run-formation-probe.js';
+const PROBE_PATH = 'examples/service-data-affinity/run-formation-probe.js';
 const QUORUM_CONCENTRATED_REASON_CODE = 'operation_ledger_quorum_concentrated';
 const QUORUM_CONCENTRATED_EMITTER_PATHS = [
   'src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js',
@@ -47,7 +46,6 @@ test('demo module exports the cluster-start helpers the probe reuses ' +
   '(and importing it starts nothing)', (t) => {
   const helpers = {
     queryRows,
-    runLagrangeDemo,
     startCluster,
     startDockerCluster,
     startLocalCluster,

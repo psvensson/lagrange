@@ -35,6 +35,14 @@ const SCENARIOS = {
   'formation-ledger-quorum-spread-first': [
     'test/convergence/dt6-formation-ledger-quorum-spread-first.test.js',
   ],
+  'formation-ledger-quorum-concentrated-replace-churn-60s': [
+    'test/rebalancer/rebalance-coordinator-topology-guard.test.js',
+    'test/convergence/dt6-formation-ledger-quorum-spread-first.test.js',
+  ],
+  'formation-ledger-self-spread-services-owner-unavailable': [
+    'test/rebalancer/rebalance-coordinator-topology-guard.test.js',
+    'test/convergence/dt6-formation-ledger-quorum-spread-first.test.js',
+  ],
 };
 
 runGuardTestScenarios(SCENARIOS);

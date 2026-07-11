@@ -150,6 +150,22 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-11 — **Affinity is intrinsic, not a demo toggle:** a runtime
+  service with fresh access evidence always receives production
+  data-affinity placement weights. `read_locality` remains an independent
+  query-routing policy and no longer enables/disables placement. The
+  newcomer MovieLens surface is one three-way comparison: PostgreSQL
+  grouped SQL, Lagrange distributed grouped SQL, and a replicated
+  Lagrange service that learns placement while executing a documented
+  confidence-adjusted Bayesian ranking. The service begins without an
+  access profile; attribution-driven convergence is the before/after
+  story. The older partition-callback MovieLens demo and its fetch-all
+  PostgreSQL comparison are removed after their reusable download,
+  loader, PostgreSQL, and cluster helpers move beneath the surviving
+  service-data-affinity example. Performance ratios are intentionally
+  omitted across unlike local topologies; correctness, transfer shape,
+  bounded candidate exchange, and learned placement are the claims.
+
 - 2026-07-11 — **Tier-3 completion reframed by user decision:** multiple
   latency domains are not a prerequisite for the service/data-affinity
   thesis. The primary demo is one latency domain with asymmetric

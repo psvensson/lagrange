@@ -93,7 +93,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## demo
 
-- `demo:formation-probe` — `node examples/movielens-access-affinity/run-formation-probe.js`
+- `demo:formation-probe` — `node examples/service-data-affinity/run-formation-probe.js`
+- `demo:movielens` — `node examples/service-data-affinity/run-comparison.js`
 
 ## distributed
 
@@ -267,4 +268,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-171 scripts indexed; 66 have a curated description, 105 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+172 scripts indexed; 66 have a curated description, 106 fall back to their raw command. Improve coverage in the two sources named in the header comment.
