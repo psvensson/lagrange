@@ -29,6 +29,7 @@
 - **service-affinity-query-attribution-wiring-main**: Three consecutive current-HEAD runs of the shared deterministic affinity scenario passed all four guard files and 202 assertions. [test-output/reports/service-data-affinity-parallel-reduce-demo-2026-07-11T17-21-00-853Z.report.json]
 - **service-affinity-query-attribution-wiring-main**: Independent verifier approved the complete single-zone parallel-reduce vertical slice, including this bounded owner package, after reproducing the 202-assertion guard and adversarially checking identity, leases, snapshots, chronology, attribution, lifecycle failure, and report semantics. [subagent:/root/affinity_parallel_reduce_verify]
 - **service-affinity-query-attribution-wiring-main**: Post-attempt verifier approval applies to the exact query/scenario package: workload SQL remains attributed, coordination SQL is un-attributed without bypassing normal sessions, and all four guard files execute. [subagent:/root/affinity_parallel_reduce_verify]
+- **service-affinity-query-attribution-wiring-main**: Ingested evidence from service-data-affinity-parallel-reduce-demo-2026-07-11T17-37-54-287Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-data-affinity-parallel-reduce-demo-2026-07-11T17-37-54-287Z.report.json]
 
 ## Theories
 _(none recorded)_

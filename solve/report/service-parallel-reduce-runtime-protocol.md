@@ -29,6 +29,7 @@
 - **service-parallel-reduce-runtime-protocol-main**: Three consecutive current-HEAD runs of the shared deterministic affinity scenario passed all four guard files and 202 assertions. [test-output/reports/service-data-affinity-parallel-reduce-demo-2026-07-11T17-21-00-853Z.report.json]
 - **service-parallel-reduce-runtime-protocol-main**: Independent verifier approved the complete single-zone parallel-reduce vertical slice, including this bounded owner package, after reproducing the 202-assertion guard and adversarially checking identity, leases, snapshots, chronology, attribution, lifecycle failure, and report semantics. [subagent:/root/affinity_parallel_reduce_verify]
 - **service-parallel-reduce-runtime-protocol-main**: Post-attempt independent verifier approval applies to the exact unchanged runtime/test package: stable CAS leases, strict snapshots, exact merge, lifecycle failure projection, real-SQL takeover, and stale-release fencing passed the 202-assertion scenario. [subagent:/root/affinity_parallel_reduce_verify]
+- **service-parallel-reduce-runtime-protocol-main**: Ingested evidence from service-data-affinity-parallel-reduce-demo-2026-07-11T17-37-54-287Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-data-affinity-parallel-reduce-demo-2026-07-11T17-37-54-287Z.report.json]
 
 ## Theories
 _(none recorded)_
