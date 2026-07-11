@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: revision 6, independently reapproved
+Status: revision 7, independently reapproved
 
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
@@ -643,15 +643,16 @@ three review-only migration proposals:
 | Draft Quest | Boundary | Authority evidence | Declared pathscope | Review disposition |
 | --- | --- | --- | --- | --- |
 | `priority-recovery-admin-control-plane-admission-publication-single-engaged-authority` | `admin -> control-plane` | `buildPriorityRecoveryAdmissionByPartitionId` 0.915; `buildPriorityRecoveryPublicationNodeDecisions` 0.928 | runtime mutation: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`; read-only engagement trace: `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/priority-recovery-snapshot.js`, `src/control-plane/priority-recovery-snapshot-closure.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-admission-publication-single-engaged-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-admission-publication-single-engaged-authority.json` | architecture and proof approved superseding Quest; seal product Quest |
-| `priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority` | `admin -> control-plane` | `resolvePriorityRecoveryReasonCodesFromReadiness` 0.742 | runtime: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`, `src/control-plane/priority-recovery-snapshot-ingress.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-reason-codes-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority.json` | architecture and proof approved; seal product Quest |
+| `priority-recovery-admin-dormant-context-retirement` | `admin -> control-plane` | the generated 0.742 reason-code signal exposed an entirely unreachable six-export Admin context surface | runtime mutation: delete `src/admin/admin-control-snapshot-priority-recovery-context.js`; edit `src/admin/admin-control-snapshot.js`; read-only engagement trace: `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/priority-recovery-snapshot.js`, `src/control-plane/priority-recovery-snapshot-closure.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`, `src/control-plane/priority-recovery-snapshot-ingress.js`; proof/support: `scripts/run-priority-recovery-admin-dormant-context-retirement-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js`, `solve/quests/priority-recovery-admin-dormant-context-retirement.json` | architecture and proof approved superseding Quest; seal product Quest |
 | `priority-recovery-control-plane-normalize-distinct-string-array-authority` | `control-plane` | `normalizeDistinctStringArray` 0.774 | runtime: `src/control-plane/publication-recovery-evidence-values.js`, `src/control-plane/publication-recovery-stream-evidence.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-priority-spread.js`; proof/support: `scripts/run-priority-recovery-control-plane-normalize-distinct-string-array-authority-scenarios.js`, `test/control-plane/publication-recovery-normalization-authority.test.js`, `solve/quests/priority-recovery-control-plane-normalize-distinct-string-array-authority.json` | architecture and proof approved; seal product Quest |
 
 Each row uses its listed runner as the exact scenario command and requires
 three consecutive PASS reports with zero priority items and a non-empty stable
 guard-ID list. Every attempt path must be one of the row's runtime or proof
 paths. Closure removes the local duplicate declarations and every non-owner
-forwarding/re-export alias; a stable public seam imports the canonical owner
-directly. The engagement attacks are:
+forwarding/re-export alias; a stable public seam reaches authority through the
+declared canonical snapshot entry chain and never through dormant direct
+imports. The engagement attacks are:
 
 - admission/publication: direct and nested publication projections are
   identical through the live `AdminControlSnapshot` decision-snapshot seam; an
@@ -661,8 +662,13 @@ directly. The engagement attacks are:
   declarations/exports and dormant Admin imports/pass-throughs are gone and
   the sole engaged chain is Admin -> shared priority-recovery snapshot ->
   snapshot closure -> burndown;
-- readiness reason codes: malformed, blank, and duplicate codes normalize
-  identically through direct and learner-hold paths, with one declaration;
+- dormant Admin context: the module, every import, all six options
+  pass-throughs, and every local replacement/forwarding alias are absent. A
+  real Admin snapshot fixture covers blocked/missing planner projection,
+  replica-operation identity and timeline evidence, source/target admission,
+  repair-eligible promotion, recovery-only hold, unknown-readiness hold, and
+  learner reason codes containing whitespace, duplicates, blanks, empty
+  objects, and nulls through the canonical ingress/burndown owners;
 - distinct-string normalization: frozen insertion order, deduplication,
   trimming, and non-array behavior are preserved through both consumers, while
   static single-declaration and import-cycle guards prove the stream alias is
@@ -738,3 +744,14 @@ wiring, but proves the already-live shared-snapshot chain through a real
 `AdminControlSnapshot` instance. This is the independently approved
 superseding decision required for the exhausted generated Quest; no generated
 candidate is silently dropped.
+
+Revision 7 records the independently approved row-2 correction. Inspection
+showed `admin-control-snapshot-priority-recovery-context.js` has exactly one
+production importer and all six remaining exports are passed into an options
+object that consumes none. `/root/w14_plan_arch_review` and
+`/root/w14_plan_proof_review` approve replacing the unsealed narrow reason-code
+row with `priority-recovery-admin-dormant-context-retirement`: delete the whole
+unreachable module and wiring, then prove representative planner,
+replica-context, learner, admission, and publication behavior through the live
+shared snapshot chain. The generated reason-code candidate is superseded with
+stronger deletion evidence rather than dropped.
