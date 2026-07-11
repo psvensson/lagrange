@@ -570,13 +570,15 @@ Quantitative proof:
 - Two identical 1 MiB fixture patches create two descriptors and at most
   1.05 MiB of payload storage.
 - A second identical payload adds zero new content objects.
-- All W11 duplicate groups whose individual payloads are at least 64 KiB are
+- All W11 duplicate groups whose individual payloads are at least 32 KiB are
   migrated, and measured duplicate bytes in those eligible groups fall by at
   least 90% relative to the W11 baseline.
 - 100% of W11 references resolve before and after migration; a zero-migration
   run cannot satisfy the eligible-group reduction predicate.
 - One-byte tampering fails identity verification.
-- Small-artifact inline threshold and compression are fixed by the W11 report.
+- Small-artifact inline threshold is 32 KiB and content compression is gzip, as
+  selected by the W11 census from the largest threshold with an observed exact
+  duplicate group and the measured aggregate compression savings.
 
 Templates: `harness-fidelity.md`, `recovery-replay.md`.
 
