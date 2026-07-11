@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "kind": "solve-change-artifact",
+  "hashAlgorithm": "sha256",
+  "payloadSha256": "8796c2d4ebab5275bd10172bd2cafcb3be04024a675f54fe1bd04883403c5623",
+  "payloadBytes": 252809,
+  "contentEncoding": "gzip",
+  "objectPath": "solve/artifacts/sha256/87/8796c2d4ebab5275bd10172bd2cafcb3be04024a675f54fe1bd04883403c5623.diff.gz",
+  "objectStorageSha256": "646cb3123a54940b5577c4141b4c75ae60a8fbf34dbfb29f5155b76cdaf13d63"
+}
