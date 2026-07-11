@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: revision 7, independently reapproved
+Status: revision 8, implementation terminal; aggregate audit pending
 
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
@@ -642,9 +642,9 @@ three review-only migration proposals:
 
 | Draft Quest | Boundary | Authority evidence | Declared pathscope | Review disposition |
 | --- | --- | --- | --- | --- |
-| `priority-recovery-admin-control-plane-admission-publication-single-engaged-authority` | `admin -> control-plane` | `buildPriorityRecoveryAdmissionByPartitionId` 0.915; `buildPriorityRecoveryPublicationNodeDecisions` 0.928 | runtime mutation: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`; read-only engagement trace: `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/priority-recovery-snapshot.js`, `src/control-plane/priority-recovery-snapshot-closure.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-admission-publication-single-engaged-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-admission-publication-single-engaged-authority.json` | architecture and proof approved superseding Quest; seal product Quest |
-| `priority-recovery-admin-dormant-context-retirement` | `admin -> control-plane` | the generated 0.742 reason-code signal exposed an entirely unreachable six-export Admin context surface | runtime mutation: delete `src/admin/admin-control-snapshot-priority-recovery-context.js`; edit `src/admin/admin-control-snapshot.js`; read-only engagement trace: `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/priority-recovery-snapshot.js`, `src/control-plane/priority-recovery-snapshot-closure.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`, `src/control-plane/priority-recovery-snapshot-ingress.js`; proof/support: `scripts/run-priority-recovery-admin-dormant-context-retirement-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js`, `solve/quests/priority-recovery-admin-dormant-context-retirement.json` | architecture and proof approved superseding Quest; seal product Quest |
-| `priority-recovery-control-plane-normalize-distinct-string-array-authority` | `control-plane` | `normalizeDistinctStringArray` 0.774 | runtime: `src/control-plane/publication-recovery-evidence-values.js`, `src/control-plane/publication-recovery-stream-evidence.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-priority-spread.js`; proof/support: `scripts/run-priority-recovery-control-plane-normalize-distinct-string-array-authority-scenarios.js`, `test/control-plane/publication-recovery-normalization-authority.test.js`, `solve/quests/priority-recovery-control-plane-normalize-distinct-string-array-authority.json` | architecture and proof approved; seal product Quest |
+| `priority-recovery-admin-control-plane-admission-publication-single-engaged-authority` | `admin -> control-plane` | `buildPriorityRecoveryAdmissionByPartitionId` 0.915; `buildPriorityRecoveryPublicationNodeDecisions` 0.928 | runtime mutation: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`; read-only engagement trace: `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/priority-recovery-snapshot.js`, `src/control-plane/priority-recovery-snapshot-closure.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-admission-publication-single-engaged-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-admission-publication-single-engaged-authority.json` | `SOLVED`; commit `64e2c076` |
+| `priority-recovery-admin-dormant-context-retirement` | `admin -> control-plane` | the generated 0.742 reason-code signal exposed an entirely unreachable six-export Admin context surface | runtime mutation: delete `src/admin/admin-control-snapshot-priority-recovery-context.js`; edit `src/admin/admin-control-snapshot.js`; read-only engagement trace: `src/admin/admin-control-snapshot-control-plane-diagnostics.js`, `src/control-plane/priority-recovery-snapshot.js`, `src/control-plane/priority-recovery-snapshot-closure.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`, `src/control-plane/priority-recovery-snapshot-ingress.js`; proof/support: `scripts/run-priority-recovery-admin-dormant-context-retirement-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js`, `solve/quests/priority-recovery-admin-dormant-context-retirement.json` | `SOLVED`; commit `86df6381` |
+| `priority-recovery-control-plane-normalize-distinct-string-array-authority` | `control-plane` | `normalizeDistinctStringArray` 0.774 | runtime: `src/control-plane/publication-recovery-evidence-values.js`, `src/control-plane/publication-recovery-stream-evidence.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-priority-spread.js`; proof/support: `scripts/run-priority-recovery-control-plane-normalize-distinct-string-array-authority-scenarios.js`, `test/control-plane/publication-recovery-normalization-authority.test.js`, `solve/quests/priority-recovery-control-plane-normalize-distinct-string-array-authority.json` | `SOLVED`; commit `86cb4fb2` |
 
 Each row uses its listed runner as the exact scenario command and requires
 three consecutive PASS reports with zero priority items and a non-empty stable
@@ -755,3 +755,12 @@ unreachable module and wiring, then prove representative planner,
 replica-context, learner, admission, and publication behavior through the live
 shared snapshot chain. The generated reason-code candidate is superseded with
 stronger deletion evidence rather than dropped.
+
+Revision 8 records terminal execution and the regenerated post-migration
+inventory. Production source SHA-256 is now
+`1030ba62ebd51ccdf66cc57fc64e1329383cf5818a52c4a0fc82df09778d3f6a`:
+64 modules, 741 public exports, 280 import/export edges, 89 cross-layer edges,
+largest SCC 1, four visible lower-similarity name signals, zero confirmed exact
+duplicates, and zero migration candidates. The three approved rows above are
+`SOLVED`; the literal dormant-direct-import Quest remains honestly `EXHAUSTED`
+with the independently approved and solved superseding row recorded here.
