@@ -400,7 +400,6 @@ export {
   normalizeMaximumNonNegativeInteger,
   normalizeOptionalString,
   normalizeBoolean,
-  normalizePublicationRecoveryNodeIdListInput,
   normalizePublicationRecoveryHandoffNodeIds,
   normalizeProgressNodeIds,
   resolveActiveGateProgressString,

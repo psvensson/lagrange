@@ -758,9 +758,12 @@ stronger deletion evidence rather than dropped.
 
 Revision 8 records terminal execution and the regenerated post-migration
 inventory. Production source SHA-256 is now
-`1030ba62ebd51ccdf66cc57fc64e1329383cf5818a52c4a0fc82df09778d3f6a`:
-64 modules, 741 public exports, 280 import/export edges, 89 cross-layer edges,
+`4e4927edf45959e2fedb5bc6c7f2f047c12672b94c1fac53ca4146c4d873233a`:
+64 modules, 738 public exports, 280 import/export edges, 89 cross-layer edges,
 largest SCC 1, four visible lower-similarity name signals, zero confirmed exact
 duplicates, and zero migration candidates. The three approved rows above are
 `SOLVED`; the literal dormant-direct-import Quest remains honestly `EXHAUSTED`
 with the independently approved and solved superseding row recorded here.
+The final static ratchet also removed the unused compatibility-barrel aliases
+for the canonical normalizer/input helper and keeps the generator writer
+private; unused exports improve from the 1,628 baseline to 1,627.

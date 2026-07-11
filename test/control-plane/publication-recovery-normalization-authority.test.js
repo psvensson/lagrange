@@ -80,11 +80,14 @@ test('one evidence-values declaration feeds every consumer without a cycle',
       'src/control-plane/publication-recovery-gate.js', 'utf8');
     const prioritySpread = fs.readFileSync(
       'src/control-plane/publication-recovery-priority-spread.js', 'utf8');
+    const compatibilityBarrel = fs.readFileSync(
+      'src/control-plane/publication-recovery-evidence-normalizers.js', 'utf8');
     t.equal([...values.matchAll(
       /function\s+normalizeDistinctStringArray\b/gu)].length, 1);
     t.notMatch(stream, /function\s+normalizeDistinctStringArray\b/u);
     t.notMatch(stream,
       /export\s*\{[\s\S]*?normalizeDistinctStringArray[\s\S]*?\}/u);
+    t.notMatch(compatibilityBarrel, /\bnormalizeDistinctStringArray\b/u);
     for (const source of [stream, gate, prioritySpread]) {
       t.match(source,
         /normalizeDistinctStringArray[\s\S]*?from '\.\/publication-recovery-evidence-values\.js'/u);

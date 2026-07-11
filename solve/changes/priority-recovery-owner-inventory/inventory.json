@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "1030ba62ebd51ccdf66cc57fc64e1329383cf5818a52c4a0fc82df09778d3f6a"
+    "sourceSha256": "4e4927edf45959e2fedb5bc6c7f2f047c12672b94c1fac53ca4146c4d873233a"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,7 +18,7 @@
   },
   "metrics": {
     "moduleCount": 64,
-    "publicExportCount": 741,
+    "publicExportCount": 738,
     "importEdgeCount": 280,
     "crossLayerEdgeCount": 89,
     "layerDirectionViolationCount": 43,
@@ -1347,7 +1347,6 @@
         "normalizeActiveGateProgressRecords",
         "normalizeBoolean",
         "normalizeClosedUnknownNoDebtPriorityRecoveryObservation",
-        "normalizeDistinctStringArray",
         "normalizeMaximumNonNegativeInteger",
         "normalizeNonNegativeInteger",
         "normalizeOptionalString",
@@ -1357,7 +1356,6 @@
         "normalizePublicationEpoch",
         "normalizePublicationRecoveryAckEvidence",
         "normalizePublicationRecoveryHandoffNodeIds",
-        "normalizePublicationRecoveryNodeIdListInput",
         "ownerReconcileNarrowingRefreshesPublicationOwnerStream",
         "pendingAckEvidenceAllowsOwnerReconcileNarrowing",
         "resolveActiveGateProgressString",
@@ -1426,7 +1424,6 @@
         "normalizeProgressNodeIds",
         "normalizePublicationEpoch",
         "normalizePublicationRecoveryHandoffNodeIds",
-        "normalizePublicationRecoveryNodeIdListInput",
         "resolveActiveGateProgressString",
         "resolveAuthoritativePublicationMembershipNodeIds",
         "resolvePriorityRecoveryClosureWitness",
@@ -1469,7 +1466,6 @@
         "normalizeProgressNodeIds",
         "normalizePublicationEpoch",
         "normalizePublicationRecoveryHandoffNodeIds",
-        "normalizePublicationRecoveryNodeIdListInput",
         "resolveActiveGateProgressString",
         "resolveAuthoritativePublicationMembershipNodeIds",
         "resolvePriorityRecoveryClosureWitness",

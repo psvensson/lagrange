@@ -1,12 +1,10 @@
 export {
   isRecord,
-  normalizeDistinctStringArray,
   normalizePublicationEpoch,
   normalizeNonNegativeInteger,
   normalizeMaximumNonNegativeInteger,
   normalizeOptionalString,
   normalizeBoolean,
-  normalizePublicationRecoveryNodeIdListInput,
   normalizePublicationRecoveryHandoffNodeIds,
   normalizeProgressNodeIds,
   resolveActiveGateProgressString,

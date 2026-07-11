@@ -371,7 +371,7 @@ export async function buildInventory(root = ROOT) {
   };
 }
 
-export async function writeInventory(root = ROOT, output = OUTPUT) {
+async function writeInventory(root = ROOT, output = OUTPUT) {
   const inventory = await buildInventory(root);
   const destination = path.resolve(root, output);
   fs.mkdirSync(path.dirname(destination), {recursive: true});
