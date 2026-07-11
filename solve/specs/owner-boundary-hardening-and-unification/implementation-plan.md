@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: revision 3, independently approved
+Status: revision 5, independently reapproved
 
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
@@ -627,6 +627,48 @@ repository-wide move. The epic cannot complete until those approved migration
 Quests are terminal or an independently approved finding rejects a candidate
 with evidence.
 
+### W14 Measured Baseline and Draft Closure Rows (Revision 5)
+
+The terminal W14 projection is
+`solve/changes/priority-recovery-owner-inventory/inventory.json`, generated
+from production source SHA-256
+`a521d718b3a81bcfd71351bec71ba4184580c912a5ec72c038a48a51cbaca725`.
+It classifies 65 modules exactly once across five owners and all four semantic
+layers, parses 279 import/export edges with zero unresolved or parser failures,
+counts 750 public exports and 87 cross-layer edges, and measures largest SCC 1.
+Ten same-name authority signals remain visible; zero bodies are byte-identical.
+The declared five-character Jaccard threshold of 0.70 narrows those signals to
+three review-only migration proposals:
+
+| Draft Quest | Boundary | Authority evidence | Declared pathscope | Review disposition |
+| --- | --- | --- | --- | --- |
+| `priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority` | `admin -> control-plane` | `buildPriorityRecoveryAdmissionByPartitionId` 0.915; `buildPriorityRecoveryPublicationNodeDecisions` 0.928 | runtime: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`, `src/control-plane/priority-recovery-snapshot-burndown.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority.json` | architecture and proof approved; seal product Quest |
+| `priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority` | `admin -> control-plane` | `resolvePriorityRecoveryReasonCodesFromReadiness` 0.742 | runtime: `src/admin/admin-control-snapshot-priority-recovery-context.js`, `src/admin/admin-control-snapshot.js`, `src/control-plane/priority-recovery-snapshot-ingress.js`; proof/support: `scripts/run-priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority-scenarios.js`, `test/admin/admin-control-snapshot-priority-recovery-reason-codes-authority.test.js`, `solve/quests/priority-recovery-admin-control-plane-resolve-priority-recovery-reason-codes-from-readiness-authority.json` | architecture and proof approved; seal product Quest |
+| `priority-recovery-control-plane-normalize-distinct-string-array-authority` | `control-plane` | `normalizeDistinctStringArray` 0.774 | runtime: `src/control-plane/publication-recovery-evidence-values.js`, `src/control-plane/publication-recovery-stream-evidence.js`, `src/control-plane/publication-recovery-gate.js`, `src/control-plane/publication-recovery-priority-spread.js`; proof/support: `scripts/run-priority-recovery-control-plane-normalize-distinct-string-array-authority-scenarios.js`, `test/control-plane/publication-recovery-normalization-authority.test.js`, `solve/quests/priority-recovery-control-plane-normalize-distinct-string-array-authority.json` | architecture and proof approved; seal product Quest |
+
+Each row uses its listed runner as the exact scenario command and requires
+three consecutive PASS reports with zero priority items and a non-empty stable
+guard-ID list. Every attempt path must be one of the row's runtime or proof
+paths. Closure removes the local duplicate declarations and every non-owner
+forwarding/re-export alias; a stable public seam imports the canonical owner
+directly. The engagement attacks are:
+
+- admission/publication: direct and nested publication projections are
+  identical through the stable Admin seam; an admission fixture covers source
+  and target partition fanout, malformed workflow exclusion, eligible-node
+  trim/dedup, normalized ineligible reasons, and blocking reasons; a static
+  declaration/import guard proves both context copies are gone;
+- readiness reason codes: malformed, blank, and duplicate codes normalize
+  identically through direct and learner-hold paths, with one declaration;
+- distinct-string normalization: frozen insertion order, deduplication,
+  trimming, and non-array behavior are preserved through both consumers, while
+  static single-declaration and import-cycle guards prove the stream alias is
+  gone.
+
+Every suite is red on restoration of its removed local declaration or consumer
+import, and each row retains `recovery-replay.md` plus `harness-fidelity.md`.
+Similarity alone does not authorize a move.
+
 Templates: `recovery-replay.md`, `harness-fidelity.md`.
 
 ## Delivery Order
@@ -668,3 +710,15 @@ approved by both reviewers:
 - `/root/plan_arch_review` — APPROVE, no architecture blockers.
 - `/root/plan_proof_review` — APPROVE, no proof/workflow blockers. W0's terminal
   finding must cite the test artifact SHA-256 and verifier evidence.
+
+Revision 4 added the terminal W14 measurements and generated candidate rows.
+Both reviewers rejected it: `/root/w14_plan_arch_review` found that the runtime
+scopes omitted active consumers and would force forbidden forwarding aliases;
+`/root/w14_plan_proof_review` found that proof-support paths and concrete
+red-on-revert engagement attacks were undeclared. Revision 5 expands each row
+to the reviewers' minimum alias-free runtime scope, declares exact proof paths,
+and seals the concrete engagement and deletion predicates above. It is
+independently approved by `/root/w14_plan_arch_review` (all three owner
+directions, alias-free scopes, and cycle posture) and
+`/root/w14_plan_proof_review` (all three exact pathscopes, scenario contracts,
+engagement attacks, red-on-revert guards, and deletion predicates).
