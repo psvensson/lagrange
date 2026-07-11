@@ -14,6 +14,9 @@ const DIFF_PREFIX = 'diff:';
 const DIFF_EXTENSION = '.diff';
 const DESCRIPTOR_EXTENSION = '.diff.json';
 const GZIP_EXTENSION = '.diff.gz';
+const CONTENT_ADDRESSED_STORAGE_KIND = 'content-addressed';
+const PROBLEM_MISSING_UNIFIED_DIFF =
+  'changeRef artifact must contain a unified diff hunk or Git binary patch';
 const WORKFLOW_PATH_PREFIXES = Object.freeze([
   'scripts/solve/',
   'scripts/solve.js',
@@ -89,7 +92,7 @@ export function changeArtifactIdentity(root, questId, changeRef) {
     size: artifact.payloadBytes,
     sha256: artifact.payloadSha256,
   };
-  if (artifact.kind === 'content-addressed') {
+  if (artifact.kind === CONTENT_ADDRESSED_STORAGE_KIND) {
     identity.storageKind = artifact.kind;
     identity.descriptorSha256 = artifact.descriptorSha256;
     identity.objectPath = normalizeSlash(path.relative(root, artifact.objectPath));
@@ -104,7 +107,8 @@ export function changeArtifactIdentityMatches(recorded, current) {
     recorded.path === current.path &&
     recorded.size === current.size &&
     recorded.sha256 === current.sha256;
-  if (!baseMatches || recorded.storageKind !== 'content-addressed') {
+  if (!baseMatches ||
+    recorded.storageKind !== CONTENT_ADDRESSED_STORAGE_KIND) {
     return baseMatches;
   }
   return current.storageKind === recorded.storageKind &&
@@ -118,7 +122,7 @@ export function changeArtifactIdentityIsSealed(identity) {
     typeof identity.path === 'string' && identity.path.length > 0 &&
     Number.isInteger(identity.size) && identity.size >= 0 &&
     typeof identity.sha256 === 'string' && identity.sha256.length > 0;
-  if (!baseSealed || identity.storageKind !== 'content-addressed') {
+  if (!baseSealed || identity.storageKind !== CONTENT_ADDRESSED_STORAGE_KIND) {
     return baseSealed;
   }
   return typeof identity.descriptorSha256 === 'string' &&
@@ -279,8 +283,7 @@ export function inspectChangeArtifact(root, quest, changeRef) {
     problems.push('changeRef artifact must contain file paths from a patch');
   }
   if (content && !hasUnifiedDiffHunk(content) && !hasGitBinaryPatch(content)) {
-    problems.push(
-      'changeRef artifact must contain a unified diff hunk or Git binary patch');
+    problems.push(PROBLEM_MISSING_UNIFIED_DIFF);
   }
   if (questScope !== 'workflow' && categories.includes('workflow')) {
     problems.push('workflow changes must be recorded in a workflow/Quest tooling Quest');

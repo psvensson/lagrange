@@ -39,6 +39,8 @@ import {
   THEORY_SCOPE_FRONTIER,
   THEORY_SCOPE_SYSTEM,
 } from './constants.js';
+
+const DONE_WHEN_PROBE_SCOPE = 'doneWhen';
 import {isFrontierProbeEvent} from './probe-spec.js';
 
 const UNKNOWN_METRIC = '?';
@@ -310,6 +312,24 @@ const FRONTIER_HANDLERS = {
   [EVENT_EVIDENCE_INGESTED]: applyEvidenceIngested,
 };
 
+function applyQuestStateEvent(questState, event) {
+  switch (event.type) {
+  case EVENT_QUEST:
+    questState.status = event.status;
+    questState.evidence = event.evidence || null;
+    return true;
+  case EVENT_EVIDENCE_INGESTED:
+    if (event.probeScope === DONE_WHEN_PROBE_SCOPE &&
+        event.invalidSample !== true && event.done === false) {
+      questState.status = STATUS_OPEN;
+      questState.evidence = event.evidence || null;
+    }
+    return false;
+  default:
+    return false;
+  }
+}
+
 // Fold the append-only log into the current projected state. Pure given the log.
 export function projectState(quest, log) {
   const frontiers = new Map(
@@ -318,17 +338,7 @@ export function projectState(quest, log) {
   const questState = {status: STATUS_OPEN, evidence: null};
   const theories = emptyTheoryState();
   for (const event of log) {
-    if (event.type === EVENT_QUEST) {
-      questState.status = event.status;
-      questState.evidence = event.evidence || null;
-      continue;
-    }
-    if (event.type === EVENT_EVIDENCE_INGESTED &&
-      event.probeScope === 'doneWhen' &&
-      event.invalidSample !== true && event.done === false) {
-      questState.status = STATUS_OPEN;
-      questState.evidence = event.evidence || null;
-    }
+    if (applyQuestStateEvent(questState, event)) continue;
     const handler = FRONTIER_HANDLERS[event.type];
     if (handler) handler(event.frontier ? frontiers.get(event.frontier) : null, event);
     if (event.type === EVENT_THEORY_SYSTEM_DECLARED) {

@@ -38,6 +38,8 @@ import {
   inspectChangeArtifact,
 } from './change-artifact.js';
 
+const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
+
 function toRootRelative(root, absolute) {
   return path.relative(root, absolute).replaceAll(path.sep, '/');
 }
@@ -64,7 +66,8 @@ function questChangeArtifactScope(root, quest) {
   const referenced = new Set();
   const contentObjects = new Set();
   for (const name of fs.readdirSync(dir)) {
-    if (!name.endsWith('.diff') && !name.endsWith('.diff.json')) continue;
+    if (!name.endsWith('.diff') &&
+      !name.endsWith(CONTENT_DESCRIPTOR_EXTENSION)) continue;
     const artifactPath = toRootRelative(root, path.join(dir, name));
     const inspection = inspectChangeArtifact(root, quest, `diff:${artifactPath}`);
     if (!inspection.valid) continue;

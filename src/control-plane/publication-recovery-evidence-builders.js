@@ -6,7 +6,6 @@ import {
   './publication-recovery-gate.js';
 import {
   isRecord,
-  normalizeDistinctStringArray,
   normalizeNonNegativeInteger,
   normalizeOptionalString,
   normalizeBoolean,
@@ -16,6 +15,8 @@ import {
   // Constants
   PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
 } from './publication-recovery-evidence-normalizers.js';
+import {normalizeDistinctStringArray} from
+  './publication-recovery-evidence-values.js';
 import {
   buildCanonicalPublicationConvergence,
 } from './publication-recovery-convergence-builder.js';

@@ -16,6 +16,43 @@ const RAW_MARKER = /(?:observation|evidence|normaliz|context|values|bootstrap|er
 const OWNER_DECISION_MARKER = /(?:snapshot-actuation|state-machine|gate|planning|completion|assessment|intent|coordination|decision(?!-snapshot)|reentry|superseded|priority-spread|publication-boundary)/u;
 const SNAPSHOT_MARKER = /(?:snapshot|state-machine|contract|constants|helpers|row-index)/u;
 const AUTHORITY_EXPORT = /(?:snapshot|evidence|context|contract|state|outcome|build|normaliz|reduce|rebuild|resolve|assess|decide)/iu;
+const SOURCE_ROOT = 'src';
+const PATH_SEPARATOR = '/';
+const EXPORT_SEPARATOR = ',';
+const DEFAULT_EXPORT_NAME = 'default';
+const SLUG_CAMEL_REPLACEMENT = '$1-$2';
+const SLUG_SEPARATOR = '-';
+const ESCAPE_CHARACTER = '\\';
+const SINGLE_QUOTE = '\'';
+const DOUBLE_QUOTE = '"';
+const TEMPLATE_QUOTE = '`';
+const OPEN_BRACE = '{';
+const CLOSE_BRACE = '}';
+const NORMALIZED_SPACE = ' ';
+const SIMILARITY_PRECISION = 3;
+const CANDIDATE_SIMILARITY_THRESHOLD = 0.7;
+const MODULE_KEY_SEPARATOR = '\0';
+const HASH_ENCODING_HEX = 'hex';
+const CRUISE_SOURCE = 'dependency-cruiser';
+const PROBLEM_MODULE_ABSENT = 'module absent from parsed graph';
+const PROBLEM_UNRESOLVED_IMPORT = 'unresolved import';
+const INVENTORY_SCHEMA_VERSION = 'priority-recovery-owner-inventory-v1';
+const CANDIDATE_SIGNAL = 'same locally-declared exported authority name';
+const CANDIDATE_SIMILARITY =
+  'Jaccard similarity over normalized five-character grams';
+const CANDIDATE_DISPOSITION =
+  'proposal requiring independent architecture and proof approval';
+const LAYER = Object.freeze({
+  RAW: 'raw_observation',
+  SNAPSHOT: 'canonical_snapshot_reducer',
+  DECISION: 'owner_decision',
+  PRESENTATION: 'consumer_presentation',
+});
+const RATIONALE = Object.freeze({
+  RAW: 'observation/evidence surface',
+  SNAPSHOT: 'snapshot/reducer contract surface',
+  DECISION: 'owner policy or actuation surface',
+});
 const LAYER_ORDER = Object.freeze({
   raw_observation: 0,
   canonical_snapshot_reducer: 1,
@@ -30,32 +67,33 @@ function sourceFiles(root) {
       const absolute = path.join(dir, entry.name);
       if (entry.isDirectory()) visit(absolute);
       if (entry.isFile() && entry.name.endsWith('.js')) {
-        const relative = path.relative(root, absolute).replaceAll(path.sep, '/');
+        const relative = path.relative(root, absolute).replaceAll(
+          path.sep, PATH_SEPARATOR);
         if (TARGET_NAME.test(relative)) files.push(relative);
       }
     }
   };
-  visit(path.join(root, 'src'));
+  visit(path.join(root, SOURCE_ROOT));
   return files.sort();
 }
 
 function classifyModule(file) {
-  const parts = file.split('/');
+  const parts = file.split(PATH_SEPARATOR);
   const owner = parts[1];
   const basename = path.basename(file, '.js');
   if (PRESENTATION_OWNERS.has(owner)) {
-    return {owner, layer: 'consumer_presentation', rationale: `consumer owner ${owner}`};
+    return {owner, layer: LAYER.PRESENTATION, rationale: `consumer owner ${owner}`};
   }
   if (RAW_MARKER.test(basename)) {
-    return {owner, layer: 'raw_observation', rationale: 'observation/evidence surface'};
+    return {owner, layer: LAYER.RAW, rationale: RATIONALE.RAW};
   }
   if (OWNER_DECISION_MARKER.test(basename)) {
-    return {owner, layer: 'owner_decision', rationale: 'owner policy or actuation surface'};
+    return {owner, layer: LAYER.DECISION, rationale: RATIONALE.DECISION};
   }
   if (SNAPSHOT_MARKER.test(basename)) {
-    return {owner, layer: 'canonical_snapshot_reducer', rationale: 'snapshot/reducer contract surface'};
+    return {owner, layer: LAYER.SNAPSHOT, rationale: RATIONALE.SNAPSHOT};
   }
-  return {owner, layer: 'owner_decision', rationale: 'owner policy or actuation surface'};
+  return {owner, layer: LAYER.DECISION, rationale: RATIONALE.DECISION};
 }
 
 function exportedNames(source) {
@@ -71,7 +109,7 @@ function exportedNames(source) {
   }
   const blocks = /\bexport\s*\{([^}]+)\}(\s+from\s+['"][^'"]+['"])?/gu;
   for (const match of source.matchAll(blocks)) {
-    for (const item of match[1].split(',')) {
+    for (const item of match[1].split(EXPORT_SEPARATOR)) {
       const aliases = item.trim().split(/\s+as\s+/u);
       const sourceName = aliases[0]?.trim();
       const normalized = aliases.at(-1)?.trim();
@@ -82,8 +120,8 @@ function exportedNames(source) {
     }
   }
   if (/\bexport\s+default\b/u.test(source)) {
-    names.add('default');
-    localNames.add('default');
+    names.add(DEFAULT_EXPORT_NAME);
+    localNames.add(DEFAULT_EXPORT_NAME);
   }
   for (const match of source.matchAll(/\bexport\s*\*\s*from\s*['"]([^'"]+)['"]/gu)) {
     names.add(`*:${match[1]}`);
@@ -135,8 +173,8 @@ function stronglyConnectedComponents(nodes, edges) {
 }
 
 function slug(value) {
-  return value.replace(/([a-z])([A-Z])/gu, '$1-$2').toLowerCase()
-    .replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '');
+  return value.replace(/([a-z])([A-Z])/gu, SLUG_CAMEL_REPLACEMENT).toLowerCase()
+    .replace(/[^a-z0-9]+/gu, SLUG_SEPARATOR).replace(/^-|-$/gu, '');
 }
 
 function functionImplementation(source, name) {
@@ -152,18 +190,21 @@ function functionImplementation(source, name) {
     const character = source[index];
     if (quote) {
       if (escaped) escaped = false;
-      else if (character === '\\') escaped = true;
+      else if (character === ESCAPE_CHARACTER) escaped = true;
       else if (character === quote) quote = null;
       continue;
     }
-    if (character === '\'' || character === '"' || character === '`') {
+    if (character === SINGLE_QUOTE || character === DOUBLE_QUOTE ||
+        character === TEMPLATE_QUOTE) {
       quote = character;
       continue;
     }
-    if (character === '{') depth += 1;
-    if (character === '}') {
+    if (character === OPEN_BRACE) depth += 1;
+    if (character === CLOSE_BRACE) {
       depth -= 1;
-      if (depth === 0) return source.slice(start, index + 1).replace(/\s+/gu, ' ');
+      if (depth === 0) {
+        return source.slice(start, index + 1).replace(/\s+/gu, NORMALIZED_SPACE);
+      }
     }
   }
   return null;
@@ -182,7 +223,7 @@ function implementationSimilarity(left, right) {
   const rightGrams = grams(right);
   const shared = [...leftGrams].filter((value) => rightGrams.has(value)).length;
   return Number((shared / Math.max(1, leftGrams.size + rightGrams.size - shared))
-    .toFixed(3));
+    .toFixed(SIMILARITY_PRECISION));
 }
 
 function duplicateAuthorities(modules, root) {
@@ -236,14 +277,14 @@ function candidatesFor(duplicates, classifications) {
   const grouped = new Map();
   for (const duplicate of duplicates) {
     for (const pair of duplicate.implementationPairs.filter((item) =>
-      item.similarity >= 0.7)) {
-      const key = pair.modules.join('\0');
+      item.similarity >= CANDIDATE_SIMILARITY_THRESHOLD)) {
+      const key = pair.modules.join(MODULE_KEY_SEPARATOR);
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key).push({name: duplicate.exportName, similarity: pair.similarity});
     }
   }
   const candidates = [...grouped.entries()].map(([key, authoritySignals]) => {
-    const modules = key.split('\0');
+    const modules = key.split(MODULE_KEY_SEPARATOR);
     const owners = [...new Set(modules.map((file) =>
       classifications.get(file).owner))].sort();
     const authorities = authoritySignals.map((item) => item.name).sort();
@@ -291,21 +332,24 @@ export async function buildInventory(root = ROOT) {
   const unparsedImportEdges = [];
   if ((cruiseResult.output.summary?.error || 0) > 0) {
     unparsedImportEdges.push({
-      from: 'dependency-cruiser',
+      from: CRUISE_SOURCE,
       problem: `${cruiseResult.output.summary.error} parser error(s)`,
     });
   }
   for (const module of modules) {
     const parsed = cruised.get(module.path);
     if (!parsed) {
-      unparsedImportEdges.push({from: module.path, problem: 'module absent from parsed graph'});
+      unparsedImportEdges.push({
+        from: module.path,
+        problem: PROBLEM_MODULE_ABSENT,
+      });
       continue;
     }
     for (const dependency of parsed.dependencies) {
       const resolved = dependency.resolved?.replaceAll(path.sep, '/') || null;
       if (dependency.couldNotResolve) {
         unparsedImportEdges.push({from: module.path, specifier: dependency.module,
-          problem: 'unresolved import'});
+          problem: PROBLEM_UNRESOLVED_IMPORT});
       }
       const target = classifications.get(resolved);
       edges.push({
@@ -329,17 +373,21 @@ export async function buildInventory(root = ROOT) {
   const migrationCandidates = candidatesFor(duplicates, classifications);
   const sourceHash = crypto.createHash('sha256');
   for (const file of targets) {
-    sourceHash.update(file).update('\0').update(fs.readFileSync(path.join(root, file)));
+    sourceHash.update(file).update(MODULE_KEY_SEPARATOR)
+      .update(fs.readFileSync(path.join(root, file)));
   }
   return {
-    schemaVersion: 'priority-recovery-owner-inventory-v1',
-    generatedFrom: {root: 'src', sourceSha256: sourceHash.digest('hex')},
+    schemaVersion: INVENTORY_SCHEMA_VERSION,
+    generatedFrom: {
+      root: SOURCE_ROOT,
+      sourceSha256: sourceHash.digest(HASH_ENCODING_HEX),
+    },
     layerDirection: Object.keys(LAYER_ORDER),
     candidateSelection: {
-      signal: 'same locally-declared exported authority name',
-      similarity: 'Jaccard similarity over normalized five-character grams',
-      threshold: 0.7,
-      disposition: 'proposal requiring independent architecture and proof approval',
+      signal: CANDIDATE_SIGNAL,
+      similarity: CANDIDATE_SIMILARITY,
+      threshold: CANDIDATE_SIMILARITY_THRESHOLD,
+      disposition: CANDIDATE_DISPOSITION,
     },
     metrics: {
       moduleCount: modules.length,

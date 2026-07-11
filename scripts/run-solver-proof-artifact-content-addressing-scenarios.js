@@ -15,6 +15,8 @@ const GUARD_TESTS = Object.freeze([
 ]);
 const REPORT_DIR = 'test-output/reports';
 const TEST_TIMEOUT_MS = 300000;
+const VERDICT_PASS = 'PASS';
+const VERDICT_FAIL = 'FAIL';
 
 const guards = GUARD_TESTS.map((file) => ({
   file,
@@ -59,7 +61,7 @@ const stamp = timestamp.replace(/[:.]/gu, '-');
 const reportPath = path.join(REPORT_DIR, `${SCENARIO}-${stamp}.report.json`);
 fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 process.stdout.write(
-  `${SCENARIO}: ${passed ? 'PASS' : 'FAIL'} — ` +
+  `${SCENARIO}: ${passed ? VERDICT_PASS : VERDICT_FAIL} — ` +
   `${passedChecks}/${total} checks green\nreport: ${reportPath}\n`,
 );
 process.exitCode = passed ? 0 : 1;

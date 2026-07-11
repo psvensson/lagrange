@@ -13,7 +13,6 @@ import {
   resolvePublicationRecoveryConvergenceAcknowledgedNodeListInput,
   hasAuthoritativeEmptyPendingAckGate,
   hasPublicationRecoveryPressureDeferredEvidence,
-  normalizeDistinctStringArray,
   normalizePublicationEpoch,
   normalizeMaximumNonNegativeInteger,
   normalizePublicationRecoveryAckEvidence,
@@ -49,6 +48,8 @@ import {
   PUBLICATION_RECOVERY_PUBLICATION_STATUS,
   PUBLICATION_RECOVERY_PROTOCOL_STATE,
 } from './publication-recovery-evidence-normalizers.js';
+import {normalizeDistinctStringArray} from
+  './publication-recovery-evidence-values.js';
 
 function resolveCanonicalPublicationPrioritySpreadPending({
   publicationConvergenceGate = null,

@@ -10,25 +10,38 @@ const SCENARIO = 'solver-proof-artifact-census';
 const REPORT_DIR = 'test-output/reports';
 const GUARD_TEST = 'test/solve/proof-artifact-census.test.js';
 const TEST_TIMEOUT_MS = 300000;
+const REPORT_PRODUCER = 'solver-proof-artifact-census';
+const REPORT_FIDELITY = 'deterministic-guard';
+const VERDICT_PASS = 'PASS';
+const VERDICT_FAIL = 'FAIL';
+const PROBLEM = Object.freeze({
+  UNRESOLVED: 'unresolved-change-refs',
+  UNREADABLE: 'unreadable-artifacts',
+  LOG_PARSE: 'log-parse-errors',
+  FILESYSTEM_BYTES: 'filesystem-byte-mismatch',
+  UNCLASSIFIED: 'unclassified-artifacts',
+  THRESHOLD_MISSING: 'migration-threshold-not-selected',
+  THRESHOLD_NO_DUPLICATE: 'migration-threshold-has-no-duplicate-group',
+});
 
 function censusProblems(census) {
   const problems = [];
   if (census.summary.unresolvedReferenceOccurrences !== 0) {
-    problems.push('unresolved-change-refs');
+    problems.push(PROBLEM.UNRESOLVED);
   }
   if (census.summary.readableArtifactCount !== census.summary.artifactCount) {
-    problems.push('unreadable-artifacts');
+    problems.push(PROBLEM.UNREADABLE);
   }
-  if (census.summary.logParseErrors !== 0) problems.push('log-parse-errors');
-  if (!census.summary.bytesReconciled) problems.push('filesystem-byte-mismatch');
+  if (census.summary.logParseErrors !== 0) problems.push(PROBLEM.LOG_PARSE);
+  if (!census.summary.bytesReconciled) problems.push(PROBLEM.FILESYSTEM_BYTES);
   if (census.artifacts.some((artifact) => !artifact.encoding)) {
-    problems.push('unclassified-artifacts');
+    problems.push(PROBLEM.UNCLASSIFIED);
   }
   if (!Number.isInteger(census.migrationPolicy.inlineThresholdBytes)) {
-    problems.push('migration-threshold-not-selected');
+    problems.push(PROBLEM.THRESHOLD_MISSING);
   }
   if (census.migrationPolicy.eligibleDuplicateGroups === 0) {
-    problems.push('migration-threshold-has-no-duplicate-group');
+    problems.push(PROBLEM.THRESHOLD_NO_DUPLICATE);
   }
   return problems;
 }
@@ -41,15 +54,15 @@ function buildReport(timestamp, census, guard, problems) {
   return {
     timestamp,
     scenario: SCENARIO,
-    producer: 'solver-proof-artifact-census',
-    fidelity: 'deterministic-guard',
+    producer: REPORT_PRODUCER,
+    fidelity: REPORT_FIDELITY,
     summary: {total, passed: passedChecks, failed},
     optimizationSummary: {totalPriorityItems: failed},
     standardSummary: {
       scenarios: [{
         scenario: SCENARIO,
         passed,
-        current: {passed, verdict: passed ? 'PASS' : 'FAIL'},
+        current: {passed, verdict: passed ? VERDICT_PASS : VERDICT_FAIL},
         detail: {
           problems,
           guardTest: {
@@ -78,7 +91,7 @@ const stamp = timestamp.replace(/[:.]/gu, '-');
 const reportPath = path.join(REPORT_DIR, `${SCENARIO}-${stamp}.report.json`);
 fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 process.stdout.write(
-  `${SCENARIO}: ${report.summary.failed === 0 ? 'PASS' : 'FAIL'} — ` +
+  `${SCENARIO}: ${report.summary.failed === 0 ? VERDICT_PASS : VERDICT_FAIL} — ` +
   `${census.summary.artifactCount} artifacts, ` +
   `${census.summary.referenceOccurrences} references, ` +
   `${census.summary.storageBytes} bytes\nreport: ${reportPath}\n`,

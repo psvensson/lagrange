@@ -56,6 +56,8 @@ const UNKNOWN_GIT_ERROR = 'unknown error';
 const AUTO_DIFF_EMPTY_ERROR =
   'auto-diff: git diff is empty — nothing changed since the step began; ' +
   'make the change first (or pass an explicit --changeRef diff:<path>)';
+const SCOPE_PRESSURE_BLOCKED_PREFIX =
+  'scope-pressure precommit blocked: split into bounded Quest declarations ';
 
 // Solver-owned GENERATED bookkeeping the step/loop machinery itself writes
 // between step begin and commit: the pending file (solve/state, stepBegin),
@@ -296,7 +298,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   );
   if (scopeAdmission.terminal) {
     throw new Error(
-      'scope-pressure precommit blocked: split into bounded Quest declarations ' +
+      SCOPE_PRESSURE_BLOCKED_PREFIX +
       `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
       `bytes=${scopeAdmission.changeBytes})`,
     );

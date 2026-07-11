@@ -13,10 +13,48 @@ const HISTORICAL_GZIP_SUFFIX = '.gz';
 const OBJECT_ROOT = 'solve/artifacts/sha256';
 const OBJECT_SUFFIX = '.diff.gz';
 const CHANGE_REF_PREFIX = 'diff:';
-export const CONTENT_ADDRESS_THRESHOLD_BYTES = 32768;
+const DEFAULT_CONTENT_ADDRESS_THRESHOLD_BYTES = 32768;
+const NORMALIZED_PATH_SEPARATOR = '/';
+const PARENT_PATH_PREFIX = '..';
+const TEXT_ENCODING = 'utf8';
+const PROBLEM_SEPARATOR = '; ';
+const ARTIFACT_KIND_INLINE = 'inline';
+const ARTIFACT_KIND_HISTORICAL_GZIP = 'historical-gzip';
+const ARTIFACT_KIND_CONTENT_ADDRESSED = 'content-addressed';
+const PROBLEM_UNSUPPORTED_DESCRIPTOR_SCHEMA_VERSION =
+  'unsupported descriptor schemaVersion';
+const PROBLEM_INVALID_DESCRIPTOR_KIND = 'invalid descriptor kind';
+const PROBLEM_INVALID_DESCRIPTOR_HASH_ALGORITHM =
+  'invalid descriptor hash algorithm';
+const PROBLEM_INVALID_DESCRIPTOR_PAYLOAD_HASH =
+  'invalid descriptor payload SHA-256';
+const PROBLEM_INVALID_DESCRIPTOR_PAYLOAD_BYTES =
+  'invalid descriptor payload byte count';
+const PROBLEM_INVALID_DESCRIPTOR_CONTENT_ENCODING =
+  'invalid descriptor content encoding';
+const PROBLEM_NONCANONICAL_DESCRIPTOR_OBJECT_PATH =
+  'descriptor object path is not canonical for payload hash';
+const PROBLEM_INVALID_DESCRIPTOR_OBJECT_HASH =
+  'invalid descriptor object storage SHA-256';
+const PROBLEM_NONCANONICAL_DESCRIPTOR_BYTES =
+  'descriptor bytes are not canonical';
+const PROBLEM_OBJECT_STORAGE_HASH_MISMATCH =
+  'content object storage SHA-256 does not match descriptor';
+const PROBLEM_PAYLOAD_BYTE_COUNT_MISMATCH =
+  'content object payload byte count does not match descriptor';
+const PROBLEM_PAYLOAD_HASH_MISMATCH =
+  'content object payload SHA-256 does not match descriptor';
+const PROBLEM_INVALID_CHANGE_REF =
+  'changeRef must use diff:<workspace-path>';
+const WRITTEN_VERIFICATION_FAILURE_PREFIX =
+  'written content-addressed artifact failed verification: ';
+const EXISTING_MIGRATION_VERIFICATION_FAILURE_PREFIX =
+  'existing migration descriptor failed verification: ';
+export const CONTENT_ADDRESS_THRESHOLD_BYTES =
+  DEFAULT_CONTENT_ADDRESS_THRESHOLD_BYTES;
 
 function normalizePath(value) {
-  return String(value).split(path.sep).join('/');
+  return String(value).split(path.sep).join(NORMALIZED_PATH_SEPARATOR);
 }
 
 function hash(content) {
@@ -26,7 +64,8 @@ function hash(content) {
 function workspacePath(root, relative) {
   const absolute = path.resolve(root, relative);
   const fromRoot = path.relative(root, absolute);
-  if (!fromRoot || fromRoot.startsWith('..') || path.isAbsolute(fromRoot)) {
+  if (!fromRoot || fromRoot.startsWith(PARENT_PATH_PREFIX) ||
+    path.isAbsolute(fromRoot)) {
     throw new Error(`artifact path escapes workspace: ${relative}`);
   }
   return absolute;
@@ -58,32 +97,32 @@ function canonicalDescriptorBytes(descriptor) {
 function validateDescriptor(root, descriptor) {
   const problems = [];
   if (descriptor?.schemaVersion !== DESCRIPTOR_SCHEMA_VERSION) {
-    problems.push('unsupported descriptor schemaVersion');
+    problems.push(PROBLEM_UNSUPPORTED_DESCRIPTOR_SCHEMA_VERSION);
   }
   if (descriptor?.kind !== DESCRIPTOR_KIND) {
-    problems.push('invalid descriptor kind');
+    problems.push(PROBLEM_INVALID_DESCRIPTOR_KIND);
   }
   if (descriptor?.hashAlgorithm !== HASH_ALGORITHM) {
-    problems.push('invalid descriptor hash algorithm');
+    problems.push(PROBLEM_INVALID_DESCRIPTOR_HASH_ALGORITHM);
   }
   if (!/^[0-9a-f]{64}$/u.test(String(descriptor?.payloadSha256 || ''))) {
-    problems.push('invalid descriptor payload SHA-256');
+    problems.push(PROBLEM_INVALID_DESCRIPTOR_PAYLOAD_HASH);
   }
   if (!Number.isInteger(descriptor?.payloadBytes) || descriptor.payloadBytes < 0) {
-    problems.push('invalid descriptor payload byte count');
+    problems.push(PROBLEM_INVALID_DESCRIPTOR_PAYLOAD_BYTES);
   }
   if (descriptor?.contentEncoding !== CONTENT_ENCODING) {
-    problems.push('invalid descriptor content encoding');
+    problems.push(PROBLEM_INVALID_DESCRIPTOR_CONTENT_ENCODING);
   }
   const expectedObject = /^[0-9a-f]{64}$/u.test(
     String(descriptor?.payloadSha256 || '')) ?
     objectRelativePath(descriptor.payloadSha256) : null;
   if (descriptor?.objectPath !== expectedObject) {
-    problems.push('descriptor object path is not canonical for payload hash');
+    problems.push(PROBLEM_NONCANONICAL_DESCRIPTOR_OBJECT_PATH);
   }
   if (!/^[0-9a-f]{64}$/u.test(
     String(descriptor?.objectStorageSha256 || ''))) {
-    problems.push('invalid descriptor object storage SHA-256');
+    problems.push(PROBLEM_INVALID_DESCRIPTOR_OBJECT_HASH);
   }
   if (typeof descriptor?.objectPath === 'string') {
     try {
@@ -99,7 +138,7 @@ function readDescriptor(root, descriptorPath) {
   const descriptorBytes = fs.readFileSync(descriptorPath);
   let descriptor;
   try {
-    descriptor = JSON.parse(descriptorBytes.toString('utf8'));
+    descriptor = JSON.parse(descriptorBytes.toString(TEXT_ENCODING));
   } catch (error) {
     return {
       valid: false,
@@ -109,7 +148,7 @@ function readDescriptor(root, descriptorPath) {
   }
   const problems = validateDescriptor(root, descriptor);
   if (!descriptorBytes.equals(canonicalDescriptorBytes(descriptor))) {
-    problems.push('descriptor bytes are not canonical');
+    problems.push(PROBLEM_NONCANONICAL_DESCRIPTOR_BYTES);
   }
   if (problems.length > 0) {
     return {valid: false, problems, descriptor, descriptorBytes};
@@ -126,7 +165,7 @@ function readDescriptor(root, descriptorPath) {
   }
   const objectBytes = fs.readFileSync(objectPath);
   if (hash(objectBytes) !== descriptor.objectStorageSha256) {
-    problems.push('content object storage SHA-256 does not match descriptor');
+    problems.push(PROBLEM_OBJECT_STORAGE_HASH_MISMATCH);
   }
   let payload;
   try {
@@ -142,10 +181,10 @@ function readDescriptor(root, descriptorPath) {
     };
   }
   if (payload.length !== descriptor.payloadBytes) {
-    problems.push('content object payload byte count does not match descriptor');
+    problems.push(PROBLEM_PAYLOAD_BYTE_COUNT_MISMATCH);
   }
   if (hash(payload) !== descriptor.payloadSha256) {
-    problems.push('content object payload SHA-256 does not match descriptor');
+    problems.push(PROBLEM_PAYLOAD_HASH_MISMATCH);
   }
   return {
     valid: problems.length === 0,
@@ -187,7 +226,7 @@ export function readChangeArtifact(root, changeRef) {
   if (!requestedPath || !artifactPath) {
     return {
       valid: false,
-      problems: ['changeRef must use diff:<workspace-path>'],
+      problems: [PROBLEM_INVALID_CHANGE_REF],
       requestedPath,
       artifactPath,
     };
@@ -219,7 +258,7 @@ export function readChangeArtifact(root, changeRef) {
       valid: true,
       problems: [],
       kind: artifactPath.endsWith(HISTORICAL_GZIP_SUFFIX) ?
-        'historical-gzip' : 'inline',
+        ARTIFACT_KIND_HISTORICAL_GZIP : ARTIFACT_KIND_INLINE,
       requestedPath,
       artifactPath,
       payload,
@@ -230,7 +269,7 @@ export function readChangeArtifact(root, changeRef) {
   const result = readDescriptor(root, artifactPath);
   return {
     ...result,
-    kind: 'content-addressed',
+    kind: ARTIFACT_KIND_CONTENT_ADDRESSED,
     requestedPath,
     artifactPath,
     payloadSha256: result.payload ? hash(result.payload) : null,
@@ -255,7 +294,7 @@ export function writeContentAddressedChangeArtifact(
     return {
       root,
       changeRef: `${CHANGE_REF_PREFIX}${normalizePath(relativeInlinePath)}`,
-      kind: 'inline',
+      kind: ARTIFACT_KIND_INLINE,
       artifactPath: inlinePath,
       objectCreated: false,
     };
@@ -276,13 +315,13 @@ export function writeContentAddressedChangeArtifact(
   const changeRef = `${CHANGE_REF_PREFIX}${relativeDescriptor}`;
   const verified = readChangeArtifact(root, changeRef);
   if (!verified.valid) {
-    throw new Error('written content-addressed artifact failed verification: ' +
-      verified.problems.join('; '));
+    throw new Error(WRITTEN_VERIFICATION_FAILURE_PREFIX +
+      verified.problems.join(PROBLEM_SEPARATOR));
   }
   return {
     root,
     changeRef,
-    kind: 'content-addressed',
+    kind: ARTIFACT_KIND_CONTENT_ADDRESSED,
     artifactPath: descriptorPath,
     objectPath,
     objectCreated,
@@ -302,7 +341,7 @@ function descriptorReferencesObject(root, directory, objectPath, excludedPath) {
     if (!entry.isFile() || !filePath.endsWith(DESCRIPTOR_SUFFIX) ||
       filePath === excludedPath) continue;
     try {
-      const descriptor = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      const descriptor = JSON.parse(fs.readFileSync(filePath, TEXT_ENCODING));
       if (workspacePath(root, descriptor.objectPath) ===
         objectPath) return true;
     } catch {
@@ -333,9 +372,10 @@ export function migrateInlineChangeArtifact(root, relativeInlinePath) {
     const descriptorPath = `${inlinePath}${DESCRIPTOR_SUFFIX}`;
     if (fs.existsSync(descriptorPath)) {
       const artifact = readChangeArtifact(root, `diff:${normalizePath(relativeInlinePath)}`);
-      if (!artifact.valid || artifact.kind !== 'content-addressed') {
-        throw new Error('existing migration descriptor failed verification: ' +
-          artifact.problems.join('; '));
+      if (!artifact.valid ||
+        artifact.kind !== ARTIFACT_KIND_CONTENT_ADDRESSED) {
+        throw new Error(EXISTING_MIGRATION_VERIFICATION_FAILURE_PREFIX +
+          artifact.problems.join(PROBLEM_SEPARATOR));
       }
       return {
         migrated: false,

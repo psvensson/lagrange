@@ -6,8 +6,27 @@ import {gunzipSync, gzipSync} from 'node:zlib';
 import {PROOF_ARTIFACT_CENSUS} from './proof-artifact-census-constants.js';
 import {readChangeArtifact} from './content-addressed-change-artifact.js';
 
+const NORMALIZED_PATH_SEPARATOR = '/';
+const CONTENT_DESCRIPTOR_SUFFIX = '.diff.json';
+const PROBLEM_SEPARATOR = '; ';
+const CHANGE_REF_FIELD = 'changeRef';
+const EVENT_LOG_SUFFIX = '.ndjson';
+const TEXT_ENCODING = 'utf8';
+const LINE_SEPARATOR = '\n';
+const PARENT_PATH_PREFIX = '..';
+const STATUS_HISTORICAL_UNSUPPORTED = 'historical-unsupported-reference';
+const REASON_UNSUPPORTED_CHANGE_REF = 'unsupported-change-ref';
+const STATUS_HISTORICAL_INVALID_SOURCE =
+  'historical-invalid-source-reference';
+const REASON_OUTSIDE_CHANGES_DIRECTORY = 'outside-changes-directory';
+const STATUS_PAYLOAD_MISSING = 'payload-missing';
+const STATUS_PAYLOAD_UNCLASSIFIED = 'payload-unclassified';
+const STATUS_READABLE = 'readable';
+const STATUS_PAYLOAD_UNREADABLE = 'payload-unreadable';
+const WORKSPACE_ROOT_LABEL = '.';
+
 function normalizePath(value) {
-  return String(value).split(path.sep).join('/');
+  return String(value).split(path.sep).join(NORMALIZED_PATH_SEPARATOR);
 }
 
 function relativePath(root, filePath) {
@@ -32,7 +51,7 @@ function walkFiles(directory) {
 }
 
 function artifactEncoding(filePath) {
-  if (filePath.endsWith('.diff.json')) {
+  if (filePath.endsWith(CONTENT_DESCRIPTOR_SUFFIX)) {
     return PROOF_ARTIFACT_CENSUS.ENCODING_CONTENT_DESCRIPTOR;
   }
   if (filePath.endsWith(PROOF_ARTIFACT_CENSUS.GZIP_DIFF_SUFFIX)) {
@@ -53,7 +72,7 @@ function readPayload(root, filePath, encoding) {
   } else if (encoding === PROOF_ARTIFACT_CENSUS.ENCODING_CONTENT_DESCRIPTOR) {
     const changeRef = `diff:${relativePath(root, filePath)}`;
     const artifact = readChangeArtifact(root, changeRef);
-    if (!artifact.valid) throw new Error(artifact.problems.join('; '));
+    if (!artifact.valid) throw new Error(artifact.problems.join(PROBLEM_SEPARATOR));
     payload = artifact.payload;
   } else {
     payload = stored;
@@ -116,7 +135,7 @@ function collectChangeRefs(value, pointer, references) {
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
     const childPointer = `${pointer}/${key}`;
-    if (key === 'changeRef' && typeof child === 'string') {
+    if (key === CHANGE_REF_FIELD && typeof child === 'string') {
       references.push({changeRef: child, pointer: childPointer});
     }
     collectChangeRefs(child, childPointer, references);
@@ -127,107 +146,125 @@ function readReferences(root) {
   const logDir = path.join(root, PROOF_ARTIFACT_CENSUS.LOG_DIR);
   const references = [];
   const parseErrors = [];
-  for (const logPath of walkFiles(logDir).filter((file) => file.endsWith('.ndjson'))) {
-    const questId = path.basename(logPath, '.ndjson');
-    fs.readFileSync(logPath, 'utf8').split('\n').forEach((line, index) => {
-      if (!line.trim()) return;
-      try {
-        const event = JSON.parse(line);
-        const eventReferences = [];
-        collectChangeRefs(event, '', eventReferences);
-        for (const reference of eventReferences) {
-          references.push({
-            questId,
+  for (const logPath of walkFiles(logDir)
+    .filter((file) => file.endsWith(EVENT_LOG_SUFFIX))) {
+    const questId = path.basename(logPath, EVENT_LOG_SUFFIX);
+    fs.readFileSync(logPath, TEXT_ENCODING)
+      .split(LINE_SEPARATOR).forEach((line, index) => {
+        if (!line.trim()) return;
+        try {
+          const event = JSON.parse(line);
+          const eventReferences = [];
+          collectChangeRefs(event, '', eventReferences);
+          for (const reference of eventReferences) {
+            references.push({
+              questId,
+              logPath: relativePath(root, logPath),
+              line: index + 1,
+              ...reference,
+            });
+          }
+        } catch (error) {
+          parseErrors.push({
             logPath: relativePath(root, logPath),
             line: index + 1,
-            ...reference,
+            error: error.message,
           });
         }
-      } catch (error) {
-        parseErrors.push({
-          logPath: relativePath(root, logPath),
-          line: index + 1,
-          error: error.message,
-        });
-      }
-    });
+      });
   }
   return {references, parseErrors};
 }
 
 function insideDirectory(filePath, directory) {
   const relative = path.relative(directory, filePath);
-  return relative.length > 0 && !relative.startsWith('..') &&
+  return relative.length > 0 && !relative.startsWith(PARENT_PATH_PREFIX) &&
     !path.isAbsolute(relative);
+}
+
+function referenceResolutionState(supported, insideChanges, resolvedPath, artifact) {
+  switch (true) {
+  case !supported:
+    return STATUS_HISTORICAL_UNSUPPORTED;
+  case !insideChanges:
+    return STATUS_HISTORICAL_INVALID_SOURCE;
+  case !resolvedPath:
+    return STATUS_PAYLOAD_MISSING;
+  case !artifact:
+    return STATUS_PAYLOAD_UNCLASSIFIED;
+  default:
+    return STATUS_READABLE;
+  }
 }
 
 function resolveReference(root, reference, artifactByPath) {
   const prefix = PROOF_ARTIFACT_CENSUS.CHANGE_REF_PREFIX;
   const referenceSha256 = hash(Buffer.from(reference.changeRef));
-  if (!reference.changeRef.startsWith(prefix)) {
-    return {
-      ...reference,
-      referenceSha256,
-      classified: true,
-      resolved: false,
-      readabilityStatus: 'historical-unsupported-reference',
-      reason: 'unsupported-change-ref',
-    };
-  }
   const rawPath = reference.changeRef.slice(prefix.length);
   const requestedPath = path.resolve(root, rawPath);
   const changesDir = path.resolve(root, PROOF_ARTIFACT_CENSUS.CHANGES_DIR);
-  if (!insideDirectory(requestedPath, changesDir)) {
-    return {
-      ...reference,
-      referenceSha256,
-      classified: true,
-      resolved: false,
-      readabilityStatus: 'historical-invalid-source-reference',
-      reason: 'outside-changes-directory',
-    };
-  }
+  const supported = reference.changeRef.startsWith(prefix);
+  const insideChanges = supported && insideDirectory(requestedPath, changesDir);
   const candidates = [
     requestedPath,
     `${requestedPath}.json`,
     `${requestedPath}.gz`,
   ];
-  const resolvedPath = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!resolvedPath) {
+  const resolvedPath = insideChanges ?
+    candidates.find((candidate) => fs.existsSync(candidate)) : null;
+  const normalized = resolvedPath ? relativePath(root, resolvedPath) : null;
+  const artifact = normalized ? artifactByPath.get(normalized) : null;
+  const state = referenceResolutionState(
+    supported,
+    insideChanges,
+    resolvedPath,
+    artifact,
+  );
+  switch (state) {
+  case STATUS_HISTORICAL_UNSUPPORTED:
+    return {
+      ...reference,
+      referenceSha256,
+      classified: true,
+      resolved: false,
+      readabilityStatus: state,
+      reason: REASON_UNSUPPORTED_CHANGE_REF,
+    };
+  case STATUS_HISTORICAL_INVALID_SOURCE:
+    return {
+      ...reference,
+      referenceSha256,
+      classified: true,
+      resolved: false,
+      readabilityStatus: state,
+      reason: REASON_OUTSIDE_CHANGES_DIRECTORY,
+    };
+  case STATUS_PAYLOAD_MISSING:
+  case STATUS_PAYLOAD_UNCLASSIFIED:
     return {
       ...reference,
       referenceSha256,
       classified: false,
       resolved: false,
-      readabilityStatus: 'payload-missing',
-      reason: 'payload-missing',
+      readabilityStatus: state,
+      reason: state,
     };
-  }
-  const normalized = relativePath(root, resolvedPath);
-  const artifact = artifactByPath.get(normalized);
-  if (!artifact) {
+  default:
     return {
       ...reference,
       referenceSha256,
-      classified: false,
-      resolved: false,
-      readabilityStatus: 'payload-unclassified',
-      reason: 'payload-unclassified',
+      classified: true,
+      resolved: artifact.readable,
+      readabilityStatus: artifact.readable ? STATUS_READABLE :
+        STATUS_PAYLOAD_UNREADABLE,
+      reason: artifact.readable ? null : STATUS_PAYLOAD_UNREADABLE,
+      resolvedPath: normalized,
+      historicalFallback: resolvedPath !== requestedPath,
+      encoding: artifact.encoding,
+      payloadSha256: artifact.payloadSha256,
+      payloadBytes: artifact.payloadBytes,
     };
   }
-  return {
-    ...reference,
-    referenceSha256,
-    classified: true,
-    resolved: artifact.readable,
-    readabilityStatus: artifact.readable ? 'readable' : 'payload-unreadable',
-    reason: artifact.readable ? null : 'payload-unreadable',
-    resolvedPath: normalized,
-    historicalFallback: resolvedPath !== requestedPath,
-    encoding: artifact.encoding,
-    payloadSha256: artifact.payloadSha256,
-    payloadBytes: artifact.payloadBytes,
-  };
 }
 
 function duplicateGroups(artifacts) {
@@ -353,7 +390,7 @@ export function buildProofArtifactCensus(root = process.cwd()) {
   const migrationPolicy = selectMigrationPolicy(groups, artifacts);
   return {
     schemaVersion: 1,
-    root: '.',
+    root: WORKSPACE_ROOT_LABEL,
     summary,
     migrationPolicy,
     duplicateGroups: groups,

@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "4e4927edf45959e2fedb5bc6c7f2f047c12672b94c1fac53ca4146c4d873233a"
+    "sourceSha256": "736b8588a7a8218f32de74cb12332ee254b3449f3d02b2de4bf332ae0308d8c9"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,8 +19,8 @@
   "metrics": {
     "moduleCount": 64,
     "publicExportCount": 738,
-    "importEdgeCount": 280,
-    "crossLayerEdgeCount": 89,
+    "importEdgeCount": 283,
+    "crossLayerEdgeCount": 91,
     "layerDirectionViolationCount": 43,
     "largestStronglyConnectedComponent": 1,
     "duplicateAuthoritySignalCount": 4,
@@ -3864,6 +3864,16 @@
       "conformsToLayerDirection": true
     },
     {
+      "from": "src/control-plane/publication-recovery-convergence-builder.js",
+      "specifier": "./publication-recovery-evidence-values.js",
+      "to": "src/control-plane/publication-recovery-evidence-values.js",
+      "targetModule": true,
+      "sourceLayer": "owner_decision",
+      "targetLayer": "raw_observation",
+      "crossLayer": true,
+      "conformsToLayerDirection": true
+    },
+    {
       "from": "src/control-plane/publication-recovery-convergence-gate-builder.js",
       "specifier": "./priority-recovery-snapshot-active-gate.js",
       "to": "src/control-plane/priority-recovery-snapshot-active-gate.js",
@@ -3877,6 +3887,16 @@
       "from": "src/control-plane/publication-recovery-convergence-gate-builder.js",
       "specifier": "./publication-recovery-evidence-normalizers.js",
       "to": "src/control-plane/publication-recovery-evidence-normalizers.js",
+      "targetModule": true,
+      "sourceLayer": "owner_decision",
+      "targetLayer": "raw_observation",
+      "crossLayer": true,
+      "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/control-plane/publication-recovery-convergence-gate-builder.js",
+      "specifier": "./publication-recovery-evidence-values.js",
+      "to": "src/control-plane/publication-recovery-evidence-values.js",
       "targetModule": true,
       "sourceLayer": "owner_decision",
       "targetLayer": "raw_observation",
@@ -3927,6 +3947,16 @@
       "from": "src/control-plane/publication-recovery-evidence-builders.js",
       "specifier": "./publication-recovery-evidence-normalizers.js",
       "to": "src/control-plane/publication-recovery-evidence-normalizers.js",
+      "targetModule": true,
+      "sourceLayer": "raw_observation",
+      "targetLayer": "raw_observation",
+      "crossLayer": false,
+      "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/control-plane/publication-recovery-evidence-builders.js",
+      "specifier": "./publication-recovery-evidence-values.js",
+      "to": "src/control-plane/publication-recovery-evidence-values.js",
       "targetModule": true,
       "sourceLayer": "raw_observation",
       "targetLayer": "raw_observation",

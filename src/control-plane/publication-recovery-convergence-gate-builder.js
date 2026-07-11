@@ -16,7 +16,6 @@ import {
   resolvePublicationRecoveryConvergenceAcknowledgedNodeListInput,
   hasAuthoritativeEmptyPendingAckGate,
   hasAuthoritativeEmptyMissingPublishedGate,
-  normalizeDistinctStringArray,
   normalizePublicationRecoveryAckEvidence,
   resolvePublicationRecoveryPendingAckNodeIds,
   resolveActiveGateSelectedMissingPublishedEvidence,
@@ -51,6 +50,8 @@ import {
   PUBLICATION_RECOVERY_PUBLICATION_STATUS,
   PUBLICATION_RECOVERY_PROTOCOL_STATE,
 } from './publication-recovery-evidence-normalizers.js';
+import {normalizeDistinctStringArray} from
+  './publication-recovery-evidence-values.js';
 
 function resolveCanonicalPriorityPartitionSummary(context) {
   if (context.rawPublicationConvergenceGate?.priorityPartitionSummary) {
