@@ -73,6 +73,9 @@ function createSqlRequest(fields) {
     budgets: Object.freeze({...DEFAULT_QUERY_BUDGET, ...fields.budgets}),
     hints: fields.hints ? Object.freeze({...fields.hints}) : null,
     dialect: fields.dialect ?? null,
+    ...(fields.timeoutBudget ? {timeoutBudget: fields.timeoutBudget} : {}),
+    ...(fields.cancellationToken ?
+      {cancellationToken: fields.cancellationToken} : {}),
   };
 
   return Object.freeze(request);

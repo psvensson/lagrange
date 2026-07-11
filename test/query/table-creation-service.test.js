@@ -92,7 +92,7 @@ test('TableCreationService - triggers split/merge evaluation after CREATE TABLE'
       },
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
 
     t.equal(result.success, true);
     t.equal(evaluationCalls, 1);
@@ -118,7 +118,7 @@ test('TableCreationService - continues when split/merge evaluation fails',
       },
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
     t.equal(result.success, true);
     t.equal(result.operation, 'CREATE_TABLE');
   });
@@ -314,7 +314,7 @@ test('TableCreationService - writes partition metadata with logical table_name',
       },
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
     t.equal(result.success, true);
 
     const partitionWrite = writes.find((entry) => entry.tableName === 'partitions');
@@ -366,7 +366,7 @@ test('TableCreationService - re-provisions initial partition on ' +
     },
   });
 
-  const result = await service.createTable({
+  const result = await service.executeCreateTableProvisioning({
     ...createCreateTableAst(),
     ifNotExists: true,
   });
@@ -407,7 +407,7 @@ test('TableCreationService - forwards timeout budget to fresh initial ' +
     },
   });
 
-  const result = await service.createTable(
+  const result = await service.executeCreateTableProvisioning(
     createCreateTableAst(),
     {timeoutBudget},
   );
@@ -461,7 +461,7 @@ test('TableCreationService - uses authoritative metadata reads to avoid ' +
     },
   });
 
-  const result = await service.createTable({
+  const result = await service.executeCreateTableProvisioning({
     ...createCreateTableAst(),
     ifNotExists: true,
   });
@@ -505,7 +505,7 @@ test('TableCreationService - forwards timeout budget through CREATE TABLE IF ' +
     },
   });
 
-  const result = await service.createTable({
+  const result = await service.executeCreateTableProvisioning({
     ...createCreateTableAst(),
     ifNotExists: true,
   }, {
@@ -546,7 +546,7 @@ test('TableCreationService - rejects duplicate CREATE TABLE when ' +
   });
 
   await t.rejects(
-    service.createTable(createCreateTableAst()),
+    service.executeCreateTableProvisioning(createCreateTableAst()),
     /already exists/i,
     'authoritative duplicate detection should preserve CREATE TABLE semantics',
   );
@@ -571,7 +571,7 @@ test('TableCreationService - provisions initial partition when callback is confi
       },
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
     t.equal(result.success, true);
     t.ok(provisionContext, 'partition provisioner should receive context');
     t.equal(provisionContext?.tableName, 'users', 'provisioner gets table name');
@@ -614,7 +614,7 @@ test('TableCreationService - provisions CREATE TABLE partitions with a ' +
     },
   });
 
-  const result = await service.createTable(createCreateTableAst());
+  const result = await service.executeCreateTableProvisioning(createCreateTableAst());
 
   t.equal(result.success, true);
   t.equal(
@@ -643,7 +643,7 @@ test('TableCreationService - surfaces initial partition provisioning failures',
     });
 
     await t.rejects(
-      service.createTable(createCreateTableAst()),
+      service.executeCreateTableProvisioning(createCreateTableAst()),
       /provision failed/,
       'create table should fail when partition provisioning fails',
     );
@@ -681,7 +681,7 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
     },
   });
 
-  const result = await service.createTable({
+  const result = await service.executeCreateTableProvisioning({
     ...createCreateTableAst(),
     ifNotExists: true,
   });
@@ -729,7 +729,7 @@ test('TableCreationService - CREATE TABLE opts metadata writes into pending visi
       partitionProvisioner: async () => {},
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
 
     t.equal(submittedMutations.length, 2);
     t.equal(
@@ -788,7 +788,7 @@ test('TableCreationService - CREATE TABLE preserves authoritative confirmation p
       partitionProvisioner: async () => {},
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
 
     t.equal(submittedMutations.length, 2);
     t.equal(
@@ -833,7 +833,7 @@ async (t) => {
     partitionProvisioner: async () => {},
   });
 
-  const result = await service.createTable(createCreateTableAst());
+  const result = await service.executeCreateTableProvisioning(createCreateTableAst());
 
   t.equal(
     result.visibilityState,
@@ -875,7 +875,7 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
       },
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
 
     t.equal(
       result.completionState,
@@ -925,7 +925,7 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
       partitionProvisioner: async () => {},
     });
 
-    const result = await service.createTable(createCreateTableAst());
+    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
 
     t.equal(
       result.completionState,

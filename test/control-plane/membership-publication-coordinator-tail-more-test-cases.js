@@ -226,6 +226,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const priorityTableIds = [
         'control_plane_publications',
         'replica_operations',
+        'schema_operations',
         'sql_transaction_participants',
         'sql_transactions',
         'sql_write_operations',
@@ -337,6 +338,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const priorityTableIds = [
         'control_plane_publications',
         'replica_operations',
+        'schema_operations',
         'sql_transaction_participants',
         'sql_transactions',
         'sql_write_operations',
@@ -457,6 +459,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const priorityTableIds = [
         'control_plane_publications',
         'replica_operations',
+        'schema_operations',
         'sql_transaction_participants',
         'sql_transactions',
         'sql_write_operations',
@@ -578,6 +581,7 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       const priorityTableIds = [
         'control_plane_publications',
         'replica_operations',
+        'schema_operations',
         'sql_transaction_participants',
         'sql_transactions',
         'sql_write_operations',

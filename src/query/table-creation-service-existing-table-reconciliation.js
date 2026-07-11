@@ -68,6 +68,7 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
         tableName,
         existingTableRecord,
       );
+      await options.assertProvisioningOwnership?.();
       const partitionMutation = await controlPlaneGateway.submitMutation(
         {
           operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
@@ -93,6 +94,7 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
     const replicaCount = Number(
       existingPartition.replica_count ?? existingPartition.replicaCount,
     );
+    await options.assertProvisioningOwnership?.();
     const provisioningSummary = await this.provisionInitialPartition({
       tableId,
       tableName,
@@ -105,6 +107,10 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
           this.defaultReplicaCount,
       timeoutBudget: options?.timeoutBudget,
       cancellationToken: options?.cancellationToken || null,
+      schemaJobId: options.schemaJobId || null,
+      schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
+      assertProvisioningOwnership:
+        options.assertProvisioningOwnership || null,
     });
     const completion = resolveTableCreationCompletion({
       visibilityState,
@@ -112,6 +118,8 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       metadataContractOutcome,
     });
     return {
+      tableId,
+      partitionId,
       partitionMetadataCreated,
       visibilityState,
       completionState: completion.completionState,

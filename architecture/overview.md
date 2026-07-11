@@ -193,7 +193,12 @@ The distributed SQL layer is now single-path and owner-specific:
    durable owner-key workflow state, participant persistence,
    recovery-from-rows, single-flight execution, and monotonic step
    transitions. It owns workflow mechanics only, not transaction or
-   partition semantics. All topology-changing operations
+   partition semantics. Owners that require cross-process exclusion provide
+   storage-backed claim and transition compare-and-swap ports plus their
+   terminal-state policy; in-memory single-flight is only a contention
+   optimization. The coordinator applies accepted storage state before
+   mutating memory, rejects live-lease takeover and stale fences, and rebuilds
+   transition idempotency from recovered history. All topology-changing operations
    (split/rebalance/replace) route step transitions through
    `transitionStep()`, which persists `previousStep`, `nextStep`,
    `reason`, `timestamp`, and `ownerKey` on every transition.
@@ -211,7 +216,17 @@ The distributed SQL layer is now single-path and owner-specific:
    transitions that require atomic multi-row commits. Idempotency is enforced
    by operation id and step id via
    `DurableWorkflowCoordinator.isTransitionIdempotent()`.
-7. `ManagedSplitWorkflow` is the only owner for managed partition-split
+7. `SchemaProvisioningJobOwner` extends `TableCreationService` with a durable
+   long-running-operation boundary. One `schema_operations` row atomically
+   records the cluster-global normalized CREATE intent and parent workflow;
+   deterministic table, partition, replica-operation, and replica identities
+   make replay level-triggered and idempotent. READY activation resumes
+   nonterminal rows. CREATE has no legacy fallback, exact-fence transitions
+   require a live durable lease, and pre-cutover metadata must match the
+   deterministic identity and schema before replay attaches. Admin and
+   PostgreSQL project the same typed job
+   outcome (`55P03` with structured retry detail on protocol deadline).
+8. `ManagedSplitWorkflow` is the only owner for managed partition-split
    lifecycle from admission through cleanup. It composes
    `DurableWorkflowCoordinator`, persists split workflow identity in
    `tables.partition_transition_metadata`, and owns all durable phase

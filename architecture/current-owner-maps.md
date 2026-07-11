@@ -191,11 +191,22 @@ The current shared building blocks for control-plane work are:
    - owned by `AdminWebSocketAPI.executeSqlRequestWithTimeout(...)`
    - derives one inner SQL completion budget with bounded margin before the
      outer admin request deadline
-8. `TableCreationService` bootstrap provisioning budget
+8. `TableCreationService` / `SchemaProvisioningJobOwner`
    - owned by `SQLQueryEngine.executeCreateTable(...)` and
-     `TableCreationService.createTable(...)`
-   - carries the caller-owned timeout budget through fresh `CREATE TABLE`
-     bootstrap and `IF NOT EXISTS` reconciliation provisioning
+     `TableCreationService.createTable(...)`, with durable state in
+     `src/query/schema-provisioning-job-owner.js` and its repository adapter
+   - records one cluster-global versioned semantic CREATE intent and stable
+     job/table/partition identity in an atomic `schema_operations` outbox row
+     before metadata or replica side effects
+   - admits no legacy or owner-unavailable CREATE fallback; missing durable
+     persistence fails closed before table metadata is written
+   - composes exact-fence, live-lease storage CAS, replays deterministic
+     metadata, and delegates deterministic children to the replica-operation
+     owner; the caller timeout only bounds waiting for this durable job
+   - stores scalar lifecycle/claim/result fields once; `workflow_record` holds
+     only participant/history details without scalar duplicates
+   - projects one `OwnerContractOutcome` envelope with `jobId`, reason codes,
+     retry delay, and stable terminal result/error through SQL/Admin/PG wire
 9. `CanonicalLeaderRoutingGap`
    - owned by `src/query/canonical-leader-routing.js`
    - derives one canonical leader-identity gap state from the routing

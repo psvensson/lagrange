@@ -67,6 +67,8 @@ test('AdminWebSocketAPI - sendError preserves structured deferred query ' +
       nextAction: 'retry',
       reasonCode: 'control_plane_write_unhealthy',
       reasonCodes: ['control_plane_write_unhealthy'],
+      jobId: 'schema-job-users',
+      provisioningDeadlineExpired: true,
       failedDimensions: ['controlPlaneWritable'],
       runtimeAuthority: {state: 'establishing'},
       details: {cause: 'Query timeout after 15000ms'},
@@ -83,6 +85,8 @@ test('AdminWebSocketAPI - sendError preserves structured deferred query ' +
   t.equal(messages[0].nextAction, 'retry');
   t.equal(messages[0].reasonCode, 'control_plane_write_unhealthy');
   t.same(messages[0].reasonCodes, ['control_plane_write_unhealthy']);
+  t.equal(messages[0].jobId, 'schema-job-users');
+  t.equal(messages[0].provisioningDeadlineExpired, true);
   t.same(messages[0].failedDimensions, ['controlPlaneWritable']);
   t.equal(messages[0].runtimeAuthority?.state, 'establishing');
   t.equal(messages[0].details?.cause, 'Query timeout after 15000ms');

@@ -104,6 +104,7 @@ const PG_ERROR_CODE = Object.freeze({
   INVALID_AUTHORIZATION: '28000',
   CONNECTION_FAILURE: '08006',
   IN_FAILED_TRANSACTION: '25P02',
+  LOCK_NOT_AVAILABLE: '55P03',
 });
 
 // --- Describe target types ---

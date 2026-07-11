@@ -677,6 +677,7 @@ test('deriveMembershipPublicationCandidate refreshes stale priority spread metad
     const priorityTableIds = [
       'control_plane_publications',
       'replica_operations',
+      'schema_operations',
       'sql_transaction_participants',
       'sql_transactions',
       'sql_write_operations',

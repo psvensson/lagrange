@@ -6,6 +6,8 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {buildReplicaInventorySnapshot} from
+  '../../src/rebalancer/replica-inventory.js';
 
 // ---------------------------------------------------------------------------
 // Deterministic self-stabilization Φ-prover for the priority-recovery
@@ -116,6 +118,8 @@ function makeRebalancer(world) {
   const rb = Object.create(UnifiedRebalancerCore.prototype);
   rb.entityId = PARTITION_ID;
   rb.entityType = EntityType.PARTITION;
+  rb.nowFn = () => world.tick;
+  rb.replicaInventoryBuilder = buildReplicaInventorySnapshot;
   rb.logger = {error() {}, warn() {}, info() {}, debug() {}};
 
   // --- environment projections (stubbed to the modelled world) ---

@@ -939,12 +939,24 @@ test('RebalanceCoordinator createOperation persists membership publication epoch
         entityId: 'partition-1',
         nodeId: 'node-remote',
         membershipPublicationEpoch: 7,
+        operationIntentId: 'schema-job-1:operation:node-remote',
+        replicaIntentId: 'schema-job-1:replica:node-remote',
       });
 
       t.equal(
         operation.stepsHistory[0]?.membershipPublicationEpoch,
         7,
         'epoch-bound operation should persist its planning publication epoch',
+      );
+      t.equal(
+        operation.operationId,
+        'schema-job-1:operation:node-remote',
+        'replica-operation owner preserves deterministic parent intent identity',
+      );
+      t.equal(
+        operation.replicaId,
+        'schema-job-1:replica:node-remote',
+        'replica allocation converges on the deterministic child replica intent',
       );
     } finally {
       await coordinator.shutdown();

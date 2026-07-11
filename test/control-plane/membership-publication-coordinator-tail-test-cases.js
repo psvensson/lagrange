@@ -234,6 +234,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
         candidate.priorityPartitionSummary?.missingPartitionIds,
         [
           'replica_operations-p1',
+          'schema_operations-p1',
           'sql_transaction_participants-p1',
           'sql_transactions-p1',
           'sql_write_operations-p1',
@@ -338,6 +339,7 @@ export function registerMembershipPublicationCoordinatorTailTests({
             table_id: 'control_plane_publications',
           },
           {partition_id: 'replica_operations-p1', table_id: 'replica_operations'},
+          {partition_id: 'schema_operations-p1', table_id: 'schema_operations'},
           {partition_id: 'sql_transactions-p1', table_id: 'sql_transactions'},
           {
             partition_id: 'sql_transaction_participants-p1',
@@ -430,6 +432,15 @@ export function registerMembershipPublicationCoordinatorTailTests({
             raft_role: 'follower',
             address: 'node-3/partition/replica_operations-p1-r3',
           },
+          ...['node-1', 'node-2', 'node-3'].map((nodeId, index) => ({
+            service_id: `schema-ops-r${index + 1}`,
+            node_id: nodeId,
+            partition_id: 'schema_operations-p1',
+            service_type: 'partition',
+            status: 'active',
+            raft_role: index === 0 ? 'leader' : 'follower',
+            address: `${nodeId}/partition/schema_operations-p1-r${index + 1}`,
+          })),
           {
             service_id: 'sql-tx-r1',
             node_id: 'node-1',

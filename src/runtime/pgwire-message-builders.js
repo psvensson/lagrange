@@ -87,14 +87,21 @@ function buildReadyForQuery(txState) {
  * @param {string} severity - PG_SEVERITY value.
  * @param {string} code - SQLSTATE code.
  * @param {string} message - Error message.
+ * @param {string|Object|null} [detail] - Optional structured error detail.
  * @return {Buffer}
  */
-function buildErrorResponse(severity, code, message) {
+function buildErrorResponse(severity, code, message, detail = null) {
   const fields = [
     {id: PG_ERROR_FIELD.SEVERITY, val: severity},
     {id: PG_ERROR_FIELD.CODE, val: code},
     {id: PG_ERROR_FIELD.MESSAGE, val: message},
   ];
+  if (detail !== null && detail !== undefined) {
+    fields.push({
+      id: PG_ERROR_FIELD.DETAIL,
+      val: typeof detail === 'string' ? detail : JSON.stringify(detail),
+    });
+  }
   let size = 1;
   for (const f of fields) {
     size += 1 + Buffer.byteLength(f.val, LOCAL_STR_UTF8) +

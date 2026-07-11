@@ -265,6 +265,8 @@ const QUERY_LOG_MSG = Object.freeze({
     'Non-transactional write operation persistence failed',
   DISTRIBUTED_TX_RECOVERY_REPLAY_FAILED:
     'Distributed transaction recovery replay failed',
+  SCHEMA_PROVISIONING_RECOVERY_DEFERRED:
+    'Durable schema provisioning recovery deferred',
   INIT_LOGGER_FAILED: 'initLogger failed',
 });
 

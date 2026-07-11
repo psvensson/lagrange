@@ -84,6 +84,7 @@ const SPLIT_MERGE_COORDINATION_METHODS = Object.freeze({
     }
     this.detachCachePolicyListener();
     this.systemCache = cache || null;
+    this.schemaProvisioningJobRepository?.setSystemCache(this.systemCache);
     this.attachCachePolicyListener();
   },
 

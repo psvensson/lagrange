@@ -717,12 +717,14 @@ test('SQLQueryEngine - executeRequest forwards timeout budget to CREATE TABLE ' 
     ...createSqlRequest({
       statement: 'CREATE TABLE users (id TEXT PRIMARY KEY)',
       sessionId: 'create-request-timeout-budget',
+      tenantId: 'tenant-create-owner',
     }),
     timeoutBudget,
   });
 
   t.equal(result.success, true);
   t.equal(receivedOptions.timeoutBudget, timeoutBudget);
+  t.equal(receivedOptions.namespace, 'tenant-create-owner');
 });
 
 test('SQLQueryEngine - waitForRoutablePartitionServiceCount accepts fresh ' +

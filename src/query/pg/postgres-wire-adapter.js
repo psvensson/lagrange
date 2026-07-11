@@ -10,6 +10,9 @@
 
 import {LoggingService} from '../../logging/logging-service.js';
 import {createSqlRequest} from '../sql-request.js';
+import {createTimeoutBudget} from '../../control-plane/timeout-budget.js';
+import {QUERY_WALL_TIME_LIMIT_MS} from
+  '../../wasm-service/query-budget-constants.js';
 import {PARSER_DIALECT} from './pg-compat-constants.js';
 import {PG_SESSION_STATE, PG_WIRE_ERROR_MSG} from './pg-wire-constants.js';
 import {
@@ -20,6 +23,12 @@ import {
 } from '../sql-adapter-constants.js';
 
 const ANONYMOUS_PRINCIPAL = 'anonymous';
+
+function resolvePgWireWallTimeLimitMs(options = {}) {
+  const requested = Number(options?.budgets?.WALL_TIME_LIMIT_MS);
+  return Number.isFinite(requested) && requested > 0 ?
+    requested : QUERY_WALL_TIME_LIMIT_MS;
+}
 
 
 /**
@@ -158,6 +167,7 @@ class PostgresWireAdapter {
       );
     }
 
+    const wallTimeLimitMs = resolvePgWireWallTimeLimitMs(options);
     const request = createSqlRequest({
       statement: sql,
       parameters: params,
@@ -167,6 +177,9 @@ class PostgresWireAdapter {
       budgets: options.budgets,
       hints: options.hints,
       dialect: PARSER_DIALECT.POSTGRESQL,
+      timeoutBudget: createTimeoutBudget({
+        configuredBudgetMs: wallTimeLimitMs,
+      }),
     });
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTING_VIA_SQLCORE, {

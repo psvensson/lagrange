@@ -39,6 +39,14 @@ const {
   isSqlRequest,
 } = SQL_QUERY_ENGINE_SHARED;
 
+function resumeDurableProvisioningWork(engine) {
+  void engine.tableCreationService.resumeDurableProvisioningJobs?.()
+    .catch((error) => engine.logger.warn(
+      QUERY_LOG_MSG.SCHEMA_PROVISIONING_RECOVERY_DEFERRED,
+      {error: error.message},
+    ));
+}
+
 class SQLQueryEngineLifecycleAndCallbackDispatch {
   constructor(options = {}) {
     initializeSqlQueryEngineInstance(this, options);
@@ -111,6 +119,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     }
     this.recoverDistributedTransactionStateFromCache();
     const replayPromise = this.resumeRecoveredDistributedTransactions();
+    resumeDurableProvisioningWork(this);
     if (typeof this.transactionCoordinator.startRecoverySweep === LOCAL_STR_FUNCTION) {
       this.transactionCoordinator.startRecoverySweep();
     }
@@ -393,6 +402,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       case EXECUTION_MODE.SQL_STATEMENT:
         result = await this.executeQuery(statement, parameters, {
           sessionId,
+          tenantId: sqlRequest.tenantId,
           dialect: sqlRequest.dialect,
           timeoutMs: sqlRequest.timeoutMs,
           timeoutBudget: sqlRequest.timeoutBudget,

@@ -81,7 +81,7 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
     REPLAY_TEST_140646Z_EMPTY_REACHABILITY_ERROR,
     REPLAY_TEST_140646Z_EVENT_DRIVEN_WAIT_MODE,
     REPLAY_TEST_140646Z_EXPECTED_NODE_COUNT,
-    REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS,
+    REPLAY_TEST_140646Z_CLOSURE_BLOCKED_PARTITION_IDS,
     REPLAY_TEST_140646Z_NEEDS_OPERATION,
     REPLAY_TEST_140646Z_NODE_ENDPOINT_ROW_COUNT,
     REPLAY_TEST_140646Z_NODE_ID,
@@ -678,7 +678,7 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
     );
     assert.deepEqual(
       replaySummary.replayedPublication.closureWitness.blockedPartitionIds,
-      REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS,
+      REPLAY_TEST_140646Z_CLOSURE_BLOCKED_PARTITION_IDS,
     );
     assert.equal(
       replaySummary.selectedSnapshotObservation.availability,

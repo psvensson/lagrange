@@ -642,6 +642,7 @@ class SQLQueryEngineStatementExecution extends SQLQueryEngineLifecycleAndCallbac
    */
   async executeCreateTable(ast, _sessionId, options = {}) {
     return this.tableCreationService.createTable(ast, {
+      namespace: options?.tenantId,
       timeoutBudget: options?.timeoutBudget,
       cancellationToken: options?.cancellationToken || null,
     });

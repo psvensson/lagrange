@@ -52,6 +52,8 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   const partitionId = 'tbl-users-p1';
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
+  const createdMoves = [];
+  let ownershipChecks = 0;
   const mutationWorkClasses = [];
   const nodes = [
     {node_id: localNodeId, status: 'active'},
@@ -122,6 +124,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
 
   const rebalanceCoordinator = {
     async createOperation(move) {
+      createdMoves.push(move);
       createdTargetNodeIds.push(move.nodeId);
       mutationWorkClasses.push(move.controlPlaneMutationWorkClass);
       return {
@@ -159,6 +162,11 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
     tableId,
     partitionId,
     replicaCount: 3,
+    schemaJobId: 'schema-job-users',
+    schemaOwnerFenceToken: 7,
+    assertProvisioningOwnership: async () => {
+      ownershipChecks += 1;
+    },
   });
 
   t.same(
@@ -166,6 +174,21 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
     ['node-a', 'node-b', 'node-c'],
     'provisioning should target local node first, then active peers',
   );
+  t.equal(ownershipChecks, 3,
+    'parent ownership is revalidated before each child side effect');
+  t.same(
+    createdMoves.map((move) => move.operationIntentId),
+    [
+      'schema-job-users:operation:node-a',
+      'schema-job-users:operation:node-b',
+      'schema-job-users:operation:node-c',
+    ],
+    'child operation intent identity is deterministic per job and target',
+  );
+  t.ok(createdMoves.every((move) =>
+    move.parentWorkflowFenceToken === 7 &&
+    move.replicaIntentId.startsWith('schema-job-users:replica:')),
+  'child operations preserve the parent fence and deterministic replica intent');
   t.same(
     mutationWorkClasses,
     ['interactive', 'interactive', 'interactive'],

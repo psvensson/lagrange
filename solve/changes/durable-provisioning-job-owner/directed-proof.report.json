@@ -1,0 +1,29 @@
+{
+  "scenario": "durable-provisioning-job-owner-directed",
+  "status": "passed",
+  "startedAt": "2026-07-11T10:58:36.728Z",
+  "completedAt": "2026-07-11T10:58:36.789Z",
+  "fidelity": "deterministic-directed",
+  "observable": "capacity pending -> owner recreation -> one terminal duplicate-free job",
+  "jobId": "schema-job-7e32627cd6a3f6f9c3f6685b3b024cf2",
+  "tableId": "tbl-7e32627cd6a3f6f9c3f6685b3b024cf2",
+  "partitionId": "tbl-7e32627cd6a3f6f9c3f6685b3b024cf2-p1",
+  "jobStatus": "SUCCEEDED",
+  "schemaJobCount": 1,
+  "tableCount": 1,
+  "partitionCount": 1,
+  "activeReplicaCount": 3,
+  "distinctReplicaNodeCount": 3,
+  "childOperationCount": 3,
+  "operationIds": [
+    "schema-job-7e32627cd6a3f6f9c3f6685b3b024cf2:operation:node-a",
+    "schema-job-7e32627cd6a3f6f9c3f6685b3b024cf2:operation:node-b",
+    "schema-job-7e32627cd6a3f6f9c3f6685b3b024cf2:operation:node-c"
+  ],
+  "replicaIds": [
+    "schema-job-7e32627cd6a3f6f9c3f6685b3b024cf2:replica:node-a",
+    "schema-job-7e32627cd6a3f6f9c3f6685b3b024cf2:replica:node-b",
+    "schema-job-7e32627cd6a3f6f9c3f6685b3b024cf2:replica:node-c"
+  ],
+  "dispatchCount": 3
+}

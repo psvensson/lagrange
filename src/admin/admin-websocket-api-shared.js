@@ -406,6 +406,18 @@ function resolveSqlRequestTimeoutBudgetMs(timeoutMs) {
   return trimmedTimeoutMs > 0 ? trimmedTimeoutMs : normalizedTimeoutMs;
 }
 
+function appendSchemaJobQueryMetadata(message, value) {
+  if (typeof value.jobId === 'string' && value.jobId.length > 0) {
+    message.jobId = value.jobId;
+  }
+  if (Number.isFinite(value.retryAfterMs) && value.retryAfterMs > 0) {
+    message.retryAfterMs = Math.floor(value.retryAfterMs);
+  }
+  if (value.provisioningDeadlineExpired === true) {
+    message.provisioningDeadlineExpired = true;
+  }
+}
+
 function appendStructuredQueryMetadata(message, value) {
   if (!value || typeof value !== 'object') {
     return;
@@ -446,6 +458,7 @@ function appendStructuredQueryMetadata(message, value) {
   if (Array.isArray(value.reasonCodes)) {
     message.reasonCodes = [...value.reasonCodes];
   }
+  appendSchemaJobQueryMetadata(message, value);
   if (Array.isArray(value.failedDimensions)) {
     message.failedDimensions = [...value.failedDimensions];
   }

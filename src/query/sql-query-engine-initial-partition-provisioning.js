@@ -19,6 +19,12 @@ const LOCAL_STR_DISPATCH_OPERATIONS = 'dispatch_operations';
 const LOCAL_STR_WAIT_REPLICA_METADATA = 'wait_replica_metadata';
 const LOCAL_STR_WAIT_MINIMUM_REPLICA_METADATA = 'wait_minimum_replica_metadata';
 
+function buildSchemaProvisioningChildIntentId(jobId, targetNodeId, kind) {
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) return null;
+  return `${normalizedJobId}:${kind}:${String(targetNodeId || '').trim()}`;
+}
+
 const {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
   OPERATION_METADATA_KEY,
@@ -417,6 +423,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }
 
       try {
+        await context?.assertProvisioningOwnership?.();
         const operation = await this.rebalanceCoordinator.createOperation({
           type: OperationType.ADD,
           partitionId,
@@ -430,6 +437,18 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           // Initial partition provisioning executes these operations inline
           // below, so skip the redundant coordinator-created dispatch trigger.
           emitOperationCreated: false,
+          operationIntentId: buildSchemaProvisioningChildIntentId(
+            context?.schemaJobId,
+            targetNodeId,
+            'operation',
+          ),
+          replicaIntentId: buildSchemaProvisioningChildIntentId(
+            context?.schemaJobId,
+            targetNodeId,
+            'replica',
+          ),
+          parentWorkflowFenceToken:
+            context?.schemaOwnerFenceToken ?? null,
         });
         plannedOperations.push(operation);
 

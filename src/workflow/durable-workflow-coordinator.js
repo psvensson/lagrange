@@ -6,9 +6,12 @@ import {
   ACK_REJECTION_DIAGNOSTIC_FIELD,
   buildTransitionIdempotencyKey,
 } from './workflow-constants.js';
+import {
+  claimDurableWorkflow,
+  transitionDurableWorkflow,
+} from './durable-workflow-storage-ownership.js';
 
 const LOCAL_STR_UPDATEDAT = 'updatedAt';
-const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_METADATA = 'metadata';
 
@@ -27,7 +30,10 @@ class DurableWorkflowCoordinator {
    */
   constructor(options = {}) {
     this.persistWorkflow = options.persistWorkflow || (async () => {});
+    this.persistWorkflowClaim = options.persistWorkflowClaim || null;
+    this.persistWorkflowTransition = options.persistWorkflowTransition || null;
     this.persistParticipant = options.persistParticipant || (async () => {});
+    this.isTerminalWorkflow = options.isTerminalWorkflow || (() => false);
     this.onAckRejection = options.onAckRejection || null;
     this.now = options.now || (() => Date.now());
     this.workflowsById = new Map();
@@ -99,6 +105,7 @@ class DurableWorkflowCoordinator {
      * @param {string} transition.nextStep - Target step.
      * @param {string} transition.reason - Human/machine-readable reason.
      * @param {number} [transition.fenceToken] - Owner epoch / lease token.
+     * @param {string} [transition.ownerId] - Storage-backed lease owner.
      * @param {Object} [transition.metadata] - Extra fields merged into the
      *   transition history entry.
      * @param {Object} [updates] - Additional workflow field updates applied
@@ -124,47 +131,21 @@ class DurableWorkflowCoordinator {
       return workflow;
     }
 
-    const transitionFence = transition.fenceToken;
-    if (transitionFence !== undefined && transitionFence !== null) {
-      const currentFence = workflow.fenceToken;
-      if (currentFence !== undefined && currentFence !== null &&
-            transitionFence < currentFence) {
-        throw new Error(WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN);
-      }
-      workflow.fenceToken = transitionFence;
-    }
-
-    const previousStep = workflow.step || null;
-    const now = this.now();
-
-    const historyEntry = {
-      [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: previousStep,
-      [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: nextStep,
-      [WORKFLOW_TRANSITION_FIELD.REASON]: reason,
-      [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: now,
-      [WORKFLOW_TRANSITION_FIELD.OWNER_KEY]: workflow.ownerKey,
-      [WORKFLOW_TRANSITION_FIELD.FENCE_TOKEN]:
-          workflow.fenceToken ?? null,
-    };
-    if (transition.metadata &&
-          typeof transition.metadata === LOCAL_STR_OBJECT) {
-      Object.assign(historyEntry, transition.metadata);
-    }
-
-    if (!Array.isArray(workflow.transitionHistory)) {
-      workflow.transitionHistory = [];
-    }
-    workflow.transitionHistory.push(historyEntry);
-
-    workflow.step = nextStep;
-    workflow.updatedAt = now;
-    Object.assign(workflow, updates);
-
-    await this.persistWorkflow(workflow);
+    await transitionDurableWorkflow(this, workflow, transition, updates);
     if (options.markCommitted !== false) {
       this.markTransitionCommitted(workflowId, nextStep);
     }
     return workflow;
+  }
+
+  /**
+   * Acquire or renew storage-backed workflow ownership.
+   * @param {string} workflowId
+   * @param {Object} claim
+   * @return {Promise<Object>}
+   */
+  async claimWorkflow(workflowId, claim = {}) {
+    return claimDurableWorkflow(this, workflowId, claim);
   }
 
   /**
@@ -670,6 +651,14 @@ class DurableWorkflowCoordinator {
   setWorkflowState(workflow) {
     this.workflowsById.set(workflow.workflowId, workflow);
     this.workflowsByOwnerKey.set(workflow.ownerKey, workflow);
+    for (const transition of workflow.transitionHistory || []) {
+      if (transition?.[WORKFLOW_TRANSITION_FIELD.NEXT_STEP]) {
+        this.markTransitionCommitted(
+          workflow.workflowId,
+          transition[WORKFLOW_TRANSITION_FIELD.NEXT_STEP],
+        );
+      }
+    }
     return workflow;
   }
 

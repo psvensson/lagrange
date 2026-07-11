@@ -11,6 +11,10 @@ import {NUM} from '../constants/index.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {QUERY_SUBSYSTEM} from './query-constants.js';
 import {defineTableCreationCreateTableMethod} from './table-creation-service-create-table.js';
+import {defineTableCreationDurableJobMethod} from './table-creation-service-durable-job.js';
+import {SchemaProvisioningJobOwner} from './schema-provisioning-job-owner.js';
+import {SchemaProvisioningJobRepository} from './schema-provisioning-job-repository.js';
+
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
 import {defineTableCreationSplitMergeCoordination} from './table-creation-service-split-merge-coordination.js';
 import {defineTableCreationPartitionProvisioning} from './table-creation-service-partition-provisioning.js';
@@ -42,6 +46,22 @@ class TableCreationService {
         getCdcIntegrationService: () => this.cdcIntegrationService,
         getSystemTableCache: () => this.systemCache,
       }).controlPlaneSystemTableGateway;
+    this.schemaProvisioningJobRepository =
+      options.schemaProvisioningJobRepository ||
+      new SchemaProvisioningJobRepository({
+        gateway: this.controlPlaneSystemTableGateway,
+        systemCache: options.systemCache || null,
+      });
+    this.schemaProvisioningJobOwner =
+      options.schemaProvisioningJobOwner || new SchemaProvisioningJobOwner({
+        repository: this.schemaProvisioningJobRepository,
+        workflowCoordinator: options.schemaWorkflowCoordinator,
+        ownerId: options.schemaProvisioningOwnerId,
+        now: options.now,
+        leaseMs: options.schemaProvisioningLeaseMs,
+        setTimeoutFn: options.setTimeoutFn,
+        clearTimeoutFn: options.clearTimeoutFn,
+      });
     this.partitionSplitMergeManager = null;
     this.tablePolicyByTableId = new Map();
     this.partitionSizeByPartitionId = new Map();
@@ -97,6 +117,9 @@ class TableCreationService {
   setControlPlaneSystemTableGateway(controlPlaneSystemTableGateway) {
     this.controlPlaneSystemTableGateway =
       controlPlaneSystemTableGateway || null;
+    this.schemaProvisioningJobRepository?.setGateway(
+      this.controlPlaneSystemTableGateway,
+    );
   }
 
   /**
@@ -130,5 +153,6 @@ defineTableCreationMetadataLookup(TableCreationService);
 defineTableCreationExistingTableReconciliation(TableCreationService);
 defineTableCreationResultProjection(TableCreationService);
 defineTableCreationCreateTableMethod(TableCreationService);
+defineTableCreationDurableJobMethod(TableCreationService);
 
 export {TableCreationService};

@@ -90,7 +90,7 @@ appropriate to the Quest. An empty/skipped guard list is a failure.
 | W6 | `provisioning-parent-deadline-cutover` (product) | `node scripts/run-provisioning-parent-deadline-cutover-scenarios.js` | `provisioning-parent-deadline-cutover` | virtual clock executes the real SQL/TableCreationService wait path |
 | W7 | `control-plane-readiness-trust-cutover` (product) | `node scripts/run-control-plane-readiness-trust-cutover-scenarios.js` | `control-plane-readiness-trust-cutover` | trace test proves SQL consumes `ControlPlaneReadinessService` output and never raw cache+router joins |
 | W8 | `canonical-replica-inventory-cutover` (product) | `node scripts/run-canonical-replica-inventory-cutover-scenarios.js` | `canonical-replica-inventory-cutover` | topology guard and move planner call the same inventory builder in trace tests |
-| W9 | `durable-provisioning-job-owner-cutover` (product) | `node scripts/run-durable-provisioning-job-owner-cutover-scenarios.js` | `durable-provisioning-job-owner-cutover` | restart/replay test crosses public SQL/Admin projection and owner persistence |
+| W9 | `durable-provisioning-job-owner` (product) | `node scripts/run-durable-provisioning-job-owner-scenarios.js` | `durable-provisioning-job-owner` | public CREATE is fail-closed; activation/restart, two-owner lease takeover, authoritative terminal replay, Admin, and PG projections share one persisted job |
 | W10 | `transaction-owned-commit-mode-cutover` (product) | `node scripts/run-transaction-owned-commit-mode-cutover-scenarios.js` | `transaction-owned-commit-mode-cutover` | coordinator trace proves final participant freeze precedes commit-mode selection |
 | W11 | `solver-proof-artifact-census` (process) | `node scripts/run-solver-proof-artifact-census-scenarios.js` | `solver-proof-artifact-census` | census hashes every referenced `changeRef` and reconciles byte totals with filesystem totals |
 | W12 | `solver-proof-artifact-content-addressing` (process) | `node scripts/run-solver-proof-artifact-content-addressing-scenarios.js` | `solver-proof-artifact-content-addressing` | resolver reads old inline and new descriptor artifacts and rejects tampering |
@@ -420,33 +420,54 @@ Durable contract:
 - New versioned `schema_operations` system record: job ID, canonical workflow ID
   and owner key, normalized DDL/table idempotency key, schema revision,
   schema-specific progress reason codes, retry-after, created/updated/completed
-  times, and terminal schema result/error. Workflow owner, lease epoch/expiry,
-  attempt count, participant state, and transition state remain in the canonical
-  `DurableWorkflowCoordinator` record rather than being copied here.
-- Table/schema intent and job insertion occur in one system transaction. A
-  duplicate key returns the existing active/terminal job.
-- The coordinator state machine projects
-  `PENDING -> RUNNING -> SUCCEEDED|FAILED`; its existing higher-epoch claim and
-  immutable-terminal rules apply unchanged to the schema workflow.
+  times, and terminal schema result/error. This one row is both the atomic
+  schema-intent outbox and the canonical persistence backing for the parent
+  `DurableWorkflowCoordinator` record (owner/lease epoch and expiry, attempt
+  count, participant state, transition history, and fence token); schema code
+  must not maintain a second copy of those workflow fields.
+- Recording the normalized table/schema intent and initial job is one atomic
+  `schema_operations` INSERT, never a replace/upsert. Its versioned semantic
+  intent uses the current cluster-global schema namespace plus the normalized
+  table/column/type/constraint and primary-key shape and options. `SqlRequest`
+  still carries tenant identity to the owner boundary, but W9 must not pretend
+  tenant-local catalogs exist while `tables.table_name` remains globally unique.
+  Deterministic table, partition, job,
+  workflow, and idempotency identities let a duplicate matching submission
+  attach to the existing active/terminal row without cross-partition 2PC; the
+  same table identity with a different intent fails with a stable conflict.
+  Workers idempotently project the row into `tables`, `partitions`, and existing
+  replica-operation workflows.
+- Extend `DurableWorkflowCoordinator` with a storage-backed compare-and-swap
+  port for claim/renew/transition persistence and an injected terminal-state
+  policy. The coordinator state machine projects
+  `PENDING -> RUNNING -> SUCCEEDED|FAILED`; higher-epoch claims win, stale
+  writers fail closed, and terminal states are immutable. Process-local
+  `runExclusive` is only a contention optimization, never the durable lock.
 - Child placement uses existing durable replica-operation workflows; SQL never
-  reads their concentration ledger directly.
-- Cleanup retains terminal records for a documented minimum and cannot delete a
-  job still referenced by schema metadata.
+  reads their concentration ledger directly. Child operation intent IDs derive
+  from the schema job and target so replayed or stale parent workers converge on
+  the same replica-operation row; the replica-operation owner remains the only
+  code allowed to materialize it.
+- W9 exposes no schema-job DELETE path and retains terminal records indefinitely.
+  Bounded garbage collection is a separate Quest after a reference-safe policy
+  exists; this makes cleanup races fail closed in W9.
 
 Owner reuse map:
 
 - REUSED: `TableCreationService` owns schema intent, idempotency identity, and
   schema-specific success/failure semantics.
-- EXTENDED: `DurableWorkflowCoordinator` owns durable single-flight execution,
-  owner-key recovery, fencing/epoch rules, monotonic transitions, participant
-  persistence, and replay. W9 must use its existing transition machinery rather
-  than implement a second lease coordinator.
+- EXTENDED: `DurableWorkflowCoordinator` owns owner-key recovery, monotonic
+  transitions, participant persistence, replay, and the new generic durable
+  claim/renew/transition CAS contract. W9 must extend and use that shared
+  machinery rather than implement a schema-local lease coordinator; its current
+  in-memory single-flight and fence checks alone are not durable ownership.
 - REUSED: the replica-operation workflow owns child placement operations and
   their recovery.
 - REUSED: `OwnerContractOutcome` owns the cross-layer pending/retry/ready/failed
   projection.
-- NEW: only the versioned `schema_operations` record and schema-specific adapter
-  that bind normalized DDL/table identity to the canonical durable workflow.
+- NEW: only the versioned `schema_operations` atomic aggregate and its
+  schema-specific persistence/projection adapter that bind normalized DDL/table
+  identity to the canonical durable workflow.
 
 Public projection:
 
@@ -460,13 +481,23 @@ Public projection:
   `retry_after_ms` fields in structured error detail; retrying the same DDL
   attaches to the existing job.
 
+Upgrade posture: W9 is a fail-closed full-restart/minimum-version cutover for
+schema writes. Fresh bootstrap and restart-from-pre-W9 metadata must install the
+new system table before CREATE is admitted; mixed-version nodes that do not know
+the schema-job record cannot own or execute provisioning work.
+
 Proof attacks: duplicate submission, crash after atomic insert, lease expiry,
 stale worker completion, terminal replay, cleanup race, client timeout followed
 by retry, and failure propagation.
 
-Live proof: constrained multi-node provisioning returns pending, restarts the
-owner, restores capacity, and reaches one terminal result without duplicate
-replicas. The report or finding names the run and observable.
+Directed real-owner proof: constrained multi-node provisioning returns pending,
+recreates the owner over shared durable storage, restores capacity, and reaches
+one terminal result without duplicate replica-operation or replica identities.
+The proof runs the real `TableCreationService -> SQLQueryEngine ->
+RebalanceCoordinator` owner chain on deterministic storage and remote-node
+boundaries, and emits an immutable report naming the run and observable. A
+Docker engagement may supplement this evidence, but an unrelated formation
+blocker must not be relabeled as W9 evidence.
 
 Templates: `retry-loops.md`, `recovery-replay.md`,
 `concurrency-serialization.md`, `formation-circularity.md`.

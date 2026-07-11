@@ -94,6 +94,65 @@ const SQL_WRITE_OPERATIONS_SCHEMA = {
 };
 
 /**
+ * Schema operations system table schema.
+ *
+ * One row is the atomic schema-intent outbox and the canonical persistence
+ * backing for its DurableWorkflowCoordinator record. The scalar workflow
+ * fence fields support storage compare-and-swap. workflow_record contains only
+ * participant/history details that have no scalar projection, so every
+ * workflow fact has one persisted representation.
+ */
+const SCHEMA_OPERATIONS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS,
+  columns: [
+    {name: 'job_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'record_version', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'row_version', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'workflow_id', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
+    {name: 'owner_key', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'idempotency_key', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
+    {name: 'operation_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'namespace', type: COLUMN_TYPE.TEXT, notNull: true},
+    {
+      name: 'table_identity_key',
+      type: COLUMN_TYPE.TEXT,
+      notNull: true,
+      unique: true,
+    },
+    {name: 'table_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'table_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'normalized_ddl', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'intent_version', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'intent_hash', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'schema_revision', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'current_step', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'reason_codes', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'retry_after_ms', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'workflow_record', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'workflow_fence_token', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'workflow_owner_id', type: COLUMN_TYPE.TEXT},
+    {name: 'workflow_lease_expires_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'attempt_count', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'result_json', type: COLUMN_TYPE.TEXT},
+    {name: 'error_code', type: COLUMN_TYPE.TEXT},
+    {name: 'error_message', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'completed_at', type: COLUMN_TYPE.INTEGER},
+  ],
+  indices: [
+    {name: 'idx_schema_operations_owner', columns: ['owner_key']},
+    {name: 'idx_schema_operations_table', columns: ['table_name']},
+    {name: 'idx_schema_operations_status', columns: ['status', 'updated_at']},
+    {
+      name: 'idx_schema_operations_lease',
+      columns: ['workflow_lease_expires_at', 'status'],
+    },
+  ],
+};
+
+/**
  * Schema migrations system table schema.
  * Stores durable migration workflow state for user table schema changes.
  */
@@ -323,6 +382,7 @@ export {
   SQL_TRANSACTIONS_SCHEMA,
   SQL_TRANSACTION_PARTICIPANTS_SCHEMA,
   SQL_WRITE_OPERATIONS_SCHEMA,
+  SCHEMA_OPERATIONS_SCHEMA,
   SCHEMA_MIGRATIONS_SCHEMA,
   SCHEMA_MIGRATION_PARTITIONS_SCHEMA,
   DEBUG_SESSIONS_SCHEMA,

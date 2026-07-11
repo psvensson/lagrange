@@ -13,8 +13,12 @@ budget enforcement.
 - `QueryExecutor` owns execution over resolved partitions.
 - `PartitionResolver` owns partition lookup for query planning.
 - `QueryRouter` owns partition message routing and bounded retry.
-- `TableCreationService` owns table bootstrap provisioning through the caller
-  timeout budget.
+- `TableCreationService` owns normalized schema intent and composes
+  `SchemaProvisioningJobOwner`: one atomic `schema_operations` outbox row,
+  storage-fenced replay, deterministic metadata/child-operation identity, and
+  stable pending/success/failure projection. The caller timeout only bounds
+  waiting for that durable job; it never cancels the job itself. Public CREATE
+  has no legacy fallback: unavailable durable persistence fails closed.
 - Runtime primitives such as `lookup`, `emit`, and `broadcast` must route
   through the shared execution model.
 
@@ -33,6 +37,8 @@ budget enforcement.
 - Do not add a second SQL engine or fallback execution path.
 - Do not start nested work with a fresh default timeout budget; derive from the
   caller budget.
+- Do not provision CREATE side effects before the schema job insert, and do not
+  add a schema-local lease implementation beside `DurableWorkflowCoordinator`.
 - Do not infer write leader identity from supporting service metadata when the
   canonical owner row exists.
 - Do not leak raw storage, transport, or parser shapes into runtime contracts.

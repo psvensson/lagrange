@@ -651,11 +651,25 @@ class PgWireProtocolHandler {
       const result = await this._adapter.execute(
         this._session.sessionId, query, params,
       );
+      if (
+        result?.provisioningDeadlineExpired === true &&
+        typeof result?.jobId === 'string'
+      ) {
+        const error = new Error('Schema provisioning remains active');
+        error.sqlState = PG_ERROR_CODE.LOCK_NOT_AVAILABLE;
+        error.detail = {
+          provisioning_job_id: result.jobId,
+          retry_after_ms: result.retryAfterMs || 0,
+        };
+        throw error;
+      }
       if (result?.success === false) {
-        throw new Error(
+        const error = new Error(
           result.error || result.message ||
           PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED,
         );
+        Object.assign(error, result);
+        throw error;
       }
 
       // Send result set for SELECT-like queries
@@ -676,8 +690,10 @@ class PgWireProtocolHandler {
       this._applyTransactionFailure();
       this._sendError(
         PG_SEVERITY.ERROR,
-        PG_ERROR_CODE.INTERNAL_ERROR,
+        typeof err.sqlState === 'string' ?
+          err.sqlState : PG_ERROR_CODE.INTERNAL_ERROR,
         err.message,
+        err.detail || null,
       );
     }
   }
@@ -719,8 +735,8 @@ class PgWireProtocolHandler {
    * @param {string} message - Error message.
    * @private
    */
-  _sendError(severity, code, message) {
-    this._socket.write(buildErrorResponse(severity, code, message));
+  _sendError(severity, code, message, detail = null) {
+    this._socket.write(buildErrorResponse(severity, code, message, detail));
   }
 
   /** @private */

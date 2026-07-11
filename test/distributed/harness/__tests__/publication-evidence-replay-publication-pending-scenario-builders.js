@@ -53,6 +53,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
     REPLAY_TEST_140646Z_FILLER_PARTITION_SUFFIX,
     REPLAY_TEST_140646Z_FILLER_TABLE_PREFIX,
     REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS,
+    REPLAY_TEST_140646Z_CLOSURE_BLOCKED_PARTITION_IDS,
     REPLAY_TEST_140646Z_LOW_GAP_PARTITION_IDS,
     REPLAY_TEST_140646Z_NEEDS_OPERATION,
     REPLAY_TEST_140646Z_NODE_ENDPOINT_ROWS,
@@ -409,7 +410,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
       ...REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS.map((partitionId) =>
         build140646ZHighGapBlockedPartition(partitionId),
       ),
-    ];
+    ].sort((left, right) => left.partitionId.localeCompare(right.partitionId));
   }
 
   function build140646ZSqlTransactionsWitness() {
@@ -536,7 +537,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
           prioritySpreadSatisfied: false,
           prioritySpreadGap: REPLAY_TEST_140646Z_PRIORITY_SPREAD_GAP,
           priorityBlockedPartitionCount:
-          REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS.length,
+          REPLAY_TEST_140646Z_CLOSURE_BLOCKED_PARTITION_IDS.length,
           pendingAckNodeIds: REPLAY_TEST_140646Z_PENDING_ACK_NODE_IDS,
         },
         activeGateSnapshotCoverage: {
@@ -602,7 +603,8 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
             state: REPLAY_TEST_140646Z_CLOSURE_PENDING,
             prioritySpreadPending: true,
             publicationRefreshRequired: false,
-            blockedPartitionIds: REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS,
+            blockedPartitionIds:
+            REPLAY_TEST_140646Z_CLOSURE_BLOCKED_PARTITION_IDS,
           },
         },
       },

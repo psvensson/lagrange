@@ -485,7 +485,7 @@ class RebalanceCoordinatorOperationCreation {
       sourceNodeId,
     } = context;
 
-    const operationId = uuidv4();
+    const operationId = move.operationIntentId || uuidv4();
     const sourceReplicaId =
       normalizedMoveType === OperationType.REPLACE ?
         move.replicaId || null :
@@ -503,11 +503,12 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     if (normalizedMoveType === OperationType.ADD && !operationReplicaId) {
-      operationReplicaId = await this.allocateCanonicalReplicaId({
-        partitionId,
-        entityType,
-        entityId,
-      });
+      operationReplicaId = move.replicaIntentId ||
+        await this.allocateCanonicalReplicaId({
+          partitionId,
+          entityType,
+          entityId,
+        });
     } else if (
       normalizedMoveType === OperationType.REPLACE &&
       (!operationReplicaId || operationReplicaId === sourceReplicaId)
@@ -593,14 +594,18 @@ class RebalanceCoordinatorOperationCreation {
     // Persist via SQL engine (writes to partition leader)
     const inserted = await this.persistNewOperation(operation);
     if (!inserted) {
-      const existingAfterInsert = await this.queryExistingInFlightOperation(
-        partitionId,
-        move.nodeId,
-        entityType,
-        entityId,
-        normalizedMove,
-        STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-      );
+      const existingByDeterministicId = move.operationIntentId ?
+        await this.repository.queryAuthoritativeOperationById(operationId) :
+        null;
+      const existingAfterInsert = existingByDeterministicId ||
+        await this.queryExistingInFlightOperation(
+          partitionId,
+          move.nodeId,
+          entityType,
+          entityId,
+          normalizedMove,
+          STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
+        );
       if (existingAfterInsert) {
         this.rememberOperationIntents(
           [dedupeKey, criticalAddLikeIntentKey],

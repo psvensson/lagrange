@@ -1,0 +1,41 @@
+{
+  "id": "durable-provisioning-job-owner",
+  "statement": "TableCreationService atomically records schema intent and an idempotent durable provisioning job, reconciles it through existing replica-operation workflows with fenced single-writer ownership, and projects stable pending, success, or failure outcomes through SQL/Admin boundaries.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W9",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
+    "sealedAtCommit": "a53e2e56d6ba883da9d5ed32bed58cae6c650b81"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "durable-provisioning-job-owner",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "durable-provisioning-job-owner-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "durable-provisioning-job-owner",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

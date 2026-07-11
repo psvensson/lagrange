@@ -185,6 +185,17 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
       externalCdcAllowed: false,
     },
   ),
+  [TABLES.SCHEMA_OPERATIONS]: createTablePolicy(
+    TABLES.SCHEMA_OPERATIONS,
+    {
+      policyClass: CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
+      authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+      internalCachePropagation: false,
+      readinessRelevant: false,
+      bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.NONE,
+      externalCdcAllowed: false,
+    },
+  ),
   [TABLES.SCHEMA_MIGRATION_PARTITIONS]: createTablePolicy(
     TABLES.SCHEMA_MIGRATION_PARTITIONS,
     {

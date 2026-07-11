@@ -26,6 +26,7 @@ const TABLES = Object.freeze({
   SQL_TRANSACTIONS: 'sql_transactions',
   SQL_TRANSACTION_PARTICIPANTS: 'sql_transaction_participants',
   SQL_WRITE_OPERATIONS: 'sql_write_operations',
+  SCHEMA_OPERATIONS: 'schema_operations',
   DEBUG_SESSIONS: 'debug_sessions',
   DEBUG_BREAKPOINTS: 'debug_breakpoints',
   DEBUG_SNAPSHOTS: 'debug_snapshots',

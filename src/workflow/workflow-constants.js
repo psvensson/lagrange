@@ -27,6 +27,14 @@ const PARTICIPANT_ACK_RESULT = Object.freeze({
   PARTICIPANT_NOT_FOUND: 'participant_not_found',
 });
 
+const WORKFLOW_CLAIM_RESULT = Object.freeze({
+  ACCEPTED: 'accepted',
+  ACTIVE_OWNER: 'active_owner',
+  STALE_FENCE: 'stale_fence',
+  STORAGE_REJECTED: 'storage_rejected',
+  TERMINAL: 'terminal',
+});
+
 /**
  * Canonical field names for participant acknowledgement payloads.
  *
@@ -54,6 +62,17 @@ const WORKFLOW_ERROR_MSG = Object.freeze({
   REASON_REQUIRED: 'Workflow transition requires reason',
   DUPLICATE_TRANSITION: 'Duplicate transition rejected by idempotency check',
   STALE_FENCE_TOKEN: 'Transition rejected: stale fence token',
+  CLAIM_OWNER_ID_REQUIRED: 'Workflow claim requires ownerId',
+  CLAIM_FENCE_TOKEN_REQUIRED:
+    'Workflow claim requires a non-negative integer fenceToken',
+  CLAIM_LEASE_EXPIRY_REQUIRED:
+    'Workflow claim requires a finite leaseExpiresAt',
+  TERMINAL_WORKFLOW_IMMUTABLE:
+    'Terminal workflow transitions are immutable',
+  WORKFLOW_LEASE_EXPIRED:
+    'Workflow transition rejected: ownership lease expired',
+  WORKFLOW_OWNER_MISMATCH:
+    'Workflow transition rejected: owner does not hold the lease',
   PARTICIPANT_KEY_REQUIRED:
     'Participant acknowledgement requires participantKey',
   ACK_STATUS_REQUIRED:
@@ -99,6 +118,7 @@ export {
   WORKFLOW_TRANSITION_FIELD,
   WORKFLOW_ERROR_MSG,
   PARTICIPANT_ACK_RESULT,
+  WORKFLOW_CLAIM_RESULT,
   PARTICIPANT_ACK_FIELD,
   ACK_REJECTION_DIAGNOSTIC_FIELD,
   buildTransitionIdempotencyKey,
