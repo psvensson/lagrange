@@ -150,6 +150,32 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-11 — **Tier-3 completion reframed by user decision:** multiple
+  latency domains are not a prerequisite for the service/data-affinity
+  thesis. The primary demo is one latency domain with asymmetric
+  node-level data weights, a controlled `read_locality=any` →
+  `same_group` A/B on the same service, and production-equivalent
+  weighted-locality evidence. The old zone-convergence Quest
+  `movielens-affinity-placement-demo` and combined placement+CDC Quest
+  `latency-group-zone-affinity-demo` closed EXHAUSTED as superseded
+  decision closures; the successor is
+  `service-data-affinity-parallel-reduce-demo`. Multi-zone CDC fan-out
+  remains an optional independent topology direction, not an affinity
+  completion dependency. The demo also distinguishes three stages that
+  earlier prose conflated: SQL partition fan-out, disjoint reduce work
+  on runtime-service replicas, and a bounded exact partial-result merge.
+  **REUSED:** the production affinity-weight owner, service-scoped query
+  executor, native runtime lifecycle, placement toggle, and existing
+  row reducer. **EXTENDED:** runtime replica context now preserves the
+  base service identity, failed driver starts fail the lifecycle owner,
+  and the generic query loop supports parallel reduce. **NEW (after
+  comparison):** a stable leased-slot/atomic-snapshot coordinator is
+  required because the existing distributed SQL aggregation owner
+  merges partition results inside one query execution; it does not own
+  work assignment or exchange across independently placed runtime
+  service replicas. Replica IDs cannot fill that role because REPLACE
+  deliberately allocates new generations.
+
 - 2026-07-03 — **A[s][p] attribution SHIPPED (`6646ff18`, quest
   `service-partition-access-attribution` SOLVED)** and **the production
   policy lift SHIPPED (`4c0101b9`, quest

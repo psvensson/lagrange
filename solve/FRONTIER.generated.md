@@ -61,7 +61,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 24
+## Open quests — 22
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
@@ -72,9 +72,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | formation-runtime-service-create-lane-budget-starvation | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
-| latency-group-zone-affinity-demo | product | 0 | 0 | — |
 | listener-port-model-single-authority | product | 0 | 0 | — |
-| movielens-affinity-placement-demo | product | 0 | 0 | — |
 | newcomer-onboarding-friction | product | 0 | 0 | — |
 | rebalancer-own-create-memory-duplicate-replace | product | 0 | 0 | — |
 | rolling-restart-core-stability | product | 74 | 13 | CL-001, CL-004, CL-030 |
