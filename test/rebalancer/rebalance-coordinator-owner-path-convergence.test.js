@@ -818,32 +818,15 @@ test('Owner-path convergence: all progression entry points ' +
         releaseFailedPersistResolve = resolve;
       });
       let blockedFailedPersist = false;
-      const beginCalls = [];
-      let failedBeginCalls = 0;
-      const activeSessions = new Set();
+      let failedPersistCalls = 0;
+      let transactionCoordinatorCalls = 0;
 
       const coordinator = new RebalanceCoordinator({
         nodeId: TEST_NODE_ID,
         transactionCoordinator: {
-          async begin(sessionId) {
-            beginCalls.push(sessionId);
-            if (activeSessions.has(sessionId)) {
-              failedBeginCalls += 1;
-              return {
-                success: false,
-                error: 'Transaction already active for this session',
-              };
-            }
-            activeSessions.add(sessionId);
-            return {success: true};
-          },
-          async commit(sessionId) {
-            activeSessions.delete(sessionId);
-            return {success: true};
-          },
-          async rollback(sessionId) {
-            activeSessions.delete(sessionId);
-            return {success: true};
+          async begin() {
+            transactionCoordinatorCalls += 1;
+            throw new Error('rebalancer must not own SQL transactions');
           },
         },
         systemTableCache: {
@@ -893,9 +876,12 @@ test('Owner-path convergence: all progression entry points ' +
               if (existing) {
                 if (params?.[1] === WORKFLOW_STEP.FAILED &&
                     !blockedFailedPersist) {
+                  failedPersistCalls += 1;
                   blockedFailedPersist = true;
                   failedPersistStartedResolve();
                   await releaseFailedPersist;
+                } else if (params?.[1] === WORKFLOW_STEP.FAILED) {
+                  failedPersistCalls += 1;
                 }
                 existing.status = params[0];
                 existing.workflow_step = params[1];
@@ -982,19 +968,14 @@ test('Owner-path convergence: all progression entry points ' +
           .get(buildOperationOwnerKey(operationId));
 
         t.equal(
-          failedBeginCalls,
+          transactionCoordinatorCalls,
           0,
-          'shared owner key should prevent overlapping FAILED transitions',
+          'the rebalancer must not own SQL transaction sessions',
         );
         t.equal(
-          beginCalls.length,
+          failedPersistCalls,
           1,
-          'FAILED transition should begin exactly one transaction session',
-        );
-        t.match(
-          beginCalls[0],
-          new RegExp(`^${operationId}:${WORKFLOW_STEP.FAILED}`),
-          'FAILED transition should use the shared FAILED session key',
+          'shared owner serialization should persist FAILED exactly once',
         );
         // CL-029: the outcome arriving while the timeout path holds the
         // lane is coalesced away by runExclusive and then RE-DRIVEN after
@@ -1002,7 +983,7 @@ test('Owner-path convergence: all progression entry points ' +
         // outcome path may enter the lane more than once — every entry
         // must still use the shared per-operation owner key, and the
         // re-driven reconcile no-ops on the terminal row (asserted above
-        // via failedBeginCalls/beginCalls).
+        // via transactionCoordinatorCalls/failedPersistCalls).
         t.ok(
           recordedOwnerKeys.length >= 2,
           'timeout and outcome paths must both enter the owner lane',

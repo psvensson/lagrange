@@ -2,30 +2,22 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
 
 const {
-  AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
   ControlPlaneReadinessService,
   DISPATCH_RETRY_DELAY_MS,
   INITIAL_PARTITION_IDS,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECOVERABLE_TRANSITION_COMMIT_STATUS,
-  RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   SYSTEM_TABLE_NAME,
   TIMEOUT_BUDGET_DEFAULT,
-  TRANSITION_RECOVERY_READ_OPTIONS,
-  TRANSITION_RECOVERY_SQL,
   TRANSITION_STEP_OPTIONS,
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
-  buildSelectRowsByTransactionIdsSql,
   createTopLevelOperationBudget,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
-  readAuthoritativeControlPlaneRows,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
@@ -61,145 +53,9 @@ function normalizeOperationWorkflowTransitionStepsHistory(operation) {
 
 class OperationWorkflowTransitionOrchestration
   extends OperationWorkflowOwnerExecutionLane {
-  async loadAuthoritativeTransitionExecutionSession(sessionId) {
-    const txCoordinator = this.transactionCoordinator;
-    const gateway = this.repository?.controlPlaneSystemTableGateway;
-    if (
-      !gateway ||
-      typeof txCoordinator?.recoverFromSystemTables !== 'function' ||
-      typeof txCoordinator.getTransaction !== 'function'
-    ) {
-      return null;
-    }
-
-    const transactionResult = await readAuthoritativeControlPlaneRows(
-      gateway,
-      SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
-      TRANSITION_RECOVERY_SQL.SELECT_TRANSACTIONS_BY_SESSION,
-      [sessionId],
-      {
-        ...TRANSITION_RECOVERY_READ_OPTIONS,
-        controlPlaneTableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
-        controlPlaneOperationKind: 'read',
-      },
-    );
-    if (transactionResult?.success === false) {
-      throw new Error(
-        this.normalizeErrorMessage(
-          transactionResult.error,
-          OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_READ_AUTHORITATIVE_TRANSITION_TRANSACTION_STATE,
-        ),
-      );
-    }
-    const transactionRows = (transactionResult?.rows || []).filter((row) =>
-      AUTHORITATIVE_TRANSITION_RECOVERY_STATUS.has(row?.status),
-    );
-    if (transactionRows.length === 0) {
-      return null;
-    }
-
-    const transactionIds = Array.from(
-      new Set(
-        transactionRows
-          .map((row) => row?.transaction_id || row?.transactionId)
-          .filter(
-            (value) =>
-              typeof value === 'string' && value.length > 0,
-          ),
-      ),
-    );
-    let participantRows = [];
-    if (transactionIds.length > 0) {
-      const participantResult = await readAuthoritativeControlPlaneRows(
-        gateway,
-        SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
-        buildSelectRowsByTransactionIdsSql(
-          SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
-          transactionIds,
-        ),
-        transactionIds,
-        {
-          ...TRANSITION_RECOVERY_READ_OPTIONS,
-          controlPlaneTableName: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
-          controlPlaneOperationKind: 'read',
-        },
-      );
-      if (participantResult?.success === false) {
-        throw new Error(
-          this.normalizeErrorMessage(
-            participantResult.error,
-            OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_READ_AUTHORITATIVE_TRANSITION_PARTICIPANT_STATE,
-          ),
-        );
-      }
-      participantRows = participantResult?.rows || [];
-    }
-
-    txCoordinator.recoverFromSystemTables({
-      transactions: transactionRows,
-      participants: participantRows,
-      writeOperations: [],
-    });
-    return txCoordinator.getTransaction(sessionId);
-  }
-
   /**
-   * Resolve any lingering transaction state for a transition session before
-   * starting a fresh transition attempt on the same session id.
-   * @param {string} sessionId
-   * @param {Object} [options]
-   * @param {boolean} [options.allowAuthoritativeLookup=false]
-   * @return {Promise<boolean>}
-   */
-  async recoverTransitionExecutionSession(sessionId, options = {}) {
-    const txCoordinator = this.transactionCoordinator;
-    if (
-      !txCoordinator ||
-      typeof txCoordinator.getTransaction !== 'function'
-    ) {
-      return false;
-    }
-    let existingTransaction = txCoordinator.getTransaction(sessionId);
-    if (
-      !existingTransaction?.status &&
-      options.allowAuthoritativeLookup === true
-    ) {
-      existingTransaction =
-        await this.loadAuthoritativeTransitionExecutionSession(sessionId);
-    }
-    if (!existingTransaction?.status) {
-      return false;
-    }
-    let result = null;
-    if (RECOVERABLE_TRANSITION_COMMIT_STATUS.has(existingTransaction.status)) {
-      if (typeof txCoordinator.commit !== 'function') {
-        return false;
-      }
-      result = await txCoordinator.commit(sessionId);
-    } else if (
-      RECOVERABLE_TRANSITION_ROLLBACK_STATUS.has(existingTransaction.status)
-    ) {
-      if (typeof txCoordinator.rollback !== 'function') {
-        return false;
-      }
-      result = await txCoordinator.rollback(sessionId);
-    } else {
-      return false;
-    }
-    if (result?.success === true) {
-      return true;
-    }
-    throw new Error(
-      this.normalizeErrorMessage(
-        result?.error,
-        OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_RECOVER_TRANSITION_TRANSACTION,
-      ),
-    );
-  }
-
-  /**
-   * Execute a step transition atomically using the distributed
-   * transaction coordinator.
+   * Execute one guarded durable step mutation under the operation owner lane.
+   * SQL owns any post-mirror promotion to a distributed transaction.
    * @param {Object} operation
    * @param {string} step
    * @param {string} reason
@@ -209,40 +65,6 @@ class OperationWorkflowTransitionOrchestration
    * @param {Function} [options.afterCommit]
    * @return {Promise<boolean>} True when this call committed the transition.
    */
-  /**
-   * Roll back the (empty) transition transaction after an honest persist
-   * refusal so the transition reports uncommitted instead of minting an
-   * in-memory-terminal/durable-non-terminal ghost.
-   * @param {Object} txCoordinator
-   * @param {string} sessionId
-   * @param {Object} operation
-   * @param {string} step
-   * @return {Promise<void>}
-   * @private
-   */
-  async rollbackRefusedTransitionPersist(
-    txCoordinator,
-    sessionId,
-    operation,
-    step,
-  ) {
-    const rollbackResult = await txCoordinator.rollback(sessionId);
-    if (rollbackResult?.success !== true) {
-      this.logger.warn(
-        OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION,
-        {
-          operationId: operation.operationId,
-          workflowStep: step,
-          error: this.normalizeErrorMessage(
-            rollbackResult?.error,
-            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-          ),
-        },
-      );
-    }
-    this.clearTransitionExecutionAttempt(operation.operationId, step);
-  }
-
   async executeAtomicTransition(
     operation,
     step,
@@ -270,178 +92,24 @@ class OperationWorkflowTransitionOrchestration
           typeof options.afterCommit === 'function' ?
             options.afterCommit :
             null;
-        if (options?.bypassExecutionTransaction === true) {
-          await this.operationWorkflowCoordinator.transitionStep(
-            operation.operationId,
-            {nextStep: step, reason},
-            {},
-            TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
-          );
-          const persistResult = await persistFn(null);
-          if (persistResult === false) {
-            return false;
-          }
-          this.operationWorkflowCoordinator.markTransitionCommitted(
-            operation.operationId,
-            step,
-          );
-          if (afterCommit) {
-            await afterCommit();
-          }
-          return true;
+        await this.operationWorkflowCoordinator.transitionStep(
+          operation.operationId,
+          {nextStep: step, reason},
+          {},
+          TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
+        );
+        const persistResult = await persistFn();
+        if (persistResult === false) {
+          return false;
         }
-        const txCoordinator = this.transactionCoordinator;
-        if (
-          !txCoordinator ||
-          typeof txCoordinator.begin !==
-            OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ||
-          typeof txCoordinator.commit !==
-            OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION ||
-          typeof txCoordinator.rollback !==
-            OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
-        ) {
-          throw new Error(
-            REBALANCE_COORDINATOR_ERROR_MSG.TRANSACTION_COORDINATOR_REQUIRED,
-          );
-        }
-        const executionAttempt = this.reserveTransitionExecutionAttempt(
+        this.operationWorkflowCoordinator.markTransitionCommitted(
           operation.operationId,
           step,
         );
-        const sessionId = this.buildTransitionExecutionSessionId(
-          operation.operationId,
-          step,
-          executionAttempt,
-        );
-        await this.recoverTransitionExecutionSession(sessionId);
-        const beginResult = await txCoordinator.begin(sessionId);
-        if (!beginResult.success) {
-          if (
-            this.isStaleTransitionSessionConflict(beginResult.error) ||
-            this.isTransitionPartitionContention(beginResult.error)
-          ) {
-            const recovered = await this.tryRecoverTransitionExecutionSession(
-              sessionId,
-              beginResult.error,
-              {
-                allowAuthoritativeLookup: true,
-              },
-            );
-            if (!recovered) {
-              this.rotateTransitionExecutionAttemptAfterStaleSessionConflict(
-                operation.operationId,
-                step,
-                sessionId,
-                beginResult.error,
-              );
-            }
-          }
-          throw new Error(beginResult.error);
+        if (afterCommit) {
+          await afterCommit();
         }
-        let committed = false;
-        try {
-          await this.operationWorkflowCoordinator.transitionStep(
-            operation.operationId,
-            {nextStep: step, reason},
-            {},
-            TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
-          );
-          const persistResult = await persistFn(sessionId);
-          if (persistResult === false) {
-            // Honest persist refusal (zero-row update, conflicting durable
-            // terminal state, expected-step mismatch): nothing durable
-            // changed, so the transition did NOT commit — swallowing this
-            // result is what minted the run-21 immortal SYNCING ghost.
-            await this.rollbackRefusedTransitionPersist(
-              txCoordinator,
-              sessionId,
-              operation,
-              step,
-            );
-            return false;
-          }
-          const commitResult = await txCoordinator.commit(sessionId);
-          if (!commitResult.success) {
-            throw new Error(commitResult.error);
-          }
-          committed = true;
-          this.operationWorkflowCoordinator.markTransitionCommitted(
-            operation.operationId,
-            step,
-          );
-          this.clearTransitionExecutionAttempt(operation.operationId, step);
-          if (afterCommit) {
-            await afterCommit();
-          }
-          return true;
-        } catch (error) {
-          const staleTransitionSessionConflict =
-            this.isStaleTransitionSessionConflict(error);
-          const transitionPartitionContention =
-            this.isTransitionPartitionContention(error);
-          if (!committed) {
-            const activeTransaction =
-              typeof txCoordinator.getTransaction === 'function' ?
-                txCoordinator.getTransaction(sessionId) :
-                null;
-            if (!activeTransaction) {
-              if (
-                staleTransitionSessionConflict ||
-                transitionPartitionContention
-              ) {
-                const recovered =
-                  await this.tryRecoverTransitionExecutionSession(
-                    sessionId,
-                    error,
-                    {
-                      allowAuthoritativeLookup: true,
-                    },
-                  );
-                if (!recovered && staleTransitionSessionConflict) {
-                  this.rotateTransitionExecutionAttemptAfterStaleSessionConflict(
-                    operation.operationId,
-                    step,
-                    sessionId,
-                    error,
-                  );
-                }
-              }
-              throw error;
-            }
-            try {
-              const rollbackResult = await txCoordinator.rollback(sessionId);
-              if (rollbackResult?.success !== true) {
-                throw new Error(
-                  this.normalizeErrorMessage(
-                    rollbackResult?.error,
-                    OPERATION_WORKFLOW_OWNER_LITERAL.FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION,
-                  ),
-                );
-              }
-            } catch (rollbackError) {
-              rollbackError.cause = error;
-              throw rollbackError;
-            }
-          }
-          if (staleTransitionSessionConflict || transitionPartitionContention) {
-            const recovered = await this.tryRecoverTransitionExecutionSession(
-              sessionId,
-              error,
-              {
-                allowAuthoritativeLookup: true,
-              },
-            );
-            if (!recovered && staleTransitionSessionConflict) {
-              this.rotateTransitionExecutionAttemptAfterStaleSessionConflict(
-                operation.operationId,
-                step,
-                sessionId,
-                error,
-              );
-            }
-          }
-          throw error;
-        }
+        return true;
       },
       {operation},
     );
@@ -512,16 +180,11 @@ class OperationWorkflowTransitionOrchestration
       }
     };
 
-    const bypassExecutionTransaction =
-      this.shouldBypassTransitionExecutionTransaction(operation);
     const usePriorityDispatchTransitionBudget =
       this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step);
 
-    const persistFn = async (sessionId) => {
-      const persistOptions = this.buildOperationTransitionPersistOptions(
-        operation,
-        sessionId,
-      );
+    const persistFn = async () => {
+      const persistOptions = this.buildOperationTransitionPersistOptions();
       const budgetedPersistOptions =
         usePriorityDispatchTransitionBudget ?
           {
@@ -539,16 +202,9 @@ class OperationWorkflowTransitionOrchestration
           previousStep,
           step,
         );
-      const guardedPersistOptions =
-        bypassExecutionTransaction ?
-          {
-            ...budgetedPersistOptions,
-            expectedWorkflowStep,
-          } :
-          budgetedPersistOptions;
       return this.repository.persistOperationUpdate(
         projectedOperation,
-        guardedPersistOptions,
+        {...budgetedPersistOptions, expectedWorkflowStep},
       );
     };
 
@@ -561,7 +217,6 @@ class OperationWorkflowTransitionOrchestration
         persistFn,
         {
           onIdempotentTransition: projectIdempotentTransition,
-          bypassExecutionTransaction,
           afterCommit: async () => {
             await this.confirmCommittedTransitionPersistence(projectedOperation);
           },

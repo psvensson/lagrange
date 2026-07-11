@@ -12,8 +12,11 @@ import {
 import {
 } from '../../src/query/query-constants.js';
 import {
+  COMMIT_MODE,
   METRICS_LOG_TAG,
+  PARTICIPANT_SET_STATE,
   TABLES,
+  TRANSACTION_MODE,
 } from '../../src/constants/index.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -1076,6 +1079,10 @@ test('SQLQueryEngine - recovers and replays distributed transactions from system
       transaction_id: 'tx-recovery-1',
       session_id: 'recovery-session',
       status: 'PREPARED',
+      transaction_mode: TRANSACTION_MODE.EXPLICIT,
+      participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
+      commit_mode: COMMIT_MODE.TWO_PHASE_COMMIT,
+      frozen_participant_count: 1,
       created_at: 1,
       updated_at: 2,
     }];

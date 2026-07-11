@@ -1,4 +1,9 @@
 import {
+  COMMIT_MODE,
+  PARTICIPANT_SET_STATE,
+  TRANSACTION_MODE,
+} from '../../constants/index.js';
+import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_OPERATION,
@@ -23,8 +28,165 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_TRANSACTION_EPOCH = 'transaction_epoch';
 const LOCAL_STR_TRANSACTIONEPOCH = 'transactionEpoch';
+const LOCAL_STR_TRANSACTION_MODE = 'transaction_mode';
+const LOCAL_STR_TRANSACTIONMODE = 'transactionMode';
+const LOCAL_STR_PARTICIPANT_SET_STATE = 'participant_set_state';
+const LOCAL_STR_PARTICIPANTSETSTATE = 'participantSetState';
+const LOCAL_STR_COMMIT_MODE = 'commit_mode';
+const LOCAL_STR_COMMITMODE = 'commitMode';
+const LOCAL_STR_FROZEN_PARTICIPANT_COUNT = 'frozen_participant_count';
+const LOCAL_STR_FROZENPARTICIPANTCOUNT = 'frozenParticipantCount';
 const LOCAL_STR_TIMEOUT_DEADLINE = 'timeout_deadline';
 const LOCAL_STR_TIMEOUTDEADLINE = 'timeoutDeadline';
+const RECOVERED_TRANSACTION_DECISION_EVENT = 'RECOVERY_STATE_RESTORED';
+
+function readTransactionDecisionField(row, snakeKey, camelKey) {
+  return Object.prototype.hasOwnProperty.call(row, snakeKey) ?
+    row[snakeKey] :
+    row[camelKey];
+}
+
+function readTransactionDecisionFieldWithActiveLegacyDefault(
+  row,
+  snakeKey,
+  camelKey,
+  status,
+  legacyDefault,
+) {
+  const value = readTransactionDecisionField(row, snakeKey, camelKey);
+  return value === undefined && status === TRANSACTION_STATUS.ACTIVE ?
+    legacyDefault :
+    value;
+}
+
+function buildRecoveredTransactionDecisionState(row, status) {
+  return {
+    transactionMode: readTransactionDecisionFieldWithActiveLegacyDefault(
+      row,
+      LOCAL_STR_TRANSACTION_MODE,
+      LOCAL_STR_TRANSACTIONMODE,
+      status,
+      TRANSACTION_MODE.EXPLICIT,
+    ),
+    participantSetState:
+      readTransactionDecisionFieldWithActiveLegacyDefault(
+        row,
+        LOCAL_STR_PARTICIPANT_SET_STATE,
+        LOCAL_STR_PARTICIPANTSETSTATE,
+        status,
+        PARTICIPANT_SET_STATE.OPEN,
+      ),
+    commitMode: readTransactionDecisionFieldWithActiveLegacyDefault(
+      row,
+      LOCAL_STR_COMMIT_MODE,
+      LOCAL_STR_COMMITMODE,
+      status,
+      COMMIT_MODE.NOT_SELECTED,
+    ),
+    frozenParticipantCount: Number(
+      readTransactionDecisionFieldWithActiveLegacyDefault(
+        row,
+        LOCAL_STR_FROZEN_PARTICIPANT_COUNT,
+        LOCAL_STR_FROZENPARTICIPANTCOUNT,
+        status,
+        0,
+      )),
+  };
+}
+
+function validateRecoveredTransactionDecision(tx) {
+  const transactionModeValid =
+    Object.values(TRANSACTION_MODE).includes(tx.transactionMode);
+  const participantSetStateValid =
+    Object.values(PARTICIPANT_SET_STATE).includes(tx.participantSetState);
+  const commitModeValid = Object.values(COMMIT_MODE).includes(tx.commitMode);
+  const frozenCountValid = Number.isInteger(tx.frozenParticipantCount) &&
+    tx.frozenParticipantCount >= 0;
+  const openStateValid =
+    tx.participantSetState === PARTICIPANT_SET_STATE.OPEN &&
+    tx.commitMode === COMMIT_MODE.NOT_SELECTED &&
+    tx.frozenParticipantCount === 0 &&
+    [
+      TRANSACTION_STATUS.ACTIVE,
+      TRANSACTION_STATUS.ROLLING_BACK,
+      TRANSACTION_STATUS.FAILED,
+    ].includes(tx.status);
+  const frozenStateValid =
+    tx.participantSetState === PARTICIPANT_SET_STATE.FROZEN &&
+    tx.commitMode !== COMMIT_MODE.NOT_SELECTED &&
+    tx.frozenParticipantCount === tx.participants.size;
+  const onePhaseStatusValid =
+    tx.commitMode !== COMMIT_MODE.ONE_PHASE_COMMIT ||
+    ![
+      TRANSACTION_STATUS.PREPARING,
+      TRANSACTION_STATUS.PREPARED,
+    ].includes(tx.status);
+  const onePhaseCountValid =
+    tx.commitMode !== COMMIT_MODE.ONE_PHASE_COMMIT ||
+    tx.frozenParticipantCount === 1;
+  if (
+    !transactionModeValid ||
+    !participantSetStateValid ||
+    !commitModeValid ||
+    !frozenCountValid ||
+    (!openStateValid && !frozenStateValid) ||
+    !onePhaseStatusValid ||
+    !onePhaseCountValid
+  ) {
+    const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+    error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+    throw error;
+  }
+}
+
+function buildRecoveredParticipantKeysByTransaction(participantRows) {
+  const participantKeysByTransaction = new Map();
+  for (const row of participantRows) {
+    const transactionId = row.transaction_id || row.transactionId;
+    const partitionId = row.partition_id || row.partitionId;
+    if (!transactionId || !partitionId) {
+      continue;
+    }
+    const keys = participantKeysByTransaction.get(transactionId) || new Set();
+    keys.add(partitionId);
+    participantKeysByTransaction.set(transactionId, keys);
+  }
+  return participantKeysByTransaction;
+}
+
+function validateRecoveryRowsBeforeMutation(
+  coordinator,
+  transactionRows,
+  participantRows,
+) {
+  const participantKeysByTransaction =
+    buildRecoveredParticipantKeysByTransaction(participantRows);
+  for (const row of transactionRows) {
+    const status = row.status || TRANSACTION_STATUS.FAILED;
+    if (TERMINAL_TRANSACTION_STATUS.has(status)) {
+      continue;
+    }
+    const sessionId = row.session_id || row.sessionId;
+    const transactionId = row.transaction_id || row.transactionId;
+    if (!sessionId || !transactionId) {
+      const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+      error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+      throw error;
+    }
+    if (coordinator.transactionsBySession.has(sessionId)) {
+      continue;
+    }
+    const participantKeys =
+      participantKeysByTransaction.get(transactionId) || new Set();
+    validateRecoveredTransactionDecision({
+      ...buildRecoveredTransactionDecisionState(row, status),
+      status,
+      participants: new Map(
+        Array.from(participantKeys, (partitionId) => [partitionId, true]),
+      ),
+    });
+  }
+}
 
 /**
  * @param {*} errorLike
@@ -439,6 +601,12 @@ const distributedTransactionRecoveryMethods = {
       payload.writeOperations :
       [];
 
+    validateRecoveryRowsBeforeMutation(
+      this,
+      transactionRows,
+      participantRows,
+    );
+
     const recoveryOutcome = this.workflowCoordinator.recover({
       workflows: transactionRows,
       participants: participantRows,
@@ -449,6 +617,13 @@ const distributedTransactionRecoveryMethods = {
         if (!sessionId || !transactionId) {
           return null;
         }
+        const {
+          transactionMode,
+          participantSetState,
+          commitMode,
+          frozenParticipantCount,
+        } = buildRecoveredTransactionDecisionState(row, status);
+        const updatedAt = row.updated_at || row.updatedAt || this.now();
         return {
           sessionId,
           ownerKey: sessionId,
@@ -465,9 +640,27 @@ const distributedTransactionRecoveryMethods = {
             LOCAL_STR_TIMEOUT_DEADLINE,
             LOCAL_STR_TIMEOUTDEADLINE,
           ),
+          transactionMode,
+          participantSetState,
+          commitMode,
+          frozenParticipantCount,
+          participantSetFrozenAt:
+            participantSetState === PARTICIPANT_SET_STATE.FROZEN ?
+              updatedAt :
+              0,
+          decisionTrace: [Object.freeze({
+            sequence: 0,
+            event: RECOVERED_TRANSACTION_DECISION_EVENT,
+            status,
+            transactionMode,
+            participantSetState,
+            commitMode,
+            frozenParticipantCount,
+            timestamp: updatedAt,
+          })],
           writeOperations: [],
           createdAt: row.created_at || row.createdAt || this.now(),
-          updatedAt: row.updated_at || row.updatedAt || this.now(),
+          updatedAt,
         };
       },
       loadParticipant: (row) => {
@@ -502,6 +695,12 @@ const distributedTransactionRecoveryMethods = {
     // in-memory entries.
     const restoredWorkflowIds =
       recoveryOutcome?.restoredWorkflowIds || new Set();
+    for (const workflowId of restoredWorkflowIds) {
+      const tx = this.workflowCoordinator.getWorkflowById(workflowId);
+      if (tx) {
+        validateRecoveredTransactionDecision(tx);
+      }
+    }
     for (const row of transactionRows) {
       const transactionId = row.transaction_id || row.transactionId;
       if (!transactionId || !restoredWorkflowIds.has(transactionId)) {

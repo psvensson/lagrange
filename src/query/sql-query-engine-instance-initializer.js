@@ -190,6 +190,19 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
           partitionId,
           QUERY_OPERATION.ROLLBACK,
         ),
+      resolveParticipantCommitOutcome: async (
+        sessionId,
+        partitionId,
+        transactionEpoch,
+      ) => {
+        const result = await engine.deliverTransactionOperation(
+          sessionId,
+          partitionId,
+          QUERY_OPERATION.TRANSACTION_OUTCOME,
+          {transactionEpoch},
+        );
+        return result.outcome;
+      },
       persistTransaction: async (record) =>
         engine.persistDistributedTransactionRow(record),
       persistParticipant: async (record) =>

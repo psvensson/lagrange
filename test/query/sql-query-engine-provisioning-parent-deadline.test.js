@@ -96,6 +96,14 @@ function createDeadlineFixture(options = {}) {
       return {success: true, rows: []};
     },
   });
+  // This fixture attacks the inner provisioning deadline. Durable schema-job
+  // ownership has separate coverage and would otherwise end the request before
+  // the provisioning loop under test starts.
+  engine.tableCreationService.createTable = (ast, createOptions) =>
+    engine.tableCreationService.executeCreateTableProvisioning(
+      ast,
+      createOptions,
+    );
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
   engine.waitForPartitionServiceMetadata = async () => {};

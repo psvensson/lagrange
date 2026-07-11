@@ -214,21 +214,24 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
     ]),
   }),
   'src/rebalancer/operation-workflow-owner-execution-lane.js': Object.freeze({
+    forbiddenFragments: Object.freeze([
+      'bypassSingleParticipantSystemWrite',
+      'recoverTransitionExecutionSession',
+      'transactionCoordinator',
+    ]),
     functionContracts: Object.freeze([
       Object.freeze({
-        functionName: 'resolveTransitionOperationPartitionId',
+        functionName: 'buildOperationTransitionPersistOptions',
         requiredFragments: Object.freeze([
-          'operation?.partitionId',
-          'operation?.partition_id',
-          'operation?.entityId',
-          'operation?.entity_id',
+          'confirmPersistence: false',
+          'disableSystemWriteSession: true',
         ]),
       }),
       Object.freeze({
-        functionName: 'shouldBypassTransitionExecutionTransaction',
+        functionName: 'confirmCommittedTransitionPersistence',
         requiredFragments: Object.freeze([
-          'resolveTransitionOperationPartitionId',
-          'isPriorityControlPlanePartition',
+          'confirmReplicaOperationPersistence',
+          'armTerminalTransitionRepair',
         ]),
       }),
     ]),

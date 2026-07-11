@@ -242,6 +242,9 @@ test('SQLQueryEngine - transactional UPDATE forwards sessionId to distributed wr
       },
       async recordWriteOperation() {},
       async markWriteOperationResult() {},
+      async executeWriteStatement(_sessionId, _operation, executeWrite) {
+        return executeWrite();
+      },
     };
     const distributedWriteCoordinator = {
       createWritePlan(_ast, _params, options = {}) {

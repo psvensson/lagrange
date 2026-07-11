@@ -175,8 +175,6 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           sessionId: options.sessionId,
           timeoutBudget: options.timeoutBudget,
           disableSystemWriteSession: options.disableSystemWriteSession === true,
-          bypassSingleParticipantSystemWrite:
-            options.bypassSingleParticipantSystemWrite === true,
           mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
           onRetryableFailure: (errorResult) =>
             this.recoverPersistedReplicaOperationMutation(

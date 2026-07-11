@@ -1,5 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {
+  PARTITION_TRANSITION_STATE,
+} from '../partition/partition-constants.js';
+import {
   CONTROL_PLANE_SQL_OPERATION,
   resolveControlPlaneSystemTableDeliverySource,
 } from '../control-plane/control-plane-system-table-gateway-shared.js';
@@ -54,6 +57,21 @@ const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
 const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
 
 class CDCRoutedMutationReadiness {
+  hasActiveSystemTableWriteMirror(tableName) {
+    const sqlQueryEngine = this.sqlQueryEngine;
+    if (
+      typeof sqlQueryEngine?.getTableInfo !== 'function' ||
+      typeof sqlQueryEngine.parsePartitionTransition !== 'function'
+    ) {
+      return false;
+    }
+    const transition = sqlQueryEngine.parsePartitionTransition(
+      sqlQueryEngine.getTableInfo(tableName),
+    );
+    return transition?.state ===
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+  }
+
   async tryExecuteLocalSystemTableWrite(sql, params = []) {
     if (!sql || typeof sql !== 'string') {
       return {
@@ -80,6 +98,9 @@ class CDCRoutedMutationReadiness {
       return {
         handled: false,
       };
+    }
+    if (this.hasActiveSystemTableWriteMirror(tableName)) {
+      return {handled: false};
     }
     const localServices = this.resolveLocalSystemTableServices(tableName, {
       consistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
@@ -456,9 +477,6 @@ class CDCRoutedMutationReadiness {
     };
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       baseQueryOptions.sessionId = sessionId;
-    }
-    if (options?.bypassSingleParticipantSystemWrite === true) {
-      baseQueryOptions.bypassSingleParticipantSystemWrite = true;
     }
     if (options?.cancellationToken) {
       baseQueryOptions.cancellationToken = options.cancellationToken;

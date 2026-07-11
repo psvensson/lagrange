@@ -137,7 +137,7 @@ class OperationWorkflowTransitionPersistence
         try {
           transitionCommitted =
             await this.repository.persistOperationUpdate(projectedOperation, {
-              ...this.buildOperationTransitionPersistOptions(operation, null),
+              ...this.buildOperationTransitionPersistOptions(),
               confirmPersistence: true,
               expectedWorkflowStep: WORKFLOW_STEP.PENDING,
               timeoutBudget: mutationBudget,
@@ -283,18 +283,15 @@ class OperationWorkflowTransitionPersistence
         now;
     };
 
-    const persistFn = async (sessionId) => {
+    const persistFn = async () => {
       return this.repository.persistOperationUpdate(
         projectedOperation,
         {
-          ...this.buildOperationTransitionPersistOptions(operation, sessionId),
+          ...this.buildOperationTransitionPersistOptions(),
           terminalTransition: true,
         },
       );
     };
-    const bypassExecutionTransaction =
-      this.shouldBypassTransitionExecutionTransaction(operation);
-
     const transitionCommitted = await this.executeAtomicTransition(
       operation,
       finalStep,
@@ -302,7 +299,6 @@ class OperationWorkflowTransitionPersistence
       persistFn,
       {
         onIdempotentTransition: projectIdempotentTransition,
-        bypassExecutionTransaction,
         afterCommit: async () => {
           await this.confirmCommittedTransitionPersistence(
             projectedOperation,
@@ -449,18 +445,15 @@ class OperationWorkflowTransitionPersistence
       operation.errorMessage = normalizedError;
     };
 
-    const persistFn = async (sessionId) => {
+    const persistFn = async () => {
       return this.repository.persistOperationUpdate(
         projectedOperation,
         {
-          ...this.buildOperationTransitionPersistOptions(operation, sessionId),
+          ...this.buildOperationTransitionPersistOptions(),
           terminalTransition: true,
         },
       );
     };
-    const bypassExecutionTransaction =
-      this.shouldBypassTransitionExecutionTransaction(operation);
-
     const transitionCommitted = await this.executeAtomicTransition(
       operation,
       WORKFLOW_STEP.FAILED,
@@ -468,7 +461,6 @@ class OperationWorkflowTransitionPersistence
       persistFn,
       {
         onIdempotentTransition: projectIdempotentTransition,
-        bypassExecutionTransaction,
         afterCommit: async () => {
           await this.confirmCommittedTransitionPersistence(
             projectedOperation,

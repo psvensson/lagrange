@@ -30,6 +30,7 @@ import {
 } from '../../src/raft/constants.js';
 import {
   COLUMN,
+  PARTICIPANT_COMMIT_OUTCOME,
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
@@ -294,6 +295,10 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
         {name: 'status', type: 'TEXT', notNull: true},
         {name: 'transaction_epoch', type: 'INTEGER'},
         {name: 'timeout_deadline', type: 'INTEGER'},
+        {name: 'transaction_mode', type: 'TEXT', notNull: true},
+        {name: 'participant_set_state', type: 'TEXT', notNull: true},
+        {name: 'commit_mode', type: 'TEXT', notNull: true},
+        {name: 'frozen_participant_count', type: 'INTEGER', notNull: true},
         {name: 'created_at', type: 'INTEGER', notNull: true},
         {name: 'updated_at', type: 'INTEGER', notNull: true},
       ],
@@ -339,8 +344,66 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
         columns.includes('timeout_deadline'),
         'legacy sql_transactions replicas should add the timeout_deadline column during initialization',
       );
+      t.ok(columns.includes('transaction_mode'));
+      t.ok(columns.includes('participant_set_state'));
+      t.ok(columns.includes('commit_mode'));
+      t.ok(columns.includes('frozen_participant_count'));
     } finally {
       await repairedPartition.shutdown();
+      fs.rmSync(tempDir, {recursive: true, force: true});
+    }
+  });
+
+test('PartitionService - persists one-phase commit outcome atomically across restart',
+  async (t) => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-outcome-'));
+    const dbPath = path.join(tempDir, 'outcome.db');
+    const buildPartition = () => new PartitionService({
+      partitionId: 'outcome-p1',
+      tableId: 'outcome_rows',
+      tableName: 'outcome_rows',
+      schema: {
+        tableName: 'outcome_rows',
+        columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+      },
+      replicaId: 'outcome-p1-r1',
+      nodeId: 'node-1',
+      dbPath,
+    });
+    const first = buildPartition();
+    await first.initialize();
+    await first.beginTransaction('committed-session', 7);
+    await first.commitTransaction('committed-session');
+    await first.shutdown();
+
+    const restarted = buildPartition();
+    try {
+      await restarted.initialize();
+      t.equal(
+        restarted.resolveTransactionCommitOutcome('committed-session', 7),
+        PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
+      );
+      t.equal(
+        restarted.resolveTransactionCommitOutcome(
+          'never-delivered-session',
+          7,
+        ),
+        PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED,
+      );
+      await restarted.beginTransaction('committed-session', 8);
+      t.equal(
+        restarted.resolveTransactionCommitOutcome('committed-session', 8),
+        PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+        'a committed prior epoch must not satisfy a new open transaction',
+      );
+      t.equal(
+        restarted.resolveTransactionCommitOutcome('committed-session', 7),
+        PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
+        'the prior committed epoch remains independently queryable',
+      );
+      await restarted.rollbackTransaction('committed-session');
+    } finally {
+      await restarted.shutdown();
       fs.rmSync(tempDir, {recursive: true, force: true});
     }
   });

@@ -9,6 +9,7 @@ const {
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_SQL,
+  PARTICIPANT_COMMIT_OUTCOME,
   RaftRole,
 } = PARTITION_SERVICE_SHARED;
 
@@ -639,6 +640,10 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
         resolvedSessionId,
         transactionState.transactionEpoch,
       );
+      this.recordTransactionCommitOutcome(
+        resolvedSessionId,
+        transactionState.transactionEpoch,
+      );
       this.db.exec(PARTITION_SERVICE_SQL.COMMIT);
       const duration = Date.now() - transactionState.startTime;
       const operationCount = transactionState.operations.length;
@@ -792,6 +797,43 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       this.activeTransactions.size > 0 ||
       this.preparedTransactions.size > 0
     );
+  }
+
+  recordTransactionCommitOutcome(sessionId, transactionEpoch = null) {
+    const normalizedEpoch = Number.isFinite(transactionEpoch) ?
+      Math.floor(transactionEpoch) :
+      0;
+    this.db.prepare(PARTITION_SERVICE_SQL.UPSERT_TRANSACTION_OUTCOME).run(
+      this.normalizeTransactionSessionId(sessionId),
+      PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
+      normalizedEpoch,
+      Date.now(),
+    );
+  }
+
+  resolveTransactionCommitOutcome(sessionId = null, transactionEpoch = null) {
+    const normalizedSessionId = this.normalizeTransactionSessionId(sessionId);
+    const normalizedEpoch = Number.isFinite(transactionEpoch) ?
+      Math.floor(transactionEpoch) :
+      0;
+    const row = this.db
+      .prepare(PARTITION_SERVICE_SQL.SELECT_TRANSACTION_OUTCOME)
+      .get(normalizedSessionId, normalizedEpoch);
+    if (row?.outcome === PARTICIPANT_COMMIT_OUTCOME.COMMITTED) {
+      return PARTICIPANT_COMMIT_OUTCOME.COMMITTED;
+    }
+    const openTransaction =
+      this.resolveOpenTransactionState(normalizedSessionId);
+    if (
+      openTransaction &&
+      Number(openTransaction.state.transactionEpoch || 0) === normalizedEpoch
+    ) {
+      return PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
+    }
+    if (this.preparedStateLostSessions.has(normalizedSessionId)) {
+      return PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
+    }
+    return PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED;
   }
   /**
    * Replicate transaction commit through Raft for durability.

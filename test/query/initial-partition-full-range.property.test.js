@@ -46,6 +46,10 @@ class MockCDCIntegrationService {
     this.insertedRows.push({tableName, row});
   }
 
+  async updateSystemTableRow() {
+    return {success: true};
+  }
+
   getPartitionRows() {
     return this.insertedRows.filter((r) => r.tableName === 'partitions');
   }
@@ -101,7 +105,7 @@ test('Property 44: Initial partition has full key range [NULL, NULL)', async (t)
           cdcIntegrationService: mockCDC,
         });
 
-        const result = await service.createTable(ast);
+        const result = await service.executeCreateTableProvisioning(ast);
 
         if (!result.success) {
           return false;
@@ -160,7 +164,7 @@ test('Property 44: Initial partition is linked to correct table', async (t) => {
           cdcIntegrationService: mockCDC,
         });
 
-        const result = await service.createTable(ast);
+        const result = await service.executeCreateTableProvisioning(ast);
 
         if (!result.success) {
           return false;
@@ -231,7 +235,7 @@ test('Property 44: Exactly one partition created for new table', async (t) => {
           cdcIntegrationService: mockCDC,
         });
 
-        const result = await service.createTable(ast);
+        const result = await service.executeCreateTableProvisioning(ast);
 
         if (!result.success) {
           return false;

@@ -233,28 +233,47 @@ clause, sort within each partition, and compute window values.
 
 #### Multi-Partition Transactions (Implemented)
 
-Distributed multi-partition transactions are implemented with
-`DistributedTransactionCoordinator` as the single 2PC owner and
+Distributed transactions are implemented with
+`DistributedTransactionCoordinator` as the single commit-mode owner and
 `PartitionService` as the participant owner.
 
 Implementation summary:
 1. `BEGIN` assigns a monotonic `transactionEpoch` and a timeout budget
-   deadline; both are persisted in `sql_transactions`.
+   deadline. The transaction kind is `EXPLICIT`; SQL-created statement
+   transactions are `AUTOCOMMIT`.
 2. Participant enlistment delivers `BEGIN` through `MessageRouter` with
    the assigned epoch.
-3. `COMMIT` runs phase 1 prepare. Each participant executes
+3. SQL direct-autocommits an independent one-participant statement. A final
+   post-mirror multi-participant statement is promoted to an owner-generated
+   `AUTOCOMMIT` transaction. Active explicit transactions always enlist.
+4. `COMMIT` waits for the session FIFO lane, freezes the final participant
+   set, persists its exact count, and then selects the immutable commit mode.
+   One participant uses 1PC only when the participant exposes a durable typed
+   commit outcome; otherwise it safely falls back to 2PC. A rejected durable
+   transaction or participant mutation fails closed before protocol fanout.
+5. 2PC runs phase 1 prepare. Each participant executes
    `prepareTransaction()`, validates write conflicts, and appends
    `PREPARE_TRANSACTION` in its Raft log before prepare success.
-4. On all-prepare success, coordinator persists `COMMITTING` before any
+6. On all-prepare success, coordinator persists `COMMITTING` before any
    participant commit message, then drives commit fanout with bounded
    retry/backoff.
-5. On prepare failure or explicit rollback, coordinator persists
+7. On prepare failure or explicit rollback, coordinator persists
    `ROLLING_BACK` before rollback fanout and drives all participants to
    `ROLLED_BACK`.
-6. Recovery and timeout: restart replay uses persisted statuses
-   (`ACTIVE/PREPARING -> rollback`, `PREPARED/COMMITTING -> commit`);
-   periodic recovery sweep resolves timed-out non-terminal transactions.
-7. Snapshot model: participants enforce epoch-based snapshot isolation
+8. Recovery validates staged rows before installing coordinator state, then
+   validates the persisted transaction mode, participant-set state, commit
+   mode, and frozen participant count before any callback. 1PC replay
+   resolves `COMMITTED`, `NOT_COMMITTED`, or `UNKNOWN` from the participant's
+   SQLite-atomic outcome record keyed by session and exact transaction epoch;
+   `UNKNOWN` remains in `COMMITTING`. A periodic recovery sweep resolves
+   timed-out non-terminal transactions.
+
+The W10 schema cutover is full-restart/minimum-version only. Drain every
+pre-W10 nonterminal transaction before upgrade. Mixed-version apply is not
+supported, and legacy `PREPARING`, `PREPARED`, or `COMMITTING` rows with
+`NOT_SELECTED` fail closed rather than inferring a mode.
+
+9. Snapshot model: participants enforce epoch-based snapshot isolation
    (`commit_epoch < transaction_epoch` visibility), read-your-own-writes,
    and first-committer-wins write-conflict detection via write sets.
 

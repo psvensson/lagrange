@@ -7,6 +7,11 @@ import {
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {QUERY_ERROR_CODE, QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {
+  COMMIT_MODE,
+  PARTICIPANT_SET_STATE,
+  TRANSACTION_MODE,
+} from '../../src/constants/index.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -15,6 +20,24 @@ if (!config.isInitialized()) {
 
 const sessionIdArb = fc.stringMatching(/^[a-z0-9-]{3,24}$/);
 const partitionIdArb = fc.stringMatching(/^p-[a-z0-9-]{1,12}$/);
+
+function recoveryDecision(status, participantCount) {
+  const frozen = [
+    TRANSACTION_STATUS.PREPARING,
+    TRANSACTION_STATUS.PREPARED,
+    TRANSACTION_STATUS.COMMITTING,
+  ].includes(status);
+  return {
+    transaction_mode: TRANSACTION_MODE.EXPLICIT,
+    participant_set_state: frozen ?
+      PARTICIPANT_SET_STATE.FROZEN :
+      PARTICIPANT_SET_STATE.OPEN,
+    commit_mode: frozen ?
+      COMMIT_MODE.TWO_PHASE_COMMIT :
+      COMMIT_MODE.NOT_SELECTED,
+    frozen_participant_count: frozen ? participantCount : 0,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Property 9: Epoch monotonicity
@@ -480,6 +503,10 @@ test(
               transaction_id: transactionId,
               session_id: recovered.sessionId,
               status: recovered.status,
+              ...recoveryDecision(
+                recovered.status,
+                recovered.participantCount,
+              ),
               created_at: 1,
               updated_at: 1,
             });
@@ -653,6 +680,7 @@ test(
                   transaction_id: transactionId,
                   session_id: sessionId,
                   status,
+                  ...recoveryDecision(status, partitionIds.length),
                   timeout_deadline: nowMs - 1,
                   created_at: 1,
                   updated_at: 1,

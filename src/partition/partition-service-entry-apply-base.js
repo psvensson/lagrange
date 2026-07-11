@@ -41,6 +41,18 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     const hasTimeoutDeadline = columns.some(
       (col) => col.name === PARTITION_SERVICE_COLUMN.TIMEOUT_DEADLINE,
     );
+    const hasTransactionMode = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.TRANSACTION_MODE,
+    );
+    const hasParticipantSetState = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.PARTICIPANT_SET_STATE,
+    );
+    const hasCommitMode = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.COMMIT_MODE,
+    );
+    const hasFrozenParticipantCount = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.FROZEN_PARTICIPANT_COUNT,
+    );
     if (!hasTransactionEpoch) {
       this.db.exec(
         `ALTER TABLE ${this.tableName} ` +
@@ -58,6 +70,48 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       );
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_TIMEOUT_DEADLINE,
+        {tableName: this.tableName, partitionId: this.partitionId},
+      );
+    }
+    if (!hasTransactionMode) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_TRANSACTION_MODE,
+      );
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_TRANSACTION_MODE,
+        {tableName: this.tableName, partitionId: this.partitionId},
+      );
+    }
+    if (!hasParticipantSetState) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_PARTICIPANT_SET_STATE,
+      );
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG
+          .ADDED_SQL_TRANSACTIONS_PARTICIPANT_SET_STATE,
+        {tableName: this.tableName, partitionId: this.partitionId},
+      );
+    }
+    if (!hasCommitMode) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_COMMIT_MODE,
+      );
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_COMMIT_MODE,
+        {tableName: this.tableName, partitionId: this.partitionId},
+      );
+    }
+    if (!hasFrozenParticipantCount) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_FROZEN_PARTICIPANT_COUNT,
+      );
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG
+          .ADDED_SQL_TRANSACTIONS_FROZEN_PARTICIPANT_COUNT,
         {tableName: this.tableName, partitionId: this.partitionId},
       );
     }
@@ -185,6 +239,15 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         break;
       case PARTITION_SERVICE_OPERATION.ROLLBACK:
         result = await this.rollbackTransaction(sessionId);
+        break;
+      case PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME:
+        result = {
+          success: true,
+          outcome: this.resolveTransactionCommitOutcome(
+            sessionId,
+            transactionEpoch,
+          ),
+        };
         break;
       default:
         return {
@@ -689,6 +752,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     } else if (
       command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT
     ) {
+      this.recordTransactionCommitOutcome(
+        command.sessionId,
+        command.transactionEpoch,
+      );
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRANSACTION_COMMIT_APPLIED, {
         partitionId: this.partitionId,
         operationCount: command.operations?.length || 0,

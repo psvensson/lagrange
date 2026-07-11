@@ -102,7 +102,7 @@ test('Property 42: Single-column PRIMARY KEY becomes partition key', async (t) =
         };
 
         const service = new TableCreationService();
-        const result = await service.createTable(ast);
+        const result = await service.executeCreateTableProvisioning(ast);
 
         // Verify partition key equals PRIMARY KEY
         if (!result.success) {
@@ -158,7 +158,7 @@ test('Property 42: Composite PRIMARY KEY becomes partition key', async (t) => {
         };
 
         const service = new TableCreationService();
-        const result = await service.createTable(ast);
+        const result = await service.executeCreateTableProvisioning(ast);
 
         // Verify partition key equals comma-separated PRIMARY KEY columns
         if (!result.success) {

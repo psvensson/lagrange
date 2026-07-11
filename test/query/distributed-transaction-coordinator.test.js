@@ -8,6 +8,12 @@ import {
   QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {
+  COMMIT_MODE,
+  PARTICIPANT_COMMIT_OUTCOME,
+  PARTICIPANT_SET_STATE,
+  TRANSACTION_MODE,
+} from '../../src/constants/index.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 
@@ -15,6 +21,22 @@ const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
 }
+
+function frozenTransactionDecision(participantCount) {
+  return {
+    transaction_mode: TRANSACTION_MODE.EXPLICIT,
+    participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
+    commit_mode: COMMIT_MODE.TWO_PHASE_COMMIT,
+    frozen_participant_count: participantCount,
+  };
+}
+
+const OPEN_TRANSACTION_DECISION = Object.freeze({
+  transaction_mode: TRANSACTION_MODE.EXPLICIT,
+  participant_set_state: PARTICIPANT_SET_STATE.OPEN,
+  commit_mode: COMMIT_MODE.NOT_SELECTED,
+  frozen_participant_count: 0,
+});
 
 test('DistributedTransactionCoordinator - enlists participants and commits', async (t) => {
   const calls = [];
@@ -207,6 +229,7 @@ test('DistributedTransactionCoordinator - supports recovery payloads', async (t)
       sessionId: 's4',
       transactionId: 'tx-s4-1',
       status: TRANSACTION_STATUS.PREPARED,
+      ...frozenTransactionDecision(1),
       participants: ['p1'],
       writeOperations: [{operationId: 'op-1'}],
       createdAt: 1,
@@ -304,6 +327,7 @@ test('DistributedTransactionCoordinator - recovers from canonical system table r
         transaction_id: 'tx-s7-1',
         session_id: 's7',
         status: TRANSACTION_STATUS.PREPARED,
+        ...frozenTransactionDecision(1),
         created_at: 1,
         updated_at: 2,
       }],
@@ -381,6 +405,7 @@ test('DistributedTransactionCoordinator - recovery replay resumes commit lane',
         transaction_id: 'tx-recover-commit-1',
         session_id: 'recover-commit-1',
         status: TRANSACTION_STATUS.PREPARED,
+        ...frozenTransactionDecision(2),
         created_at: 1,
         updated_at: 1,
       }],
@@ -437,6 +462,7 @@ test('DistributedTransactionCoordinator - recovery replay treats ' +
       transaction_id: 'tx-recover-idempotent-commit-1',
       session_id: 'recover-idempotent-commit-1',
       status: TRANSACTION_STATUS.COMMITTING,
+      ...frozenTransactionDecision(2),
       created_at: 1,
       updated_at: 1,
     }],
@@ -488,6 +514,7 @@ test('DistributedTransactionCoordinator - recovery replay only commits pending p
         transaction_id: 'tx-recover-commit-2',
         session_id: 'recover-commit-2',
         status: TRANSACTION_STATUS.COMMITTING,
+        ...frozenTransactionDecision(2),
         created_at: 1,
         updated_at: 1,
       }],
@@ -537,6 +564,7 @@ test('DistributedTransactionCoordinator - recovery replay rolls back preparing t
         transaction_id: 'tx-recover-preparing-1',
         session_id: 'recover-preparing-1',
         status: TRANSACTION_STATUS.PREPARING,
+        ...frozenTransactionDecision(2),
         created_at: 1,
         updated_at: 1,
       }],
@@ -583,6 +611,7 @@ test('DistributedTransactionCoordinator - recovery replay resumes rollback lane'
         transaction_id: 'tx-recover-rollback-1',
         session_id: 'recover-rollback-1',
         status: TRANSACTION_STATUS.ROLLING_BACK,
+        ...OPEN_TRANSACTION_DECISION,
         created_at: 1,
         updated_at: 1,
       }],
@@ -612,4 +641,229 @@ test('DistributedTransactionCoordinator - recovery replay resumes rollback lane'
     t.equal(recovery.failed, 0);
     t.same(rollbackCalls, ['recover-rollback-1:p1']);
     t.equal(coordinator.hasActiveTransaction('recover-rollback-1'), false);
+  });
+
+test('DistributedTransactionCoordinator - freezes before selecting one phase',
+  async (t) => {
+    const prepareCalls = [];
+    const coordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {},
+      prepareParticipant: async (sessionId, partitionId) => {
+        prepareCalls.push(`${sessionId}:${partitionId}`);
+      },
+      commitParticipant: async () => {},
+      resolveParticipantCommitOutcome: async () =>
+        PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+    });
+
+    await coordinator.begin('one-phase', {
+      commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
+    });
+    await coordinator.enlistParticipants('one-phase', ['p1']);
+    const result = await coordinator.commit('one-phase');
+
+    t.equal(result.success, true);
+    t.equal(result.commitMode, COMMIT_MODE.ONE_PHASE_COMMIT,
+      'caller preference must not override coordinator selection');
+    t.same(prepareCalls, [], 'one phase must not prepare');
+    t.same(result.decisionTrace.map((entry) => entry.event), [
+      'PARTICIPANT_SET_FROZEN',
+      'COMMIT_MODE_SELECTED',
+    ]);
+  });
+
+test('DistributedTransactionCoordinator - final second participant selects two phase',
+  async (t) => {
+    const prepareCalls = [];
+    const coordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {},
+      prepareParticipant: async (_sessionId, partitionId) => {
+        prepareCalls.push(partitionId);
+      },
+      commitParticipant: async () => {},
+      resolveParticipantCommitOutcome: async () =>
+        PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+    });
+
+    await coordinator.begin('two-phase');
+    await coordinator.enlistParticipants('two-phase', ['p1']);
+    await coordinator.enlistParticipants('two-phase', ['p2']);
+    const result = await coordinator.commit('two-phase');
+
+    t.equal(result.commitMode, COMMIT_MODE.TWO_PHASE_COMMIT);
+    t.same(prepareCalls.sort(), ['p1', 'p2']);
+  });
+
+test('DistributedTransactionCoordinator - rejects enlistment after freeze',
+  async (t) => {
+    const participantBegins = [];
+    let frozenEnlistResult;
+    const coordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async (_sessionId, partitionId) => {
+        participantBegins.push(partitionId);
+      },
+      commitParticipant: async () => {},
+      persistTransaction: async (record) => {
+        if (
+          record.participantSetState === PARTICIPANT_SET_STATE.FROZEN &&
+          !frozenEnlistResult
+        ) {
+          frozenEnlistResult = await coordinator.enlistParticipantsOwned(
+            'frozen-enlist',
+            ['p2'],
+          );
+        }
+      },
+    });
+
+    await coordinator.begin('frozen-enlist');
+    await coordinator.enlistParticipants('frozen-enlist', ['p1']);
+    await coordinator.commit('frozen-enlist');
+
+    t.equal(
+      frozenEnlistResult.errorCode,
+      QUERY_ERROR_CODE.TRANSACTION_PARTICIPANTS_FROZEN,
+    );
+    t.same(participantBegins, ['p1']);
+  });
+
+test('DistributedTransactionCoordinator - commit queues behind paused enlistment',
+  async (t) => {
+    let releaseBegin;
+    const beginPaused = new Promise((resolve) => {
+      releaseBegin = resolve;
+    });
+    let beginReached;
+    const beginReachedPromise = new Promise((resolve) => {
+      beginReached = resolve;
+    });
+    const coordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {
+        beginReached();
+        await beginPaused;
+      },
+      commitParticipant: async () => {},
+    });
+
+    await coordinator.begin('queued-freeze');
+    const enlistPromise = coordinator.enlistParticipants(
+      'queued-freeze',
+      ['p1'],
+    );
+    await beginReachedPromise;
+    const commitPromise = coordinator.commit('queued-freeze');
+    t.equal(
+      coordinator.getTransaction('queued-freeze').participantSetState,
+      PARTICIPANT_SET_STATE.OPEN,
+      'commit cannot freeze while participant begin is in flight',
+    );
+    releaseBegin();
+    await enlistPromise;
+    const commitResult = await commitPromise;
+
+    t.same(commitResult.participants, ['p1']);
+  });
+
+test('DistributedTransactionCoordinator - one phase resolves ambiguous commit outcome',
+  async (t) => {
+    const buildCoordinator = (outcome) =>
+      new DistributedTransactionCoordinator({
+        participantRetryMaxRetries: 0,
+        beginParticipant: async () => {},
+        commitParticipant: async () => {
+          const error = new Error(QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT);
+          error.errorCode = QUERY_ERROR_CODE.NO_TRANSACTION;
+          throw error;
+        },
+        resolveParticipantCommitOutcome: async () => outcome,
+      });
+
+    const committed = buildCoordinator(PARTICIPANT_COMMIT_OUTCOME.COMMITTED);
+    await committed.begin('one-phase-ack-lost');
+    await committed.enlistParticipants('one-phase-ack-lost', ['p1']);
+    t.equal((await committed.commit('one-phase-ack-lost')).success, true,
+      'durable committed outcome closes commit-before-ack replay');
+
+    const notCommitted = buildCoordinator(
+      PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED,
+    );
+    await notCommitted.begin('one-phase-restart-before-delivery');
+    await notCommitted.enlistParticipants(
+      'one-phase-restart-before-delivery',
+      ['p1'],
+    );
+    const notCommittedResult = await notCommitted.commit(
+      'one-phase-restart-before-delivery',
+    );
+    t.equal(notCommittedResult.success, false);
+    t.equal(notCommittedResult.deferred, false);
+
+    const unknown = buildCoordinator(PARTICIPANT_COMMIT_OUTCOME.UNKNOWN);
+    await unknown.begin('one-phase-unknown');
+    await unknown.enlistParticipants('one-phase-unknown', ['p1']);
+    const unknownResult = await unknown.commit('one-phase-unknown');
+    t.equal(unknownResult.deferred, true);
+    t.equal(
+      unknown.getTransaction('one-phase-unknown').status,
+      TRANSACTION_STATUS.COMMITTING,
+    );
+  });
+
+test('DistributedTransactionCoordinator - recovery rejects incomplete frozen set',
+  async (t) => {
+    const coordinator = new DistributedTransactionCoordinator();
+    t.throws(() => coordinator.recoverFromSystemTables({
+      transactions: [{
+        transaction_id: 'tx-incomplete-frozen',
+        session_id: 'incomplete-frozen',
+        status: TRANSACTION_STATUS.COMMITTING,
+        transaction_mode: TRANSACTION_MODE.EXPLICIT,
+        participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
+        commit_mode: COMMIT_MODE.TWO_PHASE_COMMIT,
+        frozen_participant_count: 2,
+        created_at: 1,
+        updated_at: 1,
+      }],
+      participants: [{
+        transaction_id: 'tx-incomplete-frozen',
+        partition_id: 'p1',
+        status: TRANSACTION_STATUS.COMMITTING,
+      }],
+    }), {
+      message: QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+    });
+  });
+
+test('DistributedTransactionCoordinator - recovery rejects multi-participant 1PC',
+  async (t) => {
+    const coordinator = new DistributedTransactionCoordinator();
+    const payload = {
+      transactions: [{
+        transaction_id: 'tx-invalid-one-phase',
+        session_id: 'invalid-one-phase',
+        status: TRANSACTION_STATUS.COMMITTING,
+        transaction_mode: TRANSACTION_MODE.EXPLICIT,
+        participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
+        commit_mode: COMMIT_MODE.ONE_PHASE_COMMIT,
+        frozen_participant_count: 2,
+        created_at: 1,
+        updated_at: 1,
+      }],
+      participants: ['p1', 'p2'].map((partitionId) => ({
+        transaction_id: 'tx-invalid-one-phase',
+        partition_id: partitionId,
+        status: TRANSACTION_STATUS.COMMITTING,
+      })),
+    };
+
+    t.throws(() => coordinator.recoverFromSystemTables(payload), {
+      message: QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+    });
+    t.equal(coordinator.hasActiveTransaction('invalid-one-phase'), false,
+      'invalid recovery must not install a live transaction');
+    t.throws(() => coordinator.recoverFromSystemTables(payload), {
+      message: QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+    });
+    t.equal(coordinator.hasActiveTransaction('invalid-one-phase'), false,
+      'repeated recovery must reject the same poison state');
   });

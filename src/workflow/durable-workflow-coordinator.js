@@ -50,7 +50,14 @@ class DurableWorkflowCoordinator {
   async registerWorkflow(record) {
     const workflow = this.createWorkflowRecord(record);
     this.setWorkflowState(workflow);
-    await this.persistWorkflow(workflow);
+    try {
+      await this.persistWorkflow(workflow);
+    } catch (error) {
+      if (this.workflowsById.get(workflow.workflowId) === workflow) {
+        this.removeWorkflow(workflow.workflowId);
+      }
+      throw error;
+    }
     return workflow;
   }
 
@@ -228,7 +235,20 @@ class DurableWorkflowCoordinator {
       workflow.enlistedParticipantCount =
         (workflow.enlistedParticipantCount || 0) + 1;
     }
-    await this.persistParticipant(participant);
+    try {
+      await this.persistParticipant(participant);
+    } catch (error) {
+      if (existing) {
+        workflow.participants.set(participant.participantKey, existing);
+      } else {
+        workflow.participants.delete(participant.participantKey);
+        workflow.enlistedParticipantCount = Math.max(
+          0,
+          (workflow.enlistedParticipantCount || 1) - 1,
+        );
+      }
+      throw error;
+    }
     return participant;
   }
 

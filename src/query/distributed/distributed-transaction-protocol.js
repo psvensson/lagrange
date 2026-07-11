@@ -5,6 +5,10 @@ import {
 } from '../query-constants.js';
 import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
 import {
+  COMMIT_MODE,
+  PARTICIPANT_COMMIT_OUTCOME,
+} from '../../constants/index.js';
+import {
   IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES,
   PARTICIPANT_RETRY_LOG_MSG,
   PARTICIPANT_STATUS,
@@ -13,6 +17,13 @@ import {
 } from './distributed-transaction-coordinator-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const COMMIT_MISS_RESOLUTION = Object.freeze({
+  NOT_A_MISS: 'NOT_A_MISS',
+  COMMITTED: PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
+  NOT_COMMITTED: PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED,
+  UNKNOWN: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+});
+const PARTICIPANT_COMMIT_OUTCOME_FIELD = 'participantCommitOutcome';
 
 /**
  * Check whether participant failures include a timeout condition.
@@ -99,7 +110,7 @@ function createTransactionTimeoutError() {
  * @private
  */
 
-function shouldTreatParticipantCommitMissAsSuccess(stage, error) {
+function isParticipantCommitMiss(stage, error) {
   if (stage !== PARTICIPANT_STATUS.COMMITTING) {
     return false;
   }
@@ -113,9 +124,17 @@ function shouldTreatParticipantCommitMissAsSuccess(stage, error) {
 
 const distributedTransactionProtocolMethods = {
   async setTransactionStatus(tx, status) {
+    const previousStatus = tx.status;
+    const previousUpdatedAt = tx.updatedAt;
     tx.status = status;
     tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
+    try {
+      await this.persistTransactionRecord(tx);
+    } catch (error) {
+      tx.status = previousStatus;
+      tx.updatedAt = previousUpdatedAt;
+      throw error;
+    }
   },
 
   /**
@@ -198,7 +217,12 @@ const distributedTransactionProtocolMethods = {
       tx.status === TRANSACTION_STATUS.ACTIVE ||
       tx.status === TRANSACTION_STATUS.FAILED
     ) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING);
+      await this.setTransactionStatus(
+        tx,
+        tx.commitMode === COMMIT_MODE.ONE_PHASE_COMMIT ?
+          TRANSACTION_STATUS.COMMITTING :
+          TRANSACTION_STATUS.PREPARING,
+      );
     }
 
     if (tx.status === TRANSACTION_STATUS.PREPARING) {
@@ -258,16 +282,25 @@ const distributedTransactionProtocolMethods = {
     if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
       return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.COMMITTING);
     }
-    const commitFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.COMMITTING,
-      PARTICIPANT_STATUS.COMMITTED,
-      (partitionId) => this.commitParticipant(tx.sessionId, partitionId),
-      {
-        participantKeys: this.getCommitParticipantKeys(tx),
-        skipBudgetEnforcement: commitStatusAllowsTimeout,
-      },
-    );
+    const commitStageResult =
+      tx.commitMode === COMMIT_MODE.ONE_PHASE_COMMIT ?
+        await this.executeOnePhaseCommitStage(tx, {
+          skipBudgetEnforcement: commitStatusAllowsTimeout,
+        }) :
+        {
+          failedParticipants: await this.executeParticipantStage(
+            tx,
+            PARTICIPANT_STATUS.COMMITTING,
+            PARTICIPANT_STATUS.COMMITTED,
+            (partitionId) => this.commitParticipant(tx.sessionId, partitionId),
+            {
+              participantKeys: this.getCommitParticipantKeys(tx),
+              skipBudgetEnforcement: commitStatusAllowsTimeout,
+            },
+          ),
+          deferred: false,
+        };
+    const commitFailures = commitStageResult.failedParticipants;
     if (commitFailures.length > 0) {
       if (
         !commitStatusAllowsTimeout &&
@@ -278,13 +311,19 @@ const distributedTransactionProtocolMethods = {
           TRANSACTION_STATUS.COMMITTING,
         );
       }
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
-      return this.buildParticipantFailureResult(
-        tx,
-        QUERY_OPERATION.COMMIT,
-        TRANSACTION_STATUS.COMMITTING,
-        commitFailures,
-      );
+      if (commitStageResult.deferred !== true) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
+      }
+      return {
+        ...this.buildParticipantFailureResult(
+          tx,
+          QUERY_OPERATION.COMMIT,
+          TRANSACTION_STATUS.COMMITTING,
+          commitFailures,
+        ),
+        deferred: commitStageResult.deferred === true,
+        commitMode: tx.commitMode,
+      };
     }
 
     await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
@@ -294,7 +333,45 @@ const distributedTransactionProtocolMethods = {
       operation: QUERY_OPERATION.COMMIT,
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
+      transactionMode: tx.transactionMode,
+      commitMode: tx.commitMode,
+      decisionTrace: tx.decisionTrace.map((entry) => ({...entry})),
     };
+  },
+
+  async executeOnePhaseCommitStage(tx, options = {}) {
+    const participantKeys = this.getCommitParticipantKeys(tx);
+    const failedParticipants = [];
+    let deferred = false;
+    for (const partitionId of participantKeys) {
+      const participant = tx.participants.get(partitionId);
+      participant.status = PARTICIPANT_STATUS.COMMITTING;
+      participant.updatedAt = this.now();
+      participant.lastError = null;
+      await this.persistParticipantRecord(tx, participant);
+      try {
+        await this.executeParticipantOperationWithRetry(
+          tx,
+          PARTICIPANT_STATUS.COMMITTING,
+          partitionId,
+          () => this.commitParticipant(tx.sessionId, partitionId),
+          options,
+        );
+        participant.status = PARTICIPANT_STATUS.COMMITTED;
+        participant.lastError = null;
+      } catch (error) {
+        const outcome = error?.[PARTICIPANT_COMMIT_OUTCOME_FIELD];
+        deferred = outcome === PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
+        participant.status = deferred ?
+          PARTICIPANT_STATUS.COMMITTING :
+          PARTICIPANT_STATUS.FAILED;
+        participant.lastError = error.message;
+        failedParticipants.push({partitionId, error: error.message});
+      }
+      participant.updatedAt = this.now();
+      await this.persistParticipantRecord(tx, participant);
+    }
+    return {failedParticipants, deferred};
   },
 
   /**
@@ -453,8 +530,24 @@ const distributedTransactionProtocolMethods = {
         await operation(partitionId);
         return;
       } catch (error) {
-        if (this.shouldTreatParticipantCommitMissAsSuccess(stage, error)) {
+        const commitMissResolution =
+          await this.resolveParticipantCommitMiss(
+            tx,
+            stage,
+            partitionId,
+            error,
+          );
+        if (commitMissResolution === COMMIT_MISS_RESOLUTION.COMMITTED) {
           return;
+        }
+        if (commitMissResolution === COMMIT_MISS_RESOLUTION.NOT_COMMITTED) {
+          error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
+            PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED;
+          throw error;
+        }
+        if (commitMissResolution === COMMIT_MISS_RESOLUTION.UNKNOWN) {
+          error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
+            PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
         }
         if (attempt >= this.participantRetryMaxRetries) {
           throw error;
@@ -482,6 +575,26 @@ const distributedTransactionProtocolMethods = {
         await this.sleep(retryDelayMs);
       }
     }
+  },
+
+  async resolveParticipantCommitMiss(tx, stage, partitionId, error) {
+    if (!isParticipantCommitMiss(stage, error)) {
+      return COMMIT_MISS_RESOLUTION.NOT_A_MISS;
+    }
+    if (tx.commitMode === COMMIT_MODE.TWO_PHASE_COMMIT) {
+      return COMMIT_MISS_RESOLUTION.COMMITTED;
+    }
+    if (typeof this.resolveParticipantCommitOutcome !== LOCAL_STR_FUNCTION) {
+      return COMMIT_MISS_RESOLUTION.UNKNOWN;
+    }
+    const outcome = await this.resolveParticipantCommitOutcome(
+      tx.sessionId,
+      partitionId,
+      tx.transactionEpoch,
+    );
+    return Object.values(PARTICIPANT_COMMIT_OUTCOME).includes(outcome) ?
+      outcome :
+      COMMIT_MISS_RESOLUTION.UNKNOWN;
   },
 
   /**
@@ -525,7 +638,9 @@ const {
   runRollbackProtocol,
   buildParticipantFailureResult,
   executeParticipantStage,
+  executeOnePhaseCommitStage,
   executeParticipantOperationWithRetry,
+  resolveParticipantCommitMiss,
   emitParticipantRetryDiagnostic,
   calculateParticipantRetryDelay,
 } = distributedTransactionProtocolMethods;
@@ -543,9 +658,10 @@ export {
   getCommitParticipantKeys,
   getRollbackParticipantKeys,
   executeParticipantStage,
+  executeOnePhaseCommitStage,
   executeParticipantOperationWithRetry,
+  resolveParticipantCommitMiss,
   createTransactionTimeoutError,
-  shouldTreatParticipantCommitMissAsSuccess,
   emitParticipantRetryDiagnostic,
   calculateParticipantRetryDelay,
 };

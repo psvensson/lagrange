@@ -15,9 +15,6 @@ import {RebalanceCoordinator} from
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {
-  DistributedTransactionCoordinator,
-} from '../../src/query/distributed/distributed-transaction-coordinator.js';
 
 // ---------------------------------------------------------------------------
 // Test-local fixture constants
@@ -66,7 +63,6 @@ function buildPersistedReplicaOperationRowFromUpdate(
  */
 function createMinimalCoordinator(overrides = {}) {
   const {
-    transactionCoordinator: overrideTransactionCoordinator,
     sqlQueryEngine: overrideSqlQueryEngine,
     controlPlaneSystemTableGateway: overrideControlPlaneSystemTableGateway,
     ...coordinatorOverrides
@@ -78,7 +74,7 @@ function createMinimalCoordinator(overrides = {}) {
     },
   };
   const sqlQueryEngine = {
-    async executeQuery(sql, params = []) {
+    async executeQuery(sql, params = [], queryOptions = {}) {
       if (sql.includes(REPLICA_OPERATION_SELECT_BY_ID_QUERY)) {
         const operationId = params[0] || null;
         const operationRow = authoritativeReplicaOperations.get(operationId);
@@ -89,7 +85,11 @@ function createMinimalCoordinator(overrides = {}) {
         };
       }
 
-      const result = await baseSqlQueryEngine.executeQuery(sql, params);
+      const result = await baseSqlQueryEngine.executeQuery(
+        sql,
+        params,
+        queryOptions,
+      );
       if (result?.success === false) {
         return result;
       }
@@ -107,8 +107,8 @@ function createMinimalCoordinator(overrides = {}) {
     },
   };
   const controlPlaneSystemTableGateway = overrideControlPlaneSystemTableGateway || {
-    async executeQuery(sql, params = []) {
-      return sqlQueryEngine.executeQuery(sql, params);
+    async executeQuery(sql, params = [], queryOptions = {}) {
+      return sqlQueryEngine.executeQuery(sql, params, queryOptions);
     },
     async readAuthoritativeRows(_tableName, sql, params = []) {
       return sqlQueryEngine.executeQuery(sql, params);
@@ -117,16 +117,6 @@ function createMinimalCoordinator(overrides = {}) {
       return sqlQueryEngine.executeQuery(sql, params);
     },
   };
-  const transactionCoordinator =
-    Object.prototype.hasOwnProperty.call(overrides, 'transactionCoordinator') ?
-      overrideTransactionCoordinator :
-      new DistributedTransactionCoordinator({
-        beginParticipant: async () => {},
-        prepareParticipant: async () => {},
-        commitParticipant: async () => {},
-        rollbackParticipant: async () => {},
-        now: () => FIXED_NOW,
-      });
   const coordinator = new RebalanceCoordinator({
     nodeId: MOCK_NODE_ID,
     systemTableCache: {
@@ -147,7 +137,6 @@ function createMinimalCoordinator(overrides = {}) {
     },
     sqlQueryEngine,
     controlPlaneSystemTableGateway,
-    transactionCoordinator,
     enableTimeouts: false,
     ...coordinatorOverrides,
   });
@@ -523,36 +512,16 @@ test('DurableWorkflowCoordinator - getWorkflowSteps returns ordered ' +
 });
 
 // ===================================================================
-// 4. Atomic transition + authoritative row commit
+// 4. Guarded autocommit transition + authoritative row commit
 // ===================================================================
 
-test('RebalanceCoordinator - updateStep commits workflow transition ' +
-  'and persist atomically', async (t) => {
-  const txCalls = [];
-  const txCoordinator = new DistributedTransactionCoordinator({
-    beginParticipant: async () => {},
-    prepareParticipant: async () => {},
-    commitParticipant: async () => {},
-    rollbackParticipant: async () => {},
-    now: () => FIXED_NOW,
-  });
-  const originalBegin = txCoordinator.begin.bind(txCoordinator);
-  const originalCommit = txCoordinator.commit.bind(txCoordinator);
-  txCoordinator.begin = async (sessionId) => {
-    txCalls.push({action: 'begin', sessionId});
-    return originalBegin(sessionId);
-  };
-  txCoordinator.commit = async (sessionId) => {
-    txCalls.push({action: 'commit', sessionId});
-    return originalCommit(sessionId);
-  };
-
-  let persistCalled = false;
+test('RebalanceCoordinator - updateStep persists once through the guarded ' +
+  'autocommit lane', async (t) => {
+  const persistCalls = [];
   const coordinator = createMinimalCoordinator({
-    transactionCoordinator: txCoordinator,
     sqlQueryEngine: {
-      async executeQuery() {
-        persistCalled = true;
+      async executeQuery(sql, params, queryOptions) {
+        persistCalls.push({sql, params, queryOptions});
         return {success: true, rows: [], changes: 1};
       },
     },
@@ -563,46 +532,26 @@ test('RebalanceCoordinator - updateStep commits workflow transition ' +
     const operation = createTestOperation();
     await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
 
-    // Verify begin happens before commit
-    const beginIdx = txCalls.findIndex((c) => c.action === 'begin');
-    const commitIdx = txCalls.findIndex((c) => c.action === 'commit');
-    t.ok(beginIdx >= 0, 'transaction begin must be called');
-    t.ok(commitIdx >= 0, 'transaction commit must be called');
-    t.ok(
-      beginIdx < commitIdx,
-      'begin must precede commit',
+    t.equal(persistCalls.length, 1, 'transition must persist exactly once');
+    t.equal(
+      persistCalls[0].queryOptions?.disableSystemWriteSession,
+      true,
+      'the rebalancer delegates commit mode through independent autocommit',
     );
-    t.ok(persistCalled, 'persist must be called within transaction');
+    t.equal(persistCalls[0].queryOptions?.sessionId, undefined,
+      'the rebalancer must not manufacture a transaction session');
   } finally {
     await coordinator.shutdown();
   }
 });
 
-test('RebalanceCoordinator - atomic transition rolls back when ' +
-  'persist fails, leaving operation unchanged', async (t) => {
-  const txCalls = [];
-  const txCoordinator = new DistributedTransactionCoordinator({
-    beginParticipant: async () => {},
-    prepareParticipant: async () => {},
-    commitParticipant: async () => {},
-    rollbackParticipant: async () => {},
-    now: () => FIXED_NOW,
-  });
-  const originalBegin = txCoordinator.begin.bind(txCoordinator);
-  const originalRollback = txCoordinator.rollback.bind(txCoordinator);
-  txCoordinator.begin = async (sessionId) => {
-    txCalls.push({action: 'begin', sessionId});
-    return originalBegin(sessionId);
-  };
-  txCoordinator.rollback = async (sessionId) => {
-    txCalls.push({action: 'rollback', sessionId});
-    return originalRollback(sessionId);
-  };
-
+test('RebalanceCoordinator - guarded transition propagates a durable ' +
+  'persist failure', async (t) => {
+  let persistAttempts = 0;
   const coordinator = createMinimalCoordinator({
-    transactionCoordinator: txCoordinator,
     sqlQueryEngine: {
       async executeQuery() {
+        persistAttempts += 1;
         return {success: false, error: 'disk full'};
       },
     },
@@ -620,45 +569,25 @@ test('RebalanceCoordinator - atomic transition rolls back when ' +
     }
 
     t.ok(threw, 'persist failure must propagate as error');
-    t.ok(
-      txCalls.some((c) => c.action === 'rollback'),
-      'transaction must be rolled back on persist failure',
-    );
-
-    // The workflow step on the operation object may have been mutated
-    // inside persistFn before the error, but the transaction rollback
-    // ensures the authoritative row was not committed.
-    // The key invariant: rollback was called, so no partial commit.
-    const rollbackIdx = txCalls.findIndex((c) => c.action === 'rollback');
-    t.ok(rollbackIdx >= 0, 'rollback must be recorded');
+    t.equal(persistAttempts, 1,
+      'the guarded durable mutation must not fork into another write path');
   } finally {
     await coordinator.shutdown();
   }
 });
 
-test('RebalanceCoordinator - completeOperation commits terminal ' +
-  'transition atomically', async (t) => {
-  const txCalls = [];
-  const txCoordinator = new DistributedTransactionCoordinator({
-    beginParticipant: async () => {},
-    prepareParticipant: async () => {},
-    commitParticipant: async () => {},
-    rollbackParticipant: async () => {},
-    now: () => FIXED_NOW,
-  });
-  const originalBegin = txCoordinator.begin.bind(txCoordinator);
-  const originalCommit = txCoordinator.commit.bind(txCoordinator);
-  txCoordinator.begin = async (sessionId) => {
-    txCalls.push({action: 'begin', sessionId});
-    return originalBegin(sessionId);
-  };
-  txCoordinator.commit = async (sessionId) => {
-    txCalls.push({action: 'commit', sessionId});
-    return originalCommit(sessionId);
-  };
-
+test('RebalanceCoordinator - completeOperation persists one terminal ' +
+  'transition', async (t) => {
+  let persistCalls = 0;
   const coordinator = createMinimalCoordinator({
-    transactionCoordinator: txCoordinator,
+    sqlQueryEngine: {
+      async executeQuery(sql) {
+        if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT)) {
+          persistCalls += 1;
+        }
+        return {success: true, rows: [], changes: 1};
+      },
+    },
   });
   coordinator.initialize();
 
@@ -671,76 +600,48 @@ test('RebalanceCoordinator - completeOperation commits terminal ' +
     await coordinator.completeOperation(operation);
 
     t.equal(operation.workflowStep, WORKFLOW_STEP.ACTIVE);
-
-    const beginIdx = txCalls.findIndex((c) => c.action === 'begin');
-    const commitIdx = txCalls.findIndex((c) => c.action === 'commit');
-    t.ok(beginIdx >= 0, 'begin must be called for terminal transition');
-    t.ok(commitIdx >= 0, 'commit must be called for terminal transition');
-    t.ok(beginIdx < commitIdx, 'begin must precede commit');
-
-    // Verify the session ID encodes operation + step for traceability
-    const beginCall = txCalls.find((c) => c.action === 'begin');
-    t.ok(
-      beginCall.sessionId.includes(operation.operationId),
-      'session ID must include operation ID',
-    );
+    t.equal(persistCalls, 1, 'terminal transition must persist exactly once');
   } finally {
     await coordinator.shutdown();
   }
 });
 
-test('RebalanceCoordinator - failOperation commits FAILED transition ' +
-  'atomically', async (t) => {
-  const txCalls = [];
-  const txCoordinator = new DistributedTransactionCoordinator({
-    beginParticipant: async () => {},
-    prepareParticipant: async () => {},
-    commitParticipant: async () => {},
-    rollbackParticipant: async () => {},
-    now: () => FIXED_NOW,
-  });
-  const originalBegin = txCoordinator.begin.bind(txCoordinator);
-  const originalCommit = txCoordinator.commit.bind(txCoordinator);
-  txCoordinator.begin = async (sessionId) => {
-    txCalls.push({action: 'begin', sessionId});
-    return originalBegin(sessionId);
-  };
-  txCoordinator.commit = async (sessionId) => {
-    txCalls.push({action: 'commit', sessionId});
-    return originalCommit(sessionId);
-  };
-
-  const coordinator = createMinimalCoordinator({
-    transactionCoordinator: txCoordinator,
-  });
-  coordinator.initialize();
-
-  try {
-    const operation = createTestOperation({
-      operationId: 'op-fail-atomic',
-      workflowStep: WORKFLOW_STEP.CREATING,
-      status: 'creating',
+test('RebalanceCoordinator - failOperation persists one FAILED transition',
+  async (t) => {
+    let persistCalls = 0;
+    const coordinator = createMinimalCoordinator({
+      sqlQueryEngine: {
+        async executeQuery(sql) {
+          if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT)) {
+            persistCalls += 1;
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
     });
+    coordinator.initialize();
 
-    await coordinator.failOperation(operation, 'atomic failure test');
+    try {
+      const operation = createTestOperation({
+        operationId: 'op-fail-atomic',
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: 'creating',
+      });
 
-    t.equal(operation.workflowStep, WORKFLOW_STEP.FAILED);
+      await coordinator.failOperation(operation, 'atomic failure test');
 
-    const beginIdx = txCalls.findIndex((c) => c.action === 'begin');
-    const commitIdx = txCalls.findIndex((c) => c.action === 'commit');
-    t.ok(beginIdx >= 0, 'begin must be called for FAILED transition');
-    t.ok(commitIdx >= 0, 'commit must be called for FAILED transition');
-    t.ok(beginIdx < commitIdx, 'begin must precede commit');
+      t.equal(operation.workflowStep, WORKFLOW_STEP.FAILED);
+      t.equal(persistCalls, 1, 'FAILED transition must persist exactly once');
 
-    // Verify transition reason is persisted in stepsHistory
-    const lastEntry =
+      // Verify transition reason is persisted in stepsHistory
+      const lastEntry =
       operation.stepsHistory[operation.stepsHistory.length - 1];
-    t.equal(
-      lastEntry.reason,
-      OPERATION_TRANSITION_REASON.OPERATION_FAILED,
-      'FAILED transition must record canonical reason',
-    );
-  } finally {
-    await coordinator.shutdown();
-  }
-});
+      t.equal(
+        lastEntry.reason,
+        OPERATION_TRANSITION_REASON.OPERATION_FAILED,
+        'FAILED transition must record canonical reason',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });

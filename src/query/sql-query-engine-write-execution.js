@@ -1,6 +1,9 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineTransactionRecoveryMethods} from './sql-query-engine-transaction-recovery-methods.js';
-import {SERVICE_PARTITION_ACCESS_KIND} from '../constants/index.js';
+import {
+  SERVICE_PARTITION_ACCESS_KIND,
+  TRANSACTION_MODE,
+} from '../constants/index.js';
 
 
 const {
@@ -12,7 +15,101 @@ const {
   WRITE_TRACKING_EXCLUDED_TABLES,
 } = SQL_QUERY_ENGINE_SHARED;
 
+const WRITE_TRANSACTION_OWNERSHIP = Object.freeze({
+  DIRECT_AUTOCOMMIT: 'DIRECT_AUTOCOMMIT',
+  EXPLICIT: 'EXPLICIT',
+  STATEMENT_AUTOCOMMIT: 'STATEMENT_AUTOCOMMIT',
+});
+const STATEMENT_AUTOCOMMIT_SESSION_PREFIX = 'statement-autocommit';
+
 class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMethods {
+  resolveWriteTransactionOwnership(sessionId, writePlan) {
+    if (this.transactionCoordinator.getTransaction(sessionId)) {
+      return WRITE_TRANSACTION_OWNERSHIP.EXPLICIT;
+    }
+    return writePlan.partitionStatements.size <= 1 ?
+      WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT :
+      WRITE_TRANSACTION_OWNERSHIP.STATEMENT_AUTOCOMMIT;
+  }
+
+  async openWriteTransaction(sessionId, writePlan) {
+    const transactionState =
+      this.transactionCoordinator.getTransaction(sessionId);
+    const ownership = this.resolveWriteTransactionOwnership(
+      sessionId,
+      writePlan,
+    );
+    switch (ownership) {
+    case WRITE_TRANSACTION_OWNERSHIP.EXPLICIT:
+      return {ownership, sessionId, transactionState};
+    case WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT:
+      return {ownership, sessionId};
+    default:
+      break;
+    }
+    const statementSessionId = [
+      STATEMENT_AUTOCOMMIT_SESSION_PREFIX,
+      writePlan.operationId,
+    ].join(':');
+    const beginResult = await this.transactionCoordinator.begin(
+      statementSessionId,
+      {transactionMode: TRANSACTION_MODE.AUTOCOMMIT},
+    );
+    if (beginResult.success !== true) {
+      return {ownership,
+        sessionId: statementSessionId, failure: beginResult};
+    }
+    return {
+      ownership,
+      sessionId: statementSessionId,
+      transactionState:
+        this.transactionCoordinator.getTransaction(statementSessionId),
+    };
+  }
+
+  async executeWriteTransaction(transaction, buildOperation, executeWrite) {
+    if (transaction.failure) {
+      return transaction.failure;
+    }
+    if (transaction.ownership === WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT) {
+      return executeWrite(transaction.sessionId);
+    }
+    return this.transactionCoordinator.executeWriteStatement(
+      transaction.sessionId,
+      buildOperation(),
+      () => executeWrite(transaction.sessionId),
+    );
+  }
+
+  async finishWriteTransaction(transaction, result) {
+    if (
+      transaction.ownership !==
+      WRITE_TRANSACTION_OWNERSHIP.STATEMENT_AUTOCOMMIT ||
+      transaction.failure
+    ) {
+      return result;
+    }
+    if (result?.success !== true) {
+      await this.transactionCoordinator.rollback(transaction.sessionId);
+      return result;
+    }
+    const commitResult =
+      await this.transactionCoordinator.commit(transaction.sessionId);
+    return commitResult.success === true ?
+      {...result, transaction: commitResult} :
+      commitResult;
+  }
+
+  async rollbackOwnedWriteTransaction(transaction) {
+    if (
+      transaction.ownership ===
+        WRITE_TRANSACTION_OWNERSHIP.STATEMENT_AUTOCOMMIT &&
+      !transaction.failure &&
+      this.transactionCoordinator.getTransaction(transaction.sessionId)
+    ) {
+      await this.transactionCoordinator.rollback(transaction.sessionId);
+    }
+  }
   /**
    * Execute an INSERT statement.
    * @param {Object} ast - Parsed INSERT AST.
@@ -48,46 +145,15 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
 
-    const txState = this.transactionCoordinator.getTransaction(sessionId);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
+    const writeTransaction = await this.openWriteTransaction(
+      sessionId,
+      writePlan,
+    );
+    const txState = writeTransaction.transactionState;
     let result;
     const executionStartTimeMs = Date.now();
     try {
-      if (txState) {
-        const payloadHash = this.createWriteOperationPayloadHash(
-          writePlan,
-          QUERY_AST_TYPE.INSERT,
-        );
-        const enlistResult =
-          await this.transactionCoordinator.enlistParticipants(
-            sessionId,
-            writePartitions,
-          );
-        if (!enlistResult.success) {
-          const canonicalFailure =
-            await this.resolveRetryableSystemTableMutationFailure({
-              txState,
-              sessionId,
-              writePlan,
-              statementType: QUERY_AST_TYPE.INSERT,
-              tableName,
-              queryOptions,
-              failureLike: enlistResult,
-            });
-          if (canonicalFailure) {
-            return canonicalFailure;
-          }
-          return enlistResult;
-        }
-        await this.transactionCoordinator.recordWriteOperation(sessionId, {
-          statementType: QUERY_AST_TYPE.INSERT,
-          operationId: writePlan.operationId,
-          partitionIds: writePartitions,
-          idempotencyKey: writePlan.idempotencyKey,
-          payloadHash,
-        });
-      }
-
       this.logger.debug(QUERY_LOG_MSG.ROUTING_INSERT, {
         tableName,
         rowCount: ast.values.length,
@@ -116,12 +182,26 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
           dualWriteMigration.migrationId ||
           null;
       }
-      result = await this.distributedWriteCoordinator.executePlan(
-        writePlan,
-        params,
-        writeExecutionOptions,
+      result = await this.executeWriteTransaction(
+        writeTransaction,
+        () => ({
+          statementType: QUERY_AST_TYPE.INSERT,
+          operationId: writePlan.operationId,
+          partitionIds: writePartitions,
+          idempotencyKey: writePlan.idempotencyKey,
+          payloadHash: this.createWriteOperationPayloadHash(
+            writePlan,
+            QUERY_AST_TYPE.INSERT,
+          ),
+        }),
+        (executionSessionId) => this.distributedWriteCoordinator.executePlan(
+          writePlan,
+          params,
+          {...writeExecutionOptions, sessionId: executionSessionId},
+        ),
       );
     } catch (error) {
+      await this.rollbackOwnedWriteTransaction(writeTransaction);
       const canonicalFailure =
         await this.resolveRetryableSystemTableMutationFailure({
           txState,
@@ -146,6 +226,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       throw error;
     }
     const executionDurationMs = Date.now() - executionStartTimeMs;
+    result = await this.finishWriteTransaction(writeTransaction, result);
     if (result?.success === false) {
       const canonicalFailure =
         await this.resolveRetryableSystemTableMutationFailure({
@@ -162,13 +243,11 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       }
     }
 
-    if (txState) {
-      await this.transactionCoordinator.markWriteOperationResult(
-        sessionId,
-        writePlan.operationId,
-        result,
-      );
-    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
+    if (
+      writeTransaction.ownership ===
+        WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT &&
+      !WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)
+    ) {
       this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.INSERT,
@@ -243,58 +322,16 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
 
-    const txState = this.transactionCoordinator.getTransaction(sessionId);
-
-    // A single-partition ledger progress write does not need 2PC — the
-    // participant BEGIN IMMEDIATE it would open is spurious and, on the
-    // control-plane ledger, orphans on a leaderless sibling partition and
-    // freezes the durable watermark. Skip enlistment when the rebalancer flags
-    // the write AND it resolved to exactly one partition POST-mirror, so a
-    // SPLIT_CUTOVER write (which adds a mirror participant above) still enlists
-    // full 2PC. writePartitions is snapshotted after addTransitionMirrorParticipants.
-    const bypassSingleParticipant =
-      queryOptions?.bypassSingleParticipantSystemWrite === true &&
-      writePartitions.length === 1;
+    const writeTransaction = await this.openWriteTransaction(
+      sessionId,
+      writePlan,
+    );
+    const txState = writeTransaction.transactionState;
 
     // Execute update on resolved partitions
     let result;
     const executionStartTimeMs = Date.now();
     try {
-      if (txState && !bypassSingleParticipant) {
-        const payloadHash = this.createWriteOperationPayloadHash(
-          writePlan,
-          QUERY_AST_TYPE.UPDATE,
-        );
-        const enlistResult =
-          await this.transactionCoordinator.enlistParticipants(
-            sessionId,
-            writePartitions,
-          );
-        if (!enlistResult.success) {
-          const canonicalFailure =
-            await this.resolveRetryableSystemTableMutationFailure({
-              txState,
-              sessionId,
-              writePlan,
-              statementType: QUERY_AST_TYPE.UPDATE,
-              tableName,
-              queryOptions,
-              failureLike: enlistResult,
-            });
-          if (canonicalFailure) {
-            return canonicalFailure;
-          }
-          return enlistResult;
-        }
-        await this.transactionCoordinator.recordWriteOperation(sessionId, {
-          statementType: QUERY_AST_TYPE.UPDATE,
-          operationId: writePlan.operationId,
-          partitionIds: writePartitions,
-          idempotencyKey: writePlan.idempotencyKey,
-          payloadHash,
-        });
-      }
-
       this.logger.debug(QUERY_LOG_MSG.ROUTING_UPDATE, {
         tableName,
         partitionCount: partitionIds.length,
@@ -322,12 +359,26 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
           dualWriteMigration.migrationId ||
           null;
       }
-      result = await this.distributedWriteCoordinator.executePlan(
-        writePlan,
-        params,
-        writeExecutionOptions,
+      result = await this.executeWriteTransaction(
+        writeTransaction,
+        () => ({
+          statementType: QUERY_AST_TYPE.UPDATE,
+          operationId: writePlan.operationId,
+          partitionIds: writePartitions,
+          idempotencyKey: writePlan.idempotencyKey,
+          payloadHash: this.createWriteOperationPayloadHash(
+            writePlan,
+            QUERY_AST_TYPE.UPDATE,
+          ),
+        }),
+        (executionSessionId) => this.distributedWriteCoordinator.executePlan(
+          writePlan,
+          params,
+          {...writeExecutionOptions, sessionId: executionSessionId},
+        ),
       );
     } catch (error) {
+      await this.rollbackOwnedWriteTransaction(writeTransaction);
       const canonicalFailure =
         await this.resolveRetryableSystemTableMutationFailure({
           txState,
@@ -352,6 +403,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       throw error;
     }
     const executionDurationMs = Date.now() - executionStartTimeMs;
+    result = await this.finishWriteTransaction(writeTransaction, result);
     if (result?.success === false) {
       const canonicalFailure =
         await this.resolveRetryableSystemTableMutationFailure({
@@ -368,13 +420,11 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       }
     }
 
-    if (txState) {
-      await this.transactionCoordinator.markWriteOperationResult(
-        sessionId,
-        writePlan.operationId,
-        result,
-      );
-    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
+    if (
+      writeTransaction.ownership ===
+        WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT &&
+      !WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)
+    ) {
       this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.UPDATE,
@@ -448,47 +498,16 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
 
-    const txState = this.transactionCoordinator.getTransaction(sessionId);
+    const writeTransaction = await this.openWriteTransaction(
+      sessionId,
+      writePlan,
+    );
+    const txState = writeTransaction.transactionState;
 
     // Execute delete on resolved partitions
     let result;
     const executionStartTimeMs = Date.now();
     try {
-      if (txState) {
-        const payloadHash = this.createWriteOperationPayloadHash(
-          writePlan,
-          QUERY_AST_TYPE.DELETE,
-        );
-        const enlistResult =
-          await this.transactionCoordinator.enlistParticipants(
-            sessionId,
-            writePartitions,
-          );
-        if (!enlistResult.success) {
-          const canonicalFailure =
-            await this.resolveRetryableSystemTableMutationFailure({
-              txState,
-              sessionId,
-              writePlan,
-              statementType: QUERY_AST_TYPE.DELETE,
-              tableName,
-              queryOptions,
-              failureLike: enlistResult,
-            });
-          if (canonicalFailure) {
-            return canonicalFailure;
-          }
-          return enlistResult;
-        }
-        await this.transactionCoordinator.recordWriteOperation(sessionId, {
-          statementType: QUERY_AST_TYPE.DELETE,
-          operationId: writePlan.operationId,
-          partitionIds: writePartitions,
-          idempotencyKey: writePlan.idempotencyKey,
-          payloadHash,
-        });
-      }
-
       this.logger.debug(QUERY_LOG_MSG.ROUTING_DELETE, {
         tableName,
         partitionCount: partitionIds.length,
@@ -516,12 +535,26 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
           dualWriteMigration.migrationId ||
           null;
       }
-      result = await this.distributedWriteCoordinator.executePlan(
-        writePlan,
-        params,
-        writeExecutionOptions,
+      result = await this.executeWriteTransaction(
+        writeTransaction,
+        () => ({
+          statementType: QUERY_AST_TYPE.DELETE,
+          operationId: writePlan.operationId,
+          partitionIds: writePartitions,
+          idempotencyKey: writePlan.idempotencyKey,
+          payloadHash: this.createWriteOperationPayloadHash(
+            writePlan,
+            QUERY_AST_TYPE.DELETE,
+          ),
+        }),
+        (executionSessionId) => this.distributedWriteCoordinator.executePlan(
+          writePlan,
+          params,
+          {...writeExecutionOptions, sessionId: executionSessionId},
+        ),
       );
     } catch (error) {
+      await this.rollbackOwnedWriteTransaction(writeTransaction);
       const canonicalFailure =
         await this.resolveRetryableSystemTableMutationFailure({
           txState,
@@ -546,6 +579,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       throw error;
     }
     const executionDurationMs = Date.now() - executionStartTimeMs;
+    result = await this.finishWriteTransaction(writeTransaction, result);
     if (result?.success === false) {
       const canonicalFailure =
         await this.resolveRetryableSystemTableMutationFailure({
@@ -562,13 +596,11 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       }
     }
 
-    if (txState) {
-      await this.transactionCoordinator.markWriteOperationResult(
-        sessionId,
-        writePlan.operationId,
-        result,
-      );
-    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
+    if (
+      writeTransaction.ownership ===
+        WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT &&
+      !WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)
+    ) {
       this.fireNonTransactionalWriteResult(
         writePlan,
         QUERY_AST_TYPE.DELETE,

@@ -367,8 +367,6 @@ const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
     'storageAdmissionService must provide checkAdd()',
   STORAGE_ADMISSION_CHECK_REPLACE_REQUIRED:
     'storageAdmissionService must provide checkReplace()',
-  TRANSACTION_COORDINATOR_REQUIRED:
-    'RebalanceCoordinator requires transactionCoordinator for atomic workflow transitions',
   WORKFLOW_COORDINATOR_REQUIRED:
     'RebalanceCoordinator requires operationWorkflowCoordinator with runExclusive()',
   WORKFLOW_COORDINATOR_REGISTRY_REQUIRED:

@@ -203,7 +203,8 @@ The distributed SQL layer is now single-path and owner-specific:
    `transitionStep()`, which persists `previousStep`, `nextStep`,
    `reason`, `timestamp`, and `ownerKey` on every transition.
 6. `DistributedTransactionCoordinator` is the only owner for distributed
-   transaction participant enlistment, 2PC phase transitions
+   transaction participant enlistment, final participant freeze, commit-mode
+   selection, and 1PC/2PC phase transitions
    (`PREPARING/PREPARED/COMMITTING/ROLLING_BACK`), prepare/commit/rollback
    dispatch, timeout-budget enforcement, and recovery from
    `sql_transactions`, `sql_transaction_participants`, and
@@ -211,9 +212,10 @@ The distributed SQL layer is now single-path and owner-specific:
    commit/rollback decisions before participant fanout, runs recovery replay,
    and runs periodic recovery sweeps for timed-out non-terminal workflows.
    Transaction-only semantics (write-operation journaling, retry/backoff,
-   timeout classification) remain local to this owner. Control-plane owners
-   (`RebalanceCoordinator`, `ManagedSplitWorkflow`) use it to wrap step
-   transitions that require atomic multi-row commits. Idempotency is enforced
+   timeout classification) remain local to this owner. Independent
+   `RebalanceCoordinator` step mutations use the guarded autocommit persistence
+   lane; SQL promotes only a final post-mirror multi-participant statement to
+   a statement-owned transaction. Idempotency is enforced
    by operation id and step id via
    `DurableWorkflowCoordinator.isTransitionIdempotent()`.
 7. `SchemaProvisioningJobOwner` extends `TableCreationService` with a durable

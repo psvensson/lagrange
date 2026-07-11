@@ -54,6 +54,12 @@ export {
   META_SERVICE_RUNTIME_REF,
 } from './wasm-meta.js';
 export {WORKFLOW_STEP} from './workflow.js';
+export {
+  COMMIT_MODE,
+  PARTICIPANT_COMMIT_OUTCOME,
+  PARTICIPANT_SET_STATE,
+  TRANSACTION_MODE,
+} from './transactions.js';
 export {METRICS_LOG_PREFIX, METRICS_LOG_TAG} from './metrics-constants.js';
 export {
   CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS,

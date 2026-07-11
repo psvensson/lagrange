@@ -90,12 +90,25 @@ function buildPriorityControlPlaneTransactionDeliveryIdentity({
 }
 
 class SQLQueryEngine extends SQLQueryEngineWriteExecution {
+  assertDistributedTransactionMutationSucceeded(result, tableName) {
+    if (result?.success === true) {
+      return;
+    }
+    const error = new Error(
+      result?.error || QUERY_ERROR_MSG.TRANSACTION_STATE_PERSIST_FAILED,
+    );
+    error.code =
+      result?.errorCode || QUERY_ERROR_CODE.TRANSACTION_STATE_PERSIST_FAILED;
+    error.tableName = tableName;
+    throw error;
+  }
+
   async persistDistributedTransactionRow(record) {
     if (!this.canPersistDistributedTransactionState()) {
       return;
     }
     const transactionId = String(record?.transactionId || '').trim();
-    await this.getControlPlaneSystemTableGateway().submitMutation({
+    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.SQL_TRANSACTIONS,
       row: {
@@ -104,6 +117,10 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
         status: record.status,
         transaction_epoch: record.transactionEpoch,
         timeout_deadline: record.timeoutDeadline,
+        transaction_mode: record.transactionMode,
+        participant_set_state: record.participantSetState,
+        commit_mode: record.commitMode,
+        frozen_participant_count: record.frozenParticipantCount,
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
@@ -119,6 +136,10 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
           null,
       },
     ));
+    this.assertDistributedTransactionMutationSucceeded(
+      result,
+      TABLES.SQL_TRANSACTIONS,
+    );
   }
 
   /**
@@ -133,7 +154,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
     }
     const participantId = String(record?.participantId || '').trim();
     const transactionId = String(record?.transactionId || '').trim();
-    await this.getControlPlaneSystemTableGateway().submitMutation({
+    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,
       row: {
@@ -154,6 +175,10 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
           null,
       },
     ));
+    this.assertDistributedTransactionMutationSucceeded(
+      result,
+      TABLES.SQL_TRANSACTION_PARTICIPANTS,
+    );
   }
 
   /**
@@ -173,7 +198,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
         record.workClass.length > 0 ?
         record.workClass :
         PRESSURE_WORK_CLASS.INTERACTIVE;
-    await this.getControlPlaneSystemTableGateway().submitMutation({
+    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.SQL_WRITE_OPERATIONS,
       row: {
@@ -198,6 +223,10 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
           null,
       },
     ));
+    this.assertDistributedTransactionMutationSucceeded(
+      result,
+      TABLES.SQL_WRITE_OPERATIONS,
+    );
   }
 
   /**
@@ -518,7 +547,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
     }
     const executionOptions = {
       buildRequest: () => ({...payload}),
-      buildSuccessResult: () => ({success: true}),
+      buildSuccessResult: (response) => ({...response, success: true}),
       isSuccessfulResponse: (response) =>
         response?.acknowledged === true &&
         response?.success === true,
@@ -558,6 +587,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       }
       throw new Error(result.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
     }
+    return result;
   }
 
   /**

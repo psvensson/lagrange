@@ -32,7 +32,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
       t.equal(alterResult.acknowledged, true);
       t.equal(alterResult.success, true);
 
-      const latestLogEntry = partition.storage.log[partition.storage.log.length - 1];
+      const latestLogEntry = partition.storage.getLastEntry();
       t.equal(latestLogEntry.data.type, PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE);
 
       const insertResult = await partition.executeQuery(

@@ -834,6 +834,7 @@ async (t) => {
 
   const engine = new SQLQueryEngine({
     tablePartitionProvisioningPollIntervalMs: 5,
+    autoStartDistributedTransactionRecovery: false,
   });
   engine.getRoutablePartitionServiceNodeIds = () => routableNodeIds;
   engine.queryExecutor = {
@@ -890,6 +891,7 @@ async (t) => {
 
   const engine = new SQLQueryEngine({
     tablePartitionProvisioningPollIntervalMs: 5,
+    autoStartDistributedTransactionRecovery: false,
   });
   engine.getRoutablePartitionServiceNodeIds = () => routableNodeIds;
   engine.queryExecutor = {

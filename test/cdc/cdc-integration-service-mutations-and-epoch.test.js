@@ -30,6 +30,9 @@ import {
 } from '../../src/control-plane/timeout-budget.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {
+  PARTITION_TRANSITION_STATE,
+} from '../../src/partition/partition-constants.js';
+import {
   READ_MODEL_DIVERGENCE_TYPE,
 } from '../../src/control-plane/read-model-contract.js';
 import {
@@ -804,6 +807,7 @@ test('CDCIntegrationService - deleteSystemTableRow', async (t) => {
     nodeId: 'test-node',
     sqlQueryEngine: mockSqlEngine,
   });
+
   service.initialize();
 
   const whereClause = {node_id: 'node-1'};
@@ -823,6 +827,37 @@ test('CDCIntegrationService - deleteSystemTableRow', async (t) => {
   );
   t.end();
 });
+
+test('CDCIntegrationService - active split mirror declines local write shortcut',
+  async (t) => {
+    let localWriteCalls = 0;
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: {
+        getTableInfo() {
+          return {partition_transition_state: 'active'};
+        },
+        parsePartitionTransition() {
+          return {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE};
+        },
+      },
+    });
+    service.resolveLocalSystemTableServices = () => [{
+      async executeQuery() {
+        localWriteCalls += 1;
+        return {success: true, changes: 1};
+      },
+    }];
+
+    const result = await service.tryExecuteLocalSystemTableWrite(
+      `UPDATE ${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS} SET status = ?`,
+      ['active'],
+    );
+
+    t.equal(result.handled, false);
+    t.equal(localWriteCalls, 0,
+      'SQL must see the final post-mirror participant set');
+  });
 
 test('CDCIntegrationService - validates table name', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();

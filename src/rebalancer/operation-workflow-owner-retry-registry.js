@@ -33,7 +33,6 @@ class OperationWorkflowOwnerRetryRegistry {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService;
     this.messageRouter = options.messageRouter;
     this.tablePolicyService = options.tablePolicyService;
-    this.transactionCoordinator = options.transactionCoordinator || null;
     this.logger = options.logger;
     this.emitter = options.emitter;
     this.config = options.config;
@@ -95,7 +94,6 @@ class OperationWorkflowOwnerRetryRegistry {
     // outcome evidence (retained payloads must keep a driver until applied).
     this.executorOutcomeRedriveInFlightByOperationId = new Set();
     this.executorOutcomeRetryDelayMsByOperationId = new Map();
-    this.transitionExecutionAttemptByStepOwnerKey = new Map();
     // Terminal-transition repair: retained terminal projections whose
     // post-commit visibility confirmation failed or deferred, re-asserted
     // with backoff until authoritatively visible (run-21 ghost-row class).

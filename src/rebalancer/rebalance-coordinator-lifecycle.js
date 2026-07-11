@@ -14,7 +14,6 @@ const LOCAL_STR_CDCGROUPPROPAGATIONSERVICE = 'cdcGroupPropagationService';
 const LOCAL_STR_BOOTSTRAPREADINESSSTATE = 'bootstrapReadinessState';
 const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
 const LOCAL_STR_CONTROLPLANEREADINESSSERVICE = 'controlPlaneReadinessService';
-const LOCAL_STR_TRANSACTIONCOORDINATOR = 'transactionCoordinator';
 
 const {
   ConfigurationManager,
@@ -242,7 +241,6 @@ class RebalanceCoordinatorLifecycle {
     );
     this.operationsInCreation = workflowInFlightExecutions;
     this.operationsInExecution = workflowInFlightExecutions;
-    this.transactionCoordinator = options.transactionCoordinator || null;
     this.nowFn = typeof options.nowFn === LOCAL_STR_FUNCTION ? options.nowFn : Date.now;
     this.priorityRecoveryActivityStaleGraceMs = Number.isFinite(
       options.priorityRecoveryActivityStaleGraceMs,
@@ -295,7 +293,6 @@ class RebalanceCoordinatorLifecycle {
         controlPlaneReadinessService: this.controlPlaneReadinessService,
         messageRouter: this.messageRouter,
         tablePolicyService: this.tablePolicyService,
-        transactionCoordinator: this.transactionCoordinator,
         logger: this.logger,
         emitter: this,
         config: this.config,
@@ -397,10 +394,6 @@ class RebalanceCoordinatorLifecycle {
       this.controlPlaneReadinessService =
         options.controlPlaneReadinessService || null;
     }
-    if (Object.hasOwn(options, LOCAL_STR_TRANSACTIONCOORDINATOR)) {
-      this.transactionCoordinator = options.transactionCoordinator || null;
-    }
-
     if (
       this.repository &&
       typeof this.repository.syncOwnerDependencies === LOCAL_STR_FUNCTION
@@ -419,7 +412,6 @@ class RebalanceCoordinatorLifecycle {
         this.controlPlaneReadinessService;
       this.workflowOwner.messageRouter = this.messageRouter;
       this.workflowOwner.tablePolicyService = this.tablePolicyService;
-      this.workflowOwner.transactionCoordinator = this.transactionCoordinator;
     }
 
     if (

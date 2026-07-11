@@ -9,6 +9,11 @@ import {
 } from '../../control-plane/timeout-budget.js';
 import {DurableWorkflowCoordinator} from '../../workflow/durable-workflow-coordinator.js';
 import {
+  COMMIT_MODE,
+  PARTICIPANT_SET_STATE,
+  TRANSACTION_MODE,
+} from '../../constants/index.js';
+import {
   PARTICIPANT_RETRY_DEFAULT,
   PARTICIPANT_STATUS,
   RECOVERY_SWEEP_DEFAULT_INTERVAL_MS,
@@ -41,9 +46,10 @@ import {
   getCommitParticipantKeys,
   getRollbackParticipantKeys,
   executeParticipantStage,
+  executeOnePhaseCommitStage,
   executeParticipantOperationWithRetry,
+  resolveParticipantCommitMiss,
   createTransactionTimeoutError,
-  shouldTreatParticipantCommitMissAsSuccess,
   emitParticipantRetryDiagnostic,
   calculateParticipantRetryDelay,
 } from './distributed-transaction-protocol.js';
@@ -60,6 +66,9 @@ import {
   getOrderedParticipantIds,
   getOrderedParticipantDetails,
 } from './distributed-transaction-records.js';
+import {
+  buildFrozenTransactionDecision,
+} from './distributed-transaction-commit-mode.js';
 
 
 /**
@@ -93,6 +102,10 @@ class DistributedTransactionCoordinator {
     this.persistParticipant = options.persistParticipant || (async () => {});
     this.persistWriteOperation =
       options.persistWriteOperation || (async () => {});
+    this.resolveParticipantCommitOutcome =
+      typeof options.resolveParticipantCommitOutcome === 'function' ?
+        options.resolveParticipantCommitOutcome :
+        null;
     this.now = options.now || (() => Date.now());
     this.nextEpoch = Number.isFinite(options.initialEpoch) ?
       Math.floor(options.initialEpoch) :
@@ -148,6 +161,10 @@ class DistributedTransactionCoordinator {
             status: workflow.status,
             transactionEpoch: workflow.transactionEpoch,
             timeoutDeadline: workflow.timeoutDeadline,
+            transactionMode: workflow.transactionMode,
+            participantSetState: workflow.participantSetState,
+            commitMode: workflow.commitMode,
+            frozenParticipantCount: workflow.frozenParticipantCount,
             createdAt: workflow.createdAt,
             updatedAt: workflow.updatedAt,
           });
@@ -166,6 +183,7 @@ class DistributedTransactionCoordinator {
         now: this.now,
       });
     this.transactionsBySession = this.workflowCoordinator.workflowsByOwnerKey;
+    this.transactionOperationTailBySession = new Map();
     this.recoveredTransactionIds = new Set();
   }
 
@@ -174,7 +192,7 @@ class DistributedTransactionCoordinator {
    * @param {string} sessionId - Session ID.
    * @return {Promise<Object>} Transaction begin result.
    */
-  async begin(sessionId) {
+  async begin(sessionId, options = {}) {
     if (this.transactionsBySession.has(sessionId)) {
       return {
         success: false,
@@ -217,6 +235,15 @@ class DistributedTransactionCoordinator {
       timeoutBudget,
       timeoutDeadline: timeoutBudget.deadlineMs,
       status: TRANSACTION_STATUS.ACTIVE,
+      transactionMode:
+        options.transactionMode === TRANSACTION_MODE.AUTOCOMMIT ?
+          TRANSACTION_MODE.AUTOCOMMIT :
+          TRANSACTION_MODE.EXPLICIT,
+      participantSetState: PARTICIPANT_SET_STATE.OPEN,
+      commitMode: COMMIT_MODE.NOT_SELECTED,
+      frozenParticipantCount: 0,
+      participantSetFrozenAt: 0,
+      decisionTrace: [],
       participants: new Map(),
       writeOperations: [],
       createdAt: now,
@@ -230,7 +257,30 @@ class DistributedTransactionCoordinator {
       sessionId,
       transactionId,
       transactionEpoch,
+      transactionMode: tx.transactionMode,
     };
+  }
+
+  /**
+   * Queue transaction operations in FIFO order for one session.
+   * Unlike workflow single-flight, distinct calls never share a result.
+   * @param {string} sessionId
+   * @param {Function} operation
+   * @return {Promise<*>}
+   * @private
+   */
+  runTransactionOperation(sessionId, operation) {
+    const previous = this.transactionOperationTailBySession.get(sessionId) ||
+      Promise.resolve();
+    const execution = previous
+      .catch(() => {})
+      .then(operation);
+    this.transactionOperationTailBySession.set(sessionId, execution);
+    return execution.finally(() => {
+      if (this.transactionOperationTailBySession.get(sessionId) === execution) {
+        this.transactionOperationTailBySession.delete(sessionId);
+      }
+    });
   }
 
   /**
@@ -240,12 +290,26 @@ class DistributedTransactionCoordinator {
    * @return {Promise<Object>} Enlistment result.
    */
   async enlistParticipants(sessionId, partitionIds) {
+    return this.runTransactionOperation(
+      sessionId,
+      () => this.enlistParticipantsOwned(sessionId, partitionIds),
+    );
+  }
+
+  async enlistParticipantsOwned(sessionId, partitionIds) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
       return {
         success: false,
         error: QUERY_ERROR_MSG.NO_ACTIVE_TRANSACTION,
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
+      };
+    }
+    if (tx.participantSetState !== PARTICIPANT_SET_STATE.OPEN) {
+      return {
+        success: false,
+        error: QUERY_ERROR_MSG.TRANSACTION_PARTICIPANTS_FROZEN,
+        errorCode: QUERY_ERROR_CODE.TRANSACTION_PARTICIPANTS_FROZEN,
       };
     }
 
@@ -278,6 +342,34 @@ class DistributedTransactionCoordinator {
       participants: this.getOrderedParticipantIds(tx),
       newlyEnlisted,
     };
+  }
+
+  /**
+   * Execute one complete transactional write while the session FIFO lane is
+   * held, so commit cannot freeze between enlistment and statement outcome.
+   * @param {string} sessionId
+   * @param {Object} operation
+   * @param {Function} executeWrite
+   * @return {Promise<Object>}
+   */
+  async executeWriteStatement(sessionId, operation, executeWrite) {
+    return this.runTransactionOperation(sessionId, async () => {
+      const enlistResult = await this.enlistParticipantsOwned(
+        sessionId,
+        operation.partitionIds,
+      );
+      if (enlistResult.success !== true) {
+        return enlistResult;
+      }
+      await this.recordWriteOperation(sessionId, operation);
+      const result = await executeWrite();
+      await this.markWriteOperationResult(
+        sessionId,
+        operation.operationId,
+        result,
+      );
+      return result;
+    });
   }
 
   /**
@@ -359,6 +451,13 @@ class DistributedTransactionCoordinator {
    * @return {Promise<Object>} Commit result.
    */
   async commit(sessionId) {
+    return this.runTransactionOperation(
+      sessionId,
+      () => this.commitOwned(sessionId),
+    );
+  }
+
+  async commitOwned(sessionId) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
       return {
@@ -366,6 +465,31 @@ class DistributedTransactionCoordinator {
         error: QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
+    }
+    if (tx.participantSetState === PARTICIPANT_SET_STATE.OPEN) {
+      const previousDecision = {
+        participantSetState: tx.participantSetState,
+        commitMode: tx.commitMode,
+        frozenParticipantCount: tx.frozenParticipantCount,
+        participantSetFrozenAt: tx.participantSetFrozenAt,
+        decisionTrace: tx.decisionTrace,
+        updatedAt: tx.updatedAt,
+      };
+      const decision = buildFrozenTransactionDecision({
+        transactionMode: tx.transactionMode,
+        participantCount: tx.participants.size,
+        onePhaseCommitSupported:
+          typeof this.resolveParticipantCommitOutcome === 'function',
+        decidedAt: this.now(),
+      });
+      Object.assign(tx, decision);
+      tx.updatedAt = decision.participantSetFrozenAt;
+      try {
+        await this.persistTransactionRecord(tx);
+      } catch (error) {
+        Object.assign(tx, previousDecision);
+        throw error;
+      }
     }
     return this.runCommitProtocol(tx);
   }
@@ -376,6 +500,13 @@ class DistributedTransactionCoordinator {
    * @return {Promise<Object>} Rollback result.
    */
   async rollback(sessionId) {
+    return this.runTransactionOperation(
+      sessionId,
+      () => this.rollbackOwned(sessionId),
+    );
+  }
+
+  async rollbackOwned(sessionId) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
       return {
@@ -403,6 +534,12 @@ class DistributedTransactionCoordinator {
       status: tx.status,
       transactionEpoch: tx.transactionEpoch,
       timeoutDeadline: tx.timeoutDeadline,
+      transactionMode: tx.transactionMode,
+      participantSetState: tx.participantSetState,
+      commitMode: tx.commitMode,
+      frozenParticipantCount: tx.frozenParticipantCount,
+      participantSetFrozenAt: tx.participantSetFrozenAt,
+      decisionTrace: tx.decisionTrace.map((entry) => ({...entry})),
       participants: this.getOrderedParticipantIds(tx),
       participantDetails: this.getOrderedParticipantDetails(tx),
       writeOperations: tx.writeOperations.map((operation) => ({...operation})),
@@ -548,12 +685,22 @@ class DistributedTransactionCoordinator {
     );
   }
 
-  createTransactionTimeoutError() {
-    return createTransactionTimeoutError.call(this);
+  async executeOnePhaseCommitStage(tx, options = {}) {
+    return executeOnePhaseCommitStage.call(this, tx, options);
   }
 
-  shouldTreatParticipantCommitMissAsSuccess(stage, error) {
-    return shouldTreatParticipantCommitMissAsSuccess.call(this, stage, error);
+  async resolveParticipantCommitMiss(tx, stage, partitionId, error) {
+    return resolveParticipantCommitMiss.call(
+      this,
+      tx,
+      stage,
+      partitionId,
+      error,
+    );
+  }
+
+  createTransactionTimeoutError() {
+    return createTransactionTimeoutError.call(this);
   }
 
   emitParticipantRetryDiagnostic(diagnostic) {

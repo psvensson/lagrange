@@ -42,7 +42,25 @@ const PARTITION_SERVICE_SQL = Object.freeze({
         value TEXT
       )
     `,
+  CREATE_TRANSACTION_OUTCOME_TABLE: `
+      CREATE TABLE IF NOT EXISTS _transaction_outcomes (
+        session_id TEXT NOT NULL,
+        transaction_epoch INTEGER NOT NULL,
+        outcome TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (session_id, transaction_epoch)
+      )
+    `,
   SELECT_RAFT_STATE_VALUE: 'SELECT value FROM _raft_state WHERE key = ?',
+  SELECT_TRANSACTION_OUTCOME:
+    'SELECT outcome FROM _transaction_outcomes ' +
+    'WHERE session_id = ? AND transaction_epoch = ?',
+  UPSERT_TRANSACTION_OUTCOME:
+    'INSERT INTO _transaction_outcomes ' +
+    '(session_id, outcome, transaction_epoch, updated_at) VALUES (?, ?, ?, ?) ' +
+    'ON CONFLICT(session_id, transaction_epoch) DO UPDATE SET ' +
+    'outcome = excluded.outcome, ' +
+    'updated_at = excluded.updated_at',
   UPSERT_RAFT_STATE: 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
   BEGIN_IMMEDIATE: 'BEGIN IMMEDIATE',
   SAVEPOINT_PREPARE: 'SAVEPOINT prepare_transaction',
@@ -97,6 +115,7 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
   TRANSACTION_COMMIT: 'TRANSACTION_COMMIT',
+  TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
 });
 
 const PARTITION_SERVICE_ROLE = Object.freeze({
@@ -145,6 +164,10 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
   TRANSACTION_EPOCH: 'transaction_epoch',
   TIMEOUT_DEADLINE: 'timeout_deadline',
+  TRANSACTION_MODE: 'transaction_mode',
+  PARTICIPANT_SET_STATE: 'participant_set_state',
+  COMMIT_MODE: 'commit_mode',
+  FROZEN_PARTICIPANT_COUNT: 'frozen_participant_count',
   TABLE_NAME: 'table_name',
   ACTIVE_PARTITION_VERSION: 'active_partition_version',
   PENDING_PARTITION_VERSION: 'pending_partition_version',
@@ -164,6 +187,14 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN transaction_epoch INTEGER',
   ADD_TIMEOUT_DEADLINE:
     'ADD COLUMN timeout_deadline INTEGER',
+  ADD_TRANSACTION_MODE:
+    'ADD COLUMN transaction_mode TEXT NOT NULL DEFAULT \'EXPLICIT\'',
+  ADD_PARTICIPANT_SET_STATE:
+    'ADD COLUMN participant_set_state TEXT NOT NULL DEFAULT \'OPEN\'',
+  ADD_COMMIT_MODE:
+    'ADD COLUMN commit_mode TEXT NOT NULL DEFAULT \'NOT_SELECTED\'',
+  ADD_FROZEN_PARTICIPANT_COUNT:
+    'ADD COLUMN frozen_participant_count INTEGER NOT NULL DEFAULT 0',
   ADD_LEADER_NODE_ID:
     'ADD COLUMN leader_node_id TEXT',
   ADD_TABLE_NAME:
@@ -267,6 +298,14 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Added transaction_epoch column to sql_transactions table',
   ADDED_SQL_TRANSACTIONS_TIMEOUT_DEADLINE:
     'Added timeout_deadline column to sql_transactions table',
+  ADDED_SQL_TRANSACTIONS_TRANSACTION_MODE:
+    'Added transaction_mode column to sql_transactions table',
+  ADDED_SQL_TRANSACTIONS_PARTICIPANT_SET_STATE:
+    'Added participant_set_state column to sql_transactions table',
+  ADDED_SQL_TRANSACTIONS_COMMIT_MODE:
+    'Added commit_mode column to sql_transactions table',
+  ADDED_SQL_TRANSACTIONS_FROZEN_PARTICIPANT_COUNT:
+    'Added frozen_participant_count column to sql_transactions table',
   ADDED_MESSAGE_GROUP_LEADER: 'Added leader_node_id column to message_groups table',
   ADDED_ACTIVE_PARTITION_VERSION:
     'Added active_partition_version column to tables table',

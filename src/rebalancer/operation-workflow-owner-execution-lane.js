@@ -18,13 +18,9 @@ const {
   OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
   OPERATION_SINGLE_FLIGHT_SCOPE,
   OPERATION_TRANSITION_REASON,
-  OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  PARTITION_SERVICE_ERROR_MSG,
-  QUERY_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SKIP_REASON,
-  TIMEOUT_BUDGET_DEFAULT,
   WORKFLOW_STEP,
   buildTopologyOperatorWitnessFromWorkflowProgress,
   getControlPlaneRetryAfterMs,
@@ -496,233 +492,17 @@ class OperationWorkflowOwnerExecutionLane
   }
 
   /**
-   * Build one stable owner key for transition-attempt tracking.
-   * @param {string} operationId
-   * @param {string} step
-   * @return {string}
-   */
-  buildTransitionExecutionStepOwnerKey(operationId, step) {
-    return [
-      String(operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING),
-      String(step || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING),
-    ].join(OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR);
-  }
-
-  /**
-   * Get or allocate the current execution attempt number for one
-   * operation/step key.
-   * @param {string} operationId
-   * @param {string} step
-   * @return {number}
-   */
-  reserveTransitionExecutionAttempt(operationId, step) {
-    const ownerKey = this.buildTransitionExecutionStepOwnerKey(
-      operationId,
-      step,
-    );
-    const currentAttempt =
-      this.transitionExecutionAttemptByStepOwnerKey.get(ownerKey);
-    if (Number.isInteger(currentAttempt) && currentAttempt >= 1) {
-      return currentAttempt;
-    }
-    this.transitionExecutionAttemptByStepOwnerKey.set(ownerKey, 1);
-    return 1;
-  }
-
-  /**
-   * Rotate the execution attempt number after a direct session collision.
-   * @param {string} operationId
-   * @param {string} step
-   * @return {number}
-   */
-  rotateTransitionExecutionAttempt(operationId, step) {
-    const ownerKey = this.buildTransitionExecutionStepOwnerKey(
-      operationId,
-      step,
-    );
-    const nextAttempt =
-      this.reserveTransitionExecutionAttempt(operationId, step) + 1;
-    this.transitionExecutionAttemptByStepOwnerKey.set(ownerKey, nextAttempt);
-    return nextAttempt;
-  }
-
-  /**
-   * Rotate the transition execution attempt after a stale-session collision and
-   * emit one canonical diagnostic with the next attempt number.
-   * @param {string} operationId
-   * @param {string} step
-   * @param {string} sessionId
-   * @param {*} errorLike
-   * @return {number}
-   */
-  rotateTransitionExecutionAttemptAfterStaleSessionConflict(
-    operationId,
-    step,
-    sessionId,
-    errorLike,
-  ) {
-    const nextAttempt = this.rotateTransitionExecutionAttempt(
-      operationId,
-      step,
-    );
-    this.logger?.warn?.(
-      OPERATION_WORKFLOW_OWNER_LITERAL.ROTATING_TRANSITION_EXECUTION_SESSION_AFTER_STALE_SESSION_COLLISION,
-      {
-        operationId,
-        workflowStep: step,
-        sessionId,
-        nextAttempt,
-        error: this.normalizeErrorMessage(
-          errorLike,
-          OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-        ),
-      },
-    );
-    return nextAttempt;
-  }
-
-  /**
-   * Clear tracked attempt state after a committed transition.
-   * @param {string} operationId
-   * @param {string} step
-   * @return {void}
-   */
-  clearTransitionExecutionAttempt(operationId, step) {
-    const ownerKey = this.buildTransitionExecutionStepOwnerKey(
-      operationId,
-      step,
-    );
-    this.transitionExecutionAttemptByStepOwnerKey.delete(ownerKey);
-  }
-
-  /**
-   * Build one attempt-scoped transition session id.
-   * @param {string} operationId
-   * @param {string} step
-   * @param {number} executionAttempt
-   * @return {string}
-   */
-  buildTransitionExecutionSessionId(operationId, step, executionAttempt) {
-    return [
-      String(operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING),
-      String(step || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING),
-      OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX + String(executionAttempt),
-    ].join(OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR);
-  }
-
-  /**
-   * Clamp transition-owned replica_operations writes to the enclosing
-   * distributed transaction deadline so inner retry loops do not outlive
-   * the parent transaction and mask the original contention boundary.
-   * @param {string} sessionId
-   * @return {Object|null}
-   */
-  buildTransitionMutationTimeoutBudget(sessionId) {
-    if (
-      typeof this.transactionCoordinator?.getTransaction !== 'function'
-    ) {
-      return null;
-    }
-    const transactionState =
-      this.transactionCoordinator.getTransaction(sessionId);
-    const deadlineMs = Number.isFinite(transactionState?.timeoutDeadline) ?
-      Math.floor(transactionState.timeoutDeadline) :
-      null;
-    if (!Number.isFinite(deadlineMs)) {
-      return null;
-    }
-    const startedAtMs = Date.now();
-    return Object.freeze({
-      configuredBudgetMs: Math.max(
-        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
-        deadlineMs - startedAtMs,
-      ),
-      startedAtMs,
-      deadlineMs,
-      operationName: OPERATION_WORKFLOW_OWNER_LITERAL.TRANSACTION,
-    });
-  }
-
-  /**
-   * Build canonical persistence options for transition-owned
-   * replica_operations mutations so every transition path shares the same
-   * enclosing transaction budget clamp.
-   * @param {string} sessionId
+   * Build the independent autocommit persistence intent for a transition.
+   * SQL still promotes a post-mirror multi-participant plan to a statement-
+   * owned distributed transaction after it knows the final participant set.
    * @return {Object}
+   * @private
    */
-  buildTransitionPersistOptions(sessionId) {
-    const persistOptions = {
-      sessionId,
+  buildOperationTransitionPersistOptions() {
+    return {
       confirmPersistence: false,
-      timeoutBudget: this.buildTransitionMutationTimeoutBudget(sessionId),
-      // A ledger progress write is single-partition (one durable participant);
-      // it must not open a spurious 2PC participant hold on replica_operations
-      // that orphans on a leaderless sibling and freezes the durable watermark.
-      // The engine honors this only when the post-mirror write is single-
-      // partition, so a SPLIT_CUTOVER (2-participant) write still enlists 2PC.
-      bypassSingleParticipantSystemWrite: true,
+      disableSystemWriteSession: true,
     };
-    if (typeof sessionId !== 'string' || sessionId.length <= 0) {
-      delete persistOptions.sessionId;
-    }
-    return persistOptions;
-  }
-
-  /**
-   * Normalize the partition id from either in-memory operation objects or
-   * durable replica_operations rows before selecting the persistence lane.
-   * @param {Object|null} operation
-   * @return {string}
-   * @private
-   */
-  resolveTransitionOperationPartitionId(operation) {
-    const candidatePartitionIds = [
-      operation?.partitionId,
-      operation?.partition_id,
-      operation?.entityId,
-      operation?.entity_id,
-    ];
-    const partitionId = candidatePartitionIds.find(
-      (candidate) =>
-        typeof candidate === 'string' && candidate.length > 0,
-    );
-    return typeof partitionId === 'string' ?
-      partitionId :
-      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
-  }
-
-  /**
-   * Priority control-plane recovery partitions must not route their own
-   * replica_operations step transitions back through the control-plane
-   * tables they are still converging.
-   * @param {Object|null} operation
-   * @return {boolean}
-   * @private
-   */
-  shouldBypassTransitionExecutionTransaction(operation) {
-    const partitionId = this.resolveTransitionOperationPartitionId(operation);
-    return isPriorityControlPlanePartition({partitionId});
-  }
-
-  /**
-   * Build canonical persistence options for one transition-owned
-   * replica_operations mutation.
-   * @param {Object|null} operation
-   * @param {string|null} sessionId
-   * @return {Object}
-   * @private
-   */
-  buildOperationTransitionPersistOptions(operation, sessionId) {
-    const persistOptions = this.buildTransitionPersistOptions(sessionId);
-    if (this.shouldBypassTransitionExecutionTransaction(operation)) {
-      const directPersistOptions = {
-        ...persistOptions,
-        disableSystemWriteSession: true,
-      };
-      delete directPersistOptions.sessionId;
-      return directPersistOptions;
-    }
-    return persistOptions;
   }
 
   /**
@@ -801,66 +581,6 @@ class OperationWorkflowOwnerExecutionLane
       operation,
       TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_DEFERRED,
     );
-  }
-
-  /**
-   * Check whether a transition failure indicates a stale session id that
-   * should rotate on the next retry.
-   * @param {*} errorLike
-   * @return {boolean}
-   */
-  isStaleTransitionSessionConflict(errorLike) {
-    const message = this.normalizeErrorMessage(errorLike, '');
-    return message === QUERY_ERROR_MSG.TRANSACTION_ACTIVE;
-  }
-
-  /**
-   * Partition transaction contention can be caused either by a stale same-
-   * session transaction or by unrelated control-plane pressure. Treat it as
-   * retryable, but do not assume it warrants a new canonical session id.
-   * @param {*} errorLike
-   * @return {boolean}
-   */
-  isTransitionPartitionContention(errorLike) {
-    return (
-      this.normalizeErrorMessage(
-        errorLike,
-        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-      ) === PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE
-    );
-  }
-
-  /**
-   * Attempt same-session recovery without masking the original transition
-   * failure when the recovery probe itself is unavailable.
-   * @param {string} sessionId
-   * @param {*} errorLike
-   * @param {Object} [options]
-   * @param {boolean} [options.allowAuthoritativeLookup=false]
-   * @return {Promise<boolean>}
-   * @private
-   */
-  async tryRecoverTransitionExecutionSession(
-    sessionId,
-    errorLike,
-    options = {},
-  ) {
-    try {
-      return await this.recoverTransitionExecutionSession(sessionId, options);
-    } catch (recoveryError) {
-      this.logger.warn(
-        OPERATION_WORKFLOW_OWNER_LITERAL.TRANSITION_SESSION_RECOVERY_PROBE_FAILED,
-        {
-          sessionId,
-          error: recoveryError?.message || String(recoveryError),
-          originalError: this.normalizeErrorMessage(
-            errorLike,
-            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
-          ),
-        },
-      );
-      return false;
-    }
   }
 }
 
