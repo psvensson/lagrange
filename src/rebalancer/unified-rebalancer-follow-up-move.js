@@ -1,11 +1,12 @@
 import {UnifiedRebalancerFollowUpDecision} from './unified-rebalancer-follow-up-decision.js';
 import {
-  computeInFlightAwareReplicaAccounting,
-} from './in-flight-aware-replica-count.js';
-import {
   applyUnifiedRebalancerFollowUpAugmentationMethods,
 } from './unified-rebalancer-follow-up-augmentation-methods.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
+import {
+  REPLICA_INVENTORY_OBSERVATION_STATE,
+} from './replica-inventory-constants.js';
+import {inFlightAddInfluenceCount} from './replica-inventory.js';
 
 const {
   EntityType,
@@ -15,14 +16,13 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE,
-  PRIORITY_RECOVERY_FOLLOW_UP_UNOCCUPIED_SERVICE_STATUSES,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
   REBALANCER_ERROR_MSG,
   REBALANCER_LOG_MSG,
   REBALANCER_MOVE_FIELD,
   REBALANCER_RUNTIME_REASON,
   REBALANCER_SKIP_REASON,
   REBALANCER_TARGET_READINESS_MODE,
-  ReplicaStatus,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
@@ -38,6 +38,75 @@ const PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD = Object.freeze({
 });
 
 class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+  buildPriorityRecoveryFollowUpInventory(
+    currentReplicas = [],
+    partitionId = '',
+    ownerOperationObservation = null,
+  ) {
+    const resolvedPartitionId = partitionId || this.entityId;
+    const crossPartition = resolvedPartitionId !== this.entityId;
+    const rawOperations = (crossPartition ?
+      this.getGlobalTopologyBlockingInFlightOperations() :
+      this.getTopologyBlockingInFlightOperations()).filter((operation) => {
+      const operationPartitionId = String(
+        operation?.partition_id ||
+        operation?.partitionId ||
+        operation?.entity_id ||
+        operation?.entityId ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      return operationPartitionId.length === 0 ||
+        operationPartitionId === resolvedPartitionId;
+    });
+    const operations = ownerOperationObservation?.operations || rawOperations;
+    const capturedAtMs = this.nowFn();
+    return this.replicaInventoryBuilder({
+      entityType: EntityType.PARTITION,
+      entityId: resolvedPartitionId,
+      capturedAtMs,
+      committedRowsObservation: {
+        state: currentReplicas.length > 0 ?
+          REPLICA_INVENTORY_OBSERVATION_STATE.PRESENT :
+          REPLICA_INVENTORY_OBSERVATION_STATE.EMPTY,
+        rows: currentReplicas,
+        observedAtMs: capturedAtMs,
+      },
+      inFlightOperationObservation: {
+        state: ownerOperationObservation?.state ||
+          (operations.length > 0 ?
+            REPLICA_INVENTORY_OBSERVATION_STATE.PRESENT :
+            REPLICA_INVENTORY_OBSERVATION_STATE.EMPTY),
+        operations,
+        observedAtMs: capturedAtMs,
+      },
+    });
+  }
+
+  resolvePriorityRecoveryFollowUpOwnerOperationObservation(decision = null) {
+    const semanticState =
+      decision?.decisionSnapshot?.semanticState ||
+      decision?.decisionSnapshot?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SEMANTIC_STATE_ID
+      ];
+    if (semanticState !== PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION) {
+      return null;
+    }
+    const ownerVisibilityState =
+      decision?.decisionSnapshot?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.AUTHORITATIVE_VISIBILITY_STATE
+      ];
+    if (
+      ownerVisibilityState !==
+        REPLICA_INVENTORY_OBSERVATION_STATE.OWNER_ADJUDICATED_EMPTY
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      state: REPLICA_INVENTORY_OBSERVATION_STATE.OWNER_ADJUDICATED_EMPTY,
+      operations: Object.freeze([]),
+    });
+  }
+
   buildPriorityRecoveryFollowUpHealthyNodeSet(currentReplicas = []) {
     return new Set(
       this.getHealthyReplicas(currentReplicas)
@@ -52,58 +121,31 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     );
   }
 
-  buildPriorityRecoveryFollowUpOccupiedNodeSet(currentReplicas = []) {
-    const occupiedNodeIds = new Set();
-    const replicas = Array.isArray(currentReplicas) ? currentReplicas : [];
-    for (const replica of replicas) {
-      const nodeId = String(
-        replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID] ||
-          replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).trim();
-      if (nodeId.length === 0) {
-        continue;
-      }
-      const status = String(
-        replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.STATUS] ??
-          ReplicaStatus.ACTIVE,
-      ).toLowerCase();
-      if (PRIORITY_RECOVERY_FOLLOW_UP_UNOCCUPIED_SERVICE_STATUSES.has(status)) {
-        continue;
-      }
-      occupiedNodeIds.add(nodeId);
-    }
-    return occupiedNodeIds;
+  buildPriorityRecoveryFollowUpOccupiedNodeSet(
+    currentReplicas = [],
+    inventory = null,
+  ) {
+    return new Set(
+      (inventory || this.buildPriorityRecoveryFollowUpInventory(
+        currentReplicas,
+        this.entityId,
+      )).occupiedNodeIds,
+    );
   }
 
-  buildPriorityRecoveryFollowUpPendingTargetNodeSet(decision = null) {
+  buildPriorityRecoveryFollowUpPendingTargetNodeSet(
+    decision = null,
+    inventory = null,
+  ) {
     const followUpPartitionId =
       this.resolvePriorityRecoveryFollowUpPartitionId(decision);
-    const pendingTargetNodeIds = new Set();
-    for (const operation of this.getTopologyBlockingInFlightOperations()) {
-      const operationPartitionId = String(
-        operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
-          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
-          operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).trim();
-      if (
-        followUpPartitionId.length > 0 &&
-        operationPartitionId.length > 0 &&
-        operationPartitionId !== followUpPartitionId
-      ) {
-        continue;
-      }
-      const targetNodeId = String(
-        operation?.target_node_id ||
-          operation?.targetNodeId ||
-          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-      ).trim();
-      if (targetNodeId.length > 0) {
-        pendingTargetNodeIds.add(targetNodeId);
-      }
-    }
-    return pendingTargetNodeIds;
+    const resolvedInventory = inventory ||
+      this.buildPriorityRecoveryFollowUpInventory([], followUpPartitionId);
+    return new Set(
+      resolvedInventory.operations
+        .map((operation) => operation.targetNodeId)
+        .filter((nodeId) => nodeId.length > 0),
+    );
   }
 
   buildPriorityRecoveryFollowUpCrossPartitionPendingTargetNodeSet(
@@ -148,18 +190,16 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
    * @param {string} partitionId
    * @return {number}
    */
-  countPriorityRecoveryFollowUpInFlightAdds(partitionId) {
+  countPriorityRecoveryFollowUpInFlightAdds(partitionId, inventory = null) {
     // Single-owner accounting: route the in-flight ADD classification through the
     // shared helper (one definition of "an in-flight count-increasing ADD for a
     // partition"). currentReplicas is intentionally empty here — this count is
     // paired by the caller with the ACTIVE-only healthyReplicaCount, so the
     // committed-row dedup the helper applies for occupancy must NOT apply (a
     // CREATING replica is represented by its op, not an ACTIVE row).
-    return computeInFlightAwareReplicaAccounting({
-      currentReplicas: [],
-      inFlightOperations: this.getTopologyBlockingInFlightOperations(),
-      partitionId,
-    }).inFlightAddCount;
+    return inFlightAddInfluenceCount(
+      inventory || this.buildPriorityRecoveryFollowUpInventory([], partitionId),
+    );
   }
 
   /**
@@ -177,9 +217,10 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     partitionId,
     occupiedReplicaCount,
     targetReplicaCount,
+    inventory = null,
   ) {
     const inFlightAddCount =
-      this.countPriorityRecoveryFollowUpInFlightAdds(partitionId);
+      this.countPriorityRecoveryFollowUpInFlightAdds(partitionId, inventory);
     return occupiedReplicaCount + inFlightAddCount >= targetReplicaCount;
   }
 
@@ -251,7 +292,22 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     decision,
     currentReplicas = [],
     targetState = null,
+    inventory = null,
   ) {
+    const targetStateInventory =
+      targetState?.topologyTransitionSnapshot?.inventory || null;
+    const followUpPartitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(decision);
+    const resolvedInventory = inventory ||
+      (targetStateInventory?.entityId === followUpPartitionId ?
+        targetStateInventory : null) ||
+      this.buildPriorityRecoveryFollowUpInventory(
+        currentReplicas,
+        followUpPartitionId,
+      );
+    if (resolvedInventory.provenance.topologyIncreaseUsable !== true) {
+      return null;
+    }
     const eligibleNodeIds =
       this.resolvePriorityRecoveryFollowUpCandidateNodeIds(
         decision,
@@ -260,9 +316,15 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     const healthyNodeIds =
       this.buildPriorityRecoveryFollowUpHealthyNodeSet(currentReplicas);
     const occupiedNodeIds =
-      this.buildPriorityRecoveryFollowUpOccupiedNodeSet(currentReplicas);
+      this.buildPriorityRecoveryFollowUpOccupiedNodeSet(
+        currentReplicas,
+        resolvedInventory,
+      );
     const pendingTargetNodeIds =
-      this.buildPriorityRecoveryFollowUpPendingTargetNodeSet(decision);
+      this.buildPriorityRecoveryFollowUpPendingTargetNodeSet(
+        decision,
+        resolvedInventory,
+      );
     const crossPartitionPendingTargetNodeIds =
       this.buildPriorityRecoveryFollowUpCrossPartitionPendingTargetNodeSet(
         decision,
@@ -421,10 +483,23 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
         decision,
         context.currentReplicas,
       );
+    const targetStateInventory =
+      context.targetState?.topologyTransitionSnapshot?.inventory || null;
+    const ownerOperationObservation =
+      this.resolvePriorityRecoveryFollowUpOwnerOperationObservation(decision);
+    const inventory = !ownerOperationObservation &&
+      targetStateInventory?.entityId === partitionId ?
+      targetStateInventory :
+      this.buildPriorityRecoveryFollowUpInventory(
+        currentReplicas,
+        partitionId,
+        ownerOperationObservation,
+      );
     const targetNodeId = this.selectPriorityRecoveryFollowUpTargetNodeId(
       decision,
       currentReplicas,
       context.targetState,
+      inventory,
     );
     if (!targetNodeId) {
       return this.buildPriorityRecoveryFollowUpMoveOutcome(
@@ -472,6 +547,7 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
           partitionId,
           occupiedAliveReplicas.length,
           targetReplicaCount,
+          inventory,
         )
       ) {
         return this.buildPriorityRecoveryFollowUpMoveOutcome(

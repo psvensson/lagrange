@@ -1,5 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {resolveRandomSource} from '../random/random-source.js';
+import {buildReplicaInventorySnapshot} from './replica-inventory.js';
 import {
   applyUnifiedRebalancerControlPlaneReadinessMethods,
 } from './unified-rebalancer-control-plane-readiness-methods.js';
@@ -85,6 +86,8 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       typeof options.nowFn === UNIFIED_REBALANCER_LITERAL.FUNCTION ?
         options.nowFn :
         Date.now;
+    this.replicaInventoryBuilder =
+      options.replicaInventoryBuilder || buildReplicaInventorySnapshot;
     // DT5 seam: scheduler/leadership-start jitter draws from a RandomSource
     // (default RealRandomSource = Math.random, byte-identical) so a seed determines
     // the rebalancer's check cadence — the thundering-herd staggering that perturbs
@@ -264,6 +267,7 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       accountingService: this.storageAccountingService,
       storagePressureBehavior: this.storagePressureBehavior,
       strictOwnerDependencies: true,
+      replicaInventoryBuilder: this.replicaInventoryBuilder,
     });
     this.syncOwnerDependenciesFromCoordinator(this.rebalanceCoordinator);
 

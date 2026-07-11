@@ -140,6 +140,8 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     }
 
     const effectivePolicy = policy || (await this.getPolicy());
+    const inventorySourceStateBefore =
+      this.movePlanner.captureReplicaInventorySourceState();
     const currentReplicas = this.getCurrentReplicas();
     const availableNodes = this.getAvailableNodes();
     if (availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
@@ -155,6 +157,7 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
     const targetState = await this.movePlanner.calculateTargetState(
       currentReplicas,
       effectivePolicy,
+      inventorySourceStateBefore,
     );
     const planningMembershipPublicationEpoch =
       this.resolvePublishedMembershipPlanningEpoch();

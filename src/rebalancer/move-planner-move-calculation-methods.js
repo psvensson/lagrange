@@ -14,8 +14,9 @@ import {NUM} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
-  computeInFlightAwareReplicaAccounting,
-} from './in-flight-aware-replica-count.js';
+  REPLICA_INVENTORY_EFFECTIVE_VIEW,
+  effectiveReplicaCountAfterOperations,
+} from './replica-inventory.js';
 import {
   MOVE_REASON,
   REBALANCER_LOG_MSG,
@@ -36,12 +37,6 @@ const MOVE_PLANNER_LITERAL = Object.freeze({
   UNKNOWN: 'unknown',
 });
 const MoveType = REBALANCER_MOVE_TYPE;
-const PLACEMENT_OCCUPIED_STATUSES = new Set([
-  ReplicaStatus.PENDING,
-  ReplicaStatus.CREATING,
-  ReplicaStatus.SYNCING,
-  ReplicaStatus.ACTIVE,
-]);
 
 /**
  * MovePlanner calculates replica placement and moves for partitions,
@@ -79,6 +74,10 @@ class MovePlannerMoveCalculationMethods {
     const moves = [];
     const healthyReplicas =
       this.moveStateProvider.getHealthyReplicas(currentReplicas);
+    const transitionSnapshot =
+      targetState.topologyTransitionSnapshot ||
+      this.buildTopologyTransitionSnapshot(currentReplicas);
+    const inventory = transitionSnapshot.inventory;
     const isTopologyCleanupReason = (reason) => {
       return (
         reason === MOVE_REASON.NODE_NOT_IN_TARGET ||
@@ -124,20 +123,12 @@ class MovePlannerMoveCalculationMethods {
         spreadAcrossNodes: true,
       },
     };
-    const placementReplicas = currentReplicas.filter((replica) => {
-      const status =
-        typeof replica?.status === 'string' ?
-          replica.status.toLowerCase() :
-          ReplicaStatus.ACTIVE;
-      return !!replica?.node_id && PLACEMENT_OCCUPIED_STATUSES.has(status);
-    });
     const activePlacementReplicas = currentReplicas.filter((replica) => {
       const status = replica?.status || ReplicaStatus.ACTIVE;
       return status === ReplicaStatus.ACTIVE && !!replica?.node_id;
     });
     const targetNodeIds = targetState.targetNodes;
     const isDegradedPlacement = !!targetState?.degraded;
-    const transitionSnapshot = this.buildTopologyTransitionSnapshot();
     const nodesWithAddTransitional =
       transitionSnapshot.nodesWithEntityAddTransitional;
     const nodesWithGlobalSystemAddTransitional =
@@ -168,7 +159,8 @@ class MovePlannerMoveCalculationMethods {
       }
     }
     const cleanupOnlyWhilePending =
-      pendingCount > 0 && !this.isControlPlanePriorityPartition();
+      pendingCount > 0 && !this.isControlPlanePriorityPartition() ||
+      inventory.provenance.topologyIncreaseUsable !== true;
 
     // Count target replicas per node
     const targetCounts = new Map();
@@ -181,11 +173,11 @@ class MovePlannerMoveCalculationMethods {
 
     // Count current replicas per node
     const currentCounts = new Map();
-    for (const replica of placementReplicas) {
-      if (replica && replica.node_id) {
+    for (const replica of inventory.replicas) {
+      if (replica.accountingOccupied && replica.nodeId) {
         currentCounts.set(
-          replica.node_id,
-          (currentCounts.get(replica.node_id) || 0) + 1,
+          replica.nodeId,
+          (currentCounts.get(replica.nodeId) || 0) + 1,
         );
       }
     }
@@ -309,11 +301,15 @@ class MovePlannerMoveCalculationMethods {
     // deficit decision below derives its threshold from this breakdown so the
     // count invariant has one author instead of several disagreeing ones (rows
     // lag in-flight creation, which is what caused the over-replication stall).
-    const inFlightAccounting = computeInFlightAwareReplicaAccounting({
-      currentReplicas,
-      inFlightOperations: this.getEntityTopologyBlockingInFlightOperations(),
-      partitionId: this.entityId,
-    });
+    const inFlightAccounting = transitionSnapshot.inventory.accounting;
+    const creationEffectiveCount = effectiveReplicaCountAfterOperations(
+      inventory,
+      REPLICA_INVENTORY_EFFECTIVE_VIEW.PEAK_CREATION,
+    );
+    const deficitEffectiveCount = effectiveReplicaCountAfterOperations(
+      inventory,
+      REPLICA_INVENTORY_EFFECTIVE_VIEW.DEFICIT_FILL,
+    );
     // In-flight-aware over-creation cap (priority control-plane partitions).
     // Stop minting new replacements only once a SURPLUS of committed voters
     // already exists (activeCount > target): that is the over-creation pile-up
@@ -360,7 +356,7 @@ class MovePlannerMoveCalculationMethods {
         raftRoleAuthoritativeFire:
           inFlightAccounting.activeVoterCount > targetReplicaCount &&
           inFlightAccounting.activeCount <= targetReplicaCount,
-        creationEffectiveCount: inFlightAccounting.creationEffectiveCount,
+        creationEffectiveCount,
         inFlightReplaceInCreationCount:
           inFlightAccounting.inFlightReplaceInCreationCount,
         inFlightAddCount: inFlightAccounting.inFlightAddCount,
@@ -584,7 +580,7 @@ class MovePlannerMoveCalculationMethods {
       if (
         serializeCriticalReplace &&
         replaceCount < naturalReplaceCount &&
-        inFlightAccounting.deficitEffectiveCount >= targetReplicaCount
+        deficitEffectiveCount >= targetReplicaCount
       ) {
         const retainedAddMoves = addMoves.filter(
           (move) => move.reason !== MOVE_REASON.INCREASE_REPLICA_COUNT,
@@ -649,7 +645,7 @@ class MovePlannerMoveCalculationMethods {
     if (
       addMoves.length > 0 &&
       replaceMoves.length === 0 &&
-      inFlightAccounting.deficitEffectiveCount >= targetReplicaCount
+      deficitEffectiveCount >= targetReplicaCount
     ) {
       const retainedAddMoves = addMoves.filter(
         (move) => move.reason !== MOVE_REASON.INCREASE_REPLICA_COUNT,
@@ -659,8 +655,8 @@ class MovePlannerMoveCalculationMethods {
         this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
           entityId: this.entityId,
           activePlacementReplicaCount: activePlacementReplicas.length,
-          placementReplicaCount: placementReplicas.length,
-          deficitEffectiveCount: inFlightAccounting.deficitEffectiveCount,
+          placementReplicaCount: inventory.accounting.occupiedCount,
+          deficitEffectiveCount,
           targetReplicaCount,
           deferredAddCount,
         });

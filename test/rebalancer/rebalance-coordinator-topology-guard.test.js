@@ -6,6 +6,7 @@ import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   STORAGE_ADMISSION_DECISION_TYPE,
 } from '../../src/rebalancer/storage-admission-constants.js';
+import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 import {
   createMockCache,
   createMockControlPlaneReadinessService,
@@ -167,7 +168,7 @@ function createCoordinator(options = {}) {
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       systemTableCache: cache,
     }),
-    controlPlaneSystemTableGateway: {
+    controlPlaneSystemTableGateway: options.controlPlaneSystemTableGateway || {
       readAuthoritativeRows: async (_tableName, sql, params = []) =>
         sqlEngine.executeQuery(sql, params),
       readRows: async (_tableName, sql, params = []) =>
@@ -188,6 +189,7 @@ function createCoordinator(options = {}) {
     storageAccountingService: {
       estimateReplicaBytes: () => 1,
     },
+    replicaInventoryBuilder: options.replicaInventoryBuilder,
     enableTimeouts: false,
   });
   coordinator.initialize();
@@ -244,6 +246,71 @@ test('RebalanceCoordinator blocks same-node duplicate topology creation', async 
 
   coordinator.shutdown();
 });
+
+test('RebalanceCoordinator topology guard invokes the injected inventory owner',
+  async (t) => {
+    initializeTestEnvironment();
+    let inventoryBuildCount = 0;
+    const inventoryBuilder = (options) => {
+      inventoryBuildCount += 1;
+      return buildReplicaInventorySnapshot(options);
+    };
+    const {coordinator} = createCoordinator({
+      cacheServices: [
+        createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_TARGET_NODE_ID),
+      ],
+      replicaInventoryBuilder: inventoryBuilder,
+    });
+
+    await captureOperationCreateError(() => coordinator.createOperation({
+      type: TEST_ADD_OPERATION_TYPE,
+      partitionId: TEST_PARTITION_ID,
+      nodeId: TEST_TARGET_NODE_ID,
+      emitOperationCreated: false,
+      enforceConcurrentOperationBudget: true,
+    }));
+
+    t.equal(inventoryBuildCount, 1,
+      'create-time occupancy and target census share one canonical capture');
+    coordinator.shutdown();
+  },
+);
+
+test('RebalanceCoordinator fails topology increase closed when owner rows are unavailable',
+  async (t) => {
+    initializeTestEnvironment();
+    const unavailable = async () => ({
+      success: false,
+      rows: [],
+      error: 'owner unavailable',
+    });
+    const {coordinator} = createCoordinator({
+      cacheServices: [
+        createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
+      ],
+      controlPlaneSystemTableGateway: {
+        readAuthoritativeRows: unavailable,
+        readRows: unavailable,
+        executeQuery: unavailable,
+      },
+    });
+
+    const error = await captureOperationCreateError(() =>
+      coordinator.createOperation({
+        type: TEST_ADD_OPERATION_TYPE,
+        partitionId: TEST_PARTITION_ID,
+        nodeId: TEST_TARGET_NODE_ID,
+        emitOperationCreated: false,
+        enforceConcurrentOperationBudget: true,
+      }),
+    );
+
+    t.same(error?.admissionResult?.blockingReasons,
+      ['replica_inventory_unusable'],
+      'cache presence cannot turn unavailable owner evidence into empty');
+    coordinator.shutdown();
+  },
+);
 
 test('RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target', async (t) => {
   initializeTestEnvironment();
@@ -427,6 +494,37 @@ test('count-keyed lane HOLDS a REPLACE churn create while the critical partition
     0,
     'the held REPLACE churn create persists no replica operation',
   );
+  coordinator.shutdown();
+});
+
+test('count-keyed lane consumes canonical identity deduplication', async (t) => {
+  initializeTestEnvironment();
+  const first = critRow(CRIT_PARTITION_ID + '-r1', 'node-1');
+  const rows = [
+    first,
+    {...first},
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+    critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+
+  const operation = await coordinator.createOperation({
+    type: TEST_REPLACE_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-5',
+    replicaId: CRIT_PARTITION_ID + '-r1',
+    sourceNodeId: 'node-1',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  });
+
+  t.ok(operation,
+    'duplicate observations of one identity do not manufacture a surplus');
+  t.equal(sqlEngine.getOperations().length, 1,
+    'critical lane output depends on canonical inventory deduplication');
   coordinator.shutdown();
 });
 

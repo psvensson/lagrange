@@ -57,6 +57,10 @@ import {
 import {
   PLACEMENT_OWNER_SCORE_PROFILE,
 } from './placement-owner-constants.js';
+import {
+  buildReplicaInventorySnapshot,
+  isReplicaInventoryAddTransitionalOperation,
+} from './replica-inventory.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -173,6 +177,7 @@ const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
   getPreviousOddCount,
   isOddReplicaCount,
   isPriorityControlPlanePartition,
+  isReplicaInventoryAddTransitionalOperation,
   isSystemTablePartition,
 });
 
@@ -232,6 +237,8 @@ class MovePlanner {
     this.accountingService = options.accountingService || null;
     this.storagePressureBehavior = options.storagePressureBehavior || null;
     this.strictOwnerDependencies = options.strictOwnerDependencies === true;
+    this.replicaInventoryBuilder =
+      options.replicaInventoryBuilder || buildReplicaInventorySnapshot;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -252,15 +259,23 @@ class MovePlanner {
    *
    * @param {Array<Object>} currentReplicas - Current replica state.
    * @param {Object} policy - Applicable policy.
+   * @param {Object|null} inventorySourceStateBefore source capture bracket
    * @return {Promise<Object>} Target state with replica count and
    *   placement.
    */
-  async calculateTargetState(currentReplicas, policy) {
+  async calculateTargetState(
+    currentReplicas,
+    policy,
+    inventorySourceStateBefore = null,
+  ) {
     const nodes = this.moveStateProvider.getAvailableNodes();
     const targetReplicaCount =
       policy.targetReplicaCount || policy.replicaCount || NUM.THREE;
     const estimatedBytes = this.getEstimatedBytesForEntity();
-    const transitionSnapshot = this.buildTopologyTransitionSnapshot();
+    const transitionSnapshot = this.buildTopologyTransitionSnapshot(
+      currentReplicas,
+      inventorySourceStateBefore,
+    );
     if (this.isDescriptorEpochRejected(transitionSnapshot)) {
       const diagnostics =
         this.buildDescriptorEpochRejectedDiagnostics(nodes, transitionSnapshot);

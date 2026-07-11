@@ -1,4 +1,100 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const PLANNER_INVENTORY_OBSERVATION_STATE = Object.freeze({
+  PRESENT: 'present',
+  EMPTY: 'empty',
+  UNAVAILABLE: 'unavailable',
+});
+
+function resolvePlannerInventoryObservationState(values, available = true) {
+  if (!available || !Array.isArray(values)) {
+    return PLANNER_INVENTORY_OBSERVATION_STATE.UNAVAILABLE;
+  }
+  return values.length > 0 ?
+    PLANNER_INVENTORY_OBSERVATION_STATE.PRESENT :
+    PLANNER_INVENTORY_OBSERVATION_STATE.EMPTY;
+}
+
+function buildPlannerReplicaInventory(options) {
+  const {
+    builder,
+    entityType,
+    entityId,
+    currentReplicas,
+    operations,
+    operationObservationAvailable,
+    captureBefore,
+    captureAfter,
+  } = options;
+  return builder({
+    entityType,
+    entityId,
+    capturedAtMs: captureAfter.capturedAtMs,
+    committedRowsObservation: {
+      state: resolvePlannerInventoryObservationState(currentReplicas),
+      rows: currentReplicas,
+      revisionBefore: captureBefore.committedRows.revision,
+      revisionAfter: captureAfter.committedRows.revision,
+      revision: captureAfter.committedRows.revision,
+      watermarkBefore: captureBefore.committedRows.lastAppliedAtMs,
+      watermarkAfter: captureAfter.committedRows.lastAppliedAtMs,
+      causeId: captureAfter.committedRows.causeId,
+      observedAtMs: captureBefore.capturedAtMs,
+    },
+    inFlightOperationObservation: {
+      state: resolvePlannerInventoryObservationState(
+        operations,
+        operationObservationAvailable,
+      ),
+      operations,
+      revisionBefore: captureBefore.inFlightOperations.revision,
+      revisionAfter: captureAfter.inFlightOperations.revision,
+      revision: captureAfter.inFlightOperations.revision,
+      watermarkBefore: captureBefore.inFlightOperations.lastAppliedAtMs,
+      watermarkAfter: captureAfter.inFlightOperations.lastAppliedAtMs,
+      causeId: captureAfter.inFlightOperations.causeId,
+      observedAtMs: captureAfter.capturedAtMs,
+    },
+  });
+}
+
+function buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP) {
+  const nodesWithEntityAddTransitional = new Set();
+  const replicasInRemoving = new Set();
+  for (const operation of inventory.operations) {
+    if (operation.addTransitional) {
+      nodesWithEntityAddTransitional.add(operation.targetNodeId || null);
+    }
+    const workflowStep = operation.workflowStep || null;
+    const state = workflowStep ?
+      String(workflowStep).toLowerCase() :
+      operation.status;
+    if (state === ReplicaStatus.REMOVING ||
+        workflowStep === WORKFLOW_STEP.STOPPING) {
+      replicasInRemoving.add(
+        operation.sourceReplicaId || operation.targetReplicaId || null,
+      );
+    }
+  }
+  return {nodesWithEntityAddTransitional, replicasInRemoving};
+}
+
+function buildGlobalSystemTransitionNodeSet(options) {
+  const targetNodeIds = new Set();
+  if (!options.systemPartition) {
+    return targetNodeIds;
+  }
+  for (const operation of options.operations) {
+    if (!options.isAddTransitional(operation)) {
+      continue;
+    }
+    const partitionId = operation?.partition_id || null;
+    if (!options.isSystemPartition({partitionId})) {
+      continue;
+    }
+    targetNodeIds.add(operation?.target_node_id || null);
+  }
+  return targetNodeIds;
+}
 
 function createMovePlannerStateMethods(deps = {}) {
   const {
@@ -19,6 +115,7 @@ function createMovePlannerStateMethods(deps = {}) {
     getPreviousOddCount,
     isOddReplicaCount,
     isPriorityControlPlanePartition,
+    isReplicaInventoryAddTransitionalOperation,
     isSystemTablePartition,
   } = deps;
 
@@ -279,71 +376,82 @@ function createMovePlannerStateMethods(deps = {}) {
     }
 
     /**
-     * @param {Object} operation
-     * @return {boolean}
-     * @private
+     * Capture real cache generation and observation watermarks at one edge of
+     * an inventory read. Callers bracket row/operation capture with two of
+     * these snapshots; the inventory owner compares like-domain revisions.
+     * @return {Object}
      */
-    isAddTransitionalOperation(operation) {
-      const workflowStep = operation?.workflow_step || null;
-      const state = workflowStep ?
-        String(workflowStep).toLowerCase() :
-        operation?.status;
-      return state === ReplicaStatus.PENDING ||
-        state === ReplicaStatus.CREATING ||
-        state === ReplicaStatus.SYNCING ||
-        workflowStep === WORKFLOW_STEP.SENDING;
+    captureReplicaInventorySourceState() {
+      const cache = this.moveStateProvider?.systemTableCache || null;
+      const canReadRevision =
+        typeof cache?.getAppliedSchemaVersion === MOVE_PLANNER_LITERAL.FUNCTION;
+      const canReadAppliedAt =
+        typeof cache?.getLastAppliedAtMs === MOVE_PLANNER_LITERAL.FUNCTION;
+      const canReadCause =
+        typeof cache?.getLastAppliedCauseId === MOVE_PLANNER_LITERAL.FUNCTION;
+      const captureTable = (tableName) => ({
+        revision: canReadRevision ? cache.getAppliedSchemaVersion(tableName) : null,
+        lastAppliedAtMs: canReadAppliedAt ? cache.getLastAppliedAtMs(tableName) : null,
+        causeId: canReadCause ? cache.getLastAppliedCauseId(tableName) : null,
+      });
+      return {
+        capturedAtMs: Date.now(),
+        committedRows: captureTable(SYSTEM_TABLE_NAME.SERVICES),
+        inFlightOperations: captureTable(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
+      };
     }
 
     /**
      * Build one immutable snapshot of in-flight topology transitions for move
      * planning so add-target occupancy is adjudicated once.
+     * @param {Array<Object>} currentReplicas
      * @return {Object}
      * @private
      */
-    buildTopologyTransitionSnapshot() {
+    buildTopologyTransitionSnapshot(
+      currentReplicas = [],
+      sourceStateBefore = null,
+    ) {
+      const captureBefore =
+        sourceStateBefore || this.captureReplicaInventorySourceState();
       const entityInFlightOperations =
         this.getEntityTopologyBlockingInFlightOperations();
       const globalInFlightOperations =
         this.getGlobalTopologyBlockingInFlightOperations();
-      const nodesWithEntityAddTransitional = new Set();
-      const nodesWithGlobalSystemAddTransitional = new Set();
-      const replicasInRemoving = new Set();
-
-      for (const operation of entityInFlightOperations) {
-        const isAddTransitional = this.isAddTransitionalOperation(operation);
-        if (isAddTransitional) {
-          nodesWithEntityAddTransitional.add(operation?.target_node_id || null);
-        }
-        const workflowStep = operation?.workflow_step || null;
-        const state = workflowStep ?
-          String(workflowStep).toLowerCase() :
-          operation?.status;
-        if (state === ReplicaStatus.REMOVING ||
-            workflowStep === WORKFLOW_STEP.STOPPING) {
-          replicasInRemoving.add(operation?.replica_id || null);
-        }
-      }
-
-      if (this.isSystemPartitionEntity()) {
-        for (const operation of globalInFlightOperations) {
-          if (!this.isAddTransitionalOperation(operation)) {
-            continue;
-          }
-          const partitionId = operation?.partition_id || null;
-          if (!isSystemTablePartition({partitionId})) {
-            continue;
-          }
-          nodesWithGlobalSystemAddTransitional.add(
-            operation?.target_node_id || null,
-          );
-        }
-      }
+      const captureAfter = this.captureReplicaInventorySourceState();
+      const operationObservationAvailable =
+        typeof this.moveStateProvider.getTopologyBlockingInFlightOperations ===
+          MOVE_PLANNER_LITERAL.FUNCTION ||
+        typeof this.moveStateProvider.getInFlightOperations ===
+          MOVE_PLANNER_LITERAL.FUNCTION;
+      const inventory = buildPlannerReplicaInventory({
+        builder: this.replicaInventoryBuilder,
+        entityType: this.entityType,
+        entityId: this.entityId,
+        currentReplicas,
+        operations: entityInFlightOperations,
+        operationObservationAvailable,
+        captureBefore,
+        captureAfter,
+      });
+      const {
+        nodesWithEntityAddTransitional,
+        replicasInRemoving,
+      } = buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP);
+      const nodesWithGlobalSystemAddTransitional =
+        buildGlobalSystemTransitionNodeSet({
+          systemPartition: this.isSystemPartitionEntity(),
+          operations: globalInFlightOperations,
+          isAddTransitional: isReplicaInventoryAddTransitionalOperation,
+          isSystemPartition: isSystemTablePartition,
+        });
 
       return {
         pendingCount: entityInFlightOperations.length,
         nodesWithEntityAddTransitional,
         nodesWithGlobalSystemAddTransitional,
         replicasInRemoving,
+        inventory,
         descriptorEpochDecision:
           this.resolvePartitionDescriptorEpochDecision(),
       };

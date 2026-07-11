@@ -1,4 +1,7 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  REPLICA_INVENTORY_OBSERVATION_STATE,
+} from './replica-inventory-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -213,6 +216,33 @@ class RebalanceCoordinatorOperationReadMethods {
       operations: Array.isArray(operations) ? operations : [],
       deferredOutcome: null,
       retryAfterMs: null,
+    });
+  }
+
+  /**
+   * Resolve the operation observation consumed by topology inventory. Generic
+   * deferral remains unusable. The existing recovery-pressure owner may emit
+   * an explicit bounded-usable state only after proving its contained-pressure
+   * exception and zero visible operations.
+   * @param {string} entityType
+   * @param {string} entityId
+   * @return {Promise<Object>}
+   */
+  async getEntityTopologyInventoryOperationObservation(entityType, entityId) {
+    const observation = await this.getEntityAuthoritativeOperationObservation(
+      entityType,
+      entityId,
+    );
+    if (!this.shouldAllowPriorityRecoveryDeferredObservation(
+      entityId,
+      observation,
+    )) {
+      return observation;
+    }
+    return Object.freeze({
+      ...observation,
+      state: REPLICA_INVENTORY_OBSERVATION_STATE.BOUNDED_USABLE,
+      boundedDeferredVisibility: true,
     });
   }
 
@@ -449,6 +479,9 @@ class RebalanceCoordinatorOperationReadMethods {
       error: result?.error || null,
       reasonCode: result?.reasonCode || null,
       retryAfterMs: getControlPlaneRetryAfterMs(result),
+      snapshotVersion: result?.snapshotVersion ?? null,
+      observedAtMs:
+        Number.isFinite(result?.observedAtMs) ? result.observedAtMs : null,
     });
   }
 

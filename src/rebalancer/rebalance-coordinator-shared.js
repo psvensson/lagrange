@@ -206,10 +206,12 @@ const RECENT_OPERATION_INTENT_VISIBILITY_STATE = Object.freeze({
 const TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT = NUM.THREE;
 const TOPOLOGY_GUARD_STATE = Object.freeze({
   ALLOWED: 'allowed',
+  INVENTORY_UNUSABLE: 'inventory_unusable',
   TARGET_NODE_OCCUPIED: 'target_node_occupied',
   TARGET_REPLICA_COUNT_SATISFIED: 'target_replica_count_satisfied',
 });
 const TOPOLOGY_GUARD_REASON = Object.freeze({
+  REPLICA_INVENTORY_UNUSABLE: 'replica_inventory_unusable',
   TARGET_NODE_ALREADY_OCCUPIED: 'target_node_already_occupied',
   TARGET_REPLICA_COUNT_ALREADY_SATISFIED:
     'target_replica_count_already_satisfied',

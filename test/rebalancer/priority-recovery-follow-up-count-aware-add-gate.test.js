@@ -5,6 +5,7 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {createTestRebalancer} from './test-helpers.js';
+import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 
 // Count-aware deficit ADD gate (reframe lever #2 — see memory
 // metastable-reconfig-reframe / over-removal-readd-oscillation-root).
@@ -61,10 +62,10 @@ function inFlightOperation(operationId, type, targetNodeId, replicaId) {
   };
 }
 
-function buildDecision() {
+function buildDecision(partitionId = PARTITION_ID) {
   return {
     decisionSnapshot: {
-      partitionId: PARTITION_ID,
+      partitionId,
       semanticState: 'needs_operation',
       progress: {nextRequiredAction: 'create_recovery_operation'},
       planner: {requiredDistinctNodeCount: TARGET_REPLICA_COUNT},
@@ -78,7 +79,7 @@ function buildDecision() {
   };
 }
 
-function buildRebalancer(replicaOperations = []) {
+function buildRebalancer(replicaOperations = [], services = []) {
   return createTestRebalancer({
     entityId: PARTITION_ID,
     entityType: EntityType.PARTITION,
@@ -91,6 +92,7 @@ function buildRebalancer(replicaOperations = []) {
         {node_id: NODE_D, status: 'active'},
       ],
       replicaOperations,
+      services,
     },
   });
 }
@@ -148,6 +150,115 @@ test('count-aware gate still creates an ADD for a genuine uncovered deficit',
       rebalancer.shutdown();
     }
   });
+
+test('follow-up gate suppresses increases on unusable inventory', async (t) => {
+  const rebalancer = buildRebalancer([]);
+  rebalancer.replicaInventoryBuilder = (options) =>
+    buildReplicaInventorySnapshot({
+      ...options,
+      inFlightOperationObservation: {
+        ...options.inFlightOperationObservation,
+        state: 'deferred',
+      },
+    });
+  try {
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision: buildDecision(),
+      currentReplicas: [activeVoterReplica(NODE_A, 'r-a')],
+    });
+
+    t.equal(move.type, undefined,
+      'deferred operation visibility cannot authorize a follow-up ADD');
+    t.equal(move.followUpMoveState, 'target_unavailable');
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
+test('surrogate follow-up trusts needs-operation owner over stale global rows',
+  async (t) => {
+    const surrogatePartitionId = 'sql_write_operations-p1';
+    const surrogateRows = [
+      {
+        ...activeVoterReplica(NODE_A, 'surrogate-r-a'),
+        partition_id: surrogatePartitionId,
+      },
+      {
+        ...activeVoterReplica(NODE_B, 'surrogate-r-b'),
+        partition_id: surrogatePartitionId,
+      },
+    ];
+    const surrogateAdd = {
+      ...inFlightOperation('surrogate-add-c', MoveType.ADD, NODE_C,
+        'surrogate-r-c'),
+      entity_id: surrogatePartitionId,
+      partition_id: surrogatePartitionId,
+    };
+    const rebalancer = buildRebalancer([surrogateAdd], surrogateRows);
+    const ownerDecision = buildDecision(surrogatePartitionId);
+    ownerDecision.decisionSnapshot.authoritativeVisibilityState =
+      'owner_adjudicated_empty';
+    const wrongEntityInventory = buildReplicaInventorySnapshot({
+      entityType: EntityType.PARTITION,
+      entityId: PARTITION_ID,
+      committedRowsObservation: {state: 'empty', rows: []},
+      inFlightOperationObservation: {state: 'empty', operations: []},
+    });
+    try {
+      const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+        decision: ownerDecision,
+        currentReplicas: [activeVoterReplica(NODE_D, 'current-r-d')],
+        targetState: {
+          targetReplicaCount: TARGET_REPLICA_COUNT,
+          targetNodes: [NODE_A, NODE_B, NODE_C],
+          topologyTransitionSnapshot: {inventory: wrongEntityInventory},
+        },
+      });
+
+      t.equal(move.type, MoveType.ADD,
+        'needs-operation owner adjudication discards the stale global ADD');
+      t.equal(move.nodeId, NODE_C,
+        'surrogate rows still select the missing node from its own topology');
+    } finally {
+      rebalancer.shutdown();
+    }
+  },
+);
+
+test('surrogate unresolved owner preserves live global ADD influence', async (t) => {
+  const surrogatePartitionId = 'sql_write_operations-p1';
+  const surrogateRows = [
+    {...activeVoterReplica(NODE_A, 'surrogate-r-a'),
+      partition_id: surrogatePartitionId},
+    {...activeVoterReplica(NODE_B, 'surrogate-r-b'),
+      partition_id: surrogatePartitionId},
+  ];
+  const surrogateAdd = {
+    ...inFlightOperation('surrogate-add-c', MoveType.ADD, NODE_C,
+      'surrogate-r-c'),
+    entity_id: surrogatePartitionId,
+    partition_id: surrogatePartitionId,
+  };
+  const decision = buildDecision(surrogatePartitionId);
+  decision.decisionSnapshot.semanticState = 'blocked_unclassified';
+  const rebalancer = buildRebalancer([surrogateAdd], surrogateRows);
+  try {
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision,
+      currentReplicas: [],
+      targetState: {
+        targetReplicaCount: TARGET_REPLICA_COUNT,
+        targetNodes: [NODE_A, NODE_B, NODE_C],
+      },
+    });
+
+    t.equal(move.followUpMoveState, 'target_unavailable',
+      'unadjudicated live ADD keeps its surrogate target occupied');
+    t.equal(move.type, undefined);
+  } finally {
+    rebalancer.shutdown();
+  }
+});
 
 test('count-aware gate allows provisioning ADDs while in-flight ADDs fall short',
   async (t) => {

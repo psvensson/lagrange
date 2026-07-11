@@ -1,5 +1,8 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-import {VOTER_RAFT_ROLES} from '../raft/constants.js';
+import {
+  countsTowardVoterTarget,
+  occupiesNode,
+} from './replica-inventory.js';
 
 const {
   OperationType,
@@ -8,6 +11,7 @@ const {
   REPLICA_ID_START_INDEX,
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
+  SYSTEM_TABLE_NAME,
   TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT,
   TOPOLOGY_GUARD_REASON,
   TOPOLOGY_GUARD_STATE,
@@ -30,10 +34,6 @@ const TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES = new Set([
 const TOPOLOGY_GUARD_TARGET_COUNT_OPERATION_TYPES = new Set([
   OperationType.ADD,
 ]);
-const TOPOLOGY_GUARD_DEFAULT_SERVICE_STATUS = ReplicaStatus.ACTIVE;
-const TOPOLOGY_GUARD_IGNORED_SERVICE_STATUSES = new Set([
-  ReplicaStatus.REMOVED,
-]);
 const RETIRED_REPLACE_SOURCE_OPERATION_STATUSES = new Set([
   ReplicaStatus.REMOVED,
 ]);
@@ -54,6 +54,34 @@ const REPLACE_SOURCE_RETIREMENT_SAFETY_ERROR_BY_STATE = Object.freeze({
 const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
   state: TOPOLOGY_GUARD_STATE.ALLOWED,
 });
+
+function captureInventoryCacheTableState(cache, tableName) {
+  return {
+    revision:
+      typeof cache?.getAppliedSchemaVersion === LOCAL_STR_FUNCTION ?
+        cache.getAppliedSchemaVersion(tableName) : null,
+    lastAppliedAtMs:
+      typeof cache?.getLastAppliedAtMs === LOCAL_STR_FUNCTION ?
+        cache.getLastAppliedAtMs(tableName) : null,
+    causeId:
+      typeof cache?.getLastAppliedCauseId === LOCAL_STR_FUNCTION ?
+        cache.getLastAppliedCauseId(tableName) : null,
+  };
+}
+
+function captureInventoryCacheState(cache, capturedAtMs) {
+  return {
+    capturedAtMs,
+    committedRows: captureInventoryCacheTableState(
+      cache,
+      SYSTEM_TABLE_NAME.SERVICES,
+    ),
+    inFlightOperations: captureInventoryCacheTableState(
+      cache,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    ),
+  };
+}
 
 function extractCanonicalReplicaIndex(replicaId, canonicalPrefix) {
   if (typeof replicaId !== LOCAL_STR_STRING || replicaId.length === 0) {
@@ -98,96 +126,6 @@ class RebalanceCoordinatorTopologyGuardMethods {
     return TOPOLOGY_GUARD_TARGET_COUNT_OPERATION_TYPES.has(
       normalizedMoveType,
     );
-  }
-
-  isTopologyGuardBlockingServiceRow(row) {
-    const normalizedStatus = String(
-      row?.status ?? TOPOLOGY_GUARD_DEFAULT_SERVICE_STATUS,
-    ).toLowerCase();
-    return !TOPOLOGY_GUARD_IGNORED_SERVICE_STATUSES.has(normalizedStatus);
-  }
-
-  /**
-   * An ORPHANED occupancy: a row that reached status=active but is NOT an
-   * authoritative raft voter and has NO live in-flight ADD-like operation
-   * bringing it toward voter membership. This is the phantom a lost
-   * promotion-to-voter write-back leaves behind (its REPLACE completed, the
-   * source drained, yet raft_role never advanced) — it occupies a node in
-   * placement but can never contribute a quorum vote or complete a spread.
-   *
-   * Such a row must NOT count toward the TARGET_REPLICA_COUNT_SATISFIED census,
-   * otherwise it blocks the very spread ADD that would mint a real replacement
-   * voter (the interlock, which counts raft voters, correctly sees the group
-   * under-replicated and concentrated — a self-referential formation deadlock).
-   *
-   * Conservative by construction: a row still catching up
-   * (status pending/creating/syncing) OR one with a live in-flight ADD-like op
-   * is NOT an orphan (it is a legitimate in-flight voter-to-be and still counts,
-   * so a redundant fourth ADD is not admitted). Only a status=active,
-   * non-voter, no-in-flight-op row is dropped. Durable over-creation is
-   * independently capped planner-side by the raft_role voter count.
-   * @param {Object} row
-   * @param {Set<string>} liveAddTargetNodeIds distinct target nodes of live
-   *   in-flight ADD-like operations for this entity
-   * @return {boolean}
-   */
-  isTopologyGuardOrphanedServiceRow(row, liveAddTargetNodeIds) {
-    const normalizedRaftRole = String(row?.raft_role || '')
-      .trim()
-      .toLowerCase();
-    if (VOTER_RAFT_ROLES.has(normalizedRaftRole)) {
-      return false;
-    }
-    const normalizedStatus = String(
-      row?.status ?? TOPOLOGY_GUARD_DEFAULT_SERVICE_STATUS,
-    ).toLowerCase();
-    if (normalizedStatus !== ReplicaStatus.ACTIVE) {
-      return false;
-    }
-    const nodeId = String(row?.node_id || row?.nodeId || '').trim();
-    return !liveAddTargetNodeIds.has(nodeId);
-  }
-
-  /**
-   * Distinct target nodes of the entity's live (non-terminal) ADD-like
-   * operations — the nodes that are actively being brought toward a voter.
-   * @param {Object} options
-   * @return {Set<string>}
-   */
-  resolveTopologyGuardLiveAddTargetNodeIds({entityType, entityId}) {
-    const liveOperationRows =
-      this.getEntityInFlightOperationRows({entityType, entityId}) || [];
-    const targetNodeIds = new Set();
-    for (const operation of liveOperationRows) {
-      const targetNodeId =
-        this.resolveTopologyGuardAddTargetNodeId(operation);
-      if (targetNodeId !== null) {
-        targetNodeIds.add(targetNodeId);
-      }
-    }
-    return targetNodeIds;
-  }
-
-  /**
-   * The target node of one live ADD-like operation row, or null when the
-   * operation is not ADD-like (or names no target node).
-   * @param {Object} operation
-   * @return {string|null}
-   * @private
-   */
-  resolveTopologyGuardAddTargetNodeId(operation) {
-    const row = operation || {};
-    const normalizedType = this.normalizeMoveType(
-      row.type || row.operation_type || row.operationType,
-    );
-    if (!TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(normalizedType)) {
-      return null;
-    }
-    const targetNodeId = String(
-      row.target_node_id || row.targetNodeId || row.node_id || row.nodeId ||
-        '',
-    ).trim();
-    return targetNodeId.length > 0 ? targetNodeId : null;
   }
 
   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
@@ -244,6 +182,10 @@ class RebalanceCoordinatorTopologyGuardMethods {
       });
     }
 
+    const cacheStateBefore = captureInventoryCacheState(
+      this.systemTableCache,
+      this.nowFn(),
+    );
     const cacheServiceRows = this.getEntityServiceRows({
       partitionId,
       entityType,
@@ -259,42 +201,63 @@ class RebalanceCoordinatorTopologyGuardMethods {
       cacheServiceRows,
       authoritativeObservation.rows,
     );
-    const topologyBlockingServiceRows = mergedServiceRows.filter((row) =>
-      this.isTopologyGuardBlockingServiceRow(row),
+    const operationObservation =
+      await this.getEntityTopologyInventoryOperationObservation(
+        entityType,
+        entityId,
+      );
+    const liveOperationRows = Array.isArray(operationObservation?.operations) ?
+      operationObservation.operations : [];
+    const cacheStateAfter = captureInventoryCacheState(
+      this.systemTableCache,
+      this.nowFn(),
     );
-    // Full occupancy set — one row per node, ANY non-removed status/role. Backs
-    // the TARGET_NODE_OCCUPIED check (one-node-per-replica), which must stay
-    // status-inclusive so an orphaned row still forbids double-placing its node.
-    const observedDistinctNodeIds = [
-      ...new Set(
-        topologyBlockingServiceRows
-          .map((row) => String(row?.node_id || row?.nodeId || '').trim())
-          .filter((nodeId) => nodeId.length > 0),
-      ),
-    ];
-    // Count-census set — excludes orphaned rows (status=active, non-voter, no
-    // live in-flight ADD-like op). A dropped orphan lets the spread ADD that
-    // would mint a real replacement voter through; catching-up learners and
-    // in-flight targets still count, so over-creation is not admitted. Backs the
-    // TARGET_REPLICA_COUNT_SATISFIED check only.
-    const liveAddTargetNodeIds = this.resolveTopologyGuardLiveAddTargetNodeIds({
+    const inventory = this.replicaInventoryBuilder({
       entityType,
       entityId,
+      capturedAtMs: cacheStateAfter.capturedAtMs,
+      committedRowsObservation: {
+        state: authoritativeObservation.available === false ? 'unavailable' :
+          mergedServiceRows.length > 0 ? 'present' : 'empty',
+        rows: mergedServiceRows,
+        revision: authoritativeObservation.snapshotVersion,
+        revisionBefore: cacheStateBefore.committedRows.revision,
+        revisionAfter: cacheStateAfter.committedRows.revision,
+        watermarkBefore: cacheStateBefore.committedRows.lastAppliedAtMs,
+        watermarkAfter: cacheStateAfter.committedRows.lastAppliedAtMs,
+        causeId: cacheStateAfter.committedRows.causeId,
+        observedAtMs:
+          authoritativeObservation.observedAtMs ??
+            cacheStateBefore.capturedAtMs,
+      },
+      inFlightOperationObservation: {
+        state: operationObservation?.state || 'unavailable',
+        operations: liveOperationRows,
+        revisionBefore: cacheStateBefore.inFlightOperations.revision,
+        revisionAfter: cacheStateAfter.inFlightOperations.revision,
+        revision: cacheStateAfter.inFlightOperations.revision,
+        watermarkBefore: cacheStateBefore.inFlightOperations.lastAppliedAtMs,
+        watermarkAfter: cacheStateAfter.inFlightOperations.lastAppliedAtMs,
+        causeId: cacheStateAfter.inFlightOperations.causeId,
+        observedAtMs: cacheStateAfter.capturedAtMs,
+      },
     });
-    const countedDistinctNodeIds = [
-      ...new Set(
-        topologyBlockingServiceRows
-          .filter(
-            (row) =>
-              !this.isTopologyGuardOrphanedServiceRow(
-                row,
-                liveAddTargetNodeIds,
-              ),
-          )
-          .map((row) => String(row?.node_id || row?.nodeId || '').trim())
-          .filter((nodeId) => nodeId.length > 0),
-      ),
-    ];
+    const observedDistinctNodeIds = inventory.occupiedNodeIds;
+    const countedDistinctNodeIds = inventory.voterTargetNodeIds.filter(
+      (nodeId) =>
+        inventory.replicas.some((replica) =>
+          replica.nodeId === nodeId &&
+          countsTowardVoterTarget(inventory, replica.replicaId),
+        ) ||
+        inventory.operations.some((operation) =>
+          operation.targetNodeId === nodeId &&
+          (!operation.targetReplicaId ||
+            countsTowardVoterTarget(
+              inventory,
+              operation.targetReplicaId,
+            )),
+        ),
+    );
     const targetReplicaCount =
       await this.resolveTopologyGuardTargetReplicaCount({
         partitionId,
@@ -302,7 +265,12 @@ class RebalanceCoordinatorTopologyGuardMethods {
       });
     const topologyGuardDecisionTable = Object.freeze([
       Object.freeze({
-        matches: observedDistinctNodeIds.includes(targetNodeId),
+        matches: !inventory.provenance.topologyIncreaseUsable,
+        state: TOPOLOGY_GUARD_STATE.INVENTORY_UNUSABLE,
+        blockingReason: TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
+      }),
+      Object.freeze({
+        matches: occupiesNode(inventory, targetNodeId),
         state: TOPOLOGY_GUARD_STATE.TARGET_NODE_OCCUPIED,
         blockingReason: TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
       }),
@@ -341,13 +309,16 @@ class RebalanceCoordinatorTopologyGuardMethods {
         topologySnapshot: Object.freeze({
           observedDistinctNodeIds: Object.freeze(observedDistinctNodeIds),
           observedDistinctNodeCount: observedDistinctNodeIds.length,
-          observedServiceRowCount: topologyBlockingServiceRows.length,
+          observedServiceRowCount: inventory.replicas.length,
           targetNodeId,
           targetReplicaCount,
           authoritativeAvailable: authoritativeObservation.available === true,
           authoritativeReasonCode: authoritativeObservation.reasonCode || null,
           authoritativeRetryAfterMs:
             authoritativeObservation.retryAfterMs || null,
+          inventoryProvenance: inventory.provenance,
+          inventorySourceRevisions: inventory.sourceRevisions,
+          inventorySourceWatermarks: inventory.sourceWatermarks,
         }),
       }),
     });

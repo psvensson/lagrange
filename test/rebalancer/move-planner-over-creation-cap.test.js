@@ -23,6 +23,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {REBALANCER_ENTITY_TYPE, REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 
 const PRIORITY_PARTITION_ID = 'sql_transaction_participants-p1';
 
@@ -73,11 +74,12 @@ function promotedVoterStatusLagging(replicaId, nodeId) {
   };
 }
 
-function plannerFor(provider) {
+function plannerFor(provider, replicaInventoryBuilder) {
   return new MovePlanner({
     entityId: PRIORITY_PARTITION_ID,
     entityType: REBALANCER_ENTITY_TYPE.PARTITION,
     moveStateProvider: provider,
+    replicaInventoryBuilder,
   });
 }
 
@@ -116,6 +118,64 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
       );
       t.same(addLike, [],
         'no new ADD/REPLACE while a surplus of committed voters has not drained');
+    },
+  );
+
+  await t.test('target selection and move calculation reuse one inventory capture',
+    async (t) => {
+      const currentReplicas = [active('r1', 'node-1')];
+      let inventoryBuildCount = 0;
+      const inventoryBuilder = (options) => {
+        inventoryBuildCount += 1;
+        return buildReplicaInventorySnapshot(options);
+      };
+      const planner = plannerFor(
+        createMoveStateProvider({currentReplicas}),
+        inventoryBuilder,
+      );
+
+      const targetState = await planner.calculateTargetState(
+        currentReplicas,
+        {targetReplicaCount: 3, minReplicaCount: 1, maxReplicaCount: 5},
+      );
+      planner.calculateMoves(currentReplicas, targetState);
+
+      t.equal(inventoryBuildCount, 1,
+        'one canonical capture serves target selection and move decisions');
+    },
+  );
+
+  await t.test('unusable inventory suppresses increases but permits cleanup',
+    async (t) => {
+      const currentReplicas = [
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-1'),
+        active('r4', 'node-1'),
+      ];
+      const unusableBuilder = (options) => buildReplicaInventorySnapshot({
+        ...options,
+        inFlightOperationObservation: {
+          ...options.inFlightOperationObservation,
+          state: 'deferred',
+        },
+      });
+      const planner = plannerFor(
+        createMoveStateProvider({currentReplicas}),
+        unusableBuilder,
+      );
+
+      const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
+      const topologyIncreases = moves.filter((move) =>
+        move.type === REBALANCER_MOVE_TYPE.ADD ||
+        move.type === REBALANCER_MOVE_TYPE.REPLACE,
+      );
+
+      t.same(topologyIncreases, [],
+        'deferred operation visibility cannot authorize ADD/REPLACE');
+      t.equal(moves.some((move) =>
+        move.type === REBALANCER_MOVE_TYPE.REMOVE), true,
+      'surplus cleanup remains available');
     },
   );
 

@@ -1,4 +1,7 @@
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
+import {
+  REPLICA_INVENTORY_OBSERVATION_STATE,
+} from './replica-inventory-constants.js';
 
 const {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY,
@@ -259,6 +262,8 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       return Object.freeze({
         ...decisionSnapshot,
         semanticState: PRIORITY_RECOVERY_FOLLOW_UP_DECISION.NEEDS_OPERATION,
+        [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.AUTHORITATIVE_VISIBILITY_STATE]:
+          REPLICA_INVENTORY_OBSERVATION_STATE.OWNER_ADJUDICATED_EMPTY,
         [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.BLOCKER_REASONS]:
           Object.freeze([
             ...new Set([

@@ -238,13 +238,29 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
       return;
     }
+    const capturedAtMs = this.nowFn();
+    const inventory = this.replicaInventoryBuilder({
+      entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+      entityId: context?.entityId || context?.partitionId,
+      capturedAtMs,
+      committedRowsObservation: {
+        state: 'present',
+        rows: serviceRows,
+        observedAtMs: capturedAtMs,
+      },
+      inFlightOperationObservation: {
+        state: 'empty',
+        operations: [],
+        observedAtMs: capturedAtMs,
+      },
+    });
     let occupiedAliveCount = 0;
-    for (const row of serviceRows) {
-      const status = String(row?.status || ReplicaStatus.ACTIVE).toLowerCase();
+    for (const replica of inventory.replicas) {
+      const status = replica.status;
       if (!LANE_OCCUPANCY_STATUSES.has(status)) {
         continue;
       }
-      const nodeId = row?.node_id || row?.nodeId;
+      const nodeId = replica.nodeId;
       if (!nodeId || !this.isNodeReadyForRouting(nodeId)) {
         continue;
       }

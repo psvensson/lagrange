@@ -1,5 +1,6 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {buildReplicaInventorySnapshot} from './replica-inventory.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
@@ -119,6 +120,8 @@ class RebalanceCoordinatorLifecycle {
       REBALANCE_COORDINATOR_ERROR_MSG.SQL_ENGINE_REQUIRED,
     );
     this.enableTimeouts = options.enableTimeouts !== false;
+    this.replicaInventoryBuilder =
+      options.replicaInventoryBuilder || buildReplicaInventorySnapshot;
 
     // Optional storage capacity services (Req 4.1, 11.4)
     this.storageAccountingService = options.storageAccountingService || null;

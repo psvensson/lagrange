@@ -2,6 +2,9 @@ import {UnifiedRebalancerBudgetPlanning} from './unified-rebalancer-budget-plann
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
+import {
+  REPLICA_INVENTORY_OBSERVATION_STATE,
+} from './replica-inventory-constants.js';
 
 const {
   EntityType,
@@ -103,25 +106,57 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
           includeNonRequiredSnapshot: true,
         },
       );
-    if (!planningDecisionSnapshot) {
-      return reconstructedDecisionSnapshot;
+    let selectedDecisionSnapshot =
+      planningDecisionSnapshot || reconstructedDecisionSnapshot;
+    if (planningDecisionSnapshot && reconstructedDecisionSnapshot) {
+      const planningOperationRequired =
+        this.isPriorityRecoveryFollowUpOperationRequired(
+          planningDecisionSnapshot,
+        );
+      const reconstructedOperationRequired =
+        this.isPriorityRecoveryFollowUpOperationRequired(
+          reconstructedDecisionSnapshot,
+        );
+      selectedDecisionSnapshot =
+        planningOperationRequired === reconstructedOperationRequired ?
+          planningDecisionSnapshot :
+          reconstructedDecisionSnapshot;
     }
-    if (!reconstructedDecisionSnapshot) {
-      return planningDecisionSnapshot;
+    return this.attachPriorityRecoveryClosureWitnessOperationObservation(
+      planningSnapshot,
+      partitionId,
+      selectedDecisionSnapshot,
+    );
+  }
+
+  attachPriorityRecoveryClosureWitnessOperationObservation(
+    planningSnapshot = null,
+    partitionId = '',
+    decisionSnapshot = null,
+  ) {
+    if (!decisionSnapshot) {
+      return null;
     }
-    const planningOperationRequired =
-      this.isPriorityRecoveryFollowUpOperationRequired(
-        planningDecisionSnapshot,
+    const semanticState =
+      decisionSnapshot?.semanticState ||
+      decisionSnapshot?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SEMANTIC_STATE_ID
+      ];
+    const closureWitnessEvidence =
+      this.buildPriorityRecoveryClosureWitnessFollowUpEvidence(planningSnapshot);
+    const ownerAdjudicatedEmpty =
+      semanticState === PRIORITY_RECOVERY_FOLLOW_UP_DECISION.NEEDS_OPERATION &&
+      closureWitnessEvidence.needsOperationCandidatePartitionIds.includes(
+        partitionId,
       );
-    const reconstructedOperationRequired =
-      this.isPriorityRecoveryFollowUpOperationRequired(
-        reconstructedDecisionSnapshot,
-      );
-    const operationRequirementMatches =
-      planningOperationRequired === reconstructedOperationRequired;
-    return operationRequirementMatches ?
-      planningDecisionSnapshot :
-      reconstructedDecisionSnapshot;
+    if (!ownerAdjudicatedEmpty) {
+      return decisionSnapshot;
+    }
+    return Object.freeze({
+      ...decisionSnapshot,
+      [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.AUTHORITATIVE_VISIBILITY_STATE]:
+        REPLICA_INVENTORY_OBSERVATION_STATE.OWNER_ADJUDICATED_EMPTY,
+    });
   }
 
   buildPriorityRecoveryClosureWitnessFollowUpSpreadGapByPartitionId(
@@ -453,6 +488,10 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     const closureWitnessPreferred =
       closureWitnessEvidence.followUpRequired === true &&
       closureWitnessEvidence.candidatePartitionIds.length > 0;
+    const closureWitnessNeedsOperation =
+      closureWitnessEvidence.needsOperationCandidatePartitionIds.includes(
+        partitionId,
+      );
     if (
       closureWitnessPreferred &&
       !closureWitnessEvidence.candidatePartitionIds.includes(partitionId)
@@ -485,6 +524,10 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     const decisionSnapshot = Object.freeze({
       partitionId,
       semanticState: assessment.semanticState,
+      [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.AUTHORITATIVE_VISIBILITY_STATE]:
+        closureWitnessNeedsOperation ?
+          REPLICA_INVENTORY_OBSERVATION_STATE.OWNER_ADJUDICATED_EMPTY :
+          null,
       blockerReasons: Object.freeze([...assessment.blockerReasons]),
       planner: assessment.planner,
       admission: Object.freeze({
