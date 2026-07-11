@@ -20,13 +20,14 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: unknown
 - Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json
-- Selected theory: theory-load-after-full-formation-drain
-- Next move: continue supervised step for movielens-three-way-affinity-demo-main
+- Selected theory: theory-load-after-full-formation-drain (stale: selected theory status is needs-rerun)
+- Next move: record or select a fresh frontier theory for movielens-three-way-affinity-demo-main
 
 ## Continuation
-- Status: allowed
-- Next action: continue supervised step for movielens-three-way-affinity-demo-main
-- Blocker: none
+- Status: blocked-theory
+- Next action: record and select frontier theory for movielens-three-way-affinity-demo-main with npm run model:contracts as discriminator
+- Blocker: frontier theory required for movielens-three-way-affinity-demo-main
+- Blocker: selected theory stale: selected theory status is needs-rerun
 
 ## Scope Pressure
 - Changed files: 10
@@ -54,11 +55,12 @@
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
 - **movielens-three-way-affinity-demo-main**: Independent verifier approved the move-limit scheduling patch after its recorded attempt, including saturated cleanup composition. [subagent:/root/affinity_parallel_reduce_verify]
+- **movielens-three-way-affinity-demo-main**: Independent verifier approved the bounded full-drain bootstrap sequencing and corrected pre/post-ledger diagnostics. [subagent:/root/affinity_parallel_reduce_verify]
 
 ## Theories
 - **theory-ledger-cure-move-limit-starvation** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism scheduling_starvation, owner rebalancer_planning_owner, boundary move_limit_ordering, modelGate npm run model:contracts
 - **theory-ledger-cure-move-limit-starvation-v2** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism scheduling_starvation, owner rebalancer_planning_owner, boundary move_limit_ordering, modelGate npm run model:contracts
-- **theory-load-after-full-formation-drain** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism transition_gap, owner demo_bootstrap_owner, boundary formation_to_data_load, modelGate npm run model:contracts
+- **theory-load-after-full-formation-drain** [needs-rerun] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism transition_gap, owner demo_bootstrap_owner, boundary formation_to_data_load, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-three-way-affinity-demo-main**: theory-load-after-full-formation-drain
@@ -69,6 +71,7 @@
 - **theory-ledger-cure-move-limit-starvation-v2**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
 - **theory-ledger-cure-move-limit-starvation-v2**: supported (scenario=failed, theory=partial, movement=moved_boundary) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
 - **theory-load-after-full-formation-drain**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
+- **theory-load-after-full-formation-drain**: needs-rerun (scenario=failed, theory=inconclusive, movement=moved_boundary) [data/examples/service-data-affinity-demo-archive/run-2026-07-11T20-34-45-161Z.tar.gz]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
