@@ -1,0 +1,521 @@
+diff --git a/scripts/run-solver-scope-pressure-precommit-enforcement-scenarios.js b/scripts/run-solver-scope-pressure-precommit-enforcement-scenarios.js
+new file mode 100644
+index 00000000..50a8c922
+--- /dev/null
++++ b/scripts/run-solver-scope-pressure-precommit-enforcement-scenarios.js
+@@ -0,0 +1,10 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
++
++runGuardTestScenarios({
++  'solver-scope-pressure-precommit-enforcement': [
++    'test/solve/scope-pressure-precommit-enforcement.test.js',
++    'test/solve/convergence-guards.test.js',
++  ],
++});
+diff --git a/scripts/solve/change-artifact.js b/scripts/solve/change-artifact.js
+index e328886f..259aa9e1 100644
+--- a/scripts/solve/change-artifact.js
++++ b/scripts/solve/change-artifact.js
+@@ -300,5 +300,6 @@ export function inspectChangeArtifact(root, quest, changeRef) {
+     storageKind: artifact.kind || null,
+     contentObjectPath: artifact.objectPath ?
+       normalizeSlash(path.relative(root, artifact.objectPath)) : null,
++    payloadBytes: artifact.payloadBytes || 0,
+   };
+ }
+diff --git a/scripts/solve/constants.js b/scripts/solve/constants.js
+index 0f3f3678..9c440d76 100644
+--- a/scripts/solve/constants.js
++++ b/scripts/solve/constants.js
+@@ -208,6 +208,8 @@ export const COUPLED_OSC_SWAP_THRESHOLD = 2;
+ // Lowered from 60 after a 9h run accumulated a 50-file stack that sailed under the old
+ // bound (see solver oscillation post-mortem): 25 forces the split the advisory only suggested.
+ export const SCOPE_PRESSURE_FILE_LIMIT = 25;
++export const SCOPE_PRESSURE_OWNER_LIMIT = 6;
++export const SCOPE_PRESSURE_BYTE_LIMIT = 262144;
+ 
+ // rr-B: frontier gradient metric kinds that are interchangeable refinements of one
+ // another for the SAME probe+scenario. Swapping among these sharpens the search gradient
+diff --git a/scripts/solve/convergence-guards.js b/scripts/solve/convergence-guards.js
+index 1b8554b5..fc046198 100644
+--- a/scripts/solve/convergence-guards.js
++++ b/scripts/solve/convergence-guards.js
+@@ -13,6 +13,8 @@ import {
+   EVENT_EVIDENCE_INGESTED,
+   COUPLED_OSC_SWAP_THRESHOLD,
+   SCOPE_PRESSURE_FILE_LIMIT,
++  SCOPE_PRESSURE_OWNER_LIMIT,
++  SCOPE_PRESSURE_BYTE_LIMIT,
+   HARNESS_NONMEASURING_PARK_THRESHOLD,
+   NON_MEASURING_VERDICT_REASONS,
+ } from './constants.js';
+@@ -282,7 +284,18 @@ export function coupledLocalFixBlocked(log, frontierId = null, satisfiedInvarian
+ export function scopeTerminalStatus(scopePressure) {
+   const fileCount = Array.isArray(scopePressure?.changedPaths) ?
+     scopePressure.changedPaths.length : 0;
+-  return {terminal: fileCount > SCOPE_PRESSURE_FILE_LIMIT, fileCount};
++  const ownerCount = Array.isArray(scopePressure?.ownerAreas) ?
++    scopePressure.ownerAreas.length : 0;
++  const changeBytes = Number.isInteger(scopePressure?.changedBytes) ?
++    scopePressure.changedBytes : 0;
++  return {
++    terminal: fileCount > SCOPE_PRESSURE_FILE_LIMIT ||
++      ownerCount > SCOPE_PRESSURE_OWNER_LIMIT ||
++      changeBytes > SCOPE_PRESSURE_BYTE_LIMIT,
++    fileCount,
++    ownerCount,
++    changeBytes,
++  };
+ }
+ 
+ // rr-G: the harness has stopped measuring. A run that did not measure the system under
+diff --git a/scripts/solve/handoff.js b/scripts/solve/handoff.js
+index 59a280c2..9adacd4d 100644
+--- a/scripts/solve/handoff.js
++++ b/scripts/solve/handoff.js
+@@ -31,6 +31,8 @@ import {
+ } from './store.js';
+ import {reportFilePath} from './report.js';
+ import {auditQuest, commitGate, checkpointGate} from './audit.js';
++import {analyzeScopePressure} from './scope-pressure.js';
++import {scopeTerminalStatus} from './convergence-guards.js';
+ import {
+   expectedChangeDir,
+   inspectChangeArtifact,
+@@ -125,7 +127,25 @@ export function buildHandoff(root, quest, options = {}) {
+   // accumulating an unrecoverable dirty tree.
+   const checkpoint = options.checkpoint === true;
+   const audit = auditQuest(root, quest);
+-  const gate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
++  const baseGate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
++  const scopeStatus = scopeTerminalStatus(
++    analyzeScopePressure(
++      root,
++      quest,
++      readLog(root, quest.id),
++      {ignoreBaselines: true},
++    ),
++  );
++  const scopeProblem = scopeStatus.terminal ? [{
++    message: 'scope-pressure precommit blocked: split into bounded Quest declarations ' +
++      `(files=${scopeStatus.fileCount}, owners=${scopeStatus.ownerCount}, ` +
++      `bytes=${scopeStatus.changeBytes})`,
++  }] : [];
++  const gate = {
++    ...baseGate,
++    ready: baseGate.ready && scopeProblem.length === 0,
++    problems: [...baseGate.problems, ...scopeProblem],
++  };
+   const artifactScope = questChangeArtifactScope(root, quest);
+   const questArtifacts = questArtifactPaths(root, quest.id);
+   const scope = {
+diff --git a/scripts/solve/scope-pressure.js b/scripts/solve/scope-pressure.js
+index 2f6c30ff..5537a450 100644
+--- a/scripts/solve/scope-pressure.js
++++ b/scripts/solve/scope-pressure.js
+@@ -54,8 +54,8 @@ function latestScopeBaselineIndex(log) {
+   return -1;
+ }
+ 
+-function attemptInspections(root, quest, log) {
+-  const baselineIndex = latestScopeBaselineIndex(log);
++function attemptInspections(root, quest, log, options = {}) {
++  const baselineIndex = options.ignoreBaselines ? -1 : latestScopeBaselineIndex(log);
+   return log
+     .map((event, index) => ({event, index}))
+     .filter(({event, index}) =>
+@@ -80,6 +80,7 @@ function summarizeAttempts(inspections) {
+       ownerAreas,
+       categories: entry.inspection.categories || [],
+       changedPaths: paths,
++      changeBytes: entry.inspection.payloadBytes || 0,
+     };
+   });
+ }
+@@ -118,14 +119,16 @@ function recommendedActions(changedPaths, ownerAreas, categories) {
+   return actions;
+ }
+ 
+-export function analyzeScopePressure(root, quest, log) {
+-  const inspections = attemptInspections(root, quest, log);
++export function analyzeScopePressure(root, quest, log, options = {}) {
++  const inspections = attemptInspections(root, quest, log, options);
+   const changedPaths = [...new Set(inspections.flatMap((entry) =>
+     entry.inspection.changedPaths || []))].sort();
+   const ownerAreas = [...new Set(changedPaths.map(ownerAreaForPath))].sort();
+   const categories = [...new Set(inspections.flatMap((entry) =>
+     entry.inspection.categories || []))].sort();
+   const signals = [];
++  const changedBytes = inspections.reduce((sum, entry) =>
++    sum + (entry.inspection.payloadBytes || 0), 0);
+   if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
+     signals.push({
+       type: 'broad-source-scope',
+@@ -155,6 +158,7 @@ export function analyzeScopePressure(root, quest, log) {
+   }
+   return {
+     changedPaths,
++    changedBytes,
+     ownerAreas,
+     categories,
+     attempts: summarizeAttempts(inspections),
+@@ -164,9 +168,24 @@ export function analyzeScopePressure(root, quest, log) {
+   };
+ }
+ 
++export function analyzeScopePressureCandidate(root, quest, log, inspection) {
++  const current = analyzeScopePressure(root, quest, log, {ignoreBaselines: true});
++  const changedPaths = [...new Set([
++    ...current.changedPaths,
++    ...(inspection.changedPaths || []),
++  ])].sort();
++  return {
++    ...current,
++    changedPaths,
++    changedBytes: current.changedBytes + (inspection.payloadBytes || 0),
++    ownerAreas: [...new Set(changedPaths.map(ownerAreaForPath))].sort(),
++  };
++}
++
+ export function renderScopePressure(scopePressure) {
+   const lines = ['## Scope Pressure'];
+   lines.push(`- Changed files: ${scopePressure.changedPaths.length}`);
++  lines.push(`- Change bytes: ${scopePressure.changedBytes || 0}`);
+   lines.push(`- Owner areas: ${scopePressure.ownerAreas.join(', ') || 'none'}`);
+   lines.push(`- Categories: ${scopePressure.categories.join(', ') || 'none'}`);
+   if (scopePressure.recommendedActions?.length > 0) {
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index 42110482..bbe4f5eb 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -38,6 +38,8 @@ import {suggestVerificationTemplates} from './verification-template-suggest.js';
+ import {autoCommitQuest} from './handoff.js';
+ import {writeReport} from './report.js';
+ import {analyzeQuestHealth} from './health.js';
++import {analyzeScopePressureCandidate} from './scope-pressure.js';
++import {scopeTerminalStatus} from './convergence-guards.js';
+ import {
+   resolveGateDecision,
+   gateDecisionToStepResult,
+@@ -289,6 +291,16 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
+   }
+ 
+   const log = readLog(root, quest.id);
++  const scopeAdmission = scopeTerminalStatus(
++    analyzeScopePressureCandidate(root, quest, log, changeInspection),
++  );
++  if (scopeAdmission.terminal) {
++    throw new Error(
++      'scope-pressure precommit blocked: split into bounded Quest declarations ' +
++      `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
++      `bytes=${scopeAdmission.changeBytes})`,
++    );
++  }
+   const state = projectState(quest, log);
+   const def = quest.frontiers.find((frontier) => frontier.id === pending.frontier);
+   const frontierState = state.frontiers.find((frontier) =>
+diff --git a/solve/quests/solver-scope-pressure-precommit-enforcement.json b/solve/quests/solver-scope-pressure-precommit-enforcement.json
+new file mode 100644
+index 00000000..e4edec7b
+--- /dev/null
++++ b/solve/quests/solver-scope-pressure-precommit-enforcement.json
+@@ -0,0 +1,41 @@
++{
++  "id": "solver-scope-pressure-precommit-enforcement",
++  "statement": "An attempt that exceeds owner, path, or byte thresholds cannot be recorded or handed off until it is split into bounded Quest declarations; the guard acts before commit rather than warning after a broad change lands.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md#W13",
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "solve/epics/owner-boundary-hardening-and-unification.md",
++    "sealedAtCommit": "80ae7cfa352e37e80dc1936d5860e1e1fbe25e35"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "solver-scope-pressure-precommit-enforcement",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-scope-pressure-precommit-enforcement-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "solver-scope-pressure-precommit-enforcement",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/test/solve/convergence-guards.test.js b/test/solve/convergence-guards.test.js
+index aafcd048..839fd786 100644
+--- a/test/solve/convergence-guards.test.js
++++ b/test/solve/convergence-guards.test.js
+@@ -216,8 +216,9 @@ tap.test('scopeTerminalStatus: crosses the file bound', (t) => {
+ });
+ 
+ tap.test('scopeTerminalStatus: tolerates a missing scope-pressure object', (t) => {
+-  t.same(scopeTerminalStatus(null), {terminal: false, fileCount: 0}, 'null is safe');
+-  t.same(scopeTerminalStatus({}), {terminal: false, fileCount: 0}, 'empty is safe');
++  const empty = {terminal: false, fileCount: 0, ownerCount: 0, changeBytes: 0};
++  t.same(scopeTerminalStatus(null), empty, 'null is safe');
++  t.same(scopeTerminalStatus({}), empty, 'empty is safe');
+   t.end();
+ });
+ 
+diff --git a/test/solve/scope-pressure-precommit-enforcement.test.js b/test/solve/scope-pressure-precommit-enforcement.test.js
+new file mode 100644
+index 00000000..95f32610
+--- /dev/null
++++ b/test/solve/scope-pressure-precommit-enforcement.test.js
+@@ -0,0 +1,186 @@
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++
++import tap from 'tap';
++
++import {
++  EVENT_ATTEMPT,
++  EVENT_FINDING,
++  EVENT_QUEST,
++  SCOPE_PRESSURE_BYTE_LIMIT,
++  SCOPE_PRESSURE_FILE_LIMIT,
++  SCOPE_PRESSURE_OWNER_LIMIT,
++  STATUS_SOLVED,
++} from '../../scripts/solve/constants.js';
++import {buildHandoff} from '../../scripts/solve/handoff.js';
++import {writeContentAddressedChangeArtifact} from
++  '../../scripts/solve/content-addressed-change-artifact.js';
++import {runStep, stepPending} from '../../scripts/solve/step.js';
++import {appendEvent, readLog, saveQuest} from '../../scripts/solve/store.js';
++
++function tempRoot() {
++  return fs.mkdtempSync(path.join(os.tmpdir(), 'scope-precommit-'));
++}
++
++function setup() {
++  const root = tempRoot();
++  const oracle = path.join(root, 'oracle.json');
++  fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
++  const quest = {
++    id: 'solver-scope-guard',
++    class: 'process',
++    statement: 'Enforce scope before commit.',
++    doneWhen: {probe: 'oracle', args: {file: oracle}},
++    frontiers: [{
++      id: 'solver-scope-guard-main',
++      priority: 1,
++      metric: {probe: 'oracle', args: {file: oracle}},
++    }],
++  };
++  saveQuest(root, quest);
++  runStep(root, quest);
++  return {root, quest};
++}
++
++function makeDiff(root, paths, bytes = 0, name = 'change') {
++  const file = path.join(
++    root, 'solve/changes/solver-scope-guard', `${name}.diff`);
++  fs.mkdirSync(path.dirname(file), {recursive: true});
++  const content = paths.flatMap((filePath) => [
++    `diff --git a/${filePath} b/${filePath}`,
++    `--- a/${filePath}`,
++    `+++ b/${filePath}`,
++    '@@ -1 +1 @@',
++    '-before',
++    '+after',
++  ]).join('\n').padEnd(bytes, 'x');
++  fs.writeFileSync(file, content);
++  return `diff:${file}`;
++}
++
++function commit(root, quest, changeRef) {
++  return runStep(root, quest, {changeRef, summary: 'scope fixture'});
++}
++
++tap.test('real step accepts below and exactly-equal path bounds', (t) => {
++  for (const count of [SCOPE_PRESSURE_FILE_LIMIT - 1, SCOPE_PRESSURE_FILE_LIMIT]) {
++    const {root, quest} = setup();
++    const paths = Array.from({length: count}, (_, index) =>
++      `scripts/solve/case-${index}.js`);
++    const result = commit(root, quest, makeDiff(root, paths));
++    t.same(result.violations, [], `${count} paths accepted`);
++    t.equal(readLog(root, quest.id).filter((event) =>
++      event.type === EVENT_ATTEMPT).length, 1);
++    fs.rmSync(root, {recursive: true, force: true});
++  }
++  t.end();
++});
++
++tap.test('real step rejects one-above path bound before attempt recording', (t) => {
++  const {root, quest} = setup();
++  const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
++    `scripts/solve/case-${index}.js`);
++  t.throws(() => commit(root, quest, makeDiff(root, paths)),
++    /scope-pressure precommit blocked.*files=26/iu);
++  t.equal(readLog(root, quest.id).some((event) => event.type === EVENT_ATTEMPT), false);
++  t.ok(stepPending(root, quest.id), 'pending step survives split-required refusal');
++  fs.rmSync(root, {recursive: true, force: true});
++  t.end();
++});
++
++tap.test('real step rejects owner and byte overflow independently', (t) => {
++  {
++    const {root, quest} = setup();
++    const equalPaths = Array.from({length: SCOPE_PRESSURE_OWNER_LIMIT}, (_, index) =>
++      `scripts/owner-${index}/file.js`);
++    t.same(commit(root, quest, makeDiff(root, equalPaths)).violations, [],
++      'owner count equal to limit is accepted');
++    fs.rmSync(root, {recursive: true, force: true});
++  }
++  {
++    const {root, quest} = setup();
++    const paths = Array.from({length: SCOPE_PRESSURE_OWNER_LIMIT + 1}, (_, index) =>
++      `scripts/owner-${index}/file.js`);
++    t.throws(() => commit(root, quest, makeDiff(root, paths)), /owners=7/iu);
++    fs.rmSync(root, {recursive: true, force: true});
++  }
++  {
++    const {root, quest} = setup();
++    const changeRef = makeDiff(
++      root,
++      ['scripts/solve/large.js'],
++      SCOPE_PRESSURE_BYTE_LIMIT,
++    );
++    t.same(commit(root, quest, changeRef).violations, [],
++      'payload bytes equal to limit are accepted');
++    fs.rmSync(root, {recursive: true, force: true});
++  }
++  {
++    const {root, quest} = setup();
++    const inlinePath = 'solve/changes/solver-scope-guard/large.diff';
++    const content = fs.readFileSync(makeDiff(
++      root,
++      ['scripts/solve/large.js'],
++      SCOPE_PRESSURE_BYTE_LIMIT + 1,
++    ).slice('diff:'.length));
++    fs.rmSync(path.join(root, inlinePath), {force: true});
++    const written = writeContentAddressedChangeArtifact(
++      root, inlinePath, content, {thresholdBytes: 0});
++    t.throws(() => commit(root, quest, written.changeRef), /bytes=262145/iu);
++    fs.rmSync(root, {recursive: true, force: true});
++  }
++  t.end();
++});
++
++tap.test('handoff rejects historical over-threshold attempt', (t) => {
++  const {root, quest} = setup();
++  const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
++    `scripts/solve/case-${index}.js`);
++  const changeRef = makeDiff(root, paths);
++  appendEvent(root, quest.id, {
++    type: EVENT_ATTEMPT,
++    frontier: quest.frontiers[0].id,
++    changeRef,
++    metricBefore: 1,
++    metricAfter: 1,
++  });
++  appendEvent(root, quest.id, {
++    type: EVENT_FINDING,
++    frontier: quest.frontiers[0].id,
++    claim: 'self-authored baseline must not authorize handoff',
++    scopePressureClassification: {resolution: 'baselined'},
++  });
++  appendEvent(root, quest.id, {
++    type: EVENT_FINDING,
++    frontier: quest.frontiers[0].id,
++    kind: 'verifier-approval',
++    evidence: 'subagent:scope-test',
++  });
++  appendEvent(root, quest.id, {type: EVENT_QUEST, status: STATUS_SOLVED});
++
++  const handoff = buildHandoff(root, quest, {dirtyFiles: []});
++  t.equal(handoff.ok, false);
++  t.match(handoff.gate.problems.map((item) => item.message).join(' '),
++    /scope-pressure precommit blocked/iu);
++
++  fs.rmSync(root, {recursive: true, force: true});
++  t.end();
++});
++
++tap.test('cumulative attempts cannot each stay small while crossing the bound', (t) => {
++  const {root, quest} = setup();
++  const firstPaths = Array.from({length: 13}, (_, index) =>
++    `scripts/solve/first-${index}.js`);
++  commit(root, quest, makeDiff(root, firstPaths, 0, 'first'));
++  runStep(root, quest);
++  const secondPaths = Array.from({length: 13}, (_, index) =>
++    `scripts/solve/second-${index}.js`);
++  t.throws(() => commit(root, quest, makeDiff(root, secondPaths, 0, 'second')),
++    /scope-pressure precommit blocked.*files=26/iu);
++  t.equal(readLog(root, quest.id).filter((event) =>
++    event.type === EVENT_ATTEMPT).length, 1,
++  'only the bounded first attempt is recorded');
++  fs.rmSync(root, {recursive: true, force: true});
++  t.end();
++});
+diff --git a/test/solve/step.test.js b/test/solve/step.test.js
+index 10907fa1..020e4d28 100644
+--- a/test/solve/step.test.js
++++ b/test/solve/step.test.js
+@@ -6,7 +6,7 @@ import os from 'node:os';
+ import {appendEvent, saveQuest, readLog, projectState}
+   from '../../scripts/solve/store.js';
+ import {runStep} from '../../scripts/solve/step.js';
+-import {EVENT_SOLVED, EVENT_QUEST, STATUS_SOLVED}
++import {EVENT_ATTEMPT, EVENT_SOLVED, EVENT_QUEST, STATUS_SOLVED}
+   from '../../scripts/solve/constants.js';
+ 
+ function tmp() {
+@@ -173,7 +173,7 @@ tap.test('synchronous runStep (P3)', async (t) => {
+     t.end();
+   });
+ 
+-  t.test('begin step blocks when prior scope pressure is terminal', (t) => {
++  t.test('commit blocks before terminal scope pressure can be recorded', (t) => {
+     const root = tmp();
+     const oracle = path.join(root, 'o.json');
+     fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
+@@ -181,7 +181,7 @@ tap.test('synchronous runStep (P3)', async (t) => {
+     saveQuest(root, quest);
+ 
+     runStep(root, quest);
+-    runStep(root, quest, {
++    t.throws(() => runStep(root, quest, {
+       changeRef: makeMultiDiff(
+         root,
+         quest.id,
+@@ -189,12 +189,10 @@ tap.test('synchronous runStep (P3)', async (t) => {
+         Array.from({length: 61}, (_, i) => `src/scope/file-${i}.js`),
+       ),
+       summary: 'wide patch',
+-    });
+-
+-    const gated = runStep(root, quest);
+-    t.equal(gated.terminal, 'blocked', 'terminal scope gate is a non-terminal block');
+-    t.equal(gated.disposition, 'reroute', 'scope pressure reroutes the approach');
+-    t.match(gated.problems.join('\n'), /scope pressure terminal/u);
++    }), /scope-pressure precommit blocked/iu);
++    t.equal(readLog(root, quest.id)
++      .some((event) => event.type === EVENT_ATTEMPT), false,
++    'over-threshold scope records no ordinary attempt');
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });

@@ -38,6 +38,8 @@ import {suggestVerificationTemplates} from './verification-template-suggest.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReport} from './report.js';
 import {analyzeQuestHealth} from './health.js';
+import {analyzeScopePressureCandidate} from './scope-pressure.js';
+import {scopeTerminalStatus} from './convergence-guards.js';
 import {
   resolveGateDecision,
   gateDecisionToStepResult,
@@ -289,6 +291,16 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   }
 
   const log = readLog(root, quest.id);
+  const scopeAdmission = scopeTerminalStatus(
+    analyzeScopePressureCandidate(root, quest, log, changeInspection),
+  );
+  if (scopeAdmission.terminal) {
+    throw new Error(
+      'scope-pressure precommit blocked: split into bounded Quest declarations ' +
+      `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
+      `bytes=${scopeAdmission.changeBytes})`,
+    );
+  }
   const state = projectState(quest, log);
   const def = quest.frontiers.find((frontier) => frontier.id === pending.frontier);
   const frontierState = state.frontiers.find((frontier) =>

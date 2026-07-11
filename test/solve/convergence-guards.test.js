@@ -216,8 +216,9 @@ tap.test('scopeTerminalStatus: crosses the file bound', (t) => {
 });
 
 tap.test('scopeTerminalStatus: tolerates a missing scope-pressure object', (t) => {
-  t.same(scopeTerminalStatus(null), {terminal: false, fileCount: 0}, 'null is safe');
-  t.same(scopeTerminalStatus({}), {terminal: false, fileCount: 0}, 'empty is safe');
+  const empty = {terminal: false, fileCount: 0, ownerCount: 0, changeBytes: 0};
+  t.same(scopeTerminalStatus(null), empty, 'null is safe');
+  t.same(scopeTerminalStatus({}), empty, 'empty is safe');
   t.end();
 });
 

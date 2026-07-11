@@ -300,5 +300,6 @@ export function inspectChangeArtifact(root, quest, changeRef) {
     storageKind: artifact.kind || null,
     contentObjectPath: artifact.objectPath ?
       normalizeSlash(path.relative(root, artifact.objectPath)) : null,
+    payloadBytes: artifact.payloadBytes || 0,
   };
 }

@@ -208,6 +208,8 @@ export const COUPLED_OSC_SWAP_THRESHOLD = 2;
 // Lowered from 60 after a 9h run accumulated a 50-file stack that sailed under the old
 // bound (see solver oscillation post-mortem): 25 forces the split the advisory only suggested.
 export const SCOPE_PRESSURE_FILE_LIMIT = 25;
+export const SCOPE_PRESSURE_OWNER_LIMIT = 6;
+export const SCOPE_PRESSURE_BYTE_LIMIT = 262144;
 
 // rr-B: frontier gradient metric kinds that are interchangeable refinements of one
 // another for the SAME probe+scenario. Swapping among these sharpens the search gradient

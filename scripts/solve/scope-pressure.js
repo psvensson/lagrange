@@ -54,8 +54,8 @@ function latestScopeBaselineIndex(log) {
   return -1;
 }
 
-function attemptInspections(root, quest, log) {
-  const baselineIndex = latestScopeBaselineIndex(log);
+function attemptInspections(root, quest, log, options = {}) {
+  const baselineIndex = options.ignoreBaselines ? -1 : latestScopeBaselineIndex(log);
   return log
     .map((event, index) => ({event, index}))
     .filter(({event, index}) =>
@@ -80,6 +80,7 @@ function summarizeAttempts(inspections) {
       ownerAreas,
       categories: entry.inspection.categories || [],
       changedPaths: paths,
+      changeBytes: entry.inspection.payloadBytes || 0,
     };
   });
 }
@@ -118,14 +119,16 @@ function recommendedActions(changedPaths, ownerAreas, categories) {
   return actions;
 }
 
-export function analyzeScopePressure(root, quest, log) {
-  const inspections = attemptInspections(root, quest, log);
+export function analyzeScopePressure(root, quest, log, options = {}) {
+  const inspections = attemptInspections(root, quest, log, options);
   const changedPaths = [...new Set(inspections.flatMap((entry) =>
     entry.inspection.changedPaths || []))].sort();
   const ownerAreas = [...new Set(changedPaths.map(ownerAreaForPath))].sort();
   const categories = [...new Set(inspections.flatMap((entry) =>
     entry.inspection.categories || []))].sort();
   const signals = [];
+  const changedBytes = inspections.reduce((sum, entry) =>
+    sum + (entry.inspection.payloadBytes || 0), 0);
   if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
     signals.push({
       type: 'broad-source-scope',
@@ -155,6 +158,7 @@ export function analyzeScopePressure(root, quest, log) {
   }
   return {
     changedPaths,
+    changedBytes,
     ownerAreas,
     categories,
     attempts: summarizeAttempts(inspections),
@@ -164,9 +168,24 @@ export function analyzeScopePressure(root, quest, log) {
   };
 }
 
+export function analyzeScopePressureCandidate(root, quest, log, inspection) {
+  const current = analyzeScopePressure(root, quest, log, {ignoreBaselines: true});
+  const changedPaths = [...new Set([
+    ...current.changedPaths,
+    ...(inspection.changedPaths || []),
+  ])].sort();
+  return {
+    ...current,
+    changedPaths,
+    changedBytes: current.changedBytes + (inspection.payloadBytes || 0),
+    ownerAreas: [...new Set(changedPaths.map(ownerAreaForPath))].sort(),
+  };
+}
+
 export function renderScopePressure(scopePressure) {
   const lines = ['## Scope Pressure'];
   lines.push(`- Changed files: ${scopePressure.changedPaths.length}`);
+  lines.push(`- Change bytes: ${scopePressure.changedBytes || 0}`);
   lines.push(`- Owner areas: ${scopePressure.ownerAreas.join(', ') || 'none'}`);
   lines.push(`- Categories: ${scopePressure.categories.join(', ') || 'none'}`);
   if (scopePressure.recommendedActions?.length > 0) {

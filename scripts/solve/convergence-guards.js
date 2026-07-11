@@ -13,6 +13,8 @@ import {
   EVENT_EVIDENCE_INGESTED,
   COUPLED_OSC_SWAP_THRESHOLD,
   SCOPE_PRESSURE_FILE_LIMIT,
+  SCOPE_PRESSURE_OWNER_LIMIT,
+  SCOPE_PRESSURE_BYTE_LIMIT,
   HARNESS_NONMEASURING_PARK_THRESHOLD,
   NON_MEASURING_VERDICT_REASONS,
 } from './constants.js';
@@ -282,7 +284,18 @@ export function coupledLocalFixBlocked(log, frontierId = null, satisfiedInvarian
 export function scopeTerminalStatus(scopePressure) {
   const fileCount = Array.isArray(scopePressure?.changedPaths) ?
     scopePressure.changedPaths.length : 0;
-  return {terminal: fileCount > SCOPE_PRESSURE_FILE_LIMIT, fileCount};
+  const ownerCount = Array.isArray(scopePressure?.ownerAreas) ?
+    scopePressure.ownerAreas.length : 0;
+  const changeBytes = Number.isInteger(scopePressure?.changedBytes) ?
+    scopePressure.changedBytes : 0;
+  return {
+    terminal: fileCount > SCOPE_PRESSURE_FILE_LIMIT ||
+      ownerCount > SCOPE_PRESSURE_OWNER_LIMIT ||
+      changeBytes > SCOPE_PRESSURE_BYTE_LIMIT,
+    fileCount,
+    ownerCount,
+    changeBytes,
+  };
 }
 
 // rr-G: the harness has stopped measuring. A run that did not measure the system under

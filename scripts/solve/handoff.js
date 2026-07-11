@@ -31,6 +31,8 @@ import {
 } from './store.js';
 import {reportFilePath} from './report.js';
 import {auditQuest, commitGate, checkpointGate} from './audit.js';
+import {analyzeScopePressure} from './scope-pressure.js';
+import {scopeTerminalStatus} from './convergence-guards.js';
 import {
   expectedChangeDir,
   inspectChangeArtifact,
@@ -125,7 +127,25 @@ export function buildHandoff(root, quest, options = {}) {
   // accumulating an unrecoverable dirty tree.
   const checkpoint = options.checkpoint === true;
   const audit = auditQuest(root, quest);
-  const gate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
+  const baseGate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
+  const scopeStatus = scopeTerminalStatus(
+    analyzeScopePressure(
+      root,
+      quest,
+      readLog(root, quest.id),
+      {ignoreBaselines: true},
+    ),
+  );
+  const scopeProblem = scopeStatus.terminal ? [{
+    message: 'scope-pressure precommit blocked: split into bounded Quest declarations ' +
+      `(files=${scopeStatus.fileCount}, owners=${scopeStatus.ownerCount}, ` +
+      `bytes=${scopeStatus.changeBytes})`,
+  }] : [];
+  const gate = {
+    ...baseGate,
+    ready: baseGate.ready && scopeProblem.length === 0,
+    problems: [...baseGate.problems, ...scopeProblem],
+  };
   const artifactScope = questChangeArtifactScope(root, quest);
   const questArtifacts = questArtifactPaths(root, quest.id);
   const scope = {

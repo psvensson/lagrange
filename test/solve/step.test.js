@@ -6,7 +6,7 @@ import os from 'node:os';
 import {appendEvent, saveQuest, readLog, projectState}
   from '../../scripts/solve/store.js';
 import {runStep} from '../../scripts/solve/step.js';
-import {EVENT_SOLVED, EVENT_QUEST, STATUS_SOLVED}
+import {EVENT_ATTEMPT, EVENT_SOLVED, EVENT_QUEST, STATUS_SOLVED}
   from '../../scripts/solve/constants.js';
 
 function tmp() {
@@ -173,7 +173,7 @@ tap.test('synchronous runStep (P3)', async (t) => {
     t.end();
   });
 
-  t.test('begin step blocks when prior scope pressure is terminal', (t) => {
+  t.test('commit blocks before terminal scope pressure can be recorded', (t) => {
     const root = tmp();
     const oracle = path.join(root, 'o.json');
     fs.writeFileSync(oracle, JSON.stringify({metric: 3, target: 0}));
@@ -181,7 +181,7 @@ tap.test('synchronous runStep (P3)', async (t) => {
     saveQuest(root, quest);
 
     runStep(root, quest);
-    runStep(root, quest, {
+    t.throws(() => runStep(root, quest, {
       changeRef: makeMultiDiff(
         root,
         quest.id,
@@ -189,12 +189,10 @@ tap.test('synchronous runStep (P3)', async (t) => {
         Array.from({length: 61}, (_, i) => `src/scope/file-${i}.js`),
       ),
       summary: 'wide patch',
-    });
-
-    const gated = runStep(root, quest);
-    t.equal(gated.terminal, 'blocked', 'terminal scope gate is a non-terminal block');
-    t.equal(gated.disposition, 'reroute', 'scope pressure reroutes the approach');
-    t.match(gated.problems.join('\n'), /scope pressure terminal/u);
+    }), /scope-pressure precommit blocked/iu);
+    t.equal(readLog(root, quest.id)
+      .some((event) => event.type === EVENT_ATTEMPT), false,
+    'over-threshold scope records no ordinary attempt');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

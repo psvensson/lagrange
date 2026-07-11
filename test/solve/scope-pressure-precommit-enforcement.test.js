@@ -1,0 +1,186 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import tap from 'tap';
+
+import {
+  EVENT_ATTEMPT,
+  EVENT_FINDING,
+  EVENT_QUEST,
+  SCOPE_PRESSURE_BYTE_LIMIT,
+  SCOPE_PRESSURE_FILE_LIMIT,
+  SCOPE_PRESSURE_OWNER_LIMIT,
+  STATUS_SOLVED,
+} from '../../scripts/solve/constants.js';
+import {buildHandoff} from '../../scripts/solve/handoff.js';
+import {writeContentAddressedChangeArtifact} from
+  '../../scripts/solve/content-addressed-change-artifact.js';
+import {runStep, stepPending} from '../../scripts/solve/step.js';
+import {appendEvent, readLog, saveQuest} from '../../scripts/solve/store.js';
+
+function tempRoot() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'scope-precommit-'));
+}
+
+function setup() {
+  const root = tempRoot();
+  const oracle = path.join(root, 'oracle.json');
+  fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+  const quest = {
+    id: 'solver-scope-guard',
+    class: 'process',
+    statement: 'Enforce scope before commit.',
+    doneWhen: {probe: 'oracle', args: {file: oracle}},
+    frontiers: [{
+      id: 'solver-scope-guard-main',
+      priority: 1,
+      metric: {probe: 'oracle', args: {file: oracle}},
+    }],
+  };
+  saveQuest(root, quest);
+  runStep(root, quest);
+  return {root, quest};
+}
+
+function makeDiff(root, paths, bytes = 0, name = 'change') {
+  const file = path.join(
+    root, 'solve/changes/solver-scope-guard', `${name}.diff`);
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  const content = paths.flatMap((filePath) => [
+    `diff --git a/${filePath} b/${filePath}`,
+    `--- a/${filePath}`,
+    `+++ b/${filePath}`,
+    '@@ -1 +1 @@',
+    '-before',
+    '+after',
+  ]).join('\n').padEnd(bytes, 'x');
+  fs.writeFileSync(file, content);
+  return `diff:${file}`;
+}
+
+function commit(root, quest, changeRef) {
+  return runStep(root, quest, {changeRef, summary: 'scope fixture'});
+}
+
+tap.test('real step accepts below and exactly-equal path bounds', (t) => {
+  for (const count of [SCOPE_PRESSURE_FILE_LIMIT - 1, SCOPE_PRESSURE_FILE_LIMIT]) {
+    const {root, quest} = setup();
+    const paths = Array.from({length: count}, (_, index) =>
+      `scripts/solve/case-${index}.js`);
+    const result = commit(root, quest, makeDiff(root, paths));
+    t.same(result.violations, [], `${count} paths accepted`);
+    t.equal(readLog(root, quest.id).filter((event) =>
+      event.type === EVENT_ATTEMPT).length, 1);
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+  t.end();
+});
+
+tap.test('real step rejects one-above path bound before attempt recording', (t) => {
+  const {root, quest} = setup();
+  const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
+    `scripts/solve/case-${index}.js`);
+  t.throws(() => commit(root, quest, makeDiff(root, paths)),
+    /scope-pressure precommit blocked.*files=26/iu);
+  t.equal(readLog(root, quest.id).some((event) => event.type === EVENT_ATTEMPT), false);
+  t.ok(stepPending(root, quest.id), 'pending step survives split-required refusal');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('real step rejects owner and byte overflow independently', (t) => {
+  {
+    const {root, quest} = setup();
+    const equalPaths = Array.from({length: SCOPE_PRESSURE_OWNER_LIMIT}, (_, index) =>
+      `scripts/owner-${index}/file.js`);
+    t.same(commit(root, quest, makeDiff(root, equalPaths)).violations, [],
+      'owner count equal to limit is accepted');
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+  {
+    const {root, quest} = setup();
+    const paths = Array.from({length: SCOPE_PRESSURE_OWNER_LIMIT + 1}, (_, index) =>
+      `scripts/owner-${index}/file.js`);
+    t.throws(() => commit(root, quest, makeDiff(root, paths)), /owners=7/iu);
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+  {
+    const {root, quest} = setup();
+    const changeRef = makeDiff(
+      root,
+      ['scripts/solve/large.js'],
+      SCOPE_PRESSURE_BYTE_LIMIT,
+    );
+    t.same(commit(root, quest, changeRef).violations, [],
+      'payload bytes equal to limit are accepted');
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+  {
+    const {root, quest} = setup();
+    const inlinePath = 'solve/changes/solver-scope-guard/large.diff';
+    const content = fs.readFileSync(makeDiff(
+      root,
+      ['scripts/solve/large.js'],
+      SCOPE_PRESSURE_BYTE_LIMIT + 1,
+    ).slice('diff:'.length));
+    fs.rmSync(path.join(root, inlinePath), {force: true});
+    const written = writeContentAddressedChangeArtifact(
+      root, inlinePath, content, {thresholdBytes: 0});
+    t.throws(() => commit(root, quest, written.changeRef), /bytes=262145/iu);
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+  t.end();
+});
+
+tap.test('handoff rejects historical over-threshold attempt', (t) => {
+  const {root, quest} = setup();
+  const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
+    `scripts/solve/case-${index}.js`);
+  const changeRef = makeDiff(root, paths);
+  appendEvent(root, quest.id, {
+    type: EVENT_ATTEMPT,
+    frontier: quest.frontiers[0].id,
+    changeRef,
+    metricBefore: 1,
+    metricAfter: 1,
+  });
+  appendEvent(root, quest.id, {
+    type: EVENT_FINDING,
+    frontier: quest.frontiers[0].id,
+    claim: 'self-authored baseline must not authorize handoff',
+    scopePressureClassification: {resolution: 'baselined'},
+  });
+  appendEvent(root, quest.id, {
+    type: EVENT_FINDING,
+    frontier: quest.frontiers[0].id,
+    kind: 'verifier-approval',
+    evidence: 'subagent:scope-test',
+  });
+  appendEvent(root, quest.id, {type: EVENT_QUEST, status: STATUS_SOLVED});
+
+  const handoff = buildHandoff(root, quest, {dirtyFiles: []});
+  t.equal(handoff.ok, false);
+  t.match(handoff.gate.problems.map((item) => item.message).join(' '),
+    /scope-pressure precommit blocked/iu);
+
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('cumulative attempts cannot each stay small while crossing the bound', (t) => {
+  const {root, quest} = setup();
+  const firstPaths = Array.from({length: 13}, (_, index) =>
+    `scripts/solve/first-${index}.js`);
+  commit(root, quest, makeDiff(root, firstPaths, 0, 'first'));
+  runStep(root, quest);
+  const secondPaths = Array.from({length: 13}, (_, index) =>
+    `scripts/solve/second-${index}.js`);
+  t.throws(() => commit(root, quest, makeDiff(root, secondPaths, 0, 'second')),
+    /scope-pressure precommit blocked.*files=26/iu);
+  t.equal(readLog(root, quest.id).filter((event) =>
+    event.type === EVENT_ATTEMPT).length, 1,
+  'only the bounded first attempt is recorded');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
