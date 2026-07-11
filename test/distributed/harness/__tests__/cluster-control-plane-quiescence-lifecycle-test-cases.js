@@ -873,6 +873,16 @@ export function registerClusterControlPlaneQuiescenceLifecycleTests(context) {
       'transport ws host should bind on all interfaces in containers',
     );
     assert.strictEqual(
+      env.ADMIN_WEBSOCKET_HOST,
+      '0.0.0.0',
+      'isolated test containers should expose Admin to harness probes',
+    );
+    assert.strictEqual(
+      env.ADMIN_ALLOW_INSECURE_EXTERNAL_BIND,
+      'true',
+      'the test-only external Admin bind must be an explicit opt-in',
+    );
+    assert.strictEqual(
       env[RAFT_PROVIDER_DEFAULTS.envKey],
       RAFT_PROVIDER_DEFAULTS.provider,
       'raft provider env should default to liferaft',

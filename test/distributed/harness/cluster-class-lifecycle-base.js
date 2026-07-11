@@ -25,6 +25,9 @@ import {sweepUnexpectedNodeExits} from './unexpected-node-exit.js';
 // reuse run is bind-mounting live src yet lacks the fingerprint that protects it
 // from the stale-code trap.
 const FAST_LOCAL_SOURCE_BIND_TARGET = '/app/src';
+const ADMIN_WEBSOCKET_HOST_ENV_KEY = 'ADMIN_WEBSOCKET_HOST';
+const ADMIN_ALLOW_INSECURE_EXTERNAL_BIND_ENV_KEY =
+  'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND';
 const DOCKER_BIND_SEPARATOR = ':';
 const LEGACY_REUSE_SHELL_ENTRYPOINTS = Object.freeze(['sh', 'bash']);
 const LEGACY_REUSE_SHELL_ARG = '-lc';
@@ -360,6 +363,11 @@ class ClusterLifecycleBase {
     env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
     env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = containerName + ':' + PORTS.REST;
     env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
+    // The harness reaches Admin over the container's isolated bridge address.
+    // Production remains loopback-only by default; live test containers opt in
+    // explicitly so readiness and query probes exercise the real Admin boundary.
+    env[ADMIN_WEBSOCKET_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
+    env[ADMIN_ALLOW_INSECURE_EXTERNAL_BIND_ENV_KEY] = 'true';
     this._applySourceFingerprintEnv(env);
     if (this._isFileLoggingEnabled()) {
       // Route node logs to a bind-mounted file instead of stdout — see
