@@ -33,7 +33,7 @@ import {reportFilePath} from './report.js';
 import {auditQuest, commitGate, checkpointGate} from './audit.js';
 import {
   expectedChangeDir,
-  changedPathsFromDiffContent,
+  inspectChangeArtifact,
 } from './change-artifact.js';
 
 function toRootRelative(root, absolute) {
@@ -56,18 +56,27 @@ function questArtifactPaths(root, questId) {
 
 // Source/test files named inside this Quest's own change artifacts. These are the
 // only non-solve/ paths a Quest legitimately touches.
-function diffReferencedPaths(root, questId) {
-  const dir = expectedChangeDir(root, questId);
-  if (!fs.existsSync(dir)) return [];
+function questChangeArtifactScope(root, quest) {
+  const dir = expectedChangeDir(root, quest.id);
+  if (!fs.existsSync(dir)) return {diffReferenced: [], contentObjects: []};
   const referenced = new Set();
+  const contentObjects = new Set();
   for (const name of fs.readdirSync(dir)) {
-    if (!name.endsWith('.diff')) continue;
-    const content = fs.readFileSync(path.join(dir, name), 'utf8');
-    for (const filePath of changedPathsFromDiffContent(content)) {
+    if (!name.endsWith('.diff') && !name.endsWith('.diff.json')) continue;
+    const artifactPath = toRootRelative(root, path.join(dir, name));
+    const inspection = inspectChangeArtifact(root, quest, `diff:${artifactPath}`);
+    if (!inspection.valid) continue;
+    if (inspection.contentObjectPath) {
+      contentObjects.add(inspection.contentObjectPath);
+    }
+    for (const filePath of inspection.changedPaths) {
       referenced.add(filePath);
     }
   }
-  return [...referenced].sort();
+  return {
+    diffReferenced: [...referenced].sort(),
+    contentObjects: [...contentObjects].sort(),
+  };
 }
 
 // Pure scope decision: a dirty path is in-scope when it is one of the Quest's
@@ -117,9 +126,12 @@ export function buildHandoff(root, quest, options = {}) {
   const checkpoint = options.checkpoint === true;
   const audit = auditQuest(root, quest);
   const gate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
+  const artifactScope = questChangeArtifactScope(root, quest);
+  const questArtifacts = questArtifactPaths(root, quest.id);
   const scope = {
-    ...questArtifactPaths(root, quest.id),
-    diffReferenced: diffReferencedPaths(root, quest.id),
+    ...questArtifacts,
+    files: [...questArtifacts.files, ...artifactScope.contentObjects],
+    diffReferenced: artifactScope.diffReferenced,
   };
   const dirtyFiles = options.dirtyFiles || gitDirtyFiles(root);
   const {inScope, outOfScope} = classifyDirtyPaths(dirtyFiles, scope);

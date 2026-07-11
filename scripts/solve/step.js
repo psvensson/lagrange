@@ -27,10 +27,13 @@ import {
   STATUS_SOLVED,
 } from './constants.js';
 import {
-  changeArtifactPath,
   expectedChangeDir,
   inspectChangeArtifact,
 } from './change-artifact.js';
+import {
+  cleanupWrittenChangeArtifact,
+  writeContentAddressedChangeArtifact,
+} from './content-addressed-change-artifact.js';
 import {suggestVerificationTemplates} from './verification-template-suggest.js';
 import {autoCommitQuest} from './handoff.js';
 import {writeReport} from './report.js';
@@ -45,7 +48,7 @@ import {unrecordedEvidenceContinuation} from './continuation.js';
 
 const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
 const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
-const AUTO_DIFF_ARTIFACT_PATTERN = /^attempt-(\d+)\.diff$/u;
+const AUTO_DIFF_ARTIFACT_PATTERN = /^attempt-(\d+)\.diff(?:\.json)?$/u;
 const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const UNKNOWN_GIT_ERROR = 'unknown error';
 const AUTO_DIFF_EMPTY_ERROR =
@@ -96,7 +99,8 @@ function nextAutoDiffArtifactPath(root, questId) {
 function createAutoDiffChangeRef(root, quest, pending) {
   const pin = pending.headCommit || 'HEAD';
   const out = spawnSync('git', [
-    'diff', pin, '--', '.', ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,
+    'diff', '--binary', pin, '--', '.',
+    ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,
   ], {
     cwd: root,
     encoding: 'utf8',
@@ -111,8 +115,12 @@ function createAutoDiffChangeRef(root, quest, pending) {
     throw new Error(AUTO_DIFF_EMPTY_ERROR);
   }
   const file = nextAutoDiffArtifactPath(root, quest.id);
-  fs.writeFileSync(file, out.stdout);
-  return `diff:${path.relative(root, file)}`;
+  const relativeFile = path.relative(root, file);
+  return writeContentAddressedChangeArtifact(
+    root,
+    relativeFile,
+    out.stdout,
+  );
 }
 
 export function pendingFilePath(root, questId) {
@@ -250,9 +258,10 @@ function stepCommit(root, quest, options = {}) {
       'or run `solve step --id <quest>` before manual work',
     );
   }
-  const autoDiffRef = options.changeRef ?
+  const autoDiffWrite = options.changeRef ?
     null :
     createAutoDiffChangeRef(root, quest, pending);
+  const autoDiffRef = autoDiffWrite?.changeRef || null;
   const changeRef = options.changeRef || autoDiffRef;
   // A rejected commit (invalid changeRef, missing frontier, or a theory-gate
   // stop) records no attempt, so a generated auto-diff artifact must not
@@ -264,7 +273,7 @@ function stepCommit(root, quest, options = {}) {
     return result;
   } finally {
     if (autoDiffRef && !attemptRecorded) {
-      fs.rmSync(changeArtifactPath(root, quest.id, autoDiffRef), {force: true});
+      cleanupWrittenChangeArtifact(autoDiffWrite);
     }
   }
 }
@@ -347,8 +356,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
 // Advisory only — a suggestion failure must never fail the recorded attempt.
 function suggestChangeVerificationTemplates(root, changeInspection) {
   try {
-    const content = fs.readFileSync(changeInspection.filePath, 'utf8');
-    return suggestVerificationTemplates(root, content);
+    return suggestVerificationTemplates(root, changeInspection.content || '');
   } catch {
     return [];
   }

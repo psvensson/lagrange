@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "baselineEvidence": "test-output/reports/solver-proof-artifact-census-2026-07-11T13-14-17-498Z.report.json",
+  "baselineEvidenceSha256": "3f93a07f62273a63133bb704a4d64b33fd61fc6962c970705d5c3dfda3ea779f",
+  "inlineThresholdBytes": 32768,
+  "contentCompression": "gzip",
+  "classifiedReferenceOccurrences": 250,
+  "readableReferenceOccurrences": 248,
+  "migratedArtifacts": 2,
+  "newlyMigratedArtifacts": 2,
+  "recoveredMigratedArtifacts": 0,
+  "eligibleDuplicateGroups": 1,
+  "baselineDuplicateBytes": 43062,
+  "remainingDuplicateBytes": 0,
+  "duplicateReduction": 1,
+  "migrations": [
+    {
+      "path": "solve/changes/helm-admin-default-deny-cutover/attempt-1.diff",
+      "payloadSha256": "df6537c1f0d2e79d5d23890d165ea5398f0825de155b40644e59558bad19c68b",
+      "descriptorPath": "solve/changes/helm-admin-default-deny-cutover/attempt-1.diff.json",
+      "objectPath": "solve/artifacts/sha256/df/df6537c1f0d2e79d5d23890d165ea5398f0825de155b40644e59558bad19c68b.diff.gz",
+      "descriptorSha256": "7820a256b12ef082040217cff96661c1dae1941cd1a46c43c054fb06acc45fce",
+      "objectStorageSha256": "2130bed979ce81d1cf7b3e326de93e33799aa8de4eb2fa17d9ceb4db1e7aefcc",
+      "objectCreated": true
+    },
+    {
+      "path": "solve/changes/helm-admin-default-deny-cutover/attempt-2.diff",
+      "payloadSha256": "df6537c1f0d2e79d5d23890d165ea5398f0825de155b40644e59558bad19c68b",
+      "descriptorPath": "solve/changes/helm-admin-default-deny-cutover/attempt-2.diff.json",
+      "objectPath": "solve/artifacts/sha256/df/df6537c1f0d2e79d5d23890d165ea5398f0825de155b40644e59558bad19c68b.diff.gz",
+      "descriptorSha256": "7820a256b12ef082040217cff96661c1dae1941cd1a46c43c054fb06acc45fce",
+      "objectStorageSha256": "2130bed979ce81d1cf7b3e326de93e33799aa8de4eb2fa17d9ceb4db1e7aefcc",
+      "objectCreated": false
+    }
+  ]
+}

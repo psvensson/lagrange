@@ -791,8 +791,10 @@ export function recordQuestSolvedIfDone(root, quest, ctx, options = {}) {
     !terminalIntegrityAllowsClosure(root, quest, readLog(root, quest.id))) {
     return {done: false, evidence: questDone.evidence};
   }
-  const alreadySolved = [...readLog(root, quest.id)].reverse()
-    .some((e) => e.type === EVENT_QUEST && e.status === STATUS_SOLVED);
+  const alreadySolved = projectState(
+    quest,
+    readLog(root, quest.id),
+  ).questStatus === STATUS_SOLVED;
   if (!alreadySolved) {
     appendEvent(root, quest.id, {
       type: EVENT_QUEST,

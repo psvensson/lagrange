@@ -13,6 +13,7 @@ import {distanceMetricFromReport}
   from '../../scripts/solve/probes/scenario-harness.js';
 import {
   EVENT_SOLVED,
+  EVENT_QUEST,
   STATUS_OPEN,
   STATUS_SOLVED,
   OSCILLATION_REOPEN_BUDGET,
@@ -542,11 +543,22 @@ tap.test('evidence ingestion (P2)', async (t) => {
       frontier: 'evidence-quest-test-main',
       evidence: 'previous-pass.report.json',
     });
+    appendEvent(root, goal.id, {
+      type: EVENT_QUEST,
+      status: STATUS_SOLVED,
+      evidence: 'previous-pass.report.json',
+    });
 
     const event = ingestEvidence(root, {
       questId: goal.id,
       frontierId: 'evidence-quest-test-main',
       evidencePath: reportPath,
+    });
+    ingestEvidence(root, {
+      questId: goal.id,
+      frontierId: 'evidence-quest-test-main',
+      evidencePath: reportPath,
+      probeScope: 'doneWhen',
     });
     const state = projectState(goal, readLog(root, goal.id));
     const frontier = state.frontiers.find((item) =>
@@ -558,6 +570,8 @@ tap.test('evidence ingestion (P2)', async (t) => {
       'projection reopens the frontier after a fresh measured failure');
     t.equal(frontier.current, event.metric,
       'projection keeps the latest measured metric');
+    t.equal(state.questStatus, STATUS_OPEN,
+      'fresh failed doneWhen evidence reopens the Quest for a corrective attempt');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

@@ -3,10 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {execFileSync, spawnSync} from 'node:child_process';
+import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 
 import {saveQuest} from '../../scripts/solve/store.js';
 import {runStep, stepPending} from '../../scripts/solve/step.js';
+import {contentObjectRoot, readChangeArtifact} from
+  '../../scripts/solve/content-addressed-change-artifact.js';
+import {buildHandoff} from '../../scripts/solve/handoff.js';
 import {makeOracleQuest} from './solve-test-quest-fixture.js';
 
 const CLI = path.resolve(
@@ -33,6 +37,14 @@ function gitRoot() {
   return root;
 }
 
+function filesUnder(directory) {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, {withFileTypes: true}).flatMap((entry) => {
+    const filePath = path.join(directory, entry.name);
+    return entry.isDirectory() ? filesUnder(filePath) : [filePath];
+  });
+}
+
 tap.test('step --commit --auto-diff', async (t) => {
   t.test('snapshots the working-tree diff as the changeRef artifact', (t) => {
     const root = gitRoot();
@@ -56,6 +68,57 @@ tap.test('step --commit --auto-diff', async (t) => {
     const content = fs.readFileSync(artifact, 'utf8');
     t.match(content, /^diff --git a\/src\/demo\.js b\/src\/demo\.js$/mu);
     t.match(content, /^@@ /mu, 'contains a unified diff hunk');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('large snapshots use verified descriptors that handoff can inspect', (t) => {
+    const root = gitRoot();
+    const {quest, oracle} = makeOracleQuest(root);
+    runStep(root, quest);
+
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'),
+      `after\n${'large-change\n'.repeat(5000)}`);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    const result = runStep(root, quest, {autoDiff: true, summary: 'large'});
+
+    t.equal(result.changeRef,
+      'diff:solve/changes/demo/attempt-1.diff.json');
+    const artifact = readChangeArtifact(root, result.changeRef);
+    t.equal(artifact.valid, true);
+    t.equal(artifact.kind, 'content-addressed');
+    t.match(artifact.payload.toString('utf8'), /a\/src\/demo\.js/u);
+    const descriptorPath = path.relative(root, artifact.artifactPath);
+    const objectPath = path.relative(root, artifact.objectPath);
+    const handoff = buildHandoff(root, quest, {
+      checkpoint: true,
+      dirtyFiles: ['src/demo.js', descriptorPath, objectPath],
+    });
+    t.same(handoff.inScope, [descriptorPath, objectPath, 'src/demo.js'].sort(),
+      'handoff owns descriptor, content object, and payload-derived source scope');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('binary snapshots carry reversible Git binary payloads', (t) => {
+    const root = gitRoot();
+    const {quest, oracle} = makeOracleQuest(root);
+    runStep(root, quest);
+
+    const binaryPath = path.join(root, 'src', 'proof.bin');
+    fs.writeFileSync(binaryPath, randomBytes(65536));
+    git(root, ['add', '-N', 'src/proof.bin']);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    const result = runStep(root, quest, {autoDiff: true, summary: 'binary'});
+    const artifact = readChangeArtifact(root, result.changeRef);
+    const patchPath = path.join(root, 'captured.diff');
+    fs.writeFileSync(patchPath, artifact.payload);
+
+    t.match(artifact.payload.toString('utf8'), /GIT binary patch/u);
+    t.doesNotThrow(() => git(root, ['apply', '--reverse', '--check', patchPath]),
+      'captured payload reverse-applies with complete binary bytes');
+
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -199,6 +262,31 @@ tap.test('step --commit --auto-diff', async (t) => {
     const r = runStep(root, quest, {autoDiff: true, summary: 'right scope'});
     t.equal(r.changeRef, 'diff:solve/changes/demo/attempt-1.diff',
       'numbering stays dense after a rejected commit');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a rejected large commit removes descriptor and unowned object', (t) => {
+    const root = gitRoot();
+    const {quest} = makeOracleQuest(root);
+    fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'scripts', 'quest-context.js'), 'v1\n');
+    git(root, ['add', 'scripts']);
+    git(root, ['commit', '--quiet', '-m', 'track workflow file']);
+
+    runStep(root, quest);
+    fs.writeFileSync(path.join(root, 'scripts', 'quest-context.js'),
+      `v2\n${'large-workflow-change\n'.repeat(5000)}`);
+    t.throws(
+      () => runStep(root, quest, {autoDiff: true, summary: 'large wrong scope'}),
+      /invalid changeRef: .*workflow changes must be recorded/u,
+    );
+    const changeDir = path.join(root, 'solve', 'changes', 'demo');
+    t.same(fs.existsSync(changeDir) ? fs.readdirSync(changeDir) : [], [],
+      'rejected descriptor is removed');
+    t.same(filesUnder(contentObjectRoot(root)), [],
+      'new object with no surviving descriptor is removed');
+
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

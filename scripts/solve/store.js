@@ -323,6 +323,12 @@ export function projectState(quest, log) {
       questState.evidence = event.evidence || null;
       continue;
     }
+    if (event.type === EVENT_EVIDENCE_INGESTED &&
+      event.probeScope === 'doneWhen' &&
+      event.invalidSample !== true && event.done === false) {
+      questState.status = STATUS_OPEN;
+      questState.evidence = event.evidence || null;
+    }
     const handler = FRONTIER_HANDLERS[event.type];
     if (handler) handler(event.frontier ? frontiers.get(event.frontier) : null, event);
     if (event.type === EVENT_THEORY_SYSTEM_DECLARED) {

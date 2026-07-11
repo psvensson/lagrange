@@ -1,24 +1,19 @@
-import fs from 'node:fs';
 import path from 'node:path';
-import {createHash} from 'node:crypto';
 
 import {
   QUEST_CLASS_PRODUCT,
   SOLVE_DATA_DIR,
 } from './constants.js';
+import {
+  readChangeArtifact,
+  requestedChangeArtifactPath,
+  resolvedChangeArtifactPath,
+} from './content-addressed-change-artifact.js';
 
 const DIFF_PREFIX = 'diff:';
 const DIFF_EXTENSION = '.diff';
-const HASH_ALGORITHM = 'sha256';
-const HASH_ENCODING = 'hex';
-const PATH_LINE_PREFIXES = Object.freeze([
-  'diff --git ',
-  '--- ',
-  '+++ ',
-  'rename from ',
-  'rename to ',
-]);
-
+const DESCRIPTOR_EXTENSION = '.diff.json';
+const GZIP_EXTENSION = '.diff.gz';
 const WORKFLOW_PATH_PREFIXES = Object.freeze([
   'scripts/solve/',
   'scripts/solve.js',
@@ -72,62 +67,65 @@ function normalizeSlash(value) {
   return String(value || '').replaceAll(path.sep, '/');
 }
 
-function workspaceRelative(root, filePath) {
-  const absolute = path.isAbsolute(filePath) ?
-    path.normalize(filePath) :
-    path.resolve(root, filePath);
-  const relative = path.relative(root, absolute);
-  return {
-    absolute,
-    relative: normalizeSlash(relative),
-    insideWorkspace: Boolean(relative) &&
-      !relative.startsWith('..') &&
-      !path.isAbsolute(relative),
-  };
-}
-
 export function changeArtifactPath(root, questId, changeRef) {
-  if (typeof changeRef !== 'string' || !changeRef.startsWith(DIFF_PREFIX)) {
-    return null;
-  }
-  const rawPath = changeRef.slice(DIFF_PREFIX.length);
-  if (!rawPath) return null;
-  const {absolute} = workspaceRelative(root, rawPath);
-  return absolute;
+  return resolvedChangeArtifactPath(root, changeRef);
 }
 
 export function changeArtifactIdentity(root, questId, changeRef) {
-  const filePath = changeArtifactPath(root, questId, changeRef);
-  if (!filePath || !fs.existsSync(filePath)) {
+  const requestedPath = requestedChangeArtifactPath(root, changeRef);
+  const artifact = readChangeArtifact(root, changeRef);
+  if (!requestedPath || !artifact.valid || !artifact.payload) {
     return {
-      path: filePath ? normalizeSlash(path.relative(root, filePath)) : null,
+      path: requestedPath ?
+        normalizeSlash(path.relative(root, requestedPath)) : null,
       exists: false,
       size: null,
       sha256: null,
     };
   }
-  const content = fs.readFileSync(filePath);
-  return {
-    path: normalizeSlash(path.relative(root, filePath)),
+  const identity = {
+    path: normalizeSlash(path.relative(root, requestedPath)),
     exists: true,
-    size: content.length,
-    sha256: createHash(HASH_ALGORITHM).update(content).digest(HASH_ENCODING),
+    size: artifact.payloadBytes,
+    sha256: artifact.payloadSha256,
   };
+  if (artifact.kind === 'content-addressed') {
+    identity.storageKind = artifact.kind;
+    identity.descriptorSha256 = artifact.descriptorSha256;
+    identity.objectPath = normalizeSlash(path.relative(root, artifact.objectPath));
+    identity.objectStorageSha256 = artifact.objectStorageSha256;
+  }
+  return identity;
 }
 
 export function changeArtifactIdentityMatches(recorded, current) {
-  return changeArtifactIdentityIsSealed(recorded) &&
+  const baseMatches = changeArtifactIdentityIsSealed(recorded) &&
     changeArtifactIdentityIsSealed(current) &&
     recorded.path === current.path &&
     recorded.size === current.size &&
     recorded.sha256 === current.sha256;
+  if (!baseMatches || recorded.storageKind !== 'content-addressed') {
+    return baseMatches;
+  }
+  return current.storageKind === recorded.storageKind &&
+    current.descriptorSha256 === recorded.descriptorSha256 &&
+    current.objectPath === recorded.objectPath &&
+    current.objectStorageSha256 === recorded.objectStorageSha256;
 }
 
 export function changeArtifactIdentityIsSealed(identity) {
-  return identity?.exists === true &&
+  const baseSealed = identity?.exists === true &&
     typeof identity.path === 'string' && identity.path.length > 0 &&
     Number.isInteger(identity.size) && identity.size >= 0 &&
     typeof identity.sha256 === 'string' && identity.sha256.length > 0;
+  if (!baseSealed || identity.storageKind !== 'content-addressed') {
+    return baseSealed;
+  }
+  return typeof identity.descriptorSha256 === 'string' &&
+    identity.descriptorSha256.length > 0 &&
+    typeof identity.objectPath === 'string' && identity.objectPath.length > 0 &&
+    typeof identity.objectStorageSha256 === 'string' &&
+    identity.objectStorageSha256.length > 0;
 }
 
 export function expectedChangeDir(root, questId) {
@@ -136,7 +134,10 @@ export function expectedChangeDir(root, questId) {
 
 function isExpectedChangeArtifact(root, questId, filePath) {
   const changeDir = `${expectedChangeDir(root, questId)}${path.sep}`;
-  return filePath.startsWith(changeDir) && filePath.endsWith(DIFF_EXTENSION);
+  return filePath.startsWith(changeDir) &&
+    (filePath.endsWith(DIFF_EXTENSION) ||
+      filePath.endsWith(DESCRIPTOR_EXTENSION) ||
+      filePath.endsWith(GZIP_EXTENSION));
 }
 
 function normalizeDiffPath(value) {
@@ -170,15 +171,14 @@ function parseRenameLine(line) {
 
 export function changedPathsFromDiffContent(content) {
   const paths = new Set();
-  for (const line of String(content || '').split('\n')) {
-    if (!PATH_LINE_PREFIXES.some((prefix) => line.startsWith(prefix))) {
-      continue;
-    }
-    for (const filePath of [
+  const lines = String(content || '').split('\n');
+  const hasGitDiffHeaders = lines.some((line) => line.startsWith('diff --git '));
+  for (const line of lines) {
+    const candidates = hasGitDiffHeaders ? [
       ...parseGitDiffLine(line),
-      ...parsePatchPathLine(line),
       ...parseRenameLine(line),
-    ]) {
+    ] : parsePatchPathLine(line);
+    for (const filePath of candidates) {
       paths.add(filePath);
     }
   }
@@ -187,6 +187,10 @@ export function changedPathsFromDiffContent(content) {
 
 function hasUnifiedDiffHunk(content) {
   return /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/mu.test(String(content || ''));
+}
+
+function hasGitBinaryPatch(content) {
+  return /^GIT binary patch$/mu.test(String(content || ''));
 }
 
 export function classifyPath(filePath) {
@@ -248,6 +252,7 @@ export function classifyQuestScope(quest) {
 export function inspectChangeArtifact(root, quest, changeRef) {
   const problems = [];
   const filePath = changeArtifactPath(root, quest.id, changeRef);
+  const artifact = readChangeArtifact(root, changeRef);
   if (!filePath) {
     return {
       valid: false,
@@ -258,23 +263,24 @@ export function inspectChangeArtifact(root, quest, changeRef) {
       questScope: classifyQuestScope(quest),
     };
   }
-  if (!fs.existsSync(filePath)) {
-    problems.push(`changeRef artifact does not exist: ${filePath}`);
+  if (!artifact.valid) {
+    problems.push(...artifact.problems);
   } else if (!isExpectedChangeArtifact(root, quest.id, filePath)) {
     problems.push(
       `changeRef artifact must live under ${expectedChangeDir(root, quest.id)}/`,
     );
   }
 
-  const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+  const content = artifact.payload ? artifact.payload.toString('utf8') : '';
   const changedPaths = changedPathsFromDiffContent(content);
   const categories = [...new Set(changedPaths.map(classifyPath))].sort();
   const questScope = classifyQuestScope(quest);
   if (changedPaths.length === 0) {
     problems.push('changeRef artifact must contain file paths from a patch');
   }
-  if (content && !hasUnifiedDiffHunk(content)) {
-    problems.push('changeRef artifact must contain at least one unified diff hunk');
+  if (content && !hasUnifiedDiffHunk(content) && !hasGitBinaryPatch(content)) {
+    problems.push(
+      'changeRef artifact must contain a unified diff hunk or Git binary patch');
   }
   if (questScope !== 'workflow' && categories.includes('workflow')) {
     problems.push('workflow changes must be recorded in a workflow/Quest tooling Quest');
@@ -290,5 +296,9 @@ export function inspectChangeArtifact(root, quest, changeRef) {
     changedPaths,
     categories,
     questScope,
+    content,
+    storageKind: artifact.kind || null,
+    contentObjectPath: artifact.objectPath ?
+      normalizeSlash(path.relative(root, artifact.objectPath)) : null,
   };
 }

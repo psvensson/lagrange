@@ -4,6 +4,7 @@ import path from 'node:path';
 import {gunzipSync, gzipSync} from 'node:zlib';
 
 import {PROOF_ARTIFACT_CENSUS} from './proof-artifact-census-constants.js';
+import {readChangeArtifact} from './content-addressed-change-artifact.js';
 
 function normalizePath(value) {
   return String(value).split(path.sep).join('/');
@@ -31,6 +32,9 @@ function walkFiles(directory) {
 }
 
 function artifactEncoding(filePath) {
+  if (filePath.endsWith('.diff.json')) {
+    return PROOF_ARTIFACT_CENSUS.ENCODING_CONTENT_DESCRIPTOR;
+  }
   if (filePath.endsWith(PROOF_ARTIFACT_CENSUS.GZIP_DIFF_SUFFIX)) {
     return PROOF_ARTIFACT_CENSUS.ENCODING_GZIP_DIFF;
   }
@@ -41,17 +45,26 @@ function artifactEncoding(filePath) {
   return null;
 }
 
-function readPayload(filePath, encoding) {
+function readPayload(root, filePath, encoding) {
   const stored = fs.readFileSync(filePath);
-  const payload = encoding === PROOF_ARTIFACT_CENSUS.ENCODING_GZIP_DIFF ?
-    gunzipSync(stored) : stored;
+  let payload;
+  if (encoding === PROOF_ARTIFACT_CENSUS.ENCODING_GZIP_DIFF) {
+    payload = gunzipSync(stored);
+  } else if (encoding === PROOF_ARTIFACT_CENSUS.ENCODING_CONTENT_DESCRIPTOR) {
+    const changeRef = `diff:${relativePath(root, filePath)}`;
+    const artifact = readChangeArtifact(root, changeRef);
+    if (!artifact.valid) throw new Error(artifact.problems.join('; '));
+    payload = artifact.payload;
+  } else {
+    payload = stored;
+  }
   return {stored, payload};
 }
 
 function inventoryArtifact(root, filePath) {
   const encoding = artifactEncoding(filePath);
   try {
-    const {stored, payload} = readPayload(filePath, encoding);
+    const {stored, payload} = readPayload(root, filePath, encoding);
     return {
       path: relativePath(root, filePath),
       encoding,
@@ -83,6 +96,15 @@ function inventoryArtifacts(root) {
   return walkFiles(changesDir)
     .filter((filePath) => artifactEncoding(filePath) !== null)
     .map((filePath) => inventoryArtifact(root, filePath));
+}
+
+function inventoryContentObjects(root) {
+  const objectDir = path.join(root, PROOF_ARTIFACT_CENSUS.CONTENT_OBJECT_DIR);
+  return walkFiles(objectDir).map((filePath) => ({
+    path: relativePath(root, filePath),
+    absolutePath: filePath,
+    storageBytes: fs.statSync(filePath).size,
+  }));
 }
 
 function collectChangeRefs(value, pointer, references) {
@@ -165,7 +187,11 @@ function resolveReference(root, reference, artifactByPath) {
       reason: 'outside-changes-directory',
     };
   }
-  const candidates = [requestedPath, `${requestedPath}.gz`];
+  const candidates = [
+    requestedPath,
+    `${requestedPath}.json`,
+    `${requestedPath}.gz`,
+  ];
   const resolvedPath = candidates.find((candidate) => fs.existsSync(candidate));
   if (!resolvedPath) {
     return {
@@ -256,14 +282,20 @@ function selectMigrationPolicy(groups, artifacts) {
   };
 }
 
-function summarize(artifacts, groups, references, parseErrors) {
+function summarize(artifacts, contentObjects, groups, references, parseErrors) {
   const readable = artifacts.filter((artifact) => artifact.readable);
   const referencedPaths = new Set(references
     .filter((reference) => reference.resolved)
     .map((reference) => reference.resolvedPath));
-  const storageBytes = artifacts.reduce((sum, item) => sum + item.storageBytes, 0);
+  const artifactStorageBytes = artifacts.reduce(
+    (sum, item) => sum + item.storageBytes, 0);
+  const contentObjectStorageBytes = contentObjects.reduce(
+    (sum, item) => sum + item.storageBytes, 0);
+  const storageBytes = artifactStorageBytes + contentObjectStorageBytes;
   const filesystemBytes = artifacts.reduce((sum, item) =>
-    sum + fs.statSync(item.absolutePath).size, 0);
+    sum + fs.statSync(item.absolutePath).size, 0) +
+    contentObjects.reduce((sum, item) =>
+      sum + fs.statSync(item.absolutePath).size, 0);
   const uniquePayloadBytes = [...new Map(readable.map((item) =>
     [item.payloadSha256, item.payloadBytes])).values()]
     .reduce((sum, size) => sum + size, 0);
@@ -271,6 +303,7 @@ function summarize(artifacts, groups, references, parseErrors) {
     sum + group.duplicatePayloadBytes, 0);
   return {
     artifactCount: artifacts.length,
+    contentObjectCount: contentObjects.length,
     readableArtifactCount: readable.length,
     referencedArtifactCount: referencedPaths.size,
     unreferencedArtifactCount: artifacts.length - referencedPaths.size,
@@ -286,6 +319,8 @@ function summarize(artifacts, groups, references, parseErrors) {
       (item) => item.historicalFallback).length,
     logParseErrors: parseErrors.length,
     storageBytes,
+    artifactStorageBytes,
+    contentObjectStorageBytes,
     filesystemBytes,
     bytesReconciled: artifacts.length > 0 && storageBytes === filesystemBytes,
     uniquePayloadBytes,
@@ -301,13 +336,20 @@ export function buildProofArtifactCensus(root = process.cwd()) {
     ...artifact,
     absolutePath: path.resolve(absoluteRoot, artifact.path),
   }));
+  const contentObjects = inventoryContentObjects(absoluteRoot);
   const artifactByPath = new Map(artifacts.map((artifact) =>
     [artifact.path, artifact]));
   const {references: rawReferences, parseErrors} = readReferences(absoluteRoot);
   const references = rawReferences.map((reference) =>
     resolveReference(absoluteRoot, reference, artifactByPath));
   const groups = duplicateGroups(artifacts);
-  const summary = summarize(artifacts, groups, references, parseErrors);
+  const summary = summarize(
+    artifacts,
+    contentObjects,
+    groups,
+    references,
+    parseErrors,
+  );
   const migrationPolicy = selectMigrationPolicy(groups, artifacts);
   return {
     schemaVersion: 1,
@@ -319,6 +361,8 @@ export function buildProofArtifactCensus(root = process.cwd()) {
     unresolvedReferences: references.filter((item) => !item.classified),
     historicalFallbacks: references.filter((item) => item.historicalFallback),
     parseErrors,
+    contentObjects: contentObjects.map(({absolutePath: _absolutePath, ...item}) =>
+      item),
     artifacts: artifacts.map((item) => {
       const {absolutePath: _absolutePath, ...artifact} = item;
       return {

@@ -7,6 +7,8 @@ export const PROOF_ARTIFACT_CENSUS = Object.freeze({
   PATCH_SUFFIX: '.patch',
   ENCODING_INLINE_DIFF: 'inline-diff',
   ENCODING_GZIP_DIFF: 'gzip-diff',
+  ENCODING_CONTENT_DESCRIPTOR: 'content-addressed-descriptor',
+  CONTENT_OBJECT_DIR: 'solve/artifacts/sha256',
   HASH_ALGORITHM: 'sha256',
   HASH_ENCODING: 'hex',
   COMPRESSION_GZIP: 'gzip',
