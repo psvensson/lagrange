@@ -57,11 +57,59 @@ candidate (node-1) brought up LAST. All three cold formations converged to
 retry-budget exhaustion. The unprobed-fallback + per-retry rotation path is
 live-proven.
 
-## Tier 2a / 2b — in progress
+## Tier 2a — hedging live A/B (quest 4) — PARTIAL: no-regression PASS, engagement UNBINDABLE
 
-- 2a hedging A/B: pending (runs after 2b to avoid docker contention).
-- 2b managed-merge ladder: quest + scenario development delegated; see
-  quest `managed-partition-merge-live-validation` once authored.
+- Run 1 (`tier2a-run1-report.json`): FAIL before load dispatch —
+  `nodeAdmissionBlocked: 14465`, dominantReason
+  `publication_missing_active_node` (the tracked CL-004 load-admission
+  class); transient — run 2 passed on identical setup.
+- Run 2 (`tier2a-on-pass-report.json`): **PASS** with hedging ON (the
+  shipped default) — 200 ms injected follower latency, success rate over
+  threshold, p50 34 ms / p95 297 ms / p99 371 ms. Live no-regression
+  evidence: the hedging change does not destabilize the read/write path
+  under a slow follower.
+- Hedge ENGAGEMENT could not be bound on this vehicle, for two
+  independently sufficient reasons: (1) `SPECULATIVE_EXEC_START` is
+  logged at debug level (`parallel-query-coordinator-hedging-methods.js:266`)
+  and harness containers run at info — absence in logs proves nothing;
+  (2) the scenario's load table is single-partition, and hedging is gated
+  on multi-partition fan-outs (`partitionIds.length > 1`), so no hedge can
+  fire regardless. The OFF arm was therefore skipped as information-free.
+- Follow-ups for a binding A/B: an info-level hedge counter (or metrics
+  surfacing in the harness report), and a multi-partition load table —
+  which requires the provisioning prerequisite below.
+- Run deviations: `timeouts.nodeStartup` raised to 120 s (seed cold boot
+  exceeds the default 30 s no-progress window on this machine);
+  `--no-fast-local` hermetic runs (root-owned `.tmp/reuse-data` from
+  aborted runs breaks container reuse; SRC fingerprint guaranteed by
+  image rebuild).
+
+## Tier 2b — managed-merge live ladder (quest 5) — BLOCKED (scenario built, committed)
+
+The `partition-merge-under-load` scenario + failure variants + config +
+unit tests are complete, gates-green, and committed; see quest
+`managed-partition-merge-live-validation` (BLOCKED finding with evidence
+under `solve/changes/managed-partition-merge-live-validation/`). 4 of 4
+product runs died in the pre-existing
+`operation_ledger_quorum_concentrated` admission storm before the merge
+machinery emitted a single log line (SRC_FINGERPRINT verified each run;
+analyzers: `dominantReason=nodeAdmissionBlocked`,
+`failureMode=partition_growth_stalled`). None of the five binding
+observables was evaluated.
+
+## Final verdict
+
+- **No live regression attributable to the five-quest batch was found
+  anywhere in Tiers 0-2.** Membership and join paths are live-healthy
+  (quest 2 fully live-validated, twice over); hedging is live-stable at
+  its default; the SQL and merge correctness quests rest on their
+  real-execution in-proc guards.
+- **The single gating issue for the remaining depth (live SQL oracle,
+  hedge-engagement A/B, the entire merge ladder) is the pre-existing
+  formation/provisioning admission storm** — now reproduced on BOTH
+  harness vehicles and at the pre-batch commit. Fixing the open
+  `formation-ledger` lineage unblocks all three in one stroke; the
+  scenarios and scripts to run afterwards are committed and ready.
 
 ## Standing conclusions so far
 
