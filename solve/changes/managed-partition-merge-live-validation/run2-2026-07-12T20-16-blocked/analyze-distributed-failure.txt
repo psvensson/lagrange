@@ -1,0 +1,120 @@
+
+== Report ==
+path=test-output/report.json
+summary.total=1
+summary.passed=0
+summary.failed=1
+summary.durationMs=328747
+scenario.index=0
+scenario.name=partition-merge-under-load
+scenario.passed=n/a
+scenario.durationMs=328747
+scenario.error=Timed out waiting for table "benchmark_merge_events" to add at least 2 partitions and spread replicas to at least 3 nodes. Baseline=1, latest=1, additionalSeen=0, spread=1, samples=393, serviceCount=1, transientQueryErrors=0, lastQueryError=none, failureMode=partition_growth_stalled, topologyState=routable, leaderServiceMissingPartitionCount=0, overReplicatedPartitionCount=0, selectedNodeIds=35a891b8-c1a0-5064-9c6e-2acfba61c2a7,11601fe0-72d6-5853-8590-ec2881853e72,ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,8be8d30f-4499-5eed-865c-71b4d529a67a,7493b0ab-a054-5fad-a91b-5e331db29304, readyReplicaNodeIds=35a891b8-c1a0-5064-9c6e-2acfba61c2a7,11601fe0-72d6-5853-8590-ec2881853e72,ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,7493b0ab-a054-5fad-a91b-5e331db29304, admissionReadyNodeIds=, readinessReasonHistogram=local_replica_not_voter_ready:1, convergenceStateHistogram=ready_replica:4|replica_blocked:1
+
+== Failed Phase ==
+phase=n/a
+status=n/a
+durationMs=n/a
+rootCauseClass=load
+dominantReason=nodeAdmissionBlocked
+reasonCounts:
+  nodeAdmissionBlocked: 5220
+  retryableControlPlanePressure: 396
+  priority_partitions_not_spread: 2
+  priority_spread_pending: 1
+  closure_witness_startup_active_publication_lag: 1
+  priority_recovery_progress_class: 2
+  priority_recovery_operation_scheduling_event_driven: 1
+  priority_recovery_actuation_state_action_required: 1
+  priority_recovery_actuation_state_dispatched_waiting_progress: 1
+  priority_recovery_actuation_state_transition_deferred: 4
+  priority_recovery_owner_rebalancer_leader: 1
+  priority_recovery_owner_operation_workflow_owner: 5
+  priority_recovery_blocking_boundary_operation_scheduling: 1
+  priority_recovery_blocking_boundary_workflow_progress: 5
+  priority_recovery_wait_mode_event_driven: 6
+  priority_recovery_next_action_create_recovery_operation: 1
+  priority_recovery_next_action_wait_for_operation_progress: 5
+  priority_recovery_contract_state_pending: 6
+  priority_recovery_progress_partition: 6
+
+== Load Metrics ==
+source=playback
+completeness=playback_completed
+loadEvidenceClass=product_load_lane_pressure
+dominantWaitReason=nodeAdmissionBlocked
+total=0
+success=0
+failed=0
+errors=0
+attemptErrors=396
+opsPerSec=0
+targetOperations=4500
+dispatchedOperations=235
+undispatchedOperations=4265
+waitReasons:
+  nodeSlotUnavailable: 0
+  nodeAdmissionBlocked: 5220
+  retryableControlPlanePressure: 396
+  timeoutWaits: 0
+  queueCapacityRejected: 0
+perNode (sorted by attemptErrors desc):
+  ebc4aa0b-06c6-506d-93ea-1dd2deca3f58: dispatched=81, success=0, attemptErrors=81, admissionSignals=81, queuePressureSignals=1046
+  8be8d30f-4499-5eed-865c-71b4d529a67a: dispatched=80, success=0, attemptErrors=80, admissionSignals=80, queuePressureSignals=1043
+  35a891b8-c1a0-5064-9c6e-2acfba61c2a7: dispatched=79, success=0, attemptErrors=79, admissionSignals=79, queuePressureSignals=1043
+  7493b0ab-a054-5fad-a91b-5e331db29304: dispatched=78, success=0, attemptErrors=78, admissionSignals=78, queuePressureSignals=1043
+  11601fe0-72d6-5853-8590-ec2881853e72: dispatched=78, success=0, attemptErrors=78, admissionSignals=78, queuePressureSignals=1045
+
+== Channel Metrics ==
+(none)
+
+== Consistency Mismatches ==
+(none)
+
+== Playback Warnings ==
+(none)
+
+== Internal Signal Messages (first 12) ==
+(none)
+
+== Cluster Stage Timeline ==
+1783887400116	setup.network.creating			
+1783887400118	setup.network.created			
+1783887400122	setup.seed.starting			
+1783887400330	setup.seed.bootstrap.waiting			seed_live
+1783887433565	setup.seed.bootstrap.ready			seed_join_ready
+1783887433565	setup.joiner.starting			
+1783887433730	setup.joiner.started			
+1783887433730	setup.joiner.starting			
+1783887433828	setup.joiner.started			
+1783887433828	setup.joiner.starting			
+1783887433980	setup.joiner.started			
+1783887433980	setup.joiner.starting			
+1783887434095	setup.joiner.started			
+1783887434095	setup.cluster.waiting-active			seed_join_ready
+1783887443990	setup.cluster.waiting-active	6	9894	
+1783887443990	setup.cluster.active			cluster_active
+1783887443990	setup.logs.subscription.starting			
+1783887443991	setup.logs.subscription.ready			
+1783887730142	teardown.starting			
+1783887736563	teardown.complete			
+1783887736563	teardown.capture.finalizing			
+
+== Cluster Stage Durations ==
+{
+  "seedStartMs": 1783887400122,
+  "seedJoinReadyMs": 1783887433565,
+  "clusterWaitStartMs": 1783887434095,
+  "clusterActiveMs": 1783887443990,
+  "seedToJoinReadyMs": 33443,
+  "clusterWaitToActiveMs": 9895,
+  "seedToClusterActiveMs": 43868
+}
+
+== Log Pattern Counts ==
+query_timeout_5000ms=0
+query_timeout_4000ms=0
+failed_query_operations_table=0
+inflight_owner_pressure=0
+heartbeat_failing_repeatedly=0
+invalid_state_transition=0

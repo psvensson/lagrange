@@ -52,8 +52,8 @@ const EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS = [
   'stale-publication-durable-truth-ahead',
 ];
 
-test('scenario-registry tracks the canonical 21-scenario matrix', (t) => {
-  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 21);
+test('scenario-registry tracks the canonical 22-scenario matrix', (t) => {
+  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 22);
   t.end();
 });
 
@@ -135,12 +135,11 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
 test('scenario-registry formats canonical scenario matrix lines', (t) => {
   const lines = formatCanonicalScenarioMatrixLines();
 
-  assert.equal(lines.length, 21);
+  assert.equal(lines.length, 22);
   assert.equal(lines[0], 'local-three-node.json|admin-query-smoke');
   assert.equal(
     lines[lines.length - 1],
-    'local-benchmark-7node-partition-split.json|' +
-      'seven-node-postgres-baseline-partition-split',
+    'local-partition-merge.json|partition-merge-under-load',
   );
   t.end();
 });

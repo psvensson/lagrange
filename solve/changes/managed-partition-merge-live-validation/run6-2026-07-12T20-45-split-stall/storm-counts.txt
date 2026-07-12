@@ -1,0 +1,5 @@
+node1 operation_ledger_quorum_concentrated: 75
+node2 operation_ledger_quorum_concentrated: 2
+node3 operation_ledger_quorum_concentrated: 0
+node4 operation_ledger_quorum_concentrated: 0
+node5 operation_ledger_quorum_concentrated: 83

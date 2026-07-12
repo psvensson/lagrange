@@ -1,0 +1,124 @@
+
+== Report ==
+path=test-output/report.json
+summary.total=1
+summary.passed=0
+summary.failed=1
+summary.durationMs=563467
+scenario.index=0
+scenario.name=partition-merge-under-load
+scenario.passed=n/a
+scenario.durationMs=563467
+scenario.error=Timed out waiting for table "benchmark_merge_events" to add at least 4 partitions and spread replicas to at least 3 nodes. Baseline=1, latest=2, additionalSeen=1, spread=3, samples=97, serviceCount=4, transientQueryErrors=0, lastQueryError=none, failureMode=partition_growth_stalled, topologyState=routable, leaderServiceMissingPartitionCount=0, overReplicatedPartitionCount=0, selectedNodeIds=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,8be8d30f-4499-5eed-865c-71b4d529a67a,35a891b8-c1a0-5064-9c6e-2acfba61c2a7,11601fe0-72d6-5853-8590-ec2881853e72,7493b0ab-a054-5fad-a91b-5e331db29304, readyReplicaNodeIds=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,8be8d30f-4499-5eed-865c-71b4d529a67a, admissionReadyNodeIds=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,8be8d30f-4499-5eed-865c-71b4d529a67a,7493b0ab-a054-5fad-a91b-5e331db29304, readinessReasonHistogram=discovery_pressured:1|local_replica_not_voter_ready:2|replica_operation_failed:1, convergenceStateHistogram=ready_replica:2|replica_blocked:3
+
+== Failed Phase ==
+phase=n/a
+status=n/a
+durationMs=n/a
+rootCauseClass=load
+dominantReason=nodeAdmissionBlocked
+reasonCounts:
+  nodeSlotUnavailable: 890
+  nodeAdmissionBlocked: 10640
+  retryableControlPlanePressure: 813
+  timeoutWaits: 835
+  priority_partitions_not_spread: 2
+  priority_spread_pending: 1
+  priority_recovery_progress_class: 2
+  priority_recovery_operation_scheduling_event_driven: 1
+  priority_recovery_actuation_state_action_required: 1
+  priority_recovery_actuation_state_persisted_not_dispatched: 1
+  priority_recovery_actuation_state_transition_deferred: 4
+  priority_recovery_owner_rebalancer_leader: 1
+  priority_recovery_owner_operation_workflow_owner: 5
+  priority_recovery_blocking_boundary_operation_scheduling: 1
+  priority_recovery_blocking_boundary_workflow_progress: 5
+  priority_recovery_wait_mode_event_driven: 6
+  priority_recovery_next_action_create_recovery_operation: 1
+  priority_recovery_next_action_advance_existing_operation: 1
+  priority_recovery_next_action_wait_for_operation_progress: 4
+  priority_recovery_contract_state_pending: 6
+  priority_recovery_progress_partition: 6
+
+== Load Metrics ==
+source=playback
+completeness=playback_completed
+loadEvidenceClass=product_load_lane_pressure
+dominantWaitReason=nodeAdmissionBlocked
+total=1038
+success=1038
+failed=0
+errors=0
+attemptErrors=1646
+opsPerSec=3.278667812199929
+targetOperations=9000
+dispatchedOperations=2176
+undispatchedOperations=6824
+waitReasons:
+  nodeSlotUnavailable: 890
+  nodeAdmissionBlocked: 10640
+  retryableControlPlanePressure: 813
+  timeoutWaits: 835
+  queueCapacityRejected: 0
+perNode (sorted by attemptErrors desc):
+  ebc4aa0b-06c6-506d-93ea-1dd2deca3f58: dispatched=481, success=83, attemptErrors=398, admissionSignals=105, queuePressureSignals=2440
+  35a891b8-c1a0-5064-9c6e-2acfba61c2a7: dispatched=360, success=0, attemptErrors=360, admissionSignals=287, queuePressureSignals=2475
+  7493b0ab-a054-5fad-a91b-5e331db29304: dispatched=439, success=82, attemptErrors=357, admissionSignals=109, queuePressureSignals=2205
+  8be8d30f-4499-5eed-865c-71b4d529a67a: dispatched=1203, success=873, attemptErrors=330, admissionSignals=111, queuePressureSignals=1691
+  11601fe0-72d6-5853-8590-ec2881853e72: dispatched=201, success=0, attemptErrors=201, admissionSignals=201, queuePressureSignals=2719
+
+== Channel Metrics ==
+(none)
+
+== Consistency Mismatches ==
+(none)
+
+== Playback Warnings ==
+[1783889223452] node=unknown message=Failed to capture topology snapshot: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms
+[1783889332663] node=7493b0ab-a054-5fad-a91b-5e331db29304 message=Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms
+[1783889509775] node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7 message=Failed to query services on node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: WebSocket was closed before the connection was established
+
+== Internal Signal Messages (first 12) ==
+(none)
+
+== Cluster Stage Timeline ==
+1783889175585	setup.network.creating			
+1783889175587	setup.network.created			
+1783889175590	setup.seed.starting			
+1783889175737	setup.seed.bootstrap.waiting			seed_live
+1783889208820	setup.seed.bootstrap.ready			seed_join_ready
+1783889208820	setup.joiner.starting			
+1783889208954	setup.joiner.started			
+1783889208954	setup.joiner.starting			
+1783889209074	setup.joiner.started			
+1783889209074	setup.joiner.starting			
+1783889209191	setup.joiner.started			
+1783889209191	setup.joiner.starting			
+1783889209324	setup.joiner.started			
+1783889209324	setup.cluster.waiting-active			seed_join_ready
+1783889217182	setup.cluster.waiting-active	2	7856	
+1783889217183	setup.cluster.active			cluster_active
+1783889217183	setup.logs.subscription.starting			
+1783889217183	setup.logs.subscription.ready			
+1783889740179	teardown.starting			
+1783889755618	teardown.complete			
+1783889755618	teardown.capture.finalizing			
+
+== Cluster Stage Durations ==
+{
+  "seedStartMs": 1783889175590,
+  "seedJoinReadyMs": 1783889208820,
+  "clusterWaitStartMs": 1783889209324,
+  "clusterActiveMs": 1783889217183,
+  "seedToJoinReadyMs": 33230,
+  "clusterWaitToActiveMs": 7859,
+  "seedToClusterActiveMs": 41593
+}
+
+== Log Pattern Counts ==
+query_timeout_5000ms=0
+query_timeout_4000ms=0
+failed_query_operations_table=0
+inflight_owner_pressure=0
+heartbeat_failing_repeatedly=4
+invalid_state_transition=0

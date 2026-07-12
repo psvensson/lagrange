@@ -1,0 +1,41 @@
+{
+  "id": "managed-partition-merge-live-validation",
+  "statement": "The managed partition merge is validated on a live multi-node cluster: a new partition-merge-under-load distributed-harness scenario provisions a 3+ partition table, sustains a ledgered write workload, triggers real auto-merges via lowered thresholds, and proves with zero acknowledged-write loss (ledger vs post-merge scan), sibling-range routability through cutover, actual source raft-group dissolution, and a second merge on the same table; failure variants (source-leader kill mid-backfill and in the cutover window, merge under rebalancer churn, abort followed by immediate retry) converge data-safe within the cutover-wait bound.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "sealedAtCommit": "6e17112d0fa03cde8cdff46fb965909f1e9167f7"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "managed-partition-merge-live-validation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "managed-partition-merge-live-validation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "managed-partition-merge-live-validation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

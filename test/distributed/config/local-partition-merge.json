@@ -1,0 +1,60 @@
+{
+  "size": 5,
+  "docker": {
+    "socketPath": "/var/run/docker.sock"
+  },
+  "image": "distributed-db:test",
+  "timeouts": {
+    "nodeStartup": 120000,
+    "convergence": 90000,
+    "quietWindow": 3000,
+    "scenarioDefault": 900000,
+    "bootstrapReadyStableWindowMs": 1000
+  },
+  "convergence": {
+    "targetVoterCount": 3,
+    "settleTimeoutMs": 30000,
+    "quietWindowMs": 3000,
+    "maxSustainedOverTargetMs": 2000,
+    "sampleIntervalMs": 250
+  },
+  "resourceLimits": {
+    "memory": "2g",
+    "cpus": "2.0"
+  },
+  "partition": {
+    "evaluationIntervalMs": 60000
+  },
+  "benchmark": {
+    "loadQueryTimeoutMs": 10000,
+    "controlQueryTimeoutMs": 15000
+  },
+  "scenarios": {
+    "partitionMergeUnderLoad": {
+      "expectedNodeCount": 5,
+      "variant": "happy-path",
+      "splitLoadOpsPerSec": 60,
+      "splitLoadDuration": "300s",
+      "mergeLoadOpsPerSec": 20,
+      "mergeLoadDuration": "360s",
+      "minAdditionalPartitions": 4,
+      "preMergePartitionCount": 3,
+      "minDistinctReplicaNodes": 3,
+      "splitDistributionTimeoutMs": 480000,
+      "requiredCompletedMerges": 2,
+      "mergeCompletionTimeoutMs": 360000,
+      "dissolutionSettleTimeoutMs": 120000,
+      "ackVisibilityTimeoutMs": 90000,
+      "finalConsistencyTimeoutMs": 180000
+    }
+  },
+  "memoryLeak": {
+    "enabled": true,
+    "failOnDetection": false,
+    "requireSamples": false
+  },
+  "load": {
+    "defaultOpsPerSec": 60,
+    "defaultDuration": "30s"
+  }
+}

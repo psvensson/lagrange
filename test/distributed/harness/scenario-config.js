@@ -308,6 +308,126 @@ function resolveTableDistributionQueryConfig(options = {}) {
   });
 }
 
+const PARTITION_MERGE_SCENARIO_VARIANT = Object.freeze({
+  HAPPY_PATH: 'happy-path',
+  SOURCE_LEADER_KILL_BACKFILL: 'source-leader-kill-backfill',
+  SOURCE_LEADER_KILL_CUTOVER: 'source-leader-kill-cutover',
+  REPLACE_CHURN: 'merge-under-replace-churn',
+  ABORT_RETRY: 'abort-retry',
+});
+
+const PARTITION_MERGE_DEFAULT_TABLE_NAME = 'benchmark_merge_events';
+
+// Phase 1: aggressive splits, merges disabled (threshold 1 byte / 1 qpm can
+// never be satisfied by a real partition pair).
+const PARTITION_MERGE_SPLIT_PHASE_TABLE_POLICIES = Object.freeze({
+  externalCdcAllowed: false,
+  splitStorageThreshold: 16384,
+  splitTrafficThreshold: 120,
+  mergeStorageThreshold: 1,
+  mergeTrafficThreshold: 1,
+});
+
+// Phase 2: splits effectively disabled, merges enabled for any adjacent
+// pair the scenario produced (combined size and traffic sit far below
+// these bounds).
+const PARTITION_MERGE_MERGE_PHASE_TABLE_POLICIES = Object.freeze({
+  externalCdcAllowed: false,
+  splitStorageThreshold: 1073741824,
+  splitTrafficThreshold: 1000000,
+  mergeStorageThreshold: 268435456,
+  mergeTrafficThreshold: 1000000,
+});
+
+function normalizePartitionMergeVariant(value) {
+  const variants = Object.values(PARTITION_MERGE_SCENARIO_VARIANT);
+  return variants.includes(value) ?
+    value :
+    PARTITION_MERGE_SCENARIO_VARIANT.HAPPY_PATH;
+}
+
+function resolvePartitionMergeUnderLoadScenarioConfig(options = {}) {
+  const splitPhaseTablePolicies = normalizeObject(
+    options.splitPhaseTablePolicies,
+  ) || PARTITION_MERGE_SPLIT_PHASE_TABLE_POLICIES;
+  const mergePhaseTablePolicies = normalizeObject(
+    options.mergePhaseTablePolicies,
+  ) || PARTITION_MERGE_MERGE_PHASE_TABLE_POLICIES;
+  return Object.freeze({
+    expectedNodeCount: normalizeFiniteNumber(options.expectedNodeCount, 5),
+    tableName: normalizeNonEmptyString(
+      options.tableName,
+      PARTITION_MERGE_DEFAULT_TABLE_NAME,
+    ),
+    variant: normalizePartitionMergeVariant(options.variant),
+    splitPhaseTablePolicies,
+    mergePhaseTablePolicies,
+    splitLoadOpsPerSec: normalizeFiniteNumber(options.splitLoadOpsPerSec, 60),
+    splitLoadDuration: normalizeNonEmptyString(
+      options.splitLoadDuration,
+      '150s',
+    ),
+    mergeLoadOpsPerSec: normalizeFiniteNumber(options.mergeLoadOpsPerSec, 20),
+    mergeLoadDuration: normalizeNonEmptyString(
+      options.mergeLoadDuration,
+      '360s',
+    ),
+    // waitForPartitionGrowthAndSpread counts CUMULATIVE new partition
+    // ids (one split yields 2); two splits (4 new ids) leave 3 current
+    // partitions for the merge phase.
+    minAdditionalPartitions:
+      normalizeFiniteNumber(options.minAdditionalPartitions, 4),
+    preMergePartitionCount:
+      normalizeFiniteNumber(options.preMergePartitionCount, 3),
+    preMergeTopologyTimeoutMs:
+      normalizeFiniteNumber(options.preMergeTopologyTimeoutMs, 90000),
+    minDistinctReplicaNodes:
+      normalizeFiniteNumber(options.minDistinctReplicaNodes, 3),
+    loadNodeRequiredCount:
+      normalizeFiniteNumber(options.loadNodeRequiredCount, 2),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 120000),
+    controlPlaneQuiescenceTimeoutMs:
+      normalizeFiniteNumber(options.controlPlaneQuiescenceTimeoutMs, 180000),
+    controlPlaneQuiescenceNoProgressTimeoutMs:
+      normalizeFiniteNumber(
+        options.controlPlaneQuiescenceNoProgressTimeoutMs,
+        90000,
+      ),
+    splitDistributionTimeoutMs:
+      normalizeFiniteNumber(options.splitDistributionTimeoutMs, 240000),
+    distributionPollIntervalMs:
+      normalizeFiniteNumber(options.distributionPollIntervalMs, 500),
+    requiredCompletedMerges:
+      normalizeFiniteNumber(options.requiredCompletedMerges, 2),
+    mergeCompletionTimeoutMs:
+      normalizeFiniteNumber(options.mergeCompletionTimeoutMs, 300000),
+    mergeLogScanPollIntervalMs:
+      normalizeFiniteNumber(options.mergeLogScanPollIntervalMs, 2000),
+    probeKeyCount: normalizeFiniteNumber(options.probeKeyCount, 12),
+    probeIntervalMs: normalizeFiniteNumber(options.probeIntervalMs, 400),
+    probeQueryTimeoutMs:
+      normalizeFiniteNumber(options.probeQueryTimeoutMs, 5000),
+    dissolutionSettleTimeoutMs:
+      normalizeFiniteNumber(options.dissolutionSettleTimeoutMs, 120000),
+    dissolutionPollIntervalMs:
+      normalizeFiniteNumber(options.dissolutionPollIntervalMs, 1000),
+    ackVisibilityTimeoutMs:
+      normalizeFiniteNumber(options.ackVisibilityTimeoutMs, 90000),
+    ackVisibilityPollIntervalMs:
+      normalizeFiniteNumber(options.ackVisibilityPollIntervalMs, 500),
+    minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.5),
+    cutoverWaitBoundMs:
+      normalizeFiniteNumber(options.cutoverWaitBoundMs, 120000),
+    variantKillTriggerTimeoutMs:
+      normalizeFiniteNumber(options.variantKillTriggerTimeoutMs, 240000),
+    variantRestartDelayMs:
+      normalizeFiniteNumber(options.variantRestartDelayMs, 15000),
+    finalConsistencyTimeoutMs:
+      normalizeFiniteNumber(options.finalConsistencyTimeoutMs, 180000),
+  });
+}
+
 function resolvePartitionGrowthAndSpreadScenarioConfig(options = {}) {
   return Object.freeze({
     tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
@@ -321,9 +441,11 @@ function resolvePartitionGrowthAndSpreadScenarioConfig(options = {}) {
 }
 
 export {
+  PARTITION_MERGE_SCENARIO_VARIANT,
   resolveDiskFullUnderLoadScenarioConfig,
   resolvePartitionKillHealUnderLoadScenarioConfig,
   resolvePartitionGrowthAndSpreadScenarioConfig,
+  resolvePartitionMergeUnderLoadScenarioConfig,
   resolveScenarioOptions,
   resolveSeedRestartUnderLoadScenarioConfig,
   resolveSlowFollowerUnderLoadScenarioConfig,

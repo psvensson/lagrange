@@ -1,0 +1,19 @@
+{
+  "scenarioName": "partition-merge-under-load",
+  "startedAt": 1783887400116,
+  "endedAt": 1783887736563,
+  "durationMs": 336447,
+  "files": {
+    "events": "test-output/.playback/report/partition-merge-under-load/events.ndjson",
+    "samples": "test-output/.playback/report/partition-merge-under-load/samples.ndjson",
+    "snapshots": "test-output/.playback/report/partition-merge-under-load/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/partition-merge-under-load/playback-manifest.json",
+    "viewer": "test-output/.playback/report/partition-merge-under-load/playback-viewer.html"
+  },
+  "counts": {
+    "events": 214,
+    "samples": 165,
+    "snapshots": 848
+  },
+  "warnings": []
+}

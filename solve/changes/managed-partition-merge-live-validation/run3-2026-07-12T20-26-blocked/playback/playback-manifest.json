@@ -1,0 +1,304 @@
+{
+  "scenarioName": "partition-merge-under-load",
+  "startedAt": 1783887940681,
+  "endedAt": 1783888148105,
+  "durationMs": 207424,
+  "files": {
+    "events": "test-output/.playback/report/partition-merge-under-load/events.ndjson",
+    "samples": "test-output/.playback/report/partition-merge-under-load/samples.ndjson",
+    "snapshots": "test-output/.playback/report/partition-merge-under-load/snapshots.ndjson",
+    "manifest": "test-output/.playback/report/partition-merge-under-load/playback-manifest.json",
+    "viewer": "test-output/.playback/report/partition-merge-under-load/playback-viewer.html"
+  },
+  "counts": {
+    "events": 125,
+    "samples": 96,
+    "snapshots": 124
+  },
+  "warnings": [
+    {
+      "code": "service-query-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+      "message": "Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query connection reset for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot",
+      "timestamp": 1783888085553,
+      "details": {
+        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "error": "Admin API query connection reset for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot",
+        "reachability": {
+          "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+          "timestamp": 1783888078381,
+          "reachable": true,
+          "adminReady": true,
+          "reachableBy": "admin_ws",
+          "bootstrapHealth": {
+            "attempted": true,
+            "ok": false,
+            "statusCode": -1,
+            "error": "http_status_-1",
+            "url": "http://172.21.0.2:8080/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminHealth": {
+            "attempted": true,
+            "ok": false,
+            "statusCode": -1,
+            "error": "http_status_-1",
+            "url": "http://172.21.0.2:8081/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminWs": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": "ws://172.21.0.2:8081/api/admin/stream",
+            "query": null
+          },
+          "sqlProbe": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": null,
+            "query": "SELECT node_id FROM nodes LIMIT 1"
+          },
+          "lastError": null
+        }
+      }
+    },
+    {
+      "code": "topology-capture-failed",
+      "message": "Failed to capture topology snapshot: Admin API query connection reset for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot",
+      "timestamp": 1783888085554,
+      "details": {
+        "anchorNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "error": "Admin API query connection reset for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot",
+        "reachability": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "timestamp": 1783888078381,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_ws",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": false,
+              "statusCode": -1,
+              "error": "http_status_-1",
+              "url": "http://172.21.0.2:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": false,
+              "statusCode": -1,
+              "error": "http_status_-1",
+              "url": "http://172.21.0.2:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.21.0.2:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          },
+          {
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "timestamp": 1783888081383,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_health",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.3:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.3:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.21.0.3:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          },
+          {
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "timestamp": 1783888081412,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_health",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.4:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.4:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.21.0.4:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          },
+          {
+            "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+            "timestamp": 1783888081429,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_health",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.5:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.5:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.21.0.5:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          },
+          {
+            "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "timestamp": 1783888081440,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_health",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.6:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": 200,
+              "error": null,
+              "url": "http://172.21.0.6:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.21.0.6:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          }
+        ]
+      }
+    }
+  ]
+}

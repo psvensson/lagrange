@@ -1,0 +1,118 @@
+
+== Report ==
+path=test-output/report.json
+summary.total=1
+summary.passed=0
+summary.failed=1
+summary.durationMs=190814
+scenario.index=0
+scenario.name=partition-merge-under-load
+scenario.passed=n/a
+scenario.durationMs=190814
+scenario.error=Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 19631ms
+
+== Failed Phase ==
+phase=n/a
+status=n/a
+durationMs=n/a
+rootCauseClass=load
+dominantReason=nodeAdmissionBlocked
+reasonCounts:
+  nodeSlotUnavailable: 45
+  nodeAdmissionBlocked: 1508
+  retryableControlPlanePressure: 63
+  timeoutWaits: 165
+  priority_partitions_not_spread: 2
+  publication_epoch_pending: 1
+  priority_spread_pending: 1
+  priority_recovery_progress_class: 1
+  priority_recovery_operation_scheduling_event_driven: 1
+  priority_recovery_actuation_state_action_required: 6
+  priority_recovery_owner_rebalancer_leader: 6
+  priority_recovery_blocking_boundary_operation_scheduling: 6
+  priority_recovery_wait_mode_event_driven: 6
+  priority_recovery_next_action_create_recovery_operation: 6
+  priority_recovery_contract_state_pending: 6
+  priority_recovery_progress_partition: 6
+
+== Load Metrics ==
+source=playback
+completeness=playback_completed
+loadEvidenceClass=product_load_lane_pressure
+dominantWaitReason=nodeAdmissionBlocked
+total=140
+success=140
+failed=0
+errors=0
+attemptErrors=226
+opsPerSec=3.414301043800605
+targetOperations=4500
+dispatchedOperations=328
+undispatchedOperations=4172
+waitReasons:
+  nodeSlotUnavailable: 45
+  nodeAdmissionBlocked: 1508
+  retryableControlPlanePressure: 63
+  timeoutWaits: 165
+  queueCapacityRejected: 0
+perNode (sorted by attemptErrors desc):
+  8be8d30f-4499-5eed-865c-71b4d529a67a: dispatched=100, success=35, attemptErrors=65, admissionSignals=20, queuePressureSignals=284
+  35a891b8-c1a0-5064-9c6e-2acfba61c2a7: dispatched=114, success=59, attemptErrors=55, admissionSignals=10, queuePressureSignals=310
+  ebc4aa0b-06c6-506d-93ea-1dd2deca3f58: dispatched=76, success=25, attemptErrors=51, admissionSignals=14, queuePressureSignals=275
+  7493b0ab-a054-5fad-a91b-5e331db29304: dispatched=79, success=21, attemptErrors=36, admissionSignals=0, queuePressureSignals=213
+  11601fe0-72d6-5853-8590-ec2881853e72: dispatched=19, success=0, attemptErrors=19, admissionSignals=19, queuePressureSignals=471
+
+== Channel Metrics ==
+(none)
+
+== Consistency Mismatches ==
+(none)
+
+== Playback Warnings ==
+[1783888085553] node=7493b0ab-a054-5fad-a91b-5e331db29304 message=Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query connection reset for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot
+[1783888085554] node=unknown message=Failed to capture topology snapshot: Admin API query connection reset for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot
+
+== Internal Signal Messages (first 12) ==
+(none)
+
+== Cluster Stage Timeline ==
+1783887940681	setup.network.creating			
+1783887940683	setup.network.created			
+1783887940687	setup.seed.starting			
+1783887940881	setup.seed.bootstrap.waiting			seed_live
+1783887975204	setup.seed.bootstrap.ready			seed_join_ready
+1783887975205	setup.joiner.starting			
+1783887975362	setup.joiner.started			
+1783887975362	setup.joiner.starting			
+1783887975483	setup.joiner.started			
+1783887975483	setup.joiner.starting			
+1783887975606	setup.joiner.started			
+1783887975606	setup.joiner.starting			
+1783887975721	setup.joiner.started			
+1783887975721	setup.cluster.waiting-active			seed_join_ready
+1783887979054	setup.cluster.waiting-active	2	3331	
+1783887979055	setup.cluster.active			cluster_active
+1783887979055	setup.logs.subscription.starting			
+1783887979092	setup.logs.subscription.ready			
+1783888133913	teardown.starting			
+1783888148105	teardown.complete			
+1783888148105	teardown.capture.finalizing			
+
+== Cluster Stage Durations ==
+{
+  "seedStartMs": 1783887940687,
+  "seedJoinReadyMs": 1783887975204,
+  "clusterWaitStartMs": 1783887975721,
+  "clusterActiveMs": 1783887979055,
+  "seedToJoinReadyMs": 34517,
+  "clusterWaitToActiveMs": 3334,
+  "seedToClusterActiveMs": 38368
+}
+
+== Log Pattern Counts ==
+query_timeout_5000ms=0
+query_timeout_4000ms=0
+failed_query_operations_table=0
+inflight_owner_pressure=0
+heartbeat_failing_repeatedly=0
+invalid_state_transition=0

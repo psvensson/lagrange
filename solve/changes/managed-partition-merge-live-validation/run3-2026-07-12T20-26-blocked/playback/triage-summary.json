@@ -1,0 +1,2224 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-12T20:29:08.200Z",
+  "scenario": "partition-merge-under-load",
+  "summary": {
+    "error": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 19631ms",
+    "phase": null,
+    "rootCauseClass": "load",
+    "dominantReason": "nodeAdmissionBlocked",
+    "failureClass": "load_pressure",
+    "failureClassSignals": [
+      "dominantReason=nodeAdmissionBlocked"
+    ],
+    "readinessFailure": {
+      "mode": "startup",
+      "classCode": null,
+      "recoverability": null,
+      "progressSignal": {
+        "attemptsSinceProgress": 1,
+        "maxAttempts": null,
+        "stalled": false
+      },
+      "terminalReason": null,
+      "source": null,
+      "cause": "none",
+      "error": null
+    },
+    "failureAction": "Load traffic is admission-blocked while control-plane recovery or readiness pressure remains active.",
+    "operatorRecommendation": "Inspect load-lane admission errors, control-plane write pressure, and priority recovery operation visibility before rerun.",
+    "bottleneckKind": null,
+    "stabilityGates": {
+      "failover": {
+        "type": "failover",
+        "status": "closed",
+        "applicable": true,
+        "blockers": [],
+        "evidence": {
+          "pendingAckCount": 0,
+          "blockedNodeCount": 0,
+          "missingPublishedCount": 0,
+          "missingPublishedNodeIds": [],
+          "pendingAckBlockedNodeCount": 0,
+          "publicationBlockedNodeCount": 0,
+          "writeUnhealthyNodeCount": 0,
+          "readinessMode": "startup"
+        }
+      },
+      "convergence": {
+        "type": "convergence",
+        "status": "open",
+        "applicable": true,
+        "blockers": [
+          "priority_spread_pending"
+        ],
+        "evidence": {
+          "pendingAckCount": 0,
+          "blockedNodeCount": 0,
+          "missingPublishedCount": 0,
+          "missingPublishedNodeIds": [],
+          "publicationPending": false,
+          "prioritySpreadPending": true,
+          "closureRecordId": null,
+          "closureWitnessClass": null,
+          "readinessMode": "startup"
+        }
+      },
+      "restart_recovery": {
+        "type": "restart_recovery",
+        "status": "not_applicable",
+        "applicable": false,
+        "blockers": [],
+        "evidence": {
+          "restartBoundaryCount": 0
+        }
+      }
+    },
+    "affectedNodeIds": [],
+    "topReasons": [
+      {
+        "reason": "nodeAdmissionBlocked",
+        "count": 1508
+      },
+      {
+        "reason": "timeoutWaits",
+        "count": 165
+      },
+      {
+        "reason": "retryableControlPlanePressure",
+        "count": 63
+      },
+      {
+        "reason": "nodeSlotUnavailable",
+        "count": 45
+      },
+      {
+        "reason": "priority_recovery_actuation_state_action_required",
+        "count": 6
+      }
+    ]
+  },
+  "artifacts": {
+    "reportPath": "test-output/report.json",
+    "analysisPath": null,
+    "timelinePath": "test-output/.playback/report/partition-merge-under-load/_timeline.log",
+    "playbackEventsPath": "test-output/.playback/report/partition-merge-under-load/events.ndjson",
+    "nodeLogPaths": {
+      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": "test-output/.playback/report/partition-merge-under-load/35a891b8-c1a0-5064-9c6e-2acfba61c2a7.log",
+      "11601fe0-72d6-5853-8590-ec2881853e72": "test-output/.playback/report/partition-merge-under-load/11601fe0-72d6-5853-8590-ec2881853e72.log",
+      "8be8d30f-4499-5eed-865c-71b4d529a67a": "test-output/.playback/report/partition-merge-under-load/8be8d30f-4499-5eed-865c-71b4d529a67a.log",
+      "7493b0ab-a054-5fad-a91b-5e331db29304": "test-output/.playback/report/partition-merge-under-load/7493b0ab-a054-5fad-a91b-5e331db29304.log",
+      "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": "test-output/.playback/report/partition-merge-under-load/ebc4aa0b-06c6-506d-93ea-1dd2deca3f58.log"
+    },
+    "failureBundleJsonPath": "test-output/.playback/report/partition-merge-under-load/failure-bundle.json",
+    "failureBundleMarkdownPath": "test-output/.playback/report/partition-merge-under-load/failure-bundle.md"
+  },
+  "load": {
+    "total": 140,
+    "success": 140,
+    "failed": 0,
+    "errors": 0,
+    "attemptErrors": 226,
+    "opsPerSec": 3.414301043800605,
+    "dispatchedOperations": 328,
+    "undispatchedOperations": 4172,
+    "waitReasons": {
+      "nodeSlotUnavailable": 45,
+      "nodeAdmissionBlocked": 1508,
+      "retryableControlPlanePressure": 63,
+      "timeoutWaits": 165,
+      "queueCapacityRejected": 0
+    },
+    "perNodeTopAttemptErrors": [
+      {
+        "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "dispatched": 100,
+        "success": 35,
+        "attemptErrors": 65,
+        "admissionSignals": 20,
+        "queuePressureSignals": 284
+      },
+      {
+        "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "dispatched": 114,
+        "success": 59,
+        "attemptErrors": 55,
+        "admissionSignals": 10,
+        "queuePressureSignals": 310
+      },
+      {
+        "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+        "dispatched": 76,
+        "success": 25,
+        "attemptErrors": 51,
+        "admissionSignals": 14,
+        "queuePressureSignals": 275
+      },
+      {
+        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "dispatched": 79,
+        "success": 21,
+        "attemptErrors": 36,
+        "admissionSignals": 0,
+        "queuePressureSignals": 213
+      },
+      {
+        "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+        "dispatched": 19,
+        "success": 0,
+        "attemptErrors": 19,
+        "admissionSignals": 19,
+        "queuePressureSignals": 471
+      }
+    ]
+  },
+  "publicationConvergence": {
+    "publicationEpoch": 2,
+    "publicationStatus": "PUBLISHED",
+    "publicationOwnerStream": {
+      "semanticOwner": "publication_owner",
+      "revision": {
+        "state": "current",
+        "desired": {
+          "state": "current",
+          "value": 2
+        },
+        "committed": {
+          "state": "current",
+          "value": 2
+        },
+        "observed": {
+          "state": "current",
+          "value": 2
+        }
+      },
+      "ackState": "not_required",
+      "pendingAckEvidenceState": "required_ack_node_list",
+      "requiredAckNodeIds": [],
+      "acknowledgedNodeIds": [],
+      "pendingAckNodeIds": [],
+      "pendingAckCount": 0,
+      "freshnessFence": "recovery_lag",
+      "missingPublishedNodeIds": [],
+      "missingPublishedCount": 0,
+      "recoveryOutcome": "recovering",
+      "streamOutcome": "recovering",
+      "reasonCodes": [
+        "publication_status_published",
+        "ack_not_required",
+        "priority_spread_pending"
+      ],
+      "publicationStatus": "PUBLISHED",
+      "publicationObservationState": "",
+      "recoveryProtocolState": "priority_spread_pending",
+      "prioritySpreadPending": true,
+      "prioritySpreadEvidenceUnavailable": false,
+      "pressureState": "none",
+      "pressureDeferred": false,
+      "pressureCoalesced": false,
+      "pressureRetryAfterMs": 0,
+      "pressureReasonCodes": []
+    },
+    "streamOutcome": "recovering",
+    "ackState": "not_required",
+    "freshnessFence": "recovery_lag",
+    "recoveryOutcome": "recovering",
+    "publicationOwnerReasonCodes": [
+      "publication_status_published",
+      "ack_not_required",
+      "priority_spread_pending"
+    ],
+    "publicationRecoveryGate": {
+      "state": "priority_spread_pending",
+      "ready": false,
+      "active": true,
+      "publicationEpoch": 2,
+      "publicationStatus": "PUBLISHED",
+      "publicationStatusNormalized": "PUBLISHED",
+      "publicationObservationState": null,
+      "recoveryProtocolState": "priority_spread_pending",
+      "reasonCodes": [
+        "priority_partitions_not_spread"
+      ],
+      "priorityPartitionSummary": {
+        "satisfied": false,
+        "requiredDistinctNodeCount": 2,
+        "readyEligibleNodeCount": 2,
+        "totalPriorityPartitionCount": 6,
+        "missingPartitionIds": [
+          "control_plane_publications-p1",
+          "replica_operations-p1",
+          "schema_operations-p1",
+          "sql_transaction_participants-p1",
+          "sql_transactions-p1",
+          "sql_write_operations-p1"
+        ],
+        "blockedPartitions": [
+          {
+            "partitionId": "control_plane_publications-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "replica_operations-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "schema_operations-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "sql_transaction_participants-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "sql_transactions-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "sql_write_operations-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          }
+        ],
+        "blockedPartitionCount": 6,
+        "largestSpreadGap": 1,
+        "totalSpreadGap": 6
+      },
+      "durablePriorityPartitionSummary": {
+        "satisfied": false,
+        "requiredDistinctNodeCount": 2,
+        "readyEligibleNodeCount": 2,
+        "totalPriorityPartitionCount": 6,
+        "missingPartitionIds": [
+          "control_plane_publications-p1",
+          "replica_operations-p1",
+          "schema_operations-p1",
+          "sql_transaction_participants-p1",
+          "sql_transactions-p1",
+          "sql_write_operations-p1"
+        ],
+        "blockedPartitions": [
+          {
+            "partitionId": "control_plane_publications-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "replica_operations-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "schema_operations-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "sql_transaction_participants-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "sql_transactions-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          },
+          {
+            "partitionId": "sql_write_operations-p1",
+            "spreadGap": 1,
+            "requiredDistinctNodeCount": 2,
+            "readyDistinctNodeCount": 1,
+            "readyReplicaCount": 3,
+            "exclusionReasonCounts": {},
+            "blockerReasonCodes": []
+          }
+        ],
+        "blockedPartitionCount": 6,
+        "largestSpreadGap": 1,
+        "totalSpreadGap": 6
+      },
+      "publicationOwnerStream": {
+        "semanticOwner": "publication_owner",
+        "revision": {
+          "state": "current",
+          "desired": {
+            "state": "current",
+            "value": 2
+          },
+          "committed": {
+            "state": "current",
+            "value": 2
+          },
+          "observed": {
+            "state": "current",
+            "value": 2
+          }
+        },
+        "ackState": "not_required",
+        "pendingAckEvidenceState": "required_ack_node_list",
+        "requiredAckNodeIds": [],
+        "acknowledgedNodeIds": [],
+        "pendingAckNodeIds": [],
+        "pendingAckCount": 0,
+        "freshnessFence": "recovery_lag",
+        "missingPublishedNodeIds": [],
+        "missingPublishedCount": 0,
+        "recoveryOutcome": "recovering",
+        "streamOutcome": "recovering",
+        "reasonCodes": [
+          "publication_status_published",
+          "ack_not_required",
+          "priority_spread_pending"
+        ],
+        "publicationStatus": "PUBLISHED",
+        "publicationObservationState": "",
+        "recoveryProtocolState": "priority_spread_pending",
+        "prioritySpreadPending": true,
+        "prioritySpreadEvidenceUnavailable": false,
+        "pressureState": "none",
+        "pressureDeferred": false,
+        "pressureCoalesced": false,
+        "pressureRetryAfterMs": 0,
+        "pressureReasonCodes": []
+      },
+      "streamOutcome": "recovering",
+      "ackState": "not_required",
+      "freshnessFence": "recovery_lag",
+      "recoveryOutcome": "recovering",
+      "pressureState": "none",
+      "pressureDeferred": false,
+      "pressureCoalesced": false,
+      "pressureRetryAfterMs": 0,
+      "pressureReasonCodes": [],
+      "priorityRecoveryClosureWitness": null,
+      "prioritySpreadDecisionSource": "priority_partition_summary",
+      "prioritySpreadEvidenceUnavailable": false,
+      "closureRecordId": null,
+      "closureWitnessClass": null,
+      "requiredAckNodeIds": [],
+      "requiredAckCount": 0,
+      "acknowledgedNodeIds": [],
+      "acknowledgedCount": 0,
+      "pendingAckNodeIds": [],
+      "pendingAckCount": 0,
+      "pendingAckEvidenceState": "required_ack_node_list",
+      "missingPublishedNodeIds": [],
+      "missingPublishedCount": 0,
+      "publicationPending": false,
+      "ackPending": false,
+      "prioritySpreadPending": true,
+      "publicationExcludesTargetNode": false
+    },
+    "pendingAckNodeIds": [],
+    "pendingAckCount": 0,
+    "blockedNodeIds": [],
+    "blockedNodeCount": 0,
+    "blockingReasonCounts": {},
+    "publishedActiveNodeIds": [
+      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+      "7493b0ab-a054-5fad-a91b-5e331db29304"
+    ],
+    "missingPublishedNodeIds": [],
+    "missingPublishedCount": 0,
+    "publishedAt": null,
+    "updatedAt": null,
+    "recoveryProtocolState": "priority_spread_pending",
+    "priorityRecoveryReasonCodes": [
+      "priority_partitions_not_spread",
+      "publication_epoch_pending"
+    ],
+    "publicationPending": false,
+    "prioritySpreadPending": true,
+    "publicationConvergenceGateReasons": [
+      "priority_partitions_not_spread",
+      "publication_epoch_pending"
+    ],
+    "activeGate": {
+      "mode": "startup",
+      "state": "ready",
+      "ready": true,
+      "softSuccess": false,
+      "attempts": 2,
+      "elapsedMs": 3331,
+      "maxAttempts": null,
+      "maxCoordinatorCycles": null,
+      "attemptsSinceProgress": 1,
+      "coordinatorCyclesSinceProgress": 1,
+      "lastMeaningfulProgressAttempt": 1,
+      "lastMeaningfulProgressElapsedMs": 234,
+      "closureRecordId": null,
+      "closureWitnessClass": null,
+      "reasonCode": null,
+      "stalledReason": null,
+      "progress": {
+        "expectedNodeCount": 5,
+        "activeNodeCount": 5,
+        "inactiveNodeCount": 0,
+        "snapshotCoverageNodeCount": 5,
+        "snapshotCoverageComplete": true,
+        "publicationStatus": "PUBLISHED",
+        "publicationStatusRank": 3,
+        "publicationEpoch": 2,
+        "recoveryProtocolState": "priority_spread_pending",
+        "selectedSnapshotNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "selectedSnapshotTimeoutMs": 30000,
+        "selectedSnapshotAdminReady": true,
+        "selectedSnapshotReachableBy": "admin_health",
+        "selectedSnapshotError": null,
+        "selectedSnapshotReachabilityError": null,
+        "selectedSnapshotObservationMode": "repair_deferred",
+        "selectedSnapshotObservationState": "deferred_refresh",
+        "selectedSnapshotObservationContractState": "deferred",
+        "selectedSnapshotObservationRefreshState": "deferred",
+        "selectedSnapshotObservationNextAction": "retry",
+        "selectedSnapshotObservationReasonCodes": [],
+        "selectedSnapshotObservationRetryAfterMs": 1000,
+        "selectedSnapshotRepairDeferred": true,
+        "selectedControlPlaneOwnerQueueDepth": {
+          "pendingWrites": 0,
+          "pendingWriteGrowthCount": 0,
+          "retainedBacklogGrowthCount": 0,
+          "sharedPressureBackpressured": false,
+          "transportPressureBackpressured": false,
+          "queryPressureBackpressured": false,
+          "ownerKey": "membership-publication:cluster_membership",
+          "pendingKeys": [],
+          "retryingKeys": [],
+          "inFlightKeys": [],
+          "retryableDrainFailureCount": 0
+        },
+        "selectedCdcReplayLag": {
+          "bufferedEvents": 0,
+          "replayBufferGrowthCount": 0,
+          "replayRetryDepth": 0,
+          "replayInFlightPartitionCount": 0,
+          "partitionCount": 105
+        },
+        "publicationActiveGateHandoffState": "pending",
+        "publicationActiveGateHandoffReasonCode": "owner_reconcile_pending",
+        "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
+        "publicationActiveGateHandoffRuntimePromotionAllowed": false,
+        "publicationActiveGateHandoffPendingReconcileNodeIds": [
+          "11601fe0-72d6-5853-8590-ec2881853e72",
+          "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+        ],
+        "publicationActiveGateHandoffPendingReconcileCount": 3,
+        "activeGateOwnerCohortState": "pending",
+        "activeGateOwnerCohortReasonCode": "owner_reconcile_pending",
+        "activeGateOwnerCohortMissingPublishedNodeIds": [
+          "11601fe0-72d6-5853-8590-ec2881853e72",
+          "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+        ],
+        "activeGateOwnerCohortMissingPublishedCount": 3,
+        "activeGateOwnerCohortPendingRecoveryNodeIds": [],
+        "activeGateOwnerCohortPendingRecoveryCount": 0,
+        "activeGateOwnerCohortPendingReconcileNodeIds": [
+          "11601fe0-72d6-5853-8590-ec2881853e72",
+          "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+        ],
+        "activeGateOwnerCohortPendingReconcileCount": 3,
+        "membershipPublicationHandoffOutcomeState": "write_deferred",
+        "membershipPublicationHandoffOutcomeReasonCode": "owner_reconcile_enqueued",
+        "membershipPublicationHandoffOutcomeEnqueued": true,
+        "membershipPublicationHandoffOutcomeRetryAfterMs": 1000,
+        "perNodePublicationDisagreementSet": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": [
+            "11601fe0-72d6-5853-8590-ec2881853e72",
+            "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+          ]
+        },
+        "selectedPublishedActiveNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "selectedPublishedActiveCount": 2,
+        "selectedMissingPublishedNodeIds": [],
+        "pendingAckCount": 0,
+        "missingPublishedCount": 4,
+        "gateReasonCount": 0,
+        "gateReasons": [],
+        "prioritySpreadSatisfied": false,
+        "prioritySpreadGap": 6,
+        "priorityBlockedPartitionCount": 6,
+        "priorityRecoveryProgressClasses": {
+          "partitionIdsByClass": {
+            "priority_operation_serial_wait": [],
+            "eligible_but_no_operation_created": [
+              "control_plane_publications-p1",
+              "replica_operations-p1",
+              "schema_operations-p1",
+              "sql_transaction_participants-p1",
+              "sql_transactions-p1",
+              "sql_write_operations-p1"
+            ],
+            "operation_created_but_no_step_transitions": [],
+            "learner_active_but_never_promotable": [],
+            "publication_recovery_eligible_but_coordinator_excludes_node": []
+          },
+          "unresolvedClassIds": [
+            "eligible_but_no_operation_created"
+          ],
+          "unresolvedClassCount": 1,
+          "partitionIdsBySemanticState": {
+            "converged": [],
+            "spread_satisfied_in_flight": [],
+            "needs_operation": [
+              "control_plane_publications-p1",
+              "replica_operations-p1",
+              "schema_operations-p1",
+              "sql_transaction_participants-p1",
+              "sql_transactions-p1",
+              "sql_write_operations-p1"
+            ],
+            "operation_stalled": [],
+            "learner_promotion_blocked": [],
+            "coordination_mismatch": [],
+            "recovering_in_flight": [],
+            "blocked_unclassified": []
+          },
+          "unresolvedSemanticStateIds": [
+            "needs_operation"
+          ],
+          "unresolvedSemanticStateCount": 1,
+          "blockedPartitionIds": [
+            "control_plane_publications-p1",
+            "replica_operations-p1",
+            "schema_operations-p1",
+            "sql_transaction_participants-p1",
+            "sql_transactions-p1",
+            "sql_write_operations-p1"
+          ],
+          "blockedPartitionCount": 6
+        },
+        "priorityRecoveryUnresolvedClassCount": 1,
+        "priorityRecoveryUnresolvedSemanticStateCount": 1,
+        "priorityRecoveryBlockedPartitionCount": 6,
+        "closureRecordId": null,
+        "closureWitnessClass": null,
+        "readinessDelay": {
+          "timedOut": false,
+          "cause": "none",
+          "source": null,
+          "recoverability": null,
+          "error": null
+        },
+        "blockers": [
+          "priority_recovery_progress_class=eligible_but_no_operation_created"
+        ],
+        "blockerSignature": "priority_recovery_progress_class=eligible_but_no_operation_created",
+        "pendingAckNodeIds": []
+      },
+      "bestProgress": {
+        "expectedNodeCount": 5,
+        "activeNodeCount": 1,
+        "inactiveNodeCount": 4,
+        "snapshotCoverageNodeCount": 1,
+        "snapshotCoverageComplete": false,
+        "publicationStatus": "PUBLISHED",
+        "publicationStatusRank": 3,
+        "publicationEpoch": 2,
+        "recoveryProtocolState": "priority_spread_pending",
+        "selectedSnapshotNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "selectedSnapshotTimeoutMs": 30000,
+        "selectedSnapshotAdminReady": true,
+        "selectedSnapshotReachableBy": "admin_health",
+        "selectedSnapshotError": null,
+        "selectedSnapshotReachabilityError": null,
+        "selectedSnapshotObservationMode": "fresh_owner",
+        "selectedSnapshotObservationState": "fresh",
+        "selectedSnapshotObservationContractState": "ready",
+        "selectedSnapshotObservationRefreshState": "idle",
+        "selectedSnapshotObservationNextAction": "proceed",
+        "selectedSnapshotObservationReasonCodes": [],
+        "selectedSnapshotObservationRetryAfterMs": null,
+        "selectedSnapshotRepairDeferred": false,
+        "selectedControlPlaneOwnerQueueDepth": {
+          "pendingWrites": 0,
+          "pendingWriteGrowthCount": 0,
+          "retainedBacklogGrowthCount": 0,
+          "sharedPressureBackpressured": false,
+          "transportPressureBackpressured": false,
+          "queryPressureBackpressured": false,
+          "ownerKey": "membership-publication:cluster_membership",
+          "pendingKeys": [],
+          "retryingKeys": [],
+          "inFlightKeys": [],
+          "retryableDrainFailureCount": 0
+        },
+        "selectedCdcReplayLag": {
+          "bufferedEvents": 0,
+          "replayBufferGrowthCount": 0,
+          "replayRetryDepth": 0,
+          "replayInFlightPartitionCount": 0,
+          "partitionCount": 105
+        },
+        "publicationActiveGateHandoffState": "complete",
+        "publicationActiveGateHandoffReasonCode": "owner_cohort_complete",
+        "publicationActiveGateHandoffNextAction": "admit_active_gate",
+        "publicationActiveGateHandoffRuntimePromotionAllowed": true,
+        "publicationActiveGateHandoffPendingReconcileNodeIds": [],
+        "publicationActiveGateHandoffPendingReconcileCount": 0,
+        "activeGateOwnerCohortState": "complete",
+        "activeGateOwnerCohortReasonCode": "owner_cohort_complete",
+        "activeGateOwnerCohortMissingPublishedNodeIds": [],
+        "activeGateOwnerCohortMissingPublishedCount": 0,
+        "activeGateOwnerCohortPendingRecoveryNodeIds": [],
+        "activeGateOwnerCohortPendingRecoveryCount": 0,
+        "activeGateOwnerCohortPendingReconcileNodeIds": [],
+        "activeGateOwnerCohortPendingReconcileCount": 0,
+        "membershipPublicationHandoffOutcomeState": null,
+        "membershipPublicationHandoffOutcomeReasonCode": null,
+        "membershipPublicationHandoffOutcomeEnqueued": false,
+        "membershipPublicationHandoffOutcomeRetryAfterMs": null,
+        "perNodePublicationDisagreementSet": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": [
+            "11601fe0-72d6-5853-8590-ec2881853e72",
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+          ],
+          "11601fe0-72d6-5853-8590-ec2881853e72": [],
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [],
+          "8be8d30f-4499-5eed-865c-71b4d529a67a": [],
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": []
+        },
+        "selectedPublishedActiveNodeIds": [
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "selectedPublishedActiveCount": 1,
+        "selectedMissingPublishedNodeIds": [
+          "11601fe0-72d6-5853-8590-ec2881853e72",
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+        ],
+        "pendingAckCount": 0,
+        "missingPublishedCount": 4,
+        "gateReasonCount": 0,
+        "gateReasons": [],
+        "prioritySpreadSatisfied": false,
+        "prioritySpreadGap": 6,
+        "priorityBlockedPartitionCount": 6,
+        "priorityRecoveryProgressClasses": {
+          "partitionIdsByClass": {
+            "priority_operation_serial_wait": [],
+            "eligible_but_no_operation_created": [
+              "control_plane_publications-p1",
+              "replica_operations-p1",
+              "schema_operations-p1",
+              "sql_transaction_participants-p1",
+              "sql_transactions-p1",
+              "sql_write_operations-p1"
+            ],
+            "operation_created_but_no_step_transitions": [],
+            "learner_active_but_never_promotable": [],
+            "publication_recovery_eligible_but_coordinator_excludes_node": []
+          },
+          "unresolvedClassIds": [
+            "eligible_but_no_operation_created"
+          ],
+          "unresolvedClassCount": 1,
+          "partitionIdsBySemanticState": {
+            "converged": [],
+            "spread_satisfied_in_flight": [],
+            "needs_operation": [
+              "control_plane_publications-p1",
+              "replica_operations-p1",
+              "schema_operations-p1",
+              "sql_transaction_participants-p1",
+              "sql_transactions-p1",
+              "sql_write_operations-p1"
+            ],
+            "operation_stalled": [],
+            "learner_promotion_blocked": [],
+            "coordination_mismatch": [],
+            "recovering_in_flight": [],
+            "blocked_unclassified": []
+          },
+          "unresolvedSemanticStateIds": [
+            "needs_operation"
+          ],
+          "unresolvedSemanticStateCount": 1,
+          "blockedPartitionIds": [
+            "control_plane_publications-p1",
+            "replica_operations-p1",
+            "schema_operations-p1",
+            "sql_transaction_participants-p1",
+            "sql_transactions-p1",
+            "sql_write_operations-p1"
+          ],
+          "blockedPartitionCount": 6
+        },
+        "priorityRecoveryUnresolvedClassCount": 1,
+        "priorityRecoveryUnresolvedSemanticStateCount": 1,
+        "priorityRecoveryBlockedPartitionCount": 6,
+        "closureRecordId": null,
+        "closureWitnessClass": null,
+        "readinessDelay": {
+          "timedOut": false,
+          "cause": "none",
+          "source": null,
+          "recoverability": null,
+          "error": null
+        },
+        "blockers": [
+          "inactive_nodes=4",
+          "snapshot_coverage=1/5",
+          "priority_recovery_progress_class=eligible_but_no_operation_created"
+        ],
+        "blockerSignature": "inactive_nodes=4|snapshot_coverage=1/5|priority_recovery_progress_class=eligible_but_no_operation_created",
+        "pendingAckNodeIds": []
+      },
+      "blockerHistory": [
+        {
+          "blockers": [
+            "inactive_nodes=4",
+            "snapshot_coverage=1/5"
+          ],
+          "signature": "inactive_nodes=4|snapshot_coverage=1/5",
+          "count": 1,
+          "firstAttempt": 1,
+          "firstElapsedMs": 234,
+          "lastAttempt": 1,
+          "lastElapsedMs": 234
+        }
+      ],
+      "admissionState": {
+        "strong_active": 5
+      },
+      "waitPolicy": {
+        "readinessMode": "startup",
+        "closureRecordId": null,
+        "allowSoftSuccess": false,
+        "hardFailure": false
+      },
+      "readinessDelay": {
+        "timedOut": false,
+        "cause": "none",
+        "source": null,
+        "recoverability": null,
+        "error": null
+      },
+      "readinessFailure": null,
+      "lastMeaningfulProgress": {
+        "expectedNodeCount": 5,
+        "activeNodeCount": 1,
+        "inactiveNodeCount": 4,
+        "snapshotCoverageNodeCount": 1,
+        "snapshotCoverageComplete": false,
+        "publicationStatus": "PUBLISHED",
+        "publicationStatusRank": 3,
+        "publicationEpoch": 2,
+        "recoveryProtocolState": "priority_spread_pending",
+        "selectedSnapshotNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "selectedSnapshotTimeoutMs": 30000,
+        "selectedSnapshotAdminReady": true,
+        "selectedSnapshotReachableBy": "admin_health",
+        "selectedSnapshotError": null,
+        "selectedSnapshotReachabilityError": null,
+        "selectedSnapshotObservationMode": "fresh_owner",
+        "selectedSnapshotObservationState": "fresh",
+        "selectedSnapshotObservationContractState": "ready",
+        "selectedSnapshotObservationRefreshState": "idle",
+        "selectedSnapshotObservationNextAction": "proceed",
+        "selectedSnapshotObservationReasonCodes": [],
+        "selectedSnapshotObservationRetryAfterMs": null,
+        "selectedSnapshotRepairDeferred": false,
+        "selectedControlPlaneOwnerQueueDepth": {
+          "pendingWrites": 0,
+          "pendingWriteGrowthCount": 0,
+          "retainedBacklogGrowthCount": 0,
+          "sharedPressureBackpressured": false,
+          "transportPressureBackpressured": false,
+          "queryPressureBackpressured": false,
+          "ownerKey": "membership-publication:cluster_membership",
+          "pendingKeys": [],
+          "retryingKeys": [],
+          "inFlightKeys": [],
+          "retryableDrainFailureCount": 0
+        },
+        "selectedCdcReplayLag": {
+          "bufferedEvents": 0,
+          "replayBufferGrowthCount": 0,
+          "replayRetryDepth": 0,
+          "replayInFlightPartitionCount": 0,
+          "partitionCount": 105
+        },
+        "publicationActiveGateHandoffState": "complete",
+        "publicationActiveGateHandoffReasonCode": "owner_cohort_complete",
+        "publicationActiveGateHandoffNextAction": "admit_active_gate",
+        "publicationActiveGateHandoffRuntimePromotionAllowed": true,
+        "publicationActiveGateHandoffPendingReconcileNodeIds": [],
+        "publicationActiveGateHandoffPendingReconcileCount": 0,
+        "activeGateOwnerCohortState": "complete",
+        "activeGateOwnerCohortReasonCode": "owner_cohort_complete",
+        "activeGateOwnerCohortMissingPublishedNodeIds": [],
+        "activeGateOwnerCohortMissingPublishedCount": 0,
+        "activeGateOwnerCohortPendingRecoveryNodeIds": [],
+        "activeGateOwnerCohortPendingRecoveryCount": 0,
+        "activeGateOwnerCohortPendingReconcileNodeIds": [],
+        "activeGateOwnerCohortPendingReconcileCount": 0,
+        "membershipPublicationHandoffOutcomeState": null,
+        "membershipPublicationHandoffOutcomeReasonCode": null,
+        "membershipPublicationHandoffOutcomeEnqueued": false,
+        "membershipPublicationHandoffOutcomeRetryAfterMs": null,
+        "perNodePublicationDisagreementSet": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": [
+            "11601fe0-72d6-5853-8590-ec2881853e72",
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+          ],
+          "11601fe0-72d6-5853-8590-ec2881853e72": [],
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [],
+          "8be8d30f-4499-5eed-865c-71b4d529a67a": [],
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": []
+        },
+        "selectedPublishedActiveNodeIds": [
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "selectedPublishedActiveCount": 1,
+        "selectedMissingPublishedNodeIds": [
+          "11601fe0-72d6-5853-8590-ec2881853e72",
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+        ],
+        "pendingAckCount": 0,
+        "missingPublishedCount": 4,
+        "gateReasonCount": 0,
+        "gateReasons": [],
+        "prioritySpreadSatisfied": false,
+        "prioritySpreadGap": 6,
+        "priorityBlockedPartitionCount": 6,
+        "priorityRecoveryProgressClasses": {
+          "partitionIdsByClass": {
+            "priority_operation_serial_wait": [],
+            "eligible_but_no_operation_created": [
+              "control_plane_publications-p1",
+              "replica_operations-p1",
+              "schema_operations-p1",
+              "sql_transaction_participants-p1",
+              "sql_transactions-p1",
+              "sql_write_operations-p1"
+            ],
+            "operation_created_but_no_step_transitions": [],
+            "learner_active_but_never_promotable": [],
+            "publication_recovery_eligible_but_coordinator_excludes_node": []
+          },
+          "unresolvedClassIds": [
+            "eligible_but_no_operation_created"
+          ],
+          "unresolvedClassCount": 1,
+          "partitionIdsBySemanticState": {
+            "converged": [],
+            "spread_satisfied_in_flight": [],
+            "needs_operation": [
+              "control_plane_publications-p1",
+              "replica_operations-p1",
+              "schema_operations-p1",
+              "sql_transaction_participants-p1",
+              "sql_transactions-p1",
+              "sql_write_operations-p1"
+            ],
+            "operation_stalled": [],
+            "learner_promotion_blocked": [],
+            "coordination_mismatch": [],
+            "recovering_in_flight": [],
+            "blocked_unclassified": []
+          },
+          "unresolvedSemanticStateIds": [
+            "needs_operation"
+          ],
+          "unresolvedSemanticStateCount": 1,
+          "blockedPartitionIds": [
+            "control_plane_publications-p1",
+            "replica_operations-p1",
+            "schema_operations-p1",
+            "sql_transaction_participants-p1",
+            "sql_transactions-p1",
+            "sql_write_operations-p1"
+          ],
+          "blockedPartitionCount": 6
+        },
+        "priorityRecoveryUnresolvedClassCount": 1,
+        "priorityRecoveryUnresolvedSemanticStateCount": 1,
+        "priorityRecoveryBlockedPartitionCount": 6,
+        "closureRecordId": null,
+        "closureWitnessClass": null,
+        "readinessDelay": {
+          "timedOut": false,
+          "cause": "none",
+          "source": null,
+          "recoverability": null,
+          "error": null
+        },
+        "blockers": [
+          "inactive_nodes=4",
+          "snapshot_coverage=1/5",
+          "priority_recovery_progress_class=eligible_but_no_operation_created"
+        ],
+        "blockerSignature": "inactive_nodes=4|snapshot_coverage=1/5|priority_recovery_progress_class=eligible_but_no_operation_created",
+        "pendingAckNodeIds": []
+      },
+      "lastMeaningfulChange": null,
+      "lastProgressEvent": null,
+      "failedNoProgress": null
+    },
+    "activeGateProgress": {
+      "expectedNodeCount": 5,
+      "activeNodeCount": 5,
+      "inactiveNodeCount": 0,
+      "snapshotCoverageNodeCount": 5,
+      "snapshotCoverageComplete": true,
+      "publicationStatus": "PUBLISHED",
+      "publicationStatusRank": 3,
+      "publicationEpoch": 2,
+      "recoveryProtocolState": "priority_spread_pending",
+      "selectedSnapshotNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+      "selectedSnapshotTimeoutMs": 30000,
+      "selectedSnapshotAdminReady": true,
+      "selectedSnapshotReachableBy": "admin_health",
+      "selectedSnapshotError": null,
+      "selectedSnapshotReachabilityError": null,
+      "selectedSnapshotObservationMode": "repair_deferred",
+      "selectedSnapshotObservationState": "deferred_refresh",
+      "selectedSnapshotObservationContractState": "deferred",
+      "selectedSnapshotObservationRefreshState": "deferred",
+      "selectedSnapshotObservationNextAction": "retry",
+      "selectedSnapshotObservationReasonCodes": [],
+      "selectedSnapshotObservationRetryAfterMs": 1000,
+      "selectedSnapshotRepairDeferred": true,
+      "selectedControlPlaneOwnerQueueDepth": {
+        "pendingWrites": 0,
+        "pendingWriteGrowthCount": 0,
+        "retainedBacklogGrowthCount": 0,
+        "sharedPressureBackpressured": false,
+        "transportPressureBackpressured": false,
+        "queryPressureBackpressured": false,
+        "ownerKey": "membership-publication:cluster_membership",
+        "pendingKeys": [],
+        "retryingKeys": [],
+        "inFlightKeys": [],
+        "retryableDrainFailureCount": 0
+      },
+      "selectedCdcReplayLag": {
+        "bufferedEvents": 0,
+        "replayBufferGrowthCount": 0,
+        "replayRetryDepth": 0,
+        "replayInFlightPartitionCount": 0,
+        "partitionCount": 105
+      },
+      "publicationActiveGateHandoffState": "pending",
+      "publicationActiveGateHandoffReasonCode": "owner_reconcile_pending",
+      "publicationActiveGateHandoffNextAction": "reconcile_owner_membership_publication",
+      "publicationActiveGateHandoffRuntimePromotionAllowed": false,
+      "publicationActiveGateHandoffPendingReconcileNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "publicationActiveGateHandoffPendingReconcileCount": 3,
+      "activeGateOwnerCohortState": "pending",
+      "activeGateOwnerCohortReasonCode": "owner_reconcile_pending",
+      "activeGateOwnerCohortMissingPublishedNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "activeGateOwnerCohortMissingPublishedCount": 3,
+      "activeGateOwnerCohortPendingRecoveryNodeIds": [],
+      "activeGateOwnerCohortPendingRecoveryCount": 0,
+      "activeGateOwnerCohortPendingReconcileNodeIds": [
+        "11601fe0-72d6-5853-8590-ec2881853e72",
+        "8be8d30f-4499-5eed-865c-71b4d529a67a",
+        "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+      ],
+      "activeGateOwnerCohortPendingReconcileCount": 3,
+      "membershipPublicationHandoffOutcomeState": "write_deferred",
+      "membershipPublicationHandoffOutcomeReasonCode": "owner_reconcile_enqueued",
+      "membershipPublicationHandoffOutcomeEnqueued": true,
+      "membershipPublicationHandoffOutcomeRetryAfterMs": 1000,
+      "perNodePublicationDisagreementSet": {
+        "7493b0ab-a054-5fad-a91b-5e331db29304": [
+          "11601fe0-72d6-5853-8590-ec2881853e72",
+          "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+        ]
+      },
+      "selectedPublishedActiveNodeIds": [
+        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+        "7493b0ab-a054-5fad-a91b-5e331db29304"
+      ],
+      "selectedPublishedActiveCount": 2,
+      "selectedMissingPublishedNodeIds": [],
+      "pendingAckCount": 0,
+      "missingPublishedCount": 4,
+      "gateReasonCount": 0,
+      "gateReasons": [],
+      "prioritySpreadSatisfied": false,
+      "prioritySpreadGap": 6,
+      "priorityBlockedPartitionCount": 6,
+      "priorityRecoveryProgressClasses": {
+        "partitionIdsByClass": {
+          "priority_operation_serial_wait": [],
+          "eligible_but_no_operation_created": [
+            "control_plane_publications-p1",
+            "replica_operations-p1",
+            "schema_operations-p1",
+            "sql_transaction_participants-p1",
+            "sql_transactions-p1",
+            "sql_write_operations-p1"
+          ],
+          "operation_created_but_no_step_transitions": [],
+          "learner_active_but_never_promotable": [],
+          "publication_recovery_eligible_but_coordinator_excludes_node": []
+        },
+        "unresolvedClassIds": [
+          "eligible_but_no_operation_created"
+        ],
+        "unresolvedClassCount": 1,
+        "partitionIdsBySemanticState": {
+          "converged": [],
+          "spread_satisfied_in_flight": [],
+          "needs_operation": [
+            "control_plane_publications-p1",
+            "replica_operations-p1",
+            "schema_operations-p1",
+            "sql_transaction_participants-p1",
+            "sql_transactions-p1",
+            "sql_write_operations-p1"
+          ],
+          "operation_stalled": [],
+          "learner_promotion_blocked": [],
+          "coordination_mismatch": [],
+          "recovering_in_flight": [],
+          "blocked_unclassified": []
+        },
+        "unresolvedSemanticStateIds": [
+          "needs_operation"
+        ],
+        "unresolvedSemanticStateCount": 1,
+        "blockedPartitionIds": [
+          "control_plane_publications-p1",
+          "replica_operations-p1",
+          "schema_operations-p1",
+          "sql_transaction_participants-p1",
+          "sql_transactions-p1",
+          "sql_write_operations-p1"
+        ],
+        "blockedPartitionCount": 6
+      },
+      "priorityRecoveryUnresolvedClassCount": 1,
+      "priorityRecoveryUnresolvedSemanticStateCount": 1,
+      "priorityRecoveryBlockedPartitionCount": 6,
+      "closureRecordId": null,
+      "closureWitnessClass": null,
+      "readinessDelay": {
+        "timedOut": false,
+        "cause": "none",
+        "source": null,
+        "recoverability": null,
+        "error": null
+      },
+      "blockers": [
+        "priority_recovery_progress_class=eligible_but_no_operation_created"
+      ],
+      "blockerSignature": "priority_recovery_progress_class=eligible_but_no_operation_created",
+      "pendingAckNodeIds": []
+    },
+    "activeGateSnapshotCoveragePending": false,
+    "activeGateSnapshotCoverageBlocker": null,
+    "activeGateReadinessDelay": {
+      "timedOut": false,
+      "cause": "none",
+      "source": null,
+      "recoverability": null,
+      "error": null
+    },
+    "closureRecordId": null,
+    "closureWitnessClass": null,
+    "projectionDiagnostics": {
+      "readinessDecisionMode": "cluster_member_or_recovery_eligible",
+      "readinessDecisionDimensions": [
+        "clusterMemberHealthy",
+        "controlPlaneRecoveryEligible"
+      ],
+      "recoveryEligibleProjectionEnabled": true,
+      "recoveryEligibleIncludedNodeIds": [],
+      "readinessExcludedNodeIds": [],
+      "clusterMemberUnhealthyExcludedNodeIds": [],
+      "retentionGraceMisses": []
+    },
+    "priorityPartitionSummary": {
+      "satisfied": false,
+      "requiredDistinctNodeCount": 2,
+      "readyEligibleNodeCount": 2,
+      "totalPriorityPartitionCount": 6,
+      "missingPartitionIds": [
+        "control_plane_publications-p1",
+        "replica_operations-p1",
+        "schema_operations-p1",
+        "sql_transaction_participants-p1",
+        "sql_transactions-p1",
+        "sql_write_operations-p1"
+      ],
+      "blockedPartitions": [
+        {
+          "partitionId": "control_plane_publications-p1",
+          "spreadGap": 1,
+          "requiredDistinctNodeCount": 2,
+          "readyDistinctNodeCount": 1,
+          "readyReplicaCount": 3,
+          "exclusionReasonCounts": {},
+          "blockerReasonCodes": []
+        },
+        {
+          "partitionId": "replica_operations-p1",
+          "spreadGap": 1,
+          "requiredDistinctNodeCount": 2,
+          "readyDistinctNodeCount": 1,
+          "readyReplicaCount": 3,
+          "exclusionReasonCounts": {},
+          "blockerReasonCodes": []
+        },
+        {
+          "partitionId": "schema_operations-p1",
+          "spreadGap": 1,
+          "requiredDistinctNodeCount": 2,
+          "readyDistinctNodeCount": 1,
+          "readyReplicaCount": 3,
+          "exclusionReasonCounts": {},
+          "blockerReasonCodes": []
+        },
+        {
+          "partitionId": "sql_transaction_participants-p1",
+          "spreadGap": 1,
+          "requiredDistinctNodeCount": 2,
+          "readyDistinctNodeCount": 1,
+          "readyReplicaCount": 3,
+          "exclusionReasonCounts": {},
+          "blockerReasonCodes": []
+        },
+        {
+          "partitionId": "sql_transactions-p1",
+          "spreadGap": 1,
+          "requiredDistinctNodeCount": 2,
+          "readyDistinctNodeCount": 1,
+          "readyReplicaCount": 3,
+          "exclusionReasonCounts": {},
+          "blockerReasonCodes": []
+        },
+        {
+          "partitionId": "sql_write_operations-p1",
+          "spreadGap": 1,
+          "requiredDistinctNodeCount": 2,
+          "readyDistinctNodeCount": 1,
+          "readyReplicaCount": 3,
+          "exclusionReasonCounts": {},
+          "blockerReasonCodes": []
+        }
+      ],
+      "blockedPartitionCount": 6,
+      "largestSpreadGap": 1,
+      "totalSpreadGap": 6
+    },
+    "priorityRecoveryProgressClassIds": [
+      "eligible_but_no_operation_created"
+    ],
+    "priorityRecoveryProgressClassCount": 1,
+    "priorityRecoverySemanticStateIds": [
+      "needs_operation"
+    ],
+    "priorityRecoverySemanticStateCount": 1,
+    "priorityRecoveryBlockedPartitionIds": [
+      "control_plane_publications-p1",
+      "replica_operations-p1",
+      "schema_operations-p1",
+      "sql_transaction_participants-p1",
+      "sql_transactions-p1",
+      "sql_write_operations-p1"
+    ],
+    "priorityRecoveryBlockedPartitionCount": 6,
+    "priorityRecoveryUnresolvedPartitionIds": [
+      "control_plane_publications-p1",
+      "replica_operations-p1",
+      "schema_operations-p1",
+      "sql_transaction_participants-p1",
+      "sql_transactions-p1",
+      "sql_write_operations-p1"
+    ],
+    "priorityRecoveryUnresolvedPartitionCount": 6,
+    "priorityRecoveryBlockerPartitionIdsByReason": {
+      "priority_operation_serial_wait": [],
+      "eligible_but_no_operation_created": [
+        "control_plane_publications-p1",
+        "replica_operations-p1",
+        "schema_operations-p1",
+        "sql_transaction_participants-p1",
+        "sql_transactions-p1",
+        "sql_write_operations-p1"
+      ],
+      "operation_created_but_no_step_transitions": [],
+      "learner_active_but_never_promotable": [],
+      "publication_recovery_eligible_but_coordinator_excludes_node": []
+    },
+    "priorityRecoveryPartitionIdsBySemanticState": {
+      "converged": [],
+      "spread_satisfied_in_flight": [],
+      "needs_operation": [
+        "control_plane_publications-p1",
+        "replica_operations-p1",
+        "schema_operations-p1",
+        "sql_transaction_participants-p1",
+        "sql_transactions-p1",
+        "sql_write_operations-p1"
+      ],
+      "operation_stalled": [],
+      "learner_promotion_blocked": [],
+      "coordination_mismatch": [],
+      "recovering_in_flight": [],
+      "blocked_unclassified": []
+    },
+    "priorityRecoveryPartitionBlockerHistory": [
+      {
+        "partitionId": "control_plane_publications-p1",
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ]
+      },
+      {
+        "partitionId": "replica_operations-p1",
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ]
+      },
+      {
+        "partitionId": "schema_operations-p1",
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ]
+      },
+      {
+        "partitionId": "sql_transaction_participants-p1",
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ]
+      },
+      {
+        "partitionId": "sql_transactions-p1",
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ]
+      },
+      {
+        "partitionId": "sql_write_operations-p1",
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ]
+      }
+    ],
+    "priorityRecoveryPartitionSemanticStateHistory": [
+      {
+        "partitionId": "control_plane_publications-p1",
+        "semanticStateIds": [
+          "needs_operation"
+        ]
+      },
+      {
+        "partitionId": "replica_operations-p1",
+        "semanticStateIds": [
+          "needs_operation"
+        ]
+      },
+      {
+        "partitionId": "schema_operations-p1",
+        "semanticStateIds": [
+          "needs_operation"
+        ]
+      },
+      {
+        "partitionId": "sql_transaction_participants-p1",
+        "semanticStateIds": [
+          "needs_operation"
+        ]
+      },
+      {
+        "partitionId": "sql_transactions-p1",
+        "semanticStateIds": [
+          "needs_operation"
+        ]
+      },
+      {
+        "partitionId": "sql_write_operations-p1",
+        "semanticStateIds": [
+          "needs_operation"
+        ]
+      }
+    ],
+    "priorityRecoveryPartitionWitnesses": [
+      {
+        "partitionId": "control_plane_publications-p1",
+        "semanticStateId": "needs_operation",
+        "spreadGap": 1,
+        "readyDistinctNodeCount": 1,
+        "requiredDistinctNodeCount": 2,
+        "progressClassIds": [
+          "eligible_but_no_operation_created"
+        ],
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ],
+        "authoritativeVisibilityState": "none",
+        "removeSafetyState": "blocked",
+        "transportPressureState": "none",
+        "progressContractState": "pending",
+        "progressNextAction": "wait",
+        "actuationState": "action_required",
+        "actuationOwner": "rebalancer_leader",
+        "currentOwner": "rebalancer_leader",
+        "nextRequiredAction": "create_recovery_operation",
+        "blockingBoundary": "operation_scheduling",
+        "waitMode": "event_driven",
+        "workflowProgressPhaseId": "none",
+        "stepAgeMs": 1783887976972,
+        "pressureState": "none",
+        "pendingWrites": 0,
+        "pendingWriteGrowthCount": 0,
+        "retainedBacklogGrowthCount": 0,
+        "lastProgressAtMs": 1783887976972,
+        "correlationKey": "control_plane_publications-p1|2|operation_unknown",
+        "decisionDimension": "unavailable",
+        "progressEvidenceSourceIds": [
+          "blocker_reasons",
+          "completion_state",
+          "last_progress_timestamp",
+          "workflow_state"
+        ],
+        "witnessIds": [
+          "control_plane_publications-p1|2|operation_unknown"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": [],
+        "eligibleNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "recoveryEligibleExcludedNodeIds": [],
+        "activeLearnerNodeIds": [],
+        "promotableLearnerNodeIds": [],
+        "operationIds": [],
+        "completionState": "blocked",
+        "workflowState": "none",
+        "visibilityState": "none",
+        "convergenceState": "spread_gap",
+        "workflowSource": "none",
+        "snapshotCapturedAt": 1783887976972,
+        "latestOperationWorkflowStep": "unavailable",
+        "latestOperationStatus": "unavailable"
+      },
+      {
+        "partitionId": "replica_operations-p1",
+        "semanticStateId": "needs_operation",
+        "spreadGap": 1,
+        "readyDistinctNodeCount": 1,
+        "requiredDistinctNodeCount": 2,
+        "progressClassIds": [
+          "eligible_but_no_operation_created"
+        ],
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ],
+        "authoritativeVisibilityState": "none",
+        "removeSafetyState": "blocked",
+        "transportPressureState": "none",
+        "progressContractState": "pending",
+        "progressNextAction": "wait",
+        "actuationState": "action_required",
+        "actuationOwner": "rebalancer_leader",
+        "currentOwner": "rebalancer_leader",
+        "nextRequiredAction": "create_recovery_operation",
+        "blockingBoundary": "operation_scheduling",
+        "waitMode": "event_driven",
+        "workflowProgressPhaseId": "none",
+        "stepAgeMs": 1783887976972,
+        "pressureState": "none",
+        "pendingWrites": 0,
+        "pendingWriteGrowthCount": 0,
+        "retainedBacklogGrowthCount": 0,
+        "lastProgressAtMs": 1783887976972,
+        "correlationKey": "replica_operations-p1|2|operation_unknown",
+        "decisionDimension": "unavailable",
+        "progressEvidenceSourceIds": [
+          "blocker_reasons",
+          "completion_state",
+          "last_progress_timestamp",
+          "workflow_state"
+        ],
+        "witnessIds": [
+          "replica_operations-p1|2|operation_unknown"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": [],
+        "eligibleNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "recoveryEligibleExcludedNodeIds": [],
+        "activeLearnerNodeIds": [],
+        "promotableLearnerNodeIds": [],
+        "operationIds": [],
+        "completionState": "blocked",
+        "workflowState": "none",
+        "visibilityState": "none",
+        "convergenceState": "spread_gap",
+        "workflowSource": "none",
+        "snapshotCapturedAt": 1783887976972,
+        "latestOperationWorkflowStep": "unavailable",
+        "latestOperationStatus": "unavailable"
+      },
+      {
+        "partitionId": "schema_operations-p1",
+        "semanticStateId": "needs_operation",
+        "spreadGap": 1,
+        "readyDistinctNodeCount": 1,
+        "requiredDistinctNodeCount": 2,
+        "progressClassIds": [
+          "eligible_but_no_operation_created"
+        ],
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ],
+        "authoritativeVisibilityState": "none",
+        "removeSafetyState": "blocked",
+        "transportPressureState": "none",
+        "progressContractState": "pending",
+        "progressNextAction": "wait",
+        "actuationState": "action_required",
+        "actuationOwner": "rebalancer_leader",
+        "currentOwner": "rebalancer_leader",
+        "nextRequiredAction": "create_recovery_operation",
+        "blockingBoundary": "operation_scheduling",
+        "waitMode": "event_driven",
+        "workflowProgressPhaseId": "none",
+        "stepAgeMs": 1783887976972,
+        "pressureState": "none",
+        "pendingWrites": 0,
+        "pendingWriteGrowthCount": 0,
+        "retainedBacklogGrowthCount": 0,
+        "lastProgressAtMs": 1783887976972,
+        "correlationKey": "schema_operations-p1|2|operation_unknown",
+        "decisionDimension": "unavailable",
+        "progressEvidenceSourceIds": [
+          "blocker_reasons",
+          "completion_state",
+          "last_progress_timestamp",
+          "workflow_state"
+        ],
+        "witnessIds": [
+          "schema_operations-p1|2|operation_unknown"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": [],
+        "eligibleNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "recoveryEligibleExcludedNodeIds": [],
+        "activeLearnerNodeIds": [],
+        "promotableLearnerNodeIds": [],
+        "operationIds": [],
+        "completionState": "blocked",
+        "workflowState": "none",
+        "visibilityState": "none",
+        "convergenceState": "spread_gap",
+        "workflowSource": "none",
+        "snapshotCapturedAt": 1783887976972,
+        "latestOperationWorkflowStep": "unavailable",
+        "latestOperationStatus": "unavailable"
+      },
+      {
+        "partitionId": "sql_transaction_participants-p1",
+        "semanticStateId": "needs_operation",
+        "spreadGap": 1,
+        "readyDistinctNodeCount": 1,
+        "requiredDistinctNodeCount": 2,
+        "progressClassIds": [
+          "eligible_but_no_operation_created"
+        ],
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ],
+        "authoritativeVisibilityState": "none",
+        "removeSafetyState": "blocked",
+        "transportPressureState": "none",
+        "progressContractState": "pending",
+        "progressNextAction": "wait",
+        "actuationState": "action_required",
+        "actuationOwner": "rebalancer_leader",
+        "currentOwner": "rebalancer_leader",
+        "nextRequiredAction": "create_recovery_operation",
+        "blockingBoundary": "operation_scheduling",
+        "waitMode": "event_driven",
+        "workflowProgressPhaseId": "none",
+        "stepAgeMs": 1783887976972,
+        "pressureState": "none",
+        "pendingWrites": 0,
+        "pendingWriteGrowthCount": 0,
+        "retainedBacklogGrowthCount": 0,
+        "lastProgressAtMs": 1783887976972,
+        "correlationKey": "sql_transaction_participants-p1|2|operation_unknown",
+        "decisionDimension": "unavailable",
+        "progressEvidenceSourceIds": [
+          "blocker_reasons",
+          "completion_state",
+          "last_progress_timestamp",
+          "workflow_state"
+        ],
+        "witnessIds": [
+          "sql_transaction_participants-p1|2|operation_unknown"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": [],
+        "eligibleNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "recoveryEligibleExcludedNodeIds": [],
+        "activeLearnerNodeIds": [],
+        "promotableLearnerNodeIds": [],
+        "operationIds": [],
+        "completionState": "blocked",
+        "workflowState": "none",
+        "visibilityState": "none",
+        "convergenceState": "spread_gap",
+        "workflowSource": "none",
+        "snapshotCapturedAt": 1783887976972,
+        "latestOperationWorkflowStep": "unavailable",
+        "latestOperationStatus": "unavailable"
+      },
+      {
+        "partitionId": "sql_transactions-p1",
+        "semanticStateId": "needs_operation",
+        "spreadGap": 1,
+        "readyDistinctNodeCount": 1,
+        "requiredDistinctNodeCount": 2,
+        "progressClassIds": [
+          "eligible_but_no_operation_created"
+        ],
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ],
+        "authoritativeVisibilityState": "none",
+        "removeSafetyState": "blocked",
+        "transportPressureState": "none",
+        "progressContractState": "pending",
+        "progressNextAction": "wait",
+        "actuationState": "action_required",
+        "actuationOwner": "rebalancer_leader",
+        "currentOwner": "rebalancer_leader",
+        "nextRequiredAction": "create_recovery_operation",
+        "blockingBoundary": "operation_scheduling",
+        "waitMode": "event_driven",
+        "workflowProgressPhaseId": "none",
+        "stepAgeMs": 1783887976972,
+        "pressureState": "none",
+        "pendingWrites": 0,
+        "pendingWriteGrowthCount": 0,
+        "retainedBacklogGrowthCount": 0,
+        "lastProgressAtMs": 1783887976972,
+        "correlationKey": "sql_transactions-p1|2|operation_unknown",
+        "decisionDimension": "unavailable",
+        "progressEvidenceSourceIds": [
+          "blocker_reasons",
+          "completion_state",
+          "last_progress_timestamp",
+          "workflow_state"
+        ],
+        "witnessIds": [
+          "sql_transactions-p1|2|operation_unknown"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": [],
+        "eligibleNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "recoveryEligibleExcludedNodeIds": [],
+        "activeLearnerNodeIds": [],
+        "promotableLearnerNodeIds": [],
+        "operationIds": [],
+        "completionState": "blocked",
+        "workflowState": "none",
+        "visibilityState": "none",
+        "convergenceState": "spread_gap",
+        "workflowSource": "none",
+        "snapshotCapturedAt": 1783887976972,
+        "latestOperationWorkflowStep": "unavailable",
+        "latestOperationStatus": "unavailable"
+      },
+      {
+        "partitionId": "sql_write_operations-p1",
+        "semanticStateId": "needs_operation",
+        "spreadGap": 1,
+        "readyDistinctNodeCount": 1,
+        "requiredDistinctNodeCount": 2,
+        "progressClassIds": [
+          "eligible_but_no_operation_created"
+        ],
+        "blockerReasonCodes": [
+          "eligible_but_no_operation_created"
+        ],
+        "authoritativeVisibilityState": "none",
+        "removeSafetyState": "blocked",
+        "transportPressureState": "none",
+        "progressContractState": "pending",
+        "progressNextAction": "wait",
+        "actuationState": "action_required",
+        "actuationOwner": "rebalancer_leader",
+        "currentOwner": "rebalancer_leader",
+        "nextRequiredAction": "create_recovery_operation",
+        "blockingBoundary": "operation_scheduling",
+        "waitMode": "event_driven",
+        "workflowProgressPhaseId": "none",
+        "stepAgeMs": 1783887976972,
+        "pressureState": "none",
+        "pendingWrites": 0,
+        "pendingWriteGrowthCount": 0,
+        "retainedBacklogGrowthCount": 0,
+        "lastProgressAtMs": 1783887976972,
+        "correlationKey": "sql_write_operations-p1|2|operation_unknown",
+        "decisionDimension": "unavailable",
+        "progressEvidenceSourceIds": [
+          "blocker_reasons",
+          "completion_state",
+          "last_progress_timestamp",
+          "workflow_state"
+        ],
+        "witnessIds": [
+          "sql_write_operations-p1|2|operation_unknown"
+        ],
+        "serialWaitOperationIds": [],
+        "serialWaitPartitionIds": [],
+        "eligibleNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "recoveryEligibleExcludedNodeIds": [],
+        "activeLearnerNodeIds": [],
+        "promotableLearnerNodeIds": [],
+        "operationIds": [],
+        "completionState": "blocked",
+        "workflowState": "none",
+        "visibilityState": "none",
+        "convergenceState": "spread_gap",
+        "workflowSource": "none",
+        "snapshotCapturedAt": 1783887976972,
+        "latestOperationWorkflowStep": "unavailable",
+        "latestOperationStatus": "unavailable"
+      }
+    ],
+    "priorityRecoveryProgressSummary": null,
+    "priorityRecoveryAdmissionDecisionDimensions": [],
+    "priorityRecoveryInvariantFailingIds": [],
+    "priorityRecoveryInvariantFailures": [],
+    "priorityRecoveryInvariantCount": 3
+  },
+  "playback": {
+    "firstFaultTimeline": {
+      "loadStartAtMs": 1783888060488,
+      "loadStartAt": "2026-07-12T20:27:40.488Z",
+      "markers": {
+        "queuePressureOnset": {
+          "atMs": 1783888061490,
+          "at": "2026-07-12T20:27:41.490Z",
+          "deltaFromLoadStartMs": 1002
+        },
+        "attemptErrorOnset": {
+          "atMs": 1783888061490,
+          "at": "2026-07-12T20:27:41.490Z",
+          "deltaFromLoadStartMs": 1002
+        },
+        "hardFailureOnset": null
+      },
+      "orderedMarkers": [
+        {
+          "marker": "queuePressureOnset",
+          "atMs": 1783888061490,
+          "at": "2026-07-12T20:27:41.490Z",
+          "deltaFromLoadStartMs": 1002
+        },
+        {
+          "marker": "attemptErrorOnset",
+          "atMs": 1783888061490,
+          "at": "2026-07-12T20:27:41.490Z",
+          "deltaFromLoadStartMs": 1002
+        }
+      ]
+    },
+    "eventSummary": {
+      "eventCount": 125,
+      "clusterStages": [
+        {
+          "timestampMs": 1783887975483,
+          "timestamp": "2026-07-12T20:26:15.483Z",
+          "stage": "setup.joiner.starting",
+          "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783887975606,
+          "timestamp": "2026-07-12T20:26:15.606Z",
+          "stage": "setup.joiner.started",
+          "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783887975606,
+          "timestamp": "2026-07-12T20:26:15.606Z",
+          "stage": "setup.joiner.starting",
+          "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783887975721,
+          "timestamp": "2026-07-12T20:26:15.721Z",
+          "stage": "setup.joiner.started",
+          "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783887975721,
+          "timestamp": "2026-07-12T20:26:15.721Z",
+          "stage": "setup.cluster.waiting-active",
+          "nodeId": null,
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783887979054,
+          "timestamp": "2026-07-12T20:26:19.054Z",
+          "stage": "setup.cluster.waiting-active",
+          "nodeId": null,
+          "attempts": 2,
+          "elapsedMs": 3331
+        },
+        {
+          "timestampMs": 1783887979055,
+          "timestamp": "2026-07-12T20:26:19.055Z",
+          "stage": "setup.cluster.active",
+          "nodeId": null,
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783887979055,
+          "timestamp": "2026-07-12T20:26:19.055Z",
+          "stage": "setup.logs.subscription.starting",
+          "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783887979092,
+          "timestamp": "2026-07-12T20:26:19.092Z",
+          "stage": "setup.logs.subscription.ready",
+          "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783888133913,
+          "timestamp": "2026-07-12T20:28:53.913Z",
+          "stage": "teardown.starting",
+          "nodeId": null,
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783888148105,
+          "timestamp": "2026-07-12T20:29:08.105Z",
+          "stage": "teardown.complete",
+          "nodeId": null,
+          "attempts": null,
+          "elapsedMs": null
+        },
+        {
+          "timestampMs": 1783888148105,
+          "timestamp": "2026-07-12T20:29:08.105Z",
+          "stage": "teardown.capture.finalizing",
+          "nodeId": null,
+          "attempts": null,
+          "elapsedMs": null
+        }
+      ],
+      "load": {
+        "startedAtMs": 1783888060488,
+        "startedAt": "2026-07-12T20:27:40.488Z",
+        "completedAtMs": 1783888101492,
+        "completedAt": "2026-07-12T20:28:21.492Z",
+        "progressEventCount": 41,
+        "lastMetrics": {
+          "total": 140,
+          "success": 140,
+          "failed": 0,
+          "errors": 0,
+          "latency": {
+            "avg": 2487.45,
+            "p50": 2020,
+            "p95": 5606,
+            "p99": 5838
+          },
+          "opsPerSec": 3.414301043800605,
+          "attemptErrors": 226,
+          "queueDelay": {
+            "avg": 4.621359457818021,
+            "p50": 1.34326171875,
+            "p95": 11.682861328125,
+            "p99": 28.783447265625,
+            "max": 40.118408203125
+          },
+          "distinctErrors": [
+            "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane load: serve not ready: load lane admission denied on node 11601fe0-72d6-5853-8590-ec2881853e72 (tableName=benchmark_merge_events, benchmarkReady=false, reasons=local_replica_not_voter_ready)",
+            "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane load: Distributed operation failed due to participant failures",
+            "Admin API query timed out for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane load after 10000ms",
+            "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane load after 10000ms",
+            "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane load after 10000ms",
+            "Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane load: Distributed operation failed due to participant failures",
+            "Admin API query timed out for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane load after 10000ms",
+            "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane load: Query timeout after 10000ms",
+            "Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane load: Query timeout after 10000ms",
+            "Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane load: serve not ready: load lane admission denied on node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 (serveEligible=false, reasons=PRIORITY_CONTROL_PLANE_RECOVERY_PENDING)"
+          ],
+          "targetOperations": 4500,
+          "dispatchedOperations": 328,
+          "undispatchedOperations": 4172,
+          "undispatchedByReason": {
+            "capacity": 0,
+            "durationTimeout": 0,
+            "cancelled": 4172
+          },
+          "perNode": {
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+              "dispatched": 114,
+              "success": 59,
+              "attemptErrors": 55,
+              "admissionSignals": 10,
+              "queuePressureSignals": 310,
+              "waitReasons": {
+                "nodeSlotUnavailable": 10,
+                "nodeAdmissionBlocked": 300,
+                "retryableControlPlanePressure": 10,
+                "timeoutWaits": 46,
+                "queueCapacityRejected": 0
+              },
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0,
+                "flowControl": 0
+              }
+            },
+            "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+              "dispatched": 76,
+              "success": 25,
+              "attemptErrors": 51,
+              "admissionSignals": 14,
+              "queuePressureSignals": 275,
+              "waitReasons": {
+                "nodeSlotUnavailable": 10,
+                "nodeAdmissionBlocked": 265,
+                "retryableControlPlanePressure": 14,
+                "timeoutWaits": 37,
+                "queueCapacityRejected": 0
+              },
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0,
+                "flowControl": 0
+              }
+            },
+            "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+              "dispatched": 100,
+              "success": 35,
+              "attemptErrors": 65,
+              "admissionSignals": 20,
+              "queuePressureSignals": 284,
+              "waitReasons": {
+                "nodeSlotUnavailable": 10,
+                "nodeAdmissionBlocked": 274,
+                "retryableControlPlanePressure": 20,
+                "timeoutWaits": 46,
+                "queueCapacityRejected": 0
+              },
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0,
+                "flowControl": 0
+              }
+            },
+            "7493b0ab-a054-5fad-a91b-5e331db29304": {
+              "dispatched": 79,
+              "success": 21,
+              "attemptErrors": 36,
+              "admissionSignals": 0,
+              "queuePressureSignals": 213,
+              "waitReasons": {
+                "nodeSlotUnavailable": 15,
+                "nodeAdmissionBlocked": 198,
+                "retryableControlPlanePressure": 0,
+                "timeoutWaits": 36,
+                "queueCapacityRejected": 0
+              },
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0,
+                "flowControl": 0
+              }
+            },
+            "11601fe0-72d6-5853-8590-ec2881853e72": {
+              "dispatched": 19,
+              "success": 0,
+              "attemptErrors": 19,
+              "admissionSignals": 19,
+              "queuePressureSignals": 471,
+              "waitReasons": {
+                "nodeSlotUnavailable": 0,
+                "nodeAdmissionBlocked": 471,
+                "retryableControlPlanePressure": 19,
+                "timeoutWaits": 0,
+                "queueCapacityRejected": 0
+              },
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0,
+                "flowControl": 0
+              }
+            }
+          },
+          "admissionSignals": 63,
+          "nonAdmissionAttemptErrors": 0,
+          "rejectedOperations": 0,
+          "rejectedByReason": {
+            "queueFull": 0,
+            "flowControl": 0
+          },
+          "queuePressure": {
+            "samples": 8008,
+            "pendingQueueDepth": {
+              "avg": 1.7096653346653348,
+              "p95": 2,
+              "p99": 2,
+              "max": 2
+            }
+          },
+          "waitReasons": {
+            "nodeSlotUnavailable": 45,
+            "nodeAdmissionBlocked": 1508,
+            "retryableControlPlanePressure": 63,
+            "timeoutWaits": 165,
+            "queueCapacityRejected": 0
+          },
+          "dispatchGuardrail": {
+            "enabled": true,
+            "configuredMaxInFlight": 128,
+            "currentEffectiveMaxInFlight": 32,
+            "minEffectiveMaxInFlight": 32,
+            "configuredDispatchIntervalMs": 33.333333333333336,
+            "currentEffectiveDispatchIntervalMs": 133.33333333333334,
+            "maxEffectiveDispatchIntervalMs": 133.33333333333334,
+            "pressureScore": 3,
+            "pressureSignalThreshold": 2,
+            "queueDepthThreshold": 4,
+            "reductionStepRatio": 0.25,
+            "minMaxInFlight": 2,
+            "recoveryQuietTicks": 8,
+            "engagedTransitions": 187,
+            "recoveryTransitions": 183,
+            "maxPressureSignalsDelta": 20,
+            "maxPendingQueueDepth": 2
+          },
+          "suppressedRetrySafeAttemptErrors": 163,
+          "suppressedRetrySafeTimeoutWaits": 163,
+          "nonAdmissionTimeoutWaits": 2
+        }
+      },
+      "topology": {
+        "partitionCreatedCount": 1,
+        "replicaCreatedCount": 19,
+        "replicaRemovedCount": 12,
+        "recentEvents": [
+          {
+            "type": "replica.removed",
+            "timestampMs": 1783888037142,
+            "timestamp": "2026-07-12T20:27:17.142Z",
+            "entityId": "schema_operations-p1-r2",
+            "partitionId": "schema_operations-p1",
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "status": "active",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "replica.removed",
+            "timestampMs": 1783888037142,
+            "timestamp": "2026-07-12T20:27:17.142Z",
+            "entityId": "control_plane_publications-p1-r2",
+            "partitionId": "control_plane_publications-p1",
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "status": "pending",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "replica.removed",
+            "timestampMs": 1783888039514,
+            "timestamp": "2026-07-12T20:27:19.514Z",
+            "entityId": "control_plane_publications-p1-r2",
+            "partitionId": "control_plane_publications-p1",
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "status": "active",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "partition.created",
+            "timestampMs": 1783888048010,
+            "timestamp": "2026-07-12T20:27:28.010Z",
+            "entityId": "tbl-1fa0b9f86743005e32ea04725e592e31-p1",
+            "partitionId": null,
+            "nodeId": null,
+            "status": null,
+            "tableName": "benchmark_merge_events",
+            "tableId": "tbl-1fa0b9f86743005e32ea04725e592e31"
+          },
+          {
+            "type": "replica.created",
+            "timestampMs": 1783888048010,
+            "timestamp": "2026-07-12T20:27:28.010Z",
+            "entityId": "schema-job-1fa0b9f86743005e32ea04725e592e31:replica:7493b0ab-a054-5fad-a91b-5e331db29304",
+            "partitionId": "tbl-1fa0b9f86743005e32ea04725e592e31-p1",
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "status": "active",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "replica.created",
+            "timestampMs": 1783888048010,
+            "timestamp": "2026-07-12T20:27:28.010Z",
+            "entityId": "schema-job-1fa0b9f86743005e32ea04725e592e31:replica:7493b0ab-a054-5fad-a91b-5e331db29304",
+            "partitionId": "tbl-1fa0b9f86743005e32ea04725e592e31-p1",
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "status": "pending",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "replica.created",
+            "timestampMs": 1783888048010,
+            "timestamp": "2026-07-12T20:27:28.010Z",
+            "entityId": "schema-job-1fa0b9f86743005e32ea04725e592e31:replica:11601fe0-72d6-5853-8590-ec2881853e72",
+            "partitionId": "tbl-1fa0b9f86743005e32ea04725e592e31-p1",
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "status": "pending",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "replica.created",
+            "timestampMs": 1783888056072,
+            "timestamp": "2026-07-12T20:27:36.072Z",
+            "entityId": "schema-job-1fa0b9f86743005e32ea04725e592e31:replica:11601fe0-72d6-5853-8590-ec2881853e72",
+            "partitionId": "tbl-1fa0b9f86743005e32ea04725e592e31-p1",
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "status": "creating",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "replica.created",
+            "timestampMs": 1783888056072,
+            "timestamp": "2026-07-12T20:27:36.072Z",
+            "entityId": "schema-job-1fa0b9f86743005e32ea04725e592e31:replica:35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "partitionId": "tbl-1fa0b9f86743005e32ea04725e592e31-p1",
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "status": "pending",
+            "tableName": null,
+            "tableId": null
+          },
+          {
+            "type": "replica.created",
+            "timestampMs": 1783888056072,
+            "timestamp": "2026-07-12T20:27:36.072Z",
+            "entityId": "schema-job-1fa0b9f86743005e32ea04725e592e31:replica:35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "partitionId": "tbl-1fa0b9f86743005e32ea04725e592e31-p1",
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "status": "pending",
+            "tableName": null,
+            "tableId": null
+          }
+        ]
+      }
+    }
+  },
+  "partitioning": null,
+  "routingDiagnosticsByNodeId": null,
+  "recoveryReadiness": null
+}

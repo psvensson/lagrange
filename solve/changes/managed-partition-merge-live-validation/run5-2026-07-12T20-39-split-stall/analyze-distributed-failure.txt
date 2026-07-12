@@ -1,0 +1,124 @@
+
+== Report ==
+path=test-output/report.json
+summary.total=1
+summary.passed=0
+summary.failed=1
+summary.durationMs=317778
+scenario.index=0
+scenario.name=partition-merge-under-load
+scenario.passed=n/a
+scenario.durationMs=317778
+scenario.error=Timed out waiting for table "benchmark_merge_events" to add at least 4 partitions and spread replicas to at least 3 nodes. Baseline=1, latest=3, additionalSeen=2, spread=4, samples=55, serviceCount=5, transientQueryErrors=0, lastQueryError=none, failureMode=partition_growth_stalled, topologyState=opaque, leaderServiceMissingPartitionCount=0, overReplicatedPartitionCount=0, selectedNodeIds=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,8be8d30f-4499-5eed-865c-71b4d529a67a,35a891b8-c1a0-5064-9c6e-2acfba61c2a7,11601fe0-72d6-5853-8590-ec2881853e72,7493b0ab-a054-5fad-a91b-5e331db29304, readyReplicaNodeIds=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,8be8d30f-4499-5eed-865c-71b4d529a67a, admissionReadyNodeIds=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58,8be8d30f-4499-5eed-865c-71b4d529a67a,7493b0ab-a054-5fad-a91b-5e331db29304, readinessReasonHistogram=discovery_pressured:1|local_replica_not_voter_ready:2, convergenceStateHistogram=ready_replica:2|replica_blocked:3
+
+== Failed Phase ==
+phase=n/a
+status=n/a
+durationMs=n/a
+rootCauseClass=load
+dominantReason=nodeAdmissionBlocked
+reasonCounts:
+  nodeSlotUnavailable: 15088
+  nodeAdmissionBlocked: 2766
+  retryableControlPlanePressure: 364
+  timeoutWaits: 135
+  priority_partitions_not_spread: 2
+  priority_spread_pending: 1
+  closure_witness_startup_active_publication_lag: 1
+  priority_recovery_progress_class: 2
+  priority_recovery_operation_scheduling_event_driven: 1
+  priority_recovery_actuation_state_action_required: 1
+  priority_recovery_actuation_state_dispatched_waiting_progress: 1
+  priority_recovery_actuation_state_transition_deferred: 4
+  priority_recovery_owner_rebalancer_leader: 1
+  priority_recovery_owner_operation_workflow_owner: 5
+  priority_recovery_blocking_boundary_operation_scheduling: 1
+  priority_recovery_blocking_boundary_workflow_progress: 5
+  priority_recovery_wait_mode_event_driven: 6
+  priority_recovery_next_action_create_recovery_operation: 1
+  priority_recovery_next_action_advance_existing_operation: 1
+  priority_recovery_next_action_wait_for_operation_progress: 4
+  priority_recovery_contract_state_pending: 6
+  priority_recovery_progress_partition: 6
+
+== Load Metrics ==
+source=playback
+completeness=playback_completed
+loadEvidenceClass=product_load_lane_pressure
+dominantWaitReason=nodeAdmissionBlocked
+total=654
+success=654
+failed=0
+errors=0
+attemptErrors=498
+opsPerSec=4.239732909792227
+targetOperations=4500
+dispatchedOperations=953
+undispatchedOperations=3547
+waitReasons:
+  nodeSlotUnavailable: 15088
+  nodeAdmissionBlocked: 2766
+  retryableControlPlanePressure: 364
+  timeoutWaits: 135
+  queueCapacityRejected: 0
+perNode (sorted by attemptErrors desc):
+  7493b0ab-a054-5fad-a91b-5e331db29304: dispatched=154, success=39, attemptErrors=115, admissionSignals=76, queuePressureSignals=414
+  8be8d30f-4499-5eed-865c-71b4d529a67a: dispatched=389, success=284, attemptErrors=105, admissionSignals=50, queuePressureSignals=8085
+  35a891b8-c1a0-5064-9c6e-2acfba61c2a7: dispatched=100, success=0, attemptErrors=100, admissionSignals=100, queuePressureSignals=633
+  ebc4aa0b-06c6-506d-93ea-1dd2deca3f58: dispatched=427, success=331, attemptErrors=96, admissionSignals=56, queuePressureSignals=8083
+  11601fe0-72d6-5853-8590-ec2881853e72: dispatched=82, success=0, attemptErrors=82, admissionSignals=82, queuePressureSignals=639
+
+== Channel Metrics ==
+(none)
+
+== Consistency Mismatches ==
+(none)
+
+== Playback Warnings ==
+[1783888834675] node=unknown message=Failed to capture topology snapshot: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms
+[1783888905238] node=7493b0ab-a054-5fad-a91b-5e331db29304 message=Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query connection reset for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot
+
+== Internal Signal Messages (first 12) ==
+(none)
+
+== Cluster Stage Timeline ==
+1783888784398	setup.network.creating			
+1783888784400	setup.network.created			
+1783888784404	setup.seed.starting			
+1783888784523	setup.seed.bootstrap.waiting			seed_live
+1783888820229	setup.seed.bootstrap.ready			seed_join_ready
+1783888820229	setup.joiner.starting			
+1783888820395	setup.joiner.started			
+1783888820395	setup.joiner.starting			
+1783888820509	setup.joiner.started			
+1783888820509	setup.joiner.starting			
+1783888820672	setup.joiner.started			
+1783888820672	setup.joiner.starting			
+1783888820810	setup.joiner.started			
+1783888820810	setup.cluster.waiting-active			seed_join_ready
+1783888827109	setup.cluster.waiting-active	3	6297	
+1783888827109	setup.cluster.active			cluster_active
+1783888827110	setup.logs.subscription.starting			
+1783888827111	setup.logs.subscription.ready			
+1783889104852	teardown.starting			
+1783889126942	teardown.complete			
+1783889126942	teardown.capture.finalizing			
+
+== Cluster Stage Durations ==
+{
+  "seedStartMs": 1783888784404,
+  "seedJoinReadyMs": 1783888820229,
+  "clusterWaitStartMs": 1783888820810,
+  "clusterActiveMs": 1783888827109,
+  "seedToJoinReadyMs": 35825,
+  "clusterWaitToActiveMs": 6299,
+  "seedToClusterActiveMs": 42705
+}
+
+== Log Pattern Counts ==
+query_timeout_5000ms=0
+query_timeout_4000ms=0
+failed_query_operations_table=0
+inflight_owner_pressure=0
+heartbeat_failing_repeatedly=0
+invalid_state_transition=0

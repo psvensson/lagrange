@@ -96,6 +96,10 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
     config: 'local-benchmark-7node-partition-split.json',
     name: 'seven-node-postgres-baseline-partition-split',
   }),
+  Object.freeze({
+    config: 'local-partition-merge.json',
+    name: 'partition-merge-under-load',
+  }),
 ]);
 
 function normalizeScenarioConfigName(configPathOrName) {
