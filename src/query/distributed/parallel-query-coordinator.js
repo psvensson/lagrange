@@ -26,14 +26,13 @@ import {
   buildPartitionExecutionSuccessOutcome,
   normalizePartitionExecutionFailureSnapshot,
 } from './parallel-query-partition-outcomes.js';
+import {
+  installParallelQueryCoordinatorHedgingMethods,
+} from './parallel-query-coordinator-hedging-methods.js';
 
 
 const QUERY_ID_PREFIX = 'q-';
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
-
-const REPLICA_STATUS = Object.freeze({
-  ACTIVE: 'active',
-});
 
 /**
  * ParallelQueryCoordinator handles parallel query execution across partitions
@@ -77,9 +76,6 @@ class ParallelQueryCoordinator {
     this.streamingEnabled = config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_ENABLED) !== false;
     this.streamingChunkSize = config.get(QUERY_CONFIG_KEY.COORDINATOR_STREAMING_CHUNK_SIZE) ||
       QUERY_DEFAULTS.COORDINATOR_STREAMING_CHUNK_SIZE;
-    if (this.partitionQueryExecutor) {
-      this.speculativeExecutionEnabled = false;
-    }
 
     // Track active queries for resource management
     this.activeConnections = 0;
@@ -340,11 +336,6 @@ class ParallelQueryCoordinator {
     );
 
     try {
-      // Create execution promises for each partition
-      const executionPromises = partitionIds.map((partitionId) =>
-        this.executeOnPartitionWithMetrics(sql, partitionId, params, metrics, options),
-      );
-
       // Create timeout promise with clearable timer
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
@@ -355,27 +346,28 @@ class ParallelQueryCoordinator {
         }, effectiveTimeoutMs);
       });
 
-      // Execute with straggler detection if enabled
+      // Execute with straggler hedging if enabled. Hedging is read-only:
+      // a hedged write could be delivered twice (the hedge lands on a
+      // follower whose leader redirect bypasses the exclusion), so write
+      // fan-outs keep the plain race against the chunk timeout.
       if (this.speculativeExecutionEnabled &&
+        options.forRead === true &&
         partitionIds.length > 1) {
-        const result = await this.executeWithSpeculativeExecution(
-          executionPromises,
-          partitionIds,
+        return await this.executeWithSpeculativeExecution(
           sql,
+          partitionIds,
           params,
           metrics,
           timeoutPromise,
           cancellationPromise,
+          options,
         );
-        // Clear timeout after speculative execution completes
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        return result;
       }
 
       // Simple parallel execution with timeout
+      const executionPromises = partitionIds.map((partitionId) =>
+        this.executeOnPartitionWithMetrics(sql, partitionId, params, metrics, options),
+      );
       const racePromises = [
         Promise.all(executionPromises),
         timeoutPromise,
@@ -396,165 +388,6 @@ class ParallelQueryCoordinator {
       }
       this.activeConnections -= partitionIds.length;
     }
-  }
-
-  /**
-   * Execute with speculative execution for stragglers.
-   * Requirements: 26.10, 26.11
-   * @param {Array} executionPromises - Original execution promises.
-   * @param {Array} partitionIds - Partition IDs.
-   * @param {string} sql - SQL query.
-   * @param {Array} params - Query parameters.
-   * @param {QueryExecutionMetrics} metrics - Metrics tracker.
-   * @param {Promise} timeoutPromise - Timeout promise.
-   * @param {Promise|null} cancellationPromise - Cancellation promise.
-   * @return {Promise<Array>} Array of partition results.
-   * @private
-   */
-  async executeWithSpeculativeExecution(
-    executionPromises,
-    partitionIds,
-    sql,
-    params,
-    metrics,
-    timeoutPromise,
-    cancellationPromise,
-  ) {
-    const results = new Map();
-    const pendingPartitions = new Set(partitionIds);
-    const speculativePromises = new Map();
-
-    // Wrap each promise to track completion
-    const wrappedPromises = executionPromises.map((promise, index) => {
-      const partitionId = partitionIds[index];
-      return promise.then((result) => {
-        results.set(partitionId, result);
-        pendingPartitions.delete(partitionId);
-        return {partitionId, result};
-      });
-    });
-
-    // Start a timer to check for stragglers
-    const stragglerCheckInterval = setInterval(() => {
-      const medianLatency = metrics.getMedianLatency();
-      if (medianLatency > 0 &&
-        pendingPartitions.size > 0) {
-        const stragglerThreshold = medianLatency * this.stragglerThresholdMultiplier;
-
-        for (const partitionId of pendingPartitions) {
-          const partitionMetrics = metrics.partitionMetrics.get(partitionId);
-          if (partitionMetrics && partitionMetrics.startTime) {
-            const elapsed = Date.now() - partitionMetrics.startTime;
-            if (elapsed > stragglerThreshold && !speculativePromises.has(partitionId)) {
-              // Start speculative execution on alternative replica
-              this.startSpeculativeExecution(
-                partitionId,
-                sql,
-                params,
-                metrics,
-                speculativePromises,
-                results,
-                pendingPartitions,
-              );
-            }
-          }
-        }
-      }
-    }, this.speculativeExecutionDelayMs);
-
-    try {
-      // Wait for all original promises or timeout
-      const racePromises = [
-        Promise.all(wrappedPromises),
-        timeoutPromise,
-      ];
-      if (cancellationPromise) {
-        racePromises.push(cancellationPromise);
-      }
-      await Promise.race(racePromises);
-
-      // Detect and log stragglers
-      this.detectAndLogStragglers(metrics);
-
-      return partitionIds.map((id) => results.get(id));
-    } finally {
-      clearInterval(stragglerCheckInterval);
-      // Cancel any pending speculative executions
-      for (const [, controller] of speculativePromises) {
-        if (controller && controller.abort) {
-          controller.abort();
-        }
-      }
-    }
-  }
-
-  /**
-   * Start speculative execution on an alternative replica.
-   * Requirements: 26.11
-   * @param {string} partitionId - Partition ID.
-   * @param {string} sql - SQL query.
-   * @param {Array} params - Query parameters.
-   * @param {QueryExecutionMetrics} metrics - Metrics tracker.
-   * @param {Map} speculativePromises - Map of speculative promises.
-   * @param {Map} results - Results map.
-   * @param {Set} pendingPartitions - Set of pending partitions.
-   * @private
-   */
-  startSpeculativeExecution(
-    partitionId,
-    sql,
-    params,
-    metrics,
-    speculativePromises,
-    results,
-    pendingPartitions,
-  ) {
-    const replicas = this.getAlternativeReplicas(partitionId);
-    if (replicas.length === 0) return;
-
-    // Select a different replica
-    const alternativeReplica = replicas.find((r) =>
-      r.status === REPLICA_STATUS.ACTIVE || r.status === undefined,
-    );
-
-    if (!alternativeReplica) return;
-
-    this.logger.debug(QUERY_LOG_MSG.SPECULATIVE_EXEC_START, {
-      partitionId,
-      replicaId: alternativeReplica.replicaId,
-    });
-
-    metrics.speculativeExecutions++;
-    metrics.stragglers.push(partitionId);
-
-    const speculativeMetrics = new PartitionQueryMetrics(partitionId);
-    speculativeMetrics.isSpeculative = true;
-    speculativeMetrics.start();
-
-    const speculativePromise = this.executeQueryOnService(
-      alternativeReplica,
-      sql,
-      params,
-    ).then((result) => {
-      if (result && result.success === false) {
-        speculativeMetrics.fail(
-          new Error(result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED),
-          result,
-        );
-        return result;
-      }
-      speculativeMetrics.complete(result.rows?.length || 0);
-      if (!results.has(partitionId)) {
-        results.set(partitionId, result);
-        pendingPartitions.delete(partitionId);
-      }
-      return result;
-    }).catch((error) => {
-      speculativeMetrics.fail(error);
-      return {success: false, error: error.message, rows: []};
-    });
-
-    speculativePromises.set(partitionId, {promise: speculativePromise});
   }
 
   /**
@@ -763,6 +596,8 @@ class ParallelQueryCoordinator {
     };
   }
 }
+
+installParallelQueryCoordinatorHedgingMethods(ParallelQueryCoordinator);
 
 export {
   ParallelQueryCoordinator,

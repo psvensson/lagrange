@@ -239,6 +239,10 @@ const QUERY_LOG_MSG = Object.freeze({
   NO_ALTERNATIVE_REPLICAS: 'No alternative replicas for speculative execution',
   SPECULATIVE_EXEC_START: 'Starting speculative execution for straggler',
   SPECULATIVE_EXEC_FAILED: 'Speculative execution failed',
+  HEDGE_LOSER_RESULT_DISCARDED:
+    'Hedged partition attempt lost the race; result discarded',
+  HEDGE_PRIMARY_ATTEMPT_REJECTED:
+    'Primary partition attempt rejected unexpectedly during hedged fan-out',
   STREAMING_MEMORY_LIMIT_REACHED: 'Streaming aggregator memory limit reached',
   TABLE_CREATE_START: 'Creating table',
   TABLE_EXISTS_SKIP: 'Table already exists, skipping creation',
@@ -453,6 +457,11 @@ const QUERY_DEFAULTS = Object.freeze({
   COORDINATOR_QUERY_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   COORDINATOR_STRAGGLER_THRESHOLD_MULTIPLIER: 2,
   COORDINATOR_SPECULATIVE_EXECUTION_DELAY_MS: NUM.TEN * NUM.TEN,
+  // Absolute per-request floor for the straggler-hedge trigger. The
+  // relative trigger (median latency x straggler multiplier) is
+  // chunk-relative and collapses toward zero on fast fan-outs; the floor
+  // keeps hedging from firing on ordinary latency jitter.
+  COORDINATOR_HEDGE_MIN_STRAGGLER_THRESHOLD_MS: NUM.HUNDRED,
   COORDINATOR_STREAMING_CHUNK_SIZE: NUM.THOUSAND,
 });
 

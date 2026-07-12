@@ -113,15 +113,39 @@ class QueryExecutionMetrics {
   }
 
   /**
-   * Add partition metrics.
+   * Add partition metrics. First completion wins: once a partition has
+   * a COMPLETED entry, a later attempt's completion (the losing side of
+   * a hedged partition) must neither overwrite the winner's entry nor
+   * re-add its rows/bytes to the fan-out totals — the inflated totals
+   * would misreport metrics and can spuriously trip the result-buffer
+   * limit. A completion may still replace an earlier failure.
    * @param {PartitionQueryMetrics} metrics - Partition metrics.
    */
   addPartitionMetrics(metrics) {
+    const existing = this.partitionMetrics.get(metrics.partitionId);
+    if (existing && existing.status === QUERY_STATUS.COMPLETED) {
+      return;
+    }
     this.partitionMetrics.set(metrics.partitionId, metrics);
     if (metrics.status === QUERY_STATUS.COMPLETED) {
       this.totalRows += metrics.rowCount;
       this.totalBytes += metrics.bytesRead;
     }
+  }
+
+  /**
+   * Whether at least one partition has completed successfully. Used as
+   * the straggler-hedge evidence gate: a sub-millisecond completion has
+   * latency 0 and would make a median>0 gate read as "no evidence".
+   * @return {boolean} True when a completed partition exists.
+   */
+  hasCompletedPartitions() {
+    for (const partitionMetrics of this.partitionMetrics.values()) {
+      if (partitionMetrics.status === QUERY_STATUS.COMPLETED) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

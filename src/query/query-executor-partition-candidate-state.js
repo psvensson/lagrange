@@ -20,6 +20,13 @@ function createPartitionCandidateDeliveryState({
   runtimeRoutingRepairState,
 }) {
   const attemptedAddresses = new Set();
+  // Straggler-hedge attempts exclude the delivery addresses the primary
+  // attempt already targeted so the hedge lands on a different replica.
+  const excludedDeliveryAddresses = new Set(
+    Array.isArray(executionOptions.excludeDeliveryAddresses) ?
+      executionOptions.excludeDeliveryAddresses :
+      [],
+  );
   let leaderRecoveryQueued = false;
   let retryCurrentAddressOnNextAttempt = false;
   let deferPartitionRetryOnNextAttempt = false;
@@ -55,7 +62,8 @@ function createPartitionCandidateDeliveryState({
       if (
         typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
         address.length === 0 ||
-        attemptedAddresses.has(address)
+        attemptedAddresses.has(address) ||
+        excludedDeliveryAddresses.has(address)
       ) {
         return true;
       }

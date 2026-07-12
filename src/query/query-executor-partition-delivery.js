@@ -22,6 +22,7 @@ const {
   ERRORS,
   LOG_MSG,
   QUERY_ERROR_MSG,
+  QUERY_EXECUTOR_LITERAL,
   QUERY_LOG_MSG,
   QUERY_RESPONSE_TYPE,
   normalizeParticipantFailureString,
@@ -269,6 +270,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           continue;
         }
         candidateState.markAttemptedAddress(address);
+        this.notifyHedgeDeliveryObserver(
+          executionOptions,
+          partitionId,
+          serviceInfo,
+          address,
+          serviceCandidates.length,
+        );
         this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {
           partitionId,
           address,
@@ -749,6 +757,38 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         lastFailureDetails,
       ),
     };
+  }
+
+  /**
+   * Report one delivery attempt to a straggler-hedging observer when the
+   * caller supplied one, so a speculative retry can be forced onto a
+   * different replica than the primary attempt targeted.
+   * @param {Object} executionOptions - Execution options.
+   * @param {string} partitionId - Partition ID.
+   * @param {Object} serviceInfo - Candidate service info.
+   * @param {string} address - Delivery address.
+   * @param {number} candidateCount - Distinct routable candidates seen.
+   * @private
+   */
+  notifyHedgeDeliveryObserver(
+    executionOptions,
+    partitionId,
+    serviceInfo,
+    address,
+    candidateCount,
+  ) {
+    if (
+      typeof executionOptions?.hedgeDeliveryObserver !==
+      QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
+    ) {
+      return;
+    }
+    executionOptions.hedgeDeliveryObserver({
+      partitionId,
+      address,
+      nodeId: serviceInfo?.nodeId,
+      candidateCount,
+    });
   }
 }
 export {QueryExecutorPartitionDelivery};
