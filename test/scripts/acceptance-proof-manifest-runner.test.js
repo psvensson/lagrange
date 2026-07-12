@@ -312,4 +312,56 @@ describe('acceptance proof manifest runner', () => {
       );
     }
   });
+
+  it('owns the short developer proof in one acceptance manifest', () => {
+    const smokeManifestPath =
+      'test/manifests/developer-smoke-proof-manifest.json';
+    const smoke = JSON.parse(fs.readFileSync(smokeManifestPath, 'utf8'));
+    const expectedTests = [
+      'test/scripts/run-test-files.test.js',
+      'test/scripts/acceptance-proof-manifest-runner.test.js',
+      'test/release/public-api-side-effect-boundary.test.js',
+      'test/release/project-hardening-contracts.test.js',
+      'test/admin/admin-websocket-external-bind-policy.test.js',
+      'test/runtime/pgwire-protocol-ordering.test.js',
+      'test/compatibility/pgwire-client-compat.test.js',
+      'test/closure/CL-040.repro.test.js',
+      'test/closure/CL-041.repro.test.js',
+      'test/closure/CL-042.repro.test.js',
+      'test/convergence/dt6-publication-quorum-failback-network.test.js',
+      'test/convergence/dt6-publication-failback-pct-search.test.js',
+      'test/convergence/dt6-fine-drive-midchurn-safety.test.js',
+      'test/control-plane/owner-outcome-contract.test.js',
+      'test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js',
+      'test/query/transaction-owned-commit-mode-guard.test.js',
+      'test/solve/content-addressed-change-artifact.test.js',
+    ];
+
+    assert.deepEqual(validateAcceptanceManifest(smoke), []);
+    assert.equal(smoke.id, 'developer-smoke-proof');
+    assert.deepEqual(smoke.commands.map((entry) => entry.id), [
+      'focused-contracts',
+    ]);
+    assert.equal(smoke.commands[0].timeoutMs, 60000);
+    assert.deepEqual(smoke.commands[0].argv.slice(0, 2), [
+      'scripts/run-test-files.js',
+      '--jobs=8',
+    ]);
+    assert.deepEqual(smoke.commands[0].argv.slice(2), expectedTests);
+    assert.equal(new Set(expectedTests).size, expectedTests.length);
+    assert.equal(expectedTests.every((file) => fs.existsSync(file)), true);
+
+    const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    assert.match(
+      packageJson.scripts['test:smoke'],
+      /run-project-hardening-acceptance\.js/u,
+    );
+    assert.match(packageJson.scripts['test:smoke'], new RegExp(smokeManifestPath));
+    const scenarioRunner = fs.readFileSync(
+      'scripts/run-developer-smoke-proof-scenarios.js',
+      'utf8',
+    );
+    assert.match(scenarioRunner, /runProjectHardeningAcceptance/u);
+    assert.match(scenarioRunner, new RegExp(smokeManifestPath));
+  });
 });
