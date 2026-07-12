@@ -258,5 +258,7 @@ export {
   buildExplicitFileSizeEntries,
   buildFileSizeEntries,
   buildOwnerBoundaryGuidanceEntries,
+  FILE_SIZE_BASELINES,
   FILE_SIZE_SCOPE,
+  FILE_SIZE_THRESHOLDS,
 };

@@ -1,0 +1,41 @@
+{
+  "id": "global-owner-debt-inventory-migration",
+  "statement": "A fresh v2-integrity Quest remeasures and seals the final global owner-debt inventory implementation after the superseded pre-v2 model-gate violation; the eight source paths, exact 16-child architecture-approved batch, 189-assertion proof, and bounded scope are reconstructed without relying on the legacy Quest's terminal integrity.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/developer-velocity-maintainability-and-product-readiness.md#m1--global-owner-debt-inventory",
+    "closesCL": [],
+    "parentQuest": "global-owner-debt-inventory",
+    "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+    "sealedAtCommit": "d9a09a580bcdf41f855ae67442aac1ab4960c18c"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "global-owner-debt-inventory-migration",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "global-owner-debt-inventory-migration-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "global-owner-debt-inventory-migration",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
