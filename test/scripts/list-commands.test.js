@@ -38,6 +38,7 @@ const SOLVE_NEW_COMMAND =
 const SOLVE_INGEST_EVIDENCE_COMMAND =
   'npm run solve:ingest-evidence -- --id <quest> --frontier <frontier> --evidence <path>';
 const STEERING_PACK_COMMAND = 'npm run steering:llm:pack';
+const TEST_SMOKE_COMMAND = 'npm run test:smoke';
 
 const MODEL_CONTRACT_RECORDS_COMMAND =
   'npm run model:contract-records -- [architecture/contracts/name.md]';
@@ -155,6 +156,7 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
     SOLVE_NEW_COMMAND,
     SOLVE_INGEST_EVIDENCE_COMMAND,
     STEERING_PACK_COMMAND,
+    TEST_SMOKE_COMMAND,
     MODEL_CONTRACT_RECORDS_COMMAND,
     MODEL_INVARIANTS_COMMAND,
     MODEL_DECISION_TABLES_COMMAND,

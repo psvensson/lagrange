@@ -123,7 +123,8 @@ these numbers establish direction, not a movable closure predicate.
 
 ```text
 Velocity lane
-  V1 developer smoke proof
+  V1a developer smoke command surface
+    -> V1b developer smoke proof
     -> V2a primary test-classification manifest
       -> V2b classifier consumer cutover
         -> V2c duration enforcement/remediation batches
@@ -182,7 +183,8 @@ constraint. The declared pathscope excludes the pre-existing untracked
 
 | Work | Quest ID / class | Exact evidence command | Declared implementation pathscope | Engagement and red-on-revert proof |
 | --- | --- | --- | --- | --- |
-| V1 | `developer-smoke-proof` / process | `node scripts/run-developer-smoke-proof-scenarios.js` | developer-smoke manifest; acceptance wrapper tests; `package.json`; README; command catalog/tests; V1 runner/Quest evidence | runner executes the manifest SHA through the existing acceptance executor; empty command list, missing test, skip, timeout, and removed package command fail |
+| V1a | `developer-smoke-command-surface` / process | `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --scenario developer-smoke-command-surface --receipt-dir test-output/acceptance/developer-smoke` | `package.json`; README; command catalog/tests; generated tools index; V1a Quest evidence | public alias and catalog resolve to the single manifest through the existing executor; removing or redirecting the package command fails |
+| V1b | `developer-smoke-proof` / process | `node scripts/run-developer-smoke-proof-scenarios.js` | developer-smoke manifest; acceptance wrapper tests; V1 runner/Quest evidence | runner executes the manifest SHA through the existing acceptance executor; empty command list, missing test, skip, and timeout fail |
 | V2a | `test-primary-classification-manifest` / process | `node scripts/run-test-primary-classification-manifest-scenarios.js` | one new classification manifest/schema module; generator and classifier tests; Quest evidence | filesystem census assigns every `*.test.js` one primary class; missing, duplicate, and unknown class fail |
 | V2b | `test-classification-consumer-cutover` / process | `node scripts/run-test-classification-consumer-cutover-scenarios.js` | `package.json`; test runner; shard generator/files; classification tests; docs; Quest evidence | unit/fast/shard commands consume the manifest; restoring any retired shell discovery path fails the guard |
 | V2c | `test-duration-contract-enforcement` / process | `node scripts/run-test-duration-contract-enforcement-scenarios.js` | runner duration policy; duration fixtures/tests; Quest evidence | exact below/equal/above literal 2s and 30s body-time cases; missing timing, invalid class, and timeout fail closed |
@@ -423,6 +425,11 @@ acceptance-manifest owner, produces immediate developer value, and establishes
 the measurement surface needed by V2 and V3. In parallel, A1 may refresh the
 artifact census and M1 may generate the global owner-debt inventory after V1 is
 terminal or in a separate worktree.
+
+The first V1 attempt crossed the six-owner admission bound because its command
+surface and executable proof were one change artifact. V1 is therefore landed
+as the bounded V1a command-surface child followed by the V1b executable proof;
+the sealed behavior and dependency order are unchanged.
 
 ## Plan Verification Record
 

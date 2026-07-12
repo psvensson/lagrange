@@ -100,6 +100,10 @@ const COMMAND_GROUPS = Object.freeze([
     title: 'Focused Validation',
     commands: Object.freeze([
       Object.freeze({
+        command: 'npm run test:smoke',
+        description: 'Run the versioned short developer proof through the fail-closed acceptance executor.',
+      }),
+      Object.freeze({
         command: 'npm test -- test/path/to/file.test.js',
         description: 'Run one focused TAP test file.',
       }),

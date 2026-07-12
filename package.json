@@ -34,6 +34,7 @@
     "model:contracts": "npm run model:contract-records && npm run model:invariants && npm run model:decision-tables && npm run model:statecharts && npm run model:owner-traces && npm run model:alloy && npm run model:check",
     "pretest": "npm run audit:state-machine-pressure",
     "test": "npm run test:sharded:all",
+    "test:smoke": "node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke",
     "test:safety-pregate": "node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)",
     "test:file": "node scripts/run-test-files.js",
     "test:fast": "find test -type f -name '*.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js --jobs=8",

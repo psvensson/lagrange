@@ -246,6 +246,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
 - `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
+- `test:smoke` — Run the versioned short developer proof through the fail-closed acceptance executor.
 - `test:static` — Run unused, dependency, complexity, metadata, and runtime grammar checks.
 - `test:task27:ci` — `npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate`
 - `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
@@ -268,4 +269,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-172 scripts indexed; 66 have a curated description, 106 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+173 scripts indexed; 67 have a curated description, 106 fall back to their raw command. Improve coverage in the two sources named in the header comment.

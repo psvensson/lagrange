@@ -454,6 +454,9 @@ values and topology details.
 ### Useful Commands
 
 ```bash
+# Short, high-signal developer proof (normally a few seconds)
+npm run test:smoke
+
 # Quick test pass: unit and non-integration suites (a few minutes)
 npm run test:fast
 
