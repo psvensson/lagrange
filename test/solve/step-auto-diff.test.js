@@ -291,6 +291,37 @@ tap.test('step --commit --auto-diff', async (t) => {
     t.end();
   });
 
+  t.test('accepted auto-diff survives a later git commit failure', (t) => {
+    const root = gitRoot();
+    fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'docs', 'demo.md'), 'before\n');
+    git(root, ['add', 'docs/demo.md']);
+    git(root, ['commit', '--quiet', '-m', 'track docs']);
+    const {quest, oracle} = makeOracleQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(path.join(root, 'docs', 'demo.md'), 'after\n');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    const hook = path.join(root, '.git', 'hooks', 'pre-commit');
+    fs.writeFileSync(hook, '#!/bin/sh\nexit 1\n', {mode: 0o755});
+
+    t.throws(() => runStep(root, quest, {
+      autoDiff: true,
+      summary: 'accepted before commit failure',
+    }), /Command failed: git commit/u);
+    const artifact = path.join(
+      root,
+      'solve',
+      'changes',
+      'demo',
+      'attempt-1.diff',
+    );
+    t.equal(fs.existsSync(artifact), true,
+      'accepted artifact remains available for retry and audit');
+    t.match(fs.readFileSync(artifact, 'utf8'), /a\/docs\/demo\.md/u);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('CLI warns that --auto-diff is ignored beside --changeRef', (t) => {
     // FAULT-3 regression: both flags used to silently prefer --changeRef.
     const root = gitRoot();

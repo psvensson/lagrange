@@ -1,0 +1,275 @@
+diff --git a/scripts/run-solver-deletion-safe-handoff-scenarios.js b/scripts/run-solver-deletion-safe-handoff-scenarios.js
+new file mode 100644
+index 00000000..296a1cd1
+--- /dev/null
++++ b/scripts/run-solver-deletion-safe-handoff-scenarios.js
+@@ -0,0 +1,58 @@
++#!/usr/bin/env node
++
++import fs from 'node:fs';
++import path from 'node:path';
++
++import {runTestFileSync} from './run-test-files.js';
++
++const SCENARIO = 'solver-deletion-safe-handoff-recovery';
++const TEST_FILES = Object.freeze([
++  'test/solve/handoff.test.js',
++  'test/solve/step-auto-diff.test.js',
++]);
++const REPORT_DIR = 'test-output/reports';
++const TEST_TIMEOUT_MS = 300000;
++const VERDICT_PASS = 'PASS';
++const VERDICT_FAIL = 'FAIL';
++const REPORT_FIDELITY = 'deterministic-guard';
++
++const guards = TEST_FILES.map((file) => ({
++  file,
++  ...runTestFileSync(file, {print: false, timeoutMs: TEST_TIMEOUT_MS}),
++}));
++const passedChecks = guards.filter((guard) => guard.ok).length;
++const failed = guards.length - passedChecks;
++const passed = failed === 0;
++const timestamp = new Date().toISOString();
++const report = {
++  timestamp,
++  scenario: SCENARIO,
++  producer: SCENARIO,
++  fidelity: REPORT_FIDELITY,
++  summary: {total: guards.length, passed: passedChecks, failed},
++  optimizationSummary: {totalPriorityItems: failed},
++  standardSummary: {
++    scenarios: [{
++      scenario: SCENARIO,
++      passed,
++      current: {passed, verdict: passed ? VERDICT_PASS : VERDICT_FAIL},
++      detail: {
++        guards: guards.map((guard) => ({
++          file: guard.file,
++          passed: guard.ok,
++          assertions: guard.assertions,
++        })),
++      },
++    }],
++  },
++};
++fs.mkdirSync(REPORT_DIR, {recursive: true});
++const stamp = timestamp.replace(/[:.]/gu, '-');
++const reportPath = path.join(REPORT_DIR, `${SCENARIO}-${stamp}.report.json`);
++fs.writeFileSync(reportPath, `${JSON.stringify(report, undefined, 2)}\n`);
++process.stdout.write(
++  `${SCENARIO}: ${passed ? VERDICT_PASS : VERDICT_FAIL} — ` +
++  `${guards.reduce((sum, guard) => sum + guard.assertions, 0)} assertions\n` +
++  `report: ${reportPath}\n`,
++);
++process.exitCode = passed ? 0 : 1;
+diff --git a/scripts/solve/handoff.js b/scripts/solve/handoff.js
+index 36241a42..026e67b4 100644
+--- a/scripts/solve/handoff.js
++++ b/scripts/solve/handoff.js
+@@ -39,6 +39,16 @@ import {
+ } from './change-artifact.js';
+ 
+ const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
++const GIT_COMMAND = 'git';
++const STDIO_IGNORE = 'ignore';
++const GIT_ARGUMENT = Object.freeze({
++  ADD: 'add',
++  ALL: '--all',
++  HEAD: 'HEAD',
++  PATHS: '--',
++  QUIET: '--quiet',
++  RESET: 'reset',
++});
+ 
+ function toRootRelative(root, absolute) {
+   return path.relative(root, absolute).replaceAll(path.sep, '/');
+@@ -206,7 +216,10 @@ function gitCommands(handoff) {
+   if (handoff.inScope.length === 0) return [];
+   // Commit only — nothing else (no push).
+   return [
+-    ['git', 'add', '--', ...handoff.inScope],
++    [GIT_COMMAND, GIT_ARGUMENT.RESET, GIT_ARGUMENT.QUIET, GIT_ARGUMENT.HEAD,
++      GIT_ARGUMENT.PATHS, ...handoff.inScope],
++    [GIT_COMMAND, GIT_ARGUMENT.ADD, GIT_ARGUMENT.ALL, GIT_ARGUMENT.PATHS,
++      ...handoff.inScope],
+     ['git', 'commit', '--only', '-m', commitMessage(handoff), '--',
+       ...handoff.inScope],
+   ];
+@@ -298,9 +311,25 @@ export function autoCommitQuest(root, questId, options = {}) {
+   if (handoff.inScope.length === 0) {
+     return {committed: false, skipped: 'nothing-in-scope'};
+   }
+-  execFileSync('git', ['add', '--', ...handoff.inScope], {cwd: root, stdio: 'ignore'});
+-  execFileSync('git', ['commit', '--only', '-m', commitMessage(handoff), '--',
+-    ...handoff.inScope], {cwd: root, stdio: 'ignore'});
++  execFileSync(GIT_COMMAND, [
++    GIT_ARGUMENT.RESET,
++    GIT_ARGUMENT.QUIET,
++    GIT_ARGUMENT.HEAD,
++    GIT_ARGUMENT.PATHS,
++    ...handoff.inScope,
++  ], {cwd: root, stdio: STDIO_IGNORE});
++  execFileSync(GIT_COMMAND, [
++    GIT_ARGUMENT.ADD,
++    GIT_ARGUMENT.ALL,
++    GIT_ARGUMENT.PATHS,
++    ...handoff.inScope,
++  ], {
++    cwd: root,
++    stdio: STDIO_IGNORE,
++  });
++  execFileSync(GIT_COMMAND, ['commit', '--only', '-m', commitMessage(handoff),
++    GIT_ARGUMENT.PATHS,
++    ...handoff.inScope], {cwd: root, stdio: STDIO_IGNORE});
+   return {
+     committed: true,
+     checkpoint,
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index 27d1bb33..1d012c06 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -276,7 +276,10 @@ function stepCommit(root, quest, options = {}) {
+     attemptRecorded = !result.terminal;
+     return result;
+   } finally {
+-    if (autoDiffRef && !attemptRecorded) {
++    const recordedAfterCommitFailure = autoDiffRef && readLog(root, quest.id)
++      .some((event) => event.type === 'attempt' &&
++        event.changeRef === autoDiffRef);
++    if (autoDiffRef && !attemptRecorded && !recordedAfterCommitFailure) {
+       cleanupWrittenChangeArtifact(autoDiffWrite);
+     }
+   }
+diff --git a/solve/quests/solver-deletion-safe-handoff-recovery.json b/solve/quests/solver-deletion-safe-handoff-recovery.json
+new file mode 100644
+index 00000000..007aaeef
+--- /dev/null
++++ b/solve/quests/solver-deletion-safe-handoff-recovery.json
+@@ -0,0 +1,41 @@
++{
++  "id": "solver-deletion-safe-handoff-recovery",
++  "statement": "Solver handoff and automatic commit stage exact in-scope tracked deletions even when already staged, preserve unrelated staged work, and never delete an accepted auto-diff artifact when a later Git commit operation fails; focused regressions and deterministic scenario proof close the loop.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/epics/developer-velocity-maintainability-and-product-readiness.md#a2aa2b--historical-payload-migration",
++    "closesCL": [],
++    "parentQuest": "solver-historical-artifact-batch-tooling",
++    "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
++    "sealedAtCommit": "150af74036df05812f7dd58cd681f1b7cc7821ef"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "solver-deletion-safe-handoff-recovery",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-deletion-safe-handoff-recovery-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "solver-deletion-safe-handoff-recovery",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/test/solve/handoff.test.js b/test/solve/handoff.test.js
+index a2775d91..0332a319 100644
+--- a/test/solve/handoff.test.js
++++ b/test/solve/handoff.test.js
+@@ -256,6 +256,39 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('already-staged tracked deletion commits without unrelated staged work',
++    (t) => {
++      const root = tmp();
++      initGit(root);
++      fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
++      fs.mkdirSync(path.join(root, 'src'), {recursive: true});
++      fs.writeFileSync(path.join(root, 'docs', 'deleted.md'), 'remove me\n');
++      fs.writeFileSync(path.join(root, 'src', 'unrelated.js'), 'keep staged\n');
++      execFileSync('git', ['add', 'docs/deleted.md'], {cwd: root});
++      execFileSync('git', ['commit', '-m', 'track deletion target'], {cwd: root});
++      const {quest, oracle} = makeQuest(root);
++      runStep(root, quest);
++      fs.rmSync(path.join(root, 'docs', 'deleted.md'));
++      execFileSync('git', ['add', '--all', '--', 'docs/deleted.md'], {cwd: root});
++      execFileSync('git', ['add', 'src/unrelated.js'], {cwd: root});
++      fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
++
++      const result = runStep(root, quest, {
++        changeRef: makeDiff(root, quest.id, 'delete', 'docs/deleted.md'),
++        summary: 'delete tracked proof',
++      });
++      t.equal(result.commit.committed, true);
++      t.equal(fs.existsSync(path.join(root, 'docs', 'deleted.md')), false);
++      t.notOk(committedFiles(root).includes('src/unrelated.js'));
++      const status = execFileSync('git', ['status', '--porcelain', '-uall'], {
++        cwd: root,
++        encoding: 'utf8',
++      });
++      t.match(status, /src\/unrelated\.js/u);
++      fs.rmSync(root, {recursive: true, force: true});
++      t.end();
++    });
++
+   t.test('an unverified source change suppresses the commit', (t) => {
+     const root = tmp();
+     initGit(root);
+diff --git a/test/solve/step-auto-diff.test.js b/test/solve/step-auto-diff.test.js
+index 5d230a72..2a3b56fa 100644
+--- a/test/solve/step-auto-diff.test.js
++++ b/test/solve/step-auto-diff.test.js
+@@ -291,6 +291,37 @@ tap.test('step --commit --auto-diff', async (t) => {
+     t.end();
+   });
+ 
++  t.test('accepted auto-diff survives a later git commit failure', (t) => {
++    const root = gitRoot();
++    fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
++    fs.writeFileSync(path.join(root, 'docs', 'demo.md'), 'before\n');
++    git(root, ['add', 'docs/demo.md']);
++    git(root, ['commit', '--quiet', '-m', 'track docs']);
++    const {quest, oracle} = makeOracleQuest(root);
++    runStep(root, quest);
++    fs.writeFileSync(path.join(root, 'docs', 'demo.md'), 'after\n');
++    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
++    const hook = path.join(root, '.git', 'hooks', 'pre-commit');
++    fs.writeFileSync(hook, '#!/bin/sh\nexit 1\n', {mode: 0o755});
++
++    t.throws(() => runStep(root, quest, {
++      autoDiff: true,
++      summary: 'accepted before commit failure',
++    }), /Command failed: git commit/u);
++    const artifact = path.join(
++      root,
++      'solve',
++      'changes',
++      'demo',
++      'attempt-1.diff',
++    );
++    t.equal(fs.existsSync(artifact), true,
++      'accepted artifact remains available for retry and audit');
++    t.match(fs.readFileSync(artifact, 'utf8'), /a\/docs\/demo\.md/u);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('CLI warns that --auto-diff is ignored beside --changeRef', (t) => {
+     // FAULT-3 regression: both flags used to silently prefer --changeRef.
+     const root = gitRoot();

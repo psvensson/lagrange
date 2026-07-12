@@ -276,7 +276,10 @@ function stepCommit(root, quest, options = {}) {
     attemptRecorded = !result.terminal;
     return result;
   } finally {
-    if (autoDiffRef && !attemptRecorded) {
+    const recordedAfterCommitFailure = autoDiffRef && readLog(root, quest.id)
+      .some((event) => event.type === 'attempt' &&
+        event.changeRef === autoDiffRef);
+    if (autoDiffRef && !attemptRecorded && !recordedAfterCommitFailure) {
       cleanupWrittenChangeArtifact(autoDiffWrite);
     }
   }

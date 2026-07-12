@@ -39,6 +39,16 @@ import {
 } from './change-artifact.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
+const GIT_COMMAND = 'git';
+const STDIO_IGNORE = 'ignore';
+const GIT_ARGUMENT = Object.freeze({
+  ADD: 'add',
+  ALL: '--all',
+  HEAD: 'HEAD',
+  PATHS: '--',
+  QUIET: '--quiet',
+  RESET: 'reset',
+});
 
 function toRootRelative(root, absolute) {
   return path.relative(root, absolute).replaceAll(path.sep, '/');
@@ -206,7 +216,10 @@ function gitCommands(handoff) {
   if (handoff.inScope.length === 0) return [];
   // Commit only — nothing else (no push).
   return [
-    ['git', 'add', '--', ...handoff.inScope],
+    [GIT_COMMAND, GIT_ARGUMENT.RESET, GIT_ARGUMENT.QUIET, GIT_ARGUMENT.HEAD,
+      GIT_ARGUMENT.PATHS, ...handoff.inScope],
+    [GIT_COMMAND, GIT_ARGUMENT.ADD, GIT_ARGUMENT.ALL, GIT_ARGUMENT.PATHS,
+      ...handoff.inScope],
     ['git', 'commit', '--only', '-m', commitMessage(handoff), '--',
       ...handoff.inScope],
   ];
@@ -298,9 +311,25 @@ export function autoCommitQuest(root, questId, options = {}) {
   if (handoff.inScope.length === 0) {
     return {committed: false, skipped: 'nothing-in-scope'};
   }
-  execFileSync('git', ['add', '--', ...handoff.inScope], {cwd: root, stdio: 'ignore'});
-  execFileSync('git', ['commit', '--only', '-m', commitMessage(handoff), '--',
-    ...handoff.inScope], {cwd: root, stdio: 'ignore'});
+  execFileSync(GIT_COMMAND, [
+    GIT_ARGUMENT.RESET,
+    GIT_ARGUMENT.QUIET,
+    GIT_ARGUMENT.HEAD,
+    GIT_ARGUMENT.PATHS,
+    ...handoff.inScope,
+  ], {cwd: root, stdio: STDIO_IGNORE});
+  execFileSync(GIT_COMMAND, [
+    GIT_ARGUMENT.ADD,
+    GIT_ARGUMENT.ALL,
+    GIT_ARGUMENT.PATHS,
+    ...handoff.inScope,
+  ], {
+    cwd: root,
+    stdio: STDIO_IGNORE,
+  });
+  execFileSync(GIT_COMMAND, ['commit', '--only', '-m', commitMessage(handoff),
+    GIT_ARGUMENT.PATHS,
+    ...handoff.inScope], {cwd: root, stdio: STDIO_IGNORE});
   return {
     committed: true,
     checkpoint,

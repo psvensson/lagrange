@@ -256,6 +256,39 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
     t.end();
   });
 
+  t.test('already-staged tracked deletion commits without unrelated staged work',
+    (t) => {
+      const root = tmp();
+      initGit(root);
+      fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
+      fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+      fs.writeFileSync(path.join(root, 'docs', 'deleted.md'), 'remove me\n');
+      fs.writeFileSync(path.join(root, 'src', 'unrelated.js'), 'keep staged\n');
+      execFileSync('git', ['add', 'docs/deleted.md'], {cwd: root});
+      execFileSync('git', ['commit', '-m', 'track deletion target'], {cwd: root});
+      const {quest, oracle} = makeQuest(root);
+      runStep(root, quest);
+      fs.rmSync(path.join(root, 'docs', 'deleted.md'));
+      execFileSync('git', ['add', '--all', '--', 'docs/deleted.md'], {cwd: root});
+      execFileSync('git', ['add', 'src/unrelated.js'], {cwd: root});
+      fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+
+      const result = runStep(root, quest, {
+        changeRef: makeDiff(root, quest.id, 'delete', 'docs/deleted.md'),
+        summary: 'delete tracked proof',
+      });
+      t.equal(result.commit.committed, true);
+      t.equal(fs.existsSync(path.join(root, 'docs', 'deleted.md')), false);
+      t.notOk(committedFiles(root).includes('src/unrelated.js'));
+      const status = execFileSync('git', ['status', '--porcelain', '-uall'], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      t.match(status, /src\/unrelated\.js/u);
+      fs.rmSync(root, {recursive: true, force: true});
+      t.end();
+    });
+
   t.test('an unverified source change suppresses the commit', (t) => {
     const root = tmp();
     initGit(root);
