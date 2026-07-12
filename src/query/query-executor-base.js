@@ -2,6 +2,9 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
   installQueryExecutorJoinExecutionHelpers,
 } from './query-executor-join-execution.js';
+import {
+  buildSelectFanoutPlan,
+} from './distributed/distributed-select-fanout-plan.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -385,14 +388,21 @@ class QueryExecutorBase {
       };
     }
 
-    // Build SQL from AST
-    const sql = this.buildSelectSQL(ast);
+    // Build the fan-out plan: partition-side SQL with combinable partial
+    // aggregates and over-fetched LIMIT, so global clauses (aggregates,
+    // GROUP BY/HAVING, OFFSET) are applied exactly once at the merge.
+    const fanoutPlan = buildSelectFanoutPlan(
+      ast,
+      params,
+      (expr) => this.buildExpressionSQL(expr),
+    );
+    const sql = this.buildSelectSQL(fanoutPlan.partitionAst);
 
     // Execute on all partitions in parallel (read operations can go to any replica)
     const results = await this.executeOnPartitions(
       partitionIds,
       sql,
-      params,
+      fanoutPlan.partitionParams,
       queryTimestamp,
       true,
       // forRead = true for SELECT
@@ -434,6 +444,7 @@ class QueryExecutorBase {
       results,
       ast,
       this,
+      fanoutPlan,
     );
     const mergeDurationMs = Date.now() - mergeStartTimeMs;
     try {

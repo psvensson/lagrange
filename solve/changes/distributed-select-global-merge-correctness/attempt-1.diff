@@ -1,0 +1,1851 @@
+diff --git a/scripts/run-distributed-select-merge-scenarios.js b/scripts/run-distributed-select-merge-scenarios.js
+new file mode 100644
+index 00000000..02b12003
+--- /dev/null
++++ b/scripts/run-distributed-select-merge-scenarios.js
+@@ -0,0 +1,38 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `distributed-select-global-merge-correctness` quest
++ * scenario.
++ *
++ * Executes the committed guard suites proving distributed SELECT
++ * global-merge semantics — combinable partial aggregates, GROUP BY /
++ * HAVING combination, and exactly-once LIMIT/OFFSET — against real
++ * per-partition SQLite execution of the delivered SQL, and writes a
++ * scenario-harness report for the Solver's probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the machinery.
++ *
++ * Scenario -> guard tests:
++ *   distributed-select-global-merge-correctness
++ *     - test/query/distributed-select-global-merge-correctness.test.js
++ *       (real-SQLite partition execution of delivered SQL; the
++ *        raw-row-mock fidelity gap shipped COUNT(*)=partition-count)
++ *     - test/query/aggregate-function-correctness.property.test.js
++ *       (property suite, now routed through the SQL-honoring mock)
++ *     - test/query/distributed-merge-engine.test.js
++ *       (merge-engine global ORDER/LIMIT semantics)
++ *
++ * Usage: node scripts/run-distributed-select-merge-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'distributed-select-global-merge-correctness': [
++    'test/query/distributed-select-global-merge-correctness.test.js',
++    'test/query/aggregate-function-correctness.property.test.js',
++    'test/query/distributed-merge-engine.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/query/distributed/distributed-merge-engine.js b/src/query/distributed/distributed-merge-engine.js
+index 998eee36..7469a0bd 100644
+--- a/src/query/distributed/distributed-merge-engine.js
++++ b/src/query/distributed/distributed-merge-engine.js
+@@ -1,8 +1,14 @@
+ import {StreamingAggregator} from '../streaming-aggregator.js';
++import {FANOUT_PLAN_KIND} from './distributed-select-fanout-plan.js';
++import {combinePartialAggregateRows} from './partial-aggregate-combiner.js';
+ 
+ /**
+  * DistributedMergeEngine wraps StreamingAggregator for canonical
+- * distributed SQL global-merge semantics.
++ * distributed SQL global-merge semantics. When a fan-out plan is
++ * provided, partial-aggregate partition rows are combined with global
++ * semantics (aggregates, GROUP BY/HAVING, LIMIT/OFFSET applied exactly
++ * once); without a plan the legacy raw-row merge applies (used by the
++ * cross-partition JOIN path, whose coordinator-side rows are raw).
+  */
+ class DistributedMergeEngine {
+   /**
+@@ -19,9 +25,11 @@ class DistributedMergeEngine {
+    * @param {Object[]} partitionResults - Partition execution results.
+    * @param {Object} ast - SELECT AST.
+    * @param {Object} queryExecutor - QueryExecutor instance.
++   * @param {Object} [fanoutPlan] - Fan-out plan from
++   *   buildSelectFanoutPlan; absent for raw coordinator-side row sets.
+    * @return {Object} Aggregated result.
+    */
+-  mergePartitionResults(partitionResults, ast, queryExecutor) {
++  mergePartitionResults(partitionResults, ast, queryExecutor, fanoutPlan) {
+     const aggregator = this.streamingAggregatorFactory();
+     for (const partitionResult of partitionResults) {
+       if (partitionResult.success && Array.isArray(partitionResult.rows)) {
+@@ -29,6 +37,15 @@ class DistributedMergeEngine {
+       }
+     }
+     const mergedRows = aggregator.getAllRows();
++    if (fanoutPlan?.kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE) {
++      return {
++        rows: combinePartialAggregateRows(
++          mergedRows,
++          fanoutPlan.combineSpec,
++          queryExecutor,
++        ),
++      };
++    }
+     return queryExecutor.aggregateSelectResults(
+       [{success: true, rows: mergedRows}],
+       ast,
+diff --git a/src/query/distributed/distributed-select-fanout-plan.js b/src/query/distributed/distributed-select-fanout-plan.js
+new file mode 100644
+index 00000000..d668bef7
+--- /dev/null
++++ b/src/query/distributed/distributed-select-fanout-plan.js
+@@ -0,0 +1,764 @@
++import {EXPR_TYPE} from '../parser-constants.js';
++
++/** Aggregate function names as the parser normalizes them. */
++const AGGREGATE_FN = Object.freeze({
++  COUNT: 'COUNT',
++  SUM: 'SUM',
++  AVG: 'AVG',
++  MIN: 'MIN',
++  MAX: 'MAX',
++});
++
++/** Row-key text fragments mirroring QueryExecutor#getArgName. */
++const ARG_NAME = Object.freeze({
++  STAR: '*',
++  UNKNOWN: '?',
++});
++
++/**
++ * Fan-out plan kinds for a distributed SELECT. Explicit variants — the
++ * merge engine branches on this single canonical outcome instead of
++ * re-deriving aggregate-ness from the AST.
++ */
++const FANOUT_PLAN_KIND = {
++  RAW_ROWS: 'raw_rows',
++  PARTIAL_AGGREGATE: 'partial_aggregate',
++};
++
++/**
++ * Deterministic partition-side aliases for combinable partial columns.
++ * Prefixed so they can never collide with user column names, and stable
++ * per column index so the coordinator can address them positionally.
++ */
++const PARTIAL_ALIAS = {
++  GROUP_KEY_PREFIX: '__fanout_gk_',
++  AGGREGATE_PREFIX: '__fanout_agg_',
++  BARE_PREFIX: '__fanout_bare_',
++  DISTINCT_VALUES_SUFFIX: '_dv',
++  SUM_SUFFIX: '_sum',
++  COUNT_SUFFIX: '_count',
++  MIN_SUFFIX: '_min',
++  MAX_SUFFIX: '_max',
++};
++
++/**
++ * Per-aggregate combine strategies. One canonical decision table:
++ * every supported aggregate maps to the partial columns it needs
++ * partition-side and the combine rule the coordinator applies.
++ */
++const AGGREGATE_COMBINE_MODE = {
++  SUM_OF_COUNTS: 'sum_of_counts',
++  SUM_OF_SUMS: 'sum_of_sums',
++  SUM_PAIR_RATIO: 'sum_pair_ratio',
++  MIN_OF_MINS: 'min_of_mins',
++  MAX_OF_MAXES: 'max_of_maxes',
++  DISTINCT_VALUES: 'distinct_values',
++};
++
++const COMBINE_MODE_BY_FUNCTION = {
++  [AGGREGATE_FN.COUNT]: AGGREGATE_COMBINE_MODE.SUM_OF_COUNTS,
++  [AGGREGATE_FN.SUM]: AGGREGATE_COMBINE_MODE.SUM_OF_SUMS,
++  [AGGREGATE_FN.AVG]: AGGREGATE_COMBINE_MODE.SUM_PAIR_RATIO,
++  [AGGREGATE_FN.MIN]: AGGREGATE_COMBINE_MODE.MIN_OF_MINS,
++  [AGGREGATE_FN.MAX]: AGGREGATE_COMBINE_MODE.MAX_OF_MAXES,
++};
++
++/**
++ * Coordinator-side expression node type marking a combined aggregate
++ * value inside a SELECT expression (e.g. `SUM(x) + 1`): the partition
++ * ships the aggregate's partials, and the combiner substitutes the
++ * globally-combined value at this marker before evaluating the rest of
++ * the expression.
++ */
++const COMBINED_AGGREGATE_MARKER = 'combined_aggregate_marker';
++
++/**
++ * Expression node types the coordinator-side scalar evaluator supports.
++ * A SELECT expression containing any other node type (CASE, CAST,
++ * function calls, subqueries, ...) forces the whole plan back to legacy
++ * RAW_ROWS behavior instead of producing silently-wrong values.
++ */
++const EVALUABLE_EXPRESSION_TYPES = new Set([
++  EXPR_TYPE.BINARY,
++  EXPR_TYPE.UNARY,
++  EXPR_TYPE.LITERAL,
++  EXPR_TYPE.COLUMN_REF,
++  EXPR_TYPE.PARAMETER,
++  EXPR_TYPE.AGGREGATE,
++]);
++
++/**
++ * Binary operators the coordinator scalar evaluator supports, with
++ * SQLite affinity semantics: integer/integer division truncates and
++ * modulo casts its operands to integer; division or modulo by zero is
++ * NULL; comparisons surface as 1/0. This table is the single source of
++ * truth for BOTH plan-time evaluability (an unsupported operator forces
++ * the RAW_ROWS fallback) and combine-time evaluation.
++ */
++const SCALAR_BINARY_OPS = Object.freeze({
++  '+': (a, b) => a + b,
++  '-': (a, b) => a - b,
++  '*': (a, b) => a * b,
++  '/': (a, b) => {
++    if (Number(b) === 0) {
++      return null;
++    }
++    if (Number.isInteger(a) && Number.isInteger(b)) {
++      return Math.trunc(a / b);
++    }
++    return a / b;
++  },
++  '%': (a, b) => {
++    const divisor = Math.trunc(Number(b));
++    if (divisor === 0) {
++      return null;
++    }
++    return Math.trunc(Number(a)) % divisor;
++  },
++  '=': (a, b) => (a === b ? 1 : 0),
++  '!=': (a, b) => (a !== b ? 1 : 0),
++  '<>': (a, b) => (a !== b ? 1 : 0),
++  '<': (a, b) => (a < b ? 1 : 0),
++  '<=': (a, b) => (a <= b ? 1 : 0),
++  '>': (a, b) => (a > b ? 1 : 0),
++  '>=': (a, b) => (a >= b ? 1 : 0),
++});
++
++/** Unary operators the coordinator scalar evaluator supports. */
++const SCALAR_UNARY_OPS = Object.freeze({
++  '-': (value) => -value,
++  '+': (value) => +value,
++});
++
++/**
++ * Render an expression AST to a canonical comparison string. Used to
++ * structurally match SELECT columns against GROUP BY expressions without
++ * relying on object identity.
++ * @param {Object} expr - Expression AST node.
++ * @return {string} Canonical rendering.
++ */
++function canonicalExpressionKey(expr) {
++  return JSON.stringify(normalizeForKey(expr));
++}
++
++function normalizeForKey(node) {
++  if (node === null || typeof node !== 'object') {
++    return node;
++  }
++  if (Array.isArray(node)) {
++    return node.map(normalizeForKey);
++  }
++  const out = {};
++  for (const key of Object.keys(node).sort()) {
++    out[key] = normalizeForKey(node[key]);
++  }
++  return out;
++}
++
++/**
++ * The alias the legacy coordinator aggregation gives an aggregate output
++ * row key: user alias when present, otherwise `FUNC(argName)` where
++ * argName mirrors QueryExecutor#getArgName.
++ * @param {Object} col - SELECT column AST entry.
++ * @param {Object} expr - The aggregate expression inside it.
++ * @return {string} Output row key.
++ */
++function aggregateOutputKey(col, expr) {
++  return col.alias || canonicalAggregateName(expr);
++}
++
++/**
++ * Canonical `FUNC(arg)` name; matches evaluateExpression's HAVING lookup.
++ * @param {Object} expr - Aggregate expression AST.
++ * @return {string} Canonical aggregate name.
++ */
++function canonicalAggregateName(expr) {
++  let argName = ARG_NAME.UNKNOWN;
++  if (expr.argument?.type === EXPR_TYPE.STAR) {
++    argName = ARG_NAME.STAR;
++  } else if (
++    expr.argument?.type === EXPR_TYPE.COLUMN_REF
++  ) {
++    argName = expr.argument.column;
++  }
++  return `${expr.function}(${argName})`;
++}
++
++/**
++ * Collect every aggregate expression referenced by the SELECT columns and
++ * the HAVING clause, deduplicated by canonical shape, so HAVING can filter
++ * on aggregates that are not projected.
++ * @param {Object} ast - SELECT AST.
++ * @return {Array<{expr: Object, outputKeys: string[], havingKey: string}>}
++ */
++function collectAggregateSpecs(ast) {
++  const specs = [];
++  const byShape = new Map();
++
++  const register = (expr, outputKey) => {
++    const shape = canonicalExpressionKey(expr);
++    let spec = byShape.get(shape);
++    if (!spec) {
++      spec = {
++        expr,
++        outputKeys: [],
++        havingKey: canonicalAggregateName(expr),
++        combineMode: expr.distinct ?
++          AGGREGATE_COMBINE_MODE.DISTINCT_VALUES :
++          COMBINE_MODE_BY_FUNCTION[expr.function.toUpperCase()],
++        index: specs.length,
++      };
++      byShape.set(shape, spec);
++      specs.push(spec);
++    }
++    if (outputKey && !spec.outputKeys.includes(outputKey)) {
++      spec.outputKeys.push(outputKey);
++    }
++    return spec;
++  };
++
++  for (const col of ast.columns) {
++    const expr = col.expression || col;
++    if (expr.type === EXPR_TYPE.AGGREGATE) {
++      register(expr, aggregateOutputKey(col, expr));
++    } else {
++      // Aggregates nested inside a SELECT expression (SUM(x) + 1) still
++      // need partials shipped; the expression itself is evaluated at the
++      // coordinator over the combined values.
++      walkAggregates(expr, (nested) => register(nested, null));
++    }
++  }
++  walkAggregates(ast.having, (expr) => register(expr, null));
++  return specs;
++}
++
++function containsAggregate(node) {
++  let found = false;
++  walkAggregates(node, () => {
++    found = true;
++  });
++  return found;
++}
++
++/**
++ * Replace every aggregate node inside an expression clone with a
++ * combined-aggregate marker pointing at its registered spec.
++ * @param {Object} node - Expression AST clone (mutated in place).
++ * @param {Map} specByShape - Canonical shape -> aggregate spec.
++ */
++function replaceAggregatesWithMarkers(node, specByShape) {
++  if (!node || typeof node !== 'object') {
++    return;
++  }
++  for (const [key, value] of Object.entries(node)) {
++    if (Array.isArray(value)) {
++      value.forEach((entry, index) => {
++        if (entry?.type === EXPR_TYPE.AGGREGATE) {
++          value[index] = buildAggregateMarker(entry, specByShape);
++        } else {
++          replaceAggregatesWithMarkers(entry, specByShape);
++        }
++      });
++      continue;
++    }
++    if (value && typeof value === 'object') {
++      if (value.type === EXPR_TYPE.AGGREGATE) {
++        node[key] = buildAggregateMarker(value, specByShape);
++        continue;
++      }
++      replaceAggregatesWithMarkers(value, specByShape);
++    }
++  }
++}
++
++function buildAggregateMarker(aggregateNode, specByShape) {
++  const spec = specByShape.get(canonicalExpressionKey(aggregateNode));
++  return {type: COMBINED_AGGREGATE_MARKER, specIndex: spec.index};
++}
++
++/**
++ * Visit column refs that sit outside any aggregate (aggregates are
++ * already replaced by markers when this runs).
++ * @param {Object} node - Expression AST.
++ * @param {Function} visit - Called with each column_ref node.
++ */
++function collectOutsideColumnRefs(node, visit) {
++  if (!node || typeof node !== 'object') {
++    return;
++  }
++  if (node.type === EXPR_TYPE.COLUMN_REF) {
++    visit(node);
++    return;
++  }
++  if (node.type === COMBINED_AGGREGATE_MARKER) {
++    return;
++  }
++  for (const value of Object.values(node)) {
++    if (Array.isArray(value)) {
++      value.forEach((entry) => collectOutsideColumnRefs(entry, visit));
++    } else if (value && typeof value === 'object') {
++      collectOutsideColumnRefs(value, visit);
++    }
++  }
++}
++
++/**
++ * Whether a SELECT expression containing aggregates can be evaluated at
++ * the coordinator after its aggregates are combined.
++ * @param {Object} node - Expression AST.
++ * @return {boolean} True when every node type is evaluable.
++ */
++function expressionEvaluable(node) {
++  if (!node || typeof node !== 'object') {
++    return true;
++  }
++  if (node.type === EXPR_TYPE.AGGREGATE) {
++    // The aggregate itself is replaced by its combined value; its
++    // argument runs partition-side inside the partial.
++    return true;
++  }
++  if (node.type && !EVALUABLE_EXPRESSION_TYPES.has(node.type)) {
++    return false;
++  }
++  if (node.type === EXPR_TYPE.BINARY &&
++    !Object.hasOwn(SCALAR_BINARY_OPS, node.operator)) {
++    return false;
++  }
++  if (node.type === EXPR_TYPE.UNARY &&
++    !Object.hasOwn(SCALAR_UNARY_OPS, node.operator)) {
++    return false;
++  }
++  for (const value of Object.values(node)) {
++    if (Array.isArray(value)) {
++      if (!value.every((entry) => expressionEvaluable(entry))) {
++        return false;
++      }
++    } else if (value && typeof value === 'object') {
++      if (!expressionEvaluable(value)) {
++        return false;
++      }
++    }
++  }
++  return true;
++}
++
++/**
++ * True when some SELECT column mixes aggregates into an expression the
++ * coordinator evaluator cannot compute — forces legacy fallback.
++ * @param {Object} ast - SELECT AST.
++ * @return {boolean} Unsupported mixed expression present.
++ */
++function hasUnsupportedAggregateExpression(ast) {
++  return ast.columns.some((col) => {
++    const expr = col.expression || col;
++    return expr.type !== EXPR_TYPE.AGGREGATE &&
++      containsAggregate(expr) &&
++      !expressionEvaluable(expr);
++  });
++}
++
++function walkAggregates(node, visit) {
++  if (!node || typeof node !== 'object') {
++    return;
++  }
++  if (node.type === EXPR_TYPE.AGGREGATE) {
++    visit(node);
++    return;
++  }
++  for (const value of Object.values(node)) {
++    if (Array.isArray(value)) {
++      value.forEach((entry) => walkAggregates(entry, visit));
++    } else if (value && typeof value === 'object') {
++      walkAggregates(value, visit);
++    }
++  }
++}
++
++/**
++ * Whether every aggregate in the AST has a supported combine mode; an
++ * unsupported function falls the whole plan back to legacy behavior
++ * rather than producing silently-wrong partials.
++ * @param {Array} specs - Aggregate specs.
++ * @return {boolean} True when all combine modes are known.
++ */
++function allAggregatesCombinable(specs) {
++  return specs.every((spec) => Boolean(spec.combineMode));
++}
++
++/**
++ * True when the SELECT shape supports the partial/raw fan-out rewrite.
++ * Set operations, CTEs, subquery FROM, and JOINs keep legacy rendering
++ * (JOINs are rewritten separately by the join execution path).
++ * @param {Object} ast - SELECT AST.
++ * @return {boolean} Rewrite applicability.
++ */
++function fanoutRewriteApplies(ast) {
++  return !ast.setOperation &&
++    !(ast.ctes && ast.ctes.length > 0) &&
++    !ast.from?.subquery &&
++    !(ast.joins && ast.joins.length > 0);
++}
++
++function hasAggregatesOrGroupBy(ast, specs) {
++  return specs.length > 0 || Boolean(ast.groupBy);
++}
++
++/**
++ * Tag every parameter node with its ordinal in the original render order
++ * (columns, where, groupBy, having, orderBy — the clause order
++ * buildSelectSQL emits placeholders in for rewrite-eligible shapes).
++ * @param {Object} ast - SELECT AST (mutated: parameter nodes get
++ *   `__fanoutParamIndex`).
++ * @return {number} Total parameter count.
++ */
++function tagParameterOrdinals(ast) {
++  let ordinal = 0;
++  const visit = (node) => {
++    if (!node || typeof node !== 'object') {
++      return;
++    }
++    if (Array.isArray(node)) {
++      node.forEach(visit);
++      return;
++    }
++    if (node.type === EXPR_TYPE.PARAMETER) {
++      node.__fanoutParamIndex = ordinal;
++      ordinal += 1;
++      return;
++    }
++    for (const value of Object.values(node)) {
++      visit(value);
++    }
++  };
++  visit(ast.columns);
++  visit(ast.where);
++  visit(ast.groupBy);
++  visit(ast.having);
++  visit(ast.orderBy);
++  return ordinal;
++}
++
++/**
++ * Collect the original ordinals of every parameter node reachable from
++ * the (rewritten) partition AST, in partition render order, so the
++ * partition params array can be assembled from the original one.
++ * @param {Object} partitionAst - Rewritten AST.
++ * @return {number[]} Original parameter ordinals in partition order.
++ */
++function collectPartitionParamOrdinals(partitionAst) {
++  const ordinals = [];
++  const visit = (node) => {
++    if (!node || typeof node !== 'object') {
++      return;
++    }
++    if (Array.isArray(node)) {
++      node.forEach(visit);
++      return;
++    }
++    if (node.type === EXPR_TYPE.PARAMETER) {
++      ordinals.push(node.__fanoutParamIndex);
++      return;
++    }
++    for (const value of Object.values(node)) {
++      visit(value);
++    }
++  };
++  visit(partitionAst.columns);
++  visit(partitionAst.where);
++  visit(partitionAst.groupBy);
++  visit(partitionAst.having);
++  visit(partitionAst.orderBy);
++  return ordinals;
++}
++
++function cloneAst(node) {
++  return structuredClone(node);
++}
++
++/**
++ * Replace parameter nodes inside a coordinator-side clause with literal
++ * nodes carrying the bound value, so HAVING can be evaluated at the
++ * coordinator after the partition SQL (which no longer contains those
++ * placeholders) consumed only its own parameters.
++ * @param {Object} node - Clause AST (mutated in place).
++ * @param {Array} params - Original positional parameters.
++ */
++function substituteParameterLiterals(node, params) {
++  if (!node || typeof node !== 'object') {
++    return;
++  }
++  for (const [key, value] of Object.entries(node)) {
++    if (Array.isArray(value)) {
++      value.forEach((entry) => substituteParameterLiterals(entry, params));
++      continue;
++    }
++    if (value && typeof value === 'object') {
++      if (value.type === EXPR_TYPE.PARAMETER) {
++        node[key] = {
++          type: EXPR_TYPE.LITERAL,
++          value: params[value.__fanoutParamIndex],
++        };
++        continue;
++      }
++      substituteParameterLiterals(value, params);
++    }
++  }
++}
++
++/**
++ * Build the partition-side over-fetch limit for raw-row fan-out: OFFSET
++ * must be applied exactly once globally, so each partition returns its
++ * first (count + offset) rows and the coordinator slices.
++ * @param {Object} limit - Original limit AST ({count, offset}).
++ * @return {Object} Rewritten limit AST.
++ */
++function buildOverfetchLimit(limit) {
++  const offset = Number.isInteger(limit.offset) ? Math.max(limit.offset, 0) : 0;
++  if (!Number.isInteger(limit.count)) {
++    return {count: limit.count, offset: 0};
++  }
++  return {count: Math.max(limit.count, 0) + offset, offset: 0};
++}
++
++/**
++ * Build the partition-side projection and GROUP BY for a
++ * partial-aggregate fan-out, plus the coordinator combine spec.
++ * @param {Object} ast - Original SELECT AST.
++ * @param {Array} specs - Aggregate specs from collectAggregateSpecs.
++ * @return {{partitionAst: Object, combineSpec: Object}} Plan parts.
++ */
++function buildPartialAggregateParts(ast, specs, renderExpression) {
++  const partitionAst = cloneAst(ast);
++  const columns = [];
++  const groupKeys = [];
++  const bareColumns = [];
++  const partitionGroupBy = [];
++
++  const groupByEntries = ast.groupBy || [];
++  const groupKeyByShape = new Map();
++  groupByEntries.forEach((groupExpr, index) => {
++    const alias = `${PARTIAL_ALIAS.GROUP_KEY_PREFIX}${index}`;
++    const shape = canonicalExpressionKey(groupExpr);
++    const key = {alias, shape, outputKeys: []};
++    groupKeyByShape.set(shape, key);
++    groupKeys.push(key);
++    columns.push({expression: cloneAst(groupExpr), alias});
++    partitionGroupBy.push(cloneAst(groupExpr));
++  });
++
++  const expressionColumns = [];
++  let includeStar = false;
++  const specByShape = new Map(
++    specs.map((spec) => [canonicalExpressionKey(spec.expr), spec]),
++  );
++  const bareByColumn = new Map();
++  const ensureBareColumn = (expr, outputKey, index, projected) => {
++    const existing = bareByColumn.get(outputKey);
++    if (existing) {
++      existing.projected = existing.projected || projected;
++      return;
++    }
++    const alias = `${PARTIAL_ALIAS.BARE_PREFIX}${index}_${bareByColumn.size}`;
++    const bare = {alias, outputKey, projected};
++    bareByColumn.set(outputKey, bare);
++    bareColumns.push(bare);
++    columns.push({expression: cloneAst(expr), alias});
++  };
++
++  ast.columns.forEach((col, index) => {
++    const expr = col.expression || col;
++    if (expr.type === EXPR_TYPE.AGGREGATE) {
++      return;
++    }
++    if (expr.type === EXPR_TYPE.STAR) {
++      // SELECT * alongside aggregates/GROUP BY: ship the raw columns and
++      // let the combiner surface an arbitrary row's values per group —
++      // SQLite's own bare-column semantics.
++      includeStar = true;
++      columns.push({type: EXPR_TYPE.STAR});
++      return;
++    }
++    const shape = canonicalExpressionKey(expr);
++    const outputKey = col.alias ||
++      (expr.type === EXPR_TYPE.COLUMN_REF ?
++        expr.column :
++        renderExpression(expr));
++    const groupKey = groupKeyByShape.get(shape);
++    if (groupKey) {
++      groupKey.outputKeys.push(outputKey);
++      return;
++    }
++    if (containsAggregate(expr)) {
++      // Combined-aggregate expression: replace each aggregate node with
++      // a marker resolving to the globally-combined value, and project
++      // any raw columns it references as bare partials.
++      const markerExpr = cloneAst(expr);
++      replaceAggregatesWithMarkers(markerExpr, specByShape);
++      collectOutsideColumnRefs(markerExpr, (refExpr) =>
++        ensureBareColumn(refExpr, refExpr.column, index, false),
++      );
++      expressionColumns.push({outputKey, expression: markerExpr});
++      return;
++    }
++    ensureBareColumn(expr, outputKey, index, true);
++  });
++
++  const distinctArgShapes = new Map();
++  for (const spec of specs) {
++    const base = `${PARTIAL_ALIAS.AGGREGATE_PREFIX}${spec.index}`;
++    if (spec.combineMode === AGGREGATE_COMBINE_MODE.DISTINCT_VALUES) {
++      const argShape = canonicalExpressionKey(spec.expr.argument);
++      let valueAlias = distinctArgShapes.get(argShape);
++      if (!valueAlias) {
++        valueAlias = `${base}${PARTIAL_ALIAS.DISTINCT_VALUES_SUFFIX}`;
++        distinctArgShapes.set(argShape, valueAlias);
++        columns.push({
++          expression: cloneAst(spec.expr.argument),
++          alias: valueAlias,
++        });
++        partitionGroupBy.push(cloneAst(spec.expr.argument));
++      }
++      spec.partials = {values: valueAlias};
++      continue;
++    }
++    if (spec.combineMode === AGGREGATE_COMBINE_MODE.SUM_PAIR_RATIO) {
++      const sumAlias = `${base}${PARTIAL_ALIAS.SUM_SUFFIX}`;
++      const countAlias = `${base}${PARTIAL_ALIAS.COUNT_SUFFIX}`;
++      columns.push({
++        expression: {
++          type: EXPR_TYPE.AGGREGATE,
++          function: AGGREGATE_FN.SUM,
++          argument: cloneAst(spec.expr.argument),
++          distinct: false,
++        },
++        alias: sumAlias,
++      });
++      columns.push({
++        expression: {
++          type: EXPR_TYPE.AGGREGATE,
++          function: AGGREGATE_FN.COUNT,
++          argument: cloneAst(spec.expr.argument),
++          distinct: false,
++        },
++        alias: countAlias,
++      });
++      spec.partials = {sum: sumAlias, count: countAlias};
++      continue;
++    }
++    const suffixByMode = {
++      [AGGREGATE_COMBINE_MODE.SUM_OF_COUNTS]: PARTIAL_ALIAS.COUNT_SUFFIX,
++      [AGGREGATE_COMBINE_MODE.SUM_OF_SUMS]: PARTIAL_ALIAS.SUM_SUFFIX,
++      [AGGREGATE_COMBINE_MODE.MIN_OF_MINS]: PARTIAL_ALIAS.MIN_SUFFIX,
++      [AGGREGATE_COMBINE_MODE.MAX_OF_MAXES]: PARTIAL_ALIAS.MAX_SUFFIX,
++    };
++    const alias = `${base}${suffixByMode[spec.combineMode]}`;
++    columns.push({
++      expression: cloneAst(spec.expr),
++      alias,
++    });
++    spec.partials = {value: alias};
++  }
++
++  partitionAst.columns = columns;
++  partitionAst.groupBy = partitionGroupBy.length > 0 ?
++    partitionGroupBy :
++    null;
++  partitionAst.having = null;
++  partitionAst.orderBy = null;
++  partitionAst.limit = null;
++  partitionAst.distinct = false;
++
++  const combineSpec = {
++    groupKeys,
++    bareColumns,
++    aggregates: specs.map((spec) => ({
++      index: spec.index,
++      combineMode: spec.combineMode,
++      outputKeys: spec.outputKeys,
++      havingKey: spec.havingKey,
++      partials: spec.partials,
++      fn: spec.expr.function.toUpperCase(),
++    })),
++    having: ast.having || null,
++    orderBy: ast.orderBy || null,
++    limit: ast.limit || null,
++    hasGroupBy: groupByEntries.length > 0,
++    expressionColumns,
++    includeStar,
++  };
++
++  return {partitionAst, combineSpec};
++}
++
++/**
++ * Build the fan-out plan for a distributed SELECT: what SQL each
++ * partition executes and how the coordinator must merge the results so
++ * aggregates, GROUP BY/HAVING, and LIMIT/OFFSET are applied with global
++ * semantics exactly once.
++ * @param {Object} ast - Parsed SELECT AST (not mutated).
++ * @param {Array} params - Original positional parameters.
++ * @param {Function} renderExpression - Renders an expression AST to SQL
++ *   text (QueryExecutor#buildExpressionSQL); names unaliased outputs.
++ * @return {{kind: string, partitionAst: Object, partitionParams: Array,
++ *   combineSpec: (Object|null)}} Fan-out plan.
++ */
++function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
++  const workingAst = cloneAst(ast);
++  tagParameterOrdinals(workingAst);
++  const specs = collectAggregateSpecs(workingAst);
++  const renderExpr = renderExpression ||
++    ((expr) => canonicalExpressionKey(expr));
++
++  if (!fanoutRewriteApplies(workingAst) ||
++    (hasAggregatesOrGroupBy(workingAst, specs) &&
++      (!allAggregatesCombinable(specs) ||
++        hasUnsupportedAggregateExpression(workingAst)))) {
++    return {
++      kind: FANOUT_PLAN_KIND.RAW_ROWS,
++      partitionAst: ast,
++      partitionParams: params,
++      combineSpec: null,
++    };
++  }
++
++  if (!hasAggregatesOrGroupBy(workingAst, specs)) {
++    const partitionAst = workingAst;
++    if (partitionAst.limit) {
++      partitionAst.limit = buildOverfetchLimit(partitionAst.limit);
++    }
++    const ordinals = collectPartitionParamOrdinals(partitionAst);
++    return {
++      kind: FANOUT_PLAN_KIND.RAW_ROWS,
++      partitionAst,
++      partitionParams: ordinals.map((ordinal) => params[ordinal]),
++      combineSpec: null,
++    };
++  }
++
++  const {partitionAst, combineSpec} = buildPartialAggregateParts(
++    workingAst,
++    specs,
++    renderExpr,
++  );
++  substituteParameterLiterals(combineSpec.having, params);
++  for (const expressionColumn of combineSpec.expressionColumns) {
++    substituteParameterLiterals(expressionColumn, params);
++  }
++  const ordinals = collectPartitionParamOrdinals(partitionAst);
++  return {
++    kind: FANOUT_PLAN_KIND.PARTIAL_AGGREGATE,
++    partitionAst,
++    partitionParams: ordinals.map((ordinal) => params[ordinal]),
++    combineSpec,
++  };
++}
++
++export {
++  FANOUT_PLAN_KIND,
++  AGGREGATE_COMBINE_MODE,
++  COMBINED_AGGREGATE_MARKER,
++  PARTIAL_ALIAS,
++  SCALAR_BINARY_OPS,
++  SCALAR_UNARY_OPS,
++  buildSelectFanoutPlan,
++};
+diff --git a/src/query/distributed/partial-aggregate-combiner.js b/src/query/distributed/partial-aggregate-combiner.js
+new file mode 100644
+index 00000000..880ad3b3
+--- /dev/null
++++ b/src/query/distributed/partial-aggregate-combiner.js
+@@ -0,0 +1,321 @@
++import {
++  AGGREGATE_COMBINE_MODE,
++  COMBINED_AGGREGATE_MARKER,
++  PARTIAL_ALIAS,
++  SCALAR_BINARY_OPS,
++  SCALAR_UNARY_OPS,
++} from './distributed-select-fanout-plan.js';
++import {EXPR_TYPE} from '../parser-constants.js';
++
++/** Aggregate function names as the parser normalizes them. */
++const AGGREGATE_FN = Object.freeze({
++  COUNT: 'COUNT',
++  SUM: 'SUM',
++  AVG: 'AVG',
++  MIN: 'MIN',
++  MAX: 'MAX',
++});
++
++/**
++ * Combine partial-aggregate rows returned by the partitions into final,
++ * globally-correct result rows: group by the projected group keys,
++ * combine each aggregate's partials per its combine mode, then apply
++ * HAVING, ORDER BY, and LIMIT/OFFSET exactly once at the coordinator.
++ *
++ * The queryExecutor argument supplies the existing row-level clause
++ * appliers (applyHaving, applyOrderBy, applyLimit) so global-clause
++ * semantics stay single-sourced.
++ */
++
++/**
++ * Combine one aggregate's partial values for one group.
++ * @param {Object} aggregate - Aggregate combine spec entry.
++ * @param {Array<Object>} groupRows - Partial rows of the group.
++ * @return {*} Final aggregate value (SQL semantics: null over no input
++ *   for SUM/AVG/MIN/MAX, 0 for COUNT).
++ */
++function combineAggregate(aggregate, groupRows) {
++  switch (aggregate.combineMode) {
++  case AGGREGATE_COMBINE_MODE.SUM_OF_COUNTS:
++    return groupRows.reduce(
++      (total, row) => total + (Number(row[aggregate.partials.value]) || 0),
++      0,
++    );
++  case AGGREGATE_COMBINE_MODE.SUM_OF_SUMS:
++    return combineNullSkipping(
++      groupRows,
++      aggregate.partials.value,
++      (total, value) => total + value,
++    );
++  case AGGREGATE_COMBINE_MODE.MIN_OF_MINS:
++    return combineNullSkipping(
++      groupRows,
++      aggregate.partials.value,
++      (best, value) => (value < best ? value : best),
++    );
++  case AGGREGATE_COMBINE_MODE.MAX_OF_MAXES:
++    return combineNullSkipping(
++      groupRows,
++      aggregate.partials.value,
++      (best, value) => (value > best ? value : best),
++    );
++  case AGGREGATE_COMBINE_MODE.SUM_PAIR_RATIO: {
++    const totalCount = groupRows.reduce(
++      (total, row) => total + (Number(row[aggregate.partials.count]) || 0),
++      0,
++    );
++    if (totalCount === 0) {
++      return null;
++    }
++    const totalSum = combineNullSkipping(
++      groupRows,
++      aggregate.partials.sum,
++      (total, value) => total + value,
++    );
++    return totalSum === null ? null : totalSum / totalCount;
++  }
++  case AGGREGATE_COMBINE_MODE.DISTINCT_VALUES:
++    return combineDistinct(aggregate, groupRows);
++  default:
++    return null;
++  }
++}
++
++function combineNullSkipping(groupRows, alias, reducer) {
++  let acc = null;
++  for (const row of groupRows) {
++    const value = row[alias];
++    if (value === null || value === undefined) {
++      continue;
++    }
++    acc = acc === null ? value : reducer(acc, value);
++  }
++  return acc;
++}
++
++function combineDistinct(aggregate, groupRows) {
++  const distinct = new Set();
++  for (const row of groupRows) {
++    const value = row[aggregate.partials.values];
++    if (value !== null && value !== undefined) {
++      distinct.add(value);
++    }
++  }
++  const values = [...distinct];
++  if (aggregate.fn === AGGREGATE_FN.COUNT) {
++    return values.length;
++  }
++  if (values.length === 0) {
++    return null;
++  }
++  switch (aggregate.fn) {
++  case AGGREGATE_FN.SUM:
++    return values.reduce((total, value) => total + Number(value), 0);
++  case AGGREGATE_FN.AVG:
++    return values.reduce((total, value) => total + Number(value), 0) /
++      values.length;
++  case AGGREGATE_FN.MIN:
++    return values.reduce((best, value) => (value < best ? value : best));
++  case AGGREGATE_FN.MAX:
++    return values.reduce((best, value) => (value > best ? value : best));
++  default:
++    return null;
++  }
++}
++
++/**
++ * Build the group key for a partial row.
++ * @param {Object} combineSpec - Plan combine spec.
++ * @param {Object} row - Partial row.
++ * @return {string} Stable group key.
++ */
++function groupKeyOf(combineSpec, row) {
++  return JSON.stringify(
++    combineSpec.groupKeys.map((key) => row[key.alias]),
++  );
++}
++
++/**
++ * Merge partition partial-aggregate rows into the final result rows.
++ * @param {Array<Object>} partialRows - Concatenated partition rows.
++ * @param {Object} combineSpec - Plan combine spec.
++ * @param {Object} queryExecutor - QueryExecutor (clause appliers).
++ * @return {Array<Object>} Final rows.
++ */
++function combinePartialAggregateRows(partialRows, combineSpec, queryExecutor) {
++  const groups = new Map();
++  for (const row of partialRows) {
++    const key = groupKeyOf(combineSpec, row);
++    let group = groups.get(key);
++    if (!group) {
++      group = [];
++      groups.set(key, group);
++    }
++    group.push(row);
++  }
++  if (groups.size === 0 && !combineSpec.hasGroupBy) {
++    groups.set(groupKeyOf(combineSpec, {}), []);
++  }
++
++  let internalRows = [];
++  for (const groupRows of groups.values()) {
++    internalRows.push(buildInternalRow(combineSpec, groupRows));
++  }
++
++  if (combineSpec.having) {
++    internalRows = queryExecutor.applyHaving(
++      internalRows,
++      combineSpec.having,
++    );
++  }
++  if (combineSpec.orderBy) {
++    internalRows = queryExecutor.applyOrderBy(
++      internalRows,
++      combineSpec.orderBy,
++    );
++  }
++  if (combineSpec.limit) {
++    internalRows = queryExecutor.applyLimit(internalRows, combineSpec.limit);
++  }
++  return internalRows.map((row) => projectFinalRow(combineSpec, row));
++}
++
++function buildInternalRow(combineSpec, groupRows) {
++  const firstRow = groupRows[0] || {};
++  const row = {};
++  const starKeys = [];
++  if (combineSpec.includeStar) {
++    for (const key of Object.keys(firstRow)) {
++      if (!isInternalAlias(key)) {
++        row[key] = firstRow[key];
++        starKeys.push(key);
++      }
++    }
++  }
++  for (const key of combineSpec.groupKeys) {
++    const value = firstRow[key.alias];
++    for (const outputKey of key.outputKeys) {
++      row[outputKey] = value;
++    }
++    row[key.alias] = value;
++  }
++  for (const bare of combineSpec.bareColumns) {
++    row[bare.outputKey] = firstRow[bare.alias];
++  }
++  const combinedBySpecIndex = new Map();
++  for (const aggregate of combineSpec.aggregates) {
++    const value = combineAggregate(aggregate, groupRows);
++    combinedBySpecIndex.set(aggregate.index, value);
++    row[aggregate.havingKey] = value;
++    for (const outputKey of aggregate.outputKeys) {
++      row[outputKey] = value;
++    }
++  }
++  for (const expressionColumn of combineSpec.expressionColumns) {
++    row[expressionColumn.outputKey] = evaluateScalarExpression(
++      expressionColumn.expression,
++      row,
++      combinedBySpecIndex,
++    );
++  }
++  Object.defineProperty(row, STAR_KEYS_PROPERTY, {
++    value: starKeys,
++    enumerable: false,
++  });
++  return row;
++}
++
++/** Hidden per-row list of star-projected raw column names. */
++const STAR_KEYS_PROPERTY = '__fanoutStarKeys';
++
++function isInternalAlias(key) {
++  return key.startsWith(PARTIAL_ALIAS.GROUP_KEY_PREFIX) ||
++    key.startsWith(PARTIAL_ALIAS.AGGREGATE_PREFIX) ||
++    key.startsWith(PARTIAL_ALIAS.BARE_PREFIX);
++}
++
++/**
++ * Evaluate a coordinator-side scalar expression over a combined row.
++ * SQL null semantics: any null operand nullifies arithmetic and
++ * comparisons; boolean outcomes surface as 1/0 to match SQLite.
++ * @param {Object} node - Expression AST (markers for aggregates).
++ * @param {Object} row - Internal combined row.
++ * @param {Map} combinedBySpecIndex - Aggregate spec index -> value.
++ * @return {*} Scalar value.
++ */
++function evaluateScalarExpression(node, row, combinedBySpecIndex) {
++  switch (node?.type) {
++  case EXPR_TYPE.LITERAL:
++    return node.value;
++  case EXPR_TYPE.COLUMN_REF:
++    return row[node.column];
++  case COMBINED_AGGREGATE_MARKER:
++    return combinedBySpecIndex.get(node.specIndex);
++  case EXPR_TYPE.UNARY: {
++    const op = SCALAR_UNARY_OPS[node.operator];
++    if (!op) {
++      return null;
++    }
++    const operand = evaluateScalarExpression(
++      node.operand,
++      row,
++      combinedBySpecIndex,
++    );
++    if (operand === null || operand === undefined) {
++      return null;
++    }
++    return op(operand);
++  }
++  case EXPR_TYPE.BINARY: {
++    const op = SCALAR_BINARY_OPS[node.operator];
++    if (!op) {
++      return null;
++    }
++    const left = evaluateScalarExpression(
++      node.left,
++      row,
++      combinedBySpecIndex,
++    );
++    const right = evaluateScalarExpression(
++      node.right,
++      row,
++      combinedBySpecIndex,
++    );
++    if (left === null || left === undefined ||
++      right === null || right === undefined) {
++      return null;
++    }
++    return op(left, right);
++  }
++  default:
++    return null;
++  }
++}
++
++function projectFinalRow(combineSpec, internalRow) {
++  const row = {};
++  for (const starKey of internalRow[STAR_KEYS_PROPERTY] || []) {
++    row[starKey] = internalRow[starKey];
++  }
++  for (const key of combineSpec.groupKeys) {
++    for (const outputKey of key.outputKeys) {
++      row[outputKey] = internalRow[outputKey];
++    }
++  }
++  for (const bare of combineSpec.bareColumns) {
++    if (bare.projected) {
++      row[bare.outputKey] = internalRow[bare.outputKey];
++    }
++  }
++  for (const aggregate of combineSpec.aggregates) {
++    for (const outputKey of aggregate.outputKeys) {
++      row[outputKey] = internalRow[outputKey];
++    }
++  }
++  for (const expressionColumn of combineSpec.expressionColumns) {
++    row[expressionColumn.outputKey] = internalRow[expressionColumn.outputKey];
++  }
++  return row;
++}
++
++export {combinePartialAggregateRows};
+diff --git a/src/query/query-executor-base.js b/src/query/query-executor-base.js
+index 320bcef7..3977c540 100644
+--- a/src/query/query-executor-base.js
++++ b/src/query/query-executor-base.js
+@@ -2,6 +2,9 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+ import {
+   installQueryExecutorJoinExecutionHelpers,
+ } from './query-executor-join-execution.js';
++import {
++  buildSelectFanoutPlan,
++} from './distributed/distributed-select-fanout-plan.js';
+ 
+ const {
+   CONTROL_PLANE_READINESS_DIMENSION,
+@@ -385,14 +388,21 @@ class QueryExecutorBase {
+       };
+     }
+ 
+-    // Build SQL from AST
+-    const sql = this.buildSelectSQL(ast);
++    // Build the fan-out plan: partition-side SQL with combinable partial
++    // aggregates and over-fetched LIMIT, so global clauses (aggregates,
++    // GROUP BY/HAVING, OFFSET) are applied exactly once at the merge.
++    const fanoutPlan = buildSelectFanoutPlan(
++      ast,
++      params,
++      (expr) => this.buildExpressionSQL(expr),
++    );
++    const sql = this.buildSelectSQL(fanoutPlan.partitionAst);
+ 
+     // Execute on all partitions in parallel (read operations can go to any replica)
+     const results = await this.executeOnPartitions(
+       partitionIds,
+       sql,
+-      params,
++      fanoutPlan.partitionParams,
+       queryTimestamp,
+       true,
+       // forRead = true for SELECT
+@@ -434,6 +444,7 @@ class QueryExecutorBase {
+       results,
+       ast,
+       this,
++      fanoutPlan,
+     );
+     const mergeDurationMs = Date.now() - mergeStartTimeMs;
+     try {
+diff --git a/test/query/aggregate-function-correctness.property.test.js b/test/query/aggregate-function-correctness.property.test.js
+index a5bdcf4e..04749845 100644
+--- a/test/query/aggregate-function-correctness.property.test.js
++++ b/test/query/aggregate-function-correctness.property.test.js
+@@ -18,51 +18,15 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ const config = ConfigurationManager.getInstance();
+ config.initialize();
+ 
+-// Mock partition data storage
+-const mockPartitionData = new Map();
+-
+-// Mock message router that routes queries to mock partition data
+-function createMockMessageRouter() {
+-  return {
+-    deliver: async function(address, message) {
+-      const parts = address.split('/');
+-      const partitionId = parts[2];
+-
+-      if (message.type === 'QUERY') {
+-        const data = mockPartitionData.get(partitionId) || [];
+-        return {
+-          acknowledged: true,
+-          success: true,
+-          rows: data,
+-          changes: data.length || 1,
+-        };
+-      }
+-      return {acknowledged: true, success: true, changes: 1};
+-    },
+-  };
+-}
+-
+-// Mock system cache with services for routing
+-function createMockSystemCache(partitionIds) {
+-  const services = partitionIds.map((pid) => ({
+-    service_id: pid,
+-    service_type: 'partition',
+-    partition_id: pid,
+-    node_id: 'test-node',
+-    address: `test-node/partition/${pid}`,
+-    status: 'active',
+-  }));
+-
+-  return {
+-    services,
+-    filter: function(type, predicate) {
+-      if (type === 'services') {
+-        return this.services.filter(predicate);
+-      }
+-      return [];
+-    },
+-  };
+-}
++// Shared SQL-honoring partition mocks: the router executes the delivered
++// SQL against real SQLite seeded from mockPartitionData, so this property
++// exercises the true pushdown/merge interaction (a raw-row mock hid the
++// distributed aggregate defect).
++import {
++  mockPartitionData,
++  createMockMessageRouter,
++  createMockSystemCache,
++} from './query-executor-test-support.js';
+ 
+ /**
+  * Reference implementation for COUNT.
+diff --git a/test/query/distributed-select-global-merge-correctness.test.js b/test/query/distributed-select-global-merge-correctness.test.js
+new file mode 100644
+index 00000000..e4878a96
+--- /dev/null
++++ b/test/query/distributed-select-global-merge-correctness.test.js
+@@ -0,0 +1,425 @@
++/**
++ * Guard: distributed SELECT global-merge correctness.
++ *
++ * The partition side executes the DELIVERED SQL against a real SQLite
++ * database — exactly like partition-service-write-metrics-base
++ * executeQuery (`db.prepare(sql).all(...params)`) — so the guard proves
++ * the real pushdown/merge interaction, not a raw-row mock. Covers the
++ * defects where multi-partition COUNT(*) returned the number of
++ * partitions, SUM returned 0, AVG/MIN/MAX returned null, GROUP BY
++ * collapsed, and LIMIT/OFFSET was applied both per-partition and again
++ * at the merge.
++ */
++
++import Database from 'better-sqlite3';
++import {test} from '../../src/test-helpers/tap.js';
++import {QueryExecutor} from '../../src/query/query-executor.js';
++import {SQLParser} from '../../src/query/sql-parser.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {
++  FANOUT_PLAN_KIND,
++  buildSelectFanoutPlan,
++} from '../../src/query/distributed/distributed-select-fanout-plan.js';
++
++const config = ConfigurationManager.getInstance();
++if (!config.isInitialized()) {
++  config.initialize();
++}
++
++const TABLE_DDL =
++  'CREATE TABLE t (id INTEGER PRIMARY KEY, amount INTEGER, dept TEXT)';
++
++function buildCluster(partitionRows) {
++  const partitionDbs = new Map();
++  for (const [partitionId, rows] of Object.entries(partitionRows)) {
++    const db = new Database(':memory:');
++    db.exec(TABLE_DDL);
++    const insert = db.prepare(
++      'INSERT INTO t (id, amount, dept) VALUES (?, ?, ?)',
++    );
++    for (const row of rows) {
++      insert.run(row.id, row.amount, row.dept ?? null);
++    }
++    partitionDbs.set(partitionId, db);
++  }
++
++  const deliveredSql = [];
++  const messageRouter = {
++    async deliver(address, message) {
++      if (message.type !== 'QUERY') {
++        return {acknowledged: true, success: true};
++      }
++      const partitionId = address.split('/')[2];
++      const db = partitionDbs.get(partitionId);
++      deliveredSql.push({partitionId, sql: message.sql});
++      const rows = db.prepare(message.sql).all(...(message.params || []));
++      return {
++        acknowledged: true,
++        success: true,
++        rows,
++        count: rows.length,
++        partitionId,
++      };
++    },
++  };
++
++  const services = [...partitionDbs.keys()].map((partitionId) => ({
++    service_id: partitionId,
++    service_type: 'partition',
++    partition_id: partitionId,
++    node_id: 'test-node',
++    raft_role: 'leader',
++    address: `test-node/partition/${partitionId}`,
++    status: 'active',
++  }));
++  const systemCache = {
++    services,
++    filter(type, predicate) {
++      return type === 'services' ? this.services.filter(predicate) : [];
++    },
++    get() {
++      return null;
++    },
++    getAll(type) {
++      return type === 'services' ? this.services : [];
++    },
++  };
++
++  const executor = new QueryExecutor({messageRouter, systemCache});
++  return {executor, deliveredSql, partitionIds: [...partitionDbs.keys()]};
++}
++
++// amounts 1..10 (sum 55), depts alternate a/b, spread over 2 partitions.
++function standardCluster() {
++  return buildCluster({
++    p1: [1, 2, 3, 4, 5].map((i) => ({
++      id: i,
++      amount: i,
++      dept: i % 2 === 0 ? 'a' : 'b',
++    })),
++    p2: [6, 7, 8, 9, 10].map((i) => ({
++      id: i,
++      amount: i,
++      dept: i % 2 === 0 ? 'a' : 'b',
++    })),
++  });
++}
++
++async function select(executor, sql, partitionIds, params = []) {
++  const ast = new SQLParser(sql).parse();
++  const result = await executor.executeSelect(ast, partitionIds, params);
++  if (!result.success) {
++    throw new Error(`query failed: ${JSON.stringify(result)}`);
++  }
++  return result.rows;
++}
++
++test('global aggregates across partitions', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  t.same(
++    await select(executor, 'SELECT COUNT(*) FROM t', partitionIds),
++    [{'COUNT(*)': 10}],
++    'COUNT(*) counts rows, not partitions',
++  );
++  t.same(
++    await select(executor, 'SELECT COUNT(*) AS cnt FROM t', partitionIds),
++    [{cnt: 10}],
++    'aliased COUNT',
++  );
++  t.same(
++    await select(executor, 'SELECT SUM(amount) FROM t', partitionIds),
++    [{'SUM(amount)': 55}],
++    'SUM combines partial sums',
++  );
++  t.same(
++    await select(executor, 'SELECT AVG(amount) FROM t', partitionIds),
++    [{'AVG(amount)': 5.5}],
++    'AVG is globally weighted, not averaged averages',
++  );
++  t.same(
++    await select(executor, 'SELECT MIN(amount) FROM t', partitionIds),
++    [{'MIN(amount)': 1}],
++    'MIN across partitions',
++  );
++  t.same(
++    await select(executor, 'SELECT MAX(amount) FROM t', partitionIds),
++    [{'MAX(amount)': 10}],
++    'MAX across partitions',
++  );
++});
++
++test('single-partition aggregates stay correct', async (t) => {
++  const {executor} = standardCluster();
++
++  t.same(
++    await select(executor, 'SELECT COUNT(*) FROM t', ['p1']),
++    [{'COUNT(*)': 5}],
++    'single-partition COUNT is the row count',
++  );
++  t.same(
++    await select(executor, 'SELECT SUM(amount) AS total FROM t', ['p1']),
++    [{total: 15}],
++    'single-partition SUM',
++  );
++});
++
++test('DISTINCT aggregates deduplicate across partitions', async (t) => {
++  // amount 3 appears in both partitions; distinct amounts = 1,2,3,4.
++  const {executor, partitionIds} = buildCluster({
++    p1: [
++      {id: 1, amount: 1},
++      {id: 2, amount: 2},
++      {id: 3, amount: 3},
++    ],
++    p2: [
++      {id: 4, amount: 3},
++      {id: 5, amount: 4},
++    ],
++  });
++
++  t.same(
++    await select(
++      executor,
++      'SELECT COUNT(DISTINCT amount) AS distinct_amounts FROM t',
++      partitionIds,
++    ),
++    [{distinct_amounts: 4}],
++    'COUNT(DISTINCT) dedups across partitions',
++  );
++  // SUM(DISTINCT)/AVG(DISTINCT) do not parse (parser limitation), so
++  // COUNT is the only DISTINCT aggregate reachable at execution.
++});
++
++test('GROUP BY combines per-group partials across partitions', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  const rows = await select(
++    executor,
++    'SELECT dept, COUNT(*) AS cnt, SUM(amount) AS total FROM t ' +
++      'GROUP BY dept ORDER BY dept',
++    partitionIds,
++  );
++  t.same(
++    rows,
++    [
++      {dept: 'a', cnt: 5, total: 30},
++      {dept: 'b', cnt: 5, total: 25},
++    ],
++    'per-group COUNT/SUM are global, groups not collapsed',
++  );
++});
++
++test('GROUP BY expression keeps distinct groups', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  const rows = await select(
++    executor,
++    'SELECT amount % 2 AS parity, COUNT(*) AS cnt FROM t ' +
++      'GROUP BY amount % 2 ORDER BY parity',
++    partitionIds,
++  );
++  t.same(
++    rows,
++    [
++      {parity: 0, cnt: 5},
++      {parity: 1, cnt: 5},
++    ],
++    'expression group keys survive the merge',
++  );
++});
++
++test('HAVING filters on global aggregate values', async (t) => {
++  const {executor, partitionIds} = buildCluster({
++    p1: [
++      {id: 1, amount: 1, dept: 'a'},
++      {id: 2, amount: 2, dept: 'b'},
++    ],
++    p2: [
++      {id: 3, amount: 3, dept: 'a'},
++      {id: 4, amount: 4, dept: 'b'},
++      {id: 5, amount: 100, dept: 'b'},
++    ],
++  });
++
++  const rows = await select(
++    executor,
++    'SELECT dept, SUM(amount) AS total FROM t GROUP BY dept ' +
++      'HAVING SUM(amount) > 10',
++    partitionIds,
++  );
++  t.same(
++    rows,
++    [{dept: 'b', total: 106}],
++    'HAVING evaluates the combined aggregate, not per-partition partials',
++  );
++});
++
++test('LIMIT/OFFSET applies globally exactly once', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  const rows = await select(
++    executor,
++    'SELECT id FROM t ORDER BY id LIMIT 3 OFFSET 4',
++    partitionIds,
++  );
++  t.same(
++    rows,
++    [{id: 5}, {id: 6}, {id: 7}],
++    'OFFSET is not re-applied per partition or at the merge twice',
++  );
++
++  const singlePartition = await select(
++    executor,
++    'SELECT id FROM t ORDER BY id LIMIT 2 OFFSET 2',
++    ['p1'],
++  );
++  t.same(
++    singlePartition,
++    [{id: 3}, {id: 4}],
++    'single-partition OFFSET returns rows instead of an empty slice',
++  );
++});
++
++test('parameterized WHERE splits params from coordinator clauses', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  const rows = await select(
++    executor,
++    'SELECT COUNT(*) AS cnt FROM t WHERE amount > ?',
++    partitionIds,
++    [5],
++  );
++  t.same(rows, [{cnt: 5}], 'WHERE parameter reaches the partitions');
++});
++
++test('empty table aggregate semantics match SQLite', async (t) => {
++  const {executor, partitionIds} = buildCluster({p1: [], p2: []});
++
++  t.same(
++    await select(
++      executor,
++      'SELECT COUNT(*) AS cnt, SUM(amount) AS total FROM t',
++      partitionIds,
++    ),
++    [{cnt: 0, total: null}],
++    'COUNT 0 and SUM null over no rows',
++  );
++});
++
++test('non-aggregate SELECT rows pass through unchanged', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  const rows = await select(
++    executor,
++    'SELECT id, amount FROM t ORDER BY id',
++    partitionIds,
++  );
++  t.equal(rows.length, 10, 'all raw rows survive the merge');
++  t.same(rows[0], {id: 1, amount: 1}, 'row content intact');
++});
++
++test('aggregates nested in expressions combine globally', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  t.same(
++    await select(
++      executor,
++      'SELECT SUM(amount) + 1 AS x FROM t',
++      partitionIds,
++    ),
++    [{x: 56}],
++    'expression over aggregate uses the combined value, not a partial',
++  );
++  t.same(
++    await select(
++      executor,
++      'SELECT SUM(amount) + COUNT(*) AS x FROM t',
++      partitionIds,
++    ),
++    [{x: 65}],
++    'two aggregates in one expression both combine',
++  );
++  const grouped = await select(
++    executor,
++    'SELECT dept, SUM(amount) * 2 AS double_total FROM t ' +
++      'GROUP BY dept ORDER BY dept',
++    partitionIds,
++  );
++  t.same(
++    grouped,
++    [
++      {dept: 'a', double_total: 60},
++      {dept: 'b', double_total: 50},
++    ],
++    'per-group expression over combined aggregate',
++  );
++});
++
++test('expression evaluation matches SQLite affinity and fallback', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  t.same(
++    await select(
++      executor,
++      'SELECT SUM(amount) / COUNT(*) AS x FROM t',
++      partitionIds,
++    ),
++    [{x: 5}],
++    'integer/integer division truncates like SQLite (55/10 = 5)',
++  );
++  t.same(
++    await select(
++      executor,
++      'SELECT SUM(amount) % COUNT(*) AS x FROM t',
++      partitionIds,
++    ),
++    [{x: 5}],
++    'modulo casts to integer like SQLite (55 % 10 = 5)',
++  );
++
++  // Operators outside the scalar evaluator force the RAW_ROWS fallback
++  // instead of silently returning null through the partial path.
++  const unsupported = new SQLParser(
++    'SELECT SUM(amount) > 50 AND COUNT(*) > 2 AS x FROM t',
++  ).parse();
++  const plan = buildSelectFanoutPlan(unsupported, []);
++  t.equal(
++    plan.kind,
++    FANOUT_PLAN_KIND.RAW_ROWS,
++    'unsupported operator in aggregate expression falls back to legacy',
++  );
++});
++
++test('SELECT * with aggregates and GROUP BY succeeds', async (t) => {
++  const {executor, partitionIds} = standardCluster();
++
++  const withCount = await select(
++    executor,
++    'SELECT *, COUNT(*) AS c FROM t',
++    partitionIds,
++  );
++  t.equal(withCount.length, 1, 'one aggregate row');
++  t.equal(withCount[0].c, 10, 'star does not break the global count');
++  t.ok('id' in withCount[0], 'star surfaces raw columns');
++
++  const grouped = await select(
++    executor,
++    'SELECT * FROM t GROUP BY dept',
++    partitionIds,
++  );
++  t.equal(grouped.length, 2, 'one row per group');
++  t.ok(
++    grouped.every((row) => 'id' in row && 'dept' in row),
++    'grouped star rows carry raw columns',
++  );
++});
++
++test('partition SQL carries partials, not the bare aggregate', async (t) => {
++  const {executor, deliveredSql, partitionIds} = standardCluster();
++
++  await select(executor, 'SELECT AVG(amount) FROM t', partitionIds);
++  const sql = deliveredSql[deliveredSql.length - 1].sql;
++  t.match(sql, /SUM\(amount\)/, 'AVG ships as SUM partial');
++  t.match(sql, /COUNT\(amount\)/, 'AVG ships as COUNT partial');
++});
+diff --git a/test/query/query-executor-test-support.js b/test/query/query-executor-test-support.js
+index 355bb8e6..0a1488b6 100644
+--- a/test/query/query-executor-test-support.js
++++ b/test/query/query-executor-test-support.js
+@@ -4,13 +4,94 @@
+  * Extracted verbatim from query-executor.test.js so the parent suite and its
+  * re-enabled concern suites share one copy of the partition-routing mocks
+  * instead of duplicating the helper bodies in every file.
++ *
++ * The mock message router EXECUTES the delivered SQL against a real
++ * in-memory SQLite database seeded from mockPartitionData — mirroring
++ * partition-service-write-metrics-base executeQuery
++ * (`db.prepare(sql).all(...params)`). A mock that ignores the SQL and
++ * returns raw rows hides pushdown/merge defects (the distributed
++ * aggregate bug shipped green behind exactly that mock).
+  */
+ 
++import Database from 'better-sqlite3';
+ import {SQLParser} from '../../src/query/sql-parser.js';
++import {AST_TYPE, EXPR_TYPE} from '../../src/query/parser-constants.js';
+ 
+ // Mock partition data storage shared by the mock message router and the suites.
+ export const mockPartitionData = new Map();
+ 
++function collectColumnRefs(node, into) {
++  if (!node || typeof node !== 'object') {
++    return;
++  }
++  if (Array.isArray(node)) {
++    node.forEach((entry) => collectColumnRefs(entry, into));
++    return;
++  }
++  if (node.type === EXPR_TYPE.COLUMN_REF && node.column) {
++    into.add(node.column);
++  }
++  for (const value of Object.values(node)) {
++    collectColumnRefs(value, into);
++  }
++}
++
++function bindableValue(value) {
++  if (typeof value === 'boolean') {
++    return value ? 1 : 0;
++  }
++  if (value === undefined) {
++    return null;
++  }
++  return value;
++}
++
++/**
++ * Execute the delivered SQL over the partition's mock rows through a
++ * real SQLite database, so the mock behaves like a partition replica.
++ * @param {string} sql - Delivered partition SQL.
++ * @param {Array} params - Delivered positional parameters.
++ * @param {Array<Object>} data - Mock rows for the partition.
++ * @return {Array<Object>} Result rows.
++ */
++function executeSqlOverMockRows(sql, params, data) {
++  const ast = new SQLParser(sql).parse();
++  if (ast.type !== AST_TYPE.SELECT) {
++    // Writes keep the legacy mock contract (rows echoed back); only
++    // SELECT fan-out fidelity is load-bearing for merge semantics.
++    return data;
++  }
++  const tableName = ast.from?.name;
++  const columns = new Set();
++  for (const row of data) {
++    for (const key of Object.keys(row)) {
++      columns.add(key);
++    }
++  }
++  collectColumnRefs(ast, columns);
++  if (columns.size === 0) {
++    columns.add('id');
++  }
++
++  const db = new Database(':memory:');
++  const columnList = [...columns];
++  db.exec(
++    `CREATE TABLE ${tableName} (${columnList.map((c) => `"${c}"`).join(', ')})`,
++  );
++  const insert = db.prepare(
++    `INSERT INTO ${tableName} (${columnList.map((c) => `"${c}"`).join(', ')})` +
++      ` VALUES (${columnList.map(() => '?').join(', ')})`,
++  );
++  for (const row of data) {
++    insert.run(...columnList.map((column) => bindableValue(row[column])));
++  }
++  const rows = db
++    .prepare(sql)
++    .all(...(params || []).map((value) => bindableValue(value)));
++  db.close();
++  return rows;
++}
++
+ // Mock message router that routes queries to mock partition data
+ export function createMockMessageRouter() {
+   return {
+@@ -21,11 +102,16 @@ export function createMockMessageRouter() {
+ 
+       if (message.type === 'QUERY') {
+         const data = mockPartitionData.get(partitionId) || [];
++        const rows = executeSqlOverMockRows(
++          message.sql,
++          message.params,
++          data,
++        );
+         return {
+           acknowledged: true,
+           success: true,
+-          rows: data,
+-          changes: data.length || 1,
++          rows,
++          changes: rows.length || 1,
+         };
+       }
+       return {acknowledged: true, success: true, changes: 1};

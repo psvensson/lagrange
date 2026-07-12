@@ -18,51 +18,15 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-// Mock partition data storage
-const mockPartitionData = new Map();
-
-// Mock message router that routes queries to mock partition data
-function createMockMessageRouter() {
-  return {
-    deliver: async function(address, message) {
-      const parts = address.split('/');
-      const partitionId = parts[2];
-
-      if (message.type === 'QUERY') {
-        const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
-          success: true,
-          rows: data,
-          changes: data.length || 1,
-        };
-      }
-      return {acknowledged: true, success: true, changes: 1};
-    },
-  };
-}
-
-// Mock system cache with services for routing
-function createMockSystemCache(partitionIds) {
-  const services = partitionIds.map((pid) => ({
-    service_id: pid,
-    service_type: 'partition',
-    partition_id: pid,
-    node_id: 'test-node',
-    address: `test-node/partition/${pid}`,
-    status: 'active',
-  }));
-
-  return {
-    services,
-    filter: function(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-  };
-}
+// Shared SQL-honoring partition mocks: the router executes the delivered
+// SQL against real SQLite seeded from mockPartitionData, so this property
+// exercises the true pushdown/merge interaction (a raw-row mock hid the
+// distributed aggregate defect).
+import {
+  mockPartitionData,
+  createMockMessageRouter,
+  createMockSystemCache,
+} from './query-executor-test-support.js';
 
 /**
  * Reference implementation for COUNT.

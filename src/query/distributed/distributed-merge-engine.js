@@ -1,8 +1,14 @@
 import {StreamingAggregator} from '../streaming-aggregator.js';
+import {FANOUT_PLAN_KIND} from './distributed-select-fanout-plan.js';
+import {combinePartialAggregateRows} from './partial-aggregate-combiner.js';
 
 /**
  * DistributedMergeEngine wraps StreamingAggregator for canonical
- * distributed SQL global-merge semantics.
+ * distributed SQL global-merge semantics. When a fan-out plan is
+ * provided, partial-aggregate partition rows are combined with global
+ * semantics (aggregates, GROUP BY/HAVING, LIMIT/OFFSET applied exactly
+ * once); without a plan the legacy raw-row merge applies (used by the
+ * cross-partition JOIN path, whose coordinator-side rows are raw).
  */
 class DistributedMergeEngine {
   /**
@@ -19,9 +25,11 @@ class DistributedMergeEngine {
    * @param {Object[]} partitionResults - Partition execution results.
    * @param {Object} ast - SELECT AST.
    * @param {Object} queryExecutor - QueryExecutor instance.
+   * @param {Object} [fanoutPlan] - Fan-out plan from
+   *   buildSelectFanoutPlan; absent for raw coordinator-side row sets.
    * @return {Object} Aggregated result.
    */
-  mergePartitionResults(partitionResults, ast, queryExecutor) {
+  mergePartitionResults(partitionResults, ast, queryExecutor, fanoutPlan) {
     const aggregator = this.streamingAggregatorFactory();
     for (const partitionResult of partitionResults) {
       if (partitionResult.success && Array.isArray(partitionResult.rows)) {
@@ -29,6 +37,15 @@ class DistributedMergeEngine {
       }
     }
     const mergedRows = aggregator.getAllRows();
+    if (fanoutPlan?.kind === FANOUT_PLAN_KIND.PARTIAL_AGGREGATE) {
+      return {
+        rows: combinePartialAggregateRows(
+          mergedRows,
+          fanoutPlan.combineSpec,
+          queryExecutor,
+        ),
+      };
+    }
     return queryExecutor.aggregateSelectResults(
       [{success: true, rows: mergedRows}],
       ast,
