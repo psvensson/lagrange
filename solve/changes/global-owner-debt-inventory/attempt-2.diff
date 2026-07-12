@@ -1,0 +1,196 @@
+--- a/scripts/generate-global-owner-debt-inventory.js
++++ b/scripts/generate-global-owner-debt-inventory.js
+@@ -81,6 +81,18 @@
+   };
+ }
+ 
++function logicalJsonIdentity(relativePath, value, ignoredFields = []) {
++  const ignored = new Set(ignoredFields);
++  const projected = Object.fromEntries(Object.entries(value)
++    .filter(([key]) => !ignored.has(key)));
++  return {
++    path: relativePath,
++    identityKind: 'logical-json',
++    ignoredFields: [...ignored].sort(),
++    sha256: sha256(JSON.stringify(projected)),
++  };
++}
++
+ function listJavaScriptFiles(root) {
+   const result = [];
+   const visit = (directory) => {
+@@ -693,16 +705,20 @@
+   const importGraph = readImportGraphReport(root, files);
+   const duplicationSource = readJson(root, REPORTS.duplicationSource);
+   const duplicationTest = readJson(root, REPORTS.duplicationTest);
++  const duplicationSourceIdentity = logicalJsonIdentity(
++    REPORTS.duplicationSource, duplicationSource, ['detectionDate']);
++  const duplicationTestIdentity = logicalJsonIdentity(
++    REPORTS.duplicationTest, duplicationTest, ['detectionDate']);
+   return {
+     complexity: readJson(root, REPORTS.complexity),
+     cognitive: readJson(root, REPORTS.cognitive),
+     cycles: readJson(root, REPORTS.cycles),
+     fileSizes: [...sourceSizes, ...testSizes],
+     duplication: [
+-      {name: 'src+scripts', identity: fileIdentity(root, REPORTS.duplicationSource),
++      {name: 'src+scripts', identity: duplicationSourceIdentity,
+         total: duplicationSource.statistics.total,
+         sources: duplicationSource.statistics.formats.javascript.sources},
+-      {name: 'test', identity: fileIdentity(root, REPORTS.duplicationTest),
++      {name: 'test', identity: duplicationTestIdentity,
+         total: duplicationTest.statistics.total,
+         sources: duplicationTest.statistics.formats.javascript.sources},
+     ],
+@@ -713,8 +729,8 @@
+       cognitive: fileIdentity(root, REPORTS.cognitive),
+       cycles: fileIdentity(root, REPORTS.cycles),
+       importGraph: fileIdentity(root, REPORTS.importGraph),
+-      duplicationSource: fileIdentity(root, REPORTS.duplicationSource),
+-      duplicationTest: fileIdentity(root, REPORTS.duplicationTest),
++      duplicationSource: duplicationSourceIdentity,
++      duplicationTest: duplicationTestIdentity,
+       fileSizeAuthority: fileIdentity(root, 'scripts/check-file-size-thresholds.js'),
+       lintConfig: fileIdentity(root, 'eslint.config.js'),
+       dependencyConfig: fileIdentity(root, 'dependency-cruiser.config.cjs'),
+@@ -727,6 +743,8 @@
+   if (options.refresh === true) {
+     refreshReports(root);
+     await refreshImportGraphReport(root, listJavaScriptFiles(root));
++  } else if (options.refreshImportGraph === true) {
++    await refreshImportGraphReport(root, listJavaScriptFiles(root));
+   }
+   return validateInventory(buildInventoryFromInputs(root,
+     await collectLiveInputs(root)));
+@@ -744,6 +762,7 @@
+   const output = outputIndex >= 0 ? args[outputIndex + 1] : OUTPUT;
+   const inventory = await buildInventory(process.cwd(), {
+     refresh: args.includes('--refresh'),
++    refreshImportGraph: args.includes('--refresh-import-graph'),
+   });
+   const destination = writeInventory(process.cwd(), inventory, output);
+   process.stdout.write(`${destination}\n`);
+@@ -763,6 +782,7 @@
+   classifyDebtPath,
+   collectLiveInputs,
+   globPatternToRegex,
++  logicalJsonIdentity,
+   reconcileAssignments,
+   validateInventory,
+   writeInventory,
+--- a/solve/changes/global-owner-debt-inventory/inventory.json
++++ b/solve/changes/global-owner-debt-inventory/inventory.json
+@@ -21,17 +21,23 @@
+       {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+         "bytes": 1211186,
+-        "sha256": "a5daf5ee21b51f421963bb6e4f1aba0a4d6a9197733800fc2dce4b3708990f29"
++        "sha256": "86004d11510da9734b7b947ee5a8942238b135e33d900c71f8ca59fa920d34df"
+       },
+       {
+         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+-        "bytes": 695184,
+-        "sha256": "6f37fa6782fe7f8f8472f2681dea4e07639565cf0b0b288ae98105e339a6471f"
++        "identityKind": "logical-json",
++        "ignoredFields": [
++          "detectionDate"
++        ],
++        "sha256": "a17a4c755a0cc6627111c665a2cbcffc2e8511c2e5084100d0f4e94b49bcd965"
+       },
+       {
+         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+-        "bytes": 2466504,
+-        "sha256": "68280044d0f557424a37b81ef8eea09bd3b0636c19a1a102b154772faa5d30e1"
++        "identityKind": "logical-json",
++        "ignoredFields": [
++          "detectionDate"
++        ],
++        "sha256": "57ce6480a05fe3a87c7fb4aaeee3a1ff84f65468fb580748fbb3d2354d32719e"
+       },
+       {
+         "path": "scripts/check-file-size-thresholds.js",
+@@ -54,7 +60,7 @@
+         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
+       }
+     ],
+-    "inputDigest": "383a1c054a713550c6bee72548e8da28b35a60f3d9df895a222091ae14b2e659"
++    "inputDigest": "e0b2d2e0d95e02f8a61c94d3cc7cdf44fdd8c3414432fe1aeb64fbc1410a715b"
+   },
+   "reconciliation": {
+     "complexity": {
+@@ -99,8 +105,11 @@
+         "name": "src+scripts",
+         "identity": {
+           "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+-          "bytes": 695184,
+-          "sha256": "6f37fa6782fe7f8f8472f2681dea4e07639565cf0b0b288ae98105e339a6471f"
++          "identityKind": "logical-json",
++          "ignoredFields": [
++            "detectionDate"
++          ],
++          "sha256": "a17a4c755a0cc6627111c665a2cbcffc2e8511c2e5084100d0f4e94b49bcd965"
+         },
+         "cloneGroups": 71,
+         "duplicatedLines": 2153,
+@@ -113,8 +122,11 @@
+         "name": "test",
+         "identity": {
+           "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+-          "bytes": 2466504,
+-          "sha256": "68280044d0f557424a37b81ef8eea09bd3b0636c19a1a102b154772faa5d30e1"
++          "identityKind": "logical-json",
++          "ignoredFields": [
++            "detectionDate"
++          ],
++          "sha256": "57ce6480a05fe3a87c7fb4aaeee3a1ff84f65468fb580748fbb3d2354d32719e"
+         },
+         "cloneGroups": 836,
+         "duplicatedLines": 32008,
+@@ -151,14 +163,14 @@
+       "identity": {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+         "bytes": 1211186,
+-        "sha256": "a5daf5ee21b51f421963bb6e4f1aba0a4d6a9197733800fc2dce4b3708990f29"
++        "sha256": "86004d11510da9734b7b947ee5a8942238b135e33d900c71f8ca59fa920d34df"
+       },
+       "authority": {
+         "path": "dependency-cruiser.config.cjs",
+         "bytes": 846,
+         "sha256": "761e350db64b43a1a9e3325fe59afa9497f60543adb9610368755732e45f0000"
+       },
+-      "sourceDigest": "09b7e60f577f7961f548695771b627c3a6d14a45fa9e937906f17a34b36d7a6f",
++      "sourceDigest": "82d98a426def734fe2312cc59cda71c673e8cdd895db1a74d8deb64dff4af9ac",
+       "moduleCount": 3709,
+       "edgeCount": 15396,
+       "unresolvedCount": 7
+--- a/test/solve/global-owner-debt-inventory.test.js
++++ b/test/solve/global-owner-debt-inventory.test.js
+@@ -7,6 +7,7 @@
+   buildInventory,
+   classifyDebtPath,
+   globPatternToRegex,
++  logicalJsonIdentity,
+   reconcileAssignments,
+   validateInventory,
+ } from '../../scripts/generate-global-owner-debt-inventory.js';
+@@ -140,6 +141,20 @@
+   t.end();
+ });
+ 
++tap.test('volatile checker timestamps do not change logical identities', (t) => {
++  const first = logicalJsonIdentity('report.json', {
++    detectionDate: 'first',
++    statistics: {total: {clones: 2}},
++  }, ['detectionDate']);
++  const second = logicalJsonIdentity('report.json', {
++    detectionDate: 'second',
++    statistics: {total: {clones: 2}},
++  }, ['detectionDate']);
++  t.equal(first.sha256, second.sha256);
++  t.same(first.ignoredFields, ['detectionDate']);
++  t.end();
++});
++
+ tap.test('checked-in inventory is the fresh deterministic projection', async (t) => {
+   const inventory = await liveInventory;
+   t.ok(fs.existsSync(INVENTORY_PATH));

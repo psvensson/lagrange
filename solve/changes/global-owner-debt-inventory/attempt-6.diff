@@ -1,0 +1,1646 @@
+--- a/scripts/generate-global-owner-debt-inventory.js
++++ b/scripts/generate-global-owner-debt-inventory.js
+@@ -1,6 +1,5 @@
+ #!/usr/bin/env node
+ 
+-import crypto from 'node:crypto';
+ import {spawnSync} from 'node:child_process';
+ import fs from 'node:fs';
+ import path from 'node:path';
+@@ -15,227 +14,33 @@
+   FILE_SIZE_SCOPE,
+   FILE_SIZE_THRESHOLDS,
+ } from './check-file-size-thresholds.js';
+-import {classifyPath} from './inventory-ordinal-segments.js';
++import {
++  OWNER_DEBT,
++  OWNER_DEBT_CHILD_LIMITS as CHILD_LIMITS,
++  OWNER_DEBT_REFRESH_COMMANDS as REFRESH_COMMANDS,
++  OWNER_DEBT_REPORTS as REPORTS,
++  OWNER_DEBT_SIGNAL_KIND as SIGNAL_KIND,
++  OWNER_DEBT_SIGNAL_WEIGHTS as SIGNAL_WEIGHTS,
++  OWNER_DEBT_SOURCE_DIRECTORIES as SOURCE_DIRECTORIES,
++} from './global-owner-debt-inventory/constants.js';
++import {
++  classifyDebtPath,
++  duplicationReportIdentity,
++  fileIdentity,
++  globPatternToRegex,
++  javascriptSourceDigest,
++  listJavaScriptFiles,
++  logicalJsonIdentity,
++  normalizePath,
++  ownerAreaForPath,
++  readJson,
++  reconcileAssignments,
++  sha256,
++  signalId,
++} from './global-owner-debt-inventory/helpers.js';
+ 
+ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+-const OUTPUT = 'solve/changes/global-owner-debt-inventory/inventory.json';
+-const SCHEMA_VERSION = 'global-owner-debt-inventory-v1';
+-const HASH_ALGORITHM = 'sha256';
+-const HASH_ENCODING = 'hex';
+-const PATH_SEPARATOR = '/';
+-const SOURCE_DIRECTORIES = Object.freeze(['src', 'scripts', 'test']);
+-const JAVASCRIPT_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
+-const REPORTS = Object.freeze({
+-  complexity: 'test-output/analysis/complexity-src-test.json',
+-  cognitive: 'test-output/analysis/cognitive-complexity-src-scripts.json',
+-  cycles: 'test-output/analysis/madge-circular-src-scripts-test.json',
+-  importGraph: 'test-output/analysis/global-owner-debt-import-graph.json',
+-  duplicationSource: 'test-output/analysis/jscpd-src-scripts/jscpd-report.json',
+-  duplicationTest: 'test-output/analysis/jscpd-test/jscpd-report.json',
+-});
+-const REFRESH_COMMANDS = Object.freeze([
+-  ['scripts/check-complexity.js'],
+-  ['scripts/check-cognitive-complexity.js'],
+-  ['scripts/check-circular-dependencies.js'],
+-  ['scripts/check-duplication.js'],
+-]);
+-const CHILD_LIMITS = Object.freeze({
+-  m2: 6,
+-  m3: 4,
+-  m4c: 6,
+-  pathCount: 25,
+-  ownerAreas: 6,
+-  samplePaths: 5,
+-  adjacentTests: 8,
+-});
+-const SIGNAL_WEIGHTS = Object.freeze({
+-  complexity: 4,
+-  cognitive: 8,
+-  fileSize: 12,
+-  duplication: 1,
+-  cycle: 50,
+-  lintExclusion: 3,
+-});
+-const SEMANTIC_FALLBACK_SUFFIX = '_semantic_split';
+-const REGEX_SPECIAL_CHARACTERS = '\\^$+?.()|{}[]';
+-
+-function normalizePath(root, filePath) {
+-  const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
+-  return path.relative(root, resolved).replaceAll(path.sep, PATH_SEPARATOR);
+-}
+-
+-function sha256(value) {
+-  return crypto.createHash(HASH_ALGORITHM).update(value).digest(HASH_ENCODING);
+-}
+-
+-function readJson(root, relativePath) {
+-  return JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
+-}
+-
+-function fileIdentity(root, relativePath) {
+-  const content = fs.readFileSync(path.join(root, relativePath));
+-  return {
+-    path: relativePath,
+-    bytes: content.length,
+-    sha256: sha256(content),
+-  };
+-}
+-
+-function canonicalizeJson(value) {
+-  if (Array.isArray(value)) return value.map(canonicalizeJson);
+-  if (value === null || typeof value !== 'object') return value;
+-  return Object.fromEntries(Object.entries(value)
+-    .sort(([left], [right]) => left.localeCompare(right))
+-    .map(([key, entry]) => [key, canonicalizeJson(entry)]));
+-}
+-
+-function logicalJsonIdentity(relativePath, value, ignoredFields = []) {
+-  const ignored = new Set(ignoredFields);
+-  const projected = Object.fromEntries(Object.entries(value)
+-    .filter(([key]) => !ignored.has(key)));
+-  return {
+-    path: relativePath,
+-    identityKind: 'logical-json',
+-    ignoredFields: [...ignored].sort(),
+-    sha256: sha256(JSON.stringify(canonicalizeJson(projected))),
+-  };
+-}
+-
+-function duplicationReportIdentity(relativePath, report) {
+-  const statistics = {...report.statistics};
+-  delete statistics.detectionDate;
+-  return logicalJsonIdentity(relativePath, {statistics}, [
+-    'duplicates',
+-    'statistics.detectionDate',
+-  ]);
+-}
+-
+-function listJavaScriptFiles(root) {
+-  const result = [];
+-  const visit = (directory) => {
+-    for (const entry of fs.readdirSync(directory, {withFileTypes: true})
+-      .sort((left, right) => left.name.localeCompare(right.name))) {
+-      const absolute = path.join(directory, entry.name);
+-      if (entry.isDirectory()) visit(absolute);
+-      if (entry.isFile() && JAVASCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
+-        result.push(normalizePath(root, absolute));
+-      }
+-    }
+-  };
+-  for (const directory of SOURCE_DIRECTORIES) {
+-    visit(path.join(root, directory));
+-  }
+-  return result.sort();
+-}
+-
+-function javascriptSourceDigest(root, files) {
+-  const hash = crypto.createHash(HASH_ALGORITHM);
+-  for (const filePath of files) {
+-    hash.update(filePath).update('\0')
+-      .update(fs.readFileSync(path.join(root, filePath)));
+-  }
+-  return hash.digest(HASH_ENCODING);
+-}
+-
+-function globPatternToRegex(pattern) {
+-  let source = '^';
+-  for (let index = 0; index < pattern.length; index += 1) {
+-    const character = pattern[index];
+-    if (character === '*' && pattern[index + 1] === '*') {
+-      const followedBySlash = pattern[index + 2] === '/';
+-      source += followedBySlash ? '(?:.*/)?' : '.*';
+-      index += followedBySlash ? 2 : 1;
+-      continue;
+-    }
+-    if (character === '*') {
+-      source += '[^/]*';
+-      continue;
+-    }
+-    if (character === '?') {
+-      source += '[^/]';
+-      continue;
+-    }
+-    source += REGEX_SPECIAL_CHARACTERS.includes(character) ?
+-      `\\${character}` : character;
+-  }
+-  return new RegExp(`${source}$`, 'u');
+-}
+-
+-function ownerAreaForPath(filePath) {
+-  const segments = filePath.split(PATH_SEPARATOR);
+-  if (segments[0] === 'test' && segments[1] === 'distributed' && segments[2]) {
+-    return `test/distributed/${segments[2]}`;
+-  }
+-  return segments.length > 1 ? `${segments[0]}/${segments[1]}` : segments[0];
+-}
+-
+-function classifyDebtPath(filePath) {
+-  const segments = filePath.split(PATH_SEPARATOR);
+-  if (segments[0] === 'src') {
+-    const declared = classifyPath(filePath);
+-    if (!declared.boundary.endsWith(SEMANTIC_FALLBACK_SUFFIX)) {
+-      return {
+-        key: `semantic:${declared.owner}/${declared.boundary}`,
+-        owner: declared.owner,
+-        boundary: declared.boundary,
+-        classification: 'declared-owner-rule',
+-        ownerArea: ownerAreaForPath(filePath),
+-      };
+-    }
+-    return {
+-      key: `area:${ownerAreaForPath(filePath)}`,
+-      owner: null,
+-      boundary: ownerAreaForPath(filePath),
+-      classification: 'owner-area-fallback',
+-      ownerArea: ownerAreaForPath(filePath),
+-    };
+-  }
+-  return {
+-    key: `area:${ownerAreaForPath(filePath)}`,
+-    owner: null,
+-    boundary: ownerAreaForPath(filePath),
+-    classification: segments[0] === 'test' ? 'test-owner-area' : 'tool-owner-area',
+-    ownerArea: ownerAreaForPath(filePath),
+-  };
+-}
+-
+-function signalId(kind, fields) {
+-  return sha256(`${kind}\0${fields.join('\0')}`);
+-}
+-
+-function reconcileAssignments(sourceSignals, assignments) {
+-  const sourceIds = new Set(sourceSignals.map((signal) => signal.id));
+-  if (sourceIds.size !== sourceSignals.length) {
+-    throw new Error('source debt signals contain duplicate identities');
+-  }
+-  const counts = new Map();
+-  for (const assignment of assignments) {
+-    if (!sourceIds.has(assignment.id)) {
+-      throw new Error(`assignment references unknown signal ${assignment.id}`);
+-    }
+-    if (!assignment.boundaryKey) {
+-      throw new Error(`assignment is missing a boundary for ${assignment.id}`);
+-    }
+-    counts.set(assignment.id, (counts.get(assignment.id) || 0) + 1);
+-  }
+-  const missing = [...sourceIds].filter((id) => !counts.has(id));
+-  const repeated = [...counts].filter(([, count]) => count !== 1);
+-  if (missing.length > 0) {
+-    throw new Error(`${missing.length} debt signal(s) are unassigned`);
+-  }
+-  if (repeated.length > 0) {
+-    throw new Error(`${repeated.length} debt signal(s) are assigned more than once`);
+-  }
+-  return {
+-    sourceSignalCount: sourceSignals.length,
+-    assignedSignalCount: assignments.length,
+-    uniqueAssignmentCount: counts.size,
+-    digest: sha256(assignments
+-      .map((item) => `${item.id}\0${item.boundaryKey}`)
+-      .sort()
+-      .join('\n')),
+-  };
+-}
++const OUTPUT = OWNER_DEBT.output;
+ 
+ function emptyFileDebt(filePath, importDegrees) {
+   return {
+@@ -248,6 +53,7 @@
+     cloneTouches: 0,
+     cycleGroups: 0,
+     lintExclusions: 0,
++    structuralScore: 0,
+     importIn: importDegrees.get(filePath)?.in || 0,
+     importOut: importDegrees.get(filePath)?.out || 0,
+     signalCount: 0,
+@@ -259,11 +65,19 @@
+   return debt.complexity * SIGNAL_WEIGHTS.complexity +
+     debt.cognitive * SIGNAL_WEIGHTS.cognitive +
+     (debt.oversizedLines > 0 ? SIGNAL_WEIGHTS.fileSize : 0) +
+-    Math.min(debt.duplicatedLines, 500) / 10 +
++    Math.min(debt.duplicatedLines, SIGNAL_WEIGHTS.duplicatedLineCap) /
++      SIGNAL_WEIGHTS.duplicatedLineDivisor +
+     debt.cycleGroups * SIGNAL_WEIGHTS.cycle +
+     debt.lintExclusions * SIGNAL_WEIGHTS.lintExclusion;
+ }
+ 
++function scoreStructuralDebt(debt) {
++  return (debt.oversizedLines > 0 ? SIGNAL_WEIGHTS.fileSize : 0) +
++    Math.min(debt.duplicatedLines, SIGNAL_WEIGHTS.duplicatedLineCap) /
++      SIGNAL_WEIGHTS.duplicatedLineDivisor +
++    debt.lintExclusions * SIGNAL_WEIGHTS.lintExclusion;
++}
++
+ function ensureFileDebt(files, filePath, importDegrees) {
+   if (!files.has(filePath)) {
+     files.set(filePath, emptyFileDebt(filePath, importDegrees));
+@@ -282,7 +96,7 @@
+   };
+   const files = new Map();
+   for (const violation of inputs.complexity.violations) {
+-    add('complexity', violation.filePath,
++    add(SIGNAL_KIND.complexity, violation.filePath,
+       [violation.line, violation.column, violation.message], () => {
+         const debt = ensureFileDebt(files, normalizePath(root, violation.filePath),
+           inputs.importGraph.degrees);
+@@ -291,7 +105,7 @@
+       });
+   }
+   for (const violation of inputs.cognitive.violations) {
+-    add('cognitive', violation.filePath,
++    add(SIGNAL_KIND.cognitive, violation.filePath,
+       [violation.line, violation.column, violation.message], () => {
+         const debt = ensureFileDebt(files, normalizePath(root, violation.filePath),
+           inputs.importGraph.degrees);
+@@ -300,17 +114,18 @@
+       });
+   }
+   for (const entry of inputs.fileSizes) {
+-    add('fileSize', entry.path, [entry.scope, entry.lines, entry.threshold], () => {
+-      const debt = ensureFileDebt(files, normalizePath(root, entry.path),
+-        inputs.importGraph.degrees);
+-      debt.oversizedLines = entry.lines;
+-      debt.signalCount += 1;
+-    });
++    add(SIGNAL_KIND.fileSize, entry.path,
++      [entry.scope, entry.lines, entry.threshold], () => {
++        const debt = ensureFileDebt(files, normalizePath(root, entry.path),
++          inputs.importGraph.degrees);
++        debt.oversizedLines = entry.lines;
++        debt.signalCount += 1;
++      });
+   }
+   for (const target of inputs.duplication) {
+     for (const [filePath, stats] of Object.entries(target.sources)) {
+       if (stats.duplicatedLines === 0) continue;
+-      add('duplication', filePath,
++      add(SIGNAL_KIND.duplication, filePath,
+         [target.name, stats.clones, stats.duplicatedLines], () => {
+           const debt = ensureFileDebt(files, normalizePath(root, filePath),
+             inputs.importGraph.degrees);
+@@ -322,7 +137,7 @@
+   }
+   for (const cycleGroup of inputs.cycles.cycleGroups) {
+     const ownerPath = [...cycleGroup].sort()[0];
+-    add('cycle', ownerPath, [...cycleGroup].sort(), () => {
++    add(SIGNAL_KIND.cycle, ownerPath, [...cycleGroup].sort(), () => {
+       const debt = ensureFileDebt(files, normalizePath(root, ownerPath),
+         inputs.importGraph.degrees);
+       debt.cycleGroups += 1;
+@@ -330,13 +145,16 @@
+     });
+   }
+   for (const exclusion of inputs.lintExclusions.matches) {
+-    add('lintExclusion', exclusion.path, [exclusion.pattern], () => {
++    add(SIGNAL_KIND.lintExclusion, exclusion.path, [exclusion.pattern], () => {
+       const debt = ensureFileDebt(files, exclusion.path, inputs.importGraph.degrees);
+       debt.lintExclusions += 1;
+       debt.signalCount += 1;
+     });
+   }
+-  for (const debt of files.values()) debt.score = scoreFileDebt(debt);
++  for (const debt of files.values()) {
++    debt.score = scoreFileDebt(debt);
++    debt.structuralScore = scoreStructuralDebt(debt);
++  }
+   return {signals, files};
+ }
+ 
+@@ -363,6 +181,7 @@
+         importIn: 0,
+         importOut: 0,
+         score: 0,
++        structuralScore: 0,
+       });
+     }
+     const boundary = grouped.get(key);
+@@ -379,11 +198,15 @@
+     boundary.importIn += debt.importIn;
+     boundary.importOut += debt.importOut;
+     boundary.score += debt.score;
++    boundary.structuralScore += debt.structuralScore;
+   }
+   return [...grouped.values()].map((boundary) => {
+-    const rankedFiles = boundary.files.sort((left, right) =>
++    const rankedFiles = [...boundary.files].sort((left, right) =>
+       right.score - left.score || left.path.localeCompare(right.path));
+-    return {
++    const structuralFiles = boundary.files.filter((file) => file.structuralScore > 0)
++      .sort((left, right) => right.structuralScore - left.structuralScore ||
++        left.path.localeCompare(right.path));
++    const result = {
+       key: boundary.key,
+       owner: boundary.owner,
+       boundary: boundary.boundary,
+@@ -403,31 +226,54 @@
+       score: Number(boundary.score.toFixed(1)),
+       topPaths: rankedFiles.slice(0, CHILD_LIMITS.samplePaths).map((file) => file.path),
+     };
++    Object.defineProperties(result, {
++      structuralScoreInternal: {
++        value: Number(boundary.structuralScore.toFixed(1)),
++        enumerable: false,
++      },
++      structuralTargetsInternal: {
++        value: structuralFiles.slice(0, CHILD_LIMITS.samplePaths).map((file) => ({
++          path: file.path,
++          duplicatedLines: file.duplicatedLines,
++          oversizedLines: file.oversizedLines,
++          lintExclusions: file.lintExclusions,
++          structuralScore: Number(file.structuralScore.toFixed(1)),
++        })),
++        enumerable: false,
++      },
++    });
++    return result;
+   }).sort((left, right) => right.score - left.score ||
+     left.key.localeCompare(right.key));
+ }
+ 
+ function slug(value) {
+-  return String(value).toLowerCase().replace(/[^a-z0-9]+/gu, '-')
++  return String(value).toLowerCase().replace(/[^a-z0-9]+/gu, OWNER_DEBT.hyphen)
+     .replace(/^-|-$/gu, '');
+ }
+ 
+ function adjacentTestsFor(boundary, importGraph) {
+   const sources = new Set(boundary.topPaths.filter((file) => file.startsWith('src/')));
+   return [...sources].flatMap((source) => importGraph.importers.get(source) || [])
+-    .filter((file) => file.startsWith('test/'))
++    .filter((file) => file.startsWith(OWNER_DEBT.testPrefix))
+     .sort()
+     .slice(0, CHILD_LIMITS.adjacentTests);
+ }
+ 
+ function candidateFor(boundary, lane, importGraph) {
+-  const prefix = lane === 'm4c' ? 'test-structure-burndown' : 'owner-complexity';
++  const prefix = lane === OWNER_DEBT.laneM4c ?
++    'test-structure-burndown' : 'owner-complexity';
+   const ownerSlug = slug(boundary.owner || boundary.boundary);
+   const boundarySlug = slug(boundary.boundary);
+-  const questId = lane === 'm4c' ? `${prefix}-${boundarySlug}` :
++  const questId = lane === OWNER_DEBT.laneM4c ? `${prefix}-${boundarySlug}` :
+     `${prefix}-${ownerSlug}-${boundarySlug}`;
++  const engagementPaths = lane === OWNER_DEBT.laneM4c ?
++    boundary.structuralTargetsInternal.map((target) => target.path) :
++    boundary.topPaths;
++  const engagementTargets = lane === OWNER_DEBT.laneM4c ?
++    boundary.structuralTargetsInternal : [];
+   const pathscope = [...new Set([
+-    ...boundary.topPaths,
++    ...engagementPaths,
+     ...adjacentTestsFor(boundary, importGraph),
+     `scripts/run-${questId}-scenarios.js`,
+     `solve/quests/${questId}.json`,
+@@ -445,6 +291,8 @@
+     exactScenarioCommand: `node scripts/run-${questId}-scenarios.js`,
+     pathscope,
+     ownerAreas,
++    engagementPaths,
++    engagementTargets,
+     baseline: {
+       score: boundary.score,
+       complexity: boundary.complexity,
+@@ -453,13 +301,13 @@
+       duplicatedLines: boundary.duplicatedLines,
+       lintExclusions: boundary.lintExclusions,
+     },
+-    proof: 'focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count',
++    proof: OWNER_DEBT.childProof,
+   };
+ }
+ 
+ function childQuestBatch(boundaries, importGraph) {
+   const semantic = boundaries.filter((item) =>
+-    item.classification === 'declared-owner-rule' && item.signalCount > 0);
++    item.classification === OWNER_DEBT.classDeclaredOwner && item.signalCount > 0);
+   const m2 = semantic.filter((item) => item.ownerAreas.some((area) =>
+     area === 'src/control-plane' || area === 'src/rebalancer'))
+     .slice(0, CHILD_LIMITS.m2)
+@@ -468,13 +316,17 @@
+     area === 'src/query' || area === 'src/bootstrap'))
+     .slice(0, CHILD_LIMITS.m3)
+     .map((item) => candidateFor(item, 'm3', importGraph));
+-  const m4c = boundaries.filter((item) => item.classification === 'test-owner-area' &&
++  const m4c = boundaries.filter((item) =>
++    item.classification === OWNER_DEBT.classTestOwnerArea &&
+     (item.oversizedFiles > 0 || item.duplicatedLines > 0 || item.lintExclusions > 0))
++    .sort((left, right) =>
++      right.structuralScoreInternal - left.structuralScoreInternal ||
++      left.key.localeCompare(right.key))
+     .slice(0, CHILD_LIMITS.m4c)
+-    .map((item) => candidateFor(item, 'm4c', importGraph));
++    .map((item) => candidateFor(item, OWNER_DEBT.laneM4c, importGraph));
+   return {
+     sealed: true,
+-    expansionRule: 'review and commit a new inventory revision before adding another child',
++    expansionRule: OWNER_DEBT.expansionRule,
+     limits: CHILD_LIMITS,
+     quests: [...m2, ...m3, ...m4c],
+   };
+@@ -519,11 +371,12 @@
+     inputs.identities.ownerClassifier,
+   ];
+   return {
+-    schemaVersion: SCHEMA_VERSION,
++    schemaVersion: OWNER_DEBT.schemaVersion,
+     generatedFrom: {
+-      root: '.',
++      root: OWNER_DEBT.rootRelative,
+       inputs: inputIdentities,
+-      inputDigest: sha256(inputIdentities.map((item) => item.sha256).join('\n')),
++      inputDigest: sha256(inputIdentities.map((item) => item.sha256)
++        .join(OWNER_DEBT.newline)),
+     },
+     reconciliation: {
+       complexity: {
+@@ -601,7 +454,7 @@
+     inventory.childQuestBatch.quests.length > 0,
+   ];
+   if (checks.some((passed) => !passed)) {
+-    throw new Error('owner-debt inventory reconciliation failed');
++    throw new Error(OWNER_DEBT.reconciliationError);
+   }
+   for (const target of inventory.reconciliation.duplication) {
+     if (target.sourceCloneTouches !== target.cloneGroups * target.touchMultiplicity ||
+@@ -618,13 +471,13 @@
+   for (const args of REFRESH_COMMANDS) {
+     const result = spawnSync(process.execPath, args, {cwd: root, stdio: 'inherit'});
+     if (result.status !== 0) {
+-      throw new Error(`report refresh failed: node ${args.join(' ')}`);
++      throw new Error(`report refresh failed: node ${args.join(OWNER_DEBT.space)}`);
+     }
+   }
+ }
+ 
+ async function loadLintExclusions(root, files) {
+-  const configUrl = `${pathToFileURL(path.join(root, 'eslint.config.js')).href}` +
++  const configUrl = `${pathToFileURL(path.join(root, OWNER_DEBT.lintAuthority)).href}` +
+     `?ownerDebt=${Date.now()}`;
+   const config = (await import(configUrl)).default;
+   const patterns = [...new Set(config.flatMap((entry) => entry.ignores || []))].sort();
+@@ -676,7 +529,7 @@
+ 
+ function serializeImportGraph(importGraph) {
+   return {
+-    schemaVersion: 'global-owner-debt-import-graph-v1',
++    schemaVersion: OWNER_DEBT.importGraphSchemaVersion,
+     sourceDigest: importGraph.sourceDigest,
+     moduleCount: importGraph.moduleCount,
+     edgeCount: importGraph.edgeCount,
+@@ -700,7 +553,7 @@
+   const report = readJson(root, REPORTS.importGraph);
+   const sourceDigest = javascriptSourceDigest(root, files);
+   if (report.sourceDigest !== sourceDigest) {
+-    throw new Error('owner-debt import graph report is stale; rerun with --refresh');
++    throw new Error(OWNER_DEBT.staleImportGraphError);
+   }
+   return {
+     sourceDigest,
+@@ -715,8 +568,10 @@
+ async function collectLiveInputs(root) {
+   const files = listJavaScriptFiles(root);
+   const [sourceSizes, testSizes, lintExclusions] = await Promise.all([
+-    buildFileSizeEntries(FILE_SIZE_SCOPE.SOURCE, path.join(root, 'src')),
+-    buildFileSizeEntries(FILE_SIZE_SCOPE.TEST, path.join(root, 'test')),
++    buildFileSizeEntries(FILE_SIZE_SCOPE.SOURCE,
++      path.join(root, OWNER_DEBT.sourceDirectory)),
++    buildFileSizeEntries(FILE_SIZE_SCOPE.TEST,
++      path.join(root, OWNER_DEBT.testDirectory)),
+     loadLintExclusions(root, files),
+   ]);
+   const importGraph = readImportGraphReport(root, files);
+@@ -732,10 +587,10 @@
+     cycles: readJson(root, REPORTS.cycles),
+     fileSizes: [...sourceSizes, ...testSizes],
+     duplication: [
+-      {name: 'src+scripts', identity: duplicationSourceIdentity,
++      {name: OWNER_DEBT.sourceDuplicationTarget, identity: duplicationSourceIdentity,
+         total: duplicationSource.statistics.total,
+         sources: duplicationSource.statistics.formats.javascript.sources},
+-      {name: 'test', identity: duplicationTestIdentity,
++      {name: OWNER_DEBT.testDuplicationTarget, identity: duplicationTestIdentity,
+         total: duplicationTest.statistics.total,
+         sources: duplicationTest.statistics.formats.javascript.sources},
+     ],
+@@ -748,10 +603,10 @@
+       importGraph: fileIdentity(root, REPORTS.importGraph),
+       duplicationSource: duplicationSourceIdentity,
+       duplicationTest: duplicationTestIdentity,
+-      fileSizeAuthority: fileIdentity(root, 'scripts/check-file-size-thresholds.js'),
+-      lintConfig: fileIdentity(root, 'eslint.config.js'),
+-      dependencyConfig: fileIdentity(root, 'dependency-cruiser.config.cjs'),
+-      ownerClassifier: fileIdentity(root, 'scripts/inventory-ordinal-segments.js'),
++      fileSizeAuthority: fileIdentity(root, OWNER_DEBT.fileSizeAuthority),
++      lintConfig: fileIdentity(root, OWNER_DEBT.lintAuthority),
++      dependencyConfig: fileIdentity(root, OWNER_DEBT.dependencyAuthority),
++      ownerClassifier: fileIdentity(root, OWNER_DEBT.ownerClassifierAuthority),
+     },
+   };
+ }
+--- a/scripts/global-owner-debt-inventory/constants.js
++++ b/scripts/global-owner-debt-inventory/constants.js
+@@ -0,0 +1,114 @@
++export const OWNER_DEBT = Object.freeze({
++  output: 'solve/changes/global-owner-debt-inventory/inventory.json',
++  schemaVersion: 'global-owner-debt-inventory-v1',
++  importGraphSchemaVersion: 'global-owner-debt-import-graph-v1',
++  hashAlgorithm: 'sha256',
++  hashEncoding: 'hex',
++  pathSeparator: '/',
++  encodingUtf8: 'utf8',
++  identityLogicalJson: 'logical-json',
++  nullSeparator: '\0',
++  newline: '\n',
++  space: ' ',
++  rootRelative: '.',
++  hyphen: '-',
++  testPrefix: 'test/',
++  sourceDirectory: 'src',
++  testDirectory: 'test',
++  distributedDirectory: 'distributed',
++  sourceDuplicationTarget: 'src+scripts',
++  testDuplicationTarget: 'test',
++  laneM4c: 'm4c',
++  semanticFallbackSuffix: '_semantic_split',
++  classDeclaredOwner: 'declared-owner-rule',
++  classOwnerAreaFallback: 'owner-area-fallback',
++  classTestOwnerArea: 'test-owner-area',
++  classToolOwnerArea: 'tool-owner-area',
++  assignmentDuplicateError: 'source debt signals contain duplicate identities',
++  reconciliationError: 'owner-debt inventory reconciliation failed',
++  staleImportGraphError:
++    'owner-debt import graph report is stale; rerun with --refresh',
++  childProof:
++    'focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count',
++  expansionRule:
++    'review and commit a new inventory revision before adding another child',
++  fileSizeAuthority: 'scripts/check-file-size-thresholds.js',
++  lintAuthority: 'eslint.config.js',
++  dependencyAuthority: 'dependency-cruiser.config.cjs',
++  ownerClassifierAuthority: 'scripts/inventory-ordinal-segments.js',
++});
++
++export const OWNER_DEBT_GLOB = Object.freeze({
++  start: '^',
++  wildcard: '*',
++  single: '?',
++  recursiveDirectory: '(?:.*/)?',
++  recursive: '.*',
++  oneSegment: '[^/]*',
++  oneCharacter: '[^/]',
++  unicodeFlag: 'u',
++  specialCharacters: '\\^$+?.()|{}[]',
++});
++
++export const OWNER_DEBT_REPORTS = Object.freeze({
++  complexity: 'test-output/analysis/complexity-src-test.json',
++  cognitive: 'test-output/analysis/cognitive-complexity-src-scripts.json',
++  cycles: 'test-output/analysis/madge-circular-src-scripts-test.json',
++  importGraph: 'test-output/analysis/global-owner-debt-import-graph.json',
++  duplicationSource: 'test-output/analysis/jscpd-src-scripts/jscpd-report.json',
++  duplicationTest: 'test-output/analysis/jscpd-test/jscpd-report.json',
++});
++
++export const OWNER_DEBT_REFRESH_COMMANDS = Object.freeze([
++  ['scripts/check-complexity.js'],
++  ['scripts/check-cognitive-complexity.js'],
++  ['scripts/check-circular-dependencies.js'],
++  ['scripts/check-duplication.js'],
++]);
++
++export const OWNER_DEBT_CHILD_LIMITS = Object.freeze({
++  m2: 6,
++  m3: 4,
++  m4c: 6,
++  pathCount: 25,
++  ownerAreas: 6,
++  samplePaths: 5,
++  adjacentTests: 8,
++});
++
++export const OWNER_DEBT_SIGNAL_KIND = Object.freeze({
++  complexity: 'complexity',
++  cognitive: 'cognitive',
++  fileSize: 'fileSize',
++  duplication: 'duplication',
++  cycle: 'cycle',
++  lintExclusion: 'lintExclusion',
++});
++
++export const OWNER_DEBT_SIGNAL_WEIGHTS = Object.freeze({
++  complexity: 4,
++  cognitive: 8,
++  fileSize: 12,
++  duplication: 1,
++  cycle: 50,
++  lintExclusion: 3,
++  duplicatedLineCap: 500,
++  duplicatedLineDivisor: 10,
++});
++
++export const OWNER_DEBT_DUPLICATION_IGNORED_FIELDS = Object.freeze([
++  'duplicates',
++  'statistics.detectionDate',
++]);
++
++export const OWNER_DEBT_SOURCE_DIRECTORIES = Object.freeze([
++  'src',
++  'scripts',
++  'test',
++]);
++
++export const OWNER_DEBT_JAVASCRIPT_EXTENSIONS = new Set([
++  '.js',
++  '.cjs',
++  '.mjs',
++]);
+--- a/scripts/global-owner-debt-inventory/helpers.js
++++ b/scripts/global-owner-debt-inventory/helpers.js
+@@ -0,0 +1,209 @@
++import crypto from 'node:crypto';
++import fs from 'node:fs';
++import path from 'node:path';
++
++import {classifyPath} from '../inventory-ordinal-segments.js';
++import {
++  OWNER_DEBT,
++  OWNER_DEBT_DUPLICATION_IGNORED_FIELDS,
++  OWNER_DEBT_GLOB,
++  OWNER_DEBT_JAVASCRIPT_EXTENSIONS,
++  OWNER_DEBT_SOURCE_DIRECTORIES,
++} from './constants.js';
++
++function normalizePath(root, filePath) {
++  const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
++  return path.relative(root, resolved).replaceAll(path.sep, OWNER_DEBT.pathSeparator);
++}
++
++function sha256(value) {
++  return crypto.createHash(OWNER_DEBT.hashAlgorithm).update(value)
++    .digest(OWNER_DEBT.hashEncoding);
++}
++
++function readJson(root, relativePath) {
++  return JSON.parse(fs.readFileSync(path.join(root, relativePath),
++    OWNER_DEBT.encodingUtf8));
++}
++
++function fileIdentity(root, relativePath) {
++  const content = fs.readFileSync(path.join(root, relativePath));
++  return {path: relativePath, bytes: content.length, sha256: sha256(content)};
++}
++
++function canonicalizeJson(value) {
++  if (Array.isArray(value)) return value.map(canonicalizeJson);
++  if (value === null || typeof value !== 'object') return value;
++  return Object.fromEntries(Object.entries(value)
++    .sort(([left], [right]) => left.localeCompare(right))
++    .map(([key, entry]) => [key, canonicalizeJson(entry)]));
++}
++
++function logicalJsonIdentity(relativePath, value, ignoredFields = []) {
++  const ignored = new Set(ignoredFields);
++  const projected = Object.fromEntries(Object.entries(value)
++    .filter(([key]) => !ignored.has(key)));
++  return {
++    path: relativePath,
++    identityKind: OWNER_DEBT.identityLogicalJson,
++    ignoredFields: [...ignored].sort(),
++    sha256: sha256(JSON.stringify(canonicalizeJson(projected))),
++  };
++}
++
++function duplicationReportIdentity(relativePath, report) {
++  const statistics = {...report.statistics};
++  delete statistics.detectionDate;
++  return logicalJsonIdentity(relativePath, {statistics},
++    OWNER_DEBT_DUPLICATION_IGNORED_FIELDS);
++}
++
++function listJavaScriptFiles(root) {
++  const result = [];
++  const visit = (directory) => {
++    for (const entry of fs.readdirSync(directory, {withFileTypes: true})
++      .sort((left, right) => left.name.localeCompare(right.name))) {
++      const absolute = path.join(directory, entry.name);
++      if (entry.isDirectory()) visit(absolute);
++      if (entry.isFile() &&
++          OWNER_DEBT_JAVASCRIPT_EXTENSIONS.has(path.extname(entry.name))) {
++        result.push(normalizePath(root, absolute));
++      }
++    }
++  };
++  for (const directory of OWNER_DEBT_SOURCE_DIRECTORIES) {
++    visit(path.join(root, directory));
++  }
++  return result.sort();
++}
++
++function javascriptSourceDigest(root, files) {
++  const hash = crypto.createHash(OWNER_DEBT.hashAlgorithm);
++  for (const filePath of files) {
++    hash.update(filePath).update(OWNER_DEBT.nullSeparator)
++      .update(fs.readFileSync(path.join(root, filePath)));
++  }
++  return hash.digest(OWNER_DEBT.hashEncoding);
++}
++
++function globPatternToRegex(pattern) {
++  let source = OWNER_DEBT_GLOB.start;
++  for (let index = 0; index < pattern.length; index += 1) {
++    const character = pattern[index];
++    if (character === OWNER_DEBT_GLOB.wildcard &&
++        pattern[index + 1] === OWNER_DEBT_GLOB.wildcard) {
++      const followedBySlash = pattern[index + 2] === OWNER_DEBT.pathSeparator;
++      source += followedBySlash ? OWNER_DEBT_GLOB.recursiveDirectory :
++        OWNER_DEBT_GLOB.recursive;
++      index += followedBySlash ? 2 : 1;
++      continue;
++    }
++    if (character === OWNER_DEBT_GLOB.wildcard) {
++      source += OWNER_DEBT_GLOB.oneSegment;
++      continue;
++    }
++    if (character === OWNER_DEBT_GLOB.single) {
++      source += OWNER_DEBT_GLOB.oneCharacter;
++      continue;
++    }
++    source += OWNER_DEBT_GLOB.specialCharacters.includes(character) ?
++      `\\${character}` : character;
++  }
++  return new RegExp(`${source}$`, OWNER_DEBT_GLOB.unicodeFlag);
++}
++
++function ownerAreaForPath(filePath) {
++  const segments = filePath.split(OWNER_DEBT.pathSeparator);
++  if (segments[0] === OWNER_DEBT.testDirectory &&
++      segments[1] === OWNER_DEBT.distributedDirectory && segments[2]) {
++    return `${OWNER_DEBT.testDirectory}/${OWNER_DEBT.distributedDirectory}/` +
++      segments[2];
++  }
++  return segments.length > 1 ? `${segments[0]}/${segments[1]}` : segments[0];
++}
++
++function classifyDebtPath(filePath) {
++  const segments = filePath.split(OWNER_DEBT.pathSeparator);
++  if (segments[0] === OWNER_DEBT.sourceDirectory) {
++    const declared = classifyPath(filePath);
++    if (!declared.boundary.endsWith(OWNER_DEBT.semanticFallbackSuffix)) {
++      return {
++        key: `semantic:${declared.owner}/${declared.boundary}`,
++        owner: declared.owner,
++        boundary: declared.boundary,
++        classification: OWNER_DEBT.classDeclaredOwner,
++        ownerArea: ownerAreaForPath(filePath),
++      };
++    }
++    return {
++      key: `area:${ownerAreaForPath(filePath)}`,
++      owner: null,
++      boundary: ownerAreaForPath(filePath),
++      classification: OWNER_DEBT.classOwnerAreaFallback,
++      ownerArea: ownerAreaForPath(filePath),
++    };
++  }
++  return {
++    key: `area:${ownerAreaForPath(filePath)}`,
++    owner: null,
++    boundary: ownerAreaForPath(filePath),
++    classification: segments[0] === OWNER_DEBT.testDirectory ?
++      OWNER_DEBT.classTestOwnerArea : OWNER_DEBT.classToolOwnerArea,
++    ownerArea: ownerAreaForPath(filePath),
++  };
++}
++
++function signalId(kind, fields) {
++  return sha256(`${kind}${OWNER_DEBT.nullSeparator}` +
++    fields.join(OWNER_DEBT.nullSeparator));
++}
++
++function reconcileAssignments(sourceSignals, assignments) {
++  const sourceIds = new Set(sourceSignals.map((signal) => signal.id));
++  if (sourceIds.size !== sourceSignals.length) {
++    throw new Error(OWNER_DEBT.assignmentDuplicateError);
++  }
++  const counts = new Map();
++  for (const assignment of assignments) {
++    if (!sourceIds.has(assignment.id)) {
++      throw new Error(`assignment references unknown signal ${assignment.id}`);
++    }
++    if (!assignment.boundaryKey) {
++      throw new Error(`assignment is missing a boundary for ${assignment.id}`);
++    }
++    counts.set(assignment.id, (counts.get(assignment.id) || 0) + 1);
++  }
++  const missing = [...sourceIds].filter((id) => !counts.has(id));
++  const repeated = [...counts].filter(([, count]) => count !== 1);
++  if (missing.length > 0) {
++    throw new Error(`${missing.length} debt signal(s) are unassigned`);
++  }
++  if (repeated.length > 0) {
++    throw new Error(`${repeated.length} debt signal(s) are assigned more than once`);
++  }
++  return {
++    sourceSignalCount: sourceSignals.length,
++    assignedSignalCount: assignments.length,
++    uniqueAssignmentCount: counts.size,
++    digest: sha256(assignments
++      .map((item) => `${item.id}${OWNER_DEBT.nullSeparator}${item.boundaryKey}`)
++      .sort()
++      .join(OWNER_DEBT.newline)),
++  };
++}
++
++export {
++  classifyDebtPath,
++  duplicationReportIdentity,
++  fileIdentity,
++  globPatternToRegex,
++  javascriptSourceDigest,
++  listJavaScriptFiles,
++  logicalJsonIdentity,
++  normalizePath,
++  ownerAreaForPath,
++  readJson,
++  reconcileAssignments,
++  sha256,
++  signalId,
++};
+--- a/solve/changes/global-owner-debt-inventory/inventory.json
++++ b/solve/changes/global-owner-debt-inventory/inventory.json
+@@ -20,8 +20,8 @@
+       },
+       {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+-        "bytes": 1211186,
+-        "sha256": "9908fe4b4bc199b68a09c201d8de89728f6cba0739c560792b2864a3b6e3e7cd"
++        "bytes": 1211669,
++        "sha256": "d6d2a65db62b189459e39768f1fe006e90a7f88a67be852b655c0c35ba28ff1e"
+       },
+       {
+         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+@@ -30,7 +30,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "8e29ff9967acad90e6cb73677f1a45c504558e8582d628ee0b03db3294f61035"
++        "sha256": "e38c6e8fd423d915afd02bd8866d2ef16bbba9c3e881321359aa7863330a25de"
+       },
+       {
+         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+@@ -39,7 +39,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "0121980d1886a5b622bb8c56bcfd0686e4c9d42824407a104cee5dee24b4cfaf"
++        "sha256": "202b41eb27465078a1b1fb07a934d975181a8a2ae1915f1b1cc3da4fd054c261"
+       },
+       {
+         "path": "scripts/check-file-size-thresholds.js",
+@@ -62,7 +62,7 @@
+         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
+       }
+     ],
+-    "inputDigest": "79537a2fa7b9f75be59312b2091653e58063edbb5a9ca577c047c97f1741001b"
++    "inputDigest": "4616c2f88c34f971d70384a071e6b9263cb73f97a5c1cbadcc3e4e169aed1fb2"
+   },
+   "reconciliation": {
+     "complexity": {
+@@ -112,7 +112,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "8e29ff9967acad90e6cb73677f1a45c504558e8582d628ee0b03db3294f61035"
++          "sha256": "e38c6e8fd423d915afd02bd8866d2ef16bbba9c3e881321359aa7863330a25de"
+         },
+         "cloneGroups": 71,
+         "duplicatedLines": 2153,
+@@ -130,7 +130,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "0121980d1886a5b622bb8c56bcfd0686e4c9d42824407a104cee5dee24b4cfaf"
++          "sha256": "202b41eb27465078a1b1fb07a934d975181a8a2ae1915f1b1cc3da4fd054c261"
+         },
+         "cloneGroups": 836,
+         "duplicatedLines": 32008,
+@@ -166,17 +166,17 @@
+     "importGraph": {
+       "identity": {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+-        "bytes": 1211186,
+-        "sha256": "9908fe4b4bc199b68a09c201d8de89728f6cba0739c560792b2864a3b6e3e7cd"
++        "bytes": 1211669,
++        "sha256": "d6d2a65db62b189459e39768f1fe006e90a7f88a67be852b655c0c35ba28ff1e"
+       },
+       "authority": {
+         "path": "dependency-cruiser.config.cjs",
+         "bytes": 846,
+         "sha256": "761e350db64b43a1a9e3325fe59afa9497f60543adb9610368755732e45f0000"
+       },
+-      "sourceDigest": "e02a225321ac5f99864fcc0d9343c77bf734627b6150b5144c3da7777c187086",
+-      "moduleCount": 3709,
+-      "edgeCount": 15396,
++      "sourceDigest": "6aadd86d65ea74c0fa6e9e57dbb19b04de3f3005e461618f5183298ab78b7f82",
++      "moduleCount": 3711,
++      "edgeCount": 15401,
+       "unresolvedCount": 7
+     }
+   },
+@@ -3374,6 +3374,14 @@
+           "src/rebalancer",
+           "test/rebalancer"
+         ],
++        "engagementPaths": [
++          "src/rebalancer/unified-rebalancer-priority-readiness.js",
++          "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
++          "src/rebalancer/unified-rebalancer-follow-up-decision.js",
++          "src/rebalancer/unified-rebalancer-move-execution.js",
++          "src/rebalancer/unified-rebalancer-follow-up-move.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 221.8,
+           "complexity": 40,
+@@ -3409,6 +3417,14 @@
+           "test/query",
+           "test/rebalancer"
+         ],
++        "engagementPaths": [
++          "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
++          "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
++          "src/rebalancer/rebalance-coordinator-operation-creation.js",
++          "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
++          "src/rebalancer/rebalance-coordinator-lifecycle.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 192.4,
+           "complexity": 35,
+@@ -3441,6 +3457,14 @@
+           "src/control-plane",
+           "test/control-plane"
+         ],
++        "engagementPaths": [
++          "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
++          "src/control-plane/control-plane-system-table-gateway-diagnostics.js",
++          "src/control-plane/control-plane-system-table-gateway-query-execution.js",
++          "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
++          "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 157,
+           "complexity": 30,
+@@ -3480,6 +3504,13 @@
+           "test/control-plane",
+           "test/convergence"
+         ],
++        "engagementPaths": [
++          "src/control-plane/membership-publication-coordinator-reconcile.js",
++          "src/control-plane/membership-publication-coordinator-persist.js",
++          "src/control-plane/membership-publication-coordinator-planning.js",
++          "src/control-plane/membership-publication-coordinator-reads.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 72,
+           "complexity": 11,
+@@ -3514,6 +3545,14 @@
+           "src/control-plane",
+           "test/control-plane"
+         ],
++        "engagementPaths": [
++          "src/control-plane/priority-recovery-snapshot-burndown.js",
++          "src/control-plane/priority-recovery-snapshot-workflow.js",
++          "src/control-plane/priority-recovery-snapshot-active-gate.js",
++          "src/control-plane/priority-recovery-snapshot-rebalancer.js",
++          "src/control-plane/priority-recovery-snapshot-closure.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 68,
+           "complexity": 15,
+@@ -3554,6 +3593,14 @@
+           "test/rebalancer",
+           "test/runtime"
+         ],
++        "engagementPaths": [
++          "src/rebalancer/operation-workflow-owner-handoff-state.js",
++          "src/rebalancer/operation-workflow-owner-ports.js",
++          "src/rebalancer/operation-workflow-owner-retry-registry.js",
++          "src/rebalancer/operation-workflow-owner-execution-lane.js",
++          "src/rebalancer/operation-workflow-owner-shared.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 48,
+           "complexity": 6,
+@@ -3586,6 +3633,14 @@
+           "src/query",
+           "test/runtime"
+         ],
++        "engagementPaths": [
++          "src/query/sql-query-engine-provisioning-admission-methods.js",
++          "src/query/sql-query-engine-write-execution.js",
++          "src/query/sql-query-engine-bootstrap-routing-overlay.js",
++          "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
++          "src/query/sql-query-engine-routing-metadata-methods.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 257.8,
+           "complexity": 45,
+@@ -3616,6 +3671,14 @@
+           "solve/quests",
+           "src/query"
+         ],
++        "engagementPaths": [
++          "src/query/query-executor-join-execution.js",
++          "src/query/query-executor-sql-command-rendering.js",
++          "src/query/query-executor-select-aggregation.js",
++          "src/query/query-executor-write-retry-routing.js",
++          "src/query/query-executor-partition-routing-snapshot.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 253.9,
+           "complexity": 39,
+@@ -3644,6 +3707,12 @@
+           "solve/quests",
+           "src/query"
+         ],
++        "engagementPaths": [
++          "src/query/table-creation-service-completion.js",
++          "src/query/table-creation-service-create-table.js",
++          "src/query/table-creation-service-existing-table-reconciliation.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 20,
+           "complexity": 3,
+@@ -3670,6 +3739,10 @@
+           "solve/quests",
+           "src/bootstrap"
+         ],
++        "engagementPaths": [
++          "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js"
++        ],
++        "engagementTargets": [],
+         "baseline": {
+           "score": 12,
+           "complexity": 3,
+@@ -3682,36 +3755,6 @@
+       },
+       {
+         "lane": "m4c",
+-        "questId": "test-structure-burndown-test-distributed-harness",
+-        "owner": null,
+-        "boundary": "test/distributed/harness",
+-        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-distributed-harness-scenarios.js",
+-        "pathscope": [
+-          "scripts/run-test-structure-burndown-test-distributed-harness-scenarios.js",
+-          "solve/quests/test-structure-burndown-test-distributed-harness.json",
+-          "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
+-          "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
+-          "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
+-          "test/distributed/harness/failure-bundle-playback-classification.js",
+-          "test/distributed/harness/report-writer.js"
+-        ],
+-        "ownerAreas": [
+-          "scripts/run-test-structure-burndown-test-distributed-harness-scenarios.js",
+-          "solve/quests",
+-          "test/distributed/harness"
+-        ],
+-        "baseline": {
+-          "score": 2935.3,
+-          "complexity": 391,
+-          "cognitive": 0,
+-          "oversizedFiles": 11,
+-          "duplicatedLines": 14085,
+-          "lintExclusions": 10
+-        },
+-        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
+-      },
+-      {
+-        "lane": "m4c",
+         "questId": "test-structure-burndown-test-rebalancer",
+         "owner": null,
+         "boundary": "test/rebalancer",
+@@ -3722,14 +3765,58 @@
+           "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
+           "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
+           "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
+-          "test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js",
+-          "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js"
++          "test/rebalancer/rebalance-coordinator-operation-ownership-priority-planning-test-cases.js",
++          "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js"
+         ],
+         "ownerAreas": [
+           "scripts/run-test-structure-burndown-test-rebalancer-scenarios.js",
+           "solve/quests",
+           "test/rebalancer"
+         ],
++        "engagementPaths": [
++          "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
++          "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
++          "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
++          "test/rebalancer/rebalance-coordinator-operation-ownership-priority-planning-test-cases.js",
++          "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js"
++        ],
++        "engagementTargets": [
++          {
++            "path": "test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js",
++            "duplicatedLines": 582,
++            "oversizedLines": 0,
++            "lintExclusions": 1,
++            "structuralScore": 53
++          },
++          {
++            "path": "test/rebalancer/quorum-conditioned-remove-safety-tail-replacement-election.js",
++            "duplicatedLines": 716,
++            "oversizedLines": 0,
++            "lintExclusions": 1,
++            "structuralScore": 53
++          },
++          {
++            "path": "test/rebalancer/coordinator-created-operation-progress-remote-handoff-create-operation-test-cases.js",
++            "duplicatedLines": 582,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 50
++          },
++          {
++            "path": "test/rebalancer/rebalance-coordinator-operation-ownership-priority-planning-test-cases.js",
++            "duplicatedLines": 820,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 50
++          },
++          {
++            "path": "test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js",
++            "duplicatedLines": 557,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 50
++          }
++        ],
+         "baseline": {
+           "score": 1738.3,
+           "complexity": 54,
+@@ -3742,6 +3829,80 @@
+       },
+       {
+         "lane": "m4c",
++        "questId": "test-structure-burndown-test-distributed-harness",
++        "owner": null,
++        "boundary": "test/distributed/harness",
++        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-distributed-harness-scenarios.js",
++        "pathscope": [
++          "scripts/run-test-structure-burndown-test-distributed-harness-scenarios.js",
++          "solve/quests/test-structure-burndown-test-distributed-harness.json",
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js",
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js",
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
++          "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js"
++        ],
++        "ownerAreas": [
++          "scripts/run-test-structure-burndown-test-distributed-harness-scenarios.js",
++          "solve/quests",
++          "test/distributed/harness"
++        ],
++        "engagementPaths": [
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
++          "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js",
++          "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js"
++        ],
++        "engagementTargets": [
++          {
++            "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
++            "duplicatedLines": 750,
++            "oversizedLines": 0,
++            "lintExclusions": 1,
++            "structuralScore": 53
++          },
++          {
++            "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
++            "duplicatedLines": 916,
++            "oversizedLines": 0,
++            "lintExclusions": 1,
++            "structuralScore": 53
++          },
++          {
++            "path": "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
++            "duplicatedLines": 818,
++            "oversizedLines": 0,
++            "lintExclusions": 1,
++            "structuralScore": 53
++          },
++          {
++            "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js",
++            "duplicatedLines": 911,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 50
++          },
++          {
++            "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js",
++            "duplicatedLines": 712,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 50
++          }
++        ],
++        "baseline": {
++          "score": 2935.3,
++          "complexity": 391,
++          "cognitive": 0,
++          "oversizedFiles": 11,
++          "duplicatedLines": 14085,
++          "lintExclusions": 10
++        },
++        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
++      },
++      {
++        "lane": "m4c",
+         "questId": "test-structure-burndown-test-control-plane",
+         "owner": null,
+         "boundary": "test/control-plane",
+@@ -3760,6 +3921,50 @@
+           "solve/quests",
+           "test/control-plane"
+         ],
++        "engagementPaths": [
++          "test/control-plane/membership-publication-coordinator-tail-test-cases.js",
++          "test/control-plane/priority-recovery-snapshot-supplemental-retained-serial-wait-release-test-cases.js",
++          "test/control-plane/control-plane-readiness-service-owner-read-planning.js",
++          "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
++          "test/control-plane/read-model-contract.test.js"
++        ],
++        "engagementTargets": [
++          {
++            "path": "test/control-plane/membership-publication-coordinator-tail-test-cases.js",
++            "duplicatedLines": 338,
++            "oversizedLines": 0,
++            "lintExclusions": 1,
++            "structuralScore": 36.8
++          },
++          {
++            "path": "test/control-plane/priority-recovery-snapshot-supplemental-retained-serial-wait-release-test-cases.js",
++            "duplicatedLines": 357,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 35.7
++          },
++          {
++            "path": "test/control-plane/control-plane-readiness-service-owner-read-planning.js",
++            "duplicatedLines": 350,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 35
++          },
++          {
++            "path": "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
++            "duplicatedLines": 340,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 34
++          },
++          {
++            "path": "test/control-plane/read-model-contract.test.js",
++            "duplicatedLines": 322,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 32.2
++          }
++        ],
+         "baseline": {
+           "score": 677.1,
+           "complexity": 21,
+@@ -3772,36 +3977,6 @@
+       },
+       {
+         "lane": "m4c",
+-        "questId": "test-structure-burndown-test-distributed-scenarios",
+-        "owner": null,
+-        "boundary": "test/distributed/scenarios",
+-        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-distributed-scenarios-scenarios.js",
+-        "pathscope": [
+-          "scripts/run-test-structure-burndown-test-distributed-scenarios-scenarios.js",
+-          "solve/quests/test-structure-burndown-test-distributed-scenarios.json",
+-          "test/distributed/scenarios/diag-admin-discovery.js",
+-          "test/distributed/scenarios/postgres-baseline-comparison-discovery-readiness.js",
+-          "test/distributed/scenarios/postgres-baseline-comparison-metrics-and-phase-diagnostics.js",
+-          "test/distributed/scenarios/seven-node-read-write-load-transaction-recovery.js",
+-          "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js"
+-        ],
+-        "ownerAreas": [
+-          "scripts/run-test-structure-burndown-test-distributed-scenarios-scenarios.js",
+-          "solve/quests",
+-          "test/distributed/scenarios"
+-        ],
+-        "baseline": {
+-          "score": 549.4,
+-          "complexity": 131,
+-          "cognitive": 0,
+-          "oversizedFiles": 0,
+-          "duplicatedLines": 254,
+-          "lintExclusions": 0
+-        },
+-        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
+-      },
+-      {
+-        "lane": "m4c",
+         "questId": "test-structure-burndown-test-bootstrap",
+         "owner": null,
+         "boundary": "test/bootstrap",
+@@ -3820,6 +3995,50 @@
+           "solve/quests",
+           "test/bootstrap"
+         ],
++        "engagementPaths": [
++          "test/bootstrap/connect-websocket-phase-mesh-test-cases.js",
++          "test/bootstrap/bootstrap-api-readiness-gating.test.js",
++          "test/bootstrap/join-checkpoint-progression-characterization.test.js",
++          "test/bootstrap/bootstrap-cleanup.property.test.js",
++          "test/bootstrap/duplicate-replica-assignment.test.js"
++        ],
++        "engagementTargets": [
++          {
++            "path": "test/bootstrap/connect-websocket-phase-mesh-test-cases.js",
++            "duplicatedLines": 418,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 41.8
++          },
++          {
++            "path": "test/bootstrap/bootstrap-api-readiness-gating.test.js",
++            "duplicatedLines": 262,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 26.2
++          },
++          {
++            "path": "test/bootstrap/join-checkpoint-progression-characterization.test.js",
++            "duplicatedLines": 198,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 19.8
++          },
++          {
++            "path": "test/bootstrap/bootstrap-cleanup.property.test.js",
++            "duplicatedLines": 184,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 18.4
++          },
++          {
++            "path": "test/bootstrap/duplicate-replica-assignment.test.js",
++            "duplicatedLines": 180,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 18
++          }
++        ],
+         "baseline": {
+           "score": 491.4,
+           "complexity": 8,
+@@ -3832,30 +4051,148 @@
+       },
+       {
+         "lane": "m4c",
+-        "questId": "test-structure-burndown-test-integration",
++        "questId": "test-structure-burndown-test-node",
+         "owner": null,
+-        "boundary": "test/integration",
+-        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-integration-scenarios.js",
++        "boundary": "test/node",
++        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-node-scenarios.js",
+         "pathscope": [
+-          "scripts/run-test-structure-burndown-test-integration-scenarios.js",
+-          "solve/quests/test-structure-burndown-test-integration.json",
+-          "test/integration/cross-worker-cdc.integration.test.js",
+-          "test/integration/move-replica-handoff.integration.test.js",
+-          "test/integration/multi-worker-raft.integration.test.js",
+-          "test/integration/strict-preload-pressure-reproducer.integration.test.js",
+-          "test/integration/versioned-cdc-readiness-convergence.integration.test.js"
++          "scripts/run-test-structure-burndown-test-node-scenarios.js",
++          "solve/quests/test-structure-burndown-test-node.json",
++          "test/node/replica-handler-cache-state.test.js",
++          "test/node/replica-handler-create-topology-test-cases.js",
++          "test/node/replica-recovery-service.test.js",
++          "test/node/replica-status-state-machine.property.test.js",
++          "test/node/timeout-triggered-failures.property.test.js"
+         ],
+         "ownerAreas": [
+-          "scripts/run-test-structure-burndown-test-integration-scenarios.js",
++          "scripts/run-test-structure-burndown-test-node-scenarios.js",
+           "solve/quests",
+-          "test/integration"
++          "test/node"
++        ],
++        "engagementPaths": [
++          "test/node/replica-handler-create-topology-test-cases.js",
++          "test/node/timeout-triggered-failures.property.test.js",
++          "test/node/replica-status-state-machine.property.test.js",
++          "test/node/replica-recovery-service.test.js",
++          "test/node/replica-handler-cache-state.test.js"
++        ],
++        "engagementTargets": [
++          {
++            "path": "test/node/replica-handler-create-topology-test-cases.js",
++            "duplicatedLines": 446,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 44.6
++          },
++          {
++            "path": "test/node/timeout-triggered-failures.property.test.js",
++            "duplicatedLines": 226,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 22.6
++          },
++          {
++            "path": "test/node/replica-status-state-machine.property.test.js",
++            "duplicatedLines": 182,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 18.2
++          },
++          {
++            "path": "test/node/replica-recovery-service.test.js",
++            "duplicatedLines": 166,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 16.6
++          },
++          {
++            "path": "test/node/replica-handler-cache-state.test.js",
++            "duplicatedLines": 146,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 14.6
++          }
+         ],
+         "baseline": {
+-          "score": 394.6,
+-          "complexity": 21,
++          "score": 323,
++          "complexity": 0,
++          "cognitive": 0,
++          "oversizedFiles": 0,
++          "duplicatedLines": 3170,
++          "lintExclusions": 2
++        },
++        "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
++      },
++      {
++        "lane": "m4c",
++        "questId": "test-structure-burndown-test-query",
++        "owner": null,
++        "boundary": "test/query",
++        "exactScenarioCommand": "node scripts/run-test-structure-burndown-test-query-scenarios.js",
++        "pathscope": [
++          "scripts/run-test-structure-burndown-test-query-scenarios.js",
++          "solve/quests/test-structure-burndown-test-query.json",
++          "test/query/deferred-hash.test.js",
++          "test/query/query-executor-deferred-control-plane-write-test-cases.js",
++          "test/query/query-executor-recovery-owned-routing.test.js",
++          "test/query/sql-query-engine-execution-test-cases.js",
++          "test/query/sql-query-engine-metrics.test.js"
++        ],
++        "ownerAreas": [
++          "scripts/run-test-structure-burndown-test-query-scenarios.js",
++          "solve/quests",
++          "test/query"
++        ],
++        "engagementPaths": [
++          "test/query/query-executor-recovery-owned-routing.test.js",
++          "test/query/deferred-hash.test.js",
++          "test/query/sql-query-engine-execution-test-cases.js",
++          "test/query/sql-query-engine-metrics.test.js",
++          "test/query/query-executor-deferred-control-plane-write-test-cases.js"
++        ],
++        "engagementTargets": [
++          {
++            "path": "test/query/query-executor-recovery-owned-routing.test.js",
++            "duplicatedLines": 276,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 27.6
++          },
++          {
++            "path": "test/query/deferred-hash.test.js",
++            "duplicatedLines": 248,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 24.8
++          },
++          {
++            "path": "test/query/sql-query-engine-execution-test-cases.js",
++            "duplicatedLines": 180,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 18
++          },
++          {
++            "path": "test/query/sql-query-engine-metrics.test.js",
++            "duplicatedLines": 145,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 14.5
++          },
++          {
++            "path": "test/query/query-executor-deferred-control-plane-write-test-cases.js",
++            "duplicatedLines": 142,
++            "oversizedLines": 0,
++            "lintExclusions": 0,
++            "structuralScore": 14.2
++          }
++        ],
++        "baseline": {
++          "score": 330.1,
++          "complexity": 4,
+           "cognitive": 0,
+           "oversizedFiles": 0,
+-          "duplicatedLines": 3106,
++          "duplicatedLines": 3141,
+           "lintExclusions": 0
+         },
+         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
+--- a/test/solve/global-owner-debt-inventory.test.js
++++ b/test/solve/global-owner-debt-inventory.test.js
+@@ -101,6 +101,13 @@
+     t.ok(quest.baseline.complexity + quest.baseline.cognitive +
+       quest.baseline.oversizedFiles + quest.baseline.duplicatedLines +
+       quest.baseline.lintExclusions > 0);
++    if (quest.lane === 'm4c') {
++      t.ok(quest.engagementPaths.length > 0);
++      t.ok(quest.engagementPaths.every((file) => quest.pathscope.includes(file)));
++      t.equal(quest.engagementTargets.length, quest.engagementPaths.length);
++      t.ok(quest.engagementTargets.every((target) =>
++        target.structuralScore > 0 && quest.pathscope.includes(target.path)));
++    }
+   }
+ });
+ 

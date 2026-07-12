@@ -1,0 +1,164 @@
+--- a/scripts/generate-global-owner-debt-inventory.js
++++ b/scripts/generate-global-owner-debt-inventory.js
+@@ -93,6 +93,15 @@
+   };
+ }
+ 
++function duplicationReportIdentity(relativePath, report) {
++  const statistics = {...report.statistics};
++  delete statistics.detectionDate;
++  return logicalJsonIdentity(relativePath, {statistics}, [
++    'duplicates',
++    'statistics.detectionDate',
++  ]);
++}
++
+ function listJavaScriptFiles(root) {
+   const result = [];
+   const visit = (directory) => {
+@@ -705,10 +714,10 @@
+   const importGraph = readImportGraphReport(root, files);
+   const duplicationSource = readJson(root, REPORTS.duplicationSource);
+   const duplicationTest = readJson(root, REPORTS.duplicationTest);
+-  const duplicationSourceIdentity = logicalJsonIdentity(
+-    REPORTS.duplicationSource, duplicationSource, ['detectionDate']);
+-  const duplicationTestIdentity = logicalJsonIdentity(
+-    REPORTS.duplicationTest, duplicationTest, ['detectionDate']);
++  const duplicationSourceIdentity = duplicationReportIdentity(
++    REPORTS.duplicationSource, duplicationSource);
++  const duplicationTestIdentity = duplicationReportIdentity(
++    REPORTS.duplicationTest, duplicationTest);
+   return {
+     complexity: readJson(root, REPORTS.complexity),
+     cognitive: readJson(root, REPORTS.cognitive),
+@@ -781,6 +790,7 @@
+   buildInventoryFromInputs,
+   classifyDebtPath,
+   collectLiveInputs,
++  duplicationReportIdentity,
+   globPatternToRegex,
+   logicalJsonIdentity,
+   reconcileAssignments,
+--- a/solve/changes/global-owner-debt-inventory/inventory.json
++++ b/solve/changes/global-owner-debt-inventory/inventory.json
+@@ -21,23 +21,25 @@
+       {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+         "bytes": 1211186,
+-        "sha256": "86004d11510da9734b7b947ee5a8942238b135e33d900c71f8ca59fa920d34df"
++        "sha256": "8f5d190eb2459847fb0139275498bed90525060b253861c1e96b60cb0ed2afd2"
+       },
+       {
+         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+         "identityKind": "logical-json",
+         "ignoredFields": [
+-          "detectionDate"
++          "duplicates",
++          "statistics.detectionDate"
+         ],
+-        "sha256": "a17a4c755a0cc6627111c665a2cbcffc2e8511c2e5084100d0f4e94b49bcd965"
++        "sha256": "1a63e0049c1646d5f09a007e2dfdcf598acf02a9fd4dce2d1a6e255a401f654d"
+       },
+       {
+         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+         "identityKind": "logical-json",
+         "ignoredFields": [
+-          "detectionDate"
++          "duplicates",
++          "statistics.detectionDate"
+         ],
+-        "sha256": "57ce6480a05fe3a87c7fb4aaeee3a1ff84f65468fb580748fbb3d2354d32719e"
++        "sha256": "5f6d462cd3e0a1dcd04b6ddeb1483d684ac718c9e13f0f9a9af8b18ec9d20490"
+       },
+       {
+         "path": "scripts/check-file-size-thresholds.js",
+@@ -60,7 +62,7 @@
+         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
+       }
+     ],
+-    "inputDigest": "e0b2d2e0d95e02f8a61c94d3cc7cdf44fdd8c3414432fe1aeb64fbc1410a715b"
++    "inputDigest": "830dea4704ce025efd3afb5744aa987b3cf97e1a9a4db59ab91ef894e1afd6d9"
+   },
+   "reconciliation": {
+     "complexity": {
+@@ -107,9 +109,10 @@
+           "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+           "identityKind": "logical-json",
+           "ignoredFields": [
+-            "detectionDate"
++            "duplicates",
++            "statistics.detectionDate"
+           ],
+-          "sha256": "a17a4c755a0cc6627111c665a2cbcffc2e8511c2e5084100d0f4e94b49bcd965"
++          "sha256": "1a63e0049c1646d5f09a007e2dfdcf598acf02a9fd4dce2d1a6e255a401f654d"
+         },
+         "cloneGroups": 71,
+         "duplicatedLines": 2153,
+@@ -124,9 +127,10 @@
+           "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+           "identityKind": "logical-json",
+           "ignoredFields": [
+-            "detectionDate"
++            "duplicates",
++            "statistics.detectionDate"
+           ],
+-          "sha256": "57ce6480a05fe3a87c7fb4aaeee3a1ff84f65468fb580748fbb3d2354d32719e"
++          "sha256": "5f6d462cd3e0a1dcd04b6ddeb1483d684ac718c9e13f0f9a9af8b18ec9d20490"
+         },
+         "cloneGroups": 836,
+         "duplicatedLines": 32008,
+@@ -163,14 +167,14 @@
+       "identity": {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+         "bytes": 1211186,
+-        "sha256": "86004d11510da9734b7b947ee5a8942238b135e33d900c71f8ca59fa920d34df"
++        "sha256": "8f5d190eb2459847fb0139275498bed90525060b253861c1e96b60cb0ed2afd2"
+       },
+       "authority": {
+         "path": "dependency-cruiser.config.cjs",
+         "bytes": 846,
+         "sha256": "761e350db64b43a1a9e3325fe59afa9497f60543adb9610368755732e45f0000"
+       },
+-      "sourceDigest": "82d98a426def734fe2312cc59cda71c673e8cdd895db1a74d8deb64dff4af9ac",
++      "sourceDigest": "d603284ab68dce539528570339e49b6bbc3dc1a37d70904a55f3af9a1f9b9354",
+       "moduleCount": 3709,
+       "edgeCount": 15396,
+       "unresolvedCount": 7
+--- a/test/solve/global-owner-debt-inventory.test.js
++++ b/test/solve/global-owner-debt-inventory.test.js
+@@ -6,6 +6,7 @@
+ import {
+   buildInventory,
+   classifyDebtPath,
++  duplicationReportIdentity,
+   globPatternToRegex,
+   logicalJsonIdentity,
+   reconcileAssignments,
+@@ -142,16 +143,18 @@
+ });
+ 
+ tap.test('volatile checker timestamps do not change logical identities', (t) => {
+-  const first = logicalJsonIdentity('report.json', {
+-    detectionDate: 'first',
+-    statistics: {total: {clones: 2}},
+-  }, ['detectionDate']);
+-  const second = logicalJsonIdentity('report.json', {
+-    detectionDate: 'second',
+-    statistics: {total: {clones: 2}},
+-  }, ['detectionDate']);
++  const first = duplicationReportIdentity('report.json', {
++    duplicates: [{firstFile: {start: 1}}],
++    statistics: {detectionDate: 'first', total: {clones: 2}},
++  });
++  const second = duplicationReportIdentity('report.json', {
++    duplicates: [{firstFile: {start: 99}}],
++    statistics: {detectionDate: 'second', total: {clones: 2}},
++  });
+   t.equal(first.sha256, second.sha256);
+-  t.same(first.ignoredFields, ['detectionDate']);
++  t.same(first.ignoredFields, ['duplicates', 'statistics.detectionDate']);
++  t.equal(logicalJsonIdentity('report.json', {value: 1}).identityKind,
++    'logical-json');
+   t.end();
+ });
+ 

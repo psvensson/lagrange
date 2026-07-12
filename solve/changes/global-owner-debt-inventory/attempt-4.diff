@@ -1,0 +1,128 @@
+--- a/scripts/generate-global-owner-debt-inventory.js
++++ b/scripts/generate-global-owner-debt-inventory.js
+@@ -81,6 +81,14 @@
+   };
+ }
+ 
++function canonicalizeJson(value) {
++  if (Array.isArray(value)) return value.map(canonicalizeJson);
++  if (value === null || typeof value !== 'object') return value;
++  return Object.fromEntries(Object.entries(value)
++    .sort(([left], [right]) => left.localeCompare(right))
++    .map(([key, entry]) => [key, canonicalizeJson(entry)]));
++}
++
+ function logicalJsonIdentity(relativePath, value, ignoredFields = []) {
+   const ignored = new Set(ignoredFields);
+   const projected = Object.fromEntries(Object.entries(value)
+@@ -89,7 +97,7 @@
+     path: relativePath,
+     identityKind: 'logical-json',
+     ignoredFields: [...ignored].sort(),
+-    sha256: sha256(JSON.stringify(projected)),
++    sha256: sha256(JSON.stringify(canonicalizeJson(projected))),
+   };
+ }
+ 
+--- a/solve/changes/global-owner-debt-inventory/inventory.json
++++ b/solve/changes/global-owner-debt-inventory/inventory.json
+@@ -21,7 +21,7 @@
+       {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+         "bytes": 1211186,
+-        "sha256": "8f5d190eb2459847fb0139275498bed90525060b253861c1e96b60cb0ed2afd2"
++        "sha256": "9908fe4b4bc199b68a09c201d8de89728f6cba0739c560792b2864a3b6e3e7cd"
+       },
+       {
+         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+@@ -30,7 +30,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "1a63e0049c1646d5f09a007e2dfdcf598acf02a9fd4dce2d1a6e255a401f654d"
++        "sha256": "8e29ff9967acad90e6cb73677f1a45c504558e8582d628ee0b03db3294f61035"
+       },
+       {
+         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+@@ -39,7 +39,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "5f6d462cd3e0a1dcd04b6ddeb1483d684ac718c9e13f0f9a9af8b18ec9d20490"
++        "sha256": "0121980d1886a5b622bb8c56bcfd0686e4c9d42824407a104cee5dee24b4cfaf"
+       },
+       {
+         "path": "scripts/check-file-size-thresholds.js",
+@@ -62,7 +62,7 @@
+         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
+       }
+     ],
+-    "inputDigest": "830dea4704ce025efd3afb5744aa987b3cf97e1a9a4db59ab91ef894e1afd6d9"
++    "inputDigest": "79537a2fa7b9f75be59312b2091653e58063edbb5a9ca577c047c97f1741001b"
+   },
+   "reconciliation": {
+     "complexity": {
+@@ -112,7 +112,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "1a63e0049c1646d5f09a007e2dfdcf598acf02a9fd4dce2d1a6e255a401f654d"
++          "sha256": "8e29ff9967acad90e6cb73677f1a45c504558e8582d628ee0b03db3294f61035"
+         },
+         "cloneGroups": 71,
+         "duplicatedLines": 2153,
+@@ -130,7 +130,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "5f6d462cd3e0a1dcd04b6ddeb1483d684ac718c9e13f0f9a9af8b18ec9d20490"
++          "sha256": "0121980d1886a5b622bb8c56bcfd0686e4c9d42824407a104cee5dee24b4cfaf"
+         },
+         "cloneGroups": 836,
+         "duplicatedLines": 32008,
+@@ -167,14 +167,14 @@
+       "identity": {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+         "bytes": 1211186,
+-        "sha256": "8f5d190eb2459847fb0139275498bed90525060b253861c1e96b60cb0ed2afd2"
++        "sha256": "9908fe4b4bc199b68a09c201d8de89728f6cba0739c560792b2864a3b6e3e7cd"
+       },
+       "authority": {
+         "path": "dependency-cruiser.config.cjs",
+         "bytes": 846,
+         "sha256": "761e350db64b43a1a9e3325fe59afa9497f60543adb9610368755732e45f0000"
+       },
+-      "sourceDigest": "d603284ab68dce539528570339e49b6bbc3dc1a37d70904a55f3af9a1f9b9354",
++      "sourceDigest": "e02a225321ac5f99864fcc0d9343c77bf734627b6150b5144c3da7777c187086",
+       "moduleCount": 3709,
+       "edgeCount": 15396,
+       "unresolvedCount": 7
+--- a/test/solve/global-owner-debt-inventory.test.js
++++ b/test/solve/global-owner-debt-inventory.test.js
+@@ -145,13 +145,24 @@
+ tap.test('volatile checker timestamps do not change logical identities', (t) => {
+   const first = duplicationReportIdentity('report.json', {
+     duplicates: [{firstFile: {start: 1}}],
+-    statistics: {detectionDate: 'first', total: {clones: 2}},
++    statistics: {detectionDate: 'first', total: {clones: 2, sources: 10}},
+   });
+   const second = duplicationReportIdentity('report.json', {
+     duplicates: [{firstFile: {start: 99}}],
+-    statistics: {detectionDate: 'second', total: {clones: 2}},
++    statistics: {
++      total: {sources: 10, clones: 2},
++      detectionDate: 'second',
++    },
++  });
++  const reordered = duplicationReportIdentity('report.json', {
++    statistics: {
++      detectionDate: 'third',
++      total: {clones: 2, sources: 10},
++    },
++    duplicates: [],
+   });
+   t.equal(first.sha256, second.sha256);
++  t.equal(second.sha256, reordered.sha256);
+   t.same(first.ignoredFields, ['duplicates', 'statistics.detectionDate']);
+   t.equal(logicalJsonIdentity('report.json', {value: 1}).identityKind,
+     'logical-json');

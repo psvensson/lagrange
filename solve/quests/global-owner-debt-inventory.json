@@ -1,0 +1,41 @@
+{
+  "id": "global-owner-debt-inventory",
+  "statement": "A reproducible read-only inventory joins the existing cognitive-complexity, cyclomatic-complexity, file-size, duplication, import-graph, owner-map, and lint-exclusion authorities; reconciles every source count and content identity exactly; assigns each debt signal once; ranks semantic owner boundaries without inventing runtime owners; and commits an exact bounded M2, M3, and M4c child-Quest batch approved by independent architecture review.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/developer-velocity-maintainability-and-product-readiness.md#m1--global-owner-debt-inventory",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+    "sealedAtCommit": "d9a09a580bcdf41f855ae67442aac1ab4960c18c"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "global-owner-debt-inventory",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "global-owner-debt-inventory-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "global-owner-debt-inventory",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+--- a/solve/changes/global-owner-debt-inventory/inventory.json
++++ b/solve/changes/global-owner-debt-inventory/inventory.json
+@@ -30,7 +30,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "8e29ff9967acad90e6cb73677f1a45c504558e8582d628ee0b03db3294f61035"
++        "sha256": "4a460fe3f6f23db0a2afcd30c15a2a7d9eeefa3a4c919266fd16c71b51b9ce50"
+       },
+       {
+         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+@@ -39,7 +39,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "0121980d1886a5b622bb8c56bcfd0686e4c9d42824407a104cee5dee24b4cfaf"
++        "sha256": "448348351a942730f79f1376aaea41902e26b0bf387cb2bcd0cd8cd28f15142e"
+       },
+       {
+         "path": "scripts/check-file-size-thresholds.js",
+@@ -62,7 +62,7 @@
+         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
+       }
+     ],
+-    "inputDigest": "79537a2fa7b9f75be59312b2091653e58063edbb5a9ca577c047c97f1741001b"
++    "inputDigest": "97ca14611cb1f180ed3063f72073c878c573a6e7e2b2579e9be6635065b2be60"
+   },
+   "reconciliation": {
+     "complexity": {
+@@ -112,7 +112,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "8e29ff9967acad90e6cb73677f1a45c504558e8582d628ee0b03db3294f61035"
++          "sha256": "4a460fe3f6f23db0a2afcd30c15a2a7d9eeefa3a4c919266fd16c71b51b9ce50"
+         },
+         "cloneGroups": 71,
+         "duplicatedLines": 2153,
+@@ -130,7 +130,7 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "0121980d1886a5b622bb8c56bcfd0686e4c9d42824407a104cee5dee24b4cfaf"
++          "sha256": "448348351a942730f79f1376aaea41902e26b0bf387cb2bcd0cd8cd28f15142e"
+         },
+         "cloneGroups": 836,
+         "duplicatedLines": 32008,
