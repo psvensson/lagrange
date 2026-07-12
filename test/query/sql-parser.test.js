@@ -302,6 +302,62 @@ test('SQLParser - parses IS NOT NULL', async (t) => {
   t.equal(ast.where.operator, 'IS NOT NULL');
 });
 
+test('SQLParser - IN-list members keep column refs (not NULL literals)',
+  async (t) => {
+    const parser = new SQLParser(
+      'SELECT * FROM users WHERE status IN (\'paid\', nickname)',
+    );
+    const ast = parser.parse();
+
+    t.equal(ast.where.type, 'in');
+    t.same(
+      ast.where.values[0],
+      {type: 'literal', value: 'paid'},
+      'literal member preserved',
+    );
+    t.same(
+      ast.where.values[1],
+      {type: 'column_ref', table: null, column: 'nickname'},
+      'column-ref member is a column ref, not a NULL literal',
+    );
+
+    const negated = new SQLParser(
+      'SELECT * FROM users WHERE status NOT IN (\'x\', other_status)',
+    ).parse();
+    t.equal(negated.where.negated, true);
+    t.equal(
+      negated.where.values[1].type,
+      'column_ref',
+      'NOT IN column-ref member preserved too',
+    );
+  });
+
+test('SQLParser - IS with a non-NULL operand fails closed', async (t) => {
+  t.throws(
+    () => new SQLParser('SELECT * FROM users WHERE age IS 5').parse(),
+    /IS\/IS NOT supports only a NULL right operand/,
+    'IS <value> is rejected instead of silently becoming IS NULL',
+  );
+  t.throws(
+    () => new SQLParser(
+      'SELECT * FROM users WHERE age IS NOT 5',
+    ).parse(),
+    /IS\/IS NOT supports only a NULL right operand/,
+    'IS NOT <value> is rejected too',
+  );
+  // The supported forms still parse.
+  t.equal(
+    new SQLParser('SELECT * FROM users WHERE a IS NULL').parse()
+      .where.operator,
+    'IS NULL',
+  );
+  t.equal(
+    new SQLParser('SELECT * FROM users WHERE a IS NOT NULL').parse()
+      .where.operator,
+    'IS NOT NULL',
+  );
+});
+
 test('SQLParser - parses DISTINCT', async (t) => {
   const parser = new SQLParser('SELECT DISTINCT status FROM users');
   const ast = parser.parse();

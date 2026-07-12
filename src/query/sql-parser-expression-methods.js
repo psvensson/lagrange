@@ -13,6 +13,9 @@ const LOCAL_STR_LT_GT = '<>';
 
 const PARSER_ERROR_MSG = Object.freeze({
   UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
+  IS_NON_NULL_OPERAND:
+    'IS/IS NOT supports only a NULL right operand; ' +
+    'use = or <> for value comparison',
 });
 
 const PG_NODE_TYPE = Object.freeze({
@@ -266,8 +269,11 @@ const sqlParserExpressionMethods = {
           negated: operator === SQL_OPERATOR.NOT_IN,
         };
       }
+      // IN-list members go through the full expression converter:
+      // convertValue turns non-literals (column refs, arithmetic) into
+      // NULL literals, silently changing the predicate's meaning.
       const values = Array.isArray(expr.right.value) ?
-        expr.right.value.map((v) => this.convertValue(v)) :
+        expr.right.value.map((v) => this.convertExpression(v)) :
         [this.convertExpression(expr.right)];
       return {
         type: EXPR_TYPE.IN,
@@ -297,6 +303,15 @@ const sqlParserExpressionMethods = {
     }
 
     if (operator === SQL_OPERATOR.IS || operator === SQL_OPERATOR.IS_NOT) {
+      // Only IS [NOT] NULL is supported downstream; collapsing
+      // `IS <value>` to IS NULL silently drops the operand, so a
+      // non-NULL right side must fail closed at parse time.
+      const rightOperand = this.convertExpression(expr.right);
+      if (rightOperand !== null &&
+        !(rightOperand.type === EXPR_TYPE.LITERAL &&
+          rightOperand.value === null)) {
+        throw new Error(PARSER_ERROR_MSG.IS_NON_NULL_OPERAND);
+      }
       return {
         type: EXPR_TYPE.BINARY,
         operator: operator === SQL_OPERATOR.IS ?
