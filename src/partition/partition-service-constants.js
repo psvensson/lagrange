@@ -11,6 +11,8 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   SIZE_UPDATE_DEBOUNCE_MS: TIME_MS.SECOND * NUM.FIVE,
   SIZE_UPDATE_INTERVAL_MS: TIME_MS.MINUTE,
   MANAGED_SPLIT_WRITE_ACTIVITY_DEBOUNCE_MS: TIME_MS.SECOND * NUM.FIVE,
+  MERGE_CUTOVER_WAIT_INTERVAL_MS: 200,
+  MERGE_CUTOVER_WAIT_TIMEOUT_MS: TIME_MS.MINUTE * NUM.TWO,
   SIZE_PERSIST_RETRY_TIMEOUT_MS: TIME_MS.SECOND,
   SIZE_PERSIST_RETRY_BASE_DELAY_MS: 50,
   SIZE_PERSIST_RETRY_MAX_DELAY_MS: 250,
@@ -96,6 +98,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   QUERY: 'QUERY',
   TRANSACTION: 'TRANSACTION',
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
+  START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
 });
 
 const PARTITION_SERVICE_RESPONSE = Object.freeze({
@@ -339,6 +342,22 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Partition split execution state reconstructed from durable workflow',
   SPLIT_REPLICATION_SIZE_PERSIST_FAILED:
     'Partition size persistence failed',
+  START_MERGE_REPLICATION_REQUEST:
+    'Handling partition merge replication request',
+  MERGE_REPLICATION_STARTED: 'Partition merge replication started',
+  MERGE_REPLICATION_COMPLETED: 'Partition merge replication completed',
+  MERGE_REPLICATION_FAILED: 'Partition merge replication failed',
+  MERGE_REPLICATION_MIRROR_FAILED: 'Partition merge mirror delivery failed',
+  MERGE_REPLICATION_ACK_EMITTED:
+    'Partition merge source acknowledgement emitted',
+  MERGE_REPLICATION_CUTOVER_OBSERVED:
+    'Partition merge cutover observed on source partition',
+  MERGE_REPLICATION_FAILURE_ACK_FAILED:
+    'Partition merge failure acknowledgement could not reach the ' +
+    'workflow owner',
+  MERGE_REPLICATION_WRITE_RETAINED_AFTER_FAILURE:
+    'Partition merge mirror FAILED; acknowledged write retained in the ' +
+    'undelivered queue instead of being dropped',
   REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
   TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',
@@ -408,6 +427,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   INVALID_MESSAGE: 'Invalid message',
   INVALID_FORWARD_WRITE: 'Invalid FORWARD_WRITE message',
   INVALID_SPLIT_REPLICATION: 'Invalid START_SPLIT_REPLICATION message',
+  INVALID_MERGE_REPLICATION: 'Invalid START_MERGE_REPLICATION message',
   unknownMessage: (type) => `Unknown message type: ${type}`,
   unknownOperation: (operation) => `Unknown operation: ${operation}`,
   forwardWriteFailed: (message) =>
@@ -465,6 +485,14 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'Failed to route mirrored partition split write',
   SPLIT_REPLICATION_STATE_REQUIRED:
     'Partition split transition metadata is required',
+  MERGE_REPLICATION_ROUTING_FAILED:
+    'Failed to route mirrored partition merge write',
+  MERGE_REPLICATION_STATE_REQUIRED:
+    'Partition merge transition metadata is required',
+  MERGE_CUTOVER_WAIT_TIMEOUT:
+    'Timed out waiting for durable merge cutover activation',
+  MERGE_CUTOVER_WAIT_ABORTED:
+    'Merge cutover wait aborted: the workflow owner failed the merge',
   PERSIST_LEADER_AFTER_CDC_FAILED:
     'Failed to persist partition leader after CDC service set',
   PERSIST_PARTITION_LEADER_FAILED: 'Failed to persist partition leader update',

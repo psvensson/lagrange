@@ -200,6 +200,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       return this.handleTransactionMessage(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
       return this.handleStartSplitReplication(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION:
+      return this.handleStartMergeReplication(payload);
     default:
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.UNKNOWN_MESSAGE_TYPE, {
         type: payload.type,
@@ -492,7 +494,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     ) {
       return {acknowledged: true, success: true};
     }
-    if (this.splitReplication) {
+    if (this.splitReplication || this.mergeReplication) {
+      // Split and merge mirrors are mutually exclusive on one source
+      // partition (mirrors the merge handler's split check).
       return {
         acknowledged: false,
         error: PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,

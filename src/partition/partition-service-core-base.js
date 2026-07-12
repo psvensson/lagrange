@@ -255,6 +255,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.learnerPromotionTimer = null;
     this.splitReplication = null;
     this.splitReplicationRun = null;
+    this.mergeReplication = null;
+    this.mergeReplicationRun = null;
     this.splitSnapshotBackfillYieldEveryRows =
       SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS;
   }

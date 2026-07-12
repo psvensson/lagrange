@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
+  MERGE_OWNER_MANAGED_PHASES,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   SPLIT_OWNER_MANAGED_PHASES,
@@ -455,19 +456,32 @@ test('advanceSplitPhase persists the phase transition through the ' +
   );
 });
 
-test('SPLIT_OWNER_MANAGED_PHASES contains all PARTITION_TRANSITION_STATE ' +
-  'values — every split phase is owner-managed', (t) => {
+test('every PARTITION_TRANSITION_STATE value is owner-managed by its ' +
+  'workflow: split phases by SPLIT_OWNER_MANAGED_PHASES, merge phases by ' +
+  'MERGE_OWNER_MANAGED_PHASES', (t) => {
   const allPhases = Object.values(PARTITION_TRANSITION_STATE);
+  const mergeOnlyPrefix = 'merge_';
   for (const phase of allPhases) {
     t.ok(
-      SPLIT_OWNER_MANAGED_PHASES.has(phase),
-      `${phase} must be in SPLIT_OWNER_MANAGED_PHASES`,
+      SPLIT_OWNER_MANAGED_PHASES.has(phase) ||
+        MERGE_OWNER_MANAGED_PHASES.has(phase),
+      `${phase} must be owner-managed by a workflow phase set`,
     );
+    if (!phase.startsWith(mergeOnlyPrefix)) {
+      t.ok(
+        SPLIT_OWNER_MANAGED_PHASES.has(phase),
+        `${phase} must be in SPLIT_OWNER_MANAGED_PHASES`,
+      );
+    }
   }
+  const ownerManagedUnion = new Set([
+    ...SPLIT_OWNER_MANAGED_PHASES,
+    ...MERGE_OWNER_MANAGED_PHASES,
+  ]);
   t.equal(
-    SPLIT_OWNER_MANAGED_PHASES.size,
+    ownerManagedUnion.size,
     allPhases.length,
-    'SPLIT_OWNER_MANAGED_PHASES must not contain extra entries',
+    'owner-managed phase sets must not contain extra entries',
   );
   t.end();
 });

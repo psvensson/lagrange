@@ -14,6 +14,9 @@ import {wireMigrationRecoveryOnLeaderElection} from
   './migration/migration-recovery-trigger.js';
 import {createManagedSplitMetricsProvider} from
   './partition/managed-split-metrics-provider.js';
+import {ManagedMergeTopologyAdapter} from
+  './partition/managed-merge-topology-adapter.js';
+import {ManagedMergeWorkflow} from './partition/managed-merge-workflow.js';
 import {SPLIT_MERGE_EVENT} from './partition/partition-constants.js';
 import {STABILIZATION_RESET_TRIGGER} from
   './rebalancer/rebalancer-constants.js';
@@ -364,6 +367,15 @@ async function createSqlRuntimeComposition(options) {
   // Literal specifier so esbuild bundles this into the SEA build (see above).
   const {PartitionSplitMergeManager} =
     await import('./partition/partition-split-merge-manager.js');
+  const managedMergeWorkflow = new ManagedMergeWorkflow({
+    nodeId: options.nodeId,
+    topologyAdapter: new ManagedMergeTopologyAdapter({
+      sqlQueryEngine,
+    }),
+  });
+  // Source-partition merge executors reach the workflow owner through the
+  // engine handle, mirroring engine.managedSplitWorkflow.
+  sqlQueryEngine.managedMergeWorkflow = managedMergeWorkflow;
   const partitionSplitMergeManager = new PartitionSplitMergeManager({
     nodeId: options.nodeId,
     messageRouter: options.messageRouter,
@@ -374,6 +386,8 @@ async function createSqlRuntimeComposition(options) {
     }),
     executeSplitCandidate: (partitionId) =>
       sqlQueryEngine.executeManagedSplit(partitionId),
+    executeMergeCandidate: (candidate, executionOptions) =>
+      managedMergeWorkflow.execute(candidate, executionOptions),
     storageAdmissionService:
       options.owner.rebalanceCoordinator?.storageAdmissionService ||
       null,

@@ -797,6 +797,13 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       await this.handleSplitReplicationAfterWrite(
         sideEffectPlan.splitReplicationEntry,
       );
+      // Only awaited while a merge mirror is active: an unconditional await
+      // would add a microtask tick to every hot-path write ack.
+      if (this.mergeReplication) {
+        await this.handleMergeReplicationAfterWrite(
+          sideEffectPlan.splitReplicationEntry,
+        );
+      }
     }
     if (sideEffectPlan.scheduleSizeUpdate) {
       this.scheduleSizeUpdate();

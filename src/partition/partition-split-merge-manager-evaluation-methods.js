@@ -10,6 +10,15 @@ import {
 const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
 const LOCAL_STR_OBJECT = 'object';
 
+/**
+ * Resolve one results-list length for evaluation summary diagnostics.
+ * @param {*} value
+ * @return {number}
+ */
+function countResultList(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
 function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
   const cloneStringArray = options.cloneStringArray;
   const operationState = options.operationState;
@@ -219,21 +228,14 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       this.lastEvaluationSummary = {
         evaluated: normalized.evaluated === true,
         partitionsEvaluated: Number(normalized.partitionsEvaluated || 0),
-        splitCandidateCount: Array.isArray(normalized.splitCandidates) ?
-          normalized.splitCandidates.length :
-          0,
-        executedSplitCount: Array.isArray(normalized.executedSplits) ?
-          normalized.executedSplits.length :
-          0,
-        splitDeferredCount: Array.isArray(normalized.splitDeferred) ?
-          normalized.splitDeferred.length :
-          0,
-        splitErrorCount: Array.isArray(normalized.splitErrors) ?
-          normalized.splitErrors.length :
-          0,
-        mergeCandidateCount: Array.isArray(normalized.mergeCandidates) ?
-          normalized.mergeCandidates.length :
-          0,
+        splitCandidateCount: countResultList(normalized.splitCandidates),
+        executedSplitCount: countResultList(normalized.executedSplits),
+        splitDeferredCount: countResultList(normalized.splitDeferred),
+        splitErrorCount: countResultList(normalized.splitErrors),
+        mergeCandidateCount: countResultList(normalized.mergeCandidates),
+        executedMergeCount: countResultList(normalized.executedMerges),
+        mergeDeferredCount: countResultList(normalized.mergeDeferred),
+        mergeErrorCount: countResultList(normalized.mergeErrors),
       };
       this.lastEvaluationError = null;
     },
@@ -321,6 +323,9 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           splitErrors: [],
           splitDeferred: [],
           mergeCandidates: [],
+          executedMerges: [],
+          mergeErrors: [],
+          mergeDeferred: [],
         };
         this.recordEvaluationSuccess(
           results,
@@ -340,6 +345,9 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           splitErrors: [],
           splitDeferred: [],
           mergeCandidates: [],
+          executedMerges: [],
+          mergeErrors: [],
+          mergeDeferred: [],
         };
 
         const partitions = await this.loadEvaluationPartitions();
@@ -504,11 +512,18 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
           }
         }
 
+        await this.executeMergeCandidatesWithinBudget(
+          results,
+          bypassSplitPressure,
+        );
+
         this.logger.debug(SPLIT_MERGE_LOG_MSG.PARTITION_EVAL_COMPLETED, {
           partitionsEvaluated: results.partitionsEvaluated,
           splitCandidates: results.splitCandidates.length,
           splitDeferred: results.splitDeferred.length,
           mergeCandidates: results.mergeCandidates.length,
+          executedMerges: results.executedMerges.length,
+          mergeDeferred: results.mergeDeferred.length,
         });
 
         this.emit(
@@ -526,6 +541,69 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         throw error;
       } finally {
         this.state = operationState.IDLE;
+      }
+    },
+
+    /**
+     * Auto-execute merge candidates through the wired runtime owner,
+     * bounded per evaluation exactly like the split auto-execute loop.
+     * Candidates already covered by a split executed this round, or beyond
+     * the per-evaluation budget, are deferred with a backpressure reason.
+     * @param {Object} results - Evaluation results accumulator.
+     * @param {boolean} bypassPressure - Reactive pressure bypass flag.
+     * @return {Promise<void>}
+     * @private
+     */
+    async executeMergeCandidatesWithinBudget(results, bypassPressure) {
+      let mergeExecutionAttempts = 0;
+      for (const candidate of results.mergeCandidates) {
+        if (
+          mergeExecutionAttempts >=
+            this.maxAutoExecuteMergesPerEvaluation
+        ) {
+          this.logger.warn(
+            SPLIT_MERGE_LOG_MSG.MERGE_EXECUTION_DEFERRED,
+            {
+              leftId: candidate.leftId,
+              rightId: candidate.rightId,
+              reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+              maxAutoExecuteMergesPerEvaluation:
+                this.maxAutoExecuteMergesPerEvaluation,
+            },
+          );
+          results.mergeDeferred.push({
+            leftId: candidate.leftId,
+            rightId: candidate.rightId,
+            reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+          });
+          continue;
+        }
+        mergeExecutionAttempts += 1;
+        try {
+          const execution = await this.executeManagedMergeCandidate(
+            candidate,
+            {
+              bypassPressure,
+            },
+          );
+          this.recordManagedMergeExecutionOutcome(
+            results,
+            candidate,
+            execution,
+          );
+        } catch (error) {
+          this.logger.error(SPLIT_MERGE_LOG_MSG.MERGE_EXECUTION_FAILED, {
+            leftId: candidate.leftId,
+            rightId: candidate.rightId,
+            error: error.message,
+            phase: LOCAL_STR_WORKFLOW_EXECUTION,
+          });
+          results.mergeErrors.push({
+            leftId: candidate.leftId,
+            rightId: candidate.rightId,
+            error: error.message,
+          });
+        }
       }
     },
 
@@ -550,6 +628,8 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         evaluationIntervalMs: this.evaluationIntervalMs,
         maxAutoExecuteSplitsPerEvaluation:
           this.maxAutoExecuteSplitsPerEvaluation,
+        maxAutoExecuteMergesPerEvaluation:
+          this.maxAutoExecuteMergesPerEvaluation,
       };
     },
 
@@ -604,6 +684,10 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       if (thresholds.maxAutoExecuteSplitsPerEvaluation !== undefined) {
         this.maxAutoExecuteSplitsPerEvaluation =
           thresholds.maxAutoExecuteSplitsPerEvaluation;
+      }
+      if (thresholds.maxAutoExecuteMergesPerEvaluation !== undefined) {
+        this.maxAutoExecuteMergesPerEvaluation =
+          thresholds.maxAutoExecuteMergesPerEvaluation;
       }
 
       this.logger.info(

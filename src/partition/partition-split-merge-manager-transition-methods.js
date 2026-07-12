@@ -70,6 +70,142 @@ class PartitionSplitMergeManagerTransitionMethods {
   }
 
   /**
+   * Execute one merge candidate when a runtime owner is provided.
+   * @param {Object} candidate - {leftId, rightId} merge candidate pair.
+   * @param {Object} [options={}] - Execution options.
+   * @return {Promise<Object|null>} Execution result.
+   * @private
+   */
+  async executeManagedMergeCandidate(candidate, options = {}) {
+    if (!candidate?.leftId ||
+        !candidate?.rightId ||
+        !this.autoExecuteCandidates ||
+        typeof this.executeMergeCandidate !== LOCAL_STR_FUNCTION) {
+      return null;
+    }
+    const pressureDecision = this.evaluateSplitPressure();
+    if (options?.bypassPressure !== true &&
+        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+      return this.buildPressureDeferredExecution(
+        candidate.leftId,
+        pressureDecision,
+      );
+    }
+    return this.executeMergeCandidate(
+      candidate,
+      this.buildManagedCandidateExecutionOptions(options),
+    );
+  }
+
+  /**
+   * Build the workflow execution options for one auto-executed candidate.
+   * @param {Object} options - Auto-execution options.
+   * @return {Object} Workflow execution options.
+   * @private
+   */
+  buildManagedCandidateExecutionOptions(options) {
+    const executionOptions =
+      options?.executionOptions &&
+      typeof options.executionOptions === 'object' ?
+        {...options.executionOptions} :
+        {};
+    if (options?.bypassPressure === true) {
+      Object.assign(
+        executionOptions,
+        REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS,
+      );
+    }
+    return executionOptions;
+  }
+
+  /**
+   * Record one managed merge execution in the canonical outcome bucket.
+   * Reuses the split execution classifier (same result grammar).
+   * @param {Object} results - Evaluation results accumulator.
+   * @param {Object} candidate - {leftId, rightId} merge candidate pair.
+   * @param {Object|null} execution - Managed merge execution result.
+   * @private
+   */
+  recordManagedMergeExecutionOutcome(results, candidate, execution) {
+    if (!execution) {
+      return;
+    }
+
+    const outcome = this.classifyManagedSplitExecution(execution);
+    if (outcome === LOCAL_STR_EXECUTED) {
+      results.executedMerges.push(execution);
+      this.emit(SPLIT_MERGE_EVENT.MERGE_COMPLETED, execution);
+      return;
+    }
+    if (outcome === LOCAL_STR_DEFERRED) {
+      this.recordDeferredMergeExecution(results, candidate, execution);
+      return;
+    }
+    this.recordFailedMergeExecution(results, candidate, execution);
+  }
+
+  /**
+   * Record one deferred managed merge execution.
+   * @param {Object} results - Evaluation results accumulator.
+   * @param {Object} candidate - {leftId, rightId} merge candidate pair.
+   * @param {Object} execution - Managed merge execution result.
+   * @private
+   */
+  recordDeferredMergeExecution(results, candidate, execution) {
+    this.logger.warn(SPLIT_MERGE_LOG_MSG.MERGE_EXECUTION_DEFERRED, {
+      leftId: candidate.leftId,
+      rightId: candidate.rightId,
+      state: execution.state || null,
+      workflowId: execution.workflowId || null,
+      error: execution.error || null,
+      retryScheduled: execution.retryScheduled === true,
+      nextAttemptAt:
+        execution?.retry?.nextAttemptAt ||
+        execution?.nextAttemptAt ||
+        null,
+    });
+    results.mergeDeferred.push({
+      leftId: candidate.leftId,
+      rightId: candidate.rightId,
+      reason: execution?.state || PARTITION_TRANSITION_STATE.DEFERRED,
+      execution,
+    });
+  }
+
+  /**
+   * Record one failed managed merge execution.
+   * @param {Object} results - Evaluation results accumulator.
+   * @param {Object} candidate - {leftId, rightId} merge candidate pair.
+   * @param {Object} execution - Managed merge execution result.
+   * @private
+   */
+  recordFailedMergeExecution(results, candidate, execution) {
+    const error = typeof execution?.error === LOCAL_STR_STRING &&
+      execution.error.length > 0 ?
+      execution.error :
+      SPLIT_MERGE_ERROR_MSG.MANAGED_MERGE_EXECUTION_FAILED;
+    this.logger.error(SPLIT_MERGE_LOG_MSG.MERGE_EXECUTION_FAILED, {
+      leftId: candidate.leftId,
+      rightId: candidate.rightId,
+      error,
+      state: execution.state || null,
+      workflowId: execution.workflowId || null,
+    });
+    results.mergeErrors.push({
+      leftId: candidate.leftId,
+      rightId: candidate.rightId,
+      error,
+      state: execution.state || null,
+      workflowId: execution.workflowId || null,
+    });
+    this.emit(SPLIT_MERGE_EVENT.MERGE_FAILED, {
+      leftPartitionId: candidate.leftId,
+      rightPartitionId: candidate.rightId,
+      error,
+    });
+  }
+
+  /**
    * Determine how one managed split execution should be classified.
    * @param {Object|null} execution - Managed split execution result.
    * @return {string} Outcome bucket: executed, deferred, or error.

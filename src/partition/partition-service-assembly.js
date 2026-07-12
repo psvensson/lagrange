@@ -3,6 +3,7 @@ import {createPartitionServiceMetadataDeliveryMethods} from './partition-service
 import {createPartitionServiceLearnerPromotionMethods} from './partition-service-learner-promotion-methods.js';
 import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
 import {createPartitionServiceLifecycleMethods} from './partition-service-lifecycle-methods.js';
+import {createPartitionServiceMergeReplicationMethods} from './partition-service-merge-replication-methods.js';
 import {PartitionServiceSplitAccessorBase} from './partition-service-split-accessor-base.js';
 
 class PartitionService extends PartitionServiceSplitAccessorBase {}
@@ -14,6 +15,7 @@ Object.assign(
   createPartitionServiceLearnerPromotionMethods(),
   createPartitionServiceDurabilityFitnessMethods(),
   createPartitionServiceLifecycleMethods(),
+  createPartitionServiceMergeReplicationMethods(),
 );
 
 export {PartitionService};

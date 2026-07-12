@@ -1,0 +1,41 @@
+{
+  "id": "managed-partition-merge",
+  "statement": "Adjacent under-threshold partitions actually merge in production: a ManagedMergeWorkflow mirroring the split workflow drains two source partitions into one target via CDC fan-in catch-up, applies a durable epoch cutover that collapses the two key ranges in the authoritative topology, dissolves the retired raft group, and is wired as executeMergeCandidate in runtime composition with admission gating; guard tests prove lifecycle progression, data completeness, and post-merge routing.",
+  "priority": 5,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "sealedAtCommit": "51f61cde599ca0c53bc424488aa320fb531f5167"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "managed-partition-merge",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "managed-partition-merge-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "managed-partition-merge",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

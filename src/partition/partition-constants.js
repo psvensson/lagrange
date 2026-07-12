@@ -25,6 +25,10 @@ const PARTITION_TRANSITION_STATE = Object.freeze({
   SPLIT_BACKFILLING: 'split_backfilling',
   SPLIT_CATCHUP: 'split_catchup',
   SPLIT_CUTOVER_ACTIVE: 'split_cutover_active',
+  MERGE_PREPARING: 'merge_preparing',
+  MERGE_BACKFILLING: 'merge_backfilling',
+  MERGE_CATCHUP: 'merge_catchup',
+  MERGE_CUTOVER_ACTIVE: 'merge_cutover_active',
 });
 const PARTITION_TRANSITION_STATE_UNKNOWN = 'unknown';
 
@@ -35,6 +39,10 @@ const PARTITION_TRANSITION_PHASE = Object.freeze({
   SPLIT_BACKFILLING: 'split_backfilling',
   SPLIT_CATCHUP: 'split_catchup',
   SPLIT_CUTOVER: 'split_cutover',
+  MERGE_PREPARING: 'merge_preparing',
+  MERGE_BACKFILLING: 'merge_backfilling',
+  MERGE_CATCHUP: 'merge_catchup',
+  MERGE_CUTOVER: 'merge_cutover',
 });
 
 const PARTITION_TRANSITION_OUTCOME = Object.freeze({
@@ -67,6 +75,22 @@ const PARTITION_TRANSITION_PHASE_BY_STATE = Object.freeze(
     [
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
       PARTITION_TRANSITION_PHASE.SPLIT_CUTOVER,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_PREPARING,
+      PARTITION_TRANSITION_PHASE.MERGE_PREPARING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
+      PARTITION_TRANSITION_PHASE.MERGE_BACKFILLING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
+      PARTITION_TRANSITION_PHASE.MERGE_CATCHUP,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
+      PARTITION_TRANSITION_PHASE.MERGE_CUTOVER,
     ],
   ]),
 );
@@ -105,6 +129,22 @@ const PARTITION_TRANSITION_OUTCOME_BY_STATE = Object.freeze(
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
       PARTITION_TRANSITION_OUTCOME.RUNNING,
     ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_PREPARING,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
   ]),
 );
 
@@ -127,6 +167,27 @@ const SPLIT_OWNER_MANAGED_PHASES = Object.freeze(new Set([
   PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
   PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
   PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+]));
+
+/**
+ * Set of merge lifecycle phases that only ManagedMergeWorkflow may
+ * persist as durable partition_transition_state values.
+ *
+ * PartitionService and other execution participants MUST NOT write
+ * these states to the tables system table directly. They report typed
+ * acknowledgements and let the workflow owner advance the phase.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const MERGE_OWNER_MANAGED_PHASES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
+  PARTITION_TRANSITION_STATE.BLOCKED,
+  PARTITION_TRANSITION_STATE.DEFERRED,
+  PARTITION_TRANSITION_STATE.FAILED,
+  PARTITION_TRANSITION_STATE.MERGE_PREPARING,
+  PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
+  PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
+  PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
 ]));
 
 const RETRYABLE_PARTITION_TRANSITION_STATES = Object.freeze(new Set([
@@ -176,6 +237,8 @@ const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   PRIMARY_KEY_COLUMN: 'primaryKeyColumn',
   RETRY: 'retry',
   SOURCE_PARTITION_ID: 'sourcePartitionId',
+  SOURCE_PARTITION_IDS: 'sourcePartitionIds',
+  SIBLING_PARTITION_IDS: 'siblingPartitionIds',
   TOPOLOGY_SNAPSHOT: 'topologySnapshot',
   SPLIT_KEY: 'splitKey',
   TARGET_PARTITION_IDS: 'targetPartitionIds',
@@ -313,6 +376,8 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
   STARTING_MERGE: 'Starting partition merge',
   MERGE_COMPLETED: 'Partition merge completed',
   MERGE_FAILED: 'Partition merge failed',
+  MERGE_EXECUTION_DEFERRED: 'Managed merge execution deferred',
+  MERGE_EXECUTION_FAILED: 'Managed merge execution failed',
   RANGE_INTEGRITY_OVERLAP:
     'Range integrity violation: left and right ranges overlap',
   RANGE_VALID_AFTER_SPLIT: 'Range integrity validated after split',
@@ -350,6 +415,7 @@ const SPLIT_MERGE_ERROR_MSG = Object.freeze({
   managerBusy: (state) => `Cannot split: manager is in ${state} state`,
   mergeManagerBusy: (state) => `Cannot merge: manager is in ${state} state`,
   MANAGED_SPLIT_EXECUTION_FAILED: 'Managed split execution failed',
+  MANAGED_MERGE_EXECUTION_FAILED: 'Managed merge execution failed',
   partitionRangeMissing: (partitionId) =>
     `Partition ${partitionId} not found in key range manager`,
   leftPartitionMissing: (partitionId) =>
@@ -362,6 +428,82 @@ const SPLIT_MERGE_ERROR_MSG = Object.freeze({
   SPLIT_PREFLIGHT_OWNER_REQUIRED:
     'Split capacity preflight requires storageAdmissionService and storageAccountingService',
 });
+
+const MANAGED_MERGE_ERROR_MSG = Object.freeze({
+  SOURCE_PARTITIONS_REQUIRED:
+    'Managed merge requires two distinct source partition ids',
+  PARTITION_NOT_FOUND: 'Managed merge source partition not found',
+  TABLE_NOT_FOUND: 'Managed merge table not found',
+  TABLE_MISMATCH:
+    'Managed merge source partitions belong to different tables',
+  NOT_ADJACENT: 'Managed merge source partitions are not adjacent',
+  LEADER_REQUIRED:
+    'Managed merge requires local leadership of the left source partition',
+  ALREADY_IN_PROGRESS:
+    'Managed merge refused: partition transition already in progress',
+  CRITICAL_PARTITION:
+    'Managed merge refused for critical system partition',
+  OVER_THRESHOLD:
+    'Managed merge refused: combined source size exceeds merge threshold',
+  PRIMARY_KEY_REQUIRED:
+    'Managed merge requires a single-column partition key',
+  START_FAILED: 'Managed merge execution failed to start',
+  INVALID_PHASE_TRANSITION: 'Invalid managed merge phase transition',
+  WORKFLOW_NOT_FOUND: 'Managed merge workflow not found',
+  DESCRIPTOR_EPOCH_REJECTED:
+    'Managed merge partition descriptor epoch rejected stale evidence',
+  ADMISSION_OWNER_REQUIRED:
+    'Managed merge admission requires storageAdmissionService',
+  TARGET_PROVISIONING_NOT_VIABLE:
+    'Managed merge target provisioning precheck could not satisfy the ' +
+    'minimum routable cohort',
+});
+
+const MANAGED_MERGE_LOG_MSG = Object.freeze({
+  MERGE_START: 'Managed merge started',
+  MERGE_PREPARED: 'Managed merge prepared and backfilling',
+  CUTOVER_APPLIED: 'Managed merge cutover applied',
+  CUTOVER_AWAITING_SOURCES:
+    'Managed merge cutover awaiting remaining source catch-up',
+  CUTOVER_REFUSED_NOT_PRE_CUTOVER:
+    'Managed merge cutover refused: workflow is not in a pre-cutover phase',
+  PHASE_ADVANCE_REFUSED:
+    'Managed merge phase advance refused: the workflow left the expected ' +
+    'predecessor state while the step was queued',
+  ABORT_DISPATCH_FAILED:
+    'Managed merge abort step failed to apply',
+  SIBLINGS_RESTORED_AFTER_ABORT:
+    'Managed merge abort restored carried-forward sibling descriptors to ' +
+    'the active epoch',
+  SIBLING_CARRIED_FORWARD:
+    'Managed merge carried sibling partition forward to the target epoch',
+  DISSOLUTION_DISPATCHED:
+    'Managed merge source dissolution dispatched',
+  DISSOLUTION_FAILED: 'Managed merge source dissolution failed',
+  EXECUTION_FAILURE_PERSISTED:
+    'Managed merge execution failure persisted',
+  PERSIST_FAILURE_FAILED:
+    'Failed to persist managed merge workflow failure',
+  MERGE_ABORTED_ON_SOURCE_FAILURE:
+    'Managed merge aborted fail-safe on source failure acknowledgement; ' +
+    'sources remain authoritative',
+  POST_CUTOVER_SOURCE_FAILURE_RECORDED:
+    'Managed merge source failure acknowledged after cutover; epoch not ' +
+    'reverted',
+  TARGET_TEARDOWN_FAILED:
+    'Managed merge aborted-target teardown failed',
+  TERMINAL_TRANSITION_CLEARED:
+    'Managed merge terminal transition cleared after dissolution',
+});
+
+/**
+ * Admission operation label for managed merges. The capacity math reuses
+ * storageAdmissionService.checkSplit (target node cohort + estimatedBytes
+ * are operation-agnostic), but durable admission metadata must not
+ * mislabel a merge as a split.
+ * @type {string}
+ */
+const MANAGED_MERGE_ADMISSION_OPERATION_TYPE = 'partition_merge';
 
 const SPLIT_MERGE_DEFAULT = Object.freeze({
   SPLIT_STORAGE_THRESHOLD_BYTES: 10 * 1024 * 1024 * 1024,
@@ -405,6 +547,9 @@ const PENDING_REQUEST_VALUE = Object.freeze({
 });
 
 export {
+  MANAGED_MERGE_ADMISSION_OPERATION_TYPE,
+  MANAGED_MERGE_ERROR_MSG,
+  MANAGED_MERGE_LOG_MSG,
   PARTITION_ENTITY_TYPE,
   PARTITION_RAFT_ROLE,
   PARTITION_REQUEST_TYPE,
@@ -436,6 +581,7 @@ export {
   PARTITION_DESCRIPTOR_EPOCH_REASON,
   PARTITION_DESCRIPTOR_EPOCH_STATE,
   SPLIT_OWNER_MANAGED_PHASES,
+  MERGE_OWNER_MANAGED_PHASES,
   buildPartitionTransitionProjection,
   isDeferredPartitionTransitionOutcome,
   isRetryablePartitionTransitionState,

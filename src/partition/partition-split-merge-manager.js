@@ -35,6 +35,7 @@ const DEFAULT_MERGE_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.MERGE_STORAGE_THRESH
 const DEFAULT_MERGE_TRAFFIC_THRESHOLD = SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
 const DEFAULT_EVALUATION_INTERVAL_MS = SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
 const DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION = 1;
+const DEFAULT_MAX_AUTO_EXECUTE_MERGES_PER_EVALUATION = 1;
 const DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS = 1000;
 const DEFAULT_EVALUATION_TRIGGER = 'direct_call';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
@@ -102,6 +103,11 @@ class PartitionSplitMergeManager extends EventEmitter {
         options.maxAutoExecuteSplitsPerEvaluation >= 0 ?
           options.maxAutoExecuteSplitsPerEvaluation :
           DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION;
+    this.maxAutoExecuteMergesPerEvaluation =
+        Number.isInteger(options.maxAutoExecuteMergesPerEvaluation) &&
+        options.maxAutoExecuteMergesPerEvaluation >= 0 ?
+          options.maxAutoExecuteMergesPerEvaluation :
+          DEFAULT_MAX_AUTO_EXECUTE_MERGES_PER_EVALUATION;
     this.storageAdmissionService =
         options.storageAdmissionService || null;
     this.storageAccountingService =
@@ -191,4 +197,5 @@ export {
   DEFAULT_MERGE_TRAFFIC_THRESHOLD,
   DEFAULT_EVALUATION_INTERVAL_MS,
   DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION,
+  DEFAULT_MAX_AUTO_EXECUTE_MERGES_PER_EVALUATION,
 };
