@@ -6,6 +6,8 @@ export const HISTORICAL_ARTIFACT_MIGRATION_V2 = Object.freeze({
   CENSUS_PATH: 'solve/changes/solver-historical-artifact-census/census.json',
   MANIFEST_PATH:
     'solve/changes/solver-historical-artifact-migration-v2/manifest.json',
+  AUTHORITATIVE_MANIFEST_SHA256:
+    '279dc291c2ef76474caafacedb0cb014ad6a18b1cf092db613cd80f0b21cc124',
   BATCH_RECEIPT_DIRECTORY:
     'solve/changes/solver-historical-artifact-migration-v2/batches',
   W12_RECEIPT_PATH:
@@ -21,6 +23,10 @@ export const HISTORICAL_ARTIFACT_MIGRATION_V2 = Object.freeze({
   EXPECTED_PAYLOAD_COUNT: 51,
   MAX_BATCH_PATHS: 25,
   MAX_BATCH_BYTES: 262144,
+  BATCH_EVIDENCE_PATHS: 5,
+  BATCH_EVIDENCE_BYTES: 49152,
+  COMPLETE_QUEST_RESERVED_PATHS: 6,
+  COMPLETE_QUEST_RESERVED_BYTES: 81920,
   BATCH_RECEIPT_SCHEMA: Object.freeze({
     schemaVersion: 2,
     kind: 'solver-historical-artifact-batch-receipt',

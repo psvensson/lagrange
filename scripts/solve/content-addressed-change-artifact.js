@@ -94,8 +94,25 @@ function descriptorFor(payload, objectBytes) {
   };
 }
 
-function canonicalDescriptorBytes(descriptor) {
+export function canonicalContentAddressedDescriptorBytes(descriptor) {
   return Buffer.from(`${JSON.stringify(descriptor, null, 2)}\n`);
+}
+
+export function prepareContentAddressedChangeArtifact(relativeInlinePath, content) {
+  const payload = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  const objectBytes = gzipSync(payload);
+  const descriptor = descriptorFor(payload, objectBytes);
+  return {
+    relativeInlinePath: normalizePath(relativeInlinePath),
+    payload,
+    payloadSha256: descriptor.payloadSha256,
+    payloadBytes: descriptor.payloadBytes,
+    objectPath: descriptor.objectPath,
+    objectBytes,
+    descriptor,
+    descriptorPath: `${normalizePath(relativeInlinePath)}${DESCRIPTOR_SUFFIX}`,
+    descriptorBytes: canonicalContentAddressedDescriptorBytes(descriptor),
+  };
 }
 
 function validateDescriptor(root, descriptor) {
@@ -151,7 +168,7 @@ function readDescriptor(root, descriptorPath) {
     };
   }
   const problems = validateDescriptor(root, descriptor);
-  if (!descriptorBytes.equals(canonicalDescriptorBytes(descriptor))) {
+  if (!descriptorBytes.equals(canonicalContentAddressedDescriptorBytes(descriptor))) {
     problems.push(PROBLEM_NONCANONICAL_DESCRIPTOR_BYTES);
   }
   if (problems.length > 0) {
@@ -314,7 +331,8 @@ export function writeContentAddressedChangeArtifact(
   const objectBytes = fs.readFileSync(objectPath);
   const descriptor = descriptorFor(payload, objectBytes);
   const descriptorPath = `${inlinePath}${DESCRIPTOR_SUFFIX}`;
-  fs.writeFileSync(descriptorPath, canonicalDescriptorBytes(descriptor));
+  fs.writeFileSync(descriptorPath,
+    canonicalContentAddressedDescriptorBytes(descriptor));
   const relativeDescriptor = normalizePath(path.relative(root, descriptorPath));
   const changeRef = `${CHANGE_REF_PREFIX}${relativeDescriptor}`;
   const verified = readChangeArtifact(root, changeRef);
