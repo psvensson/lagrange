@@ -58,6 +58,20 @@ const {
   uuidv4,
 } = NODE_JOINING_SERVICE_SHARED;
 
+/**
+ * Normalize the optional seed contact candidate list.
+ * @param {*} seedNodeAddresses
+ * @return {string[]}
+ */
+function normalizeSeedNodeAddresses(seedNodeAddresses) {
+  if (!Array.isArray(seedNodeAddresses)) {
+    return [];
+  }
+  return seedNodeAddresses.filter((seedAddress) =>
+    typeof seedAddress === 'string' && seedAddress.length > 0,
+  );
+}
+
 class NodeJoiningOwnerConstruction extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -74,6 +88,8 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.nodeAddress = options.nodeAddress || null;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
+    this.seedNodeAddresses =
+      normalizeSeedNodeAddresses(options.seedNodeAddresses);
     this.seedNodeWsAddress = options.seedNodeWsAddress || null;
     this.seedNodeId = null; // Allow explicit 0 to mean "do not start a WebSocket server" (useful in tests/sandboxes).
     this.wsPort = options.wsPort ?? null;
@@ -365,6 +381,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       nodeId: this.nodeId,
       delegates: {
         getSeedNodeAddress: () => this.seedNodeAddress,
+        getSeedNodeAddresses: () => this.seedNodeAddresses,
         getNodeAddress: () => this.nodeAddress,
         getJoinStartupMode: () => this.startupMode,
         getMembershipOwnerOutcome: () => this.membershipOwnerOutcome,

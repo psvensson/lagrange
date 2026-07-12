@@ -70,8 +70,8 @@ class ContactSeedPhase {
    * @return {Promise<void>}
    */
   async phaseContactSeed() {
-    const seedNodeAddress = this.delegates.getSeedNodeAddress();
-    if (!seedNodeAddress) {
+    const seedContactCandidates = this.resolveSeedContactCandidates();
+    if (seedContactCandidates.length === 0) {
       throw new Error(JOINING_ERROR_MSG.SEED_NODE_ADDRESS_REQUIRED);
     }
     const nodeAddress = this.delegates.getNodeAddress();
@@ -79,7 +79,7 @@ class ContactSeedPhase {
     const startupMode = this.delegates.getJoinStartupMode?.();
 
     const bootstrapUrl =
-      `${seedNodeAddress}${JOINING_HTTP.BOOTSTRAP_PATH}`;
+      this.buildSeedContactBootstrapUrl(seedContactCandidates[0]);
     const logger = this.delegates.getLogger();
 
     logger.debug(JOINING_LOG_MSG.SEED_CONTACTING, {
@@ -136,6 +136,11 @@ class ContactSeedPhase {
 
     while (now() - startTime < retryTimeoutMs) {
       attempt += 1;
+      // Rotate the contact target across the candidate list on each retry;
+      // a single-candidate list reproduces today's fixed-target sequence.
+      const attemptBootstrapUrl = this.buildSeedContactBootstrapUrl(
+        seedContactCandidates[(attempt - 1) % seedContactCandidates.length],
+      );
       try {
         const httpPostImpl = this.delegates.getHttpPostImpl();
         const attemptStartedAtMs = now();
@@ -163,7 +168,7 @@ class ContactSeedPhase {
           bootstrapRequest.membershipOwnerOutcome = membershipOwnerOutcome;
         }
         const response = await httpPostImpl(
-          bootstrapUrl,
+          attemptBootstrapUrl,
           bootstrapRequest,
           {timeoutMs: requestTimeoutMs},
         );
@@ -265,7 +270,7 @@ class ContactSeedPhase {
           lastRetryAfterMs = nextDelayMs;
           logger.debug(JOINING_LOG_MSG.SEED_CONTACT_RETRYING, {
             nodeId: this.nodeId,
-            bootstrapUrl,
+            bootstrapUrl: attemptBootstrapUrl,
             attempt,
             elapsedMs,
             lastCode: classification.code,
@@ -334,7 +339,7 @@ class ContactSeedPhase {
         if (classification.terminalValidationOrConflict) {
           logger.warn(JOINING_LOG_MSG.SEED_CONTACT_TERMINAL, {
             nodeId: this.nodeId,
-            bootstrapUrl,
+            bootstrapUrl: attemptBootstrapUrl,
             attempt,
             elapsedMs,
             statusCode: classification.statusCode,
@@ -379,7 +384,7 @@ class ContactSeedPhase {
 
         logger.error(JOINING_LOG_MSG.SEED_CONTACT_FAILED, {
           nodeId: this.nodeId,
-          bootstrapUrl,
+          bootstrapUrl: attemptBootstrapUrl,
           error: error.message,
         });
         throw new Error(
@@ -431,6 +436,39 @@ class ContactSeedPhase {
     throw new Error(JOINING_ERROR_MSG.contactSeedFailed(
       SEED_READINESS_TIMEOUT_MSG(retryTimeoutMs),
     ));
+  }
+
+  /**
+   * Resolve the ordered seed-contact candidate list.
+   *
+   * Prefers the delegate-provided candidate list (selected candidate first);
+   * falls back to the legacy single seed address so callers that only wire
+   * `getSeedNodeAddress` keep their exact behavior.
+   * @return {string[]}
+   */
+  resolveSeedContactCandidates() {
+    const seedNodeAddresses = this.delegates.getSeedNodeAddresses?.();
+    const candidates = Array.isArray(seedNodeAddresses) ?
+      seedNodeAddresses.filter((seedAddress) =>
+        typeof seedAddress === 'string' && seedAddress.length > 0,
+      ) :
+      [];
+    if (candidates.length > 0) {
+      return candidates;
+    }
+    const seedNodeAddress = this.delegates.getSeedNodeAddress();
+    return typeof seedNodeAddress === 'string' && seedNodeAddress.length > 0 ?
+      [seedNodeAddress] :
+      [];
+  }
+
+  /**
+   * Build the bootstrap-contact URL for one seed candidate address.
+   * @param {string} seedNodeAddress
+   * @return {string}
+   */
+  buildSeedContactBootstrapUrl(seedNodeAddress) {
+    return `${seedNodeAddress}${JOINING_HTTP.BOOTSTRAP_PATH}`;
   }
 
   /**

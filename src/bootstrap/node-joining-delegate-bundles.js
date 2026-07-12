@@ -272,6 +272,7 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
           self.bootstrapResponse = v;
         },
         getSeedNodeAddress: () => self.seedNodeAddress,
+        getSeedNodeAddresses: () => self.seedNodeAddresses,
         getSeedNodeId: () => self.seedNodeId,
         setSeedNodeId: (v) => {
           self.seedNodeId = v;

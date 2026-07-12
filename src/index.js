@@ -14,7 +14,6 @@ import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {createControlPlaneWriteHealthProvider} from
   './bootstrap/control-plane-write-health-owner.js';
 import {
-  persistBootstrapRejoinHints,
   readPersistedLocalNodeId,
 } from './bootstrap/rejoin-hints.js';
 import {
@@ -28,7 +27,6 @@ import {
 } from './raft/raft-provider-control.js';
 import {RAFT_PROVIDER_LOG_MSG} from './raft/raft-provider-control-constants.js';
 import {
-  ENTRYPOINT_DEFAULT,
   ENTRYPOINT_ENV,
   ENTRYPOINT_ERROR_MSG,
   ENTRYPOINT_LOG_MSG,
@@ -70,6 +68,10 @@ import {
   resolveSystemCacheHandles,
 } from './entrypoint-runtime-helpers.js';
 import {
+  persistJoinSeedRejoinHints,
+  resolveSeedContactUrls,
+} from './entrypoint-runtime-join-decision.js';
+import {
   resolveBootSourceProvenance,
   resolveJoinReattemptPolicy,
   resolveLocalClusterIncarnationFence,
@@ -82,6 +84,10 @@ export * from './public-api.js';
 async function startJoinNode(options) {
   const {config, mainLogger, dataDirectoryManager, rolloutControls} = options;
   const seedNodeAddress = String(options.seedNodeAddress || '');
+  const seedNodeAddresses = Array.isArray(options.seedNodeAddresses) &&
+    options.seedNodeAddresses.length > 0 ?
+    options.seedNodeAddresses :
+    [seedNodeAddress];
   const nodeId = config.get(CONFIG_KEY.NODE_ID);
   const startupMode = typeof options.startupMode === 'string' &&
     options.startupMode.length > 0 ?
@@ -95,25 +101,13 @@ async function startJoinNode(options) {
     advertisedNodeWsAddress,
   } = resolveRuntimeAddresses(config);
 
-  try {
-    await persistBootstrapRejoinHints({
-      dataDir: dataDirectoryManager.getDataDir(),
-      nodeId,
-      nodeAddress: joiningNodeAddress,
-      nodeRole: ENTRYPOINT_RUNTIME_VALUE.JOINER,
-      peerAddresses: [seedNodeAddress],
-      clusterNodeCount: 2,
-    });
-  } catch (error) {
-    mainLogger.warn(
-      ENTRYPOINT_RUNTIME_VALUE.FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS,
-      {
-        nodeId,
-        dataDir: dataDirectoryManager.getDataDir(),
-        error: error.message,
-      },
-    );
-  }
+  await persistJoinSeedRejoinHints({
+    dataDir: dataDirectoryManager.getDataDir(),
+    nodeId,
+    nodeAddress: joiningNodeAddress,
+    peerAddresses: [seedNodeAddress],
+    logger: mainLogger,
+  });
   const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
     dataDir: dataDirectoryManager.getDataDir(),
     nodeId,
@@ -125,9 +119,8 @@ async function startJoinNode(options) {
     startupMode,
   });
 
-  const seedUrl = seedNodeAddress.startsWith('http') ?
-    seedNodeAddress :
-    `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${seedNodeAddress}`;
+  const seedUrls = resolveSeedContactUrls(seedNodeAddresses);
+  const seedUrl = seedUrls[0];
   const joiningConfig = {};
   const joinHttpTimeoutMs = parsePositiveTimeoutMs(
     env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
@@ -176,6 +169,7 @@ async function startJoinNode(options) {
     nodeAddress: joiningNodeAddress,
     advertisedNodeWsAddress,
     seedNodeAddress: seedUrl,
+    seedNodeAddresses: seedUrls,
     wsPort: wsPort,
     dataDir: dataDirectoryManager.getDataDir(),
     rolloutControls,
@@ -778,6 +772,7 @@ async function main() {
       dataDirectoryManager,
       rolloutControls,
       seedNodeAddress: startupJoinDecision.seedNodeAddress,
+      seedNodeAddresses: startupJoinDecision.seedNodeAddresses,
       startupMode: startupJoinDecision.startupMode,
       membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
       env: process.env,

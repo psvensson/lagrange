@@ -1,6 +1,8 @@
 import {
   AUTO_REJOIN_DECISION_STATE,
   RejoinHintsPersistenceService,
+  persistBootstrapRejoinHints,
+  probeRecoverablePeerAddress,
   resolveAutoRejoinStartupDecision,
 } from './bootstrap/rejoin-hints.js';
 import {
@@ -16,6 +18,7 @@ import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_ENV,
   ENTRYPOINT_LOG_MSG,
+  ENTRYPOINT_RUNTIME_VALUE,
 } from './constants/entrypoint.js';
 import {HTTP_STATUS, STRING} from './constants/index.js';
 import {resolveRuntimeAddresses} from './entrypoint-runtime-options.js';
@@ -61,6 +64,107 @@ const EXPLICIT_SEED_DECISION_TABLE = Object.freeze([
 const UNKNOWN_EXPLICIT_SEED_DECISION_STATE_ERROR_PREFIX =
   'Unknown explicit seed startup decision state: ';
 
+const SEED_CANDIDATE_SELECTION_STATE = Object.freeze({
+  SINGLE_CANDIDATE: 'single_candidate',
+  PROBED_REACHABLE: 'probed_reachable',
+  UNPROBED_FALLBACK: 'unprobed_fallback',
+});
+
+/**
+ * Parse a comma-separated seed-address value into a candidate list.
+ * @param {string|undefined} rawValue
+ * @return {string[]}
+ */
+function parseSeedNodeAddressCandidates(rawValue) {
+  return String(rawValue || STRING.EMPTY)
+    .split(ENTRYPOINT_DEFAULT.SEED_ADDRESS_CANDIDATE_SEPARATOR)
+    .map((candidate) => candidate.trim())
+    .filter((candidate) => candidate.length > 0);
+}
+
+/**
+ * Select the fresh-join contact candidate from an explicit candidate list.
+ *
+ * A single candidate is returned verbatim without probing: during cluster
+ * formation the seed may not be up yet, and ContactSeedPhase's retry loop is
+ * the liveness mechanism. With multiple candidates the same reachability
+ * probe used by durable rejoin picks the first live one; when none answers,
+ * the first candidate is kept (formation semantics — the retry loop keeps
+ * trying, it does not fail closed).
+ * @param {Object} options
+ * @param {string[]} options.candidates
+ * @param {Function} options.probePeerAddress
+ * @return {Promise<Object>}
+ */
+async function selectSeedNodeAddressCandidate(options) {
+  const candidates = options.candidates;
+  if (candidates.length === 1) {
+    return {
+      state: SEED_CANDIDATE_SELECTION_STATE.SINGLE_CANDIDATE,
+      seedNodeAddress: candidates[0],
+      seedNodeAddresses: [...candidates],
+    };
+  }
+  const reachableCandidate = await probeRecoverablePeerAddress(
+    candidates,
+    options.probePeerAddress,
+  );
+  const selectedCandidate = reachableCandidate === null ?
+    candidates[0] :
+    reachableCandidate;
+  return {
+    state: reachableCandidate === null ?
+      SEED_CANDIDATE_SELECTION_STATE.UNPROBED_FALLBACK :
+      SEED_CANDIDATE_SELECTION_STATE.PROBED_REACHABLE,
+    seedNodeAddress: selectedCandidate,
+    seedNodeAddresses: [
+      selectedCandidate,
+      ...candidates.filter((candidate) => candidate !== selectedCandidate),
+    ],
+  };
+}
+
+/**
+ * Map seed contact candidates to bootstrap-contact URLs.
+ * @param {string[]} seedNodeAddresses
+ * @return {string[]}
+ */
+function resolveSeedContactUrls(seedNodeAddresses) {
+  return seedNodeAddresses.map((seedNodeAddress) =>
+    seedNodeAddress.startsWith(ENTRYPOINT_DEFAULT.HTTP_PREFIX) ||
+    seedNodeAddress.startsWith(ENTRYPOINT_DEFAULT.HTTPS_PREFIX) ?
+      seedNodeAddress :
+      `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${seedNodeAddress}`,
+  );
+}
+
+/**
+ * Persist join-time rejoin hints; failures are logged, never fatal.
+ * @param {Object} options
+ * @return {Promise<void>}
+ */
+async function persistJoinSeedRejoinHints(options) {
+  try {
+    await persistBootstrapRejoinHints({
+      dataDir: options.dataDir,
+      nodeId: options.nodeId,
+      nodeAddress: options.nodeAddress,
+      nodeRole: ENTRYPOINT_RUNTIME_VALUE.JOINER,
+      peerAddresses: options.peerAddresses,
+      clusterNodeCount: ENTRYPOINT_DEFAULT.JOIN_HINT_CLUSTER_NODE_COUNT,
+    });
+  } catch (error) {
+    options.logger.warn(
+      ENTRYPOINT_RUNTIME_VALUE.FAILED_TO_PERSIST_BOOTSTRAP_REJOIN_HINTS,
+      {
+        nodeId: options.nodeId,
+        dataDir: options.dataDir,
+        error: error.message,
+      },
+    );
+  }
+}
+
 /**
  * Probe one persisted peer address for auto-rejoin.
  * @param {string} peerAddress
@@ -72,9 +176,11 @@ async function probeAutoRejoinPeerAddress(peerAddress) {
     return false;
   }
 
-  const baseUrl = normalizedPeerAddress.startsWith('http') ?
-    normalizedPeerAddress :
-    `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${normalizedPeerAddress}`;
+  const baseUrl =
+    normalizedPeerAddress.startsWith(ENTRYPOINT_DEFAULT.HTTP_PREFIX) ||
+    normalizedPeerAddress.startsWith(ENTRYPOINT_DEFAULT.HTTPS_PREFIX) ?
+      normalizedPeerAddress :
+      `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${normalizedPeerAddress}`;
 
   const bootstrapReadyProbe = await probeAutoRejoinPeerPath(
     baseUrl,
@@ -167,11 +273,13 @@ function resolveExplicitSeedDecisionState(snapshot) {
  * @param {Object} options
  * @param {Object} options.autoRejoinDecision
  * @param {string} options.explicitSeedNodeAddress
+ * @param {string[]} options.explicitSeedNodeAddresses
  * @return {Object}
  */
 function buildExplicitSeedStartupDecision(options) {
   const autoRejoinDecision = options.autoRejoinDecision;
   const explicitSeedNodeAddress = options.explicitSeedNodeAddress;
+  const explicitSeedNodeAddresses = options.explicitSeedNodeAddresses;
   const snapshot = buildExplicitSeedDecisionSnapshot(autoRejoinDecision);
   const state = resolveExplicitSeedDecisionState(snapshot);
 
@@ -181,6 +289,7 @@ function buildExplicitSeedStartupDecision(options) {
   case EXPLICIT_SEED_DECISION_STATE.DURABLE_PROBED_PEER:
     return {
       seedNodeAddress: snapshot.peerAddress,
+      seedNodeAddresses: [snapshot.peerAddress],
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: snapshot.source,
       membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
@@ -188,6 +297,7 @@ function buildExplicitSeedStartupDecision(options) {
   case EXPLICIT_SEED_DECISION_STATE.DURABLE_EXPLICIT_SEED:
     return {
       seedNodeAddress: explicitSeedNodeAddress,
+      seedNodeAddresses: explicitSeedNodeAddresses,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: STARTUP_JOIN_DECISION_SOURCE.EXPLICIT,
       membershipOwnerOutcome: buildMembershipOwnerOutcome({
@@ -199,6 +309,7 @@ function buildExplicitSeedStartupDecision(options) {
   case EXPLICIT_SEED_DECISION_STATE.FRESH_EXPLICIT_SEED:
     return {
       seedNodeAddress: explicitSeedNodeAddress,
+      seedNodeAddresses: explicitSeedNodeAddresses,
       startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
       source: STARTUP_JOIN_DECISION_SOURCE.EXPLICIT,
       membershipOwnerOutcome: buildMembershipOwnerOutcome({
@@ -222,16 +333,19 @@ function buildExplicitSeedStartupDecision(options) {
 async function resolveStartupJoinDecision(options) {
   const explicitSeedNodeAddress = options.cliArgs.seedNodeAddress ||
     options.env[ENTRYPOINT_ENV.SEED_NODE_ADDRESS];
+  const explicitSeedCandidates =
+    parseSeedNodeAddressCandidates(explicitSeedNodeAddress);
+  const probePeerAddress =
+    typeof options.probePeerAddress === 'function' ?
+      options.probePeerAddress :
+      probeAutoRejoinPeerAddress;
   const nodeId = options.config.get(CONFIG_KEY.NODE_ID);
   const {nodeHttpAddress} = resolveRuntimeAddresses(options.config);
   const autoRejoinDecision = await resolveAutoRejoinStartupDecision({
     dataDir: options.dataDirectoryManager.getDataDir(),
     nodeId,
     nodeAddress: nodeHttpAddress,
-    probePeerAddress:
-      typeof options.probePeerAddress === 'function' ?
-        options.probePeerAddress :
-        probeAutoRejoinPeerAddress,
+    probePeerAddress,
   });
   options.logger.info(ENTRYPOINT_LOG_MSG.AUTO_REJOIN_DECISION, {
     nodeId,
@@ -246,10 +360,24 @@ async function resolveStartupJoinDecision(options) {
     durableStateDetected: autoRejoinDecision.durableStateDetected === true,
     identityMismatch: autoRejoinDecision.identityMismatch === true,
   });
-  if (explicitSeedNodeAddress) {
+  if (explicitSeedCandidates.length > 0) {
+    const seedCandidateSelection = await selectSeedNodeAddressCandidate({
+      candidates: explicitSeedCandidates,
+      probePeerAddress,
+    });
+    if (seedCandidateSelection.state !==
+        SEED_CANDIDATE_SELECTION_STATE.SINGLE_CANDIDATE) {
+      options.logger.info(ENTRYPOINT_LOG_MSG.SEED_CANDIDATE_SELECTED, {
+        nodeId,
+        selectionState: seedCandidateSelection.state,
+        seedNodeAddress: seedCandidateSelection.seedNodeAddress,
+        seedNodeAddresses: seedCandidateSelection.seedNodeAddresses,
+      });
+    }
     return buildExplicitSeedStartupDecision({
       autoRejoinDecision,
-      explicitSeedNodeAddress,
+      explicitSeedNodeAddress: seedCandidateSelection.seedNodeAddress,
+      explicitSeedNodeAddresses: seedCandidateSelection.seedNodeAddresses,
     });
   }
   if (autoRejoinDecision.mode === STARTUP_JOIN_DECISION_MODE.FAIL) {
@@ -258,6 +386,7 @@ async function resolveStartupJoinDecision(options) {
   if (autoRejoinDecision.mode !== STARTUP_JOIN_DECISION_MODE.JOIN) {
     return {
       seedNodeAddress: null,
+      seedNodeAddresses: [],
       startupMode: STARTUP_JOIN_MODE.SEED,
       source: autoRejoinDecision.source,
       membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
@@ -272,6 +401,7 @@ async function resolveStartupJoinDecision(options) {
   });
   return {
     seedNodeAddress: autoRejoinDecision.peerAddress,
+    seedNodeAddresses: [autoRejoinDecision.peerAddress],
     startupMode: autoRejoinDecision.startupMode,
     source: autoRejoinDecision.source,
     membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
@@ -297,6 +427,11 @@ function startRejoinHintsPersistence(options) {
 }
 
 export {
+  SEED_CANDIDATE_SELECTION_STATE,
+  parseSeedNodeAddressCandidates,
+  persistJoinSeedRejoinHints,
+  resolveSeedContactUrls,
   resolveStartupJoinDecision,
+  selectSeedNodeAddressCandidate,
   startRejoinHintsPersistence,
 };

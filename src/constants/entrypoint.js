@@ -43,10 +43,13 @@ const ENTRYPOINT_DEFAULT = Object.freeze({
   READINESS_DRAIN_DEADLINE_MS: 10000,
   LOCALHOST: 'localhost',
   HTTP_PREFIX: 'http://',
+  HTTPS_PREFIX: 'https://',
   AUTO_REJOIN_BOOTSTRAP_READY_PATH: '/bootstrap/ready',
   AUTO_REJOIN_HEALTH_PATH: '/health',
   AUTO_REJOIN_PROBE_METHOD: 'GET',
   AUTO_REJOIN_PROBE_TIMEOUT_MS: 1000,
+  SEED_ADDRESS_CANDIDATE_SEPARATOR: ',',
+  JOIN_HINT_CLUSTER_NODE_COUNT: 2,
 });
 
 const ENTRYPOINT_REJOIN_DEFAULT = Object.freeze({
@@ -82,6 +85,8 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   JOINING_CLUSTER: 'Joining existing cluster',
   AUTO_REJOINING_CLUSTER: 'Restarting node will auto-rejoin existing cluster',
   AUTO_REJOIN_DECISION: 'Resolved startup auto-rejoin decision',
+  SEED_CANDIDATE_SELECTED:
+    'Selected explicit seed contact candidate by reachability probe',
   FAILED_JOIN: 'Failed to join cluster',
   JOINED_CLUSTER: 'Successfully joined cluster',
   LOGS_TABLE_CONNECTED: 'Connected logging persistence to logs table',
@@ -124,7 +129,7 @@ const ENTRYPOINT_TEXT = Object.freeze({
   OPTIONS_LINES: [
     '  --version, -v    Show version number',
     '  --help, -h       Show this help message',
-    '  --seed <url>     Seed node URL to join existing cluster',
+    '  --seed <urls>    Seed node URL(s), comma-separated, to join a cluster',
     '  --config <path>  Path to configuration file',
     '  --data-dir <path>  Base directory for partition storage',
     '  --dry-run        Validate configuration without starting',

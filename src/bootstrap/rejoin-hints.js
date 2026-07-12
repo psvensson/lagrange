@@ -797,6 +797,7 @@ export {
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
   persistBootstrapRejoinHints,
+  probeRecoverablePeerAddress,
   readPersistedLocalNodeId,
   readRejoinHints,
   RejoinHintsPersistenceService,
