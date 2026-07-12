@@ -24,6 +24,7 @@ test/bootstrap/connect-websocket-phase.test.js
 test/bootstrap/control-plane-rollout-controls.test.js
 test/bootstrap/control-plane-write-health-owner.test.js
 test/bootstrap/debug-meta-table-schemas.test.js
+test/bootstrap/fresh-join-multi-peer-contact.test.js
 test/bootstrap/hydrate-system-cache-from-bootstrap.test.js
 test/bootstrap/join-cleanup.property.test.js
 test/bootstrap/join-delegate-bundles.test.js

@@ -25,6 +25,7 @@ test/bootstrap/create-self-hosted-registration.test.js
 test/bootstrap/duplicate-replica-assignment.test.js
 test/bootstrap/durable-rejoin-partition-restore-planner.test.js
 test/bootstrap/dynamic-partition-cdc-subscription.test.js
+test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
 test/bootstrap/join-checkpoint-progression-characterization.test.js
 test/bootstrap/join-coordinator.test.js
 test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js
