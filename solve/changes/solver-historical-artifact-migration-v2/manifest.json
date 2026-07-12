@@ -1,0 +1,1082 @@
+{
+  "batchInventorySha256": "33b7edda93fc30a1b4dd50d3bce4ab648134647fecbaa38780fbad9069754424",
+  "batches": [
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 231023,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 126015,
+            "payloadSha256": "26d8420a654fbd48354cb90deedb1f12047d32b40275b45ce86f01b8e8eeb2a4"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/canonical-replica-inventory-cutover/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/26/26d8420a654fbd48354cb90deedb1f12047d32b40275b45ce86f01b8e8eeb2a4.diff.gz",
+            "payloadBytes": 126015,
+            "payloadSha256": "26d8420a654fbd48354cb90deedb1f12047d32b40275b45ce86f01b8e8eeb2a4"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/canonical-replica-inventory-cutover/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "27e3f74a9e8b682423c3c1d8d8158dcceeb45a4cb78633b561b8b0d213093c19",
+      "ordinal": 1,
+      "pathCount": 9,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-001"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 262067,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 41948,
+            "payloadSha256": "65691c8f2026f3d109378f4099bf588254d20f29e1ef9e92eae3443f85ec70f5"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/formation-ledger-leader-local-persistence-wedge/fix-leader-durability-fitness.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/65/65691c8f2026f3d109378f4099bf588254d20f29e1ef9e92eae3443f85ec70f5.diff.gz",
+            "payloadBytes": 41948,
+            "payloadSha256": "65691c8f2026f3d109378f4099bf588254d20f29e1ef9e92eae3443f85ec70f5"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/formation-ledger-leader-local-persistence-wedge/fix-leader-durability-fitness.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 97793,
+            "payloadSha256": "1b5376c2d450ee8f6a0a2de755fa406fc53e64cb7fa4e5856182e39a4e26d832"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/solver-acceptance-proof-manifest/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/1b/1b5376c2d450ee8f6a0a2de755fa406fc53e64cb7fa4e5856182e39a4e26d832.diff.gz",
+            "payloadBytes": 97793,
+            "payloadSha256": "1b5376c2d450ee8f6a0a2de755fa406fc53e64cb7fa4e5856182e39a4e26d832"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/solver-acceptance-proof-manifest/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "85f3d5f24353a8f7d407c116dfa665125f16411630fd52ff9c012b394bcaa8d9",
+      "ordinal": 2,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-002"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 258727,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 93622,
+            "payloadSha256": "4042fde3ac1e3fe4204b1aefa22a98e99bdca994a8d95cefec6e4a9b3b0683a9"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/quest-workflow-signal-quality/workflow-signal-quality.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/40/4042fde3ac1e3fe4204b1aefa22a98e99bdca994a8d95cefec6e4a9b3b0683a9.diff.gz",
+            "payloadBytes": 93622,
+            "payloadSha256": "4042fde3ac1e3fe4204b1aefa22a98e99bdca994a8d95cefec6e4a9b3b0683a9"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/quest-workflow-signal-quality/workflow-signal-quality.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 54115,
+            "payloadSha256": "9593b4139098fc2f5fab9c7ed299875df4b79fa49118687c312ecd7b367a4e6a"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/mixed-critical-reserve-dispatch.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/95/9593b4139098fc2f5fab9c7ed299875df4b79fa49118687c312ecd7b367a4e6a.diff.gz",
+            "payloadBytes": 54115,
+            "payloadSha256": "9593b4139098fc2f5fab9c7ed299875df4b79fa49118687c312ecd7b367a4e6a"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/mixed-critical-reserve-dispatch.diff"
+        }
+      ],
+      "inventorySha256": "327ddd1070e2212a523b96bee58415f69f88c54f8ce366b6060537c33a679bc9",
+      "ordinal": 3,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-003"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 262078,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 91753,
+            "payloadSha256": "0a0bc366d240afcf406e18f9ade1d90cb71ef94caab5e02bafd7c2aabb5e3e29"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/quest-system-continuation-gates/implementation.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/0a/0a0bc366d240afcf406e18f9ade1d90cb71ef94caab5e02bafd7c2aabb5e3e29.diff.gz",
+            "payloadBytes": 91753,
+            "payloadSha256": "0a0bc366d240afcf406e18f9ade1d90cb71ef94caab5e02bafd7c2aabb5e3e29"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/quest-system-continuation-gates/implementation.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 53905,
+            "payloadSha256": "d9306016d023c91842da9378e7092e41c9a49f46c51284ad842953c8a816c5d1"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/solver-terminal-integrity-cutover-verifier-fix/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/d9/d9306016d023c91842da9378e7092e41c9a49f46c51284ad842953c8a816c5d1.diff.gz",
+            "payloadBytes": 53905,
+            "payloadSha256": "d9306016d023c91842da9378e7092e41c9a49f46c51284ad842953c8a816c5d1"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/solver-terminal-integrity-cutover-verifier-fix/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "91069931ee19a9a9bfcd72742811d7f2b07784b72346ee50812845535039aa99",
+      "ordinal": 4,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-004"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 259605,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 86964,
+            "payloadSha256": "0c14e8336f21af95d860ee9021fba485e4dc182ef09cabe875915685a5023847"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/formation-ledger-quorum-spread-first/fix-ledger-quorum-spread-first.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/0c/0c14e8336f21af95d860ee9021fba485e4dc182ef09cabe875915685a5023847.diff.gz",
+            "payloadBytes": 86964,
+            "payloadSha256": "0c14e8336f21af95d860ee9021fba485e4dc182ef09cabe875915685a5023847"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/formation-ledger-quorum-spread-first/fix-ledger-quorum-spread-first.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 56853,
+            "payloadSha256": "4d67c7fcde18cb1ffa1a8cc1cc7981e8708a94df678ec3c61df65136a3c07635"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-liveness-emulation/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/4d/4d67c7fcde18cb1ffa1a8cc1cc7981e8708a94df678ec3c61df65136a3c07635.diff.gz",
+            "payloadBytes": 56853,
+            "payloadSha256": "4d67c7fcde18cb1ffa1a8cc1cc7981e8708a94df678ec3c61df65136a3c07635"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-liveness-emulation/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "f0137de18272c9b882820298e5c4b6ab3160bc0997df5ce347f4ce227f96f9d9",
+      "ordinal": 5,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-005"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 257717,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 100517,
+            "payloadSha256": "ce65c0acd9a15644e9a9d0dc6453b5444b2d32ecf8403b02f4aa73b2d9645a32"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/post-publication-quiescence-discount.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/ce/ce65c0acd9a15644e9a9d0dc6453b5444b2d32ecf8403b02f4aa73b2d9645a32.diff.gz",
+            "payloadBytes": 100517,
+            "payloadSha256": "ce65c0acd9a15644e9a9d0dc6453b5444b2d32ecf8403b02f4aa73b2d9645a32"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/post-publication-quiescence-discount.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 60028,
+            "payloadSha256": "365aeb7c7cadfcd3699a37455d078e91adf0bbec04802c1a214359f322a96b4f"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/startup-active-gate-priority-recovery-owner-progress-continuation.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/36/365aeb7c7cadfcd3699a37455d078e91adf0bbec04802c1a214359f322a96b4f.diff.gz",
+            "payloadBytes": 60028,
+            "payloadSha256": "365aeb7c7cadfcd3699a37455d078e91adf0bbec04802c1a214359f322a96b4f"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/startup-active-gate-priority-recovery-owner-progress-continuation.diff"
+        }
+      ],
+      "inventorySha256": "ab507960c6ecec1cfd8c2b4376ae1bb4dfc86222f90297787b52f56c0fe1c312",
+      "ordinal": 6,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-006"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 259332,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 77636,
+            "payloadSha256": "14cd0893e5e775c3cf46835133a3b67777fb2c900c5bed5ae52ac6032e9fbc8c"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/local-runtime-progress.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/14/14cd0893e5e775c3cf46835133a3b67777fb2c900c5bed5ae52ac6032e9fbc8c.diff.gz",
+            "payloadBytes": 77636,
+            "payloadSha256": "14cd0893e5e775c3cf46835133a3b67777fb2c900c5bed5ae52ac6032e9fbc8c"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/local-runtime-progress.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 70088,
+            "payloadSha256": "8d0fe8c368598eea2b225ba63dda955f2ff920af87680549125787ffae196a70"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/solver-terminal-integrity-cutover-exhaustion-fix/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/8d/8d0fe8c368598eea2b225ba63dda955f2ff920af87680549125787ffae196a70.diff.gz",
+            "payloadBytes": 70088,
+            "payloadSha256": "8d0fe8c368598eea2b225ba63dda955f2ff920af87680549125787ffae196a70"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/solver-terminal-integrity-cutover-exhaustion-fix/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "f758f79e981305cac4fe5dfa071fdd473c512c6aece2f953415eb8d060402ea1",
+      "ordinal": 7,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-007"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 256176,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 65234,
+            "payloadSha256": "a12a42e207c9074c50e338942bb8dafda11df602b6c19169268351e122b724c6"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/formation-voter-surplus-promotion-deferral-livelock/fix-terminal-transition-durability.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/a1/a12a42e207c9074c50e338942bb8dafda11df602b6c19169268351e122b724c6.diff.gz",
+            "payloadBytes": 65234,
+            "payloadSha256": "a12a42e207c9074c50e338942bb8dafda11df602b6c19169268351e122b724c6"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/formation-voter-surplus-promotion-deferral-livelock/fix-terminal-transition-durability.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 78366,
+            "payloadSha256": "ff087e82baa207e6096eb4fe9c6b5427e5809caa80023059c4e6112631d976a3"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/strict-priority-bootstrap-attempt.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/ff/ff087e82baa207e6096eb4fe9c6b5427e5809caa80023059c4e6112631d976a3.diff.gz",
+            "payloadBytes": 78366,
+            "payloadSha256": "ff087e82baa207e6096eb4fe9c6b5427e5809caa80023059c4e6112631d976a3"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/strict-priority-bootstrap-attempt.diff"
+        }
+      ],
+      "inventorySha256": "24a79c0037b322896d20bee578583594a13d146a343d96752d47bc5c6a221946",
+      "ordinal": 8,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-008"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 261732,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 80443,
+            "payloadSha256": "c2542cc1f9e15e78145f17886eed74cec4eba3119beab836c9c5c9f1ff77bd0b"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/current-summary-owner-witness-active-wait.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/c2/c2542cc1f9e15e78145f17886eed74cec4eba3119beab836c9c5c9f1ff77bd0b.diff.gz",
+            "payloadBytes": 80443,
+            "payloadSha256": "c2542cc1f9e15e78145f17886eed74cec4eba3119beab836c9c5c9f1ff77bd0b"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/current-summary-owner-witness-active-wait.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 81715,
+            "payloadSha256": "4da13709c24e974b583c395a7d976194cb13c3b070cafc44a3a0d8b763548816"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-run4-readiness-support-evidence/readiness-support-evidence.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/4d/4da13709c24e974b583c395a7d976194cb13c3b070cafc44a3a0d8b763548816.diff.gz",
+            "payloadBytes": 81715,
+            "payloadSha256": "4da13709c24e974b583c395a7d976194cb13c3b070cafc44a3a0d8b763548816"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-run4-readiness-support-evidence/readiness-support-evidence.diff"
+        }
+      ],
+      "inventorySha256": "f2567928534c3bdfb7f193ed9d30ea74a8180cd40c638727f3e42b9731a6437e",
+      "ordinal": 9,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-009"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 242126,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 65649,
+            "payloadSha256": "40fceb6ac6d78c907895b2cbaa1b5f308216f1ec2ae21e13fd7ae0c4a0f2f4d4"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/alloy-execution-guardrails-verifier-fix/alloy-execution-guardrails-verifier-fix.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/40/40fceb6ac6d78c907895b2cbaa1b5f308216f1ec2ae21e13fd7ae0c4a0f2f4d4.diff.gz",
+            "payloadBytes": 65649,
+            "payloadSha256": "40fceb6ac6d78c907895b2cbaa1b5f308216f1ec2ae21e13fd7ae0c4a0f2f4d4"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/alloy-execution-guardrails-verifier-fix/alloy-execution-guardrails-verifier-fix.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 65207,
+            "payloadSha256": "62c9862f194cb9f1081c7f1d37692fb89de46dd27ad50e4784ddd0e772a47d3b"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/solver-terminal-integrity-cutover-fail-closed-fix/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/62/62c9862f194cb9f1081c7f1d37692fb89de46dd27ad50e4784ddd0e772a47d3b.diff.gz",
+            "payloadBytes": 65207,
+            "payloadSha256": "62c9862f194cb9f1081c7f1d37692fb89de46dd27ad50e4784ddd0e772a47d3b"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/solver-terminal-integrity-cutover-fail-closed-fix/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "fc03af14a859ba77f906c334d9361d62025571b274912f4b28f6eb0d25e52032",
+      "ordinal": 10,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-010"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 229196,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 64364,
+            "payloadSha256": "303dcc8155c36a40a57b7c2ff81df4bf98c1b7085157baa807206317ac912226"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/global-owner-debt-inventory/attempt-6.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/30/303dcc8155c36a40a57b7c2ff81df4bf98c1b7085157baa807206317ac912226.diff.gz",
+            "payloadBytes": 64364,
+            "payloadSha256": "303dcc8155c36a40a57b7c2ff81df4bf98c1b7085157baa807206317ac912226"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/global-owner-debt-inventory/attempt-6.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 60752,
+            "payloadSha256": "dac7790296a13a067d5d0d115c769836f30c50ceaefa39e0c2bdca39e3a3e210"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/raft-committed-entry-immutability/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/da/dac7790296a13a067d5d0d115c769836f30c50ceaefa39e0c2bdca39e3a3e210.diff.gz",
+            "payloadBytes": 60752,
+            "payloadSha256": "dac7790296a13a067d5d0d115c769836f30c50ceaefa39e0c2bdca39e3a3e210"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/raft-committed-entry-immutability/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "2c52ec326d5c00f9292a9759e6e228be4cd6a00117b4d18f6e7f6f78185ea87b",
+      "ordinal": 11,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-011"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 219691,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 55694,
+            "payloadSha256": "394a941bacaef4ed243941843e868d813edcd200aa80a88d9c4a546f7ea7efd2"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/altitude-reflection-mechanism/iter1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/39/394a941bacaef4ed243941843e868d813edcd200aa80a88d9c4a546f7ea7efd2.diff.gz",
+            "payloadBytes": 55694,
+            "payloadSha256": "394a941bacaef4ed243941843e868d813edcd200aa80a88d9c4a546f7ea7efd2"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/altitude-reflection-mechanism/iter1.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 54675,
+            "payloadSha256": "932538d1d304ab790feac1ee987d0f996498491519d2447887e12d5e13d7f03f"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/movielens-affinity-placement-demo/attempt1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/93/932538d1d304ab790feac1ee987d0f996498491519d2447887e12d5e13d7f03f.diff.gz",
+            "payloadBytes": 54675,
+            "payloadSha256": "932538d1d304ab790feac1ee987d0f996498491519d2447887e12d5e13d7f03f"
+          },
+          "referenceStatus": "unreferenced",
+          "sourcePath": "solve/changes/movielens-affinity-placement-demo/attempt1.diff"
+        }
+      ],
+      "inventorySha256": "273b28dc91056ad363493b5014ece822ca0ba9865c6b349660525e5a4c05987d",
+      "ordinal": 12,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-012"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 217610,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 58170,
+            "payloadSha256": "8071bfd31d9f120276f1b263c688ec7614f5d6af3e2927f500b5ea4d34b1134d"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/provisioning-parent-deadline-cutover/w6-parent-deadline.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/80/8071bfd31d9f120276f1b263c688ec7614f5d6af3e2927f500b5ea4d34b1134d.diff.gz",
+            "payloadBytes": 58170,
+            "payloadSha256": "8071bfd31d9f120276f1b263c688ec7614f5d6af3e2927f500b5ea4d34b1134d"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/provisioning-parent-deadline-cutover/w6-parent-deadline.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 59840,
+            "payloadSha256": "e975e8ac1c2e940846f914efa4040b808e5f35b227b2ab237b9455ecf95f7071"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/failed-join-deferred-withdrawal-and-quiescence-snapshot-floor.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/e9/e975e8ac1c2e940846f914efa4040b808e5f35b227b2ab237b9455ecf95f7071.diff.gz",
+            "payloadBytes": 59840,
+            "payloadSha256": "e975e8ac1c2e940846f914efa4040b808e5f35b227b2ab237b9455ecf95f7071"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/failed-join-deferred-withdrawal-and-quiescence-snapshot-floor.diff"
+        }
+      ],
+      "inventorySha256": "8f5484a722efca779bee0726fa9ed9d79f81a199e498074368f098d2aeea51bf",
+      "ordinal": 13,
+      "pathCount": 12,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-013"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 260356,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 54304,
+            "payloadSha256": "7bfae4c1ee5a979142fbfbb71a3d68d8b2be49e9dd122338168c0a36bfe3317c"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/control-plane-readiness-trust-cutover/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/7b/7bfae4c1ee5a979142fbfbb71a3d68d8b2be49e9dd122338168c0a36bfe3317c.diff.gz",
+            "payloadBytes": 54304,
+            "payloadSha256": "7bfae4c1ee5a979142fbfbb71a3d68d8b2be49e9dd122338168c0a36bfe3317c"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/control-plane-readiness-trust-cutover/attempt-1.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 56232,
+            "payloadSha256": "422dc9a6a60da81bae6f6b1c5d1bc563b381835a6a61b6f5e33f6d0899ca10ff"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/failed-join-admission-withdrawal-publication-exclusion.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/42/422dc9a6a60da81bae6f6b1c5d1bc563b381835a6a61b6f5e33f6d0899ca10ff.diff.gz",
+            "payloadBytes": 56232,
+            "payloadSha256": "422dc9a6a60da81bae6f6b1c5d1bc563b381835a6a61b6f5e33f6d0899ca10ff"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/failed-join-admission-withdrawal-publication-exclusion.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 37364,
+            "payloadSha256": "5859860ce96179f7836db7683d189c76de23b9bf7fb056dd8b5e7e1c1bf20b27"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/service-read-locality-policy/attempt1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/58/5859860ce96179f7836db7683d189c76de23b9bf7fb056dd8b5e7e1c1bf20b27.diff.gz",
+            "payloadBytes": 37364,
+            "payloadSha256": "5859860ce96179f7836db7683d189c76de23b9bf7fb056dd8b5e7e1c1bf20b27"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/service-read-locality-policy/attempt1.diff"
+        }
+      ],
+      "inventorySha256": "58a9d62422fe12304a2736fcb2b72b6018ed754997e073a36120a46c418e8519",
+      "ordinal": 14,
+      "pathCount": 15,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-014"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 259227,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 46665,
+            "payloadSha256": "7c4f1f8758999cf9a5db3ef6dc1d8ffa1be3e027b90817b1869ec5096c95cf88"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/formation-control-plane-move-interlock/fix-ledger-self-move-serialization.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/7c/7c4f1f8758999cf9a5db3ef6dc1d8ffa1be3e027b90817b1869ec5096c95cf88.diff.gz",
+            "payloadBytes": 46665,
+            "payloadSha256": "7c4f1f8758999cf9a5db3ef6dc1d8ffa1be3e027b90817b1869ec5096c95cf88"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/formation-control-plane-move-interlock/fix-ledger-self-move-serialization.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 45965,
+            "payloadSha256": "a27bd3fccbc5d6598535f7a0602cf9fb8277b18a1468ba66aad773c508b1c1b4"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/quest-source-change-subagent-verification/source-change-verifier-guardrail.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/a2/a27bd3fccbc5d6598535f7a0602cf9fb8277b18a1468ba66aad773c508b1c1b4.diff.gz",
+            "payloadBytes": 45965,
+            "payloadSha256": "a27bd3fccbc5d6598535f7a0602cf9fb8277b18a1468ba66aad773c508b1c1b4"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/quest-source-change-subagent-verification/source-change-verifier-guardrail.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 47351,
+            "payloadSha256": "6d6a4662a2493e808b3955e1b568e7307f8058a8a21475d9993cbc6c9491b98f"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/write-routing-repair-under-control-plane-moves/fix.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/6d/6d6a4662a2493e808b3955e1b568e7307f8058a8a21475d9993cbc6c9491b98f.diff.gz",
+            "payloadBytes": 47351,
+            "payloadSha256": "6d6a4662a2493e808b3955e1b568e7307f8058a8a21475d9993cbc6c9491b98f"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/write-routing-repair-under-control-plane-moves/fix.diff"
+        }
+      ],
+      "inventorySha256": "f37ad72f7690a55dff765f4beb23c8e0329bc1d8a60d9d993864c83bbe68cd38",
+      "ordinal": 15,
+      "pathCount": 15,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-015"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 246705,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 43747,
+            "payloadSha256": "efa476d6e386faa394cab39380223fd45df4dfa78d23d8d2f4c6386cc66d1fea"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/flag-debt-retirement/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/ef/efa476d6e386faa394cab39380223fd45df4dfa78d23d8d2f4c6386cc66d1fea.diff.gz",
+            "payloadBytes": 43747,
+            "payloadSha256": "efa476d6e386faa394cab39380223fd45df4dfa78d23d8d2f4c6386cc66d1fea"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/flag-debt-retirement/attempt-1.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 40266,
+            "payloadSha256": "4aa5c9a72985cca3126ca2e7753fe3e467939717c7c1584078950ecf424e4db7"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/movielens-three-way-affinity-demo/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/4a/4aa5c9a72985cca3126ca2e7753fe3e467939717c7c1584078950ecf424e4db7.diff.gz",
+            "payloadBytes": 40266,
+            "payloadSha256": "4aa5c9a72985cca3126ca2e7753fe3e467939717c7c1584078950ecf424e4db7"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/movielens-three-way-affinity-demo/attempt-1.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 39258,
+            "payloadSha256": "01eead6292174a61264d1e847143e6590abf81b7b174bb89ba7865826b738461"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/release-0-1-0-alpha/release-scope.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/01/01eead6292174a61264d1e847143e6590abf81b7b174bb89ba7865826b738461.diff.gz",
+            "payloadBytes": 39258,
+            "payloadSha256": "01eead6292174a61264d1e847143e6590abf81b7b174bb89ba7865826b738461"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/release-0-1-0-alpha/release-scope.diff"
+        }
+      ],
+      "inventorySha256": "970930d6c7e6034c5881bd3da941c7fb8385c4b1ec3a2dee964192fb044299ce",
+      "ordinal": 16,
+      "pathCount": 15,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-016"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 237972,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 42751,
+            "payloadSha256": "ae8b201212221d1dd028e6a81f50d1dda8225746a9155921cd8a8f1b5177a892"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/raft-snapshot-gated-compaction/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/ae/ae8b201212221d1dd028e6a81f50d1dda8225746a9155921cd8a8f1b5177a892.diff.gz",
+            "payloadBytes": 42751,
+            "payloadSha256": "ae8b201212221d1dd028e6a81f50d1dda8225746a9155921cd8a8f1b5177a892"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/raft-snapshot-gated-compaction/attempt-1.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 47306,
+            "payloadSha256": "7d0f6aceda48deb52651d718b36e646d9e7a1fc3f5d08d3bb1664798202b93e1"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/load-readiness-startup-support-owner-recovery-window.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/7d/7d0f6aceda48deb52651d718b36e646d9e7a1fc3f5d08d3bb1664798202b93e1.diff.gz",
+            "payloadBytes": 47306,
+            "payloadSha256": "7d0f6aceda48deb52651d718b36e646d9e7a1fc3f5d08d3bb1664798202b93e1"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/load-readiness-startup-support-owner-recovery-window.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 41223,
+            "payloadSha256": "a5d41b2c1695cb5f95cffeccde115ef6ca527cb3743a12c3e07d543140e0ed01"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/service-partition-access-attribution/attempt1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/a5/a5d41b2c1695cb5f95cffeccde115ef6ca527cb3743a12c3e07d543140e0ed01.diff.gz",
+            "payloadBytes": 41223,
+            "payloadSha256": "a5d41b2c1695cb5f95cffeccde115ef6ca527cb3743a12c3e07d543140e0ed01"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/service-partition-access-attribution/attempt1.diff"
+        }
+      ],
+      "inventorySha256": "ce35ea0ba5e81fffc3b9b1ba1d7d3519015a3e07a4d6f4b0ac50e35cffd9a4bb",
+      "ordinal": 17,
+      "pathCount": 15,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-017"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 234148,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 40913,
+            "payloadSha256": "24332868c150745d84f58f73bdb1aa630a3c8dc50aac9dc288ec0e8fa1d9f40b"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/core-system-logic-alloy-adjacency/core-system-logic-alloy-adjacency.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/24/24332868c150745d84f58f73bdb1aa630a3c8dc50aac9dc288ec0e8fa1d9f40b.diff.gz",
+            "payloadBytes": 40913,
+            "payloadSha256": "24332868c150745d84f58f73bdb1aa630a3c8dc50aac9dc288ec0e8fa1d9f40b"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/core-system-logic-alloy-adjacency/core-system-logic-alloy-adjacency.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 45604,
+            "payloadSha256": "17a3d08b575e50215efbaa09c0cc5ee98db49feb0c4900e791eacaa51fb57d9f"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-run4-mixed-priority-context-selection/mixed-priority-context-selection.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/17/17a3d08b575e50215efbaa09c0cc5ee98db49feb0c4900e791eacaa51fb57d9f.diff.gz",
+            "payloadBytes": 45604,
+            "payloadSha256": "17a3d08b575e50215efbaa09c0cc5ee98db49feb0c4900e791eacaa51fb57d9f"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-run4-mixed-priority-context-selection/mixed-priority-context-selection.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 40277,
+            "payloadSha256": "d3575c2b3108bb4b22f6f96b8df9c0e55bda05effc8b146dc01f9dfacde596ea"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/solver-terminal-integrity-cutover/attempt-1.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/d3/d3575c2b3108bb4b22f6f96b8df9c0e55bda05effc8b146dc01f9dfacde596ea.diff.gz",
+            "payloadBytes": 40277,
+            "payloadSha256": "d3575c2b3108bb4b22f6f96b8df9c0e55bda05effc8b146dc01f9dfacde596ea"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/solver-terminal-integrity-cutover/attempt-1.diff"
+        }
+      ],
+      "inventorySha256": "f38900b5f54b4056cfdb914b21708aba39dd53d6b026b1d27adb04570e56c000",
+      "ordinal": 18,
+      "pathCount": 15,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-018"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 228202,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 37649,
+            "payloadSha256": "d370ece16eb1ac86866816834f5c9e6772d45768d3d41cd5f7319c806e3650e3"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/ledger-participant-transaction-zombie-lifecycle/fix-zombie-transaction-lifecycle.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/d3/d370ece16eb1ac86866816834f5c9e6772d45768d3d41cd5f7319c806e3650e3.diff.gz",
+            "payloadBytes": 37649,
+            "payloadSha256": "d370ece16eb1ac86866816834f5c9e6772d45768d3d41cd5f7319c806e3650e3"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/ledger-participant-transaction-zombie-lifecycle/fix-zombie-transaction-lifecycle.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 40256,
+            "payloadSha256": "5527fbdecb75f2fc73607b77c429f9652202ed81cbd2f897ab1ea3b983fb7025"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/operation-workflow-drain-redrive/solver-closure-bookkeeping.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/55/5527fbdecb75f2fc73607b77c429f9652202ed81cbd2f897ab1ea3b983fb7025.diff.gz",
+            "payloadBytes": 40256,
+            "payloadSha256": "5527fbdecb75f2fc73607b77c429f9652202ed81cbd2f897ab1ea3b983fb7025"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/operation-workflow-drain-redrive/solver-closure-bookkeeping.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 38541,
+            "payloadSha256": "64be895b3a678dd65bebd777914489d67f515f13fca0bf071db600ba42cb4a7e"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/system-pause-removal.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/64/64be895b3a678dd65bebd777914489d67f515f13fca0bf071db600ba42cb4a7e.diff.gz",
+            "payloadBytes": 38541,
+            "payloadSha256": "64be895b3a678dd65bebd777914489d67f515f13fca0bf071db600ba42cb4a7e"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/system-pause-removal.diff"
+        }
+      ],
+      "inventorySha256": "2e93d8a3261a6a9233dea3ad064846e1772a062dcfdc71071d97343ab19e6727",
+      "ordinal": 19,
+      "pathCount": 15,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-019"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 213140,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 35562,
+            "payloadSha256": "ab85f000676c00962c4f0fc162bdf68d0c66dbe915105e2ff1f2f2a7cccb331c"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/project-hardening-workflow-proof-integrity/final.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/ab/ab85f000676c00962c4f0fc162bdf68d0c66dbe915105e2ff1f2f2a7cccb331c.diff.gz",
+            "payloadBytes": 35562,
+            "payloadSha256": "ab85f000676c00962c4f0fc162bdf68d0c66dbe915105e2ff1f2f2a7cccb331c"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/project-hardening-workflow-proof-integrity/final.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 40175,
+            "payloadSha256": "0558f9b172266f85d48151757eedb17c4dc12bcdb1cadc97d5a51136141ddb73"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/load-active-gate-selected-snapshot-retry.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/05/0558f9b172266f85d48151757eedb17c4dc12bcdb1cadc97d5a51136141ddb73.diff.gz",
+            "payloadBytes": 40175,
+            "payloadSha256": "0558f9b172266f85d48151757eedb17c4dc12bcdb1cadc97d5a51136141ddb73"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/load-active-gate-selected-snapshot-retry.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 39269,
+            "payloadSha256": "a12f4ced156f6ff8dd460c98cf95d70f8c9d57ced9d17251dc5a6d745aa3e94b"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/tracked-control-plane-decision-snapshot-progress-contract.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/a1/a12f4ced156f6ff8dd460c98cf95d70f8c9d57ced9d17251dc5a6d745aa3e94b.diff.gz",
+            "payloadBytes": 39269,
+            "payloadSha256": "a12f4ced156f6ff8dd460c98cf95d70f8c9d57ced9d17251dc5a6d745aa3e94b"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/tracked-control-plane-decision-snapshot-progress-contract.diff"
+        }
+      ],
+      "inventorySha256": "2eed01bf584e86b0c76d3c3c65c0de624a516d544dea2acb4683aecabf34e048",
+      "ordinal": 20,
+      "pathCount": 15,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-020"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 261660,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 39670,
+            "payloadSha256": "2203ec8435e99017cf861ae9a4f3c89c0c7a5e09aa2d9a8afda3f61650278a56"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/critical-target-fallback-admission-class.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/22/2203ec8435e99017cf861ae9a4f3c89c0c7a5e09aa2d9a8afda3f61650278a56.diff.gz",
+            "payloadBytes": 39670,
+            "payloadSha256": "2203ec8435e99017cf861ae9a4f3c89c0c7a5e09aa2d9a8afda3f61650278a56"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/critical-target-fallback-admission-class.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 38053,
+            "payloadSha256": "e01afa9a68a87af4215ac57b38e93fa626f4c906e67146f2feb0cc2a08b7533a"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/partition-witness-owner-effect-projection.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/e0/e01afa9a68a87af4215ac57b38e93fa626f4c906e67146f2feb0cc2a08b7533a.diff.gz",
+            "payloadBytes": 38053,
+            "payloadSha256": "e01afa9a68a87af4215ac57b38e93fa626f4c906e67146f2feb0cc2a08b7533a"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/partition-witness-owner-effect-projection.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 39843,
+            "payloadSha256": "f5e2db53b414f3b61f4ff5e46ef9c6997e78b5651baf09cf34f686ee42eb7136"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-core-stability/startup-snapshot-repair-retry-continuation.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/f5/f5e2db53b414f3b61f4ff5e46ef9c6997e78b5651baf09cf34f686ee42eb7136.diff.gz",
+            "payloadBytes": 39843,
+            "payloadSha256": "f5e2db53b414f3b61f4ff5e46ef9c6997e78b5651baf09cf34f686ee42eb7136"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-core-stability/startup-snapshot-repair-retry-continuation.diff"
+        },
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 36226,
+            "payloadSha256": "7b66e737f1a142362b96bd43f4e729d851d497457aa517e6cf25f0a36541b04f"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/rolling-restart-run4-postrebalance-diagnostics-routing/postrebalance-diagnostics-routing.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/7b/7b66e737f1a142362b96bd43f4e729d851d497457aa517e6cf25f0a36541b04f.diff.gz",
+            "payloadBytes": 36226,
+            "payloadSha256": "7b66e737f1a142362b96bd43f4e729d851d497457aa517e6cf25f0a36541b04f"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/rolling-restart-run4-postrebalance-diagnostics-routing/postrebalance-diagnostics-routing.diff"
+        }
+      ],
+      "inventorySha256": "dc3d1d6d8c9c7bbb094f0330665c61f848a3eaa5dd6dd7fa1565dfc2a49ac691",
+      "ordinal": 21,
+      "pathCount": 18,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-021"
+    },
+    {
+      "byteLimit": 262144,
+      "conservativeChangeBytes": 100120,
+      "entries": [
+        {
+          "before": {
+            "kind": "inline",
+            "payloadBytes": 33014,
+            "payloadSha256": "db2b966fa29331f57b76abd1c7ec42914d33e45f55c2e14a08fa35712b06fec5"
+          },
+          "plannedAfter": {
+            "descriptorPath": "solve/changes/quest-model-guidance-theory-use/quest-model-guidance-theory-use.diff.json",
+            "kind": "content-addressed",
+            "objectPath": "solve/artifacts/sha256/db/db2b966fa29331f57b76abd1c7ec42914d33e45f55c2e14a08fa35712b06fec5.diff.gz",
+            "payloadBytes": 33014,
+            "payloadSha256": "db2b966fa29331f57b76abd1c7ec42914d33e45f55c2e14a08fa35712b06fec5"
+          },
+          "referenceStatus": "referenced",
+          "sourcePath": "solve/changes/quest-model-guidance-theory-use/quest-model-guidance-theory-use.diff"
+        }
+      ],
+      "inventorySha256": "414dba68faec09a470a1385517ff129f1bffc8bd3f5c8483980426e0439f8e50",
+      "ordinal": 22,
+      "pathCount": 9,
+      "pathLimit": 25,
+      "questId": "solver-historical-artifact-batch-022"
+    }
+  ],
+  "census": {
+    "artifactSha256": "de3e9d5ccfd1b2cd3ba9f6dc24759cd79fbf9935864d21beb569efcf27a1f65f",
+    "censusSha256": "49cd10a3ae7c82808cf4ec4ffe9463e81d365219d81fe1856c42be39635bcbcf",
+    "path": "solve/changes/solver-historical-artifact-census/census.json",
+    "schemaVersion": 1,
+    "snapshotCommit": "45ed27436999bfa87965a22f328be55359dfa6f1",
+    "snapshotTree": "2dae1b51b9f7c03b97a288f6e185003f43ed529d"
+  },
+  "kind": "solver-historical-artifact-migration-plan",
+  "migrationSchema": {
+    "id": "solver-historical-artifact-batch-receipt-v2",
+    "schemaSha256": "1f63adae35dc12056bc4f035a7f8c9060a6e525125a06109936bb0791ca13434",
+    "version": 2
+  },
+  "schemaVersion": 2,
+  "w12Receipt": {
+    "path": "solve/changes/solver-proof-artifact-content-addressing/migration-receipt.json",
+    "sha256": "f05428d371317640e9c3f679c5706a374a849734d5806216cae8f5962ab9a5d3"
+  }
+}

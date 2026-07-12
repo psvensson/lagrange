@@ -1,0 +1,52 @@
+export const HISTORICAL_ARTIFACT_MIGRATION_V2 = Object.freeze({
+  SCHEMA_VERSION: 2,
+  MANIFEST_KIND: 'solver-historical-artifact-migration-plan',
+  BATCH_RECEIPT_KIND: 'solver-historical-artifact-batch-receipt',
+  BATCH_SCHEMA_ID: 'solver-historical-artifact-batch-receipt-v2',
+  CENSUS_PATH: 'solve/changes/solver-historical-artifact-census/census.json',
+  MANIFEST_PATH:
+    'solve/changes/solver-historical-artifact-migration-v2/manifest.json',
+  BATCH_RECEIPT_DIRECTORY:
+    'solve/changes/solver-historical-artifact-migration-v2/batches',
+  W12_RECEIPT_PATH:
+    'solve/changes/solver-proof-artifact-content-addressing/migration-receipt.json',
+  HASH_ALGORITHM: 'sha256',
+  HASH_ENCODING: 'hex',
+  TEXT_ENCODING: 'utf8',
+  BEFORE_KIND: 'inline',
+  AFTER_KIND: 'content-addressed',
+  CHANGE_REF_PREFIX: 'diff:',
+  DESCRIPTOR_SUFFIX: '.json',
+  EXPECTED_BATCH_COUNT: 22,
+  EXPECTED_PAYLOAD_COUNT: 51,
+  MAX_BATCH_PATHS: 25,
+  MAX_BATCH_BYTES: 262144,
+  BATCH_RECEIPT_SCHEMA: Object.freeze({
+    schemaVersion: 2,
+    kind: 'solver-historical-artifact-batch-receipt',
+    required: Object.freeze([
+      'schemaVersion',
+      'kind',
+      'planManifestSha256',
+      'censusSha256',
+      'batchInventorySha256',
+      'questId',
+      'before',
+      'after',
+    ]),
+    beforeRequired: Object.freeze([
+      'sourcePath',
+      'payloadSha256',
+      'payloadBytes',
+    ]),
+    afterRequired: Object.freeze([
+      'sourcePath',
+      'descriptorPath',
+      'descriptorSha256',
+      'objectPath',
+      'objectStorageSha256',
+      'payloadSha256',
+      'payloadBytes',
+    ]),
+  }),
+});

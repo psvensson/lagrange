@@ -76,6 +76,10 @@ function objectRelativePath(payloadSha256) {
     `${payloadSha256}${OBJECT_SUFFIX}`;
 }
 
+export function contentObjectRelativePathForPayload(payloadSha256) {
+  return objectRelativePath(payloadSha256);
+}
+
 function descriptorFor(payload, objectBytes) {
   const payloadSha256 = hash(payload);
   return {

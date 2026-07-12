@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -10,6 +9,8 @@ import {
   canonicalHistoricalCensusBytes,
   validateHistoricalArtifactCensus,
 } from './solve/historical-artifact-census.js';
+import {historicalArtifactRootDigest} from
+  './solve/historical-artifact-root-digest.js';
 
 const DEFAULT_SCENARIO = 'solver-historical-artifact-census';
 const SCENARIO = process.argv[2] || DEFAULT_SCENARIO;
@@ -17,47 +18,14 @@ const REPORT_DIR = 'test-output/reports';
 const GUARD_TEST = 'test/solve/historical-artifact-census.test.js';
 const CENSUS_PATH =
   'solve/changes/solver-historical-artifact-census/census.json';
-const WATCHED_ROOTS = Object.freeze([
-  'solve/changes',
-  'solve/log',
-  'solve/report',
-  'solve/artifacts',
-]);
 const TEST_TIMEOUT_MS = 300000;
-const HASH_ALGORITHM = 'sha256';
 const VERDICT_PASS = 'PASS';
 const VERDICT_FAIL = 'FAIL';
-const NUL_SEPARATOR = '\0';
-const HASH_ENCODING = 'hex';
 const REPORT_FIDELITY = 'deterministic-guard';
 const TEXT_ENCODING = 'utf8';
 const PROBLEM_CENSUS_MISSING = 'census-artifact-missing';
 const PROBLEM_CENSUS_STALE = 'census-artifact-stale';
 const PROBLEM_HISTORICAL_WRITE = 'historical-root-write';
-
-function walk(directory) {
-  if (!fs.existsSync(directory)) return [];
-  const files = [];
-  for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
-    const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...walk(file));
-    else if (entry.isFile()) files.push(file);
-  }
-  return files.sort();
-}
-
-function historicalRootDigest() {
-  const digest = createHash(HASH_ALGORITHM);
-  for (const root of WATCHED_ROOTS) {
-    for (const file of walk(root)) {
-      digest.update(file);
-      digest.update(NUL_SEPARATOR);
-      digest.update(fs.readFileSync(file));
-      digest.update(NUL_SEPARATOR);
-    }
-  }
-  return digest.digest(HASH_ENCODING);
-}
 
 function buildReport(timestamp, census, guard, problems) {
   const total = 3;
@@ -94,7 +62,7 @@ function buildReport(timestamp, census, guard, problems) {
   };
 }
 
-const before = historicalRootDigest();
+const before = historicalArtifactRootDigest();
 const guard = runTestFileSync(GUARD_TEST, {
   print: false,
   timeoutMs: TEST_TIMEOUT_MS,
@@ -118,7 +86,9 @@ if (!fs.existsSync(CENSUS_PATH)) {
     problems.push(`census-build:${error.message}`);
   }
 }
-if (historicalRootDigest() !== before) problems.push(PROBLEM_HISTORICAL_WRITE);
+if (historicalArtifactRootDigest() !== before) {
+  problems.push(PROBLEM_HISTORICAL_WRITE);
+}
 const timestamp = new Date().toISOString();
 const report = buildReport(timestamp, census, guard, problems);
 fs.mkdirSync(REPORT_DIR, {recursive: true});
