@@ -397,6 +397,14 @@ class DistributedQueryPlanner {
 
   /**
    * Select join strategy for a join edge.
+   *
+   * DIAGNOSTICS-ONLY LABEL: execution is single-strategy. The executor
+   * (query-executor-join-execution.js) always runs performJoin — a hash
+   * join for extractable equi-joins with a nested-loop fallback — and
+   * no repartition engine exists. These labels survive only because
+   * EXPLAIN DISTRIBUTED and plan diagnostics surface them
+   * (sql-query-engine-statement-execution.js join_plan,
+   * buildDiagnostics); do not branch execution on them.
    * @param {Object} join - JOIN AST node.
    * @param {Object|null} leftPlan - Left table access plan.
    * @param {Object|null} rightPlan - Right table access plan.

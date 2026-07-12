@@ -306,8 +306,15 @@ const QUERY_ROUTING_REPAIR_REASON = Object.freeze({
   NO_HANDLER_STALE_SERVICE: 'no_handler_stale_service',
 });
 
-const QUERY_SQL = Object.freeze({
-  SELECT_ALL_FROM_PREFIX: 'SELECT * FROM ',
+/**
+ * Cross-partition JOIN pushdown limits. When the distinct main-side
+ * join-key value set is at most JOIN_KEY_PUSHDOWN_MAX_VALUES, the
+ * join-table fetch carries a parameter-bound `joinKey IN (...)`
+ * semi-filter; larger key sets skip the semi-filter and keep only the
+ * WHERE-conjunct and projection pushdown.
+ */
+const QUERY_JOIN_PUSHDOWN = Object.freeze({
+  JOIN_KEY_PUSHDOWN_MAX_VALUES: NUM.THOUSAND,
 });
 
 const QUERY_MESSAGE_TYPE = Object.freeze({
@@ -468,8 +475,8 @@ export {
   QUERY_ROUTER_LOG_MSG,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
+  QUERY_JOIN_PUSHDOWN,
   QUERY_SESSION,
-  QUERY_SQL,
   QUERY_SQL_FRAGMENT,
   QUERY_STATUS,
   QUERY_SUBSYSTEM,

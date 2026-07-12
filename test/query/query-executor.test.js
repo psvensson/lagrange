@@ -176,8 +176,6 @@ test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
       rows: rowSets[fanoutCalls.length - 1] || [],
     }];
   };
-  executor.resolveJoinStrategy = () => 'hash';
-  executor.executeJoinByStrategy = () => [{id: 1, name: 'Alice', bio: 'Hello'}];
   executor.mergeEngine.mergePartitionResults = (results) => ({
     rows: results[0].rows,
   });

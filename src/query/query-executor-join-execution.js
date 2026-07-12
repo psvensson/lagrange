@@ -1,7 +1,18 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {QUERY_JOIN_PUSHDOWN} from './query-constants.js';
+import {
+  SEMI_FILTER_KIND,
+  andCombineConjuncts,
+  buildJoinKeyInFilter,
+  buildJoinPushdownPlan,
+  collectDistinctJoinKeyValues,
+  resolveResidualConjunctForRow,
+} from './distributed/join-pushdown-plan.js';
+import {
+  residualPredicateAdmitsRow,
+} from './distributed/residual-predicate-evaluator.js';
 
 const {
-  DISTRIBUTED_JOIN_STRATEGY,
   QUERY_AST_NODE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -9,9 +20,14 @@ const {
   QUERY_JOIN_TYPE,
   QUERY_LOG_MSG,
   QUERY_OPERATOR,
-  QUERY_SQL,
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
+
+/** Canonical outcomes for one join-table fetch decision. */
+const JOIN_TABLE_FETCH_KIND = Object.freeze({
+  FETCH: 'fetch',
+  SKIP: 'skip',
+});
 
 const queryExecutorJoinExecutionMethods = {
   /**
@@ -70,123 +86,72 @@ const queryExecutorJoinExecutionMethods = {
   ) {
     const {joinPartitions} = options;
     const fanoutMetrics = [];
+    const pushdownPlan = buildJoinPushdownPlan(ast, params);
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_CROSS_PARTITION_JOIN, {
       mainTable: ast.from.name,
       mainPartitionCount: mainPartitionIds.length,
       joinCount: ast.joins.length,
+      pushdownKind: pushdownPlan.kind,
     });
 
-    // Fetch data from all tables, then execute the planned in-memory JOIN.
-    const mainTableSql = this.buildSelectSQLWithoutJoins(ast);
-    const mainResults = await this.executeOnPartitions(
+    // Fetch the main table with its pushed WHERE conjuncts, then fetch
+    // each join table with pushed conjuncts, projection, and join-key
+    // semi-filter before executing the in-memory JOIN edge.
+    const mainTableSql = this.buildSelectSQLWithoutJoins(
+      ast,
+      pushdownPlan.main.where,
+    );
+    const mainFetch = await this.fetchJoinFanoutRows(
       mainPartitionIds,
       mainTableSql,
-      params,
+      pushdownPlan.main.params,
       queryTimestamp,
-      true,
-      options.preferLeader || false,
-      options.preferSameLatencyGroup === true,
-      {
-        deliveryPriority: options.deliveryPriority,
-        routingReadinessDimension: options.routingReadinessDimension,
-        timeoutMs: options.timeoutMs,
-        cancellationToken: options.cancellationToken || null,
-        tableName: ast.from.name,
-      },
+      options,
+      ast.from.name,
+      fanoutMetrics,
     );
-    fanoutMetrics.push(this.getLastCoordinatorMetrics());
-    const mainFailures = mainResults.filter((result) => !result.success);
-    if (mainFailures.length > 0) {
-      const failureSummary = buildDistributedFailureSummary(mainFailures);
-      return {
-        success: false,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        ...failureSummary,
-        distributedMetrics: {
-          fanout: fanoutMetrics,
-          mergeDurationMs: 0,
-          failedPartitionCount: mainFailures.length,
-        },
-      };
-    }
-    let mainRows = [];
-    for (const result of mainResults) {
-      if (result.success && result.rows) {
-        mainRows = mainRows.concat(result.rows);
-      }
+    if (!mainFetch.ok) {
+      return mainFetch.failureResult;
     }
 
-    const joinedData = new Map();
-
-    for (const join of ast.joins) {
-      const joinTableName = join.table.name;
-      const joinTablePartitions = joinPartitions.get(joinTableName) || [];
-      if (joinTablePartitions.length > 0) {
-        const joinSql = `${QUERY_SQL.SELECT_ALL_FROM_PREFIX}${joinTableName}`;
-        const joinResults = await this.executeOnPartitions(
-          joinTablePartitions,
-          joinSql,
-          [],
-          queryTimestamp,
-          true,
-          options.preferLeader || false,
-          options.preferSameLatencyGroup === true,
-          {
-            deliveryPriority: options.deliveryPriority,
-            routingReadinessDimension: options.routingReadinessDimension,
-            timeoutMs: options.timeoutMs,
-            cancellationToken: options.cancellationToken || null,
-            tableName: joinTableName,
-          },
-        );
-        fanoutMetrics.push(this.getLastCoordinatorMetrics());
-        const joinFailures = joinResults.filter((result) => !result.success);
-        if (joinFailures.length > 0) {
-          const failureSummary = buildDistributedFailureSummary(joinFailures);
-          return {
-            success: false,
-            errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-            error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-            ...failureSummary,
-            distributedMetrics: {
-              fanout: fanoutMetrics,
-              mergeDurationMs: 0,
-              failedPartitionCount: joinFailures.length,
-            },
-          };
-        }
-        let joinRows = [];
-        for (const result of joinResults) {
-          if (result.success && result.rows) {
-            joinRows = joinRows.concat(result.rows);
-          }
-        }
-        joinedData.set(joinTableName, joinRows);
-      }
-    }
-
-    let resultRows = mainRows;
+    let resultRows = mainFetch.rows;
     let leftTableRef = ast.from.alias || ast.from.name;
-    for (const join of ast.joins) {
-      const joinTableName = join.table.name;
+    for (const [edgeIndex, join] of ast.joins.entries()) {
+      const edgePlan = pushdownPlan.joins[edgeIndex];
       const rightTableRef = join.table.alias || join.table.name;
-      const joinRows = joinedData.get(joinTableName) || [];
-      const strategy = this.resolveJoinStrategy(
-        join,
-        leftTableRef,
-        options.distributedPlan,
-      );
-      resultRows = this.executeJoinByStrategy(
+      const joinTablePartitions = joinPartitions.get(join.table.name) || [];
+      let joinRows = [];
+      if (joinTablePartitions.length > 0) {
+        const fetchPlan = this.buildJoinTableFetch(edgePlan, resultRows);
+        if (fetchPlan.kind === JOIN_TABLE_FETCH_KIND.FETCH) {
+          const joinFetch = await this.fetchJoinFanoutRows(
+            joinTablePartitions,
+            fetchPlan.sql,
+            fetchPlan.params,
+            queryTimestamp,
+            options,
+            join.table.name,
+            fanoutMetrics,
+          );
+          if (!joinFetch.ok) {
+            return joinFetch.failureResult;
+          }
+          joinRows = joinFetch.rows;
+        }
+      }
+      resultRows = this.performJoin(
         resultRows,
         joinRows,
         join,
         leftTableRef,
         rightTableRef,
-        strategy,
       );
       leftTableRef = rightTableRef;
     }
+    resultRows = this.applyResidualJoinWhere(
+      resultRows,
+      pushdownPlan.residualConjuncts,
+    );
 
     const mergeStartTimeMs = Date.now();
     const aggregated = this.mergeEngine.mergePartitionResults(
@@ -216,6 +181,160 @@ const queryExecutorJoinExecutionMethods = {
         failedPartitionCount: 0,
       },
     };
+  },
+
+  /**
+   * Run one JOIN-path partition fanout and normalize the outcome:
+   * either the concatenated rows or a canonical distributed failure.
+   * @param {Array} partitionIds - Target partition IDs.
+   * @param {string} sql - Rendered per-partition SQL.
+   * @param {Array} sqlParams - Bound parameters for the SQL.
+   * @param {Object} queryTimestamp - HLC timestamp.
+   * @param {Object} options - Execution options.
+   * @param {string} tableName - Table being fetched.
+   * @param {Array} fanoutMetrics - Accumulated fanout metrics (mutated).
+   * @return {Promise<Object>} {ok: true, rows} or {ok: false,
+   *   failureResult}.
+   * @private
+   */
+  async fetchJoinFanoutRows(
+    partitionIds,
+    sql,
+    sqlParams,
+    queryTimestamp,
+    options,
+    tableName,
+    fanoutMetrics,
+  ) {
+    const results = await this.executeOnPartitions(
+      partitionIds,
+      sql,
+      sqlParams,
+      queryTimestamp,
+      true,
+      options.preferLeader || false,
+      options.preferSameLatencyGroup === true,
+      {
+        deliveryPriority: options.deliveryPriority,
+        routingReadinessDimension: options.routingReadinessDimension,
+        timeoutMs: options.timeoutMs,
+        cancellationToken: options.cancellationToken || null,
+        tableName,
+      },
+    );
+    fanoutMetrics.push(this.getLastCoordinatorMetrics());
+    const failures = results.filter((result) => !result.success);
+    if (failures.length > 0) {
+      const failureSummary = buildDistributedFailureSummary(failures);
+      return {
+        ok: false,
+        failureResult: {
+          success: false,
+          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+          ...failureSummary,
+          distributedMetrics: {
+            fanout: fanoutMetrics,
+            mergeDurationMs: 0,
+            failedPartitionCount: failures.length,
+          },
+        },
+      };
+    }
+    let rows = [];
+    for (const result of results) {
+      if (result.success && result.rows) {
+        rows = rows.concat(result.rows);
+      }
+    }
+    return {ok: true, rows};
+  },
+
+  /**
+   * Decide one join-table fetch: skip it when the accumulated left side
+   * is empty and the join cannot preserve unmatched right rows,
+   * otherwise render the pushed WHERE, projection, and — for INNER
+   * equi-joins with a bounded distinct key set — the join-key IN
+   * semi-filter into the per-partition SQL.
+   * @param {Object} edgePlan - Edge entry from the pushdown plan.
+   * @param {Array} leftRows - Accumulated left-side rows.
+   * @return {Object} {kind: FETCH, sql, params} or {kind: SKIP}.
+   * @private
+   */
+  buildJoinTableFetch(edgePlan, leftRows) {
+    if (leftRows.length === 0 && !edgePlan.preservesRightRows) {
+      return {kind: JOIN_TABLE_FETCH_KIND.SKIP};
+    }
+    let whereAst = edgePlan.where;
+    let fetchParams = edgePlan.params;
+    if (edgePlan.semiFilter.kind === SEMI_FILTER_KIND.KEY_IN) {
+      const keySet = collectDistinctJoinKeyValues(
+        leftRows,
+        edgePlan.semiFilter,
+        QUERY_JOIN_PUSHDOWN.JOIN_KEY_PUSHDOWN_MAX_VALUES,
+      );
+      if (!keySet.overLimit && keySet.values.length > 0) {
+        const inFilter = buildJoinKeyInFilter(
+          edgePlan.semiFilter,
+          keySet.values.length,
+        );
+        whereAst = whereAst ?
+          andCombineConjuncts([whereAst, inFilter]) :
+          inFilter;
+        fetchParams = [...edgePlan.params, ...keySet.values];
+      }
+    }
+    return {
+      kind: JOIN_TABLE_FETCH_KIND.FETCH,
+      sql: this.buildJoinTableFetchSql(edgePlan, whereAst),
+      params: fetchParams,
+    };
+  },
+
+  /**
+   * Render the per-partition SQL for one join-table fetch.
+   * @param {Object} edgePlan - Edge entry from the pushdown plan.
+   * @param {Object|null} whereAst - Combined pushed WHERE AST.
+   * @return {string} SQL string.
+   * @private
+   */
+  buildJoinTableFetchSql(edgePlan, whereAst) {
+    const projectionSql = edgePlan.projection ?
+      edgePlan.projection.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14) :
+      QUERY_EXECUTOR_LITERAL.STRING_VALUE_3;
+    let sql =
+      `${QUERY_EXECUTOR_LITERAL.STRING_SELECT}${projectionSql}` +
+      ` FROM ${edgePlan.tableName}`;
+    if (edgePlan.alias) {
+      sql += ` AS ${edgePlan.alias}`;
+    }
+    if (whereAst) {
+      sql += ` WHERE ${this.buildExpressionSQL(whereAst)}`;
+    }
+    return sql;
+  },
+
+  /**
+   * Apply the coordinator-side residual WHERE conjuncts (cross-table,
+   * unknown-ownership, or OUTER-protected) after the join, matching
+   * SQL's WHERE-after-join semantics.
+   * @param {Array} rows - Joined rows.
+   * @param {Array} residualConjuncts - Prepared residual conjuncts.
+   * @return {Array} Filtered rows.
+   * @private
+   */
+  applyResidualJoinWhere(rows, residualConjuncts) {
+    if (residualConjuncts.length === 0 || rows.length === 0) {
+      return rows;
+    }
+    const resolved = residualConjuncts.map((conjunct) =>
+      resolveResidualConjunctForRow(conjunct, rows[0]),
+    );
+    // SQL three-valued logic: FALSE and UNKNOWN both filter the row —
+    // JS-strict evaluation would keep NULL rows SQLite filters.
+    return rows.filter((row) =>
+      resolved.every((conjunct) => residualPredicateAdmitsRow(conjunct, row)),
+    );
   },
 
   /**
@@ -458,85 +577,6 @@ const queryExecutorJoinExecutionMethods = {
   },
 
   /**
-   * Execute one JOIN edge with the selected distributed strategy.
-   * @param {Object[]} leftRows - Left-side rows.
-   * @param {Object[]} rightRows - Right-side rows.
-   * @param {Object} join - JOIN AST node.
-   * @param {string} leftTableRef - Left table/alias reference.
-   * @param {string} rightTableRef - Right table/alias reference.
-   * @param {string} strategy - Planner-selected join strategy.
-   * @return {Object[]} Joined rows.
-   * @private
-   */
-  executeJoinByStrategy(
-    leftRows,
-    rightRows,
-    join,
-    leftTableRef,
-    rightTableRef,
-    strategy,
-  ) {
-    switch (strategy) {
-    case DISTRIBUTED_JOIN_STRATEGY.BROADCAST:
-      return this.performJoin(
-        leftRows,
-        rightRows,
-        join,
-        leftTableRef,
-        rightTableRef,
-      );
-    case DISTRIBUTED_JOIN_STRATEGY.REPARTITION:
-      return this.performJoin(
-        leftRows,
-        rightRows,
-        join,
-        leftTableRef,
-        rightTableRef,
-      );
-    case DISTRIBUTED_JOIN_STRATEGY.NESTED_LOOP:
-      return this.nestedLoopJoin(
-        leftRows,
-        rightRows,
-        join.condition,
-        (join.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase(),
-        leftTableRef,
-        rightTableRef,
-      );
-    default:
-      return this.performJoin(
-        leftRows,
-        rightRows,
-        join,
-        leftTableRef,
-        rightTableRef,
-      );
-    }
-  },
-
-  /**
-   * Resolve strategy for one JOIN edge from distributed plan metadata.
-   * @param {Object} join - JOIN AST node.
-   * @param {string} leftTableRef - Left table/alias reference.
-   * @param {Object|null} distributedPlan - Distributed plan object.
-   * @return {string} Join strategy.
-   * @private
-   */
-  resolveJoinStrategy(join, leftTableRef, distributedPlan) {
-    const joinPlan = distributedPlan?.joinPlan || null;
-    const rightTableRef = join.table?.alias || join.table?.name || null;
-    if (!joinPlan || !rightTableRef) {
-      return DISTRIBUTED_JOIN_STRATEGY.BROADCAST;
-    }
-    const edge =
-      joinPlan.find(
-        (entry) =>
-          entry.leftAlias === leftTableRef &&
-          entry.rightAlias === rightTableRef,
-      ) || joinPlan.find((entry) => entry.rightAlias === rightTableRef);
-    return edge?.strategy || DISTRIBUTED_JOIN_STRATEGY.BROADCAST;
-  },
-
-  /**
    * Combine rows while preserving unqualified keys and qualified collisions.
    * @param {Object} leftRow - Left row.
    * @param {Object} rightRow - Right row.
@@ -565,12 +605,15 @@ const queryExecutorJoinExecutionMethods = {
   },
 
   /**
-   * Build SELECT SQL without JOIN clauses (for fetching base table data).
+   * Build SELECT SQL without JOIN clauses (for fetching main table
+   * data) using the pushdown plan's main-table WHERE — the conjuncts
+   * that provably reference only the main table.
    * @param {Object} ast - SELECT AST.
+   * @param {Object|null} mainWhere - Pushed main-table WHERE AST.
    * @return {string} SQL string without JOINs.
    * @private
    */
-  buildSelectSQLWithoutJoins(ast) {
+  buildSelectSQLWithoutJoins(ast, mainWhere) {
     let sql = QUERY_EXECUTOR_LITERAL.STRING_SELECT;
     if (ast.distinct) {
       sql += QUERY_EXECUTOR_LITERAL.STRING_DISTINCT;
@@ -587,25 +630,10 @@ const queryExecutorJoinExecutionMethods = {
       sql += ` AS ${ast.from.alias}`;
     }
 
-    if (ast.where) {
-      const mainTableWhere = this.filterWhereForTable(ast.where, ast.from.name);
-      if (mainTableWhere) {
-        sql += ` WHERE ${this.buildExpressionSQL(mainTableWhere)}`;
-      }
+    if (mainWhere) {
+      sql += ` WHERE ${this.buildExpressionSQL(mainWhere)}`;
     }
     return sql;
-  },
-
-  /**
-   * Filter WHERE clause to only include conditions for a specific table.
-   * @param {Object} where - WHERE clause AST.
-   * @param {string} tableName - Table name to filter for.
-   * @return {Object|null} Filtered WHERE clause or null.
-   * @private
-   */
-  filterWhereForTable(where, _tableName) {
-    if (!where) return null;
-    return where;
   },
 };
 

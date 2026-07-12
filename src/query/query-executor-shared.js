@@ -35,13 +35,11 @@ import {
   QUERY_ROUTING_REPAIR_REASON,
   QUERY_AST_NODE,
   QUERY_RESPONSE_TYPE,
-  QUERY_SQL,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
 import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {DistributedMergeEngine} from './distributed/distributed-merge-engine.js';
 import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator.js';
-import {DISTRIBUTED_JOIN_STRATEGY} from './distributed/distributed-query-plan-constants.js';
 import {MIGRATION_PARTITION_OPERATION} from '../migration/migration-constants.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -262,7 +260,6 @@ export const QUERY_EXECUTOR_SHARED = {
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ConfigurationManager,
-  DISTRIBUTED_JOIN_STRATEGY,
   DistributedMergeEngine,
   ERRORS,
   HLCClockService,
@@ -295,7 +292,6 @@ export const QUERY_EXECUTOR_SHARED = {
   QUERY_RESPONSE_TYPE,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
-  QUERY_SQL,
   QUERY_SUBSYSTEM,
   READINESS_SNAPSHOT_KEY,
   RAFT_ROLE,
