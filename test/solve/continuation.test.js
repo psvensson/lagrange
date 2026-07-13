@@ -4,6 +4,7 @@ import {
   CONTINUATION_ALLOWED,
   CONTINUATION_BLOCKED_METRIC_PROJECTION,
   CONTINUATION_BLOCKED_MEASUREMENT,
+  CONTINUATION_BLOCKED_REGRESSION,
   CONTINUATION_BLOCKED_SCOPE,
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
@@ -137,5 +138,17 @@ tap.test('unrecorded-evidence routes through the graded gate, not a hard throw',
     'unrecorded evidence is a recoverable reroute, never a terminal stop');
   t.match(decided.nextCommand, /ingest-evidence/u,
     'the actionable ingest command is surfaced as the next move');
+  t.end();
+});
+
+tap.test('regression reroute emits a valid finding command template', (t) => {
+  const decided = continuationDisposition({
+    status: CONTINUATION_BLOCKED_REGRESSION,
+    code: CONTINUATION_BLOCKED_REGRESSION,
+    problems: ['restore previously-green invariant'],
+  }, {questId: 'demo', frontier: 'demo-main'});
+  t.match(decided.nextCommand, /finding --id demo --frontier demo-main --claim/u);
+  t.notMatch(decided.nextCommand, /--note/u,
+    'finding accepts --claim, not the invalid --note option');
   t.end();
 });

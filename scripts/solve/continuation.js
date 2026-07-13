@@ -217,7 +217,7 @@ export function continuationNextCommand(continuation, context = {}) {
         '# land or split the current changes to reduce scope before the next attempt';
   case CONTINUATION_BLOCKED_REGRESSION:
     return `node scripts/solve.js finding${id}${f} ` +
-        '--note <restore the regressed invariant or explain why it was abandoned>';
+        '--claim "<how the regressed invariant was restored or why it was abandoned>"';
   case CONTINUATION_BLOCKED_MEASUREMENT:
     return `# fix the measurement harness for ${frontier || 'the frontier'}, ` +
         `then: node scripts/solve.js reopen${id}${f} --reason "harness fixed"`;

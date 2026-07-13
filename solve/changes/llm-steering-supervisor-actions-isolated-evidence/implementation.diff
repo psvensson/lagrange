@@ -1,0 +1,41 @@
+diff --git a/scripts/solve/continuation.js b/scripts/solve/continuation.js
+index 22ea9022ab4df26f418d76f832991f762567e1e1..c00f5225e46d775c0c6bdd6e99c467ad1e243224 100644
+--- a/scripts/solve/continuation.js
++++ b/scripts/solve/continuation.js
+@@ -217,7 +217,7 @@ export function continuationNextCommand(continuation, context = {}) {
+         '# land or split the current changes to reduce scope before the next attempt';
+   case CONTINUATION_BLOCKED_REGRESSION:
+     return `node scripts/solve.js finding${id}${f} ` +
+-        '--note <restore the regressed invariant or explain why it was abandoned>';
++        '--claim "<how the regressed invariant was restored or why it was abandoned>"';
+   case CONTINUATION_BLOCKED_MEASUREMENT:
+     return `# fix the measurement harness for ${frontier || 'the frontier'}, ` +
+         `then: node scripts/solve.js reopen${id}${f} --reason "harness fixed"`;
+diff --git a/test/solve/continuation.test.js b/test/solve/continuation.test.js
+index 307e6b0287725ecd7611ca925285243349d1b846..1b5b907bfd49b4e2013765d6408abadc3ecd3bdc 100644
+--- a/test/solve/continuation.test.js
++++ b/test/solve/continuation.test.js
+@@ -4,6 +4,7 @@ import {
+   CONTINUATION_ALLOWED,
+   CONTINUATION_BLOCKED_METRIC_PROJECTION,
+   CONTINUATION_BLOCKED_MEASUREMENT,
++  CONTINUATION_BLOCKED_REGRESSION,
+   CONTINUATION_BLOCKED_SCOPE,
+   CONTINUATION_BLOCKED_THEORY,
+   CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE,
+@@ -139,3 +140,15 @@ tap.test('unrecorded-evidence routes through the graded gate, not a hard throw',
+     'the actionable ingest command is surfaced as the next move');
+   t.end();
+ });
++
++tap.test('regression reroute emits a valid finding command template', (t) => {
++  const decided = continuationDisposition({
++    status: CONTINUATION_BLOCKED_REGRESSION,
++    code: CONTINUATION_BLOCKED_REGRESSION,
++    problems: ['restore previously-green invariant'],
++  }, {questId: 'demo', frontier: 'demo-main'});
++  t.match(decided.nextCommand, /finding --id demo --frontier demo-main --claim/u);
++  t.notMatch(decided.nextCommand, /--note/u,
++    'finding accepts --claim, not the invalid --note option');
++  t.end();
++});
