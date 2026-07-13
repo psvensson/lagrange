@@ -40,8 +40,8 @@ tap.test('solve CLI smoke (P2)', async (t) => {
     const root = tmp();
     const out = run(root, ['new', '--id', 'demo', '--statement', 'hello']);
     t.match(out, /created/);
-    t.match(out, /run --id demo --executor agent --yes --keep-alive/,
-      'next-step points at the real agent executor, not the dry skeleton');
+    t.match(out, /node scripts\/solve\.js next --id demo/,
+      'next-step delegates execution-mode choice to the typed projection');
     t.ok(fs.existsSync(path.join(root, 'solve', 'quests', 'demo.json')));
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
@@ -64,6 +64,138 @@ tap.test('solve CLI smoke (P2)', async (t) => {
         '--class', 'meta']),
       /--class must be one of product\|process/,
     );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('new authors versioned planning links without JSON hand-editing', (t) => {
+    const root = tmp();
+    run(root, [
+      'new', '--id', 'linked', '--statement', 'The linked scenario passes.',
+      '--plan-doc', 'solve/specs/linked.md',
+      '--spec-ref', 'solve/specs/linked.md#done',
+      '--roadmap-row', 'ROW-1',
+      '--closes-cl', 'CL-1', '--closes-cl', 'CL-2',
+    ]);
+    const quest = JSON.parse(fs.readFileSync(
+      path.join(root, 'solve', 'quests', 'linked.json'), 'utf8'));
+    t.equal(quest.authoringContractVersion, 1);
+    t.equal(quest.links.planDoc, 'solve/specs/linked.md');
+    t.equal(quest.links.specRef, 'solve/specs/linked.md#done');
+    t.equal(quest.links.roadmapRow, 'ROW-1');
+    t.same(quest.links.closesCL, ['CL-1', 'CL-2']);
+    t.equal(quest.links.draftedAtCommit, null,
+      'non-Git fixture records an honest null draft commit');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('lint failure creates neither declaration nor pending state', (t) => {
+    const root = tmp();
+    run(root, ['new', '--id', 'invalid-product', '--statement', 'It passes.']);
+    t.throws(() => run(root, ['step', '--id', 'invalid-product']),
+      /quest lint failed.*planning link/u);
+    t.notOk(fs.existsSync(path.join(
+      root, 'solve', 'log', 'invalid-product.ndjson')));
+    t.notOk(fs.existsSync(path.join(
+      root, 'solve', 'state', 'invalid-product.pending.json')));
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('first execution seals the extended versioned declaration', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'oracle.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+    run(root, [
+      'new', '--id', 'sealed', '--statement', 'A process result is recorded.',
+      '--class', 'process',
+    ]);
+    const questFile = path.join(root, 'solve', 'quests', 'sealed.json');
+    const quest = JSON.parse(fs.readFileSync(questFile, 'utf8'));
+    quest.doneWhen = {probe: 'oracle', args: {file: oracle}};
+    quest.frontiers[0].metric = {probe: 'oracle', args: {file: oracle}};
+    fs.writeFileSync(questFile, `${JSON.stringify(quest, null, 2)}\n`);
+    run(root, ['step', '--id', 'sealed']);
+    const declared = fs.readFileSync(
+      path.join(root, 'solve', 'log', 'sealed.ndjson'), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line))
+      .find((event) => event.type === 'quest-declared');
+    t.equal(declared.sealed.authoringContractVersion, 1);
+    t.equal(declared.sealed.statement, quest.statement);
+    t.equal(declared.sealed.class, 'process');
+    t.same(declared.sealed.frontierIds, ['sealed-main']);
+    t.same(declared.sealed.constraints, quest.constraints);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('new --force cannot erase a Quest with append-only history', (t) => {
+    const root = tmp();
+    run(root, [
+      'new', '--id', 'history', '--statement', 'A process decision is recorded.',
+      '--class', 'process',
+    ]);
+    run(root, [
+      'finding', '--id', 'history', '--frontier', 'history-main',
+      '--claim', 'history exists',
+    ]);
+    t.throws(() => run(root, [
+      'new', '--id', 'history', '--statement', 'replacement', '--force',
+    ]), /cannot overwrite a Quest with append-only history/u);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('new cannot reuse an ID whose Quest file was deleted over history', (t) => {
+    const root = tmp();
+    run(root, [
+      'new', '--id', 'deleted-history', '--statement', 'A process decision is recorded.',
+      '--class', 'process',
+    ]);
+    run(root, [
+      'finding', '--id', 'deleted-history', '--frontier', 'deleted-history-main',
+      '--claim', 'history exists',
+    ]);
+    fs.rmSync(path.join(root, 'solve', 'quests', 'deleted-history.json'));
+    t.throws(() => run(root, [
+      'new', '--id', 'deleted-history', '--statement', 'replacement', '--force',
+    ]), /Quest ID has append-only history/u);
+    t.throws(() => run(root, [
+      'new', '--id', 'deleted-history', '--statement', 'replacement',
+    ]), /Quest ID has append-only history/u);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('lint emits its report and exits nonzero for invalid drafts', (t) => {
+    const root = tmp();
+    run(root, ['new', '--id', 'lint-fail', '--statement', 'It passes.']);
+    const error = t.throws(
+      () => run(root, ['lint', '--id', 'lint-fail', '--json']),
+    );
+    t.match(error.stdout, /"status": "fail"/u);
+    t.equal(error.status, 1);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('run rejects removed options instead of silently ignoring them', (t) => {
+    const root = tmp();
+    const oracle = path.join(root, 'oracle.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    writeOracleGoal(root, 'unsupported-run-option', oracle);
+    for (const [flag, value] of [
+      ['--commit-every', '1'],
+      ['--stall-window', '3'],
+      ['--no-commit', null],
+    ]) {
+      const flagArgs = value === null ? [flag] : [flag, value];
+      t.throws(
+        () => run(root, ['run', '--id', 'unsupported-run-option', ...flagArgs]),
+        new RegExp(`unsupported option.*${flag}`, 'u'),
+      );
+    }
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -157,6 +289,34 @@ tap.test('solve CLI smoke (P2)', async (t) => {
       () => run(root, ['step', '--id', 'demo', '--changeRef', `diff:${diff}`]),
       /requires --commit/,
     );
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('verifier approvals require a structured content fingerprint', (t) => {
+    const root = tmp();
+    writeOracleGoal(root, 'demo', path.join(root, 'oracle.json'));
+    t.throws(() => run(root, [
+      'finding', '--id', 'demo', '--frontier', 'demo-main',
+      '--kind', 'verifier-approval', '--claim', 'approved',
+      '--evidence', 'subagent:verify-1',
+    ]), /verification-scope/u);
+    const fingerprint = `sha256:${'a'.repeat(64)}`;
+    run(root, [
+      'finding', '--id', 'demo', '--frontier', 'demo-main',
+      '--kind', 'verifier-approval', '--claim', 'approved',
+      '--evidence', 'subagent:verify-1',
+      '--verification-scope', 'attempt',
+      '--verification-fingerprint', fingerprint,
+    ]);
+    const event = fs.readFileSync(
+      path.join(root, 'solve', 'log', 'demo.ndjson'), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line))[0];
+    t.same(event.verification, {
+      schemaVersion: 1,
+      scope: 'attempt',
+      fingerprint,
+    });
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

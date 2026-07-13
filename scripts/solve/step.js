@@ -35,7 +35,6 @@ import {
   writeContentAddressedChangeArtifact,
 } from './content-addressed-change-artifact.js';
 import {suggestVerificationTemplates} from './verification-template-suggest.js';
-import {autoCommitQuest} from './handoff.js';
 import {writeReport} from './report.js';
 import {analyzeQuestHealth} from './health.js';
 import {analyzeScopePressureCandidate} from './scope-pressure.js';
@@ -47,6 +46,7 @@ import {
   decisionContinues,
 } from './gate.js';
 import {unrecordedEvidenceContinuation} from './continuation.js';
+import {resolveWorkspaceBaseCommit} from './verification.js';
 
 const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
 const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
@@ -78,10 +78,7 @@ const AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS = Object.freeze([
 // The HEAD sha at step-begin time, recorded into the pending file so --auto-diff can
 // snapshot exactly what changed during the attempt (null outside a git work tree).
 function resolveHeadPin(root) {
-  const out = spawnSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'});
-  if (out.status !== 0 || typeof out.stdout !== 'string') return null;
-  const sha = out.stdout.trim();
-  return /^[0-9a-f]{40}$/u.test(sha) ? sha : null;
+  return resolveWorkspaceBaseCommit(root);
 }
 
 function nextAutoDiffArtifactPath(root, questId) {
@@ -103,7 +100,7 @@ function nextAutoDiffArtifactPath(root, questId) {
 function createAutoDiffChangeRef(root, quest, pending) {
   const pin = pending.headCommit || 'HEAD';
   const out = spawnSync('git', [
-    'diff', '--binary', pin, '--', '.',
+    'diff', '--binary', '--full-index', '--no-ext-diff', pin, '--', '.',
     ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,
   ], {
     cwd: root,
@@ -337,22 +334,19 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     modelRef: options.modelRef || null,
     modelNotApplicable: options.modelNotApplicable || null,
     discrimination: options.discrimination || null,
+    workspaceBaseCommit: pending.headCommit || null,
   });
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx, {
     accepted: outcome.accepted === true,
   });
   clearPending(root, quest.id);
   writeReport(root, quest.id);
-  // Persist the Quest's own scope-clean work. Once the Quest finishes (R1) this is the
-  // durable terminal commit; while it is still running it is a squashable CHECKPOINT
-  // commit, gated on source-change verification rather than a terminal status, so a
-  // supervised attempt is never left to accumulate in the dirty tree. Auto-commit is a
-  // no-op outside a git work tree and refuses until its gate is met, so it is safe to
-  // call unconditionally. It commits only — it never pushes.
-  const commit = outcome.violations.length > 0 || outcome.accepted !== true ?
-    {committed: false, skipped: outcome.nonMeasuring ?
-      'non-measuring-sample' : 'attempt-violations'} :
-    autoCommitQuest(root, quest.id, {checkpoint: !questOutcome.done});
+  // Attempt recording never commits. The verifier first approves the exact
+  // fingerprint, then the operator invokes `solve checkpoint`; terminal handoff
+  // remains a separate full-audit action.
+  const commit = {committed: false, skipped: outcome.nonMeasuring ?
+    'non-measuring-sample' : (outcome.accepted === true ?
+      'explicit-checkpoint-required' : 'attempt-violations')};
   return {
     frontier: def.id,
     before: pending.before.metric,

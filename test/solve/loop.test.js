@@ -42,7 +42,6 @@ import {
   DISPOSITION_EXPLORE,
   OUTCOME_BLOCKED,
   OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT,
-  OUTCOME_SUPERVISOR_STALLED,
   OUTCOME_SUPERVISOR_BUDGET,
 } from '../../scripts/solve/constants.js';
 
@@ -305,10 +304,8 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
   });
 });
 
-// The loop auto-commits the quest's scope-clean work. Each verified, scope-clean
-// attempt is persisted mid-run as a squashable `checkpoint(quest):` commit (so a long
-// non-terminal quest never accumulates an unrecoverable dirty tree), and the quest's
-// finish produces one durable terminal commit. It never pushes.
+// Attempt recording has no commit side effect. The loop may still make one
+// full-audit terminal commit for a no-source Quest; source checkpoints are explicit.
 tap.test('auto-commit on quest finish (loop path)', async (t) => {
   function initGit(root) {
     const run = (...args) => execFileSync('git', args, {cwd: root, stdio: 'ignore'});
@@ -351,7 +348,7 @@ tap.test('auto-commit on quest finish (loop path)', async (t) => {
       {cwd: root, encoding: 'utf8'}).trim();
   }
 
-  t.test('checkpoints each verified attempt and makes a terminal commit, never pushes', (t) => {
+  t.test('makes only the terminal commit and never implicit checkpoints', (t) => {
     const {root, quest, changeDir} = setup({metric: 2, target: 0});
     saveQuest(root, quest);
     initGit(root);
@@ -362,20 +359,19 @@ tap.test('auto-commit on quest finish (loop path)', async (t) => {
     });
     t.equal(res.outcome, STATUS_SOLVED, 'quest solved');
     const after = Number(commitCount(root));
-    // Each verified attempt is checkpointed mid-run; the finish adds the durable
-    // terminal commit. So there is at least one checkpoint plus exactly one terminal.
     const subjects = execFileSync('git',
       ['log', '--format=%s', '-n', String(after - before)],
       {cwd: root, encoding: 'utf8'}).trim().split('\n').filter(Boolean);
     const checkpoints = subjects.filter((s) => s.startsWith('checkpoint(quest):'));
     const terminals = subjects.filter((s) => !s.startsWith('checkpoint(quest):'));
-    t.ok(checkpoints.length >= 1, 'mid-run attempts are persisted as checkpoints');
+    t.equal(checkpoints.length, 0, 'attempt recording never commits implicitly');
     t.equal(terminals.length, 1, 'exactly one durable terminal commit on finish');
     t.notMatch(subjects[0], /^checkpoint\(quest\):/u,
       'the HEAD commit is the terminal commit, not a checkpoint');
     const msg = execFileSync('git', ['log', '-1', '--format=%B'],
       {cwd: root, encoding: 'utf8'});
-    t.match(msg, /Co-Authored-By: Claude/, 'the commit carries the co-author trailer');
+    t.notMatch(msg, /Co-Authored-By:/u,
+      'an unconfigured run does not invent a co-author trailer');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -660,11 +656,15 @@ tap.test('runSupervised (P-keepalive) keeps the quest alive across non-terminal 
     t.equal(res.outcome, OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT, 'pauses on measurement');
     t.equal(calls, 1, 'does not restart a dead harness');
     t.equal(res.supervisor.innerOutcome, OUTCOME_BLOCKED, 'preserves the inner outcome');
+    t.same(res.nextAction, {
+      type: 'manual-action',
+      value: 'Repair the measurement harness, then resume the Quest.',
+    });
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
 
-  t.test('stalls out when restarts stop producing durable progress', (t) => {
+  t.test('returns an unchanged MAX_CYCLES boundary without restarting', (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sup-'));
     let calls = 0;
     // A recoverable explore stop that only ever appends gate-decision noise: no durable
@@ -675,9 +675,54 @@ tap.test('runSupervised (P-keepalive) keeps the quest alive across non-terminal 
       return {outcome: OUTCOME_BLOCKED, disposition: DISPOSITION_EXPLORE,
         frontier: 'f1', evidence: null};
     };
-    const res = runSupervised(root, quest, {runner, stallWindow: 3});
-    t.equal(res.outcome, OUTCOME_SUPERVISOR_STALLED, 'steps back on a hot spin');
-    t.equal(calls, 3, 'one initial run + two stale restarts before the window trips');
+    const res = runSupervised(root, quest, {runner});
+    t.equal(res.outcome, OUTCOME_BLOCKED, 'preserves the judgment outcome');
+    t.equal(res.supervisor.stop, 'judgment');
+    t.equal(calls, 1, 'a judgment stop returns exactly once');
+    t.same(res.nextAction, {
+      type: 'manual-action',
+      value: 'Execute the reported judgment action, then resume the Quest.',
+    });
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('MAX_CYCLES without durable progress returns after one call', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sup-'));
+    let calls = 0;
+    const runner = () => {
+      calls++;
+      return {outcome: OUTCOME_MAX_CYCLES, evidence: null};
+    };
+    const res = runSupervised(root, quest, {runner});
+    t.equal(res.outcome, OUTCOME_MAX_CYCLES);
+    t.equal(res.supervisor.stop, 'no-progress');
+    t.equal(calls, 1, 'does not replay an unchanged cycle boundary');
+    t.same(res.nextAction, {
+      type: 'manual-action',
+      value: 'Add durable evidence or revise the approach before resuming the Quest.',
+    });
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('THEORY_REQUIRED returns its typed template after one call', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sup-'));
+    let calls = 0;
+    const runner = () => {
+      calls++;
+      return {
+        outcome: OUTCOME_THEORY_REQUIRED,
+        nextCommand: 'node scripts/solve.js theory option --id sup --layer <layer>',
+      };
+    };
+    const res = runSupervised(root, quest, {runner});
+    t.equal(calls, 1);
+    t.equal(res.supervisor.stop, 'judgment');
+    t.same(res.nextAction, {
+      type: 'command-template',
+      value: 'node scripts/solve.js theory option --id sup --layer <layer>',
+    });
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -694,6 +739,10 @@ tap.test('runSupervised (P-keepalive) keeps the quest alive across non-terminal 
     const res = runSupervised(root, quest, {runner, maxRestarts: 5});
     t.equal(res.outcome, OUTCOME_SUPERVISOR_BUDGET, 'stops at the restart budget');
     t.equal(res.supervisor.restarts, 5, 'used the full budget');
+    t.same(res.nextAction, {
+      type: 'manual-action',
+      value: 'Review the supervisor budget stop and choose the next evidence-bearing move.',
+    });
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

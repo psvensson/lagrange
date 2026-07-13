@@ -9,6 +9,18 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print the Quest-first command index with diagnostic, triage, and validation entrypoints.',
       }),
       Object.freeze({
+        command: 'npm run solve:doctor -- [--json]',
+        description: 'Inspect Git, local adapter, execution mode, and attribution capabilities without mutation.',
+      }),
+      Object.freeze({
+        command: 'npm run solve:next -- --id <quest> [--json]',
+        description: 'Print the typed next action for an existing Quest.',
+      }),
+      Object.freeze({
+        command: 'npm run solve:lint -- --id <quest> | --all [--json]',
+        description: 'Validate the versioned Quest authoring contract or report the read-only legacy census.',
+      }),
+      Object.freeze({
         command: 'npm run quest:context -- --id <quest>',
         description: 'Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.',
       }),
@@ -47,6 +59,10 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run solve:audit -- --id <quest>',
         description: 'Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.',
+      }),
+      Object.freeze({
+        command: 'npm run solve:checkpoint -- --id <quest>',
+        description: 'Explicitly commit one unchanged, fingerprint-approved source attempt; never pushes.',
       }),
       Object.freeze({
         command: 'npm run solve:upgrade -- --id <quest>',

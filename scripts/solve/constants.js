@@ -238,25 +238,18 @@ export const OUTCOME_BLOCKED = 'blocked';
 // as "continue".
 export const OUTCOME_CONTINUE = 'continue';
 
-// Supervisor (keep-alive) outcomes. runSupervised wraps runLoop and re-invokes it across
-// NON-terminal stops so an autonomous quest keeps contributing to its append-only memory
-// instead of dying when one driver session ends. These outcomes are all NON-terminal — they
-// never close a quest (only SOLVED / honest EXHAUSTED do) — and exist so the operator/agent
-// can see WHY the supervisor stepped back rather than silently looping.
+// Supervisor (keep-alive) outcomes. runSupervised re-invokes runLoop only after a
+// progress-bearing MAX_CYCLES result. These outcomes are NON-terminal — they never
+// close a quest (only SOLVED / honest EXHAUSTED do) — and show why the supervisor
+// stepped back.
 //   supervisor-paused-measurement a measurement gate (dead/disconnected harness) was hit;
 //                                 re-running cannot help until the harness is repaired.
-//   supervisor-stalled            restarts stopped producing durable progress (a hot spin
-//                                 guard); a human/agent should reassess.
 //   supervisor-budget             the supervisor's own restart/cycle budget was exhausted.
 export const OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT = 'supervisor-paused-measurement';
-export const OUTCOME_SUPERVISOR_STALLED = 'supervisor-stalled';
 export const OUTCOME_SUPERVISOR_BUDGET = 'supervisor-budget';
 
-// runSupervised bounds: at most this many runLoop restarts, and a stall window of this many
-// consecutive restarts with no new durable-progress event before it steps back. Conservative
-// so a transient blip does not end the supervisor while genuine slow progress continues.
+// runSupervised bound: at most this many progress-bearing runLoop restarts.
 export const SUPERVISOR_MAX_RESTARTS = 100;
-export const SUPERVISOR_STALL_WINDOW = 3;
 // theory gate resolves to exactly one of these. Only `terminal` may CLOSE a quest, and
 // (per the two-terminal contract in AGENTS.md) only as SOLVED or honest EXHAUSTED.
 //   advisory       annotate (finding/health signal) and continue.

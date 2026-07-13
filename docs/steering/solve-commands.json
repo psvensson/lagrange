@@ -1,11 +1,11 @@
 {
   "_comment": "Curated descriptions for the solve.js CLI subcommands. Consumed by scripts/gen-solve-commands-index.js (run via `npm run steering:llm:pack`) to emit docs/steering/llm/solve-commands.md. Keys MUST match the COMMANDS map in scripts/solve.js: a registered command missing here renders as `(undocumented)` and a key here that is not registered renders under `Documented but not registered`, so `npm run steering:check` fails on either drift. Add or correct entries here, not in the generated markdown.",
   "new": {
-    "summary": "Create a Quest draft (a sealed goal under solve/quests/<id>.json). --class declares the quest class at draft time (product = MEASURED goal, the default; process = decision/scaffolding closure). Stamps links.sealedAtCommit for the seal-freshness advisory, runs the draft-time retread check against recent revert(...) commits, and --inherit-rulesout-from copies a parent quest's rulesOut findings as day-0 findings.",
-    "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--class product|process] [--inherit-rulesout-from <parentQuestId>]"
+    "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: the first execution command lints and declares it. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists.",
+    "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--class product|process] [--plan-doc <path>] [--parent-quest <id>] [--roadmap-row <id>] [--spec-ref <ref>] [--closes-cl <CL-id>] [--inherit-rulesout-from <parentQuestId>]"
   },
   "run": {
-    "summary": "Run the Quest loop to a terminal (SOLVED/EXHAUSTED). Bare `run --id <id>` uses the default `dry` executor (a no-op skeleton — it prints a banner saying so); real autonomous work needs `--executor agent --yes`, plus `--keep-alive` to survive non-terminal gates via the supervisor.",
+    "summary": "Run the Quest loop toward SOLVED/EXHAUSTED. Bare `run --id <id>` uses the default `dry` executor (a no-op skeleton — it prints a banner saying so); real autonomous work needs `--executor agent --yes`. Add `--keep-alive` to replay only progress-bearing MAX_CYCLES boundaries; judgment and repair stops return once with a typed action.",
     "usage": "node scripts/solve.js run --id <id> --executor agent --yes --keep-alive [--max 20]"
   },
   "status": {
@@ -33,8 +33,12 @@
     "usage": "node scripts/solve.js trace --row <id> | --cl <CL-#> | --spec <ref> | --quest <id>"
   },
   "handoff": {
-    "summary": "Compute the scope-safe git pathspec for committing exactly one Quest's work; dry-run by default, `--commit` executes. (Squashable mid-quest checkpoint saves are made by the autonomous run loop's auto-commit, not by a handoff flag.)",
+    "summary": "Compute the scope-safe git pathspec for committing exactly one terminal Quest; dry-run by default, `--commit` executes only after the full audit and aggregate source approval pass.",
     "usage": "node scripts/solve.js handoff --id <id> [--commit]"
+  },
+  "checkpoint": {
+    "summary": "Explicitly commit one scope-clean mid-Quest attempt after its exact patch fingerprint is approved and the current path-limited delta is unchanged. Never pushes; --dry-run only renders the decision.",
+    "usage": "node scripts/solve.js checkpoint --id <id> [--dry-run]"
   },
   "invariants": {
     "summary": "Tier-2 live-evidence verification of architecture invariants (the standing dual of doneWhen): derive HELD/BREACHED/UNGUARDED for entries in architecture/contracts/invariants.json that carry a liveEvidence block, as a fold over the Solver event log. Always active (unconditional).",
@@ -45,8 +49,8 @@
     "usage": "node scripts/solve.js probe --probe <scenario-harness|oracle|invariantHeld> [probe-specific args...]"
   },
   "finding": {
-    "summary": "Record a durable finding (a tested learning or ruled-out approach) into the Quest event log. --kind tags a machine-readable class (repro-on-head silences the seal-freshness advisory; inherited-rulesout marks levers copied from a parent quest; verifier-approval marks a subagent verification finding so the audit matcher keys on the kind, not claim prose — evidence subagent:<id> still required).",
-    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval] [--rulesOut \"<lever>\"] [--evidence <ref>]"
+    "summary": "Record a durable finding into the append-only Quest log. A verifier-approval must carry evidence subagent:<id>, an attempt|aggregate|both scope, and the exact sha256 fingerprint; recording it never commits.",
+    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval] [--rulesOut \"<lever>\"] [--evidence <ref>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>]"
   },
   "promote-finding": {
     "summary": "Promote a recorded finding into in-repo steering as a rule (then regenerate with `npm run steering:llm:pack`).",
@@ -69,8 +73,16 @@
     "usage": "node scripts/solve.js step-pending --id <id>"
   },
   "next": {
-    "summary": "Human-readable \"what do I do next?\" renderer: folds the pending-step state, the last recorded gate stop's nextCommand, the current-blocker card's next move, and the quest advisories into a handful of lines — the first is always a single imperative `Next: <command or action>`. A projection over existing read-models; derives nothing new.",
-    "usage": "node scripts/solve.js next --id <id>"
+    "summary": "Typed \"what do I do next?\" projection: folds pending-step state, the last recorded stop, the current-blocker card, and advisories. It distinguishes executable-command, command-template, manual-action, and terminal actions so a template is never presented as directly executable. Use --json for the stable machine-readable projection.",
+    "usage": "node scripts/solve.js next --id <id> [--json]"
+  },
+  "doctor": {
+    "summary": "Read-only operator preflight. Reports Git/worktree state, absent/malformed/disabled/enabled local agent configuration, live adapter executability, the no-op example adapter, attribution validity, and the recommended autonomous or supervised mode. Use --json for the stable machine-readable report.",
+    "usage": "node scripts/solve.js doctor [--json]"
+  },
+  "lint": {
+    "summary": "Read-only Quest authoring validation. --id checks one Quest; --all reports the versioned/legacy census without rewriting historical Quest files or logs.",
+    "usage": "node scripts/solve.js lint (--id <id> | --all) [--json]"
   },
   "theory": {
     "summary": "Two-layer (system + frontier) theory management used to break a stall: system, option, select, record, supersede, list, card, import-ledger.",

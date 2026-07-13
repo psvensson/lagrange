@@ -180,6 +180,7 @@ function applyFinding(frontier, event) {
     kind: event.kind || null,
     evidence: event.evidence || null,
     rulesOut: event.rulesOut || null,
+    verification: event.verification || null,
     regressionClassification: event.regressionClassification || null,
     scopePressureClassification: event.scopePressureClassification || null,
     ts: event.ts || null,
@@ -462,6 +463,7 @@ export function appendFinding(root, questId, finding) {
     kind: finding.kind || null,
     evidence: finding.evidence || null,
     rulesOut: finding.rulesOut || null,
+    verification: finding.verification || null,
     regressionClassification: finding.regressionClassification || null,
     scopePressureClassification: finding.scopePressureClassification || null,
   });
@@ -476,6 +478,7 @@ export function readFindings(root, questId, frontierId) {
       kind: e.kind || null,
       evidence: e.evidence || null,
       rulesOut: e.rulesOut || null,
+      verification: e.verification || null,
       ts: e.ts || null,
     }));
 }

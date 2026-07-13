@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 import {loadQuest, projectState, readLog} from './store.js';
 import {evaluate} from './probe.js';
-import {makeRunContext, finalizeAttempt} from './loop.js';
+import {ensureSealedGoal, makeRunContext, finalizeAttempt} from './loop.js';
 import {ingestEvidence} from './evidence.js';
 import {stepTheoryGateProblems} from './theory.js';
 import {inspectChangeArtifact} from './change-artifact.js';
@@ -17,6 +17,7 @@ import {
   theoryGateContinuation,
   decisionContinues,
 } from './gate.js';
+import {resolveWorkspaceBaseCommit} from './verification.js';
 
 export function runAttemptCommand(root, args) {
   const questId = args.id;
@@ -34,6 +35,7 @@ export function runAttemptCommand(root, args) {
   }
 
   const quest = loadQuest(root, questId);
+  ensureSealedGoal(root, quest);
   const log = readLog(root, questId);
   const state = projectState(quest, log);
   const def = quest.frontiers.find((f) => f.id === frontierId);
@@ -107,6 +109,7 @@ export function runAttemptCommand(root, args) {
 
   // 1. Measure before
   const before = evaluate(def.metric, ctx.probeCtx);
+  const workspaceBaseCommit = resolveWorkspaceBaseCommit(root);
 
   // 2. Run harness command
   console.log(`Running harness command: ${harnessCommand.join(' ')}`);
@@ -136,6 +139,7 @@ export function runAttemptCommand(root, args) {
     negativeResultMeans: args.negativeResultMeans || null,
     modelRef: args.modelRef || null,
     modelNotApplicable: args.modelNotApplicable || null,
+    workspaceBaseCommit,
   };
   const outcome = finalizeAttempt(root, quest, ctx, pick, before, attemptResult);
 

@@ -32,7 +32,6 @@ import {eventEvidenceFingerprint} from './evidence-identity.js';
 import {
   inspectChangeArtifact,
   requiresModelEvidence,
-  requiresSourceVerification,
 } from './change-artifact.js';
 import {loadQuest, projectState, readLog} from './store.js';
 import {questClass, closureKind, isDecisionClosure} from './closure-kind.js';
@@ -46,6 +45,11 @@ import {
   continuationIsAllowed,
 } from './continuation.js';
 import {isFrontierProbeEvent} from './probe-spec.js';
+import {
+  checkpointVerificationProblems,
+  terminalVerificationProblems,
+  verificationState,
+} from './verification.js';
 
 const BLOCKED_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_AVOIDED,
@@ -181,45 +185,8 @@ function auditReportOrdering(root, quest, log) {
   return [];
 }
 
-// First-class machine-readable tag for a subagent verification finding
-// (`finding --kind verifier-approval`): the matcher keys on the kind, so the
-// verification claim's prose no longer has to hit the legacy keyword regex.
-// The prose regex remains as the fallback for findings recorded without a kind.
-const VERIFIER_APPROVAL_FINDING_KIND = 'verifier-approval';
-
-function isSubagentVerificationFinding(event, frontier) {
-  if (event.type !== EVENT_FINDING || event.frontier !== frontier) return false;
-  if (typeof event.evidence !== 'string' ||
-    !event.evidence.startsWith('subagent:')) {
-    return false;
-  }
-  if (event.kind === VERIFIER_APPROVAL_FINDING_KIND) return true;
-  return /source|code|change|quest|intent|guideline|doctrine|verif/iu
-    .test(String(event.claim || ''));
-}
-
 function auditSourceChangeVerification(root, quest, log, startIndex) {
-  let latestSourceAttemptIndex = -1;
-  let latestSourceAttempt = null;
-  for (const [index, event] of log.entries()) {
-    if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
-    const inspection = inspectChangeArtifact(root, quest, event.changeRef);
-    if (inspection.changedPaths.some(requiresSourceVerification)) {
-      latestSourceAttemptIndex = index;
-      latestSourceAttempt = event;
-    }
-  }
-  if (latestSourceAttemptIndex < 0) return [];
-  const hasLaterVerification = log
-    .slice(latestSourceAttemptIndex + 1)
-    .some((event) =>
-      isSubagentVerificationFinding(event, latestSourceAttempt.frontier));
-  if (hasLaterVerification) return [];
-  return [problem(
-    'source code changes require a later subagent verification finding ' +
-      'with evidence subagent:<id>',
-    latestSourceAttempt,
-  )];
+  return verificationState(root, quest, log, {startIndex}).attemptProblems;
 }
 
 function isModelEvidenceFinding(event, frontier) {
@@ -322,10 +289,11 @@ function linkHygieneWarnings(quest) {
   if (questClass(quest) !== 'product') return [];
   const links = quest.links || {};
   const closes = Array.isArray(links.closesCL) ? links.closesCL : [];
-  if (links.roadmapRow || links.specRef || closes.length > 0) return [];
+  if (links.roadmapRow || links.specRef || links.planDoc || links.parentQuest ||
+    closes.length > 0) return [];
   return [
-    'product quest has no planning link (links.roadmapRow / specRef / closesCL all ' +
-    'empty); it will not appear in solve trace / frontier / overview joins',
+    'product quest has no planning link (links.roadmapRow / specRef / planDoc / ' +
+    'parentQuest / closesCL all empty); it will not appear in planning joins',
   ];
 }
 
@@ -387,12 +355,6 @@ function auditContinuation(root, quest) {
   ));
 }
 
-// Minimal commit gate: the ONLY preconditions for committing a quest's work are
-// that the quest finished without errors (a SOLVED or EXHAUSTED terminal is
-// recorded) and that any source-code change was verified by a later subagent
-// verification finding. Nothing else (report freshness, theory bookkeeping,
-// changeRef integrity, scope continuation, etc.) blocks the commit — those remain
-// informational via auditQuest.
 const COMMIT_GATE_TERMINAL_STATUSES = Object.freeze([
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
@@ -400,7 +362,6 @@ const COMMIT_GATE_TERMINAL_STATUSES = Object.freeze([
 
 export function commitGate(root, quest) {
   const log = readLog(root, quest.id);
-  const startIndex = strictAuditStartIndex(log);
   const finished = log.some((event) =>
     event.type === EVENT_QUEST &&
     COMMIT_GATE_TERMINAL_STATUSES.includes(event.status));
@@ -410,8 +371,8 @@ export function commitGate(root, quest) {
       'quest has not finished (no SOLVED or EXHAUSTED terminal recorded)',
     ));
   }
-  problems.push(...auditIntegrityViolations(root, quest, log));
-  problems.push(...auditSourceChangeVerification(root, quest, log, startIndex));
+  const fullAudit = auditQuest(root, quest);
+  problems.push(...fullAudit.problems);
   return {
     questId: quest.id,
     ready: problems.length === 0,
@@ -420,17 +381,16 @@ export function commitGate(root, quest) {
   };
 }
 
-// Checkpoint gate: like commitGate but WITHOUT the terminal requirement, so the
-// Solver can persist a verified, scope-clean attempt MID-quest instead of letting the
-// working tree accumulate into an unrecoverable blob over a long non-terminal run. A
-// source change still requires a later subagent-verification finding, so unverified
-// experimental edits are never checkpointed.
+// A checkpoint is intentionally narrower than terminal handoff: it proves exact
+// attempt artifact integrity and content-bound approval, but does not require
+// terminal state or aggregate approval.
 export function checkpointGate(root, quest) {
   const log = readLog(root, quest.id);
   const startIndex = strictAuditStartIndex(log);
   const problems = [
     ...auditIntegrityViolations(root, quest, log),
-    ...auditSourceChangeVerification(root, quest, log, startIndex),
+    ...auditChangeRefs(root, quest, log, startIndex),
+    ...checkpointVerificationProblems(root, quest, log, {startIndex}),
   ];
   return {
     questId: quest.id,
@@ -444,12 +404,17 @@ export function auditQuest(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
   const startIndex = strictAuditStartIndex(log);
+  const terminal = log.some((event) => event.type === EVENT_QUEST &&
+    COMMIT_GATE_TERMINAL_STATUSES.includes(event.status));
+  const verificationProblems = terminal ?
+    terminalVerificationProblems(root, quest, log, {startIndex}) :
+    auditSourceChangeVerification(root, quest, log, startIndex);
   const problems = [
     ...auditIntegrityViolations(root, quest, log),
     ...auditChangeRefs(root, quest, log, startIndex),
     ...auditEvidenceIdentity(log, startIndex),
     ...auditTheoryUse(log, startIndex),
-    ...auditSourceChangeVerification(root, quest, log, startIndex),
+    ...verificationProblems,
     ...auditModelEvidence(root, quest, log, startIndex),
     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
     ...auditUnmeasuredTheoryPromotion(log, startIndex),

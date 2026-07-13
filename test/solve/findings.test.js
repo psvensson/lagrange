@@ -54,6 +54,28 @@ tap.test('findings store (finding event)', async (t) => {
     t.end();
   });
 
+  t.test('structured verification survives append, read, and projection', (t) => {
+    const root = tmp();
+    saveQuest(root, GOAL);
+    const verification = {
+      schemaVersion: 1,
+      scope: 'attempt',
+      fingerprint: `sha256:${'a'.repeat(64)}`,
+    };
+    appendFinding(root, GOAL.id, {
+      frontier: 'a',
+      claim: 'approved',
+      kind: 'verifier-approval',
+      evidence: 'subagent:verify-1',
+      verification,
+    });
+    t.same(readFindings(root, GOAL.id, 'a')[0].verification, verification);
+    t.same(projectState(GOAL, readLog(root, GOAL.id))
+      .frontiers[0].findings[0].verification, verification);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('findings for an unknown frontier are dropped by projection', (t) => {
     const root = tmp();
     saveQuest(root, GOAL);

@@ -50,10 +50,8 @@ import {
   OUTCOME_THEORY_REQUIRED,
   OUTCOME_BLOCKED,
   OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT,
-  OUTCOME_SUPERVISOR_STALLED,
   OUTCOME_SUPERVISOR_BUDGET,
   SUPERVISOR_MAX_RESTARTS,
-  SUPERVISOR_STALL_WINDOW,
   DISPOSITION_PARK_RESUMABLE,
   DISPOSITION_ADVISORY,
   EVENT_THEORY_SYSTEM_DECLARED,
@@ -75,6 +73,11 @@ import {
 import {appendEvent, readLog, projectState, rebuildState, invariantHighWater} from './store.js';
 import {frontierHasValidSample} from './sample-validity.js';
 import {autoCommitQuest} from './handoff.js';
+import {
+  resolveWorkspaceBaseCommit,
+  VERIFICATION_CONTRACT_VERSION,
+} from './verification.js';
+import {assertQuestReadyToSeal} from './quest-lint.js';
 import {writeReportForQuest} from './report.js';
 import {evaluate} from './probe.js';
 import {
@@ -124,6 +127,7 @@ import {
   probeSpecFromIdentity,
   stableProbeKey,
 } from './probe-spec.js';
+import {typedNextAction} from './next-action.js';
 
 function defaultFileExists(p) {
   return Boolean(p) && fs.existsSync(p);
@@ -134,16 +138,27 @@ function defaultChangeRefResolves(root, quest) {
 }
 
 function sealGoal(quest) {
-  return {
+  const sealed = {
     doneWhen: quest.doneWhen,
     frontierMetrics: quest.frontiers.map((f) => f.metric),
   };
+  if (quest.authoringContractVersion !== undefined) {
+    Object.assign(sealed, {
+      authoringContractVersion: quest.authoringContractVersion,
+      statement: quest.statement,
+      class: quest.class,
+      constraints: quest.constraints || [],
+      frontierIds: quest.frontiers.map((frontier) => frontier.id),
+    });
+  }
+  return sealed;
 }
 
 function ensureDeclared(root, quest) {
   const log = readLog(root, quest.id);
   const declared = log.find((e) => e.type === EVENT_QUEST_DECLARED);
   if (declared) return declared;
+  assertQuestReadyToSeal(quest);
   return appendEvent(root, quest.id, {
     type: EVENT_QUEST_DECLARED,
     sealed: sealGoal(quest),
@@ -286,6 +301,7 @@ function applyAttempt(root, quest, ctx, pick, before) {
     .map((e) => e.evidence)
     .filter(Boolean);
   if (before.evidence) evidencePaths.push(before.evidence);
+  const workspaceBaseCommit = resolveWorkspaceBaseCommit(root);
   const result = ctx.executor.run({
     quest,
     frontierDef: pick.def,
@@ -296,8 +312,10 @@ function applyAttempt(root, quest, ctx, pick, before) {
     metricHistory,
     evidencePaths,
   });
-  const outcome = finalizeAttempt(root, quest, ctx, pick, before, result);
-  maybeCommitAttempt(root, quest, ctx, pick, outcome);
+  finalizeAttempt(root, quest, ctx, pick, before, {
+    ...result,
+    workspaceBaseCommit,
+  });
   return {terminal: null};
 }
 
@@ -402,6 +420,8 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     quest.id,
     event.changeRef,
   );
+  event.verificationContractVersion = VERIFICATION_CONTRACT_VERSION;
+  event.workspaceBaseCommit = result.workspaceBaseCommit || null;
   if (!event.invalidSample &&
     !changeArtifactIdentityIsSealed(event.changeRefIdentity)) {
     honestyViolations.push(
@@ -437,7 +457,8 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
       frontier: pick.def.id,
       violationId: integrityViolationId({
         quest,
-        generation: declared?.ts || quest.links?.sealedAtCommit,
+        generation: declared?.ts || quest.links?.draftedAtCommit ||
+          quest.links?.sealedAtCommit,
         frontier: pick.def.id,
         scope: INTEGRITY_SCOPE_ATTEMPT,
         violations: honestyViolations,
@@ -514,7 +535,8 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
       frontier: pick.def.id,
       violationId: integrityViolationId({
         quest,
-        generation: declared?.ts || quest.links?.sealedAtCommit,
+        generation: declared?.ts || quest.links?.draftedAtCommit ||
+          quest.links?.sealedAtCommit,
         frontier: pick.def.id,
         scope: INTEGRITY_SCOPE_REGRESSION,
         violations: regressionViolations,
@@ -725,40 +747,7 @@ export function makeRunContext(options = {}) {
     negativeResultMeans: options.negativeResultMeans || null,
     modelRef: options.modelRef || null,
     modelNotApplicable: options.modelNotApplicable || null,
-    autoCommit: options.autoCommit !== false,
-    commitEvery: Number.isInteger(options.commitEvery) && options.commitEvery > 0 ?
-      options.commitEvery : 1,
   };
-}
-
-// Attempt the scope-clean auto-commit after a measured attempt. While the Quest is
-// still running this is a CHECKPOINT commit, gated only on source-change verification
-// (not on a terminal status), so a long non-terminal Quest persists each verified,
-// scope-clean attempt instead of accumulating an unrecoverable dirty tree; the durable
-// terminal commit at SOLVED/EXHAUSTED still happens at the loop's terminal sites. It
-// never pushes. Also a no-op outside a git work tree, on non-measuring samples, and
-// when the change artifact does not resolve, so throwaway tmpdir tests never commit.
-function maybeCommitAttempt(root, quest, ctx, pick, outcome) {
-  if (!ctx.autoCommit) return;
-  const event = outcome?.event;
-  if (!event || event.invalidSample || !event.changeRef) return;
-  if (outcome.violations?.length > 0) return;
-  const resolves = ctx.honestyCtx.inspectChangeRef ?
-    Boolean(ctx.honestyCtx.inspectChangeRef(event.changeRef)?.valid) : true;
-  if (!resolves) return;
-  const log = readLog(root, quest.id);
-  const measuredCount = log.filter((e) =>
-    e.type === EVENT_ATTEMPT &&
-    e.frontier === pick.def.id &&
-    e.invalidSample !== true).length;
-  if (measuredCount % ctx.commitEvery !== 0) return;
-  // If the Quest has already terminalized this cycle, let the durable terminal commit
-  // own it; otherwise persist this attempt as a squashable checkpoint.
-  const terminalized = log.some((e) => e.type === EVENT_QUEST &&
-    (e.status === STATUS_SOLVED || e.status === STATUS_EXHAUSTED));
-  if (terminalized) return;
-  writeReportForQuest(root, quest);
-  return autoCommitQuest(root, quest.id, {checkpoint: true});
 }
 
 // Seal the goalposts on first declaration and reject any later goalpost drift. Shared
@@ -773,7 +762,8 @@ export function ensureSealedGoal(root, quest) {
       scope: INTEGRITY_SCOPE_GOALPOSTS,
       violationId: integrityViolationId({
         quest,
-        generation: declared?.ts || quest.links?.sealedAtCommit,
+        generation: declared?.ts || quest.links?.draftedAtCommit ||
+          quest.links?.sealedAtCommit,
         scope: INTEGRITY_SCOPE_GOALPOSTS,
         violations: goalpostViolations,
       }),
@@ -1015,8 +1005,8 @@ export function runLoop(root, quest, options = {}) {
 // gate-decision and violation records (a hard block appends those every cycle), AND the
 // per-frontier theory bookkeeping (option-declared / selected / theory-result) plus
 // frontier reopens: those are churn a stuck Solver emits on every cycle, so counting them
-// let pure whack-a-mole — "select theory N+1, re-run, repeat" — masquerade as progress and
-// defeat the supervisor's stall guard. Knowledge (findings/reflections) and real state
+// let pure whack-a-mole — "select theory N+1, re-run, repeat" — masquerade as progress at
+// a MAX_CYCLES boundary. Knowledge (findings/reflections) and real state
 // changes (measured attempts, parks, solves) still count, so a productive session is never
 // starved; a theory-churn-only session now correctly stalls.
 export function durableProgressCount(log) {
@@ -1041,36 +1031,34 @@ export function durableProgressCount(log) {
   return count;
 }
 
-// Keep-alive supervisor. Wraps runLoop and re-invokes it across NON-terminal stops so the
-// autonomous quest keeps contributing to its append-only memory instead of dying when one
-// driver session ends. It is decision-aware, NOT a blind retry loop:
-//   - SOLVED / EXHAUSTED            honest terminal -> stop and pass the result through.
-//   - park-resumable (measurement)  a dead/disconnected harness -> stop immediately; re-running
-//                                   cannot help until a human repairs the harness.
-//   - MAX_CYCLES / THEORY_REQUIRED / other BLOCKED (reroute/explore) -> a recoverable stop the
-//                                   executor can act on -> restart runLoop.
-// Two bounds prevent a hot spin: a restart cap (SUPERVISOR_MAX_RESTARTS) and a stall guard —
-// if no new durable-progress event is appended across SUPERVISOR_STALL_WINDOW consecutive
-// restarts, it steps back with OUTCOME_SUPERVISOR_STALLED. The two-terminal contract is
-// preserved: every supervisor-specific outcome is NON-terminal and never closes a quest.
+function resultNextAction(result, fallback, options = {}) {
+  return typedNextAction(result.nextCommand || fallback, options);
+}
+
+// Keep-alive owns exactly one automatic continuation: a MAX_CYCLES boundary that
+// appended durable progress. Theory, blocked, measurement, and other judgment stops
+// return after one runner call with their command/action intact for the external driver.
+// A MAX_CYCLES result without progress also returns immediately, preventing blind
+// restarts from turning one unchanged stop into repeated gate noise.
 export function runSupervised(root, quest, options = {}) {
   const maxRestarts = Number.isInteger(options.maxRestarts) ?
     options.maxRestarts : SUPERVISOR_MAX_RESTARTS;
-  const stallWindow = Number.isInteger(options.stallWindow) ?
-    options.stallWindow : SUPERVISOR_STALL_WINDOW;
   const onRestart = typeof options.onRestart === 'function' ? options.onRestart : null;
   // The runner is injectable so the supervisor's decision policy can be unit-tested in
   // isolation; production always uses the real runLoop.
   const runner = typeof options.runner === 'function' ? options.runner : runLoop;
 
   let restarts = 0;
-  let staleRestarts = 0;
   let lastProgress = durableProgressCount(readLog(root, quest.id));
   let result = runner(root, quest, options);
 
   for (;;) {
     if (result.outcome === STATUS_SOLVED || result.outcome === STATUS_EXHAUSTED) {
-      return {...result, supervisor: {restarts, stop: result.outcome}};
+      return {
+        ...result,
+        nextAction: resultNextAction(result, result.outcome, {terminal: true}),
+        supervisor: {restarts, stop: result.outcome},
+      };
     }
     // A measurement gate means the apparatus, not the system, is broken. Re-running the same
     // loop cannot produce a measurement, so step back and surface the harness repair.
@@ -1078,26 +1066,46 @@ export function runSupervised(root, quest, options = {}) {
       return {
         ...result,
         outcome: OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT,
+        nextAction: resultNextAction(
+          result,
+          'Repair the measurement harness, then resume the Quest.',
+        ),
         supervisor: {restarts, stop: 'measurement', innerOutcome: result.outcome},
+      };
+    }
+    if (result.outcome !== OUTCOME_MAX_CYCLES) {
+      return {
+        ...result,
+        nextAction: resultNextAction(
+          result,
+          'Execute the reported judgment action, then resume the Quest.',
+        ),
+        supervisor: {restarts, stop: 'judgment', innerOutcome: result.outcome},
+      };
+    }
+    const progress = durableProgressCount(readLog(root, quest.id));
+    if (progress <= lastProgress) {
+      return {
+        ...result,
+        nextAction: resultNextAction(
+          result,
+          'Add durable evidence or revise the approach before resuming the Quest.',
+        ),
+        supervisor: {restarts, stop: 'no-progress', innerOutcome: result.outcome},
       };
     }
     if (restarts >= maxRestarts) {
       return {
         ...result,
         outcome: OUTCOME_SUPERVISOR_BUDGET,
+        nextAction: resultNextAction(
+          result,
+          'Review the supervisor budget stop and choose the next evidence-bearing move.',
+        ),
         supervisor: {restarts, stop: 'budget', innerOutcome: result.outcome},
       };
     }
-    const progress = durableProgressCount(readLog(root, quest.id));
-    staleRestarts = progress > lastProgress ? 0 : staleRestarts + 1;
     lastProgress = progress;
-    if (staleRestarts >= stallWindow) {
-      return {
-        ...result,
-        outcome: OUTCOME_SUPERVISOR_STALLED,
-        supervisor: {restarts, stop: 'stalled', innerOutcome: result.outcome},
-      };
-    }
     restarts += 1;
     if (onRestart) onRestart({restarts, innerOutcome: result.outcome, progress});
     result = runner(root, quest, options);

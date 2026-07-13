@@ -21,7 +21,6 @@ import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {SOLVE_DATA_DIR, CONFIG_FILE} from './constants.js';
 import {
   loadQuest,
   readLog,
@@ -37,6 +36,7 @@ import {
   expectedChangeDir,
   inspectChangeArtifact,
 } from './change-artifact.js';
+import {resolveCoauthorTrailer} from './operator-config.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const GIT_COMMAND = 'git';
@@ -132,12 +132,8 @@ function gitDirtyFiles(root) {
 }
 
 export function buildHandoff(root, quest, options = {}) {
-  // The commit decision is gated ONLY by the minimal commit gate (quest finished
-  // without errors + source-change verification). The full audit is still computed
-  // for informational reporting, but it no longer blocks the commit. In checkpoint
-  // mode the terminal requirement is dropped (source-change verification still
-  // applies) so a long non-terminal Quest persists each verified attempt instead of
-  // accumulating an unrecoverable dirty tree.
+  // Terminal handoff requires the full audit. Checkpoint mode deliberately uses
+  // the narrower exact-attempt gate and drops terminal/aggregate requirements.
   const checkpoint = options.checkpoint === true;
   const audit = auditQuest(root, quest);
   const baseGate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
@@ -182,34 +178,14 @@ export function buildHandoff(root, quest, options = {}) {
   };
 }
 
-// The agent that drives this Solver is the commit's co-author. Default to the
-// Claude trailer (the assistant that runs the autonomous loop here) rather than a
-// hard-coded vendor; allow `solve/config.json` { "coauthorTrailer": "..." } to
-// override it so the attribution follows whoever actually runs the loop and never
-// silently drifts from the active agent.
-const DEFAULT_COAUTHOR_TRAILER =
-  'Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>';
-
-function resolveCoauthorTrailer(root) {
-  try {
-    const file = path.join(root, SOLVE_DATA_DIR, CONFIG_FILE);
-    const config = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const trailer = config.coauthorTrailer;
-    if (typeof trailer === 'string' && trailer.trim()) return trailer.trim();
-  } catch {
-    // No config / unreadable / no override key — fall back to the default.
-  }
-  return DEFAULT_COAUTHOR_TRAILER;
-}
-
 function commitMessage(handoff) {
   // Checkpoints are squashable, mid-quest saves of one verified attempt; the
   // subject marks them so they are distinguishable from the durable terminal commit.
   const subject = handoff.checkpoint ?
     `checkpoint(quest): ${handoff.questId}: ${handoff.summary}` :
     `${handoff.questId}: ${handoff.summary}`;
-  const trailer = handoff.coauthorTrailer || DEFAULT_COAUTHOR_TRAILER;
-  return `${subject}\n\n${trailer}`;
+  return handoff.coauthorTrailer ?
+    `${subject}\n\n${handoff.coauthorTrailer}` : subject;
 }
 
 function gitCommands(handoff) {
@@ -229,9 +205,11 @@ export function renderHandoff(handoff) {
   const lines = ['# Quest handoff', '', `- quest: ${handoff.questId}`,
     `- audit: ${handoff.audit.status}`];
   if (!handoff.ok) {
+    const requirement = handoff.checkpoint ?
+      'the latest source attempt must be unchanged and exactly approved' :
+      'the terminal Quest must pass its full audit and aggregate verification';
     lines.push('',
-      'REFUSED: commit gate not met — the quest must finish without errors ' +
-      'after verification:');
+      `REFUSED: commit preconditions not met — ${requirement}:`);
     for (const item of (handoff.gate?.problems || [])) {
       lines.push(`- ${item.message}${item.frontier ? ` [${item.frontier}]` : ''}`);
     }
@@ -355,4 +333,24 @@ export function runHandoffCommand(root, args) {
     return `${rendered}\n(not committed: commit gate not met)\n`;
   }
   return `${rendered}\n(dry run — pass --commit to execute)\n`;
+}
+
+// Explicit mid-Quest persistence. Findings never trigger commits; after a
+// verifier records the exact attempt approval, the operator chooses this action.
+export function runCheckpointCommand(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('checkpoint: --id <questId> is required');
+  const handoff = buildHandoff(root, loadQuest(root, id), {checkpoint: true});
+  const rendered = renderHandoff(handoff);
+  if (args['dry-run']) {
+    return `${rendered}\n(dry run — omit --dry-run to execute checkpoint)\n`;
+  }
+  if (!handoff.ok) {
+    return `${rendered}\n(not checkpointed: checkpoint preconditions not met)\n`;
+  }
+  if (handoff.inScope.length === 0) {
+    return `${rendered}\n(not checkpointed: nothing in scope)\n`;
+  }
+  executeCommit(root, handoff);
+  return `${rendered}\n(checkpointed ${handoff.inScope.length} path(s))\n`;
 }

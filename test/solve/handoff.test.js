@@ -89,7 +89,7 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
     runStep(root, quest);
     fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
     runStep(root, quest, {
-      changeRef: makeDiff(root, quest.id, 'fix', 'src/demo.js'),
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
       summary: 'scoped fix',
     });
     // A source-file change requires a recorded subagent verification finding.
@@ -105,13 +105,13 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
       'solve/log/demo.ndjson',
       'solve/report/demo.md',
       'solve/changes/demo/fix.diff',
-      'src/demo.js',
+      'docs/demo.md',
       'src/unrelated-other-quest.js',
       'solve/quests/other-quest.json',
     ];
     const handoff = buildHandoff(root, quest, {dirtyFiles});
     t.ok(handoff.ok, 'audit passed so handoff is allowed');
-    t.ok(handoff.inScope.includes('src/demo.js'), 'includes diff-referenced source');
+    t.ok(handoff.inScope.includes('docs/demo.md'), 'includes diff-referenced file');
     t.ok(handoff.inScope.includes('solve/changes/demo/fix.diff'), 'includes change artifact');
     t.ok(handoff.inScope.includes('solve/quests/demo.json'), 'includes quest file');
     t.notOk(handoff.inScope.includes('src/unrelated-other-quest.js'),
@@ -151,7 +151,7 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
     t.notOk(handoff.gate.ready, 'the commit gate is not ready');
     const md = renderHandoff(handoff);
     t.match(md, /REFUSED/, 'render makes the refusal explicit');
-    t.match(md, /finish without errors/, 'render names the commit gate');
+    t.match(md, /full audit/, 'render names the terminal precondition');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -218,9 +218,11 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
         summary: 'scoped doc fix',
         push: false,
       });
-      t.ok(r.commit.committed, 'the step auto-committed');
-      t.equal(r.commit.pushed, false, 'no push under push:false');
-      t.notOk(r.commit.pushError, 'no push attempt means no push error');
+      t.notOk(r.commit.committed, 'attempt recording does not commit');
+      t.equal(r.commit.skipped, 'explicit-checkpoint-required');
+      const committed = autoCommitQuest(root, quest.id);
+      t.ok(committed.committed, 'explicit terminal handoff commits');
+      t.equal(committed.pushed, false, 'terminal handoff never pushes');
       const files = committedFiles(root);
       t.ok(files.includes('solve/quests/demo.json'), 'commits the quest file');
       t.ok(files.some((f) => f.startsWith('solve/changes/demo/')),
@@ -229,10 +231,10 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
       const status = execFileSync('git', ['status', '--porcelain', '-uall'],
         {cwd: root, encoding: 'utf8'});
       t.match(status, /src\/unrelated\.js/, 'unrelated file is left uncommitted');
-      // The commit message carries the Co-Authored-By trailer.
+      // Attribution is explicit; an unconfigured workstation invents no agent identity.
       const msg = execFileSync('git', ['log', '-1', '--format=%B'],
         {cwd: root, encoding: 'utf8'});
-      t.match(msg, /Co-Authored-By: Claude/, 'includes the co-author trailer');
+      t.notMatch(msg, /Co-Authored-By:/u, 'omits an unconfigured co-author trailer');
       fs.rmSync(root, {recursive: true, force: true});
       t.end();
     });
@@ -249,9 +251,10 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
       changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
       summary: 'scoped doc fix',
     });
-    t.ok(r.commit.committed, 'the finished quest auto-committed');
-    t.equal(r.commit.pushed, false, 'never pushes');
-    t.notOk(r.commit.pushError, 'no push attempted means no push error');
+    t.notOk(r.commit.committed, 'attempt recording does not commit');
+    const committed = autoCommitQuest(root, quest.id);
+    t.ok(committed.committed, 'explicit terminal handoff commits');
+    t.equal(committed.pushed, false, 'never pushes');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -277,7 +280,8 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
         changeRef: makeDiff(root, quest.id, 'delete', 'docs/deleted.md'),
         summary: 'delete tracked proof',
       });
-      t.equal(result.commit.committed, true);
+      t.equal(result.commit.committed, false);
+      t.equal(autoCommitQuest(root, quest.id).committed, true);
       t.equal(fs.existsSync(path.join(root, 'docs', 'deleted.md')), false);
       t.notOk(committedFiles(root).includes('src/unrelated.js'));
       const status = execFileSync('git', ['status', '--porcelain', '-uall'], {
@@ -303,12 +307,13 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
       summary: 'unverified source change',
     });
     t.notOk(r.commit.committed, 'no commit when the source change is unverified');
-    t.equal(r.commit.skipped, 'commit-gate', 'reports the commit gate');
+    t.equal(r.commit.skipped, 'explicit-checkpoint-required',
+      'points at the explicit checkpoint workflow');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
 
-  t.test('a finished + verified source change commits', (t) => {
+  t.test('an unbound legacy-style finding cannot approve a contracted source attempt', (t) => {
     const root = tmp();
     initGit(root);
     const {quest, oracle} = makeQuest(root);
@@ -327,8 +332,8 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
       evidence: 'subagent:verify-1',
     });
     const after = autoCommitQuest(root, quest.id);
-    t.ok(after.committed, 'commits once finished without errors and verified');
-    t.equal(after.pushed, false, 'commit, nothing else');
+    t.notOk(after.committed, 'content-free prose cannot unlock terminal handoff');
+    t.equal(after.skipped, 'commit-gate');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

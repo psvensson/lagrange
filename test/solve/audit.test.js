@@ -6,7 +6,7 @@ import os from 'node:os';
 import {auditQuest} from '../../scripts/solve/audit.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {writeReport} from '../../scripts/solve/report.js';
-import {appendEvent, saveQuest} from '../../scripts/solve/store.js';
+import {appendEvent, readLog, saveQuest} from '../../scripts/solve/store.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'solve-audit-'));
@@ -41,6 +41,21 @@ function makeDiff(root, questId, name, changedPath = 'src/demo.js') {
     '+after',
   ].join('\n'));
   return `diff:${file}`;
+}
+
+function approveLatestAttempt(root, quest, frontier = `${quest.id}-main`) {
+  const attempt = [...readLog(root, quest.id)].reverse()
+    .find((event) => event.type === 'attempt');
+  const fingerprint = `sha256:${attempt.changeRefIdentity.sha256}`;
+  appendEvent(root, quest.id, {
+    type: 'finding',
+    frontier,
+    kind: 'verifier-approval',
+    claim: 'independent verification passed',
+    evidence: 'subagent:verify-1',
+    verification: {schemaVersion: 1, scope: 'attempt', fingerprint},
+  });
+  return fingerprint;
 }
 
 tap.test('Quest audit', async (t) => {
@@ -224,7 +239,7 @@ tap.test('Quest audit', async (t) => {
     let audit = auditQuest(root, quest);
     t.match(
       audit.problems.map((item) => item.message).join('\n'),
-      /source code changes require a later subagent verification finding/u,
+      /requires a later exact approval for sha256:/u,
     );
 
     appendEvent(root, quest.id, {
@@ -237,15 +252,10 @@ tap.test('Quest audit', async (t) => {
     audit = auditQuest(root, quest);
     t.match(
       audit.problems.map((item) => item.message).join('\n'),
-      /source code changes require a later subagent verification finding/u,
+      /requires a later exact approval for sha256:/u,
     );
 
-    appendEvent(root, quest.id, {
-      type: 'finding',
-      frontier: 'workflow-source-verifier-main',
-      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
-      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
-    });
+    approveLatestAttempt(root, quest);
     writeReport(root, quest.id);
 
     audit = auditQuest(root, quest);
@@ -276,16 +286,10 @@ tap.test('Quest audit', async (t) => {
     let audit = auditQuest(root, quest);
     t.match(
       audit.problems.map((item) => item.message).join('\n'),
-      /source code changes require a later subagent verification finding/u,
+      /requires a later exact approval for sha256:/u,
     );
 
-    appendEvent(root, quest.id, {
-      type: 'finding',
-      frontier: 'workflow-kind-verifier-main',
-      kind: 'verifier-approval',
-      claim: 'green across the board',
-      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
-    });
+    approveLatestAttempt(root, quest);
     writeReport(root, quest.id);
     audit = auditQuest(root, quest);
     t.equal(audit.status, 'pass');
@@ -308,12 +312,7 @@ tap.test('Quest audit', async (t) => {
       ),
       summary: 'model contract change requiring verifier and model evidence',
     });
-    appendEvent(root, quest.id, {
-      type: 'finding',
-      frontier: 'model-contract-demo-main',
-      claim: 'Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine.',
-      evidence: 'subagent:019e870d-3b19-7fa3-ae37-a85868b84226',
-    });
+    approveLatestAttempt(root, quest);
 
     let audit = auditQuest(root, quest);
     t.match(

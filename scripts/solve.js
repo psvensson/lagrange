@@ -25,6 +25,7 @@ import {runLoop, runSupervised} from './solve/loop.js';
 import {writeReport} from './solve/report.js';
 import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {runNextCommand} from './solve/next.js';
+import {buildDoctorReport, renderDoctor} from './solve/doctor.js';
 import {
   QUEST_CLASS_PRODUCT,
   QUEST_CLASSES,
@@ -44,7 +45,7 @@ import {runParkCommand} from './solve/park.js';
 import {runPortfolioCommand, buildPortfolio, loadAllQuests} from './solve/portfolio.js';
 import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runOverviewCommand, writeOverview} from './solve/overview.js';
-import {runHandoffCommand} from './solve/handoff.js';
+import {runCheckpointCommand, runHandoffCommand} from './solve/handoff.js';
 import {evaluate} from './solve/probe.js';
 import {runInvariantsCommand, triggerOnTouchedOwner} from './solve/invariant-liveness.js';
 import {scoreInvariants, renderInvariantBoard} from './solve/invariant-score.js';
@@ -53,6 +54,12 @@ import {
   CONTINUATION_BLOCKED_SCOPE,
   continuationOverridable,
 } from './solve/continuation.js';
+import {
+  QUEST_AUTHORING_CONTRACT_VERSION,
+  lintQuestCorpus,
+  renderQuestLint,
+} from './solve/quest-lint.js';
+import {buildVerificationFinding} from './solve/verification.js';
 
 const INHERITED_RULESOUT_ABSENT_CLAIM = '(no claim)';
 const INHERITED_RULESOUT_FINDING_KIND = 'inherited-rulesout';
@@ -102,17 +109,16 @@ function parseArgs(argv) {
 function questTemplate(id, statement, questClass) {
   return {
     id,
+    authoringContractVersion: QUEST_AUTHORING_CONTRACT_VERSION,
     statement: statement || 'Describe the terminal success condition in one line.',
     priority: 1,
     // class: "product" (default) goals must be MEASURED against a real artifact;
     // "process" goals are scaffolding/decision records and may close on an oracle.
     // This drives report closure-strength labeling and the audit closure-mismatch warning.
     class: questClass || QUEST_CLASS_PRODUCT,
-    // links: optional, declarative-only cross-references that situate this Quest in
-    // the planning graph (roadmap row, spec/task, the closure-ledger records it
-    // closes, a parent Quest). Readers MUST treat the whole block as optional
-    // (`quest.links ?? {}`); nothing here is enforced. `solve.js trace` and the
-    // FRONTIER board read these to join the otherwise-disconnected planning layers.
+    // links situate the Quest in the planning graph. Readers keep the block
+    // legacy-optional, while the versioned authoring contract requires a product
+    // Quest to carry at least one recognized link before first declaration.
     links: {
       roadmapRow: null,
       specRef: null,
@@ -122,10 +128,9 @@ function questTemplate(id, statement, questClass) {
       // and rationale (e.g. "solve/epics/<id>.md"). Narrative belongs there, not in
       // the Quest; this is just the pointer.
       planDoc: null,
-      // sealedAtCommit: the HEAD sha when the quest was drafted (stamped by `new`,
-      // null outside a git work tree). The seal-freshness advisory diffs src/
-      // against it to demand a reproduce-on-HEAD check before rung work.
-      sealedAtCommit: null,
+      // draftedAtCommit is only a freshness reference. The declaration event,
+      // written by the first execution command after lint passes, is the seal.
+      draftedAtCommit: null,
     },
     // done_when: the binary, artifact-bound success predicate. Sealed once declared.
     doneWhen: {
@@ -204,25 +209,56 @@ function cmdNew(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('new: --id <questId> is required');
   const file = questFilePath(root, id);
+  // Quest identity is append-only even if its declarative JSON was deleted.
+  // Inspect the log independently so deleting the draft cannot make an ID reusable.
+  const existingLog = readLog(root, id);
+  if (existingLog.length > 0 && !fs.existsSync(file)) {
+    throw new Error(
+      'new: Quest ID has append-only history but no Quest file; restore it or author a successor',
+    );
+  }
   if (fs.existsSync(file) && !args.force) {
     throw new Error(`new: ${file} already exists (use --force to overwrite)`);
   }
+  if (fs.existsSync(file) && args.force && existingLog.length > 0) {
+    throw new Error(
+      'new: --force cannot overwrite a Quest with append-only history; author a successor',
+    );
+  }
   const quest = questTemplate(id, typeof args.statement === 'string' ?
     args.statement : null, resolveQuestClass(args));
-  quest.links.sealedAtCommit = resolveHeadCommit(root);
-  const parentId = typeof args['inherit-rulesout-from'] === 'string' ?
+  quest.links.draftedAtCommit = resolveHeadCommit(root);
+  quest.links.roadmapRow = typeof args['roadmap-row'] === 'string' ?
+    args['roadmap-row'] : null;
+  quest.links.specRef = typeof args['spec-ref'] === 'string' ?
+    args['spec-ref'] : null;
+  quest.links.planDoc = typeof args['plan-doc'] === 'string' ?
+    args['plan-doc'] : null;
+  quest.links.closesCL = Array.isArray(args['closes-cl']) ?
+    args['closes-cl'] : (typeof args['closes-cl'] === 'string' ?
+      [args['closes-cl']] : []);
+  const inheritedParentId = typeof args['inherit-rulesout-from'] === 'string' ?
     args['inherit-rulesout-from'] : null;
+  const linkedParentId = typeof args['parent-quest'] === 'string' ?
+    args['parent-quest'] : null;
+  if (inheritedParentId && linkedParentId && inheritedParentId !== linkedParentId) {
+    throw new Error(
+      'new: --parent-quest and --inherit-rulesout-from must name the same Quest',
+    );
+  }
+  const parentId = inheritedParentId || linkedParentId;
   if (parentId) {
     loadQuest(root, parentId); // Fail before writing anything if the parent is unknown.
     quest.links.parentQuest = parentId;
   }
   const written = saveQuest(root, quest);
-  const inherited = parentId ? inheritRulesOutFindings(root, quest, parentId) : 0;
+  const inherited = inheritedParentId ?
+    inheritRulesOutFindings(root, quest, inheritedParentId) : 0;
   const inheritedLine = inherited ?
-    `inherited ${inherited} rulesOut finding(s) from ${parentId}\n` : '';
+    `inherited ${inherited} rulesOut finding(s) from ${inheritedParentId}\n` : '';
   process.stdout.write(
     `created ${written}\n${inheritedLine}` +
-    `Edit it, then: solve run --id ${id} --executor agent --yes --keep-alive\n`);
+    `Edit it, then: node scripts/solve.js next --id ${id}\n`);
   emitRetreadWarnings(root, quest);
   refreshFrontierBoard(root);
 }
@@ -243,13 +279,16 @@ function emitRetreadWarnings(root, quest) {
 }
 
 function buildRunOptions(root, id, args) {
+  const unsupported = ['commit-every', 'stall-window', 'no-commit']
+    .filter((name) => args[name] !== undefined);
+  if (unsupported.length > 0) {
+    throw new Error(
+      `run: unsupported option(s): ${unsupported.map((name) => `--${name}`).join(', ')}`,
+    );
+  }
   const executor = buildExecutor(root, id, args);
   const options = {executor};
   if (args.max !== undefined) options.maxCycles = Number(args.max);
-  if (args['no-commit']) options.autoCommit = false;
-  if (args['commit-every'] !== undefined) {
-    options.commitEvery = Number(args['commit-every']);
-  }
   return options;
 }
 
@@ -261,6 +300,8 @@ function writeRunOutcome(root, id, result) {
   const disposition = result.disposition ?
     `disposition: ${result.disposition}\n` : '';
   const next = result.nextCommand ? `next: ${result.nextCommand}\n` : '';
+  const nextAction = result.nextAction ?
+    `next action [${result.nextAction.type}]: ${result.nextAction.value || '(none)'}\n` : '';
   const supervisor = result.supervisor ?
     `supervisor: ${result.supervisor.stop} ` +
     `(restarts: ${result.supervisor.restarts}` +
@@ -272,6 +313,7 @@ function writeRunOutcome(root, id, result) {
     disposition +
     problems +
     next +
+    nextAction +
     commitLine(result.commit) +
     `report: ${file}\n`);
   refreshFrontierBoard(root);
@@ -285,9 +327,6 @@ function cmdRun(root, args) {
   if (args['keep-alive']) {
     if (args['max-restarts'] !== undefined) {
       options.maxRestarts = Number(args['max-restarts']);
-    }
-    if (args['stall-window'] !== undefined) {
-      options.stallWindow = Number(args['stall-window']);
     }
     options.onRestart = ({restarts, innerOutcome}) => process.stderr.write(
       `supervisor: restart ${restarts} after ${innerOutcome}\n`);
@@ -409,6 +448,15 @@ function cmdFinding(root, args) {
           null,
       } :
       null;
+  const verification = buildVerificationFinding({
+    kind: typeof args.kind === 'string' ? args.kind : null,
+    evidence: typeof args.evidence === 'string' ? args.evidence : null,
+    verificationScope: typeof args['verification-scope'] === 'string' ?
+      args['verification-scope'] : null,
+    verificationFingerprint:
+      typeof args['verification-fingerprint'] === 'string' ?
+        args['verification-fingerprint'] : null,
+  });
   const stamped = appendFinding(root, id, {
     frontier: args.frontier,
     claim: args.claim,
@@ -417,8 +465,24 @@ function cmdFinding(root, args) {
     rulesOut: typeof args.rulesOut === 'string' ? args.rulesOut : null,
     regressionClassification,
     scopePressureClassification,
+    verification,
   });
   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
+}
+
+function cmdLint(root, args) {
+  const id = args.id || args._[0];
+  if (!id && args.all !== true) {
+    throw new Error('lint: --id <questId> or --all is required');
+  }
+  const result = lintQuestCorpus(root, {id, all: args.all === true});
+  process.stdout.write(args.json === true ?
+    `${JSON.stringify(result, null, 2)}\n` : renderQuestLint(result));
+  if (result.status !== 'pass') process.exitCode = 1;
+}
+
+function cmdCheckpoint(root, args) {
+  process.stdout.write(runCheckpointCommand(root, args));
 }
 
 const PROMOTE_DOMAINS = Object.freeze(['architecture', 'testing', 'governance', 'style']);
@@ -646,7 +710,13 @@ function cmdStep(root, args) {
 function cmdNext(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error(NEXT_ID_REQUIRED);
-  process.stdout.write(runNextCommand(root, id));
+  process.stdout.write(runNextCommand(root, id, {json: args.json === true}));
+}
+
+function cmdDoctor(root, args) {
+  const report = buildDoctorReport(root);
+  process.stdout.write(args.json === true ?
+    `${JSON.stringify(report, null, 2)}\n` : renderDoctor(report));
 }
 
 // Keep the generated frontier board (solve/FRONTIER.generated.md) fresh at the
@@ -936,6 +1006,7 @@ const COMMANDS = {
   'overview': cmdOverview,
   'trace': cmdTrace,
   'handoff': cmdHandoff,
+  'checkpoint': cmdCheckpoint,
   'invariants': cmdInvariants,
   'probe': cmdProbe,
   'finding': cmdFinding,
@@ -945,6 +1016,8 @@ const COMMANDS = {
   'step': cmdStep,
   'step-pending': cmdStepPending,
   'next': cmdNext,
+  'doctor': cmdDoctor,
+  'lint': cmdLint,
   'theory': cmdTheory,
   'health': cmdHealth,
   'ingest-evidence': cmdIngestEvidence,
