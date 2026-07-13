@@ -1,0 +1,39 @@
+{
+  "id": "cure-typing-single-owner-table",
+  "authoringContractVersion": 1,
+  "statement": "Epic self-hosting-circularity-generic-treatment Option 5, fourth ladder rung (2b5875b0 lineage). The semantic 'which cure move type does a detected placement condition take, and which admission lane does that cure enter' (REPLACE cures placement skew, ADD cures under-replication, REMOVE cures surplus and failed replicas; emergency-priority vs ordinary-priority vs non-priority lanes) is today re-derived at 15 censused sites across 8 files: calculateMoves hand-rolls the whole condition-to-cure mapping from raw target-vs-current count diffs (under-representation ADD, over-representation and failed-replica REMOVE, paired count-neutral REPLACE), buildPriorityRecoveryFollowUpMove re-infers healthy-at-target-with-source REPLACE else ADD (the 2b5875b0 defect shape), and six budget/admission helpers each hand-roll the cure-by-partition-class lane conjunct from the emergency-partition classifier (budget scope selection, per-lane counting, pressure evidence, ordinary serial gate, serial-wait lane membership, plan wiring). SEALED RESULT: the cure-typing relation is declared ONCE — named rows (condition to cure move type) and (cure by partition class to admission lane) plus their classifiers live in the owner src/rebalancer/replica-placement-cure-policy.js, a sibling of operation-ledger-hold-policy.js and operation-ledger-quorum-concentration.js (which keep hold engagement and hold-state detection), with the admission-plan owner in src/control-plane consuming the same rows; every censused site consumes owner rows/predicates instead of re-deriving type or lane conjuncts (mechanism stays at the sites: node selection, pairing, counting, evidence assembly). Behavior preserved exactly (each rewritten decision is truth-table identical on its condition and partition domain); any typing GAP found during migration is recorded as a finding and fixed only in its own pinned follow-up, never silently. doneWhen: the committed census scripts/check-cure-typing-owner.js --oracle --with-gates writes solve/oracle/cure-typing-single-owner-table.json with metric = counted re-derivations outside the owner family (baseline 15), done only at metric 0 with lint + targeted suites green. NOT in scope: schema-provisioning creation ADDs (intent-derived, committed exclusions), numeric budget scalars and per-lane counts (the counting mechanism), topology-cleanup move ordering, step-coverage rows (rung-2 owner), hold engagement rows (rung-3 owner), and the 119-site partition-class ladder (rung 5). Checkpoint commit after every attempt.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "691a756503be854a74452bea1721fc3784e3d63e"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/cure-typing-single-owner-table.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "cure-typing-single-owner-table-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/cure-typing-single-owner-table.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
