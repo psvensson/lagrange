@@ -608,6 +608,29 @@ attack checklist under
 [`docs/steering/verification-templates/`](../verification-templates/INDEX.md);
 include the suggested template in the verifier prompt.
 
+When the independent verifier rejects an exact attempt, record that verdict
+instead of fabricating an approval:
+
+```sh
+node scripts/solve.js finding --id <quest> --frontier <frontier> \
+  --kind verifier-rejection \
+  --claim "Independent verification rejected this exact attempt" \
+  --evidence subagent:<id> \
+  --verification-scope attempt \
+  --verification-fingerprint sha256:<attempt-fingerprint>
+```
+
+A rejection is fail-closed and cannot be reversed by approving the rejected
+bytes later. It is resolved only when a later contracted source attempt on the
+same frontier and Git base has a different exact fingerprint, covers every
+rejected source path, and receives its own later exact approval. Recording a
+structured rejection reopens a terminal Quest and its solved frontier so the
+replacement step rendered by `next` is executable. Until replacement,
+checkpoint and terminal handoff remain blocked; `next` asks for the replacement
+attempt or its fingerprint, never for dishonest approval of the rejected one.
+Aggregate verification still covers the final source delta across the complete
+attempt path union.
+
 At terminal, recompute the aggregate fingerprint from the earliest contracted
 base through the current Git content over the sorted union of all recorded
 source paths. A later aggregate approval is mandatory. `--verification-scope

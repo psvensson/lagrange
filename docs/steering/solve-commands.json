@@ -49,8 +49,8 @@
     "usage": "node scripts/solve.js probe --probe <scenario-harness|oracle|invariantHeld> [probe-specific args...]"
   },
   "finding": {
-    "summary": "Record a durable finding into the append-only Quest log. A verifier-approval must carry evidence subagent:<id>, an attempt|aggregate|both scope, and the exact sha256 fingerprint; recording it never commits.",
-    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval] [--rulesOut \"<lever>\"] [--evidence <ref>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>]"
+    "summary": "Record durable knowledge in the append-only Quest log. Exact verifier approvals and rejections bind subagent evidence to a content fingerprint; recording either verdict never commits.",
+    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval|verifier-rejection] [--rulesOut \"<lever>\"] [--evidence <ref>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>]"
   },
   "promote-finding": {
     "summary": "Promote a recorded finding into in-repo steering as a rule (then regenerate with `npm run steering:llm:pack`).",
