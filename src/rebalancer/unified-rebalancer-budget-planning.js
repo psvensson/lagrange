@@ -1,5 +1,6 @@
 import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {orderLedgerQuorumCureMovesFirst} from './operation-ledger-hold-policy.js';
 import {
   applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods,
 } from './unified-rebalancer-priority-recovery-follow-up-decisions.js';
@@ -294,13 +295,10 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
     ) {
       return normalizedMoves;
     }
-    const isCureMove = (move) =>
-      move?.type === MoveType.REPLACE &&
-      String(move?.partitionId || this.entityId) === this.entityId;
-    return [
-      ...normalizedMoves.filter(isCureMove),
-      ...normalizedMoves.filter((move) => !isCureMove(move)),
-    ];
+    // Which moves are cure-typed is an owner row
+    // (operation-ledger-hold-policy.js); this planner owns only the
+    // entity-scoped concentration evidence check above.
+    return orderLedgerQuorumCureMovesFirst(normalizedMoves, this.entityId);
   }
 
   async getOrdinaryPriorityRecoverySerialGateSnapshot(moves = []) {

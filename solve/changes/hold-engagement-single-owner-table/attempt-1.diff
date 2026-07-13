@@ -1,0 +1,307 @@
+diff --git a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+index 288b0917910a4e30117329349e5d89b89ca7e8cf..d9e32d469c44e23c7f1f0922baf959e3c3929bd9 100644
+--- a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
++++ b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+@@ -1,16 +1,19 @@
+ import {TIME_MS} from '../constants/index.js';
+ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+ import {
+-  evaluateOperationLedgerQuorumConcentration,
+-  isConcentratedOperationLedgerPartition,
+-} from './operation-ledger-quorum-concentration.js';
++  OPERATION_LEDGER_HOLD,
++  OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
++  classifyOperationLedgerHoldMove,
++  isDisruptiveOperationLedgerSelfMove,
++  isLedgerQuorumConcentratedPartition,
++  resolveEngagedLedgerQuorumSpreadHold,
++  resolveOperationLedgerHoldEngagement,
++} from './operation-ledger-hold-policy.js';
+ 
+ const {
+-  OperationType,
+   REBALANCE_COORDINATOR_LOG_MSG,
+   SERVICE_TYPE,
+   STORAGE_ADMISSION_DECISION_TYPE,
+-  isOperationLedgerPartitionTable,
+ } = REBALANCE_COORDINATOR_SHARED;
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+@@ -20,11 +23,11 @@ const LOCAL_STR_FUNCTION = 'function';
+ // disrupts every other in-flight operation's progress writes (run-20 formation
+ // interlock; CL-017 mechanism at storm scale). The ledger self-move therefore
+ // runs EXCLUSIVELY: it admits only into an idle ledger, and while it is live no
+-// other operation admits. Deterministic reproduction:
++// other operation admits. The (hold x move class) -> engagement relation is
++// owned by operation-ledger-hold-policy.js; this file owns the MECHANISM
++// (typed rejection construction, observation scans, TOCTOU accounting).
++// Deterministic reproduction:
+ // test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js.
+-const OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES = Object.freeze(
+-  new Set([OperationType.REPLACE, OperationType.REMOVE]),
+-);
+ const OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX = 'Operation-ledger partition ';
+ const OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX =
+   ' self-move admits only into an idle operation ledger';
+@@ -56,16 +59,15 @@ function buildOperationLedgerInterlockAdmissionResult(reasonCode) {
+ 
+ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+   /**
++   * Owner-row read (operation-ledger-hold-policy.js): kept as a method so
++   * observation scans and the sync gate share one call surface.
+    * @param {string|null} normalizedMoveType
+    * @param {string|null} partitionId
+    * @return {boolean}
+    * @private
+    */
+   isDisruptiveOperationLedgerSelfMove(normalizedMoveType, partitionId) {
+-    return (
+-      OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES.has(normalizedMoveType) &&
+-      isOperationLedgerPartitionTable({partitionId})
+-    );
++    return isDisruptiveOperationLedgerSelfMove(normalizedMoveType, partitionId);
+   }
+ 
+   /**
+@@ -108,17 +110,15 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+    * (test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js)
+    * proves co-scheduling stalls while serialized dispatch completes.
+    *
+-   * Two directions, both surfaced as the standard typed budget skip so the
++   * Which moves are exempt, idle-only, or deferred comes from the owner
++   * relation (operation-ledger-hold-policy.js). This method owns the
++   * MECHANISM per outcome, surfaced as the standard typed budget skip so the
+    * planner retries next cycle:
+-   * - A disruptive ledger self-move (REPLACE/REMOVE of a ledger partition)
+-   *   admits only when no other live operation exists. ADD is exempt: ledger
+-   *   spread recovery must stay admissible (CL-013 — formation-time priority
+-   *   spread cannot be deferred without circularity).
+-   * - While a live ledger self-move exists, every other operation defers.
+-   *   Emergency quorum-restore ADDs (control_plane_publications /
+-   *   replica_operations) stay exempt: control-plane spine availability
+-   *   outranks storm avoidance, and the staleness exclusion still bounds a
+-   *   wedged self-move.
++   * - IDLE_ONLY (the disruptive ledger self-move) admits only when no other
++   *   live operation exists.
++   * - DEFER waits out a live ledger self-move, then the quorum-spread hold;
++   *   the staleness exclusion still bounds a wedged self-move.
++   * - EXEMPT (emergency quorum-restore ADDs) proceeds without observation.
+    *
+    * Inputs are actuals only: committed replica_operations rows via the
+    * established incomplete-operation observation (ARCH-0080/0084).
+@@ -129,16 +129,21 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+   async ensureOperationLedgerSelfMoveSerialized(context) {
+     const normalizedMoveType = context?.normalizedMoveType;
+     const partitionId = context?.partitionId;
+-    const isDisruptiveSelfMove = this.isDisruptiveOperationLedgerSelfMove(
++    const moveClass = classifyOperationLedgerHoldMove(
+       normalizedMoveType,
+       partitionId,
+     );
+-    const isEmergencyQuorumRestoreAdd =
+-      normalizedMoveType === OperationType.ADD &&
+-      this.isEmergencyPriorityControlPlanePartition(partitionId);
+-    if (!isDisruptiveSelfMove && isEmergencyQuorumRestoreAdd) {
++    const selfMoveEngagement = resolveOperationLedgerHoldEngagement(
++      OPERATION_LEDGER_HOLD.SELF_MOVE_SERIALIZATION,
++      moveClass,
++    );
++    if (
++      selfMoveEngagement === OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT
++    ) {
+       return;
+     }
++    const isDisruptiveSelfMove =
++      selfMoveEngagement === OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.IDLE_ONLY;
+ 
+     const incompleteOperations = await this.queryIncompleteOperations();
+     const observation = this.getIncompleteOperationObservation(
+@@ -203,13 +208,20 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+       // run-20 hold is open, but the ledger quorum may STILL be concentrated
+       // (a leadership-only relocation leaves the follower majority on the hot
+       // node). Dependent admission keeps deferring until placement actuals
+-      // show the quorum spread — ledger self-moves (the cure, handled in the
+-      // disruptive branch above) and emergency quorum-restore ADDs stay
+-      // exempt.
+-      this.ensureOperationLedgerQuorumSpreadFirst(
+-        normalizedMoveType,
+-        partitionId,
+-      );
++      // show the quorum spread; the exempt rows (the cure self-move, handled
++      // in the disruptive branch above, and emergency quorum-restore ADDs)
++      // come from the owner relation.
++      if (
++        resolveOperationLedgerHoldEngagement(
++          OPERATION_LEDGER_HOLD.QUORUM_SPREAD,
++          moveClass,
++        ) !== OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT
++      ) {
++        this.ensureOperationLedgerQuorumSpreadFirst(
++          normalizedMoveType,
++          partitionId,
++        );
++      }
+       return;
+     }
+     throw this.createOperationLedgerInterlockError(
+@@ -313,24 +325,21 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+    * @private
+    */
+   ensureOperationLedgerQuorumSpreadFirst(normalizedMoveType, partitionId) {
+-    const evaluation = evaluateOperationLedgerQuorumConcentration(
++    const engagedHold = resolveEngagedLedgerQuorumSpreadHold(
+       this.systemTableCache,
+     );
+-    if (evaluation.holdEngaged !== true) {
++    if (engagedHold === null) {
+       return;
+     }
+-    const concentratedPartition = evaluation.concentratedPartitions.find(
+-      (partition) => partition.spreadActionable,
+-    );
+     this.maybeWarnOperationLedgerQuorumSpreadHold(
+-      evaluation,
++      engagedHold.evaluation,
+       normalizedMoveType,
+       partitionId,
+     );
+     throw this.createOperationLedgerInterlockError(
+       normalizedMoveType,
+       OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+-        String(concentratedPartition.partitionId) +
++        String(engagedHold.firstSpreadActionablePartition.partitionId) +
+         OPERATION_LEDGER_QUORUM_CONCENTRATED_MESSAGE_SUFFIX,
+       OPERATION_LEDGER_QUORUM_CONCENTRATED_REASON_CODE,
+       null,
+@@ -349,8 +358,8 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+    * @return {boolean}
+    */
+   isOperationLedgerQuorumConcentratedForPartition(partitionId) {
+-    return isConcentratedOperationLedgerPartition(
+-      evaluateOperationLedgerQuorumConcentration(this.systemTableCache),
++    return isLedgerQuorumConcentratedPartition(
++      this.systemTableCache,
+       partitionId,
+     );
+   }
+@@ -438,12 +447,14 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     const normalizedMoveType = this.normalizeMoveType(move?.type);
+     const partitionId = move?.partitionId || move?.entityId || null;
+     const state = this.getOperationLedgerInterlockAdmissionState();
+-    const isDisruptiveSelfMove = this.isDisruptiveOperationLedgerSelfMove(
+-      normalizedMoveType,
+-      partitionId,
++    const selfMoveEngagement = resolveOperationLedgerHoldEngagement(
++      OPERATION_LEDGER_HOLD.SELF_MOVE_SERIALIZATION,
++      classifyOperationLedgerHoldMove(normalizedMoveType, partitionId),
+     );
+ 
+-    if (isDisruptiveSelfMove) {
++    if (
++      selfMoveEngagement === OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.IDLE_ONLY
++    ) {
+       this.assertOperationLedgerSelfMoveGateOpen(
+         state,
+         normalizedMoveType,
+@@ -482,10 +493,9 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+       }
+     }
+ 
+-    const isEmergencyQuorumRestoreAdd =
+-      normalizedMoveType === OperationType.ADD &&
+-      this.isEmergencyPriorityControlPlanePartition(partitionId);
+-    if (!isEmergencyQuorumRestoreAdd) {
++    if (
++      selfMoveEngagement !== OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT
++    ) {
+       if (state.selfMoveCreateInFlight) {
+         throw this.createOperationLedgerInterlockError(
+           normalizedMoveType,
+diff --git a/src/rebalancer/rebalance-coordinator-topology-guard-methods.js b/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
+index 6e822514b36720e2be58e36d78ddd0736764a084..f42a979a708e47174d36f0f41e2684bd90b25b5b 100644
+--- a/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
++++ b/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
+@@ -7,10 +7,7 @@ import {
+   REPLICA_INVENTORY_CONSISTENCY,
+   REPLICA_INVENTORY_OBSERVATION_STATE,
+ } from './replica-inventory-constants.js';
+-import {
+-  evaluateOperationLedgerQuorumConcentration,
+-  isConcentratedOperationLedgerPartition,
+-} from './operation-ledger-quorum-concentration.js';
++import {isEngagedLedgerQuorumSpreadCureReplace} from './operation-ledger-hold-policy.js';
+ 
+ const {
+   OperationType,
+@@ -25,7 +22,6 @@ const {
+   TOPOLOGY_GUARD_STATE,
+   UNIFIED_SERVICE_TYPE,
+   WORKFLOW_STEP,
+-  isOperationLedgerPartitionTable,
+ } = REBALANCE_COORDINATOR_SHARED;
+ 
+ const LOCAL_STR_STRING = 'string';
+@@ -157,8 +153,6 @@ class RebalanceCoordinatorTopologyGuardMethods {
+   ) {
+     const partitionId = String(context?.partitionId || '').trim();
+     if (
+-      context?.normalizedMoveType !== OperationType.REPLACE ||
+-      !isOperationLedgerPartitionTable({partitionId}) ||
+       authoritativeObservation?.available !== false ||
+       inventory?.provenance?.consistency !==
+         REPLICA_INVENTORY_CONSISTENCY.SOURCE_UNAVAILABLE ||
+@@ -186,16 +180,15 @@ class RebalanceCoordinatorTopologyGuardMethods {
+     ) {
+       return false;
+     }
+-    const concentration = evaluateOperationLedgerQuorumConcentration(
+-      this.systemTableCache,
+-    );
+-    const concentratedPartition = concentration.concentratedPartitions.find(
+-      (partition) => partition.partitionId === partitionId,
+-    );
+-    return concentration.holdEngaged === true &&
+-      concentratedPartition?.spreadActionable === true &&
+-      sourceReplica.nodeId === concentratedPartition.hottestNodeId &&
+-      isConcentratedOperationLedgerPartition(concentration, partitionId);
++    // Relation side (cure-typed move of a concentrated ledger partition whose
++    // source sits on the hottest node) is an owner row; the provenance and
++    // source-replica actuals above are this guard's own mechanism.
++    return isEngagedLedgerQuorumSpreadCureReplace({
++      systemTableCache: this.systemTableCache,
++      moveType: context?.normalizedMoveType,
++      partitionId,
++      sourceReplicaNodeId: sourceReplica.nodeId,
++    });
+   }
+ 
+   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
+diff --git a/src/rebalancer/unified-rebalancer-budget-planning.js b/src/rebalancer/unified-rebalancer-budget-planning.js
+index 1901d7382eb6979b4ba5bbb8ae4c5e0de3d376e1..bb59352f0cbd2500fdb94fad1e37ada181e61faa 100644
+--- a/src/rebalancer/unified-rebalancer-budget-planning.js
++++ b/src/rebalancer/unified-rebalancer-budget-planning.js
+@@ -1,5 +1,6 @@
+ import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.js';
+ import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
++import {orderLedgerQuorumCureMovesFirst} from './operation-ledger-hold-policy.js';
+ import {
+   applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods,
+ } from './unified-rebalancer-priority-recovery-follow-up-decisions.js';
+@@ -294,13 +295,10 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
+     ) {
+       return normalizedMoves;
+     }
+-    const isCureMove = (move) =>
+-      move?.type === MoveType.REPLACE &&
+-      String(move?.partitionId || this.entityId) === this.entityId;
+-    return [
+-      ...normalizedMoves.filter(isCureMove),
+-      ...normalizedMoves.filter((move) => !isCureMove(move)),
+-    ];
++    // Which moves are cure-typed is an owner row
++    // (operation-ledger-hold-policy.js); this planner owns only the
++    // entity-scoped concentration evidence check above.
++    return orderLedgerQuorumCureMovesFirst(normalizedMoves, this.entityId);
+   }
+ 
+   async getOrdinaryPriorityRecoverySerialGateSnapshot(moves = []) {

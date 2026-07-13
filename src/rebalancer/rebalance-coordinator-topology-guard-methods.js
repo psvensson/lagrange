@@ -7,10 +7,7 @@ import {
   REPLICA_INVENTORY_CONSISTENCY,
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
-import {
-  evaluateOperationLedgerQuorumConcentration,
-  isConcentratedOperationLedgerPartition,
-} from './operation-ledger-quorum-concentration.js';
+import {isEngagedLedgerQuorumSpreadCureReplace} from './operation-ledger-hold-policy.js';
 
 const {
   OperationType,
@@ -25,7 +22,6 @@ const {
   TOPOLOGY_GUARD_STATE,
   UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  isOperationLedgerPartitionTable,
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_STRING = 'string';
@@ -157,8 +153,6 @@ class RebalanceCoordinatorTopologyGuardMethods {
   ) {
     const partitionId = String(context?.partitionId || '').trim();
     if (
-      context?.normalizedMoveType !== OperationType.REPLACE ||
-      !isOperationLedgerPartitionTable({partitionId}) ||
       authoritativeObservation?.available !== false ||
       inventory?.provenance?.consistency !==
         REPLICA_INVENTORY_CONSISTENCY.SOURCE_UNAVAILABLE ||
@@ -186,16 +180,15 @@ class RebalanceCoordinatorTopologyGuardMethods {
     ) {
       return false;
     }
-    const concentration = evaluateOperationLedgerQuorumConcentration(
-      this.systemTableCache,
-    );
-    const concentratedPartition = concentration.concentratedPartitions.find(
-      (partition) => partition.partitionId === partitionId,
-    );
-    return concentration.holdEngaged === true &&
-      concentratedPartition?.spreadActionable === true &&
-      sourceReplica.nodeId === concentratedPartition.hottestNodeId &&
-      isConcentratedOperationLedgerPartition(concentration, partitionId);
+    // Relation side (cure-typed move of a concentrated ledger partition whose
+    // source sits on the hottest node) is an owner row; the provenance and
+    // source-replica actuals above are this guard's own mechanism.
+    return isEngagedLedgerQuorumSpreadCureReplace({
+      systemTableCache: this.systemTableCache,
+      moveType: context?.normalizedMoveType,
+      partitionId,
+      sourceReplicaNodeId: sourceReplica.nodeId,
+    });
   }
 
   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
