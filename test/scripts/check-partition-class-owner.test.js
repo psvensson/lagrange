@@ -2,6 +2,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {test} from '../../src/test-helpers/tap.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   buildOraclePayload,
   collectFileSites,
@@ -70,6 +71,181 @@ test('partition-class census follows every supported alias-laundering shape', (t
   t.end();
 });
 
+test('renamed object and destructured parameter injection stays visible', (t) => {
+  const source = `
+    const injected = {check: isPriorityControlPlanePartition};
+    const firstForward = {...injected};
+    let forwarded;
+    forwarded = {...firstForward};
+    const nestedInjected = {
+      ['nested']: {['check']: isSystemTablePartition},
+    };
+    const nestedForwarded = {...nestedInjected};
+    function callMember(deps, partitionId) {
+      return deps.check({partitionId});
+    }
+    function callDestructured({check: renamed}, partitionId) {
+      return renamed(partitionId);
+    }
+    function callNested(deps, partitionId) {
+      return deps.nested.check({partitionId});
+    }
+    function callInlineNested(deps, partitionId) {
+      return deps.nested.check({partitionId});
+    }
+    callMember({...forwarded}, 'tables-p1');
+    callDestructured({check: isCriticalSystemPartition}, 'tables-p1');
+    callNested(nestedForwarded, 'tables-p1');
+    callInlineNested(
+      {nested: {check: isPriorityControlPlanePartition}},
+      'tables-p1',
+    );
+  `;
+  const sites = collectFileSites(productionPath('renamed-injection.js'), source);
+  t.same(
+    sites.map((site) => site.kind),
+    [
+      'priority_predicate_call',
+      'critical_predicate_call',
+      'system_table_predicate_call',
+      'priority_predicate_call',
+    ],
+  );
+  t.same(
+    sites.map((site) => site.enclosingIdentifier),
+    ['callMember', 'callDestructured', 'callNested', 'callInlineNested'],
+  );
+  t.end();
+});
+
+test('inline spread, nested destructuring, and assigned nesting stay visible',
+  (t) => {
+    const source = `
+      function callInlineSpread(deps) {
+        return deps.check();
+      }
+      function callNestedDestructured({nested: {check}}) {
+        return check();
+      }
+      function callAssignedNested(deps) {
+        return deps.nested.check();
+      }
+      function safeOverride(deps) {
+        return deps.check();
+      }
+      function safeStoredOverride(deps) {
+        return deps.check();
+      }
+      function legacyStoredOverride(deps) {
+        return deps.check();
+      }
+      function safeNestedOverride(deps) {
+        return deps.nested.check();
+      }
+      function failClosedAssignment(deps) {
+        return deps.check();
+      }
+      callInlineSpread({...{check: isPriorityControlPlanePartition}});
+      callNestedDestructured({
+        nested: {check: isCriticalSystemPartition},
+      });
+      let assigned;
+      assigned = {nested: {check: isSystemTablePartition}};
+      callAssignedNested(assigned);
+      safeOverride({
+        ...{check: isPriorityControlPlanePartition},
+        check: () => false,
+      });
+      const legacy = {check: isPriorityControlPlanePartition};
+      const safe = {check: () => false};
+      safeStoredOverride({...legacy, ...safe});
+      legacyStoredOverride({...safe, ...legacy});
+      const nestedLegacy = {
+        nested: {check: isPriorityControlPlanePartition},
+      };
+      const nestedSafe = {nested: {check: () => false}};
+      safeNestedOverride({...nestedLegacy, ...nestedSafe});
+      const mutable = {check: isPriorityControlPlanePartition};
+      mutable.check = () => false;
+      failClosedAssignment(mutable);
+    `;
+    const sites = collectFileSites(
+      productionPath('recursive-parameter-flow.js'),
+      source,
+    );
+    t.same(
+      sites.map((site) => site.kind),
+      [
+        'priority_predicate_call',
+        'critical_predicate_call',
+        'system_table_predicate_call',
+        'priority_predicate_call',
+        'priority_predicate_call',
+      ],
+    );
+    t.end();
+  });
+
+test('local property destructuring preserves predicate and Set aliases', (t) => {
+  const source = `
+    const shallow = {check: isPriorityControlPlanePartition};
+    const {check} = shallow;
+    check();
+    const renamedSource = {check: isPriorityControlPlanePartition};
+    const {check: renamed} = renamedSource;
+    renamed();
+    const nestedSource = {
+      nested: {check: isPriorityControlPlanePartition},
+    };
+    const {nested: {check: nestedCheck}} = nestedSource;
+    nestedCheck();
+    const computedSource = {check: isPriorityControlPlanePartition};
+    const {['check']: computedCheck} = computedSource;
+    computedCheck();
+    let assignedCheck;
+    ({check: assignedCheck} = shallow);
+    assignedCheck();
+    const {missing: defaultCheck = isPriorityControlPlanePartition} = {};
+    defaultCheck();
+    const {...rest} = shallow;
+    rest.check();
+    const {check: omitted, ...excludedRest} = shallow;
+    excludedRest.check();
+    omitted();
+    const nestedRestSource = {
+      nested: {other: true, check: isPriorityControlPlanePartition},
+    };
+    const {nested: {other, ...nestedRest}} = nestedRestSource;
+    nestedRest.check();
+    const setSource = {ids: CRITICAL_SYSTEM_PARTITION_IDS};
+    const {ids} = setSource;
+    ids.has(partitionId);
+    const safeSource = {check: () => false};
+    const {check: safeCheck} = safeSource;
+    safeCheck();
+  `;
+  const sites = collectFileSites(
+    productionPath('local-destructuring.js'),
+    source,
+  );
+  t.same(
+    sites.map((site) => site.kind),
+    [
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'priority_predicate_call',
+      'critical_set_membership',
+    ],
+  );
+  t.end();
+});
+
 test('one critical-or-priority expression is one canonical decision site', (t) => {
   const source = `
     export function usesPriorityLane(owner, partitionId) {
@@ -104,19 +280,80 @@ test('nested independent critical-priority ladders stay independent', (t) => {
   t.end();
 });
 
-test('independently rebuilt bootstrap-critical sets cannot evade census', (t) => {
+test('all independently rebuilt bootstrap-critical sets stay visible', (t) => {
+  const literalIds = Object.values(SYSTEM_TABLE_NAME)
+    .map((tableName) => `${tableName}-p1`)
+    .map((partitionId) => JSON.stringify(partitionId))
+    .join(', ');
+  const templateIds = Object.values(SYSTEM_TABLE_NAME)
+    .map((tableName) => `\`${tableName}-p1\``)
+    .join(', ');
+  const concatenatedIds = Object.values(SYSTEM_TABLE_NAME)
+    .map((tableName) => `${JSON.stringify(tableName)} + '-p1'`)
+    .join(', ');
   const source = `
+    import {
+      CRITICAL_SYSTEM_PARTITION_IDS as canonicalIds,
+    } from '../bootstrap/system-partition-classification.js';
     const bootstrapIds = new Set(
       Object.values(SYSTEM_TABLE_NAME).map((tableName) => \`${'${tableName}'}-p1\`),
     );
-    export function isBootstrapCritical(partitionId) {
+    const keyedIds = new Set(
+      Object.keys(SYSTEM_TABLE_NAME)
+        .map((key) => SYSTEM_TABLE_NAME[key] + '-p1'),
+    );
+    const literalIds = new Set([${literalIds}]);
+    const entriesIds = new Set(
+      Object.entries(SYSTEM_TABLE_NAME)
+        .map(([, tableName]) => tableName + '-p1'),
+    );
+    const templatedIds = new Set([${templateIds}]);
+    const intermediateIds = [${templateIds}];
+    const spreadIds = new Set([...intermediateIds]);
+    const copiedIds = new Set(canonicalIds);
+    const concatenatedIds = new Set([${concatenatedIds}]);
+    function hasInjected(ids, partitionId) {
+      return ids.has(partitionId);
+    }
+    function hasDestructured({ids}, partitionId) {
+      return ids.has(partitionId);
+    }
+    export function isBootstrapCritical(partitionId, mode) {
+      if (mode === 'keyed') return keyedIds.has(partitionId);
+      if (mode === 'literal') return literalIds.has(partitionId);
+      if (mode === 'entries') return entriesIds.has(partitionId);
+      if (mode === 'template') return templatedIds.has(partitionId);
+      if (mode === 'spread') return spreadIds.has(partitionId);
+      if (mode === 'copy') {
+        return hasInjected(new Set(canonicalIds), partitionId);
+      }
+      if (mode === 'concatenated') {
+        return hasDestructured({ids: concatenatedIds}, partitionId);
+      }
       return bootstrapIds.has(partitionId);
     }
   `;
   const sites = collectFileSites(productionPath('rebuilt-set.js'), source);
   t.same(
     sites.map((site) => site.kind),
-    ['critical_set_declaration', 'critical_set_membership'],
+    [
+      'critical_set_declaration',
+      'critical_set_declaration',
+      'critical_set_declaration',
+      'critical_set_declaration',
+      'critical_set_declaration',
+      'critical_set_declaration',
+      'critical_set_declaration',
+      'critical_set_declaration',
+      'critical_set_membership',
+      'critical_set_membership',
+      'critical_set_membership',
+      'critical_set_membership',
+      'critical_set_membership',
+      'critical_set_membership',
+      'critical_set_membership',
+      'critical_set_membership',
+    ],
   );
   t.end();
 });
