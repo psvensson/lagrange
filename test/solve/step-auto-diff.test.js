@@ -291,7 +291,7 @@ tap.test('step --commit --auto-diff', async (t) => {
     t.end();
   });
 
-  t.test('accepted auto-diff survives a later git commit failure', (t) => {
+  t.test('accepted auto-diff never invokes git commit and survives a hostile hook', (t) => {
     const root = gitRoot();
     fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
     fs.writeFileSync(path.join(root, 'docs', 'demo.md'), 'before\n');
@@ -304,10 +304,13 @@ tap.test('step --commit --auto-diff', async (t) => {
     const hook = path.join(root, '.git', 'hooks', 'pre-commit');
     fs.writeFileSync(hook, '#!/bin/sh\nexit 1\n', {mode: 0o755});
 
-    t.throws(() => runStep(root, quest, {
+    const result = runStep(root, quest, {
       autoDiff: true,
-      summary: 'accepted before commit failure',
-    }), /Command failed: git commit/u);
+      summary: 'accepted before explicit checkpoint',
+    });
+    t.notOk(result.commit.committed, 'attempt recording has no commit side effect');
+    t.equal(result.commit.skipped, 'explicit-checkpoint-required',
+      'the hostile hook is irrelevant until the explicit checkpoint');
     const artifact = path.join(
       root,
       'solve',
