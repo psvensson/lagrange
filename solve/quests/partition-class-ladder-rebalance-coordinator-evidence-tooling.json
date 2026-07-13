@@ -1,0 +1,39 @@
+{
+  "id": "partition-class-ladder-rebalance-coordinator-evidence-tooling",
+  "authoringContractVersion": 1,
+  "statement": "Mechanical Option-5 rung-5 rebalance-coordinator evidence checkpoint: persist the committed analyzer views after migration ab79eba9 using an explicit two-oracle evidence patch. The parent oracle records metric 30, target 0, done false; the bounded source oracle records metric 30, target 30, done true; both record ownerCheck passed and all gates green. No source, test, specification, analyzer, package, migration, target, or behavior changes.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "closesCL": [],
+    "parentQuest": "partition-class-ladder-migration-rebalance-coordinator",
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "ab79eba917b6975ed37e2bf9466955fc811af9ab"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-migration-rebalance-coordinator.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-class-ladder-rebalance-coordinator-evidence-tooling-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/partition-class-ladder-migration-rebalance-coordinator.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
