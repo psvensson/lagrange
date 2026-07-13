@@ -187,10 +187,7 @@ test('owner contract requires the ordered vocabulary, rows, and outcome', (t) =>
     function classifySystemPartition(options = {}) {
       const partitionId = getPartitionIdFromPartitionRow(options.partitionRow) ||
         normalizeNonEmptyString(options.partitionId);
-      const tableId = resolvePartitionTableId({
-        partitionRow: options.partitionRow,
-        partitionId,
-      });
+      const tableId = resolvePartitionTableId(options);
       const context = Object.freeze({partitionId, tableId});
       const row = SYSTEM_PARTITION_CLASS_ROWS.find((candidate) =>
         candidate.matches(context));
@@ -245,10 +242,7 @@ test('owner contract requires the ordered vocabulary, rows, and outcome', (t) =>
     `function classifySystemPartition(options = {}) {
       const partitionId = getPartitionIdFromPartitionRow(options.partitionRow) ||
         normalizeNonEmptyString(options.partitionId);
-      const tableId = resolvePartitionTableId({
-        partitionRow: options.partitionRow,
-        partitionId,
-      });`,
+      const tableId = resolvePartitionTableId(options);`,
     `function classifySystemPartition() {
       const partitionId = 'always-critical-p1';
       const tableId = 'wrong';`,
@@ -321,18 +315,16 @@ test('owner contract requires the ordered vocabulary, rows, and outcome', (t) =>
     /exactly three classes/u,
   );
 
-  const spreadResolverInput = evaluateOwnerContract(validOwnerSource.replace(
-    `partitionRow: options.partitionRow,
+  const rebuiltResolverInput = evaluateOwnerContract(validOwnerSource.replace(
+    'resolvePartitionTableId(options)',
+    `resolvePartitionTableId({
+        partitionRow: options.partitionRow,
         partitionId,
-      });`,
-    `partitionRow: options.partitionRow,
-        partitionId,
-        ...override,
-      });`,
+      })`,
   ));
-  t.equal(spreadResolverInput.passed, false);
+  t.equal(rebuiltResolverInput.passed, false);
   t.match(
-    spreadResolverInput.problems.join('\n'),
+    rebuiltResolverInput.problems.join('\n'),
     /tableId must derive/u,
   );
 

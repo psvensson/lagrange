@@ -137,6 +137,7 @@
     "audit:step-coverage-owner": "node scripts/check-step-coverage-owner.js",
     "audit:hold-engagement-owner": "node scripts/check-hold-engagement-owner.js",
     "audit:cure-typing-owner": "node scripts/check-cure-typing-owner.js",
+    "audit:partition-class-owner": "node scripts/check-partition-class-owner.js",
     "audit:runtime-grammar": "node scripts/check-runtime-grammar-contracts.js && npm run audit:state-machine-pressure",
     "audit:runtime-grammar:file": "node scripts/check-runtime-grammar-contracts.js",
     "audit:state-machine-pressure": "node scripts/check-state-machine-pressure-preflight.js",

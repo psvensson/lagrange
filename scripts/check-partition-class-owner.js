@@ -112,6 +112,7 @@ const GATE_COMMANDS = Object.freeze([
       'node',
       'scripts/run-test-files.js',
       'test/scripts/check-partition-class-owner.test.js',
+      'test/bootstrap/system-partition-classification-owner.test.js',
       'test/bootstrap/traffic-readiness-utils.test.js',
       'test/rebalancer/system-partition-start-delay-preservation.property.test.js',
       'test/rebalancer/unified-rebalancer-triggers-system-partition-defer.test.js',
@@ -811,19 +812,13 @@ function canonicalClassifierInputProblems(classifierNode) {
   }
 
   const tableIdInitializer = unwrapChain(declarations.get('tableId')?.init);
-  const tableIdArgument = tableIdInitializer?.arguments?.[0];
-  const tableIdFields = objectPropertiesByName(tableIdArgument);
   if (tableIdInitializer?.type !== NODE_TYPE.CALL ||
       resolveAccessPath(tableIdInitializer.callee) !== 'resolvePartitionTableId' ||
       tableIdInitializer.arguments?.length !== 1 ||
-      !hasExactObjectProperties(
-        tableIdArgument,
-        ['partitionRow', 'partitionId'],
-      ) ||
-      resolveAccessPath(tableIdFields.get('partitionRow')?.value) !==
-        'options.partitionRow' ||
-      resolveAccessPath(tableIdFields.get('partitionId')?.value) !== 'partitionId') {
-    problems.push('tableId must derive from resolvePartitionTableId canonical inputs');
+      resolveAccessPath(tableIdInitializer.arguments[0]) !== 'options') {
+    problems.push(
+      'tableId must derive from resolvePartitionTableId original options',
+    );
   }
   return problems;
 }
