@@ -1,66 +1,19 @@
 ---
 scope: governance
-status: canonical
+status: reference-only
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-13
 ---
 
-> **Canonical source.** Quest lifecycle and first commands. Index:
-> [`INDEX.md`](INDEX.md).
+> **Reference-only summary.** The executable boot sequence lives in
+> [`docs/steering/llm/boot.md`](../llm/boot.md), and the binding operating
+> contract lives in [`solver-quests.md`](solver-quests.md). This page is retained
+> for historical vocabulary and does not define an independent command path.
 
 # Workflow Lifecycle
-
-## Quest Lifecycle
-
-Every non-trivial task follows this lifecycle:
-
-1. **Author or select a Quest.** Use `node scripts/solve.js new --id <id>` when
-   no existing Quest matches the requested outcome. The default class is
-   `product` (a MEASURED goal); for a decision/scaffolding Quest that closes on
-   a recorded decision rather than a measured artifact, pass
-   `--class process` at draft time (the field is consumed by the closure-kind
-   and portfolio machinery). For an existing draft, editing the `class` field
-   to `"process"` in the quest JSON before the first `run`/`step` remains
-   equivalent.
-2. **Seal the goal.** Define `doneWhen` before implementation begins. The goal
-   is sealed at the first `run` or `step` invocation — the first Solver
-   declaration; before that, the quest file is a refinable draft.
-3. **Default to autonomous execution.** Run
-   `run --executor agent --yes --keep-alive` for non-trivial work — drive to a true
-   terminal without pausing (see core.md "Default Posture: Autonomy"). Reach for
-   supervised `step` only for human-paced or exploratory work; mode selection is not
-   a free choice for routine non-trivial work.
-4. **Measure before and after.** Attempts are valid only when the Solver can
-   re-measure the configured frontier metric.
-5. **Record findings.** Use `node scripts/solve.js finding` for durable
-   knowledge or ruled-out approaches.
-6. **Close through the report.** Use `node scripts/solve.js report --id <id>`;
-   closure is SOLVED or EXHAUSTED.
-
-## First Commands
-
-For a new implementation task, default to an autonomous, self-resuming run:
-
-```sh
-node scripts/solve.js new --id <id> --statement "<sealed result>"
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
-```
-
-For human-paced or exploratory work, drive it step by step:
-
-```sh
-node scripts/solve.js step --id <id>
-```
-
-For an existing Quest:
-
-```sh
-node scripts/solve.js status --id <id>
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
-```
 
 ## Progress Grammar
 

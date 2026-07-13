@@ -28,7 +28,7 @@ any distributed-harness or convergence work:
   slices) before the next run and cite that. Subagents reading a shared active
   dir must first confirm the artifact's mtime/run-window matches the run they
   were asked about.
-- **Deterministic-first; the gate is a LAST RESORT ONLY.** The PRIMARY evidence
+- **Deterministic-first; a live statistical run is a LAST RESORT ONLY.** The PRIMARY evidence
   for every convergence fix is a deterministic in-process reproduction — a
   targeted or fault-injected repro at the layer where the invariant is produced,
   red-on-revert, built BEFORE changing code and kept as the validating proof
@@ -37,14 +37,14 @@ any distributed-harness or convergence work:
   and the substrate map in
   [`docs/deterministic-directed-testing-plan.md`](../../docs/deterministic-directed-testing-plan.md)).
   A fix is "proven" when a deterministic test demonstrates the mechanism and goes
-  red on revert — NOT when a gate happens to pass. If you reach for the docker
-  statistical gate (`scripts/rolling-restart-stat-gate.sh`), first write down the
+  red on revert — NOT when a live statistical run happens to pass. If you reach
+  for `scripts/rolling-restart-stat-gate.sh`, first write down the
   exact question and why no in-process test can answer it; if you can't, you are
-  not ready to gate. The runnable preflight is
+  not ready for the live run. The runnable preflight is
   `npm run gate:preflight -- --question "<exact question>" --why-not-deterministic "<one-liner>"`
   — it refuses without both answers, runs the `analyze:latent-blockers` census,
-  and prints the N-calibration table plus the three allowed gate categories.
-  - **Run a gate ONLY when the claim is irreducibly statistical** and no
+  and prints the N-calibration table plus the three allowed statistical-run categories.
+  - **Run the live harness ONLY when the claim is irreducibly statistical** and no
     deterministic test can stand in. Three named cases qualify: (1) a true
     pass-*rate* / variance question; (2) a one-time milestone certification of a
     landed, already-DT-proven improvement against a sealed bar; (3) **hot
@@ -52,15 +52,15 @@ any distributed-harness or convergence work:
     path ships only with a controlled live A/B of N≥2 runs fixed vs N≥2 runs
     reverted (see
     [`findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md`](findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md));
-    this IS an irreducibly-statistical claim, so it is an allowed gate use, and
+    this IS an irreducibly-statistical claim, so it is an allowed live-run use, and
     the `analyze:latent-blockers` pre-step below applies to it like any other
-    gate. Mechanism, classification, recovery, and red-on-revert are
-    deterministic questions — answer them in-process, never with a gate.
-  - **A gate is never the iteration loop.** Do not gate to "see if it helped", to
+    live run. Mechanism, classification, recovery, and red-on-revert are
+    deterministic questions — answer them in-process, never with a statistical run.
+  - **A live statistical run is never the iteration loop.** Do not run one to "see if it helped", to
     discover the next blocker, or to re-confirm a mechanism a DT already shows.
     Each run is non-deterministic and costs ~5–10 min of wall-clock you can't get
     back; a multi-headed run masks every reason but the dominant one.
-  - **When a gate is genuinely required, minimize it.** Start at the smallest
+  - **When a live statistical run is genuinely required, minimize it.** Start at the smallest
     informative N and escalate only when the result forces it (a borderline mixed
     rate, or a rate-promotion verdict where the statistic itself is the claim).
     Never conclude a *rate* from N=1; never default to a large N every iteration.
@@ -75,19 +75,20 @@ any distributed-harness or convergence work:
     (Wilson 95% lower-bound passRate ≥ `T(N_nodes)` + a hard SAFE floor), NOT
     "3 consecutive PASS". Its convergence axis is met *by construction* at the
     hardware floor, and the passRate baseline is **sealed once** — so a routine
-    change costs ZERO gate-hours and is validated deterministically; you spend one
-    N≥15 gate only to deliberately certify a latency-tail improvement against the
+    change costs ZERO live-run hours and is validated deterministically; you spend one
+    N≥15 run only to deliberately certify a latency-tail improvement against the
     sealed bar (and re-seal `T` upward only if the new Wilson lower bound clears
     the old one).
-  BEFORE queuing any gate, run `npm run analyze:latent-blockers`: the gate is a
+  BEFORE queuing any live statistical run, run `npm run analyze:latent-blockers`:
+  that run is a
   serial max-frequency oracle that shows only the single dominant reason and masks
-  the rest, so do not spend a gate to learn the next layer the corpus already
+  the rest, so do not spend a live run to learn the next layer the corpus already
   reveals.
 - **Use the analyzers, not raw-log grep.** Read
   [`test/distributed/harness/README.md`](../../test/distributed/harness/README.md) first,
   then `npm run analyze:distributed-failure -- --report <r>` /
   `analyze:causal-model` / `analyze:topology-convergence` /
-  `analyze:priority-recovery-residuals`. For the cross-gate picture — which
+  `analyze:priority-recovery-residuals`. For the cross-run picture — which
   blockers are MASKED behind today's dominant reason, the peel-order, and emerging
   candidates — run `npm run analyze:latent-blockers` over the whole report corpus
   (the deterministic backbone of the latent-blocker census;

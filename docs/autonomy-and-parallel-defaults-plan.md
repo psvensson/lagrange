@@ -1,7 +1,11 @@
 # Autonomy-by-default + Parallel-first — steering change plan
 
-Status: VERIFIED (subagent-checked 2026-06-17; both changes CONFIRMED, corrections applied inline)
+Status: ARCHIVED (implemented; historical plan, not active steering)
 Date: 2026-06-17
+Current behavior: `--keep-alive` replays only a progress-bearing MAX_CYCLES
+boundary. THEORY_REQUIRED, recoverable BLOCKED, and measurement repair return
+once with a typed action for the external driver. Follow `AGENTS.md` and the
+current compact packs, not the proposed wording retained below.
 Theme: the machinery for both already exists (two-terminal contract, `run
 --keep-alive`, soft-first quorum; subagents). What's missing is a **default
 posture**. This plan adds that posture as additive steering, flips two presented
@@ -16,9 +20,9 @@ queryable rule.
 
 ## Why this is mostly additive (verified)
 
-- Autonomy is fully built: `solver-quests.md:478-498` (two true terminals; all
-  other stops resumable), `:658-685` Keep-Alive Supervisor (auto-restarts across
-  MAX_CYCLES / THEORY_REQUIRED / recoverable BLOCKED), `:525-558` soft-first quorum.
+- Autonomy is fully built: `solver-quests.md` defines two true terminals and
+  resumable typed stops; its Keep-Alive Supervisor replays progress-bearing
+  MAX_CYCLES only, while THEORY_REQUIRED and recoverable BLOCKED return once.
 - There is **no positive parallelism norm** anywhere. The only "parallel" mentions
   are prohibitions (no parallel system-data caches `ARCH-0096`; test-harness
   parallelism budget `harness.md:33`) or the narrow `decision-experiments.md:103`
@@ -61,7 +65,8 @@ Precedence**:
 On a non-trivial task, drive the Quest to a true terminal (SOLVED or EXHAUSTED)
 without pausing for confirmation. Non-terminal gates (MAX_CYCLES, THEORY_REQUIRED,
 recoverable BLOCKED) are yours to resolve and resume — they are not handoff points.
-Prefer `run ... --keep-alive` for longer work so the loop survives those gates.
+Prefer `run ... --keep-alive` for longer work so progress-bearing MAX_CYCLES can
+continue automatically; execute typed judgment and repair actions externally.
 
 Stop and ask the user ONLY when one of these holds:
 
@@ -123,7 +128,8 @@ governance rules):
 The default execution posture for a non-trivial Quest is autonomous: the agent
 SHOULD drive to SOLVED or EXHAUSTED and MUST treat non-terminal gates (MAX_CYCLES,
 THEORY_REQUIRED, recoverable BLOCKED) as resume points, not handoffs. Longer work
-SHOULD use `run --keep-alive` so the loop survives those gates.
+SHOULD use `run --keep-alive` so progress-bearing MAX_CYCLES can continue
+automatically; typed judgment and repair actions remain external-driver work.
 
 The agent MUST stop and request user input only on: an unauthorized irreversible or
 outward-facing action; a genuinely undetermined success condition that no repo

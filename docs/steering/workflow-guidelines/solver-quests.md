@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-13
 ---
 
 > **Canonical source.** The Solver is the repository work system. Its unit of
@@ -35,8 +35,8 @@ A Quest must:
 2. define one or more independent `frontiers[]`;
 3. measure progress with lower-is-better probe metrics;
 4. record every attempt through the Solver event log;
-5. for every Quest-scoped source code change, spawn a subagent verifier before
-   audit and git handoff;
+5. for every Quest-scoped source attempt, record exact subagent approval before
+   checkpoint, then approve the aggregate source scope before terminal handoff;
 6. close only through a Solver terminal state;
 7. after audit passes, commit every Quest-scoped change (the Solver never
    pushes; see "Regular Commit (No Push)" below).
@@ -59,11 +59,14 @@ surface beyond the primary workflow commands shown here — including `frontier`
 A Quest lives at `solve/quests/<id>.json` and is authored with:
 
 ```sh
-node scripts/solve.js new --id <id> --statement "<sealed result>"
+node scripts/solve.js new --id <id> --statement "<sealed result>" \
+  --spec-ref <spec-or-plan-reference>
+node scripts/solve.js lint --id <id>
 ```
 
 The file declares:
 
+- `authoringContractVersion`: absent means legacy; new drafts use version 1.
 - `class`: `"product"` (default) or `"process"`. Product goals must be MEASURED
   against a real artifact probe; process goals are scaffolding/decision records
   and may legitimately close on an oracle. This drives report closure labeling,
@@ -71,7 +74,10 @@ The file declares:
 - `doneWhen`: the binary victory condition. This is artifact-bound and sealed.
 - `frontiers[]`: independent attack surfaces. Each frontier has a priority and
   a metric probe.
-- `constraints[]`: optional hard limits the agent must preserve.
+- `constraints[]`: optional hard limits the agent must preserve. In version 1,
+  each entry has non-empty `id` and `statement` strings.
+- `links`: planning references authored with `--plan-doc`, `--parent-quest`,
+  `--roadmap-row`, `--spec-ref`, and repeatable `--closes-cl` flags.
 
 Keep `metric` and `doneWhen` separate. A metric is a gradient; only `doneWhen`
 can close the Quest.
@@ -108,7 +114,7 @@ content — do not carry the lineage's narrative into the new seal:
 - **Prior art / evidence trail** = `links` (`parentQuest`, `planDoc`), where
   `trace` can join it.
 
-`new` stamps `links.sealedAtCommit` and prints retread warnings when the
+`new` stamps `links.draftedAtCommit` and prints retread warnings when the
 statement cites files or CL ids touched by a recent `revert(...)` commit —
 treat such a warning as a mandatory confirm-not-the-reverted-lever check
 before the first rung. Because a successor is sealed against the PARENT's
@@ -116,6 +122,14 @@ evidence, the seal-freshness advisory will demand a `repro-on-head` finding
 (`solve.js finding --kind repro-on-head ...`) once `src/` drifts: reproduce
 the sealed symptom on current HEAD before spending any disambiguation rung —
 a symptom already fixed in the meantime exhausts the quest immediately.
+
+Drafting is not sealing. The first `step`, `attempt`, or `run` validates the
+versioned authoring contract before it appends the declaration. Version 1 seals
+the authoring version, statement, class, constraints, `doneWhen`, frontier
+identities, and frontier metrics. A lint failure leaves no declaration or
+pending state. `new --force` cannot overwrite any Quest with log history;
+author a successor instead. `solve lint --all` is the read-only legacy census
+and never rewrites historical Quest files, logs, declarations, or outcomes.
 
 ### Closure Fidelity (live-visible classes)
 
@@ -258,19 +272,22 @@ more code is changed.
 
 ## Regular Commit (No Push)
 
-A Quest must not accumulate an unrecoverable dirty tree. The Solver commits each
-Quest's own scope-clean work as it progresses: after a `step --commit` whose
-attempt carries a resolved `diff:<path>` changeRef, after every verified,
-scope-clean measured attempt of an autonomous `run` (a squashable
-`checkpoint(quest):` commit), and on every autonomous-run terminal as the durable
-final flush. Each auto-commit refuses when its gate is not met — the mid-quest
-checkpoint gate requires the attempt's source change to be subagent-verified; the
-terminal gate additionally requires the Quest to have finished without errors —
-stages only the Quest's in-scope pathspec (never the dirty-tree shape), and
-carries a `Co-Authored-By:` trailer for the agent that drove the loop. It is a
-no-op outside a git work tree, on a non-measuring sample, and when the changeRef
-does not resolve. Throttle volume with `--commit-every N`; disable per-attempt
-commits with `--no-commit` (the terminal flush still commits).
+A Quest must not accumulate an unrecoverable dirty tree, but recording an
+attempt or finding MUST NOT commit as a side effect. After an independent
+verifier approves the exact attempt fingerprint, persist it explicitly:
+
+```sh
+node scripts/solve.js checkpoint --id <quest>
+```
+
+Checkpoint recomputes the attempt's path-limited Git delta from its recorded
+base. It checks every exact receipt since the latest checkpoint, refuses changed
+content, and refuses any dirty in-scope path that is not covered by a new receipt.
+This permits a later checkpoint to revise a previously checkpointed file without
+letting unrecorded edits hitchhike. It then commits only that Quest's in-scope
+pathspec. Terminal handoff separately requires the aggregate source fingerprint
+and the full audit. Both actions use configured attribution only; they never
+invent an agent identity.
 
 The Solver NEVER pushes: no subcommand, loop, or handoff runs `git push`
 (`autoCommitQuest` and `handoff` are commit-only). Pushing is a separate,
@@ -479,11 +496,14 @@ For autonomous work:
 node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
 ```
 
-`--keep-alive` is required for an autonomous agent: without it, `run` returns at the
-first NON-terminal stop (e.g. MAX_CYCLES, THEORY_REQUIRED) instead of driving on,
-which reads as a stall. The optional `--max <N>` caps cycles per run; reaching it
-raises the resumable MAX_CYCLES gate, not a terminal closure (omit it to use the
-default cap).
+`--keep-alive` lets an autonomous agent continue across a progress-bearing
+MAX_CYCLES boundary. Judgment and repair stops such as THEORY_REQUIRED,
+recoverable BLOCKED, and measurement repair always return once with a typed next
+action for the external driver. The optional `--max <N>` caps cycles per run;
+reaching it raises the resumable MAX_CYCLES gate, not a terminal closure (omit it
+to use the default cap). `--max-restarts <N>` bounds progress-bearing supervisor
+replays. Retired `--commit-every`, `--stall-window`, and `--no-commit` options are
+rejected rather than silently ignored.
 
 For supervised work, one attempt is a three-phase flow:
 
@@ -531,7 +551,8 @@ diff:<path>
 The concrete incantation for one attempt:
 
 ```sh
-git diff > solve/changes/<questId>/attempt-<n>.diff
+git diff --binary --full-index --no-ext-diff <base> -- <quest-paths> \
+  > solve/changes/<questId>/attempt-<n>.diff
 node scripts/solve.js step --id <questId> --commit \
   --changeRef diff:solve/changes/<questId>/attempt-<n>.diff --summary "..."
 ```
@@ -542,6 +563,10 @@ machine-side. Alternatively, `step --commit --auto-diff` captures the
 working-tree diff since step begin into
 `solve/changes/<questId>/attempt-<n>.diff` and records the changeRef in one
 move (an explicit `--changeRef` takes precedence).
+
+The canonical diff does not silently omit new files. Mark an intended untracked
+path with `git add -N <path>` before capture; verification otherwise refuses the
+untracked path rather than approving an incomplete delta.
 
 Commit SHAs are useful in release notes, pull requests, or human audit trails,
 but they are not Solver truth. A SHA says where code landed; it does not prove
@@ -560,32 +585,35 @@ building-block DTs without a live-precondition theory are exempt.
 
 ## Source Change Verification
 
-Every Quest that changes source code must spawn a subagent verifier after the
-final source diff is ready and before `node scripts/solve.js audit --id <id>`
-is used for handoff. The verifier must inspect the Quest intent, touched source
-diff, system guidelines, and applicable doctrine. Record the result as a Solver
-finding on the active frontier with `--kind verifier-approval` and evidence
-`subagent:<id>`:
+Every newly accepted source-changing attempt records verification contract v1,
+its Git base, and the SHA-256 identity of its exact patch. Spawn an independent
+verifier after that diff is ready. The verifier must inspect the Quest intent,
+touched diff, system guidelines, and applicable doctrine. Record an exact
+attempt approval on the active frontier:
 
 ```sh
 node scripts/solve.js finding --id <quest> --frontier <frontier> \
   --kind verifier-approval \
-  --claim "Subagent verifier approved source changes against Quest intent, system guidelines, and doctrine" \
-  --evidence subagent:<id>
+  --claim "Independent verification passed" \
+  --evidence subagent:<id> \
+  --verification-scope attempt \
+  --verification-fingerprint sha256:<attempt-fingerprint>
 ```
 
-The `verifier-approval` kind is the first-class machine-readable tag the audit
-matcher keys on; a finding without it is still recognized when its claim prose
-names the verification (legacy keyword fallback), but new findings SHOULD carry
-the kind so recognition never depends on wording. `step --commit` prints
+Every contracted source attempt needs its own later, same-frontier exact
+approval. Historical attempts without the contract retain the legacy prose
+matcher; legacy prose cannot approve a v1 attempt. `step --commit` prints
 `suggested verification template: <path>` when the change diff matches an
 attack checklist under
 [`docs/steering/verification-templates/`](../verification-templates/INDEX.md);
 include the suggested template in the verifier prompt.
 
-If the verifier finds issues, fix them or record a finding that explains why the
-Quest must continue; do not proceed to git handoff from an unresolved verifier
-finding.
+At terminal, recompute the aggregate fingerprint from the earliest contracted
+base through the current Git content over the sorted union of all recorded
+source paths. A later aggregate approval is mandatory. `--verification-scope
+both` may deduplicate the two approvals only when a single attempt fingerprint
+equals that aggregate fingerprint. Any later attempt, artifact tamper, or edit
+to an in-scope path invalidates the prior approval.
 
 ## Git Handoff
 
@@ -600,7 +628,8 @@ then `git commit -m "<quest>: <summary>"`. Do not push (see "Regular Commit
 (No Push)" above).
 
 `node scripts/solve.js handoff --id <quest>` computes this scope-safe pathspec.
-The `handoff` command runs the audit and refuses on failure, derives the in-scope
+The `handoff` command requires a terminal, a passing full audit, aggregate
+approval when source changed, and scope-pressure admission. It derives the in-scope
 set purely from the Quest's sealed `solve/` artifacts plus the source/test files
 named inside its own diffs, and lists every other dirty file as out-of-scope so
 unrelated work is never swept in. The `handoff` command is a dry run by default;
@@ -676,9 +705,10 @@ still narrow the next move.
 ## Autonomy Default And Stop Triggers
 
 The default execution posture for a non-trivial Quest is autonomous: the agent
-SHOULD drive to SOLVED or EXHAUSTED and MUST treat non-terminal gates (MAX_CYCLES,
-THEORY_REQUIRED, recoverable BLOCKED) as resume points, not handoffs. Longer work
-SHOULD use `run --keep-alive` so the loop survives those gates.
+SHOULD drive to SOLVED or EXHAUSTED and MUST treat non-terminal stops
+(MAX_CYCLES, THEORY_REQUIRED, recoverable BLOCKED) as resume points, not closure.
+Longer work SHOULD use `run --keep-alive` to replay progress-bearing MAX_CYCLES;
+the external driver executes typed actions returned by judgment or repair stops.
 
 The agent MUST stop and request user input only on one of the four canonical
 core.md stop triggers: (1) Authorization — an unauthorized irreversible or
@@ -944,48 +974,36 @@ same recorded memory.
 
 A long-running quest used to die when one driver session ended: an external agent
 that drives the Solver through individual subcommands in a single chat loses all
-momentum when that chat ends, and `run` itself returns on every NON-terminal stop
-(`MAX_CYCLES`, `THEORY_REQUIRED`, a recoverable `BLOCKED`). `run --keep-alive`
-wraps the loop in `runSupervised` (`scripts/solve/loop.js`) so the quest keeps
-contributing to its append-only memory across those boundaries. It is
-decision-aware, never a blind retry:
+momentum when that chat ends. `run --keep-alive` wraps the loop in
+`runSupervised` (`scripts/solve/loop.js`) and automatically crosses only a
+progress-bearing MAX_CYCLES boundary. It is decision-aware:
 
 - **SOLVED / EXHAUSTED**: the honest two-terminal contract — stop and report.
 - **measurement park (rr-G / cannot-measure)**: a dead harness cannot self-heal by
   re-running, so the supervisor steps back immediately with
   `supervisor-paused-measurement` and surfaces the harness repair.
-- **MAX_CYCLES / THEORY_REQUIRED / recoverable BLOCKED**: the executor can act on
-  these, so the loop is restarted.
+- **MAX_CYCLES**: restart only when the just-finished invocation added durable
+  progress; otherwise return the unchanged stop once.
+- **THEORY_REQUIRED / recoverable BLOCKED**: return the typed judgment action to
+  the external driver once; do not replay it inside the supervisor.
 
-Two bounds prevent a hot spin: a restart cap (`SUPERVISOR_MAX_RESTARTS`, outcome
-`supervisor-budget`) and a stall guard. The stall guard tracks a **durable-progress
-cursor** (`durableProgressCount`) that counts only events which change quest state
-or add knowledge — a measured attempt, a measuring evidence sample, a finding, any
-theory move, a reflection, a park, a reopen — and deliberately excludes the
-`gate-decision` noise a hard block appends every cycle. If no durable progress
-accrues across `SUPERVISOR_STALL_WINDOW` consecutive restarts it steps back with
-`supervisor-stalled`. Every supervisor outcome is NON-terminal: the supervisor
-never closes a quest, only honest SOLVED / EXHAUSTED do. It is model/CLI-agnostic —
-it only re-invokes the same executor through the generic file contract.
+A restart cap (`SUPERVISOR_MAX_RESTARTS`, outcome `supervisor-budget`) prevents a
+hot spin. The **durable-progress cursor** (`durableProgressCount`) counts only
+events that change quest state or add durable knowledge: a measured attempt, a
+measuring evidence sample, a finding, a system-theory declaration, a reflection,
+a park, or a solve. It deliberately excludes gate-decision/violation noise,
+per-frontier theory bookkeeping, and frontier reopens. The supervisor replays
+only a MAX_CYCLES stop that advanced this cursor. THEORY_REQUIRED, measurement
+repair, recoverable BLOCKED, and unchanged MAX_CYCLES return exactly once with
+their typed next action intact. Every supervisor outcome is non-terminal: only
+honest SOLVED / EXHAUSTED close a Quest.
 
-## Known System-Theory Hypothesis (rolling-restart)
+## Worked Examples
 
-> **Illustrative example — a possibly-stale snapshot, not policy.** The following
-> is a concrete worked example of framing a system theory, tied to one live Quest.
-> Treat it as a hypothesis-to-validate, not a steering rule; verify it against a
-> current measured run before relying on it, and expect it to drift as that Quest
-> progresses.
-
-For the rolling-restart core-stability quest, repeated coupled-invariant
-oscillation (rr-D) between the `publication_converged` / `priority_spread_settled`
-family and the families defined in terms of it points to a single shared
-admission/readiness knob: the `CoupledAdmission` model shows the two green-ranges
-overlap at exactly one value, so single-owner patches bounce forever and only an
-atomic cross-owner reconcile converges. This remains a **hypothesis to validate**,
-not a settled result: it can only be confirmed once the harness measures again
-(the rr-G park exists precisely because a long stretch of samples were
-non-measuring). Frame the next system theory around that shared knob, and confirm
-it against a measured run rather than the non-measuring noise that motivated it.
+Quest-specific snapshots are not canon. The former rolling-restart system-theory
+example now lives under
+[`docs/case-studies/rolling-restart-system-theory.md`](../../case-studies/rolling-restart-system-theory.md)
+so stale execution state cannot masquerade as an active steering rule.
 
 ## Tracked Versus Regenerable
 

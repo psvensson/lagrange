@@ -73,16 +73,16 @@ function buildReport(scenario, results, timestamp) {
   };
 }
 
-function runScenario(scenarios, scenario) {
+function runScenario(scenarios, scenario, reportDir) {
   const files = scenarios[scenario];
   const results = files.map(runGuardFile);
   const timestamp = new Date().toISOString();
   const report = buildReport(scenario, results, timestamp);
 
-  fs.mkdirSync(REPORT_DIR, {recursive: true});
+  fs.mkdirSync(reportDir, {recursive: true});
   const fileStamp = timestamp.replace(/[:.]/g, '-');
   const reportPath = path.join(
-    REPORT_DIR,
+    reportDir,
     `${scenario}-${fileStamp}.report.json`,
   );
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -102,8 +102,10 @@ function runScenario(scenarios, scenario) {
  * Run the named scenario (argv[2]) or every scenario in the map, and set
  * the process exit code (0 all pass, 1 any fail, 2 unknown scenario).
  * @param {Object<string, string[]>} scenarios - scenario -> guard files.
+ * @param {Object} options - optional reportDir override for isolated evidence.
  */
-function runGuardTestScenarios(scenarios) {
+function runGuardTestScenarios(scenarios, options = {}) {
+  const reportDir = options.reportDir || REPORT_DIR;
   const only = process.argv[2];
   const names = only ? [only] : Object.keys(scenarios);
   for (const name of names) {
@@ -115,7 +117,7 @@ function runGuardTestScenarios(scenarios) {
   }
   let allPassed = true;
   for (const name of names) {
-    if (!runScenario(scenarios, name)) allPassed = false;
+    if (!runScenario(scenarios, name, reportDir)) allPassed = false;
   }
   process.exitCode = allPassed ? 0 : 1;
 }

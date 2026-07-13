@@ -4,7 +4,7 @@ status: manual-pack
 always_load: true
 source_of_truth: self
 canonical_rules: docs/steering/workflow-guidelines/solver-quests.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-13
 ---
 
 > **Manual pack - edit here directly.** Load order is owned by
@@ -36,68 +36,54 @@ projection of the event log and terminal state.
 
 ## First Commands
 
-First apply the Quest-or-not threshold (AGENTS.md "Quest or not?"): below it —
-a single-sitting fix, doc edit, or mechanical change with an obvious proof —
-just do the work and commit it, with no Quest.
-
-For a new task above the threshold, default to an autonomous, self-resuming run
-(drive to a true terminal; see core.md "Default Posture: Autonomy"):
+First apply the Quest threshold in `AGENTS.md`. Below it, do the bounded work,
+prove it, and commit it without creating workflow state. Above it, start with
+the read-only capability preflight:
 
 ```sh
-node scripts/solve.js new --id <id> --statement "<sealed result>"
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
+node scripts/solve.js doctor
 ```
 
-`--max <N>` is optional (it caps the cycle count for one invocation; the default
-cap applies when omitted, and `--keep-alive` resumes past it), so the canonical
-runnable command leaves it off. `--yes` confirms that the `agent` executor may
-make real edits — without it,
-`--executor agent` refuses to run (it never silently mutates the tree). `--yes`
-does **not** advance gates: surviving non-terminal gates (MAX_CYCLES,
-THEORY_REQUIRED, recoverable BLOCKED) across restarts is what `--keep-alive` does
-via the supervisor. Neither flag overrides the core.md "Default Posture: Autonomy"
-stop-triggers (Authorization / Goalpost ambiguity / EXHAUSTED / Safety), which
-still pause the run.
-
-For human-paced or exploratory work, drive it step by step instead:
+For an existing Quest, ask the Solver for its one typed action:
 
 ```sh
-node scripts/solve.js step --id <id>
+node scripts/solve.js next --id <id>
 ```
 
-When a frontier stalls or the dossier says theory is required:
+For a new Quest, author its planning link at creation, validate the draft, then
+use the same typed-action surface:
 
 ```sh
-node scripts/solve.js theory list --id <id>
-node scripts/solve.js health --id <id>
-node scripts/solve.js theory system --id <id> ...
-node scripts/solve.js theory option --id <id> --frontier <frontier> ...
-node scripts/solve.js theory select --id <id> --frontier <frontier> --theory <theory-id>
+node scripts/solve.js new --id <id> --statement "<sealed result>" \
+  --spec-ref <spec-or-plan-reference>
+node scripts/solve.js lint --id <id>
+node scripts/solve.js next --id <id>
 ```
 
-For an existing Quest, the default is the same autonomous posture (reach for
-supervised `step` only when the work is genuinely human-paced or exploratory):
+`new` writes a versioned draft and stamps `links.draftedAtCommit`; it does not
+seal the goal. The first `step`, `attempt`, or `run` lints the draft and appends
+the declaration. A lint failure appends nothing. `--force` may replace only a
+history-free draft; once a log exists, author a successor Quest.
+
+`doctor` reports whether a live agent adapter is explicitly enabled and
+executable. When it recommends supervised mode, use `step`. When it recommends
+autonomous mode, `next` may return the real agent invocation. The no-op example
+adapter is never treated as a capability.
+
+After a source-changing attempt, `next` returns the exact attempt fingerprint
+to verify, then directs the operator to the explicit checkpoint:
 
 ```sh
-node scripts/solve.js status --id <id>
-node scripts/solve.js run --id <id> --executor agent --yes --keep-alive
+node scripts/solve.js checkpoint --id <id>
 ```
 
-To commit a supervised attempt:
+At a terminal, `next` requests aggregate verification when needed and returns
+`handoff --commit` only after the full audit passes. Findings never commit, and
+no Solver command pushes.
 
 ```sh
-node scripts/solve.js step --id <id> --commit \
-  --changeRef diff:<path> --summary "<what changed>"
+node scripts/solve.js handoff --id <id> --commit
 ```
-
-To close or inspect:
-
-```sh
-node scripts/solve.js report --id <id>
-```
-
-Commit completed work by default — committing is durably authorized, so do not
-wait to be asked. See core.md "Default Posture: Commit On Completion".
 
 ## Conflict Rule And Escape Hatch
 

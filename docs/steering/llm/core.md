@@ -4,7 +4,7 @@ status: manual-pack
 always_load: true
 source_of_truth: self
 canonical_rules: docs/steering/workflow-guidelines/solver-quests.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-13
 ---
 
 > **Manual pack - edit here directly.** This file is the always-load operating
@@ -36,21 +36,23 @@ canonical first-read glossary; `boot.md` points here.
 | Proof ladder | A compact sequence of 3-5 executable commands that demonstrates a claim. |
 | Subagent | A spawned worker that produces verification or research; recorded as evidence `subagent:<id>`. |
 | SOLVED / EXHAUSTED | Terminal Solver states: `doneWhen` met, or every frontier parked with no honest move. |
-| MAX_CYCLES / THEORY_REQUIRED / BLOCKED | Non-terminal run gates the executor resolves and resumes (not handoff points). |
-| Gate | Disambiguation — four unrelated uses: (a) non-terminal run stops (MAX_CYCLES / THEORY_REQUIRED / BLOCKED; prefer "non-terminal stops"); (b) the graded-guard gate-decision machinery (advisory → reroute → explore → park-resumable → terminal); (c) commit/checkpoint gates in the Quest audit; (d) live distributed release-gate runs (unrelated to the Solver). |
+| MAX_CYCLES / THEORY_REQUIRED / BLOCKED | Typed non-terminal stops. Only progress-bearing MAX_CYCLES is replayed automatically; judgment and measurement actions return to the external driver. |
+| Guard decision | The Solver's advisory → reroute → explore → park-resumable → terminal classification. |
+| Verification precondition | The exact attempt or aggregate approval required before checkpoint or terminal handoff. |
+| Live statistical run | A distributed statistical experiment; unrelated to Solver stops and verification preconditions. |
 
 ## North Star
 
-Preserve the highest-level owner boundary, choose the lightest Quest shape that
+Preserve the highest-level owner boundary, choose the smallest proof surface that
 proves the boundary was not weakened, and do not locally patch symptoms when
 the owner contract is porous.
 
 ## Default Posture: Autonomy
 
 On a non-trivial task, drive the Quest to a true terminal (SOLVED or EXHAUSTED)
-without pausing for confirmation. Non-terminal gates (MAX_CYCLES, THEORY_REQUIRED,
-recoverable BLOCKED) are yours to resolve and resume — they are not handoff points.
-Prefer `run ... --keep-alive` for longer work so the loop survives those gates.
+without pausing for confirmation. Typed non-terminal stops identify the next
+owner: only progress-bearing MAX_CYCLES is replayed automatically; judgment or
+measurement repair returns once as a typed action for the external driver.
 
 Stop and ask the user ONLY when one of these holds:
 
@@ -95,12 +97,10 @@ This applies to ad-hoc work just as much as to Quests; for Quests the Solver's
 post-audit commit handoff already does it. Work on `main` (the user's standing
 directive), and end commit messages with the configured co-author trailer.
 
-Committing never implies pushing. The Solver auto-commits Quest work (a squashable
-`checkpoint(quest):` commit per verified scope-clean attempt, plus the durable
-terminal commit) but NEVER pushes — nothing in this repository pushes
-automatically. A never-before-authorized push remains an Authorization
-stop-trigger for Quest and ad-hoc work alike. See solver-quests.md
-"Regular Commit (No Push)".
+Committing never implies pushing. Mid-Quest persistence is explicit:
+`solve checkpoint` runs only after exact attempt approval. Terminal handoff
+requires aggregate approval and the full audit. The Solver never pushes; a
+never-before-authorized push remains an Authorization stop-trigger.
 
 ## Default Posture: Parallelism
 
@@ -114,7 +114,7 @@ When sub-tasks are independent, run them concurrently rather than in sequence:
 
 Serialize ONLY when outputs feed each other, or when workers would mutate the same
 files (then isolate via worktrees or order the writes). Parallelism applies to the
-work, never to the proof: the subagent-verify-before-handoff gate, measured theory
+work, never to the proof: the content-bound verification precondition, measured theory
 promotion, and one-Quest-per-commit stay serial and intact.
 
 ## Pack vs Source Precedence
@@ -123,15 +123,13 @@ This section governs the **pack-vs-source** axis (which copy of a rule is
 authoritative). For the separate **execution-time** precedence among instructions
 (user/safety > Quest canon > domain packs), see boot.md "Authority Order".
 
-Compact packs under [`docs/steering/llm/`](.) are the runtime surface. Each
-generated domain pack is a priority-ranked SUBSET (capped per `maxRules`), not the
-full rule corpus — consult [`rules-index.md`](rules-index.md) or `npm run rule` for
-every rule in a domain. The rules omitted from a capped pack are just as binding
-when their scope is touched: the cap is a context-loading optimization, not a
-priority waiver. Source steering under [`docs/steering/`](../) is consulted
-only to chase cited detail behind a compact-pack rule or to repair pack drift. If
-source detail shows the pack is wrong, fix the source and regenerate with
-`npm run steering:llm:pack`.
+Compact packs under [`docs/steering/llm/`](.) are the selective runtime surface.
+Each generated domain pack contains every packed rule in that domain, so scope
+selection controls context without silently omitting binding rules. The manifest
+assigns every configured source an explicit `packed`, `direct-load`, or
+`reference-only` role. Use [`rules-index.md`](rules-index.md) or `npm run rule`
+for ID lookup and aliases. If source detail shows the pack is wrong, fix the
+source and regenerate with `npm run steering:llm:pack`.
 
 One carve-out: the Quest workflow canon (`AGENTS.md`,
 [solver-quests.md](../workflow-guidelines/solver-quests.md), and the active Quest
@@ -192,9 +190,10 @@ Use this list before non-trivial work:
     excluding unrelated dirty worktree entries. For Quests this is the post-audit
     commit handoff (commit only — the Solver never pushes). See "Default
     Posture: Commit On Completion".
-17. **Do not hand off Quest source changes without subagent verification**;
-    spawn a subagent verifier and record a Solver finding with evidence
-    `subagent:<id>` before audit/git handoff.
+17. **Do not checkpoint or hand off Quest source changes without content-bound
+    subagent verification**; attempt approval names the exact patch fingerprint,
+    terminal approval names the aggregate source fingerprint, and handoff also
+    requires the full audit.
 18. **Do not hand-roll a shell command where a script already does it**; consult
     `npm run commands` / [`tools-index.md`](tools-index.md) first (see "Tool
     Discovery").
@@ -242,23 +241,6 @@ of every `solve.js` subcommand (with usage), see
 a recorded finding into in-repo steering as a rule (requires
 `--domain <architecture|testing|governance|style>`, then regenerate with
 `npm run steering:llm:pack`).
-
-## Quest Shape Picker
-
-Shape is process-weight guidance for how to author the Quest (constraints, proof
-surface, metric cost) — it is NOT a declared field and there is no `--shape`
-flag. The Quest file declares only `class` (`product` | `process`; see
-solver-quests.md "Quest Anatomy"). The separate "cutover vs building-block"
-distinction in solver-quests.md is a closure-bar rule, not this picker.
-
-| Shape | Use when |
-| --- | --- |
-| `read/review` | Answering, review, or explanatory docs with no implementation truth change. |
-| `maintenance` | Bounded docs, templates, generated steering, or tooling cleanup. |
-| `proof` | Tests, validation evidence, or diagnostic classification without runtime behavior change. |
-| `experiment` | A bounded hypothesis or probe decides the next owner/action. |
-| `runtime` | Runtime behavior, owner contracts, shared metadata, diagnostics grammar, or affected consumers can change. |
-| `scenario` | Distributed, integration, load, release-gate, repeated same-frontier, or causal-closure work. |
 
 ## Core Principles
 

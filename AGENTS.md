@@ -7,7 +7,7 @@ This file is the **single entry point** for steering. It is the only document
 that prescribes a load order. Other steering files describe their own scope;
 none of them re-declare the boot sequence.
 
-## Working Model
+## Routing Decision
 
 The unit of non-trivial work is a **Quest**. A Quest is a sealed, declarative
 goal under `solve/quests/<id>.json`; attempts, findings, state, and reports are
@@ -19,29 +19,17 @@ Below that — a single-sitting fix, doc edit, or mechanical change with an
 obvious proof — just do the work and commit it. Authoritative statement:
 solver-quests.md "Operating Contract".
 
-The Solver owns work execution:
-
-- `node scripts/solve.js new --id <id> --statement "<sealed result>"` creates a
-  Quest draft.
-- `node scripts/solve.js step --id <id>` begins a supervised attempt — it pins
-  the frontier and prints the rung dossier; it records nothing until you commit.
-- `node scripts/solve.js step --id <id> --commit --changeRef diff:<path>`
-  records the measured result of that attempt.
-- `node scripts/solve.js run --id <id> --executor agent --yes --keep-alive` runs
-  the Quest loop to a terminal. The bare `run --id <id>` uses the default `dry`
-  executor — a skeleton that makes no real edits — so real autonomous work needs
-  `--executor agent --yes` (and `--keep-alive` to survive non-terminal gates).
-- `node scripts/solve.js report --id <id>` writes the Quest report.
-
-Archived execution artifacts may remain in the repository, but they are not the
-active steering path for new work.
+For a Quest, use [`boot.md`](docs/steering/llm/boot.md) as the executable
+quickstart. It owns the current commands for capability discovery, draft lint,
+typed next actions, supervised work, autonomous work, verification, checkpoint,
+and terminal handoff. This entry point deliberately does not duplicate them.
 
 ## Where Do I Look?
 
 | If you need... | Read / Run |
 | --- | --- |
-| Current Quest status | `node scripts/solve.js status --id <id>` |
-| Quest report / closure projection | `node scripts/solve.js report --id <id>` |
+| First executable action | [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md) |
+| Current typed Quest action | `node scripts/solve.js next --id <id>` |
 | Quest process and guardrails | [`docs/steering/workflow-guidelines/solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md) |
 | Solver operator quickstart | [`docs/solver-runbook.md`](docs/solver-runbook.md) |
 | Always-active core operating contract | [`docs/steering/llm/core.md`](docs/steering/llm/core.md) |
@@ -77,49 +65,21 @@ in-repo-steering vs external-memory split.
 3. Read [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md).
 4. Load the smallest relevant domain pack(s): architecture, testing, style, or
    governance. Cross-cutting work loads each relevant pack, not just one.
-5. For non-trivial implementation work, create or select a Quest and let the
-   Solver record attempts, findings, state, and terminal report.
+5. Follow `boot.md` for the first executable action; let the Solver own Quest
+   attempts, findings, verification, state, and terminal report.
 6. Consult source steering under [`docs/steering/`](docs/steering/) only for
    cited detail behind a compact-pack rule, or when repairing pack drift and
    regenerating the packs.
 
-The compact packs under [`docs/steering/llm/`](docs/steering/llm/) are the
-default LLM execution surface, but each generated domain pack is a priority-ranked
-subset (capped per `maxRules`), not the full rule corpus — consult
-[`rules-index.md`](docs/steering/llm/rules-index.md) or `npm run rule` for every
-rule in a domain. Source steering files under
-[`docs/steering/`](docs/steering/) are the canonical inputs used to generate
-those packs and add cited detail; they are not a separate runtime override path.
+The four generated domain packs under [`docs/steering/llm/`](docs/steering/llm/)
+are complete selective surfaces: load only the relevant domains, knowing every
+packed rule for that domain is present. The pack manifest assigns every configured
+source an explicit `packed`, `direct-load`, or `reference-only` role. Source
+steering adds cited detail; it is not a separate runtime override path.
 
-## Workflow Tooling
+## Generated Surfaces
 
-Prefer these canonical tools before raw JSON, log slicing, or ad-hoc queries:
-
-- **Quest lifecycle commands** (`new` / `step` / `run` / `report`): the
-  canonical invocations — including the autonomous-run incantation and its
-  dry-executor warning — are stated once, under "Working Model" above.
-- **Full command reference**: [`docs/steering/llm/solve-commands.md`](docs/steering/llm/solve-commands.md) (generated; every `solve.js` subcommand, including `status` and `probe`)
-- **Steering Pack Refresh**: `npm run steering:llm:pack` after editing any
-  source listed in `docs/steering/llm-pack.config.json`, including nested
-  `docs/steering/**/*.md` files.
-
-## Quest Closure
-
-A Quest is closed only by the Solver's terminal state:
-
-- **SOLVED**: `doneWhen` is satisfied against live evidence.
-- **EXHAUSTED**: every frontier has parked without an honest remaining move.
-
-Do not move goalposts mid-Quest. If the task changes, author a new Quest or
-record a finding that explains why the current Quest is exhausted.
-
-Two always-on default postures govern how you drive a Quest to that terminal;
-this entry point only names them, the authoritative statements are in
-[`docs/steering/llm/core.md`](docs/steering/llm/core.md):
-
-- **Autonomy** — drive a non-trivial Quest to a true terminal without pausing;
-  stop only on the core.md stop-triggers (Authorization / Goalpost ambiguity /
-  EXHAUSTED / Safety). See core.md "Default Posture: Autonomy".
-- **Commit on completion** — committing finished, verified work is durably
-  authorized; do not wait to be asked. See core.md "Default Posture: Commit On
-  Completion".
+The generated full command reference is
+[`solve-commands.md`](docs/steering/llm/solve-commands.md). Run
+`npm run steering:llm:pack` after editing a configured steering source; the
+generator checks source roles, complete domain coverage, and command drift.
