@@ -1,0 +1,28 @@
+diff --git a/solve/oracle/partition-class-ladder-census-proof.json b/solve/oracle/partition-class-ladder-census-proof.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..6c547deb5fd68cdc08b3e0378264585322a118ba
+--- /dev/null
++++ b/solve/oracle/partition-class-ladder-census-proof.json
+@@ -0,0 +1,22 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "partition-class-census-proof-terminal-handoff",
++  "detail": {
++    "parentOracle": "solve/oracle/partition-class-ladder-single-owner-table.json",
++    "analyzerContractVersion": 3,
++    "currentRawPredicateEdges": 0,
++    "currentCollapsedLadderEdges": 0,
++    "ownerContractPassed": true,
++    "requiredGatesPassed": true,
++    "sameBaseReplacementFingerprint": "sha256:fcf0e934f7dd5aa008e5d978b8d591dec935fc7a8075c6e2dcedcd9d5c2a4bfc",
++    "scopeSplitCommits": [
++      "f41bb40f",
++      "2bfa1cdb",
++      "390b79b8",
++      "cd67cb90",
++      "18f91194"
++    ]
++  }
++}
