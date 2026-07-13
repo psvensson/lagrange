@@ -1,6 +1,6 @@
 import {NUM} from '../constants/index.js';
 import {
-  isPriorityControlPlanePartition as isPriorityControlPlanePartitionId,
+  classifySystemPartition,
 } from './system-partition-classification.js';
 import {
   getTrafficReadinessSnapshot,
@@ -424,7 +424,7 @@ class StartupRecoveryCoordinator {
     );
     const isPriorityControlPlanePartition =
       partitionId !== null &&
-      isPriorityControlPlanePartitionId({partitionId});
+      classifySystemPartition({partitionId}).priorityControlPlane;
     const trafficReady = managed ? isTrafficReadySnapshot(snapshot) : true;
     const metadataPublicationReady = managed ?
       isMetadataPublicationReadySnapshot(snapshot) :

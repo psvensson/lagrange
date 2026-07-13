@@ -13,7 +13,7 @@ import {
   BOOTSTRAP_API_ERROR,
 } from '../bootstrap-api-constants.js';
 import {
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } from '../system-partition-classification.js';
 import {
   BOOTSTRAP_TOPOLOGY_SNAPSHOT_LOG,
@@ -385,10 +385,10 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
     if (
       !partitionId ||
       !cacheLeaderNodeId ||
-      !isPriorityControlPlanePartition({
+      !classifySystemPartition({
         partitionId,
         partitionRow: authoritativeRow,
-      })
+      }).priorityControlPlane
     ) {
       return false;
     }

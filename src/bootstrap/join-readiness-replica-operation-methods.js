@@ -7,7 +7,7 @@ import {
   normalizeReplicaOperationRecord,
 } from '../rebalancer/replica-operation-liveness.js';
 import {
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } from './system-partition-classification.js';
 import {
   OperationType,
@@ -190,7 +190,7 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
           discoveryCriticalPartitionIds.has(partitionId),
         priorityControlPlanePartition:
           partitionId.length > 0 &&
-          isPriorityControlPlanePartition({partitionId}),
+          classifySystemPartition({partitionId}).priorityControlPlane,
         sourceIsSelf: sourceNodeId === this.nodeId,
         targetIsSelf: targetNodeId === this.nodeId,
         sourceActive: activeNodeIds.has(sourceNodeId),

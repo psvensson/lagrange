@@ -1,0 +1,113 @@
+diff --git a/src/bootstrap/join-readiness-replica-operation-methods.js b/src/bootstrap/join-readiness-replica-operation-methods.js
+index 931a354c13b72e15239d448dfa2c3cfad745e2a1..6477e3a23ce369d0e85fcc4e31155f8f97b9d97d 100644
+--- a/src/bootstrap/join-readiness-replica-operation-methods.js
++++ b/src/bootstrap/join-readiness-replica-operation-methods.js
+@@ -7,7 +7,7 @@ import {
+   normalizeReplicaOperationRecord,
+ } from '../rebalancer/replica-operation-liveness.js';
+ import {
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+ } from './system-partition-classification.js';
+ import {
+   OperationType,
+@@ -190,7 +190,7 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
+           discoveryCriticalPartitionIds.has(partitionId),
+         priorityControlPlanePartition:
+           partitionId.length > 0 &&
+-          isPriorityControlPlanePartition({partitionId}),
++          classifySystemPartition({partitionId}).priorityControlPlane,
+         sourceIsSelf: sourceNodeId === this.nodeId,
+         targetIsSelf: targetNodeId === this.nodeId,
+         sourceActive: activeNodeIds.has(sourceNodeId),
+diff --git a/src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js b/src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js
+index d3f5bda8ec5781c00094de28b7a236ce7d99bafe..562d0cf98e1f4643c2153026617bb763a85826ce 100644
+--- a/src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js
++++ b/src/bootstrap/owners/bootstrap-topology-snapshot-owner-authoritative-rows.js
+@@ -13,7 +13,7 @@ import {
+   BOOTSTRAP_API_ERROR,
+ } from '../bootstrap-api-constants.js';
+ import {
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+ } from '../system-partition-classification.js';
+ import {
+   BOOTSTRAP_TOPOLOGY_SNAPSHOT_LOG,
+@@ -385,10 +385,10 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
+     if (
+       !partitionId ||
+       !cacheLeaderNodeId ||
+-      !isPriorityControlPlanePartition({
++      !classifySystemPartition({
+         partitionId,
+         partitionRow: authoritativeRow,
+-      })
++      }).priorityControlPlane
+     ) {
+       return false;
+     }
+diff --git a/src/bootstrap/phases/seed-partitions-phase.js b/src/bootstrap/phases/seed-partitions-phase.js
+index 1feb2187fce17787dedaa8b91cee305e38d5dab0..f240d0de50761215928135e88e43cca9131958f9 100644
+--- a/src/bootstrap/phases/seed-partitions-phase.js
++++ b/src/bootstrap/phases/seed-partitions-phase.js
+@@ -14,7 +14,7 @@ import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.
+ import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
+ import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
+ import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
+-import {isPriorityControlPlanePartition} from
++import {classifySystemPartition} from
+   '../system-partition-classification.js';
+ import {resolveCanonicalLeaderService} from
+   '../../cache/leader-readiness-gate.js';
+@@ -518,7 +518,7 @@ class SeedPartitionsPhase {
+ 
+   canBypassDirectBootstrapPriorityPartitionLeadership(partitionId) {
+     const d = this.delegates;
+-    if (!isPriorityControlPlanePartition({partitionId})) {
++    if (!classifySystemPartition({partitionId}).priorityControlPlane) {
+       return false;
+     }
+     const phase = typeof d.getPhase === 'function' ?
+diff --git a/src/bootstrap/startup-recovery-coordinator.js b/src/bootstrap/startup-recovery-coordinator.js
+index 6b91b948661e9580c05c5124921c44cf91231d24..36b2c8d58cbb382fbd171a83042918bef0fd4aea 100644
+--- a/src/bootstrap/startup-recovery-coordinator.js
++++ b/src/bootstrap/startup-recovery-coordinator.js
+@@ -1,6 +1,6 @@
+ import {NUM} from '../constants/index.js';
+ import {
+-  isPriorityControlPlanePartition as isPriorityControlPlanePartitionId,
++  classifySystemPartition,
+ } from './system-partition-classification.js';
+ import {
+   getTrafficReadinessSnapshot,
+@@ -424,7 +424,7 @@ class StartupRecoveryCoordinator {
+     );
+     const isPriorityControlPlanePartition =
+       partitionId !== null &&
+-      isPriorityControlPlanePartitionId({partitionId});
++      classifySystemPartition({partitionId}).priorityControlPlane;
+     const trafficReady = managed ? isTrafficReadySnapshot(snapshot) : true;
+     const metadataPublicationReady = managed ?
+       isMetadataPublicationReadySnapshot(snapshot) :
+diff --git a/src/bootstrap/traffic-readiness-utils.js b/src/bootstrap/traffic-readiness-utils.js
+index da5c323fadc97fa9b50a9999d85cf814901b3527..032705694ba0c46fcb9573c282cef62108e205f8 100644
+--- a/src/bootstrap/traffic-readiness-utils.js
++++ b/src/bootstrap/traffic-readiness-utils.js
+@@ -2,7 +2,7 @@ import {NUM, TIME_MS} from '../constants/index.js';
+ import {LIFECYCLE_EVENT, LIFECYCLE_PHASE} from './lifecycle-controller-constants.js';
+ import {LIFECYCLE_REASON} from './lifecycle-controller-constants.js';
+ import {
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+ } from './system-partition-classification.js';
+ import {
+   PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
+@@ -92,7 +92,7 @@ function isBackgroundWorkReadySnapshot(snapshot, options = {}) {
+     options.partitionId :
+     null;
+   if (partitionId &&
+-      isPriorityControlPlanePartition({partitionId})) {
++      classifySystemPartition({partitionId}).priorityControlPlane) {
+     return isMetadataPublicationReadySnapshot(snapshot);
+   }
+ 

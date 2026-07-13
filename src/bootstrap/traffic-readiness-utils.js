@@ -2,7 +2,7 @@ import {NUM, TIME_MS} from '../constants/index.js';
 import {LIFECYCLE_EVENT, LIFECYCLE_PHASE} from './lifecycle-controller-constants.js';
 import {LIFECYCLE_REASON} from './lifecycle-controller-constants.js';
 import {
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } from './system-partition-classification.js';
 import {
   PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
@@ -92,7 +92,7 @@ function isBackgroundWorkReadySnapshot(snapshot, options = {}) {
     options.partitionId :
     null;
   if (partitionId &&
-      isPriorityControlPlanePartition({partitionId})) {
+      classifySystemPartition({partitionId}).priorityControlPlane) {
     return isMetadataPublicationReadySnapshot(snapshot);
   }
 

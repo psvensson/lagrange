@@ -14,7 +14,7 @@ import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
 import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
 import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
-import {isPriorityControlPlanePartition} from
+import {classifySystemPartition} from
   '../system-partition-classification.js';
 import {resolveCanonicalLeaderService} from
   '../../cache/leader-readiness-gate.js';
@@ -518,7 +518,7 @@ class SeedPartitionsPhase {
 
   canBypassDirectBootstrapPriorityPartitionLeadership(partitionId) {
     const d = this.delegates;
-    if (!isPriorityControlPlanePartition({partitionId})) {
+    if (!classifySystemPartition({partitionId}).priorityControlPlane) {
       return false;
     }
     const phase = typeof d.getPhase === 'function' ?
