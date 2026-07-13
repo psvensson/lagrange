@@ -14,6 +14,7 @@ const {
   OperationType,
   UNIFIED_SERVICE_TYPE,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
+  classifySystemPartition,
   isPriorityRecoveryEmergencyPartition,
   resolveTrackedPriorityRecoveryAdmissionPlan,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -83,8 +84,9 @@ function resolveConcurrentCreateBudgetScope(
   // is consulted exactly when a priority-class creation needs the overflow
   // lane state, as before.
   const partitionId = String(budgetContext?.partitionId || '').trim();
-  const isPriorityPartition =
-    coordinator.isPriorityControlPlanePartition.bind(coordinator);
+  const isPriorityPartition = (candidatePartitionId) =>
+    classifySystemPartition({partitionId: candidatePartitionId})
+      .priorityControlPlane;
   const scopeWithoutOverflow = resolvePlacementCureBudgetScope({
     moveType: normalizedMoveType,
     partitionClass: classifyPriorityRecoveryAdmissionPartitionClass(
@@ -120,7 +122,7 @@ function shouldBypassConcurrentBudgetEmptyBackoff(
   if (partitionId.length === 0) {
     return false;
   }
-  return coordinator.isCriticalSystemPartition(partitionId);
+  return classifySystemPartition({partitionId}).systemTable;
 }
 
 function resolveConcurrentBudgetReadMode(
@@ -145,7 +147,7 @@ function resolveConcurrentBudgetReadMode(
   if (partitionId.length === 0) {
     return REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
   }
-  return coordinator.isPriorityControlPlanePartition(partitionId) ?
+  return classifySystemPartition({partitionId}).priorityControlPlane ?
     REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION :
     REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
 }
@@ -165,7 +167,7 @@ function shouldUsePriorityConcurrentAddLane(
   if (partitionId.length === 0) {
     return false;
   }
-  return coordinator.isPriorityControlPlanePartition(partitionId);
+  return classifySystemPartition({partitionId}).priorityControlPlane;
 }
 
 function isEmergencyPriorityControlPlanePartition(partitionId) {
@@ -206,7 +208,7 @@ function getPriorityRecoveryAdmissionPlan(coordinator) {
     staleGraceMs: coordinator.priorityRecoveryActivityStaleGraceMs,
     maxConcurrentAdds: coordinator.config.maxConcurrentAdds,
     isPriorityPartition: (partitionId) =>
-      coordinator.isPriorityControlPlanePartition(partitionId),
+      classifySystemPartition({partitionId}).priorityControlPlane,
     // Reference-pass, not a re-derived conjunct: the plan owner resolves
     // lane classes through the owner classification.
     isEmergencyPriorityPartition:

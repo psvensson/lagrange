@@ -22,6 +22,7 @@ const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
+  classifySystemPartition,
   resolvePriorityRecoveryActiveNodeCohort,
   shouldPriorityRecoveryOperationBlockPlanning,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -59,8 +60,9 @@ function buildConcurrentAddCountByPriorityClass(coordinator, operations = []) {
     const partitionClass = classifyPriorityRecoveryAdmissionPartitionClass(
       partitionId,
       {
-        isPriorityPartition:
-          coordinator.isPriorityControlPlanePartition.bind(coordinator),
+        isPriorityPartition: (candidatePartitionId) =>
+          classifySystemPartition({partitionId: candidatePartitionId})
+            .priorityControlPlane,
         isEmergencyPriorityPartition:
           coordinator.isEmergencyPriorityControlPlanePartition.bind(
             coordinator,
@@ -97,7 +99,7 @@ function addConcurrentPriorityBudgetOperation(
   const partitionId = getAddBudgetOperationPartitionId(coordinator, operation);
   if (
     partitionId.length === 0 ||
-    !coordinator.isPriorityControlPlanePartition(partitionId)
+    !classifySystemPartition({partitionId}).priorityControlPlane
   ) {
     return false;
   }

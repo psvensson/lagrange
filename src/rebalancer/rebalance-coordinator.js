@@ -25,6 +25,7 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   buildControlPlaneWorkloadProfile,
+  classifySystemPartition,
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
@@ -45,7 +46,7 @@ class RebalanceCoordinator extends EventEmitter {
     const partitionId = String(options.partitionId || '').trim();
     const criticalPressureBypass =
       partitionId.length > 0 &&
-      this.isPriorityControlPlanePartition(partitionId);
+      classifySystemPartition({partitionId}).priorityControlPlane;
     const workloadProfile = buildControlPlaneWorkloadProfile(
       criticalPressureBypass ?
         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_PRIORITY_VISIBILITY :

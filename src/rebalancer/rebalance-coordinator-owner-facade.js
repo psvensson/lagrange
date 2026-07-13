@@ -2,7 +2,7 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
-  isPriorityControlPlanePartitionTable,
+  classifySystemPartition,
 } = REBALANCE_COORDINATOR_SHARED;
 
 class RebalanceCoordinatorOwnerFacade {
@@ -306,7 +306,7 @@ class RebalanceCoordinatorOwnerFacade {
    * @private
    */
   isCriticalSystemPartition(partitionId) {
-    return this.workflowOwner.isCriticalSystemPartition(partitionId);
+    return classifySystemPartition({partitionId}).systemTable;
   }
 
   /**
@@ -315,9 +315,9 @@ class RebalanceCoordinatorOwnerFacade {
    * @private
    */
   isPriorityControlPlanePartition(partitionId) {
-    return isPriorityControlPlanePartitionTable({
+    return classifySystemPartition({
       partitionId,
-    });
+    }).priorityControlPlane;
   }
 
   /**
@@ -330,7 +330,7 @@ class RebalanceCoordinatorOwnerFacade {
    * @private
    */
   resolveOperationReadinessDecisionDimension(partitionId = null) {
-    if (this.isCriticalSystemPartition(partitionId)) {
+    if (classifySystemPartition({partitionId}).systemTable) {
       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
     return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;

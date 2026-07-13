@@ -16,6 +16,7 @@ const {
   SERVICE_TYPE,
   STRING,
   WORKFLOW_STEP,
+  classifySystemPartition,
 } = REBALANCE_COORDINATOR_SHARED;
 
 const LOCAL_STR_STRING = 'string';
@@ -91,7 +92,7 @@ class RebalanceCoordinatorOperationIntentMethods {
       move?.enforceConcurrentOperationBudget !== true ||
       (normalizedMoveType !== OperationType.ADD &&
         normalizedMoveType !== OperationType.REPLACE) ||
-      !this.isCriticalSystemPartition(partitionId)
+      !classifySystemPartition({partitionId}).systemTable
     ) {
       return null;
     }
@@ -274,7 +275,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     ).trim();
     if (
       partitionId.length === 0 ||
-      !this.isPriorityControlPlanePartition(partitionId)
+      !classifySystemPartition({partitionId}).priorityControlPlane
     ) {
       return Object.freeze({
         state: RECENT_OPERATION_INTENT_VISIBILITY_STATE.DEFERRED,
@@ -537,7 +538,8 @@ class RebalanceCoordinatorOperationIntentMethods {
     const partitionId = String(
       operation?.partitionId || operation?.entityId || STRING.EMPTY,
     ).trim();
-    if (!partitionId || !this.isPriorityControlPlanePartition(partitionId)) {
+    if (!partitionId ||
+      !classifySystemPartition({partitionId}).priorityControlPlane) {
       return RECENT_INTENT_TTL_MS;
     }
     const configuredPendingTimeoutMs =
@@ -569,7 +571,7 @@ class RebalanceCoordinatorOperationIntentMethods {
     const operationType = this.normalizeMoveType(operation?.type);
     const priorityPartition =
       partitionId.length > 0 &&
-      this.isPriorityControlPlanePartition(partitionId);
+      classifySystemPartition({partitionId}).priorityControlPlane;
     const usePriorityCreatePhaseBudget =
       priorityPartition &&
       PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_OPERATION_TYPES.has(

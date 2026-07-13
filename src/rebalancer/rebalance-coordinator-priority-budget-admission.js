@@ -30,7 +30,7 @@ const {
   ReplicaStatus,
   SERVICE_TYPE,
   buildPriorityRecoveryOperationAssessment,
-  isPriorityControlPlanePartitionTable,
+  classifySystemPartition,
   resolvePriorityRecoveryActiveNodeCohort,
   shouldPriorityRecoveryOperationBlockPlanning,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -120,7 +120,8 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     ) {
       return;
     }
-    if (!this.isCriticalSystemPartition(context?.partitionId)) {
+    if (!classifySystemPartition({partitionId: context?.partitionId})
+      .systemTable) {
       return;
     }
 
@@ -337,7 +338,8 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       );
       if (
         !conflictingOperation &&
-        this.isPriorityControlPlanePartition(context?.partitionId)
+        classifySystemPartition({partitionId: context?.partitionId})
+          .priorityControlPlane
       ) {
         const cacheVisibleAddLikeConflict =
           await this.findCriticalAddLikeConflictingOperation(
@@ -400,9 +402,9 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
   async shouldIgnoreCriticalAddBudgetOperation(operation) {
     if (
       !operation ||
-      !isPriorityControlPlanePartitionTable({
+      !classifySystemPartition({
         partitionId: operation.partitionId,
-      })
+      }).priorityControlPlane
     ) {
       return false;
     }
@@ -568,7 +570,8 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     if (normalizedMoveType !== OperationType.REMOVE) {
       return;
     }
-    if (!this.isPriorityControlPlanePartition(context?.partitionId)) {
+    if (!classifySystemPartition({partitionId: context?.partitionId})
+      .priorityControlPlane) {
       return;
     }
 
