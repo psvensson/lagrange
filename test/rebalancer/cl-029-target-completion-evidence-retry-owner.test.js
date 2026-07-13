@@ -1171,11 +1171,14 @@ test(
     );
 
     await t.test(
-      'ledger exit (b) baseline: retryable CAS persist failure — the ' +
-      'observed-target replay ACTUATES source removal (applied, so ' +
-      'clearing the evidence is correct) with the durable row still at ' +
-      'SYNCING, and it LOGS a persist error (the real run had none, ' +
-      'discriminating the run away from exit (b))',
+      'ledger exit (b) superseded: a retryable CAS persist failure at ' +
+      'ACTIVE is absorbed by the owner-local deferred-progress lane ' +
+      '(quest formation-ledger-self-move-blocks-cluster-ops) — updateStep ' +
+      'does not throw, the observed-target replay is not needed, source ' +
+      'removal actuates directly with the durable row still at SYNCING, ' +
+      'a durable retry owner is retained (the CL-029 invariant), and the ' +
+      'persist error is still LOGGED (the 145024Z-run3 discriminator ' +
+      'holds: that run had none)',
       async (t) => {
         const operation = buildReplaceOperation();
         const store = createCasBackedReplicaOperationStore(operation);
@@ -1201,10 +1204,11 @@ test(
           );
           t.equal(
             activeUpdateCalls.length >= 1 &&
-              Boolean(activeUpdateCalls[0]?.error),
+              !activeUpdateCalls.some((call) => Boolean(call?.error)),
             true,
-            'updateStep(operation, ACTIVE) threw the retryable ' +
-            'control-plane persist error',
+            'updateStep(operation, ACTIVE) absorbed the retryable ' +
+            'control-plane persist error via the owner-local ' +
+            'deferred-progress lane instead of throwing',
           );
           const replayObservedTargetCalls = callsOf(
             harness.calls,
@@ -1212,16 +1216,15 @@ test(
           );
           t.equal(
             replayObservedTargetCalls.length,
-            1,
-            'the inner catch routed to ' +
-            'replayReplaceActiveSourceRemovalFromObservedTarget',
+            0,
+            'the observed-target replay was not needed — the workflow ' +
+            'advanced directly off the owner-local ACTIVE row',
           );
-          t.equal(
-            replayObservedTargetCalls[0]?.result,
-            true,
-            'the observed-target replay reports true: it actuated ' +
-            'progress (source removal) from the observed-ACTIVE target, ' +
-            'absorbing the retryable persist error — exit (b)',
+          t.ok(
+            countLiveOwnerRetryState(owner).transitionRetryTimers >= 1,
+            'a durable transition retry owner is retained until the ' +
+            'ACTIVE persist lands (the CL-029 invariant under the new ' +
+            'route)',
           );
           t.equal(
             store.state.authoritative.workflowStep,

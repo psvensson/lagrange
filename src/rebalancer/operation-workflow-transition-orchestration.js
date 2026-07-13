@@ -7,6 +7,7 @@ const {
   INITIAL_PARTITION_IDS,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  OperationType,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
@@ -371,9 +372,51 @@ class OperationWorkflowTransitionOrchestration
     if (!isRetryableControlPlaneError(errorLike)) {
       return false;
     }
-    return (
+    if (
       step === WORKFLOW_STEP.CREATING &&
       this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step)
+    ) {
+      return true;
+    }
+    return this.isPriorityOutcomeDeferredLocalProgressStep(operation, step);
+  }
+
+  /**
+   * The executor-outcome-backed ACTIVE transition of a priority
+   * control-plane REPLACE: the physical work has already landed (the
+   * replacement is promoted voter-ready) and only the bookkeeping write into
+   * the operation ledger is stuck behind retryable ledger pressure. During
+   * cold formation that pressure is the operation's OWN doing — a ledger
+   * self-move degrades the very partition its progress writes need, so a
+   * hard persist-then-act gate stalls the transition for full sql-routed
+   * retry cycles while the self-move interlock freezes all other admission
+   * cluster-wide. Advancing the owner-local row and re-arming the durable
+   * write (the established lever-(a) supersession contract) keeps the
+   * workflow moving at executor speed; the durable row converges at the
+   * terminal, whose write intentionally carries no expected-step CAS.
+   *
+   * Terminal steps are deliberately NOT covered: REMOVED flows exclusively
+   * through completeOperation, which owns its own durable convergence
+   * (executor-outcome retry + terminal-transition repair) — a deferred-local
+   * terminal here would clear the transition retry without re-driving the
+   * durable persist.
+   *
+   * @param {Object|null} operation
+   * @param {string} step
+   * @return {boolean}
+   * @private
+   */
+  isPriorityOutcomeDeferredLocalProgressStep(operation, step) {
+    const partitionId = String(operation?.partitionId || '').trim();
+    if (
+      partitionId.length === 0 ||
+      !isPriorityControlPlanePartition({partitionId})
+    ) {
+      return false;
+    }
+    return (
+      step === WORKFLOW_STEP.ACTIVE &&
+      operation?.type === OperationType.REPLACE
     );
   }
 
