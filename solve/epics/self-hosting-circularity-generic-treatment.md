@@ -160,10 +160,31 @@ STATE/ACTION/STATE_TABLE/ACTION_BY_STATE shape, `decision-table-v1` JSON +
    Follow-up seeded for rung 4 / a 3b batch: the censused sibling-hold
    exempt rows (priority-budget lanes C1-C5, pressure holds E1-E2, ordinary
    serial gate F1, serial-wait lane G1-G3) share the defect shape.
-4. **Cure typing** — declared (condition → cureType → admission-lane) rows
-   co-owned with `operation-ledger-quorum-concentration.js` so
-   REPLACE-cures-skew / ADD-cures-under-replication is data, not re-inferred at
-   the budget planner (the 2b5875b0 defect class).
+4. **Cure typing** — LANDED 2026-07-13 (quest `cure-typing-single-owner-table`
+   + 2 bounded children `…-move-minters` / `…-admission-lanes`). Owner:
+   `src/rebalancer/replica-placement-cure-policy.js` (condition → {moveType,
+   moveReason} rows: under_representation ADD, failed_replica / node_not_in_target /
+   over_representation REMOVE, paired_relocation / unhealthy_source_at_target
+   REPLACE; the 2b5875b0 follow-up conjunct owned as
+   `classifyPriorityRecoveryFollowUpCureCondition`; cure budget-scope rows +
+   plan-aware resolver; ordinary-serial-lane cure move membership; fail-closed
+   null — no row, no mint) with the admission partition-class classifier
+   `classifyPriorityRecoveryAdmissionPartitionClass` living in
+   `priority-recovery-admission-constants.js` (the lane vocabulary home —
+   importing it into the rebalancer owner from inside
+   `rebalance-coordinator-shared`'s import tree was proven a TDZ cycle and
+   `CONCURRENT_CREATE_BUDGET_SCOPE` moved to `rebalancer-constants.js`), and
+   the admission-plan owner's `getPartitionClass` delegating to it. Census
+   `npm run audit:cure-typing-owner` 15→8→0 (7 cure_move_type_mint across
+   calculateMoves + buildPriorityRecoveryFollowUpMove; 8 admission_lane_conjunct
+   across 6 budget/admission helpers; 3 schema-provisioning intent-derived
+   exclusions). Guard test dt:prove-proven; two `decision-table-v1` specs
+   (replica-placement-cure-condition, placement-cure-admission-lane).
+   Adversarial verifiers: owner TRUSTED-WITH-NOTES, minters TRUSTED, lanes
+   TRUSTED-WITH-NOTES (differential truth-table harness, 0 reachable
+   divergences; notes: whitespace-only budget partition_id and lowercase
+   scope-seam move types are unreachable-today divergences, the latter closing
+   a CL-013-style case fail-open). No typing GAP found during migration.
 5. **Partition-class ladder sweep** — the 119-site hand-written
    critical→priority→default ladder onto one ordered classifier (an Option-1
    analyzer can then enforce it).
@@ -200,6 +221,16 @@ establishment) graduate separately after ladder rung 1 seeds the evidence.
   handoff commit `943b6993` + companion `33ec0cd4` (the handoff's path list
   missed the attempt's NEW untracked files — owner, guard test, spec, oracle;
   process note for rung 4: verify the handoff commit includes created files).
+- 2026-07-13 (rung 4) — `cure-typing-single-owner-table` SOLVED same-day with
+  the rung-1 parent/children shape: census analyzer committed first (baseline
+  15, commit `691a7565`), parent authored the owner + guard test + specs
+  (verifier TRUSTED-WITH-NOTES), children migrated the 7 move mints and the
+  8 lane conjuncts (verifiers TRUSTED / TRUSTED-WITH-NOTES via a differential
+  truth-table harness). Process notes: trap-6 (checkpoint missing NEW files)
+  recurred on all three quests — companion commits landed each time; the
+  shared-first import-order TDZ smoke (`node -e "await import(...shared...)"`)
+  is now a standing check for any new owner module that reads the
+  `REBALANCE_COORDINATOR_SHARED` aggregate.
 - 2026-07-13 (later) — GRADUATED on user directive ("pick up the quest(s) that
   generalize the logic to be data-driven; don't finish the formation-ledger
   lineage the old way"). Two code-census sweeps sized the surface (see
