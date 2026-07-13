@@ -208,7 +208,9 @@ STATE/ACTION/STATE_TABLE/ACTION_BY_STATE shape, `decision-table-v1` JSON +
    stabilized model receipt were preserved through bounded archives
    `390b79b8` / `cd67cb90` and the clean replacement handoff authority
    `partition-class-ladder-single-owner-table-integrity-migration`
-   (`18f91194`).
+   (`18f91194`). The remaining legacy census-proof child was superseded by the
+   same independently approved stable aggregate and closed under its bounded
+   integrity migration in `fe1f3def`.
 
 Each quest carries red-on-revert pins; behavior changes only with their own pin
 + finding. Options 1 (availability order + analyzer) and 2 (gateway
@@ -264,7 +266,9 @@ establishment) graduate separately after ladder rung 1 seeds the evidence.
   integrity history and cumulative scope, attempts 1–8 were archived in two
   bounded Quests (`390b79b8`, `cd67cb90`) and a new clean migration Quest
   committed the parent declaration/log/report plus stabilized model evidence
-  (`18f91194`). Option 5 is complete; future partition-class derivations are
+  (`18f91194`). The final legacy census-proof child and its rejected predecessor
+  receipt were preserved and superseded under a bounded integrity migration
+  (`fe1f3def`). Option 5 is complete; future partition-class derivations are
   enforced by `audit:partition-class-owner`.
 - 2026-07-13 (later) — GRADUATED on user directive ("pick up the quest(s) that
   generalize the logic to be data-driven; don't finish the formation-ledger
