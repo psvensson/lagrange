@@ -130,11 +130,17 @@ STATE/ACTION/STATE_TABLE/ACTION_BY_STATE shape, `decision-table-v1` JSON +
    `CRITICAL_SYSTEM_PARTITION_IDS` re-derivations were also deleted
    (single home: `system-partition-classification.js`); rung 5 still owns the
    remaining 119-site critical→priority→default ladder.
-2. **Workflow-step persistence coverage** — the CL-029 semantic: extend the
-   `replica-operation-progress.js` per-op-type step tables with an
-   escape-shape/coverage column, replacing `isPriorityOutcomeDeferredLocalProgressStep`,
-   `PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS`, the dispatch-rearm/drain/
-   visibility spines, and the step→timeout restatements.
+2. **Workflow-step persistence coverage** — LANDED 2026-07-13 (quest
+   `step-coverage-single-owner-table` + 2 bounded children). Owner:
+   `src/rebalancer/replica-operation-step-policy.js` (30+ named coverage rows
+   side by side; the CL-029 wake-preempt row and the incident-per-row
+   deferred-local-progress table are now single declarations; the triplicated
+   COMPLETION_STEPS unified). Census `npm run audit:step-coverage-owner`
+   52→0 (7 reasoned exclusions: budget scalars deferred to their own rung,
+   bookkeeping/action-routing/forensic non-coverage piles). Guard test
+   dt:prove-proven; adversarial verifier TRUSTED-WITH-NOTES. Deferred:
+   step→timeout/budget scalars (rung 2b candidate); dead COMPLETION_STEPS
+   wrapper exports (cleanup finding).
 3. **Hold engagement** — one declared (hold × moveType × partitionClass) →
    {exempt | idle-only | defer} relation in the ledger-interlock module,
    replacing the twice-repeated emergency-ADD exemption and the Set-omission
