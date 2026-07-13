@@ -1,0 +1,109 @@
+{
+  "metric": 8,
+  "target": 8,
+  "done": true,
+  "classification": "cure-typing-single-owner-census",
+  "detail": {
+    "generatedBy": "scripts/check-cure-typing-owner.js",
+    "ownerModules": [
+      "src/rebalancer/replica-placement-cure-policy.js",
+      "src/rebalancer/operation-ledger-hold-policy.js",
+      "src/rebalancer/operation-ledger-quorum-concentration.js",
+      "src/control-plane/priority-recovery-snapshot-workflow.js",
+      "src/control-plane/priority-recovery-admission-constants.js"
+    ],
+    "countedSites": [
+      {
+        "filePath": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+        "line": 21,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "isPriorityRecoveryOrdinarySerialLanePartitionId",
+        "detail": "isPriorityRecoveryEmergencyPartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
+        "line": 91,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "resolveConcurrentCreateBudgetScope",
+        "detail": "usesEmergencyPriorityOverflow"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
+        "line": 204,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "getPriorityRecoveryAdmissionPlan",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-pressure-helper.js",
+        "line": 63,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "buildPriorityDeferredObservationPressureEvidence",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-pressure-helper.js",
+        "line": 131,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "buildPriorityAddAdmissionPressureEvidence",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
+        "line": 57,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "buildConcurrentAddCountByPriorityClass",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
+        "line": 308,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "getOrdinaryPriorityRecoverySerialGateSnapshot",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
+        "line": 360,
+        "kind": "admission_lane_conjunct",
+        "enclosingIdentifier": "getPriorityRecoveryAdmissionPlan",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      }
+    ],
+    "excludedSites": [
+      {
+        "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "line": 316,
+        "kind": "cure_move_type_mint",
+        "enclosingIdentifier": "provisionInitialTablePartition",
+        "detail": "OperationType.ADD"
+      },
+      {
+        "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "line": 428,
+        "kind": "cure_move_type_mint",
+        "enclosingIdentifier": "provisionInitialTablePartition",
+        "detail": "OperationType.ADD"
+      },
+      {
+        "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
+        "line": 415,
+        "kind": "cure_move_type_mint",
+        "enclosingIdentifier": "probeProvisioningTargetAdmission",
+        "detail": "OperationType.ADD"
+      }
+    ],
+    "gates": [
+      {
+        "label": "lint",
+        "passed": true,
+        "exitCode": 0
+      },
+      {
+        "label": "targeted-suites",
+        "passed": true,
+        "exitCode": 0
+      }
+    ]
+  }
+}
