@@ -19,8 +19,8 @@ const {
   TRANSITION_STEP_OPTIONS,
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
+  classifySystemPartition,
   createTopLevelOperationBudget,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -293,7 +293,7 @@ class OperationWorkflowTransitionOrchestration
     return (
       partitionId.length > 0 &&
       operation?.workflowStep === WORKFLOW_STEP.PENDING &&
-      isPriorityControlPlanePartition({partitionId})
+      classifySystemPartition({partitionId}).priorityControlPlane
     );
   }
 
@@ -310,7 +310,7 @@ class OperationWorkflowTransitionOrchestration
     const partitionId = String(operation?.partitionId || '').trim();
     return (
       partitionId.length > 0 &&
-      isPriorityControlPlanePartition({partitionId}) &&
+      classifySystemPartition({partitionId}).priorityControlPlane &&
       PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS.has(step)
     );
   }
@@ -413,7 +413,7 @@ class OperationWorkflowTransitionOrchestration
     const partitionId = String(operation?.partitionId || '').trim();
     if (
       partitionId.length === 0 ||
-      !isPriorityControlPlanePartition({partitionId})
+      !classifySystemPartition({partitionId}).priorityControlPlane
     ) {
       return false;
     }

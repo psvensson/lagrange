@@ -27,8 +27,8 @@ const {
   TIMEOUT_BUDGET_DEFAULT,
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
+  classifySystemPartition,
   getControlPlaneRetryAfterMs,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES = Object.freeze(
@@ -135,7 +135,9 @@ function shouldDeferRetryableDispatchFailure(owner, operation, errorLike) {
   if (!operation || !isRetryableControlPlaneError(errorLike)) {
     return false;
   }
-  return owner.isCriticalSystemPartition(operation.partitionId);
+  return classifySystemPartition({
+    partitionId: operation.partitionId,
+  }).systemTable;
 }
 function isDispatchRetryableWorkflowStep(owner, operation) {
   if (!operation) {
@@ -160,7 +162,10 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
   return DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep);
 }
 function isCreateRearmDispatchPhase(owner, operation) {
-  if (!operation || !owner.isCriticalSystemPartition(operation.partitionId)) {
+  if (
+    !operation ||
+    !classifySystemPartition({partitionId: operation.partitionId}).systemTable
+  ) {
     return false;
   }
   if (operation.workflowStep !== WORKFLOW_STEP.CREATING) {
@@ -200,6 +205,9 @@ function buildDispatchRearmFromProgressReconcileEvidence(
   const createRearmPhase = owner.isCreateRearmDispatchPhase(operation);
   const timeoutDecision =
     owner.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(operation, now);
+  const partitionClassification = classifySystemPartition({
+    partitionId: operation?.partitionId || null,
+  });
   return Object.freeze({
     operationAvailable: Boolean(operation),
     observedCreatingWithoutCreateRearm:
@@ -219,10 +227,8 @@ function buildDispatchRearmFromProgressReconcileEvidence(
     dispatchRetryableWorkflowStep:
       owner.isDispatchRetryableWorkflowStep(operation),
     priorityRecoveryPartition:
-      owner.isCriticalSystemPartition(operation?.partitionId || null) ||
-      isPriorityControlPlanePartition({
-        partitionId: operation?.partitionId || null,
-      }),
+      partitionClassification.systemTable ||
+      partitionClassification.priorityControlPlane,
     dispatchRearmBudgetAvailable:
       timeoutDecision.stepTimedOut !== true ||
       timeoutDecision.operationBudgetActive === true,
@@ -662,9 +668,10 @@ function buildCoordinatorCreatedDispatchRow(operation) {
 }
 function shouldRetryCoordinatorCreatedRemoteHandoff(owner, operation) {
   const partitionId = operation?.partitionId || null;
+  const partitionClassification = classifySystemPartition({partitionId});
   return (
-    owner.isCriticalSystemPartition(partitionId) ||
-    isPriorityControlPlanePartition({partitionId})
+    partitionClassification.systemTable ||
+    partitionClassification.priorityControlPlane
   );
 }
 function buildCoordinatorCreatedRemoteHandoffTimeoutDecision(

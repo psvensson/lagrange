@@ -22,8 +22,8 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SKIP_REASON,
   buildTopologyOperatorWitnessFromWorkflowProgress,
+  classifySystemPartition,
   getControlPlaneRetryAfterMs,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -139,7 +139,7 @@ class OperationWorkflowOwnerExecutionLane
   async getReconciledReplicaStatus(replicaId, partitionId, targetNodeId) {
     const shouldPreferLocalPriorityReplicaObservation =
       targetNodeId === this.nodeId &&
-      isPriorityControlPlanePartition({partitionId});
+      classifySystemPartition({partitionId}).priorityControlPlane;
     if (
       shouldPreferLocalPriorityReplicaObservation &&
       this.repository &&

@@ -5,7 +5,7 @@ const {
   ReplicaStatus,
   WORKFLOW_STEP,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 /**
@@ -51,9 +51,9 @@ async function replayReplaceActiveSourceRemovalFromObservedTarget(context, opera
     !operation ||
     operation.type !== OperationType.REPLACE ||
     !context.repository.isOperationLocallyOwned(operation) ||
-    !isPriorityControlPlanePartition({
+    !classifySystemPartition({
       partitionId: operation.partitionId,
-    })
+    }).priorityControlPlane
   ) {
     return false;
   }

@@ -29,7 +29,7 @@ const {
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
   REBALANCE_COORDINATOR_LOG_MSG,
   STOPPING_REPLICA_OBSERVATION_STATE,
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
   normalizeNodeIdList,
   resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = SHARED;
@@ -82,7 +82,8 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
   isPriorityRecoveryRemoteSupersededTargetDrainCandidate(operation) {
     return (
       operation?.type === OperationType.REPLACE &&
-      isPriorityControlPlanePartition({partitionId: operation.partitionId}) &&
+      classifySystemPartition({partitionId: operation.partitionId})
+        .priorityControlPlane &&
       this.isPreSyncStep(operation.workflowStep) &&
       !this.repository.isOperationLocallyOwned(operation)
     );

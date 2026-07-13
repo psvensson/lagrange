@@ -29,9 +29,9 @@ const {
   TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE,
   WORKFLOW_STEP,
   buildTimeoutClassification,
+  classifySystemPartition,
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
-  isPriorityControlPlanePartition,
 } = SHARED;
 
 class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
@@ -368,7 +368,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     case WORKFLOW_STEP.SYNCING: {
       const configuredTimeout = this.config.syncingTimeoutMs;
       const partitionId = operation?.partitionId || null;
-      if (!isPriorityControlPlanePartition({partitionId})) {
+      if (!classifySystemPartition({partitionId}).priorityControlPlane) {
         return configuredTimeout;
       }
       return Math.max(

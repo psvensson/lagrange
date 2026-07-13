@@ -35,7 +35,7 @@ const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaStatus,
   WORKFLOW_STEP,
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } = SHARED;
 
 const TIMEOUT_INCOMPLETE_VISIBILITY_SUPPLEMENT_STATE = Object.freeze({
@@ -82,9 +82,10 @@ const ORPHAN_REDRIVE_RECONCILE_BOUNDARY = 'orphan_redrive';
 class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusReconcile {
   isPriorityRecoveryTimeoutVisibilityOperation(operation) {
     const partitionId = operation?.partitionId || null;
+    const partitionClassification = classifySystemPartition({partitionId});
     return (
-      this.isCriticalSystemPartition(partitionId) ||
-      isPriorityControlPlanePartition({partitionId})
+      partitionClassification.systemTable ||
+      partitionClassification.priorityControlPlane
     );
   }
 
@@ -520,7 +521,8 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       return false;
     }
     return (
-      isPriorityControlPlanePartition({partitionId: operation.partitionId}) &&
+      classifySystemPartition({partitionId: operation.partitionId})
+        .priorityControlPlane &&
       PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS.has(
         operation.workflowStep,
       )

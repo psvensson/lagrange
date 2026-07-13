@@ -11,7 +11,7 @@ const {
   DISPATCH_RETRY_MAX_DELAY_MS,
   DISPATCH_RETRY_BACKOFF_MULTIPLIER,
   DISPATCH_RETRY_JITTER_RATIO,
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowOwnerRetryRegistry {
@@ -83,10 +83,7 @@ class OperationWorkflowOwnerRetryRegistry {
       deadlineByOperationId: this.transitionRetryGraceDeadlineByOperationId,
       getTimeoutForStep: (workflowStep, operation) =>
         this.getTimeoutForStep(workflowStep, operation),
-      isCriticalSystemPartition: (partitionId) =>
-        this.isCriticalSystemPartition(partitionId),
-      isPriorityControlPlanePartition: (partitionId) =>
-        isPriorityControlPlanePartition({partitionId}),
+      classifySystemPartition,
     });
     this.executorOutcomeRetryTimerByOperationId = new Map();
     this.executorOutcomeRetryPayloadByOperationId = new Map();

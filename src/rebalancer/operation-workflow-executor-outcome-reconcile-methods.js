@@ -15,6 +15,7 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   WORKFLOW_STEP,
+  classifySystemPartition,
   isRetryableControlPlaneError,
 } = SHARED;
 
@@ -281,7 +282,9 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
   buildExecutorFailureReconcileEvidence(operation, errorLike) {
     return Object.freeze({
       criticalSystemPartition:
-        this.isCriticalSystemPartition(operation?.partitionId || null),
+        classifySystemPartition({
+          partitionId: operation?.partitionId || null,
+        }).systemTable,
       dispatchRetryableWorkflowStep:
         this.isDispatchRetryableWorkflowStep(operation),
       retryableControlPlaneFailure:

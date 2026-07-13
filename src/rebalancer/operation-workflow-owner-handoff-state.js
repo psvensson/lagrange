@@ -11,9 +11,9 @@ const {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
   WORKFLOW_STEP,
+  classifySystemPartition,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
-  isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE = Object.freeze({
@@ -243,9 +243,9 @@ function withOwnerHandoffState(Base) {
         responseContext: operation.operationId,
       };
       if (
-        isPriorityControlPlanePartition({
+        classifySystemPartition({
           partitionId: operation.partitionId || null,
-        })
+        }).priorityControlPlane
       ) {
         deliveryOptions.deliveryPriority =
           OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL;
@@ -579,11 +579,12 @@ function withOwnerHandoffState(Base) {
      */
     resolveCoordinatorCreatedLocalOperationPrimeState(operation) {
       const partitionId = operation?.partitionId || null;
-      if (this.isCriticalSystemPartition(partitionId)) {
+      const partitionClassification = classifySystemPartition({partitionId});
+      if (partitionClassification.systemTable) {
         return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
           .CRITICAL_SYSTEM_PARTITION;
       }
-      if (isPriorityControlPlanePartition({partitionId})) {
+      if (partitionClassification.priorityControlPlane) {
         return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
           .PRIORITY_CONTROL_PLANE_PARTITION;
       }

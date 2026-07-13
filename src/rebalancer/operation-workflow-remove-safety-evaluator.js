@@ -8,7 +8,7 @@ const {
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
   buildPriorityRecoveryBlockedPartitionIds,
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
   normalizeReplicaRowNodeIds,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -155,9 +155,9 @@ async function resolvePriorityRecoveryQuorumProjection(
 async function evaluatePriorityRecoveryCompletionRemoveSafety(context, operation) {
   if (
     !operation ||
-    !isPriorityControlPlanePartition({
+    !classifySystemPartition({
       partitionId: operation.partitionId,
-    })
+    }).priorityControlPlane
   ) {
     return null;
   }
@@ -207,9 +207,9 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
 ) {
   if (
     !operation ||
-    !isPriorityControlPlanePartition({
+    !classifySystemPartition({
       partitionId: operation.partitionId,
-    })
+    }).priorityControlPlane
   ) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
@@ -366,7 +366,9 @@ async function evaluateRemoveSafety(context, operation) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  if (!context.isCriticalSystemPartition(operation.partitionId)) {
+  if (
+    !classifySystemPartition({partitionId: operation.partitionId}).systemTable
+  ) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
@@ -602,9 +604,9 @@ async function evaluateRemoveSafety(context, operation) {
     priorityPublicationLeaderRemoveSafetyEvaluation?.classification ===
       REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE &&
     priorityRecoveryCompletionSafe &&
-    isPriorityControlPlanePartition({
+    classifySystemPartition({
       partitionId: operation?.partitionId,
-    })
+    }).priorityControlPlane
   ) {
     const completionSafeFloor =
       await resolvePriorityRecoveryQuorumProjection(

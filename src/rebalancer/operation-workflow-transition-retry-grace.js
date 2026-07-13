@@ -10,9 +10,7 @@ class OperationWorkflowTransitionRetryGrace {
   constructor(options) {
     this.deadlineByOperationId = options.deadlineByOperationId;
     this.getTimeoutForStep = options.getTimeoutForStep;
-    this.isCriticalSystemPartition = options.isCriticalSystemPartition;
-    this.isPriorityControlPlanePartition =
-      options.isPriorityControlPlanePartition;
+    this.classifySystemPartition = options.classifySystemPartition;
   }
 
   /**
@@ -139,12 +137,12 @@ class OperationWorkflowTransitionRetryGrace {
       context.partitionId.length > 0 ?
         context.partitionId :
         null;
+    const partitionClassification = this.classifySystemPartition({
+      partitionId,
+    });
     const usesProtectedPriorityBudget =
-      this.isCriticalSystemPartition(partitionId) ||
-      (
-        typeof this.isPriorityControlPlanePartition === 'function' &&
-        this.isPriorityControlPlanePartition(partitionId)
-      );
+      partitionClassification.systemTable ||
+      partitionClassification.priorityControlPlane;
     if (!usesProtectedPriorityBudget) {
       return false;
     }

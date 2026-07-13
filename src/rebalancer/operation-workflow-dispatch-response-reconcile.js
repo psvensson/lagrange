@@ -23,9 +23,9 @@ const {
   TRANSPORT_ERROR_MSG,
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
+  classifySystemPartition,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
-  isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 // Bounded memory for the first-attempt dispatch log discrimination; clearing
 // on overflow only means one extra info line per live operation step.
@@ -135,9 +135,10 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
   },
   shouldBoundReplicaOperationDispatch(operation) {
     const partitionId = operation?.partitionId || null;
+    const partitionClassification = classifySystemPartition({partitionId});
     return (
-      this.isCriticalSystemPartition(partitionId) ||
-      isPriorityControlPlanePartition({partitionId})
+      partitionClassification.systemTable ||
+      partitionClassification.priorityControlPlane
     );
   },
   buildReplicaOperationDispatchOptions(operation, dispatchNodeId) {
@@ -646,9 +647,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     if (
       operation?.workflowStep !== WORKFLOW_STEP.ACTIVE ||
       operation?.type !== OperationType.REPLACE ||
-      !isPriorityControlPlanePartition({
-        partitionId: operation?.partitionId,
-      }) ||
+      !classifySystemPartition({partitionId: operation?.partitionId})
+        .priorityControlPlane ||
       !this.repository.isOperationLocallyOwned(operation) ||
       this.safetyDeferredRetryTimerByOperationId.has(operationId) ||
       this.dispatchRetryTimerByOperationId.has(operationId) ||
@@ -697,9 +697,9 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
             !this.repository.isOperationLocallyOwned(currentOperation) ||
             currentOperation.type !== OperationType.REPLACE ||
             currentOperation.workflowStep !== WORKFLOW_STEP.ACTIVE ||
-            !isPriorityControlPlanePartition({
+            !classifySystemPartition({
               partitionId: currentOperation.partitionId,
-            })
+            }).priorityControlPlane
           ) {
             return;
           }

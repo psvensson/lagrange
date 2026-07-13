@@ -26,6 +26,7 @@ const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SAFETY_DEFERRED_LOG_THROTTLE_MS,
   WORKFLOW_STEP,
+  classifySystemPartition,
 } = SHARED;
 
 class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain {
@@ -362,7 +363,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     if (
       !operation ||
       operation.type !== OperationType.REMOVE ||
-      !this.isCriticalSystemPartition(operation.partitionId)
+      !classifySystemPartition({partitionId: operation.partitionId}).systemTable
     ) {
       return false;
     }

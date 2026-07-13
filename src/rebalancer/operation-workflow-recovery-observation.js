@@ -24,6 +24,7 @@ const {
   STOPPING_REPLICA_OBSERVATION_STATE,
   TRANSITION_RETRY_DELAY_MS,
   WORKFLOW_STEP,
+  classifySystemPartition,
 } = SHARED;
 
 const COORDINATOR_CREATED_CACHE_REENTRY_STATE = Object.freeze({
@@ -586,7 +587,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
   deferStoppingObservationRetry(operation) {
     if (
       !operation?.operationId ||
-      !this.isCriticalSystemPartition(operation.partitionId)
+      !classifySystemPartition({partitionId: operation.partitionId}).systemTable
     ) {
       return false;
     }

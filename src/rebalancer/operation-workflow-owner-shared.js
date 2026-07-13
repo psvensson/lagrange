@@ -52,10 +52,7 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
-} from '../bootstrap/system-partition-classification.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {
   WORKFLOW_STEP,
   NUM,
@@ -619,6 +616,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   buildTimeoutClassification,
   buildTopologyOperatorWitnessFromWorkflowProgress,
   classifyTransportDeliveryOutcome,
+  classifySystemPartition,
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
   getControlPlaneRetryAfterMs,
@@ -626,9 +624,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   hasPriorityRecoverySpreadGap,
   isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
-  isSystemTablePartition,
   normalizeNodeIdList,
   normalizeReplicaRowNodeIds,
   readAuthoritativeControlPlaneRows,

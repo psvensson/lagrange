@@ -14,7 +14,7 @@ const {
   OperationType,
   ReplicaStatus,
   WORKFLOW_STEP,
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES = Object.freeze(
@@ -106,10 +106,12 @@ function buildDispatchWakeProgressPreemptEvidence(
       dispatchWakeInput === true &&
       operation?.workflowStep === WORKFLOW_STEP.PENDING &&
       (
-        context.isCriticalSystemPartition(operation?.partitionId) ||
-        isPriorityControlPlanePartition({
+        classifySystemPartition({
           partitionId: operation?.partitionId,
-        })
+        }).systemTable ||
+        classifySystemPartition({
+          partitionId: operation?.partitionId,
+        }).priorityControlPlane
       ),
     observedTargetStatus,
   });

@@ -648,7 +648,8 @@ function shouldReconcilePriorityRecoveryDispatchPendingDrain(
     evidence.workflowProgressBoundary === true
     // Partition scope is NOT re-checked here: it is owned solely by the inner drain
     // candidate gate isPriorityRecoveryOperationDrainCandidate ->
-    // isPriorityControlPlanePartition (operation-workflow-recovery-timeout.js). A
+    // classifySystemPartition(...).priorityControlPlane
+    // (operation-workflow-recovery-timeout.js). A
     // non-candidate partition reaching reconcile yields a NOOP drain snapshot and falls
     // through to the owner-effect path, so a duplicate partition pre-filter here only
     // risked drifting from that single authority.
