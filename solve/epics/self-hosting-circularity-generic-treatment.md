@@ -141,10 +141,25 @@ STATE/ACTION/STATE_TABLE/ACTION_BY_STATE shape, `decision-table-v1` JSON +
    dt:prove-proven; adversarial verifier TRUSTED-WITH-NOTES. Deferred:
    step→timeout/budget scalars (rung 2b candidate); dead COMPLETION_STEPS
    wrapper exports (cleanup finding).
-3. **Hold engagement** — one declared (hold × moveType × partitionClass) →
-   {exempt | idle-only | defer} relation in the ledger-interlock module,
-   replacing the twice-repeated emergency-ADD exemption and the Set-omission
-   lane (CL-013).
+3. **Hold engagement** — LANDED 2026-07-13 (quest
+   `hold-engagement-single-owner-table`, single quest, no children needed).
+   Owner: `src/rebalancer/operation-ledger-hold-policy.js` (the
+   (hold × move class) → {exempt | idle_only | defer} relation; named rows:
+   disruptive self-move {REPLACE,REMOVE} with the CL-013 ADD omission made
+   explicit, emergency quorum-restore ADD exemption declared once instead of
+   twice, quorum-spread cure REPLACE; move classifier; fail-closed DEFER).
+   `operation-ledger-quorum-concentration.js` stays the policy-free
+   hold-state owner. Census `npm run audit:hold-engagement-owner` 10→0
+   (4 AST kinds: ledger conjuncts, emergency exemption reads, raw hold-state
+   reads, cure classifiers; 7 sibling-admission-hold sites are committed
+   reasoned exclusions). Guard test dt:prove-proven; `decision-table-v1` row
+   spec `docs/specs/decision-tables/operation-ledger-hold-engagement.json`;
+   adversarial verifier TRUSTED-WITH-NOTES (notes: owner ingress
+   case-normalization is a strict superset only on production-unreachable
+   inputs, CL-013 precedent; analyzer escapes need deliberate evasion).
+   Follow-up seeded for rung 4 / a 3b batch: the censused sibling-hold
+   exempt rows (priority-budget lanes C1-C5, pressure holds E1-E2, ordinary
+   serial gate F1, serial-wait lane G1-G3) share the defect shape.
 4. **Cure typing** — declared (condition → cureType → admission-lane) rows
    co-owned with `operation-ledger-quorum-concentration.js` so
    REPLACE-cures-skew / ADD-cures-under-replication is data, not re-inferred at
@@ -179,6 +194,12 @@ establishment) graduate separately after ladder rung 1 seeds the evidence.
   ledger; hold predicate unsatisfiable at ≤2 voters). Inventory of the five
   in-repo escape shapes compiled from the class memory, the L-write epic, and the
   interlock/quorum-concentration source.
+- 2026-07-13 (rung 3) — `hold-engagement-single-owner-table` SOLVED same-day:
+  census analyzer committed first (baseline 10), owner module + three
+  consumer migrations landed as one verified attempt (TRUSTED-WITH-NOTES),
+  handoff commit `943b6993` + companion `33ec0cd4` (the handoff's path list
+  missed the attempt's NEW untracked files — owner, guard test, spec, oracle;
+  process note for rung 4: verify the handoff commit includes created files).
 - 2026-07-13 (later) — GRADUATED on user directive ("pick up the quest(s) that
   generalize the logic to be data-driven; don't finish the formation-ledger
   lineage the old way"). Two code-census sweeps sized the surface (see
