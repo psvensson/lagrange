@@ -4,7 +4,7 @@
   "done": true,
   "classification": "partition-class-single-owner-census",
   "detail": {
-    "analyzerContractVersion": 2,
+    "analyzerContractVersion": 3,
     "generatedBy": "scripts/check-partition-class-owner.js",
     "ownerModule": "src/bootstrap/system-partition-classification.js",
     "ownerContract": {
