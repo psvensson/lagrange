@@ -1,0 +1,381 @@
+{
+  "metric": 52,
+  "target": 0,
+  "done": false,
+  "classification": "step-coverage-single-owner-census",
+  "detail": {
+    "generatedBy": "scripts/check-step-coverage-owner.js",
+    "ownerModules": [
+      "src/rebalancer/replica-operation-progress.js",
+      "src/rebalancer/replica-operation-step-policy.js"
+    ],
+    "countedSites": [
+      {
+        "filePath": "src/control-plane/membership-publication-row-helpers.js",
+        "line": 162,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "buildDispatchRetryReadyNodeEvidence",
+        "detail": "ACTIVE,PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/membership-publication-row-helpers.js",
+        "line": 248,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "isDispatchRetryOperation",
+        "detail": "ACTIVE,PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/priority-recovery-dispatch-pending-diagnostic-owner.js",
+        "line": 41,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/priority-recovery-snapshot-contract.js",
+        "line": 180,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_DISPATCHED_WORKFLOW_STEPS",
+        "detail": "SENDING,CREATING,SYNCING,ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/control-plane/priority-recovery-snapshot-ingress.js",
+        "line": 316,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "isPriorityRecoveryDispatchPendingWorkflowStep",
+        "detail": "PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/priority-recovery-snapshot-observation.js",
+        "line": 159,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "resolvePriorityRecoveryWorkflowProgressPhaseId",
+        "detail": "ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/control-plane/replica-dispatch-reconcile-callbacks.js",
+        "line": 146,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "reconcileOperationDispatch",
+        "detail": "PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
+        "line": 77,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "enqueueReplicaOperationRow",
+        "detail": "ACTIVE,PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
+        "line": 124,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "replayReplicaOperationRow",
+        "detail": "ACTIVE,PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
+        "line": 138,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "buildDispatchReplayReadyNodeEvidence",
+        "detail": "ACTIVE,PENDING,SENDING"
+      },
+      {
+        "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
+        "line": 237,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "isDispatchReplayableOperationRow",
+        "detail": "ACTIVE,PENDING,SENDING"
+      },
+      {
+        "filePath": "src/node/message-group-service-handler-constants.js",
+        "line": 77,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "COMPLETION_STEPS",
+        "detail": "ACTIVE,REMOVED,FAILED"
+      },
+      {
+        "filePath": "src/node/replica-handler-constants.js",
+        "line": 121,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "COMPLETION_STEPS",
+        "detail": "ACTIVE,REMOVED,FAILED"
+      },
+      {
+        "filePath": "src/node/replica-handler-voter-readiness-methods.js",
+        "line": 124,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "hasInFlightCriticalVoterReadyGateOperation",
+        "detail": "FAILED,REMOVED"
+      },
+      {
+        "filePath": "src/node/runtime-service-handler-constants.js",
+        "line": 73,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "COMPLETION_STEPS",
+        "detail": "ACTIVE,REMOVED,FAILED"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-dispatch-execution.js",
+        "line": 279,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "dispatchOperationInternal",
+        "detail": "ACTIVE,PENDING,SENDING,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
+        "line": 141,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "isDispatchRetryableWorkflowStep",
+        "detail": "ACTIVE,PENDING,SENDING,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
+        "line": 180,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "isRemoveInitialDispatchPhase",
+        "detail": "ACTIVE,PENDING,SENDING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "line": 213,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "executeOperationInternal",
+        "detail": "ACTIVE,PENDING,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
+        "line": 27,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING,CREATING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
+        "line": 467,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "resolveTransitionReason",
+        "detail": "ACTIVE,CREATING,FAILED,REMOVED,SENDING,STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-owner-ports.js",
+        "line": 57,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS",
+        "detail": "PENDING,SENDING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-owner-shared.js",
+        "line": 278,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING,CREATING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-owner-shared.js",
+        "line": 337,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING,CREATING,SYNCING,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "line": 66,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS",
+        "detail": "ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "line": 141,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING,CREATING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "line": 164,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "line": 270,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS",
+        "detail": "SYNCING,ACTIVE"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "line": 284,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING,CREATING,SYNCING,ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile-shared.js",
+        "line": 460,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS",
+        "detail": "ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
+        "line": 277,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "handleRecovery",
+        "detail": "STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
+        "line": 136,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "applyReconciledReplicaStatus",
+        "detail": "CREATING,PENDING,SENDING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
+        "line": 364,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "getTimeoutForStep",
+        "detail": "CREATING,PENDING,SENDING,STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
+        "line": 464,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "isPreSyncStep",
+        "detail": "PENDING,SENDING,CREATING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
+        "line": 479,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "resolveOperationLifecycleAction",
+        "detail": "ACTIVE,CREATING,PENDING,SENDING,STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
+        "line": 26,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS",
+        "detail": "SENDING,CREATING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
+        "line": 246,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "updateStep",
+        "detail": "ACTIVE,CREATING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
+        "line": 421,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "isPriorityOutcomeDeferredLocalProgressStep",
+        "detail": "ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
+        "line": 471,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "recordPriorityDispatchDeferredLocalProgress",
+        "detail": "ACTIVE,CREATING"
+      },
+      {
+        "filePath": "src/rebalancer/operation-workflow-transition-retry-grace.js",
+        "line": 150,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "usesOperationBudget",
+        "detail": "ACTIVE,CREATING,PENDING,SENDING,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/priority-publication-safety-shared.js",
+        "line": 41,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS",
+        "detail": "PENDING,SENDING,CREATING,SYNCING,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
+        "line": 576,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "reconcileReplaceActualActive",
+        "detail": "ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
+        "line": 30,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS",
+        "detail": "PENDING,SENDING"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
+        "line": 609,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "getRecentOperationMissReuseBudgetMs",
+        "detail": "ACTIVE,CREATING,STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "line": 59,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE",
+        "detail": "PENDING,SENDING,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "line": 67,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE",
+        "detail": "PENDING,SENDING,CREATING,SYNCING,ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-recovery-helper.js",
+        "line": 113,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "handleRecovery",
+        "detail": "STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/replica-operation-liveness.js",
+        "line": 218,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "inferOperationTypeFromStepsHistory",
+        "detail": "CREATING,STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/replica-operation-repository-incomplete-read-methods.js",
+        "line": 75,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS",
+        "detail": "PENDING,SENDING,CREATING,SYNCING,ACTIVE,STOPPING"
+      },
+      {
+        "filePath": "src/rebalancer/replica-operation-repository-incomplete-read-methods.js",
+        "line": 305,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "result",
+        "detail": "PENDING,SENDING,CREATING,SYNCING,STOPPING,ACTIVE"
+      },
+      {
+        "filePath": "src/rebalancer/replica-operation-repository-incomplete-read-methods.js",
+        "line": 255,
+        "kind": "step_branch_pile",
+        "enclosingIdentifier": "cachedRows",
+        "detail": "ACTIVE,CREATING,PENDING,SENDING,STOPPING,SYNCING"
+      },
+      {
+        "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
+        "line": 28,
+        "kind": "step_coverage_set_declaration",
+        "enclosingIdentifier": "PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET",
+        "detail": "ACTIVE,REMOVED"
+      }
+    ],
+    "excludedSites": [],
+    "gates": null
+  }
+}
