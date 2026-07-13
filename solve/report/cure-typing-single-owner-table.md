@@ -16,16 +16,16 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: ownership_gap
+- Movement: first blocker observed: unknown
+- Latest evidence: solve/oracle/cure-typing-single-owner-table.json
 - Selected theory: none
 - Next move: continue supervised step for cure-typing-single-owner-table-main
 
 ## Continuation
-- Status: blocked-metric-projection
+- Status: allowed
 - Next action: continue supervised step for cure-typing-single-owner-table-main
-- Blocker: live frontier metric 0 differs from recorded metric 15
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 1
@@ -37,11 +37,12 @@
 - Signals: none
 
 ## Frontiers
-- **cure-typing-single-owner-table-main** [open] rung 1, attempts 1, metric 15 -> 15
+- **cure-typing-single-owner-table-main** [open] rung 1, attempts 1, metric 15 -> 0
 
 ## Findings
 - **cure-typing-single-owner-table-main**: independent verification passed: TRUSTED-WITH-NOTES (A1-A10 attacks not refuted; notes: follow-up selectable-source must be computed after id extraction as a boolean; ordinary serial gate is mixed-scope — inject arg-ignoring entity-scoped isPriorityPartition; pressure-helper emergency flag equivalence rests on emergency-table-ids subset of priority-table-ids) [subagent:aa3ee6c5eceb79ce4]
 - **cure-typing-single-owner-table-main**: sealed symptom RESOLVED on HEAD by the two child slices (this is the intended path, not a stale seal): census metric 15 -> 0 via cure-typing-owner-migration-move-minters (7 mints) and cure-typing-owner-migration-admission-lanes (8 lane conjuncts), both SOLVED and handed off with adversarial verification [solve/oracle/cure-typing-single-owner-table.json]
+- **cure-typing-single-owner-table-main**: Ingested evidence from cure-typing-single-owner-table.json. Metric: 15 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/cure-typing-single-owner-table.json]
 - **cure-typing-single-owner-table-main**: Ingested evidence from cure-typing-single-owner-table.json. Metric: 15 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/cure-typing-single-owner-table.json]
 
 ## Theories
