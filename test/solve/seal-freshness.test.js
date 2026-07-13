@@ -27,6 +27,22 @@ tap.test('fires when src/ drifted since the seal and no repro finding exists', (
   t.end();
 });
 
+tap.test('new drafts prefer draftedAtCommit while legacy seals remain readable', (t) => {
+  const drafted = 'b'.repeat(40);
+  let receivedCommit = null;
+  const advisory = buildSealFreshnessAdvisory(
+    quest({links: {draftedAtCommit: drafted, sealedAtCommit: SEAL_SHA}}),
+    [],
+    {root: '/nowhere', diffNamesSince: (_root, commit) => {
+      receivedCommit = commit;
+      return 'src/a.js\n';
+    }},
+  );
+  t.equal(receivedCommit, drafted);
+  t.equal(advisory.draftedAtCommit, drafted);
+  t.end();
+});
+
 tap.test('silent when no src/ drift since the seal', (t) => {
   t.equal(buildSealFreshnessAdvisory(quest(), [], options('')), null);
   t.equal(buildSealFreshnessAdvisory(quest(), [], options('\n \n')), null,

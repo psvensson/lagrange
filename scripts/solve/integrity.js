@@ -65,7 +65,8 @@ export function integrityViolationId({
 }) {
   return [
     quest.id,
-    generation || quest.links?.sealedAtCommit || UNVERSIONED_GENERATION,
+    generation || quest.links?.draftedAtCommit ||
+      quest.links?.sealedAtCommit || UNVERSIONED_GENERATION,
     scope,
     frontier || QUEST_LEVEL_FRONTIER,
     digest({

@@ -142,5 +142,27 @@ export function validateGoalpostsImmutable(quest, declaredEvent) {
   if (!allMetricsImmutableOrRefined) {
     violations.push('frontier metric definitions changed after declaration');
   }
+  const sealedVersion = declaredEvent.sealed.authoringContractVersion;
+  if (sealedVersion !== undefined) {
+    if (quest.authoringContractVersion !== sealedVersion) {
+      violations.push('quest authoring contract version changed after declaration');
+    }
+    if (JSON.stringify(quest.statement) !==
+      JSON.stringify(declaredEvent.sealed.statement)) {
+      violations.push('quest statement changed after declaration');
+    }
+    if (JSON.stringify(quest.class) !== JSON.stringify(declaredEvent.sealed.class)) {
+      violations.push('quest class changed after declaration');
+    }
+    if (JSON.stringify(quest.constraints || []) !==
+      JSON.stringify(declaredEvent.sealed.constraints || [])) {
+      violations.push('quest constraints changed after declaration');
+    }
+    const frontierIds = quest.frontiers.map((frontier) => frontier.id);
+    if (JSON.stringify(frontierIds) !==
+      JSON.stringify(declaredEvent.sealed.frontierIds || [])) {
+      violations.push('frontier identities changed after declaration');
+    }
+  }
   return violations;
 }

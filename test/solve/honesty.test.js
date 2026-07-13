@@ -185,4 +185,53 @@ tap.test('honesty checks (the only process)', async (t) => {
     'a different scenario is goalpost movement, not a gradient refinement');
     t.end();
   });
+
+  t.test('versioned declarations seal statement, class, constraints, and frontier ids', (t) => {
+    const metric = {probe: 'harness', args: {scenario: 'demo', metric: 'priority'}};
+    const quest = {
+      authoringContractVersion: 1,
+      statement: 'The demo passes.',
+      class: 'process',
+      constraints: [{id: 'preserve-history'}],
+      doneWhen: metric,
+      frontiers: [{id: 'demo-main', metric}],
+    };
+    const declared = {sealed: {
+      authoringContractVersion: 1,
+      statement: quest.statement,
+      class: quest.class,
+      constraints: quest.constraints,
+      doneWhen: quest.doneWhen,
+      frontierIds: ['demo-main'],
+      frontierMetrics: [metric],
+    }};
+    t.same(validateGoalpostsImmutable(quest, declared), []);
+    const moved = {
+      ...quest,
+      statement: 'A different result passes.',
+      class: 'product',
+      constraints: [],
+      frontiers: [{id: 'renamed', metric}],
+    };
+    const violations = validateGoalpostsImmutable(moved, declared).join('\n');
+    t.match(violations, /statement changed/u);
+    t.match(violations, /class changed/u);
+    t.match(violations, /constraints changed/u);
+    t.match(violations, /frontier identities changed/u);
+    t.end();
+  });
+
+  t.test('legacy declarations retain the historical comparison surface', (t) => {
+    const metric = {probe: 'oracle', args: {file: 'o'}};
+    const declared = {sealed: {doneWhen: metric, frontierMetrics: [metric]}};
+    const quest = {
+      statement: 'Legacy statement may predate statement sealing.',
+      class: 'process',
+      constraints: [{id: 'legacy'}],
+      doneWhen: metric,
+      frontiers: [{id: 'legacy-renamed', metric}],
+    };
+    t.same(validateGoalpostsImmutable(quest, declared), []);
+    t.end();
+  });
 });

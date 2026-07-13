@@ -3,7 +3,8 @@
 // Incident class (formation-promoted-voter-not-voter-ready-routable-60s, c7057af4): a
 // quest sealed against evidence from an older HEAD spent a full disambiguation rung
 // before discovering the sealed symptom no longer reproduces — fixes landed between
-// the seal evidence and the work. `new` stamps `links.sealedAtCommit`; this advisory
+// the draft evidence and the work. New authoring contracts stamp
+// `links.draftedAtCommit`; legacy Quests retain `links.sealedAtCommit`. This advisory
 // fires while (a) src/ has changed since that commit and (b) no `repro-on-head`
 // finding exists, steering the driver to a cheap reproduce-on-HEAD check as the first
 // move. Advisory-only (repo pattern: advisory-not-gate) and silent for legacy quests
@@ -78,23 +79,24 @@ function hasReproOnHeadFinding(log) {
  * @return {Object|null}
  */
 export function buildSealFreshnessAdvisory(quest, log, options) {
-  const sealedAtCommit = quest?.links?.sealedAtCommit;
-  if (typeof sealedAtCommit !== 'string' || !sealedAtCommit.trim()) return null;
+  const draftedAtCommit = quest?.links?.draftedAtCommit ??
+    quest?.links?.sealedAtCommit;
+  if (typeof draftedAtCommit !== 'string' || !draftedAtCommit.trim()) return null;
   if (hasReproOnHeadFinding(log)) return null;
   const diff = (options.diffNamesSince || gitDiffNamesSince)(
-    options.root, sealedAtCommit.trim());
+    options.root, draftedAtCommit.trim());
   if (diff === null) return null;
   const changed = diff.split(LINE_SEPARATOR)
     .map((line) => line.trim()).filter(Boolean);
   if (changed.length === 0) return null;
-  const shortSha = sealedAtCommit.trim().slice(0, SHORT_SHA_LENGTH);
+  const shortSha = draftedAtCommit.trim().slice(0, SHORT_SHA_LENGTH);
   return {
     kind: SEAL_FRESHNESS_ADVISORY_KIND,
     severity: ADVISORY_SEVERITY,
-    sealedAtCommit: sealedAtCommit.trim(),
+    draftedAtCommit: draftedAtCommit.trim(),
     changedSrcFiles: changed.length,
     message:
-      `src/ has changed in ${changed.length} file(s) since this quest was sealed ` +
+      `src/ has changed in ${changed.length} file(s) since this quest was drafted ` +
       `(${shortSha}) and no repro-on-head finding exists — reproduce the sealed ` +
       SEAL_FRESHNESS_MESSAGE_SUFFIX,
     command:
