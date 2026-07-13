@@ -26,6 +26,8 @@
 
 ## Findings
 - **cure-typing-owner-migration-move-minters-main**: sealed symptom reproduces on HEAD: census metric 15 with all 7 cure_move_type_mint sites intact in calculateMoves (4) and buildPriorityRecoveryFollowUpMove (3); the src change since draft is the new owner module itself [solve/oracle/cure-typing-owner-migration-move-minters.json]
+- **cure-typing-owner-migration-move-minters-main**: independent verification passed: TRUSTED (value fidelity by object identity through the shared constant chain; surplus reason guards unchanged; classifier proven complement of shouldReplace; no fall-through to the REPLACE mint; no remaining literal mints; 6/6 suites, lint clean, metric 8) [subagent:ace1a97809590610b]
+- **cure-typing-owner-migration-move-minters-main**: independent verification passed for the aggregate: single-attempt quest, aggregate fingerprint is byte-identical to the attempt fingerprint already adversarially verified TRUSTED (six attack angles, 6/6 suites, lint clean, metric 8) [subagent:ace1a97809590610b]
 
 ## Theories
 _(none recorded)_
