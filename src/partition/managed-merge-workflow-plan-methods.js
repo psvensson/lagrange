@@ -93,8 +93,8 @@ class ManagedMergeWorkflowPlanMethods {
     if (!this.isLocalManagedMergeLeader(leftInfo)) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.LEADER_REQUIRED);
     }
-    if (this.isCriticalSystemPartition(leftPartitionId) === true ||
-        this.isCriticalSystemPartition(rightPartitionId) === true) {
+    if (this.isSystemTablePartitionId(leftPartitionId) === true ||
+        this.isSystemTablePartitionId(rightPartitionId) === true) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.CRITICAL_PARTITION);
     }
     return {

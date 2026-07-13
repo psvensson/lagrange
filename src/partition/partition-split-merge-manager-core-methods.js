@@ -1,6 +1,6 @@
 import {SERVICE_TYPE} from '../constants/index.js';
 import {ADMISSION_DECISION} from '../rebalancer/storage-capacity-constants.js';
-import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
@@ -472,7 +472,7 @@ class PartitionSplitMergeManagerCoreMethods {
     // never split — their single-owner / single-Raft-leader semantics are the
     // basis for owner-driven membership being a single source of truth. A split
     // would create a second "owner" for a fragment and break that invariant.
-    if (isPriorityControlPlanePartition({partitionId})) {
+    if (classifySystemPartition({partitionId}).priorityControlPlane) {
       return false;
     }
     const storageThreshold = policy.splitStorageThreshold || this.splitStorageThreshold;

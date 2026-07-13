@@ -1,7 +1,7 @@
 import {AddressManager} from '../address/address-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
-  CRITICAL_SYSTEM_PARTITION_IDS,
+  isBootstrapCriticalSystemPartitionId,
 } from '../bootstrap/system-partition-classification.js';
 import {
   ENTITY_TYPE,
@@ -113,14 +113,14 @@ class PartitionServiceRowOwner {
     };
   }
 
-  isCriticalSystemPartition(partitionId) {
+  isBootstrapCriticalPartitionId(partitionId) {
     return typeof partitionId === 'string' &&
-      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
+      isBootstrapCriticalSystemPartitionId(partitionId);
   }
 
   buildDeferredUpdateOptions(serviceId, partitionId = null) {
     return {
-      ...(this.isCriticalSystemPartition(partitionId) ?
+      ...(this.isBootstrapCriticalPartitionId(partitionId) ?
         CRITICAL_SERVICE_ROW_UPDATE_OPTION :
         SERVICE_ROW_UPDATE_OPTION),
       coalescingKey: `services:${serviceId}`,
@@ -129,7 +129,7 @@ class PartitionServiceRowOwner {
 
   buildPartitionLeaderUpdateOptions(partitionId) {
     return {
-      ...(this.isCriticalSystemPartition(partitionId) ?
+      ...(this.isBootstrapCriticalPartitionId(partitionId) ?
         CRITICAL_SERVICE_ROW_UPDATE_OPTION :
         SERVICE_ROW_UPDATE_OPTION),
       coalescingKey: `partitions:leader:${partitionId}`,

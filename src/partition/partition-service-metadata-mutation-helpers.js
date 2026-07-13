@@ -1,4 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 
 const {
   AuthoritativeRowMutationHelper,
@@ -8,7 +11,6 @@ const {
   PRESSURE_WORK_CLASS,
   SYSTEM_TABLE_NAME,
   TABLES,
-  isPriorityControlPlanePartition,
 } = PARTITION_SERVICE_SHARED;
 
 function hasAuthoritativeRoleReadOwner(gateway) {
@@ -80,9 +82,9 @@ function createRoleMutationHelper(owner) {
       updated_at: updatedAt,
     }),
     buildUpdateOptions: () => {
-      const priorityPartition = isPriorityControlPlanePartition({
+      const priorityPartition = classifySystemPartition({
         partitionId: owner.partitionId,
-      });
+      }).priorityControlPlane;
       return {
         deliveryPriority: priorityPartition ?
           PARTITION_SERVICE_LITERAL.CRITICAL :

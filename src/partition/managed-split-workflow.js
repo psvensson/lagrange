@@ -35,7 +35,7 @@ const LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION = 'resolveActivePartitionVersion';
 const LOCAL_STR_BUILDMANAGEDSPLITPLAN = 'buildManagedSplitPlan';
 const LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS = 'resolveProvisionTargetNodeIds';
 const LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS = 'getRoutablePartitionServiceNodeIds';
-const LOCAL_STR_ISCRITICALSYSTEMPARTITION = 'isCriticalSystemPartition';
+const LOCAL_STR_ISSYSTEMTABLEPARTITIONID = 'isSystemTablePartitionId';
 const LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT = 'captureTopologySnapshot';
 const LOCAL_STR_CALCULATEQUORUMREPLICACOUNT = 'calculateQuorumReplicaCount';
 const LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET = 'createExecutionTimeoutBudget';
@@ -115,9 +115,12 @@ class ManagedSplitWorkflow {
       ) ||
       options.getRoutablePartitionServiceNodeIds ||
       (() => []);
-    this.isCriticalSystemPartition =
-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_ISCRITICALSYSTEMPARTITION) ||
-      options.isCriticalSystemPartition ||
+    this.isSystemTablePartitionId =
+      bindTopologyMethod(
+        this.topologyAdapter,
+        LOCAL_STR_ISSYSTEMTABLEPARTITIONID,
+      ) ||
+      options.isSystemTablePartitionId ||
       (() => false);
     this.captureTopologySnapshot =
       bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT) ||
@@ -267,7 +270,7 @@ class ManagedSplitWorkflow {
     const splitBootstrapReplicaCount =
       this.calculateQuorumReplicaCount(replicaCount);
     const criticalSystemPartition =
-      this.isCriticalSystemPartition(partitionId) === true;
+      this.isSystemTablePartitionId(partitionId) === true;
     const sourceRoutableNodeIds = this.getRoutablePartitionServiceNodeIds(
       partitionId,
     );

@@ -243,7 +243,10 @@ function buildMergeWorkflow(options = {}) {
       'getRoutablePartitionServiceNodeIds',
       () => ['node-a', 'node-b'],
     ),
-    isCriticalSystemPartition: opt('isCriticalSystemPartition', () => false),
+    isSystemTablePartitionId: opt(
+      'isSystemTablePartitionId',
+      () => false,
+    ),
     storageAdmissionService: opt('storageAdmissionService', {
       async checkSplit(payload) {
         admissionCalls.push(payload);

@@ -1,0 +1,404 @@
+diff --git a/src/partition/managed-merge-topology-adapter.js b/src/partition/managed-merge-topology-adapter.js
+index bf802c7b37e54b7763e4535cf0c1918e3e35fd3c..9e18056193385dc897d25628205f4cb39d378cec 100644
+--- a/src/partition/managed-merge-topology-adapter.js
++++ b/src/partition/managed-merge-topology-adapter.js
+@@ -1,4 +1,7 @@
+ import {TABLES} from '../constants/index.js';
++import {
++  isBootstrapCriticalSystemPartitionId,
++} from '../bootstrap/system-partition-classification.js';
+ import {
+   CONTROL_PLANE_READINESS_DIMENSION,
+ } from '../control-plane/control-plane-readiness-constants.js';
+@@ -6,7 +9,6 @@ import {
+   PARTITION_SERVICE_MESSAGE_TYPE,
+ } from './partition-service-constants.js';
+ 
+-const LOCAL_STR_FUNCTION = 'function';
+ const LOCAL_STR_PARTITION_ID = 'partition_id';
+ const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
+ const LOCAL_STR_TABLE_ID = 'table_id';
+@@ -15,6 +17,10 @@ const LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX = '/service/replica-handler';
+ const MERGE_REPLICATION_START_FAILED =
+   'Failed to start merge replication on source partition';
+ 
++function getRuntimeView(runtime) {
++  return runtime?.systemCache;
++}
++
+ /**
+  * Topology adapter binding ManagedMergeWorkflow to the runtime SQL query
+  * engine. Mirrors ManagedSplitTopologyAdapter; the merge-specific additions
+@@ -40,7 +46,7 @@ class ManagedMergeTopologyAdapter {
+   }
+ 
+   listTableInfos() {
+-    return this.sqlQueryEngine?.systemCache?.getAll(TABLES.TABLES) || [];
++    return getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.TABLES) || [];
+   }
+ 
+   parsePartitionTransition(tableInfo) {
+@@ -68,11 +74,8 @@ class ManagedMergeTopologyAdapter {
+     ) || [];
+   }
+ 
+-  isCriticalSystemPartition(partitionId) {
+-    return typeof this.sqlQueryEngine?.rebalanceCoordinator
+-      ?.isCriticalSystemPartition === LOCAL_STR_FUNCTION &&
+-      this.sqlQueryEngine.rebalanceCoordinator
+-        .isCriticalSystemPartition(partitionId) === true;
++  isBootstrapCriticalPartitionId(partitionId) {
++    return isBootstrapCriticalSystemPartitionId(partitionId);
+   }
+ 
+   calculateQuorumReplicaCount(replicaCount) {
+@@ -155,7 +158,7 @@ class ManagedMergeTopologyAdapter {
+    */
+   listTablePartitionRows(tableId) {
+     const rows =
+-      this.sqlQueryEngine?.systemCache?.getAll(TABLES.PARTITIONS) || [];
++      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.PARTITIONS) || [];
+     return rows.filter((row) => {
+       const rowTableId =
+         row?.[LOCAL_STR_TABLE_ID] ?? row?.[LOCAL_STR_TABLE_ID_CAMEL];
+@@ -171,7 +174,7 @@ class ManagedMergeTopologyAdapter {
+    */
+   listPartitionServiceRows(partitionId) {
+     const rows =
+-      this.sqlQueryEngine?.systemCache?.getAll(TABLES.SERVICES) || [];
++      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.SERVICES) || [];
+     return rows.filter((row) => {
+       const rowPartitionId =
+         row?.[LOCAL_STR_PARTITION_ID] ?? row?.[LOCAL_STR_PARTITION_ID_CAMEL];
+diff --git a/src/partition/managed-merge-workflow-plan-methods.js b/src/partition/managed-merge-workflow-plan-methods.js
+index c498bc8b58b4bae9be375f64ab94ee740241841f..7e34b2ac77d1f76a04d8fe2edd6bc1bbb0f828e7 100644
+--- a/src/partition/managed-merge-workflow-plan-methods.js
++++ b/src/partition/managed-merge-workflow-plan-methods.js
+@@ -93,8 +93,8 @@ class ManagedMergeWorkflowPlanMethods {
+     if (!this.isLocalManagedMergeLeader(leftInfo)) {
+       throw new Error(MANAGED_MERGE_ERROR_MSG.LEADER_REQUIRED);
+     }
+-    if (this.isCriticalSystemPartition(leftPartitionId) === true ||
+-        this.isCriticalSystemPartition(rightPartitionId) === true) {
++    if (this.isBootstrapCriticalPartitionId(leftPartitionId) === true ||
++        this.isBootstrapCriticalPartitionId(rightPartitionId) === true) {
+       throw new Error(MANAGED_MERGE_ERROR_MSG.CRITICAL_PARTITION);
+     }
+     return {
+diff --git a/src/partition/managed-merge-workflow.js b/src/partition/managed-merge-workflow.js
+index d7e80c527395fde50c3ef66c1a3538a18c20be8a..ffb5334134a9518b58d5530bfefa30cc118f16e7 100644
+--- a/src/partition/managed-merge-workflow.js
++++ b/src/partition/managed-merge-workflow.js
+@@ -65,7 +65,7 @@ const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
+   {property: 'resolveActivePartitionVersion', fallback: () => 1},
+   {property: 'resolveProvisionTargetNodeIds', fallback: () => []},
+   {property: 'getRoutablePartitionServiceNodeIds', fallback: () => []},
+-  {property: 'isCriticalSystemPartition', fallback: () => false},
++  {property: 'isBootstrapCriticalPartitionId', fallback: () => false},
+   {
+     property: 'calculateQuorumReplicaCount',
+     fallback: () => DEFAULT_QUORUM_REPLICA_COUNT,
+diff --git a/src/partition/managed-split-topology-adapter.js b/src/partition/managed-split-topology-adapter.js
+index 2c9ee8534491e2fc921c4c18d0d31ebf5e7877ae..db543b24989cb9d42bb58b734cf8720702035ca8 100644
+--- a/src/partition/managed-split-topology-adapter.js
++++ b/src/partition/managed-split-topology-adapter.js
+@@ -1,9 +1,14 @@
+ import {TABLES} from '../constants/index.js';
++import {
++  isBootstrapCriticalSystemPartitionId,
++} from '../bootstrap/system-partition-classification.js';
+ import {
+   CONTROL_PLANE_READINESS_DIMENSION,
+ } from '../control-plane/control-plane-readiness-constants.js';
+ 
+-const LOCAL_STR_FUNCTION = 'function';
++function getRuntimeView(runtime) {
++  return runtime?.systemCache;
++}
+ 
+ class ManagedSplitTopologyAdapter {
+   constructor(options = {}) {
+@@ -23,7 +28,7 @@ class ManagedSplitTopologyAdapter {
+   }
+ 
+   listTableInfos() {
+-    return this.sqlQueryEngine?.systemCache?.getAll(TABLES.TABLES) || [];
++    return getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.TABLES) || [];
+   }
+ 
+   parsePartitionTransition(tableInfo) {
+@@ -55,11 +60,8 @@ class ManagedSplitTopologyAdapter {
+     ) || [];
+   }
+ 
+-  isCriticalSystemPartition(partitionId) {
+-    return typeof this.sqlQueryEngine?.rebalanceCoordinator
+-      ?.isCriticalSystemPartition === LOCAL_STR_FUNCTION &&
+-      this.sqlQueryEngine.rebalanceCoordinator
+-        .isCriticalSystemPartition(partitionId) === true;
++  isBootstrapCriticalPartitionId(partitionId) {
++    return isBootstrapCriticalSystemPartitionId(partitionId);
+   }
+ 
+   captureTopologySnapshot(context) {
+diff --git a/src/partition/managed-split-workflow.js b/src/partition/managed-split-workflow.js
+index 4d64c55764d545a642c0cbf99ae42c8ef45b3527..3d7250075752ecee7289788a358c6c2c3d77697a 100644
+--- a/src/partition/managed-split-workflow.js
++++ b/src/partition/managed-split-workflow.js
+@@ -35,7 +35,8 @@ const LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION = 'resolveActivePartitionVersion';
+ const LOCAL_STR_BUILDMANAGEDSPLITPLAN = 'buildManagedSplitPlan';
+ const LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS = 'resolveProvisionTargetNodeIds';
+ const LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS = 'getRoutablePartitionServiceNodeIds';
+-const LOCAL_STR_ISCRITICALSYSTEMPARTITION = 'isCriticalSystemPartition';
++const LOCAL_STR_ISBOOTSTRAPCRITICALPARTITIONID =
++  'isBootstrapCriticalPartitionId';
+ const LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT = 'captureTopologySnapshot';
+ const LOCAL_STR_CALCULATEQUORUMREPLICACOUNT = 'calculateQuorumReplicaCount';
+ const LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET = 'createExecutionTimeoutBudget';
+@@ -115,9 +116,12 @@ class ManagedSplitWorkflow {
+       ) ||
+       options.getRoutablePartitionServiceNodeIds ||
+       (() => []);
+-    this.isCriticalSystemPartition =
+-      bindTopologyMethod(this.topologyAdapter, LOCAL_STR_ISCRITICALSYSTEMPARTITION) ||
+-      options.isCriticalSystemPartition ||
++    this.isBootstrapCriticalPartitionId =
++      bindTopologyMethod(
++        this.topologyAdapter,
++        LOCAL_STR_ISBOOTSTRAPCRITICALPARTITIONID,
++      ) ||
++      options.isBootstrapCriticalPartitionId ||
+       (() => false);
+     this.captureTopologySnapshot =
+       bindTopologyMethod(this.topologyAdapter, LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT) ||
+@@ -267,7 +271,7 @@ class ManagedSplitWorkflow {
+     const splitBootstrapReplicaCount =
+       this.calculateQuorumReplicaCount(replicaCount);
+     const criticalSystemPartition =
+-      this.isCriticalSystemPartition(partitionId) === true;
++      this.isBootstrapCriticalPartitionId(partitionId) === true;
+     const sourceRoutableNodeIds = this.getRoutablePartitionServiceNodeIds(
+       partitionId,
+     );
+diff --git a/src/partition/partition-service-learner-promotion-methods.js b/src/partition/partition-service-learner-promotion-methods.js
+index bc6da31bbe1c7966e23dabffcb6e7bdfcaf74e99..b2ff8841d08502a7ebddc2d42233a239f52ae766 100644
+--- a/src/partition/partition-service-learner-promotion-methods.js
++++ b/src/partition/partition-service-learner-promotion-methods.js
+@@ -1,4 +1,8 @@
+ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
++import {
++  classifySystemPartition,
++  isBootstrapCriticalSystemPartitionId,
++} from '../bootstrap/system-partition-classification.js';
+ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+ import {filterSharedRows} from '../cache/shared-row-read.js';
+ 
+@@ -6,7 +10,6 @@ const {
+   ACTIVE_VOTER_ROLES,
+   ADD_LIKE_REPLICA_OPERATION_TYPES,
+   COLUMN,
+-  CRITICAL_SYSTEM_PARTITION_IDS,
+   LIFECYCLE_REASON,
+   PARTITION_REPLICA_COUNT_FIELD,
+   PARTITION_SERVICE_DEFAULT,
+@@ -26,7 +29,6 @@ const {
+   buildPriorityRecoveryPartitionAssessment,
+   getTrafficReadinessSnapshot,
+   hasPriorityRecoverySpreadGap,
+-  isPriorityControlPlanePartition,
+   resolvePriorityRecoveryActiveNodeCohort,
+ } = PARTITION_SERVICE_SHARED;
+ 
+@@ -65,7 +67,9 @@ class PartitionServiceLearnerPromotionMethods {
+     }, delayMs);
+   }
+   isPriorityRecoveryPendingForLearnerPromotion() {
+-    if (!isPriorityControlPlanePartition({partitionId: this.partitionId})) {
++    if (!classifySystemPartition({
++      partitionId: this.partitionId,
++    }).priorityControlPlane) {
+       return false;
+     }
+     const readinessSnapshot = getTrafficReadinessSnapshot(
+@@ -121,7 +125,9 @@ class PartitionServiceLearnerPromotionMethods {
+   isPriorityControlPlaneFormationLearnerPromotion() {
+     return (
+       this.isJoiningExistingGroup === true &&
+-      isPriorityControlPlanePartition({partitionId: this.partitionId})
++      classifySystemPartition({
++        partitionId: this.partitionId,
++      }).priorityControlPlane
+     );
+   }
+   getPriorityRecoveryPlanningSnapshotForLearnerPromotion() {
+@@ -368,7 +374,9 @@ class PartitionServiceLearnerPromotionMethods {
+     const priorityRecoveryActive =
+       this.isPriorityRecoveryPendingForLearnerPromotion();
+     if (
+-      !isPriorityControlPlanePartition({partitionId: this.partitionId}) &&
++      !classifySystemPartition({
++        partitionId: this.partitionId,
++      }).priorityControlPlane &&
+       priorityRecoveryActive !== true
+     ) {
+       return null;
+@@ -489,7 +497,7 @@ class PartitionServiceLearnerPromotionMethods {
+       inFlightAddLikeReplicaIds.has(this.replicaId),
+     );
+     const targetReplicaCount = this.getTargetReplicaCountForPromotion();
+-    const isCriticalSystemPartition = CRITICAL_SYSTEM_PARTITION_IDS.has(
++    const isCriticalSystemPartition = isBootstrapCriticalSystemPartitionId(
+       this.partitionId,
+     );
+     const singleReplacementPromotionAllowed =
+diff --git a/src/partition/partition-service-metadata-mutation-helpers.js b/src/partition/partition-service-metadata-mutation-helpers.js
+index c8e1a9348eddea052c4c3d4f28c5825ee917fae7..0d1deac9dbc7943cfaa37d793b19054c8c29a504 100644
+--- a/src/partition/partition-service-metadata-mutation-helpers.js
++++ b/src/partition/partition-service-metadata-mutation-helpers.js
+@@ -1,4 +1,7 @@
+ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ 
+ const {
+   AuthoritativeRowMutationHelper,
+@@ -8,7 +11,6 @@ const {
+   PRESSURE_WORK_CLASS,
+   SYSTEM_TABLE_NAME,
+   TABLES,
+-  isPriorityControlPlanePartition,
+ } = PARTITION_SERVICE_SHARED;
+ 
+ function hasAuthoritativeRoleReadOwner(gateway) {
+@@ -80,9 +82,9 @@ function createRoleMutationHelper(owner) {
+       updated_at: updatedAt,
+     }),
+     buildUpdateOptions: () => {
+-      const priorityPartition = isPriorityControlPlanePartition({
++      const priorityPartition = classifySystemPartition({
+         partitionId: owner.partitionId,
+-      });
++      }).priorityControlPlane;
+       return {
+         deliveryPriority: priorityPartition ?
+           PARTITION_SERVICE_LITERAL.CRITICAL :
+diff --git a/src/partition/partition-service-row-owner.js b/src/partition/partition-service-row-owner.js
+index 069951e3811b45d9f62381e7e5c2025ea3627af1..e6e4b17c5850c0e81d7c72ef4db08e70bda52944 100644
+--- a/src/partition/partition-service-row-owner.js
++++ b/src/partition/partition-service-row-owner.js
+@@ -1,7 +1,7 @@
+ import {AddressManager} from '../address/address-manager.js';
+ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+ import {
+-  CRITICAL_SYSTEM_PARTITION_IDS,
++  isBootstrapCriticalSystemPartitionId,
+ } from '../bootstrap/system-partition-classification.js';
+ import {
+   ENTITY_TYPE,
+@@ -113,14 +113,14 @@ class PartitionServiceRowOwner {
+     };
+   }
+ 
+-  isCriticalSystemPartition(partitionId) {
++  isBootstrapCriticalPartitionId(partitionId) {
+     return typeof partitionId === 'string' &&
+-      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
++      isBootstrapCriticalSystemPartitionId(partitionId);
+   }
+ 
+   buildDeferredUpdateOptions(serviceId, partitionId = null) {
+     return {
+-      ...(this.isCriticalSystemPartition(partitionId) ?
++      ...(this.isBootstrapCriticalPartitionId(partitionId) ?
+         CRITICAL_SERVICE_ROW_UPDATE_OPTION :
+         SERVICE_ROW_UPDATE_OPTION),
+       coalescingKey: `services:${serviceId}`,
+@@ -129,7 +129,7 @@ class PartitionServiceRowOwner {
+ 
+   buildPartitionLeaderUpdateOptions(partitionId) {
+     return {
+-      ...(this.isCriticalSystemPartition(partitionId) ?
++      ...(this.isBootstrapCriticalPartitionId(partitionId) ?
+         CRITICAL_SERVICE_ROW_UPDATE_OPTION :
+         SERVICE_ROW_UPDATE_OPTION),
+       coalescingKey: `partitions:leader:${partitionId}`,
+diff --git a/src/partition/partition-split-merge-manager-core-methods.js b/src/partition/partition-split-merge-manager-core-methods.js
+index 39bc2ef554551cb6b680a6c68857e3e9a73d1fb5..80f33fa46317a6a11f8bf17b4ce15c94454f02dd 100644
+--- a/src/partition/partition-split-merge-manager-core-methods.js
++++ b/src/partition/partition-split-merge-manager-core-methods.js
+@@ -1,6 +1,6 @@
+ import {SERVICE_TYPE} from '../constants/index.js';
+ import {ADMISSION_DECISION} from '../rebalancer/storage-capacity-constants.js';
+-import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ import {
+   PRESSURE_WORK_CLASS,
+   PressureGovernor,
+@@ -472,7 +472,7 @@ class PartitionSplitMergeManagerCoreMethods {
+     // never split — their single-owner / single-Raft-leader semantics are the
+     // basis for owner-driven membership being a single source of truth. A split
+     // would create a second "owner" for a fragment and break that invariant.
+-    if (isPriorityControlPlanePartition({partitionId})) {
++    if (classifySystemPartition({partitionId}).priorityControlPlane) {
+       return false;
+     }
+     const storageThreshold = policy.splitStorageThreshold || this.splitStorageThreshold;
+diff --git a/test/partition/managed-merge-workflow-test-helpers.js b/test/partition/managed-merge-workflow-test-helpers.js
+index 7113feb7e4d540ee8dd62b0d8b1fd52144351ac2..c8444db4cab5c0847260322c1aa36b45af7b5a15 100644
+--- a/test/partition/managed-merge-workflow-test-helpers.js
++++ b/test/partition/managed-merge-workflow-test-helpers.js
+@@ -243,7 +243,10 @@ function buildMergeWorkflow(options = {}) {
+       'getRoutablePartitionServiceNodeIds',
+       () => ['node-a', 'node-b'],
+     ),
+-    isCriticalSystemPartition: opt('isCriticalSystemPartition', () => false),
++    isBootstrapCriticalPartitionId: opt(
++      'isBootstrapCriticalPartitionId',
++      () => false,
++    ),
+     storageAdmissionService: opt('storageAdmissionService', {
+       async checkSplit(payload) {
+         admissionCalls.push(payload);
+diff --git a/test/partition/managed-merge-workflow.test.js b/test/partition/managed-merge-workflow.test.js
+index 3660eddbbef1d295c930910fc9404bbee034325d..2017db4720568e8ff93660b37cb2a03449360464 100644
+--- a/test/partition/managed-merge-workflow.test.js
++++ b/test/partition/managed-merge-workflow.test.js
+@@ -215,7 +215,7 @@ test('managed merge - refuses when combined size exceeds the merge ' +
+ 
+ test('managed merge - refuses critical system partitions', async (t) => {
+   const fixture = buildMergeWorkflow({
+-    isCriticalSystemPartition: (partitionId) =>
++    isBootstrapCriticalPartitionId: (partitionId) =>
+       partitionId === FIXTURE_LEFT_PARTITION_ID,
+   });
+ 
+diff --git a/test/partition/managed-split-workflow-test-helpers.js b/test/partition/managed-split-workflow-test-helpers.js
+index 568bb0453f9c9863909df2f590ecf7d068a9b2cd..e353ffaf7b678f048cd7f2e37c6f0760b0e19402 100644
+--- a/test/partition/managed-split-workflow-test-helpers.js
++++ b/test/partition/managed-split-workflow-test-helpers.js
+@@ -111,8 +111,8 @@ function buildWorkflow(options = {}) {
+     getRoutablePartitionServiceNodeIds:
+       options.getRoutablePartitionServiceNodeIds ||
+       (() => ['node-a', 'node-b']),
+-    isCriticalSystemPartition:
+-      options.isCriticalSystemPartition ||
++    isBootstrapCriticalPartitionId:
++      options.isBootstrapCriticalPartitionId ||
+       (() => false),
+     captureTopologySnapshot:
+       options.captureTopologySnapshot || null,
+diff --git a/test/partition/managed-split-workflow.test.js b/test/partition/managed-split-workflow.test.js
+index 1ce668fec20c547322e4b9a03a509fd11bcd938b..72b02a99ca22905329aa851652983b91c07d75cc 100644
+--- a/test/partition/managed-split-workflow.test.js
++++ b/test/partition/managed-split-workflow.test.js
+@@ -144,7 +144,7 @@ test('ManagedSplitWorkflow lowers source quorum to one for critical system ' +
+     }),
+     calculateQuorumReplicaCount: () => 3,
+     getRoutablePartitionServiceNodeIds: () => ['node-a'],
+-    isCriticalSystemPartition: (partitionId) =>
++    isBootstrapCriticalPartitionId: (partitionId) =>
+       partitionId === 'control_plane_publications-p1',
+   });
+ 
+

@@ -1,4 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  classifySystemPartition,
+  isBootstrapCriticalSystemPartitionId,
+} from '../bootstrap/system-partition-classification.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {filterSharedRows} from '../cache/shared-row-read.js';
 
@@ -6,7 +10,6 @@ const {
   ACTIVE_VOTER_ROLES,
   ADD_LIKE_REPLICA_OPERATION_TYPES,
   COLUMN,
-  CRITICAL_SYSTEM_PARTITION_IDS,
   LIFECYCLE_REASON,
   PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_DEFAULT,
@@ -26,7 +29,6 @@ const {
   buildPriorityRecoveryPartitionAssessment,
   getTrafficReadinessSnapshot,
   hasPriorityRecoverySpreadGap,
-  isPriorityControlPlanePartition,
   resolvePriorityRecoveryActiveNodeCohort,
 } = PARTITION_SERVICE_SHARED;
 
@@ -65,7 +67,9 @@ class PartitionServiceLearnerPromotionMethods {
     }, delayMs);
   }
   isPriorityRecoveryPendingForLearnerPromotion() {
-    if (!isPriorityControlPlanePartition({partitionId: this.partitionId})) {
+    if (!classifySystemPartition({
+      partitionId: this.partitionId,
+    }).priorityControlPlane) {
       return false;
     }
     const readinessSnapshot = getTrafficReadinessSnapshot(
@@ -121,7 +125,9 @@ class PartitionServiceLearnerPromotionMethods {
   isPriorityControlPlaneFormationLearnerPromotion() {
     return (
       this.isJoiningExistingGroup === true &&
-      isPriorityControlPlanePartition({partitionId: this.partitionId})
+      classifySystemPartition({
+        partitionId: this.partitionId,
+      }).priorityControlPlane
     );
   }
   getPriorityRecoveryPlanningSnapshotForLearnerPromotion() {
@@ -368,7 +374,9 @@ class PartitionServiceLearnerPromotionMethods {
     const priorityRecoveryActive =
       this.isPriorityRecoveryPendingForLearnerPromotion();
     if (
-      !isPriorityControlPlanePartition({partitionId: this.partitionId}) &&
+      !classifySystemPartition({
+        partitionId: this.partitionId,
+      }).priorityControlPlane &&
       priorityRecoveryActive !== true
     ) {
       return null;
@@ -489,7 +497,7 @@ class PartitionServiceLearnerPromotionMethods {
       inFlightAddLikeReplicaIds.has(this.replicaId),
     );
     const targetReplicaCount = this.getTargetReplicaCountForPromotion();
-    const isCriticalSystemPartition = CRITICAL_SYSTEM_PARTITION_IDS.has(
+    const isCriticalSystemPartition = isBootstrapCriticalSystemPartitionId(
       this.partitionId,
     );
     const singleReplacementPromotionAllowed =

@@ -1,9 +1,16 @@
 import {TABLES} from '../constants/index.js';
 import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+
+function getRuntimeView(runtime) {
+  return runtime?.systemCache;
+}
 
 class ManagedSplitTopologyAdapter {
   constructor(options = {}) {
@@ -23,7 +30,7 @@ class ManagedSplitTopologyAdapter {
   }
 
   listTableInfos() {
-    return this.sqlQueryEngine?.systemCache?.getAll(TABLES.TABLES) || [];
+    return getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.TABLES) || [];
   }
 
   parsePartitionTransition(tableInfo) {
@@ -55,11 +62,10 @@ class ManagedSplitTopologyAdapter {
     ) || [];
   }
 
-  isCriticalSystemPartition(partitionId) {
+  isSystemTablePartitionId(partitionId) {
     return typeof this.sqlQueryEngine?.rebalanceCoordinator
       ?.isCriticalSystemPartition === LOCAL_STR_FUNCTION &&
-      this.sqlQueryEngine.rebalanceCoordinator
-        .isCriticalSystemPartition(partitionId) === true;
+      classifySystemPartition({partitionId}).systemTable;
   }
 
   captureTopologySnapshot(context) {

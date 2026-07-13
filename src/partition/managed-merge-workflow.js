@@ -65,7 +65,7 @@ const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
   {property: 'resolveActivePartitionVersion', fallback: () => 1},
   {property: 'resolveProvisionTargetNodeIds', fallback: () => []},
   {property: 'getRoutablePartitionServiceNodeIds', fallback: () => []},
-  {property: 'isCriticalSystemPartition', fallback: () => false},
+  {property: 'isSystemTablePartitionId', fallback: () => false},
   {
     property: 'calculateQuorumReplicaCount',
     fallback: () => DEFAULT_QUORUM_REPLICA_COUNT,

@@ -1,19 +1,26 @@
 import {TABLES} from '../constants/index.js';
 import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
   PARTITION_SERVICE_MESSAGE_TYPE,
 } from './partition-service-constants.js';
 
-const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
+const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
 const LOCAL_STR_TABLE_ID = 'table_id';
 const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
 const LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX = '/service/replica-handler';
 const MERGE_REPLICATION_START_FAILED =
   'Failed to start merge replication on source partition';
+
+function getRuntimeView(runtime) {
+  return runtime?.systemCache;
+}
 
 /**
  * Topology adapter binding ManagedMergeWorkflow to the runtime SQL query
@@ -40,7 +47,7 @@ class ManagedMergeTopologyAdapter {
   }
 
   listTableInfos() {
-    return this.sqlQueryEngine?.systemCache?.getAll(TABLES.TABLES) || [];
+    return getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.TABLES) || [];
   }
 
   parsePartitionTransition(tableInfo) {
@@ -68,11 +75,10 @@ class ManagedMergeTopologyAdapter {
     ) || [];
   }
 
-  isCriticalSystemPartition(partitionId) {
+  isSystemTablePartitionId(partitionId) {
     return typeof this.sqlQueryEngine?.rebalanceCoordinator
       ?.isCriticalSystemPartition === LOCAL_STR_FUNCTION &&
-      this.sqlQueryEngine.rebalanceCoordinator
-        .isCriticalSystemPartition(partitionId) === true;
+      classifySystemPartition({partitionId}).systemTable;
   }
 
   calculateQuorumReplicaCount(replicaCount) {
@@ -155,7 +161,7 @@ class ManagedMergeTopologyAdapter {
    */
   listTablePartitionRows(tableId) {
     const rows =
-      this.sqlQueryEngine?.systemCache?.getAll(TABLES.PARTITIONS) || [];
+      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.PARTITIONS) || [];
     return rows.filter((row) => {
       const rowTableId =
         row?.[LOCAL_STR_TABLE_ID] ?? row?.[LOCAL_STR_TABLE_ID_CAMEL];
@@ -171,7 +177,7 @@ class ManagedMergeTopologyAdapter {
    */
   listPartitionServiceRows(partitionId) {
     const rows =
-      this.sqlQueryEngine?.systemCache?.getAll(TABLES.SERVICES) || [];
+      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.SERVICES) || [];
     return rows.filter((row) => {
       const rowPartitionId =
         row?.[LOCAL_STR_PARTITION_ID] ?? row?.[LOCAL_STR_PARTITION_ID_CAMEL];

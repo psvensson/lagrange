@@ -30,6 +30,38 @@ import {
   buildWorkflow,
   createAdmissionResult,
 } from './managed-split-workflow-test-helpers.js';
+import {
+  ManagedSplitTopologyAdapter,
+} from '../../src/partition/managed-split-topology-adapter.js';
+import {
+  ManagedMergeTopologyAdapter,
+} from '../../src/partition/managed-merge-topology-adapter.js';
+
+test('managed topology adapters preserve coordinator-backed system-table truth',
+  (t) => {
+    const sqlQueryEngine = {
+      rebalanceCoordinator: {
+        isCriticalSystemPartition() {
+          return true;
+        },
+      },
+    };
+    const adapters = [
+      new ManagedSplitTopologyAdapter({sqlQueryEngine}),
+      new ManagedMergeTopologyAdapter({sqlQueryEngine}),
+    ];
+    for (const adapter of adapters) {
+      t.equal(adapter.isSystemTablePartitionId('nodes-p1'), true);
+      t.equal(adapter.isSystemTablePartitionId('nodes-p2'), true);
+      t.equal(adapter.isSystemTablePartitionId(' nodes-p1 '), true);
+      t.equal(adapter.isSystemTablePartitionId('users-p1'), false);
+    }
+    const missingCoordinator = new ManagedSplitTopologyAdapter({
+      sqlQueryEngine: {},
+    });
+    t.equal(missingCoordinator.isSystemTablePartitionId('nodes-p1'), false);
+    t.end();
+  });
 
 test('ManagedSplitWorkflow persists admission_pending before planning and ' +
   'consumes the admission owner', async (t) => {
@@ -144,7 +176,7 @@ test('ManagedSplitWorkflow lowers source quorum to one for critical system ' +
     }),
     calculateQuorumReplicaCount: () => 3,
     getRoutablePartitionServiceNodeIds: () => ['node-a'],
-    isCriticalSystemPartition: (partitionId) =>
+    isSystemTablePartitionId: (partitionId) =>
       partitionId === 'control_plane_publications-p1',
   });
 

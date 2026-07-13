@@ -215,7 +215,7 @@ test('managed merge - refuses when combined size exceeds the merge ' +
 
 test('managed merge - refuses critical system partitions', async (t) => {
   const fixture = buildMergeWorkflow({
-    isCriticalSystemPartition: (partitionId) =>
+    isSystemTablePartitionId: (partitionId) =>
       partitionId === FIXTURE_LEFT_PARTITION_ID,
   });
 

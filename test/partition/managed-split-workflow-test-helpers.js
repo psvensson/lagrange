@@ -111,8 +111,8 @@ function buildWorkflow(options = {}) {
     getRoutablePartitionServiceNodeIds:
       options.getRoutablePartitionServiceNodeIds ||
       (() => ['node-a', 'node-b']),
-    isCriticalSystemPartition:
-      options.isCriticalSystemPartition ||
+    isSystemTablePartitionId:
+      options.isSystemTablePartitionId ||
       (() => false),
     captureTopologySnapshot:
       options.captureTopologySnapshot || null,
