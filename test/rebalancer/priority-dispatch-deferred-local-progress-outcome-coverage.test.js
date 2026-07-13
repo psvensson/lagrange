@@ -99,6 +99,48 @@ test(
 );
 
 test(
+  'the executor-outcome STOPPING transition is absorbed for priority ' +
+    'REPLACE and REMOVE (its producing dispatch-response branch)',
+  (t) => {
+    const probe = buildOrchestrationProbe();
+    t.equal(
+      shouldUse(
+        probe,
+        LEDGER_SELF_MOVE_OP,
+        WORKFLOW_STEP.STOPPING,
+        buildRetryableLedgerDefer(),
+      ),
+      true,
+      'REPLACE remove-phase STOPPING (removal dispatched and acknowledged) ' +
+        'advances owner-locally',
+    );
+    const removeOp = {...LEDGER_SELF_MOVE_OP, type: OperationType.REMOVE};
+    t.equal(
+      shouldUse(
+        probe,
+        removeOp,
+        WORKFLOW_STEP.STOPPING,
+        buildRetryableLedgerDefer(),
+      ),
+      true,
+      'REMOVE STOPPING advances owner-locally',
+    );
+    const addOp = {...LEDGER_SELF_MOVE_OP, type: OperationType.ADD};
+    t.equal(
+      shouldUse(
+        probe,
+        addOp,
+        WORKFLOW_STEP.STOPPING,
+        buildRetryableLedgerDefer(),
+      ),
+      false,
+      'an ADD never reaches a remove-phase STOPPING — not covered',
+    );
+    t.end();
+  },
+);
+
+test(
   'terminal REMOVED is deliberately NOT absorbed — completeOperation owns ' +
     'durable terminal convergence',
   (t) => {

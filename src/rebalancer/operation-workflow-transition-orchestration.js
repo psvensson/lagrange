@@ -382,21 +382,25 @@ class OperationWorkflowTransitionOrchestration
   }
 
   /**
-   * The executor-outcome-backed ACTIVE transition of a priority
-   * control-plane REPLACE: the physical work has already landed (the
-   * replacement is promoted voter-ready) and only the bookkeeping write into
-   * the operation ledger is stuck behind retryable ledger pressure. During
-   * cold formation that pressure is the operation's OWN doing — a ledger
-   * self-move degrades the very partition its progress writes need, so a
-   * hard persist-then-act gate stalls the transition for full sql-routed
-   * retry cycles while the self-move interlock freezes all other admission
-   * cluster-wide. Advancing the owner-local row and re-arming the durable
-   * write (the established lever-(a) supersession contract) keeps the
-   * workflow moving at executor speed; the durable row converges at the
-   * terminal, whose write intentionally carries no expected-step CAS.
+   * The executor-outcome-backed transitions of priority control-plane
+   * operations: the physical work has already landed (the REPLACE
+   * replacement is promoted voter-ready at ACTIVE; the source/subject
+   * replica's removal has been dispatched and acknowledged at STOPPING) and
+   * only the bookkeeping write into the operation ledger is stuck behind
+   * retryable ledger pressure. During cold formation that pressure is the
+   * operation's OWN doing — a ledger self-move degrades the very partition
+   * its progress writes need, so a hard persist-then-act gate stalls each
+   * transition for full sql-routed retry cycles while the self-move
+   * interlock freezes all other admission cluster-wide. Advancing the
+   * owner-local row and re-arming the durable write (the established
+   * lever-(a) supersession contract) keeps the workflow moving at executor
+   * speed; the durable row converges at the terminal, whose write
+   * intentionally carries no expected-step CAS.
    *
-   * Terminal steps are deliberately NOT covered: REMOVED flows exclusively
-   * through completeOperation, which owns its own durable convergence
+   * STOPPING mirrors its producing branch (dispatch-response reconcile:
+   * REMOVE, or REPLACE in its remove phase). Terminal steps are
+   * deliberately NOT covered: REMOVED flows exclusively through
+   * completeOperation, which owns its own durable convergence
    * (executor-outcome retry + terminal-transition repair) — a deferred-local
    * terminal here would clear the transition retry without re-driving the
    * durable persist.
@@ -414,10 +418,16 @@ class OperationWorkflowTransitionOrchestration
     ) {
       return false;
     }
-    return (
-      step === WORKFLOW_STEP.ACTIVE &&
-      operation?.type === OperationType.REPLACE
-    );
+    if (step === WORKFLOW_STEP.ACTIVE) {
+      return operation?.type === OperationType.REPLACE;
+    }
+    if (step === WORKFLOW_STEP.STOPPING) {
+      return (
+        operation?.type === OperationType.REPLACE ||
+        operation?.type === OperationType.REMOVE
+      );
+    }
+    return false;
   }
 
   /**
