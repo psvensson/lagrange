@@ -61,7 +61,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 23
+## Open quests — 24
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
@@ -87,5 +87,6 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | seed-join-gate-authoritative-refresh | product | 0 | 0 | — |
 | transition-mutation-budget-doom-loop | product | 0 | 0 | — |
 | unwired-event-adjudication | product | 0 | 0 | — |
+| voter-readiness-visibility-single-owner-table | product | 0 | 0 | — |
 | write-path-internal-pacing | product | 0 | 0 | — |
 

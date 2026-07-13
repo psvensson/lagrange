@@ -1,8 +1,8 @@
 ---
 id: self-hosting-circularity-generic-treatment
 roadmapRow: null
-status: discussing
-graduatesTo: null
+status: graduated
+graduatesTo: voter-readiness-visibility-single-owner-table
 ---
 
 # Self-hosting circularity: one declared contract instead of N rediscovered patches
@@ -80,6 +80,63 @@ The point fixes are not random — they are five recurring escape shapes:
   placement in PD; FDB has coordinators). Named for completeness: it is a
   re-architecture, contradicts the single-substrate design premise, and the five
   escape shapes exist precisely to avoid it. Not proposed.
+- **Option 5 — Centralize the semantics as data-driven decision tables (user
+  directive 2026-07-13: "these central and important features should not be left
+  to the periphery of parts of the system to misinterpret").** The recurring
+  failure SHAPE behind CL-029/CL-035 and the 2026-07-13 fixes is peripheral code
+  re-deriving a central semantic from raw rows with its own scoping: the CL-035
+  seed was priority-scoped while the gate consuming it was not; the remove-safety
+  gate read row `raft_role` while the promotion truth lived in the raft tracker;
+  the concentration predicate conflated under-replication with placement skew;
+  the deferred-local-progress coverage enumerated steps ad hoc. The codebase
+  already practices the cure in places (style rule "decision tables or state
+  models instead of nested independent ifs"; `OPERATION_TERMINAL_STATUSES_BY_TYPE`
+  and the workflow-step progression maps in `replica-operation-progress.js`; the
+  planning-gate state table; the graded-guard gate machinery; the TLC-modeled
+  bounded-re-entry rule table). The option: promote the formation-critical
+  semantics — voter-readiness visibility, workflow-step/persistence coverage,
+  hold engagement, cure typing — into single-owner declared tables that gates and
+  seeds CONSUME (one row per (semantic, partition-class, step) with the escape
+  shape named), so scoping mismatches like CL-035's become impossible to express.
+  Composes with Options 1-2: the availability order (1) says what may depend on
+  what; the tables (5) say what each decision means; the gateway (2) enforces the
+  write-path escape. Trade-off: a migration of ~5 decision sites, each currently
+  working-but-idiomatic; best done one semantic per quest with red-on-revert
+  pins, not as a big-bang rewrite.
+
+## Graduation ladder (Option 5, one semantic per quest — sealed 2026-07-13)
+
+Code census (two subagent sweeps, 2026-07-13) sized the migration surface and
+found the house table idiom already normative (four-part frozen
+STATE/ACTION/STATE_TABLE/ACTION_BY_STATE shape, `decision-table-v1` JSON +
+`npm run model:decision-tables` cartesian-exhaustiveness, AST ratchet
+`audit:guideline:decision-boundaries`, rule ARCH-0013). Ladder, in order:
+
+1. **`voter-readiness-visibility-single-owner-table`** (AUTHORED, `links.planDoc`
+   → this epic) — the CL-035 semantic: ~16 derivation sites, FOUR role-set
+   declarations, THREE divergent memberships (candidate in/out/any-non-learner);
+   includes deleting the three local `CRITICAL_SYSTEM_PARTITION_IDS`
+   re-derivations so scoping keys on `system-partition-classification.js`.
+2. **Workflow-step persistence coverage** — the CL-029 semantic: extend the
+   `replica-operation-progress.js` per-op-type step tables with an
+   escape-shape/coverage column, replacing `isPriorityOutcomeDeferredLocalProgressStep`,
+   `PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS`, the dispatch-rearm/drain/
+   visibility spines, and the step→timeout restatements.
+3. **Hold engagement** — one declared (hold × moveType × partitionClass) →
+   {exempt | idle-only | defer} relation in the ledger-interlock module,
+   replacing the twice-repeated emergency-ADD exemption and the Set-omission
+   lane (CL-013).
+4. **Cure typing** — declared (condition → cureType → admission-lane) rows
+   co-owned with `operation-ledger-quorum-concentration.js` so
+   REPLACE-cures-skew / ADD-cures-under-replication is data, not re-inferred at
+   the budget planner (the 2b5875b0 defect class).
+5. **Partition-class ladder sweep** — the 119-site hand-written
+   critical→priority→default ladder onto one ordered classifier (an Option-1
+   analyzer can then enforce it).
+
+Each quest carries red-on-revert pins; behavior changes only with their own pin
++ finding. Options 1 (availability order + analyzer) and 2 (gateway
+establishment) graduate separately after ladder rung 1 seeds the evidence.
 
 ## Open questions
 
@@ -103,3 +160,12 @@ The point fixes are not random — they are five recurring escape shapes:
   ledger; hold predicate unsatisfiable at ≤2 voters). Inventory of the five
   in-repo escape shapes compiled from the class memory, the L-write epic, and the
   interlock/quorum-concentration source.
+- 2026-07-13 (later) — GRADUATED on user directive ("pick up the quest(s) that
+  generalize the logic to be data-driven; don't finish the formation-ledger
+  lineage the old way"). Two code-census sweeps sized the surface (see
+  "Graduation ladder"); first quest
+  `voter-readiness-visibility-single-owner-table` authored with an
+  oracle-probe doneWhen (committed census analyzer counts independent
+  derivations outside the owner; done at 0). The open formation-ledger quest
+  stays open with a pivot finding; its residual (load-phase schema-job op
+  confirmation) is not chased as point fixes while the ladder runs.
