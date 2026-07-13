@@ -20,6 +20,13 @@
 //       usesEmergencyPriorityOverflow) outside the owner family: the
 //       cureType -> admission-lane conjunct home.
 // Metric 0 == every cure-typing decision reads a named owner row.
+// Landed 2026-07-13 (baseline 15 -> 0): the condition/cure/scope rows live in
+// src/rebalancer/replica-placement-cure-policy.js; the admission
+// partition-class classifier (classifyPriorityRecoveryAdmissionPartitionClass)
+// lives in src/control-plane/priority-recovery-admission-constants.js — the
+// cycle-safe lane-vocabulary home, since the admission-plan owner sits inside
+// rebalance-coordinator-shared's import tree. This analyzer stays the ratchet:
+// new sites count by default.
 //
 // Delegation wrappers (a function named exactly like the marker it calls) are
 // skipped automatically. Schema-provisioning creation ADDs (intent-derived,

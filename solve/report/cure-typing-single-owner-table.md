@@ -4,40 +4,25 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/cure-typing-single-owner-table.json
 
-**Attempts:** 1
+**Attempts:** 2
 
 ## Links
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
 
-## Current Blocker
-- Frontier: cure-typing-single-owner-table-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: ownership_gap
-- Movement: first blocker observed: unknown
-- Latest evidence: solve/oracle/cure-typing-single-owner-table.json
-- Selected theory: none
-- Next move: continue supervised step for cure-typing-single-owner-table-main
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for cure-typing-single-owner-table-main
-- Blocker: none
-
 ## Scope Pressure
-- Changed files: 1
-- Change bytes: 1030
-- Owner areas: scripts/check-hold-engagement-owner.js
+- Changed files: 2
+- Change bytes: 2166
+- Owner areas: scripts/check-cure-typing-owner.js, scripts/check-hold-engagement-owner.js
 - Categories: other
 - Split plan:
+  - scripts/check-cure-typing-owner.js: 1 file(s)
   - scripts/check-hold-engagement-owner.js: 1 file(s)
 - Signals: none
 
 ## Frontiers
-- **cure-typing-single-owner-table-main** [open] rung 1, attempts 1, metric 15 -> 0
+- **cure-typing-single-owner-table-main** [solved] rung 2, attempts 2, metric 15 -> 0
 
 ## Findings
 - **cure-typing-single-owner-table-main**: independent verification passed: TRUSTED-WITH-NOTES (A1-A10 attacks not refuted; notes: follow-up selectable-source must be computed after id extraction as a boolean; ordinary serial gate is mixed-scope — inject arg-ignoring entity-scoped isPriorityPartition; pressure-helper emergency flag equivalence rests on emergency-table-ids subset of priority-table-ids) [subagent:aa3ee6c5eceb79ce4]
@@ -58,3 +43,4 @@ _(none recorded)_
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-13T13:36:07.937Z | cure-typing-single-owner-table-main | observe | 15 -> 15 | flat | no_evidence |  | diff:solve/changes/cure-typing-single-owner-table/attempt-1.diff |
+| 2026-07-13T14:38:22.895Z | cure-typing-single-owner-table-main | local-fix | 0 -> 0 | flat | solved |  | diff:solve/changes/cure-typing-single-owner-table/attempt-2.diff |
