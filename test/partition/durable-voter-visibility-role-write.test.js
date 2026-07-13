@@ -18,7 +18,7 @@ import {evaluateOperationLedgerQuorumConcentration} from
 // reading the replica as a LEARNER forever: the quorum-spread admission hold
 // never releases, the spread planner computes overTarget=false, and the demo
 // CREATE TABLE starves. These guards drive the REAL production wiring
-// (createRoleMutationHelper / seedLocalPriorityReplicaRaftRole via prototype
+// (createRoleMutationHelper / seedLocalReplicaVoterRaftRole via prototype
 // calls on contract-faithful substrates) — not by-fiat cache rows.
 
 const SERVICES = 'services';
@@ -216,7 +216,7 @@ function seedPromotedRoleViaRealHandlerSeam({replicaId, cache, markedLocalOnly})
       markServiceRowLocalOnly: (serviceId) => markedLocalOnly.push(serviceId),
     },
   };
-  return ReplicaHandler.prototype.seedLocalPriorityReplicaRaftRole.call(
+  return ReplicaHandler.prototype.seedLocalReplicaVoterRaftRole.call(
     handler,
     replicaId,
     LEDGER_PARTITION_ID,

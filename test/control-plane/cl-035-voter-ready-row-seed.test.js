@@ -13,7 +13,7 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 // SERVICES row's raft_role, sees learner/null long after the replica is actually
 // a voter, and defers removing the superseded source forever -> priority
 // control-plane spread never recovers post-restart (run3 stuck at 1/5, run4 2/5).
-// Fix: seedLocalPriorityReplicaRaftRole writes the locally-decided voting role
+// Fix: seedLocalReplicaVoterRaftRole writes the locally-decided voting role
 // into the LOCAL cache row at the voter-ready activation moment (no control-plane
 // round-trip), so the gate observes local truth. These tests exercise the seed
 // (via ReplicaHandler.prototype with a mock `this` + a REAL SystemTableCache so
@@ -26,7 +26,7 @@ const REPLICA_ID = 'control_plane_publications-p1-r4';
 const ADDRESS = 'ws://127.0.0.1:8082';
 
 const seedRaftRole =
-  ReplicaHandler.prototype.seedLocalPriorityReplicaRaftRole;
+  ReplicaHandler.prototype.seedLocalReplicaVoterRaftRole;
 const isVoterReadyTopology =
   PriorityPublicationSafetyTopology.prototype.isVoterReadyReplicaTopology;
 const waitForVoterReady =
@@ -91,18 +91,25 @@ t.test('CL-035 seed: collapses a leader role to follower (matches durable value)
   t.end();
 });
 
-t.test('CL-035 seed: does NOT write for a non-priority partition', (t) => {
-  const cache = makeCacheWithRow({raftRole: 'learner'});
-  const ctx = makeSeedThis(cache, {trackedRole: 'follower'});
+t.test(
+  'CL-035 guard-breach fix: the seed also writes for a non-priority ' +
+    'partition (2026-07-13 formation run: six critical-system REPLACEs ' +
+    'wedged replace_remove_safety_blocked while their targets had logged ' +
+    'voter-ready — the promotion is a committed local raft decision ' +
+    'regardless of partition class)',
+  (t) => {
+    const cache = makeCacheWithRow({raftRole: 'learner'});
+    const ctx = makeSeedThis(cache, {trackedRole: 'follower'});
 
-  const applied = seedRaftRole.call(ctx, REPLICA_ID, NON_PRIORITY_PARTITION);
+    const applied = seedRaftRole.call(ctx, REPLICA_ID, NON_PRIORITY_PARTITION);
 
-  t.equal(applied, false, 'non-priority partition is a no-op');
-  const row = cache.get(SYSTEM_TABLE_NAME.SERVICES, REPLICA_ID);
-  t.equal(row.raft_role, 'learner', 'row unchanged');
-  t.same(ctx.self.marked, [], 'no local-only marking');
-  t.end();
-});
+    t.equal(applied, true, 'non-priority partition is seeded too');
+    const row = cache.get(SYSTEM_TABLE_NAME.SERVICES, REPLICA_ID);
+    t.equal(row.raft_role, 'follower', 'row raft_role advanced');
+    t.same(ctx.self.marked, [REPLICA_ID], 'row re-marked local-only');
+    t.end();
+  },
+);
 
 t.test('CL-035 seed: does NOT write while the local role is still learner', (t) => {
   const cache = makeCacheWithRow({raftRole: 'learner'});
@@ -185,8 +192,8 @@ t.test('CL-035 wiring: voter-ready activation seeds the role before returning', 
     throwIfShuttingDown: () => {},
     isReplicaVoterReady: () => true,
     getTrackedService: () => null,
-    seedLocalPriorityReplicaRaftRole: (replicaId, partitionId) => {
-      calls.push({replicaId, partitionId});
+    seedLocalReplicaVoterRaftRole: (replicaId) => {
+      calls.push({replicaId});
       return true;
     },
   };
@@ -195,7 +202,7 @@ t.test('CL-035 wiring: voter-ready activation seeds the role before returning', 
 
   t.same(
     calls,
-    [{replicaId: REPLICA_ID, partitionId: PRIORITY_PARTITION}],
+    [{replicaId: REPLICA_ID}],
     'activation path invoked the raft_role seed exactly once',
   );
   t.end();

@@ -464,26 +464,28 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
      * budget during post-restart recovery). The REPLACE remove-safety gate
      * (priority-publication-safety-topology.isVoterReadyReplicaTopology)
      * reads the SERVICES row's raft_role and defers removing the superseded
-     * source forever while the row still reads learner/null, so priority
-     * control-plane spread never recovers. Mirror the CL-016 local-commit
-     * seed for the one field that helper omits: write the locally-decided
-     * voting role into the LOCAL cache row so the gate (which merges cache
-     * over a null-raft_role authoritative row, preferring defined fields)
-     * observes local truth without a control-plane round-trip. Scoped to
-     * priority control-plane partitions; only seeds when the in-memory role
-     * is a non-learner voter (the promotion is a committed local decision in
-     * this single-phase raft model, so it cannot mark a still-catching-up
-     * learner as a voter). Superseded later by the durable write's CDC
-     * round-trip (newer updated_at wins in the cache merge).
+     * source forever while the row still reads learner/null, so the spread
+     * never recovers. Mirror the CL-016 local-commit seed for the one field
+     * that helper omits: write the locally-decided voting role into the
+     * LOCAL cache row so the gate (which merges cache over a null-raft_role
+     * authoritative row, preferring defined fields) observes local truth
+     * without a control-plane round-trip. Applies to every partition the
+     * voter-ready activation gate covers (critical system partitions): the
+     * promotion is a committed local raft decision regardless of partition
+     * class (the original priority-only scoping matched the then-observed
+     * symptom, and the 2026-07-13 formation run wedged six critical-system
+     * REPLACEs on replace_remove_safety_blocked while their targets had
+     * already logged voter-ready — the CL-035 guard breach). Only seeds when
+     * the in-memory role is a non-learner voter (the promotion is a
+     * committed local decision in this single-phase raft model, so it cannot
+     * mark a still-catching-up learner as a voter). Superseded later by the
+     * durable write's CDC round-trip (newer updated_at wins in the cache
+     * merge).
      * @param {string} replicaId
-     * @param {string} partitionId
      * @return {boolean} Whether the local raft_role seed was applied.
      * @private
      */
-    seedLocalPriorityReplicaRaftRole(replicaId, partitionId) {
-      if (!isPriorityControlPlanePartition({partitionId})) {
-        return false;
-      }
+    seedLocalReplicaVoterRaftRole(replicaId) {
       if (
         !this.systemTableCache ||
         typeof this.systemTableCache.applySystemTableChange !==
@@ -516,7 +518,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           raft_role: normalizedRole,
           updated_at: Date.now(),
         },
-        {causeId: `priority-local-voter-ready:${replicaId}`},
+        {causeId: `local-voter-ready:${replicaId}`},
       );
       this.replicaStateMachine?.markServiceRowLocalOnly?.(replicaId);
       return true;

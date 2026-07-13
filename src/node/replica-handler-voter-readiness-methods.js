@@ -156,8 +156,9 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           // CL-035: seed the locally-decided voting role into the local
           // SERVICES row so the REPLACE remove-safety gate observes the
           // promotion (the durable raft_role write defers through the
-          // recovering control plane). No-op for non-priority partitions.
-          this.seedLocalPriorityReplicaRaftRole(replicaId, partitionId);
+          // recovering control plane). Every partition: the promotion is a
+          // committed local raft decision regardless of partition class.
+          this.seedLocalReplicaVoterRaftRole(replicaId);
           // The seed makes the promotion locally visible — but it also makes
           // the local cache row equal to the durable write the owner still
           // has pending, which historically dedup-masked that write (run-27:
