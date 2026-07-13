@@ -1,0 +1,77 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "hold-engagement-single-owner-census",
+  "detail": {
+    "generatedBy": "scripts/check-hold-engagement-owner.js",
+    "ownerModules": [
+      "src/rebalancer/operation-ledger-hold-policy.js",
+      "src/rebalancer/operation-ledger-quorum-concentration.js"
+    ],
+    "countedSites": [],
+    "excludedSites": [
+      {
+        "filePath": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
+        "line": 21,
+        "kind": "emergency_exemption_read",
+        "enclosingIdentifier": "isPriorityRecoveryOrdinarySerialLanePartitionId",
+        "detail": "isPriorityRecoveryEmergencyPartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
+        "line": 204,
+        "kind": "emergency_exemption_read",
+        "enclosingIdentifier": "getPriorityRecoveryAdmissionPlan",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-pressure-helper.js",
+        "line": 63,
+        "kind": "emergency_exemption_read",
+        "enclosingIdentifier": "buildPriorityDeferredObservationPressureEvidence",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-pressure-helper.js",
+        "line": 131,
+        "kind": "emergency_exemption_read",
+        "enclosingIdentifier": "buildPriorityAddAdmissionPressureEvidence",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
+        "line": 57,
+        "kind": "emergency_exemption_read",
+        "enclosingIdentifier": "buildConcurrentAddCountByPriorityClass",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
+        "line": 308,
+        "kind": "emergency_exemption_read",
+        "enclosingIdentifier": "getOrdinaryPriorityRecoverySerialGateSnapshot",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      },
+      {
+        "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
+        "line": 360,
+        "kind": "emergency_exemption_read",
+        "enclosingIdentifier": "getPriorityRecoveryAdmissionPlan",
+        "detail": "isEmergencyPriorityControlPlanePartition"
+      }
+    ],
+    "gates": [
+      {
+        "label": "lint",
+        "passed": true,
+        "exitCode": 0
+      },
+      {
+        "label": "targeted-suites",
+        "passed": true,
+        "exitCode": 0
+      }
+    ]
+  }
+}

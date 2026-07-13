@@ -1,0 +1,309 @@
+/**
+ * Single owner of the operation-ledger HOLD-ENGAGEMENT relation (quest
+ * hold-engagement-single-owner-table; epic self-hosting-circularity-
+ * generic-treatment Option 5, rung 3 — the CL-013 lineage).
+ *
+ * "What does a candidate move (moveType x partition class) do while an
+ * operation-ledger hold is engaged — exempt, idle-only, or defer" used to be
+ * scattered control flow: the emergency quorum-restore ADD exemption conjunct
+ * was written once per admission lane, ledger spread ADDs were exempt from
+ * the self-move interlock only by OMISSION from the disruptive-move set
+ * (CL-013: formation-time priority spread cannot be deferred without
+ * circularity), and the cure-move classifier (REPLACE cures concentration)
+ * was hand-rolled at the topology guard and the planning reorder. This module
+ * declares the relation ONCE: named move classes, named hold kinds, and one
+ * (hold x move class) -> engagement table, reviewable side by side.
+ * Consumers resolve rows; they never re-derive conjuncts or read raw
+ * hold state for a policy decision. The census analyzer
+ * (scripts/check-hold-engagement-owner.js, npm run
+ * audit:hold-engagement-owner) counts any re-derivation outside this module
+ * and operation-ledger-quorum-concentration.js (which keeps hold-STATE
+ * detection and stays policy-free).
+ *
+ * Rows deliberately DIFFER per hold — that is the point of naming them.
+ * Review question for every new hold or exemption: which move class is it,
+ * which row covers it, and why does that row's engagement stop where it
+ * stops?
+ */
+import {OperationType} from './replica-status.js';
+import {isOperationLedgerPartition} from '../bootstrap/system-partition-classification.js';
+import {isPriorityRecoveryEmergencyPartition} from '../control-plane/priority-recovery-admission-constants.js';
+import {
+  evaluateOperationLedgerQuorumConcentration,
+  isConcentratedOperationLedgerPartition,
+} from './operation-ledger-quorum-concentration.js';
+
+const LOCAL_STR_STRING = 'string';
+
+// The two operation-ledger admission holds. SELF_MOVE_SERIALIZATION is the
+// run-20 interlock (a ledger self-move runs exclusively); QUORUM_SPREAD is
+// the run-22 concentration hold (dependent admission defers until the ledger
+// quorum spreads).
+const OPERATION_LEDGER_HOLD = Object.freeze({
+  SELF_MOVE_SERIALIZATION: 'ledger_self_move_serialization',
+  QUORUM_SPREAD: 'ledger_quorum_spread',
+});
+
+// What an engaged hold means for a move: proceed regardless (EXEMPT), admit
+// only into an idle ledger (IDLE_ONLY), or wait for release (DEFER).
+const OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME = Object.freeze({
+  EXEMPT: 'exempt',
+  IDLE_ONLY: 'idle_only',
+  DEFER: 'defer',
+});
+
+// The move classes of the relation. Classification order is significant and
+// owned here: a disruptive ledger self-move is never also an emergency ADD
+// (ADD is not a disruptive type), and everything unclassified is DEPENDENT.
+const OPERATION_LEDGER_HOLD_MOVE_CLASS = Object.freeze({
+  DISRUPTIVE_LEDGER_SELF_MOVE: 'disruptive_ledger_self_move',
+  EMERGENCY_QUORUM_RESTORE_ADD: 'emergency_quorum_restore_add',
+  DEPENDENT: 'dependent',
+});
+
+// Named row: which move types DISRUPT the ledger when self-moving
+// (REPLACE/REMOVE reconfigure the raft group every operation writes progress
+// through). ADD is deliberately absent — the CL-013 lane: ledger spread
+// recovery must stay admissible through the hold it cures, so an ADD of a
+// ledger partition is never a disruptive self-move. Extending or narrowing
+// this row is an incident-class decision, never a drive-by edit.
+const OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES = Object.freeze(
+  new Set([OperationType.REPLACE, OperationType.REMOVE]),
+);
+
+// Named row: the quorum-spread CURE move type. Concentration is placement
+// skew, cured by a count-neutral REPLACE off the hottest node. REMOVE is
+// deliberately absent (the surplus-drain lever was measured non-binding —
+// the over-target drain lineage), and ADD cures under-replication, not skew.
+const LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES = Object.freeze(
+  new Set([OperationType.REPLACE]),
+);
+
+// The declared relation: (hold x move class) -> engagement. Read column-wise
+// per hold: the self-move interlock serializes (disruptive moves admit only
+// into an idle ledger, everything else defers) while emergency quorum-restore
+// ADDs stay exempt — control-plane spine availability outranks storm
+// avoidance. The quorum-spread hold defers dependents only: the disruptive
+// self-move IS the cure, and emergency ADDs restore the spine the hold
+// protects.
+const OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS = Object.freeze(
+  new Map([
+    [
+      OPERATION_LEDGER_HOLD.SELF_MOVE_SERIALIZATION,
+      Object.freeze(
+        new Map([
+          [
+            OPERATION_LEDGER_HOLD_MOVE_CLASS.DISRUPTIVE_LEDGER_SELF_MOVE,
+            OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.IDLE_ONLY,
+          ],
+          [
+            OPERATION_LEDGER_HOLD_MOVE_CLASS.EMERGENCY_QUORUM_RESTORE_ADD,
+            OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT,
+          ],
+          [
+            OPERATION_LEDGER_HOLD_MOVE_CLASS.DEPENDENT,
+            OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.DEFER,
+          ],
+        ]),
+      ),
+    ],
+    [
+      OPERATION_LEDGER_HOLD.QUORUM_SPREAD,
+      Object.freeze(
+        new Map([
+          [
+            OPERATION_LEDGER_HOLD_MOVE_CLASS.DISRUPTIVE_LEDGER_SELF_MOVE,
+            OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT,
+          ],
+          [
+            OPERATION_LEDGER_HOLD_MOVE_CLASS.EMERGENCY_QUORUM_RESTORE_ADD,
+            OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT,
+          ],
+          [
+            OPERATION_LEDGER_HOLD_MOVE_CLASS.DEPENDENT,
+            OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.DEFER,
+          ],
+        ]),
+      ),
+    ],
+  ]),
+);
+
+/**
+ * Ingress normalization for both consumer domains (coordinator-normalized
+ * OperationType values and planner MoveType values differ only by case; the
+ * CL-013 verification already treated case-sensitive comparison here as
+ * fail-open and normalized it).
+ * @param {*} moveType
+ * @return {string|null}
+ * @private
+ */
+function normalizeOperationLedgerMoveType(moveType) {
+  if (typeof moveType !== LOCAL_STR_STRING) {
+    return null;
+  }
+  const normalized = moveType.toUpperCase();
+  return normalized.length === 0 ? null : normalized;
+}
+
+/**
+ * @param {*} moveType
+ * @param {*} partitionId
+ * @return {boolean}
+ */
+function isDisruptiveOperationLedgerSelfMove(moveType, partitionId) {
+  return (
+    OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES.has(
+      normalizeOperationLedgerMoveType(moveType),
+    ) && isOperationLedgerPartition({partitionId})
+  );
+}
+
+/**
+ * Classify a candidate move for the hold-engagement relation.
+ * @param {*} moveType
+ * @param {*} partitionId
+ * @return {string} One of OPERATION_LEDGER_HOLD_MOVE_CLASS.
+ */
+function classifyOperationLedgerHoldMove(moveType, partitionId) {
+  if (isDisruptiveOperationLedgerSelfMove(moveType, partitionId)) {
+    return OPERATION_LEDGER_HOLD_MOVE_CLASS.DISRUPTIVE_LEDGER_SELF_MOVE;
+  }
+  if (
+    normalizeOperationLedgerMoveType(moveType) === OperationType.ADD &&
+    isPriorityRecoveryEmergencyPartition(partitionId)
+  ) {
+    return OPERATION_LEDGER_HOLD_MOVE_CLASS.EMERGENCY_QUORUM_RESTORE_ADD;
+  }
+  return OPERATION_LEDGER_HOLD_MOVE_CLASS.DEPENDENT;
+}
+
+/**
+ * Resolve the declared engagement for a hold and move class. Fail-closed:
+ * an unknown hold or move class DEFERS (an undeclared combination must never
+ * silently bypass a hold).
+ * @param {string} holdKind
+ * @param {string} moveClass
+ * @return {string} One of OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.
+ */
+function resolveOperationLedgerHoldEngagement(holdKind, moveClass) {
+  return (
+    OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS.get(holdKind)?.get(
+      moveClass,
+    ) ?? OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.DEFER
+  );
+}
+
+/**
+ * Resolve the quorum-spread hold from actuals, as a policy decision surface:
+ * null when the hold is not engaged; otherwise the evaluation plus the first
+ * spread-actionable partition (engagement guarantees one exists).
+ * @param {Object|null} systemTableCache
+ * @return {{evaluation: Object, firstSpreadActionablePartition: Object}|null}
+ */
+function resolveEngagedLedgerQuorumSpreadHold(systemTableCache) {
+  const evaluation =
+    evaluateOperationLedgerQuorumConcentration(systemTableCache);
+  if (evaluation.holdEngaged !== true) {
+    return null;
+  }
+  return Object.freeze({
+    evaluation,
+    firstSpreadActionablePartition: evaluation.concentratedPartitions.find(
+      (partition) => partition.spreadActionable,
+    ),
+  });
+}
+
+/**
+ * Quorum-concentration evidence for a single partition (the planner's
+ * priority-recovery gate reads this to keep planning the cure while the hold
+ * itself sustains readiness-deferral states).
+ * @param {Object|null} systemTableCache
+ * @param {string|null} partitionId
+ * @return {boolean}
+ */
+function isLedgerQuorumConcentratedPartition(systemTableCache, partitionId) {
+  return isConcentratedOperationLedgerPartition(
+    evaluateOperationLedgerQuorumConcentration(systemTableCache),
+    partitionId,
+  );
+}
+
+/**
+ * The cure-move exemption of the QUORUM_SPREAD hold, fully resolved against
+ * actuals: a cure-typed move of a concentrated ledger partition whose source
+ * replica sits on the hottest node. Callers own their mechanism-side checks
+ * (inventory provenance, replica actuals); this owns the relation side.
+ * @param {Object} params
+ * @param {Object|null} params.systemTableCache
+ * @param {*} params.moveType
+ * @param {string|null} params.partitionId
+ * @param {string|null} params.sourceReplicaNodeId
+ * @return {boolean}
+ */
+function isEngagedLedgerQuorumSpreadCureReplace({
+  systemTableCache,
+  moveType,
+  partitionId,
+  sourceReplicaNodeId,
+}) {
+  if (
+    !LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES.has(
+      normalizeOperationLedgerMoveType(moveType),
+    ) ||
+    !isOperationLedgerPartition({partitionId})
+  ) {
+    return false;
+  }
+  const evaluation =
+    evaluateOperationLedgerQuorumConcentration(systemTableCache);
+  const concentratedPartition = evaluation.concentratedPartitions.find(
+    (partition) => partition.partitionId === partitionId,
+  );
+  return (
+    evaluation.holdEngaged === true &&
+    concentratedPartition?.spreadActionable === true &&
+    sourceReplicaNodeId === concentratedPartition.hottestNodeId &&
+    isConcentratedOperationLedgerPartition(evaluation, partitionId)
+  );
+}
+
+/**
+ * Order the QUORUM_SPREAD cure moves of a concentrated partition first —
+ * the hold itself sustains the readiness states that would otherwise
+ * deprioritize its own cure. The caller establishes that the partition is
+ * concentrated; this owns which moves are cure-typed.
+ * @param {Array<Object>} moves
+ * @param {string} concentratedPartitionId
+ * @return {Array<Object>}
+ */
+function orderLedgerQuorumCureMovesFirst(moves, concentratedPartitionId) {
+  const normalizedMoves = Array.isArray(moves) ? moves : [];
+  const isCureMove = (move) =>
+    LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES.has(
+      normalizeOperationLedgerMoveType(move?.type),
+    ) &&
+    String(move?.partitionId || concentratedPartitionId) ===
+      concentratedPartitionId;
+  return [
+    ...normalizedMoves.filter(isCureMove),
+    ...normalizedMoves.filter((move) => !isCureMove(move)),
+  ];
+}
+
+export {
+  LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES,
+  OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES,
+  OPERATION_LEDGER_HOLD,
+  OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS,
+  OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
+  OPERATION_LEDGER_HOLD_MOVE_CLASS,
+  classifyOperationLedgerHoldMove,
+  isDisruptiveOperationLedgerSelfMove,
+  isEngagedLedgerQuorumSpreadCureReplace,
+  isLedgerQuorumConcentratedPartition,
+  orderLedgerQuorumCureMovesFirst,
+  resolveEngagedLedgerQuorumSpreadHold,
+  resolveOperationLedgerHoldEngagement,
+};

@@ -1,0 +1,129 @@
+{
+  "schema": "decision-table-v1",
+  "id": "operation-ledger-hold-engagement",
+  "owner": "src/rebalancer/operation-ledger-hold-policy.js",
+  "boundary": "rebalancer_admission",
+  "inputs": [
+    {
+      "name": "hold",
+      "values": [
+        "ledger_self_move_serialization",
+        "ledger_quorum_spread"
+      ]
+    },
+    {
+      "name": "moveClass",
+      "values": [
+        "disruptive_ledger_self_move",
+        "emergency_quorum_restore_add",
+        "dependent"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "engagement",
+      "values": [
+        "exempt",
+        "idle_only",
+        "defer"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "cure-stays-admissible",
+      "statement": "The move class that cures a hold is never deferred by that hold (CL-013: exemption classes for availability-critical operations)."
+    },
+    {
+      "id": "fail-closed-defer",
+      "statement": "Any undeclared (hold, moveClass) combination resolves to defer; an unknown move never silently bypasses a hold."
+    }
+  ],
+  "rules": [
+    {
+      "id": "self-move-serializes-exclusively",
+      "when": {
+        "hold": "ledger_self_move_serialization",
+        "moveClass": "disruptive_ledger_self_move"
+      },
+      "outcome": {
+        "engagement": "idle_only"
+      },
+      "reason": "A REPLACE/REMOVE of a ledger partition admits only into an idle ledger; co-scheduling is the run-20 formation interlock.",
+      "invariantRefs": [
+        "cure-stays-admissible"
+      ]
+    },
+    {
+      "id": "emergency-add-exempt-from-self-move-hold",
+      "when": {
+        "hold": "ledger_self_move_serialization",
+        "moveClass": "emergency_quorum_restore_add"
+      },
+      "outcome": {
+        "engagement": "exempt"
+      },
+      "reason": "Control-plane spine availability outranks storm avoidance; ledger spread recovery must stay admissible through the hold it cures (CL-013).",
+      "invariantRefs": [
+        "cure-stays-admissible"
+      ]
+    },
+    {
+      "id": "dependents-defer-behind-live-self-move",
+      "when": {
+        "hold": "ledger_self_move_serialization",
+        "moveClass": "dependent"
+      },
+      "outcome": {
+        "engagement": "defer"
+      },
+      "reason": "While a live ledger self-move exists every other operation defers; the CL-043 staleness exclusion bounds a wedged holder.",
+      "invariantRefs": [
+        "fail-closed-defer"
+      ]
+    },
+    {
+      "id": "self-move-is-the-concentration-cure",
+      "when": {
+        "hold": "ledger_quorum_spread",
+        "moveClass": "disruptive_ledger_self_move"
+      },
+      "outcome": {
+        "engagement": "exempt"
+      },
+      "reason": "The count-neutral spread REPLACE is the cure for a concentrated ledger quorum and must pass the hold it releases.",
+      "invariantRefs": [
+        "cure-stays-admissible"
+      ]
+    },
+    {
+      "id": "emergency-add-exempt-from-quorum-hold",
+      "when": {
+        "hold": "ledger_quorum_spread",
+        "moveClass": "emergency_quorum_restore_add"
+      },
+      "outcome": {
+        "engagement": "exempt"
+      },
+      "reason": "Emergency quorum-restore ADDs rebuild the spine the hold protects.",
+      "invariantRefs": [
+        "cure-stays-admissible"
+      ]
+    },
+    {
+      "id": "dependents-defer-until-quorum-spreads",
+      "when": {
+        "hold": "ledger_quorum_spread",
+        "moveClass": "dependent"
+      },
+      "outcome": {
+        "engagement": "defer"
+      },
+      "reason": "Dependent admission defers until placement actuals show the ledger quorum spread (run-22 release-too-early gap).",
+      "invariantRefs": [
+        "fail-closed-defer"
+      ]
+    }
+  ]
+}
