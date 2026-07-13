@@ -1,3 +1,4 @@
+import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 import {
@@ -272,10 +273,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         continue;
       }
 
-      if (
-        this.isPreSyncStep(originalStep) ||
-        originalStep === WORKFLOW_STEP.STOPPING
-      ) {
+      if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
         result.markedFailed++;
       } else if (originalStep === WORKFLOW_STEP.SYNCING) {
         result.reconciled++;

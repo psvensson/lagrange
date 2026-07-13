@@ -2,7 +2,9 @@
  * Constants for MessageGroupServiceHandler.
  */
 
-import {WORKFLOW_STEP} from '../constants/index.js';
+import {
+  OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
+} from '../rebalancer/replica-operation-step-policy.js';
 
 const MESSAGE_GROUP_SERVICE_HANDLER_SUBSYSTEM =
   'message-group-service-handler';
@@ -74,11 +76,7 @@ const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
 });
 
 const MESSAGE_GROUP_SERVICE_HANDLER_WORKFLOW = Object.freeze({
-  COMPLETION_STEPS: [
-    WORKFLOW_STEP.ACTIVE,
-    WORKFLOW_STEP.REMOVED,
-    WORKFLOW_STEP.FAILED,
-  ],
+  COMPLETION_STEPS: OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
 });
 
 export {

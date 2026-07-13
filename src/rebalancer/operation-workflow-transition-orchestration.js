@@ -1,5 +1,9 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
+import {
+  PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
+  isPriorityOutcomeDeferredLocalProgressCovered,
+} from './replica-operation-step-policy.js';
 
 const {
   ControlPlaneReadinessService,
@@ -7,7 +11,6 @@ const {
   INITIAL_PARTITION_IDS,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OperationType,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
@@ -23,10 +26,6 @@ const {
 
 const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
   TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
-const PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS = new Set([
-  WORKFLOW_STEP.SENDING,
-  WORKFLOW_STEP.CREATING,
-]);
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
 
@@ -418,16 +417,10 @@ class OperationWorkflowTransitionOrchestration
     ) {
       return false;
     }
-    if (step === WORKFLOW_STEP.ACTIVE) {
-      return operation?.type === OperationType.REPLACE;
-    }
-    if (step === WORKFLOW_STEP.STOPPING) {
-      return (
-        operation?.type === OperationType.REPLACE ||
-        operation?.type === OperationType.REMOVE
-      );
-    }
-    return false;
+    return isPriorityOutcomeDeferredLocalProgressCovered(
+      operation?.type,
+      step,
+    );
   }
 
   /**

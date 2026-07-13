@@ -1,0 +1,16 @@
+{
+  "test": "test/control-plane/cl-035-voter-ready-row-seed.test.js",
+  "src": [
+    "src/node/replica-handler-create-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 1,
+    "revertRunExit": 1,
+    "restoreRunExit": 1
+  },
+  "srcChanged": true,
+  "verdict": "fix-not-passing",
+  "ok": false,
+  "detail": "test does not pass WITH the fix; nothing to prove",
+  "timestamp": "2026-07-13T09:03:48.673Z"
+}

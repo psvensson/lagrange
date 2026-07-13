@@ -1,4 +1,8 @@
 import {
+  DISPATCH_PENDING_WORKFLOW_STEPS,
+  isActiveReplaceSourceRemovalPhase,
+} from '../rebalancer/replica-operation-step-policy.js';
+import {
   COLUMN,
   WORKFLOW_STEP,
 } from '../constants/index.js';
@@ -158,8 +162,7 @@ function buildDispatchRetryReadyNodeEvidence(operation) {
     });
   }
   if (
-    operation?.type === OperationType.REPLACE &&
-    operation?.workflowStep === WORKFLOW_STEP.ACTIVE
+    isActiveReplaceSourceRemovalPhase(operation?.type, operation?.workflowStep)
   ) {
     return Object.freeze({
       phase: DISPATCH_RETRY_READY_NODE_PHASE.ACTIVE_REPLACE_SOURCE_REMOVAL,
@@ -168,10 +171,7 @@ function buildDispatchRetryReadyNodeEvidence(operation) {
       targetNodeIds: Object.freeze([]),
     });
   }
-  if (
-    operation.workflowStep === WORKFLOW_STEP.PENDING ||
-    operation.workflowStep === WORKFLOW_STEP.SENDING
-  ) {
+  if (DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep)) {
     return Object.freeze({
       phase: DISPATCH_RETRY_READY_NODE_PHASE.INITIAL_TARGET_DISPATCH,
       sourceNodeIds: Object.freeze([]),
@@ -244,18 +244,15 @@ function isDispatchRetryOperation(operation) {
   if (!operation) {
     return false;
   }
-  if (
-    operation.workflowStep === WORKFLOW_STEP.PENDING ||
-    operation.workflowStep === WORKFLOW_STEP.SENDING
-  ) {
+  if (DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflowStep)) {
     return true;
   }
   if (isDispatchRetryCreateTargetRearmOperation(operation)) {
     return true;
   }
-  return (
-    operation.type === OperationType.REPLACE &&
-    operation.workflowStep === WORKFLOW_STEP.ACTIVE
+  return isActiveReplaceSourceRemovalPhase(
+    operation.type,
+    operation.workflowStep,
   );
 }
 

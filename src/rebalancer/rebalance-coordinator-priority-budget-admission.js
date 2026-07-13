@@ -16,6 +16,9 @@ import {
   shouldBypassConcurrentBudgetEmptyBackoff,
   shouldUsePriorityConcurrentAddLane,
 } from './rebalance-coordinator-concurrent-add-budget.js';
+import {
+  PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
+} from './replica-operation-step-policy.js';
 
 const LOCAL_STR_CRITICAL_PARTITION = 'Critical partition ';
 const LOCAL_STR_FUNCTION = 'function';
@@ -26,7 +29,6 @@ const {
   OperationType,
   ReplicaStatus,
   SERVICE_TYPE,
-  WORKFLOW_STEP,
   buildPriorityRecoveryOperationAssessment,
   isPriorityControlPlanePartitionTable,
   resolvePriorityRecoveryActiveNodeCohort,
@@ -51,30 +53,6 @@ const ENTITY_SERIALIZED_ADD_LIKE_OPERATION_TYPES = Object.freeze([
   OperationType.ADD,
   OperationType.REPLACE,
 ]);
-const PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE =
-  Object.freeze(
-    new Map([
-      [
-        OperationType.REMOVE,
-        new Set([
-          WORKFLOW_STEP.PENDING,
-          WORKFLOW_STEP.SENDING,
-          WORKFLOW_STEP.STOPPING,
-        ]),
-      ],
-      [
-        OperationType.REPLACE,
-        new Set([
-          WORKFLOW_STEP.PENDING,
-          WORKFLOW_STEP.SENDING,
-          WORKFLOW_STEP.CREATING,
-          WORKFLOW_STEP.SYNCING,
-          WORKFLOW_STEP.ACTIVE,
-          WORKFLOW_STEP.STOPPING,
-        ]),
-      ],
-    ]),
-  );
 const PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_PREFIX =
   'Priority control-plane partition ';
 const PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_SUFFIX =

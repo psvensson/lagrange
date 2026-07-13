@@ -1,3 +1,4 @@
+import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 const {
   DISPATCH_RETRY_DELAY_MS,
@@ -209,10 +210,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       this.repository.isReplaceRemoveDispatchPhase(operation);
     const removeRedriveDispatchPhase =
       operation.type === OperationType.REMOVE &&
-      (
-        operation.workflowStep === WORKFLOW_STEP.ACTIVE ||
-        operation.workflowStep === WORKFLOW_STEP.STOPPING
-      );
+      REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(operation.workflowStep);
     const createRearmDispatchPhase =
       this.isCreateRearmDispatchPhase(operation);
     const replaceSourceReplicaId =

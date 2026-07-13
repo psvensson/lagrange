@@ -1,5 +1,11 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  CREATE_REARM_DISPATCH_OPERATION_TYPES,
+  DISPATCH_PENDING_WORKFLOW_STEPS,
+  REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
+  REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
+} from './replica-operation-step-policy.js';
+import {
   OPERATION_OWNER_RETRY_ACTION,
   OPERATION_OWNER_RETRY_KIND,
   buildOperationOwnerRetryOutcome,
@@ -137,10 +143,7 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
   }
   const workflowStep = operation.workflowStep || operation.workflow_step;
   if (owner.repository.isReplaceRemoveDispatchPhase(operation)) {
-    return (
-      workflowStep === WORKFLOW_STEP.ACTIVE ||
-      workflowStep === WORKFLOW_STEP.STOPPING
-    );
+    return REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(workflowStep);
   }
   if (
     owner.isRemoveInitialDispatchPhase(operation) ||
@@ -154,10 +157,7 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
   if (owner.isCreateRearmDispatchPhase(operation)) {
     return true;
   }
-  return (
-    workflowStep === WORKFLOW_STEP.PENDING ||
-    workflowStep === WORKFLOW_STEP.SENDING
-  );
+  return DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep);
 }
 function isCreateRearmDispatchPhase(owner, operation) {
   if (!operation || !owner.isCriticalSystemPartition(operation.partitionId)) {
@@ -169,17 +169,12 @@ function isCreateRearmDispatchPhase(owner, operation) {
   if (owner.repository.isReplaceRemoveDispatchPhase(operation)) {
     return false;
   }
-  return (
-    operation.type === OperationType.ADD ||
-    operation.type === OperationType.REPLACE
-  );
+  return CREATE_REARM_DISPATCH_OPERATION_TYPES.has(operation.type);
 }
 function isRemoveInitialDispatchPhase(operation) {
   return (
     operation?.type === OperationType.REMOVE &&
-    (operation?.workflowStep === WORKFLOW_STEP.PENDING ||
-      operation?.workflowStep === WORKFLOW_STEP.SENDING ||
-      operation?.workflowStep === WORKFLOW_STEP.ACTIVE)
+    REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS.has(operation?.workflowStep)
   );
 }
 function isSafetyDeferredRetryableOperation(owner, operation) {

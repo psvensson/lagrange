@@ -1,3 +1,4 @@
+import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
 
@@ -133,9 +134,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
 
     if (
       reconciledStatus === ReplicaStatus.SYNCING &&
-      (operation.workflowStep === WORKFLOW_STEP.PENDING ||
-        operation.workflowStep === WORKFLOW_STEP.SENDING ||
-        operation.workflowStep === WORKFLOW_STEP.CREATING)
+      PRE_SYNC_WORKFLOW_STEPS.has(operation.workflowStep)
     ) {
       await this.updateStep(operation, WORKFLOW_STEP.SYNCING);
       return true;

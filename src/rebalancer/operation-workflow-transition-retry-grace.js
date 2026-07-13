@@ -1,3 +1,4 @@
+import {PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
@@ -147,15 +148,7 @@ class OperationWorkflowTransitionRetryGrace {
     if (!usesProtectedPriorityBudget) {
       return false;
     }
-    if (workflowStep === WORKFLOW_STEP.CREATING) {
-      return false;
-    }
-    return (
-      workflowStep === WORKFLOW_STEP.PENDING ||
-      workflowStep === WORKFLOW_STEP.SENDING ||
-      workflowStep === WORKFLOW_STEP.ACTIVE ||
-      workflowStep === WORKFLOW_STEP.STOPPING
-    );
+    return PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS.has(workflowStep);
   }
 
   /**

@@ -8,8 +8,8 @@
  * Requirements: 10.2, 3.1
  */
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {WORKFLOW_STEP} from '../constants/index.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
 import {
@@ -120,10 +120,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
             row.workflow_step.toUpperCase() :
             null;
         if (workflowStep) {
-          return (
-            workflowStep !== WORKFLOW_STEP.REMOVED &&
-            workflowStep !== WORKFLOW_STEP.FAILED
-          );
+          return !REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS.has(workflowStep);
         }
         const status =
           typeof row?.status === REPLICA_HANDLER_TYPEOF.STRING ?

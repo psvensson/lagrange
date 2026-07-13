@@ -3,6 +3,11 @@ import {
   applyOperationWorkflowExecutorOutcomeReconcileMethods,
 } from './operation-workflow-executor-outcome-reconcile-methods.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+import {
+  PRE_SYNC_WORKFLOW_STEPS,
+  RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
+  isActiveReplaceSourceRemovalPhase,
+} from './replica-operation-step-policy.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
 
 const {
@@ -461,11 +466,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   }
 
   isPreSyncStep(step) {
-    return [
-      WORKFLOW_STEP.PENDING,
-      WORKFLOW_STEP.SENDING,
-      WORKFLOW_STEP.CREATING,
-    ].includes(step);
+    return PRE_SYNC_WORKFLOW_STEPS.has(step);
   }
 
   resolveOperationLifecycleAction(
@@ -482,8 +483,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     }
 
     if (
-      operation.type === OperationType.REPLACE &&
-      operation.workflowStep === WORKFLOW_STEP.ACTIVE
+      isActiveReplaceSourceRemovalPhase(operation.type, operation.workflowStep)
     ) {
       return OPERATION_LIFECYCLE_ACTION.EXECUTE_ACTIVE_REPLACE;
     }
@@ -501,10 +501,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
     }
 
     if (
-      operation.workflowStep === WORKFLOW_STEP.PENDING ||
-      operation.workflowStep === WORKFLOW_STEP.SENDING ||
-      operation.workflowStep === WORKFLOW_STEP.CREATING ||
-      operation.workflowStep === WORKFLOW_STEP.SYNCING
+      RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS.has(operation.workflowStep)
     ) {
       return OPERATION_LIFECYCLE_ACTION.RECONCILE_REPLICA_STATUS;
     }

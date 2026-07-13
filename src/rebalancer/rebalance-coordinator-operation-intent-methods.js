@@ -1,4 +1,7 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS,
+} from './replica-operation-step-policy.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -26,10 +29,6 @@ const LOCAL_STR_FAILED_TO_REFRESH_RECENT_OPERATION_INTEN = 'Failed to refresh re
 const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_OPERATION_TYPES = new Set([
   OperationType.ADD,
   OperationType.REPLACE,
-]);
-const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS = new Set([
-  WORKFLOW_STEP.PENDING,
-  WORKFLOW_STEP.SENDING,
 ]);
 
 class RebalanceCoordinatorOperationIntentMethods {

@@ -5,7 +5,9 @@
  * for the runtime-service replica operation handler.
  */
 
-import {WORKFLOW_STEP} from '../constants/index.js';
+import {
+  OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
+} from '../rebalancer/replica-operation-step-policy.js';
 
 const RUNTIME_SERVICE_HANDLER_SUBSYSTEM = 'runtime-service-handler';
 
@@ -70,11 +72,7 @@ const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
 });
 
 const RUNTIME_SERVICE_HANDLER_WORKFLOW = Object.freeze({
-  COMPLETION_STEPS: [
-    WORKFLOW_STEP.ACTIVE,
-    WORKFLOW_STEP.REMOVED,
-    WORKFLOW_STEP.FAILED,
-  ],
+  COMPLETION_STEPS: OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
 });
 
 export {

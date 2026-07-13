@@ -1,3 +1,4 @@
+import {resolveOperationTransitionReason} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerRetryRegistry} from './operation-workflow-owner-retry-registry.js';
 import {withOwnerHandoffState} from './operation-workflow-owner-handoff-state.js';
@@ -17,11 +18,9 @@ const {
   OPERATION_OWNER_ACTION,
   OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
   OPERATION_SINGLE_FLIGHT_SCOPE,
-  OPERATION_TRANSITION_REASON,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SKIP_REASON,
-  WORKFLOW_STEP,
   buildTopologyOperatorWitnessFromWorkflowProgress,
   getControlPlaneRetryAfterMs,
   isPriorityControlPlanePartition,
@@ -464,31 +463,7 @@ class OperationWorkflowOwnerExecutionLane
    * @return {string}
    */
   resolveTransitionReason(previousStep, nextStep) {
-    if (nextStep === WORKFLOW_STEP.SENDING) {
-      return OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
-    }
-    if (nextStep === WORKFLOW_STEP.CREATING) {
-      return OPERATION_TRANSITION_REASON.DISPATCH_CREATING;
-    }
-    if (nextStep === WORKFLOW_STEP.STOPPING) {
-      return OPERATION_TRANSITION_REASON.DISPATCH_STOPPING;
-    }
-    if (
-      nextStep === WORKFLOW_STEP.ACTIVE &&
-      previousStep === WORKFLOW_STEP.SYNCING
-    ) {
-      return OPERATION_TRANSITION_REASON.RECONCILE_ACTIVE;
-    }
-    if (nextStep === WORKFLOW_STEP.ACTIVE) {
-      return OPERATION_TRANSITION_REASON.DISPATCH_ALREADY_EXISTS;
-    }
-    if (nextStep === WORKFLOW_STEP.REMOVED) {
-      return OPERATION_TRANSITION_REASON.OPERATION_COMPLETED;
-    }
-    if (nextStep === WORKFLOW_STEP.FAILED) {
-      return OPERATION_TRANSITION_REASON.OPERATION_FAILED;
-    }
-    return OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
+    return resolveOperationTransitionReason(previousStep, nextStep);
   }
 
   /**

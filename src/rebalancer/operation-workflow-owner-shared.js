@@ -112,6 +112,10 @@ import {
   EXECUTOR_OUTCOME_ACTION_MAP,
 } from './executor-outcome-constants.js';
 import {SQL_RECONCILIATION_REASON} from '../control-plane/read-model-contract.js';
+import {
+  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
+  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS,
+} from './replica-operation-step-policy.js';
 const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
   CLOSE_PAREN: ')',
   COMMA_SPACE: ', ',
@@ -274,14 +278,6 @@ const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE = Object.freeze({
   MATERIALIZED: 'materialized',
   UNMATERIALIZED: 'unmaterialized',
 });
-const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS = Object.freeze(
-  new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
-  ]),
-);
-
 const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   COMPLETE_PRIORITY_RECOVERY_DRAIN: 'complete_priority_recovery_drain',
   FAIL_PRIORITY_RECOVERY_DRAIN_STALE: 'fail_priority_recovery_drain_stale',
@@ -330,16 +326,6 @@ const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
     ReplicaStatus.ACTIVE,
     ReplicaStatus.REMOVING,
     ReplicaStatus.FAILED,
-  ]),
-);
-
-const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(
-  new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
-    WORKFLOW_STEP.SYNCING,
-    WORKFLOW_STEP.STOPPING,
   ]),
 );
 

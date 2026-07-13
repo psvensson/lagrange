@@ -1,3 +1,4 @@
+import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowTransitionPersistence} from './operation-workflow-transition-persistence.js';
 import * as DISPATCH_WAKE_PREEMPTION
@@ -276,8 +277,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     }
     if (replaceRemoveDispatchPhase) {
       if (
-        dispatchableWorkflowStep !== WORKFLOW_STEP.ACTIVE &&
-        dispatchableWorkflowStep !== WORKFLOW_STEP.STOPPING
+        !REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(dispatchableWorkflowStep)
       ) {
         return this.buildSkippedOperationResult(
           OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,

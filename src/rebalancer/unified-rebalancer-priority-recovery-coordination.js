@@ -8,6 +8,9 @@ import {
 } from '../control-plane/control-plane-publications-leadership.js';
 import {TABLES} from '../constants/tables.js';
 import {COLUMN} from '../constants/columns.js';
+import {
+  PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET,
+} from './replica-operation-step-policy.js';
 
 const PUBLICATIONS_WRITE_LEADER_DIAG_MSG =
   'DIAG publications write-leader resolution (seed-driven membership)';
@@ -16,7 +19,6 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
   UNIFIED_REBALANCER_LITERAL,
-  WORKFLOW_STEP,
   getPartitionRowFromCache,
   isCoordinatorOwnedOperationType,
   isPriorityControlPlanePartition,
@@ -25,10 +27,6 @@ const {
   resolveTrackedPriorityRecoveryAdmissionPlan,
 } = UNIFIED_REBALANCER_SHARED;
 
-const PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET = new Set([
-  WORKFLOW_STEP.ACTIVE,
-  WORKFLOW_STEP.REMOVED,
-]);
 const PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET = new Set([
   REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
   REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,

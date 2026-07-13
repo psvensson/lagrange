@@ -1,4 +1,5 @@
 import {WORKFLOW_STEP} from '../constants/index.js';
+import {OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKER_REASON,
@@ -155,10 +156,7 @@ function resolvePriorityRecoveryWorkflowProgressPhaseId(operationContext) {
   if (directPhase) {
     return directPhase;
   }
-  if (
-    workflowStep === WORKFLOW_STEP.ACTIVE ||
-    workflowStep === WORKFLOW_STEP.STOPPING
-  ) {
+  if (OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS.has(workflowStep)) {
     return resolvePriorityRecoverySourceRemovalProgressPhase(operationContext);
   }
   if (isPriorityRecoveryOperationContextTerminal(operationContext) === true) {

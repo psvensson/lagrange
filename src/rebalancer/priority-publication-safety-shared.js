@@ -1,4 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS} from './replica-operation-step-policy.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -37,14 +38,6 @@ const {
   isSystemTablePartition,
   readAuthoritativeControlPlaneRows,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
-
-const PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS = Object.freeze([
-  WORKFLOW_STEP.PENDING,
-  WORKFLOW_STEP.SENDING,
-  WORKFLOW_STEP.CREATING,
-  WORKFLOW_STEP.SYNCING,
-  WORKFLOW_STEP.STOPPING,
-]);
 
 const STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES = Object.freeze(
   new Set([

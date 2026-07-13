@@ -1,3 +1,9 @@
+import {
+  PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
+  PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
+  isIncompleteOperationRowStep,
+} from './replica-operation-step-policy.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignReplicaOperationRepositoryIncompleteReadMethods(
@@ -69,18 +75,6 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
       ],
     ]),
   );
-
-  const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS =
-    Object.freeze(
-      new Set([
-        WORKFLOW_STEP.PENDING,
-        WORKFLOW_STEP.SENDING,
-        WORKFLOW_STEP.CREATING,
-        WORKFLOW_STEP.SYNCING,
-        WORKFLOW_STEP.ACTIVE,
-        WORKFLOW_STEP.STOPPING,
-      ]),
-    );
 
   class ReplicaOperationRepositoryIncompleteReadMethods {
     /**
@@ -251,18 +245,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         if (!row) {
           return false;
         }
-        return (
-          row.workflow_step === WORKFLOW_STEP.PENDING ||
-        row.workflow_step === WORKFLOW_STEP.SENDING ||
-        row.workflow_step === WORKFLOW_STEP.CREATING ||
-        row.workflow_step === WORKFLOW_STEP.SYNCING ||
-        row.workflow_step === WORKFLOW_STEP.STOPPING ||
-        (
-          row.workflow_step === WORKFLOW_STEP.ACTIVE &&
-          (row.type === OperationType.REPLACE ||
-            row.type === OperationType.REMOVE)
-        )
-        );
+        return isIncompleteOperationRowStep(row.type, row.workflow_step);
       });
       if (cachedRows === null) {
         return [];
@@ -305,12 +288,7 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         [
           this.nodeId,
           this.nodeId,
-          WORKFLOW_STEP.PENDING,
-          WORKFLOW_STEP.SENDING,
-          WORKFLOW_STEP.CREATING,
-          WORKFLOW_STEP.SYNCING,
-          WORKFLOW_STEP.STOPPING,
-          WORKFLOW_STEP.ACTIVE,
+          ...PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
           OperationType.REPLACE,
           OperationType.REMOVE,
         ],

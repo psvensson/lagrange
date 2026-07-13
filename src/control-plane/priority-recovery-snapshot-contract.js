@@ -1,7 +1,4 @@
 import {
-  WORKFLOW_STEP,
-} from '../constants/index.js';
-import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from './priority-recovery-diagnostics-constants.js';
@@ -10,6 +7,9 @@ import {
   ReplicaStatus,
   TERMINAL_STATUSES as REPLICA_OPERATION_TERMINAL_STATUSES,
 } from '../rebalancer/replica-status.js';
+import {
+  PRIORITY_RECOVERY_DISPATCHED_WORKFLOW_STEPS,
+} from '../rebalancer/replica-operation-step-policy.js';
 const LOCAL_STR_EMPTY = '';
 
 const LOCAL_EMPTY_LIST = Object.freeze([]);
@@ -176,14 +176,6 @@ const PRIORITY_RECOVERY_WORKFLOW_STATE = Object.freeze({
   REMOVE_PHASE: 'remove_phase',
   TERMINAL: 'terminal',
 });
-
-const PRIORITY_RECOVERY_DISPATCHED_WORKFLOW_STEPS = new Set([
-  WORKFLOW_STEP.SENDING,
-  WORKFLOW_STEP.CREATING,
-  WORKFLOW_STEP.SYNCING,
-  WORKFLOW_STEP.ACTIVE,
-  WORKFLOW_STEP.STOPPING,
-]);
 
 const PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE = Object.freeze({
   TRANSITION_OBSERVED: 'transition_observed',

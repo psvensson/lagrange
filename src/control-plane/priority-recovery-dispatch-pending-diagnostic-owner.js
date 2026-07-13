@@ -29,6 +29,9 @@ import {
   OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
   OPERATION_WORKFLOW_REASON_CODE_VALUES,
 } from '../rebalancer/operation-workflow-owner-constants.js';
+import {
+  PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS,
+} from '../rebalancer/replica-operation-step-policy.js';
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_STATE =
   Object.freeze({
@@ -36,9 +39,6 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_OWNER_STATE =
     ADVANCE_EXISTING_OPERATION:
       'diagnostic_dispatch_pending_owner_advance_existing_operation',
   });
-
-const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS =
-  Object.freeze(new Set([WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]));
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_ACTUATION_STATES =
   Object.freeze(new Set([

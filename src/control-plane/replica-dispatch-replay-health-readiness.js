@@ -1,5 +1,9 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {ReplicaDispatchOperationExecution} from './replica-dispatch-operation-execution.js';
+import {
+  DISPATCH_PENDING_WORKFLOW_STEPS,
+  isActiveReplaceSourceRemovalPhase,
+} from '../rebalancer/replica-operation-step-policy.js';
 
 const {
   COLUMN,
@@ -8,12 +12,10 @@ const {
   DISPATCH_DEFAULT,
   DISPATCH_LOG_MSG,
   MEMBERSHIP_PUBLICATION_STATUS,
-  OperationType,
   READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   STATE,
-  WORKFLOW_STEP,
   compareNodeHeartbeatWatermarks,
   getControlPlaneErrorMessage,
   getControlPlaneNodeStatePublicationProfile,
@@ -72,10 +74,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       return false;
     }
 
-    if (
-      row.type === OperationType.REPLACE &&
-      row.workflow_step === WORKFLOW_STEP.ACTIVE
-    ) {
+    if (isActiveReplaceSourceRemovalPhase(row.type, row.workflow_step)) {
       this.operationDispatchQueue.enqueue(
         row.operation_id,
         reasons.replaceActiveReason,
@@ -93,10 +92,7 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       return true;
     }
 
-    if (
-      row.workflow_step !== WORKFLOW_STEP.PENDING &&
-      row.workflow_step !== WORKFLOW_STEP.SENDING
-    ) {
+    if (!DISPATCH_PENDING_WORKFLOW_STEPS.has(row.workflow_step)) {
       return false;
     }
 
@@ -121,11 +117,9 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
 
     const workflowStep = row.workflow_step;
     const remoteReplayable =
-      workflowStep === WORKFLOW_STEP.PENDING ||
-      workflowStep === WORKFLOW_STEP.SENDING ||
+      DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep) ||
       this.isDispatchReplayCreateTargetRearmOperation(row) ||
-      (row.type === OperationType.REPLACE &&
-        workflowStep === WORKFLOW_STEP.ACTIVE);
+      isActiveReplaceSourceRemovalPhase(row.type, workflowStep);
     if (!remoteReplayable || this.isReplicaOperationLocallyOwned(row)) {
       return false;
     }

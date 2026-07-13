@@ -1,3 +1,4 @@
+import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
 import {
@@ -108,10 +109,7 @@ async function handleRecovery(coordinator) {
       continue;
     }
 
-    if (
-      coordinator.isPreSyncStep(originalStep) ||
-      originalStep === WORKFLOW_STEP.STOPPING
-    ) {
+    if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
       result.markedFailed++;
     } else if (originalStep === WORKFLOW_STEP.SYNCING) {
       result.reconciled++;

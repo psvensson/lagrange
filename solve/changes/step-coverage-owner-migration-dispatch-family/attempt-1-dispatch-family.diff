@@ -1,0 +1,1194 @@
+diff --git a/src/rebalancer/operation-workflow-dispatch-execution.js b/src/rebalancer/operation-workflow-dispatch-execution.js
+index 5df9c08c..ef189ea2 100644
+--- a/src/rebalancer/operation-workflow-dispatch-execution.js
++++ b/src/rebalancer/operation-workflow-dispatch-execution.js
+@@ -1,3 +1,4 @@
++import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+ import {OperationWorkflowTransitionPersistence} from './operation-workflow-transition-persistence.js';
+ import * as DISPATCH_WAKE_PREEMPTION
+@@ -276,8 +277,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
+     }
+     if (replaceRemoveDispatchPhase) {
+       if (
+-        dispatchableWorkflowStep !== WORKFLOW_STEP.ACTIVE &&
+-        dispatchableWorkflowStep !== WORKFLOW_STEP.STOPPING
++        !REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(dispatchableWorkflowStep)
+       ) {
+         return this.buildSkippedOperationResult(
+           OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+diff --git a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+index b885ded8..f3d938e7 100644
+--- a/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
++++ b/src/rebalancer/operation-workflow-dispatch-rearm-evidence.js
+@@ -1,4 +1,10 @@
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
++import {
++  CREATE_REARM_DISPATCH_OPERATION_TYPES,
++  DISPATCH_PENDING_WORKFLOW_STEPS,
++  REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
++  REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
++} from './replica-operation-step-policy.js';
+ import {
+   OPERATION_OWNER_RETRY_ACTION,
+   OPERATION_OWNER_RETRY_KIND,
+@@ -137,10 +143,7 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
+   }
+   const workflowStep = operation.workflowStep || operation.workflow_step;
+   if (owner.repository.isReplaceRemoveDispatchPhase(operation)) {
+-    return (
+-      workflowStep === WORKFLOW_STEP.ACTIVE ||
+-      workflowStep === WORKFLOW_STEP.STOPPING
+-    );
++    return REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(workflowStep);
+   }
+   if (
+     owner.isRemoveInitialDispatchPhase(operation) ||
+@@ -154,10 +157,7 @@ function isDispatchRetryableWorkflowStep(owner, operation) {
+   if (owner.isCreateRearmDispatchPhase(operation)) {
+     return true;
+   }
+-  return (
+-    workflowStep === WORKFLOW_STEP.PENDING ||
+-    workflowStep === WORKFLOW_STEP.SENDING
+-  );
++  return DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep);
+ }
+ function isCreateRearmDispatchPhase(owner, operation) {
+   if (!operation || !owner.isCriticalSystemPartition(operation.partitionId)) {
+@@ -169,17 +169,12 @@ function isCreateRearmDispatchPhase(owner, operation) {
+   if (owner.repository.isReplaceRemoveDispatchPhase(operation)) {
+     return false;
+   }
+-  return (
+-    operation.type === OperationType.ADD ||
+-    operation.type === OperationType.REPLACE
+-  );
++  return CREATE_REARM_DISPATCH_OPERATION_TYPES.has(operation.type);
+ }
+ function isRemoveInitialDispatchPhase(operation) {
+   return (
+     operation?.type === OperationType.REMOVE &&
+-    (operation?.workflowStep === WORKFLOW_STEP.PENDING ||
+-      operation?.workflowStep === WORKFLOW_STEP.SENDING ||
+-      operation?.workflowStep === WORKFLOW_STEP.ACTIVE)
++    REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS.has(operation?.workflowStep)
+   );
+ }
+ function isSafetyDeferredRetryableOperation(owner, operation) {
+diff --git a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+index b23fe033..d71acd44 100644
+--- a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
++++ b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+@@ -1,3 +1,4 @@
++import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+ const {
+   DISPATCH_RETRY_DELAY_MS,
+@@ -209,10 +210,7 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
+       this.repository.isReplaceRemoveDispatchPhase(operation);
+     const removeRedriveDispatchPhase =
+       operation.type === OperationType.REMOVE &&
+-      (
+-        operation.workflowStep === WORKFLOW_STEP.ACTIVE ||
+-        operation.workflowStep === WORKFLOW_STEP.STOPPING
+-      );
++      REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(operation.workflowStep);
+     const createRearmDispatchPhase =
+       this.isCreateRearmDispatchPhase(operation);
+     const replaceSourceReplicaId =
+diff --git a/src/rebalancer/operation-workflow-dispatch-wake-preemption.js b/src/rebalancer/operation-workflow-dispatch-wake-preemption.js
+index 945f032c..1f8c1e7f 100644
+--- a/src/rebalancer/operation-workflow-dispatch-wake-preemption.js
++++ b/src/rebalancer/operation-workflow-dispatch-wake-preemption.js
+@@ -1,4 +1,7 @@
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
++import {
++  DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
++} from './replica-operation-step-policy.js';
+ import {
+   DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE,
+   isDispatchWakeProgressPreemptStateAllowed,
+@@ -23,14 +26,6 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES = Object.freeze(
+   ]),
+ );
+ 
+-const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
+-  new Set([
+-    WORKFLOW_STEP.PENDING,
+-    WORKFLOW_STEP.SENDING,
+-    WORKFLOW_STEP.CREATING,
+-  ]),
+-);
+-
+ /**
+  * @param {string|Object} operationInput
+  * @return {boolean}
+diff --git a/src/rebalancer/operation-workflow-owner-execution-lane.js b/src/rebalancer/operation-workflow-owner-execution-lane.js
+index da446684..014707b7 100644
+--- a/src/rebalancer/operation-workflow-owner-execution-lane.js
++++ b/src/rebalancer/operation-workflow-owner-execution-lane.js
+@@ -1,3 +1,4 @@
++import {resolveOperationTransitionReason} from './replica-operation-step-policy.js';
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+ import {OperationWorkflowOwnerRetryRegistry} from './operation-workflow-owner-retry-registry.js';
+ import {withOwnerHandoffState} from './operation-workflow-owner-handoff-state.js';
+@@ -17,11 +18,9 @@ const {
+   OPERATION_OWNER_ACTION,
+   OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
+   OPERATION_SINGLE_FLIGHT_SCOPE,
+-  OPERATION_TRANSITION_REASON,
+   OPERATION_WORKFLOW_OWNER_LITERAL,
+   REBALANCE_COORDINATOR_LOG_MSG,
+   REBALANCER_SKIP_REASON,
+-  WORKFLOW_STEP,
+   buildTopologyOperatorWitnessFromWorkflowProgress,
+   getControlPlaneRetryAfterMs,
+   isPriorityControlPlanePartition,
+@@ -464,31 +463,7 @@ class OperationWorkflowOwnerExecutionLane
+    * @return {string}
+    */
+   resolveTransitionReason(previousStep, nextStep) {
+-    if (nextStep === WORKFLOW_STEP.SENDING) {
+-      return OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
+-    }
+-    if (nextStep === WORKFLOW_STEP.CREATING) {
+-      return OPERATION_TRANSITION_REASON.DISPATCH_CREATING;
+-    }
+-    if (nextStep === WORKFLOW_STEP.STOPPING) {
+-      return OPERATION_TRANSITION_REASON.DISPATCH_STOPPING;
+-    }
+-    if (
+-      nextStep === WORKFLOW_STEP.ACTIVE &&
+-      previousStep === WORKFLOW_STEP.SYNCING
+-    ) {
+-      return OPERATION_TRANSITION_REASON.RECONCILE_ACTIVE;
+-    }
+-    if (nextStep === WORKFLOW_STEP.ACTIVE) {
+-      return OPERATION_TRANSITION_REASON.DISPATCH_ALREADY_EXISTS;
+-    }
+-    if (nextStep === WORKFLOW_STEP.REMOVED) {
+-      return OPERATION_TRANSITION_REASON.OPERATION_COMPLETED;
+-    }
+-    if (nextStep === WORKFLOW_STEP.FAILED) {
+-      return OPERATION_TRANSITION_REASON.OPERATION_FAILED;
+-    }
+-    return OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
++    return resolveOperationTransitionReason(previousStep, nextStep);
+   }
+ 
+   /**
+diff --git a/src/rebalancer/operation-workflow-owner-ports.js b/src/rebalancer/operation-workflow-owner-ports.js
+index b8e9e268..f1b50c9e 100644
+--- a/src/rebalancer/operation-workflow-owner-ports.js
++++ b/src/rebalancer/operation-workflow-owner-ports.js
+@@ -34,6 +34,9 @@ import {
+ import {
+   createOperationProgressStore,
+ } from './operation-progress-store.js';
++import {
++  OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS,
++} from './replica-operation-step-policy.js';
+ 
+ const OPERATION_WORKFLOW_OWNER_PORT_EMPTY_TEXT = '';
+ const OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD = null;
+@@ -53,11 +56,6 @@ const OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE =
+ const OPERATION_WORKFLOW_OWNER_PORT_WORKFLOW_STEP_UNDERSCORE =
+   'workflow_step';
+ const OPERATION_WORKFLOW_OWNER_PORT_STATUS_UNDERSCORE = 'status';
+-const OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS =
+-  Object.freeze(new Set([
+-    WORKFLOW_STEP.PENDING,
+-    WORKFLOW_STEP.SENDING,
+-  ]));
+ const OPERATION_WORKFLOW_OWNER_PORT_REMOTE_HANDOFF_SNAPSHOT_STATE =
+   Object.freeze({
+     COORDINATOR_MODE_UNAVAILABLE: 'coordinator_mode_unavailable',
+diff --git a/src/rebalancer/operation-workflow-owner-shared.js b/src/rebalancer/operation-workflow-owner-shared.js
+index 94bce924..8c21aaf2 100644
+--- a/src/rebalancer/operation-workflow-owner-shared.js
++++ b/src/rebalancer/operation-workflow-owner-shared.js
+@@ -112,6 +112,10 @@ import {
+   EXECUTOR_OUTCOME_ACTION_MAP,
+ } from './executor-outcome-constants.js';
+ import {SQL_RECONCILIATION_REASON} from '../control-plane/read-model-contract.js';
++import {
++  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS,
++} from './replica-operation-step-policy.js';
+ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
+   CLOSE_PAREN: ')',
+   COMMA_SPACE: ', ',
+@@ -274,14 +278,6 @@ const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE = Object.freeze({
+   MATERIALIZED: 'materialized',
+   UNMATERIALIZED: 'unmaterialized',
+ });
+-const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS = Object.freeze(
+-  new Set([
+-    WORKFLOW_STEP.PENDING,
+-    WORKFLOW_STEP.SENDING,
+-    WORKFLOW_STEP.CREATING,
+-  ]),
+-);
+-
+ const OPERATION_LIFECYCLE_ACTION = Object.freeze({
+   COMPLETE_PRIORITY_RECOVERY_DRAIN: 'complete_priority_recovery_drain',
+   FAIL_PRIORITY_RECOVERY_DRAIN_STALE: 'fail_priority_recovery_drain_stale',
+@@ -333,16 +329,6 @@ const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
+   ]),
+ );
+ 
+-const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(
+-  new Set([
+-    WORKFLOW_STEP.PENDING,
+-    WORKFLOW_STEP.SENDING,
+-    WORKFLOW_STEP.CREATING,
+-    WORKFLOW_STEP.SYNCING,
+-    WORKFLOW_STEP.STOPPING,
+-  ]),
+-);
+-
+ const SAFETY_DEFERRED_LOG_THROTTLE_MS = TIME_MS.SECOND * NUM.FIVE;
+ const SAFETY_DEFERRED_RETRY_DELAY_MS = TIME_MS.SECOND;
+ const OBSERVED_PROGRESS_RETRY_DELAY_MS = TIME_MS.SECOND / 4;
+diff --git a/src/rebalancer/operation-workflow-recovery-reconcile-shared.js b/src/rebalancer/operation-workflow-recovery-reconcile-shared.js
+index 1b521700..93770ba0 100644
+--- a/src/rebalancer/operation-workflow-recovery-reconcile-shared.js
++++ b/src/rebalancer/operation-workflow-recovery-reconcile-shared.js
+@@ -8,6 +8,14 @@ import {
+   PRIORITY_RECOVERY_WAIT_MODE,
+   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+ } from '../control-plane/priority-recovery-diagnostics-constants.js';
++import {
++  EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
++  OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS,
++  OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS,
++  TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS,
++} from './replica-operation-step-policy.js';
+ 
+ const {
+   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+@@ -62,10 +70,6 @@ const STOPPING_REPLICA_OBSERVATION_STATE = Object.freeze({
+   UNAVAILABLE: 'unavailable',
+ });
+ 
+-const OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS = Object.freeze(
+-  new Set([WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING]),
+-);
+-
+ const OBSERVED_PROGRESS_TABLE_STATE = Object.freeze({
+   SERVICE_REPLICA_STATE: 'service_replica_state',
+   OPERATION_WORKFLOW_STATE: 'operation_workflow_state',
+@@ -137,15 +141,6 @@ const OBSERVED_OPERATION_ROW_TARGET_PROGRESS_TYPES = Object.freeze(
+   new Set([OperationType.ADD, OperationType.REPLACE]),
+ );
+ 
+-const OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS = Object.freeze(
+-  new Set([
+-    WORKFLOW_STEP.PENDING,
+-    WORKFLOW_STEP.SENDING,
+-    WORKFLOW_STEP.CREATING,
+-    WORKFLOW_STEP.SYNCING,
+-  ]),
+-);
+-
+ const OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES = Object.freeze(
+   new Set([
+     ReplicaStatus.PENDING,
+@@ -160,10 +155,6 @@ const TARGET_PENDING_CREATE_ADMISSION_WORKFLOW_STEPS = Object.freeze(
+   new Set([WORKFLOW_STEP.SENDING]),
+ );
+ 
+-const TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS = Object.freeze(
+-  new Set([WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING]),
+-);
+-
+ const TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS = Object.freeze(
+   new Map([
+     [
+@@ -266,10 +257,6 @@ const ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES = Object.freeze(
+   ]),
+ );
+ 
+-const EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS = Object.freeze(
+-  new Set([WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE]),
+-);
+-
+ const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE = Object.freeze({
+   NOT_APPLICABLE: 'not_applicable',
+   EVIDENCE_UNAVAILABLE: 'evidence_unavailable',
+@@ -280,16 +267,6 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE = Object.freeze({
+   SUPERSEDED_TARGET: 'superseded_target',
+ });
+ 
+-const PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS = Object.freeze(
+-  new Set([
+-    WORKFLOW_STEP.PENDING,
+-    WORKFLOW_STEP.SENDING,
+-    WORKFLOW_STEP.CREATING,
+-    WORKFLOW_STEP.SYNCING,
+-    WORKFLOW_STEP.ACTIVE,
+-    WORKFLOW_STEP.STOPPING,
+-  ]),
+-);
+ const PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES = Object.freeze(
+   new Set([
+     OperationType.ADD,
+@@ -455,13 +432,6 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_SOURCE_STATES = Object.freeze(
+     PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.REMOVAL_IN_FLIGHT,
+   ]),
+ );
+-const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS =
+-  Object.freeze(
+-    new Set([
+-      WORKFLOW_STEP.ACTIVE,
+-      WORKFLOW_STEP.STOPPING,
+-    ]),
+-  );
+ const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_TARGET_OBSERVED_WORKFLOW_STEPS =
+   Object.freeze(
+     new Set([
+diff --git a/src/rebalancer/operation-workflow-recovery-reconcile.js b/src/rebalancer/operation-workflow-recovery-reconcile.js
+index fc184e35..05f455fb 100644
+--- a/src/rebalancer/operation-workflow-recovery-reconcile.js
++++ b/src/rebalancer/operation-workflow-recovery-reconcile.js
+@@ -1,3 +1,4 @@
++import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+ import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
+ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+ import {
+@@ -272,10 +273,7 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain
+         continue;
+       }
+ 
+-      if (
+-        this.isPreSyncStep(originalStep) ||
+-        originalStep === WORKFLOW_STEP.STOPPING
+-      ) {
++      if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
+         result.markedFailed++;
+       } else if (originalStep === WORKFLOW_STEP.SYNCING) {
+         result.reconciled++;
+diff --git a/src/rebalancer/operation-workflow-recovery-status-reconcile.js b/src/rebalancer/operation-workflow-recovery-status-reconcile.js
+index d20e3285..7e46a89b 100644
+--- a/src/rebalancer/operation-workflow-recovery-status-reconcile.js
++++ b/src/rebalancer/operation-workflow-recovery-status-reconcile.js
+@@ -1,3 +1,4 @@
++import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+ import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
+ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+ 
+@@ -133,9 +134,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
+ 
+     if (
+       reconciledStatus === ReplicaStatus.SYNCING &&
+-      (operation.workflowStep === WORKFLOW_STEP.PENDING ||
+-        operation.workflowStep === WORKFLOW_STEP.SENDING ||
+-        operation.workflowStep === WORKFLOW_STEP.CREATING)
++      PRE_SYNC_WORKFLOW_STEPS.has(operation.workflowStep)
+     ) {
+       await this.updateStep(operation, WORKFLOW_STEP.SYNCING);
+       return true;
+diff --git a/src/rebalancer/operation-workflow-recovery-timeout.js b/src/rebalancer/operation-workflow-recovery-timeout.js
+index 6c95fbdf..7d5dc5ee 100644
+--- a/src/rebalancer/operation-workflow-recovery-timeout.js
++++ b/src/rebalancer/operation-workflow-recovery-timeout.js
+@@ -3,6 +3,11 @@ import {
+   applyOperationWorkflowExecutorOutcomeReconcileMethods,
+ } from './operation-workflow-executor-outcome-reconcile-methods.js';
+ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
++import {
++  PRE_SYNC_WORKFLOW_STEPS,
++  RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
++  isActiveReplaceSourceRemovalPhase,
++} from './replica-operation-step-policy.js';
+ import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
+ 
+ const {
+@@ -461,11 +466,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
+   }
+ 
+   isPreSyncStep(step) {
+-    return [
+-      WORKFLOW_STEP.PENDING,
+-      WORKFLOW_STEP.SENDING,
+-      WORKFLOW_STEP.CREATING,
+-    ].includes(step);
++    return PRE_SYNC_WORKFLOW_STEPS.has(step);
+   }
+ 
+   resolveOperationLifecycleAction(
+@@ -482,8 +483,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
+     }
+ 
+     if (
+-      operation.type === OperationType.REPLACE &&
+-      operation.workflowStep === WORKFLOW_STEP.ACTIVE
++      isActiveReplaceSourceRemovalPhase(operation.type, operation.workflowStep)
+     ) {
+       return OPERATION_LIFECYCLE_ACTION.EXECUTE_ACTIVE_REPLACE;
+     }
+@@ -501,10 +501,7 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
+     }
+ 
+     if (
+-      operation.workflowStep === WORKFLOW_STEP.PENDING ||
+-      operation.workflowStep === WORKFLOW_STEP.SENDING ||
+-      operation.workflowStep === WORKFLOW_STEP.CREATING ||
+-      operation.workflowStep === WORKFLOW_STEP.SYNCING
++      RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS.has(operation.workflowStep)
+     ) {
+       return OPERATION_LIFECYCLE_ACTION.RECONCILE_REPLICA_STATUS;
+     }
+diff --git a/src/rebalancer/operation-workflow-transition-orchestration.js b/src/rebalancer/operation-workflow-transition-orchestration.js
+index 7db40123..26122bb4 100644
+--- a/src/rebalancer/operation-workflow-transition-orchestration.js
++++ b/src/rebalancer/operation-workflow-transition-orchestration.js
+@@ -1,5 +1,9 @@
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+ import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
++import {
++  PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
++  isPriorityOutcomeDeferredLocalProgressCovered,
++} from './replica-operation-step-policy.js';
+ 
+ const {
+   ControlPlaneReadinessService,
+@@ -7,7 +11,6 @@ const {
+   INITIAL_PARTITION_IDS,
+   OPERATION_METADATA_KEY,
+   OPERATION_WORKFLOW_OWNER_LITERAL,
+-  OperationType,
+   REBALANCE_COORDINATOR_EVENT,
+   REBALANCE_COORDINATOR_LOG_MSG,
+   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+@@ -23,10 +26,6 @@ const {
+ 
+ const PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS =
+   TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+-const PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS = new Set([
+-  WORKFLOW_STEP.SENDING,
+-  WORKFLOW_STEP.CREATING,
+-]);
+ const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
+   'priorityDeferredClaimExpectedStep';
+ 
+@@ -418,16 +417,10 @@ class OperationWorkflowTransitionOrchestration
+     ) {
+       return false;
+     }
+-    if (step === WORKFLOW_STEP.ACTIVE) {
+-      return operation?.type === OperationType.REPLACE;
+-    }
+-    if (step === WORKFLOW_STEP.STOPPING) {
+-      return (
+-        operation?.type === OperationType.REPLACE ||
+-        operation?.type === OperationType.REMOVE
+-      );
+-    }
+-    return false;
++    return isPriorityOutcomeDeferredLocalProgressCovered(
++      operation?.type,
++      step,
++    );
+   }
+ 
+   /**
+diff --git a/src/rebalancer/operation-workflow-transition-retry-grace.js b/src/rebalancer/operation-workflow-transition-retry-grace.js
+index 99c92fbf..4891ae9f 100644
+--- a/src/rebalancer/operation-workflow-transition-retry-grace.js
++++ b/src/rebalancer/operation-workflow-transition-retry-grace.js
+@@ -1,3 +1,4 @@
++import {PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+ 
+ const {
+@@ -147,15 +148,7 @@ class OperationWorkflowTransitionRetryGrace {
+     if (!usesProtectedPriorityBudget) {
+       return false;
+     }
+-    if (workflowStep === WORKFLOW_STEP.CREATING) {
+-      return false;
+-    }
+-    return (
+-      workflowStep === WORKFLOW_STEP.PENDING ||
+-      workflowStep === WORKFLOW_STEP.SENDING ||
+-      workflowStep === WORKFLOW_STEP.ACTIVE ||
+-      workflowStep === WORKFLOW_STEP.STOPPING
+-    );
++    return PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS.has(workflowStep);
+   }
+ 
+   /**
+diff --git a/src/rebalancer/rebalance-coordinator-recovery-helper.js b/src/rebalancer/rebalance-coordinator-recovery-helper.js
+index b564b3f6..e3da733f 100644
+--- a/src/rebalancer/rebalance-coordinator-recovery-helper.js
++++ b/src/rebalancer/rebalance-coordinator-recovery-helper.js
+@@ -1,3 +1,4 @@
++import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+ import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
+ import {
+@@ -108,10 +109,7 @@ async function handleRecovery(coordinator) {
+       continue;
+     }
+ 
+-    if (
+-      coordinator.isPreSyncStep(originalStep) ||
+-      originalStep === WORKFLOW_STEP.STOPPING
+-    ) {
++    if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
+       result.markedFailed++;
+     } else if (originalStep === WORKFLOW_STEP.SYNCING) {
+       result.reconciled++;
+diff --git a/src/rebalancer/replica-operation-step-policy.js b/src/rebalancer/replica-operation-step-policy.js
+new file mode 100644
+index 00000000..592f2034
+--- /dev/null
++++ b/src/rebalancer/replica-operation-step-policy.js
+@@ -0,0 +1,491 @@
++/**
++ * Single owner of replica-operation STEP-COVERAGE policy (quest
++ * step-coverage-single-owner-table; epic self-hosting-circularity-
++ * generic-treatment Option 5, rung 2 — the CL-029 lineage).
++ *
++ * "Which WORKFLOW_STEP values of which operation type does THIS mechanism
++ * cover" used to be enumerated ad hoc at every call site (24 hand-rolled
++ * sets + 28 branch piles across 33 files), so coverage GAPS were invisible:
++ * the dispatch-wake preempt set stopped one step short of target_sync
++ * (CL-029), and the deferred-local-progress rows (CREATING, ACTIVE,
++ * STOPPING) were each a separate production incident. This module declares
++ * every coverage row ONCE, side by side, named after its mechanism.
++ * Consumers import a row; they never enumerate steps inline. The census
++ * analyzer (scripts/check-step-coverage-owner.js, npm run
++ * audit:step-coverage-owner) counts any re-derivation outside this module
++ * and replica-operation-progress.js (which owns the progression/terminal
++ * tables).
++ *
++ * Rows deliberately DIFFER — that is the point of naming them. Review
++ * question for every new mechanism: which existing row covers it, and if
++ * none does, what is the new row's name and why does its coverage stop
++ * where it stops?
++ */
++import {WORKFLOW_STEP} from '../constants/index.js';
++import {OperationType} from './replica-status.js';
++import {OPERATION_TRANSITION_REASON} from './rebalancer-constants.js';
++
++// ---------------------------------------------------------------------------
++// Dispatch-lane coverage
++// ---------------------------------------------------------------------------
++
++// Wake-driven progress preemption: wakeups can arrive after cache evidence
++// has already moved the replica beyond the current durable step. CL-029's
++// lost-completion class lived exactly at this row's boundary — extending or
++// narrowing it is an incident-class decision, never a drive-by edit.
++const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++  ]),
++);
++
++// Owner-port reconcile of dispatch-pending rows.
++const OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS =
++  Object.freeze(
++    new Set([
++      WORKFLOW_STEP.PENDING,
++      WORKFLOW_STEP.SENDING,
++    ]),
++  );
++
++// Priority dispatch durable-step mutations that run under the bounded
++// operation budget instead of the unbounded persist-then-act gate.
++const PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++  ]),
++);
++
++// Claimed but not yet handed to an executor — the pre-dispatch coverage row
++// shared by the dispatch retry/replay/reconcile family.
++const DISPATCH_PENDING_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++  ]),
++);
++
++// A REPLACE at ACTIVE is in its source-removal phase: the replacement is
++// placed and the remaining dispatchable work is removing the superseded
++// source replica.
++function isActiveReplaceSourceRemovalPhase(operationType, workflowStep) {
++  return (
++    operationType === OperationType.REPLACE &&
++    workflowStep === WORKFLOW_STEP.ACTIVE
++  );
++}
++
++// Type-agnostic terminal markers used by remove-like in-flight gate checks
++// (REMOVE/REPLACE rows only — an ADD terminates at ACTIVE and must not use
++// this row; see OPERATION_TERMINAL_WORKFLOW_STEPS_BY_TYPE for typed truth).
++const REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.REMOVED,
++    WORKFLOW_STEP.FAILED,
++  ]),
++);
++
++// Priority-recovery diagnostic surface for rows stuck before dispatch.
++const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS =
++  Object.freeze(
++    new Set([
++      WORKFLOW_STEP.PENDING,
++      WORKFLOW_STEP.SENDING,
++    ]),
++  );
++
++// Steps at which an operation counts as DISPATCHED for the priority-recovery
++// snapshot contract (everything past the claim, terminal steps excluded).
++const PRIORITY_RECOVERY_DISPATCHED_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// ---------------------------------------------------------------------------
++// Observed-progress / executor-outcome reconcile coverage
++// ---------------------------------------------------------------------------
++
++// Non-terminal steps whose observed target progress is worth reconciling.
++const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// Row steps eligible for observed-target-progress reconciliation.
++const OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++  ]),
++);
++
++// REPLACE source-removal phase as seen by observed progress.
++const OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// Rows still admissible for a target CREATING create-reconcile.
++const TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++  ]),
++);
++
++// Executor step-update outcomes applied through the reconcile lane.
++const EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.SYNCING,
++    WORKFLOW_STEP.ACTIVE,
++  ]),
++);
++
++// ---------------------------------------------------------------------------
++// Priority-recovery drain / visibility coverage
++// ---------------------------------------------------------------------------
++
++// Every non-terminal step participates in the priority-recovery drain.
++const PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// REPLACE steps whose drain hold releases on completed placement.
++const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS =
++  Object.freeze(
++    new Set([
++      WORKFLOW_STEP.ACTIVE,
++      WORKFLOW_STEP.STOPPING,
++    ]),
++  );
++
++// Incomplete-operation visibility reads (repository incomplete-read lane).
++const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// Canonical ordered non-terminal step list for incomplete-read SQL/display
++// lanes (same membership as the visibility set, order significant).
++const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER = Object.freeze([
++  WORKFLOW_STEP.PENDING,
++  WORKFLOW_STEP.SENDING,
++  WORKFLOW_STEP.CREATING,
++  WORKFLOW_STEP.SYNCING,
++  WORKFLOW_STEP.STOPPING,
++  WORKFLOW_STEP.ACTIVE,
++]);
++
++// Cache-side incompleteness: these steps are in-flight for EVERY operation
++// type; ACTIVE is handled by isIncompleteOperationRowStep below because an
++// ADD at ACTIVE is terminal while remove-phase types still have work left.
++const INCOMPLETE_OPERATION_UNCONDITIONAL_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++const INCOMPLETE_OPERATION_ACTIVE_STEP_TYPES = Object.freeze(
++  new Set([OperationType.REPLACE, OperationType.REMOVE]),
++);
++
++function isIncompleteOperationRowStep(operationType, workflowStep) {
++  if (workflowStep === WORKFLOW_STEP.ACTIVE) {
++    return INCOMPLETE_OPERATION_ACTIVE_STEP_TYPES.has(operationType);
++  }
++  return INCOMPLETE_OPERATION_UNCONDITIONAL_WORKFLOW_STEPS.has(workflowStep);
++}
++
++// Steps whose age counts against the priority-recovery step timeout.
++const PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// ---------------------------------------------------------------------------
++// Pre-sync phase coverage
++// ---------------------------------------------------------------------------
++
++// Steps strictly before data sync begins: no replica data movement has
++// happened yet, so lifecycle actions may recreate/retarget freely.
++const PRE_SYNC_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++  ]),
++);
++
++// Pre-sync REPLACE rows in priority recovery (same boundary, REPLACE lane).
++const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++  ]),
++);
++
++// ---------------------------------------------------------------------------
++// Coordinator / intent / lane-admission coverage
++// ---------------------------------------------------------------------------
++
++// Recent-intent-miss reuse extends only to rows not yet dispatched.
++const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS =
++  Object.freeze(
++    new Set([
++      WORKFLOW_STEP.PENDING,
++      WORKFLOW_STEP.SENDING,
++    ]),
++  );
++
++// Priority control-plane REMOVE-lane admission per operation type: REMOVEs
++// conflict only while pre-dispatch or stopping; REPLACEs occupy the lane
++// across their whole non-terminal life.
++const PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE =
++  Object.freeze(
++    new Map([
++      [
++        OperationType.REMOVE,
++        Object.freeze(
++          new Set([
++            WORKFLOW_STEP.PENDING,
++            WORKFLOW_STEP.SENDING,
++            WORKFLOW_STEP.STOPPING,
++          ]),
++        ),
++      ],
++      [
++        OperationType.REPLACE,
++        Object.freeze(
++          new Set([
++            WORKFLOW_STEP.PENDING,
++            WORKFLOW_STEP.SENDING,
++            WORKFLOW_STEP.CREATING,
++            WORKFLOW_STEP.SYNCING,
++            WORKFLOW_STEP.ACTIVE,
++            WORKFLOW_STEP.STOPPING,
++          ]),
++        ),
++      ],
++    ]),
++  );
++
++// Coordinator-side "the operation made real progress" watermark.
++const PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.REMOVED,
++  ]),
++);
++
++// ---------------------------------------------------------------------------
++// Executor completion signaling (node/message-group/runtime handlers)
++// ---------------------------------------------------------------------------
++
++// Steps whose executor outcome message signals operation completion.
++// Previously three IDENTICAL copies (replica-handler-constants,
++// message-group-service-handler-constants, runtime-service-handler-constants)
++// that could silently drift.
++const OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.REMOVED,
++    WORKFLOW_STEP.FAILED,
++  ]),
++);
++
++// ---------------------------------------------------------------------------
++// Dispatch phase windows and recovery classification
++// ---------------------------------------------------------------------------
++
++// The remove-phase dispatch window: a REPLACE removing its superseded source,
++// or a REMOVE being re-driven, is dispatchable only at these steps.
++const REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// REMOVE rows eligible for (re-)dispatch of the initial removal.
++const REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.ACTIVE,
++  ]),
++);
++
++// Create-rearm applies to placement-creating operation types (critical
++// partitions, CREATING step; the caller owns those two checks).
++const CREATE_REARM_DISPATCH_OPERATION_TYPES = Object.freeze(
++  new Set([OperationType.ADD, OperationType.REPLACE]),
++);
++
++// Steps whose durable transitions run under the protected priority budget.
++// CREATING is deliberately absent: it takes the bounded
++// PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS lane instead.
++const PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.ACTIVE,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// Steps whose reconciled replica status feeds a durable step advance.
++const RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.SYNCING,
++  ]),
++);
++
++// Node-recovery classification: rows at these steps are marked failed on
++// recovery (pre-sync steps plus STOPPING); SYNCING rows reconcile instead.
++const NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++    WORKFLOW_STEP.STOPPING,
++  ]),
++);
++
++// ---------------------------------------------------------------------------
++// Transition-reason projection
++// ---------------------------------------------------------------------------
++
++// Canonical reason per durable step transition (next step -> reason), with
++// the single progression-sensitive case: ACTIVE reached from SYNCING is a
++// reconcile promotion, ACTIVE reached any other way means the dispatch found
++// the replica already in place.
++const OPERATION_TRANSITION_REASON_BY_NEXT_STEP = Object.freeze(new Map([
++  [WORKFLOW_STEP.SENDING, OPERATION_TRANSITION_REASON.DISPATCH_SENDING],
++  [WORKFLOW_STEP.CREATING, OPERATION_TRANSITION_REASON.DISPATCH_CREATING],
++  [WORKFLOW_STEP.STOPPING, OPERATION_TRANSITION_REASON.DISPATCH_STOPPING],
++  [WORKFLOW_STEP.REMOVED, OPERATION_TRANSITION_REASON.OPERATION_COMPLETED],
++  [WORKFLOW_STEP.FAILED, OPERATION_TRANSITION_REASON.OPERATION_FAILED],
++]));
++
++function resolveOperationTransitionReason(previousStep, nextStep) {
++  if (nextStep === WORKFLOW_STEP.ACTIVE) {
++    return previousStep === WORKFLOW_STEP.SYNCING ?
++      OPERATION_TRANSITION_REASON.RECONCILE_ACTIVE :
++      OPERATION_TRANSITION_REASON.DISPATCH_ALREADY_EXISTS;
++  }
++  return OPERATION_TRANSITION_REASON_BY_NEXT_STEP.get(nextStep) ??
++    OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
++}
++
++// ---------------------------------------------------------------------------
++// Deferred owner-local progress (lever-(a) supersession) coverage
++// ---------------------------------------------------------------------------
++
++// Which operation types may take the owner-local deferred-progress escape at
++// which executor-outcome step (priority control-plane partitions only; the
++// caller owns the partition-class and retryable-error checks). Each row was
++// a separate production incident before this table existed: CREATING
++// (64a18b76, via the mutation-steps row above), ACTIVE (9ef19615),
++// STOPPING (c6c35d7e). Terminal steps are deliberately absent: REMOVED flows
++// exclusively through completeOperation, which owns its own durable
++// convergence.
++const PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP = Object.freeze(
++  new Map([
++    [
++      WORKFLOW_STEP.ACTIVE,
++      Object.freeze(new Set([OperationType.REPLACE])),
++    ],
++    [
++      WORKFLOW_STEP.STOPPING,
++      Object.freeze(
++        new Set([OperationType.REPLACE, OperationType.REMOVE]),
++      ),
++    ],
++  ]),
++);
++
++function isPriorityOutcomeDeferredLocalProgressCovered(operationType, step) {
++  const coveredTypes =
++    PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP.get(step);
++  return coveredTypes ? coveredTypes.has(operationType) : false;
++}
++
++export {
++  CREATE_REARM_DISPATCH_OPERATION_TYPES,
++  DISPATCH_PENDING_WORKFLOW_STEPS,
++  DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
++  NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
++  PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS,
++  RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
++  REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
++  REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
++  resolveOperationTransitionReason,
++  EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
++  OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS,
++  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
++  OBSERVED_PROGRESS_REPLACE_SOURCE_WORKFLOW_STEPS,
++  OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
++  OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS,
++  PRE_SYNC_WORKFLOW_STEPS,
++  PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
++  PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
++  PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP,
++  PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET,
++  PRIORITY_RECOVERY_DISPATCHED_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
++  PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
++  PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS,
++  PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS,
++  REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS,
++  TARGET_CREATING_CREATE_ADMISSION_WORKFLOW_STEPS,
++  isActiveReplaceSourceRemovalPhase,
++  isIncompleteOperationRowStep,
++  isPriorityOutcomeDeferredLocalProgressCovered,
++};
+diff --git a/test/rebalancer/replica-operation-step-policy.test.js b/test/rebalancer/replica-operation-step-policy.test.js
+new file mode 100644
+index 00000000..d48806b9
+--- /dev/null
++++ b/test/rebalancer/replica-operation-step-policy.test.js
+@@ -0,0 +1,146 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {OperationType} from '../../src/rebalancer/replica-status.js';
++import {OPERATION_TRANSITION_REASON} from '../../src/rebalancer/rebalancer-constants.js';
++import {
++  DISPATCH_PENDING_WORKFLOW_STEPS,
++  DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
++  NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
++  OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
++  PRE_SYNC_WORKFLOW_STEPS,
++  PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
++  PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
++  PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP,
++  PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER,
++  PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
++  PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS,
++  PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS,
++  REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
++  isActiveReplaceSourceRemovalPhase,
++  isIncompleteOperationRowStep,
++  isPriorityOutcomeDeferredLocalProgressCovered,
++  resolveOperationTransitionReason,
++} from '../../src/rebalancer/replica-operation-step-policy.js';
++
++// Red-on-revert pin for the single-owner step-coverage policy (quest
++// step-coverage-single-owner-table, CL-029 lineage). The rows' exact
++// memberships are the contract: every widening/narrowing must fail here
++// first and be an explicit incident-class decision.
++
++test('CL-029 lineage rows keep their sealed memberships', (t) => {
++  t.strictSame(
++    [...DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS].sort(),
++    [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING].sort(),
++    'wake-preempt covers exactly {PENDING,SENDING,CREATING} — extending it is a CL-029-class decision');
++  t.strictSame(
++    [...PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS].sort(),
++    [WORKFLOW_STEP.CREATING, WORKFLOW_STEP.SENDING].sort());
++  t.ok(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
++    .get(WORKFLOW_STEP.ACTIVE).has(OperationType.REPLACE));
++  t.ok(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
++    .get(WORKFLOW_STEP.STOPPING).has(OperationType.REMOVE));
++  t.notOk(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
++    .get(WORKFLOW_STEP.STOPPING).has(OperationType.ADD));
++  t.notOk(PRIORITY_OUTCOME_DEFERRED_LOCAL_PROGRESS_TYPES_BY_STEP
++    .has(WORKFLOW_STEP.REMOVED),
++  'terminal steps deliberately absent: REMOVED converges via completeOperation');
++  t.end();
++});
++
++test('deferred-local-progress predicate mirrors the table', (t) => {
++  t.ok(isPriorityOutcomeDeferredLocalProgressCovered(
++    OperationType.REPLACE, WORKFLOW_STEP.ACTIVE));
++  t.ok(isPriorityOutcomeDeferredLocalProgressCovered(
++    OperationType.REMOVE, WORKFLOW_STEP.STOPPING));
++  t.notOk(isPriorityOutcomeDeferredLocalProgressCovered(
++    OperationType.ADD, WORKFLOW_STEP.ACTIVE));
++  t.notOk(isPriorityOutcomeDeferredLocalProgressCovered(
++    OperationType.REPLACE, WORKFLOW_STEP.CREATING),
++  'CREATING takes the mutation-budget lane, not this table');
++  t.end();
++});
++
++test('dispatch phase windows', (t) => {
++  t.strictSame([...DISPATCH_PENDING_WORKFLOW_STEPS].sort(),
++    [WORKFLOW_STEP.PENDING, WORKFLOW_STEP.SENDING].sort());
++  t.strictSame([...REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS].sort(),
++    [WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.STOPPING].sort());
++  t.ok(isActiveReplaceSourceRemovalPhase(
++    OperationType.REPLACE, WORKFLOW_STEP.ACTIVE));
++  t.notOk(isActiveReplaceSourceRemovalPhase(
++    OperationType.ADD, WORKFLOW_STEP.ACTIVE));
++  t.notOk(isActiveReplaceSourceRemovalPhase(
++    OperationType.REPLACE, WORKFLOW_STEP.STOPPING));
++  t.end();
++});
++
++test('incompleteness: ACTIVE counts only for remove-phase types', (t) => {
++  t.ok(isIncompleteOperationRowStep(OperationType.REPLACE, WORKFLOW_STEP.ACTIVE));
++  t.ok(isIncompleteOperationRowStep(OperationType.REMOVE, WORKFLOW_STEP.ACTIVE));
++  t.notOk(isIncompleteOperationRowStep(OperationType.ADD, WORKFLOW_STEP.ACTIVE),
++    'an ADD at ACTIVE is terminal');
++  t.ok(isIncompleteOperationRowStep(OperationType.ADD, WORKFLOW_STEP.SYNCING));
++  t.notOk(isIncompleteOperationRowStep(OperationType.REMOVE, WORKFLOW_STEP.REMOVED));
++  t.strictSame(
++    [...PRIORITY_RECOVERY_INCOMPLETE_OPERATION_STEP_ORDER].sort(),
++    [...PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS].sort(),
++    'ordered SQL list and visibility set stay membership-identical');
++  t.end();
++});
++
++test('budget and recovery coverage rows', (t) => {
++  t.notOk(PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS.has(WORKFLOW_STEP.CREATING),
++    'CREATING deliberately excluded: it uses the bounded mutation lane');
++  t.strictSame([...NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS].sort(),
++    [...PRE_SYNC_WORKFLOW_STEPS, WORKFLOW_STEP.STOPPING].sort(),
++    'recovery marks failed = pre-sync plus STOPPING');
++  for (const step of PRE_SYNC_WORKFLOW_STEPS) {
++    t.ok(PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS.has(step),
++      `pre-sync ${step} participates in the drain`);
++  }
++  t.end();
++});
++
++test('per-type lane rows and completion signaling', (t) => {
++  const removeLane = PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE;
++  t.ok(removeLane.get(OperationType.REMOVE).has(WORKFLOW_STEP.STOPPING));
++  t.notOk(removeLane.get(OperationType.REMOVE).has(WORKFLOW_STEP.SYNCING));
++  t.ok(removeLane.get(OperationType.REPLACE).has(WORKFLOW_STEP.SYNCING));
++  t.strictSame([...OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS].sort(),
++    [WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.FAILED, WORKFLOW_STEP.REMOVED].sort(),
++    'the formerly-triplicated completion row');
++  t.end();
++});
++
++test('transition-reason projection', (t) => {
++  t.equal(resolveOperationTransitionReason(
++    WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE),
++  OPERATION_TRANSITION_REASON.RECONCILE_ACTIVE);
++  t.equal(resolveOperationTransitionReason(
++    WORKFLOW_STEP.PENDING, WORKFLOW_STEP.ACTIVE),
++  OPERATION_TRANSITION_REASON.DISPATCH_ALREADY_EXISTS);
++  t.equal(resolveOperationTransitionReason(
++    WORKFLOW_STEP.ACTIVE, WORKFLOW_STEP.REMOVED),
++  OPERATION_TRANSITION_REASON.OPERATION_COMPLETED);
++  t.equal(resolveOperationTransitionReason(null, 'unknown-step'),
++    OPERATION_TRANSITION_REASON.DISPATCH_SENDING,
++    'unknown transitions keep the historical DISPATCH_SENDING fallback');
++  t.end();
++});
++
++test('every exported row is frozen', (t) => {
++  for (const row of [
++    DISPATCH_PENDING_WORKFLOW_STEPS,
++    DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
++    NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS,
++    OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
++    PRE_SYNC_WORKFLOW_STEPS,
++    PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
++    PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS,
++    PROTECTED_PRIORITY_BUDGET_WORKFLOW_STEPS,
++    REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
++  ]) {
++    t.ok(Object.isFrozen(row));
++  }
++  t.end();
++});

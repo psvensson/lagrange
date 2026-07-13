@@ -4,8 +4,10 @@ import {
   STRING,
   TIME_MS,
   TYPEOF,
-  WORKFLOW_STEP,
 } from '../constants/index.js';
+import {
+  OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
+} from '../rebalancer/replica-operation-step-policy.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 
@@ -118,11 +120,7 @@ const REPLICA_HANDLER_EVENT = Object.freeze({
 });
 
 const REPLICA_HANDLER_WORKFLOW = Object.freeze({
-  COMPLETION_STEPS: [
-    WORKFLOW_STEP.ACTIVE,
-    WORKFLOW_STEP.REMOVED,
-    WORKFLOW_STEP.FAILED,
-  ],
+  COMPLETION_STEPS: OPERATION_EXECUTOR_COMPLETION_WORKFLOW_STEPS,
 });
 
 const REPLICA_HANDLER_PROGRESS = Object.freeze({

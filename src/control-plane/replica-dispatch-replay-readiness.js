@@ -1,6 +1,10 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {ReplicaDispatchServiceLifecycle} from './replica-dispatch-service-lifecycle.js';
 import {
+  DISPATCH_PENDING_WORKFLOW_STEPS,
+  isActiveReplaceSourceRemovalPhase,
+} from '../rebalancer/replica-operation-step-policy.js';
+import {
   getDispatchRetryRowOperationIds,
   getDispatchRetryRowPartitionIds,
   getPriorityRecoveryDispatchRetryBlockedOperationIds,
@@ -134,10 +138,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     const workflowStep = operation.workflow_step;
     const targetNodeId = operation.target_node_id || null;
     const ownerNodeId = this.resolveReplicaOperationOwnerNodeId(operation);
-    if (
-      workflowStep === WORKFLOW_STEP.PENDING ||
-      workflowStep === WORKFLOW_STEP.SENDING
-    ) {
+    if (DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep)) {
       return Object.freeze({
         phase: DISPATCH_REPLAY_READY_NODE_PHASE.INITIAL_TARGET_DISPATCH,
         sourceNodeIds: Object.freeze([]),
@@ -233,18 +234,15 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     if (!operation || typeof operation !== 'object') {
       return false;
     }
-    if (
-      operation.workflow_step === WORKFLOW_STEP.PENDING ||
-      operation.workflow_step === WORKFLOW_STEP.SENDING
-    ) {
+    if (DISPATCH_PENDING_WORKFLOW_STEPS.has(operation.workflow_step)) {
       return true;
     }
     if (this.isDispatchReplayCreateTargetRearmOperation(operation)) {
       return true;
     }
-    return (
-      operation.type === OperationType.REPLACE &&
-      operation.workflow_step === WORKFLOW_STEP.ACTIVE
+    return isActiveReplaceSourceRemovalPhase(
+      operation.type,
+      operation.workflow_step,
     );
   }
 

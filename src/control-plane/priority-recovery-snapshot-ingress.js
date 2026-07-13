@@ -1,5 +1,5 @@
-import {WORKFLOW_STEP} from '../constants/index.js';
 import {PRIORITY_CONTROL_PLANE_TABLE_IDS} from '../bootstrap/system-partition-classification.js';
+import {DISPATCH_PENDING_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
@@ -312,10 +312,7 @@ function isPriorityRecoveryDispatchPendingWorkflowStep(operationContext) {
   const workflowStep = String(
     operationContext?.workflowStep || LOCAL_STR_EMPTY,
   ).toUpperCase();
-  return (
-    workflowStep === WORKFLOW_STEP.PENDING ||
-    workflowStep === WORKFLOW_STEP.SENDING
-  );
+  return DISPATCH_PENDING_WORKFLOW_STEPS.has(workflowStep);
 }
 
 function isPriorityRecoverySupersedableInFlightOperationContext(

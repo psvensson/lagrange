@@ -1,4 +1,5 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
+import {DISPATCH_PENDING_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 
 const {
   COLUMN,
@@ -8,7 +9,6 @@ const {
   REPLICA_DISPATCH_SERVICE_LITERAL,
   SERVICE_STATUS,
   SYSTEM_TABLE_NAME,
-  WORKFLOW_STEP,
   isCoordinatorOwnedOperationType,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -142,10 +142,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
         return;
       }
 
-      if (
-        row.workflow_step !== WORKFLOW_STEP.PENDING &&
-        row.workflow_step !== WORKFLOW_STEP.SENDING
-      ) {
+      if (!DISPATCH_PENDING_WORKFLOW_STEPS.has(row.workflow_step)) {
         this.clearDeferredOperationDispatchRetry(operationId);
         return;
       }

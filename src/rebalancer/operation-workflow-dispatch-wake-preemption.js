@@ -1,5 +1,8 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
+  DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS,
+} from './replica-operation-step-policy.js';
+import {
   DISPATCH_WAKE_PENDING_TARGET_PROGRESS_STATE,
   isDispatchWakeProgressPreemptStateAllowed,
   resolveDispatchWakePendingTargetProgressState,
@@ -20,14 +23,6 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES = Object.freeze(
     ReplicaStatus.SYNCING,
     ReplicaStatus.ACTIVE,
     ReplicaStatus.FAILED,
-  ]),
-);
-
-const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
-  new Set([
-    WORKFLOW_STEP.PENDING,
-    WORKFLOW_STEP.SENDING,
-    WORKFLOW_STEP.CREATING,
   ]),
 );
 
