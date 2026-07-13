@@ -63,16 +63,25 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
       const trackedRole = this.getTrackedReplicaRole(replicaId);
       const raft = service.raft || null;
       const raftProvider = service.raftProvider || null;
-      if (trackedRole !== RAFT_ROLE.LEADER) {
-        if (
-          trackedRole === RAFT_ROLE.FOLLOWER &&
-          reason === ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION
-        ) {
+      if (
+        reason === ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION
+      ) {
+        // The replacement election names the replica that SHOULD lead. When
+        // it already leads (an ambient election won the race with this
+        // request), the goal is achieved — falling through to the demotion
+        // branch would step down the very replica being elected and hand
+        // leadership back to the drained node. A mid-election candidate is
+        // likewise left to finish seeking the leadership this request asks
+        // for.
+        if (trackedRole === RAFT_ROLE.FOLLOWER) {
           return this.requestTrackedReplacementLeaderElection(
             raftProvider,
             raft,
           );
         }
+        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+      }
+      if (trackedRole !== RAFT_ROLE.LEADER) {
         return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
       }
       if (
