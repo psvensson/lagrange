@@ -231,6 +231,15 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         const retainedAfterRun =
           this.executorOutcomeRetryPayloadByOperationId.get(operationId);
         if (retainedAfterRun === payload) {
+          // CL-029 backstop: a reconcile that ran but left the evidence
+          // untouched must not strand the payload owner-less. Every real
+          // reconcile path at HEAD clears or replaces the entry, so this
+          // exit guards the CLASS (a future path that forgets to clear or
+          // schedule, or the unmapped-action fallthrough) rather than a
+          // demonstrated live path — the previously silent orphan becomes
+          // a bounded 30s-cadence retry with a warn per arm. Consumption
+          // clears the timer and resets the backoff.
+          this.scheduleExecutorOutcomeRetry(payload, null);
           return;
         }
       }
