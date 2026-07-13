@@ -74,6 +74,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:runtime-grammar:file` — Check runtime owner-contract and grammar drift.
 - `audit:shards` — `node scripts/generate-test-shards.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
+- `audit:voter-readiness-owner` — `node scripts/check-voter-readiness-single-owner.js`
 
 ## build
 
@@ -170,11 +171,15 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `solve:attempt` — Run a command through the Solver-owned measured-attempt path.
 - `solve:audit` — Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.
+- `solve:checkpoint` — Explicitly commit one unchanged, fingerprint-approved source attempt; never pushes.
 - `solve:consistency` — `node scripts/solve/ledger-consistency.js`
+- `solve:doctor` — Inspect Git, local adapter, execution mode, and attribution capabilities without mutation.
 - `solve:finding` — Record durable Quest memory for a frontier.
 - `solve:health` — Report Quest loop-health, theory gates, divergence signals, and the next legal action.
 - `solve:ingest-evidence` — Record fresh probe evidence with a content fingerprint before the next attempt.
+- `solve:lint` — Validate the versioned Quest authoring contract or report the read-only legacy census.
 - `solve:new` — Create an authored Quest file under solve/quests.
+- `solve:next` — Print the typed next action for an existing Quest.
 - `solve:probe` — Measure a scenario metric directly without recording an attempt.
 - `solve:report` — Print the Quest report projection.
 - `solve:run` — `node scripts/solve.js run`
@@ -233,6 +238,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
 - `test:integration:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-2.txt)`
 - `test:integration:3` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-3.txt)`
+- `test:llm-steering-usability` — `node scripts/run-llm-steering-usability-scenarios.js`
 - `test:metadata-gateway:audit` — `node scripts/check-unified-system-metadata-gateway.js`
 - `test:metrics` — `npm run test:complexity:cognitive && npm run test:cycles && npm run test:duplication`
 - `test:metrics:scoped` — Run scoped cyclomatic and cognitive complexity ratchets.
@@ -269,4 +275,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-173 scripts indexed; 67 have a curated description, 106 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+179 scripts indexed; 71 have a curated description, 108 fall back to their raw command. Improve coverage in the two sources named in the header comment.

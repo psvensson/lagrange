@@ -14,7 +14,7 @@ Load for coding-style and lint policy enforcement.
 
 Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.
 
-> **Complete pack.** All 14 style rules are included below.
+> **Complete selectively loaded pack.** All 14 style master rules are included below.
 
 ## Rules
 

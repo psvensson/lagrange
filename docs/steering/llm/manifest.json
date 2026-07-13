@@ -1,41 +1,361 @@
 {
-  "generatedAt": "2026-07-10T11:44:03.583Z",
+  "generatedAt": "2026-07-13T10:47:00.397Z",
+  "stats": {
+    "candidateCount": 403,
+    "dedupedRuleCount": 394,
+    "exportedRuleCount": 394,
+    "aliasRuleCount": 4,
+    "masterRuleCount": 390,
+    "emittedMasterRuleCount": 390,
+    "estimatedAllRulesTokens": 16384
+  },
+  "sources": [
+    {
+      "file": "system-guidelines.md",
+      "role": "packed",
+      "domain": "architecture",
+      "ruleCount": 53,
+      "masterRuleCount": 51,
+      "aliasRuleCount": 2,
+      "emittedMasterRuleCount": 51
+    },
+    {
+      "file": "runtime-contracts.md",
+      "role": "packed",
+      "domain": "architecture",
+      "ruleCount": 67,
+      "masterRuleCount": 67,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 67
+    },
+    {
+      "file": "doctrine/owner-boundaries.md",
+      "role": "packed",
+      "domain": "architecture",
+      "ruleCount": 11,
+      "masterRuleCount": 11,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 11
+    },
+    {
+      "file": "doctrine/single-path.md",
+      "role": "packed",
+      "domain": "architecture",
+      "ruleCount": 7,
+      "masterRuleCount": 7,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 7
+    },
+    {
+      "file": "doctrine/state-encoding.md",
+      "role": "packed",
+      "domain": "architecture",
+      "ruleCount": 20,
+      "masterRuleCount": 19,
+      "aliasRuleCount": 1,
+      "emittedMasterRuleCount": 19
+    },
+    {
+      "file": "doctrine/decision-experiments.md",
+      "role": "packed",
+      "domain": "architecture",
+      "ruleCount": 15,
+      "masterRuleCount": 15,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 15
+    },
+    {
+      "file": "operational-ground-truth.md",
+      "role": "direct-load",
+      "domain": "testing",
+      "ruleCount": 0,
+      "masterRuleCount": 0,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 0,
+      "loadWhen": "Before distributed-harness or convergence work."
+    },
+    {
+      "file": "testing-guidelines/harness.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 8,
+      "masterRuleCount": 8,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 8
+    },
+    {
+      "file": "testing-guidelines/fixtures.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 22,
+      "masterRuleCount": 22,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 22
+    },
+    {
+      "file": "testing-guidelines/regression-policy.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 34,
+      "masterRuleCount": 34,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 34
+    },
+    {
+      "file": "testing-guidelines/release-gate.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 9,
+      "masterRuleCount": 9,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 9
+    },
+    {
+      "file": "testing-guidelines/proof-ladders.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 14,
+      "masterRuleCount": 13,
+      "aliasRuleCount": 1,
+      "emittedMasterRuleCount": 13
+    },
+    {
+      "file": "code-style.md",
+      "role": "packed",
+      "domain": "style",
+      "ruleCount": 14,
+      "masterRuleCount": 14,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 14
+    },
+    {
+      "file": "roadmap.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 13,
+      "masterRuleCount": 13,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 13
+    },
+    {
+      "file": "memory-boundary.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 6,
+      "masterRuleCount": 6,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 6
+    },
+    {
+      "file": "workflow-guidelines/lifecycle.md",
+      "role": "reference-only",
+      "domain": "governance",
+      "ruleCount": 0,
+      "masterRuleCount": 0,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 0,
+      "reason": "Convenience lifecycle summary; solver-quests.md owns the binding workflow contract."
+    },
+    {
+      "file": "workflow-guidelines/validators.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 4,
+      "masterRuleCount": 4,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 4
+    },
+    {
+      "file": "workflow-guidelines/quest-artifacts.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 3,
+      "masterRuleCount": 3,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 3
+    },
+    {
+      "file": "workflow-guidelines/closure.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "workflow-guidelines/subagents.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 5,
+      "masterRuleCount": 5,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 5
+    },
+    {
+      "file": "workflow-guidelines/solver-quests.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 84,
+      "masterRuleCount": 84,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 84
+    },
+    {
+      "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-06-30-correctness-over-fewest-lines.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-06-30-plan-requests-stay-plan-only.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-07-05-prefer-machine-checks-over-prose.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 1,
+      "masterRuleCount": 1,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 1
+    },
+    {
+      "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
+      "role": "packed",
+      "domain": "testing",
+      "ruleCount": 2,
+      "masterRuleCount": 2,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 2
+    },
+    {
+      "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 2,
+      "masterRuleCount": 2,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 2
+    }
+  ],
   "packs": [
     {
       "name": "core",
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
       "ruleCount": 29,
-      "estimatedTokens": 4240,
+      "estimatedTokens": 3949,
       "domains": [
         "architecture",
         "testing",
         "style",
         "governance"
       ],
-      "mode": "manual"
+      "mode": "manual",
+      "completeness": "manual"
     },
     {
       "name": "architecture",
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
-      "ruleCount": 40,
-      "estimatedTokens": 1192,
+      "ruleCount": 165,
+      "estimatedTokens": 5611,
       "domains": [
         "architecture"
       ],
-      "mode": "generated"
+      "mode": "generated",
+      "completeness": "complete",
+      "masterRuleCount": 165,
+      "aliasRuleCount": 3,
+      "indexedRuleCount": 168,
+      "sourceFiles": [
+        "system-guidelines.md",
+        "runtime-contracts.md",
+        "doctrine/owner-boundaries.md",
+        "doctrine/single-path.md",
+        "doctrine/state-encoding.md",
+        "doctrine/decision-experiments.md"
+      ]
     },
     {
       "name": "testing",
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
-      "ruleCount": 35,
-      "estimatedTokens": 1528,
+      "ruleCount": 88,
+      "estimatedTokens": 4043,
       "domains": [
         "testing"
       ],
-      "mode": "generated"
+      "mode": "generated",
+      "completeness": "complete",
+      "masterRuleCount": 88,
+      "aliasRuleCount": 1,
+      "indexedRuleCount": 89,
+      "sourceFiles": [
+        "operational-ground-truth.md",
+        "testing-guidelines/harness.md",
+        "testing-guidelines/fixtures.md",
+        "testing-guidelines/regression-policy.md",
+        "testing-guidelines/release-gate.md",
+        "testing-guidelines/proof-ladders.md",
+        "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
+        "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
+        "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md"
+      ]
     },
     {
       "name": "style",
@@ -46,18 +366,46 @@
       "domains": [
         "style"
       ],
-      "mode": "generated"
+      "mode": "generated",
+      "completeness": "complete",
+      "masterRuleCount": 14,
+      "aliasRuleCount": 0,
+      "indexedRuleCount": 14,
+      "sourceFiles": [
+        "code-style.md"
+      ]
     },
     {
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 30,
-      "estimatedTokens": 963,
+      "ruleCount": 123,
+      "estimatedTokens": 6559,
       "domains": [
         "governance"
       ],
-      "mode": "generated"
+      "mode": "generated",
+      "completeness": "complete",
+      "masterRuleCount": 123,
+      "aliasRuleCount": 0,
+      "indexedRuleCount": 123,
+      "sourceFiles": [
+        "roadmap.md",
+        "memory-boundary.md",
+        "workflow-guidelines/lifecycle.md",
+        "workflow-guidelines/validators.md",
+        "workflow-guidelines/quest-artifacts.md",
+        "workflow-guidelines/closure.md",
+        "workflow-guidelines/subagents.md",
+        "workflow-guidelines/solver-quests.md",
+        "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
+        "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
+        "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
+        "findings/2026-06-30-correctness-over-fewest-lines.md",
+        "findings/2026-06-30-plan-requests-stay-plan-only.md",
+        "findings/2026-07-05-prefer-machine-checks-over-prose.md",
+        "findings/2026-07-10-reuse-comparison-before-new-machinery.md"
+      ]
     }
   ]
 }
