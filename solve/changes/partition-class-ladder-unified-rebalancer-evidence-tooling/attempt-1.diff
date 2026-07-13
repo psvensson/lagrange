@@ -1,0 +1,481 @@
+diff --git a/solve/oracle/partition-class-ladder-migration-unified-rebalancer.json b/solve/oracle/partition-class-ladder-migration-unified-rebalancer.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..a73bd7525185974597aa11720fa85e71b044628d
+--- /dev/null
++++ b/solve/oracle/partition-class-ladder-migration-unified-rebalancer.json
+@@ -0,0 +1,363 @@
++{
++  "metric": 45,
++  "target": 45,
++  "done": true,
++  "classification": "partition-class-single-owner-census",
++  "detail": {
++    "analyzerContractVersion": 2,
++    "generatedBy": "scripts/check-partition-class-owner.js",
++    "ownerModule": "src/bootstrap/system-partition-classification.js",
++    "ownerContract": {
++      "passed": true,
++      "problems": []
++    },
++    "baselineReconciliation": {
++      "epicDecisionSites": 119,
++      "headLegacyPredicateEdges": 122,
++      "headDirectCriticalSetMemberships": 3,
++      "collapsedDuplicateLadderEdges": 6,
++      "explanation": "The six literal critical||priority ladders each have two predicate call edges but one canonical decision site: 122 predicate edges + 3 set memberships - 6 duplicate ladder edges = 119 sites."
++    },
++    "currentRawPredicateEdges": 51,
++    "currentCollapsedLadderEdges": 6,
++    "countsByKind": {
++      "critical_predicate_call": 13,
++      "ordered_partition_class_ladder": 6,
++      "priority_predicate_call": 26
++    },
++    "countedSites": [
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
++        "line": 138,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "shouldDeferRetryableDispatchFailure",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
++        "line": 163,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "isCreateRearmDispatchPhase",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
++        "line": 222,
++        "kind": "ordered_partition_class_ladder",
++        "enclosingIdentifier": "buildDispatchRearmFromProgressReconcileEvidence",
++        "detail": "critical_predicate_call+priority_predicate_call"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
++        "line": 666,
++        "kind": "ordered_partition_class_ladder",
++        "enclosingIdentifier": "shouldRetryCoordinatorCreatedRemoteHandoff",
++        "detail": "critical_predicate_call+priority_predicate_call"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
++        "line": 139,
++        "kind": "ordered_partition_class_ladder",
++        "enclosingIdentifier": "shouldBoundReplicaOperationDispatch",
++        "detail": "critical_predicate_call+priority_predicate_call"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
++        "line": 649,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "ensurePriorityActiveReplaceRetryArmed",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
++        "line": 700,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "timerHandle",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-dispatch-wake-preemption.js",
++        "line": 109,
++        "kind": "ordered_partition_class_ladder",
++        "enclosingIdentifier": "buildDispatchWakeProgressPreemptEvidence",
++        "detail": "critical_predicate_call+priority_predicate_call"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
++        "line": 284,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "buildExecutorFailureReconcileEvidence",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-owner-execution-lane.js",
++        "line": 142,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "getReconciledReplicaStatus",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-owner-handoff-state.js",
++        "line": 246,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "withOwnerHandoffState",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-owner-handoff-state.js",
++        "line": 582,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "withOwnerHandoffState",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-owner-handoff-state.js",
++        "line": 586,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "withOwnerHandoffState",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-owner-retry-registry.js",
++        "line": 87,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "constructor",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-owner-retry-registry.js",
++        "line": 89,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "constructor",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
++        "line": 85,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "isPriorityRecoveryRemoteSupersededTargetDrainCandidate",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-recovery-observation.js",
++        "line": 589,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "deferStoppingObservationRetry",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
++        "line": 365,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "isCriticalRemoveOverReplicated",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
++        "line": 371,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "getTimeoutForStep",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
++        "line": 86,
++        "kind": "ordered_partition_class_ladder",
++        "enclosingIdentifier": "isPriorityRecoveryTimeoutVisibilityOperation",
++        "detail": "critical_predicate_call+priority_predicate_call"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
++        "line": 523,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "isPriorityRecoveryOperationDrainCandidate",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
++        "line": 158,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "evaluatePriorityRecoveryCompletionRemoveSafety",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
++        "line": 210,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "evaluatePriorityPublishedMembershipRemoveSafety",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
++        "line": 369,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "evaluateRemoveSafety",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
++        "line": 605,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "evaluateRemoveSafety",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-replace-replay.js",
++        "line": 54,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "replayReplaceActiveSourceRemovalFromObservedTarget",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
++        "line": 296,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "shouldUsePriorityDispatchClaimNarrowPath",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
++        "line": 313,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "shouldUsePriorityDispatchTransitionMutationBudget",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-transition-orchestration.js",
++        "line": 416,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "isPriorityOutcomeDeferredLocalProgressStep",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/operation-workflow-transition-retry-grace.js",
++        "line": 143,
++        "kind": "ordered_partition_class_ladder",
++        "enclosingIdentifier": "usesOperationBudget",
++        "detail": "critical_predicate_call+priority_predicate_call"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
++        "line": 123,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "shouldBypassConcurrentBudgetEmptyBackoff",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
++        "line": 148,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "resolveConcurrentBudgetReadMode",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
++        "line": 168,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "shouldUsePriorityConcurrentAddLane",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
++        "line": 209,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "getPriorityRecoveryAdmissionPlan",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
++        "line": 94,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "buildCriticalAddLikeIntentKey",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
++        "line": 277,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "inspectRecentOperationIntentEntityVisibility",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
++        "line": 540,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "getRecentOperationIntentTtlMs",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
++        "line": 572,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "resolveRecentOperationMissReuseSnapshot",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-owner-facade.js",
++        "line": 309,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "isCriticalSystemPartition",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-owner-facade.js",
++        "line": 333,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "resolveOperationReadinessDecisionDimension",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
++        "line": 123,
++        "kind": "critical_predicate_call",
++        "enclosingIdentifier": "ensureCriticalPartitionCreateLaneAvailable",
++        "detail": "isCriticalSystemPartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
++        "line": 340,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "ensureEntityAddLikeCreateLaneAvailable",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
++        "line": 571,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "ensurePriorityControlPlaneRemoveLaneAvailable",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
++        "line": 100,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "addConcurrentPriorityBudgetOperation",
++        "detail": "isPriorityControlPlanePartition"
++      },
++      {
++        "filePath": "src/rebalancer/rebalance-coordinator.js",
++        "line": 48,
++        "kind": "priority_predicate_call",
++        "enclosingIdentifier": "getLocalRouterPressureDecision",
++        "detail": "isPriorityControlPlanePartition"
++      }
++    ],
++    "gates": [
++      {
++        "label": "lint",
++        "passed": true,
++        "exitCode": 0
++      },
++      {
++        "label": "decision-table-model",
++        "passed": true,
++        "exitCode": 0
++      },
++      {
++        "label": "targeted-suites",
++        "passed": true,
++        "exitCode": 0
++      }
++    ]
++  }
++}
+diff --git a/solve/oracle/partition-class-ladder-single-owner-table.json b/solve/oracle/partition-class-ladder-single-owner-table.json
+index abbc83a095dedd26e87cd7f6edd68d33c01f7ae7..1fbac3fb5883e3625a92c0c41f53053bbd964589 100644
+--- a/solve/oracle/partition-class-ladder-single-owner-table.json
++++ b/solve/oracle/partition-class-ladder-single-owner-table.json
+@@ -1,5 +1,5 @@
+ {
+-  "metric": 56,
++  "metric": 45,
+   "target": 0,
+   "done": false,
+   "classification": "partition-class-single-owner-census",
+@@ -18,13 +18,12 @@
+       "collapsedDuplicateLadderEdges": 6,
+       "explanation": "The six literal critical||priority ladders each have two predicate call edges but one canonical decision site: 122 predicate edges + 3 set memberships - 6 duplicate ladder edges = 119 sites."
+     },
+-    "currentRawPredicateEdges": 62,
++    "currentRawPredicateEdges": 51,
+     "currentCollapsedLadderEdges": 6,
+     "countsByKind": {
+-      "critical_predicate_call": 16,
++      "critical_predicate_call": 13,
+       "ordered_partition_class_ladder": 6,
+-      "priority_predicate_call": 33,
+-      "system_table_predicate_call": 1
++      "priority_predicate_call": 26
+     },
+     "countedSites": [
+       {
+@@ -341,83 +340,6 @@
+         "kind": "priority_predicate_call",
+         "enclosingIdentifier": "getLocalRouterPressureDecision",
+         "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
+-        "line": 388,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "getPriorityRecoveryPlanningSnapshot",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
+-        "line": 480,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "getPriorityRecoveryPlanningSnapshotSync",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
+-        "line": 67,
+-        "kind": "critical_predicate_call",
+-        "enclosingIdentifier": "getBudgetQueryOptions",
+-        "detail": "isCriticalSystemPartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
+-        "line": 370,
+-        "kind": "critical_predicate_call",
+-        "enclosingIdentifier": "getHealthyReplicas",
+-        "detail": "isCriticalSystemPartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-budget-planning.js",
+-        "line": 414,
+-        "kind": "critical_predicate_call",
+-        "enclosingIdentifier": "getReadyNodeOccupiedReplicas",
+-        "detail": "isCriticalSystemPartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
+-        "line": 32,
+-        "kind": "system_table_predicate_call",
+-        "enclosingIdentifier": "isSystemPartitionEntity",
+-        "detail": "isSystemTablePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
+-        "line": 119,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "isControlPlanePriorityPartition",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
+-        "line": 33,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "buildNonBlockingPriorityOperationIdSet",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
+-        "line": 102,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "buildNonBlockingPriorityOperationIdSetSync",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
+-        "line": 165,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "buildCoordinatorProgressRebalanceDecision",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-coordination.js",
+-        "line": 356,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "getPriorityRecoveryAdmissionPlan",
+-        "detail": "isPriorityControlPlanePartition"
+       }
+     ],
+     "gates": [
