@@ -1,7 +1,7 @@
 {
   "metric": 85,
-  "target": 0,
-  "done": false,
+  "target": 85,
+  "done": true,
   "classification": "partition-class-single-owner-census",
   "detail": {
     "analyzerContractVersion": 2,
