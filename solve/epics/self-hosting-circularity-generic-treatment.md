@@ -185,9 +185,30 @@ STATE/ACTION/STATE_TABLE/ACTION_BY_STATE shape, `decision-table-v1` JSON +
    divergences; notes: whitespace-only budget partition_id and lowercase
    scope-seam move types are unreachable-today divergences, the latter closing
    a CL-013-style case fail-open). No typing GAP found during migration.
-5. **Partition-class ladder sweep** — the 119-site hand-written
-   critical→priority→default ladder onto one ordered classifier (an Option-1
-   analyzer can then enforce it).
+5. **Partition-class ladder sweep** — LANDED 2026-07-13 (quest
+   `partition-class-ladder-single-owner-table` plus bounded owner-area,
+   analyzer-hardening, evidence, and integrity-migration children). Owner:
+   `src/bootstrap/system-partition-classification.js`, whose frozen ordered
+   decision table and `classifySystemPartition` outcome preserve the deliberate
+   critical/priority overlap while emitting one canonical ordered class. The
+   contract-v3 census `npm run audit:partition-class-owner` reconciles the epic
+   baseline as 122 predicate edges + 3 direct critical-set memberships - 6
+   duplicated two-edge OR ladders = 119 decision sites; bounded migrations moved
+   the parent census 119→114→105→103→0, with the final 30 owner-execution sites
+   landed in `929fc05b` and the committed parent oracle persisted at raw /
+   collapsed 0/0 in `2bfa1cdb`. No classification GAP or behavior change was
+   found. Rejected analyzer receipts drove a fail-closed AST/data-flow hardening
+   sweep (renamed/member/parameter aliases, destructuring and object rest,
+   rebuilt/spread/copied Sets, static snapshots/overrides, templates/concat and
+   nested flow); the final source checkpoint `f41bb40f` keeps all five analyzer
+   modules below 800 lines and passed 63 reconstructed adversarial cases, 123
+   focused assertions (68 analyzer + 55 owner), lint, zero dependency
+   violations, cycle ratchet 0/0, model contracts, and the live gated 0/0 census
+   under independent isolated verification. The legacy pre-v2 parent trail and
+   stabilized model receipt were preserved through bounded archives
+   `390b79b8` / `cd67cb90` and the clean replacement handoff authority
+   `partition-class-ladder-single-owner-table-integrity-migration`
+   (`18f91194`).
 
 Each quest carries red-on-revert pins; behavior changes only with their own pin
 + finding. Options 1 (availability order + analyzer) and 2 (gateway
@@ -231,6 +252,20 @@ establishment) graduate separately after ladder rung 1 seeds the evidence.
   shared-first import-order TDZ smoke (`node -e "await import(...shared...)"`)
   is now a standing check for any new owner module that reads the
   `REBALANCE_COORDINATOR_SHARED` aggregate.
+- 2026-07-13 (rung 5) — `partition-class-ladder-single-owner-table` completed
+  the Option-5 ladder: all 119 peripheral critical→priority→default decisions
+  now consume the ordered system-partition classification owner, and the
+  contract-v3 parent census is committed at raw/collapsed 0/0. Independent
+  adversarial review repeatedly rejected incomplete census receipts, producing
+  the final split analyzer and 63-case historical attack corpus rather than a
+  weak zero. Final source/evidence commits are `f41bb40f` / `2bfa1cdb`;
+  same-base attempt 8 was verified without allowing report-producing gates to
+  mutate the reviewed worktree. Because the original parent contained pre-v2
+  integrity history and cumulative scope, attempts 1–8 were archived in two
+  bounded Quests (`390b79b8`, `cd67cb90`) and a new clean migration Quest
+  committed the parent declaration/log/report plus stabilized model evidence
+  (`18f91194`). Option 5 is complete; future partition-class derivations are
+  enforced by `audit:partition-class-owner`.
 - 2026-07-13 (later) — GRADUATED on user directive ("pick up the quest(s) that
   generalize the logic to be data-driven; don't finish the formation-ledger
   lineage the old way"). Two code-census sweeps sized the surface (see
