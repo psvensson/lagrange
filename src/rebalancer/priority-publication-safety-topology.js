@@ -2,6 +2,7 @@ import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {TIME_MS} from '../constants/time.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -19,7 +20,6 @@ const {
   SYSTEM_TABLE_NAME,
   VOTER_READY_REPLICA_TOPOLOGY_STATUSES,
   WORKFLOW_STEP,
-  isSystemTablePartition,
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
 
@@ -80,7 +80,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
   }
 
   isCriticalSystemPartition(partitionId) {
-    return isSystemTablePartition({partitionId});
+    return classifySystemPartition({partitionId}).systemTable;
   }
 
   resolveOperationReadinessDecisionDimension(operationOrPartitionId = null) {
@@ -88,7 +88,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       typeof operationOrPartitionId === 'string' ?
         operationOrPartitionId :
         normalizePriorityRecoveryOperationPartitionId(operationOrPartitionId);
-    if (this.isCriticalSystemPartition(partitionId)) {
+    if (classifySystemPartition({partitionId}).systemTable) {
       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
     return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;

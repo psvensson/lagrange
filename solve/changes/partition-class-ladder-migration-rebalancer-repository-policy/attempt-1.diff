@@ -1,0 +1,550 @@
+diff --git a/src/rebalancer/move-planner-state-methods.js b/src/rebalancer/move-planner-state-methods.js
+index 0183cfa42018801089cfafac86d7cf269884856e..bd5685fb1c82b4b895d455a66368504a4609df84 100644
+--- a/src/rebalancer/move-planner-state-methods.js
++++ b/src/rebalancer/move-planner-state-methods.js
+@@ -110,13 +110,12 @@ function createMovePlannerStateMethods(deps = {}) {
+     applyAdditionalRebalancingReason,
+     buildPartitionDescriptorEpochDecision,
+     buildReplicaCountPolicyDecision,
++    classifySystemPartition,
+     getNextOddCount,
+     getPartitionRowFromCache,
+     getPreviousOddCount,
+     isOddReplicaCount,
+-    isPriorityControlPlanePartition,
+     isReplicaInventoryAddTransitionalOperation,
+-    isSystemTablePartition,
+   } = deps;
+ 
+   class MovePlannerStateMethods {
+@@ -274,10 +273,10 @@ function createMovePlannerStateMethods(deps = {}) {
+       }
+       const systemTableCache = this.moveStateProvider?.systemTableCache || null;
+       const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
+-      return isPriorityControlPlanePartition({
++      return classifySystemPartition({
+         partitionId: this.entityId,
+         partitionRow,
+-      });
++      }).priorityControlPlane;
+     }
+ 
+     /**
+@@ -311,10 +310,10 @@ function createMovePlannerStateMethods(deps = {}) {
+       }
+       const systemTableCache = this.moveStateProvider?.systemTableCache || null;
+       const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
+-      return isSystemTablePartition({
++      return classifySystemPartition({
+         partitionId: this.entityId,
+         partitionRow,
+-      });
++      }).systemTable;
+     }
+ 
+     /**
+@@ -443,7 +442,8 @@ function createMovePlannerStateMethods(deps = {}) {
+           systemPartition: this.isSystemPartitionEntity(),
+           operations: globalInFlightOperations,
+           isAddTransitional: isReplicaInventoryAddTransitionalOperation,
+-          isSystemPartition: isSystemTablePartition,
++          isSystemPartition: (options) =>
++            classifySystemPartition(options).systemTable,
+         });
+ 
+       return {
+@@ -514,7 +514,16 @@ function createMovePlannerStateMethods(deps = {}) {
+         typeof this.moveStateProvider.isCriticalSystemPartition ===
+           MOVE_PLANNER_LITERAL.FUNCTION
+       ) {
+-        return this.moveStateProvider.isCriticalSystemPartition() === true;
++        const systemTableCache =
++          this.moveStateProvider?.systemTableCache || null;
++        const partitionRow = getPartitionRowFromCache(
++          systemTableCache,
++          this.entityId,
++        );
++        return classifySystemPartition({
++          partitionId: this.entityId,
++          partitionRow,
++        }).systemTable;
+       }
+       return false;
+     }
+diff --git a/src/rebalancer/move-planner.js b/src/rebalancer/move-planner.js
+index 5b59bff31f01107734d8fb065b9bf0ac42e54a23..6647d4a9959f1d3178d4fec64274ea2dd1ba40ef 100644
+--- a/src/rebalancer/move-planner.js
++++ b/src/rebalancer/move-planner.js
+@@ -13,9 +13,8 @@
+ import {LoggingService} from '../logging/logging-service.js';
+ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+ import {
++  classifySystemPartition,
+   getPartitionRowFromCache,
+-  isPriorityControlPlanePartition,
+-  isSystemTablePartition,
+ } from '../bootstrap/system-partition-classification.js';
+ import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+ import {
+@@ -172,13 +171,12 @@ const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
+   applyAdditionalRebalancingReason,
+   buildPartitionDescriptorEpochDecision,
+   buildReplicaCountPolicyDecision,
++  classifySystemPartition,
+   getNextOddCount,
+   getPartitionRowFromCache,
+   getPreviousOddCount,
+   isOddReplicaCount,
+-  isPriorityControlPlanePartition,
+   isReplicaInventoryAddTransitionalOperation,
+-  isSystemTablePartition,
+ });
+ 
+ /**
+diff --git a/src/rebalancer/priority-publication-handoff.js b/src/rebalancer/priority-publication-handoff.js
+index a04e8e86ce5be2873ccd28033f92c85a26fe651d..f7f0b854d1a6fc568344bee5c16f0376162b9ad2 100644
+--- a/src/rebalancer/priority-publication-handoff.js
++++ b/src/rebalancer/priority-publication-handoff.js
+@@ -1,5 +1,6 @@
+ import {PriorityPublicationLeaderSafety} from './priority-publication-leader-safety.js';
+ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ 
+ const {
+   OPERATION_HANDLER,
+@@ -18,7 +19,6 @@ const {
+   ReplicaOperationReason,
+   ReplicaOperationResponseStatus,
+   SERVICE_TYPE,
+-  isPriorityControlPlanePartition,
+ } = SHARED;
+ 
+ const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
+@@ -281,7 +281,8 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
+     const priorityReplaceSourceRemoval =
+       operation?.type === OperationType.REPLACE &&
+       this.repository.isReplaceRemovePhase(operation) &&
+-      isPriorityControlPlanePartition({partitionId: operation.partitionId});
++      classifySystemPartition({partitionId: operation.partitionId})
++        .priorityControlPlane;
+     const replacementLeaderElectionHandoff =
+       handoffRequest?.requestReason ===
+       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION;
+diff --git a/src/rebalancer/priority-publication-safety-rows.js b/src/rebalancer/priority-publication-safety-rows.js
+index b74d7222a3dae12f39390beb09e9d705bf33b748..874beed57ef55d953cb8aa2fdb017f90c4988b1e 100644
+--- a/src/rebalancer/priority-publication-safety-rows.js
++++ b/src/rebalancer/priority-publication-safety-rows.js
+@@ -1,5 +1,6 @@
+ import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
+ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ 
+ const {
+   DEFAULT_MIN_REPLICA_COUNT,
+@@ -9,7 +10,6 @@ const {
+   REMOVE_SAFETY_SQL,
+   SERVICE_TYPE,
+   SYSTEM_TABLE_NAME,
+-  isPriorityControlPlanePartition,
+   normalizePriorityRecoveryOperationPartitionId,
+   readAuthoritativeControlPlaneRows,
+ } = SHARED;
+@@ -208,9 +208,9 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
+     );
+     if (
+       !operation ||
+-      !isPriorityControlPlanePartition({
++      !classifySystemPartition({
+         partitionId,
+-      })
++      }).priorityControlPlane
+     ) {
+       return null;
+     }
+diff --git a/src/rebalancer/priority-publication-safety-topology.js b/src/rebalancer/priority-publication-safety-topology.js
+index 69519671aff8da171e8d6975f166f4da2a842ca5..7250f57193b748b6917368c0513a0c08b7861949 100644
+--- a/src/rebalancer/priority-publication-safety-topology.js
++++ b/src/rebalancer/priority-publication-safety-topology.js
+@@ -2,6 +2,7 @@ import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-
+ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
+ import {TIME_MS} from '../constants/time.js';
+ import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ 
+ const {
+   CONTROL_PLANE_READINESS_DIMENSION,
+@@ -19,7 +20,6 @@ const {
+   SYSTEM_TABLE_NAME,
+   VOTER_READY_REPLICA_TOPOLOGY_STATUSES,
+   WORKFLOW_STEP,
+-  isSystemTablePartition,
+   normalizePriorityRecoveryOperationPartitionId,
+ } = SHARED;
+ 
+@@ -80,7 +80,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
+   }
+ 
+   isCriticalSystemPartition(partitionId) {
+-    return isSystemTablePartition({partitionId});
++    return classifySystemPartition({partitionId}).systemTable;
+   }
+ 
+   resolveOperationReadinessDecisionDimension(operationOrPartitionId = null) {
+@@ -88,7 +88,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
+       typeof operationOrPartitionId === 'string' ?
+         operationOrPartitionId :
+         normalizePriorityRecoveryOperationPartitionId(operationOrPartitionId);
+-    if (this.isCriticalSystemPartition(partitionId)) {
++    if (classifySystemPartition({partitionId}).systemTable) {
+       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+     }
+     return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+diff --git a/src/rebalancer/priority-recovery-superseded-target.js b/src/rebalancer/priority-recovery-superseded-target.js
+index a374c3fb063d0a4591885a60ee963eed5c6abc32..ae8d76274583f23b085f2d8a77566e4c68b26b00 100644
+--- a/src/rebalancer/priority-recovery-superseded-target.js
++++ b/src/rebalancer/priority-recovery-superseded-target.js
+@@ -1,4 +1,5 @@
+ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ import {PriorityRecoveryObservation} from './priority-recovery-observation.js';
+ import {
+   buildPriorityRemoveSafetyRecoveryProjectionNodeIds,
+@@ -45,7 +46,6 @@ const {
+   buildPriorityRecoveryOperationAssessment,
+   getWorkflowSteps,
+   hasPriorityRecoverySpreadGap,
+-  isPriorityControlPlanePartition,
+   normalizeNodeIdList,
+   resolvePriorityRecoveryActiveNodeCohort,
+ } = OPERATION_WORKFLOW_OWNER_SHARED;
+@@ -469,9 +469,9 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
+     return (
+       operation?.type === OperationType.REPLACE &&
+       operation?.workflowStep === WORKFLOW_STEP.ACTIVE &&
+-      isPriorityControlPlanePartition({
++      classifySystemPartition({
+         partitionId: operation?.partitionId,
+-      }) &&
++      }).priorityControlPlane &&
+       this.isVoterReadyReplicaTopology(replacementReplicaRow)
+     );
+   }
+diff --git a/src/rebalancer/provisioning-admission-policy.js b/src/rebalancer/provisioning-admission-policy.js
+index 323dc519d0e4446a54b19531fa95ac8f3d203d32..9f0244c791e156e88561dc3839a62e2d0277896b 100644
+--- a/src/rebalancer/provisioning-admission-policy.js
++++ b/src/rebalancer/provisioning-admission-policy.js
+@@ -14,7 +14,7 @@ import {
+   requiresStableLocalControlPlaneMutationReadiness,
+ } from '../control-plane/control-plane-mutation-readiness.js';
+ import {
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+ } from '../bootstrap/system-partition-classification.js';
+ import {
+   REBALANCE_COORDINATOR_ERROR_MSG,
+@@ -98,15 +98,15 @@ class ProvisioningAdmissionPolicy {
+   }
+ 
+   /**
+-   * @param {string|null} partitionId
+-   * @return {boolean}
++   * @param {Object} options
++   * @return {Object|null}
+    * @private
+    */
+-  isCriticalSystemPartition(partitionId) {
+-    if (typeof this.delegates.isCriticalSystemPartition === LOCAL_STR_FUNCTION) {
+-      return this.delegates.isCriticalSystemPartition(partitionId) === true;
++  getPartitionClassification(options = {}) {
++    if (typeof this.delegates.classifySystemPartition === LOCAL_STR_FUNCTION) {
++      return this.delegates.classifySystemPartition(options);
+     }
+-    return false;
++    return null;
+   }
+ 
+   /**
+@@ -122,7 +122,7 @@ class ProvisioningAdmissionPolicy {
+       context.move?.partitionId ||
+       context.move?.entityId ||
+       null;
+-    return this.isCriticalSystemPartition(partitionId);
++    return this.getPartitionClassification({partitionId})?.systemTable === true;
+   }
+ 
+   /**
+@@ -222,9 +222,9 @@ class ProvisioningAdmissionPolicy {
+     const blocker = getLocalControlPlaneMutationReadinessBlocker({
+       nodeId: this.getNodeId(),
+       controlPlaneReadinessService: this.getControlPlaneReadinessService(),
+-      allowPriorityRecoveryBypass: isPriorityControlPlanePartition({
++      allowPriorityRecoveryBypass: classifySystemPartition({
+         partitionId: move?.partitionId || move?.entityId || null,
+-      }),
++      }).priorityControlPlane,
+     });
+     if (!blocker) {
+       return;
+diff --git a/src/rebalancer/rebalance-coordinator-lifecycle.js b/src/rebalancer/rebalance-coordinator-lifecycle.js
+index 951b587f99034b6a7bda94d1b0d2ede55566c3bb..12cef4f5f73cef08af0830daa2830e3f40a40324 100644
+--- a/src/rebalancer/rebalance-coordinator-lifecycle.js
++++ b/src/rebalancer/rebalance-coordinator-lifecycle.js
+@@ -1,6 +1,7 @@
+ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+ import {resolveTimeSource} from '../time/time-source.js';
+ import {buildReplicaInventorySnapshot} from './replica-inventory.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
+@@ -332,8 +333,7 @@ class RebalanceCoordinatorLifecycle {
+             this.controlPlaneReadinessService,
+           getStorageAdmissionService: () => this.storageAdmissionService,
+           getStorageAccountingService: () => this.storageAccountingService,
+-          isCriticalSystemPartition: (partitionId) =>
+-            this.isCriticalSystemPartition(partitionId),
++          classifySystemPartition,
+           normalizeMoveType: (moveType) => this.normalizeMoveType(moveType),
+         },
+       });
+diff --git a/src/rebalancer/replica-operation-liveness.js b/src/rebalancer/replica-operation-liveness.js
+index 5d3ba3a1877f4ccae67ea816c5d1fc6a52b6dc60..23a6ec3e6ded16eb82b546f88ee67b9f1b7b08bb 100644
+--- a/src/rebalancer/replica-operation-liveness.js
++++ b/src/rebalancer/replica-operation-liveness.js
+@@ -1,7 +1,7 @@
+ import {NUM, TIME_MS, WORKFLOW_STEP} from '../constants/index.js';
+ import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
+ import {
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+ } from '../bootstrap/system-partition-classification.js';
+ import {
+   OperationType,
+@@ -563,7 +563,7 @@ function resolveStepTimeoutMs(workflowStep, options = {}) {
+   // staleness/reaper calls do not pass the flag, so its real retry budget is unchanged.
+   if (
+     workflowStep === WORKFLOW_STEP.SYNCING &&
+-    (isPriorityControlPlanePartition({partitionId}) ||
++    (classifySystemPartition({partitionId}).priorityControlPlane ||
+       options.capSyncingStaleTimeoutForAllPartitions === true)
+   ) {
+     return Math.min(
+diff --git a/src/rebalancer/replica-operation-repository-incomplete-read-methods.js b/src/rebalancer/replica-operation-repository-incomplete-read-methods.js
+index 266f6167fd41d06d708847fb16432bb5510efadd..61b5d687d8eed639c193e9cb04d2beafd77b54d4 100644
+--- a/src/rebalancer/replica-operation-repository-incomplete-read-methods.js
++++ b/src/rebalancer/replica-operation-repository-incomplete-read-methods.js
+@@ -23,10 +23,9 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
+     WORKFLOW_STEP,
+     buildControlPlaneFailurePayload,
+     buildReplicaOperationVisibilityReadOptions,
++    classifySystemPartition,
+     isCoordinatorOwnedOperationType,
+-    isPriorityControlPlanePartition,
+     isRetryableControlPlaneError,
+-    isSystemTablePartition,
+     resolveReplicaOperationVisibilityReadMode,
+   } = options;
+ 
+@@ -182,7 +181,8 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
+     isPriorityRecoveryIncompleteOperationVisibilityCandidate(operation) {
+       if (
+         !operation ||
+-        !isPriorityControlPlanePartition({partitionId: operation.partitionId})
++        !classifySystemPartition({partitionId: operation.partitionId})
++          .priorityControlPlane
+       ) {
+         return false;
+       }
+@@ -211,9 +211,9 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
+         operation.type === OperationType.REPLACE &&
+         sourceNodeId.length > 0 &&
+         sourceNodeId === this.nodeId &&
+-        isSystemTablePartition({
++        classifySystemPartition({
+           partitionId: operation.partitionId,
+-        }) &&
++        }).systemTable &&
+         PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS.has(
+           operation.workflowStep,
+         ),
+diff --git a/src/rebalancer/replica-operation-repository-mutation-transition-methods.js b/src/rebalancer/replica-operation-repository-mutation-transition-methods.js
+index 6d6eb2e981fa7ec3025b81753874212ba6b82451..7b7812411702180badae3e75823af15720156f12 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-transition-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-transition-methods.js
+@@ -6,7 +6,7 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
+ ) {
+   const {
+     REPLICA_OPERATION_TRANSITION_LANE,
+-    isPriorityControlPlanePartition,
++    classifySystemPartition,
+   } = options;
+ 
+   class ReplicaOperationRepositoryMutationTransitionMethods {
+@@ -34,7 +34,8 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
+         this.buildReplicaOperationTransitionPartitionClassificationInput(
+           options,
+         );
+-      return isPriorityControlPlanePartition(partitionClassificationInput) ?
++      return classifySystemPartition(partitionClassificationInput)
++        .priorityControlPlane ?
+         REPLICA_OPERATION_TRANSITION_LANE.PRIORITY_RECOVERY :
+         REPLICA_OPERATION_TRANSITION_LANE.DEFAULT;
+     }
+diff --git a/src/rebalancer/replica-operation-repository-row-methods.js b/src/rebalancer/replica-operation-repository-row-methods.js
+index 5819354baa62719b3bd2328b97312d621996d282..b8e348e2b57ac64f2cd22ff3846ad4e16f73c0c0 100644
+--- a/src/rebalancer/replica-operation-repository-row-methods.js
++++ b/src/rebalancer/replica-operation-repository-row-methods.js
+@@ -28,12 +28,11 @@ function assignReplicaOperationRepositoryRowMethods(
+     SYSTEM_TABLE_NAME,
+     WORKFLOW_STEP,
+     buildReplicaOperationSemanticWitnesses,
++    classifySystemPartition,
+     getOperationMetadataObject,
+     getOperationMetadataString,
+     getOperationMetadataStringArray,
+-    isPriorityControlPlanePartition,
+     isReplaceRemoveDispatchPhase,
+-    isSystemTablePartition,
+     isTerminalReplicaOperationRecord,
+     resolveReplicaOperationSemanticPhase,
+   } = options;
+@@ -150,10 +149,10 @@ function assignReplicaOperationRepositoryRowMethods(
+       semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
+       const isSystemReplace =
+       isUnsettledReplace &&
+-      isSystemTablePartition({partitionId});
++      classifySystemPartition({partitionId}).systemTable;
+       const isPriorityReplace =
+       isUnsettledReplace &&
+-      isPriorityControlPlanePartition({partitionId});
++      classifySystemPartition({partitionId}).priorityControlPlane;
+       if (isSystemReplace || isPriorityReplace) {
+       // Keep canonical ownership on the target from initial dispatch through
+       // source removal so the replacement host can survive transient source
+@@ -203,7 +202,8 @@ function assignReplicaOperationRepositoryRowMethods(
+       !operation.operationId ||
+       !operation.partitionId ||
+       !this.systemTableCache ||
+-      !isPriorityControlPlanePartition({partitionId: operation.partitionId}) ||
++      !classifySystemPartition({partitionId: operation.partitionId})
++        .priorityControlPlane ||
+       !this.isOperationLocallyOwned(operation)
+       ) {
+         return false;
+diff --git a/src/rebalancer/replica-operation-repository.js b/src/rebalancer/replica-operation-repository.js
+index e9aa93afa6fb67a5d8c062c5ece82af96b628028..af388f24b9c2fc8e92ff4f958ff41777f4fe91a9 100644
+--- a/src/rebalancer/replica-operation-repository.js
++++ b/src/rebalancer/replica-operation-repository.js
+@@ -20,8 +20,7 @@ import {
+   SYSTEM_TABLE_NAME,
+ } from '../bootstrap/system-table-schemas-constants.js';
+ import {
+-  isPriorityControlPlanePartition,
+-  isSystemTablePartition,
++  classifySystemPartition,
+ } from '../bootstrap/system-partition-classification.js';
+ import {
+   CONTROL_PLANE_PARTICIPATION_KIND,
+@@ -629,12 +628,11 @@ assignReplicaOperationRepositoryRowMethods(ReplicaOperationRepository, {
+   TYPEOF,
+   WORKFLOW_STEP,
+   buildReplicaOperationSemanticWitnesses,
++  classifySystemPartition,
+   getOperationMetadataObject,
+   getOperationMetadataString,
+   getOperationMetadataStringArray,
+-  isPriorityControlPlanePartition,
+   isReplaceRemoveDispatchPhase,
+-  isSystemTablePartition,
+   isTerminalReplicaOperationRecord,
+   resolveReplicaOperationSemanticPhase,
+ });
+@@ -667,11 +665,10 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
+   UNIFIED_SERVICE_TYPE,
+   buildControlPlaneFailurePayload,
+   buildReplicaOperationVisibilityReadOptions,
++  classifySystemPartition,
+   getControlPlaneRetryAfterMs,
+-  isPriorityControlPlanePartition,
+   isCoordinatorOwnedOperationType,
+   isRetryableControlPlaneError,
+-  isSystemTablePartition,
+   readAuthoritativeControlPlaneRows,
+   resolveAuthoritativeReadModeContract,
+   resolveReplicaOperationVisibilityReadMode,
+@@ -712,12 +709,12 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
+   TYPEOF,
+   buildControlPlaneFailurePayload,
+   buildDivergenceEvent,
++  classifySystemPartition,
+   cloneControlPlaneFailureParticipants,
+   getControlPlaneErrorCode,
+   getControlPlaneRetryAfterMs,
+   getRemainingBudgetMs,
+   hasControlPlaneMutationRoutingGapFailureSignature,
+-  isPriorityControlPlanePartition,
+   isRetryableControlPlaneError,
+   isRetryableWorkflowParticipantLookupErrorMessage,
+   ROUTER_ERROR_MSG,
+diff --git a/test/rebalancer/provisioning-admission-policy.test.js b/test/rebalancer/provisioning-admission-policy.test.js
+index 63a9b016a1374fcd07325cf155e211495ebbc6ed..eadc88fb6f8149c7256de3969428e18eedcf2f4a 100644
+--- a/test/rebalancer/provisioning-admission-policy.test.js
++++ b/test/rebalancer/provisioning-admission-policy.test.js
+@@ -33,10 +33,10 @@ function createPolicy(options = {}) {
+           return 64;
+         },
+       },
+-    isCriticalSystemPartition:
+-      typeof options.isCriticalSystemPartition === 'function' ?
+-        options.isCriticalSystemPartition :
+-        () => false,
++    classifySystemPartition:
++      typeof options.classifySystemPartition === 'function' ?
++        options.classifySystemPartition :
++        () => ({systemTable: false}),
+   };
+ 
+   const policy = new ProvisioningAdmissionPolicy({
+@@ -52,8 +52,8 @@ function createPolicy(options = {}) {
+         state.storageAdmissionService,
+       getStorageAccountingService: () =>
+         state.storageAccountingService,
+-      isCriticalSystemPartition: (partitionId) =>
+-        state.isCriticalSystemPartition(partitionId),
++      classifySystemPartition: (classificationOptions) =>
++        state.classifySystemPartition(classificationOptions),
+       normalizeMoveType: (moveType) => {
+         if (typeof moveType !== 'string') {
+           return null;
+@@ -66,6 +66,19 @@ function createPolicy(options = {}) {
+   return {policy, state};
+ }
+ 
++test('resolveAdmissionCriticality remains false without classifier delegate', (t) => {
++  const policy = new ProvisioningAdmissionPolicy({delegates: {}});
++
++  t.equal(
++    policy.resolveAdmissionCriticality({
++      partitionId: 'control_plane_publications-p1',
++    }),
++    false,
++    'missing delegate must not create new admission authority',
++  );
++  t.end();
++});
++
+ test('checkProvisioningAdmission admits non storage-increasing moves', async (t) => {
+   const {policy} = createPolicy();
+ 
+@@ -168,8 +181,9 @@ test('evaluateProvisioningAdmission forwards critical partition context',
+   async (t) => {
+     const calls = [];
+     const {policy} = createPolicy({
+-      isCriticalSystemPartition: (partitionId) =>
+-        partitionId === 'control_plane_publications-p1',
++      classifySystemPartition: ({partitionId}) => ({
++        systemTable: partitionId === 'control_plane_publications-p1',
++      }),
+       storageAdmissionService: {
+         async checkAdd(options = {}) {
+           calls.push({

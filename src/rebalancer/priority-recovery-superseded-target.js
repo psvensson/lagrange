@@ -1,4 +1,5 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {PriorityRecoveryObservation} from './priority-recovery-observation.js';
 import {
   buildPriorityRemoveSafetyRecoveryProjectionNodeIds,
@@ -45,7 +46,6 @@ const {
   buildPriorityRecoveryOperationAssessment,
   getWorkflowSteps,
   hasPriorityRecoverySpreadGap,
-  isPriorityControlPlanePartition,
   normalizeNodeIdList,
   resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -469,9 +469,9 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
     return (
       operation?.type === OperationType.REPLACE &&
       operation?.workflowStep === WORKFLOW_STEP.ACTIVE &&
-      isPriorityControlPlanePartition({
+      classifySystemPartition({
         partitionId: operation?.partitionId,
-      }) &&
+      }).priorityControlPlane &&
       this.isVoterReadyReplicaTopology(replacementReplicaRow)
     );
   }

@@ -13,9 +13,8 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  classifySystemPartition,
   getPartitionRowFromCache,
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
 } from '../bootstrap/system-partition-classification.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {
@@ -172,13 +171,12 @@ const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
   applyAdditionalRebalancingReason,
   buildPartitionDescriptorEpochDecision,
   buildReplicaCountPolicyDecision,
+  classifySystemPartition,
   getNextOddCount,
   getPartitionRowFromCache,
   getPreviousOddCount,
   isOddReplicaCount,
-  isPriorityControlPlanePartition,
   isReplicaInventoryAddTransitionalOperation,
-  isSystemTablePartition,
 });
 
 /**

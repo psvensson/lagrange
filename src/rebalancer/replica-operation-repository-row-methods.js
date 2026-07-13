@@ -28,12 +28,11 @@ function assignReplicaOperationRepositoryRowMethods(
     SYSTEM_TABLE_NAME,
     WORKFLOW_STEP,
     buildReplicaOperationSemanticWitnesses,
+    classifySystemPartition,
     getOperationMetadataObject,
     getOperationMetadataString,
     getOperationMetadataStringArray,
-    isPriorityControlPlanePartition,
     isReplaceRemoveDispatchPhase,
-    isSystemTablePartition,
     isTerminalReplicaOperationRecord,
     resolveReplicaOperationSemanticPhase,
   } = options;
@@ -150,10 +149,10 @@ function assignReplicaOperationRepositoryRowMethods(
       semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
       const isSystemReplace =
       isUnsettledReplace &&
-      isSystemTablePartition({partitionId});
+      classifySystemPartition({partitionId}).systemTable;
       const isPriorityReplace =
       isUnsettledReplace &&
-      isPriorityControlPlanePartition({partitionId});
+      classifySystemPartition({partitionId}).priorityControlPlane;
       if (isSystemReplace || isPriorityReplace) {
       // Keep canonical ownership on the target from initial dispatch through
       // source removal so the replacement host can survive transient source
@@ -203,7 +202,8 @@ function assignReplicaOperationRepositoryRowMethods(
       !operation.operationId ||
       !operation.partitionId ||
       !this.systemTableCache ||
-      !isPriorityControlPlanePartition({partitionId: operation.partitionId}) ||
+      !classifySystemPartition({partitionId: operation.partitionId})
+        .priorityControlPlane ||
       !this.isOperationLocallyOwned(operation)
       ) {
         return false;

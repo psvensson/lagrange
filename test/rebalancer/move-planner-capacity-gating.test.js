@@ -490,7 +490,7 @@ test('MovePlanner capacity gating', async (t) => {
         entityType: REBALANCER_ENTITY_TYPE.PARTITION,
         moveStateProvider: {
           ...makeMoveStateProvider(nodes),
-          isCriticalSystemPartition: () => true,
+          isSystemPartitionEntity: () => true,
         },
         storageAdmissionService: {
           async checkAdd(options = {}) {
@@ -546,6 +546,24 @@ test('MovePlanner capacity gating', async (t) => {
         calls[0]?.isCritical,
         false,
         'without the provider contract, MovePlanner should not infer critical admission from a second local detector',
+      );
+    });
+
+  await t.test('critical admission preserves the provider entity-type decision for system-looking IDs',
+    async (t) => {
+      const planner = new MovePlanner({
+        entityId: 'control_plane_publications-p1',
+        entityType: REBALANCER_ENTITY_TYPE.MESSAGE_GROUP,
+        moveStateProvider: {
+          ...makeMoveStateProvider([]),
+          isSystemPartitionEntity: () => false,
+        },
+      });
+
+      t.equal(
+        planner.isCriticalAdmissionEntity(),
+        false,
+        'a message group must remain non-critical even when its ID resembles a system partition',
       );
     });
 

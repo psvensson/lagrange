@@ -1,6 +1,7 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {buildReplicaInventorySnapshot} from './replica-inventory.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
@@ -332,8 +333,7 @@ class RebalanceCoordinatorLifecycle {
             this.controlPlaneReadinessService,
           getStorageAdmissionService: () => this.storageAdmissionService,
           getStorageAccountingService: () => this.storageAccountingService,
-          isCriticalSystemPartition: (partitionId) =>
-            this.isCriticalSystemPartition(partitionId),
+          classifySystemPartition,
           normalizeMoveType: (moveType) => this.normalizeMoveType(moveType),
         },
       });

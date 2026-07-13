@@ -14,7 +14,7 @@ import {
   requiresStableLocalControlPlaneMutationReadiness,
 } from '../control-plane/control-plane-mutation-readiness.js';
 import {
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {
   REBALANCE_COORDINATOR_ERROR_MSG,
@@ -98,15 +98,15 @@ class ProvisioningAdmissionPolicy {
   }
 
   /**
-   * @param {string|null} partitionId
-   * @return {boolean}
+   * @param {Object} options
+   * @return {Object|null}
    * @private
    */
-  isCriticalSystemPartition(partitionId) {
-    if (typeof this.delegates.isCriticalSystemPartition === LOCAL_STR_FUNCTION) {
-      return this.delegates.isCriticalSystemPartition(partitionId) === true;
+  getPartitionClassification(options = {}) {
+    if (typeof this.delegates.classifySystemPartition === LOCAL_STR_FUNCTION) {
+      return this.delegates.classifySystemPartition(options);
     }
-    return false;
+    return null;
   }
 
   /**
@@ -122,7 +122,7 @@ class ProvisioningAdmissionPolicy {
       context.move?.partitionId ||
       context.move?.entityId ||
       null;
-    return this.isCriticalSystemPartition(partitionId);
+    return this.getPartitionClassification({partitionId})?.systemTable === true;
   }
 
   /**
@@ -222,9 +222,9 @@ class ProvisioningAdmissionPolicy {
     const blocker = getLocalControlPlaneMutationReadinessBlocker({
       nodeId: this.getNodeId(),
       controlPlaneReadinessService: this.getControlPlaneReadinessService(),
-      allowPriorityRecoveryBypass: isPriorityControlPlanePartition({
+      allowPriorityRecoveryBypass: classifySystemPartition({
         partitionId: move?.partitionId || move?.entityId || null,
-      }),
+      }).priorityControlPlane,
     });
     if (!blocker) {
       return;

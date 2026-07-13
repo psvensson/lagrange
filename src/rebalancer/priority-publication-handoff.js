@@ -1,5 +1,6 @@
 import {PriorityPublicationLeaderSafety} from './priority-publication-leader-safety.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 
 const {
   OPERATION_HANDLER,
@@ -18,7 +19,6 @@ const {
   ReplicaOperationReason,
   ReplicaOperationResponseStatus,
   SERVICE_TYPE,
-  isPriorityControlPlanePartition,
 } = SHARED;
 
 const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
@@ -281,7 +281,8 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     const priorityReplaceSourceRemoval =
       operation?.type === OperationType.REPLACE &&
       this.repository.isReplaceRemovePhase(operation) &&
-      isPriorityControlPlanePartition({partitionId: operation.partitionId});
+      classifySystemPartition({partitionId: operation.partitionId})
+        .priorityControlPlane;
     const replacementLeaderElectionHandoff =
       handoffRequest?.requestReason ===
       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION;

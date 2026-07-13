@@ -6,7 +6,7 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
 ) {
   const {
     REPLICA_OPERATION_TRANSITION_LANE,
-    isPriorityControlPlanePartition,
+    classifySystemPartition,
   } = options;
 
   class ReplicaOperationRepositoryMutationTransitionMethods {
@@ -34,7 +34,8 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
         this.buildReplicaOperationTransitionPartitionClassificationInput(
           options,
         );
-      return isPriorityControlPlanePartition(partitionClassificationInput) ?
+      return classifySystemPartition(partitionClassificationInput)
+        .priorityControlPlane ?
         REPLICA_OPERATION_TRANSITION_LANE.PRIORITY_RECOVERY :
         REPLICA_OPERATION_TRANSITION_LANE.DEFAULT;
     }

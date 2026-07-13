@@ -33,10 +33,10 @@ function createPolicy(options = {}) {
           return 64;
         },
       },
-    isCriticalSystemPartition:
-      typeof options.isCriticalSystemPartition === 'function' ?
-        options.isCriticalSystemPartition :
-        () => false,
+    classifySystemPartition:
+      typeof options.classifySystemPartition === 'function' ?
+        options.classifySystemPartition :
+        () => ({systemTable: false}),
   };
 
   const policy = new ProvisioningAdmissionPolicy({
@@ -52,8 +52,8 @@ function createPolicy(options = {}) {
         state.storageAdmissionService,
       getStorageAccountingService: () =>
         state.storageAccountingService,
-      isCriticalSystemPartition: (partitionId) =>
-        state.isCriticalSystemPartition(partitionId),
+      classifySystemPartition: (classificationOptions) =>
+        state.classifySystemPartition(classificationOptions),
       normalizeMoveType: (moveType) => {
         if (typeof moveType !== 'string') {
           return null;
@@ -65,6 +65,19 @@ function createPolicy(options = {}) {
 
   return {policy, state};
 }
+
+test('resolveAdmissionCriticality remains false without classifier delegate', (t) => {
+  const policy = new ProvisioningAdmissionPolicy({delegates: {}});
+
+  t.equal(
+    policy.resolveAdmissionCriticality({
+      partitionId: 'control_plane_publications-p1',
+    }),
+    false,
+    'missing delegate must not create new admission authority',
+  );
+  t.end();
+});
 
 test('checkProvisioningAdmission admits non storage-increasing moves', async (t) => {
   const {policy} = createPolicy();
@@ -168,8 +181,9 @@ test('evaluateProvisioningAdmission forwards critical partition context',
   async (t) => {
     const calls = [];
     const {policy} = createPolicy({
-      isCriticalSystemPartition: (partitionId) =>
-        partitionId === 'control_plane_publications-p1',
+      classifySystemPartition: ({partitionId}) => ({
+        systemTable: partitionId === 'control_plane_publications-p1',
+      }),
       storageAdmissionService: {
         async checkAdd(options = {}) {
           calls.push({

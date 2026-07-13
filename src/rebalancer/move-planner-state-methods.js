@@ -110,13 +110,12 @@ function createMovePlannerStateMethods(deps = {}) {
     applyAdditionalRebalancingReason,
     buildPartitionDescriptorEpochDecision,
     buildReplicaCountPolicyDecision,
+    classifySystemPartition,
     getNextOddCount,
     getPartitionRowFromCache,
     getPreviousOddCount,
     isOddReplicaCount,
-    isPriorityControlPlanePartition,
     isReplicaInventoryAddTransitionalOperation,
-    isSystemTablePartition,
   } = deps;
 
   class MovePlannerStateMethods {
@@ -274,10 +273,10 @@ function createMovePlannerStateMethods(deps = {}) {
       }
       const systemTableCache = this.moveStateProvider?.systemTableCache || null;
       const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
-      return isPriorityControlPlanePartition({
+      return classifySystemPartition({
         partitionId: this.entityId,
         partitionRow,
-      });
+      }).priorityControlPlane;
     }
 
     /**
@@ -311,10 +310,10 @@ function createMovePlannerStateMethods(deps = {}) {
       }
       const systemTableCache = this.moveStateProvider?.systemTableCache || null;
       const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
-      return isSystemTablePartition({
+      return classifySystemPartition({
         partitionId: this.entityId,
         partitionRow,
-      });
+      }).systemTable;
     }
 
     /**
@@ -443,7 +442,8 @@ function createMovePlannerStateMethods(deps = {}) {
           systemPartition: this.isSystemPartitionEntity(),
           operations: globalInFlightOperations,
           isAddTransitional: isReplicaInventoryAddTransitionalOperation,
-          isSystemPartition: isSystemTablePartition,
+          isSystemPartition: (options) =>
+            classifySystemPartition(options).systemTable,
         });
 
       return {
@@ -511,10 +511,10 @@ function createMovePlannerStateMethods(deps = {}) {
     isCriticalAdmissionEntity() {
       if (
         this.moveStateProvider &&
-        typeof this.moveStateProvider.isCriticalSystemPartition ===
+        typeof this.moveStateProvider.isSystemPartitionEntity ===
           MOVE_PLANNER_LITERAL.FUNCTION
       ) {
-        return this.moveStateProvider.isCriticalSystemPartition() === true;
+        return this.moveStateProvider.isSystemPartitionEntity() === true;
       }
       return false;
     }

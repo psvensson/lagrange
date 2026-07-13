@@ -1,5 +1,6 @@
 import {PriorityPublicationSafetyTopology} from './priority-publication-safety-topology.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 
 const {
   DEFAULT_MIN_REPLICA_COUNT,
@@ -9,7 +10,6 @@ const {
   REMOVE_SAFETY_SQL,
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
-  isPriorityControlPlanePartition,
   normalizePriorityRecoveryOperationPartitionId,
   readAuthoritativeControlPlaneRows,
 } = SHARED;
@@ -208,9 +208,9 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     );
     if (
       !operation ||
-      !isPriorityControlPlanePartition({
+      !classifySystemPartition({
         partitionId,
-      })
+      }).priorityControlPlane
     ) {
       return null;
     }

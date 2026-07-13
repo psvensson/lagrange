@@ -23,10 +23,9 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     WORKFLOW_STEP,
     buildControlPlaneFailurePayload,
     buildReplicaOperationVisibilityReadOptions,
+    classifySystemPartition,
     isCoordinatorOwnedOperationType,
-    isPriorityControlPlanePartition,
     isRetryableControlPlaneError,
-    isSystemTablePartition,
     resolveReplicaOperationVisibilityReadMode,
   } = options;
 
@@ -182,7 +181,8 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
     isPriorityRecoveryIncompleteOperationVisibilityCandidate(operation) {
       if (
         !operation ||
-        !isPriorityControlPlanePartition({partitionId: operation.partitionId})
+        !classifySystemPartition({partitionId: operation.partitionId})
+          .priorityControlPlane
       ) {
         return false;
       }
@@ -211,9 +211,9 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         operation.type === OperationType.REPLACE &&
         sourceNodeId.length > 0 &&
         sourceNodeId === this.nodeId &&
-        isSystemTablePartition({
+        classifySystemPartition({
           partitionId: operation.partitionId,
-        }) &&
+        }).systemTable &&
         PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS.has(
           operation.workflowStep,
         ),

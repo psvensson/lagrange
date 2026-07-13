@@ -1,7 +1,7 @@
 import {NUM, TIME_MS, WORKFLOW_STEP} from '../constants/index.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
 import {
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {
   OperationType,
@@ -563,7 +563,7 @@ function resolveStepTimeoutMs(workflowStep, options = {}) {
   // staleness/reaper calls do not pass the flag, so its real retry budget is unchanged.
   if (
     workflowStep === WORKFLOW_STEP.SYNCING &&
-    (isPriorityControlPlanePartition({partitionId}) ||
+    (classifySystemPartition({partitionId}).priorityControlPlane ||
       options.capSyncingStaleTimeoutForAllPartitions === true)
   ) {
     return Math.min(
