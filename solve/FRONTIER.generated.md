@@ -66,7 +66,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
-| formation-ledger-self-move-blocks-cluster-ops | product | 3 | 1 | — |
+| formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
 | formation-runtime-service-create-lane-budget-starvation | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
