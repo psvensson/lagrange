@@ -1,0 +1,39 @@
+{
+  "id": "partition-class-ladder-census-proof-final",
+  "authoringContractVersion": 1,
+  "statement": "Final bounded Option-5 rung-5 census proof: the committed analyzer reconciles exactly 119 canonical production decision sites and resists alias, injected-wrapper, rebuilt-set, nested-ladder, marker-string, wrong-outcome, row-selection-bypass, and dead-proof-object evasions; owner closure requires the exact frozen three-class order, direct set-derived overlap facts, and a classifier return selected through candidate.matches(canonicalContext), with all gates fail-closed.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "closesCL": [],
+    "parentQuest": "partition-class-ladder-census-proof",
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "b559dfdb3de0b31899d8094be63753e0e40d93d8"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-single-owner-table.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-class-ladder-census-proof-final-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/partition-class-ladder-single-owner-table.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
