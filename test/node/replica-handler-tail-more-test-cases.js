@@ -1073,6 +1073,16 @@ export async function registerReplicaHandlerTailMoreTests({
         false,
         'should not gate REMOVE operations when metadata is explicit',
       );
+      t.equal(
+        handler.shouldGateActivationOnVoterReadiness(
+          ' nodes-p1 ',
+          'missing-op',
+          false,
+          OperationType.ADD,
+        ),
+        false,
+        'should preserve exact critical-set matching for padded partition IDs',
+      );
 
       handler.shutdown();
     });

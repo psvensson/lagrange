@@ -1,0 +1,181 @@
+diff --git a/src/bootstrap/system-partition-classification.js b/src/bootstrap/system-partition-classification.js
+index 7518d441..19077980 100644
+--- a/src/bootstrap/system-partition-classification.js
++++ b/src/bootstrap/system-partition-classification.js
+@@ -171,6 +171,10 @@ function classifySystemPartition(options = {}) {
+   });
+ }
+ 
++function isBootstrapCriticalSystemPartitionId(partitionId) {
++  return CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
++}
++
+ function isSystemTablePartition(options = {}) {
+   return classifySystemPartition(options).systemTable;
+ }
+@@ -447,6 +451,7 @@ export {
+   buildPartitionRowByPartitionId,
+   classifySystemPartition,
+   getPartitionRowFromCache,
++  isBootstrapCriticalSystemPartitionId,
+   isCriticalTransportControlPlanePartition,
+   isCriticalTransportTargetAddress,
+   isOperationLedgerPartition,
+diff --git a/src/node/replica-handler-class.js b/src/node/replica-handler-class.js
+index d2a88b4e..eafb6e4e 100644
+--- a/src/node/replica-handler-class.js
++++ b/src/node/replica-handler-class.js
+@@ -22,7 +22,7 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
+ import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
+ import {NUM} from '../constants/index.js';
+ import {
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+ } from '../bootstrap/system-partition-classification.js';
+ import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
+ import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+@@ -188,11 +188,11 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
+   SYSTEM_TABLE_HYDRATION_SQL,
+   SYSTEM_TABLE_NAME,
+   TABLE_METADATA_MISSING_PREFIX,
++  classifySystemPartition,
+   createControlPlaneRuntimeBundle,
+   createSystemMetadataGatewayRequiredError,
+   fs,
+   isFreshPartitionBootstrapWindow,
+-  isPriorityControlPlanePartition,
+   isReplicaJoinNodeViable,
+   path,
+   partitionMetadataMissingError,
+diff --git a/src/node/replica-handler-runtime-metadata-methods.js b/src/node/replica-handler-runtime-metadata-methods.js
+index df4d3814..24ed51e1 100644
+--- a/src/node/replica-handler-runtime-metadata-methods.js
++++ b/src/node/replica-handler-runtime-metadata-methods.js
+@@ -33,10 +33,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
+     SYSTEM_TABLE_HYDRATION_SQL,
+     SYSTEM_TABLE_NAME,
+     TABLE_METADATA_MISSING_PREFIX,
++    classifySystemPartition,
+     createControlPlaneRuntimeBundle,
+     createSystemMetadataGatewayRequiredError,
+     isFreshPartitionBootstrapWindow,
+-    isPriorityControlPlanePartition,
+     isReplicaJoinNodeViable,
+     partitionMetadataMissingError,
+   } = options;
+@@ -176,10 +176,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
+         hydratedMetadata?.serviceRows || [],
+       );
+       const shouldFilterUnavailablePeerTopology =
+-        isPriorityControlPlanePartition({
++        classifySystemPartition({
+           partitionId,
+           partitionRow: partition,
+-        });
++        }).priorityControlPlane;
+       const now = Date.now();
+       const addressManager = AddressManager.getInstance();
+       const replicaIds = [];
+diff --git a/src/node/replica-handler-transition-policy.js b/src/node/replica-handler-transition-policy.js
+index 1a10a695..227c7833 100644
+--- a/src/node/replica-handler-transition-policy.js
++++ b/src/node/replica-handler-transition-policy.js
+@@ -6,9 +6,6 @@
+  * Requirements: 10.2, 3.1
+  */
+ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+-import {
+-  CRITICAL_SYSTEM_PARTITION_IDS,
+-} from '../bootstrap/system-partition-classification.js';
+ import {STATE} from '../constants/index.js';
+ import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
+ import {isNodeRecordReady} from './node-readiness-policy.js';
+@@ -142,7 +139,6 @@ function isReplicaJoinNodeViable(nodeRow, options = {}) {
+ }
+ 
+ export {
+-  CRITICAL_SYSTEM_PARTITION_IDS,
+   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
+   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
+   METADATA_RESOLUTION_POLL_INTERVAL_MS,
+diff --git a/src/node/replica-handler-voter-readiness-methods.js b/src/node/replica-handler-voter-readiness-methods.js
+index 9636feb5..08fbf412 100644
+--- a/src/node/replica-handler-voter-readiness-methods.js
++++ b/src/node/replica-handler-voter-readiness-methods.js
+@@ -8,12 +8,14 @@
+  * Requirements: 10.2, 3.1
+  */
+ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
++import {
++  isBootstrapCriticalSystemPartitionId,
++} from '../bootstrap/system-partition-classification.js';
+ import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+ import {REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
+ import {ReplicaStatus} from '../rebalancer/replica-status.js';
+ import {REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
+ import {
+-  CRITICAL_SYSTEM_PARTITION_IDS,
+   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
+   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
+   VOTER_READY_CHECK_INTERVAL_MS,
+@@ -43,7 +45,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
+     ) {
+       if (
+         typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
+-        !CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId)
++        !isBootstrapCriticalSystemPartitionId(partitionId)
+       ) {
+         return false;
+       }
+diff --git a/test/bootstrap/system-partition-classification-owner.test.js b/test/bootstrap/system-partition-classification-owner.test.js
+index 94cb44c1..3d1fb278 100644
+--- a/test/bootstrap/system-partition-classification-owner.test.js
++++ b/test/bootstrap/system-partition-classification-owner.test.js
+@@ -6,6 +6,7 @@ import {
+   SYSTEM_PARTITION_CLASS,
+   SYSTEM_PARTITION_CLASS_ROWS,
+   classifySystemPartition,
++  isBootstrapCriticalSystemPartitionId,
+   isPriorityControlPlanePartition,
+   isSystemTablePartition,
+   resolvePartitionTableId,
+@@ -104,6 +105,17 @@ test('ordered class preserves all overlapping membership facts', (t) => {
+   t.end();
+ });
+ 
++test('bootstrap-critical ID predicate preserves exact membership', (t) => {
++  const criticalPartitionId = partitionId(PRIORITY_TABLE_ID, 1);
++  t.equal(isBootstrapCriticalSystemPartitionId(criticalPartitionId), true);
++  t.equal(
++    isBootstrapCriticalSystemPartitionId(` ${criticalPartitionId} `),
++    false,
++  );
++  t.equal(isBootstrapCriticalSystemPartitionId(null), false);
++  t.end();
++});
++
+ test('partition row and snake-case fields have canonical precedence', (t) => {
+   const outcome = classifySystemPartition({
+     partitionId: partitionId(PRIORITY_TABLE_ID, 2),
+diff --git a/test/node/replica-handler-tail-more-test-cases.js b/test/node/replica-handler-tail-more-test-cases.js
+index 95315a5f..351bbed5 100644
+--- a/test/node/replica-handler-tail-more-test-cases.js
++++ b/test/node/replica-handler-tail-more-test-cases.js
+@@ -1073,6 +1073,16 @@ export async function registerReplicaHandlerTailMoreTests({
+         false,
+         'should not gate REMOVE operations when metadata is explicit',
+       );
++      t.equal(
++        handler.shouldGateActivationOnVoterReadiness(
++          ' nodes-p1 ',
++          'missing-op',
++          false,
++          OperationType.ADD,
++        ),
++        false,
++        'should preserve exact critical-set matching for padded partition IDs',
++      );
+ 
+       handler.shutdown();
+     });
+

@@ -171,6 +171,10 @@ function classifySystemPartition(options = {}) {
   });
 }
 
+function isBootstrapCriticalSystemPartitionId(partitionId) {
+  return CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
+}
+
 function isSystemTablePartition(options = {}) {
   return classifySystemPartition(options).systemTable;
 }
@@ -447,6 +451,7 @@ export {
   buildPartitionRowByPartitionId,
   classifySystemPartition,
   getPartitionRowFromCache,
+  isBootstrapCriticalSystemPartitionId,
   isCriticalTransportControlPlanePartition,
   isCriticalTransportTargetAddress,
   isOperationLedgerPartition,

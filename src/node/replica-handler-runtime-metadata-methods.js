@@ -33,10 +33,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
     SYSTEM_TABLE_HYDRATION_SQL,
     SYSTEM_TABLE_NAME,
     TABLE_METADATA_MISSING_PREFIX,
+    classifySystemPartition,
     createControlPlaneRuntimeBundle,
     createSystemMetadataGatewayRequiredError,
     isFreshPartitionBootstrapWindow,
-    isPriorityControlPlanePartition,
     isReplicaJoinNodeViable,
     partitionMetadataMissingError,
   } = options;
@@ -176,10 +176,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         hydratedMetadata?.serviceRows || [],
       );
       const shouldFilterUnavailablePeerTopology =
-        isPriorityControlPlanePartition({
+        classifySystemPartition({
           partitionId,
           partitionRow: partition,
-        });
+        }).priorityControlPlane;
       const now = Date.now();
       const addressManager = AddressManager.getInstance();
       const replicaIds = [];

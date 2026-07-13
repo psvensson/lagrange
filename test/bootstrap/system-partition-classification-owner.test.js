@@ -6,6 +6,7 @@ import {
   SYSTEM_PARTITION_CLASS,
   SYSTEM_PARTITION_CLASS_ROWS,
   classifySystemPartition,
+  isBootstrapCriticalSystemPartitionId,
   isPriorityControlPlanePartition,
   isSystemTablePartition,
   resolvePartitionTableId,
@@ -101,6 +102,17 @@ test('ordered class preserves all overlapping membership facts', (t) => {
     t.same(outcome, entry.expected, entry.name);
     t.ok(Object.isFrozen(outcome), `${entry.name} outcome is frozen`);
   }
+  t.end();
+});
+
+test('bootstrap-critical ID predicate preserves exact membership', (t) => {
+  const criticalPartitionId = partitionId(PRIORITY_TABLE_ID, 1);
+  t.equal(isBootstrapCriticalSystemPartitionId(criticalPartitionId), true);
+  t.equal(
+    isBootstrapCriticalSystemPartitionId(` ${criticalPartitionId} `),
+    false,
+  );
+  t.equal(isBootstrapCriticalSystemPartitionId(null), false);
   t.end();
 });
 

@@ -6,9 +6,6 @@
  * Requirements: 10.2, 3.1
  */
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {
-  CRITICAL_SYSTEM_PARTITION_IDS,
-} from '../bootstrap/system-partition-classification.js';
 import {STATE} from '../constants/index.js';
 import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
 import {isNodeRecordReady} from './node-readiness-policy.js';
@@ -142,7 +139,6 @@ function isReplicaJoinNodeViable(nodeRow, options = {}) {
 }
 
 export {
-  CRITICAL_SYSTEM_PARTITION_IDS,
   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,

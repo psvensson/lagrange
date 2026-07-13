@@ -8,12 +8,14 @@
  * Requirements: 10.2, 3.1
  */
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  isBootstrapCriticalSystemPartitionId,
+} from '../bootstrap/system-partition-classification.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {REMOVE_LIKE_TERMINAL_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
 import {
-  CRITICAL_SYSTEM_PARTITION_IDS,
   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
   VOTER_READY_CHECK_INTERVAL_MS,
@@ -43,7 +45,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
     ) {
       if (
         typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
-        !CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId)
+        !isBootstrapCriticalSystemPartitionId(partitionId)
       ) {
         return false;
       }
