@@ -28,17 +28,18 @@
  * why does that cure or lane stop where it stops?
  */
 import {OperationType} from './replica-status.js';
-import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-import {MOVE_REASON, REBALANCER_MOVE_TYPE} from './rebalancer-constants.js';
-import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
+import {
+  CONCURRENT_CREATE_BUDGET_SCOPE,
+  MOVE_REASON,
+  REBALANCER_MOVE_TYPE,
+} from './rebalancer-constants.js';
 import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
-  isPriorityRecoveryEmergencyPartition,
+  classifyPriorityRecoveryAdmissionPartitionClass,
 } from '../control-plane/priority-recovery-admission-constants.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
-const {CONCURRENT_CREATE_BUDGET_SCOPE} = REBALANCE_COORDINATOR_SHARED;
 
 // The named placement conditions a planner can detect. Detection (count
 // diffs, health reads, target membership) is caller mechanism; the
@@ -163,44 +164,11 @@ function normalizePlacementCureMoveType(moveType) {
   return normalized.length === 0 ? null : normalized;
 }
 
-/**
- * Classify a partition for cure admission. The classification ORDER is the
- * owned semantic: not priority (or no partition id) -> NON_PRIORITY,
- * emergency before ordinary — an emergency partition is never counted or
- * gated in the ordinary lane. Predicates default to the global classifiers;
- * callers with scoped views (cache-backed planner rows, tracked recovery
- * membership) inject their own.
- * @param {*} partitionId
- * @param {Object} [predicates]
- * @param {function(string): boolean} [predicates.isPriorityPartition]
- * @param {function(string): boolean} [predicates.isEmergencyPriorityPartition]
- * @return {string} One of PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.
- */
-function classifyPlacementCureAdmissionPartitionClass(
-  partitionId,
-  predicates = {},
-) {
-  const isPriorityPartition =
-    typeof predicates.isPriorityPartition === LOCAL_STR_FUNCTION ?
-      predicates.isPriorityPartition :
-      (candidatePartitionId) =>
-        isPriorityControlPlanePartition({partitionId: candidatePartitionId});
-  const isEmergencyPriorityPartition =
-    typeof predicates.isEmergencyPriorityPartition === LOCAL_STR_FUNCTION ?
-      predicates.isEmergencyPriorityPartition :
-      isPriorityRecoveryEmergencyPartition;
-  const normalizedPartitionId = String(partitionId || '').trim();
-  if (
-    normalizedPartitionId.length === 0 ||
-    isPriorityPartition(normalizedPartitionId) !== true
-  ) {
-    return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.NON_PRIORITY;
-  }
-  if (isEmergencyPriorityPartition(normalizedPartitionId) === true) {
-    return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY;
-  }
-  return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY;
-}
+// The admission partition-class classifier lives with the lane vocabulary in
+// priority-recovery-admission-constants.js (the admission-plan owner sits in
+// that module's import tree; importing it from here would cycle through
+// rebalance-coordinator-shared). Re-exported below — rebalancer consumers
+// read the whole cure-typing relation from this owner surface.
 
 /**
  * The cure budget-scope rows: which concurrent-create budget a cure move
@@ -246,6 +214,42 @@ function resolvePlacementCureBudgetScope({
   return CONCURRENT_CREATE_BUDGET_SCOPE.PRIORITY_ADD;
 }
 
+/**
+ * Resolve the cure budget scope against a live priority-recovery admission
+ * plan: the plan owns the overflow lane state (usesEmergencyPriorityOverflow
+ * — emergency recovery active AND the partition classifies emergency under
+ * the plan's own predicates); this resolves the declared rows against it.
+ * The class conjunct uses the global emergency classifier while the overflow
+ * bit uses the plan's — identical in production (both delegate to the same
+ * table-id set); a divergence is expressible only with inconsistent injected
+ * predicates.
+ * @param {Object} params
+ * @param {*} params.moveType
+ * @param {*} params.partitionId
+ * @param {Object|null} params.admissionPlan
+ * @param {function(string): boolean} [params.isPriorityPartition]
+ * @return {string} One of CONCURRENT_CREATE_BUDGET_SCOPE.
+ */
+function resolvePlacementCureBudgetScopeFromAdmissionPlan({
+  moveType,
+  partitionId,
+  admissionPlan,
+  isPriorityPartition,
+}) {
+  const partitionClass = classifyPriorityRecoveryAdmissionPartitionClass(
+    partitionId,
+    {isPriorityPartition},
+  );
+  return resolvePlacementCureBudgetScope({
+    moveType,
+    partitionClass,
+    usesEmergencyPriorityOverflow:
+      typeof admissionPlan?.usesEmergencyPriorityOverflow ===
+        LOCAL_STR_FUNCTION &&
+      admissionPlan.usesEmergencyPriorityOverflow(partitionId) === true,
+  });
+}
+
 // Named row: the cure move types that occupy the ordinary-priority serial
 // lane (one recovery reconfiguration at a time). ADD always occupies it; a
 // REPLACE occupies it only until its remove-dispatch phase (the drain no
@@ -272,9 +276,13 @@ export {
   ORDINARY_SERIAL_LANE_CURE_MOVE_TYPES,
   PLACEMENT_CURE_BY_CONDITION,
   PLACEMENT_CURE_CONDITION,
-  classifyPlacementCureAdmissionPartitionClass,
+  // Re-exported lane vocabulary: consumers of the classifier read its result
+  // against these values without re-importing the control-plane home.
+  PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
+  classifyPriorityRecoveryAdmissionPartitionClass,
   classifyPriorityRecoveryFollowUpCureCondition,
   isOrdinarySerialLaneCureMove,
   resolvePlacementCure,
   resolvePlacementCureBudgetScope,
+  resolvePlacementCureBudgetScopeFromAdmissionPlan,
 };

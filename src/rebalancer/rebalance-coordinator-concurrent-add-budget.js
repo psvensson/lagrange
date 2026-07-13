@@ -1,4 +1,9 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  classifyPriorityRecoveryAdmissionPartitionClass,
+  resolvePlacementCureBudgetScope,
+  resolvePlacementCureBudgetScopeFromAdmissionPlan,
+} from './replica-placement-cure-policy.js';
 
 const LOCAL_STR_ADD = 'add';
 const LOCAL_STR_FUNCTION = 'function';
@@ -73,28 +78,30 @@ function resolveConcurrentCreateBudgetScope(
   normalizedMoveType,
   budgetContext = {},
 ) {
-  if (normalizedMoveType === OperationType.REMOVE) {
-    return CONCURRENT_CREATE_BUDGET_SCOPE.REMOVE;
+  // Scope selection is an owner row (replica-placement-cure-policy.js);
+  // this resolver owns only the lazy plan read: the tracked admission plan
+  // is consulted exactly when a priority-class creation needs the overflow
+  // lane state, as before.
+  const partitionId = String(budgetContext?.partitionId || '').trim();
+  const isPriorityPartition =
+    coordinator.isPriorityControlPlanePartition.bind(coordinator);
+  const scopeWithoutOverflow = resolvePlacementCureBudgetScope({
+    moveType: normalizedMoveType,
+    partitionClass: classifyPriorityRecoveryAdmissionPartitionClass(
+      partitionId,
+      {isPriorityPartition},
+    ),
+    usesEmergencyPriorityOverflow: false,
+  });
+  if (scopeWithoutOverflow !== CONCURRENT_CREATE_BUDGET_SCOPE.PRIORITY_ADD) {
+    return scopeWithoutOverflow;
   }
-  if (
-    !shouldUsePriorityConcurrentAddLane(
-      coordinator,
-      normalizedMoveType,
-      budgetContext,
-    )
-  ) {
-    return CONCURRENT_CREATE_BUDGET_SCOPE.ADD;
-  }
-  const priorityRecoveryAdmissionPlan =
-    getPriorityRecoveryAdmissionPlan(coordinator);
-  if (
-    priorityRecoveryAdmissionPlan.usesEmergencyPriorityOverflow(
-      budgetContext?.partitionId,
-    ) === true
-  ) {
-    return CONCURRENT_CREATE_BUDGET_SCOPE.EMERGENCY_PRIORITY_ADD;
-  }
-  return CONCURRENT_CREATE_BUDGET_SCOPE.PRIORITY_ADD;
+  return resolvePlacementCureBudgetScopeFromAdmissionPlan({
+    moveType: normalizedMoveType,
+    partitionId,
+    admissionPlan: getPriorityRecoveryAdmissionPlan(coordinator),
+    isPriorityPartition,
+  });
 }
 
 function shouldBypassConcurrentBudgetEmptyBackoff(
@@ -200,8 +207,10 @@ function getPriorityRecoveryAdmissionPlan(coordinator) {
     maxConcurrentAdds: coordinator.config.maxConcurrentAdds,
     isPriorityPartition: (partitionId) =>
       coordinator.isPriorityControlPlanePartition(partitionId),
-    isEmergencyPriorityPartition: (partitionId) =>
-      coordinator.isEmergencyPriorityControlPlanePartition(partitionId),
+    // Reference-pass, not a re-derived conjunct: the plan owner resolves
+    // lane classes through the owner classification.
+    isEmergencyPriorityPartition:
+      coordinator.isEmergencyPriorityControlPlanePartition.bind(coordinator),
   });
 }
 

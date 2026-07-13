@@ -1,6 +1,11 @@
-import {resolvePartitionTableId} from '../bootstrap/system-partition-classification.js';
+import {
+  isPriorityControlPlanePartition,
+  resolvePartitionTableId,
+} from '../bootstrap/system-partition-classification.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {TIME_MS} from '../constants/index.js';
+
+const LOCAL_STR_FUNCTION = 'function';
 
 const PRIORITY_RECOVERY_LEARNER_HOLD_REASON_NOT_RECOVERY_ELIGIBLE =
   'not_control_plane_recovery_eligible';
@@ -52,6 +57,49 @@ function isPriorityRecoveryEmergencyPartition(partitionId) {
     PRIORITY_RECOVERY_EMERGENCY_PARTITION_TABLE_IDS.has(tableId);
 }
 
+/**
+ * Classify a partition for priority-recovery admission (quest
+ * cure-typing-single-owner-table: the cure-typing owner family's lane
+ * classifier — re-exported by src/rebalancer/replica-placement-cure-policy.js
+ * for rebalancer consumers; it lives here, the lane vocabulary home, because
+ * the admission-plan owner sits in this module's import tree). The
+ * classification ORDER is the owned semantic: not priority (or no partition
+ * id) -> NON_PRIORITY, emergency before ordinary — an emergency partition is
+ * never counted or gated in the ordinary lane. Predicates default to the
+ * global classifiers; callers with scoped views (cache-backed planner rows,
+ * tracked recovery membership) inject their own.
+ * @param {*} partitionId
+ * @param {Object} [predicates]
+ * @param {function(string): boolean} [predicates.isPriorityPartition]
+ * @param {function(string): boolean} [predicates.isEmergencyPriorityPartition]
+ * @return {string} One of PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.
+ */
+function classifyPriorityRecoveryAdmissionPartitionClass(
+  partitionId,
+  predicates = {},
+) {
+  const isPriorityPartition =
+    typeof predicates.isPriorityPartition === LOCAL_STR_FUNCTION ?
+      predicates.isPriorityPartition :
+      (candidatePartitionId) =>
+        isPriorityControlPlanePartition({partitionId: candidatePartitionId});
+  const isEmergencyPriorityPartition =
+    typeof predicates.isEmergencyPriorityPartition === LOCAL_STR_FUNCTION ?
+      predicates.isEmergencyPriorityPartition :
+      isPriorityRecoveryEmergencyPartition;
+  const normalizedPartitionId = String(partitionId || '').trim();
+  if (
+    normalizedPartitionId.length === 0 ||
+    isPriorityPartition(normalizedPartitionId) !== true
+  ) {
+    return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.NON_PRIORITY;
+  }
+  if (isEmergencyPriorityPartition(normalizedPartitionId) === true) {
+    return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY;
+  }
+  return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY;
+}
+
 export {
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
   PRIORITY_RECOVERY_ADMISSION_DECISION_REASON,
@@ -67,5 +115,6 @@ export {
   PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_CLUSTER_MEMBER_UNHEALTHY,
   PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_READINESS_PROJECTION_EXCLUDED,
   PRIORITY_RECOVERY_PUBLICATION_INCLUSION_REASON_RECOVERY_ELIGIBLE_PROJECTION_INCLUDED,
+  classifyPriorityRecoveryAdmissionPartitionClass,
   isPriorityRecoveryEmergencyPartition,
 };

@@ -1,5 +1,9 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
+  classifyPriorityRecoveryAdmissionPartitionClass,
+} from './replica-placement-cure-policy.js';
+import {
   PRIORITY_ADD_ADMISSION_PRESSURE_ACTION,
   PRIORITY_ADD_ADMISSION_PRESSURE_ACTION_BY_STATE,
   PRIORITY_DEFERRED_OBSERVATION_PRESSURE_ALLOWED_STATES,
@@ -58,9 +62,18 @@ function buildPriorityDeferredObservationPressureEvidence(coordinator, options =
   return Object.freeze({
     priorityRecoveryPartitionActive:
       admissionEvidence.priorityRecoveryPartitionActive === true,
+    // Lane classification is an owner row (replica-placement-cure-policy.js);
+    // emergency partitions classify emergency because they are also priority
+    // (the emergency table set is a subset of the priority set).
     emergencyPriorityPartition:
-      partitionId.length > 0 &&
-      coordinator.isEmergencyPriorityControlPlanePartition(partitionId),
+      classifyPriorityRecoveryAdmissionPartitionClass(partitionId, {
+        isPriorityPartition:
+          coordinator.isPriorityControlPlanePartition.bind(coordinator),
+        isEmergencyPriorityPartition:
+          coordinator.isEmergencyPriorityControlPlanePartition.bind(
+            coordinator,
+          ),
+      }) === PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY,
     backpressured: pressureDecision?.summary?.backpressured === true,
   });
 }
@@ -125,10 +138,16 @@ function buildPriorityAddAdmissionPressureEvidence(coordinator, options = {}) {
       false;
   const planningEvidence =
     resolvePriorityRecoveryPlanningEvidence(coordinator, partitionId);
+  // Lane classification is an owner row (replica-placement-cure-policy.js);
+  // the recovery-active conjunct stays evidence mechanism.
   const emergencyPriorityRecoveryPartition =
-    partitionId.length > 0 &&
     priorityRecoveryAdmissionPlan?.emergencyRecoveryActive === true &&
-    coordinator.isEmergencyPriorityControlPlanePartition(partitionId);
+    classifyPriorityRecoveryAdmissionPartitionClass(partitionId, {
+      isPriorityPartition:
+        coordinator.isPriorityControlPlanePartition.bind(coordinator),
+      isEmergencyPriorityPartition:
+        coordinator.isEmergencyPriorityControlPlanePartition.bind(coordinator),
+    }) === PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY;
   const priorityRecoveryActive =
     priorityRecoveryAdmissionPlan?.recoveryActive === true ||
     planningEvidence.recoveryActive === true;

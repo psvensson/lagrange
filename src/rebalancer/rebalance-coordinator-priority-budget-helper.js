@@ -1,5 +1,9 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
+  classifyPriorityRecoveryAdmissionPartitionClass,
+} from './replica-placement-cure-policy.js';
+import {
   shouldAllowPriorityRecoveryDeferredObservation,
 } from './rebalance-coordinator-pressure-helper.js';
 import {
@@ -50,18 +54,32 @@ function buildConcurrentAddCountByPriorityClass(coordinator, operations = []) {
       continue;
     }
     const partitionId = getAddBudgetOperationPartitionId(coordinator, operation);
+    // Lane classification is an owner row (replica-placement-cure-policy.js);
+    // this helper owns only the counting.
+    const partitionClass = classifyPriorityRecoveryAdmissionPartitionClass(
+      partitionId,
+      {
+        isPriorityPartition:
+          coordinator.isPriorityControlPlanePartition.bind(coordinator),
+        isEmergencyPriorityPartition:
+          coordinator.isEmergencyPriorityControlPlanePartition.bind(
+            coordinator,
+          ),
+      },
+    );
     if (
-      partitionId.length > 0 &&
-      coordinator.isPriorityControlPlanePartition(partitionId)
+      partitionClass ===
+      PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY
     ) {
-      if (coordinator.isEmergencyPriorityControlPlanePartition(partitionId)) {
-        emergencyPriorityCount += 1;
-      } else {
-        ordinaryPriorityCount += 1;
-      }
-      continue;
+      emergencyPriorityCount += 1;
+    } else if (
+      partitionClass ===
+      PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY
+    ) {
+      ordinaryPriorityCount += 1;
+    } else {
+      nonPriorityCount += 1;
     }
-    nonPriorityCount += 1;
   }
   return {
     priorityCount: ordinaryPriorityCount + emergencyPriorityCount,

@@ -356,8 +356,11 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
         isPriorityControlPlanePartition({
           partitionId,
         }),
-      isEmergencyPriorityPartition: (partitionId) =>
-        this.isEmergencyPriorityControlPlanePartition(partitionId),
+      // Reference-pass, not a re-derived conjunct: the plan owner resolves
+      // lane classes through the owner classification; this wiring only
+      // names which emergency predicate that classification uses.
+      isEmergencyPriorityPartition:
+        this.isEmergencyPriorityControlPlanePartition.bind(this),
     });
   }
 

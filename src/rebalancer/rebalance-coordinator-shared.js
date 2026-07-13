@@ -81,6 +81,7 @@ import {
 } from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
 import {
+  CONCURRENT_CREATE_BUDGET_SCOPE,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -173,12 +174,6 @@ const REPLICA_ID_SEPARATOR = '-r';
 const REPLICA_ID_START_INDEX = 1;
 const DEFAULT_AMPLIFICATION_FACTOR = 1;
 
-const CONCURRENT_CREATE_BUDGET_SCOPE = Object.freeze({
-  ADD: 'add',
-  PRIORITY_ADD: 'priority_add',
-  EMERGENCY_PRIORITY_ADD: 'emergency_priority_add',
-  REMOVE: 'remove',
-});
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
   routingReadinessDimension:

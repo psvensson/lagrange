@@ -35,6 +35,17 @@ const REBALANCER_MOVE_TYPE = Object.freeze({
   REPLACE: 'replace',
 });
 
+// The concurrent-create budget lanes (moved here from
+// rebalance-coordinator-shared.js: the cure-typing owner reads it and the
+// aggregate object cannot be destructured at module scope from inside its
+// own import cycle).
+const CONCURRENT_CREATE_BUDGET_SCOPE = Object.freeze({
+  ADD: 'add',
+  PRIORITY_ADD: 'priority_add',
+  EMERGENCY_PRIORITY_ADD: 'emergency_priority_add',
+  REMOVE: 'remove',
+});
+
 const REBALANCER_CONCURRENT_BUDGET_READ_MODE = Object.freeze({
   CACHE_ONLY: 'cache_only',
   OWNER_RPC_RECHECK_ON_SATURATION: 'owner_rpc_recheck_on_saturation',
@@ -489,6 +500,7 @@ const OPERATION_TRANSITION_REASON = Object.freeze({
 });
 
 export {
+  CONCURRENT_CREATE_BUDGET_SCOPE,
   MOVE_REASON,
   OPERATION_TRANSITION_REASON,
   PLACEMENT_DEGRADED_REASON,

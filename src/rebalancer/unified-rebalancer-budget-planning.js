@@ -2,6 +2,10 @@ import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {orderLedgerQuorumCureMovesFirst} from './operation-ledger-hold-policy.js';
 import {
+  PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
+  classifyPriorityRecoveryAdmissionPartitionClass,
+} from './replica-placement-cure-policy.js';
+import {
   applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods,
 } from './unified-rebalancer-priority-recovery-follow-up-decisions.js';
 import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalancer-follow-up-shared.js';
@@ -303,9 +307,24 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
 
   async getOrdinaryPriorityRecoverySerialGateSnapshot(moves = []) {
     const partitionId = this.resolvePriorityRecoveryBudgetPartitionId(moves);
+    // Ordinary-lane membership is an owner row
+    // (replica-placement-cure-policy.js). The conjunct is deliberately
+    // mixed-scope and preserved exactly: priority-ness is THIS entity's
+    // planning question (arg-ignoring predicate) while emergency-ness follows
+    // the resolved budget partition id, which can differ on cross-partition
+    // follow-ups.
+    const partitionClass = classifyPriorityRecoveryAdmissionPartitionClass(
+      partitionId,
+      {
+        isPriorityPartition: () =>
+          this.isControlPlanePriorityPartition() === true,
+        isEmergencyPriorityPartition:
+          this.isEmergencyPriorityControlPlanePartition.bind(this),
+      },
+    );
     if (
-      !this.isControlPlanePriorityPartition() ||
-      this.isEmergencyPriorityControlPlanePartition(partitionId) ||
+      partitionClass !==
+        PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY ||
       !this.isPriorityControlPlaneRecoveryActive() ||
       !this.hasPriorityBudgetBypassCandidateMove(moves) ||
       !this.rebalanceCoordinator ||

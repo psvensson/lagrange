@@ -1,9 +1,12 @@
-import {isPriorityRecoveryEmergencyPartition} from './priority-recovery-admission-constants.js';
+import {PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS} from './priority-recovery-admission-constants.js';
 import {normalizePriorityRecoveryStringList} from './priority-recovery-helpers.js';
 import {
-  OperationType,
   isReplaceRemoveDispatchPhase,
 } from '../rebalancer/replica-status.js';
+import {
+  classifyPriorityRecoveryAdmissionPartitionClass,
+  isOrdinarySerialLaneCureMove,
+} from '../rebalancer/replica-placement-cure-policy.js';
 import {
   LOCAL_STR_EMPTY,
 } from './priority-recovery-snapshot-contract.js';
@@ -15,10 +18,15 @@ import {
   isPriorityRecoveryOperationContextTerminal,
 } from './priority-recovery-operation-context-state.js';
 
+// Ordinary serial lane membership is an owner row
+// (replica-placement-cure-policy.js): tracked recovery membership is this
+// domain's priority predicate, and ORDINARY_PRIORITY is exactly
+// tracked-and-not-emergency under the owner's classification order.
 function isPriorityRecoveryOrdinarySerialLanePartitionId(partitionId) {
   return (
-    isPriorityRecoveryTrackedPartitionId(partitionId) &&
-    isPriorityRecoveryEmergencyPartition(partitionId) !== true
+    classifyPriorityRecoveryAdmissionPartitionClass(partitionId, {
+      isPriorityPartition: isPriorityRecoveryTrackedPartitionId,
+    }) === PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY
   );
 }
 
@@ -35,13 +43,9 @@ function isPriorityRecoveryOrdinarySerialLaneOperationContext(
   if (isPriorityRecoveryOperationContextTerminal(operationContext)) {
     return false;
   }
-  const operationType = String(operationContext.type || '').toUpperCase();
-  if (operationType === OperationType.ADD) {
-    return true;
-  }
-  return (
-    operationType === OperationType.REPLACE &&
-    isReplaceRemoveDispatchPhase(operationContext) !== true
+  return isOrdinarySerialLaneCureMove(
+    operationContext.type,
+    isReplaceRemoveDispatchPhase(operationContext) === true,
   );
 }
 
@@ -58,13 +62,9 @@ function isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
   ) {
     return false;
   }
-  const operationType = String(operationContext.type || '').toUpperCase();
-  if (operationType === OperationType.ADD) {
-    return true;
-  }
-  return (
-    operationType === OperationType.REPLACE &&
-    isReplaceRemoveDispatchPhase(operationContext) !== true
+  return isOrdinarySerialLaneCureMove(
+    operationContext.type,
+    isReplaceRemoveDispatchPhase(operationContext) === true,
   );
 }
 

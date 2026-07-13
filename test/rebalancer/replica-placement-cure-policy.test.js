@@ -12,11 +12,12 @@ import {
   ORDINARY_SERIAL_LANE_CURE_MOVE_TYPES,
   PLACEMENT_CURE_BY_CONDITION,
   PLACEMENT_CURE_CONDITION,
-  classifyPlacementCureAdmissionPartitionClass,
+  classifyPriorityRecoveryAdmissionPartitionClass,
   classifyPriorityRecoveryFollowUpCureCondition,
   isOrdinarySerialLaneCureMove,
   resolvePlacementCure,
   resolvePlacementCureBudgetScope,
+  resolvePlacementCureBudgetScopeFromAdmissionPlan,
 } from '../../src/rebalancer/replica-placement-cure-policy.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 
@@ -131,28 +132,28 @@ test('the follow-up condition classifier owns the 2b5875b0 conjunct', (t) => {
 
 test('the admission partition-class classifier owns its order', (t) => {
   t.equal(
-    classifyPlacementCureAdmissionPartitionClass(LEDGER_PARTITION_ID),
+    classifyPriorityRecoveryAdmissionPartitionClass(LEDGER_PARTITION_ID),
     PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY,
     'the operation ledger classifies emergency before ordinary');
   t.equal(
-    classifyPlacementCureAdmissionPartitionClass(PUBLICATIONS_PARTITION_ID),
+    classifyPriorityRecoveryAdmissionPartitionClass(PUBLICATIONS_PARTITION_ID),
     PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY);
   t.equal(
-    classifyPlacementCureAdmissionPartitionClass(USER_PARTITION_ID),
+    classifyPriorityRecoveryAdmissionPartitionClass(USER_PARTITION_ID),
     PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.NON_PRIORITY);
   t.equal(
-    classifyPlacementCureAdmissionPartitionClass(''),
+    classifyPriorityRecoveryAdmissionPartitionClass(''),
     PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.NON_PRIORITY,
     'no partition id never classifies into a priority lane');
   t.equal(
-    classifyPlacementCureAdmissionPartitionClass('p-1', {
+    classifyPriorityRecoveryAdmissionPartitionClass('p-1', {
       isPriorityPartition: () => true,
       isEmergencyPriorityPartition: () => false,
     }),
     PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY,
     'priority without emergency is the ordinary lane');
   t.equal(
-    classifyPlacementCureAdmissionPartitionClass('p-1', {
+    classifyPriorityRecoveryAdmissionPartitionClass('p-1', {
       isPriorityPartition: () => false,
       isEmergencyPriorityPartition: () => true,
     }),
@@ -209,6 +210,52 @@ test('the cure budget-scope rows keep their sealed outcomes', (t) => {
     scope(OperationType.ADD, 'no_such_class', true),
     CONCURRENT_CREATE_BUDGET_SCOPE.ADD,
     'an unknown partition class degrades to the plain add budget');
+  t.end();
+});
+
+test('the plan-aware scope resolver consumes the plan overflow state', (t) => {
+  const emergencyPlan = {usesEmergencyPriorityOverflow: () => true};
+  const idlePlan = {usesEmergencyPriorityOverflow: () => false};
+  t.equal(
+    resolvePlacementCureBudgetScopeFromAdmissionPlan({
+      moveType: OperationType.ADD,
+      partitionId: LEDGER_PARTITION_ID,
+      admissionPlan: emergencyPlan,
+    }),
+    CONCURRENT_CREATE_BUDGET_SCOPE.EMERGENCY_PRIORITY_ADD);
+  t.equal(
+    resolvePlacementCureBudgetScopeFromAdmissionPlan({
+      moveType: OperationType.ADD,
+      partitionId: LEDGER_PARTITION_ID,
+      admissionPlan: idlePlan,
+    }),
+    CONCURRENT_CREATE_BUDGET_SCOPE.PRIORITY_ADD,
+    'without active overflow the emergency partition draws the priority ' +
+      'budget');
+  t.equal(
+    resolvePlacementCureBudgetScopeFromAdmissionPlan({
+      moveType: OperationType.ADD,
+      partitionId: USER_PARTITION_ID,
+      admissionPlan: emergencyPlan,
+    }),
+    CONCURRENT_CREATE_BUDGET_SCOPE.ADD,
+    'a non-priority partition never draws a priority scope, whatever the ' +
+      'plan claims');
+  t.equal(
+    resolvePlacementCureBudgetScopeFromAdmissionPlan({
+      moveType: OperationType.REMOVE,
+      partitionId: LEDGER_PARTITION_ID,
+      admissionPlan: emergencyPlan,
+    }),
+    CONCURRENT_CREATE_BUDGET_SCOPE.REMOVE);
+  t.equal(
+    resolvePlacementCureBudgetScopeFromAdmissionPlan({
+      moveType: OperationType.ADD,
+      partitionId: LEDGER_PARTITION_ID,
+      admissionPlan: null,
+    }),
+    CONCURRENT_CREATE_BUDGET_SCOPE.PRIORITY_ADD,
+    'a missing plan means no overflow, never a thrown gate');
   t.end();
 });
 

@@ -3,6 +3,7 @@ import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
   PRIORITY_RECOVERY_ADMISSION_SOURCE,
   PRIORITY_RECOVERY_EMERGENCY_PARTITION_TABLE_IDS,
+  classifyPriorityRecoveryAdmissionPartitionClass,
 } from './priority-recovery-admission-constants.js';
 import {
   normalizePriorityRecoveryInteger,
@@ -59,19 +60,13 @@ function buildPriorityRecoveryAdmissionPlan(options = {}) {
       options.priorityPartitionSummary ?
         PRIORITY_RECOVERY_ADMISSION_SOURCE.PUBLICATION_SUMMARY :
         PRIORITY_RECOVERY_ADMISSION_SOURCE.INACTIVE_DEFAULT;
-  const getPartitionClass = (partitionId) => {
-    const normalizedPartitionId = String(partitionId || '').trim();
-    if (
-      normalizedPartitionId.length === 0 ||
-      !isPriorityPartition(normalizedPartitionId)
-    ) {
-      return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.NON_PRIORITY;
-    }
-    if (isEmergencyPriorityPartition(normalizedPartitionId)) {
-      return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.EMERGENCY_PRIORITY;
-    }
-    return PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY;
-  };
+  // Lane classification (and its order) is the owner classifier's; the plan
+  // only fixes which predicates it runs under.
+  const getPartitionClass = (partitionId) =>
+    classifyPriorityRecoveryAdmissionPartitionClass(partitionId, {
+      isPriorityPartition,
+      isEmergencyPriorityPartition,
+    });
   const getReservedNonPrioritySlots = (partitionId, slotType = 'add') => {
     if (
       getPartitionClass(partitionId) !==
