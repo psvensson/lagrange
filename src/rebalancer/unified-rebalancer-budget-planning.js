@@ -1,4 +1,5 @@
 import {UnifiedRebalancerReplicaState} from './unified-rebalancer-replica-state.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   applyUnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods,
 } from './unified-rebalancer-priority-recovery-follow-up-decisions.js';
@@ -14,7 +15,6 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE,
   PRIORITY_TOPOLOGY_CLEANUP_MOVE_REASON_SET,
-  RAFT_ROLE,
   REBALANCER_BUDGET_READ_OPTIONS,
   REBALANCER_CONFIG_KEY,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
@@ -362,11 +362,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       if (!replica?.node_id || !replica?.address) {
         return false;
       }
-      const role =
-        typeof replica.raft_role === 'string' ?
-          replica.raft_role.toLowerCase() :
-          null;
-      if (!role || role === RAFT_ROLE.LEARNER) {
+      if (!isVoterRaftRole(replica.raft_role)) {
         return false;
       }
       return readyNodeIds.has(replica.node_id);

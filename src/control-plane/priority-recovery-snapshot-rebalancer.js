@@ -10,9 +10,9 @@ import {
 import {
   memoizedParseStepsHistoryString,
 } from '../rebalancer/steps-history-parse-memo.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   LOCAL_STR_EMPTY,
-  PRIORITY_RECOVERY_RAFT_ROLE_LEARNER,
   PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_COMPLETED_AT,
   PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT,
@@ -392,9 +392,7 @@ function resolvePriorityRecoveryTargetServiceRowVisibilityState(serviceRow) {
       PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE_CAMEL,
     ) || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
   ).toLowerCase();
-  const hasNonLearnerRole =
-    raftRole.length > 0 &&
-    raftRole !== PRIORITY_RECOVERY_RAFT_ROLE_LEARNER;
+  const hasNonLearnerRole = isVoterRaftRole(raftRole);
   if (status === PRIORITY_RECOVERY_STATUS_ACTIVE) {
     return hasNonLearnerRole === true ?
       PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ACTIVE_OPERATIONAL :

@@ -1,6 +1,9 @@
 import {AddressManager} from '../address/address-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  CRITICAL_SYSTEM_PARTITION_IDS,
+} from '../bootstrap/system-partition-classification.js';
+import {
   ENTITY_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -34,9 +37,6 @@ const CRITICAL_SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   skipCacheWait: true,
   workClass: 'critical',
 });
-const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
-);
 
 function assertRequiredString(value, errorMessage) {
   if (typeof value !== 'string' || value.length === 0) {

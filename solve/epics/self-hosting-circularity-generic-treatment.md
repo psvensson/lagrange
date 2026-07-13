@@ -112,11 +112,24 @@ STATE/ACTION/STATE_TABLE/ACTION_BY_STATE shape, `decision-table-v1` JSON +
 `npm run model:decision-tables` cartesian-exhaustiveness, AST ratchet
 `audit:guideline:decision-boundaries`, rule ARCH-0013). Ladder, in order:
 
-1. **`voter-readiness-visibility-single-owner-table`** (AUTHORED, `links.planDoc`
-   → this epic) — the CL-035 semantic: ~16 derivation sites, FOUR role-set
-   declarations, THREE divergent memberships (candidate in/out/any-non-learner);
-   includes deleting the three local `CRITICAL_SYSTEM_PARTITION_IDS`
-   re-derivations so scoping keys on `system-partition-classification.js`.
+1. **`voter-readiness-visibility-single-owner-table`** — LANDED 2026-07-13.
+   Owner: `src/raft/replica-voter-readiness.js` (named rows: quorum_voter incl.
+   candidate / load_routable excl. candidate / repair_only / catchup_learner;
+   fail-closed predicates; guard test dt:prove-proven). Census analyzer
+   `npm run audit:voter-readiness-owner` (alias-aware) went 15→7→0; four
+   role-set declarations and both laundered learner aliases deleted; adversarial
+   verifier TRUSTED-WITH-NOTES (its enum-alias refutation surfaced 9 further
+   sites, migrated). Execution note: the scope-pressure precommit (6-owner-area
+   quest-lifetime cap) forced the split into three bounded `process`-class child
+   quests (`…-raft-node-admin`, `…-rebalancer-batch2`,
+   `…-partition-raft-aliases`, `…-critical-partition-set-home`, each
+   `links.parentQuest`) while the parent kept the census oracle doneWhen —
+   reuse this shape for rungs 2–5, but land a checkpoint commit after EVERY
+   attempt (interleaved uncommitted attempts across siblings break the
+   verification exactness contract). The three local
+   `CRITICAL_SYSTEM_PARTITION_IDS` re-derivations were also deleted
+   (single home: `system-partition-classification.js`); rung 5 still owns the
+   remaining 119-site critical→priority→default ladder.
 2. **Workflow-step persistence coverage** — the CL-029 semantic: extend the
    `replica-operation-progress.js` per-op-type step tables with an
    escape-shape/coverage column, replacing `isPriorityOutcomeDeferredLocalProgressStep`,

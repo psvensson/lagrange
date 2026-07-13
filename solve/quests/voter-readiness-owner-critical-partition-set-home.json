@@ -1,0 +1,39 @@
+{
+  "id": "voter-readiness-owner-critical-partition-set-home",
+  "authoringContractVersion": 1,
+  "statement": "Bounded child of voter-readiness-visibility-single-owner-table (scope-pressure split, batch 4: the scoping column). The parent's sealed result requires the voter-readiness rows' scoping to key on the declared partition-class taxonomy, deleting the three local CRITICAL_SYSTEM_PARTITION_IDS re-derivations (replica-handler-transition-policy, partition-service-shared, partition-service-row-owner \u2014 three identical hand-written first-partition sets that could silently drift). SEALED RESULT: CRITICAL_SYSTEM_PARTITION_IDS is declared ONCE in src/bootstrap/system-partition-classification.js (with the deliberate -p1 first-partition scoping documented against isSystemTablePartition drift) and the three former re-derivation sites import it; the census analyzer gains a critical_partition_set_local_declaration detector so any future local re-derivation is counted, and the census stays 0 under the extended detector. doneWhen: scripts/check-voter-readiness-single-owner.js --oracle --oracle-file solve/oracle/voter-readiness-owner-critical-partition-set-home.json --done-at 0 --with-gates reports metric 0 with lint + targeted suites green.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "voter-readiness-visibility-single-owner-table",
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "b3d248b75df1bc3b98f5090e5231ed527695f18e"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/voter-readiness-owner-critical-partition-set-home.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "voter-readiness-owner-critical-partition-set-home-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/voter-readiness-owner-critical-partition-set-home.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

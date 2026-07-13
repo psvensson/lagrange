@@ -1,6 +1,7 @@
 import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-execution.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {TIME_MS} from '../constants/time.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -123,14 +124,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
     if (!replicaRow.address) {
       return false;
     }
-    const raftRole =
-      typeof replicaRow.raft_role === 'string' ?
-        replicaRow.raft_role.toLowerCase() :
-        null;
-    if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
-      return false;
-    }
-    return true;
+    return isVoterRaftRole(replicaRow.raft_role);
   }
 
   isVoterReadyRoutableReplica(replicaRow, options = {}) {

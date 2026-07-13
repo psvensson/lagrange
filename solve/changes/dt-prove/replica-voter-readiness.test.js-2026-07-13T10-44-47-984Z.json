@@ -1,0 +1,16 @@
+{
+  "test": "test/raft/replica-voter-readiness.test.js",
+  "src": [
+    "src/raft/replica-voter-readiness.js"
+  ],
+  "runs": {
+    "fixRunExit": 1,
+    "revertRunExit": 1,
+    "restoreRunExit": 1
+  },
+  "srcChanged": true,
+  "verdict": "fix-not-passing",
+  "ok": false,
+  "detail": "test does not pass WITH the fix; nothing to prove",
+  "timestamp": "2026-07-13T10:44:47.941Z"
+}

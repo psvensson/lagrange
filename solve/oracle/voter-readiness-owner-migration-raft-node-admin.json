@@ -1,0 +1,26 @@
+{
+  "metric": 0,
+  "target": 7,
+  "done": true,
+  "classification": "voter-readiness-single-owner-census",
+  "detail": {
+    "generatedBy": "scripts/check-voter-readiness-single-owner.js",
+    "ownerModules": [
+      "src/raft/replica-voter-readiness.js"
+    ],
+    "countedSites": [],
+    "excludedSites": [],
+    "gates": [
+      {
+        "label": "lint",
+        "passed": true,
+        "exitCode": 0
+      },
+      {
+        "label": "targeted-suites",
+        "passed": true,
+        "exitCode": 0
+      }
+    ]
+  }
+}

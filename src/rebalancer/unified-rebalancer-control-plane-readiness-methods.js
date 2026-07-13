@@ -1,4 +1,5 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -13,7 +14,6 @@ const {
   isSystemTablePartition,
 } = UNIFIED_REBALANCER_SHARED;
 
-const CONTROL_PLANE_PUBLICATION_TRIM_RAFT_LEARNER = 'learner';
 const CONTROL_PLANE_READINESS_CONSTRUCTOR = 'constructor';
 
 class UnifiedRebalancerControlPlaneReadinessMethods {
@@ -269,7 +269,7 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       ).toLowerCase();
       return (
         status === SERVICE_STATUS.ACTIVE &&
-        raftRole !== CONTROL_PLANE_PUBLICATION_TRIM_RAFT_LEARNER
+        !isCatchupLearnerRaftRole(raftRole)
       );
     }).length;
     return activeVoterReplicaCount > targetReplicaCount;

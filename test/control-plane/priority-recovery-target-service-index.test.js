@@ -24,7 +24,7 @@ const STATUS_SYNCING = 'syncing';
 const SERVICE_TYPE_PARTITION = 'partition';
 const SERVICE_TYPE_CONTROL = 'control-plane';
 const RAFT_ROLE_LEARNER = 'learner';
-const RAFT_ROLE_VOTER = 'voter';
+const RAFT_ROLE_VOTER = 'follower';
 const MATCH_KEY_FIELDS = new Set([
   'service_type',
   'node_id',

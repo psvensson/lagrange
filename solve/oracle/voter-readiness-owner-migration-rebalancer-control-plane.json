@@ -1,0 +1,15 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": false,
+  "classification": "voter-readiness-single-owner-census",
+  "detail": {
+    "generatedBy": "scripts/check-voter-readiness-single-owner.js",
+    "ownerModules": [
+      "src/raft/replica-voter-readiness.js"
+    ],
+    "countedSites": [],
+    "excludedSites": [],
+    "gates": null
+  }
+}

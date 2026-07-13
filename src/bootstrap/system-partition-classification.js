@@ -14,6 +14,16 @@ const REPLICA_ID_SUFFIX_PATTERN = /-r\d+$/;
 
 const SYSTEM_TABLE_IDS = new Set(Object.values(SYSTEM_TABLE_NAME));
 
+// First partition of every system table — the bootstrap-critical partition set.
+// NOTE the deliberate -p1 scoping: this names only FIRST partitions, while
+// isSystemTablePartition matches any partition of a system table. Previously
+// re-derived locally in replica-handler-transition-policy,
+// partition-service-shared, and partition-service-row-owner (identical copies
+// that could silently drift); declared once here.
+const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
+  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
+);
+
 const PRIORITY_CONTROL_PLANE_TABLE_IDS = new Set([
   SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
   SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -391,6 +401,7 @@ function resolvePriorityControlPlanePartitionIds(options = {}) {
 }
 
 export {
+  CRITICAL_SYSTEM_PARTITION_IDS,
   CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS,
   CRITICAL_TRANSPORT_TARGET_REASON,
   PRIORITY_CONTROL_PLANE_TABLE_IDS,

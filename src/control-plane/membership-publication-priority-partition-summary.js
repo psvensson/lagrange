@@ -5,7 +5,7 @@ import {
   isPriorityControlPlanePartition,
   resolvePriorityControlPlanePartitionIds,
 } from '../bootstrap/system-partition-classification.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
@@ -275,7 +275,7 @@ function resolvePrioritySpreadReplicaExclusionReason(
     return 'node_id_missing';
   }
   if (
-    normalizedService.raftRole === RAFT_ROLE.LEARNER &&
+    isCatchupLearnerRaftRole(normalizedService.raftRole) &&
     !isReadinessPromotable(readinessByNodeId[normalizedService.nodeId] || null)
   ) {
     return 'learner_not_promotable';

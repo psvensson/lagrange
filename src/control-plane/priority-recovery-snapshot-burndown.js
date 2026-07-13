@@ -1,4 +1,5 @@
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
@@ -26,7 +27,6 @@ import {
 import {
   PRIORITY_RECOVERY_PROGRESS_DECISION,
   PRIORITY_RECOVERY_PROVENANCE_SOURCE,
-  PRIORITY_RECOVERY_RAFT_ROLE_LEARNER,
   PRIORITY_RECOVERY_SERVICE_FIELD_NODE_ID,
   PRIORITY_RECOVERY_SERVICE_FIELD_PARTITION_ID,
   PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE,
@@ -346,7 +346,7 @@ function buildPriorityRecoveryLearnerPromotionByPartitionId(
     ).toLowerCase();
     if (
       status !== PRIORITY_RECOVERY_STATUS_ACTIVE ||
-      raftRole !== PRIORITY_RECOVERY_RAFT_ROLE_LEARNER
+      !isCatchupLearnerRaftRole(raftRole)
     ) {
       continue;
     }

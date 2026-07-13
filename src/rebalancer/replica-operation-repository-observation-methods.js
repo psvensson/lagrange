@@ -1,3 +1,5 @@
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 const OBSERVED_REPLICA_ROW_FIELD = Object.freeze({
@@ -16,7 +18,6 @@ function assignReplicaOperationRepositoryObservationMethods(
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
     COORDINATOR_OWNER_COMPONENT,
-    RAFT_ROLE,
     READ_MODEL_DIVERGENCE_TYPE,
     REBALANCE_COORDINATOR_EVENT,
     REBALANCE_COORDINATOR_LOG_MSG,
@@ -91,15 +92,11 @@ function assignReplicaOperationRepositoryObservationMethods(
         OBSERVED_REPLICA_ROW_FIELD.ADDRESS,
       );
       if (status === ReplicaStatus.ACTIVE) {
-        if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
-          return ReplicaStatus.SYNCING;
-        }
-        return status;
+        return isVoterRaftRole(raftRole) ? status : ReplicaStatus.SYNCING;
       }
       if (
         status === ReplicaStatus.SYNCING &&
-        raftRole &&
-        raftRole !== RAFT_ROLE.LEARNER &&
+        isVoterRaftRole(raftRole) &&
         address
       ) {
         return ReplicaStatus.ACTIVE;
