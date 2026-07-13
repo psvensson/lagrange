@@ -47,6 +47,9 @@ import {ReplicaCreationProgressReporter} from '../utils/replica-creation-progres
 import {ReplicaStateMachine} from './replica-state-machine.js';
 import {assignReplicaHandlerLifecycleMethods} from './replica-handler-lifecycle-methods.js';
 import {assignReplicaHandlerCreateMethods} from './replica-handler-create-methods.js';
+import {
+  assignReplicaHandlerCreateStatusMethods,
+} from './replica-handler-create-status-methods.js';
 import {assignReplicaHandlerProgressMethods} from './replica-handler-progress-methods.js';
 import {
   assignReplicaHandlerRemoveRequestMethods,
@@ -160,6 +163,7 @@ class ReplicaHandler extends EventEmitter {
 
 assignReplicaHandlerLifecycleMethods(ReplicaHandler);
 assignReplicaHandlerProgressMethods(ReplicaHandler);
+assignReplicaHandlerCreateStatusMethods(ReplicaHandler);
 assignReplicaHandlerCreateMethods(ReplicaHandler);
 assignReplicaHandlerRemoveRequestMethods(ReplicaHandler);
 assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler);
