@@ -1,5 +1,8 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   QueryExecutorCanonicalLeaderRoutingMethods,
 } from './query-executor-canonical-leader-routing-methods.js';
 
@@ -13,7 +16,6 @@ const {
   QUERY_ROUTING_REPAIR_REASON,
   SYSTEM_TABLE_NAMES,
   TRANSPORT_ERROR_MSG,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
   normalizeParticipantRetryAfterMs,
 } = QUERY_EXECUTOR_SHARED;
@@ -520,10 +522,10 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     }
     const priorityControlPlaneWrite =
       !forRead &&
-      isPriorityControlPlanePartition({
+      classifySystemPartition({
         partitionId,
         partitionRow: this.getPartitionRecord(partitionId),
-      });
+      }).priorityControlPlane;
     if (systemTableWrite && deferredFailure) {
       if (priorityControlPlaneWrite && retryable) {
         return this.buildControlPlaneWriteRetryDecision(

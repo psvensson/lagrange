@@ -1,4 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
 import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
 
@@ -25,7 +28,6 @@ const {
   TABLES,
   WRITE_OPERATION_STATUS,
   createHash,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
@@ -449,7 +451,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    * @private
    */
   resolveTransactionOperationRoutingReadinessDimension(partitionId) {
-    if (isPriorityControlPlanePartition({partitionId})) {
+    if (classifySystemPartition({partitionId}).priorityControlPlane) {
       return CONTROL_PLANE_READINESS_DIMENSION
         .CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
@@ -468,7 +470,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    */
   buildTransactionOperationDeliveryProfile(partitionId) {
     const priorityControlPlanePartition =
-      isPriorityControlPlanePartition({partitionId});
+      classifySystemPartition({partitionId}).priorityControlPlane;
     return Object.freeze({
       routingReadinessDimension:
         this.resolveTransactionOperationRoutingReadinessDimension(partitionId),

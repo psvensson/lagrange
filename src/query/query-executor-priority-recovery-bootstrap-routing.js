@@ -1,4 +1,7 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
@@ -6,7 +9,6 @@ const {
   CONTROL_PLANE_READINESS_REASON,
   QUERY_EXECUTOR_LITERAL,
   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
-  isPriorityControlPlanePartition,
 } = QUERY_EXECUTOR_SHARED;
 
 const PRIORITY_RECOVERY_BOOTSTRAP_REQUIRED_REASONS = Object.freeze([
@@ -36,7 +38,10 @@ function isPriorityRecoveryWriteRouting({
   routingOptions,
 }) {
   return (
-    isPriorityControlPlanePartition({partitionId, partitionRow}) &&
+    classifySystemPartition({
+      partitionId,
+      partitionRow,
+    }).priorityControlPlane &&
     routingReadinessDimension ===
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
     routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ] === false &&

@@ -1,4 +1,7 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -11,7 +14,6 @@ const {
   SERVICE_TYPE,
   SERVICE_STATUS,
   TABLES,
-  isPriorityControlPlanePartition,
   resolveCanonicalLeaderRoutingGapState,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -459,10 +461,10 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
       return false;
     }
     const partitionRow = this.getPartitionRecord(routingSnapshot.partitionId);
-    return isPriorityControlPlanePartition({
+    return classifySystemPartition({
       partitionId: routingSnapshot.partitionId,
       partitionRow,
-    });
+    }).priorityControlPlane;
   },
 
   /**

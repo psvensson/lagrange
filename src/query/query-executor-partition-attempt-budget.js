@@ -1,9 +1,11 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   QUERY_EXECUTOR_LITERAL,
-  isPriorityControlPlanePartition,
 } = QUERY_EXECUTOR_SHARED;
 
 const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1;
@@ -67,10 +69,10 @@ function createPartitionAttemptBudget({
     if (forRead) {
       return true;
     }
-    return isPriorityControlPlanePartition({
+    return classifySystemPartition({
       partitionId,
       partitionRow: executor.getPartitionRecord(partitionId),
-    });
+    }).priorityControlPlane;
   };
   const shouldDeferRecoveryCandidateColdReconnect = (
     candidate,

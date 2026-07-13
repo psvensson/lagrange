@@ -1,4 +1,7 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 import {QueryExecutorPartitionDelivery} from './query-executor-partition-delivery.js';
 
 const {
@@ -9,7 +12,6 @@ const {
   QUERY_EXECUTOR_LITERAL,
   SERVICE_STATUS,
   SYSTEM_TABLE_NAMES,
-  isPriorityControlPlanePartition,
   resolveCanonicalLeaderIdentitySnapshot,
   resolveCanonicalLeaderRoutingGapState,
 } = QUERY_EXECUTOR_SHARED;
@@ -90,10 +92,10 @@ class QueryExecutorCanonicalLeaderRoutingMethods
   }
 
   shouldRetainCanonicalLeaderIdentity(partitionId, partitionRow = null) {
-    return isPriorityControlPlanePartition({
+    return classifySystemPartition({
       partitionId,
       partitionRow,
-    });
+    }).priorityControlPlane;
   }
 
   hasActiveCanonicalLeaderService(serviceRows = [], leaderNodeId = null) {
@@ -208,10 +210,10 @@ class QueryExecutorCanonicalLeaderRoutingMethods
     const priorityRecoveryRouting =
       resolvedRoutingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
-      isPriorityControlPlanePartition({
+      classifySystemPartition({
         partitionId: resolvedPartitionId,
         partitionRow,
-      }) &&
+      }).priorityControlPlane &&
       Number(resolvedRoutingSnapshot?.routableServiceCount) > 0;
     const partitionTableName =
       resolvedPartitionId !== null ?

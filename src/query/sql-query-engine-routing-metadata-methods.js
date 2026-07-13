@@ -1,4 +1,7 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -11,7 +14,6 @@ const {
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
-  isPriorityControlPlanePartition,
 } = SQL_QUERY_ENGINE_SHARED;
 
 const AUTHORITATIVE_ROUTING_OVERLAY_STATE = Object.freeze({
@@ -316,7 +318,10 @@ class SQLQueryEngineRoutingMetadataMethods {
       typeof this.getCachedPartitionRecord === LOCAL_STR_FUNCTION ?
         this.getCachedPartitionRecord(partitionId) :
         null;
-    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
+    if (!classifySystemPartition({
+      partitionId,
+      partitionRow,
+    }).priorityControlPlane) {
       return [];
     }
     const partitionServices = this.partitionServicesProvider();

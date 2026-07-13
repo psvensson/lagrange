@@ -1,4 +1,7 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  classifySystemPartition,
+} from '../bootstrap/system-partition-classification.js';
 import {QueryExecutorCancellationRouting} from './query-executor-cancellation-routing-install.js';
 import {installQueryExecutorSelectAggregationHelpers} from './query-executor-select-aggregation.js';
 import {installQueryExecutorSqlCommandHelpers} from './query-executor-sql-command-rendering.js';
@@ -24,7 +27,6 @@ const {
   TABLES,
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
-  isPriorityControlPlanePartition,
   resolveBootstrapLeaderSelection,
   resolveCanonicalPartitionLeaderObservation,
 } = QUERY_EXECUTOR_SHARED;
@@ -146,8 +148,10 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
       partitionId.length > 0 ?
         this.getPartitionRecord(partitionId) :
         null;
-    const priorityControlPlanePartition =
-      isPriorityControlPlanePartition({partitionId, partitionRow});
+    const priorityControlPlanePartition = classifySystemPartition({
+      partitionId,
+      partitionRow,
+    }).priorityControlPlane;
     const priorityRecoveryWriteRouting =
       isPriorityRecoveryWriteRouting({
         partitionId,

@@ -1,0 +1,278 @@
+diff --git a/src/query/query-executor-canonical-leader-routing-methods.js b/src/query/query-executor-canonical-leader-routing-methods.js
+index 95902742091f5fa28bd7a3e6390b914f912f4ccd..dc8be828efebca94433bfca6c87a68ccebf31465 100644
+--- a/src/query/query-executor-canonical-leader-routing-methods.js
++++ b/src/query/query-executor-canonical-leader-routing-methods.js
+@@ -1,4 +1,7 @@
+ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ import {QueryExecutorPartitionDelivery} from './query-executor-partition-delivery.js';
+ 
+ const {
+@@ -9,7 +12,6 @@ const {
+   QUERY_EXECUTOR_LITERAL,
+   SERVICE_STATUS,
+   SYSTEM_TABLE_NAMES,
+-  isPriorityControlPlanePartition,
+   resolveCanonicalLeaderIdentitySnapshot,
+   resolveCanonicalLeaderRoutingGapState,
+ } = QUERY_EXECUTOR_SHARED;
+@@ -90,10 +92,10 @@ class QueryExecutorCanonicalLeaderRoutingMethods
+   }
+ 
+   shouldRetainCanonicalLeaderIdentity(partitionId, partitionRow = null) {
+-    return isPriorityControlPlanePartition({
++    return classifySystemPartition({
+       partitionId,
+       partitionRow,
+-    });
++    }).priorityControlPlane;
+   }
+ 
+   hasActiveCanonicalLeaderService(serviceRows = [], leaderNodeId = null) {
+@@ -208,10 +210,10 @@ class QueryExecutorCanonicalLeaderRoutingMethods
+     const priorityRecoveryRouting =
+       resolvedRoutingReadinessDimension ===
+         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
+-      isPriorityControlPlanePartition({
++      classifySystemPartition({
+         partitionId: resolvedPartitionId,
+         partitionRow,
+-      }) &&
++      }).priorityControlPlane &&
+       Number(resolvedRoutingSnapshot?.routableServiceCount) > 0;
+     const partitionTableName =
+       resolvedPartitionId !== null ?
+diff --git a/src/query/query-executor-partition-attempt-budget.js b/src/query/query-executor-partition-attempt-budget.js
+index 616eff9601065c0287cd136b46e34dec41b8fdee..06e14980111ed6a6945a2007e9e2ce35b4d6e772 100644
+--- a/src/query/query-executor-partition-attempt-budget.js
++++ b/src/query/query-executor-partition-attempt-budget.js
+@@ -1,9 +1,11 @@
+ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ 
+ const {
+   CONTROL_PLANE_READINESS_DIMENSION,
+   QUERY_EXECUTOR_LITERAL,
+-  isPriorityControlPlanePartition,
+ } = QUERY_EXECUTOR_SHARED;
+ 
+ const READ_CANDIDATE_MIN_DELIVERY_TIMEOUT_MS = 1;
+@@ -67,10 +69,10 @@ function createPartitionAttemptBudget({
+     if (forRead) {
+       return true;
+     }
+-    return isPriorityControlPlanePartition({
++    return classifySystemPartition({
+       partitionId,
+       partitionRow: executor.getPartitionRecord(partitionId),
+-    });
++    }).priorityControlPlane;
+   };
+   const shouldDeferRecoveryCandidateColdReconnect = (
+     candidate,
+diff --git a/src/query/query-executor-partition-routing-snapshot.js b/src/query/query-executor-partition-routing-snapshot.js
+index 77e8ca2e9c0a821710c60eb70b9af350c85f611e..5d01b3fe3f71aebe57977f7df16c5ebafcfaf88c 100644
+--- a/src/query/query-executor-partition-routing-snapshot.js
++++ b/src/query/query-executor-partition-routing-snapshot.js
+@@ -1,4 +1,7 @@
+ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ 
+ const {
+   CONTROL_PLANE_READINESS_DIMENSION,
+@@ -11,7 +14,6 @@ const {
+   SERVICE_TYPE,
+   SERVICE_STATUS,
+   TABLES,
+-  isPriorityControlPlanePartition,
+   resolveCanonicalLeaderRoutingGapState,
+ } = QUERY_EXECUTOR_SHARED;
+ 
+@@ -459,10 +461,10 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
+       return false;
+     }
+     const partitionRow = this.getPartitionRecord(routingSnapshot.partitionId);
+-    return isPriorityControlPlanePartition({
++    return classifySystemPartition({
+       partitionId: routingSnapshot.partitionId,
+       partitionRow,
+-    });
++    }).priorityControlPlane;
+   },
+ 
+   /**
+diff --git a/src/query/query-executor-partition-service-resolution.js b/src/query/query-executor-partition-service-resolution.js
+index a132a41e2ba71289809abd7d06178a62f61b00ae..64da2bc9bd1d80c7388a2b71daafc86925132ff1 100644
+--- a/src/query/query-executor-partition-service-resolution.js
++++ b/src/query/query-executor-partition-service-resolution.js
+@@ -1,4 +1,7 @@
+ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ import {QueryExecutorCancellationRouting} from './query-executor-cancellation-routing-install.js';
+ import {installQueryExecutorSelectAggregationHelpers} from './query-executor-select-aggregation.js';
+ import {installQueryExecutorSqlCommandHelpers} from './query-executor-sql-command-rendering.js';
+@@ -24,7 +27,6 @@ const {
+   TABLES,
+   compactEligibilitySnapshot,
+   evaluateEligibilityDecision,
+-  isPriorityControlPlanePartition,
+   resolveBootstrapLeaderSelection,
+   resolveCanonicalPartitionLeaderObservation,
+ } = QUERY_EXECUTOR_SHARED;
+@@ -146,8 +148,10 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
+       partitionId.length > 0 ?
+         this.getPartitionRecord(partitionId) :
+         null;
+-    const priorityControlPlanePartition =
+-      isPriorityControlPlanePartition({partitionId, partitionRow});
++    const priorityControlPlanePartition = classifySystemPartition({
++      partitionId,
++      partitionRow,
++    }).priorityControlPlane;
+     const priorityRecoveryWriteRouting =
+       isPriorityRecoveryWriteRouting({
+         partitionId,
+diff --git a/src/query/query-executor-priority-recovery-bootstrap-routing.js b/src/query/query-executor-priority-recovery-bootstrap-routing.js
+index ac4be1d1c2417499b088b021598bc6d8eb4ed70d..9e8deb01cbae1bd46e9905d3d1be504be458332f 100644
+--- a/src/query/query-executor-priority-recovery-bootstrap-routing.js
++++ b/src/query/query-executor-priority-recovery-bootstrap-routing.js
+@@ -1,4 +1,7 @@
+ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ 
+ const {
+   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+@@ -6,7 +9,6 @@ const {
+   CONTROL_PLANE_READINESS_REASON,
+   QUERY_EXECUTOR_LITERAL,
+   QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
+-  isPriorityControlPlanePartition,
+ } = QUERY_EXECUTOR_SHARED;
+ 
+ const PRIORITY_RECOVERY_BOOTSTRAP_REQUIRED_REASONS = Object.freeze([
+@@ -36,7 +38,10 @@ function isPriorityRecoveryWriteRouting({
+   routingOptions,
+ }) {
+   return (
+-    isPriorityControlPlanePartition({partitionId, partitionRow}) &&
++    classifySystemPartition({
++      partitionId,
++      partitionRow,
++    }).priorityControlPlane &&
+     routingReadinessDimension ===
+       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
+     routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.FOR_READ] === false &&
+diff --git a/src/query/query-executor-write-retry-routing.js b/src/query/query-executor-write-retry-routing.js
+index cf4545f0d19b88d4b44e36b1edad8a79d92bf0d2..55258688d6568c71d948edf6f273b9cb8e01e8ab 100644
+--- a/src/query/query-executor-write-retry-routing.js
++++ b/src/query/query-executor-write-retry-routing.js
+@@ -1,4 +1,7 @@
+ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ import {
+   QueryExecutorCanonicalLeaderRoutingMethods,
+ } from './query-executor-canonical-leader-routing-methods.js';
+@@ -13,7 +16,6 @@ const {
+   QUERY_ROUTING_REPAIR_REASON,
+   SYSTEM_TABLE_NAMES,
+   TRANSPORT_ERROR_MSG,
+-  isPriorityControlPlanePartition,
+   isRetryableControlPlaneError,
+   normalizeParticipantRetryAfterMs,
+ } = QUERY_EXECUTOR_SHARED;
+@@ -520,10 +522,10 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
+     }
+     const priorityControlPlaneWrite =
+       !forRead &&
+-      isPriorityControlPlanePartition({
++      classifySystemPartition({
+         partitionId,
+         partitionRow: this.getPartitionRecord(partitionId),
+-      });
++      }).priorityControlPlane;
+     if (systemTableWrite && deferredFailure) {
+       if (priorityControlPlaneWrite && retryable) {
+         return this.buildControlPlaneWriteRetryDecision(
+diff --git a/src/query/sql-query-engine-routing-metadata-methods.js b/src/query/sql-query-engine-routing-metadata-methods.js
+index 6fb233e9629b47493470c363671b775e22e6743b..cd7bdf162f1c8738e8fd72fde88c1819488a6227 100644
+--- a/src/query/sql-query-engine-routing-metadata-methods.js
++++ b/src/query/sql-query-engine-routing-metadata-methods.js
+@@ -1,4 +1,7 @@
+ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ const LOCAL_STR_STRING = 'string';
+@@ -11,7 +14,6 @@ const {
+   SERVICE_STATUS,
+   SERVICE_TYPE,
+   TABLES,
+-  isPriorityControlPlanePartition,
+ } = SQL_QUERY_ENGINE_SHARED;
+ 
+ const AUTHORITATIVE_ROUTING_OVERLAY_STATE = Object.freeze({
+@@ -316,7 +318,10 @@ class SQLQueryEngineRoutingMetadataMethods {
+       typeof this.getCachedPartitionRecord === LOCAL_STR_FUNCTION ?
+         this.getCachedPartitionRecord(partitionId) :
+         null;
+-    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
++    if (!classifySystemPartition({
++      partitionId,
++      partitionRow,
++    }).priorityControlPlane) {
+       return [];
+     }
+     const partitionServices = this.partitionServicesProvider();
+diff --git a/src/query/sql-query-engine.js b/src/query/sql-query-engine.js
+index 33d62ecea29c4752426d434bdb77a3356b571b08..cc9c20fec55d3a2eb23d15d860a9d0113414ed89 100644
+--- a/src/query/sql-query-engine.js
++++ b/src/query/sql-query-engine.js
+@@ -1,4 +1,7 @@
+ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
+ import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
+ import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
+ 
+@@ -25,7 +28,6 @@ const {
+   TABLES,
+   WRITE_OPERATION_STATUS,
+   createHash,
+-  isPriorityControlPlanePartition,
+   isRetryableControlPlaneError,
+ } = SQL_QUERY_ENGINE_SHARED;
+ 
+@@ -449,7 +451,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
+    * @private
+    */
+   resolveTransactionOperationRoutingReadinessDimension(partitionId) {
+-    if (isPriorityControlPlanePartition({partitionId})) {
++    if (classifySystemPartition({partitionId}).priorityControlPlane) {
+       return CONTROL_PLANE_READINESS_DIMENSION
+         .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+     }
+@@ -468,7 +470,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
+    */
+   buildTransactionOperationDeliveryProfile(partitionId) {
+     const priorityControlPlanePartition =
+-      isPriorityControlPlanePartition({partitionId});
++      classifySystemPartition({partitionId}).priorityControlPlane;
+     return Object.freeze({
+       routingReadinessDimension:
+         this.resolveTransactionOperationRoutingReadinessDimension(partitionId),
+
