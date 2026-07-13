@@ -1,0 +1,39 @@
+{
+  "id": "partition-class-ladder-single-owner-table",
+  "authoringContractVersion": 1,
+  "statement": "Epic self-hosting-circularity-generic-treatment Option 5, fifth ladder rung. The semantic which ordered system-partition class applies to a partition — bootstrap-critical, priority-control-plane, or default — is re-expressed across the epic-censused 119 production sites as direct critical/priority predicate calls, injected wrappers, set membership, and locally ordered OR/if ladders. SEALED RESULT: src/bootstrap/system-partition-classification.js is the single owner of a named, frozen, ordered partition-class decision table and classifier; its outcome preserves the deliberately overlapping membership facts required for exact behavior while emitting one canonical ordered class, and every censused production decision consumes that owner outcome or an owner-derived named predicate instead of re-deriving or locally ordering classification. Behavior is preserved exactly at every migrated site; any classification GAP found during migration is recorded and fixed only in its own pinned follow-up. doneWhen: the committed scripts/check-partition-class-owner.js --oracle --with-gates writes solve/oracle/partition-class-ladder-single-owner-table.json with metric = counted classification re-derivations outside the owner family, done only at metric 0 with the decision-table model, lint, owner tests, and targeted suites green. NOT in scope: critical-transport target classification, table-id parsing, the rung-4 emergency-vs-ordinary admission sub-classification beyond consuming this base owner, numeric budgets, or behavior changes. Execute as bounded child quests by owner-area batch and checkpoint after every attempt.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "3426245e9be54be1a969de8e52a4ca5619549228"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-single-owner-table.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-class-ladder-single-owner-table-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/partition-class-ladder-single-owner-table.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
