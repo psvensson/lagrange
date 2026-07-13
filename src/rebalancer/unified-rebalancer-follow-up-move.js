@@ -7,11 +7,14 @@ import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
 import {inFlightAddInfluenceCount} from './replica-inventory.js';
+import {
+  PLACEMENT_CURE_CONDITION,
+  classifyPriorityRecoveryFollowUpCureCondition,
+  resolvePlacementCure,
+} from './replica-placement-cure-policy.js';
 
 const {
   EntityType,
-  MOVE_REASON,
-  MoveType,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON,
@@ -519,9 +522,18 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       healthyReplicas,
       targetNodeId,
     );
-    const shouldReplace =
-      healthyReplicas.length >= targetReplicaCount && !!sourceReplica;
-    if (!shouldReplace) {
+    // Condition -> cure typing is an owner row
+    // (replica-placement-cure-policy.js); this builder owns the observation
+    // inputs and the move mechanism around the resolved row.
+    const cureCondition = classifyPriorityRecoveryFollowUpCureCondition({
+      healthyReplicaCount: healthyReplicas.length,
+      targetReplicaCount,
+      hasSelectableSourceReplica: Boolean(sourceReplica),
+    });
+    if (
+      cureCondition === PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION
+    ) {
+      const deficitCure = resolvePlacementCure(cureCondition);
       // Count-aware deficit gate: a genuine replica-count deficit may legitimately
       // need several concurrent ADDs (fresh-partition provisioning fills 0 -> N),
       // but the re-decision storm re-issues an ADD every tick while a prior ADD is
@@ -559,12 +571,12 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.ADD_FOLLOW_UP_CREATED,
         Object.freeze({
-          type: MoveType.ADD,
+          type: deficitCure.moveType,
           partitionId,
           entityType: EntityType.PARTITION,
           entityId: partitionId,
           nodeId: targetNodeId,
-          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          reason: deficitCure.moveReason,
           controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
           ...serialWaitMoveFields,
           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
@@ -583,16 +595,22 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
     if (sourceNodeId.length === 0 || replicaId.length === 0) {
+      // The selected source resolves no usable ids: the relocation degrades
+      // to the deficit ADD row (source-unavailable fallback), never an
+      // improvised REPLACE.
+      const fallbackCure = resolvePlacementCure(
+        PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
+      );
       return this.buildPriorityRecoveryFollowUpMoveOutcome(
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.SOURCE_FALLBACK_ADD_CREATED,
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.SOURCE_UNAVAILABLE,
         Object.freeze({
-          type: MoveType.ADD,
+          type: fallbackCure.moveType,
           partitionId,
           entityType: EntityType.PARTITION,
           entityId: partitionId,
           nodeId: targetNodeId,
-          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          reason: fallbackCure.moveReason,
           controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
           ...serialWaitMoveFields,
           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
@@ -600,18 +618,19 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
         }),
       );
     }
+    const relocationCure = resolvePlacementCure(cureCondition);
     return this.buildPriorityRecoveryFollowUpMoveOutcome(
       PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
       PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.REPLACE_FOLLOW_UP_CREATED,
       Object.freeze({
-        type: MoveType.REPLACE,
+        type: relocationCure.moveType,
         partitionId,
         entityType: EntityType.PARTITION,
         entityId: partitionId,
         nodeId: targetNodeId,
         sourceNodeId,
         replicaId,
-        reason: MOVE_REASON.REPLACE_REPLICA,
+        reason: relocationCure.moveReason,
         controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
         ...serialWaitMoveFields,
         [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:

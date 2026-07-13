@@ -22,6 +22,10 @@ import {
   REBALANCER_LOG_MSG,
   REBALANCER_MOVE_TYPE,
 } from './rebalancer-constants.js';
+import {
+  PLACEMENT_CURE_CONDITION,
+  resolvePlacementCure,
+} from './replica-placement-cure-policy.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -204,11 +208,14 @@ class MovePlannerMoveCalculationMethods {
           continue;
         }
         scheduledRemoveReplicaIds.add(replicaId);
+        const failedReplicaCure = resolvePlacementCure(
+          PLACEMENT_CURE_CONDITION.FAILED_REPLICA,
+        );
         moves.push({
-          type: MoveType.REMOVE,
+          type: failedReplicaCure.moveType,
           replicaId,
           nodeId: replica.node_id,
-          reason: MOVE_REASON.REPLICA_FAILED,
+          reason: failedReplicaCure.moveReason,
         });
       }
     }
@@ -286,11 +293,14 @@ class MovePlannerMoveCalculationMethods {
         }
         const currentCount = currentCounts.get(nodeId) || 0;
         const needed = targetCount - currentCount;
+        const deficitCure = resolvePlacementCure(
+          PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
+        );
         for (let i = 0; i < needed; i++) {
           addMoves.push({
-            type: MoveType.ADD,
+            type: deficitCure.moveType,
             nodeId,
-            reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+            reason: deficitCure.moveReason,
           });
         }
       }
@@ -395,10 +405,12 @@ class MovePlannerMoveCalculationMethods {
           });
           continue;
         }
-        const reason =
+        const surplusCure = resolvePlacementCure(
           targetCount === 0 ?
-            MOVE_REASON.NODE_NOT_IN_TARGET :
-            MOVE_REASON.SPREAD_REPLICAS;
+            PLACEMENT_CURE_CONDITION.NODE_NOT_IN_TARGET :
+            PLACEMENT_CURE_CONDITION.OVER_REPRESENTATION,
+        );
+        const reason = surplusCure.moveReason;
         if (cleanupOnlyWhilePending && isTopologyCleanupReason(reason)) {
           const existingCleanupRemoves = candidateRemoves.filter((move) =>
             isTopologyCleanupReason(move.reason),
@@ -472,7 +484,7 @@ class MovePlannerMoveCalculationMethods {
           }
         }
         candidateRemoves.push({
-          type: MoveType.REMOVE,
+          type: surplusCure.moveType,
           replicaId,
           nodeId: nodeId,
           reason,
@@ -559,16 +571,19 @@ class MovePlannerMoveCalculationMethods {
         ) :
         naturalReplaceCount;
       const consumedRemoveReplicaIds = new Set();
+      const relocationCure = resolvePlacementCure(
+        PLACEMENT_CURE_CONDITION.PAIRED_RELOCATION,
+      );
       for (let i = 0; i < replaceCount; i++) {
         const addMove = addMoves.shift();
         const removeMove = replaceCandidates[i];
         consumedRemoveReplicaIds.add(removeMove.replicaId);
         replaceMoves.push({
-          type: MoveType.REPLACE,
+          type: relocationCure.moveType,
           nodeId: addMove.nodeId,
           sourceNodeId: removeMove.nodeId,
           replicaId: removeMove.replicaId,
-          reason: MOVE_REASON.REPLACE_REPLICA,
+          reason: relocationCure.moveReason,
         });
       }
       // When the serialization cap held back spread-restoration REPLACEs, defer

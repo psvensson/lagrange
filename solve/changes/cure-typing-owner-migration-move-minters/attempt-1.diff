@@ -1,0 +1,201 @@
+diff --git a/src/rebalancer/move-planner-move-calculation-methods.js b/src/rebalancer/move-planner-move-calculation-methods.js
+index 23581870cb4c83c4fb4c71246830b1c0cdb29a75..c10f9613e7361c013865d0eb0d53fefe6c9f6d8e 100644
+--- a/src/rebalancer/move-planner-move-calculation-methods.js
++++ b/src/rebalancer/move-planner-move-calculation-methods.js
+@@ -22,6 +22,10 @@ import {
+   REBALANCER_LOG_MSG,
+   REBALANCER_MOVE_TYPE,
+ } from './rebalancer-constants.js';
++import {
++  PLACEMENT_CURE_CONDITION,
++  resolvePlacementCure,
++} from './replica-placement-cure-policy.js';
+ const MOVE_PLANNER_LITERAL = Object.freeze({
+   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
+   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
+@@ -204,11 +208,14 @@ class MovePlannerMoveCalculationMethods {
+           continue;
+         }
+         scheduledRemoveReplicaIds.add(replicaId);
++        const failedReplicaCure = resolvePlacementCure(
++          PLACEMENT_CURE_CONDITION.FAILED_REPLICA,
++        );
+         moves.push({
+-          type: MoveType.REMOVE,
++          type: failedReplicaCure.moveType,
+           replicaId,
+           nodeId: replica.node_id,
+-          reason: MOVE_REASON.REPLICA_FAILED,
++          reason: failedReplicaCure.moveReason,
+         });
+       }
+     }
+@@ -286,11 +293,14 @@ class MovePlannerMoveCalculationMethods {
+         }
+         const currentCount = currentCounts.get(nodeId) || 0;
+         const needed = targetCount - currentCount;
++        const deficitCure = resolvePlacementCure(
++          PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
++        );
+         for (let i = 0; i < needed; i++) {
+           addMoves.push({
+-            type: MoveType.ADD,
++            type: deficitCure.moveType,
+             nodeId,
+-            reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
++            reason: deficitCure.moveReason,
+           });
+         }
+       }
+@@ -395,10 +405,12 @@ class MovePlannerMoveCalculationMethods {
+           });
+           continue;
+         }
+-        const reason =
++        const surplusCure = resolvePlacementCure(
+           targetCount === 0 ?
+-            MOVE_REASON.NODE_NOT_IN_TARGET :
+-            MOVE_REASON.SPREAD_REPLICAS;
++            PLACEMENT_CURE_CONDITION.NODE_NOT_IN_TARGET :
++            PLACEMENT_CURE_CONDITION.OVER_REPRESENTATION,
++        );
++        const reason = surplusCure.moveReason;
+         if (cleanupOnlyWhilePending && isTopologyCleanupReason(reason)) {
+           const existingCleanupRemoves = candidateRemoves.filter((move) =>
+             isTopologyCleanupReason(move.reason),
+@@ -472,7 +484,7 @@ class MovePlannerMoveCalculationMethods {
+           }
+         }
+         candidateRemoves.push({
+-          type: MoveType.REMOVE,
++          type: surplusCure.moveType,
+           replicaId,
+           nodeId: nodeId,
+           reason,
+@@ -559,16 +571,19 @@ class MovePlannerMoveCalculationMethods {
+         ) :
+         naturalReplaceCount;
+       const consumedRemoveReplicaIds = new Set();
++      const relocationCure = resolvePlacementCure(
++        PLACEMENT_CURE_CONDITION.PAIRED_RELOCATION,
++      );
+       for (let i = 0; i < replaceCount; i++) {
+         const addMove = addMoves.shift();
+         const removeMove = replaceCandidates[i];
+         consumedRemoveReplicaIds.add(removeMove.replicaId);
+         replaceMoves.push({
+-          type: MoveType.REPLACE,
++          type: relocationCure.moveType,
+           nodeId: addMove.nodeId,
+           sourceNodeId: removeMove.nodeId,
+           replicaId: removeMove.replicaId,
+-          reason: MOVE_REASON.REPLACE_REPLICA,
++          reason: relocationCure.moveReason,
+         });
+       }
+       // When the serialization cap held back spread-restoration REPLACEs, defer
+diff --git a/src/rebalancer/unified-rebalancer-follow-up-move.js b/src/rebalancer/unified-rebalancer-follow-up-move.js
+index f24f077f47567eba6554e1cc119a271a18d6af3a..aa69569c27cbad595c106d339c4b68db770c26ac 100644
+--- a/src/rebalancer/unified-rebalancer-follow-up-move.js
++++ b/src/rebalancer/unified-rebalancer-follow-up-move.js
+@@ -7,11 +7,14 @@ import {
+   REPLICA_INVENTORY_OBSERVATION_STATE,
+ } from './replica-inventory-constants.js';
+ import {inFlightAddInfluenceCount} from './replica-inventory.js';
++import {
++  PLACEMENT_CURE_CONDITION,
++  classifyPriorityRecoveryFollowUpCureCondition,
++  resolvePlacementCure,
++} from './replica-placement-cure-policy.js';
+ 
+ const {
+   EntityType,
+-  MOVE_REASON,
+-  MoveType,
+   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
+   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
+   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON,
+@@ -519,9 +522,18 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+       healthyReplicas,
+       targetNodeId,
+     );
+-    const shouldReplace =
+-      healthyReplicas.length >= targetReplicaCount && !!sourceReplica;
+-    if (!shouldReplace) {
++    // Condition -> cure typing is an owner row
++    // (replica-placement-cure-policy.js); this builder owns the observation
++    // inputs and the move mechanism around the resolved row.
++    const cureCondition = classifyPriorityRecoveryFollowUpCureCondition({
++      healthyReplicaCount: healthyReplicas.length,
++      targetReplicaCount,
++      hasSelectableSourceReplica: Boolean(sourceReplica),
++    });
++    if (
++      cureCondition === PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION
++    ) {
++      const deficitCure = resolvePlacementCure(cureCondition);
+       // Count-aware deficit gate: a genuine replica-count deficit may legitimately
+       // need several concurrent ADDs (fresh-partition provisioning fills 0 -> N),
+       // but the re-decision storm re-issues an ADD every tick while a prior ADD is
+@@ -559,12 +571,12 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
+         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.ADD_FOLLOW_UP_CREATED,
+         Object.freeze({
+-          type: MoveType.ADD,
++          type: deficitCure.moveType,
+           partitionId,
+           entityType: EntityType.PARTITION,
+           entityId: partitionId,
+           nodeId: targetNodeId,
+-          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
++          reason: deficitCure.moveReason,
+           controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
+           ...serialWaitMoveFields,
+           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
+@@ -583,16 +595,22 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+     ).trim();
+     if (sourceNodeId.length === 0 || replicaId.length === 0) {
++      // The selected source resolves no usable ids: the relocation degrades
++      // to the deficit ADD row (source-unavailable fallback), never an
++      // improvised REPLACE.
++      const fallbackCure = resolvePlacementCure(
++        PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
++      );
+       return this.buildPriorityRecoveryFollowUpMoveOutcome(
+         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.SOURCE_FALLBACK_ADD_CREATED,
+         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.SOURCE_UNAVAILABLE,
+         Object.freeze({
+-          type: MoveType.ADD,
++          type: fallbackCure.moveType,
+           partitionId,
+           entityType: EntityType.PARTITION,
+           entityId: partitionId,
+           nodeId: targetNodeId,
+-          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
++          reason: fallbackCure.moveReason,
+           controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
+           ...serialWaitMoveFields,
+           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
+@@ -600,18 +618,19 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
+         }),
+       );
+     }
++    const relocationCure = resolvePlacementCure(cureCondition);
+     return this.buildPriorityRecoveryFollowUpMoveOutcome(
+       PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
+       PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.REPLACE_FOLLOW_UP_CREATED,
+       Object.freeze({
+-        type: MoveType.REPLACE,
++        type: relocationCure.moveType,
+         partitionId,
+         entityType: EntityType.PARTITION,
+         entityId: partitionId,
+         nodeId: targetNodeId,
+         sourceNodeId,
+         replicaId,
+-        reason: MOVE_REASON.REPLACE_REPLICA,
++        reason: relocationCure.moveReason,
+         controlPlaneMutationWorkClass: UNIFIED_REBALANCER_LITERAL.BACKGROUND,
+         ...serialWaitMoveFields,
+         [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
