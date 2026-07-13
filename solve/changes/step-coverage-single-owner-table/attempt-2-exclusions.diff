@@ -1,0 +1,53 @@
+diff --git a/scripts/check-step-coverage-owner.js b/scripts/check-step-coverage-owner.js
+index bf8f2fe8..3e2d2464 100644
+--- a/scripts/check-step-coverage-owner.js
++++ b/scripts/check-step-coverage-owner.js
+@@ -43,6 +43,48 @@ const OWNER_MODULES = Object.freeze(new Set([
+ // Out-of-scope exclusions, each with a reason tied to the sealed statement.
+ // Keyed file + kind + enclosing identifier; a site not listed always counts.
+ const EXCLUDED_SITES = Object.freeze([
++  {
++    filePath: 'src/rebalancer/operation-workflow-recovery-status-reconcile.js',
++    kind: 'step_branch_pile',
++    enclosingIdentifier: 'getTimeoutForStep',
++    reason: 'per-step timeout SCALARS (budget policy semantic, sealed NOT-in-scope)',
++  },
++  {
++    filePath: 'src/rebalancer/rebalance-coordinator-operation-intent-methods.js',
++    kind: 'step_branch_pile',
++    enclosingIdentifier: 'getRecentOperationMissReuseBudgetMs',
++    reason: 'per-step reuse-budget SCALARS (budget policy semantic, sealed NOT-in-scope)',
++  },
++  {
++    filePath: 'src/rebalancer/operation-workflow-transition-orchestration.js',
++    kind: 'step_branch_pile',
++    enclosingIdentifier: 'updateStep',
++    reason: 'independent single-step bookkeeping conditionals (clear retry when leaving ACTIVE; not a coverage enumeration)',
++  },
++  {
++    filePath: 'src/rebalancer/operation-workflow-transition-orchestration.js',
++    kind: 'step_branch_pile',
++    enclosingIdentifier: 'recordPriorityDispatchDeferredLocalProgress',
++    reason: 'independent single-step bookkeeping conditionals (claim-field cleanup at CREATING, retry clear off ACTIVE)',
++  },
++  {
++    filePath: 'src/rebalancer/priority-recovery-superseded-target.js',
++    kind: 'step_branch_pile',
++    enclosingIdentifier: 'reconcileReplaceActualActive',
++    reason: 'per-step ACTION ROUTING: each branch performs a distinct reconcile action (a state-model chain, not a coverage set)',
++  },
++  {
++    filePath: 'src/rebalancer/operation-workflow-dispatch-execution.js',
++    kind: 'step_branch_pile',
++    enclosingIdentifier: 'dispatchOperationInternal',
++    reason: 'per-step ACTION ROUTING in the dispatch sequencer (claim at PENDING vs re-send), not a coverage set',
++  },
++  {
++    filePath: 'src/rebalancer/replica-operation-liveness.js',
++    kind: 'step_branch_pile',
++    enclosingIdentifier: 'inferOperationTypeFromStepsHistory',
++    reason: 'forensic type inference over steps-history evidence tokens, not a coverage set',
++  },
+ ]);
+ 
+ const WORKFLOW_STEP_ENUM_NAME = 'WORKFLOW_STEP';
