@@ -9,7 +9,7 @@
  */
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {REPLICA_HANDLER_LOG_MSG, REPLICA_HANDLER_TYPEOF} from './replica-handler-constants.js';
 import {
@@ -196,7 +196,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
      */
     isReplicaVoterReady(replicaId) {
       const normalizedRole = this.getTrackedReplicaRole(replicaId);
-      if (!normalizedRole || normalizedRole === RAFT_ROLE.LEARNER) {
+      if (!isVoterRaftRole(normalizedRole)) {
         return false;
       }
       const serviceRow = this.systemTableCache.get(

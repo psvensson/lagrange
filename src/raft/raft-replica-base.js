@@ -17,6 +17,7 @@ import {STRING} from '../constants/index.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {resolveRaftTransportDeliveryOptions} from './constants.js';
+import {isCatchupLearnerRaftRole} from './replica-voter-readiness.js';
 import {
   applyReplicaDemotion,
   clearReplicaLeaderUpdateState,
@@ -420,7 +421,7 @@ class RaftReplicaBase extends EventEmitter {
   checkLearnerPromotion() {
     this.learnerPromotionTimer = null;
 
-    if (this.role !== RaftRole.LEARNER) {
+    if (!isCatchupLearnerRaftRole(this.role)) {
       return;
     }
 

@@ -6,8 +6,10 @@
  * Requirements: 10.2, 3.1
  */
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  CRITICAL_SYSTEM_PARTITION_IDS,
+} from '../bootstrap/system-partition-classification.js';
 import {STATE} from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
 import {isNodeRecordReady} from './node-readiness-policy.js';
 import {
@@ -24,9 +26,6 @@ const REPLICA_HANDLER_LITERAL = Object.freeze({
   READ: 'read',
   SYSTEM_TABLE_QUERY_FAILED: 'system table query failed',
 });
-const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
-);
 const VOTER_READY_CHECK_INTERVAL_MS = 250;
 const METADATA_RESOLUTION_POLL_INTERVAL_MS = 50;
 const partitionMetadataMissingError =
@@ -35,11 +34,6 @@ const tableMetadataMissingError =
   REPLICA_HANDLER_ERROR_MSG.TABLE_METADATA_MISSING;
 const PARTITION_METADATA_MISSING_PREFIX = partitionMetadataMissingError('');
 const TABLE_METADATA_MISSING_PREFIX = tableMetadataMissingError('');
-const ESTABLISHED_VOTER_ROLES = new Set([
-  RAFT_ROLE.LEADER,
-  RAFT_ROLE.FOLLOWER,
-  RAFT_ROLE.CANDIDATE,
-]);
 const CRITICAL_VOTER_READY_GATED_OPERATION_TYPES = new Set([
   OperationType.ADD,
   OperationType.REPLACE,
@@ -151,7 +145,6 @@ export {
   CRITICAL_SYSTEM_PARTITION_IDS,
   CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES,
   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
-  ESTABLISHED_VOTER_ROLES,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   PARTITION_METADATA_MISSING_PREFIX,
   REPLICA_HANDLER_LITERAL,

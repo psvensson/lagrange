@@ -32,6 +32,7 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
+import {LOAD_ROUTABLE_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
   TIMEOUT_BUDGET_CLASSIFICATION,
@@ -160,7 +161,6 @@ const LOAD_LANE_ADMISSION_REASON_FALLBACK = Object.freeze({
   BENCHMARK_ADMISSION_BLOCKED: 'benchmark_admission_blocked',
   BENCHMARK_READINESS_BLOCKED: 'benchmark_readiness_blocked',
 });
-const LOAD_LANE_VOTER_READY_REPLICA_ROLES = new Set(['leader', 'follower']);
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
@@ -545,7 +545,7 @@ export const ADMIN_WEBSOCKET_API_SHARED = {
   LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
   LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS,
   LOAD_LANE_TABLE_ADMISSION_STATE,
-  LOAD_LANE_VOTER_READY_REPLICA_ROLES,
+  LOAD_ROUTABLE_RAFT_ROLES,
   LoggingService,
   META_SERVICE_ID,
   MUTATION_GUARD_MODE,

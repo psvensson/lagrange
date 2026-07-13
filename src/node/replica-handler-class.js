@@ -58,8 +58,8 @@ import {assignReplicaHandlerRuntimeMethods} from './replica-handler-runtime-meth
 import {
   assignReplicaHandlerRemoveExecutionMethods,
 } from './replica-handler-remove-execution-methods.js';
+import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {
-  ESTABLISHED_VOTER_ROLES,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   PARTITION_METADATA_MISSING_PREFIX,
   REPLICA_HANDLER_LITERAL,
@@ -168,7 +168,7 @@ assignReplicaHandlerVoterReadinessMethods(ReplicaHandler);
 assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler);
 assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   AddressManager,
-  ESTABLISHED_VOTER_ROLES,
+  VOTER_RAFT_ROLES,
   METADATA_RESOLUTION_POLL_INTERVAL_MS,
   NUM,
   PRESSURE_WORK_CLASS,

@@ -26,6 +26,7 @@ import {buildServiceDiscoverySql} from './node-client.js';
 import {ENTRYPOINT_ENV} from '../../../src/constants/entrypoint.js';
 import {TABLES} from '../../../src/constants/index.js';
 import {INVARIANT_SEVERITY} from '../../../src/invariants/invariant-catalog.js';
+import {LOAD_ROUTABLE_RAFT_ROLES} from '../../../src/raft/replica-voter-readiness.js';
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
@@ -328,7 +329,6 @@ const LOAD_LANE_SOFT_ADMISSION_REASON_CODES = new Set([
   'schema_partition_unavailable',
   'leadership_unstable',
 ]);
-const LOAD_LANE_VOTER_READY_REPLICA_ROLES = new Set(['leader', 'follower']);
 const CLUSTER_STAGE_SETUP_NETWORK_CREATING = 'setup.network.creating';
 const CLUSTER_STAGE_SETUP_NETWORK_CREATED = 'setup.network.created';
 const CLUSTER_STAGE_SETUP_SEED_STARTING = 'setup.seed.starting';
@@ -507,7 +507,7 @@ function inspectLocalBenchmarkAdmissionFromDiscovery(
           ] || '',
         ).toLowerCase();
         const localReplicaVoterReady =
-          LOAD_LANE_VOTER_READY_REPLICA_ROLES.has(localReplicaRole);
+          LOAD_ROUTABLE_RAFT_ROLES.has(localReplicaRole);
         const discoveryReasonDetails = normalizeDiscoveryReasons(
           benchmarkAdmission[
             SERVICE_DISCOVERY_BENCHMARK_ADMISSION_REASONS_FIELD
@@ -1241,7 +1241,6 @@ export const CLUSTER_BASE_LAYER = {
   BENCHMARK_ADMISSION_DEGRADATION_STATE_HEALTHY,
   BENCHMARK_ADMISSION_REASON_LEADERSHIP_UNSTABLE,
   LOAD_LANE_SOFT_ADMISSION_REASON_CODES,
-  LOAD_LANE_VOTER_READY_REPLICA_ROLES,
   CLUSTER_STAGE_SETUP_NETWORK_CREATING,
   CLUSTER_STAGE_SETUP_NETWORK_CREATED,
   CLUSTER_STAGE_SETUP_SEED_STARTING,

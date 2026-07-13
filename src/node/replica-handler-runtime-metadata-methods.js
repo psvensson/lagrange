@@ -19,7 +19,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
 ) {
   const {
     AddressManager,
-    ESTABLISHED_VOTER_ROLES,
+    VOTER_RAFT_ROLES,
     METADATA_RESOLUTION_POLL_INTERVAL_MS,
     PRESSURE_WORK_CLASS,
     PARTITION_METADATA_MISSING_PREFIX,
@@ -240,7 +240,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         }
         const isEstablishedVoter =
           service.status === ReplicaStatus.ACTIVE &&
-          ESTABLISHED_VOTER_ROLES.has(service.raft_role);
+          VOTER_RAFT_ROLES.has(service.raft_role);
         if (
           serviceReplicaId !== replicaId &&
           isEstablishedVoter &&

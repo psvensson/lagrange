@@ -1,5 +1,8 @@
 import {NUM, TIME_MS} from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+import {
+  isLoadRoutableRaftRole,
+  isRepairOnlyRaftRole,
+} from '../raft/replica-voter-readiness.js';
 
 
 const REPLICA_STATE_MACHINE_SUBSYSTEM = 'replica-state-machine';
@@ -155,26 +158,12 @@ const REPLICA_STATE_MACHINE_REPAIR_ONLY_STATES = Object.freeze([
   REPLICA_STATE_MACHINE_STATE.FAILED,
 ]);
 
-const REPLICA_RAFT_ROLE_LOAD_READY_STATES = Object.freeze([
-  RAFT_ROLE.LEADER,
-  RAFT_ROLE.FOLLOWER,
-]);
-
-const REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES = Object.freeze([
-  RAFT_ROLE.CANDIDATE,
-  RAFT_ROLE.LEARNER,
-]);
-
 function isLoadReadyReplicaRaftRole(role) {
-  return REPLICA_RAFT_ROLE_LOAD_READY_STATES.includes(
-    String(role || '').toLowerCase(),
-  );
+  return isLoadRoutableRaftRole(role);
 }
 
 function isRepairOnlyReplicaRaftRole(role) {
-  return REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES.includes(
-    String(role || '').toLowerCase(),
-  );
+  return isRepairOnlyRaftRole(role);
 }
 
 export {
@@ -190,8 +179,6 @@ export {
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_OPERATION,
   REPLICA_STATE_MACHINE_REASON,
-  REPLICA_RAFT_ROLE_LOAD_READY_STATES,
-  REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES,
   REPLICA_STATE_MACHINE_STATE,
   REPLICA_STATE_MACHINE_LOAD_READY_STATES,
   REPLICA_STATE_MACHINE_REPAIR_ONLY_STATES,

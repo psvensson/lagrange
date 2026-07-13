@@ -1,5 +1,5 @@
 import {TABLES, SERVICE_TYPE} from '../constants/index.js';
-import {VOTER_RAFT_ROLES} from '../raft/constants.js';
+import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {ReplicaStatus} from './replica-operation-progress.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
@@ -24,7 +24,7 @@ const {isOperationLedgerPartitionTable} = REBALANCE_COORDINATOR_SHARED;
 const QUORUM_VOTER_STATUSES = Object.freeze(
   new Set([ReplicaStatus.ACTIVE, ReplicaStatus.REMOVING]),
 );
-// Voter raft roles = the shared VOTER_RAFT_ROLES (raft/constants.js); learners
+// Voter raft roles = the shared VOTER_RAFT_ROLES (raft/replica-voter-readiness.js); learners
 // never count. (Status side stays local — REMOVING is intentionally a quorum
 // voter here, see QUORUM_VOTER_STATUSES.)
 const QUORUM_VOTER_RAFT_ROLES = VOTER_RAFT_ROLES;

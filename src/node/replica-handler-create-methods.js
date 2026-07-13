@@ -13,7 +13,7 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
-import {RAFT_ROLE} from '../raft/constants.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {
   REPLICA_HANDLER_ERROR_MSG,
@@ -504,7 +504,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         return false;
       }
       const trackedRole = this.getTrackedReplicaRole(replicaId);
-      if (!trackedRole || trackedRole === RAFT_ROLE.LEARNER) {
+      if (!isVoterRaftRole(trackedRole)) {
         return false;
       }
       const normalizedRole = normalizePublishedRaftRole(trackedRole, {

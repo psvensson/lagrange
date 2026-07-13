@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 
 const {
   CONTROL_PLANE_PARTITION_IDS,
@@ -9,7 +10,6 @@ const {
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_VALUE,
   PRESSURE_WORK_CLASS,
-  RaftRole,
   SYSTEM_TABLE_NAME,
   isSystemTableWriteReady,
   normalizePublishedRaftRole,
@@ -54,7 +54,7 @@ class PartitionServiceMetadataDeliveryMethods {
    * @return {boolean} Whether a re-assert was queued.
    */
   reassertDurableRaftRole() {
-    if (!this.role || this.role === RaftRole.LEARNER) {
+    if (!isVoterRaftRole(this.role)) {
       return false;
     }
     this.queueRoleUpdate(this.role);

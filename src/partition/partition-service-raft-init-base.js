@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   reconcileRaftPeersFromCacheForService,
 } from './partition-service-raft-peer-cache-reconciliation.js';
@@ -406,7 +407,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         return true;
       }
       const isJoiningLearner =
-        this.isJoiningExistingGroup === true && this.role === RaftRole.LEARNER;
+        this.isJoiningExistingGroup === true &&
+        isCatchupLearnerRaftRole(this.role);
       if (!isJoiningLearner) {
         return false;
       }

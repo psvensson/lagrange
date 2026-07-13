@@ -29,7 +29,7 @@ const {
   LOAD_LANE_SOFT_ADMISSION_REASON_CODES,
   LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS,
   LOAD_LANE_TABLE_ADMISSION_STATE,
-  LOAD_LANE_VOTER_READY_REPLICA_ROLES,
+  LOAD_ROUTABLE_RAFT_ROLES,
   META_SERVICE_ID,
   SQLParser,
   WASM_SERVICE_PROTOCOL,
@@ -200,7 +200,7 @@ class AdminWebSocketLoadLaneAdmission extends AdminWebSocketAPIBase {
       benchmarkAdmission.localReplicaRole || EMPTY_STRING,
     ).toLowerCase();
     const localReplicaVoterReady =
-      LOAD_LANE_VOTER_READY_REPLICA_ROLES.has(localReplicaRole);
+      LOAD_ROUTABLE_RAFT_ROLES.has(localReplicaRole);
     const degradedByOperationIds = Array.isArray(
       benchmarkAdmission.degradedByOperationIds,
     ) ?

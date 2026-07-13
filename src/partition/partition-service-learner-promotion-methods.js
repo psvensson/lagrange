@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {filterSharedRows} from '../cache/shared-row-read.js';
 
 const {
@@ -7,7 +8,6 @@ const {
   COLUMN,
   CRITICAL_SYSTEM_PARTITION_IDS,
   LIFECYCLE_REASON,
-  PARTITION_RAFT_ROLE,
   PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
@@ -261,14 +261,13 @@ class PartitionServiceLearnerPromotionMethods {
   isLearnerServiceRowForPromotion(serviceRow) {
     return (
       this.isLiveReplicaServiceRowForPromotion(serviceRow) &&
-      serviceRow?.[COLUMN.RAFT_ROLE] === PARTITION_RAFT_ROLE.LEARNER
+      isCatchupLearnerRaftRole(serviceRow?.[COLUMN.RAFT_ROLE])
     );
   }
   isActiveVoterServiceRowForPromotion(serviceRow) {
     const raftRole = serviceRow?.[COLUMN.RAFT_ROLE];
     return (
       this.isLiveReplicaServiceRowForPromotion(serviceRow) &&
-      raftRole !== PARTITION_RAFT_ROLE.LEARNER &&
       ACTIVE_VOTER_ROLES.has(raftRole)
     );
   }
@@ -302,7 +301,7 @@ class PartitionServiceLearnerPromotionMethods {
       (serviceRow) => this.isLocalReplicaServiceRowForPromotion(serviceRow),
     );
     if (
-      this.role === RaftRole.LEARNER &&
+      isCatchupLearnerRaftRole(this.role) &&
       localReplicaId.length > 0 &&
       operationReplicaIds.has(localReplicaId) &&
       !localLearnerRowVisible
@@ -327,7 +326,7 @@ class PartitionServiceLearnerPromotionMethods {
     const baseLearnerCount = operationScopedLearnerCount.scopeActive ?
       operationScopedLearnerCount.learnerCount :
       observedLearnerCount;
-    if (this.role !== RaftRole.LEARNER) {
+    if (!isCatchupLearnerRaftRole(this.role)) {
       return {
         activeVoterCount: observedActiveVoterCount,
         learnerCount: baseLearnerCount,
@@ -357,7 +356,7 @@ class PartitionServiceLearnerPromotionMethods {
       [];
     const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
     if (
-      this.role !== RaftRole.LEARNER ||
+      !isCatchupLearnerRaftRole(this.role) ||
       localNodeId.length === 0 ||
       learnerNodeIds.includes(localNodeId)
     ) {
@@ -455,7 +454,7 @@ class PartitionServiceLearnerPromotionMethods {
    */
   checkLearnerPromotion() {
     this.learnerPromotionTimer = null;
-    if (this.role !== RaftRole.LEARNER) {
+    if (!isCatchupLearnerRaftRole(this.role)) {
       return;
     }
     if (!this.leaderId) {

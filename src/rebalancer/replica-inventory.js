@@ -1,4 +1,4 @@
-import {VOTER_RAFT_ROLES} from '../raft/constants.js';
+import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
 import {normalizeReplicaOperationRecord} from './replica-operation-liveness.js';
 import {OperationType, ReplicaStatus} from './replica-status.js';
 import {
