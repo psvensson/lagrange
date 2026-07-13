@@ -356,43 +356,6 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
   }
 
   /**
-   * Provisioning-side progress signal for the whole-cluster quorum-concentration
-   * hold. The provisioning transient re-wait uses this to tell a spread that is
-   * PROGRESSING (keep waiting the cure out) from a WEDGE (fail fast) — the same
-   * concentration measure the hold itself gates on, so the two can never
-   * disagree about "is the cure still curing".
-   *
-   * `worstConcentration` is the MAX `maxVotersOnOneNode` across the actionable
-   * concentrated ledger partitions (higher = more concentrated). As voters
-   * spread off the hottest node it falls toward 1; when no ledger partition is
-   * concentrated the hold has cleared (`holdEngaged=false`). It is intentionally
-   * derived from the authoritative placement rows, not from any provisioning
-   * cache.
-   * @return {{holdEngaged: boolean, worstConcentration: number|null}}
-   */
-  resolveOperationLedgerConcentrationProgressSnapshot() {
-    const evaluation = evaluateOperationLedgerQuorumConcentration(
-      this.systemTableCache,
-    );
-    if (evaluation.holdEngaged !== true) {
-      return {holdEngaged: false, worstConcentration: null};
-    }
-    let worstConcentration = null;
-    for (const partition of evaluation.concentratedPartitions) {
-      if (partition.spreadActionable !== true) {
-        continue;
-      }
-      if (
-        worstConcentration === null ||
-        partition.maxVotersOnOneNode > worstConcentration
-      ) {
-        worstConcentration = partition.maxVotersOnOneNode;
-      }
-    }
-    return {holdEngaged: true, worstConcentration};
-  }
-
-  /**
    * Periodic (not per-rejection) observability while the quorum-spread hold
    * is engaged: a hold that persists because the cure keeps failing must be
    * loud, not silent.

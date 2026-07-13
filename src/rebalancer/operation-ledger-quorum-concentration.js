@@ -127,6 +127,21 @@ function evaluateLedgerPartitionConcentration({
     return null;
   }
   const {hottestNodeId, maxVotersOnOneNode} = resolveHottestNode(voterRows);
+  // Concentration is a PLACEMENT-SKEW condition — cured by a spread REPLACE
+  // that moves a voter off a multi-voter node. With at most one voter per
+  // node there is no skew a REPLACE can reduce (moving a lone voter between
+  // nodes keeps maxVotersOnOneNode at 1), yet the majority formula below is
+  // unsatisfiable for any placement of <=2 voters — so a 1-2-voter ledger
+  // view would classify as permanently concentrated and the planner would
+  // re-mint impotent count-neutral cure REPLACEs while the hold defers all
+  // dependent admission (live: seven successive ledger REPLACEs over 15min
+  // against a 2-voter view, demo run 2026-07-13T06:52; the 07-12 docker
+  // probe storms). Too few voters is UNDER-REPLICATION — the ADD/promotion
+  // machinery's concern — not concentration. The run-22 protection case
+  // (two or more voters on one node) is unaffected.
+  if (maxVotersOnOneNode <= 1) {
+    return null;
+  }
   const majority = Math.floor(totalVoters / 2) + 1;
   if (totalVoters - maxVotersOnOneNode >= majority) {
     return null;
