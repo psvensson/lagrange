@@ -31,6 +31,8 @@
 
 ## Findings
 - **cure-typing-owner-migration-admission-lanes-main**: sealed symptom reproduces on HEAD: census metric 8 with all 8 admission_lane_conjunct sites intact across 6 files (src changes since draft are the owner module and the sibling minter migration) [solve/oracle/cure-typing-owner-migration-admission-lanes.json]
+- **cure-typing-owner-migration-admission-lanes-main**: independent verification passed: TRUSTED-WITH-NOTES via differential truth-table harness (old logic re-implemented from the diff vs new owner fns; 0 reachable divergences; plan-fetch/tracker-mutation counts preserved; both import orders TDZ-free). Two theoretical unreachable divergences recorded as notes: whitespace-only budget partition_id would skip the ordinary serial gate (pid falls back to entityId today), and lowercase move types at the scope seam now normalize (closes a CL-013-style case fail-open on an input production wiring cannot produce) [subagent:a2cb3e5c25b3921c8]
+- **cure-typing-owner-migration-admission-lanes-main**: independent verification passed for the aggregate: single-attempt quest, aggregate fingerprint byte-identical to the adversarially verified attempt (differential harness, 0 reachable divergences) [subagent:a2cb3e5c25b3921c8]
 
 ## Theories
 _(none recorded)_
