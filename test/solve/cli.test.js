@@ -317,6 +317,29 @@ tap.test('solve CLI smoke (P2)', async (t) => {
       scope: 'attempt',
       fingerprint,
     });
+    t.throws(() => run(root, [
+      'finding', '--id', 'demo', '--frontier', 'demo-main',
+      '--kind', 'verifier-rejection', '--claim', 'rejected',
+      '--evidence', 'subagent:verify-2',
+      '--verification-scope', 'aggregate',
+      '--verification-fingerprint', fingerprint,
+    ]), /verification-scope attempt/u);
+    run(root, [
+      'finding', '--id', 'demo', '--frontier', 'demo-main',
+      '--kind', 'verifier-rejection', '--claim', 'rejected',
+      '--evidence', 'subagent:verify-2',
+      '--verification-scope', 'attempt',
+      '--verification-fingerprint', fingerprint,
+    ]);
+    const rejection = fs.readFileSync(
+      path.join(root, 'solve', 'log', 'demo.ndjson'), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line)).at(-1);
+    t.same(rejection.verification, {
+      schemaVersion: 1,
+      scope: 'attempt',
+      fingerprint,
+      verdict: 'rejected',
+    });
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

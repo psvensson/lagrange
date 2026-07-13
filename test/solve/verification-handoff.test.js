@@ -11,14 +11,17 @@ import {
 } from '../../scripts/solve/handoff.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {writeReport} from '../../scripts/solve/report.js';
+import {buildNextLines} from '../../scripts/solve/next.js';
 import {
   appendFinding,
+  projectState,
   readLog,
   saveQuest,
 } from '../../scripts/solve/store.js';
 import {
   aggregateSourceFingerprint,
   buildVerificationFinding,
+  findApprovedRejectionReplacement,
   sourceChangingAttempts,
   verificationState,
 } from '../../scripts/solve/verification.js';
@@ -90,6 +93,21 @@ function approve(root, quest, scope, fingerprint) {
   });
 }
 
+function reject(root, quest, fingerprint) {
+  return appendFinding(root, quest.id, {
+    frontier: 'runtime-verify-main',
+    kind: 'verifier-rejection',
+    claim: 'independent verification rejected this exact source attempt',
+    evidence: 'subagent:rejection-verifier',
+    verification: {
+      schemaVersion: 1,
+      scope: 'attempt',
+      fingerprint,
+      verdict: 'rejected',
+    },
+  });
+}
+
 function recordAttempt({root, quest, oracle}, changedPath, metric, name) {
   const pending = runStep(root, quest);
   fs.writeFileSync(path.join(root, changedPath),
@@ -131,6 +149,67 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.end();
   });
 
+  t.test('rejecting a terminal attempt reopens it for a real replacement step', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 0, 'terminal-rejected-a');
+    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
+    const rejectedFingerprint =
+      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`;
+    const appendCandidateRejection = (frontier, fingerprint, evidence) =>
+      appendFinding(fx.root, fx.quest.id, {
+        frontier,
+        kind: 'verifier-rejection',
+        claim: 'candidate terminal rejection',
+        evidence,
+        verification: {
+          schemaVersion: 1,
+          scope: 'attempt',
+          fingerprint,
+          verdict: 'rejected',
+        },
+      });
+    appendCandidateRejection(
+      'other-frontier',
+      rejectedFingerprint,
+      'subagent:wrong-frontier',
+    );
+    appendCandidateRejection(
+      'runtime-verify-main',
+      `sha256:${'9'.repeat(64)}`,
+      'subagent:unbound-fingerprint',
+    );
+    appendCandidateRejection(
+      'runtime-verify-main',
+      rejectedFingerprint,
+      'subagent:v:bad',
+    );
+    t.equal(
+      projectState(
+        fx.quest,
+        readLog(fx.root, fx.quest.id),
+      ).questStatus,
+      'solved',
+      'wrong-frontier, unbound, and malformed rejections stay terminal',
+    );
+    reject(
+      fx.root,
+      fx.quest,
+      rejectedFingerprint,
+    );
+
+    t.equal(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+      'terminal aggregate approval never outranks exact rejection replacement',
+    );
+    const replacement = runStep(fx.root, fx.quest);
+    t.equal(replacement.terminal, null,
+      'the rendered replacement step is executable, not refused as solved');
+    t.equal(replacement.before.metric, 0);
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('checkpoint rechecks every approved uncheckpointed attempt', (t) => {
     const fx = fixture();
     recordAttempt(fx, 'src/a.js', 1, 'a');
@@ -147,6 +226,154 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       /a\.diff.*changed after approval/u,
     );
     fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a rejected attempt requires an exact-approved same-base replacement', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'rejected-a');
+    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
+    const rejectedFingerprint =
+      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`;
+    reject(fx.root, fx.quest, rejectedFingerprint);
+
+    let state = verificationState(
+      fx.root,
+      fx.quest,
+      readLog(fx.root, fx.quest.id),
+    );
+    t.match(
+      state.attemptProblems.map((item) => item.message).join('\n'),
+      /was explicitly rejected.*same-frontier, same-base/u,
+    );
+    t.same(state.pendingAttempts, [],
+      'the Solver never asks for approval of the rejected fingerprint');
+    t.equal(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+      'next advances to a replacement step instead of approving rejected bytes',
+    );
+    t.equal(checkpointGate(fx.root, fx.quest).status, 'fail');
+
+    recordAttempt(fx, 'src/a.js', 0, 'replacement-a');
+    const replacementAttempt = latestAttempt(fx.root, fx.quest);
+    const replacementFingerprint =
+      `sha256:${replacementAttempt.changeRefIdentity.sha256}`;
+    state = verificationState(fx.root, fx.quest, readLog(fx.root, fx.quest.id));
+    t.same(
+      state.pendingAttempts.map((attempt) => attempt.fingerprint),
+      [replacementFingerprint],
+      'next verification work is the replacement, never the rejected attempt',
+    );
+    t.match(buildNextLines(fx.root, fx.quest.id)[0],
+      new RegExp(replacementFingerprint, 'u'));
+    t.match(
+      state.attemptProblems.map((item) => item.message).join('\n'),
+      /explicitly rejected|requires a later exact approval/u,
+    );
+
+    approve(fx.root, fx.quest, 'attempt', replacementFingerprint);
+    state = verificationState(fx.root, fx.quest, readLog(fx.root, fx.quest.id));
+    t.same(state.attemptProblems, []);
+    t.equal(state.resolvedRejectedAttempts.length, 1);
+    t.same(state.unresolvedRejectedAttempts, []);
+    t.equal(
+      state.resolvedRejectedAttempts[0].replacement.fingerprint,
+      replacementFingerprint,
+    );
+    t.equal(checkpointGate(fx.root, fx.quest).status, 'pass',
+      'checkpoint exactness rechecks the approved replacement, not rejected bytes');
+    t.notMatch(
+      auditQuest(fx.root, fx.quest).problems.map((item) => item.message).join('\n'),
+      /explicitly rejected/u,
+      'audit advances past the superseded rejection',
+    );
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('rejection findings fail closed on scope and fingerprint shape', (t) => {
+    const fingerprint = `sha256:${'1'.repeat(64)}`;
+    t.throws(() => buildVerificationFinding({
+      kind: 'verifier-rejection',
+      evidence: 'subagent:rejector',
+      verificationScope: 'aggregate',
+      verificationFingerprint: fingerprint,
+    }), /verification-scope attempt/u);
+    t.throws(() => buildVerificationFinding({
+      kind: 'verifier-rejection',
+      evidence: 'subagent:',
+      verificationScope: 'attempt',
+      verificationFingerprint: fingerprint,
+    }), /non-empty-stable-id/u);
+    t.same(buildVerificationFinding({
+      kind: 'verifier-rejection',
+      evidence: 'subagent:rejector',
+      verificationScope: 'attempt',
+      verificationFingerprint: fingerprint,
+    }), {
+      schemaVersion: 1,
+      scope: 'attempt',
+      fingerprint,
+      verdict: 'rejected',
+    });
+    t.end();
+  });
+
+  t.test('rejected replacement matching rejects partial, wrong-base, and cross-frontier attempts', (t) => {
+    const fingerprint = `sha256:${'2'.repeat(64)}`;
+    const rejected = {
+      index: 0,
+      event: {frontier: 'main', workspaceBaseCommit: 'base-a'},
+      sourcePaths: ['src/a.js', 'src/b.js'],
+    };
+    const approval = {
+      type: 'finding',
+      frontier: 'main',
+      kind: 'verifier-approval',
+      evidence: 'subagent:replacement-verifier',
+      verification: {schemaVersion: 1, scope: 'attempt', fingerprint},
+    };
+    const candidate = (overrides = {}) => ({
+      index: 2,
+      contracted: true,
+      fingerprint,
+      event: {frontier: 'main', workspaceBaseCommit: 'base-a'},
+      sourcePaths: ['src/a.js', 'src/b.js'],
+      ...overrides,
+    });
+    const log = [{type: 'attempt'}, {type: 'finding'}, {type: 'attempt'}, approval];
+
+    t.equal(findApprovedRejectionReplacement(
+      log,
+      [candidate({sourcePaths: ['src/a.js']})],
+      rejected,
+      1,
+    ), null, 'partial path coverage is not a replacement');
+    t.equal(findApprovedRejectionReplacement(
+      log,
+      [candidate({event: {frontier: 'main', workspaceBaseCommit: 'base-b'}})],
+      rejected,
+      1,
+    ), null, 'a different Git base is not a replacement');
+    t.equal(findApprovedRejectionReplacement(
+      log,
+      [candidate({event: {frontier: 'other', workspaceBaseCommit: 'base-a'}})],
+      rejected,
+      1,
+    ), null, 'a different frontier is not a replacement');
+    t.equal(findApprovedRejectionReplacement(
+      log,
+      [candidate()],
+      {...rejected, fingerprint},
+      1,
+    ), null, 'identical rejected bytes cannot be laundered by a duplicate attempt');
+    t.equal(
+      findApprovedRejectionReplacement(log, [candidate()], rejected, 1)
+        ?.attempt.fingerprint,
+      fingerprint,
+      'same-base, same-frontier, full-path exact approval resolves rejection',
+    );
     t.end();
   });
 

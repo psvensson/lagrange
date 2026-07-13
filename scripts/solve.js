@@ -414,6 +414,10 @@ function cmdProbe(root, args) {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
+function optionalStringArgument(args, name) {
+  return typeof args[name] === 'string' ? args[name] : null;
+}
+
 function cmdFinding(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('finding: --id <questId> is required');
@@ -448,20 +452,20 @@ function cmdFinding(root, args) {
           null,
       } :
       null;
+  const kind = optionalStringArgument(args, 'kind');
+  const evidence = optionalStringArgument(args, 'evidence');
   const verification = buildVerificationFinding({
-    kind: typeof args.kind === 'string' ? args.kind : null,
-    evidence: typeof args.evidence === 'string' ? args.evidence : null,
-    verificationScope: typeof args['verification-scope'] === 'string' ?
-      args['verification-scope'] : null,
+    kind,
+    evidence,
+    verificationScope: optionalStringArgument(args, 'verification-scope'),
     verificationFingerprint:
-      typeof args['verification-fingerprint'] === 'string' ?
-        args['verification-fingerprint'] : null,
+      optionalStringArgument(args, 'verification-fingerprint'),
   });
   const stamped = appendFinding(root, id, {
     frontier: args.frontier,
     claim: args.claim,
-    kind: typeof args.kind === 'string' ? args.kind : null,
-    evidence: typeof args.evidence === 'string' ? args.evidence : null,
+    kind,
+    evidence,
     rulesOut: typeof args.rulesOut === 'string' ? args.rulesOut : null,
     regressionClassification,
     scopePressureClassification,
@@ -627,16 +631,35 @@ function cmdReflect(root, args) {
   process.stdout.write(
     `recorded ${altitude ? 'altitude ' : ''}reflection @ ${stamped.ts}\n`);
 }
-function cmdStep(root, args) {
-  const id = args.id || args._[0];
-  if (!id) throw new Error('step: --id <questId> is required');
-  const quest = loadQuest(root, id);
-  if (args.abort) {
-    process.stdout.write(stepAbort(root, id) ?
-      'pending step aborted\n' :
-      'no pending step\n');
-    return;
+function writeStepTerminal(root, quest, result) {
+  if (result.terminal === 'theory-required' || result.terminal === 'blocked') {
+    const header = result.terminal === 'theory-required' ?
+      `THEORY REQUIRED — ${result.frontier} rung ${result.rungIndex}` :
+      `BLOCKED (${result.disposition || 'recoverable'}) — ${result.frontier} ` +
+      `rung ${result.rungIndex}`;
+    const next = result.nextCommand ? `\nnext: ${result.nextCommand}` : '';
+    process.stdout.write(
+      `${header}\n` +
+      `${(result.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
+      `${next}\n`);
+    emitAdvisories(root, quest);
+    refreshFrontierBoard(root);
+    return true;
   }
+  if (result.terminal === 'solved') {
+    process.stdout.write(`SOLVED — evidence: ${result.evidence || '(none)'}\n`);
+    refreshFrontierBoard(root);
+    return true;
+  }
+  if (result.terminal === 'exhausted') {
+    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
+    refreshFrontierBoard(root);
+    return true;
+  }
+  return false;
+}
+
+function validateStepCommitArguments(args) {
   if (args.changeRef && !args.commit) {
     throw new Error('step commit requires --commit with --changeRef');
   }
@@ -649,6 +672,19 @@ function cmdStep(root, args) {
   if (args.commit && !args.changeRef && !args[AUTO_DIFF_ARGUMENT]) {
     throw new Error(STEP_CHANGE_REF_REQUIRED);
   }
+}
+
+function cmdStep(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('step: --id <questId> is required');
+  const quest = loadQuest(root, id);
+  if (args.abort) {
+    process.stdout.write(stepAbort(root, id) ?
+      'pending step aborted\n' :
+      'no pending step\n');
+    return;
+  }
+  validateStepCommitArguments(args);
   const r = runStep(root, quest, {
     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
     autoDiff: Boolean(args[AUTO_DIFF_ARGUMENT]),
@@ -656,30 +692,7 @@ function cmdStep(root, args) {
     force: Boolean(args.force),
     ...theoryCommitArgs(args),
   });
-  if (r.terminal === 'theory-required' || r.terminal === 'blocked') {
-    const header = r.terminal === 'theory-required' ?
-      `THEORY REQUIRED — ${r.frontier} rung ${r.rungIndex}` :
-      `BLOCKED (${r.disposition || 'recoverable'}) — ${r.frontier} ` +
-      `rung ${r.rungIndex}`;
-    const next = r.nextCommand ? `\nnext: ${r.nextCommand}` : '';
-    process.stdout.write(
-      `${header}\n` +
-      `${(r.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
-      `${next}\n`);
-    emitAdvisories(root, quest);
-    refreshFrontierBoard(root);
-    return;
-  }
-  if (r.terminal === 'solved') {
-    process.stdout.write(`SOLVED — evidence: ${r.evidence || '(none)'}\n`);
-    refreshFrontierBoard(root);
-    return;
-  }
-  if (r.terminal === 'exhausted') {
-    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
-    refreshFrontierBoard(root);
-    return;
-  }
+  if (writeStepTerminal(root, quest, r)) return;
   if (!args.commit) {
     process.stdout.write(
       `pinned ${r.frontier}: metric ${r.before.metric}\n` +

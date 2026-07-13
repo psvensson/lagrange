@@ -44,6 +44,47 @@ const DONE_WHEN_PROBE_SCOPE = 'doneWhen';
 import {isFrontierProbeEvent} from './probe-spec.js';
 
 const UNKNOWN_METRIC = '?';
+const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
+const VERIFICATION_SCOPE_ATTEMPT = 'attempt';
+const VERIFICATION_VERDICT_REJECTED = 'rejected';
+const VERIFICATION_FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const VERIFIER_EVIDENCE_PATTERN =
+  /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
+
+function isStructuredVerifierRejection(event) {
+  return event?.type === EVENT_FINDING &&
+    event.kind === VERIFIER_REJECTION_FINDING_KIND &&
+    event.verification?.schemaVersion === 1 &&
+    event.verification?.scope === VERIFICATION_SCOPE_ATTEMPT &&
+    event.verification?.verdict === VERIFICATION_VERDICT_REJECTED &&
+    VERIFICATION_FINGERPRINT_PATTERN.test(
+      String(event.verification?.fingerprint || ''),
+    ) &&
+    VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''));
+}
+
+function boundVerifierRejectionEvents(log) {
+  const contractedAttemptKeys = new Set();
+  const boundRejections = new Set();
+  for (const event of log) {
+    const fingerprint = `sha256:${event.changeRefIdentity?.sha256 || ''}`;
+    const key = `${event.frontier || ''}\n${fingerprint}`;
+    if (event.type === EVENT_ATTEMPT &&
+        event.verificationContractVersion === 1 &&
+        VERIFICATION_FINGERPRINT_PATTERN.test(fingerprint)) {
+      contractedAttemptKeys.add(key);
+      continue;
+    }
+    if (isStructuredVerifierRejection(event)) {
+      const rejectionKey = `${event.frontier || ''}\n` +
+        event.verification.fingerprint;
+      if (contractedAttemptKeys.has(rejectionKey)) {
+        boundRejections.add(event);
+      }
+    }
+  }
+  return boundRejections;
+}
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, {recursive: true});
@@ -173,7 +214,7 @@ function applyReopen(frontier, event) {
   frontier.reason = event.reason || null;
 }
 
-function applyFinding(frontier, event) {
+function applyFinding(frontier, event, reopensTerminal = false) {
   if (!frontier) return;
   frontier.findings.push({
     claim: event.claim || null,
@@ -185,6 +226,10 @@ function applyFinding(frontier, event) {
     scopePressureClassification: event.scopePressureClassification || null,
     ts: event.ts || null,
   });
+  if (reopensTerminal && frontier.status === STATUS_SOLVED) {
+    frontier.status = STATUS_OPEN;
+    frontier.reason = 'exact terminal source attempt was rejected';
+  }
 }
 
 function applyEvidenceIngested(frontierState, event) {
@@ -313,7 +358,7 @@ const FRONTIER_HANDLERS = {
   [EVENT_EVIDENCE_INGESTED]: applyEvidenceIngested,
 };
 
-function applyQuestStateEvent(questState, event) {
+function applyQuestStateEvent(questState, event, reopensTerminal = false) {
   switch (event.type) {
   case EVENT_QUEST:
     questState.status = event.status;
@@ -322,6 +367,12 @@ function applyQuestStateEvent(questState, event) {
   case EVENT_EVIDENCE_INGESTED:
     if (event.probeScope === DONE_WHEN_PROBE_SCOPE &&
         event.invalidSample !== true && event.done === false) {
+      questState.status = STATUS_OPEN;
+      questState.evidence = event.evidence || null;
+    }
+    return false;
+  case EVENT_FINDING:
+    if (reopensTerminal) {
       questState.status = STATUS_OPEN;
       questState.evidence = event.evidence || null;
     }
@@ -338,10 +389,25 @@ export function projectState(quest, log) {
   );
   const questState = {status: STATUS_OPEN, evidence: null};
   const theories = emptyTheoryState();
+  const boundRejections = boundVerifierRejectionEvents(log);
   for (const event of log) {
-    if (applyQuestStateEvent(questState, event)) continue;
+    const reopensTerminal = boundRejections.has(event);
+    if (applyQuestStateEvent(
+      questState,
+      event,
+      reopensTerminal,
+    )) continue;
+    if (event.type === EVENT_FINDING) {
+      applyFinding(
+        event.frontier ? frontiers.get(event.frontier) : null,
+        event,
+        reopensTerminal,
+      );
+    }
     const handler = FRONTIER_HANDLERS[event.type];
-    if (handler) handler(event.frontier ? frontiers.get(event.frontier) : null, event);
+    if (handler && event.type !== EVENT_FINDING) {
+      handler(event.frontier ? frontiers.get(event.frontier) : null, event);
+    }
     if (event.type === EVENT_THEORY_SYSTEM_DECLARED) {
       addTheory(theories, event, THEORY_SCOPE_SYSTEM);
     } else if (event.type === EVENT_THEORY_OPTION_DECLARED) {

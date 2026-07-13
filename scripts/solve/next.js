@@ -66,6 +66,11 @@ function nextAction({questId, state, pending, gateStop, blocker,
       pendingVerification.fingerprint || 'sha256:<missing>',
     );
   }
+  if (verification.unresolvedRejectedAttempts.length > 0) {
+    return typedNextAction(pending ?
+      pendingCommitCommand(questId) :
+      `node scripts/solve.js step --id ${questId}`);
+  }
   if (TERMINAL_STATUSES.includes(state.questStatus)) {
     if (verification.attempts.some((attempt) => attempt.contracted) &&
       !verification.aggregateApproval) {

@@ -14,6 +14,8 @@ import {
 
 export const VERIFICATION_CONTRACT_VERSION = 1;
 export const VERIFIER_APPROVAL_FINDING_KIND = 'verifier-approval';
+const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
+const VERIFICATION_VERDICT_REJECTED = 'rejected';
 export const VERIFICATION_SCOPE = Object.freeze({
   ATTEMPT: 'attempt',
   AGGREGATE: 'aggregate',
@@ -89,6 +91,17 @@ function structuredApprovalMatches(event, scope, fingerprint) {
   return verification.scope === scope || verification.scope === VERIFICATION_SCOPE.BOTH;
 }
 
+function structuredRejectionMatches(event, fingerprint) {
+  if (event.type !== EVENT_FINDING ||
+    event.kind !== VERIFIER_REJECTION_FINDING_KIND ||
+    !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) return false;
+  const verification = verificationOf(event);
+  return verification?.schemaVersion === VERIFICATION_CONTRACT_VERSION &&
+    verification.scope === VERIFICATION_SCOPE.ATTEMPT &&
+    verification.fingerprint === fingerprint &&
+    verification.verdict === VERIFICATION_VERDICT_REJECTED;
+}
+
 function legacyApprovalMatches(event, frontier) {
   if (event.type !== EVENT_FINDING || event.frontier !== frontier ||
     !String(event.evidence || '').startsWith('subagent:')) return false;
@@ -100,6 +113,63 @@ function laterApproval(log, attempt, scope, fingerprint) {
   return log.slice(attempt.index + 1).find((event) =>
     event.frontier === attempt.event.frontier &&
     structuredApprovalMatches(event, scope, fingerprint));
+}
+
+function laterRejection(log, attempt, fingerprint) {
+  for (let index = attempt.index + 1; index < log.length; index += 1) {
+    const event = log[index];
+    if (event.frontier === attempt.event.frontier &&
+        structuredRejectionMatches(event, fingerprint)) {
+      return {event, index};
+    }
+  }
+  return null;
+}
+
+function rejectionDisposition(log, attempts, attempt) {
+  const rejection = laterRejection(log, attempt, attempt.fingerprint);
+  if (!rejection) return null;
+  const replacement = findApprovedRejectionReplacement(
+    log,
+    attempts,
+    attempt,
+    rejection.index,
+  );
+  return replacement ?
+    {rejection, replacement} :
+    {rejection, replacement: null};
+}
+
+function sourcePathSuperset(candidate, rejected) {
+  const candidatePaths = new Set(candidate.sourcePaths);
+  return rejected.sourcePaths.every((filePath) => candidatePaths.has(filePath));
+}
+
+export function findApprovedRejectionReplacement(
+  log,
+  attempts,
+  rejectedAttempt,
+  rejectionIndex,
+) {
+  for (const candidate of attempts) {
+    if (candidate.index <= rejectionIndex ||
+        !candidate.contracted ||
+        candidate.fingerprint === rejectedAttempt.fingerprint ||
+        candidate.event.frontier !== rejectedAttempt.event.frontier ||
+        candidate.event.workspaceBaseCommit !==
+          rejectedAttempt.event.workspaceBaseCommit ||
+        !sourcePathSuperset(candidate, rejectedAttempt)) {
+      continue;
+    }
+    const approval = laterApproval(
+      log,
+      candidate,
+      VERIFICATION_SCOPE.ATTEMPT,
+      candidate.fingerprint,
+    );
+    if (approval) return {attempt: candidate, approval};
+  }
+  return null;
 }
 
 function gitStatusHasUntracked(root, paths) {
@@ -214,6 +284,8 @@ export function verificationState(root, quest, log, options = {}) {
   const attempts = sourceChangingAttempts(root, quest, log, options);
   const attemptProblems = [];
   const pendingAttempts = [];
+  const resolvedRejectedAttempts = [];
+  const unresolvedRejectedAttempts = [];
   for (const attempt of attempts) {
     if (!attempt.contracted) {
       const approval = log.slice(attempt.index + 1)
@@ -232,6 +304,29 @@ export function verificationState(root, quest, log, options = {}) {
         'is missing a sealed verification fingerprint',
       ));
       pendingAttempts.push(attempt);
+      continue;
+    }
+    const rejection = rejectionDisposition(log, attempts, attempt);
+    if (rejection?.replacement) {
+      resolvedRejectedAttempts.push({
+        attempt,
+        rejection: rejection.rejection.event,
+        replacement: rejection.replacement.attempt,
+        approval: rejection.replacement.approval,
+      });
+      continue;
+    }
+    if (rejection) {
+      attemptProblems.push(attemptProblem(
+        attempt,
+        `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
+          'same-frontier, same-base source attempt covering every rejected ' +
+          'source path plus its own later exact approval',
+      ));
+      unresolvedRejectedAttempts.push({
+        attempt,
+        rejection: rejection.rejection.event,
+      });
       continue;
     }
     const approval = laterApproval(
@@ -269,16 +364,23 @@ export function verificationState(root, quest, log, options = {}) {
     aggregate,
     aggregateApproval,
     aggregateProblems,
+    resolvedRejectedAttempts,
+    unresolvedRejectedAttempts,
   };
 }
 
 export function checkpointVerificationProblems(root, quest, log, options = {}) {
   const state = verificationState(root, quest, log, options);
   if (state.attemptProblems.length > 0) return state.attemptProblems;
+  const resolvedRejectedIndexes = new Set(
+    state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
+  );
   const checkpointCommit = latestCheckpointCommit(root, quest.id);
   const problems = [];
   const uncheckpointed = state.attempts.filter((attempt) =>
-    attempt.contracted && attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+    attempt.contracted &&
+    !resolvedRejectedIndexes.has(attempt.index) &&
+    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
   const contracted = state.attempts.filter((attempt) => attempt.contracted);
   const coveredPaths = new Set(uncheckpointed.flatMap(
     (attempt) => attempt.inspection.changedPaths));
@@ -322,26 +424,33 @@ export function terminalVerificationProblems(root, quest, log, options = {}) {
 }
 
 export function buildVerificationFinding(args) {
-  if (args.kind !== VERIFIER_APPROVAL_FINDING_KIND) return null;
+  const isApproval = args.kind === VERIFIER_APPROVAL_FINDING_KIND;
+  const isRejection = args.kind === VERIFIER_REJECTION_FINDING_KIND;
+  if (!isApproval && !isRejection) return null;
+  const label = isRejection ? 'verifier-rejection' : 'verifier-approval';
   if (!VERIFIER_EVIDENCE_PATTERN.test(String(args.evidence || ''))) {
     throw new Error(
-      'verifier-approval requires --evidence subagent:<non-empty-stable-id>',
+      `${label} requires --evidence subagent:<non-empty-stable-id>`,
     );
   }
   const scope = args.verificationScope;
   if (!Object.values(VERIFICATION_SCOPE).includes(scope)) {
     throw new Error(
-      'verifier-approval requires --verification-scope attempt|aggregate|both',
+      `${label} requires --verification-scope attempt|aggregate|both`,
     );
+  }
+  if (isRejection && scope !== VERIFICATION_SCOPE.ATTEMPT) {
+    throw new Error('verifier-rejection requires --verification-scope attempt');
   }
   if (!validVerificationFingerprint(args.verificationFingerprint)) {
     throw new Error(
-      'verifier-approval requires --verification-fingerprint sha256:<64 hex>',
+      `${label} requires --verification-fingerprint sha256:<64 hex>`,
     );
   }
   return {
     schemaVersion: VERIFICATION_CONTRACT_VERSION,
     scope,
     fingerprint: args.verificationFingerprint,
+    ...(isRejection ? {verdict: VERIFICATION_VERDICT_REJECTED} : {}),
   };
 }
