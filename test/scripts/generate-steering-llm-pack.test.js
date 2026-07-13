@@ -1,7 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   applyRuleAliases,
+  applySourceRoles,
   buildManifest,
+  buildSourceManifest,
   classifyAphoristicText,
   countMarkdownRules,
   formatRuleCitation,
@@ -9,9 +11,13 @@ import {
   locateRuleBySourceRef,
   parseMarkdownCandidates,
   renderPackMarkdown,
+  renderReadme,
   selectOutputRules,
+  validateCompleteOutputConfig,
+  validateCompleteOutputCoverage,
   validateCompleteRules,
   validateRulesHaveTriggerAndCitation,
+  validateSourceRoles,
 } from '../../scripts/generate-steering-llm-pack.js';
 
 const TEST_SOURCE_FILE = 'system guidelines.md';
@@ -351,6 +357,142 @@ test('selectOutputRules suppresses canonical_of alias rules from per-domain pack
 
   t.equal(selected.length, 2);
   t.equal(selected.map((rule) => rule.id).join(','), 'STYLE-0001,STYLE-0003');
+  t.end();
+});
+
+test('complete domain selection never hides master rules behind a cap', (t) => {
+  const allRules = [
+    {id: 'STYLE-0001', domain: 'style'},
+    {id: 'STYLE-0002', domain: 'style'},
+    {id: 'STYLE-0003', domain: 'style'},
+  ];
+  const selected = selectOutputRules(allRules, {
+    name: 'style', domains: ['style'], maxRules: 1,
+  });
+
+  t.same(selected.map((rule) => rule.id), [
+    'STYLE-0001', 'STYLE-0002', 'STYLE-0003',
+  ]);
+  t.end();
+});
+
+test('source roles are explicit and non-pack roles explain their routing', (t) => {
+  const valid = [
+    {file: 'a.md', role: 'packed', domain: 'style', priority: 1},
+    {
+      file: 'b.md', role: 'direct-load', domain: 'testing',
+      loadWhen: 'before distributed work',
+    },
+    {
+      file: 'c.md', role: 'reference-only', domain: 'governance',
+      reason: 'navigation only',
+    },
+  ];
+  t.doesNotThrow(() => validateSourceRoles(valid));
+  t.throws(
+    () => validateSourceRoles([{file: 'a.md', domain: 'style', priority: 1}]),
+    /must declare role/u,
+  );
+  t.throws(
+    () => validateSourceRoles([
+      {file: 'b.md', role: 'direct-load', domain: 'testing'},
+    ]),
+    /must declare loadWhen/u,
+  );
+  t.end();
+});
+
+test('limiting keys are rejected for complete domain outputs', (t) => {
+  t.doesNotThrow(() => validateCompleteOutputConfig([
+    {name: 'style', domains: ['style']},
+  ]));
+  t.throws(
+    () => validateCompleteOutputConfig([
+      {name: 'style', domains: ['style'], maxRules: 1},
+    ]),
+    /must be complete.*maxRules/u,
+  );
+  t.end();
+});
+
+test('coverage requires every master exactly once and accepts indexed aliases',
+  (t) => {
+    const master = {
+      id: 'STYLE-0001', domain: 'style',
+      sources: [{file: 'a.md', line: 1}],
+    };
+    const alias = {
+      id: 'ARCH-0001', domain: 'architecture', canonical_of: 'STYLE-0001',
+      sources: [{file: 'd.md', line: 1}],
+    };
+    const outputs = [{name: 'style', domains: ['style']}];
+    const selected = new Map([['style', [master]]]);
+
+    t.doesNotThrow(() => validateCompleteOutputCoverage(
+      [master, alias], outputs, selected,
+    ));
+    t.throws(
+      () => validateCompleteOutputCoverage([master], outputs, new Map()),
+      /incomplete/u,
+    );
+    t.end();
+  });
+
+test('source manifest fails unexplained zero contribution and records provenance',
+  (t) => {
+    const sources = [
+      {file: 'a.md', role: 'packed', domain: 'style', priority: 1},
+      {
+        file: 'b.md', role: 'direct-load', domain: 'testing',
+        loadWhen: 'before distributed work',
+      },
+    ];
+    const rule = {
+      id: 'STYLE-0001', domain: 'style',
+      sources: [{file: 'a.md', line: 1}],
+    };
+    applySourceRoles([rule], sources);
+    const sourceManifest = buildSourceManifest(
+      sources, [rule], new Map([['style', [rule]]]),
+    );
+
+    t.equal(rule.sources[0].role, 'packed');
+    t.equal(sourceManifest[0].emittedMasterRuleCount, 1);
+    t.equal(sourceManifest[1].role, 'direct-load');
+    t.throws(
+      () => buildSourceManifest(
+        [{file: 'missing.md', role: 'packed', domain: 'style', priority: 1}],
+        [],
+        new Map(),
+      ),
+      /unexplained zero contribution/u,
+    );
+    t.end();
+  });
+
+test('manifest and README describe complete selectively loaded packs', (t) => {
+  const rule = {id: 'STYLE-0001', domain: 'style', text: 'Do not fork names.'};
+  const alias = {
+    id: 'ARCH-0001', domain: 'style', text: 'Do not fork naming.',
+    canonical_of: 'STYLE-0001',
+  };
+  const sources = [{
+    file: 'a.md', role: 'packed', domain: 'style', masterRuleCount: 1,
+    aliasRuleCount: 1,
+  }];
+  const manifest = buildManifest(
+    [{name: 'style', title: 'Style', domains: ['style']}],
+    new Map([['style', [rule]]]),
+    new Map(),
+    {allRules: [rule, alias], sourceManifest: sources},
+  );
+  const readme = renderReadme(manifest, sources);
+
+  t.equal(manifest[0].completeness, 'complete');
+  t.equal(manifest[0].masterRuleCount, 1);
+  t.equal(manifest[0].aliasRuleCount, 1);
+  t.match(readme, /selectively loaded domain packs/u);
+  t.notMatch(readme, /always-loaded priority subset/u);
   t.end();
 });
 

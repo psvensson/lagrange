@@ -60,28 +60,48 @@ const LOCAL_STR_ALIAS_ANCHOR_DRIFT =
   're-locate the rule in the source file and update llm-pack.config.json.';
 const LOCAL_STR_PIN_MATCH_UPDATE =
   'to the current rule text in that source file.';
-const LOCAL_STR_RULE_MATCH_UPDATE =
-  'rule text in that source file.';
 const LOCAL_STR_SOURCE_CONTRIBUTION_HEADER =
-  'Per-source contribution (master rules: in >=1 pack / below cap):';
-const LOCAL_STR_SOURCE_BELOW_CAP_WARNING =
-  'Its rules are queryable via `npm run rule` but never pack-loaded; ' +
-  'raise its priority or take a quota decision if that is not intended.';
-const LOCAL_STR_SOURCE_WITHOUT_RULES_WARNING =
-  'extracted rules; its prose has no recognized normative sentences ' +
-  '(or every candidate deduped into another source).';
+  'Per-source role and complete-pack contribution:';
 const LOCAL_STR_POINTER = 'pointer';
-const LOCAL_STR_POINTER_SOURCE_WARNING =
-  '(frontmatter `status: pointer`; pointers route lookups and are ' +
-  'not rule sources; remove it from llm-pack.config.json sources).';
 const LOCAL_STR_ALIAS_REFERENCE_FAILURE =
   'ruleAliases references not found (line anchor drifted or rule text ' +
   'no longer extracted):\n  - ';
 const LOCAL_STR_LIST_ITEM_SEPARATOR = '\n  - ';
 const LOCAL_STR_FULL_RULE_CORPUS = 'full rule corpus';
-const LOCAL_STR_MANUAL_OUTPUT_DEAD_KEYS =
-  'its maxRules/domainCaps are never read; remove the dead keys ' +
-  'from llm-pack.config.json.';
+const LOCAL_STR_PACKED = 'packed';
+const LOCAL_STR_DIRECT_LOAD = 'direct-load';
+const LOCAL_STR_REFERENCE_ONLY = 'reference-only';
+const LOCAL_STR_COMPLETE = 'complete';
+const LOCAL_STR_INCOMPLETE = 'incomplete';
+const LOCAL_STR_MISSING = '<missing>';
+const LOCAL_STR_MISSING_FILE = '<missing-file>';
+const LOCAL_STR_MISSING_NAME = '<missing-name>';
+const LOCAL_STR_COMMA_SPACE = ', ';
+const LOCAL_STR_MAX_RULES = 'maxRules';
+const LOCAL_STR_DOMAIN_CAPS = 'domainCaps';
+const LOCAL_STR_PINNED_RULES = 'pinnedRules';
+const LOCAL_STR_INVALID_SOURCE_ENTRY =
+  'Every steering source must have one unique file; invalid entry: ';
+const LOCAL_STR_OUTPUT_DOMAIN_REQUIRED = 'declare at least one domain.';
+const LOCAL_STR_COMPLETE_EMISSION_REQUIRED =
+  'Every master steering rule must appear in exactly one complete domain ';
+const LOCAL_STR_ALIAS_MASTER_REQUIRED =
+  'Steering aliases must point to an emitted master rule: ';
+const LOCAL_STR_ZERO_CONTRIBUTION_REMEDIATION =
+  'contribution; extract at least one rule or assign an explicit ' +
+  'direct-load/reference-only role.';
+const LOCAL_STR_POINTER_REMEDIATION =
+  'reference-only or replace it with the canonical source.';
+const OUTPUT_LIMIT_KEYS = Object.freeze([
+  LOCAL_STR_MAX_RULES,
+  LOCAL_STR_DOMAIN_CAPS,
+  LOCAL_STR_PINNED_RULES,
+]);
+const SOURCE_ROLES = new Set([
+  LOCAL_STR_PACKED,
+  LOCAL_STR_DIRECT_LOAD,
+  LOCAL_STR_REFERENCE_ONLY,
+]);
 const FRONTMATTER_STATUS_MISSING = Object.freeze({
   found: false,
   status: '',
@@ -109,7 +129,6 @@ const PROCESS_ARG_SCRIPT_INDEX = 1;
 const COMPARE_EQUAL = 0;
 const RULE_ID_PREFIX_START_INDEX = 0;
 const RULE_ID_PREFIX_MAX_LENGTH = 6;
-const RULE_COUNT_INCREMENT = 1;
 const EXIT_CODE_SUCCESS = 0;
 const EXIT_CODE_FAILURE = 1;
 const JSON_INDENT_SPACES = 2;
@@ -507,6 +526,70 @@ function ensureRelativePath(workspaceRoot, value) {
     return value;
   }
   return path.join(workspaceRoot, value);
+}
+
+function validateSourceRoleDetails(source) {
+  if (source.role === LOCAL_STR_PACKED && !Number.isFinite(source.priority)) {
+    throw new Error(
+      `Packed steering source ${source.file} must declare a numeric priority.`,
+    );
+  }
+  if (source.role === LOCAL_STR_DIRECT_LOAD && !source.loadWhen) {
+    throw new Error(
+      `Direct-load steering source ${source.file} must declare loadWhen.`,
+    );
+  }
+  if (source.role === LOCAL_STR_REFERENCE_ONLY && !source.reason) {
+    throw new Error(
+      `Reference-only steering source ${source.file} must declare a reason.`,
+    );
+  }
+}
+
+function validateSourceRoles(sources = []) {
+  const seenFiles = new Set();
+  for (const source of sources) {
+    if (!source.file || seenFiles.has(source.file)) {
+      throw new Error(
+        LOCAL_STR_INVALID_SOURCE_ENTRY +
+        `${source.file || LOCAL_STR_MISSING_FILE}.`,
+      );
+    }
+    seenFiles.add(source.file);
+    if (!SOURCE_ROLES.has(source.role)) {
+      throw new Error(
+        `Steering source ${source.file} must declare role ` +
+        `${[...SOURCE_ROLES].join(LOCAL_STR_COMMA_SPACE)}; received ` +
+        `${source.role || LOCAL_STR_MISSING}.`,
+      );
+    }
+    if (!source.domain) {
+      throw new Error(
+        `Steering source ${source.file} must declare its domain provenance.`,
+      );
+    }
+    validateSourceRoleDetails(source);
+  }
+}
+
+function validateCompleteOutputConfig(outputs = []) {
+  for (const output of outputs) {
+    const capKeys = OUTPUT_LIMIT_KEYS
+      .filter((key) => output[key] !== undefined);
+    if (capKeys.length > 0) {
+      throw new Error(
+        `Steering output ${output.name || LOCAL_STR_MISSING_NAME} must be ` +
+        `complete; remove limiting keys: ${capKeys.join(LOCAL_STR_COMMA_SPACE)}.`,
+      );
+    }
+    if (!output.manual && (!Array.isArray(output.domains) ||
+        output.domains.length === 0)) {
+      throw new Error(
+        `Generated steering output ${output.name || LOCAL_STR_MISSING_NAME} must ` +
+        LOCAL_STR_OUTPUT_DOMAIN_REQUIRED,
+      );
+    }
+  }
 }
 
 function sectionPathFromStack(sectionStack) {
@@ -1024,76 +1107,129 @@ function applyRuleAliases(allRules = [], ruleAliases = []) {
   return aliasStats;
 }
 
-// Pins reference file + match substring (NOT rule IDs, which renumber across
-// regens). A pin that matches nothing is a hard failure: pins exist because
-// the rule is load-bearing, so it must never drop out silently.
-function resolvePinnedRules(allRules = [], output = {}) {
-  const resolved = [];
-  for (const pin of output.pinnedRules || []) {
-    const rule = allRules.find((candidate) =>
-      !candidate.canonical_of &&
-      (output.domains || []).includes(candidate.domain) &&
-      (candidate.sources || []).some((source) => source.file === pin.file) &&
-      candidate.text.includes(pin.match));
-    if (!rule) {
-      throw new Error(
-        `pinnedRules entry for output "${output.name}" matched no rule: ` +
-        `file=${pin.file} match="${pin.match}". Update the match substring ` +
-        LOCAL_STR_RULE_MATCH_UPDATE,
-      );
-    }
-    if (!resolved.includes(rule)) {
-      resolved.push(rule);
-    }
-  }
-  return resolved;
-}
-
 function selectOutputRules(allRules = [], output = {}) {
   const domains = new Set(output.domains || []);
-  const maxRules = Number.isFinite(output.maxRules) ? output.maxRules : 80;
-  const domainCaps = output.domainCaps || {};
-  const pinned = new Set(resolvePinnedRules(allRules, output));
-  const remainderBudget = Math.max(0, maxRules - pinned.size);
+  return allRules.filter((rule) =>
+    domains.has(rule.domain) && !rule.canonical_of);
+}
 
-  const selected = [];
-  const countsByDomain = new Map();
-  let remainderCount = 0;
-
+function applySourceRoles(allRules = [], sources = []) {
+  const rolesByFile = new Map(
+    sources.map((source) => [source.file, source.role]),
+  );
   for (const rule of allRules) {
-    if (!domains.has(rule.domain)) {
-      continue;
+    for (const sourceRef of rule.sources || []) {
+      const role = rolesByFile.get(sourceRef.file);
+      if (!role) {
+        throw new Error(
+          `Rule ${rule.id || LOCAL_STR_UNKNOWN_RULE} cites unclassified ` +
+          `steering source ${sourceRef.file}.`,
+        );
+      }
+      sourceRef.role = role;
     }
-    if (rule.canonical_of) {
-      continue;
+  }
+}
+
+function validateCompleteOutputCoverage(
+  allRules = [],
+  outputs = [],
+  selectedByOutput = new Map(),
+) {
+  const generatedOutputs = outputs.filter((output) => !output.manual);
+  const emissionCountByRuleId = new Map();
+
+  for (const output of generatedOutputs) {
+    const expected = allRules.filter((rule) =>
+      !rule.canonical_of && (output.domains || []).includes(rule.domain));
+    const selected = selectedByOutput.get(output.name) || [];
+    const expectedIds = new Set(expected.map((rule) => rule.id));
+    const selectedIds = new Set(selected.map((rule) => rule.id));
+    if (expectedIds.size !== selectedIds.size ||
+        [...expectedIds].some((id) => !selectedIds.has(id))) {
+      throw new Error(
+        `Steering output ${output.name} is incomplete: selected ` +
+        `${selectedIds.size} of ${expectedIds.size} master rules.`,
+      );
     }
-
-    // Pinned rules are force-included regardless of maxRules/domainCaps;
-    // the caps apply to the remainder.
-    if (pinned.has(rule)) {
-      selected.push(rule);
-      continue;
+    for (const id of selectedIds) {
+      emissionCountByRuleId.set(
+        id,
+        (emissionCountByRuleId.get(id) || 0) + 1,
+      );
     }
-
-    if (remainderCount >= remainderBudget) {
-      continue;
-    }
-
-    const currentCount = countsByDomain.get(rule.domain) || 0;
-    const cap = Number.isFinite(domainCaps[rule.domain]) ?
-      Number(domainCaps[rule.domain]) :
-      Number.POSITIVE_INFINITY;
-
-    if (currentCount >= cap) {
-      continue;
-    }
-
-    selected.push(rule);
-    remainderCount += RULE_COUNT_INCREMENT;
-    countsByDomain.set(rule.domain, currentCount + RULE_COUNT_INCREMENT);
   }
 
-  return selected;
+  const masterRules = allRules.filter((rule) => !rule.canonical_of);
+  const coverageFailures = masterRules.filter(
+    (rule) => emissionCountByRuleId.get(rule.id) !== 1,
+  );
+  if (coverageFailures.length > 0) {
+    throw new Error(
+      LOCAL_STR_COMPLETE_EMISSION_REQUIRED +
+      `pack; invalid emissions: ${coverageFailures.map((rule) =>
+        `${rule.id}=${emissionCountByRuleId.get(rule.id) || 0}`)
+        .join(LOCAL_STR_COMMA_SPACE)}.`,
+    );
+  }
+
+  const knownMasterIds = new Set(masterRules.map((rule) => rule.id));
+  const invalidAliases = allRules.filter((rule) =>
+    rule.canonical_of && !knownMasterIds.has(rule.canonical_of));
+  if (invalidAliases.length > 0) {
+    throw new Error(
+      LOCAL_STR_ALIAS_MASTER_REQUIRED +
+      `${invalidAliases.map((rule) => rule.id).join(LOCAL_STR_COMMA_SPACE)}.`,
+    );
+  }
+}
+
+function buildSourceManifest(
+  sources = [],
+  allRules = [],
+  selectedByOutput = new Map(),
+) {
+  const emittedIds = new Set(
+    [...selectedByOutput.values()].flat().map((rule) => rule.id),
+  );
+  return sources.map((source) => {
+    const sourceRules = allRules.filter((rule) =>
+      (rule.sources || []).some((ref) => ref.file === source.file));
+    const masterRules = sourceRules.filter((rule) => !rule.canonical_of);
+    const aliasRules = sourceRules.filter((rule) => rule.canonical_of);
+    const emittedMasterRuleCount = masterRules.filter((rule) =>
+      emittedIds.has(rule.id)).length;
+
+    if (source.role === LOCAL_STR_PACKED && sourceRules.length === 0) {
+      throw new Error(
+        `Packed steering source ${source.file} has unexplained zero ` +
+        LOCAL_STR_ZERO_CONTRIBUTION_REMEDIATION,
+      );
+    }
+    if (source.role !== LOCAL_STR_PACKED && sourceRules.length > 0) {
+      throw new Error(
+        `Non-pack steering source ${source.file} unexpectedly contributed ` +
+        `${sourceRules.length} rules.`,
+      );
+    }
+
+    const entry = {
+      file: source.file,
+      role: source.role,
+      domain: source.domain,
+      ruleCount: sourceRules.length,
+      masterRuleCount: masterRules.length,
+      aliasRuleCount: aliasRules.length,
+      emittedMasterRuleCount,
+    };
+    if (source.loadWhen) {
+      entry.loadWhen = source.loadWhen;
+    }
+    if (source.reason) {
+      entry.reason = source.reason;
+    }
+    return entry;
+  });
 }
 
 // Attach a `machine_check` marker to every rule matched by a config
@@ -1231,9 +1367,7 @@ function renderPackMarkdown(
 
   const sourceForScope = output.name || 'pack';
   // rules-index.md lists every rule INCLUDING canonical_of aliases, while pack
-  // totals count masters only. Surface both so the two artifacts reconcile by
-  // inspection (e.g. "40 of 111 architecture rules (114 incl. cross-domain
-  // aliases)" vs 114 architecture rows in the index).
+  // totals count masters only. Surface both so the artifacts reconcile.
   const aliasSuffix =
     (Number.isFinite(domainTotalWithAliases) &&
       Number.isFinite(domainTotal) &&
@@ -1257,9 +1391,8 @@ function renderPackMarkdown(
     '',
     'Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.',
     '',
-    (Number.isFinite(domainTotal) && domainTotal > rules.length) ?
-      `> **Priority subset — showing ${rules.length} of ${domainTotal} ${sourceForScope} rules**${aliasSuffix} (capped per \`maxRules\` in \`llm-pack.config.json\`). The IDs below are NOT gapless: ${domainTotal - rules.length} lower-priority rules are omitted. For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :
-      `> **Complete pack.** All ${rules.length} ${sourceForScope} rules are included below${aliasSuffix}.`,
+    `> **Complete selectively loaded pack.** All ${rules.length} ` +
+      `${sourceForScope} master rules are included below${aliasSuffix}.`,
     '',
     '## Rules',
     '',
@@ -1273,7 +1406,10 @@ function buildManifest(
   outputs = [],
   selectedByOutput = new Map(),
   manualContentByOutput = new Map(),
+  options = {},
 ) {
+  const allRules = options.allRules || [];
+  const sourceManifest = options.sourceManifest || [];
   return outputs.map((output) => {
     if (output.manual) {
       const manualContent = manualContentByOutput.get(output.name) ||
@@ -1286,10 +1422,19 @@ function buildManifest(
         estimatedTokens: estimateTokens(manualContent),
         domains: output.domains || [],
         mode: LOCAL_STR_MANUAL,
+        completeness: LOCAL_STR_MANUAL,
       };
     }
 
     const rules = selectedByOutput.get(output.name) || [];
+    const domainRules = allRules.filter((rule) =>
+      (output.domains || []).includes(rule.domain));
+    const masterRuleCount = domainRules.filter(
+      (rule) => !rule.canonical_of,
+    ).length || rules.length;
+    const aliasRuleCount = domainRules.filter(
+      (rule) => rule.canonical_of,
+    ).length;
     const estimatedRuleTokens = estimateTokens(
       rules.map((rule, index) => `${index + 1}. [${rule.id}] ${rule.text}`)
         .join('\n'),
@@ -1303,11 +1448,20 @@ function buildManifest(
       estimatedTokens: estimatedRuleTokens,
       domains: output.domains || [],
       mode: LOCAL_STR_GENERATED,
+      completeness: rules.length === masterRuleCount ?
+        LOCAL_STR_COMPLETE :
+        LOCAL_STR_INCOMPLETE,
+      masterRuleCount,
+      aliasRuleCount,
+      indexedRuleCount: masterRuleCount + aliasRuleCount,
+      sourceFiles: sourceManifest
+        .filter((source) => (output.domains || []).includes(source.domain))
+        .map((source) => source.file),
     };
   });
 }
 
-function renderReadme(manifestEntries = []) {
+function renderReadme(manifestEntries = [], sourceManifest = []) {
   // Pure index. Load order is owned by AGENTS.md; do not duplicate it here.
   // Pack sizes live in manifest.json (regenerated alongside this file).
   const purpose = {
@@ -1351,19 +1505,21 @@ function renderReadme(manifestEntries = []) {
       ),
     '| `rules.json` | generated | Complete generated rule corpus with IDs and source citations. **Too large to Read whole** — query it with `npm run rule -- --id <ID>` (or `--tag`/`--domain`/free-text), or browse `rules-index.md`. |',
     '| `rules-index.md` | generated | One line per rule (id, strength, domain, summary), loadable in one Read; points to `npm run rule` for full text. Regenerated by `npm run steering:llm:pack`. |',
-    '| `manifest.json` | generated | Pack metadata (rule counts, token estimates, domains, mode). |',
+    '| `manifest.json` | generated | Pack completeness, source roles and provenance, rule counts, token estimates, domains, and mode. |',
     '',
     '## Conflict Resolution',
     '',
-    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the always-loaded priority subset of the rule corpus (capped per `maxRules`); consult `rules-index.md` or `npm run rule` for every rule in a domain. The source-vs-pack distinction is a generator concern, not a runtime one.',
+    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the selectively loaded domain packs. Each domain pack is complete; no binding rule in a packed source is hidden behind a priority cap. Sources assigned `direct-load` are read under their recorded load condition instead of being compiled into a pack. Sources assigned `reference-only` are nonbinding navigation or explanation.',
     '',
     'If a domain pack rule looks wrong, fix the underlying source file under `docs/steering/` and regenerate with `npm run steering:llm:pack`. Do not silently prefer the source at runtime — that hides drift instead of repairing it.',
     '',
     '## Notes',
     '',
     '- `core.md` and `boot.md` are manually curated so the always-load contract stays memorable.',
-    '- Domain Markdown packs are generated and compact for prompt loading.',
+    '- Domain Markdown packs are generated, selectively loaded, and complete.',
     '- Pack sizes (rule counts, token estimates) are recorded in `manifest.json` at generation time; do not maintain a separate static table.',
+    `- Source inventory: ${sourceManifest.length} classified sources; ` +
+      'see `manifest.json` and `rules-index.md` for role and provenance.',
     '- Cross-pack duplicates are collapsed via `ruleAliases` in [`../llm-pack.config.json`](../llm-pack.config.json): each alias rule carries `canonical_of: <master-id>` in `rules.json` and is suppressed from per-domain pack emission, so the same rule never appears under multiple IDs in the markdown packs. Master rules keep an `aliases: [...]` array listing the suppressed IDs for traceability.',
     '',
   ];
@@ -1443,41 +1599,14 @@ function stableGeneratedAt(existingPayload, nextPayload) {
     new Date().toISOString();
 }
 
-// Per-source visibility: how many master rules each configured source landed
-// in at least one pack, and how many sit below every cap. A source whose rules
-// ALL sit below cap is loudly flagged — it is configured but invisible in the
-// always-loaded packs (still queryable via `npm run rule`).
-function reportPerSourceContribution(sources, allRules, selectedByOutput) {
-  const selectedAnywhere = new Set();
-  for (const rules of selectedByOutput.values()) {
-    for (const rule of rules) {
-      selectedAnywhere.add(rule);
-    }
-  }
+function reportPerSourceContribution(sourceManifest) {
   console.log(LOCAL_STR_SOURCE_CONTRIBUTION_HEADER);
-  for (const source of sources) {
-    const sourceRules = allRules.filter((rule) =>
-      !rule.canonical_of &&
-      (rule.sources || []).some((ref) => ref.file === source.file));
-    const emitted = sourceRules.filter((rule) => selectedAnywhere.has(rule)).length;
-    const belowCap = sourceRules.length - emitted;
+  for (const source of sourceManifest) {
     console.log(
-      `- ${source.file}: ${emitted} in packs, ${belowCap} below cap ` +
-      `(${sourceRules.length} rules total)`,
+      `- ${source.file}: role=${source.role}, masters=` +
+      `${source.emittedMasterRuleCount}/${source.masterRuleCount}, ` +
+      `aliases=${source.aliasRuleCount}`,
     );
-    if (sourceRules.length > 0 && emitted === 0) {
-      console.warn(
-        `steering:llm:pack: WARN source ${source.file} contributes ZERO ` +
-        `rules to every pack (${sourceRules.length} rules, all below cap). ` +
-        LOCAL_STR_SOURCE_BELOW_CAP_WARNING,
-      );
-    }
-    if (sourceRules.length === 0) {
-      console.warn(
-        `steering:llm:pack: WARN source ${source.file} yielded ZERO ` +
-        LOCAL_STR_SOURCE_WITHOUT_RULES_WARNING,
-      );
-    }
   }
 }
 
@@ -1495,23 +1624,25 @@ async function main() {
   );
 
   const config = await readJson(configPath);
+  validateSourceRoles(config.sources || []);
+  validateCompleteOutputConfig(config.outputs || []);
   const sourceDir = ensureRelativePath(workspaceRoot, config.sourceDir);
   const llmDir = ensureRelativePath(workspaceRoot, config.llmDir);
 
   const candidates = [];
-  const ruleSources = [];
   for (const source of config.sources || []) {
     const absoluteFilePath = path.join(sourceDir, source.file);
     const content = await fs.readFile(absoluteFilePath, 'utf8');
-    const frontmatter = frontmatterStatus(content);
-    if (frontmatter.found && frontmatter.status === LOCAL_STR_POINTER) {
-      console.warn(
-        `steering:llm:pack: WARN skipping pointer source ${source.file} ` +
-        LOCAL_STR_POINTER_SOURCE_WARNING,
-      );
+    if (source.role !== LOCAL_STR_PACKED) {
       continue;
     }
-    ruleSources.push(source);
+    const frontmatter = frontmatterStatus(content);
+    if (frontmatter.found && frontmatter.status === LOCAL_STR_POINTER) {
+      throw new Error(
+        `Packed steering source ${source.file} is a pointer; classify it as ` +
+        LOCAL_STR_POINTER_REMEDIATION,
+      );
+    }
     const sourceCandidates = parseMarkdownCandidates(content, {
       file: source.file,
       domain: source.domain,
@@ -1522,6 +1653,7 @@ async function main() {
 
   const deduped = dedupeCandidates(candidates).sort(compareRules);
   const {allRules} = assignRuleIds(deduped, config.domainPrefixes || {});
+  applySourceRoles(allRules, config.sources || []);
   const aliasStats = applyRuleAliases(allRules, config.ruleAliases || []);
   if (aliasStats.missing.length > 0) {
     const details = aliasStats.missing.map((missing) => {
@@ -1546,12 +1678,6 @@ async function main() {
   const manualContentByOutput = new Map();
   for (const output of config.outputs || []) {
     if (output.manual) {
-      if (output.maxRules !== undefined || output.domainCaps !== undefined) {
-        console.warn(
-          `steering:llm:pack: WARN output "${output.name}" is manual; ` +
-          LOCAL_STR_MANUAL_OUTPUT_DEAD_KEYS,
-        );
-      }
       const manualPath = path.join(llmDir, `${output.name}.md`);
       const manualContent = await fs.readFile(manualPath, LOCAL_STR_UTF8);
       manualContentByOutput.set(output.name, manualContent);
@@ -1580,29 +1706,37 @@ async function main() {
     );
   }
 
-  reportPerSourceContribution(ruleSources, allRules, selectedByOutput);
+  validateCompleteOutputCoverage(
+    allRules,
+    config.outputs || [],
+    selectedByOutput,
+  );
+  const sourceManifest = buildSourceManifest(
+    config.sources || [],
+    allRules,
+    selectedByOutput,
+  );
+  reportPerSourceContribution(sourceManifest);
 
   const manifestEntries = buildManifest(
     config.outputs || [],
     selectedByOutput,
     manualContentByOutput,
+    {allRules, sourceManifest},
   );
   const rulesJsonPath = path.join(llmDir, LOCAL_STR_RULES_JSON);
   const manifestPath = path.join(llmDir, LOCAL_STR_MANIFEST_JSON);
   const rulesJson = {
     sourceDir: config.sourceDir,
     llmDir: config.llmDir,
-    sourceFiles: ruleSources.map((entry) => ({
-      file: entry.file,
-      domain: entry.domain,
-      priority: entry.priority,
-    })),
+    sourceFiles: sourceManifest,
     stats: {
       candidateCount: candidates.length,
       dedupedRuleCount: deduped.length,
       exportedRuleCount: allRules.length,
       aliasRuleCount: allRules.filter((rule) => rule.canonical_of).length,
       masterRuleCount: allRules.filter((rule) => !rule.canonical_of).length,
+      emittedMasterRuleCount: [...selectedByOutput.values()].flat().length,
       estimatedAllRulesTokens: estimateTokens(
         allRules.map((rule) => `${rule.id} ${rule.text}`).join('\n'),
       ),
@@ -1641,6 +1775,8 @@ async function main() {
 
   const manifest = {
     generatedAt: rulesJson.generatedAt,
+    stats: rulesJson.stats,
+    sources: sourceManifest,
     packs: manifestEntries,
   };
   manifest.generatedAt = stableGeneratedAt(
@@ -1653,7 +1789,7 @@ async function main() {
     `${JSON.stringify(manifest, null, JSON_INDENT_SPACES)}\n`,
   );
 
-  const readme = renderReadme(manifestEntries);
+  const readme = renderReadme(manifestEntries, sourceManifest);
   await writeTextIfChanged(
     path.join(llmDir, LOCAL_STR_README_MD),
     `${readme}`,
@@ -1683,7 +1819,9 @@ if (isDirectRun()) {
 export {
   appendChildBulletsForParentRule,
   applyRuleAliases,
+  applySourceRoles,
   buildManifest,
+  buildSourceManifest,
   classifyAphoristicText,
   collectBulletListText,
   countMarkdownRules,
@@ -1692,7 +1830,11 @@ export {
   locateRuleBySourceRef,
   parseMarkdownCandidates,
   renderPackMarkdown,
+  renderReadme,
   selectOutputRules,
+  validateCompleteOutputConfig,
+  validateCompleteOutputCoverage,
   validateCompleteRules,
   validateRulesHaveTriggerAndCitation,
+  validateSourceRoles,
 };

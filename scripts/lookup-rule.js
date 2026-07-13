@@ -31,11 +31,34 @@ const INDEX_SUMMARY_CHARS = 90;
 const EXIT_OK = 0;
 const EXIT_FAILURE = 1;
 const EXIT_DRIFT = 2;
+const LOCAL_STR_PACKED = 'packed';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_STR_EM_DASH = '—';
+const LOCAL_STR_ESCAPED_PIPE = '\\|';
+const SOURCE_INVENTORY_HEADER_LINES = Object.freeze([
+  '## Source roles',
+  '',
+  'Every configured source has one explicit generator role. `packed` sources',
+  'contribute binding rules to a complete domain pack; `direct-load` sources',
+  'are read under their load condition; `reference-only` sources are nonbinding.',
+  '',
+  '| source | role | domain | masters | aliases | load condition / reason |',
+  '| --- | --- | --- | ---: | ---: | --- |',
+]);
+const RULE_INDEX_HEADER_LINES = Object.freeze([
+  '## Rules',
+  '',
+  '| id | strength | domain | source [role] | machine_check | summary |',
+  '| --- | --- | --- | --- | --- | --- |',
+]);
+
+export function loadRuleCorpus() {
+  const raw = fs.readFileSync(RULES_JSON_PATH, 'utf8');
+  return JSON.parse(raw);
+}
 
 export function loadRules() {
-  const raw = fs.readFileSync(RULES_JSON_PATH, 'utf8');
-  const parsed = JSON.parse(raw);
-  return parsed.rules || [];
+  return loadRuleCorpus().rules || [];
 }
 
 function parseArgs(argv) {
@@ -67,7 +90,8 @@ export function matchesRule(rule, flags) {
 
 function renderRule(rule) {
   const sources = (rule.sources || [])
-    .map((s) => `${s.file}:${s.line}${s.section ? ` (${s.section})` : ''}`)
+    .map((s) => `${s.file}:${s.line} [${s.role || LOCAL_STR_UNKNOWN}]` +
+      `${s.section ? ` (${s.section})` : ''}`)
     .join('\n    ');
   const aliasLine = rule.canonical_of ?
     `\n  alias-of: ${rule.canonical_of}` :
@@ -86,8 +110,37 @@ function summarize(text) {
     `${flat.slice(0, INDEX_SUMMARY_CHARS - 1)}…` : flat;
 }
 
-export function renderIndex(rules) {
+function renderSourceInventory(sources = []) {
+  if (sources.length === 0) {
+    return [];
+  }
+  const lines = [...SOURCE_INVENTORY_HEADER_LINES];
+  for (const source of sources) {
+    const note = source.loadWhen || source.reason || LOCAL_STR_EM_DASH;
+    lines.push(
+      `| ${source.file} | ${source.role} | ${source.domain} | ` +
+      `${source.masterRuleCount || 0} | ${source.aliasRuleCount || 0} | ` +
+      `${String(note).replace(/\|/gu, LOCAL_STR_ESCAPED_PIPE)} |`,
+    );
+  }
+  return [...lines, ''];
+}
+
+function formatPrimarySource(rule, rolesByFile) {
+  const primary = (rule.sources || [])[0];
+  if (!primary) {
+    return LOCAL_STR_EM_DASH;
+  }
+  const role = primary.role || rolesByFile.get(primary.file) ||
+    LOCAL_STR_PACKED;
+  return `${primary.file}:${primary.line} [${role}]`;
+}
+
+export function renderIndex(rules, sources = []) {
   const aliasCount = rules.filter((rule) => rule.canonical_of).length;
+  const rolesByFile = new Map(
+    sources.map((source) => [source.file, source.role]),
+  );
   const lines = [
     '# Rule index (generated — do not edit)',
     '',
@@ -101,16 +154,18 @@ export function renderIndex(rules) {
     'are suppressed from the per-domain packs, so pack banners count masters ' +
     'only). machine_check names the command that enforces the rule, or —.',
     '',
-    '| id | strength | domain | machine_check | summary |',
-    '| --- | --- | --- | --- | --- |',
+    ...renderSourceInventory(sources),
+    ...RULE_INDEX_HEADER_LINES,
   ];
   for (const rule of rules) {
     const aliasNote = rule.canonical_of ?
       ` _(alias of ${rule.canonical_of})_` : '';
     const machineCheck = rule.machine_check ?
-      `\`${rule.machine_check}\`` : '—';
+      `\`${rule.machine_check}\`` : LOCAL_STR_EM_DASH;
+    const primarySource = formatPrimarySource(rule, rolesByFile);
     lines.push(
-      `| ${rule.id} | ${rule.strength} | ${rule.domain} | ${machineCheck} | ` +
+      `| ${rule.id} | ${rule.strength} | ${rule.domain} | ${primarySource} | ` +
+      `${machineCheck} | ` +
       `${summarize(rule.rule).replace(/\|/g, '\\|')}${aliasNote} |`,
     );
   }
@@ -119,15 +174,17 @@ export function renderIndex(rules) {
 
 function main() {
   const flags = parseArgs(process.argv.slice(2));
-  const rules = loadRules();
+  const corpus = loadRuleCorpus();
+  const rules = corpus.rules || [];
+  const sources = corpus.sourceFiles || [];
 
   if (flags.writeIndex) {
-    fs.writeFileSync(INDEX_MD_PATH, renderIndex(rules));
+    fs.writeFileSync(INDEX_MD_PATH, renderIndex(rules, sources));
     process.stdout.write(`wrote ${INDEX_MD_PATH} (${rules.length} rules)\n`);
     return EXIT_OK;
   }
   if (flags.checkIndex) {
-    const expected = renderIndex(rules);
+    const expected = renderIndex(rules, sources);
     const actual = fs.existsSync(INDEX_MD_PATH) ?
       fs.readFileSync(INDEX_MD_PATH, 'utf8') : '';
     if (expected !== actual) {

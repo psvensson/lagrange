@@ -10,156 +10,187 @@
   "sources": [
     {
       "file": "system-guidelines.md",
+      "role": "packed",
       "domain": "architecture",
       "priority": 150
     },
     {
       "file": "runtime-contracts.md",
+      "role": "packed",
       "domain": "architecture",
       "priority": 135
     },
     {
       "file": "doctrine/owner-boundaries.md",
+      "role": "packed",
       "domain": "architecture",
       "priority": 120
     },
     {
       "file": "doctrine/single-path.md",
+      "role": "packed",
       "domain": "architecture",
       "priority": 120
     },
     {
       "file": "doctrine/state-encoding.md",
+      "role": "packed",
       "domain": "architecture",
       "priority": 120
     },
     {
       "file": "doctrine/decision-experiments.md",
+      "role": "packed",
       "domain": "architecture",
       "priority": 120
     },
     {
       "file": "operational-ground-truth.md",
+      "role": "direct-load",
       "domain": "testing",
-      "priority": 130
+      "loadWhen": "Before distributed-harness or convergence work."
     },
     {
       "file": "testing-guidelines/harness.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 130
     },
     {
       "file": "testing-guidelines/fixtures.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 130
     },
     {
       "file": "testing-guidelines/regression-policy.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 130
     },
     {
       "file": "testing-guidelines/release-gate.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 130
     },
     {
       "file": "testing-guidelines/proof-ladders.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 130
     },
     {
       "file": "code-style.md",
+      "role": "packed",
       "domain": "style",
       "priority": 130
     },
     {
       "file": "roadmap.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 120
     },
     {
       "file": "memory-boundary.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 118
     },
     {
       "file": "workflow-guidelines/lifecycle.md",
+      "role": "reference-only",
       "domain": "governance",
-      "priority": 115
+      "reason": "Convenience lifecycle summary; solver-quests.md owns the binding workflow contract."
     },
     {
       "file": "workflow-guidelines/validators.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 115
     },
     {
       "file": "workflow-guidelines/quest-artifacts.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 115
     },
     {
       "file": "workflow-guidelines/closure.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 115
     },
     {
       "file": "workflow-guidelines/subagents.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 115
     },
     {
       "file": "workflow-guidelines/solver-quests.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 110
     },
     {
       "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 100
     },
     {
       "file": "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 100
     },
     {
       "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 100
     },
     {
       "file": "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 100
     },
     {
       "file": "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 100
     },
     {
       "file": "findings/2026-06-30-correctness-over-fewest-lines.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 100
     },
     {
       "file": "findings/2026-06-30-plan-requests-stay-plan-only.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 100
     },
     {
       "file": "findings/2026-07-05-prefer-machine-checks-over-prose.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 100
     },
     {
       "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
+      "role": "packed",
       "domain": "testing",
       "priority": 130
     },
     {
       "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
+      "role": "packed",
       "domain": "governance",
       "priority": 130
     }
@@ -183,8 +214,7 @@
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "domains": [
         "architecture"
-      ],
-      "maxRules": 40
+      ]
     },
     {
       "name": "testing",
@@ -192,19 +222,6 @@
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
       "domains": [
         "testing"
-      ],
-      "maxRules": 35,
-      "pinnedRules": [
-        {
-          "note": "two-strikes tripwire 1: same soft warning in two consecutive runs = failing assertion",
-          "file": "testing-guidelines/regression-policy.md",
-          "match": "appearing in two consecutive runs of the same scenario MUST be treated as a failing assertion"
-        },
-        {
-          "note": "two-strikes tripwire 2: live evidence contradicts a sealed statement/fix claim TWICE = change the framing",
-          "file": "testing-guidelines/regression-policy.md",
-          "match": "contradicts a sealed statement or a fix claim TWICE"
-        }
       ]
     },
     {
@@ -213,8 +230,7 @@
       "description": "Load for coding-style and lint policy enforcement.",
       "domains": [
         "style"
-      ],
-      "maxRules": 25
+      ]
     },
     {
       "name": "governance",
@@ -222,8 +238,7 @@
       "description": "Load for roadmap and edition-scope checks.",
       "domains": [
         "governance"
-      ],
-      "maxRules": 30
+      ]
     }
   ],
   "ruleAliases": [

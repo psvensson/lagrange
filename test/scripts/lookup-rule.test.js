@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  loadRuleCorpus,
   loadRules,
   matchesRule,
   renderIndex,
@@ -26,8 +27,14 @@ test('matchesRule filters by id, domain, strength, tag, and free text', (t) => {
 
 test('renderIndex emits one row per rule and a correct total', (t) => {
   const rules = [SAMPLE, {...SAMPLE, id: 'ARCH-0002'}];
-  const md = renderIndex(rules);
+  const sources = [{
+    file: 'a.md', role: 'packed', domain: 'architecture',
+    masterRuleCount: 2, aliasRuleCount: 0,
+  }];
+  const md = renderIndex(rules, sources);
   t.match(md, /Total rules: 2/);
+  t.match(md, /\| a\.md \| packed \| architecture \| 2 \| 0 \|/u);
+  t.match(md, /a\.md:9 \[packed\]/u);
   const rows = md.split('\n').filter((l) => /^\| ARCH-\d+ \|/.test(l));
   t.equal(rows.length, 2, 'one table row per rule');
   t.end();
@@ -35,8 +42,9 @@ test('renderIndex emits one row per rule and a correct total', (t) => {
 
 test('the committed index is in sync with rules.json (drift guard)', (t) => {
   // Guards WS9: the generated rules-index.md line count must equal rules.length.
+  const corpus = loadRuleCorpus();
   const rules = loadRules();
-  const md = renderIndex(rules);
+  const md = renderIndex(rules, corpus.sourceFiles || []);
   const rows = md.split('\n').filter((l) => /^\| [A-Z]+-\d+ \|/.test(l));
   t.equal(rows.length, rules.length, 'index row count === rules.length');
   t.end();

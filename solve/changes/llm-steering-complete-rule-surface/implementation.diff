@@ -1,0 +1,1207 @@
+diff --git a/docs/steering/llm-pack.config.json b/docs/steering/llm-pack.config.json
+index 33e7896d6b8e09fc5b558fbc5b47ffd233e9b355..5d9e073c79e8e61f86653596e705795f403b77a0 100644
+--- a/docs/steering/llm-pack.config.json
++++ b/docs/steering/llm-pack.config.json
+@@ -10,156 +10,187 @@
+   "sources": [
+     {
+       "file": "system-guidelines.md",
++      "role": "packed",
+       "domain": "architecture",
+       "priority": 150
+     },
+     {
+       "file": "runtime-contracts.md",
++      "role": "packed",
+       "domain": "architecture",
+       "priority": 135
+     },
+     {
+       "file": "doctrine/owner-boundaries.md",
++      "role": "packed",
+       "domain": "architecture",
+       "priority": 120
+     },
+     {
+       "file": "doctrine/single-path.md",
++      "role": "packed",
+       "domain": "architecture",
+       "priority": 120
+     },
+     {
+       "file": "doctrine/state-encoding.md",
++      "role": "packed",
+       "domain": "architecture",
+       "priority": 120
+     },
+     {
+       "file": "doctrine/decision-experiments.md",
++      "role": "packed",
+       "domain": "architecture",
+       "priority": 120
+     },
+     {
+       "file": "operational-ground-truth.md",
++      "role": "direct-load",
+       "domain": "testing",
+-      "priority": 130
++      "loadWhen": "Before distributed-harness or convergence work."
+     },
+     {
+       "file": "testing-guidelines/harness.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 130
+     },
+     {
+       "file": "testing-guidelines/fixtures.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 130
+     },
+     {
+       "file": "testing-guidelines/regression-policy.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 130
+     },
+     {
+       "file": "testing-guidelines/release-gate.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 130
+     },
+     {
+       "file": "testing-guidelines/proof-ladders.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 130
+     },
+     {
+       "file": "code-style.md",
++      "role": "packed",
+       "domain": "style",
+       "priority": 130
+     },
+     {
+       "file": "roadmap.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 120
+     },
+     {
+       "file": "memory-boundary.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 118
+     },
+     {
+       "file": "workflow-guidelines/lifecycle.md",
++      "role": "reference-only",
+       "domain": "governance",
+-      "priority": 115
++      "reason": "Convenience lifecycle summary; solver-quests.md owns the binding workflow contract."
+     },
+     {
+       "file": "workflow-guidelines/validators.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 115
+     },
+     {
+       "file": "workflow-guidelines/quest-artifacts.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 115
+     },
+     {
+       "file": "workflow-guidelines/closure.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 115
+     },
+     {
+       "file": "workflow-guidelines/subagents.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 115
+     },
+     {
+       "file": "workflow-guidelines/solver-quests.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 110
+     },
+     {
+       "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-06-30-correctness-over-fewest-lines.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-06-30-plan-requests-stay-plan-only.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-07-05-prefer-machine-checks-over-prose.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 100
+     },
+     {
+       "file": "findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md",
++      "role": "packed",
+       "domain": "testing",
+       "priority": 130
+     },
+     {
+       "file": "findings/2026-07-10-reuse-comparison-before-new-machinery.md",
++      "role": "packed",
+       "domain": "governance",
+       "priority": 130
+     }
+@@ -183,8 +214,7 @@
+       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
+       "domains": [
+         "architecture"
+-      ],
+-      "maxRules": 40
++      ]
+     },
+     {
+       "name": "testing",
+@@ -192,19 +222,6 @@
+       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
+       "domains": [
+         "testing"
+-      ],
+-      "maxRules": 35,
+-      "pinnedRules": [
+-        {
+-          "note": "two-strikes tripwire 1: same soft warning in two consecutive runs = failing assertion",
+-          "file": "testing-guidelines/regression-policy.md",
+-          "match": "appearing in two consecutive runs of the same scenario MUST be treated as a failing assertion"
+-        },
+-        {
+-          "note": "two-strikes tripwire 2: live evidence contradicts a sealed statement/fix claim TWICE = change the framing",
+-          "file": "testing-guidelines/regression-policy.md",
+-          "match": "contradicts a sealed statement or a fix claim TWICE"
+-        }
+       ]
+     },
+     {
+@@ -213,8 +230,7 @@
+       "description": "Load for coding-style and lint policy enforcement.",
+       "domains": [
+         "style"
+-      ],
+-      "maxRules": 25
++      ]
+     },
+     {
+       "name": "governance",
+@@ -222,8 +238,7 @@
+       "description": "Load for roadmap and edition-scope checks.",
+       "domains": [
+         "governance"
+-      ],
+-      "maxRules": 30
++      ]
+     }
+   ],
+   "ruleAliases": [
+diff --git a/scripts/generate-steering-llm-pack.js b/scripts/generate-steering-llm-pack.js
+index 55353e05f217728931d0da879d8d6c8f7cbb31fb..f9278ae02c925d99f42915878a1f78a1f2946942 100755
+--- a/scripts/generate-steering-llm-pack.js
++++ b/scripts/generate-steering-llm-pack.js
+@@ -60,28 +60,48 @@ const LOCAL_STR_ALIAS_ANCHOR_DRIFT =
+   're-locate the rule in the source file and update llm-pack.config.json.';
+ const LOCAL_STR_PIN_MATCH_UPDATE =
+   'to the current rule text in that source file.';
+-const LOCAL_STR_RULE_MATCH_UPDATE =
+-  'rule text in that source file.';
+ const LOCAL_STR_SOURCE_CONTRIBUTION_HEADER =
+-  'Per-source contribution (master rules: in >=1 pack / below cap):';
+-const LOCAL_STR_SOURCE_BELOW_CAP_WARNING =
+-  'Its rules are queryable via `npm run rule` but never pack-loaded; ' +
+-  'raise its priority or take a quota decision if that is not intended.';
+-const LOCAL_STR_SOURCE_WITHOUT_RULES_WARNING =
+-  'extracted rules; its prose has no recognized normative sentences ' +
+-  '(or every candidate deduped into another source).';
++  'Per-source role and complete-pack contribution:';
+ const LOCAL_STR_POINTER = 'pointer';
+-const LOCAL_STR_POINTER_SOURCE_WARNING =
+-  '(frontmatter `status: pointer`; pointers route lookups and are ' +
+-  'not rule sources; remove it from llm-pack.config.json sources).';
+ const LOCAL_STR_ALIAS_REFERENCE_FAILURE =
+   'ruleAliases references not found (line anchor drifted or rule text ' +
+   'no longer extracted):\n  - ';
+ const LOCAL_STR_LIST_ITEM_SEPARATOR = '\n  - ';
+ const LOCAL_STR_FULL_RULE_CORPUS = 'full rule corpus';
+-const LOCAL_STR_MANUAL_OUTPUT_DEAD_KEYS =
+-  'its maxRules/domainCaps are never read; remove the dead keys ' +
+-  'from llm-pack.config.json.';
++const LOCAL_STR_PACKED = 'packed';
++const LOCAL_STR_DIRECT_LOAD = 'direct-load';
++const LOCAL_STR_REFERENCE_ONLY = 'reference-only';
++const LOCAL_STR_COMPLETE = 'complete';
++const LOCAL_STR_INCOMPLETE = 'incomplete';
++const LOCAL_STR_MISSING = '<missing>';
++const LOCAL_STR_MISSING_FILE = '<missing-file>';
++const LOCAL_STR_MISSING_NAME = '<missing-name>';
++const LOCAL_STR_COMMA_SPACE = ', ';
++const LOCAL_STR_MAX_RULES = 'maxRules';
++const LOCAL_STR_DOMAIN_CAPS = 'domainCaps';
++const LOCAL_STR_PINNED_RULES = 'pinnedRules';
++const LOCAL_STR_INVALID_SOURCE_ENTRY =
++  'Every steering source must have one unique file; invalid entry: ';
++const LOCAL_STR_OUTPUT_DOMAIN_REQUIRED = 'declare at least one domain.';
++const LOCAL_STR_COMPLETE_EMISSION_REQUIRED =
++  'Every master steering rule must appear in exactly one complete domain ';
++const LOCAL_STR_ALIAS_MASTER_REQUIRED =
++  'Steering aliases must point to an emitted master rule: ';
++const LOCAL_STR_ZERO_CONTRIBUTION_REMEDIATION =
++  'contribution; extract at least one rule or assign an explicit ' +
++  'direct-load/reference-only role.';
++const LOCAL_STR_POINTER_REMEDIATION =
++  'reference-only or replace it with the canonical source.';
++const OUTPUT_LIMIT_KEYS = Object.freeze([
++  LOCAL_STR_MAX_RULES,
++  LOCAL_STR_DOMAIN_CAPS,
++  LOCAL_STR_PINNED_RULES,
++]);
++const SOURCE_ROLES = new Set([
++  LOCAL_STR_PACKED,
++  LOCAL_STR_DIRECT_LOAD,
++  LOCAL_STR_REFERENCE_ONLY,
++]);
+ const FRONTMATTER_STATUS_MISSING = Object.freeze({
+   found: false,
+   status: '',
+@@ -109,7 +129,6 @@ const PROCESS_ARG_SCRIPT_INDEX = 1;
+ const COMPARE_EQUAL = 0;
+ const RULE_ID_PREFIX_START_INDEX = 0;
+ const RULE_ID_PREFIX_MAX_LENGTH = 6;
+-const RULE_COUNT_INCREMENT = 1;
+ const EXIT_CODE_SUCCESS = 0;
+ const EXIT_CODE_FAILURE = 1;
+ const JSON_INDENT_SPACES = 2;
+@@ -509,6 +528,70 @@ function ensureRelativePath(workspaceRoot, value) {
+   return path.join(workspaceRoot, value);
+ }
+ 
++function validateSourceRoleDetails(source) {
++  if (source.role === LOCAL_STR_PACKED && !Number.isFinite(source.priority)) {
++    throw new Error(
++      `Packed steering source ${source.file} must declare a numeric priority.`,
++    );
++  }
++  if (source.role === LOCAL_STR_DIRECT_LOAD && !source.loadWhen) {
++    throw new Error(
++      `Direct-load steering source ${source.file} must declare loadWhen.`,
++    );
++  }
++  if (source.role === LOCAL_STR_REFERENCE_ONLY && !source.reason) {
++    throw new Error(
++      `Reference-only steering source ${source.file} must declare a reason.`,
++    );
++  }
++}
++
++function validateSourceRoles(sources = []) {
++  const seenFiles = new Set();
++  for (const source of sources) {
++    if (!source.file || seenFiles.has(source.file)) {
++      throw new Error(
++        LOCAL_STR_INVALID_SOURCE_ENTRY +
++        `${source.file || LOCAL_STR_MISSING_FILE}.`,
++      );
++    }
++    seenFiles.add(source.file);
++    if (!SOURCE_ROLES.has(source.role)) {
++      throw new Error(
++        `Steering source ${source.file} must declare role ` +
++        `${[...SOURCE_ROLES].join(LOCAL_STR_COMMA_SPACE)}; received ` +
++        `${source.role || LOCAL_STR_MISSING}.`,
++      );
++    }
++    if (!source.domain) {
++      throw new Error(
++        `Steering source ${source.file} must declare its domain provenance.`,
++      );
++    }
++    validateSourceRoleDetails(source);
++  }
++}
++
++function validateCompleteOutputConfig(outputs = []) {
++  for (const output of outputs) {
++    const capKeys = OUTPUT_LIMIT_KEYS
++      .filter((key) => output[key] !== undefined);
++    if (capKeys.length > 0) {
++      throw new Error(
++        `Steering output ${output.name || LOCAL_STR_MISSING_NAME} must be ` +
++        `complete; remove limiting keys: ${capKeys.join(LOCAL_STR_COMMA_SPACE)}.`,
++      );
++    }
++    if (!output.manual && (!Array.isArray(output.domains) ||
++        output.domains.length === 0)) {
++      throw new Error(
++        `Generated steering output ${output.name || LOCAL_STR_MISSING_NAME} must ` +
++        LOCAL_STR_OUTPUT_DOMAIN_REQUIRED,
++      );
++    }
++  }
++}
++
+ function sectionPathFromStack(sectionStack) {
+   const parts = sectionStack.filter(Boolean);
+   return parts.length > 0 ? parts.join(LOCAL_STR_SPACE_GT_SPACE) : LOCAL_STR_ROOT;
+@@ -1024,76 +1107,129 @@ function applyRuleAliases(allRules = [], ruleAliases = []) {
+   return aliasStats;
+ }
+ 
+-// Pins reference file + match substring (NOT rule IDs, which renumber across
+-// regens). A pin that matches nothing is a hard failure: pins exist because
+-// the rule is load-bearing, so it must never drop out silently.
+-function resolvePinnedRules(allRules = [], output = {}) {
+-  const resolved = [];
+-  for (const pin of output.pinnedRules || []) {
+-    const rule = allRules.find((candidate) =>
+-      !candidate.canonical_of &&
+-      (output.domains || []).includes(candidate.domain) &&
+-      (candidate.sources || []).some((source) => source.file === pin.file) &&
+-      candidate.text.includes(pin.match));
+-    if (!rule) {
++function selectOutputRules(allRules = [], output = {}) {
++  const domains = new Set(output.domains || []);
++  return allRules.filter((rule) =>
++    domains.has(rule.domain) && !rule.canonical_of);
++}
++
++function applySourceRoles(allRules = [], sources = []) {
++  const rolesByFile = new Map(
++    sources.map((source) => [source.file, source.role]),
++  );
++  for (const rule of allRules) {
++    for (const sourceRef of rule.sources || []) {
++      const role = rolesByFile.get(sourceRef.file);
++      if (!role) {
++        throw new Error(
++          `Rule ${rule.id || LOCAL_STR_UNKNOWN_RULE} cites unclassified ` +
++          `steering source ${sourceRef.file}.`,
++        );
++      }
++      sourceRef.role = role;
++    }
++  }
++}
++
++function validateCompleteOutputCoverage(
++  allRules = [],
++  outputs = [],
++  selectedByOutput = new Map(),
++) {
++  const generatedOutputs = outputs.filter((output) => !output.manual);
++  const emissionCountByRuleId = new Map();
++
++  for (const output of generatedOutputs) {
++    const expected = allRules.filter((rule) =>
++      !rule.canonical_of && (output.domains || []).includes(rule.domain));
++    const selected = selectedByOutput.get(output.name) || [];
++    const expectedIds = new Set(expected.map((rule) => rule.id));
++    const selectedIds = new Set(selected.map((rule) => rule.id));
++    if (expectedIds.size !== selectedIds.size ||
++        [...expectedIds].some((id) => !selectedIds.has(id))) {
+       throw new Error(
+-        `pinnedRules entry for output "${output.name}" matched no rule: ` +
+-        `file=${pin.file} match="${pin.match}". Update the match substring ` +
+-        LOCAL_STR_RULE_MATCH_UPDATE,
++        `Steering output ${output.name} is incomplete: selected ` +
++        `${selectedIds.size} of ${expectedIds.size} master rules.`,
+       );
+     }
+-    if (!resolved.includes(rule)) {
+-      resolved.push(rule);
++    for (const id of selectedIds) {
++      emissionCountByRuleId.set(
++        id,
++        (emissionCountByRuleId.get(id) || 0) + 1,
++      );
+     }
+   }
+-  return resolved;
+-}
+ 
+-function selectOutputRules(allRules = [], output = {}) {
+-  const domains = new Set(output.domains || []);
+-  const maxRules = Number.isFinite(output.maxRules) ? output.maxRules : 80;
+-  const domainCaps = output.domainCaps || {};
+-  const pinned = new Set(resolvePinnedRules(allRules, output));
+-  const remainderBudget = Math.max(0, maxRules - pinned.size);
++  const masterRules = allRules.filter((rule) => !rule.canonical_of);
++  const coverageFailures = masterRules.filter(
++    (rule) => emissionCountByRuleId.get(rule.id) !== 1,
++  );
++  if (coverageFailures.length > 0) {
++    throw new Error(
++      LOCAL_STR_COMPLETE_EMISSION_REQUIRED +
++      `pack; invalid emissions: ${coverageFailures.map((rule) =>
++        `${rule.id}=${emissionCountByRuleId.get(rule.id) || 0}`)
++        .join(LOCAL_STR_COMMA_SPACE)}.`,
++    );
++  }
+ 
+-  const selected = [];
+-  const countsByDomain = new Map();
+-  let remainderCount = 0;
++  const knownMasterIds = new Set(masterRules.map((rule) => rule.id));
++  const invalidAliases = allRules.filter((rule) =>
++    rule.canonical_of && !knownMasterIds.has(rule.canonical_of));
++  if (invalidAliases.length > 0) {
++    throw new Error(
++      LOCAL_STR_ALIAS_MASTER_REQUIRED +
++      `${invalidAliases.map((rule) => rule.id).join(LOCAL_STR_COMMA_SPACE)}.`,
++    );
++  }
++}
+ 
+-  for (const rule of allRules) {
+-    if (!domains.has(rule.domain)) {
+-      continue;
+-    }
+-    if (rule.canonical_of) {
+-      continue;
+-    }
++function buildSourceManifest(
++  sources = [],
++  allRules = [],
++  selectedByOutput = new Map(),
++) {
++  const emittedIds = new Set(
++    [...selectedByOutput.values()].flat().map((rule) => rule.id),
++  );
++  return sources.map((source) => {
++    const sourceRules = allRules.filter((rule) =>
++      (rule.sources || []).some((ref) => ref.file === source.file));
++    const masterRules = sourceRules.filter((rule) => !rule.canonical_of);
++    const aliasRules = sourceRules.filter((rule) => rule.canonical_of);
++    const emittedMasterRuleCount = masterRules.filter((rule) =>
++      emittedIds.has(rule.id)).length;
+ 
+-    // Pinned rules are force-included regardless of maxRules/domainCaps;
+-    // the caps apply to the remainder.
+-    if (pinned.has(rule)) {
+-      selected.push(rule);
+-      continue;
++    if (source.role === LOCAL_STR_PACKED && sourceRules.length === 0) {
++      throw new Error(
++        `Packed steering source ${source.file} has unexplained zero ` +
++        LOCAL_STR_ZERO_CONTRIBUTION_REMEDIATION,
++      );
+     }
+-
+-    if (remainderCount >= remainderBudget) {
+-      continue;
++    if (source.role !== LOCAL_STR_PACKED && sourceRules.length > 0) {
++      throw new Error(
++        `Non-pack steering source ${source.file} unexpectedly contributed ` +
++        `${sourceRules.length} rules.`,
++      );
+     }
+ 
+-    const currentCount = countsByDomain.get(rule.domain) || 0;
+-    const cap = Number.isFinite(domainCaps[rule.domain]) ?
+-      Number(domainCaps[rule.domain]) :
+-      Number.POSITIVE_INFINITY;
+-
+-    if (currentCount >= cap) {
+-      continue;
++    const entry = {
++      file: source.file,
++      role: source.role,
++      domain: source.domain,
++      ruleCount: sourceRules.length,
++      masterRuleCount: masterRules.length,
++      aliasRuleCount: aliasRules.length,
++      emittedMasterRuleCount,
++    };
++    if (source.loadWhen) {
++      entry.loadWhen = source.loadWhen;
+     }
+-
+-    selected.push(rule);
+-    remainderCount += RULE_COUNT_INCREMENT;
+-    countsByDomain.set(rule.domain, currentCount + RULE_COUNT_INCREMENT);
+-  }
+-
+-  return selected;
++    if (source.reason) {
++      entry.reason = source.reason;
++    }
++    return entry;
++  });
+ }
+ 
+ // Attach a `machine_check` marker to every rule matched by a config
+@@ -1231,9 +1367,7 @@ function renderPackMarkdown(
+ 
+   const sourceForScope = output.name || 'pack';
+   // rules-index.md lists every rule INCLUDING canonical_of aliases, while pack
+-  // totals count masters only. Surface both so the two artifacts reconcile by
+-  // inspection (e.g. "40 of 111 architecture rules (114 incl. cross-domain
+-  // aliases)" vs 114 architecture rows in the index).
++  // totals count masters only. Surface both so the artifacts reconcile.
+   const aliasSuffix =
+     (Number.isFinite(domainTotalWithAliases) &&
+       Number.isFinite(domainTotal) &&
+@@ -1257,9 +1391,8 @@ function renderPackMarkdown(
+     '',
+     'Rule count, token estimate, and domain coverage live in `manifest.json` (regenerated on each `npm run steering:llm:pack`). Do not maintain those numbers inline.',
+     '',
+-    (Number.isFinite(domainTotal) && domainTotal > rules.length) ?
+-      `> **Priority subset — showing ${rules.length} of ${domainTotal} ${sourceForScope} rules**${aliasSuffix} (capped per \`maxRules\` in \`llm-pack.config.json\`). The IDs below are NOT gapless: ${domainTotal - rules.length} lower-priority rules are omitted. For every ${sourceForScope} rule, see [\`rules-index.md\`](rules-index.md) or run \`npm run rule -- --domain ${sourceForScope}\`.` :
+-      `> **Complete pack.** All ${rules.length} ${sourceForScope} rules are included below${aliasSuffix}.`,
++    `> **Complete selectively loaded pack.** All ${rules.length} ` +
++      `${sourceForScope} master rules are included below${aliasSuffix}.`,
+     '',
+     '## Rules',
+     '',
+@@ -1273,7 +1406,10 @@ function buildManifest(
+   outputs = [],
+   selectedByOutput = new Map(),
+   manualContentByOutput = new Map(),
++  options = {},
+ ) {
++  const allRules = options.allRules || [];
++  const sourceManifest = options.sourceManifest || [];
+   return outputs.map((output) => {
+     if (output.manual) {
+       const manualContent = manualContentByOutput.get(output.name) ||
+@@ -1286,10 +1422,19 @@ function buildManifest(
+         estimatedTokens: estimateTokens(manualContent),
+         domains: output.domains || [],
+         mode: LOCAL_STR_MANUAL,
++        completeness: LOCAL_STR_MANUAL,
+       };
+     }
+ 
+     const rules = selectedByOutput.get(output.name) || [];
++    const domainRules = allRules.filter((rule) =>
++      (output.domains || []).includes(rule.domain));
++    const masterRuleCount = domainRules.filter(
++      (rule) => !rule.canonical_of,
++    ).length || rules.length;
++    const aliasRuleCount = domainRules.filter(
++      (rule) => rule.canonical_of,
++    ).length;
+     const estimatedRuleTokens = estimateTokens(
+       rules.map((rule, index) => `${index + 1}. [${rule.id}] ${rule.text}`)
+         .join('\n'),
+@@ -1303,11 +1448,20 @@ function buildManifest(
+       estimatedTokens: estimatedRuleTokens,
+       domains: output.domains || [],
+       mode: LOCAL_STR_GENERATED,
++      completeness: rules.length === masterRuleCount ?
++        LOCAL_STR_COMPLETE :
++        LOCAL_STR_INCOMPLETE,
++      masterRuleCount,
++      aliasRuleCount,
++      indexedRuleCount: masterRuleCount + aliasRuleCount,
++      sourceFiles: sourceManifest
++        .filter((source) => (output.domains || []).includes(source.domain))
++        .map((source) => source.file),
+     };
+   });
+ }
+ 
+-function renderReadme(manifestEntries = []) {
++function renderReadme(manifestEntries = [], sourceManifest = []) {
+   // Pure index. Load order is owned by AGENTS.md; do not duplicate it here.
+   // Pack sizes live in manifest.json (regenerated alongside this file).
+   const purpose = {
+@@ -1351,19 +1505,21 @@ function renderReadme(manifestEntries = []) {
+       ),
+     '| `rules.json` | generated | Complete generated rule corpus with IDs and source citations. **Too large to Read whole** — query it with `npm run rule -- --id <ID>` (or `--tag`/`--domain`/free-text), or browse `rules-index.md`. |',
+     '| `rules-index.md` | generated | One line per rule (id, strength, domain, summary), loadable in one Read; points to `npm run rule` for full text. Regenerated by `npm run steering:llm:pack`. |',
+-    '| `manifest.json` | generated | Pack metadata (rule counts, token estimates, domains, mode). |',
++    '| `manifest.json` | generated | Pack completeness, source roles and provenance, rule counts, token estimates, domains, and mode. |',
+     '',
+     '## Conflict Resolution',
+     '',
+-    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the domain packs. The packs are the always-loaded priority subset of the rule corpus (capped per `maxRules`); consult `rules-index.md` or `npm run rule` for every rule in a domain. The source-vs-pack distinction is a generator concern, not a runtime one.',
++    'At execution time, follow the three-level Authority Order in [`boot.md`](boot.md): user instructions and safety limits, then Quest workflow canon plus the active Quest file, then the selectively loaded domain packs. Each domain pack is complete; no binding rule in a packed source is hidden behind a priority cap. Sources assigned `direct-load` are read under their recorded load condition instead of being compiled into a pack. Sources assigned `reference-only` are nonbinding navigation or explanation.',
+     '',
+     'If a domain pack rule looks wrong, fix the underlying source file under `docs/steering/` and regenerate with `npm run steering:llm:pack`. Do not silently prefer the source at runtime — that hides drift instead of repairing it.',
+     '',
+     '## Notes',
+     '',
+     '- `core.md` and `boot.md` are manually curated so the always-load contract stays memorable.',
+-    '- Domain Markdown packs are generated and compact for prompt loading.',
++    '- Domain Markdown packs are generated, selectively loaded, and complete.',
+     '- Pack sizes (rule counts, token estimates) are recorded in `manifest.json` at generation time; do not maintain a separate static table.',
++    `- Source inventory: ${sourceManifest.length} classified sources; ` +
++      'see `manifest.json` and `rules-index.md` for role and provenance.',
+     '- Cross-pack duplicates are collapsed via `ruleAliases` in [`../llm-pack.config.json`](../llm-pack.config.json): each alias rule carries `canonical_of: <master-id>` in `rules.json` and is suppressed from per-domain pack emission, so the same rule never appears under multiple IDs in the markdown packs. Master rules keep an `aliases: [...]` array listing the suppressed IDs for traceability.',
+     '',
+   ];
+@@ -1443,41 +1599,14 @@ function stableGeneratedAt(existingPayload, nextPayload) {
+     new Date().toISOString();
+ }
+ 
+-// Per-source visibility: how many master rules each configured source landed
+-// in at least one pack, and how many sit below every cap. A source whose rules
+-// ALL sit below cap is loudly flagged — it is configured but invisible in the
+-// always-loaded packs (still queryable via `npm run rule`).
+-function reportPerSourceContribution(sources, allRules, selectedByOutput) {
+-  const selectedAnywhere = new Set();
+-  for (const rules of selectedByOutput.values()) {
+-    for (const rule of rules) {
+-      selectedAnywhere.add(rule);
+-    }
+-  }
++function reportPerSourceContribution(sourceManifest) {
+   console.log(LOCAL_STR_SOURCE_CONTRIBUTION_HEADER);
+-  for (const source of sources) {
+-    const sourceRules = allRules.filter((rule) =>
+-      !rule.canonical_of &&
+-      (rule.sources || []).some((ref) => ref.file === source.file));
+-    const emitted = sourceRules.filter((rule) => selectedAnywhere.has(rule)).length;
+-    const belowCap = sourceRules.length - emitted;
++  for (const source of sourceManifest) {
+     console.log(
+-      `- ${source.file}: ${emitted} in packs, ${belowCap} below cap ` +
+-      `(${sourceRules.length} rules total)`,
++      `- ${source.file}: role=${source.role}, masters=` +
++      `${source.emittedMasterRuleCount}/${source.masterRuleCount}, ` +
++      `aliases=${source.aliasRuleCount}`,
+     );
+-    if (sourceRules.length > 0 && emitted === 0) {
+-      console.warn(
+-        `steering:llm:pack: WARN source ${source.file} contributes ZERO ` +
+-        `rules to every pack (${sourceRules.length} rules, all below cap). ` +
+-        LOCAL_STR_SOURCE_BELOW_CAP_WARNING,
+-      );
+-    }
+-    if (sourceRules.length === 0) {
+-      console.warn(
+-        `steering:llm:pack: WARN source ${source.file} yielded ZERO ` +
+-        LOCAL_STR_SOURCE_WITHOUT_RULES_WARNING,
+-      );
+-    }
+   }
+ }
+ 
+@@ -1495,23 +1624,25 @@ async function main() {
+   );
+ 
+   const config = await readJson(configPath);
++  validateSourceRoles(config.sources || []);
++  validateCompleteOutputConfig(config.outputs || []);
+   const sourceDir = ensureRelativePath(workspaceRoot, config.sourceDir);
+   const llmDir = ensureRelativePath(workspaceRoot, config.llmDir);
+ 
+   const candidates = [];
+-  const ruleSources = [];
+   for (const source of config.sources || []) {
+     const absoluteFilePath = path.join(sourceDir, source.file);
+     const content = await fs.readFile(absoluteFilePath, 'utf8');
++    if (source.role !== LOCAL_STR_PACKED) {
++      continue;
++    }
+     const frontmatter = frontmatterStatus(content);
+     if (frontmatter.found && frontmatter.status === LOCAL_STR_POINTER) {
+-      console.warn(
+-        `steering:llm:pack: WARN skipping pointer source ${source.file} ` +
+-        LOCAL_STR_POINTER_SOURCE_WARNING,
++      throw new Error(
++        `Packed steering source ${source.file} is a pointer; classify it as ` +
++        LOCAL_STR_POINTER_REMEDIATION,
+       );
+-      continue;
+     }
+-    ruleSources.push(source);
+     const sourceCandidates = parseMarkdownCandidates(content, {
+       file: source.file,
+       domain: source.domain,
+@@ -1522,6 +1653,7 @@ async function main() {
+ 
+   const deduped = dedupeCandidates(candidates).sort(compareRules);
+   const {allRules} = assignRuleIds(deduped, config.domainPrefixes || {});
++  applySourceRoles(allRules, config.sources || []);
+   const aliasStats = applyRuleAliases(allRules, config.ruleAliases || []);
+   if (aliasStats.missing.length > 0) {
+     const details = aliasStats.missing.map((missing) => {
+@@ -1546,12 +1678,6 @@ async function main() {
+   const manualContentByOutput = new Map();
+   for (const output of config.outputs || []) {
+     if (output.manual) {
+-      if (output.maxRules !== undefined || output.domainCaps !== undefined) {
+-        console.warn(
+-          `steering:llm:pack: WARN output "${output.name}" is manual; ` +
+-          LOCAL_STR_MANUAL_OUTPUT_DEAD_KEYS,
+-        );
+-      }
+       const manualPath = path.join(llmDir, `${output.name}.md`);
+       const manualContent = await fs.readFile(manualPath, LOCAL_STR_UTF8);
+       manualContentByOutput.set(output.name, manualContent);
+@@ -1580,29 +1706,37 @@ async function main() {
+     );
+   }
+ 
+-  reportPerSourceContribution(ruleSources, allRules, selectedByOutput);
++  validateCompleteOutputCoverage(
++    allRules,
++    config.outputs || [],
++    selectedByOutput,
++  );
++  const sourceManifest = buildSourceManifest(
++    config.sources || [],
++    allRules,
++    selectedByOutput,
++  );
++  reportPerSourceContribution(sourceManifest);
+ 
+   const manifestEntries = buildManifest(
+     config.outputs || [],
+     selectedByOutput,
+     manualContentByOutput,
++    {allRules, sourceManifest},
+   );
+   const rulesJsonPath = path.join(llmDir, LOCAL_STR_RULES_JSON);
+   const manifestPath = path.join(llmDir, LOCAL_STR_MANIFEST_JSON);
+   const rulesJson = {
+     sourceDir: config.sourceDir,
+     llmDir: config.llmDir,
+-    sourceFiles: ruleSources.map((entry) => ({
+-      file: entry.file,
+-      domain: entry.domain,
+-      priority: entry.priority,
+-    })),
++    sourceFiles: sourceManifest,
+     stats: {
+       candidateCount: candidates.length,
+       dedupedRuleCount: deduped.length,
+       exportedRuleCount: allRules.length,
+       aliasRuleCount: allRules.filter((rule) => rule.canonical_of).length,
+       masterRuleCount: allRules.filter((rule) => !rule.canonical_of).length,
++      emittedMasterRuleCount: [...selectedByOutput.values()].flat().length,
+       estimatedAllRulesTokens: estimateTokens(
+         allRules.map((rule) => `${rule.id} ${rule.text}`).join('\n'),
+       ),
+@@ -1641,6 +1775,8 @@ async function main() {
+ 
+   const manifest = {
+     generatedAt: rulesJson.generatedAt,
++    stats: rulesJson.stats,
++    sources: sourceManifest,
+     packs: manifestEntries,
+   };
+   manifest.generatedAt = stableGeneratedAt(
+@@ -1653,7 +1789,7 @@ async function main() {
+     `${JSON.stringify(manifest, null, JSON_INDENT_SPACES)}\n`,
+   );
+ 
+-  const readme = renderReadme(manifestEntries);
++  const readme = renderReadme(manifestEntries, sourceManifest);
+   await writeTextIfChanged(
+     path.join(llmDir, LOCAL_STR_README_MD),
+     `${readme}`,
+@@ -1683,7 +1819,9 @@ if (isDirectRun()) {
+ export {
+   appendChildBulletsForParentRule,
+   applyRuleAliases,
++  applySourceRoles,
+   buildManifest,
++  buildSourceManifest,
+   classifyAphoristicText,
+   collectBulletListText,
+   countMarkdownRules,
+@@ -1692,7 +1830,11 @@ export {
+   locateRuleBySourceRef,
+   parseMarkdownCandidates,
+   renderPackMarkdown,
++  renderReadme,
+   selectOutputRules,
++  validateCompleteOutputConfig,
++  validateCompleteOutputCoverage,
+   validateCompleteRules,
+   validateRulesHaveTriggerAndCitation,
++  validateSourceRoles,
+ };
+diff --git a/scripts/lookup-rule.js b/scripts/lookup-rule.js
+index 2876109cff1b656035dd9ca79554e563c49daff1..624b9472e85b2f9a95fac1ac18732affbcad95de 100644
+--- a/scripts/lookup-rule.js
++++ b/scripts/lookup-rule.js
+@@ -31,11 +31,34 @@ const INDEX_SUMMARY_CHARS = 90;
+ const EXIT_OK = 0;
+ const EXIT_FAILURE = 1;
+ const EXIT_DRIFT = 2;
++const LOCAL_STR_PACKED = 'packed';
++const LOCAL_STR_UNKNOWN = 'unknown';
++const LOCAL_STR_EM_DASH = '—';
++const LOCAL_STR_ESCAPED_PIPE = '\\|';
++const SOURCE_INVENTORY_HEADER_LINES = Object.freeze([
++  '## Source roles',
++  '',
++  'Every configured source has one explicit generator role. `packed` sources',
++  'contribute binding rules to a complete domain pack; `direct-load` sources',
++  'are read under their load condition; `reference-only` sources are nonbinding.',
++  '',
++  '| source | role | domain | masters | aliases | load condition / reason |',
++  '| --- | --- | --- | ---: | ---: | --- |',
++]);
++const RULE_INDEX_HEADER_LINES = Object.freeze([
++  '## Rules',
++  '',
++  '| id | strength | domain | source [role] | machine_check | summary |',
++  '| --- | --- | --- | --- | --- | --- |',
++]);
+ 
+-export function loadRules() {
++export function loadRuleCorpus() {
+   const raw = fs.readFileSync(RULES_JSON_PATH, 'utf8');
+-  const parsed = JSON.parse(raw);
+-  return parsed.rules || [];
++  return JSON.parse(raw);
++}
++
++export function loadRules() {
++  return loadRuleCorpus().rules || [];
+ }
+ 
+ function parseArgs(argv) {
+@@ -67,7 +90,8 @@ export function matchesRule(rule, flags) {
+ 
+ function renderRule(rule) {
+   const sources = (rule.sources || [])
+-    .map((s) => `${s.file}:${s.line}${s.section ? ` (${s.section})` : ''}`)
++    .map((s) => `${s.file}:${s.line} [${s.role || LOCAL_STR_UNKNOWN}]` +
++      `${s.section ? ` (${s.section})` : ''}`)
+     .join('\n    ');
+   const aliasLine = rule.canonical_of ?
+     `\n  alias-of: ${rule.canonical_of}` :
+@@ -86,8 +110,37 @@ function summarize(text) {
+     `${flat.slice(0, INDEX_SUMMARY_CHARS - 1)}…` : flat;
+ }
+ 
+-export function renderIndex(rules) {
++function renderSourceInventory(sources = []) {
++  if (sources.length === 0) {
++    return [];
++  }
++  const lines = [...SOURCE_INVENTORY_HEADER_LINES];
++  for (const source of sources) {
++    const note = source.loadWhen || source.reason || LOCAL_STR_EM_DASH;
++    lines.push(
++      `| ${source.file} | ${source.role} | ${source.domain} | ` +
++      `${source.masterRuleCount || 0} | ${source.aliasRuleCount || 0} | ` +
++      `${String(note).replace(/\|/gu, LOCAL_STR_ESCAPED_PIPE)} |`,
++    );
++  }
++  return [...lines, ''];
++}
++
++function formatPrimarySource(rule, rolesByFile) {
++  const primary = (rule.sources || [])[0];
++  if (!primary) {
++    return LOCAL_STR_EM_DASH;
++  }
++  const role = primary.role || rolesByFile.get(primary.file) ||
++    LOCAL_STR_PACKED;
++  return `${primary.file}:${primary.line} [${role}]`;
++}
++
++export function renderIndex(rules, sources = []) {
+   const aliasCount = rules.filter((rule) => rule.canonical_of).length;
++  const rolesByFile = new Map(
++    sources.map((source) => [source.file, source.role]),
++  );
+   const lines = [
+     '# Rule index (generated — do not edit)',
+     '',
+@@ -101,16 +154,18 @@ export function renderIndex(rules) {
+     'are suppressed from the per-domain packs, so pack banners count masters ' +
+     'only). machine_check names the command that enforces the rule, or —.',
+     '',
+-    '| id | strength | domain | machine_check | summary |',
+-    '| --- | --- | --- | --- | --- |',
++    ...renderSourceInventory(sources),
++    ...RULE_INDEX_HEADER_LINES,
+   ];
+   for (const rule of rules) {
+     const aliasNote = rule.canonical_of ?
+       ` _(alias of ${rule.canonical_of})_` : '';
+     const machineCheck = rule.machine_check ?
+-      `\`${rule.machine_check}\`` : '—';
++      `\`${rule.machine_check}\`` : LOCAL_STR_EM_DASH;
++    const primarySource = formatPrimarySource(rule, rolesByFile);
+     lines.push(
+-      `| ${rule.id} | ${rule.strength} | ${rule.domain} | ${machineCheck} | ` +
++      `| ${rule.id} | ${rule.strength} | ${rule.domain} | ${primarySource} | ` +
++      `${machineCheck} | ` +
+       `${summarize(rule.rule).replace(/\|/g, '\\|')}${aliasNote} |`,
+     );
+   }
+@@ -119,15 +174,17 @@ export function renderIndex(rules) {
+ 
+ function main() {
+   const flags = parseArgs(process.argv.slice(2));
+-  const rules = loadRules();
++  const corpus = loadRuleCorpus();
++  const rules = corpus.rules || [];
++  const sources = corpus.sourceFiles || [];
+ 
+   if (flags.writeIndex) {
+-    fs.writeFileSync(INDEX_MD_PATH, renderIndex(rules));
++    fs.writeFileSync(INDEX_MD_PATH, renderIndex(rules, sources));
+     process.stdout.write(`wrote ${INDEX_MD_PATH} (${rules.length} rules)\n`);
+     return EXIT_OK;
+   }
+   if (flags.checkIndex) {
+-    const expected = renderIndex(rules);
++    const expected = renderIndex(rules, sources);
+     const actual = fs.existsSync(INDEX_MD_PATH) ?
+       fs.readFileSync(INDEX_MD_PATH, 'utf8') : '';
+     if (expected !== actual) {
+diff --git a/test/scripts/generate-steering-llm-pack.test.js b/test/scripts/generate-steering-llm-pack.test.js
+index 66eea7b58d63a08fa44b2ab66fb9de83a7a25a1d..8a7b95274324ea2ce5c22453da195d18e692f2f9 100644
+--- a/test/scripts/generate-steering-llm-pack.test.js
++++ b/test/scripts/generate-steering-llm-pack.test.js
+@@ -1,7 +1,9 @@
+ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   applyRuleAliases,
++  applySourceRoles,
+   buildManifest,
++  buildSourceManifest,
+   classifyAphoristicText,
+   countMarkdownRules,
+   formatRuleCitation,
+@@ -9,9 +11,13 @@ import {
+   locateRuleBySourceRef,
+   parseMarkdownCandidates,
+   renderPackMarkdown,
++  renderReadme,
+   selectOutputRules,
++  validateCompleteOutputConfig,
++  validateCompleteOutputCoverage,
+   validateCompleteRules,
+   validateRulesHaveTriggerAndCitation,
++  validateSourceRoles,
+ } from '../../scripts/generate-steering-llm-pack.js';
+ 
+ const TEST_SOURCE_FILE = 'system guidelines.md';
+@@ -354,6 +360,142 @@ test('selectOutputRules suppresses canonical_of alias rules from per-domain pack
+   t.end();
+ });
+ 
++test('complete domain selection never hides master rules behind a cap', (t) => {
++  const allRules = [
++    {id: 'STYLE-0001', domain: 'style'},
++    {id: 'STYLE-0002', domain: 'style'},
++    {id: 'STYLE-0003', domain: 'style'},
++  ];
++  const selected = selectOutputRules(allRules, {
++    name: 'style', domains: ['style'], maxRules: 1,
++  });
++
++  t.same(selected.map((rule) => rule.id), [
++    'STYLE-0001', 'STYLE-0002', 'STYLE-0003',
++  ]);
++  t.end();
++});
++
++test('source roles are explicit and non-pack roles explain their routing', (t) => {
++  const valid = [
++    {file: 'a.md', role: 'packed', domain: 'style', priority: 1},
++    {
++      file: 'b.md', role: 'direct-load', domain: 'testing',
++      loadWhen: 'before distributed work',
++    },
++    {
++      file: 'c.md', role: 'reference-only', domain: 'governance',
++      reason: 'navigation only',
++    },
++  ];
++  t.doesNotThrow(() => validateSourceRoles(valid));
++  t.throws(
++    () => validateSourceRoles([{file: 'a.md', domain: 'style', priority: 1}]),
++    /must declare role/u,
++  );
++  t.throws(
++    () => validateSourceRoles([
++      {file: 'b.md', role: 'direct-load', domain: 'testing'},
++    ]),
++    /must declare loadWhen/u,
++  );
++  t.end();
++});
++
++test('limiting keys are rejected for complete domain outputs', (t) => {
++  t.doesNotThrow(() => validateCompleteOutputConfig([
++    {name: 'style', domains: ['style']},
++  ]));
++  t.throws(
++    () => validateCompleteOutputConfig([
++      {name: 'style', domains: ['style'], maxRules: 1},
++    ]),
++    /must be complete.*maxRules/u,
++  );
++  t.end();
++});
++
++test('coverage requires every master exactly once and accepts indexed aliases',
++  (t) => {
++    const master = {
++      id: 'STYLE-0001', domain: 'style',
++      sources: [{file: 'a.md', line: 1}],
++    };
++    const alias = {
++      id: 'ARCH-0001', domain: 'architecture', canonical_of: 'STYLE-0001',
++      sources: [{file: 'd.md', line: 1}],
++    };
++    const outputs = [{name: 'style', domains: ['style']}];
++    const selected = new Map([['style', [master]]]);
++
++    t.doesNotThrow(() => validateCompleteOutputCoverage(
++      [master, alias], outputs, selected,
++    ));
++    t.throws(
++      () => validateCompleteOutputCoverage([master], outputs, new Map()),
++      /incomplete/u,
++    );
++    t.end();
++  });
++
++test('source manifest fails unexplained zero contribution and records provenance',
++  (t) => {
++    const sources = [
++      {file: 'a.md', role: 'packed', domain: 'style', priority: 1},
++      {
++        file: 'b.md', role: 'direct-load', domain: 'testing',
++        loadWhen: 'before distributed work',
++      },
++    ];
++    const rule = {
++      id: 'STYLE-0001', domain: 'style',
++      sources: [{file: 'a.md', line: 1}],
++    };
++    applySourceRoles([rule], sources);
++    const sourceManifest = buildSourceManifest(
++      sources, [rule], new Map([['style', [rule]]]),
++    );
++
++    t.equal(rule.sources[0].role, 'packed');
++    t.equal(sourceManifest[0].emittedMasterRuleCount, 1);
++    t.equal(sourceManifest[1].role, 'direct-load');
++    t.throws(
++      () => buildSourceManifest(
++        [{file: 'missing.md', role: 'packed', domain: 'style', priority: 1}],
++        [],
++        new Map(),
++      ),
++      /unexplained zero contribution/u,
++    );
++    t.end();
++  });
++
++test('manifest and README describe complete selectively loaded packs', (t) => {
++  const rule = {id: 'STYLE-0001', domain: 'style', text: 'Do not fork names.'};
++  const alias = {
++    id: 'ARCH-0001', domain: 'style', text: 'Do not fork naming.',
++    canonical_of: 'STYLE-0001',
++  };
++  const sources = [{
++    file: 'a.md', role: 'packed', domain: 'style', masterRuleCount: 1,
++    aliasRuleCount: 1,
++  }];
++  const manifest = buildManifest(
++    [{name: 'style', title: 'Style', domains: ['style']}],
++    new Map([['style', [rule]]]),
++    new Map(),
++    {allRules: [rule, alias], sourceManifest: sources},
++  );
++  const readme = renderReadme(manifest, sources);
++
++  t.equal(manifest[0].completeness, 'complete');
++  t.equal(manifest[0].masterRuleCount, 1);
++  t.equal(manifest[0].aliasRuleCount, 1);
++  t.match(readme, /selectively loaded domain packs/u);
++  t.notMatch(readme, /always-loaded priority subset/u);
++  t.end();
++});
++
+ test('locateRuleBySourceRef finds rule by file+line', (t) => {
+   const rules = [
+     {id: 'A', sources: [{file: 'x.md', line: 1}, {file: 'y.md', line: 2}]},
+diff --git a/test/scripts/lookup-rule.test.js b/test/scripts/lookup-rule.test.js
+index 9edccbb0951b61179774e30b911c88ea9d441936..64b61a84ec6e4c5638c108621bba8358d589ead5 100644
+--- a/test/scripts/lookup-rule.test.js
++++ b/test/scripts/lookup-rule.test.js
+@@ -1,5 +1,6 @@
+ import {test} from '../../src/test-helpers/tap.js';
+ import {
++  loadRuleCorpus,
+   loadRules,
+   matchesRule,
+   renderIndex,
+@@ -26,8 +27,14 @@ test('matchesRule filters by id, domain, strength, tag, and free text', (t) => {
+ 
+ test('renderIndex emits one row per rule and a correct total', (t) => {
+   const rules = [SAMPLE, {...SAMPLE, id: 'ARCH-0002'}];
+-  const md = renderIndex(rules);
++  const sources = [{
++    file: 'a.md', role: 'packed', domain: 'architecture',
++    masterRuleCount: 2, aliasRuleCount: 0,
++  }];
++  const md = renderIndex(rules, sources);
+   t.match(md, /Total rules: 2/);
++  t.match(md, /\| a\.md \| packed \| architecture \| 2 \| 0 \|/u);
++  t.match(md, /a\.md:9 \[packed\]/u);
+   const rows = md.split('\n').filter((l) => /^\| ARCH-\d+ \|/.test(l));
+   t.equal(rows.length, 2, 'one table row per rule');
+   t.end();
+@@ -35,8 +42,9 @@ test('renderIndex emits one row per rule and a correct total', (t) => {
+ 
+ test('the committed index is in sync with rules.json (drift guard)', (t) => {
+   // Guards WS9: the generated rules-index.md line count must equal rules.length.
++  const corpus = loadRuleCorpus();
+   const rules = loadRules();
+-  const md = renderIndex(rules);
++  const md = renderIndex(rules, corpus.sourceFiles || []);
+   const rows = md.split('\n').filter((l) => /^\| [A-Z]+-\d+ \|/.test(l));
+   t.equal(rows.length, rules.length, 'index row count === rules.length');
+   t.end();
