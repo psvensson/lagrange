@@ -61,17 +61,18 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 22
+## Open quests — 23
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
-| formation-ledger-self-move-blocks-cluster-ops | product | 3 | 0 | — |
+| formation-ledger-self-move-blocks-cluster-ops | product | 3 | 1 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
 | formation-runtime-service-create-lane-budget-starvation | product | 0 | 0 | — |
 | join-retry-patience-selectable | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
 | listener-port-model-single-authority | product | 0 | 0 | — |
+| managed-partition-merge-live-validation | product | 0 | 0 | — |
 | movielens-three-way-affinity-demo | product | 4 | 0 | — |
 | newcomer-onboarding-friction | product | 0 | 0 | — |
 | rebalancer-own-create-memory-duplicate-replace | product | 0 | 0 | — |
