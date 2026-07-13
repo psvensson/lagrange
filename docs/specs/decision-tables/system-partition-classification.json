@@ -1,0 +1,104 @@
+{
+  "schema": "decision-table-v1",
+  "id": "system-partition-classification",
+  "owner": "src/bootstrap/system-partition-classification.js",
+  "boundary": "bootstrap_partition_classification",
+  "inputs": [
+    {
+      "name": "bootstrapCritical",
+      "values": [
+        "true",
+        "false"
+      ]
+    },
+    {
+      "name": "priorityControlPlane",
+      "values": [
+        "true",
+        "false"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "partitionClass",
+      "values": [
+        "bootstrap_critical",
+        "priority_control_plane",
+        "default"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "bootstrap-critical-precedes-priority",
+      "statement": "A bootstrap-critical partition always takes the bootstrap_critical ordered class, including the deliberate overlap where its table is also priority-control-plane."
+    },
+    {
+      "id": "priority-follows-bootstrap",
+      "statement": "A non-bootstrap partition takes priority_control_plane exactly when its table is priority-control-plane."
+    },
+    {
+      "id": "default-is-the-terminal-row",
+      "statement": "A partition with neither bootstrap-critical nor priority-control-plane membership takes the default ordered class."
+    }
+  ],
+  "rules": [
+    {
+      "id": "bootstrap-priority-overlap",
+      "when": {
+        "bootstrapCritical": "true",
+        "priorityControlPlane": "true"
+      },
+      "outcome": {
+        "partitionClass": "bootstrap_critical"
+      },
+      "reason": "The first partition of a priority system table carries both facts, and bootstrap availability wins the ordered classification.",
+      "invariantRefs": [
+        "bootstrap-critical-precedes-priority"
+      ]
+    },
+    {
+      "id": "bootstrap-non-priority-system",
+      "when": {
+        "bootstrapCritical": "true",
+        "priorityControlPlane": "false"
+      },
+      "outcome": {
+        "partitionClass": "bootstrap_critical"
+      },
+      "reason": "The first partition of every system table is bootstrap-critical whether or not the table belongs to the narrower priority set.",
+      "invariantRefs": [
+        "bootstrap-critical-precedes-priority"
+      ]
+    },
+    {
+      "id": "later-priority-partition",
+      "when": {
+        "bootstrapCritical": "false",
+        "priorityControlPlane": "true"
+      },
+      "outcome": {
+        "partitionClass": "priority_control_plane"
+      },
+      "reason": "A later partition of a priority table is priority-control-plane but no longer bootstrap-critical.",
+      "invariantRefs": [
+        "priority-follows-bootstrap"
+      ]
+    },
+    {
+      "id": "terminal-default",
+      "when": {
+        "bootstrapCritical": "false",
+        "priorityControlPlane": "false"
+      },
+      "outcome": {
+        "partitionClass": "default"
+      },
+      "reason": "With both stronger membership facts absent, the terminal row supplies the default ordered class.",
+      "invariantRefs": [
+        "default-is-the-terminal-row"
+      ]
+    }
+  ]
+}

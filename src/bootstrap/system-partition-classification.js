@@ -132,14 +132,51 @@ function resolvePartitionTableId(options = {}) {
   return resolvePartitionTableIdFromPartitionId(options.partitionId);
 }
 
-function isSystemTablePartition(options = {}) {
+const SYSTEM_PARTITION_CLASS = Object.freeze({
+  BOOTSTRAP_CRITICAL: 'bootstrap_critical',
+  PRIORITY_CONTROL_PLANE: 'priority_control_plane',
+  DEFAULT: 'default',
+});
+
+const SYSTEM_PARTITION_CLASS_ROWS = Object.freeze([
+  Object.freeze({
+    partitionClass: SYSTEM_PARTITION_CLASS.BOOTSTRAP_CRITICAL,
+    matches: ({partitionId}) =>
+      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId),
+  }),
+  Object.freeze({
+    partitionClass: SYSTEM_PARTITION_CLASS.PRIORITY_CONTROL_PLANE,
+    matches: ({tableId}) =>
+      PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId),
+  }),
+  Object.freeze({
+    partitionClass: SYSTEM_PARTITION_CLASS.DEFAULT,
+    matches: () => true,
+  }),
+]);
+
+function classifySystemPartition(options = {}) {
+  const partitionId =
+    getPartitionIdFromPartitionRow(options.partitionRow) ||
+    normalizeNonEmptyString(options.partitionId);
   const tableId = resolvePartitionTableId(options);
-  return tableId !== null && SYSTEM_TABLE_IDS.has(tableId);
+  const context = Object.freeze({partitionId, tableId});
+  const row = SYSTEM_PARTITION_CLASS_ROWS.find((candidate) =>
+    candidate.matches(context));
+  return Object.freeze({
+    partitionClass: row.partitionClass,
+    bootstrapCritical: CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId),
+    priorityControlPlane: PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId),
+    systemTable: SYSTEM_TABLE_IDS.has(tableId),
+  });
+}
+
+function isSystemTablePartition(options = {}) {
+  return classifySystemPartition(options).systemTable;
 }
 
 function isPriorityControlPlanePartition(options = {}) {
-  const tableId = resolvePartitionTableId(options);
-  return tableId !== null && PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId);
+  return classifySystemPartition(options).priorityControlPlane;
 }
 
 // The replica_operations table is the operation LEDGER: every in-flight
@@ -405,7 +442,10 @@ export {
   CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS,
   CRITICAL_TRANSPORT_TARGET_REASON,
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
+  SYSTEM_PARTITION_CLASS,
+  SYSTEM_PARTITION_CLASS_ROWS,
   buildPartitionRowByPartitionId,
+  classifySystemPartition,
   getPartitionRowFromCache,
   isCriticalTransportControlPlanePartition,
   isCriticalTransportTargetAddress,
