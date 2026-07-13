@@ -1,0 +1,152 @@
+{
+  "schema": "decision-table-v1",
+  "id": "placement-cure-admission-lane",
+  "owner": "src/rebalancer/replica-placement-cure-policy.js",
+  "boundary": "rebalancer_admission",
+  "inputs": [
+    {
+      "name": "move",
+      "values": [
+        "remove",
+        "replica_creating",
+        "undeclared_move"
+      ]
+    },
+    {
+      "name": "partitionClass",
+      "values": [
+        "non_priority",
+        "ordinary_priority",
+        "emergency_priority"
+      ]
+    },
+    {
+      "name": "emergencyOverflow",
+      "values": [
+        "active",
+        "inactive"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "budgetScope",
+      "values": [
+        "remove",
+        "add",
+        "priority_add",
+        "emergency_priority_add"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "emergency-lane-needs-both",
+      "statement": "The emergency overflow scope requires the EMERGENCY_PRIORITY partition class AND an active overflow; an ordinary-priority cure never enters the emergency lane."
+    },
+    {
+      "id": "unknown-degrades-to-plain-add",
+      "statement": "An unknown move type or partition class draws the plain add budget; it never acquires a priority or emergency slot."
+    },
+    {
+      "id": "drains-never-draw-create-budget",
+      "statement": "Replica-count-reducing moves always take the remove scope; they never consume an add, priority, or emergency create slot."
+    },
+    {
+      "id": "priority-budgets-are-class-gated",
+      "statement": "Only priority-class partitions draw the priority create budgets; non-priority cures take the plain add budget."
+    }
+  ],
+  "rules": [
+    {
+      "id": "remove-always-remove-scope",
+      "when": {
+        "move": "remove",
+        "partitionClass": "*",
+        "emergencyOverflow": "*"
+      },
+      "outcome": {
+        "budgetScope": "remove"
+      },
+      "reason": "A drain contends with drains; replica-count-reducing moves never draw a create budget.",
+      "invariantRefs": [
+        "drains-never-draw-create-budget"
+      ]
+    },
+    {
+      "id": "unknown-move-plain-add",
+      "when": {
+        "move": "undeclared_move",
+        "partitionClass": "*",
+        "emergencyOverflow": "*"
+      },
+      "outcome": {
+        "budgetScope": "add"
+      },
+      "reason": "A move type outside the declared cure rows degrades to the plain add budget.",
+      "invariantRefs": [
+        "unknown-degrades-to-plain-add"
+      ]
+    },
+    {
+      "id": "non-priority-create-plain-add",
+      "when": {
+        "move": "replica_creating",
+        "partitionClass": "non_priority",
+        "emergencyOverflow": "*"
+      },
+      "outcome": {
+        "budgetScope": "add"
+      },
+      "reason": "Only priority-class partitions draw the priority create budgets.",
+      "invariantRefs": [
+        "priority-budgets-are-class-gated"
+      ]
+    },
+    {
+      "id": "ordinary-priority-create-priority-add",
+      "when": {
+        "move": "replica_creating",
+        "partitionClass": "ordinary_priority",
+        "emergencyOverflow": "*"
+      },
+      "outcome": {
+        "budgetScope": "priority_add"
+      },
+      "reason": "Ordinary-priority cures draw the priority add budget regardless of the overflow flag \u2014 the emergency lane is class-gated.",
+      "invariantRefs": [
+        "emergency-lane-needs-both"
+      ]
+    },
+    {
+      "id": "emergency-with-overflow-emergency-add",
+      "when": {
+        "move": "replica_creating",
+        "partitionClass": "emergency_priority",
+        "emergencyOverflow": "active"
+      },
+      "outcome": {
+        "budgetScope": "emergency_priority_add"
+      },
+      "reason": "The control-plane spine cure escalates to the overflow slots only while emergency recovery holds them open.",
+      "invariantRefs": [
+        "emergency-lane-needs-both"
+      ]
+    },
+    {
+      "id": "emergency-without-overflow-priority-add",
+      "when": {
+        "move": "replica_creating",
+        "partitionClass": "emergency_priority",
+        "emergencyOverflow": "inactive"
+      },
+      "outcome": {
+        "budgetScope": "priority_add"
+      },
+      "reason": "Without active overflow an emergency partition draws the same priority budget as an ordinary one.",
+      "invariantRefs": [
+        "emergency-lane-needs-both"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "schema": "decision-table-v1",
+  "id": "replica-placement-cure-condition",
+  "owner": "src/rebalancer/replica-placement-cure-policy.js",
+  "boundary": "rebalancer_planning",
+  "inputs": [
+    {
+      "name": "condition",
+      "values": [
+        "under_representation",
+        "failed_replica",
+        "node_not_in_target",
+        "over_representation",
+        "paired_relocation",
+        "unhealthy_source_at_target"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "moveType",
+      "values": [
+        "add",
+        "remove",
+        "replace"
+      ]
+    },
+    {
+      "name": "moveReason",
+      "values": [
+        "increase_replica_count",
+        "replica_failed",
+        "node_not_in_target",
+        "spread_replicas",
+        "replace_replica"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "add-only-cures-deficit",
+      "statement": "Under-representation is the only ADD-cured condition; too few replicas is never REPLACE-curable and skew is never ADD-curable (the 2b5875b0 conflation)."
+    },
+    {
+      "id": "replace-is-count-neutral",
+      "statement": "Every REPLACE-cured condition leaves the replica count unchanged; count changes belong to the ADD and REMOVE rows."
+    },
+    {
+      "id": "fail-closed-no-mint",
+      "statement": "An undeclared condition resolves to no cure row; a move is never improvised for a condition without a declared row."
+    },
+    {
+      "id": "remove-cures-surplus-and-failure",
+      "statement": "Every REMOVE-cured condition is a surplus or a dead replica; REMOVE never cures a deficit or skew directly."
+    }
+  ],
+  "rules": [
+    {
+      "id": "deficit-cured-by-add",
+      "when": {
+        "condition": "under_representation"
+      },
+      "outcome": {
+        "moveType": "add",
+        "moveReason": "increase_replica_count"
+      },
+      "reason": "A target node holds fewer replicas than intended; only a replica-creating ADD closes a count deficit.",
+      "invariantRefs": [
+        "add-only-cures-deficit"
+      ]
+    },
+    {
+      "id": "failed-replica-removed",
+      "when": {
+        "condition": "failed_replica"
+      },
+      "outcome": {
+        "moveType": "remove",
+        "moveReason": "replica_failed"
+      },
+      "reason": "A FAILED replica (or terminal failed replace target) is dead weight; removal frees its slot for the deficit ADD.",
+      "invariantRefs": [
+        "remove-cures-surplus-and-failure"
+      ]
+    },
+    {
+      "id": "off-target-node-drained",
+      "when": {
+        "condition": "node_not_in_target"
+      },
+      "outcome": {
+        "moveType": "remove",
+        "moveReason": "node_not_in_target"
+      },
+      "reason": "A replica on a node the placement no longer includes is surplus wherever counts stand.",
+      "invariantRefs": [
+        "remove-cures-surplus-and-failure"
+      ]
+    },
+    {
+      "id": "over-representation-drained",
+      "when": {
+        "condition": "over_representation"
+      },
+      "outcome": {
+        "moveType": "remove",
+        "moveReason": "spread_replicas"
+      },
+      "reason": "A node above its intended share sheds the excess; spread is restored by draining, not by adding elsewhere.",
+      "invariantRefs": [
+        "remove-cures-surplus-and-failure"
+      ]
+    },
+    {
+      "id": "relocation-is-count-neutral-replace",
+      "when": {
+        "condition": "paired_relocation"
+      },
+      "outcome": {
+        "moveType": "replace",
+        "moveReason": "replace_replica"
+      },
+      "reason": "An under-represented target paired with an over-represented source relocates one replica; pairing into REPLACE keeps the count stable through the move.",
+      "invariantRefs": [
+        "replace-is-count-neutral"
+      ]
+    },
+    {
+      "id": "unhealthy-source-walked-off",
+      "when": {
+        "condition": "unhealthy_source_at_target"
+      },
+      "outcome": {
+        "moveType": "replace",
+        "moveReason": "replace_replica"
+      },
+      "reason": "At target count with a selectable source, the follow-up walks the replica off count-neutrally; below target the same observation is a deficit and takes the ADD row.",
+      "invariantRefs": [
+        "replace-is-count-neutral",
+        "add-only-cures-deficit"
+      ]
+    }
+  ]
+}
