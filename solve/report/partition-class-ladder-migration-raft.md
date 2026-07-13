@@ -28,6 +28,7 @@
 ## Findings
 - **partition-class-ladder-migration-raft-main**: Independent verification passed: exact source bytes match the attempt, both branches remain truth-table equivalent to the legacy predicate, critical-transport behavior and import topology are unchanged, the census moves exactly 105 to 103, and focused transport plus owner tests are green. [subagent:verify_raft_partition_class]
 - **partition-class-ladder-migration-raft-main**: Independent aggregate verification passed: the complete aggregate is the single reviewed source attempt, current bytes match exactly, and no additional source paths, rejected bytes, or unverified edits are present. [subagent:verify_raft_partition_class]
+- **partition-class-ladder-migration-raft-main**: Ingested evidence from partition-class-ladder-migration-raft.json. Metric: 103 -> 103. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-migration-raft.json]
 
 ## Theories
 _(none recorded)_
