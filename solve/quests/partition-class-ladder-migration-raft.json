@@ -1,0 +1,39 @@
+{
+  "id": "partition-class-ladder-migration-raft",
+  "authoringContractVersion": 1,
+  "statement": "Bounded Option-5 rung-5 raft migration: the two censused partition-class decisions in src/raft/constants.js consume classifySystemPartition(...).priorityControlPlane instead of calling the legacy priority predicate. Behavior remains truth-table identical for the explicit-target and sender-address fallback input shapes. doneWhen: solve/oracle/partition-class-ladder-migration-raft.json reports metric at most 103, ownerCheck passed, and all gates green. NOT in scope: critical-transport target classification, bootstrap, control-plane, node, partition, query, rebalancer, table-id or address parsing, predicate removal, numeric budgets, or behavior change.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "closesCL": [],
+    "parentQuest": "partition-class-ladder-single-owner-table",
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "0ecbd66ce7a3c994528697971516114ebc6d2926"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-migration-raft.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-class-ladder-migration-raft-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/partition-class-ladder-migration-raft.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

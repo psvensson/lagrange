@@ -5,8 +5,8 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
+  classifySystemPartition,
   isCriticalTransportControlPlanePartition,
-  isPriorityControlPlanePartition,
 } from
   '../bootstrap/system-partition-classification.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
@@ -153,9 +153,9 @@ function resolvePriorityControlPlanePartitionId(packet = null) {
 function resolvePriorityControlPlaneReadinessPartitionId(packet = null) {
   const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
   if (explicitTargetPartitionId) {
-    return isPriorityControlPlanePartition({
+    return classifySystemPartition({
       partitionId: explicitTargetPartitionId,
-    }) ?
+    }).priorityControlPlane ?
       explicitTargetPartitionId :
       null;
   }
@@ -163,7 +163,8 @@ function resolvePriorityControlPlaneReadinessPartitionId(packet = null) {
   if (!senderPartitionId) {
     return null;
   }
-  return isPriorityControlPlanePartition({partitionId: senderPartitionId}) ?
+  return classifySystemPartition({partitionId: senderPartitionId})
+    .priorityControlPlane ?
     senderPartitionId :
     null;
 }
