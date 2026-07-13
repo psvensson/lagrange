@@ -49,10 +49,13 @@ const ORACLE_FILE = 'solve/oracle/hold-engagement-single-owner-table.json';
 const ORACLE_TARGET = 0;
 
 // The owner family of the operation-ledger hold-engagement semantic: the
-// declared relation rows (hold policy) and the hold-state evaluator it wraps.
+// declared relation rows (hold policy), the hold-state evaluator it wraps,
+// and the rung-4 cure-typing sibling (its admission partition-class
+// classifier legitimately reads the emergency classifier).
 const OWNER_MODULES = Object.freeze(new Set([
   'src/rebalancer/operation-ledger-hold-policy.js',
   'src/rebalancer/operation-ledger-quorum-concentration.js',
+  'src/rebalancer/replica-placement-cure-policy.js',
 ]));
 
 const VIOLATION_KIND = Object.freeze({
