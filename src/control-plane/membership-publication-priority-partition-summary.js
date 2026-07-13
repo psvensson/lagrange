@@ -2,7 +2,7 @@ import {SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   buildPartitionRowByPartitionId,
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
   resolvePriorityControlPlanePartitionIds,
 } from '../bootstrap/system-partition-classification.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
@@ -301,7 +301,8 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     const normalizedService = normalizeServiceRow(serviceRow);
     const partitionId = normalizedService.partitionId;
     const partitionRow = partitionRowByPartitionId.get(partitionId) || null;
-    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
+    if (!classifySystemPartition({partitionId, partitionRow})
+      .priorityControlPlane) {
       continue;
     }
     observedPriorityServiceRow = true;
@@ -331,7 +332,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     stats.nodeIds.add(normalizedService.nodeId);
   }
   const observedPriorityPartitionRow = partitionRows.some((partitionRow) =>
-    isPriorityControlPlanePartition({partitionRow}),
+    classifySystemPartition({partitionRow}).priorityControlPlane,
   );
   if (!observedPriorityServiceRow && !observedPriorityPartitionRow) {
     return null;

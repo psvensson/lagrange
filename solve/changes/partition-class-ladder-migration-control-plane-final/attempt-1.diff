@@ -1,0 +1,234 @@
+diff --git a/src/control-plane/membership-publication-priority-partition-summary.js b/src/control-plane/membership-publication-priority-partition-summary.js
+index d34225c4..0d9c5dc4 100644
+--- a/src/control-plane/membership-publication-priority-partition-summary.js
++++ b/src/control-plane/membership-publication-priority-partition-summary.js
+@@ -2,7 +2,7 @@ import {SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
+ import {
+   PRIORITY_CONTROL_PLANE_TABLE_IDS,
+   buildPartitionRowByPartitionId,
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+   resolvePriorityControlPlanePartitionIds,
+ } from '../bootstrap/system-partition-classification.js';
+ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+@@ -301,7 +301,8 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+     const normalizedService = normalizeServiceRow(serviceRow);
+     const partitionId = normalizedService.partitionId;
+     const partitionRow = partitionRowByPartitionId.get(partitionId) || null;
+-    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
++    if (!classifySystemPartition({partitionId, partitionRow})
++      .priorityControlPlane) {
+       continue;
+     }
+     observedPriorityServiceRow = true;
+@@ -331,7 +332,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+     stats.nodeIds.add(normalizedService.nodeId);
+   }
+   const observedPriorityPartitionRow = partitionRows.some((partitionRow) =>
+-    isPriorityControlPlanePartition({partitionRow}),
++    classifySystemPartition({partitionRow}).priorityControlPlane,
+   );
+   if (!observedPriorityServiceRow && !observedPriorityPartitionRow) {
+     return null;
+diff --git a/src/control-plane/membership-publication-row-helpers.js b/src/control-plane/membership-publication-row-helpers.js
+index 4a3bf002..445958ec 100644
+--- a/src/control-plane/membership-publication-row-helpers.js
++++ b/src/control-plane/membership-publication-row-helpers.js
+@@ -10,7 +10,7 @@ import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
+ import {isTerminalPublicationRecoveryStatus} from './publication-recovery-state-machine.js';
+ import {OperationType} from '../rebalancer/replica-status.js';
+ import {
+-  isSystemTablePartition,
++  classifySystemPartition,
+ } from '../bootstrap/system-partition-classification.js';
+ import {
+   DISPATCH_RETRY_READY_NODE_PHASE,
+@@ -197,7 +197,7 @@ function buildDispatchRetryReadyNodeEvidence(operation) {
+ 
+ function isDispatchRetryCreateTargetRearmOperation(operation) {
+   return (
+-    isSystemTablePartition({partitionId: operation?.partitionId}) &&
++    classifySystemPartition({partitionId: operation?.partitionId}).systemTable &&
+     operation.workflowStep === WORKFLOW_STEP.CREATING &&
+     (
+       operation.type === OperationType.ADD ||
+diff --git a/src/control-plane/priority-recovery-admission-constants.js b/src/control-plane/priority-recovery-admission-constants.js
+index b8614f1f..8d1b0350 100644
+--- a/src/control-plane/priority-recovery-admission-constants.js
++++ b/src/control-plane/priority-recovery-admission-constants.js
+@@ -1,5 +1,5 @@
+ import {
+-  isPriorityControlPlanePartition,
++  classifySystemPartition,
+   resolvePartitionTableId,
+ } from '../bootstrap/system-partition-classification.js';
+ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+@@ -82,7 +82,8 @@ function classifyPriorityRecoveryAdmissionPartitionClass(
+     typeof predicates.isPriorityPartition === LOCAL_STR_FUNCTION ?
+       predicates.isPriorityPartition :
+       (candidatePartitionId) =>
+-        isPriorityControlPlanePartition({partitionId: candidatePartitionId});
++        classifySystemPartition({partitionId: candidatePartitionId})
++          .priorityControlPlane;
+   const isEmergencyPriorityPartition =
+     typeof predicates.isEmergencyPriorityPartition === LOCAL_STR_FUNCTION ?
+       predicates.isEmergencyPriorityPartition :
+diff --git a/src/control-plane/replica-dispatch-direct-wakeup.js b/src/control-plane/replica-dispatch-direct-wakeup.js
+index df17cab8..f2a06801 100644
+--- a/src/control-plane/replica-dispatch-direct-wakeup.js
++++ b/src/control-plane/replica-dispatch-direct-wakeup.js
+@@ -6,8 +6,8 @@ const {
+   OPERATION_WORKFLOW_OWNER_LITERAL,
+   REPLICA_DISPATCH_SERVICE_LITERAL,
+   classifyTransportDeliveryOutcome,
++  classifySystemPartition,
+   isDeliveredTransportDeliveryOutcome,
+-  isPriorityControlPlanePartition,
+ } = REPLICA_DISPATCH_SERVICE_SHARED;
+ 
+ const DIRECT_DISPATCH_WAKEUP_EMPTY_VALUE = null;
+@@ -80,7 +80,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
+       operation?.partitionId ||
+       operation?.partition_id ||
+       DIRECT_DISPATCH_WAKEUP_EMPTY_VALUE;
+-    if (isPriorityControlPlanePartition({partitionId})) {
++    if (classifySystemPartition({partitionId}).priorityControlPlane) {
+       deliveryOptions[
+         DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD.DELIVERY_PRIORITY
+       ] = OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL;
+diff --git a/src/control-plane/replica-dispatch-operation-execution.js b/src/control-plane/replica-dispatch-operation-execution.js
+index d348c220..3917c84b 100644
+--- a/src/control-plane/replica-dispatch-operation-execution.js
++++ b/src/control-plane/replica-dispatch-operation-execution.js
+@@ -25,9 +25,9 @@ const {
+   REPLICA_DISPATCH_SERVICE_LITERAL,
+   ReplicaOperationField,
+   assertCritical,
++  classifySystemPartition,
+   getControlPlaneErrorMessage,
+   isCoordinatorOwnedOperationType,
+-  isPriorityControlPlanePartition,
+ } = REPLICA_DISPATCH_SERVICE_SHARED;
+ 
+ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
+@@ -88,9 +88,9 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
+    * @private
+    */
+   isPriorityControlPlaneDispatch(row, rowOperation) {
+-    return isPriorityControlPlanePartition({
++    return classifySystemPartition({
+       partitionId: row.partition_id || rowOperation.partitionId || null,
+-    });
++    }).priorityControlPlane;
+   }
+ 
+   /**
+diff --git a/src/control-plane/replica-dispatch-priority-recovery-bootstrap.js b/src/control-plane/replica-dispatch-priority-recovery-bootstrap.js
+index 7afc212e..7c4c5dac 100644
+--- a/src/control-plane/replica-dispatch-priority-recovery-bootstrap.js
++++ b/src/control-plane/replica-dispatch-priority-recovery-bootstrap.js
+@@ -3,7 +3,7 @@ import {
+   CONTROL_PLANE_READINESS_DIMENSION,
+   CONTROL_PLANE_READINESS_REASON,
+ } from './control-plane-readiness-constants.js';
+-import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ 
+ const PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_REASONS = Object.freeze([
+   CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+@@ -185,7 +185,7 @@ function shouldAllowPriorityRecoveryDispatchBootstrap({
+     return false;
+   }
+   const partitionId = operation?.partitionId || operation?.partition_id || '';
+-  if (!isPriorityControlPlanePartition({partitionId})) {
++  if (!classifySystemPartition({partitionId}).priorityControlPlane) {
+     return false;
+   }
+   const targetNodeId = operation?.targetNodeId || operation?.target_node_id || null;
+diff --git a/src/control-plane/replica-dispatch-readiness-capture.js b/src/control-plane/replica-dispatch-readiness-capture.js
+index 97f2fc53..33476b31 100644
+--- a/src/control-plane/replica-dispatch-readiness-capture.js
++++ b/src/control-plane/replica-dispatch-readiness-capture.js
+@@ -19,10 +19,10 @@ const {
+   ReplicaOperationField,
+   SERVICE_TYPE,
+   STRING,
++  classifySystemPartition,
+   getOperationMetadataObject,
+   getOperationMetadataString,
+   getOperationMetadataStringArray,
+-  isSystemTablePartition,
+   isRetryableControlPlaneError,
+   wasNodeRecordReadyWhenWritten,
+ } = REPLICA_DISPATCH_SERVICE_SHARED;
+@@ -301,7 +301,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
+         operationOrPartitionId?.partitionId ||
+           operationOrPartitionId?.partition_id ||
+           null;
+-    if (isSystemTablePartition({partitionId})) {
++    if (classifySystemPartition({partitionId}).systemTable) {
+       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+     }
+     return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+diff --git a/src/control-plane/replica-dispatch-replay-readiness.js b/src/control-plane/replica-dispatch-replay-readiness.js
+index 7f84a238..26e02be2 100644
+--- a/src/control-plane/replica-dispatch-replay-readiness.js
++++ b/src/control-plane/replica-dispatch-replay-readiness.js
+@@ -20,8 +20,8 @@ const {
+   REPLICA_OPERATION_VISIBILITY_READ_MODE,
+   SYSTEM_TABLE_NAME,
+   WORKFLOW_STEP,
++  classifySystemPartition,
+   isCoordinatorOwnedOperationType,
+-  isSystemTablePartition,
+   shouldUseAuthoritativePriorityRecoveryRediscovery,
+ } = REPLICA_DISPATCH_SERVICE_SHARED;
+ 
+@@ -180,7 +180,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
+    */
+   isDispatchReplayCreateTargetRearmOperation(operation) {
+     return (
+-      isSystemTablePartition({partitionId: operation?.partition_id}) &&
++      classifySystemPartition({partitionId: operation?.partition_id}).systemTable &&
+       operation.workflow_step === WORKFLOW_STEP.CREATING &&
+       (
+         operation.type === OperationType.ADD ||
+diff --git a/src/control-plane/replica-dispatch-service-shared.js b/src/control-plane/replica-dispatch-service-shared.js
+index cbb423a9..192ff50a 100644
+--- a/src/control-plane/replica-dispatch-service-shared.js
++++ b/src/control-plane/replica-dispatch-service-shared.js
+@@ -77,7 +77,7 @@ import {
+ import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query/query-constants.js';
+ import {unwrapRowReadResult} from './owners/system-metadata-owner-base.js';
+ import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
+-import {isSystemTablePartition} from '../bootstrap/system-partition-classification.js';
++import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+ import {MESSAGE_GROUP_CDC_INGRESS_ACTION} from '../message-group/message-group-forwarding-owner.js';
+ import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-coordinator.js';
+ import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
+@@ -89,7 +89,6 @@ const {
+   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+   classifyTransportDeliveryOutcome,
+   isDeliveredTransportDeliveryOutcome,
+-  isPriorityControlPlanePartition,
+ } = OPERATION_WORKFLOW_OWNER_SHARED;
+ const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
+   AUTHORITATIVE: 'authoritative',
+@@ -255,6 +254,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
+   TYPEOF,
+   WORKFLOW_STEP,
+   assertCritical,
++  classifySystemPartition,
+   compareNodeHeartbeatWatermarks,
+   createControlPlaneRuntimeBundle,
+   getControlPlaneErrorCode,
+@@ -269,9 +269,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
+   isCoordinatorOwnedOperationType,
+   isDeliveredTransportDeliveryOutcome,
+   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
+-  isPriorityControlPlanePartition,
+   isRetryableControlPlaneError,
+-  isSystemTablePartition,
+   isTerminalMembershipPublicationStatus,
+   resolveControlPlaneNodeStatePublicationMode,
+   resolveReadyNodePublicationAdvancementState,

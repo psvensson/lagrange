@@ -10,7 +10,7 @@ import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {isTerminalPublicationRecoveryStatus} from './publication-recovery-state-machine.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {
-  isSystemTablePartition,
+  classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {
   DISPATCH_RETRY_READY_NODE_PHASE,
@@ -197,7 +197,7 @@ function buildDispatchRetryReadyNodeEvidence(operation) {
 
 function isDispatchRetryCreateTargetRearmOperation(operation) {
   return (
-    isSystemTablePartition({partitionId: operation?.partitionId}) &&
+    classifySystemPartition({partitionId: operation?.partitionId}).systemTable &&
     operation.workflowStep === WORKFLOW_STEP.CREATING &&
     (
       operation.type === OperationType.ADD ||

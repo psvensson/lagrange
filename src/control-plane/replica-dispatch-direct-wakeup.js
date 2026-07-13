@@ -6,8 +6,8 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   classifyTransportDeliveryOutcome,
+  classifySystemPartition,
   isDeliveredTransportDeliveryOutcome,
-  isPriorityControlPlanePartition,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 const DIRECT_DISPATCH_WAKEUP_EMPTY_VALUE = null;
@@ -80,7 +80,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
       operation?.partitionId ||
       operation?.partition_id ||
       DIRECT_DISPATCH_WAKEUP_EMPTY_VALUE;
-    if (isPriorityControlPlanePartition({partitionId})) {
+    if (classifySystemPartition({partitionId}).priorityControlPlane) {
       deliveryOptions[
         DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD.DELIVERY_PRIORITY
       ] = OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL;

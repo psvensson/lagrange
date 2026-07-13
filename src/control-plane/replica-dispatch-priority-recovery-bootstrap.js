@@ -3,7 +3,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from './control-plane-readiness-constants.js';
-import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 
 const PRIORITY_RECOVERY_DISPATCH_BOOTSTRAP_REQUIRED_REASONS = Object.freeze([
   CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
@@ -185,7 +185,7 @@ function shouldAllowPriorityRecoveryDispatchBootstrap({
     return false;
   }
   const partitionId = operation?.partitionId || operation?.partition_id || '';
-  if (!isPriorityControlPlanePartition({partitionId})) {
+  if (!classifySystemPartition({partitionId}).priorityControlPlane) {
     return false;
   }
   const targetNodeId = operation?.targetNodeId || operation?.target_node_id || null;

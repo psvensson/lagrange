@@ -25,9 +25,9 @@ const {
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
   assertCritical,
+  classifySystemPartition,
   getControlPlaneErrorMessage,
   isCoordinatorOwnedOperationType,
-  isPriorityControlPlanePartition,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
@@ -88,9 +88,9 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
    * @private
    */
   isPriorityControlPlaneDispatch(row, rowOperation) {
-    return isPriorityControlPlanePartition({
+    return classifySystemPartition({
       partitionId: row.partition_id || rowOperation.partitionId || null,
-    });
+    }).priorityControlPlane;
   }
 
   /**

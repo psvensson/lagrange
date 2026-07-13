@@ -77,7 +77,7 @@ import {
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query/query-constants.js';
 import {unwrapRowReadResult} from './owners/system-metadata-owner-base.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
-import {isSystemTablePartition} from '../bootstrap/system-partition-classification.js';
+import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {MESSAGE_GROUP_CDC_INGRESS_ACTION} from '../message-group/message-group-forwarding-owner.js';
 import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-coordinator.js';
 import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
@@ -89,7 +89,6 @@ const {
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
-  isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
   AUTHORITATIVE: 'authoritative',
@@ -255,6 +254,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   TYPEOF,
   WORKFLOW_STEP,
   assertCritical,
+  classifySystemPartition,
   compareNodeHeartbeatWatermarks,
   createControlPlaneRuntimeBundle,
   getControlPlaneErrorCode,
@@ -269,9 +269,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
-  isSystemTablePartition,
   isTerminalMembershipPublicationStatus,
   resolveControlPlaneNodeStatePublicationMode,
   resolveReadyNodePublicationAdvancementState,

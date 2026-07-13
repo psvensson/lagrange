@@ -19,10 +19,10 @@ const {
   ReplicaOperationField,
   SERVICE_TYPE,
   STRING,
+  classifySystemPartition,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
-  isSystemTablePartition,
   isRetryableControlPlaneError,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -301,7 +301,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
         operationOrPartitionId?.partitionId ||
           operationOrPartitionId?.partition_id ||
           null;
-    if (isSystemTablePartition({partitionId})) {
+    if (classifySystemPartition({partitionId}).systemTable) {
       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
     return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;

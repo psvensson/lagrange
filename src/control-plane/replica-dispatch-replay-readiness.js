@@ -20,8 +20,8 @@ const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SYSTEM_TABLE_NAME,
   WORKFLOW_STEP,
+  classifySystemPartition,
   isCoordinatorOwnedOperationType,
-  isSystemTablePartition,
   shouldUseAuthoritativePriorityRecoveryRediscovery,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -180,7 +180,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    */
   isDispatchReplayCreateTargetRearmOperation(operation) {
     return (
-      isSystemTablePartition({partitionId: operation?.partition_id}) &&
+      classifySystemPartition({partitionId: operation?.partition_id}).systemTable &&
       operation.workflow_step === WORKFLOW_STEP.CREATING &&
       (
         operation.type === OperationType.ADD ||

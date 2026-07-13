@@ -1,5 +1,5 @@
 import {
-  isPriorityControlPlanePartition,
+  classifySystemPartition,
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -82,7 +82,8 @@ function classifyPriorityRecoveryAdmissionPartitionClass(
     typeof predicates.isPriorityPartition === LOCAL_STR_FUNCTION ?
       predicates.isPriorityPartition :
       (candidatePartitionId) =>
-        isPriorityControlPlanePartition({partitionId: candidatePartitionId});
+        classifySystemPartition({partitionId: candidatePartitionId})
+          .priorityControlPlane;
   const isEmergencyPriorityPartition =
     typeof predicates.isEmergencyPriorityPartition === LOCAL_STR_FUNCTION ?
       predicates.isEmergencyPriorityPartition :
