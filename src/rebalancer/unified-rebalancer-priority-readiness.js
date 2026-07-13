@@ -11,9 +11,9 @@ const {
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   buildPublicationRecoveryGateSnapshot,
+  classifySystemPartition,
   getLocalControlPlaneMutationReadinessBlocker,
   isBackgroundWorkLifecycleReadySnapshot,
-  isPriorityControlPlanePartition,
   resolvePriorityRecoveryActiveNodeCohort,
   resolveReplicaOperationSemanticPhase,
   shouldPriorityRecoveryOperationBlockPlanning,
@@ -30,7 +30,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
       ).trim();
       if (
         partitionId.length === 0 ||
-        !isPriorityControlPlanePartition({partitionId})
+        !classifySystemPartition({partitionId}).priorityControlPlane
       ) {
         continue;
       }
@@ -99,7 +99,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
       ).trim();
       if (
         partitionId.length === 0 ||
-        !isPriorityControlPlanePartition({partitionId})
+        !classifySystemPartition({partitionId}).priorityControlPlane
       ) {
         continue;
       }

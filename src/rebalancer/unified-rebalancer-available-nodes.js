@@ -15,8 +15,8 @@ const {
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
+  classifySystemPartition,
   getPartitionRowFromCache,
-  isPriorityControlPlanePartition,
   resolvePriorityRecoveryActiveNodeCohort,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -385,7 +385,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       this.systemTableCache,
       partitionId,
     );
-    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
+    if (!classifySystemPartition({partitionId, partitionRow})
+      .priorityControlPlane) {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
@@ -477,7 +478,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       this.systemTableCache,
       partitionId,
     );
-    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
+    if (!classifySystemPartition({partitionId, partitionRow})
+      .priorityControlPlane) {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;

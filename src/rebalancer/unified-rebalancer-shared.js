@@ -11,10 +11,9 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../cdc/cdc-integration-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  classifySystemPartition,
   getPartitionRowFromCache,
   isCriticalTransportControlPlanePartition as isCriticalTransportControlPlanePartitionTable,
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
 } from '../bootstrap/system-partition-classification.js';
 import {isBackgroundWorkReadySnapshot as isBackgroundWorkLifecycleReadySnapshot} from '../bootstrap/traffic-readiness-utils.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
@@ -318,6 +317,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   buildPublicationRecoveryGateSnapshot,
+  classifySystemPartition,
   createControlPlaneRuntimeBundle,
   getControlPlaneRetryAfterMs,
   getLocalControlPlaneMutationReadinessBlocker,
@@ -334,12 +334,10 @@ export const UNIFIED_REBALANCER_SHARED = {
   isNodeReadyWithTransport,
   isNodeRecordReady,
   isOddReplicaCount,
-  isPriorityControlPlanePartition,
   isReplaceRemoveDispatchPhase,
   isReplicaOperationInFlight,
   isReplicaOperationStale,
   isRetryableControlPlaneError,
-  isSystemTablePartition,
   isTerminalReplicaOperationSemanticPhase,
   isTerminalReplicaOperationRecord,
   isTerminalStep,

@@ -64,7 +64,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
   getBudgetQueryOptions() {
     const criticalQuery =
       this.isControlPlanePriorityPartition() ||
-      this.isCriticalSystemPartition();
+      this.isSystemPartitionEntity();
     const workloadProfile = buildControlPlaneWorkloadProfile(
       criticalQuery ?
         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_PRIORITY_VISIBILITY :
@@ -367,7 +367,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
 
     // Align critical-partition health semantics with coordinator safety checks:
     // consider only routable non-learner replicas on ready nodes as healthy.
-    if (!this.isCriticalSystemPartition()) {
+    if (!this.isSystemPartitionEntity()) {
       return activeReplicas;
     }
 
@@ -411,7 +411,7 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
       const status = replica.status || ReplicaStatus.ACTIVE;
       return status === ReplicaStatus.ACTIVE;
     });
-    if (!this.isCriticalSystemPartition()) {
+    if (!this.isSystemPartitionEntity()) {
       return activeReplicas;
     }
     const readyNodeIds = new Set(

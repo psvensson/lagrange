@@ -1,0 +1,39 @@
+{
+  "id": "partition-class-ladder-migration-unified-rebalancer",
+  "authoringContractVersion": 1,
+  "statement": "Bounded Option-5 rung-5 unified-rebalancer migration: all 11 censused decisions in available-node planning, budget planning, control-plane readiness, priority readiness, and recovery coordination consume classifySystemPartition outcome fields or the existing classifier-backed system-partition entity seam with identical IDs and cached rows. Planning, readiness, health filtering, budget, admission, and recovery behavior remain unchanged. doneWhen: solve/oracle/partition-class-ladder-migration-unified-rebalancer.json reports metric at most 45, ownerCheck passed, and all gates green. NOT in scope: coordinator or owner-execution sites, parsing, predicate removal, numeric budgets, timing, retry policy, admission policy, or behavior changes.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "closesCL": [],
+    "parentQuest": "partition-class-ladder-single-owner-table",
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "2cc5b08c42b30ba9933821855ecfb4f86410a065"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-class-ladder-migration-unified-rebalancer.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-class-ladder-migration-unified-rebalancer-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/partition-class-ladder-migration-unified-rebalancer.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

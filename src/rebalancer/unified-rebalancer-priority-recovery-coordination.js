@@ -19,9 +19,9 @@ const {
   REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
   UNIFIED_REBALANCER_LITERAL,
+  classifySystemPartition,
   getPartitionRowFromCache,
   isCoordinatorOwnedOperationType,
-  isPriorityControlPlanePartition,
   isPriorityRecoveryEmergencyPartition,
   isTerminalReplicaOperationRecord,
   resolveTrackedPriorityRecoveryAdmissionPlan,
@@ -160,15 +160,17 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
         operation.workflow_step ||
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).toUpperCase();
+    // Runtime grammar: isPriorityControlPlanePartition remains the decision
+    // axis; its value now comes directly from the canonical outcome below.
     const operationPriorityPartition =
       operationPartitionId.length > UNIFIED_REBALANCER_LITERAL.ZERO &&
-      isPriorityControlPlanePartition({
+      classifySystemPartition({
         partitionId: operationPartitionId,
         partitionRow: getPartitionRowFromCache(
           this.systemTableCache,
           operationPartitionId,
         ),
-      });
+      }).priorityControlPlane;
     const stepProgress =
       eventName === REBALANCE_COORDINATOR_EVENT.STEP_CHANGED &&
       PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET.has(normalizedNewStep);
@@ -353,9 +355,9 @@ class UnifiedRebalancerPriorityRecoveryCoordination {
       staleGraceMs: this.priorityRecoveryActivityStaleGraceMs,
       maxConcurrentAdds: this.maxConcurrentMoves,
       isPriorityPartition: (partitionId) =>
-        isPriorityControlPlanePartition({
+        classifySystemPartition({
           partitionId,
-        }),
+        }).priorityControlPlane,
       // Reference-pass, not a re-derived conjunct: the plan owner resolves
       // lane classes through the owner classification; this wiring only
       // names which emergency predicate that classification uses.

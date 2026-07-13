@@ -9,9 +9,8 @@ const {
   SERVICE_STATUS,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
+  classifySystemPartition,
   getPartitionRowFromCache,
-  isPriorityControlPlanePartition,
-  isSystemTablePartition,
 } = UNIFIED_REBALANCER_SHARED;
 
 const CONTROL_PLANE_READINESS_CONSTRUCTOR = 'constructor';
@@ -29,10 +28,10 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       this.systemTableCache,
       this.entityId,
     );
-    return isSystemTablePartition({
+    return classifySystemPartition({
       partitionId: this.entityId,
       partitionRow,
-    });
+    }).systemTable;
   }
 
   /**
@@ -116,10 +115,10 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       this.systemTableCache,
       this.entityId,
     );
-    return isPriorityControlPlanePartition({
+    return classifySystemPartition({
       partitionId: this.entityId,
       partitionRow,
-    });
+    }).priorityControlPlane;
   }
 
   /**
