@@ -29,6 +29,8 @@
 - **cure-typing-single-owner-table-main**: sealed symptom RESOLVED on HEAD by the two child slices (this is the intended path, not a stale seal): census metric 15 -> 0 via cure-typing-owner-migration-move-minters (7 mints) and cure-typing-owner-migration-admission-lanes (8 lane conjuncts), both SOLVED and handed off with adversarial verification [solve/oracle/cure-typing-single-owner-table.json]
 - **cure-typing-single-owner-table-main**: Ingested evidence from cure-typing-single-owner-table.json. Metric: 15 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/cure-typing-single-owner-table.json]
 - **cure-typing-single-owner-table-main**: Ingested evidence from cure-typing-single-owner-table.json. Metric: 15 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/cure-typing-single-owner-table.json]
+- **cure-typing-single-owner-table-main**: independent verification passed: TRUSTED (comment-only analyzer diff verified; documented owner layout confirmed true in tree; census metric 0; oracle done with gates green; guard suite 49 assertions green) [subagent:a44dcd99bf45f961a]
+- **cure-typing-single-owner-table-main**: independent verification passed for the aggregate: TRUSTED (owner surface coherent with all exports production-consumed or deliberately test-pinned; guard test pins every relation; both decision-table specs match the code rows rule-by-rule; both census analyzers at metric 0; full targeted gate done=true; tree clean) [subagent:a41c72c80e409f2b9]
 
 ## Theories
 _(none recorded)_
