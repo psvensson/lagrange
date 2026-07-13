@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "agentCommand": "replace-with-a-live-adapter {requestFile} {responseFile}",
+  "timeoutMs": 600000,
+  "coauthorTrailer": "Co-Authored-By: Your Agent <agent@example.com>"
+}

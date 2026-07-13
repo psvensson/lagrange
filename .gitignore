@@ -38,6 +38,9 @@ models/**/*_TTrace_*.bin
 # generated reports, and attempt change diffs are durable workflow evidence and
 # stay trackable.
 solve/state/
+# Machine-local executor capability and attribution. Never commit credentials or
+# workstation-specific adapter commands.
+/solve/config.json
 # Standing-invariant status board: a per-run projection of evaluation results
 # (regenerate on demand via `solve invariants --export`); not committed because it
 # reflects local evaluation runs, unlike the Quest-state-derived FRONTIER/OVERVIEW boards.

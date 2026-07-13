@@ -44,7 +44,11 @@ const TASK = {
   evidencePaths: ['test-output/reports/a.report.json'],
 };
 
-const CONFIG = {agentCommand: 'agent {requestFile} {responseFile}', timeoutMs: 5000};
+const CONFIG = {
+  enabled: true,
+  agentCommand: `${process.execPath} {requestFile} {responseFile}`,
+  timeoutMs: 5000,
+};
 
 tap.test('agent executor (P4)', async (t) => {
   t.test('writes the dossier to the request file and reads the response', (t) => {
@@ -113,13 +117,15 @@ tap.test('agent executor (P4)', async (t) => {
     t.end();
   });
 
-  t.test('loadAgentConfig requires a config file with agentCommand', (t) => {
+  t.test('loadAgentConfig requires an explicitly enabled live config', (t) => {
     const root = tmp();
-    t.throws(() => loadAgentConfig(root), /needs/, 'missing config throws');
+    t.throws(() => loadAgentConfig(root), /unavailable/, 'missing config throws');
     const file = configFilePath(root);
     fs.mkdirSync(path.dirname(file), {recursive: true});
-    fs.writeFileSync(file, JSON.stringify({timeoutMs: 1}));
+    fs.writeFileSync(file, JSON.stringify({enabled: true, timeoutMs: 1}));
     t.throws(() => loadAgentConfig(root), /agentCommand/, 'missing command throws');
+    fs.writeFileSync(file, JSON.stringify({...CONFIG, enabled: false}));
+    t.throws(() => loadAgentConfig(root), /disabled/, 'disabled config throws');
     fs.writeFileSync(file, JSON.stringify(CONFIG));
     t.equal(loadAgentConfig(root).agentCommand, CONFIG.agentCommand);
     fs.rmSync(root, {recursive: true, force: true});

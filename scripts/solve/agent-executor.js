@@ -5,7 +5,8 @@
 // (a CLI, a model-API wrapper, a shell script, a remote runner) can satisfy the
 // contract by conforming to one I/O shape:
 //
-//   config  solve/config.json: { agentCommand: "<argv template>", timeoutMs: N }
+//   config  solve/config.json: { enabled: true, agentCommand: "<argv template>",
+//           timeoutMs: N }
 //           {requestFile}/{responseFile} are interpolated into the template and also
 //           exported as SOLVE_REQUEST_FILE / SOLVE_RESPONSE_FILE.
 //   request (solver -> agent)  JSON dossier: questId, statement, frontier, rung,
@@ -33,22 +34,141 @@ import {rungPrompt} from './ladder.js';
 const DEFAULT_TIMEOUT_MS = 600000;
 const REQUEST_PLACEHOLDER = '{requestFile}';
 const RESPONSE_PLACEHOLDER = '{responseFile}';
+const EXAMPLE_ADAPTER = 'scripts/solve/agent-adapter.example.sh';
+const CONFIG_STATE = Object.freeze({
+  ABSENT: 'absent',
+  MALFORMED: 'malformed',
+  DISABLED: 'disabled',
+  ENABLED: 'enabled',
+});
 
 export function configFilePath(root) {
   return path.join(root, SOLVE_DATA_DIR, CONFIG_FILE);
 }
 
-export function loadAgentConfig(root) {
+function executablePath(root, command) {
+  const executable = command.trim().split(/\s+/u)[0];
+  if (!executable) return null;
+  if (executable.includes('/') || executable.includes(path.sep)) {
+    return path.isAbsolute(executable) ? executable : path.resolve(root, executable);
+  }
+  for (const directory of (process.env.PATH || '').split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, executable);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch {
+      // Keep searching PATH.
+    }
+  }
+  return null;
+}
+
+function executableReady(file) {
+  if (!file) return false;
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return fs.statSync(file).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function usesExampleAdapter(root, command) {
+  const executable = command.trim().split(/\s+/u)[0] || '';
+  const resolved = path.isAbsolute(executable) ? executable : path.resolve(root, executable);
+  return executable === EXAMPLE_ADAPTER ||
+    resolved === path.resolve(root, EXAMPLE_ADAPTER);
+}
+
+// Read-only capability inspection shared by `solve doctor` and the live executor.
+// It never creates a config, probes the adapter by running it, or changes the worktree.
+export function inspectAgentConfig(root) {
   const file = configFilePath(root);
   if (!fs.existsSync(file)) {
+    return {
+      state: CONFIG_STATE.ABSENT,
+      enabled: false,
+      available: false,
+      command: null,
+      executable: null,
+      issues: ['solve/config.json is absent'],
+      config: null,
+    };
+  }
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return {
+      state: CONFIG_STATE.MALFORMED,
+      enabled: false,
+      available: false,
+      command: null,
+      executable: null,
+      issues: ['solve/config.json is not valid JSON'],
+      config: null,
+    };
+  }
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return {
+      state: CONFIG_STATE.MALFORMED,
+      enabled: false,
+      available: false,
+      command: null,
+      executable: null,
+      issues: ['solve/config.json must contain a JSON object'],
+      config: null,
+    };
+  }
+
+  const command = typeof config.agentCommand === 'string' && config.agentCommand.trim() ?
+    config.agentCommand.trim() : null;
+  if (config.enabled !== true) {
+    return {
+      state: CONFIG_STATE.DISABLED,
+      enabled: false,
+      available: false,
+      command,
+      executable: command ? executablePath(root, command) : null,
+      issues: ['agent executor is disabled; set "enabled": true only for a live adapter'],
+      config,
+    };
+  }
+
+  const issues = [];
+  const executable = command ? executablePath(root, command) : null;
+  if (!command) issues.push('"agentCommand" (string) is required');
+  if (command && usesExampleAdapter(root, command)) {
+    issues.push(`${EXAMPLE_ADAPTER} is a no-op reference adapter`);
+  }
+  if (command && !executableReady(executable)) {
+    issues.push('agentCommand executable is missing or not executable');
+  }
+  if (config.timeoutMs !== undefined &&
+    (!Number.isFinite(Number(config.timeoutMs)) || Number(config.timeoutMs) <= 0)) {
+    issues.push('"timeoutMs" must be a positive number when provided');
+  }
+  return {
+    state: CONFIG_STATE.ENABLED,
+    enabled: true,
+    available: issues.length === 0,
+    command,
+    executable,
+    issues,
+    config,
+  };
+}
+
+export function loadAgentConfig(root) {
+  const inspected = inspectAgentConfig(root);
+  if (!inspected.available) {
     throw new Error(
-      `agent executor needs ${file} ({ "agentCommand": "...", "timeoutMs": N })`);
+      `agent executor unavailable: ${inspected.issues.join('; ')}; ` +
+      'run `node scripts/solve.js doctor` for supervised-mode guidance');
   }
-  const config = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (typeof config.agentCommand !== 'string' || !config.agentCommand.trim()) {
-    throw new Error(`${file}: "agentCommand" (string) is required`);
-  }
-  return config;
+  return inspected.config;
 }
 
 function metricNameOf(frontierDef) {
