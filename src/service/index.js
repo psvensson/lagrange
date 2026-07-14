@@ -67,6 +67,25 @@ export {
 } from './installable-service-artifact-resolver.js';
 
 export {
+  DockerBuildxOciLayoutExporter,
+} from './docker-buildx-oci-layout-exporter.js';
+
+export {
+  OCI_CONTAINER_LAYER_MEDIA_TYPES,
+  OCI_EMPTY_CONFIG_MEDIA_TYPE,
+  OCI_IMAGE_CONFIG_MEDIA_TYPE,
+  OCI_IMAGE_LAYOUT_VERSION,
+  OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+  OCI_IMAGE_SCHEMA_VERSION,
+} from './oci-image-layout-contract.js';
+
+export {
+  SERVICE_LOCAL_OCI_LAYOUT_ERROR_CODE,
+  ServiceLocalOciLayoutBuilder,
+  ServiceLocalOciLayoutFailure,
+} from './service-local-oci-layout-builder.js';
+
+export {
   SERVICE_LIFECYCLE_COMMAND,
 } from './service-lifecycle-command-contract.js';
 

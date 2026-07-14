@@ -136,6 +136,29 @@ Primary production path.
 Development path. Produces an OCI-compatible directory layout so the
 install path remains uniform.
 
+`ServiceLocalOciLayoutBuilder` is the one local build owner. Callers provide an
+explicit runtime kind, platform, `SOURCE_DATE_EPOCH`, output root, and pinned
+source input. For `oci_container`, the pinned input is a context fingerprint
+plus context, Dockerfile, and build arguments; the injected production adapter
+executes `docker buildx build` with an OCI directory export. For
+`wasm_component`, the input is an already-built binary payload. The builder
+does not compile or validate a component and never treats the legacy
+JavaScript callback envelope as WebAssembly.
+
+Before atomic, digest-addressed publication, the owner verifies the complete
+layout graph: one top image-manifest descriptor, exact config and layer blob
+sizes/digests, container OCI layer media types, or exactly one
+`application/wasm` layer with an empty deterministic config. The owner pins the
+prepared output directory identity across exporter and publication awaits, and
+requires the layout root, `blobs`, and `blobs/sha256` to be owned ordinary
+directories rather than links. Its deeply frozen receipt contains `layoutPath`,
+`runtimeKind`, `topManifestDescriptor`,
+`payloadDescriptors`, `totalPayloadBytes`, `platform`, `sourceDateEpoch`, and
+`buildInputFingerprint`. Identical inputs are idempotent and reproduce the same
+content graph. This receipt is the S5b/S5c seam: S5c later materializes and
+submits the final external manifest. S5b does not write catalog state, register
+an artifact, or activate a runtime.
+
 Example:
 
 ``` bash
@@ -350,6 +373,12 @@ Detached signatures cover the domain-separated canonical artifact digest,
 not a mutable tag. The owner returns normalized verified metadata; it does not
 store the artifact, write catalog state, authenticate to registries, activate a
 runtime, or substitute for the later container/WASM payload consumer.
+
+For the local development producer, full graph validation occurs before the
+layout reaches this acquisition boundary. The build owner and resolver have
+non-overlapping roles: the former publishes a complete content-addressed graph;
+the latter binds the selected top descriptor and runtime media to the external
+manifest and trust policy.
 
 ------------------------------------------------------------------------
 

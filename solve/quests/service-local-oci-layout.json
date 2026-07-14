@@ -1,0 +1,80 @@
+{
+  "id": "service-local-oci-layout",
+  "authoringContractVersion": 1,
+  "statement": "Given explicit pinned development inputs for an oci_container image or prebuilt wasm_component payload, one local build owner publishes an atomic OCI image-layout directory and immutable deterministic receipt whose descriptor graph binds the exact bytes; identical inputs reproduce the same content graph, and InstallableServiceArtifactResolver accepts the exact local layout for a matching external manifest while tampered or partial graphs fail closed, without registry, catalog, control-transport, reconciler, or runtime activation.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/requirements.md#r3--one-install-and-control-plane",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "d2a74764c4e877b083b8fedf57fb12cb10e4f512"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-local-oci-layout",
+      "reportDir": "test-output/reports/service-local-oci-layout",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-local-oci-layout-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-local-oci-layout",
+          "reportDir": "test-output/reports/service-local-oci-layout",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "prerequisite-and-interface",
+      "statement": "Start from terminal S1/S2 commit d2a74764. The immutable receipt owns layoutPath, runtimeKind, topManifestDescriptor (digest/mediaType/sizeBytes), payloadDescriptors, totalPayloadBytes, explicit platform, sourceDateEpoch, and buildInputFingerprint. S5a only provides source/template inputs and S5c later materializes and submits the final external manifest."
+    },
+    {
+      "id": "one-local-build-owner",
+      "statement": "One service-layer build owner creates both oci_container and prebuilt wasm_component layouts. Its output must engage InstallableServiceArtifactResolver through LOCAL_OCI_LAYOUT in proof; no parallel resolver, packaging path, or artifact identity owner is permitted."
+    },
+    {
+      "id": "oci-content-graph",
+      "statement": "Publish oci-layout 1.0.0, schemaVersion 2 index.json with exactly one top image-manifest descriptor, and all referenced config/layer blobs at their sha256 digest paths with exact media type and size. Validate the whole graph before atomic publication."
+    },
+    {
+      "id": "deterministic-and-atomic",
+      "statement": "Canonical JSON bytes, explicit platform and sourceDateEpoch, a deterministic build-input fingerprint, digest-addressed final layout paths, immutable receipts, and atomic sibling-directory publication make identical inputs idempotent. Failure or malformed exporter output leaves no published partial layout."
+    },
+    {
+      "id": "container-adapter",
+      "statement": "Container builds route through an injected Buildx adapter whose production path uses docker buildx build with an OCI directory output, explicit platform/SOURCE_DATE_EPOCH, OCI media types, timestamp rewrite, and disabled provenance. Deterministic core closure uses an injected in-process exporter and does not require live Docker."
+    },
+    {
+      "id": "wasm-truth",
+      "statement": "WASM input is a prebuilt binary payload only, published as exactly one application/wasm layer with a deterministic empty OCI config. Do not reuse or describe the legacy JavaScript envelope as genuine WASM, and make no component-validation or runtime-activation claim."
+    },
+    {
+      "id": "bounded-owner-scope",
+      "statement": "Scope is the JavaScript service API/build owner, Buildx adapter, focused tests, deterministic scenario runner, and architecture truth. Do not mutate CLI, catalog/SQL, reconciler, control transport, capability claims, or runtime activation."
+    },
+    {
+      "id": "negative-proof",
+      "statement": "Focused proof attacks missing and tampered blobs, size/digest/media mismatches, invalid or multi-entry indexes, incorrect WASM layer cardinality, unsafe output roots, exporter failure, determinism, idempotency, receipt immutability, and resolver acceptance."
+    },
+    {
+      "id": "guardrail-and-red-on-revert",
+      "statement": "New src files remain at or below 800 lines and new test files at or below 1500. Record runtime-grammar, literal, file-size, focused lint/test/scenario gates, three consecutive green measurements, and independent exact-patch plus aggregate red-on-revert verifier approval before checkpoint and terminal handoff."
+    }
+  ]
+}

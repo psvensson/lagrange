@@ -18,6 +18,10 @@ import {
   EXTERNAL_SERVICE_MEDIA_TYPE,
   validateExternalServiceManifest,
 } from './external-service-manifest.js';
+import {
+  OCI_IMAGE_LAYOUT_VERSION,
+  OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+} from './oci-image-layout-contract.js';
 
 const INSTALLABLE_ARTIFACT_SOURCE_KIND = Object.freeze({
   LOCAL_OCI_LAYOUT: 'local_oci_layout',
@@ -54,9 +58,6 @@ const SIGNATURE_STATUS = Object.freeze({
   VERIFIED: 'verified',
 });
 
-const OCI_IMAGE_LAYOUT_VERSION = '1.0.0';
-const OCI_IMAGE_MANIFEST_MEDIA_TYPE =
-  EXTERNAL_SERVICE_MEDIA_TYPE.OCI_CONTAINER;
 const DEFAULT_MAX_DESCRIPTOR_BYTES = 4 * 1024 * 1024;
 const MAX_LAYOUT_MARKER_BYTES = 4 * 1024;
 const MAX_INDEX_BYTES = 1024 * 1024;
