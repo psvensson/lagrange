@@ -35,6 +35,9 @@
 
 ## Findings
 - **service-install-catalog-owner-concurrency-closure-main**: Independent exact and identical aggregate verification passed, including stale replay and partial-write counters [subagent:verify_s0_transport_decision]
+- **service-install-catalog-owner-concurrency-closure-main**: independent verification passed [subagent:verify_scaffold_aggregate]
+- **service-install-catalog-owner-concurrency-closure-main**: Ingested evidence from service-install-catalog-owner-2026-07-14T17-10-44-417Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-install-catalog-owner/service-install-catalog-owner-2026-07-14T17-10-44-417Z.report.json]
+- **service-install-catalog-owner-concurrency-closure-main**: Ingested evidence from service-install-catalog-owner-2026-07-14T17-10-44-417Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-install-catalog-owner/service-install-catalog-owner-2026-07-14T17-10-44-417Z.report.json]
 
 ## Theories
 _(none recorded)_
