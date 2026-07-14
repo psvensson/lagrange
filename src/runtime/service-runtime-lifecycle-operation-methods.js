@@ -1,4 +1,6 @@
 const RUNTIME_DRIVER_START_FAILED = 'runtime driver start failed';
+const CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE =
+  'current SQL request executor is unavailable';
 
 function createServiceRuntimeLifecycleOperationMethods(deps) {
   const {
@@ -26,19 +28,35 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       definition.service_id ?? replicaServiceId;
   }
 
+  function executeWithCurrentSqlRequestExecutor(
+    owner, issuingServiceIdentity, request,
+  ) {
+    const currentQueryExecutor = owner._queryExecutorFactory?.(
+      issuingServiceIdentity,
+    );
+    if (typeof currentQueryExecutor?.executeRequest !== 'function') {
+      throw new Error(CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE);
+    }
+    return currentQueryExecutor.executeRequest(request);
+  }
+
   function injectServiceQueryExecutor(
     owner, definition, serviceId, replicaContext, runtimeKind,
   ) {
     if (!owner._queryExecutorFactory) {
       return;
     }
-    const queryExecutor = owner._queryExecutorFactory(
-      resolveIssuingServiceIdentity(definition, serviceId),
-    );
+    const issuingServiceIdentity =
+      resolveIssuingServiceIdentity(definition, serviceId);
+    const queryExecutor = owner._queryExecutorFactory(issuingServiceIdentity);
     replicaContext.queryExecutor = queryExecutor;
     if (typeof queryExecutor?.executeRequest === 'function') {
-      replicaContext.sqlRequestExecutor =
-        queryExecutor.executeRequest.bind(queryExecutor);
+      replicaContext.sqlRequestExecutor = (request) =>
+        executeWithCurrentSqlRequestExecutor(
+          owner,
+          issuingServiceIdentity,
+          request,
+        );
     }
     owner.emit(
       QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
