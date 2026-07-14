@@ -22,10 +22,11 @@ Milestone M1 proves database portability only.
 
 | Order | Quest | Result |
 | --- | --- | --- |
-| S0 | `service-control-transport-decision` | One authenticated lifecycle mutation transport and security boundary is selected. |
+| S0 | `service-control-transport-decision` | First-class lifecycle SQL over authenticated PG wire is the selected ingress; the CLI is a client and the admin WebSocket remains a local compatibility adapter. |
 | S1 | `external-service-manifest-contract` | Versioned external schema accepts digest-pinned `oci_container`/`wasm_component` and rejects `native_js`. |
 | S2 | `installable-service-artifact-owner` | One OCI/local-layout resolver verifies digest, media type, and configured signature policy. |
 | S3 | `service-install-catalog-owner` | Durable desired package/revision/install/rollout/failure state references canonical actual-state tables. |
+| S3b | `service-lifecycle-sql-control-surface` | Authenticated, action-authorized lifecycle SQL submits intent to the catalog owner and returns typed operation outcomes. |
 | S4 | `service-installation-reconciler` | Existing lifecycle machinery converges desired installs with typed failure and recovery. |
 | S5a | `service-init-scaffold` | CLI scaffolds an external service project and manifest. |
 | S5b | `service-local-oci-layout` | Development build produces the same OCI-compatible layout consumed by installation. |
@@ -86,4 +87,3 @@ Milestone M5 is the complete evaluator journey.
 - W1 cannot close on core magic bytes alone; the chosen component classification
   and public invocation must be measured.
 - E3 is the only whole-program terminal. Earlier milestones make narrower claims.
-

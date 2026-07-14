@@ -1,0 +1,23 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "authenticated_pgwire_lifecycle_sql_selected",
+  "detail": {
+    "selectedTransport": "first_class_lifecycle_sql_over_authenticated_pgwire",
+    "securityBoundary": "tls_then_credentials_then_lifecycle_action_authorization_then_owner_submission",
+    "ownerRoute": "pgwire_to_sql_ingress_to_service_catalog_to_installation_reconciler",
+    "rejectedAlternative": "authenticated_private_admin_rpc",
+    "reusedExtendedNewComparison": "recorded",
+    "decisionDocument": "architecture/service-control-transport.md",
+    "activeDesign": "solve/specs/service-portability-ladder/design.md#control-transport",
+    "implementationQuest": "service-lifecycle-sql-control-surface",
+    "evidence": [
+      "src/query/pg/postgres-wire-adapter.js",
+      "src/runtime/pgwire-auth-handler.js",
+      "src/runtime/pgwire-runtime-module.js",
+      "src/entrypoint-runtime-admin-composition.js",
+      "architecture/lagrange-service-registry.md#recommended-sql--admin-surface"
+    ]
+  }
+}

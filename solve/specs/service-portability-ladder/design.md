@@ -52,14 +52,18 @@ valid work.
 
 ## Control transport
 
-The control-transport Quest selects one of these existing-owner extensions:
+Phase 1 selects first-class lifecycle SQL over authenticated PG wire. The CLI is
+a stateless client of that surface. PG wire owns TLS and credential ingress; SQL
+classifies lifecycle statements and enforces lifecycle-specific authorization;
+the cluster service catalog and reconciler remain the mutation and convergence
+owners. The complete boundary and rejected alternative are recorded in
+[`architecture/service-control-transport.md`](../../../architecture/service-control-transport.md).
 
-1. first-class lifecycle SQL over authenticated PG wire; or
-2. authenticated private admin RPC consumed by the CLI.
-
-The public UX may hide transport envelopes, but it must not hide the security
-boundary. An unauthenticated externally bound admin WebSocket is not an allowed
-production control plane.
+The node-local admin WebSocket remains a loopback compatibility/diagnostics
+adapter. It is not the production CLI transport and is never a fallback when the
+lifecycle SQL surface is unavailable. A downstream bounded Quest implements the
+SQL grammar, server-derived security-context propagation, action authorization,
+and typed owner outcome after the desired catalog owner exists.
 
 ## OCI provider milestone
 
@@ -139,4 +143,3 @@ runtime objects. Recovery acceptance names the killed instance and the distinct
 replacement. Attribution acceptance watermarks the triggering request and reads
 only later access rows. Cold/warm timing verifies cache/image preconditions and
 records every sample.
-
