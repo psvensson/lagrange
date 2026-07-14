@@ -193,6 +193,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.inFlightBackfillsByKey = new Map(); // Unified lifecycle owners for joining message-group startup.
     this.serviceLifecycleManager = null;
     this.serviceLifecycleCommandOwner = null;
+    this.serviceInstallationReconcilerOwnerHandle = null;
     this.systemMetadataOwners = null;
     this.serviceReconciler = null; // Replica handler for CREATE_REPLICA/REMOVE_REPLICA execution
     this.replicaHandler = null; // Replica state machine for tracking replica lifecycle states

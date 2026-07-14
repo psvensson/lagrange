@@ -5,6 +5,9 @@ import {
 import {
   INITIAL_MESSAGE_GROUP_ID,
 } from './system-table-schemas-constants.js';
+import {
+  detachServiceInstallationReconcilerOwner,
+} from './shared/service-installation-reconciler-setup.js';
 
 function createBootstrapServiceSeedDelegateMethods() {
   return {
@@ -266,9 +269,10 @@ function buildPhaseExecutionDelegates(service) {
     waitForPartitionLeadership: (options) =>
       self.seedPartitionsPhase
         .waitForPartitionLeadership(options),
-    stopUnifiedLifecycleOwners: () =>
-      self.seedInfrastructurePhase
-        .stopUnifiedLifecycleOwners(),
+    stopUnifiedLifecycleOwners: () => {
+      detachServiceInstallationReconcilerOwner(self);
+      return self.seedInfrastructurePhase.stopUnifiedLifecycleOwners();
+    },
     swapSystemTableWriter: () =>
       self.seedRegistrationPhase.swapSystemTableWriter(),
     ensureBootstrapCdcIntegrationService: () =>
@@ -382,9 +386,10 @@ function buildCleanupDelegates(service) {
       self.partitionReplicas = [];
     },
 
-    stopUnifiedLifecycleOwners: () =>
-      self.seedInfrastructurePhase
-        .stopUnifiedLifecycleOwners(),
+    stopUnifiedLifecycleOwners: () => {
+      detachServiceInstallationReconcilerOwner(self);
+      return self.seedInfrastructurePhase.stopUnifiedLifecycleOwners();
+    },
     emit: (event, data) => self.emit(event, data),
 
     clearCdcIntegrationService: () => {

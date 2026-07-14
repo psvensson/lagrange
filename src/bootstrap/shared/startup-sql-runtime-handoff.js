@@ -2,6 +2,9 @@ import {CDCIntegrationSetup} from './cdc-integration-setup.js';
 import {
   bindServiceLifecycleCommandOwnerToSqlRuntime,
 } from './service-lifecycle-command-owner-binding.js';
+import {
+  ensureServiceInstallationReconcilerOwner,
+} from './service-installation-reconciler-setup.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -124,6 +127,8 @@ function attachSqlRuntimeToStartupOwner(options) {
       typeof owner.activateDistributedTransactionRecovery === LOCAL_STR_FUNCTION) {
     owner.activateDistributedTransactionRecovery();
   }
+
+  ensureServiceInstallationReconcilerOwner(owner);
 }
 
 /**

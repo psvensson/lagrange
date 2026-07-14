@@ -2,6 +2,9 @@ import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {
   NodeJoiningAdmissionReadiness,
 } from './node-joining-admission-readiness.js';
+import {
+  detachServiceInstallationReconcilerOwner,
+} from './shared/service-installation-reconciler-setup.js';
 
 const {
   JOINING_UNIFIED_RECONCILE,
@@ -213,6 +216,7 @@ class NodeJoiningReplicaDescriptorCoordination extends NodeJoiningAdmissionReadi
    * @private
    */
   stopJoiningLifecycleOwners() {
+    detachServiceInstallationReconcilerOwner(this);
     this.startupServiceLifecycleOwner.stopOwners();
   }
   /**
