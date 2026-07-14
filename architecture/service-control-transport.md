@@ -29,9 +29,23 @@ External lifecycle control may not use PG wire trust mode. Trust mode remains a
 loopback-only database-development policy. A client-supplied tenant, principal,
 role, service identity, or owner outcome is never authoritative.
 
-The initial statement family is `INSTALL SERVICE`, `UPGRADE SERVICE`, `REMOVE
-SERVICE`, and read-only `SHOW SERVICE ...` forms. Their exact grammar and result
-schema belong to the downstream `service-lifecycle-sql-control-surface` Quest.
+The initial executable grammar is deliberately parameterized and closed:
+
+```sql
+INSTALL SERVICE $1;
+UPGRADE SERVICE $1;
+REMOVE SERVICE $1;
+SHOW SERVICE $1;
+SHOW SERVICES;
+```
+
+The first four forms accept exactly one JSON object bind parameter. Install and
+upgrade require `manifest`, `artifact_source`, and `idempotency_key`, with
+optional `config`; remove requires `service_name` and `idempotency_key`; the
+single-service read requires `service_name`. Tenant, principal, roles,
+signature policy, durable identifiers, and owner outcomes are never payload
+fields. This narrow envelope keeps JSON and configuration out of SQL text while
+allowing the SQL ingress to classify the action before parsing the payload.
 
 ## Owner route
 
@@ -56,9 +70,12 @@ The route preserves these boundaries:
 | Running instances and endpoints | Existing service lifecycle, `services`, and `service_endpoints` owners |
 | User experience | CLI as a stateless SQL client |
 
-Retries use an owner-defined idempotency key or stable operation identity. The
+Retries use the caller's opaque idempotency key only as input to an
+owner-derived operation identity bound to action, tenant, and principal. The
 CLI must not infer success from a disconnected session, and the SQL layer must
-not mutate catalog tables directly to bypass the command owner.
+not mutate catalog tables directly to bypass the command owner. Artifact
+signature policy is server-configured and explicit; a command payload cannot
+weaken it.
 
 ## Reused, extended, and new
 

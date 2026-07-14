@@ -42,6 +42,56 @@ test('createSqlRequest - accepts explicit fields', (t) => {
   t.end();
 });
 
+test('createSqlRequest - defensively freezes server security context', (t) => {
+  const roles = ['service-operator'];
+  const securityContext = {
+    tenantId: 'tenant-a',
+    principal: 'alice',
+    roles,
+  };
+  const req = createSqlRequest({
+    statement: 'SHOW SERVICES',
+    securityContext,
+  });
+
+  roles.push('attacker');
+  securityContext.principal = 'mallory';
+  t.same(req.securityContext, {
+    tenantId: 'tenant-a',
+    principal: 'alice',
+    roles: ['service-operator'],
+  });
+  t.ok(Object.isFrozen(req.securityContext));
+  t.ok(Object.isFrozen(req.securityContext.roles));
+  t.ok(isSqlRequest(req));
+  t.end();
+});
+
+test('createSqlRequest - rejects malformed security context', (t) => {
+  t.throws(() => createSqlRequest({
+    statement: 'SHOW SERVICES',
+    securityContext: {
+      tenantId: 'tenant-a',
+      principal: 'alice',
+      roles: 'operator',
+    },
+  }), /security context/iu);
+  t.end();
+});
+
+test('createSqlRequest - rejects tenant and security-context mismatch', (t) => {
+  t.throws(() => createSqlRequest({
+    statement: 'SHOW SERVICES',
+    tenantId: 'tenant-b',
+    securityContext: {
+      tenantId: 'tenant-a',
+      principal: 'alice',
+      roles: ['service-operator'],
+    },
+  }), /security context/iu);
+  t.end();
+});
+
 test('createSqlRequest - partition_callback requires module ref', (t) => {
   t.throws(() => {
     createSqlRequest({

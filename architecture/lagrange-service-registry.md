@@ -175,16 +175,21 @@ lagrange service status backup-manager
 # Recommended SQL / Admin Surface
 
 ``` sql
-INSTALL SERVICE 'lagrange/backup-manager' VERSION '1.2.0';
-UPGRADE SERVICE 'lagrange/backup-manager' VERSION '1.3.0';
-REMOVE SERVICE 'lagrange/backup-manager';
+INSTALL SERVICE $1;
+UPGRADE SERVICE $1;
+REMOVE SERVICE $1;
+SHOW SERVICE $1;
 SHOW SERVICES;
-SHOW SERVICE REVISIONS;
-SHOW SERVICE INSTANCES;
 ```
 
-The exact SQL syntax can evolve, but the model should expose service
-lifecycle as a first-class cluster operation.
+The first four forms use one JSON bind parameter. Install and upgrade carry a
+versioned external manifest, artifact source, stable idempotency key, and
+optional revision config. Remove carries the service name and idempotency key;
+the single-service read carries only the service name. Authenticated session
+context and the server's signature policy are never client payload fields.
+`SHOW SERVICES` has no parameters. The returned rows expose durable catalog
+operation and rollout state; `recorded_not_running` is not reported as running
+instance state.
 
 ------------------------------------------------------------------------
 

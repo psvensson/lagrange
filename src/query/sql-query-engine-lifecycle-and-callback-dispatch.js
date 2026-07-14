@@ -24,7 +24,6 @@ const {
   CallbackExecutionHost,
   EXECUTION_MODE,
   LoggingService,
-  METRICS_LOG_TAG,
   MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
   MigrationCoordinator,
   MigrationPipeline,
@@ -36,7 +35,6 @@ const {
   QUERY_SUBSYSTEM,
   ZERO_SHA256_DIGEST,
   createCallbackDriverRegistry,
-  isSqlRequest,
 } = SQL_QUERY_ENGINE_SHARED;
 
 function resumeDurableProvisioningWork(engine) {
@@ -373,100 +371,6 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    */
   setWasmExecutor(wasmExecutor) {
     this.wasmExecutor = wasmExecutor || null;
-  }
-
-  /**
-   * Execute a canonical SqlRequest with execution-mode dispatch.
-   *
-   * This is the single owning dispatch entrypoint for
-   * execution-mode behavior. All adapters (internal, protocol,
-   * WASM) should converge here.
-   *
-   * Requirements: 1.1, 13.1
-   * @param {Readonly<Object>} sqlRequest - Frozen SqlRequest object.
-   * @return {Promise<Object>} Execution result.
-   */
-  async executeRequest(sqlRequest) {
-    if (!isSqlRequest(sqlRequest)) {
-      throw new Error(ADAPTER_ERROR_MSG.INVALID_SQL_REQUEST);
-    }
-
-    const {executionMode, statement, parameters, sessionId} = sqlRequest;
-
-    this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_START, {
-      executionMode,
-      statement: statement.substring(0, LOCAL_NUM_ONE_HUNDRED),
-      sessionId,
-    });
-
-    const dispatchStartMs = Date.now();
-    try {
-      let result;
-
-      switch (executionMode) {
-      case EXECUTION_MODE.SQL_STATEMENT:
-        result = await this.executeQuery(statement, parameters, {
-          sessionId,
-          tenantId: sqlRequest.tenantId,
-          dialect: sqlRequest.dialect,
-          timeoutMs: sqlRequest.timeoutMs,
-          timeoutBudget: sqlRequest.timeoutBudget,
-          cancellationToken: sqlRequest.cancellationToken || null,
-        });
-        break;
-
-      case EXECUTION_MODE.PARTITION_CALLBACK:
-        result = await this.executePartitionCallback(sqlRequest);
-        break;
-
-      case EXECUTION_MODE.STAGE:
-        result = await this.executeStageRequest(sqlRequest);
-        break;
-
-      case EXECUTION_MODE.PLAN:
-        result = await this.executePlanRequest(sqlRequest);
-        break;
-
-      default:
-        throw new Error(
-          `${ADAPTER_ERROR_MSG.UNSUPPORTED_EXECUTION_MODE}${executionMode}`,
-        );
-      }
-
-      this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_COMPLETE, {
-        executionMode,
-        success: result.success,
-      });
-
-      try {
-        this.logger.info(METRICS_LOG_TAG.QUERY_DISPATCH, {
-          executionMode,
-          totalDurationMs: Date.now() - dispatchStartMs,
-          success: result?.success ?? false,
-          sessionId,
-        });
-      } catch (_metricsErr) {
-        // Metrics logging must not propagate to callers
-      }
-
-      return result;
-    } catch (error) {
-      try {
-        this.logger.info(METRICS_LOG_TAG.QUERY_DISPATCH, {
-          executionMode,
-          totalDurationMs: Date.now() - dispatchStartMs,
-          success: false,
-          sessionId,
-        });
-      } catch (_metricsErr) {
-        // Metrics logging must not propagate to callers
-      }
-      this.logger.error(ADAPTER_LOG_MSG.EXECUTE_REQUEST_FAILED, {
-        executionMode,
-        error: error.message,
-      });
-      throw error;
-    }
   }
 
   /**

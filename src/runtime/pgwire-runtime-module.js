@@ -35,7 +35,7 @@ import {PostgresWireAdapter} from '../query/pg/postgres-wire-adapter.js';
 import {PgWireProtocolHandler} from './pgwire-protocol-handler.js';
 import {PgWireAuthHandler} from './pgwire-auth-handler.js';
 import {
-  PGWIRE_AUTH_ACTION,
+  PGWIRE_AUTH_DEFAULT_ACTIONS,
 } from './pgwire-auth-constants.js';
 import {
   PGWIRE_AUTH_MODE,
@@ -212,7 +212,11 @@ class PostgresWireRuntimeModule {
           (replicaContext.pgwireCredentialVerifier ||
             this._credentialVerifier) : undefined,
         policy: {
-          allowedActions: new Set([PGWIRE_AUTH_ACTION.EXECUTE_QUERY]),
+          allowedActions: new Set(
+            config.authMode === PGWIRE_AUTH_MODE.PASSWORD ?
+              PGWIRE_AUTH_DEFAULT_ACTIONS.PASSWORD :
+              PGWIRE_AUTH_DEFAULT_ACTIONS.TRUST,
+          ),
         },
         logger: this._logger,
       }));

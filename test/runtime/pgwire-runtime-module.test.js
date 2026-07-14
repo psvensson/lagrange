@@ -33,6 +33,9 @@ import {
 import {WASM_SERVICE_PROTOCOL} from
   '../../src/wasm-service/wasm-service-constants.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
+import {PGWIRE_AUTH_ACTION} from
+  '../../src/runtime/pgwire-auth-constants.js';
+import {PGWIRE_AUTH_MODE} from '../../src/runtime/pgwire-descriptor.js';
 
 /**
  * Create a minimal service definition for testing.
@@ -467,6 +470,42 @@ describe('pgwire-runtime-module', () => {
   });
 
   describe('constants', () => {
+    it('grants lifecycle actions only to password-mode production policy',
+      () => {
+        const mod = new PostgresWireRuntimeModule({logger: {
+          debug() {}, error() {}, info() {}, warn() {},
+        }});
+        const context = {
+          tenantId: 'tenant-a',
+          principal: 'alice',
+          roles: [],
+        };
+        const password = mod._authHandlerFactory({
+          authMode: PGWIRE_AUTH_MODE.PASSWORD,
+        }, {
+          pgwireCredentialVerifier: async () => ({authenticated: true}),
+        });
+        const trust = mod._authHandlerFactory({
+          authMode: PGWIRE_AUTH_MODE.TRUST,
+        }, {});
+
+        for (const action of [
+          PGWIRE_AUTH_ACTION.SERVICE_INSTALL,
+          PGWIRE_AUTH_ACTION.SERVICE_READ,
+          PGWIRE_AUTH_ACTION.SERVICE_REMOVE,
+          PGWIRE_AUTH_ACTION.SERVICE_UPGRADE,
+        ]) {
+          assert.equal(password.authorizeQuery(context, action).authorized, true);
+          assert.equal(trust.authorizeQuery(context, action).authorized, false);
+        }
+        assert.equal(
+          trust.authorizeQuery(
+            context, PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
+          ).authorized,
+          true,
+        );
+      });
+
     it('should export frozen PGWIRE_MODULE_ERROR', () => {
       assert.ok(Object.isFrozen(PGWIRE_MODULE_ERROR));
     });

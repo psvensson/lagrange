@@ -16,6 +16,13 @@ import {QUERY_WALL_TIME_LIMIT_MS} from
 import {PARSER_DIALECT} from './pg-compat-constants.js';
 import {PG_SESSION_STATE, PG_WIRE_ERROR_MSG} from './pg-wire-constants.js';
 import {
+  SERVICE_LIFECYCLE_SQL_CLASSIFICATION,
+  SERVICE_LIFECYCLE_SQL_COMMAND,
+  classifyServiceLifecycleSql,
+} from '../service-lifecycle-sql-contract.js';
+import {PGWIRE_AUTH_ACTION} from
+  '../../runtime/pgwire-auth-constants.js';
+import {
   EXECUTION_MODE,
   ADAPTER_SUBSYSTEM,
   ADAPTER_ERROR_MSG,
@@ -28,6 +35,26 @@ function resolvePgWireWallTimeLimitMs(options = {}) {
   const requested = Number(options?.budgets?.WALL_TIME_LIMIT_MS);
   return Number.isFinite(requested) && requested > 0 ?
     requested : QUERY_WALL_TIME_LIMIT_MS;
+}
+
+function resolveStatementAuthorizationAction(statement) {
+  const classification = classifyServiceLifecycleSql(statement);
+  if (classification.kind !== SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
+    return PGWIRE_AUTH_ACTION.EXECUTE_QUERY;
+  }
+  switch (classification.command) {
+  case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
+    return PGWIRE_AUTH_ACTION.SERVICE_INSTALL;
+  case SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE:
+    return PGWIRE_AUTH_ACTION.SERVICE_UPGRADE;
+  case SERVICE_LIFECYCLE_SQL_COMMAND.REMOVE:
+    return PGWIRE_AUTH_ACTION.SERVICE_REMOVE;
+  case SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ALL:
+  case SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ONE:
+    return PGWIRE_AUTH_ACTION.SERVICE_READ;
+  default:
+    throw new Error(ADAPTER_ERROR_MSG.LIFECYCLE_AUTH_ACTION_REQUIRED);
+  }
 }
 
 
@@ -116,8 +143,8 @@ class PostgresWireAdapter {
 
     const session = {
       sessionId,
-      tenantId: credentials.tenantId,
-      user: credentials.user || null,
+      tenantId: authResult.context.tenantId,
+      user: authResult.context.principal,
       state: PG_SESSION_STATE.AUTHENTICATED,
       createdAt: Date.now(),
       securityContext: authResult.context,
@@ -160,6 +187,7 @@ class PostgresWireAdapter {
     }
     const authorization = this.authHandler.authorizeQuery(
       session.securityContext,
+      resolveStatementAuthorizationAction(sql),
     );
     if (!authorization?.authorized) {
       throw new Error(
@@ -180,6 +208,7 @@ class PostgresWireAdapter {
       timeoutBudget: createTimeoutBudget({
         configuredBudgetMs: wallTimeLimitMs,
       }),
+      securityContext: session.securityContext,
     });
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTING_VIA_SQLCORE, {

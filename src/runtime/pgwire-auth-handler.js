@@ -117,11 +117,20 @@ class PgWireAuthHandler {
             PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED,
           );
         }
+        if (authResult.roles !== undefined &&
+            (!Array.isArray(authResult.roles) ||
+             !authResult.roles.every((role) => typeof role === 'string'))) {
+          return this._failAuth(
+            {tenantId: credentials.database,
+              principal: credentials.user},
+            PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED,
+          );
+        }
         // Build context from authenticator result
         const context = Object.freeze({
           tenantId: credentials.database,
           principal: credentials.user,
-          roles: authResult.roles || [],
+          roles: Object.freeze([...(authResult.roles || [])]),
         });
         return this._succeedAuth(context);
       } catch (_err) {
@@ -137,7 +146,7 @@ class PgWireAuthHandler {
     const context = Object.freeze({
       tenantId: credentials.database,
       principal: credentials.user,
-      roles: [],
+      roles: Object.freeze([]),
     });
     return this._succeedAuth(context);
   }

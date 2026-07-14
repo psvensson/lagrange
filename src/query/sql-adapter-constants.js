@@ -65,6 +65,10 @@ const ADAPTER_ERROR_MSG = Object.freeze({
   STATEMENT_REQUIRED: 'SQL statement string is required',
   STATEMENT_MUST_BE_STRING: 'SQL statement must be a string',
   PARAMETERS_MUST_BE_ARRAY: 'SQL parameters must be an array',
+  SECURITY_CONTEXT_INVALID:
+    'SqlRequest security context must contain tenantId, principal, and roles',
+  LIFECYCLE_AUTH_ACTION_REQUIRED:
+    'Lifecycle SQL classification requires an authorization action',
   TENANT_ID_REQUIRED: 'Tenant ID is required for protocol sessions',
   SESSION_ID_REQUIRED: 'Session ID is required for protocol sessions',
   UNSUPPORTED_PROTOCOL_FEATURE:

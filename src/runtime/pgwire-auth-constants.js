@@ -20,6 +20,23 @@ const PGWIRE_AUTH_DECISION = Object.freeze({
 const PGWIRE_AUTH_ACTION = Object.freeze({
   CONNECT: 'pgwire.connect',
   EXECUTE_QUERY: 'pgwire.execute_query',
+  SERVICE_INSTALL: 'pgwire.service.install',
+  SERVICE_READ: 'pgwire.service.read',
+  SERVICE_REMOVE: 'pgwire.service.remove',
+  SERVICE_UPGRADE: 'pgwire.service.upgrade',
+});
+
+const PGWIRE_AUTH_DEFAULT_ACTIONS = Object.freeze({
+  PASSWORD: Object.freeze([
+    PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
+    PGWIRE_AUTH_ACTION.SERVICE_INSTALL,
+    PGWIRE_AUTH_ACTION.SERVICE_READ,
+    PGWIRE_AUTH_ACTION.SERVICE_REMOVE,
+    PGWIRE_AUTH_ACTION.SERVICE_UPGRADE,
+  ]),
+  TRUST: Object.freeze([
+    PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
+  ]),
 });
 
 // --- Structured audit log messages ---
@@ -61,6 +78,7 @@ const PGWIRE_AUTH_LOG_TAG = 'pgwire.auth';
 export {
   PGWIRE_AUTH_DECISION,
   PGWIRE_AUTH_ACTION,
+  PGWIRE_AUTH_DEFAULT_ACTIONS,
   PGWIRE_AUTH_AUDIT_MSG,
   PGWIRE_AUTH_ERROR_MSG,
   PGWIRE_AUTH_LOG_TAG,
