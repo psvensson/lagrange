@@ -58,6 +58,7 @@ compute moves to the data and cross-node traffic is reduced:
 ### Service Platform
 
 - [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md) - Kernel platform API contract.
+- [Service Control Transport](service-control-transport.md) - Authenticated lifecycle SQL ingress, security boundary, owner route, and rejected admin-RPC alternative.
 - [Lagrange Service Manifest](lagrange-service-manifest.md) - Service manifest format and activation model.
 - [Lagrange Service Registry](lagrange-service-registry.md) - Service registry architecture.
 

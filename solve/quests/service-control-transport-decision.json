@@ -1,0 +1,47 @@
+{
+  "id": "service-control-transport-decision",
+  "authoringContractVersion": 1,
+  "statement": "Phase 1 service lifecycle mutations have one selected authenticated transport, one named security boundary, and one owner-preserving route that the CLI and downstream install Quests must consume.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/design.md#control-transport",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "409bf1615c3618aeb9aac2b669a876e45cc39d8b"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/service-control-transport-decision.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-control-transport-decision-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/service-control-transport-decision.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "decision-only-scope",
+      "statement": "This Quest selects and records the control transport and security boundary only; it must not implement SQL grammar, catalog state, reconciliation, manifests, artifacts, or CLI behavior owned by downstream Phase 1 Quests."
+    },
+    {
+      "id": "owner-preserving-route",
+      "statement": "The selected ingress must submit authenticated intent to the service lifecycle/catalog owners; it must not make the transport, CLI, or a node-local adapter a second mutation owner."
+    }
+  ]
+}
