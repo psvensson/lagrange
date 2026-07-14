@@ -13,6 +13,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
+    "lagrange": "./src/sea-entry.js",
     "lagrange-admin": "./src/cli/bin/lagrange-admin.js"
   },
   "scripts": {

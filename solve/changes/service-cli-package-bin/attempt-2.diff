@@ -1,0 +1,24 @@
+diff --git a/package-lock.json b/package-lock.json
+index a23cdac5bda322838187fc47b78476b406b46161..21effd52ee34f99f36c6c9e0930701394c30a00e 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -25,6 +25,7 @@
+         "ws": "^8.18.0"
+       },
+       "bin": {
++        "lagrange": "src/sea-entry.js",
+         "lagrange-admin": "src/cli/bin/lagrange-admin.js"
+       },
+       "devDependencies": {
+diff --git a/package.json b/package.json
+index 2ad59b952f8b0fb00c0ac154078f03471f82c5b9..9ae95d7996819d22cb7977c42c23ad88881e4918 100644
+--- a/package.json
++++ b/package.json
+@@ -13,6 +13,7 @@
+     "./package.json": "./package.json"
+   },
+   "bin": {
++    "lagrange": "./src/sea-entry.js",
+     "lagrange-admin": "./src/cli/bin/lagrange-admin.js"
+   },
+   "scripts": {
