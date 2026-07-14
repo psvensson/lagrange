@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T13-46-52-624Z.report.json
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json
 
 **Attempts:** 6
 
@@ -12,23 +12,6 @@
 - spec: solve/specs/service-portability-ladder/tasks.md#phase-1--install-and-control-plane
 - parent quest: service-lifecycle-sql-control-surface
 - plan: solve/specs/service-portability-ladder/tasks.md
-
-## Current Blocker
-- Frontier: service-lifecycle-authoritative-sql-handoff-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json
-- Selected theory: theory-20260714-noncanonical-change-artifact-receipt
-- Next move: continue supervised step for service-lifecycle-authoritative-sql-handoff-main
-- No longer current: PASS
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 13
