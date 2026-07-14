@@ -37,6 +37,7 @@
 - **service-installation-reconciler-main**: Independent verification rejected this exact attempt: active zero-runtime, per-installation single-flight, seed/join cleanup, never-activated removal, literal-owner, and explicit timer-state guards were incomplete [subagent:verify_s4_reconciler]
 - **service-installation-reconciler-main**: Ingested evidence from service-installation-reconciler-2026-07-14T14-36-30-640Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-installation-reconciler/service-installation-reconciler-2026-07-14T14-36-30-640Z.report.json]
 - **service-installation-reconciler-main**: Ingested evidence from service-installation-reconciler-2026-07-14T14-36-30-640Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-installation-reconciler/service-installation-reconciler-2026-07-14T14-36-30-640Z.report.json]
+- **service-installation-reconciler-main**: Independent verification approved the same-base replacement attempt and identical aggregate after every rejected mutation turned red [subagent:phase1_s5b_preflight]
 
 ## Theories
 _(none recorded)_
