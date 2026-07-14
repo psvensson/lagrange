@@ -1,0 +1,1184 @@
+diff --git a/scripts/checks/run-service-lifecycle-command-catalog-composition-scenarios.js b/scripts/checks/run-service-lifecycle-command-catalog-composition-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..06ab9ca3dcb32992f4643aaa782df3011a3b7552
+--- /dev/null
++++ b/scripts/checks/run-service-lifecycle-command-catalog-composition-scenarios.js
+@@ -0,0 +1,16 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIO = 'service-lifecycle-command-catalog-composition';
++const REPORT_DIR =
++  'test-output/reports/service-lifecycle-command-catalog-composition';
++const TEST_FILES = Object.freeze([
++  'test/service/service-lifecycle-command-owner.test.js',
++  'test/bootstrap/shared/control-plane-setup.test.js',
++  'test/control-plane/service-install-catalog-owner.test.js',
++]);
++
++runGuardTestScenarios({
++  [SCENARIO]: TEST_FILES,
++}, {reportDir: REPORT_DIR});
+diff --git a/src/bootstrap/shared/control-plane-setup.js b/src/bootstrap/shared/control-plane-setup.js
+index 4dd408112b7af5a902487b4dd635efec5972101e..dc74e48747ccb24e6c92d14ce61ac00e84411c3d 100644
+--- a/src/bootstrap/shared/control-plane-setup.js
++++ b/src/bootstrap/shared/control-plane-setup.js
+@@ -62,6 +62,11 @@ import {SUBSYSTEM, TABLES} from '../../constants/index.js';
+ import {isControlPlanePublicationsWriteLeader} from '../../control-plane/control-plane-publications-leadership.js';
+ import {MembershipSwimRuntime} from '../../control-plane/membership-swim-runtime.js';
+ import {resolvePublishedActiveNodeIds} from '../../control-plane/active-node-publication-snapshots.js';
++import {
++  InstallableServiceArtifactResolver,
++  SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
++  ServiceLifecycleCommandOwner,
++} from '../../service/index.js';
+ 
+ /**
+  * Subsystem identifier for logging.
+@@ -100,6 +105,29 @@ const ERROR_MSG = Object.freeze({
+   TRANSACTION_COORDINATOR_REQUIRED: 'transactionCoordinator',
+ });
+ 
++function createAndWireServiceLifecycleCommandOwner(
++  options, controlPlaneRuntimeBundle, systemMetadataOwners,
++) {
++  const artifactResolver = options.installableServiceArtifactResolver ||
++    new InstallableServiceArtifactResolver({
++      remoteProvider: options.installableServiceRemoteProvider,
++    });
++  const commandOwner = new ServiceLifecycleCommandOwner({
++    artifactResolver,
++    catalogOwner: systemMetadataOwners.serviceInstallCatalogOwner,
++    signaturePolicy: options.serviceArtifactSignaturePolicy ??
++      SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
++  });
++  const sqlQueryEngine = controlPlaneRuntimeBundle.sqlQueryEngine;
++  if (typeof sqlQueryEngine?.setServiceLifecycleCommandOwner ===
++      TYPEOF_FUNCTION) {
++    sqlQueryEngine.setServiceLifecycleCommandOwner(commandOwner);
++  } else {
++    sqlQueryEngine.serviceLifecycleCommandOwner = commandOwner;
++  }
++  return commandOwner;
++}
++
+ /**
+  * Shared control plane setup used by both bootstrap paths.
+  * Creates decomposed control plane services directly.
+@@ -337,6 +365,12 @@ class ControlPlaneSetup {
+       controlPlaneSystemTableGateway,
+       systemTableCache,
+     });
++    const serviceLifecycleCommandOwner =
++      createAndWireServiceLifecycleCommandOwner(
++        options,
++        controlPlaneRuntimeBundle,
++        systemMetadataOwners,
++      );
+     const membershipPublicationRuntimeOwner =
+       new MembershipPublicationRuntimeOwner({
+         nodeId,
+@@ -492,6 +526,7 @@ class ControlPlaneSetup {
+       membershipPublicationService,
+       membershipPublicationRuntimeOwner,
+       systemMetadataOwners,
++      serviceLifecycleCommandOwner,
+     };
+   }
+ 
+diff --git a/src/control-plane/owners/service-install-catalog-owner.js b/src/control-plane/owners/service-install-catalog-owner.js
+index 735ca2d26b1ce4445d2fffb5aafcea0bd62b1ffc..bd6ced34883e9e83852e5d0b2627c9311a053ce5 100644
+--- a/src/control-plane/owners/service-install-catalog-owner.js
++++ b/src/control-plane/owners/service-install-catalog-owner.js
+@@ -221,6 +221,46 @@ class ServiceInstallCatalogOwner {
+     return rows[0] || null;
+   }
+ 
++  async getInstallationByOperationId(operationId) {
++    const id = requireIdentifier(operationId, '/operationId');
++    const row = await this.readInstallationByOperationId(id);
++    if (row === null) return null;
++    if (!isPlainObject(row) || row.operation_id !== id) {
++      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
++        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_OPERATION_LOOKUP_INVALID);
++    }
++    return projectInstallation(row);
++  }
++
++  async listInstallations() {
++    const result = await this.installationRows.listRows();
++    if (result?.success === false) {
++      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
++        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
++    }
++    const rows = Array.isArray(result) ? result : result?.rows;
++    if (!Array.isArray(rows)) {
++      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
++        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
++    }
++    for (const row of rows) {
++      assertInstallationRecord(row);
++      if (!Number.isSafeInteger(row.created_at) || row.created_at < 0 ||
++          typeof row.installation_id !== 'string') {
++        fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++          SERVICE_INSTALL_CATALOG_PATH.INSTALLATION,
++          SERVICE_INSTALL_CATALOG_MESSAGE.INSTALLATION_STATE_CORRUPT);
++      }
++    }
++    return deepFreeze([...rows]
++      .sort((left, right) => left.created_at - right.created_at ||
++        left.installation_id.localeCompare(right.installation_id))
++      .map(projectInstallation));
++  }
++
+   async getPackage(packageId) {
+     const id = requireIdentifier(packageId, '/packageId');
+     const row = await this.readRow(
+diff --git a/src/service/index.js b/src/service/index.js
+index 551cb36a7679df68d8aaeb9f23da160d6fc83ad7..1517a74cf7ebe2064f0b467747a68972a14b9351 100644
+--- a/src/service/index.js
++++ b/src/service/index.js
+@@ -65,3 +65,14 @@ export {
+   SIGNATURE_STATUS,
+   buildArtifactSignaturePayload,
+ } from './installable-service-artifact-resolver.js';
++
++export {
++  SERVICE_LIFECYCLE_COMMAND,
++} from './service-lifecycle-command-contract.js';
++
++export {
++  SERVICE_LIFECYCLE_COMMAND_ERROR_CODE,
++  SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
++  ServiceLifecycleCommandError,
++  ServiceLifecycleCommandOwner,
++} from './service-lifecycle-command-owner.js';
+diff --git a/src/service/service-lifecycle-command-contract.js b/src/service/service-lifecycle-command-contract.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..fb3afb8570785b6809fa516fc6fc78df1febc609
+--- /dev/null
++++ b/src/service/service-lifecycle-command-contract.js
+@@ -0,0 +1,13 @@
++/**
++ * Semantic command vocabulary shared by SQL ingress and lifecycle ownership.
++ */
++
++const SERVICE_LIFECYCLE_COMMAND = Object.freeze({
++  INSTALL: 'install_service',
++  REMOVE: 'remove_service',
++  SHOW_ALL: 'show_services',
++  SHOW_ONE: 'show_service',
++  UPGRADE: 'upgrade_service',
++});
++
++export {SERVICE_LIFECYCLE_COMMAND};
+diff --git a/src/service/service-lifecycle-command-owner.js b/src/service/service-lifecycle-command-owner.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4abc63c3ec3744648e971c96d2dff84be0861868
+--- /dev/null
++++ b/src/service/service-lifecycle-command-owner.js
+@@ -0,0 +1,633 @@
++/**
++ * Semantic owner for authenticated service lifecycle commands.
++ *
++ * SQL supplies grammar and projection. This owner composes the manifest,
++ * artifact, and desired-state catalog owners and derives every durable identity
++ * from canonical intent plus the authenticated server context.
++ */
++
++import {createHash} from 'node:crypto';
++
++import {
++  SERVICE_INSTALL_DESIRED_STATE,
++  ServiceInstallCatalogError,
++} from '../control-plane/owners/index.js';
++import {SERVICE_LIFECYCLE_COMMAND as SERVICE_LIFECYCLE_SQL_COMMAND} from
++  './service-lifecycle-command-contract.js';
++import {
++  ARTIFACT_SIGNATURE_POLICY_MODE,
++} from './installable-service-artifact-resolver.js';
++import {normalizeExternalServiceManifest} from './external-service-manifest.js';
++
++const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
++  ARTIFACT_REJECTED: 'service_lifecycle_artifact_rejected',
++  CATALOG_REJECTED: 'service_lifecycle_catalog_rejected',
++  DEPENDENCY_REQUIRED: 'service_lifecycle_dependency_required',
++  IDEMPOTENCY_CONFLICT: 'service_lifecycle_idempotency_conflict',
++  INVALID_CONFIG: 'service_lifecycle_invalid_config',
++  INVALID_IDEMPOTENCY_KEY: 'service_lifecycle_invalid_idempotency_key',
++  INVALID_SECURITY_CONTEXT: 'service_lifecycle_invalid_security_context',
++  INVALID_SERVICE_NAME: 'service_lifecycle_invalid_service_name',
++  MANIFEST_REJECTED: 'service_lifecycle_manifest_rejected',
++  SERVICE_NOT_FOUND: 'service_lifecycle_service_not_found',
++  SIGNATURE_POLICY_INVALID: 'service_lifecycle_signature_policy_invalid',
++  UNSUPPORTED_COMMAND: 'service_lifecycle_unsupported_command',
++});
++
++const SERVICE_LIFECYCLE_COMMAND_STAGE = Object.freeze({
++  ARTIFACT: 'artifact_resolution',
++  CATALOG: 'catalog_submission',
++  COMMAND: 'command_normalization',
++  MANIFEST: 'manifest_normalization',
++  SECURITY: 'security_context',
++});
++
++const SERVICE_LIFECYCLE_OPERATION_STATUS = Object.freeze({
++  DURABLE: 'durable',
++  REPLAYED: 'replayed',
++});
++
++const SERVICE_LIFECYCLE_COMMAND_PATH = Object.freeze({
++  ARTIFACT_SOURCE: '/payload/artifact_source',
++  CATALOG: '/catalog',
++  CATALOG_PACKAGE: '/catalog/package',
++  CATALOG_REVISION: '/catalog/revision',
++  COMMAND: '/command',
++  CONFIG: '/payload/config',
++  DEPENDENCIES: '/dependencies',
++  IDEMPOTENCY_KEY: '/payload/idempotency_key',
++  MANIFEST: '/payload/manifest',
++  SECURITY_CONTEXT: '/securityContext',
++  SERVICE_NAME: '/payload/service_name',
++  SIGNATURE_POLICY: '/signaturePolicy',
++});
++
++const SERVICE_LIFECYCLE_COMMAND_MESSAGE = Object.freeze({
++  ARTIFACT_REJECTED: 'installable service artifact was rejected',
++  CATALOG_PACKAGE_MISSING: 'catalog revision references a missing package',
++  CATALOG_REVISION_MISSING:
++    'catalog installation references a missing revision',
++  COMMAND_FAILED: 'service lifecycle command failed',
++  CONFIG_INVALID: 'service revision config must be a JSON object',
++  DEPENDENCIES_REQUIRED: 'catalog and artifact owners are required',
++  IDEMPOTENCY_CONFLICT:
++    'idempotency key is already bound to different lifecycle intent',
++  IDEMPOTENCY_KEY_INVALID:
++    'idempotency_key must be a bounded non-empty string',
++  MANIFEST_REJECTED: 'external service manifest was rejected',
++  SECURITY_CONTEXT_INVALID:
++    'authenticated tenant, principal, and roles are required',
++  SERVICE_NAME_INVALID:
++    'service_name must match the external manifest name contract',
++  SERVICE_NOT_FOUND: 'service has no catalog installation to remove',
++  SIGNATURE_POLICY_REQUIRED:
++    'service lifecycle owner requires an explicit signature policy',
++  UNSUPPORTED_COMMAND: 'service lifecycle command is unsupported',
++});
++
++const SERVICE_LIFECYCLE_COMMAND_LITERAL = Object.freeze({
++  ERROR_NAME: 'ServiceLifecycleCommandError',
++});
++
++const SERVICE_LIFECYCLE_ID_KIND = Object.freeze({
++  DEFINITION: 'definition',
++  INSTALLATION: 'installation',
++  OPERATION: 'operation',
++  PACKAGE: 'package',
++  REVISION: 'revision',
++});
++
++const SERVICE_LIFECYCLE_OWNER_RESULT_STATUS = Object.freeze({
++  REJECTED: 'rejected',
++  RESOLVED: 'resolved',
++});
++
++const SERVICE_LIFECYCLE_REPLAY_STATE = Object.freeze({
++  ABSENT: 'absent',
++  REPLAYED: 'replayed',
++});
++
++const SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY = Object.freeze({
++  mode: ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
++  trusted_keys: Object.freeze({}),
++});
++
++const SERVICE_NAME_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
++const MAX_IDEMPOTENCY_KEY_LENGTH = 256;
++const HASH_ALGORITHM = 'sha256';
++const HASH_ENCODING = 'hex';
++const TYPEOF_OBJECT = 'object';
++const TYPEOF_STRING = 'string';
++
++class ServiceLifecycleCommandError extends Error {
++  constructor(code, stage, path, message, detail = {}) {
++    super(message);
++    this.name = SERVICE_LIFECYCLE_COMMAND_LITERAL.ERROR_NAME;
++    this.code = code;
++    this.stage = stage;
++    this.path = path;
++    this.detail = detail;
++  }
++}
++
++function isPlainObject(value) {
++  if (!value || typeof value !== TYPEOF_OBJECT || Array.isArray(value)) {
++    return false;
++  }
++  const prototype = Object.getPrototypeOf(value);
++  return prototype === Object.prototype || prototype === null;
++}
++
++function deepFreeze(value) {
++  if (!value || typeof value !== TYPEOF_OBJECT || Object.isFrozen(value)) {
++    return value;
++  }
++  for (const child of Object.values(value)) deepFreeze(child);
++  return Object.freeze(value);
++}
++
++function canonicalize(value) {
++  if (Array.isArray(value)) return value.map(canonicalize);
++  if (!isPlainObject(value)) return value;
++  return Object.fromEntries(
++    Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
++  );
++}
++
++function stableJson(value) {
++  return JSON.stringify(canonicalize(value));
++}
++
++function shortHash(value) {
++  return createHash(HASH_ALGORITHM)
++    .update(stableJson(value))
++    .digest(HASH_ENCODING);
++}
++
++function derivedId(kind, value) {
++  return `service-${kind}-${shortHash(value)}`;
++}
++
++function commandFailure(code, stage, path, message, detail = {}) {
++  throw new ServiceLifecycleCommandError(code, stage, path, message, detail);
++}
++
++function validateSignaturePolicy(signaturePolicy) {
++  if (!isPlainObject(signaturePolicy) ||
++      !Object.values(ARTIFACT_SIGNATURE_POLICY_MODE)
++        .includes(signaturePolicy.mode)) {
++    commandFailure(
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.SIGNATURE_POLICY_INVALID,
++      SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
++      SERVICE_LIFECYCLE_COMMAND_PATH.SIGNATURE_POLICY,
++      SERVICE_LIFECYCLE_COMMAND_MESSAGE.SIGNATURE_POLICY_REQUIRED,
++    );
++  }
++  return deepFreeze(canonicalize(signaturePolicy));
++}
++
++function validateSecurityContext(securityContext) {
++  const rolesValid = Array.isArray(securityContext?.roles) &&
++    securityContext.roles.every((role) => typeof role === TYPEOF_STRING);
++  if (typeof securityContext?.tenantId !== TYPEOF_STRING ||
++      securityContext.tenantId.length === 0 ||
++      typeof securityContext?.principal !== TYPEOF_STRING ||
++      securityContext.principal.length === 0 || !rolesValid) {
++    commandFailure(
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.INVALID_SECURITY_CONTEXT,
++      SERVICE_LIFECYCLE_COMMAND_STAGE.SECURITY,
++      SERVICE_LIFECYCLE_COMMAND_PATH.SECURITY_CONTEXT,
++      SERVICE_LIFECYCLE_COMMAND_MESSAGE.SECURITY_CONTEXT_INVALID,
++    );
++  }
++  return securityContext;
++}
++
++function validateServiceName(serviceName) {
++  if (typeof serviceName !== TYPEOF_STRING ||
++      !SERVICE_NAME_PATTERN.test(serviceName)) {
++    commandFailure(
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.INVALID_SERVICE_NAME,
++      SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
++      SERVICE_LIFECYCLE_COMMAND_PATH.SERVICE_NAME,
++      SERVICE_LIFECYCLE_COMMAND_MESSAGE.SERVICE_NAME_INVALID,
++    );
++  }
++  return serviceName;
++}
++
++function validateIdempotencyKey(idempotencyKey) {
++  if (typeof idempotencyKey !== TYPEOF_STRING ||
++      idempotencyKey.trim() !== idempotencyKey ||
++      idempotencyKey.length === 0 ||
++      idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
++    commandFailure(
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.INVALID_IDEMPOTENCY_KEY,
++      SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
++      SERVICE_LIFECYCLE_COMMAND_PATH.IDEMPOTENCY_KEY,
++      SERVICE_LIFECYCLE_COMMAND_MESSAGE.IDEMPOTENCY_KEY_INVALID,
++    );
++  }
++  return idempotencyKey;
++}
++
++function normalizeConfig(config) {
++  const effective = config === undefined ? {} : config;
++  if (!isPlainObject(effective)) {
++    commandFailure(
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.INVALID_CONFIG,
++      SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
++      SERVICE_LIFECYCLE_COMMAND_PATH.CONFIG,
++      SERVICE_LIFECYCLE_COMMAND_MESSAGE.CONFIG_INVALID,
++    );
++  }
++  return canonicalize(effective);
++}
++
++function buildIntentIdentity(command, payload, securityContext, manifest) {
++  const config = normalizeConfig(payload.config);
++  const packageId = derivedId(SERVICE_LIFECYCLE_ID_KIND.PACKAGE, {
++    artifactDigest: manifest.artifact.digest,
++    tenantId: securityContext.tenantId,
++    serviceName: manifest.name,
++    version: manifest.version,
++  });
++  const revisionId = derivedId(SERVICE_LIFECYCLE_ID_KIND.REVISION, {
++    artifactDigest: manifest.artifact.digest,
++    config,
++    packageId,
++    version: manifest.version,
++  });
++  const serviceDefinitionId = derivedId(SERVICE_LIFECYCLE_ID_KIND.DEFINITION, {
++    tenantId: securityContext.tenantId,
++    serviceName: manifest.name,
++  });
++  const operationId = derivedId(SERVICE_LIFECYCLE_ID_KIND.OPERATION, {
++    action: command,
++    idempotencyKey: validateIdempotencyKey(payload.idempotency_key),
++    principal: securityContext.principal,
++    tenantId: securityContext.tenantId,
++  });
++  return deepFreeze({
++    config,
++    desiredState: SERVICE_INSTALL_DESIRED_STATE.ACTIVE,
++    installationId: derivedId(
++      SERVICE_LIFECYCLE_ID_KIND.INSTALLATION,
++      {operationId},
++    ),
++    operationId,
++    packageId,
++    revisionId,
++    serviceDefinitionId,
++    serviceName: manifest.name,
++  });
++}
++
++function buildRemovalIdentity(command, payload, securityContext) {
++  const serviceName = validateServiceName(payload.service_name);
++  const serviceDefinitionId = derivedId(SERVICE_LIFECYCLE_ID_KIND.DEFINITION, {
++    tenantId: securityContext.tenantId,
++    serviceName,
++  });
++  const operationId = derivedId(SERVICE_LIFECYCLE_ID_KIND.OPERATION, {
++    action: command,
++    idempotencyKey: validateIdempotencyKey(payload.idempotency_key),
++    principal: securityContext.principal,
++    tenantId: securityContext.tenantId,
++  });
++  return deepFreeze({
++    desiredState: SERVICE_INSTALL_DESIRED_STATE.REMOVED,
++    installationId: derivedId(
++      SERVICE_LIFECYCLE_ID_KIND.INSTALLATION,
++      {operationId},
++    ),
++    operationId,
++    serviceDefinitionId,
++    serviceName,
++  });
++}
++
++function assertReplayMatches(existing, identity) {
++  const matches = existing.installationId === identity.installationId &&
++    existing.revisionId === identity.revisionId &&
++    existing.serviceDefinitionId === identity.serviceDefinitionId &&
++    existing.desiredState === identity.desiredState &&
++    existing.operationId === identity.operationId;
++  if (!matches) {
++    commandFailure(
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.IDEMPOTENCY_CONFLICT,
++      SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
++      SERVICE_LIFECYCLE_COMMAND_PATH.IDEMPOTENCY_KEY,
++      SERVICE_LIFECYCLE_COMMAND_MESSAGE.IDEMPOTENCY_CONFLICT,
++    );
++  }
++}
++
++function operationRow(command, identity, installation, replayed) {
++  return deepFreeze({
++    action: command,
++    desired_state: installation.desiredState,
++    installation_id: installation.installationId,
++    operation_id: installation.operationId,
++    operation_status: replayed ?
++      SERVICE_LIFECYCLE_OPERATION_STATUS.REPLAYED :
++      SERVICE_LIFECYCLE_OPERATION_STATUS.DURABLE,
++    package_id: identity.packageId || '',
++    revision_id: installation.revisionId,
++    rollout_state: installation.rolloutState,
++    service_definition_id: installation.serviceDefinitionId,
++    service_name: identity.serviceName,
++  });
++}
++
++function successResult(command, rows, changes = 0) {
++  return deepFreeze({
++    success: true,
++    operation: command,
++    rows,
++    rowCount: rows.length,
++    changes,
++  });
++}
++
++function failureResult(error) {
++  const known = error instanceof ServiceLifecycleCommandError;
++  const catalog = error instanceof ServiceInstallCatalogError;
++  const code = known ? error.code :
++    SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED;
++  const stage = known ? error.stage : SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG;
++  const path = known ? error.path :
++    (catalog ? error.path : SERVICE_LIFECYCLE_COMMAND_PATH.CATALOG);
++  const ownerCode = catalog ? error.code : undefined;
++  return deepFreeze({
++    success: false,
++    error: known || catalog ? error.message :
++      SERVICE_LIFECYCLE_COMMAND_MESSAGE.COMMAND_FAILED,
++    errorCode: code,
++    detail: {
++      ...(known ? error.detail : {}),
++      ...(ownerCode ? {ownerCode} : {}),
++      path,
++      stage,
++    },
++  });
++}
++
++function latestByServiceDefinition(installations) {
++  const latest = new Map();
++  for (const installation of installations) {
++    latest.set(installation.serviceDefinitionId, installation);
++  }
++  return [...latest.values()];
++}
++
++class ServiceLifecycleCommandOwner {
++  constructor(options = {}) {
++    if (!options.catalogOwner || !options.artifactResolver) {
++      commandFailure(
++        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.DEPENDENCY_REQUIRED,
++        SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
++        SERVICE_LIFECYCLE_COMMAND_PATH.DEPENDENCIES,
++        SERVICE_LIFECYCLE_COMMAND_MESSAGE.DEPENDENCIES_REQUIRED,
++      );
++    }
++    this.catalogOwner = options.catalogOwner;
++    this.artifactResolver = options.artifactResolver;
++    this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
++  }
++
++  async execute(command, payload, securityContext) {
++    try {
++      const context = validateSecurityContext(securityContext);
++      switch (command) {
++      case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
++      case SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE:
++        return await this.submitArtifactIntent(command, payload, context);
++      case SERVICE_LIFECYCLE_SQL_COMMAND.REMOVE:
++        return await this.submitRemovalIntent(command, payload, context);
++      case SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ONE:
++        return await this.showOne(payload, context);
++      case SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ALL:
++        return await this.showAll(context);
++      default:
++        commandFailure(
++          SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.UNSUPPORTED_COMMAND,
++          SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
++          SERVICE_LIFECYCLE_COMMAND_PATH.COMMAND,
++          SERVICE_LIFECYCLE_COMMAND_MESSAGE.UNSUPPORTED_COMMAND,
++        );
++      }
++    } catch (error) {
++      return failureResult(error);
++    }
++  }
++
++  normalizeManifest(payload) {
++    const result = normalizeExternalServiceManifest(payload.manifest);
++    if (result.status === SERVICE_LIFECYCLE_OWNER_RESULT_STATUS.REJECTED) {
++      commandFailure(
++        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.MANIFEST_REJECTED,
++        SERVICE_LIFECYCLE_COMMAND_STAGE.MANIFEST,
++        SERVICE_LIFECYCLE_COMMAND_PATH.MANIFEST,
++        SERVICE_LIFECYCLE_COMMAND_MESSAGE.MANIFEST_REJECTED,
++        {errors: result.errors},
++      );
++    }
++    return result.manifest;
++  }
++
++  async resolveArtifact(manifest, artifactSource) {
++    const result = await this.artifactResolver.resolve({
++      manifest,
++      source: artifactSource,
++      signaturePolicy: this.signaturePolicy,
++    });
++    if (result?.status !== SERVICE_LIFECYCLE_OWNER_RESULT_STATUS.RESOLVED) {
++      commandFailure(
++        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
++        SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
++        SERVICE_LIFECYCLE_COMMAND_PATH.ARTIFACT_SOURCE,
++        SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_REJECTED,
++        {errors: result?.errors || []},
++      );
++    }
++    return result;
++  }
++
++  async replayIfDurable(command, identity) {
++    const existing = await this.catalogOwner.getInstallationByOperationId(
++      identity.operationId,
++    );
++    if (!existing) {
++      return Object.freeze({state: SERVICE_LIFECYCLE_REPLAY_STATE.ABSENT});
++    }
++    assertReplayMatches(existing, identity);
++    return Object.freeze({
++      state: SERVICE_LIFECYCLE_REPLAY_STATE.REPLAYED,
++      result: successResult(
++        command,
++        [operationRow(command, identity, existing, true)],
++      ),
++    });
++  }
++
++  async submitArtifactIntent(command, payload, securityContext) {
++    const manifest = this.normalizeManifest(payload);
++    const identity = buildIntentIdentity(
++      command, payload, securityContext, manifest,
++    );
++    const replay = await this.replayIfDurable(command, identity);
++    if (replay.state === SERVICE_LIFECYCLE_REPLAY_STATE.REPLAYED) {
++      return replay.result;
++    }
++    const resolvedArtifact = await this.resolveArtifact(
++      manifest, payload.artifact_source,
++    );
++    await this.catalogOwner.recordPackage({
++      packageId: identity.packageId,
++      manifest,
++      resolvedArtifact,
++    });
++    await this.catalogOwner.recordRevision({
++      revisionId: identity.revisionId,
++      packageId: identity.packageId,
++      config: identity.config,
++    });
++    const installation = await this.catalogOwner.requestInstallation({
++      installationId: identity.installationId,
++      revisionId: identity.revisionId,
++      serviceDefinitionId: identity.serviceDefinitionId,
++      desiredState: identity.desiredState,
++      operationId: identity.operationId,
++    });
++    return successResult(
++      command,
++      [operationRow(command, identity, installation, false)],
++      1,
++    );
++  }
++
++  async submitRemovalIntent(command, payload, securityContext) {
++    const identity = buildRemovalIdentity(command, payload, securityContext);
++    const existing = await this.catalogOwner.getInstallationByOperationId(
++      identity.operationId,
++    );
++    if (existing) {
++      const replayIdentity = {...identity, revisionId: existing.revisionId};
++      assertReplayMatches(existing, replayIdentity);
++      return successResult(
++        command,
++        [operationRow(command, replayIdentity, existing, true)],
++      );
++    }
++    const installations = await this.catalogOwner.listInstallations();
++    const current = installations
++      .filter((entry) =>
++        entry.serviceDefinitionId === identity.serviceDefinitionId)
++      .at(-1);
++    if (!current) {
++      commandFailure(
++        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.SERVICE_NOT_FOUND,
++        SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
++        SERVICE_LIFECYCLE_COMMAND_PATH.SERVICE_NAME,
++        SERVICE_LIFECYCLE_COMMAND_MESSAGE.SERVICE_NOT_FOUND,
++      );
++    }
++    const removalIdentity = deepFreeze({
++      ...identity,
++      revisionId: current.revisionId,
++    });
++    const installation = await this.catalogOwner.requestInstallation({
++      installationId: removalIdentity.installationId,
++      revisionId: removalIdentity.revisionId,
++      serviceDefinitionId: removalIdentity.serviceDefinitionId,
++      desiredState: removalIdentity.desiredState,
++      operationId: removalIdentity.operationId,
++    });
++    return successResult(
++      command,
++      [operationRow(command, removalIdentity, installation, false)],
++      1,
++    );
++  }
++
++  async statusRow(installation) {
++    const revision = await this.catalogOwner.getRevision(
++      installation.revisionId,
++    );
++    if (!revision) {
++      commandFailure(
++        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
++        SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
++        SERVICE_LIFECYCLE_COMMAND_PATH.CATALOG_REVISION,
++        SERVICE_LIFECYCLE_COMMAND_MESSAGE.CATALOG_REVISION_MISSING,
++      );
++    }
++    const servicePackage = await this.catalogOwner.getPackage(
++      revision.packageId,
++    );
++    if (!servicePackage) {
++      commandFailure(
++        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
++        SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
++        SERVICE_LIFECYCLE_COMMAND_PATH.CATALOG_PACKAGE,
++        SERVICE_LIFECYCLE_COMMAND_MESSAGE.CATALOG_PACKAGE_MISSING,
++      );
++    }
++    return deepFreeze({
++      desired_state: installation.desiredState,
++      installation_id: installation.installationId,
++      latest_failure_id: installation.latestFailureId,
++      operation_id: installation.operationId,
++      revision_id: installation.revisionId,
++      rollout_state: installation.rolloutState,
++      service_definition_id: installation.serviceDefinitionId,
++      service_name: servicePackage.name,
++      version: servicePackage.version,
++    });
++  }
++
++  async showOne(payload, securityContext) {
++    const serviceName = validateServiceName(payload.service_name);
++    const serviceDefinitionId = derivedId(
++      SERVICE_LIFECYCLE_ID_KIND.DEFINITION,
++      {
++        tenantId: securityContext.tenantId,
++        serviceName,
++      },
++    );
++    const installations = await this.catalogOwner.listInstallations();
++    const installation = installations
++      .filter((entry) => entry.serviceDefinitionId === serviceDefinitionId)
++      .at(-1);
++    const rows = installation ? [await this.statusRow(installation)] : [];
++    return successResult(SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ONE, rows);
++  }
++
++  async showAll(securityContext) {
++    const installations = latestByServiceDefinition(
++      await this.catalogOwner.listInstallations(),
++    );
++    const projected = await Promise.all(
++      installations.map((installation) => this.statusRow(installation)),
++    );
++    const rows = projected.filter((row) =>
++      row.service_definition_id === derivedId(
++        SERVICE_LIFECYCLE_ID_KIND.DEFINITION,
++        {
++          tenantId: securityContext.tenantId,
++          serviceName: row.service_name,
++        },
++      ));
++    rows.sort((left, right) =>
++      left.service_name.localeCompare(right.service_name));
++    return successResult(SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ALL, rows);
++  }
++}
++
++export {
++  SERVICE_LIFECYCLE_COMMAND_ERROR_CODE,
++  SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
++  ServiceLifecycleCommandError,
++  ServiceLifecycleCommandOwner,
++};
+diff --git a/test/bootstrap/shared/control-plane-setup.test.js b/test/bootstrap/shared/control-plane-setup.test.js
+index df5c5ea016c723bd6988b534831c95ea45e3c3f4..d2afd4c459c0a171950bb19ceeccb96da5ea7ba5 100644
+--- a/test/bootstrap/shared/control-plane-setup.test.js
++++ b/test/bootstrap/shared/control-plane-setup.test.js
+@@ -61,6 +61,9 @@ describe('ControlPlaneSetup', () => {
+       sqlQueryEngine: {
+         execute: async () => ({rows: []}),
+         transactionCoordinator,
++        setServiceLifecycleCommandOwner(owner) {
++          this.serviceLifecycleCommandOwner = owner;
++        },
+       },
+     };
+ 
+@@ -317,6 +320,15 @@ describe('ControlPlaneSetup', () => {
+         assert.ok(result.dispatchService);
+         assert.ok(result.rebalanceCoordinator);
+         assert.ok(result.systemMetadataOwners);
++        assert.strictEqual(
++          result.serviceLifecycleCommandOwner.catalogOwner,
++          result.systemMetadataOwners.serviceInstallCatalogOwner,
++        );
++        assert.strictEqual(
++          mockCdcIntegrationService.sqlQueryEngine
++            .serviceLifecycleCommandOwner,
++          result.serviceLifecycleCommandOwner,
++        );
+         assert.strictEqual(
+           result.endpointService.serviceEndpointsOwner,
+           result.systemMetadataOwners.serviceEndpointsOwner,
+diff --git a/test/service/service-lifecycle-command-owner.test.js b/test/service/service-lifecycle-command-owner.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..75fd723eb9c8002cf16244a1be65a06308cc29f1
+--- /dev/null
++++ b/test/service/service-lifecycle-command-owner.test.js
+@@ -0,0 +1,331 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++
++import {TABLES} from '../../src/constants/index.js';
++import {createSystemMetadataOwners} from
++  '../../src/control-plane/owners/index.js';
++import {SERVICE_LIFECYCLE_COMMAND} from
++  '../../src/service/service-lifecycle-command-contract.js';
++import {
++  SERVICE_LIFECYCLE_COMMAND_ERROR_CODE,
++  SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
++  ServiceLifecycleCommandOwner,
++} from '../../src/service/service-lifecycle-command-owner.js';
++
++const DIGEST_A = `sha256:${'a'.repeat(64)}`;
++const DIGEST_B = `sha256:${'b'.repeat(64)}`;
++const CONTAINER_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
++const CATALOG_TABLES = Object.freeze([
++  TABLES.SERVICE_PACKAGES,
++  TABLES.SERVICE_REVISIONS,
++  TABLES.SERVICE_INSTALLATIONS,
++  TABLES.SERVICE_INSTALL_FAILURES,
++]);
++
++function clone(value) {
++  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
++}
++
++class LifecycleCatalogGateway {
++  constructor() {
++    this.tables = new Map(CATALOG_TABLES.map((table) => [table, new Map()]));
++  }
++
++  primaryKey(table) {
++    return {
++      [TABLES.SERVICE_PACKAGES]: 'package_id',
++      [TABLES.SERVICE_REVISIONS]: 'revision_id',
++      [TABLES.SERVICE_INSTALLATIONS]: 'installation_id',
++      [TABLES.SERVICE_INSTALL_FAILURES]: 'failure_id',
++    }[table];
++  }
++
++  async readAuthoritativeRows(table, sql, params) {
++    const rows = [...this.tables.get(table).values()];
++    const match = / WHERE ([a-z_]+) = \?$/u.exec(sql);
++    return {
++      success: true,
++      rows: clone(match ?
++        rows.filter((row) => row[match[1]] === params[0]) :
++        rows),
++    };
++  }
++
++  async insertSystemTableRow(table, row) {
++    const rows = this.tables.get(table);
++    const key = row[this.primaryKey(table)];
++    if (rows.has(key)) return {success: false, error: 'duplicate key'};
++    if (table === TABLES.SERVICE_INSTALLATIONS &&
++        [...rows.values()].some((entry) =>
++          entry.operation_id === row.operation_id)) {
++      return {success: false, error: 'duplicate operation'};
++    }
++    rows.set(key, clone(row));
++    return {success: true, affectedRows: 1};
++  }
++
++  async updateSystemTableRow(table, where, data) {
++    let affectedRows = 0;
++    for (const [key, row] of this.tables.get(table)) {
++      if (!Object.entries(where).every(([field, value]) =>
++        row[field] === value)) continue;
++      this.tables.get(table).set(key, clone({...row, ...data}));
++      affectedRows += 1;
++    }
++    return {success: true, affectedRows};
++  }
++
++  async upsertSystemTableRow(table, row) {
++    this.tables.get(table).set(row[this.primaryKey(table)], clone(row));
++    return {success: true, affectedRows: 1};
++  }
++
++  async deleteSystemTableRow(table, where) {
++    let affectedRows = 0;
++    for (const [key, row] of this.tables.get(table)) {
++      if (!Object.entries(where).every(([field, value]) =>
++        row[field] === value)) continue;
++      this.tables.get(table).delete(key);
++      affectedRows += 1;
++    }
++    return {success: true, affectedRows};
++  }
++
++  rowCount(table) {
++    return this.tables.get(table).size;
++  }
++}
++
++class FixtureArtifactResolver {
++  constructor(options = {}) {
++    this.reject = options.reject === true;
++    this.calls = [];
++  }
++
++  async resolve(request) {
++    this.calls.push(request);
++    if (this.reject) {
++      return Object.freeze({
++        status: 'rejected',
++        errors: Object.freeze([Object.freeze({
++          code: 'digest_mismatch',
++          path: '/artifact/descriptor/digest',
++          message: 'fixture digest mismatch',
++        })]),
++      });
++    }
++    return Object.freeze({
++      status: 'resolved',
++      artifact: Object.freeze({
++        digest: request.manifest.artifact.digest,
++        payloadMediaType: request.manifest.artifact.media_type,
++        signature: Object.freeze({
++          status: 'unsigned_allowed',
++          keyId: null,
++        }),
++      }),
++    });
++  }
++}
++
++function manifest(version = '1.0.0', digest = DIGEST_A) {
++  return {
++    schema_version: 1,
++    name: 'analytics-worker',
++    version,
++    artifact: {
++      type: 'oci',
++      ref: `registry.example.test/analytics-worker@${digest}`,
++      digest,
++      media_type: CONTAINER_MEDIA_TYPE,
++    },
++    runtime: {kind: 'oci_container'},
++  };
++}
++
++function installPayload(overrides = {}) {
++  return {
++    artifact_source: {kind: 'remote_oci'},
++    config: {replicas: 2},
++    idempotency_key: 'install-analytics-worker',
++    manifest: manifest(),
++    ...overrides,
++  };
++}
++
++function securityContext(tenantId = 'tenant-a') {
++  return Object.freeze({
++    tenantId,
++    principal: 'alice',
++    roles: Object.freeze(['service-operator']),
++  });
++}
++
++function createOwnerFixture(options = {}) {
++  const gateway = new LifecycleCatalogGateway();
++  let now = 1000;
++  const catalogOwner = createSystemMetadataOwners({
++    controlPlaneSystemTableGateway: gateway,
++    now: () => now++,
++  }).serviceInstallCatalogOwner;
++  const artifactResolver = options.artifactResolver ||
++    new FixtureArtifactResolver();
++  const owner = new ServiceLifecycleCommandOwner({
++    artifactResolver,
++    catalogOwner,
++    signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
++  });
++  return {artifactResolver, catalogOwner, gateway, owner};
++}
++
++describe('service lifecycle command and catalog composition', () => {
++  it('records one stable install intent and replays without resolving again',
++    async () => {
++      const fixture = createOwnerFixture();
++      const first = await fixture.owner.execute(
++        SERVICE_LIFECYCLE_COMMAND.INSTALL,
++        installPayload(),
++        securityContext(),
++      );
++      const replay = await fixture.owner.execute(
++        SERVICE_LIFECYCLE_COMMAND.INSTALL,
++        installPayload(),
++        securityContext(),
++      );
++
++      assert.equal(first.success, true);
++      assert.equal(first.rows[0].operation_status, 'durable');
++      assert.equal(first.rows[0].rollout_state, 'recorded_not_running');
++      assert.equal(replay.rows[0].operation_status, 'replayed');
++      assert.equal(replay.rows[0].operation_id, first.rows[0].operation_id);
++      assert.equal(fixture.artifactResolver.calls.length, 1);
++      assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_INSTALLATIONS), 1);
++      assert.deepEqual(
++        fixture.artifactResolver.calls[0].signaturePolicy,
++        SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
++      );
++    });
++
++  it('rejects changed intent for an existing idempotency identity', async () => {
++    const fixture = createOwnerFixture();
++    await fixture.owner.execute(
++      SERVICE_LIFECYCLE_COMMAND.INSTALL,
++      installPayload(),
++      securityContext(),
++    );
++    const result = await fixture.owner.execute(
++      SERVICE_LIFECYCLE_COMMAND.INSTALL,
++      installPayload({config: {replicas: 9}}),
++      securityContext(),
++    );
++
++    assert.equal(result.success, false);
++    assert.equal(
++      result.errorCode,
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.IDEMPOTENCY_CONFLICT,
++    );
++    assert.equal(fixture.artifactResolver.calls.length, 1);
++    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_INSTALLATIONS), 1);
++  });
++
++  it('rejects unresolved artifacts before every catalog write', async () => {
++    const artifactResolver = new FixtureArtifactResolver({reject: true});
++    const fixture = createOwnerFixture({artifactResolver});
++    const result = await fixture.owner.execute(
++      SERVICE_LIFECYCLE_COMMAND.INSTALL,
++      installPayload(),
++      securityContext(),
++    );
++
++    assert.equal(result.success, false);
++    assert.equal(
++      result.errorCode,
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
++    );
++    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_PACKAGES), 0);
++    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_REVISIONS), 0);
++    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_INSTALLATIONS), 0);
++  });
++
++  it('records upgrade and removal desired state and projects catalog truth',
++    async () => {
++      const fixture = createOwnerFixture();
++      const installed = await fixture.owner.execute(
++        SERVICE_LIFECYCLE_COMMAND.INSTALL,
++        installPayload(),
++        securityContext(),
++      );
++      const upgraded = await fixture.owner.execute(
++        SERVICE_LIFECYCLE_COMMAND.UPGRADE,
++        installPayload({
++          idempotency_key: 'upgrade-analytics-worker',
++          manifest: manifest('2.0.0', DIGEST_B),
++        }),
++        securityContext(),
++      );
++      const removed = await fixture.owner.execute(
++        SERVICE_LIFECYCLE_COMMAND.REMOVE,
++        {
++          idempotency_key: 'remove-analytics-worker',
++          service_name: 'analytics-worker',
++        },
++        securityContext(),
++      );
++      const status = await fixture.owner.execute(
++        SERVICE_LIFECYCLE_COMMAND.SHOW_ONE,
++        {service_name: 'analytics-worker'},
++        securityContext(),
++      );
++
++      assert.equal(installed.success, true);
++      assert.equal(upgraded.success, true);
++      assert.notEqual(
++        upgraded.rows[0].revision_id,
++        installed.rows[0].revision_id,
++      );
++      assert.equal(removed.rows[0].desired_state, 'removed');
++      assert.equal(removed.rows[0].revision_id, upgraded.rows[0].revision_id);
++      assert.equal(status.rows[0].desired_state, 'removed');
++      assert.equal(status.rows[0].rollout_state, 'recorded_not_running');
++      assert.equal(Object.hasOwn(status.rows[0], 'running'), false);
++    });
++
++  it('derives tenant-scoped identities and tenant-filtered status', async () => {
++    const fixture = createOwnerFixture();
++    const tenantA = await fixture.owner.execute(
++      SERVICE_LIFECYCLE_COMMAND.INSTALL,
++      installPayload(),
++      securityContext('tenant-a'),
++    );
++    const tenantB = await fixture.owner.execute(
++      SERVICE_LIFECYCLE_COMMAND.INSTALL,
++      installPayload(),
++      securityContext('tenant-b'),
++    );
++    const tenantAList = await fixture.owner.execute(
++      SERVICE_LIFECYCLE_COMMAND.SHOW_ALL,
++      {},
++      securityContext('tenant-a'),
++    );
++    const tenantBList = await fixture.owner.execute(
++      SERVICE_LIFECYCLE_COMMAND.SHOW_ALL,
++      {},
++      securityContext('tenant-b'),
++    );
++
++    assert.notEqual(
++      tenantA.rows[0].service_definition_id,
++      tenantB.rows[0].service_definition_id,
++    );
++    assert.equal(tenantAList.rows.length, 1);
++    assert.equal(tenantBList.rows.length, 1);
++    assert.equal(
++      tenantAList.rows[0].service_definition_id,
++      tenantA.rows[0].service_definition_id,
++    );
++    assert.equal(
++      tenantBList.rows[0].service_definition_id,
++      tenantB.rows[0].service_definition_id,
++    );
++  });
++});

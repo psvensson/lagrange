@@ -62,6 +62,11 @@ import {SUBSYSTEM, TABLES} from '../../constants/index.js';
 import {isControlPlanePublicationsWriteLeader} from '../../control-plane/control-plane-publications-leadership.js';
 import {MembershipSwimRuntime} from '../../control-plane/membership-swim-runtime.js';
 import {resolvePublishedActiveNodeIds} from '../../control-plane/active-node-publication-snapshots.js';
+import {
+  InstallableServiceArtifactResolver,
+  SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
+  ServiceLifecycleCommandOwner,
+} from '../../service/index.js';
 
 /**
  * Subsystem identifier for logging.
@@ -99,6 +104,29 @@ const ERROR_MSG = Object.freeze({
   TABLE_POLICY_SERVICE_REQUIRED: 'tablePolicyService',
   TRANSACTION_COORDINATOR_REQUIRED: 'transactionCoordinator',
 });
+
+function createAndWireServiceLifecycleCommandOwner(
+  options, controlPlaneRuntimeBundle, systemMetadataOwners,
+) {
+  const artifactResolver = options.installableServiceArtifactResolver ||
+    new InstallableServiceArtifactResolver({
+      remoteProvider: options.installableServiceRemoteProvider,
+    });
+  const commandOwner = new ServiceLifecycleCommandOwner({
+    artifactResolver,
+    catalogOwner: systemMetadataOwners.serviceInstallCatalogOwner,
+    signaturePolicy: options.serviceArtifactSignaturePolicy ??
+      SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
+  });
+  const sqlQueryEngine = controlPlaneRuntimeBundle.sqlQueryEngine;
+  if (typeof sqlQueryEngine?.setServiceLifecycleCommandOwner ===
+      TYPEOF_FUNCTION) {
+    sqlQueryEngine.setServiceLifecycleCommandOwner(commandOwner);
+  } else {
+    sqlQueryEngine.serviceLifecycleCommandOwner = commandOwner;
+  }
+  return commandOwner;
+}
 
 /**
  * Shared control plane setup used by both bootstrap paths.
@@ -337,6 +365,12 @@ class ControlPlaneSetup {
       controlPlaneSystemTableGateway,
       systemTableCache,
     });
+    const serviceLifecycleCommandOwner =
+      createAndWireServiceLifecycleCommandOwner(
+        options,
+        controlPlaneRuntimeBundle,
+        systemMetadataOwners,
+      );
     const membershipPublicationRuntimeOwner =
       new MembershipPublicationRuntimeOwner({
         nodeId,
@@ -492,6 +526,7 @@ class ControlPlaneSetup {
       membershipPublicationService,
       membershipPublicationRuntimeOwner,
       systemMetadataOwners,
+      serviceLifecycleCommandOwner,
     };
   }
 

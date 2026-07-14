@@ -65,3 +65,14 @@ export {
   SIGNATURE_STATUS,
   buildArtifactSignaturePayload,
 } from './installable-service-artifact-resolver.js';
+
+export {
+  SERVICE_LIFECYCLE_COMMAND,
+} from './service-lifecycle-command-contract.js';
+
+export {
+  SERVICE_LIFECYCLE_COMMAND_ERROR_CODE,
+  SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
+  ServiceLifecycleCommandError,
+  ServiceLifecycleCommandOwner,
+} from './service-lifecycle-command-owner.js';

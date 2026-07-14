@@ -1,0 +1,64 @@
+{
+  "id": "service-lifecycle-command-catalog-composition",
+  "authoringContractVersion": 1,
+  "statement": "The service lifecycle command owner composes manifest normalization, explicit artifact policy, stable authenticated intent identity, and ServiceInstallCatalogOwner durable operations and status projections, with shared bootstrap wiring to the same catalog owner.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/requirements.md#r3--one-install-and-control-plane",
+    "closesCL": [],
+    "parentQuest": "service-lifecycle-sql-control-surface",
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "d830f496b667e78fd86a590d26571c80346f5c92"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-lifecycle-command-catalog-composition",
+      "reportDir": "test-output/reports/service-lifecycle-command-catalog-composition",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-lifecycle-command-catalog-composition-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-lifecycle-command-catalog-composition",
+          "reportDir": "test-output/reports/service-lifecycle-command-catalog-composition",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "owner-composition",
+      "statement": "The command owner normalizes the existing external manifest contract, applies a server-configured explicit artifact signature policy through InstallableServiceArtifactResolver, derives stable package, revision, service-definition, installation, and operation identifiers from canonical intent plus authenticated context, and invokes only ServiceInstallCatalogOwner methods."
+    },
+    {
+      "id": "durable-retry-and-status",
+      "statement": "Identical authenticated retries with the same action and idempotency_key return the same durable operation without resolving or writing again; changed intent conflicts, unresolved artifacts cause zero catalog writes, install and upgrade report recorded_not_running, remove records removed intent against the latest revision, and status never projects running."
+    },
+    {
+      "id": "production-composition",
+      "statement": "Shared ControlPlaneSetup constructs one command owner backed by the exact ServiceInstallCatalogOwner returned by its createSystemMetadataOwners call and exposes it to the SQL engine composition seam without a second catalog authority or direct table fallback."
+    },
+    {
+      "id": "bounded-owner-scope",
+      "statement": "Production changes are limited to src/service, ServiceInstallCatalogOwner read projections under src/control-plane, and shared bootstrap wiring under src/bootstrap; focused tests and one scenario runner may cover those owners. SQL grammar, PG-wire authorization, reconciliation, runtime activation, and actual-state ownership are excluded."
+    },
+    {
+      "id": "red-on-revert-engagement",
+      "statement": "Independent verification must approve the exact source patch and aggregate fingerprint and show the scenario turns red when durable replay is removed, artifact rejection writes catalog state, or shared bootstrap uses a different catalog owner."
+    }
+  ]
+}

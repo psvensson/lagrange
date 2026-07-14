@@ -221,6 +221,46 @@ class ServiceInstallCatalogOwner {
     return rows[0] || null;
   }
 
+  async getInstallationByOperationId(operationId) {
+    const id = requireIdentifier(operationId, '/operationId');
+    const row = await this.readInstallationByOperationId(id);
+    if (row === null) return null;
+    if (!isPlainObject(row) || row.operation_id !== id) {
+      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
+        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_OPERATION_LOOKUP_INVALID);
+    }
+    return projectInstallation(row);
+  }
+
+  async listInstallations() {
+    const result = await this.installationRows.listRows();
+    if (result?.success === false) {
+      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
+        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
+    }
+    const rows = Array.isArray(result) ? result : result?.rows;
+    if (!Array.isArray(rows)) {
+      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
+        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
+    }
+    for (const row of rows) {
+      assertInstallationRecord(row);
+      if (!Number.isSafeInteger(row.created_at) || row.created_at < 0 ||
+          typeof row.installation_id !== 'string') {
+        fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+          SERVICE_INSTALL_CATALOG_PATH.INSTALLATION,
+          SERVICE_INSTALL_CATALOG_MESSAGE.INSTALLATION_STATE_CORRUPT);
+      }
+    }
+    return deepFreeze([...rows]
+      .sort((left, right) => left.created_at - right.created_at ||
+        left.installation_id.localeCompare(right.installation_id))
+      .map(projectInstallation));
+  }
+
   async getPackage(packageId) {
     const id = requireIdentifier(packageId, '/packageId');
     const row = await this.readRow(

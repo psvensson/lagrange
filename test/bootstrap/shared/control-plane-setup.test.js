@@ -61,6 +61,9 @@ describe('ControlPlaneSetup', () => {
       sqlQueryEngine: {
         execute: async () => ({rows: []}),
         transactionCoordinator,
+        setServiceLifecycleCommandOwner(owner) {
+          this.serviceLifecycleCommandOwner = owner;
+        },
       },
     };
 
@@ -317,6 +320,15 @@ describe('ControlPlaneSetup', () => {
         assert.ok(result.dispatchService);
         assert.ok(result.rebalanceCoordinator);
         assert.ok(result.systemMetadataOwners);
+        assert.strictEqual(
+          result.serviceLifecycleCommandOwner.catalogOwner,
+          result.systemMetadataOwners.serviceInstallCatalogOwner,
+        );
+        assert.strictEqual(
+          mockCdcIntegrationService.sqlQueryEngine
+            .serviceLifecycleCommandOwner,
+          result.serviceLifecycleCommandOwner,
+        );
         assert.strictEqual(
           result.endpointService.serviceEndpointsOwner,
           result.systemMetadataOwners.serviceEndpointsOwner,
