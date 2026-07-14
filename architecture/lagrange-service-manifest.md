@@ -81,6 +81,7 @@ installation:
 
 ## Identity
 
+-   `schema_version` --- currently `1`
 -   `name`
 -   `version`
 -   `display_name`
@@ -91,6 +92,7 @@ Example:
 
 ``` json
 {
+  "schema_version": 1,
   "name": "backup-manager",
   "version": "1.2.0",
   "display_name": "Backup Manager",
@@ -130,7 +132,7 @@ Example (WASM component packaged as OCI):
   "artifact": {
     "type": "oci",
     "ref": "registry.lagrange.dev/services/backup-manager:1.2.0",
-    "digest": "sha256:abc123",
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "media_type": "application/wasm",
     "size_bytes": 2487311
   }
@@ -144,7 +146,7 @@ Example (container image):
   "artifact": {
     "type": "oci",
     "ref": "registry.lagrange.dev/services/analytics-worker:3.0.0",
-    "digest": "sha256:def456",
+    "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "media_type": "application/vnd.oci.image.manifest.v1+json",
     "size_bytes": 89200000
   }
@@ -379,6 +381,7 @@ commercial consumer example only under the current edition matrix.
 
 ``` json
 {
+  "schema_version": 1,
   "name": "backup-manager",
   "version": "1.2.0",
   "display_name": "Backup Manager",
@@ -387,7 +390,7 @@ commercial consumer example only under the current edition matrix.
   "artifact": {
     "type": "oci",
     "ref": "registry.lagrange.dev/services/backup-manager:1.2.0",
-    "digest": "sha256:abc123",
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "media_type": "application/wasm",
     "size_bytes": 2487311
   },
@@ -448,6 +451,7 @@ commercial consumer example only under the current edition matrix.
 The kernel should validate at least the following before activation:
 
 -   required fields present
+-   manifest `schema_version` is supported
 -   version format valid
 -   artifact type is `oci`
 -   artifact reference valid

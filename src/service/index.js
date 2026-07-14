@@ -46,3 +46,12 @@ export {
   validateServiceDescriptor,
   assertServiceDescriptor,
 } from './service-descriptor.js';
+
+export {
+  EXTERNAL_SERVICE_MANIFEST_ERROR_CODE,
+  EXTERNAL_SERVICE_MANIFEST_SCHEMA,
+  EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+  EXTERNAL_SERVICE_MEDIA_TYPE,
+  normalizeExternalServiceManifest,
+  validateExternalServiceManifest,
+} from './external-service-manifest.js';

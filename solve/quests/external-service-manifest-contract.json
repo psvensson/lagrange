@@ -1,0 +1,60 @@
+{
+  "id": "external-service-manifest-contract",
+  "authoringContractVersion": 1,
+  "statement": "A versioned external service manifest contract accepts deterministically normalized, digest-pinned OCI artifacts for oci_container and wasm_component runtimes, rejects native_js and runtime/media mismatches with typed errors, and leaves artifact resolution, signature verification, catalog persistence, and activation to their downstream owners.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/requirements.md#r3--one-install-and-control-plane",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "2e0c51e10ddd02c173343e9acbcf67c79b707423"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "external-service-manifest-contract",
+      "reportDir": "test-output/reports/external-service-manifest-contract",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "external-service-manifest-contract-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "external-service-manifest-contract",
+          "reportDir": "test-output/reports/external-service-manifest-contract",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "sealed-contract-scope",
+      "statement": "The contract owner is src/service/external-service-manifest.js, exported through src/service/index.js and proved by test/service/external-service-manifest.test.js via scripts/checks/run-external-service-manifest-contract-scenarios.js; architecture/lagrange-service-manifest.md may be aligned with the executable schema. No other production owner is in scope."
+    },
+    {
+      "id": "negative-attacks",
+      "statement": "The scenario must reject external native_js and unknown runtimes, unsupported schema versions, missing or malformed sha256 digests, non-OCI packaging, unrecognized media types, and runtime/media mismatches, while accepting both external runtime kinds and ignoring unknown optional fields deterministically."
+    },
+    {
+      "id": "owner-boundary",
+      "statement": "This Quest validates and normalizes manifest structure only. It must not fetch artifacts, compare resolved bytes with digests, enforce signature policy, persist catalog state, submit lifecycle mutations, or activate runtimes."
+    },
+    {
+      "id": "red-on-revert-engagement",
+      "statement": "Independent verification must show the declared scenario fails when the external manifest owner is reverted or when native_js is admitted, and must verify the exact source patch plus aggregate content before checkpoint and handoff."
+    }
+  ]
+}
