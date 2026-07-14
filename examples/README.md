@@ -5,8 +5,17 @@ need. Each has its own README with exact commands.
 
 ## [distributed-sql/](distributed-sql/README.md)
 
-Copyable partition-callback examples (basic iterator through WASM), run
-against a live node by a manifest-driven runner.
+Copyable partition-callback examples, from a basic iterator through an internal
+JavaScript-envelope lifecycle rehearsal, run against a live node by a
+manifest-driven runner.
+
+The current support matrix is
+[`docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
+**Service portability status:** examples may claim only capabilities marked as
+implemented in that matrix.
+The rehearsal is not a WebAssembly binary or component. External service
+installation is not implemented yet, and OCI callback invocation remains
+unsupported.
 
 - **Prerequisites**: a running Lagrange node (`npm start` from the repo root).
 - The per-example `index.js` files are callback modules loaded by the runner,

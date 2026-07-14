@@ -1,10 +1,11 @@
 {
   "id": "06-wasm-remote-replica",
-  "title": "WASM component ctx.call on partition callback",
+  "title": "JavaScript-envelope WASM lifecycle rehearsal",
   "level": "advanced",
   "version": "1.0.0",
   "entry": "index.js",
   "runtimeKind": "wasm_component",
+  "artifactContract": "js_callback_envelope_rehearsal",
   "callbackExport": "run",
   "select": "SELECT node_id, status FROM nodes LIMIT 3",
   "params": [],

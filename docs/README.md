@@ -8,8 +8,11 @@ material for people (and agents) developing the system itself.
 
 Guides for running, inspecting, and administering a cluster:
 
-- [wasm-services-user-guide.md](wasm-services-user-guide.md) — build, upload,
-  and run distributed WASM services (the main user guide)
+- **Service portability status:** the current runtime matrix is
+  [`docs/service-portability-capabilities.json`](service-portability-capabilities.json);
+  target architecture is not an implemented install path.
+- [wasm-services-user-guide.md](wasm-services-user-guide.md) — current callback
+  lifecycle rehearsal plus clearly labelled target WASM service contracts
 - [component-distribution.md](component-distribution.md) — how components are
   distributed across nodes
 - [admin-api-reference.md](admin-api-reference.md) — admin API actions,

@@ -1,0 +1,52 @@
+{
+  "id": "service-portability-claims-surface-final",
+  "authoringContractVersion": 1,
+  "statement": "The public capability matrix, documentation, JavaScript-envelope rehearsal, and distributed examples-catalog harness use one truthful capability grammar; both the claims attacks and real examples scenario pass, while restoring the retired wasmCompiled fixture makes the service-portability-claims-surface-final scenario fail.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/requirements.md#r1--truthful-capability-contract",
+    "closesCL": [],
+    "parentQuest": "service-portability-claims-surface-v2",
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "9209969c18abcbe3a7fd7fac693db5597517d13f"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-portability-claims-surface-final",
+      "reportDir": "test-output/reports/service-portability-claims-surface-final",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-portability-claims-surface-final-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-portability-claims-surface-final",
+          "reportDir": "test-output/reports/service-portability-claims-surface-final",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "atomic-green-scope",
+      "statement": "The attempt must include the public capability/docs/example patch, the pure checker and contract test, the examples-catalog fixture alignment, and scripts/checks/run-service-portability-claims-surface-final-scenarios.js so the committed revision is green in isolation."
+    },
+    {
+      "id": "hard-owner-bound",
+      "statement": "The aggregate source patch must remain at or below six owner areas and must exclude package/static-gate wiring, architecture status-table cleanup, production runtime behavior, and all unrelated dirty Solver work."
+    }
+  ]
+}

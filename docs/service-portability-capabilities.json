@@ -1,0 +1,23 @@
+{
+  "contractVersion": 1,
+  "runtimes": {
+    "native_js": {
+      "externalInstall": "unsupported",
+      "managedExecution": "kernel_internal",
+      "callbackInvocation": "internal_supported"
+    },
+    "wasm_component": {
+      "externalInstall": "unsupported",
+      "managedExecution": "lifecycle_scaffold",
+      "callbackInvocation": "javascript_envelope_rehearsal",
+      "artifactFormat": "js_wasm_component_v1",
+      "genuineComponentExecution": false
+    },
+    "oci_container": {
+      "externalInstall": "unsupported",
+      "managedExecution": "descriptor_and_in_memory_lifecycle_scaffold",
+      "callbackInvocation": "unsupported",
+      "realContainerActivation": false
+    }
+  }
+}

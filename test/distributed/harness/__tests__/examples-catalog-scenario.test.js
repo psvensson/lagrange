@@ -25,7 +25,7 @@ function buildCallbackRows(callbackModuleRef) {
   }
   if (callbackModuleRef.includes('06-wasm-remote-replica')) {
     return [{
-      wasmCompiled: true,
+      artifactEnvelopeExecuted: true,
       remotePartitionReplica: true,
     }];
   }

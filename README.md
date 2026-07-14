@@ -90,8 +90,9 @@ The differences in practice are:
   node
 - cross-partition work is explicit through primitives like `lookup`, `emit`,
   and `broadcast`
-- services and WASM modules are first-class runtime pieces, not just SQL-side
-  extension hooks
+- replicated service descriptors and callback modules are first-class runtime
+  metadata, not just SQL-side extension hooks; genuine component execution is
+  still a planned cutover
 
 If you only need some row-level logic near a single-node database, stored
 procedures are the simpler tool. Lagrange is aiming at the point where the
@@ -169,12 +170,14 @@ every cross-partition step behind a convenient abstraction.
 
 No.
 
-WASM is one execution format in the system, not the entire story. The repo
-already contains built-in runtime services and regular systems code, and the
-README example is about the execution model more than the packaging format.
+WASM is a target execution format for externally installable services, not the
+entire story. Today the repo contains built-in runtime services, regular systems
+code, and a JavaScript-envelope lifecycle rehearsal. The README example is about
+the execution model more than the packaging format.
 
-WASM matters here because it is a useful unit for sandboxed, portable,
-replicable compute. It is not the only way to think about the runtime.
+WASM matters here because a genuine component can become a useful unit for
+sandboxed, portable, replicable compute once the component runtime is delivered.
+It is not the only way to think about the runtime.
 
 ### Is This A Database With Extra Compute, Or A Compute System With Storage?
 
@@ -226,8 +229,8 @@ Current building blocks include:
   services, and internal system queries
 - distributed execution primitives such as `lookup`, `emit`, and `broadcast`
   (defined in the [Example](#example) section)
-- WASM service execution, with services querying tables through that same
-  SQL engine
+- WASM service lifecycle scaffolding, currently exercised by a JavaScript
+  artifact envelope rather than compiled WebAssembly
 - cluster diagnostics, health probes, live query support, and an admin CLI
 - distributed failure and stress testing infrastructure
 
@@ -248,6 +251,15 @@ separate worker service to stand up.
 
 **Two ways to hand that function to the cluster:**
 
+Current runtime support is recorded in
+[`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
+**Service portability status:** the matrix is the current implementation claim;
+architecture documents may describe later target contracts.
+The uploaded `wasm_component` callback example is an internal lifecycle rehearsal:
+its JavaScript source is serialized into `js_wasm_component_v1` and evaluated as
+JavaScript. It is not a WebAssembly binary or component. External service
+installation is not implemented yet, and `native_js` remains kernel-internal.
+
 - **Embedded** — run the runtime inside your own Node process and call
   `runtime.run(fn)` directly (the [Example](#example) below). This is the
   quickest path for scripts, drivers, and tests: the runtime connects to the
@@ -257,8 +269,9 @@ separate worker service to stand up.
   `runtimeKind` — `native_js` or `wasm_component` — and the `SELECT` that drives
   it). A runner stores the module inside the cluster and invokes it by that
   statement. This is how the
-  [runnable examples](examples/distributed-sql/README.md) work, and how a
-  service ships as a first-class, replicated cluster citizen.
+  [runnable examples](examples/distributed-sql/README.md) exercise the current
+  callback lifecycle. They do not yet demonstrate an externally installable
+  service artifact.
 
 **Where it runs.** The `SELECT` in your callback names a table. The cluster
 resolves that table to the partitions that hold its rows, and the nodes that own
@@ -504,11 +517,14 @@ every steering document by default.
 
 ## How It Is Put Together
 
-Lagrange is built from three replicated building blocks:
+Lagrange is built from replicated data, messaging, and runtime-service building
+blocks:
 
 - **Partition Groups**: table storage backed by Raft and SQLite
 - **Message Groups**: cluster communication and routing
-- **WASM Service Groups**: replicated distributed compute
+- **Runtime Service Groups**: replicated service lifecycle and placement; the
+  current uploaded callback rehearsal executes JavaScript rather than a genuine
+  WASM component
 
 ```mermaid
 flowchart TD
@@ -525,13 +541,13 @@ SqlCore[SqlCore SQL Engine]
 SqlCore --> Router[Message Router]
 
 Router --> Partitions
-Router --> Wasm
+Router --> Runtime
 
 Partitions[Partition Groups<br>Raft + SQLite]
-Wasm[WASM Service Groups<br>Distributed Compute]
+Runtime[Runtime Service Groups<br>Lifecycle + Placement]
 
 Partitions --> Nodes
-Wasm --> Nodes
+Runtime --> Nodes
 
 Nodes[Cluster Nodes]
 ```
@@ -574,11 +590,12 @@ canonical request model.
 Compute can run on the nodes that already own the data it needs, with explicit
 primitives for cross-partition work when locality is not enough.
 
-### WASM Execution
+### WASM Component Direction
 
-Distributed functions run as WebAssembly modules. That keeps execution
-sandboxed and portable while making language choice less central than the
-runtime contract.
+The target runtime executes genuine WebAssembly components for a small,
+portable deployment artifact. Today the `wasm_component` callback example is a
+JavaScript-envelope lifecycle rehearsal; it does not yet provide component
+sandboxing or language-neutral execution.
 
 ### Service Query Bridge
 

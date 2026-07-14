@@ -9,7 +9,7 @@ This directory contains copyable callback examples ordered from basic to advance
 3. `03-plan-reduce-by-key`
 4. `04-nested-bounded-call`
 5. `05-guardrail-failure`
-6. `06-wasm-remote-replica`
+6. `06-wasm-remote-replica` — internal JavaScript-envelope lifecycle rehearsal
 
 Each example directory contains:
 
@@ -17,13 +17,28 @@ Each example directory contains:
 - `example.manifest.json`: runtime + execution metadata
 - `expected.json`: output contract used by runner and harness
 
-## JS to WASM Process (Current Runtime Contract)
+## Current Runtime Boundary
+
+The machine-readable capability contract is
+[`docs/service-portability-capabilities.json`](../../docs/service-portability-capabilities.json).
+**Service portability status:** this directory demonstrates the callback path
+described by that current-state contract, not the target install ecosystem.
+External service installation is not implemented yet. `native_js` is
+kernel-internal, and OCI callback invocation remains unsupported.
+
+The sixth example deliberately exercises the current `wasm_component` routing
+and lifecycle scaffolding, but its input is JavaScript. It is not a WebAssembly
+binary or component and must not be used for deployment-size or WASM-performance
+claims.
+
+## JavaScript Envelope Process (Current Rehearsal Contract)
 
 The examples runner (`scripts/examples/build-upload-run.js`) supports two runtime kinds:
 
 - `native_js`: uploads raw JS source as `code.code_blob`.
-- `wasm_component`: packages JS into a serialized artifact envelope
-  (`js_wasm_component_v1`) and uploads that artifact as `code.code_blob`.
+- `wasm_component`: for this internal rehearsal only, packages JS into a
+  serialized artifact envelope (`js_wasm_component_v1`) and uploads that artifact
+  as `code.code_blob`.
 
 For `wasm_component`, the packaging step currently does:
 
@@ -35,9 +50,9 @@ For `wasm_component`, the packaging step currently does:
    - run export metadata (`runExport`, `exports`)
 4. Selects executor type `wasm_service`.
 
-This means the "compile" step in the current implementation is artifact
-construction for the runtime contract, not yet an external JS->WASM toolchain
-compile (for example `jco`/`javy`).
+This construction does not compile JavaScript to WASM. The runtime later
+evaluates the source as JavaScript. A genuine component engine, component ABI,
+OCI installation path, and public invocation contract are separate cutovers.
 
 ## Upload and Execution Lifecycle
 

@@ -1,10 +1,28 @@
-# WASM Services User Guide
+# WASM Services Architecture and Current Runtime Guide
 
-Comprehensive operator guide for publishing WASM artifacts, creating WASM
-services, and administering them in this system.
+This guide distinguishes the current embedded lifecycle scaffolding from the
+target external WASM service contract.
 
-This guide is implementation-focused and maps to the current control plane in
-this repository.
+Current runtime support is machine-readable in
+[`service-portability-capabilities.json`](service-portability-capabilities.json).
+Its repository path is `docs/service-portability-capabilities.json`.
+**Service portability status:** current instructions are limited by that matrix;
+target-only sections are labelled explicitly.
+The current `wasm_component` callback example wraps JavaScript source in a
+`js_wasm_component_v1` envelope and evaluates it as JavaScript. It is not a
+WebAssembly binary or component. External service installation is not
+implemented yet, and OCI callback invocation remains unsupported.
+
+Sections that show `.wasm` artifacts and external service publication describe
+the target manifest/control-plane contract. They are not a currently runnable
+copy-and-paste installation path.
+
+When a real runtime capability cuts over, update these surfaces together in one
+verified Quest: increment the capability contract version, change the runtime
+state, replace its implementation evidence probe, update every inventoried
+public document and example contract, add the former limitation as a negative
+regression, and run both the behavioral and public-claims guards. Leaving old
+evidence markers in dead code is not sufficient to change a capability state.
 
 ## 1. Control Plane Overview
 
@@ -20,13 +38,14 @@ Active operator path:
 4. Dispatchable ingress messages are translated to canonical `Service_Message`
    envelopes and executed through the shared dispatcher contract.
 
-## 2. Prerequisites
+## 2. Prerequisites for the Current Rehearsal
 
 1. Node is running (`npm start`), and you know the admin WebSocket port.
    - Fixed port: `8081` (system admin service port)
 2. You can connect to the admin stream:
    - `ws://<node-host>:8081/api/admin/stream`
-3. You have a WASM module file and can compute its SHA-256 digest.
+3. Use the JavaScript callback examples under `examples/distributed-sql/`.
+   Genuine component binaries are not accepted by the active callback loader.
 
 Optional CLI:
 
@@ -96,9 +115,9 @@ Response shape (`query_result`) includes callback execution metadata:
 }
 ```
 
-## 4. Artifact Upload Workflow
+## 4. Target Artifact Upload Workflow (Not Yet Active)
 
-The practical artifact workflow is:
+The target artifact workflow is:
 
 1. Store executable bytes/metadata in `code`
 2. Publish module metadata in `module_manifests`
@@ -193,9 +212,11 @@ WHERE namespace = 'acme' AND name = 'hello'
 ORDER BY created_at DESC;
 ```
 
-## 5. Start a WASM Service
+## 5. Target External WASM Service Lifecycle (Not Yet Active)
 
-Create a service definition row. This is the declarative start signal.
+The intended catalog contract uses a service definition as declarative desired
+state. The current lifecycle scaffolding does not prove that an externally
+supplied component binary is installed or invoked.
 
 ```sql
 INSERT INTO service_definitions (
@@ -269,7 +290,7 @@ FROM service_endpoints
 WHERE service_id = 'svc-acme-hello';
 ```
 
-### 5.3 Unified Lifecycle Convergence
+### 5.3 Intended Unified Lifecycle Convergence
 
 Service startup and maintenance are ownership-controlled:
 
@@ -277,7 +298,8 @@ Service startup and maintenance are ownership-controlled:
    descriptor (`runtime_kind`, `runtime_ref`, `runtime_config`).
 2. `ServiceReconciler` computes drift between desired and actual service rows.
 3. `ServiceLifecycleManager` is the only owner of create/start/stop/restart.
-4. Built-ins and userland WASM services converge through the same path.
+4. The target is for built-ins and externally installed WASM services to
+   converge through the same path; external activation is not implemented yet.
 
 ## 6. Administer Existing Services
 
@@ -342,6 +364,10 @@ Behavior:
 5. Validates results against `expected.json` contracts.
 6. Writes a JSON artifact (`test-output/examples/<runId>.json`).
 7. Returns non-zero exit code if any required example fails.
+
+This runner proves callback routing and lifecycle scaffolding. Its
+`js_wasm_component_v1` artifact contains JavaScript bytes, so a green run is not
+evidence of component compilation or execution.
 
 ## 8. Debug Session and DAP APIs
 

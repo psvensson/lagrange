@@ -20,7 +20,7 @@ module.exports.run = async function run(ctx, batch) {
   }
 
   return [{
-    wasmCompiled: true,
+    artifactEnvelopeExecuted: true,
     remotePartitionReplica: Boolean(batch.partitionId),
     partitionId: batch.partitionId,
     inputRows: Array.isArray(batch.rows) ? batch.rows.length : 0,
