@@ -1,0 +1,72 @@
+{
+  "id": "service-install-catalog-owner",
+  "authoringContractVersion": 1,
+  "statement": "The cluster service install catalog durably records immutable package and revision identity, idempotent installation intent, rollout outcomes, and typed failures while exposing only logical references to the canonical service definition, instance, and endpoint actual-state owners; unsupported activation is recorded_not_running and cannot be projected as running.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/requirements.md#r3--one-install-and-control-plane",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "a24664c1b103d99cc6830a195a197f78f8925494"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-install-catalog-owner",
+      "reportDir": "test-output/reports/service-install-catalog-owner",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-install-catalog-owner-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-install-catalog-owner",
+          "reportDir": "test-output/reports/service-install-catalog-owner",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "sealed-owner-scope",
+      "statement": "The production owner is src/control-plane/owners/service-install-catalog-owner.js, exported and wired by src/control-plane/owners/index.js and create-system-metadata-owners.js. Its durable table contracts are declared only through src/constants/tables.js, the bootstrap system-table schema modules, and src/cache/cdc-table-policy.js. The production composition factory is proved by test/control-plane/service-install-catalog-owner.test.js via scripts/checks/run-service-install-catalog-owner-scenarios.js; architecture/lagrange-service-manifest.md and architecture/lagrange-service-registry.md may be aligned."
+    },
+    {
+      "id": "desired-actual-boundary",
+      "statement": "The catalog may persist package, revision, installation, rollout, operation identity, and typed failure fields plus a stable service_definition_id reference. It must not persist or infer replica node, health, address, endpoint, raft role, runtime process, or running status; services and service_endpoints remain the canonical actual-state tables."
+    },
+    {
+      "id": "durable-system-tables",
+      "statement": "Package, revision, installation, and failure records use registered replicated system-table schemas with initial partition and replica identities and an explicit non-propagated CDC policy. Immutable identities conflict rather than overwrite, and a newly composed owner must recover the same records through authoritative reads."
+    },
+    {
+      "id": "typed-state-contract",
+      "statement": "Installation requests have stable operation identity and deterministic replay. Initial unsupported activation persists rollout_state recorded_not_running. Rollout state and failures use closed enums and typed error codes; caller-supplied actual-state or running fields fail closed, and corrupt durable running state is never projected as a running installation."
+    },
+    {
+      "id": "negative-attacks",
+      "statement": "The scenario must reject missing package/revision/install references, immutable-ID conflicts, operation replay with changed intent, unknown or actual-state fields, unknown desired/rollout/failure values, forbidden running state, and malformed gateway results while proving package-to-revision-to-install persistence, typed failure durability, and restart recovery through the production owner factory."
+    },
+    {
+      "id": "downstream-exclusions",
+      "statement": "This Quest does not implement lifecycle SQL, authentication or authorization, artifact fetching or verification, reconciler scheduling, service_definitions mutation, runtime activation, endpoint publication, registry access, or CLI commands."
+    },
+    {
+      "id": "red-on-revert-engagement",
+      "statement": "Independent verification must show the scenario turns red when recorded_not_running persistence, immutable conflict checks, or the actual-state ownership guard is bypassed, and must verify exact-patch plus aggregate fingerprints before checkpoint and handoff."
+    }
+  ]
+}
