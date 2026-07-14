@@ -7,6 +7,7 @@ import {PartitionsOwner} from './partitions-owner.js';
 import {ReplicaOperationsOwner} from './replica-operations-owner.js';
 import {ServiceDefinitionsOwner} from './service-definitions-owner.js';
 import {ServiceEndpointsOwner} from './service-endpoints-owner.js';
+import {ServiceInstallCatalogOwner} from './service-install-catalog-owner.js';
 import {ServicesOwner} from './services-owner.js';
 
 function createOwnerOptions(options = {}) {
@@ -14,6 +15,7 @@ function createOwnerOptions(options = {}) {
     controlPlaneSystemTableGateway:
       options.controlPlaneSystemTableGateway || null,
     systemTableCache: options.systemTableCache || null,
+    now: options.now,
   };
 }
 
@@ -30,6 +32,7 @@ function createSystemMetadataOwners(options = {}) {
     logsOwner: new LogsOwner(ownerOptions),
     serviceEndpointsOwner: new ServiceEndpointsOwner(ownerOptions),
     serviceDefinitionsOwner: new ServiceDefinitionsOwner(ownerOptions),
+    serviceInstallCatalogOwner: new ServiceInstallCatalogOwner(ownerOptions),
   });
 }
 

@@ -11,4 +11,13 @@ export {ReplicaOperationsOwner} from './replica-operations-owner.js';
 export {LogsOwner} from './logs-owner.js';
 export {ServiceEndpointsOwner} from './service-endpoints-owner.js';
 export {ServiceDefinitionsOwner} from './service-definitions-owner.js';
+export {
+  SERVICE_INSTALL_CATALOG_ERROR_CODE,
+  SERVICE_INSTALL_DESIRED_STATE,
+  SERVICE_INSTALL_FAILURE_CODE,
+  SERVICE_INSTALL_FAILURE_PHASE,
+  SERVICE_INSTALL_ROLLOUT_STATE,
+  ServiceInstallCatalogError,
+  ServiceInstallCatalogOwner,
+} from './service-install-catalog-owner.js';
 export {createSystemMetadataOwners} from './create-system-metadata-owners.js';

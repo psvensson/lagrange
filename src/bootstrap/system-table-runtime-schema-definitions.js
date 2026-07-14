@@ -281,6 +281,106 @@ const SERVICE_TIMERS_SCHEMA = {
 };
 
 /**
+ * Immutable, verified external service package identities.
+ * Runtime instance and endpoint observations are intentionally absent.
+ */
+const SERVICE_PACKAGES_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SERVICE_PACKAGES,
+  columns: [
+    {name: 'package_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'package_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'package_version', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'manifest_schema_version', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'runtime_kind', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'artifact_ref', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'artifact_digest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'artifact_media_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'payload_media_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'signature_status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'normalized_manifest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_service_packages_name_version',
+      columns: ['package_name', 'package_version'],
+    },
+    {name: 'idx_service_packages_digest', columns: ['artifact_digest']},
+  ],
+};
+
+/**
+ * Immutable configuration revisions derived from verified packages.
+ */
+const SERVICE_REVISIONS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SERVICE_REVISIONS,
+  columns: [
+    {name: 'revision_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'package_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'artifact_digest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'config_digest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'normalized_config', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_service_revisions_package', columns: ['package_id']},
+    {name: 'idx_service_revisions_digest', columns: ['artifact_digest']},
+  ],
+};
+
+/**
+ * Desired install and rollout state. service_definition_id is the only link
+ * into runtime ownership; replica and endpoint actuals stay in their tables.
+ */
+const SERVICE_INSTALLATIONS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SERVICE_INSTALLATIONS,
+  columns: [
+    {name: 'installation_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'revision_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'service_definition_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'desired_state', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'rollout_state', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'operation_id', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
+    {name: 'latest_failure_id', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+  ],
+  indices: [
+    {name: 'idx_service_installations_revision', columns: ['revision_id']},
+    {
+      name: 'idx_service_installations_definition',
+      columns: ['service_definition_id'],
+    },
+    {name: 'idx_service_installations_rollout', columns: ['rollout_state']},
+  ],
+};
+
+/**
+ * Typed failure facts. Free-form exception text is excluded to keep catalog
+ * state bounded and prevent provider or credential detail from leaking.
+ */
+const SERVICE_INSTALL_FAILURES_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SERVICE_INSTALL_FAILURES,
+  columns: [
+    {name: 'failure_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'installation_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'revision_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'failure_code', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'failure_phase', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'retryable', type: COLUMN_TYPE.BOOLEAN, notNull: true},
+    {name: 'occurred_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_service_install_failures_installation',
+      columns: ['installation_id', 'occurred_at'],
+    },
+    {name: 'idx_service_install_failures_code', columns: ['failure_code']},
+  ],
+};
+
+/**
  * Module manifests system table schema.
  * Stores WASM module/package metadata with component-model identity.
  * Requirements: 3.2, 5.2, 10.1, 10.2
@@ -508,6 +608,10 @@ export {
   SERVICE_ENDPOINTS_SCHEMA,
   SERVICE_PARTITION_ACCESS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,
+  SERVICE_PACKAGES_SCHEMA,
+  SERVICE_REVISIONS_SCHEMA,
+  SERVICE_INSTALLATIONS_SCHEMA,
+  SERVICE_INSTALL_FAILURES_SCHEMA,
   MODULE_MANIFESTS_SCHEMA,
   PACKAGE_REGISTRY_MAPPINGS_SCHEMA,
   PACKAGE_REGISTRY_OVERRIDES_SCHEMA,
