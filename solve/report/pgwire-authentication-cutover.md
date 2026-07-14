@@ -19,7 +19,7 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json
+- Latest evidence: test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-49-59-273Z.report.json
 - Selected theory: theory-20260714-canonical-receipt-mismatch
 - Next move: continue supervised step for pgwire-authentication-cutover-main
 - No longer current: PASS
@@ -66,6 +66,9 @@
 - **pgwire-authentication-cutover-main**: Ingested evidence from pgwire-authentication-cutover-2026-07-14T07-42-52-210Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-42-52-210Z.report.json]
 - **pgwire-authentication-cutover-main**: Ingested evidence from pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json]
 - **pgwire-authentication-cutover-main**: Ingested evidence from pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json]
+- **pgwire-authentication-cutover-main**: Independent verification passed for the causally later exact canonical replacement. [subagent:verify_portability_plan]
+- **pgwire-authentication-cutover-main**: Ingested evidence from pgwire-authentication-cutover-2026-07-14T07-49-59-273Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-49-59-273Z.report.json]
+- **pgwire-authentication-cutover-main**: Ingested evidence from pgwire-authentication-cutover-2026-07-14T07-49-59-273Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-49-59-273Z.report.json]
 
 ## Theories
 - **theory-20260714-append-only-replacement-order** [active] system, mechanism append_only_replacement_order, owner solver_verification_contract, modelGate npm run model:contracts
@@ -81,6 +84,7 @@
 - **theory-20260714-canonical-receipt-mismatch**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-42-52-210Z.report.json]
 - **theory-20260714-canonical-receipt-mismatch**: falsified (scenario=done, theory=falsified, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json]
 - **theory-20260714-canonical-receipt-mismatch**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json]
+- **theory-20260714-canonical-receipt-mismatch**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-49-59-273Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
