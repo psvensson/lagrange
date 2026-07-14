@@ -26,7 +26,9 @@
 - **service-cli-package-bin-main** [solved] rung 0, attempts 1, metric 1 -> 0
 
 ## Findings
-_(none recorded)_
+- **service-cli-package-bin-main**: Model not applicable: the exact two-line package and lockfile bin-map change adds no runtime state, transition, concurrency, architecture, or lifecycle semantics. [contract:solve/quests/service-cli-package-bin.json#package-metadata-only]
+- **service-cli-package-bin-main**: Independent exact verification passed: both bin maps align, each removal is red, lagrange-admin is unchanged, and the patch adds no runtime concurrency or model semantics. [subagent:verify_s5a_package_bin]
+- **service-cli-package-bin-main**: Independent post-checkpoint aggregate verification passed: package.json matches the reviewed aggregate bytes and the committed lockfile remains aligned with no in-scope drift. [subagent:verify_s5a_package_bin]
 
 ## Theories
 _(none recorded)_
