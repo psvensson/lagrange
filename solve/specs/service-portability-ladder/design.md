@@ -72,6 +72,26 @@ Lagrange node containers do not receive an unrestricted Docker socket. The
 agent exposes only the runtime operations and identity labels required by the
 driver, authenticates callers, and owns engine-specific translation.
 
+The selected contract is recorded in
+[`architecture/oci-runtime-host-contract.md`](../../../architecture/oci-runtime-host-contract.md).
+It uses a private authenticated Unix-domain control socket, agent-derived
+resource labels, a closed operation/result grammar, and one production
+construction route through seed and join startup into `createRuntimeStartupWiring`.
+The decision is `selected_not_implemented`; C1 owns the provider/agent/Compose
+implementation, receipt/fence restart safety, and live binding proof, while C2
+owns probes, logs, endpoints, kill/replacement, and managed-instance/node
+restart recovery.
+
+Fresh agent receipt state is enrolled through a TPM-monotonic host record, and
+replacement enrollment requires durable prior-incarnation retirement plus a
+distinct empty Engine data root. A mutation unresolved across agent restart
+quarantines that incarnation; runtime evidence cannot clear it.
+
+The first live activation accepts only an immutable remote OCI digest derived
+from the artifact owner. A local OCI layout must be published to an accessible
+registry before activation; neither the provider nor agent trusts a CLI or
+node-local filesystem path.
+
 The first live milestone explicitly does not claim Kubernetes support. A future
 Kubernetes provider requires an independent Quest covering controller/CRI
 authority, network publication, privilege, recovery, and live composition-root
