@@ -1,7 +1,16 @@
 # Examples
 
-Three example families live here, ordered by how much infrastructure they
+Four example families live here, ordered by how much infrastructure they
 need. Each has its own README with exact commands.
+
+## [service-portability/](service-portability/README.md)
+
+Build one immutable Node/`pg` application image and run it unchanged against
+stock PostgreSQL and Lagrange's PostgreSQL wire listener. The live comparison
+proves a bounded SQL slice, exact result parity, password authentication,
+verified TLS, and fail-closed credential/certificate attacks.
+
+- **Prerequisites**: Docker and Node.js 20+.
 
 ## [distributed-sql/](distributed-sql/README.md)
 

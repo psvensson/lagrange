@@ -1,0 +1,68 @@
+{
+  "id": "dockerized-pg-client-compatibility-example",
+  "authoringContractVersion": 1,
+  "statement": "One immutable Docker image for an ordinary Node HTTP application uses the real pg pool unchanged against PostgreSQL and the production Lagrange PG listener: both return the same deterministic parameterized transaction result, the Lagrange connection authenticates from a separate container with verified TLS, and only connection, credential, TLS, and Lagrange metadata configuration differ.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/requirements.md#r2--existing-application-portability",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "c4bc5e33a9de38aa727b0b1cdfacaaa46876fb82"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "dockerized-pg-client-compatibility-example",
+      "reportDir": "test-output/reports/dockerized-pg-client-compatibility-example",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "dockerized-pg-client-compatibility-example-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "dockerized-pg-client-compatibility-example",
+          "reportDir": "test-output/reports/dockerized-pg-client-compatibility-example",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Independently verify every exact source attempt and the terminal aggregate with content-bound evidence from a subagent before Solver checkpoint and handoff."
+    },
+    {
+      "id": "immutable-application-image",
+      "statement": "The PostgreSQL and Lagrange stages use the same inspected image ID, application source, Dockerfile, entrypoint, and command; the runner builds the image once and may vary only connection, credential, TLS, and Lagrange service metadata configuration."
+    },
+    {
+      "id": "ordinary-client-slice",
+      "statement": "The application exposes an ordinary HTTP handler backed by the real pg Pool and proves parameter binding, a transaction, schema mutation, multi-row data, and deterministic ordering without backend-specific SQL branches."
+    },
+    {
+      "id": "production-lagrange-path",
+      "statement": "The Lagrange stage engages createRuntimeStartupWiring, ServiceRuntimeLifecycle, the production PostgresWireRuntimeModule listener, password authentication, TLS require mode, and the normal SqlRequest executor boundary."
+    },
+    {
+      "id": "external-tls-security",
+      "statement": "The Lagrange client is a separate application container, validates the server certificate, and proves wrong-password and wrong-CA attempts fail before a SqlRequest; loopback trust is not widened."
+    },
+    {
+      "id": "honest-compatibility-claim",
+      "statement": "The example and capability surfaces call this a measured PostgreSQL slice, not arbitrary PostgreSQL or ORM compatibility, and do not claim external service installation or managed OCI execution."
+    },
+    {
+      "id": "bounded-f4-scope",
+      "statement": "This Quest proves database portability only; it does not absorb the later versioned evaluator fixture, installation control plane, managed OCI lifecycle, placement, or genuine WASM rows."
+    }
+  ]
+}

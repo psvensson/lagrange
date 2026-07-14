@@ -114,6 +114,24 @@ Clients discover PG wire endpoints through `service_endpoints`:
 - UI distinguishes logical services (e.g., `sys-postgres-wire`)
   from individual replica rows for clarity
 
+### Measured Application Portability Example
+
+[`examples/service-portability/`](../examples/service-portability/README.md)
+builds one immutable Node/`pg` HTTP application image and runs it against stock
+PostgreSQL and the production Lagrange listener. The runner inspects every
+application container to prove the image ID, entrypoint, and command are
+identical. Only connection, credential, TLS, and Lagrange service metadata may
+change.
+
+The measured slice covers the `pg` Pool, parameterized extended queries, a
+transaction, portable schema mutation and inserts, and a deterministically
+ordered multi-row select. The Lagrange stage authenticates from a separate
+container with verified TLS; wrong-password and wrong-CA attacks produce no
+`SqlRequest`. This is bounded evidence for a useful compatibility slice, not a
+claim of arbitrary ORM or complete PostgreSQL compatibility. The application is
+externally run in this milestone; managed OCI installation and supervision are
+separate lifecycle capabilities.
+
 ### Admin Security and Observability
 - Auth middleware (`src/admin/admin-auth-middleware.js`) enforces
   authn/authz at the service command layer

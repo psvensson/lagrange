@@ -1,0 +1,1464 @@
+diff --git a/architecture/postgres-wire.md b/architecture/postgres-wire.md
+index 01d8852ad76cf5c0b6e7fe05ef07cb54a1e18dc2..79682036002fc3dee12f073aad17de3c9698aa09 100644
+--- a/architecture/postgres-wire.md
++++ b/architecture/postgres-wire.md
+@@ -114,6 +114,24 @@ Clients discover PG wire endpoints through `service_endpoints`:
+ - UI distinguishes logical services (e.g., `sys-postgres-wire`)
+   from individual replica rows for clarity
+ 
++### Measured Application Portability Example
++
++[`examples/service-portability/`](../examples/service-portability/README.md)
++builds one immutable Node/`pg` HTTP application image and runs it against stock
++PostgreSQL and the production Lagrange listener. The runner inspects every
++application container to prove the image ID, entrypoint, and command are
++identical. Only connection, credential, TLS, and Lagrange service metadata may
++change.
++
++The measured slice covers the `pg` Pool, parameterized extended queries, a
++transaction, portable schema mutation and inserts, and a deterministically
++ordered multi-row select. The Lagrange stage authenticates from a separate
++container with verified TLS; wrong-password and wrong-CA attacks produce no
++`SqlRequest`. This is bounded evidence for a useful compatibility slice, not a
++claim of arbitrary ORM or complete PostgreSQL compatibility. The application is
++externally run in this milestone; managed OCI installation and supervision are
++separate lifecycle capabilities.
++
+ ### Admin Security and Observability
+ - Auth middleware (`src/admin/admin-auth-middleware.js`) enforces
+   authn/authz at the service command layer
+diff --git a/examples/README.md b/examples/README.md
+index e42525ff54df19a723dcffa1058c0fc1ccf47821..ef86435b7aa26636a6b49ca4972e98f8ace0cd96 100644
+--- a/examples/README.md
++++ b/examples/README.md
+@@ -1,8 +1,17 @@
+ # Examples
+ 
+-Three example families live here, ordered by how much infrastructure they
++Four example families live here, ordered by how much infrastructure they
+ need. Each has its own README with exact commands.
+ 
++## [service-portability/](service-portability/README.md)
++
++Build one immutable Node/`pg` application image and run it unchanged against
++stock PostgreSQL and Lagrange's PostgreSQL wire listener. The live comparison
++proves a bounded SQL slice, exact result parity, password authentication,
++verified TLS, and fail-closed credential/certificate attacks.
++
++- **Prerequisites**: Docker and Node.js 20+.
++
+ ## [distributed-sql/](distributed-sql/README.md)
+ 
+ Copyable partition-callback examples, from a basic iterator through an internal
+diff --git a/examples/service-portability/README.md b/examples/service-portability/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..e42cf6bd33fbb5504e4a4d991b64f18a1b298a72
+--- /dev/null
++++ b/examples/service-portability/README.md
+@@ -0,0 +1,48 @@
++# PostgreSQL application portability
++
++This example builds one ordinary Node HTTP application image and runs that exact
++image against two database endpoints:
++
++1. a stock PostgreSQL container; and
++2. Lagrange's production PostgreSQL wire listener.
++
++The application source, Dockerfile, entrypoint, command, and inspected image ID
++stay identical. Only connection, credential, and TLS environment variables
++change. The Lagrange stage runs in a separate application container, uses
++password authentication, validates the server certificate, and keeps the demo
++private key outside the application image.
++
++## Run it
++
++Prerequisites are Node.js 20+ and a running Docker daemon. From the repository
++root:
++
++```sh
++node examples/service-portability/run-database-portability.js
++```
++
++The command builds the application image once, starts an isolated PostgreSQL
++baseline, starts the Lagrange listener through `createRuntimeStartupWiring` and
++`ServiceRuntimeLifecycle`, invokes the same `/rankings` handler in both stages,
++checks exact result parity, attacks the Lagrange stage with a wrong password and
++wrong CA, writes a versioned live report under `test-output/reports/`, and tears
++everything down.
++
++## What this proves
++
++The measured PostgreSQL slice is intentionally explicit:
++
++- the real `pg` Pool from an external application container;
++- password authentication and verified TLS on the Lagrange connection;
++- parameterized extended queries;
++- `BEGIN`/`COMMIT` transaction handling;
++- portable `DROP TABLE`, `CREATE TABLE`, and multi-row `INSERT` operations; and
++- a filtered multi-row `SELECT` with deterministic ordering.
++
++It is not a claim of arbitrary ORM compatibility or complete PostgreSQL
++behavior. This database-portability milestone also does not claim that Lagrange
++installs or manages the application container. Managed OCI execution and genuine
++WASM components are later stages of the service-portability ladder.
++
++The certificates and private key in `certs/` are local example fixtures only.
++Never use them outside this disposable proof.
+diff --git a/examples/service-portability/app/Dockerfile b/examples/service-portability/app/Dockerfile
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d63eea90147163dfa9a55408268ae78c977346f
+--- /dev/null
++++ b/examples/service-portability/app/Dockerfile
+@@ -0,0 +1,16 @@
++FROM node@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c
++
++WORKDIR /app
++ENV NODE_ENV=production
++
++COPY app/package.json app/package-lock.json ./
++RUN npm ci --omit=dev && npm cache clean --force
++
++COPY app/server.js ./server.js
++COPY certs/server-cert.pem ./certs/lagrange-ca.pem
++COPY certs/wrong-ca-cert.pem ./certs/wrong-ca.pem
++
++USER node
++EXPOSE 3000
++ENTRYPOINT ["node"]
++CMD ["server.js"]
+diff --git a/examples/service-portability/app/package-lock.json b/examples/service-portability/app/package-lock.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..5fa7900e36debc714e329e2c732121a2584c0d77
+--- /dev/null
++++ b/examples/service-portability/app/package-lock.json
+@@ -0,0 +1,164 @@
++{
++  "name": "lagrange-service-portability-app",
++  "version": "1.0.0",
++  "lockfileVersion": 3,
++  "requires": true,
++  "packages": {
++    "": {
++      "name": "lagrange-service-portability-app",
++      "version": "1.0.0",
++      "dependencies": {
++        "pg": "8.18.0"
++      },
++      "engines": {
++        "node": ">=20"
++      }
++    },
++    "node_modules/pg": {
++      "version": "8.18.0",
++      "resolved": "https://registry.npmjs.org/pg/-/pg-8.18.0.tgz",
++      "integrity": "sha512-xqrUDL1b9MbkydY/s+VZ6v+xiMUmOUk7SS9d/1kpyQxoJ6U9AO1oIJyUWVZojbfe5Cc/oluutcgFG4L9RDP1iQ==",
++      "license": "MIT",
++      "dependencies": {
++        "pg-connection-string": "^2.11.0",
++        "pg-pool": "^3.11.0",
++        "pg-protocol": "^1.11.0",
++        "pg-types": "2.2.0",
++        "pgpass": "1.0.5"
++      },
++      "engines": {
++        "node": ">= 16.0.0"
++      },
++      "optionalDependencies": {
++        "pg-cloudflare": "^1.3.0"
++      },
++      "peerDependencies": {
++        "pg-native": ">=3.0.1"
++      },
++      "peerDependenciesMeta": {
++        "pg-native": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/pg-cloudflare": {
++      "version": "1.4.0",
++      "resolved": "https://registry.npmjs.org/pg-cloudflare/-/pg-cloudflare-1.4.0.tgz",
++      "integrity": "sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==",
++      "license": "MIT",
++      "optional": true
++    },
++    "node_modules/pg-connection-string": {
++      "version": "2.14.0",
++      "resolved": "https://registry.npmjs.org/pg-connection-string/-/pg-connection-string-2.14.0.tgz",
++      "integrity": "sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==",
++      "license": "MIT"
++    },
++    "node_modules/pg-int8": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/pg-int8/-/pg-int8-1.0.1.tgz",
++      "integrity": "sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==",
++      "license": "ISC",
++      "engines": {
++        "node": ">=4.0.0"
++      }
++    },
++    "node_modules/pg-pool": {
++      "version": "3.14.0",
++      "resolved": "https://registry.npmjs.org/pg-pool/-/pg-pool-3.14.0.tgz",
++      "integrity": "sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==",
++      "license": "MIT",
++      "peerDependencies": {
++        "pg": ">=8.0"
++      }
++    },
++    "node_modules/pg-protocol": {
++      "version": "1.15.0",
++      "resolved": "https://registry.npmjs.org/pg-protocol/-/pg-protocol-1.15.0.tgz",
++      "integrity": "sha512-cq9sECI5s0+uPUXjbz8ioyPJni6RzsRib0US67i5IoTZKw8fNeYlVE7u8F4dG7vEJJtc5wdD1K189lCCUwqWTQ==",
++      "license": "MIT"
++    },
++    "node_modules/pg-types": {
++      "version": "2.2.0",
++      "resolved": "https://registry.npmjs.org/pg-types/-/pg-types-2.2.0.tgz",
++      "integrity": "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==",
++      "license": "MIT",
++      "dependencies": {
++        "pg-int8": "1.0.1",
++        "postgres-array": "~2.0.0",
++        "postgres-bytea": "~1.0.0",
++        "postgres-date": "~1.0.4",
++        "postgres-interval": "^1.1.0"
++      },
++      "engines": {
++        "node": ">=4"
++      }
++    },
++    "node_modules/pgpass": {
++      "version": "1.0.5",
++      "resolved": "https://registry.npmjs.org/pgpass/-/pgpass-1.0.5.tgz",
++      "integrity": "sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==",
++      "license": "MIT",
++      "dependencies": {
++        "split2": "^4.1.0"
++      }
++    },
++    "node_modules/postgres-array": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/postgres-array/-/postgres-array-2.0.0.tgz",
++      "integrity": "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=4"
++      }
++    },
++    "node_modules/postgres-bytea": {
++      "version": "1.0.1",
++      "resolved": "https://registry.npmjs.org/postgres-bytea/-/postgres-bytea-1.0.1.tgz",
++      "integrity": "sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/postgres-date": {
++      "version": "1.0.7",
++      "resolved": "https://registry.npmjs.org/postgres-date/-/postgres-date-1.0.7.tgz",
++      "integrity": "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/postgres-interval": {
++      "version": "1.2.0",
++      "resolved": "https://registry.npmjs.org/postgres-interval/-/postgres-interval-1.2.0.tgz",
++      "integrity": "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==",
++      "license": "MIT",
++      "dependencies": {
++        "xtend": "^4.0.0"
++      },
++      "engines": {
++        "node": ">=0.10.0"
++      }
++    },
++    "node_modules/split2": {
++      "version": "4.2.0",
++      "resolved": "https://registry.npmjs.org/split2/-/split2-4.2.0.tgz",
++      "integrity": "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==",
++      "license": "ISC",
++      "engines": {
++        "node": ">= 10.x"
++      }
++    },
++    "node_modules/xtend": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
++      "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.4"
++      }
++    }
++  }
++}
+diff --git a/examples/service-portability/app/package.json b/examples/service-portability/app/package.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..cac03ea38ac87069e89af4bedca1efa88dd67e32
+--- /dev/null
++++ b/examples/service-portability/app/package.json
+@@ -0,0 +1,12 @@
++{
++  "name": "lagrange-service-portability-app",
++  "version": "1.0.0",
++  "private": true,
++  "type": "module",
++  "engines": {
++    "node": ">=20"
++  },
++  "dependencies": {
++    "pg": "8.18.0"
++  }
++}
+diff --git a/examples/service-portability/app/server.js b/examples/service-portability/app/server.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4d791c6a5df9538a0325def520c5fd2a9d57a167
+--- /dev/null
++++ b/examples/service-portability/app/server.js
+@@ -0,0 +1,209 @@
++import {createServer} from 'node:http';
++import {readFileSync} from 'node:fs';
++
++import pg from 'pg';
++
++const {Pool} = pg;
++
++const HTTP_STATUS = Object.freeze({
++  OK: 200,
++  BAD_REQUEST: 400,
++  NOT_FOUND: 404,
++  METHOD_NOT_ALLOWED: 405,
++  SERVICE_UNAVAILABLE: 503,
++});
++const TLS_MODE = Object.freeze({
++  DISABLE: 'disable',
++  VERIFY_FULL: 'verify-full',
++});
++const APP_ENV = Object.freeze({
++  DATABASE_HOST: 'DB_HOST',
++  DATABASE_PORT: 'DB_PORT',
++  DATABASE_NAME: 'DB_NAME',
++  DATABASE_USER: 'DB_USER',
++  DATABASE_PASSWORD: 'DB_PASSWORD',
++  TLS_CA_FILE: 'DB_TLS_CA_FILE',
++  TLS_SERVERNAME: 'DB_TLS_SERVERNAME',
++  SERVER_PORT: 'PORT',
++});
++const NETWORK = Object.freeze({
++  BIND_HOST: '0.0.0.0',
++  MAX_PORT: 65535,
++});
++const POOL_CONFIGURATION = Object.freeze({
++  MAX_CONNECTIONS: 4,
++  CONNECTION_TIMEOUT_MS: 2000,
++});
++const TEXT = Object.freeze({
++  ENCODING: 'utf8',
++  JSON_MEDIA_TYPE: 'application/json',
++  INVALID_TLS_MODE: 'DB_TLS_MODE must be disable or verify-full',
++  INVALID_MINIMUM_SCORE: 'minimumScore must be an integer',
++});
++const PORTABLE_SQL = Object.freeze({
++  BEGIN: 'BEGIN',
++  DROP_TABLE: 'DROP TABLE IF EXISTS portability_scores',
++  CREATE_TABLE: 'CREATE TABLE portability_scores (' +
++    'id INTEGER PRIMARY KEY, name TEXT NOT NULL, score INTEGER NOT NULL)',
++  INSERT_ROW:
++    'INSERT INTO portability_scores (id, name, score) VALUES ($1, $2, $3)',
++  COMMIT: 'COMMIT',
++  ROLLBACK: 'ROLLBACK',
++});
++const PROCESS_SIGNAL = Object.freeze({
++  TERMINATE: 'SIGTERM',
++  INTERRUPT: 'SIGINT',
++});
++const DEFAULT_PORT = 3000;
++const DEFAULT_MINIMUM_SCORE = 70;
++const SEED_ROWS = Object.freeze([
++  Object.freeze([1, 'Ada', 91]),
++  Object.freeze([2, 'Grace', 97]),
++  Object.freeze([3, 'Linus', 68]),
++  Object.freeze([4, 'Margaret', 91]),
++]);
++
++function requiredEnvironment(name) {
++  const value = process.env[name];
++  if (!value) throw new Error(`missing required environment: ${name}`);
++  return value;
++}
++
++function parsePort(value, name) {
++  const parsed = Number.parseInt(value, 10);
++  if (!Number.isInteger(parsed) || parsed < 1 || parsed > NETWORK.MAX_PORT) {
++    throw new Error(`${name} must be a valid TCP port`);
++  }
++  return parsed;
++}
++
++function buildSslConfiguration() {
++  const mode = process.env.DB_TLS_MODE || TLS_MODE.DISABLE;
++  if (mode === TLS_MODE.DISABLE) return false;
++  if (mode !== TLS_MODE.VERIFY_FULL) {
++    throw new Error(TEXT.INVALID_TLS_MODE);
++  }
++  return {
++    ca: readFileSync(
++      requiredEnvironment(APP_ENV.TLS_CA_FILE),
++      TEXT.ENCODING,
++    ),
++    rejectUnauthorized: true,
++    servername: requiredEnvironment(APP_ENV.TLS_SERVERNAME),
++  };
++}
++
++function createPool() {
++  return new Pool({
++    host: requiredEnvironment(APP_ENV.DATABASE_HOST),
++    port: parsePort(
++      requiredEnvironment(APP_ENV.DATABASE_PORT),
++      APP_ENV.DATABASE_PORT,
++    ),
++    database: requiredEnvironment(APP_ENV.DATABASE_NAME),
++    user: requiredEnvironment(APP_ENV.DATABASE_USER),
++    password: requiredEnvironment(APP_ENV.DATABASE_PASSWORD),
++    ssl: buildSslConfiguration(),
++    max: POOL_CONFIGURATION.MAX_CONNECTIONS,
++    connectionTimeoutMillis: POOL_CONFIGURATION.CONNECTION_TIMEOUT_MS,
++  });
++}
++
++function sendJson(response, status, body) {
++  response.writeHead(status, {'content-type': TEXT.JSON_MEDIA_TYPE});
++  response.end(`${JSON.stringify(body)}\n`);
++}
++
++async function readJsonBody(request) {
++  const chunks = [];
++  for await (const chunk of request) chunks.push(chunk);
++  if (chunks.length === 0) return {};
++  return JSON.parse(Buffer.concat(chunks).toString(TEXT.ENCODING));
++}
++
++function parseMinimumScore(body) {
++  const value = body.minimumScore ?? DEFAULT_MINIMUM_SCORE;
++  if (!Number.isInteger(value)) {
++    throw new Error(TEXT.INVALID_MINIMUM_SCORE);
++  }
++  return value;
++}
++
++async function executePortableRanking(pool, minimumScore) {
++  const client = await pool.connect();
++  try {
++    await client.query(PORTABLE_SQL.BEGIN);
++    await client.query(PORTABLE_SQL.DROP_TABLE);
++    await client.query(PORTABLE_SQL.CREATE_TABLE);
++    for (const row of SEED_ROWS) {
++      await client.query(
++        PORTABLE_SQL.INSERT_ROW,
++        row,
++      );
++    }
++    const result = await client.query(
++      'SELECT id, name, score FROM portability_scores ' +
++      'WHERE score >= $1 ORDER BY score DESC, id ASC',
++      [minimumScore],
++    );
++    await client.query(PORTABLE_SQL.COMMIT);
++    return result.rows.map((row) => ({
++      id: Number(row.id),
++      name: row.name,
++      score: Number(row.score),
++    }));
++  } catch (error) {
++    await client.query(PORTABLE_SQL.ROLLBACK);
++    throw error;
++  } finally {
++    client.release();
++  }
++}
++
++const pool = createPool();
++const server = createServer(async (request, response) => {
++  if (request.url === '/health' && request.method === 'GET') {
++    sendJson(response, HTTP_STATUS.OK, {status: 'ready'});
++    return;
++  }
++  if (request.url !== '/rankings') {
++    sendJson(response, HTTP_STATUS.NOT_FOUND, {error: 'not found'});
++    return;
++  }
++  if (request.method !== 'POST') {
++    sendJson(response, HTTP_STATUS.METHOD_NOT_ALLOWED, {
++      error: 'method not allowed',
++    });
++    return;
++  }
++  try {
++    const minimumScore = parseMinimumScore(await readJsonBody(request));
++    const rankings = await executePortableRanking(pool, minimumScore);
++    sendJson(response, HTTP_STATUS.OK, {rankings});
++  } catch (error) {
++    const malformedRequest = error instanceof SyntaxError ||
++      error?.message === TEXT.INVALID_MINIMUM_SCORE;
++    sendJson(
++      response,
++      malformedRequest ? HTTP_STATUS.BAD_REQUEST :
++        HTTP_STATUS.SERVICE_UNAVAILABLE,
++      {error: malformedRequest ? 'invalid request' : 'database request failed'},
++    );
++  }
++});
++
++server.listen(
++  parsePort(
++    process.env[APP_ENV.SERVER_PORT] || String(DEFAULT_PORT),
++    APP_ENV.SERVER_PORT,
++  ),
++  NETWORK.BIND_HOST,
++);
++
++async function shutdown() {
++  server.close();
++  await pool.end();
++}
++
++process.once(PROCESS_SIGNAL.TERMINATE, shutdown);
++process.once(PROCESS_SIGNAL.INTERRUPT, shutdown);
+diff --git a/examples/service-portability/certs/server-cert.pem b/examples/service-portability/certs/server-cert.pem
+new file mode 100644
+index 0000000000000000000000000000000000000000..26b1bf5eef525ffcac8ba2f4e0b8dddbca322575
+--- /dev/null
++++ b/examples/service-portability/certs/server-cert.pem
+@@ -0,0 +1,19 @@
++-----BEGIN CERTIFICATE-----
++MIIDJTCCAg2gAwIBAgIUVDP6vrHaCmxbjBHyhZE1uysZeSYwDQYJKoZIhvcNAQEL
++BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDcxNDA3NTQwNFoXDTM2MDcx
++MTA3NTQwNFowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
++AAOCAQ8AMIIBCgKCAQEArSdECQZGnXIBGHHhSWcsJq6qP5WwfCr6mnFu4zDPQabY
++SF1Itoguj47ZuSxeQqdmQ+u9xzR2uq/WivVZjH0rpqYs7wGO/0esfFR+kGxPyhcV
++BV1RAKjzYH0TLDID9qvyr4nAwjP73hIWRIkDAOnABPJxfUZNX5BNMKcghk5gs40x
++woie+ktmrtd52h3UcIm1p0FlG0T0COYyj8hy0pQ7MZAFSOM0FdVftxRciub+lTHK
++3KhmFaJWY3Fdu4BvgxlLtv7HSgbgIaKJUh87lk+P/uWGSTeVTyNXjp7hdZxadb4p
++Ld/lfQC4mMRhZInv8ZFjIlNLZKML74ZWRwY8sPu+/wIDAQABo28wbTAdBgNVHQ4E
++FgQU1ogLZ+5GR78oQ1VUwXTsAzD/6k0wHwYDVR0jBBgwFoAU1ogLZ+5GR78oQ1VU
++wXTsAzD/6k0wDwYDVR0TAQH/BAUwAwEB/zAaBgNVHREEEzARgglsb2NhbGhvc3SH
++BH8AAAEwDQYJKoZIhvcNAQELBQADggEBAFmYHxhFhfwn4q67Dx/LcbKnLZ7B8/9l
++63u2uDTAIvMkdlyK9xdE57COypxhyCt+7qEiM65E/kMCucGQAnAUfkrw8ONV9gOU
++YvbuY4MdDQQt9vNViZOaOz5f4P8u1Q5owd8WNNyJMTcI6VNbX49WRtxdxZ6gpFSI
++IQc4DSHFi/vrLgfoZGro5Kddf1qWtAUpkcbL6n/+slXMO7YnUAbrHQ/PLnQMKIT8
++9I7y01wQkw/f5VP4zJsotjTVLjA2Peo75FbISEuaOFOJLFAXliFTes6LsbyTY3K7
++ANIEPpCsGyPLCszm9vqCorCIpc48ZjKNkLan+Ruz9etpDHY7/x+nnvA=
++-----END CERTIFICATE-----
+diff --git a/examples/service-portability/certs/server-key.pem b/examples/service-portability/certs/server-key.pem
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd342c5d6946d9b2902f6c99e4322e2804c3daa8
+--- /dev/null
++++ b/examples/service-portability/certs/server-key.pem
+@@ -0,0 +1,28 @@
++-----BEGIN PRIVATE KEY-----
++MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCtJ0QJBkadcgEY
++ceFJZywmrqo/lbB8KvqacW7jMM9BpthIXUi2iC6Pjtm5LF5Cp2ZD673HNHa6r9aK
++9VmMfSumpizvAY7/R6x8VH6QbE/KFxUFXVEAqPNgfRMsMgP2q/KvicDCM/veEhZE
++iQMA6cAE8nF9Rk1fkE0wpyCGTmCzjTHCiJ76S2au13naHdRwibWnQWUbRPQI5jKP
++yHLSlDsxkAVI4zQV1V+3FFyK5v6VMcrcqGYVolZjcV27gG+DGUu2/sdKBuAhoolS
++HzuWT4/+5YZJN5VPI1eOnuF1nFp1vikt3+V9ALiYxGFkie/xkWMiU0tkowvvhlZH
++Bjyw+77/AgMBAAECggEATZ9qKQ+GrYNTiWVX5OObD9ZCXRHaVbegs4bBepjBeMF2
++eO5Ur/tZwCJ+aTxCH2hS+ITghUJ4LVWxfIbjt47PeDxLrXOJ6tfzM6NfP5hGpqZ1
++VnvQWdbjj/BSHYBodXb86wN6hbTvJsz97Yhsb8baPX2AMfRHsF0MtZBejMbrI+Id
++wJDuFL5dAKMr+8V6RjfRa5wHmIXzAnK3lxSfMEITgmLSC+wBiTmBp8+qq59z9vU0
++2fS9gBbEyVPX7sWXwi+d8GlWROFAirw2KI+nJUoL3rL+Y9FFg+GwkXslqfcZHEx6
++fXQuM6BrmXFBU6H/pL/6zXVzesfLwun8zadAImSYLQKBgQDYycb5q6OnJBoRamno
++ccfftkyQFoX2tp8++R3A6cltttvpwy5SJhk2E1EOreLLzrf9rILV+F8H6cj/or1W
++j+9YZJQ1ekZu2buD0kGfAeXV0wfM0oczMsJ0wQBov1ENx35o7Xd+Qg3nNPadVQma
++TmodfM5J2Ty4MFM+uhCc9azEYwKBgQDMeQJ8hH8wVaji77fpimMEleZuYHA9jwNW
++nHa70VU+5lFGSUyjZbHG8nlaMwAvWyLmBBTa5mDTJsF5MeRLvR+bPH/Q5nEQCsHW
++WRipYEhPMV6yiteQslHQ+Ct5G4n/Th7KGBoNzgB3O1tQtiC7NqWQ4Ce9scNbabjE
++59iEphAXtQKBgBJKC6Baq6bZM93ORXsXxk4IWjM5wzmKNKsiZzE0SAsahzkUf17s
++2emm/Yqoft7E5N7g4/TbTGElhxCSETkxUXb6nUpZs4F8mwZHAcRBa7t7X0gXZtKZ
++8K/a7IbpxRPNhcuiZRdgyT19SWUCnJnJDcjJE7pFOosrgIplNiuXymiTAoGAZUIc
++CBv5fK8/BrteIYqFxLSTO+AIVYPoTFEJv7NH+vFGGH+eM2DeLD7R9+g/1DPW0X/9
++7/Wcx5RuxZz+iL9s0oygY4xrO12IZqUSwHZM+OLjGZoGbMLSH6F2rfAEY+mE9+H9
++rQ5yTpmXfB3lkbDbRyaqp5dLvo5ZkTGbmP1ABO0CgYAi+mLHkM81/xPxusPXrb/W
++nNlJvEIiB2nnm51RbPRrZuDla8CMXbVFQg5slbrmwkTFeDWBfsjC7rSHSqbNFeNl
++PdjEMaylgdwn7p9YzO3+ABqn3BoZIFNDkwL4Vq6g4AsKGCF1l6PU7QaAAvTgD2vw
++RpPW3AqPWTjOwjUn8MJvZw==
++-----END PRIVATE KEY-----
+diff --git a/examples/service-portability/certs/wrong-ca-cert.pem b/examples/service-portability/certs/wrong-ca-cert.pem
+new file mode 100644
+index 0000000000000000000000000000000000000000..9c624fc6e374b4f4dfa1429a588ace3b342bf9f8
+--- /dev/null
++++ b/examples/service-portability/certs/wrong-ca-cert.pem
+@@ -0,0 +1,19 @@
++-----BEGIN CERTIFICATE-----
++MIIDHDCCAgSgAwIBAgIUCLuqs87mPLEmWBwMvJh6IZFGIsswDQYJKoZIhvcNAQEL
++BQAwEzERMA8GA1UEAwwId3JvbmctY2EwHhcNMjYwNzE0MDc1NDA0WhcNMzYwNzEx
++MDc1NDA0WjATMREwDwYDVQQDDAh3cm9uZy1jYTCCASIwDQYJKoZIhvcNAQEBBQAD
++ggEPADCCAQoCggEBAKkFx1VGDin/q/HRNW31pG7aybbT9GUKRbePq9/rbTW24uGy
++zPf485uNJIo0LQ37qpFRFQzhN+eoPpypOGFA3vVk/D3r6oj2M9HomxyV3BtDfrdM
++ZQrEhs4fu7KZ//oL0N8uYHJNTIYzHGDr+D0iEv8R4zq8U8Gpqiv0m6iWMyC0dhgh
++Uy0UC6TiGzv5kk++UoBEpzwzgwVvdYLxI3RWEOFkhBUNoRUGiHw6M1P+YyVkc4yJ
++qhZSq6Pv2p9mG9DFB8BIOHFX4MGY21VQ0KicAI6UzKfidcvC4xUSB0kfRWquaWk2
++4/eBywwBxQZOS2Z9dw98RQ8c6If8unzipyH3oXcCAwEAAaNoMGYwHQYDVR0OBBYE
++FEOLQkwJoAyKVu1L+AnRfiJrKP40MB8GA1UdIwQYMBaAFEOLQkwJoAyKVu1L+AnR
++fiJrKP40MA8GA1UdEwEB/wQFMAMBAf8wEwYDVR0RBAwwCoIId3JvbmctY2EwDQYJ
++KoZIhvcNAQELBQADggEBAI7jHb+vM18iIsuYCGE/w7drYp9Bv5BWDV4x0FXQleYu
++W0aLT82IVrRuaWfakfq9gfi74TIoN2f0FXg+d88yKrzZOZvvDGYNBCe8u+2PExpf
+++qld1xw5qFrtUYqfXBj/ceUDp/+b7/RZXr+w1DxHT8lczypanrm4gNIWfNMXhCJH
++NMjpCR0q32KWK+xDXMwUcS22qqG0w82gyDjAeaYRzYuai2NogfxE9+M/tfis5tyF
++IZpVszpyejTuxJTf+lH+tN/LH7FP7e7/CqeSNlI1hPs37JOvbfsbdMPcRTxBLRY7
++y0n2gAnUEydOLZrd4vplmOK1b2Fq+jrBUcaF5hsbitw=
++-----END CERTIFICATE-----
+diff --git a/examples/service-portability/run-database-portability.js b/examples/service-portability/run-database-portability.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..25ca789a7320fdb920e18107c9849f4c273cae93
+--- /dev/null
++++ b/examples/service-portability/run-database-portability.js
+@@ -0,0 +1,653 @@
++#!/usr/bin/env node
++
++import assert from 'node:assert/strict';
++import {execFile} from 'node:child_process';
++import {randomUUID} from 'node:crypto';
++import {
++  mkdir,
++  readFile,
++  rm,
++  writeFile,
++} from 'node:fs/promises';
++import {tmpdir} from 'node:os';
++import path from 'node:path';
++import {fileURLToPath, pathToFileURL} from 'node:url';
++import {promisify} from 'node:util';
++
++import Database from 'better-sqlite3';
++
++import {RUNTIME_KIND} from '../../src/constants/runtime.js';
++import {
++  META_SERVICE_ID,
++  META_SERVICE_RUNTIME_REF,
++} from '../../src/constants/wasm-meta.js';
++import {isSqlRequest} from '../../src/query/sql-request.js';
++import {createRuntimeStartupWiring} from
++  '../../src/runtime/runtime-startup-wiring.js';
++
++const execFileAsync = promisify(execFile);
++const EXAMPLE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
++const REPOSITORY_ROOT = path.resolve(EXAMPLE_DIRECTORY, '../..');
++const DEFAULT_REPORT_DIRECTORY = path.join(
++  REPOSITORY_ROOT,
++  'test-output/reports/dockerized-pg-client-compatibility-example/live',
++);
++const POSTGRES_IMAGE =
++  'postgres@sha256:fceb6f86328c36f2438fae3b851b0cc57c4a7e69a58c866d9ce24281f2cf0c9c';
++const POSTGRES_NETWORK_ALIAS = 'postgres';
++const APPLICATION_PORT = 3000;
++const DATABASE = 'portable_app';
++const USER = 'portable_app';
++const PASSWORD = 'portable-password';
++const WRONG_PASSWORD = 'wrong-portable-password';
++const MINIMUM_SCORE = 70;
++const EXPECTED_RESPONSE = Object.freeze({
++  rankings: Object.freeze([
++    Object.freeze({id: 2, name: 'Grace', score: 97}),
++    Object.freeze({id: 1, name: 'Ada', score: 91}),
++    Object.freeze({id: 4, name: 'Margaret', score: 91}),
++  ]),
++});
++const SQL_PARAMETER_PATTERN = /\$\d+/gu;
++const SQL_SELECT_PATTERN = /^\s*(SELECT|WITH|PRAGMA)\b/iu;
++const WAIT_TIMEOUT_MS = 30000;
++const WAIT_INTERVAL_MS = 200;
++const DOCKER_MAX_BUFFER = 8 * 1024 * 1024;
++const DOCKER_EXECUTABLE = 'docker';
++const TEXT_ENCODING = 'utf8';
++const APPLICATION_PROCESS = Object.freeze({
++  ENTRYPOINT: 'node',
++  COMMAND: 'server.js',
++});
++const HTTP_EXPECTATION = Object.freeze({
++  OK: 200,
++  SERVICE_UNAVAILABLE: 503,
++});
++const LAGRANGE_RUNTIME = Object.freeze({
++  HOST: '0.0.0.0',
++  AUTH_MODE: 'password',
++  TLS_MODE: 'require',
++  PREPARED_STATUS: 'ready',
++  STARTED_STATUS: 'running',
++});
++const DOCKER_ARGUMENT = Object.freeze({
++  BUILD: 'build',
++  CREATE: 'create',
++  DATABASE: '--dbname',
++  ENVIRONMENT: '--env',
++  EXECUTE: 'exec',
++  FILE: '--file',
++  FORCE: '--force',
++  FORMAT: '--format',
++  IMAGE: 'image',
++  IMAGE_ID_FILE: '--iidfile',
++  INSPECT: 'inspect',
++  NAME: '--name',
++  NETWORK_COMMAND: 'network',
++  NETWORK_OPTION: '--network',
++  NETWORK_ALIAS: '--network-alias',
++  PORT: 'port',
++  POSTGRES_READY: 'pg_isready',
++  PUBLISH: '--publish',
++  REMOVE: 'rm',
++  START: 'start',
++  TAG: '--tag',
++  USERNAME: '--username',
++  VERSION: 'version',
++});
++const DOCKER_FORMAT = Object.freeze({
++  APPLICATION_INSPECTION:
++    '{{.Image}}|{{json .Config.Entrypoint}}|{{json .Config.Cmd}}',
++  NETWORK_GATEWAY: '{{(index .IPAM.Config 0).Gateway}}',
++  SERVER_VERSION: '{{.Server.Version}}',
++});
++const DOCKER_PATH = Object.freeze({
++  BUILD_CONTEXT: 'examples/service-portability',
++  DOCKERFILE: 'examples/service-portability/app/Dockerfile',
++});
++const RUN_STAGE = Object.freeze({
++  DOCKER_PREFLIGHT: 'docker-preflight',
++  IMAGE_BUILD: 'image-build',
++  POSTGRES_START: 'postgres-start',
++  POSTGRES_APPLICATION: 'postgres-application',
++  LAGRANGE_START: 'lagrange-start',
++  LAGRANGE_APPLICATION: 'lagrange-application',
++  WRONG_PASSWORD_ATTACK: 'wrong-password-attack',
++  WRONG_CA_ATTACK: 'wrong-ca-attack',
++  FAILURE_SAFE_TEARDOWN_PROBE: 'failure-safe-teardown-probe',
++});
++const RUN_OUTCOME_STATUS = Object.freeze({
++  PENDING: 'pending',
++  SUCCEEDED: 'succeeded',
++  FAILED: 'failed',
++});
++const RUN_TEXT = Object.freeze({
++  INSPECTION_SEPARATOR: '|',
++  CLEANUP_SEPARATOR: ' ',
++  PORT_REQUIRED: 'application container must publish its HTTP port',
++  POSTGRES_READINESS: 'PostgreSQL readiness',
++  DATABASE_REQUEST_FAILED: 'database request failed',
++  LAGRANGE_LISTENER: 'lagrange listener',
++  CLEANUP_FAILED: 'database portability example cleanup failed',
++  INJECTED_CONTAINER_FAILURE: 'injected post-create container failure',
++});
++
++function delay(milliseconds) {
++  return new Promise((resolve) => setTimeout(resolve, milliseconds));
++}
++
++async function runDocker(argumentsList) {
++  return execFileAsync(DOCKER_EXECUTABLE, argumentsList, {
++    cwd: REPOSITORY_ROOT,
++    maxBuffer: DOCKER_MAX_BUFFER,
++  });
++}
++
++async function waitUntil(check, description) {
++  const deadline = Date.now() + WAIT_TIMEOUT_MS;
++  while (Date.now() < deadline) {
++    if (await check()) return;
++    await delay(WAIT_INTERVAL_MS);
++  }
++  throw new Error(`timed out waiting for ${description}`);
++}
++
++function createSqlRequestExecutor(database, observedRequests) {
++  return async (request) => {
++    assert.equal(isSqlRequest(request), true);
++    observedRequests.push(request);
++    const statement = request.statement.replace(SQL_PARAMETER_PATTERN, '?');
++    const prepared = database.prepare(statement);
++    if (SQL_SELECT_PATTERN.test(statement)) {
++      return {
++        success: true,
++        rows: prepared.all(...request.parameters),
++        columns: prepared.columns().map((column) => column.name),
++      };
++    }
++    const result = prepared.run(...request.parameters);
++    return {
++      success: true,
++      rows: [],
++      changes: result.changes,
++      rowCount: result.changes,
++    };
++  };
++}
++
++function createLagrangeDefinition() {
++  return {
++    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
++    runtimeKind: RUNTIME_KIND.NATIVE_JS,
++    runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
++    runtimeConfig: JSON.stringify({
++      host: LAGRANGE_RUNTIME.HOST,
++      authMode: LAGRANGE_RUNTIME.AUTH_MODE,
++      tlsMode: LAGRANGE_RUNTIME.TLS_MODE,
++    }),
++  };
++}
++
++async function startLagrangeListener(observedRequests) {
++  const database = new Database(':memory:');
++  const definition = createLagrangeDefinition();
++  const wiring = createRuntimeStartupWiring({
++    pgwireCredentialEnv: {
++      PGWIRE_AUTH_USER: USER,
++      PGWIRE_AUTH_PASSWORD: PASSWORD,
++      PGWIRE_AUTH_DATABASE: DATABASE,
++    },
++    pgwireTlsEnv: {
++      PGWIRE_TLS_KEY_PATH: path.join(
++        EXAMPLE_DIRECTORY,
++        'certs/server-key.pem',
++      ),
++      PGWIRE_TLS_CERT_PATH: path.join(
++        EXAMPLE_DIRECTORY,
++        'certs/server-cert.pem',
++      ),
++    },
++  });
++  const runtime = wiring.serviceRuntimeLifecycle;
++  runtime.setQueryExecutorFactory(() => ({
++    executeRequest: createSqlRequestExecutor(database, observedRequests),
++  }));
++  const prepared = await runtime.prepare(definition, {nodeId: 'example-node'});
++  assert.equal(prepared.status, LAGRANGE_RUNTIME.PREPARED_STATUS);
++  const started = await runtime.start({
++    ...definition,
++    host: LAGRANGE_RUNTIME.HOST,
++    port: 0,
++  });
++  assert.equal(started.status, LAGRANGE_RUNTIME.STARTED_STATUS);
++  return {
++    port: started.endpointIntent.port,
++    async stop() {
++      await runtime.stop({...definition, host: LAGRANGE_RUNTIME.HOST});
++      database.close();
++    },
++  };
++}
++
++function buildApplicationEnvironment(overrides) {
++  return {
++    PORT: String(APPLICATION_PORT),
++    DB_HOST: overrides.host,
++    DB_PORT: String(overrides.port),
++    DB_NAME: DATABASE,
++    DB_USER: USER,
++    DB_PASSWORD: overrides.password || PASSWORD,
++    DB_TLS_MODE: overrides.tlsMode,
++    ...(overrides.caFile ? {DB_TLS_CA_FILE: overrides.caFile} : {}),
++    ...(overrides.servername ? {
++      DB_TLS_SERVERNAME: overrides.servername,
++    } : {}),
++  };
++}
++
++function environmentArguments(environment) {
++  return Object.entries(environment).flatMap(([name, value]) => [
++    DOCKER_ARGUMENT.ENVIRONMENT,
++    `${name}=${value}`,
++  ]);
++}
++
++async function inspectApplicationContainer(containerName) {
++  const {stdout} = await runDocker([
++    DOCKER_ARGUMENT.INSPECT,
++    DOCKER_ARGUMENT.FORMAT,
++    DOCKER_FORMAT.APPLICATION_INSPECTION,
++    containerName,
++  ]);
++  const [imageId, entrypoint, command] = stdout.trim().split(
++    RUN_TEXT.INSPECTION_SEPARATOR,
++  );
++  return {
++    imageId,
++    entrypoint: JSON.parse(entrypoint),
++    command: JSON.parse(command),
++  };
++}
++
++async function inspectPublishedPort(containerName) {
++  const {stdout} = await runDocker([
++    DOCKER_ARGUMENT.PORT,
++    containerName,
++    `${APPLICATION_PORT}/tcp`,
++  ]);
++  const match = stdout.trim().match(/:(\d+)$/u);
++  assert.ok(match, RUN_TEXT.PORT_REQUIRED);
++  return Number.parseInt(match[1], 10);
++}
++
++async function launchApplication(options) {
++  await runDocker([
++    DOCKER_ARGUMENT.CREATE,
++    DOCKER_ARGUMENT.NAME, options.containerName,
++    DOCKER_ARGUMENT.NETWORK_OPTION, options.networkName,
++    DOCKER_ARGUMENT.PUBLISH, `127.0.0.1::${APPLICATION_PORT}`,
++    ...environmentArguments(options.environment),
++    options.imageTag,
++  ]);
++  options.createdContainers.add(options.containerName);
++  if (options.failAfterCreate === true) {
++    throw new Error(RUN_TEXT.INJECTED_CONTAINER_FAILURE);
++  }
++  await runDocker([DOCKER_ARGUMENT.START, options.containerName]);
++  const inspection = await inspectApplicationContainer(options.containerName);
++  const hostPort = await inspectPublishedPort(options.containerName);
++  await waitUntil(async () => {
++    try {
++      return (await fetch(`http://127.0.0.1:${hostPort}/health`)).ok;
++    } catch (_error) {
++      return false;
++    }
++  }, `${options.containerName} HTTP listener`);
++  return {hostPort, inspection};
++}
++
++async function requestRankings(hostPort) {
++  const response = await fetch(`http://127.0.0.1:${hostPort}/rankings`, {
++    method: 'POST',
++    headers: {'content-type': 'application/json'},
++    body: JSON.stringify({minimumScore: MINIMUM_SCORE}),
++  });
++  return {
++    status: response.status,
++    body: await response.json(),
++  };
++}
++
++async function runApplicationStage(options) {
++  const launched = await launchApplication(options);
++  return {
++    ...(await requestRankings(launched.hostPort)),
++    container: launched.inspection,
++  };
++}
++
++async function waitForPostgres(containerName) {
++  await waitUntil(async () => {
++    try {
++      await runDocker([
++        DOCKER_ARGUMENT.EXECUTE,
++        containerName,
++        DOCKER_ARGUMENT.POSTGRES_READY,
++        DOCKER_ARGUMENT.USERNAME, USER,
++        DOCKER_ARGUMENT.DATABASE, DATABASE,
++      ]);
++      return true;
++    } catch (_error) {
++      return false;
++    }
++  }, RUN_TEXT.POSTGRES_READINESS);
++}
++
++async function inspectNetworkGateway(networkName) {
++  const {stdout} = await runDocker([
++    DOCKER_ARGUMENT.NETWORK_COMMAND,
++    DOCKER_ARGUMENT.INSPECT,
++    DOCKER_ARGUMENT.FORMAT,
++    DOCKER_FORMAT.NETWORK_GATEWAY,
++    networkName,
++  ]);
++  return stdout.trim();
++}
++
++async function buildApplicationImage(imageTag, temporaryDirectory) {
++  const imageIdFile = path.join(temporaryDirectory, 'application-image.id');
++  await runDocker([
++    DOCKER_ARGUMENT.BUILD,
++    DOCKER_ARGUMENT.FILE, DOCKER_PATH.DOCKERFILE,
++    DOCKER_ARGUMENT.IMAGE_ID_FILE, imageIdFile,
++    DOCKER_ARGUMENT.TAG, imageTag,
++    DOCKER_PATH.BUILD_CONTEXT,
++  ]);
++  return (await readFile(imageIdFile, TEXT_ENCODING)).trim();
++}
++
++async function startPostgres(containerName, networkName, createdContainers) {
++  await runDocker([
++    DOCKER_ARGUMENT.CREATE,
++    DOCKER_ARGUMENT.NAME, containerName,
++    DOCKER_ARGUMENT.NETWORK_OPTION, networkName,
++    DOCKER_ARGUMENT.NETWORK_ALIAS, POSTGRES_NETWORK_ALIAS,
++    DOCKER_ARGUMENT.ENVIRONMENT, `POSTGRES_DB=${DATABASE}`,
++    DOCKER_ARGUMENT.ENVIRONMENT, `POSTGRES_USER=${USER}`,
++    DOCKER_ARGUMENT.ENVIRONMENT, `POSTGRES_PASSWORD=${PASSWORD}`,
++    POSTGRES_IMAGE,
++  ]);
++  createdContainers.add(containerName);
++  await runDocker([DOCKER_ARGUMENT.START, containerName]);
++  await waitForPostgres(containerName);
++}
++
++async function removeDockerResource(argumentsList, cleanupErrors) {
++  try {
++    await runDocker(argumentsList);
++  } catch (_error) {
++    cleanupErrors.push(argumentsList.join(RUN_TEXT.CLEANUP_SEPARATOR));
++  }
++}
++
++async function writeLiveReport(reportDirectory, report) {
++  await mkdir(reportDirectory, {recursive: true});
++  const fileStamp = report.timestamp.replace(/[:.]/gu, '-');
++  const reportPath = path.join(
++    reportDirectory,
++    `database-portability-${fileStamp}.report.json`,
++  );
++  await writeFile(
++    reportPath,
++    `${JSON.stringify(report, null, 2)}\n`,
++    TEXT_ENCODING,
++  );
++  return reportPath;
++}
++
++async function runDatabasePortabilityExample(options = {}) {
++  const runId = randomUUID();
++  const suffix = runId.slice(0, 8);
++  const imageTag = `lagrange-portable-pg-app:${suffix}`;
++  const networkName = `lagrange-portability-${suffix}`;
++  const postgresContainer = `portable-postgres-${suffix}`;
++  const temporaryDirectory = path.join(tmpdir(), `lagrange-portability-${runId}`);
++  const cleanupErrors = [];
++  const createdContainers = new Set();
++  const observedRequests = [];
++  let lagrangeListener = null;
++  let runOutcome = {status: RUN_OUTCOME_STATUS.PENDING};
++  let stage = RUN_STAGE.DOCKER_PREFLIGHT;
++  await mkdir(temporaryDirectory, {recursive: true});
++  try {
++    await runDocker([
++      DOCKER_ARGUMENT.VERSION,
++      DOCKER_ARGUMENT.FORMAT,
++      DOCKER_FORMAT.SERVER_VERSION,
++    ]);
++    stage = RUN_STAGE.IMAGE_BUILD;
++    const imageId = await buildApplicationImage(imageTag, temporaryDirectory);
++    await runDocker([
++      DOCKER_ARGUMENT.NETWORK_COMMAND,
++      DOCKER_ARGUMENT.CREATE,
++      networkName,
++    ]);
++    const networkGateway = await inspectNetworkGateway(networkName);
++    stage = RUN_STAGE.POSTGRES_START;
++    await startPostgres(
++      postgresContainer,
++      networkName,
++      createdContainers,
++    );
++
++    stage = options.failAfterFirstApplicationCreate === true ?
++      RUN_STAGE.FAILURE_SAFE_TEARDOWN_PROBE :
++      RUN_STAGE.POSTGRES_APPLICATION;
++    const postgresEnvironment = buildApplicationEnvironment({
++      host: 'postgres',
++      port: 5432,
++      tlsMode: 'disable',
++    });
++    const postgres = await runApplicationStage({
++      containerName: `portable-app-postgres-${suffix}`,
++      networkName,
++      imageTag,
++      environment: postgresEnvironment,
++      createdContainers,
++      failAfterCreate: options.failAfterFirstApplicationCreate,
++    });
++    assert.equal(postgres.status, HTTP_EXPECTATION.OK);
++    assert.deepEqual(postgres.body, EXPECTED_RESPONSE);
++
++    stage = RUN_STAGE.LAGRANGE_START;
++    lagrangeListener = await startLagrangeListener(observedRequests);
++    const lagrangeEnvironment = buildApplicationEnvironment({
++      host: networkGateway,
++      port: lagrangeListener.port,
++      tlsMode: 'verify-full',
++      caFile: '/app/certs/lagrange-ca.pem',
++      servername: 'localhost',
++    });
++    stage = RUN_STAGE.LAGRANGE_APPLICATION;
++    const lagrange = await runApplicationStage({
++      containerName: `portable-app-lagrange-${suffix}`,
++      networkName,
++      imageTag,
++      environment: lagrangeEnvironment,
++      createdContainers,
++    });
++    assert.equal(lagrange.status, HTTP_EXPECTATION.OK);
++    assert.deepEqual(lagrange.body, EXPECTED_RESPONSE);
++    assert.deepEqual(lagrange.body, postgres.body);
++
++    const requestsBeforeAttacks = observedRequests.length;
++    assert.ok(requestsBeforeAttacks > 0);
++    stage = RUN_STAGE.WRONG_PASSWORD_ATTACK;
++    const wrongPassword = await runApplicationStage({
++      containerName: `portable-app-wrong-password-${suffix}`,
++      networkName,
++      imageTag,
++      environment: {
++        ...lagrangeEnvironment,
++        DB_PASSWORD: WRONG_PASSWORD,
++      },
++      createdContainers,
++    });
++    assert.equal(wrongPassword.status, HTTP_EXPECTATION.SERVICE_UNAVAILABLE);
++    assert.deepEqual(wrongPassword.body, {
++      error: RUN_TEXT.DATABASE_REQUEST_FAILED,
++    });
++    assert.equal(observedRequests.length, requestsBeforeAttacks);
++
++    stage = RUN_STAGE.WRONG_CA_ATTACK;
++    const wrongCa = await runApplicationStage({
++      containerName: `portable-app-wrong-ca-${suffix}`,
++      networkName,
++      imageTag,
++      environment: {
++        ...lagrangeEnvironment,
++        DB_TLS_CA_FILE: '/app/certs/wrong-ca.pem',
++      },
++      createdContainers,
++    });
++    assert.equal(wrongCa.status, HTTP_EXPECTATION.SERVICE_UNAVAILABLE);
++    assert.deepEqual(wrongCa.body, {error: RUN_TEXT.DATABASE_REQUEST_FAILED});
++    assert.equal(observedRequests.length, requestsBeforeAttacks);
++
++    const inspections = [
++      postgres.container,
++      lagrange.container,
++      wrongPassword.container,
++      wrongCa.container,
++    ];
++    for (const inspection of inspections) {
++      assert.equal(inspection.imageId, imageId);
++      assert.deepEqual(inspection.entrypoint, [APPLICATION_PROCESS.ENTRYPOINT]);
++      assert.deepEqual(inspection.command, [APPLICATION_PROCESS.COMMAND]);
++    }
++
++    const report = {
++      schemaVersion: 1,
++      timestamp: new Date().toISOString(),
++      runId,
++      producer: 'service-portability-database-example',
++      fidelity: 'live-integration',
++      image: {
++        id: imageId,
++        buildCount: 1,
++        entrypoint: [APPLICATION_PROCESS.ENTRYPOINT],
++        command: [APPLICATION_PROCESS.COMMAND],
++        allContainerImageIdsMatch: true,
++      },
++      configuration: {
++        postgres: Object.keys(postgresEnvironment).sort(),
++        lagrange: Object.keys(lagrangeEnvironment).sort(),
++        allowedDifferenceClasses: [
++          'connection',
++          'credential',
++          'tls',
++          'lagrange_service_metadata',
++        ],
++      },
++      stages: {
++        postgres: {status: 'PASS', response: postgres.body},
++        lagrange: {
++          status: 'PASS',
++          response: lagrange.body,
++          productionWiring: true,
++          passwordAuthentication: true,
++          verifiedTls: true,
++          sqlRequests: requestsBeforeAttacks,
++        },
++      },
++      attacks: {
++        wrongPassword: 'rejected_before_sql',
++        wrongCertificateAuthority: 'rejected_before_sql',
++      },
++      parity: {
++        status: 'PASS',
++        expected: EXPECTED_RESPONSE,
++      },
++      supportedSlice: [
++        'pg Pool',
++        'parameterized extended queries',
++        'BEGIN/COMMIT transaction',
++        'DROP/CREATE TABLE',
++        'multi-row INSERT',
++        'filtered SELECT with deterministic ORDER BY',
++      ],
++    };
++    const reportPath = await writeLiveReport(
++      options.reportDirectory || DEFAULT_REPORT_DIRECTORY,
++      report,
++    );
++    runOutcome = {
++      status: RUN_OUTCOME_STATUS.SUCCEEDED,
++      value: {report, reportPath},
++    };
++  } catch (_error) {
++    runOutcome = {
++      status: RUN_OUTCOME_STATUS.FAILED,
++      error: new Error(`database portability example failed during ${stage}`),
++    };
++  } finally {
++    for (const containerName of [...createdContainers].reverse()) {
++      await removeDockerResource([
++        DOCKER_ARGUMENT.REMOVE,
++        DOCKER_ARGUMENT.FORCE,
++        containerName,
++      ], cleanupErrors);
++    }
++    if (lagrangeListener) {
++      try {
++        await lagrangeListener.stop();
++      } catch (_error) {
++        cleanupErrors.push(RUN_TEXT.LAGRANGE_LISTENER);
++      }
++    }
++    await removeDockerResource([
++      DOCKER_ARGUMENT.NETWORK_COMMAND,
++      DOCKER_ARGUMENT.REMOVE,
++      networkName,
++    ], cleanupErrors);
++    await removeDockerResource([
++      DOCKER_ARGUMENT.IMAGE,
++      DOCKER_ARGUMENT.REMOVE,
++      DOCKER_ARGUMENT.FORCE,
++      imageTag,
++    ], cleanupErrors);
++    await rm(temporaryDirectory, {recursive: true, force: true});
++  }
++  if (cleanupErrors.length > 0 && options.failOnCleanupError) {
++    throw new Error(RUN_TEXT.CLEANUP_FAILED);
++  }
++  if (runOutcome.status === RUN_OUTCOME_STATUS.FAILED) {
++    throw runOutcome.error;
++  }
++  assert.equal(runOutcome.status, RUN_OUTCOME_STATUS.SUCCEEDED);
++  return runOutcome.value;
++}
++
++async function runCli() {
++  const {report, reportPath} = await runDatabasePortabilityExample({
++    failOnCleanupError: true,
++  });
++  process.stdout.write(
++    `service-portability database comparison: ${report.parity.status}\n` +
++    `image: ${report.image.id}\n` +
++    `report: ${path.relative(REPOSITORY_ROOT, reportPath)}\n`,
++  );
++}
++
++const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : null;
++if (invokedPath === import.meta.url) {
++  runCli().catch((error) => {
++    process.stderr.write(`${error.message}\n`);
++    process.exitCode = 1;
++  });
++}
++
++export {
++  EXPECTED_RESPONSE,
++  runDatabasePortabilityExample,
++};
+diff --git a/scripts/checks/run-dockerized-pg-client-compatibility-example-scenarios.js b/scripts/checks/run-dockerized-pg-client-compatibility-example-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..37ffac460339dd9c5aa2177371f86a04f2b5c50b
+--- /dev/null
++++ b/scripts/checks/run-dockerized-pg-client-compatibility-example-scenarios.js
+@@ -0,0 +1,135 @@
++#!/usr/bin/env node
++
++import {mkdirSync, writeFileSync} from 'node:fs';
++import path from 'node:path';
++
++import {runDatabasePortabilityExample} from
++  '../../examples/service-portability/run-database-portability.js';
++import {runTestFileSync} from '../run-test-files.js';
++
++const SCENARIO = 'dockerized-pg-client-compatibility-example';
++const REPORT_DIR =
++  'test-output/reports/dockerized-pg-client-compatibility-example';
++const CONTRACT_TEST =
++  'test/examples/dockerized-pg-client-compatibility-example.test.js';
++const LIVE_REPORT_SEGMENT = 'live';
++const TEXT_ENCODING = 'utf8';
++const VERDICT = Object.freeze({
++  PASS: 'PASS',
++  FAIL: 'FAIL',
++});
++const LIVE_STATUS = Object.freeze({
++  NOT_RUN: 'not_run',
++  PASSED: 'passed',
++  FAILED: 'failed',
++});
++const FAILURE_STAGE = Object.freeze({
++  CONTRACT: 'contract test failed',
++  TEARDOWN: 'failure-safe teardown probe failed',
++});
++const TEARDOWN_EXPECTED_ERROR =
++  'database portability example failed during failure-safe-teardown-probe';
++
++async function runTeardownProbe() {
++  try {
++    await runDatabasePortabilityExample({
++      reportDirectory: path.join(REPORT_DIR, LIVE_REPORT_SEGMENT),
++      failAfterFirstApplicationCreate: true,
++      failOnCleanupError: true,
++    });
++    return false;
++  } catch (error) {
++    return error.message === TEARDOWN_EXPECTED_ERROR;
++  }
++}
++
++async function runLiveMeasurement() {
++  try {
++    return {
++      status: LIVE_STATUS.PASSED,
++      value: await runDatabasePortabilityExample({
++        reportDirectory: path.join(REPORT_DIR, LIVE_REPORT_SEGMENT),
++        failOnCleanupError: true,
++      }),
++    };
++  } catch (error) {
++    return {
++      status: LIVE_STATUS.FAILED,
++      failureStage: error.message,
++    };
++  }
++}
++
++async function runScenario() {
++  const contract = runTestFileSync(CONTRACT_TEST, {
++    print: false,
++    timeoutMs: 300000,
++  });
++  const teardownPassed = contract.ok ? await runTeardownProbe() : false;
++  const liveOutcome = contract.ok && teardownPassed ?
++    await runLiveMeasurement() : {
++      status: LIVE_STATUS.NOT_RUN,
++      failureStage: FAILURE_STAGE.CONTRACT,
++    };
++  const livePassed = liveOutcome.status === LIVE_STATUS.PASSED;
++  const passed = contract.ok && teardownPassed && livePassed;
++  const timestamp = new Date().toISOString();
++  const report = {
++    timestamp,
++    scenario: SCENARIO,
++    producer: 'dockerized-pg-client-compatibility-example-runner',
++    fidelity: 'live-integration',
++    summary: {
++      total: 3,
++      passed: Number(contract.ok) + Number(teardownPassed) +
++        Number(livePassed),
++      failed: Number(!contract.ok) + Number(!teardownPassed) +
++        Number(!livePassed),
++    },
++    optimizationSummary: {
++      totalPriorityItems: passed ? 0 : 1,
++    },
++    standardSummary: {
++      scenarios: [{
++        scenario: SCENARIO,
++        passed,
++        current: {
++          passed,
++          verdict: passed ? 'PASS' : 'FAIL',
++        },
++        detail: {
++          contract: {
++            passed: contract.ok,
++            assertions: contract.assertions,
++          },
++          failureSafeTeardown: teardownPassed,
++          liveReport: livePassed ? liveOutcome.value.reportPath : null,
++          image: livePassed ? liveOutcome.value.report.image : null,
++          stages: livePassed ? liveOutcome.value.report.stages : null,
++          attacks: livePassed ? liveOutcome.value.report.attacks : null,
++          failureStage: !teardownPassed ? FAILURE_STAGE.TEARDOWN :
++            (livePassed ? null : liveOutcome.failureStage),
++        },
++      }],
++    },
++  };
++  mkdirSync(REPORT_DIR, {recursive: true});
++  const fileStamp = timestamp.replace(/[:.]/gu, '-');
++  const reportPath = path.join(
++    REPORT_DIR,
++    `${SCENARIO}-${fileStamp}.report.json`,
++  );
++  writeFileSync(
++    reportPath,
++    `${JSON.stringify(report, null, 2)}\n`,
++    TEXT_ENCODING,
++  );
++  process.stdout.write(
++    `${SCENARIO}: ${passed ? VERDICT.PASS : VERDICT.FAIL} — ` +
++    `${report.summary.passed}/${report.summary.total} gates green\n` +
++    `report: ${reportPath}\n`,
++  );
++  process.exitCode = passed ? 0 : 1;
++}
++
++await runScenario();
+diff --git a/test/examples/dockerized-pg-client-compatibility-example.test.js b/test/examples/dockerized-pg-client-compatibility-example.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0cb716a3391baa6c54c229868b4230eab0ea491f
+--- /dev/null
++++ b/test/examples/dockerized-pg-client-compatibility-example.test.js
+@@ -0,0 +1,43 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++import {readFile} from 'node:fs/promises';
++
++const EXAMPLE_ROOT = new URL('../../examples/service-portability/', import.meta.url);
++
++async function readExample(relativePath) {
++  return readFile(new URL(relativePath, EXAMPLE_ROOT), 'utf8');
++}
++
++describe('dockerized pg client compatibility example contract', () => {
++  it('builds one ordinary pg application image without its server key',
++    async () => {
++      const dockerfile = await readExample('app/Dockerfile');
++      const application = await readExample('app/server.js');
++
++      assert.match(dockerfile, /ENTRYPOINT \["node"\]/u);
++      assert.match(dockerfile, /CMD \["server\.js"\]/u);
++      assert.doesNotMatch(dockerfile, /server-key\.pem/u);
++      assert.match(application, /new Pool\(/u);
++      assert.match(application, /PORTABLE_SQL\.BEGIN/u);
++      assert.match(application, /VALUES \(\$1, \$2, \$3\)/u);
++      assert.match(application, /ORDER BY score DESC, id ASC/u);
++      assert.doesNotMatch(application, /LAGRANGE|POSTGRESQL_TARGET/u);
++    });
++
++  it('documents a bounded compatibility claim and one-command live proof',
++    async () => {
++      const readme = await readExample('README.md');
++      const runner = await readExample('run-database-portability.js');
++
++      assert.match(readme, /measured PostgreSQL slice/iu);
++      assert.match(readme, /not.*arbitrary ORM compatibility/iu);
++      assert.match(readme, /run-database-portability\.js/u);
++      assert.match(runner, /createRuntimeStartupWiring/u);
++      assert.match(runner, /allContainerImageIdsMatch/u);
++      assert.match(runner, /wrongCertificateAuthority/u);
++      assert.match(runner, /rejected_before_sql/u);
++      assert.match(runner, /createdContainers\.add/u);
++      assert.match(runner, /failAfterFirstApplicationCreate/u);
++      assert.match(runner, /\[\.\.\.createdContainers\]\.reverse/u);
++    });
++});
