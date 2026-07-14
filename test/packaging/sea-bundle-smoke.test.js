@@ -1,5 +1,6 @@
 import {dirname, join} from 'path';
 import {fileURLToPath} from 'url';
+import os from 'os';
 import fs from 'fs';
 import {test} from '../../src/test-helpers/tap.js';
 import {runEntrypoint} from '../../src/test-helpers/run-entrypoint.js';
@@ -47,5 +48,19 @@ test('SEA bundle smoke test', async (t) => {
     bundleDryRun.stdout,
     /Bootstrap API started/,
     'bundle dry-run does not start services',
+  );
+
+  const tempRoot = fs.mkdtempSync(join(os.tmpdir(), 'lagrange-sea-init-'));
+  const serviceTarget = join(tempRoot, 'bundled-service');
+  t.teardown(() => fs.rmSync(tempRoot, {recursive: true, force: true}));
+  const bundleServiceInit = await runEntrypoint(mainBundle, {
+    args: ['service', 'init', serviceTarget],
+    timeoutMs: 15000,
+  });
+  t.equal(bundleServiceInit.exitCode, 0, 'bundle service init exits cleanly');
+  t.equal(
+    fs.existsSync(join(serviceTarget, 'lagrange-service.template.json')),
+    true,
+    'bundle service init creates the manifest template',
   );
 });
