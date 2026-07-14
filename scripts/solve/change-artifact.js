@@ -15,6 +15,7 @@ const DIFF_EXTENSION = '.diff';
 const DESCRIPTOR_EXTENSION = '.diff.json';
 const GZIP_EXTENSION = '.diff.gz';
 const CONTENT_ADDRESSED_STORAGE_KIND = 'content-addressed';
+const ROOT_PACKAGE_LOCK_PATH = 'package-lock.json';
 const PROBLEM_MISSING_UNIFIED_DIFF =
   'changeRef artifact must contain a unified diff hunk or Git binary patch';
 const WORKFLOW_PATH_PREFIXES = Object.freeze([
@@ -214,8 +215,9 @@ export function classifyPath(filePath) {
 
 export function requiresSourceVerification(filePath) {
   const normalized = normalizeSlash(filePath);
-  return SOURCE_VERIFICATION_PATH_PREFIXES.some((prefix) =>
-    normalized.startsWith(prefix));
+  return normalized === ROOT_PACKAGE_LOCK_PATH ||
+    SOURCE_VERIFICATION_PATH_PREFIXES.some((prefix) =>
+      normalized.startsWith(prefix));
 }
 
 export function requiresModelEvidence(filePath) {

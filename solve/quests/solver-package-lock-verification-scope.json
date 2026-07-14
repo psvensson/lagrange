@@ -1,0 +1,60 @@
+{
+  "id": "solver-package-lock-verification-scope",
+  "authoringContractVersion": 1,
+  "statement": "Solver exact and aggregate source verification classify package-lock.json as content-bound source so a dependency reclassification cannot reach terminal handoff with an aggregate fingerprint that omits the lockfile.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "docs/steering/workflow-guidelines/solver-quests.md#source-change-verification-contract",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "docs/steering/workflow-guidelines/solver-quests.md",
+    "draftedAtCommit": "cb016d0386c4651e5a515f79f68078c280dabeea"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "solver-package-lock-verification-scope",
+      "reportDir": "test-output/reports/solver-package-lock-verification-scope",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-package-lock-verification-scope-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "solver-package-lock-verification-scope",
+          "reportDir": "test-output/reports/solver-package-lock-verification-scope",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "lockfile-source-classification",
+      "statement": "requiresSourceVerification returns true for the root package-lock.json while preserving every existing source-verification prefix and workflow/product classification. Nested or similarly named files are not broadened unless already covered by an existing source prefix."
+    },
+    {
+      "id": "aggregate-engagement",
+      "statement": "A focused regression proves the root lockfile is content-bound and that a canonical aggregate over package.json plus package-lock.json changes when either file changes. The companion service-cli-pg-runtime-dependency-v2 aggregate must recompute to the independently established four-path fingerprint after this fix lands."
+    },
+    {
+      "id": "bounded-scope",
+      "statement": "Production scope is scripts/solve/change-artifact.js only, with one focused test and one scenario runner. Rejection-supersession behavior, artifact formats, handoff commit behavior, unrelated Solver work, and product runtime behavior are unchanged."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Independent verification must show reverting the package-lock.json classification turns the focused scenario red, approve exact and aggregate fingerprints, and confirm the existing verification-handoff suite remains green."
+    }
+  ]
+}
