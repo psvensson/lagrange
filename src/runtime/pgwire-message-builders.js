@@ -44,6 +44,21 @@ function buildAuthOk() {
 }
 
 /**
+ * Build AuthenticationCleartextPassword message.
+ *
+ * The credential verifier remains server-owned. Transport encryption is a
+ * separate policy cutover; callers must not expose this exchange externally
+ * until TLS is required.
+ *
+ * @return {Buffer}
+ */
+function buildAuthCleartextPassword() {
+  const payload = Buffer.allocUnsafe(PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE);
+  payload.writeInt32BE(PG_AUTH_TYPE.CLEARTEXT_PASSWORD, 0);
+  return buildMessage(PG_BACKEND_MSG.AUTH, payload);
+}
+
+/**
  * Build ParameterStatus message.
  * @param {string} name - Parameter name.
  * @param {string} value - Parameter value.
@@ -231,6 +246,7 @@ function buildEmptyQueryResponse() {
 
 export {
   buildAuthOk,
+  buildAuthCleartextPassword,
   buildParameterStatus,
   buildBackendKeyData,
   buildReadyForQuery,

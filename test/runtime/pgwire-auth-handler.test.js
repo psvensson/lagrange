@@ -52,6 +52,16 @@ describe('PgWireAuthHandler', () => {
         new RegExp(PGWIRE_AUTH_ERROR_MSG.POLICY_REQUIRED, 'u'),
       );
     });
+
+    it('requires an authenticator for password mode', () => {
+      assert.throws(
+        () => new PgWireAuthHandler({
+          mode: PGWIRE_AUTH_HANDLER_MODE.PASSWORD,
+          policy: trustPolicy,
+        }),
+        new RegExp(PGWIRE_AUTH_ERROR_MSG.MODE_REQUIRED, 'u'),
+      );
+    });
   });
 
   describe('authenticate', () => {
@@ -176,21 +186,30 @@ describe('PgWireAuthHandler', () => {
     });
 
     it('fails closed when authenticator throws', async () => {
-      const authenticator = async () => {
-        throw new Error('backend unavailable');
+      const logged = [];
+      const authenticator = async (credentials) => {
+        throw new Error(`backend rejected ${credentials.password}`);
       };
       const handler = createAuthHandler({
         authenticator,
-        logger: silentLogger,
+        mode: PGWIRE_AUTH_HANDLER_MODE.PASSWORD,
+        logger: {
+          ...silentLogger,
+          info(...args) {
+            logged.push(args);
+          },
+        },
       });
       const result = await handler.authenticate({
         user: 'alice',
         database: 'mydb',
+        password: 'never-log-this-secret',
       });
 
       assert.equal(result.authenticated, false);
       assert.equal(result.context, null);
-      assert.equal(result.error, 'backend unavailable');
+      assert.equal(result.error, PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED);
+      assert.doesNotMatch(JSON.stringify(logged), /never-log-this-secret/u);
     });
 
     it('emits audit record on failed auth', async () => {

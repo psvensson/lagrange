@@ -36,7 +36,10 @@ const PGWIRE_AUTH_MODE = Object.freeze({
 });
 
 const ALLOWED_AUTH_MODES = Object.freeze(
-  new Set([PGWIRE_AUTH_MODE.TRUST]),
+  new Set([
+    PGWIRE_AUTH_MODE.TRUST,
+    PGWIRE_AUTH_MODE.PASSWORD,
+  ]),
 );
 
 // --- Allowed TLS mode values ---
@@ -55,6 +58,10 @@ const PGWIRE_LOOPBACK_HOSTS = Object.freeze(
   new Set(['127.0.0.1', '::1', 'localhost']),
 );
 
+const PGWIRE_CONFIG_FIELDS = Object.freeze(
+  new Set(Object.values(PGWIRE_CONFIG_FIELD)),
+);
+
 // --- PG wire descriptor error messages ---
 
 const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
@@ -64,6 +71,8 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
     'runtime_config must be valid JSON when provided',
   CONFIG_NOT_OBJECT:
     'runtime_config JSON must contain an object',
+  CONFIG_UNSUPPORTED_FIELD:
+    'runtime_config contains an unsupported field',
   HOST_NOT_STRING:
     'host must be a string when provided',
   HOST_EMPTY:
@@ -85,7 +94,7 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
   MAX_SESSIONS_NOT_INTEGER:
     'maxSessions must be a positive integer',
   AUTH_MODE_INVALID:
-    'authMode must be trust until credential exchange is implemented',
+    'authMode must be trust or password',
   AUTH_MODE_REQUIRED:
     'authMode must be explicitly configured',
   TLS_MODE_INVALID:
@@ -161,6 +170,12 @@ function validateHostConfig(config) {
   return host.trim().length === 0 ?
     [PGWIRE_DESCRIPTOR_ERROR.HOST_EMPTY] :
     [];
+}
+
+function validateKnownConfigFields(config) {
+  return Object.keys(config).every((field) => PGWIRE_CONFIG_FIELDS.has(field)) ?
+    [] :
+    [PGWIRE_DESCRIPTOR_ERROR.CONFIG_UNSUPPORTED_FIELD];
 }
 
 function validateOptionalPortConfig(config, field, notIntegerError, rangeError) {
@@ -249,6 +264,7 @@ function validatePgwireRuntimeConfig(configStr) {
   }
   const config = parseResult.config;
   const errors = [
+    ...validateKnownConfigFields(config),
     ...validateHostConfig(config),
     ...validateOptionalPortConfig(
       config,

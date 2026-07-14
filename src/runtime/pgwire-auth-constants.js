@@ -51,6 +51,7 @@ const PGWIRE_AUTH_ERROR_MSG = Object.freeze({
 
 const PGWIRE_AUTH_HANDLER_MODE = Object.freeze({
   TRUST: 'trust',
+  PASSWORD: 'password',
 });
 
 // --- Log tag for auth audit entries ---

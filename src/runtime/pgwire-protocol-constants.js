@@ -35,6 +35,7 @@ const PG_FRONTEND_MSG = Object.freeze({
   CLOSE: 0x43, // 'C'
   TERMINATE: 0x58, // 'X'
   FLUSH: 0x48, // 'H'
+  PASSWORD: 0x70, // 'p'
 });
 
 // --- Backend (server -> client) message type bytes ---
@@ -147,6 +148,8 @@ const PG_HANDLER_ERROR = Object.freeze({
     'Missing required startup parameter: database',
   UNKNOWN_MESSAGE_TYPE:
     'Unknown frontend message type',
+  PASSWORD_MESSAGE_REQUIRED:
+    'PasswordMessage is required during authentication',
   PARSE_UNNAMED_ONLY:
     'Only unnamed prepared statements are supported',
   DESCRIBE_UNNAMED_ONLY:

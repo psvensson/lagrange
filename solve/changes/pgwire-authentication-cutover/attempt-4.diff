@@ -1,0 +1,1143 @@
+diff --git a/architecture/postgres-wire.md b/architecture/postgres-wire.md
+index 9fdfdaa5da82460a9e8775ca5c6290ac110a9b5e..2acc6d3d458e35d60bf27aeb4229cf2712dedf8b 100644
+--- a/architecture/postgres-wire.md
++++ b/architecture/postgres-wire.md
+@@ -59,13 +59,18 @@ PG Client (psql, pg driver, ORM)
+ 
+ ### Current Security Posture
+ 
+-- Runtime configuration must explicitly select `authMode: "trust"` and
+-  `tlsMode: "disable"`; implicit trust is rejected.
+-- Trust mode may bind only to `127.0.0.1`, `::1`, or `localhost`. A remote
+-  endpoint is unavailable until a real credential exchange is implemented.
+-- Password, SCRAM, TLS-prefer, and TLS-require descriptors fail validation.
+-  They are not advertised as working modes while the protocol handler cannot
+-  perform those exchanges.
++- Runtime configuration must explicitly select `authMode: "trust"` or
++  `authMode: "password"` and must still select `tlsMode: "disable"` until the
++  TLS policy cutover lands; implicit authentication is rejected.
++- Trust mode may bind only to `127.0.0.1`, `::1`, or `localhost`.
++- Password mode performs PostgreSQL `AuthenticationCleartextPassword` before a
++  session exists. The production composition root builds its verifier only from
++  the complete `PGWIRE_AUTH_USER`, `PGWIRE_AUTH_PASSWORD`, and
++  `PGWIRE_AUTH_DATABASE` environment tuple; partial configuration fails startup,
++  and password material is not stored in `runtime_config` or audit records.
++- SCRAM, TLS-prefer, and TLS-require descriptors still fail validation. Password
++  mode is not an externally secure deployment posture until TLS-require is
++  implemented and enabled by `pgwire-tls-policy-cutover`.
+ - Every authenticated session carries a security context, and every query is
+   authorized before the adapter constructs and dispatches its `SqlRequest`.
+ - The admin WebSocket also defaults to loopback. External admin binding is
+diff --git a/scripts/checks/run-pgwire-authentication-cutover-scenarios.js b/scripts/checks/run-pgwire-authentication-cutover-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1a9cac4147978ad4aeae3d6620188caf0cb57994
+--- /dev/null
++++ b/scripts/checks/run-pgwire-authentication-cutover-scenarios.js
+@@ -0,0 +1,18 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIO = 'pgwire-authentication-cutover';
++const REPORT_DIR = 'test-output/reports/pgwire-authentication-cutover';
++const TEST_FILES = Object.freeze([
++  'test/runtime/pgwire-password-authentication-cutover.test.js',
++  'test/runtime/pgwire-descriptor.test.js',
++  'test/runtime/pgwire-auth-handler.test.js',
++  'test/runtime/pgwire-protocol-handler.test.js',
++  'test/runtime/pgwire-runtime-module.test.js',
++  'test/runtime/runtime-startup-wiring.test.js',
++]);
++
++runGuardTestScenarios({
++  [SCENARIO]: TEST_FILES,
++}, {reportDir: REPORT_DIR});
+diff --git a/src/runtime/pgwire-auth-constants.js b/src/runtime/pgwire-auth-constants.js
+index b383953dca4f13417a2b411e358d6ad347a69d0a..0f9e3952bc1550dbe3dcb08e319544168ad42702 100644
+--- a/src/runtime/pgwire-auth-constants.js
++++ b/src/runtime/pgwire-auth-constants.js
+@@ -51,6 +51,7 @@ const PGWIRE_AUTH_ERROR_MSG = Object.freeze({
+ 
+ const PGWIRE_AUTH_HANDLER_MODE = Object.freeze({
+   TRUST: 'trust',
++  PASSWORD: 'password',
+ });
+ 
+ // --- Log tag for auth audit entries ---
+diff --git a/src/runtime/pgwire-auth-handler.js b/src/runtime/pgwire-auth-handler.js
+index 5c59d87fc9e211ac6b1de2847aa802e4dc299d01..8253666d43b61932f0133cea83cdd2bdde62a37e 100644
+--- a/src/runtime/pgwire-auth-handler.js
++++ b/src/runtime/pgwire-auth-handler.js
+@@ -60,7 +60,7 @@ class PgWireAuthHandler {
+     }
+     if (
+       this._mode &&
+-      this._mode !== PGWIRE_AUTH_HANDLER_MODE.TRUST
++      !Object.values(PGWIRE_AUTH_HANDLER_MODE).includes(this._mode)
+     ) {
+       throw new Error(PGWIRE_AUTH_ERROR_MSG.MODE_UNSUPPORTED);
+     }
+@@ -124,11 +124,11 @@ class PgWireAuthHandler {
+           roles: authResult.roles || [],
+         });
+         return this._succeedAuth(context);
+-      } catch (err) {
++      } catch (_err) {
+         return this._failAuth(
+           {tenantId: credentials.database,
+             principal: credentials.user},
+-          err.message || PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED,
++          PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED,
+         );
+       }
+     }
+diff --git a/src/runtime/pgwire-credential-verifier.js b/src/runtime/pgwire-credential-verifier.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c9096e570c6130739e550223497265249b121a48
+--- /dev/null
++++ b/src/runtime/pgwire-credential-verifier.js
+@@ -0,0 +1,84 @@
++/**
++ * Production composition-root credential verifier for PG wire password mode.
++ *
++ * Password material is read from the process environment and captured only by
++ * the verifier closure. It is never copied into a service runtime descriptor.
++ */
++
++import {timingSafeEqual} from 'node:crypto';
++
++const PGWIRE_CREDENTIAL_ENV = Object.freeze({
++  USER: 'PGWIRE_AUTH_USER',
++  PASSWORD: 'PGWIRE_AUTH_PASSWORD',
++  DATABASE: 'PGWIRE_AUTH_DATABASE',
++});
++
++const PGWIRE_CREDENTIAL_CONFIG_ERROR =
++  'PG wire password authentication requires user, password, and database';
++const EXPECTED_CREDENTIAL_FIELD_COUNT = Object.keys(PGWIRE_CREDENTIAL_ENV).length;
++const APPLICATION_ROLE = 'application';
++
++function safeStringEqual(actual, expected) {
++  if (typeof actual !== 'string' || typeof expected !== 'string') return false;
++  const actualBytes = Buffer.from(actual, 'utf8');
++  const expectedBytes = Buffer.from(expected, 'utf8');
++  const width = Math.max(actualBytes.length, expectedBytes.length, 1);
++  const actualPadded = Buffer.alloc(width);
++  const expectedPadded = Buffer.alloc(width);
++  actualBytes.copy(actualPadded);
++  expectedBytes.copy(expectedPadded);
++  return timingSafeEqual(actualPadded, expectedPadded) &&
++    actualBytes.length === expectedBytes.length;
++}
++
++function credentialTupleMatches(
++  credentials,
++  expected,
++  compare = safeStringEqual,
++) {
++  const comparisons = [
++    compare(credentials?.user, expected.user),
++    compare(credentials?.password, expected.password),
++    compare(credentials?.database, expected.database),
++  ];
++  return comparisons.reduce(
++    (combined, matches) => combined & Number(matches),
++    1,
++  ) === 1;
++}
++
++/**
++ * Build the production password verifier from an environment-like object.
++ *
++ * @param {Object} [env=process.env] - Environment key-value map.
++ * @return {Function|null} Async credential verifier, or null when unconfigured.
++ */
++function buildPgwireCredentialVerifier(env = process.env) {
++  const user = env[PGWIRE_CREDENTIAL_ENV.USER];
++  const password = env[PGWIRE_CREDENTIAL_ENV.PASSWORD];
++  const database = env[PGWIRE_CREDENTIAL_ENV.DATABASE];
++  const configured = [user, password, database]
++    .filter((value) => typeof value === 'string' && value.length > 0);
++
++  if (configured.length === 0) return null;
++  if (configured.length !== EXPECTED_CREDENTIAL_FIELD_COUNT) {
++    throw new Error(PGWIRE_CREDENTIAL_CONFIG_ERROR);
++  }
++
++  const expected = Object.freeze({user, password, database});
++  return async (credentials) => {
++    const authenticated = credentialTupleMatches(credentials, expected);
++    return {
++      authenticated,
++      roles: authenticated ? [APPLICATION_ROLE] : [],
++    };
++  };
++}
++
++export {
++  PGWIRE_CREDENTIAL_ENV,
++  PGWIRE_CREDENTIAL_CONFIG_ERROR,
++  safeStringEqual,
++  credentialTupleMatches,
++  buildPgwireCredentialVerifier,
++};
+diff --git a/src/runtime/pgwire-descriptor.js b/src/runtime/pgwire-descriptor.js
+index f59c3aeac8af5cfbcf7fe14e6a2379367905554a..4459702978109f8d9e3920c71b34b244d207c7b6 100644
+--- a/src/runtime/pgwire-descriptor.js
++++ b/src/runtime/pgwire-descriptor.js
+@@ -36,7 +36,10 @@ const PGWIRE_AUTH_MODE = Object.freeze({
+ });
+ 
+ const ALLOWED_AUTH_MODES = Object.freeze(
+-  new Set([PGWIRE_AUTH_MODE.TRUST]),
++  new Set([
++    PGWIRE_AUTH_MODE.TRUST,
++    PGWIRE_AUTH_MODE.PASSWORD,
++  ]),
+ );
+ 
+ // --- Allowed TLS mode values ---
+@@ -55,6 +58,10 @@ const PGWIRE_LOOPBACK_HOSTS = Object.freeze(
+   new Set(['127.0.0.1', '::1', 'localhost']),
+ );
+ 
++const PGWIRE_CONFIG_FIELDS = Object.freeze(
++  new Set(Object.values(PGWIRE_CONFIG_FIELD)),
++);
++
+ // --- PG wire descriptor error messages ---
+ 
+ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
+@@ -64,6 +71,8 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
+     'runtime_config must be valid JSON when provided',
+   CONFIG_NOT_OBJECT:
+     'runtime_config JSON must contain an object',
++  CONFIG_UNSUPPORTED_FIELD:
++    'runtime_config contains an unsupported field',
+   HOST_NOT_STRING:
+     'host must be a string when provided',
+   HOST_EMPTY:
+@@ -85,7 +94,7 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
+   MAX_SESSIONS_NOT_INTEGER:
+     'maxSessions must be a positive integer',
+   AUTH_MODE_INVALID:
+-    'authMode must be trust until credential exchange is implemented',
++    'authMode must be trust or password',
+   AUTH_MODE_REQUIRED:
+     'authMode must be explicitly configured',
+   TLS_MODE_INVALID:
+@@ -163,6 +172,12 @@ function validateHostConfig(config) {
+     [];
+ }
+ 
++function validateKnownConfigFields(config) {
++  return Object.keys(config).every((field) => PGWIRE_CONFIG_FIELDS.has(field)) ?
++    [] :
++    [PGWIRE_DESCRIPTOR_ERROR.CONFIG_UNSUPPORTED_FIELD];
++}
++
+ function validateOptionalPortConfig(config, field, notIntegerError, rangeError) {
+   if (!(field in config)) {
+     return [];
+@@ -249,6 +264,7 @@ function validatePgwireRuntimeConfig(configStr) {
+   }
+   const config = parseResult.config;
+   const errors = [
++    ...validateKnownConfigFields(config),
+     ...validateHostConfig(config),
+     ...validateOptionalPortConfig(
+       config,
+diff --git a/src/runtime/pgwire-message-builders.js b/src/runtime/pgwire-message-builders.js
+index 70aa7450ba6b5b10e2d0d875aea6d0d960b517dd..a6d6ea803507d54c9bbe9678b48ba72c6c64ee4d 100644
+--- a/src/runtime/pgwire-message-builders.js
++++ b/src/runtime/pgwire-message-builders.js
+@@ -43,6 +43,21 @@ function buildAuthOk() {
+   return buildMessage(PG_BACKEND_MSG.AUTH, payload);
+ }
+ 
++/**
++ * Build AuthenticationCleartextPassword message.
++ *
++ * The credential verifier remains server-owned. Transport encryption is a
++ * separate policy cutover; callers must not expose this exchange externally
++ * until TLS is required.
++ *
++ * @return {Buffer}
++ */
++function buildAuthCleartextPassword() {
++  const payload = Buffer.allocUnsafe(PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE);
++  payload.writeInt32BE(PG_AUTH_TYPE.CLEARTEXT_PASSWORD, 0);
++  return buildMessage(PG_BACKEND_MSG.AUTH, payload);
++}
++
+ /**
+  * Build ParameterStatus message.
+  * @param {string} name - Parameter name.
+@@ -231,6 +246,7 @@ function buildEmptyQueryResponse() {
+ 
+ export {
+   buildAuthOk,
++  buildAuthCleartextPassword,
+   buildParameterStatus,
+   buildBackendKeyData,
+   buildReadyForQuery,
+diff --git a/src/runtime/pgwire-protocol-constants.js b/src/runtime/pgwire-protocol-constants.js
+index 7abe292aa95012918848739c9f1763a94f2c4563..e1ec96c00038e7f7d3854314b6a752098a0aeb13 100644
+--- a/src/runtime/pgwire-protocol-constants.js
++++ b/src/runtime/pgwire-protocol-constants.js
+@@ -35,6 +35,7 @@ const PG_FRONTEND_MSG = Object.freeze({
+   CLOSE: 0x43, // 'C'
+   TERMINATE: 0x58, // 'X'
+   FLUSH: 0x48, // 'H'
++  PASSWORD: 0x70, // 'p'
+ });
+ 
+ // --- Backend (server -> client) message type bytes ---
+@@ -147,6 +148,8 @@ const PG_HANDLER_ERROR = Object.freeze({
+     'Missing required startup parameter: database',
+   UNKNOWN_MESSAGE_TYPE:
+     'Unknown frontend message type',
++  PASSWORD_MESSAGE_REQUIRED:
++    'PasswordMessage is required during authentication',
+   PARSE_UNNAMED_ONLY:
+     'Only unnamed prepared statements are supported',
+   DESCRIBE_UNNAMED_ONLY:
+diff --git a/src/runtime/pgwire-protocol-handler.js b/src/runtime/pgwire-protocol-handler.js
+index f5b5a11b357a764bbb8aa5b35746434ab41f177f..dac345e2b1411c917a5b902dcbc544ccd5257c28 100644
+--- a/src/runtime/pgwire-protocol-handler.js
++++ b/src/runtime/pgwire-protocol-handler.js
+@@ -32,6 +32,7 @@ import {
+ } from './pgwire-session.js';
+ import {
+   buildAuthOk,
++  buildAuthCleartextPassword,
+   buildParameterStatus,
+   buildBackendKeyData,
+   buildReadyForQuery,
+@@ -63,6 +64,7 @@ import {
+   writeCString,
+   readCString,
+ } from './pgwire-buffer-codec.js';
++import {PGWIRE_AUTH_MODE} from './pgwire-descriptor.js';
+ 
+ const LOCAL_STR_BEGIN = 'BEGIN';
+ const LOCAL_STR_COMMIT = 'COMMIT';
+@@ -81,6 +83,7 @@ const LOCAL_STR_UNNAMED = '(unnamed)';
+ 
+ const HANDLER_PHASE = Object.freeze({
+   STARTUP: 'startup',
++  AUTHENTICATION: 'authentication',
+   NORMAL: 'normal',
+   CLOSED: 'closed',
+ });
+@@ -97,6 +100,7 @@ class PgWireProtocolHandler {
+    * @param {Object} options
+    * @param {Object} options.adapter - PostgresWireAdapter instance.
+    * @param {import('node:net').Socket} options.socket - TCP socket.
++   * @param {string} [options.authMode] - Explicit descriptor auth mode.
+    * @param {Object} [options.logger] - Logger instance.
+    */
+   constructor(options) {
+@@ -109,8 +113,10 @@ class PgWireProtocolHandler {
+     this._adapter = options.adapter;
+     this._socket = options.socket;
+     this._logger = options.logger || console;
++    this._authMode = options.authMode || PGWIRE_AUTH_MODE.TRUST;
+     this._phase = HANDLER_PHASE.STARTUP;
+     this._session = null;
++    this._pendingAuth = null;
+     this._buffer = Buffer.alloc(0);
+     this._processing = Promise.resolve();
+     this._pid = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
+@@ -144,6 +150,7 @@ class PgWireProtocolHandler {
+       this._adapter.closeSession(sid);
+       this._session.close();
+     }
++    this._pendingAuth = null;
+     this._buffer = Buffer.alloc(0);
+   }
+ 
+@@ -187,6 +194,9 @@ class PgWireProtocolHandler {
+     if (this._phase === HANDLER_PHASE.STARTUP) {
+       await this._processStartup();
+     }
++    if (this._phase === HANDLER_PHASE.AUTHENTICATION) {
++      await this._processAuthentication();
++    }
+     if (this._phase === HANDLER_PHASE.NORMAL) {
+       await this._processMessages();
+     }
+@@ -255,22 +265,84 @@ class PgWireProtocolHandler {
+    * @private
+    */
+   async _handleStartup(params) {
+-    const sessionId = `pgwire-${randomUUID()}`;
+-    const tenantId = params.database || 'default';
+-    const user = params.user || 'anonymous';
++    const pendingAuth = Object.freeze({
++      sessionId: `pgwire-${randomUUID()}`,
++      tenantId: params.database || 'default',
++      user: params.user || 'anonymous',
++      database: params.database || null,
++    });
++
++    if (this._authMode === PGWIRE_AUTH_MODE.PASSWORD) {
++      this._pendingAuth = pendingAuth;
++      this._phase = HANDLER_PHASE.AUTHENTICATION;
++      this._socket.write(buildAuthCleartextPassword());
++      return;
++    }
++
++    await this._completeAuthentication(pendingAuth);
++  }
++
++  /**
++   * Process one PostgreSQL PasswordMessage without logging its payload.
++   * @private
++   */
++  async _processAuthentication() {
++    if (this._buffer.length < PG_BUFFER_LIMIT.MSG_HEADER_SIZE) return;
++
++    const type = this._buffer[0];
++    const msgLen = this._buffer.readInt32BE(1);
++    if (msgLen < PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE + 1) {
++      this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
++      return;
++    }
++    if (msgLen > PG_BUFFER_LIMIT.MAX_MESSAGE_SIZE) {
++      this._failProtocol(PG_HANDLER_ERROR.MESSAGE_TOO_LARGE);
++      return;
++    }
++
++    const totalLen = 1 + msgLen;
++    if (this._buffer.length < totalLen) return;
++    if (type !== PG_FRONTEND_MSG.PASSWORD) {
++      this._failAuthentication(PG_HANDLER_ERROR.PASSWORD_MESSAGE_REQUIRED);
++      return;
++    }
++
++    const payload = this._buffer.subarray(
++      PG_BUFFER_LIMIT.MSG_HEADER_SIZE,
++      totalLen,
++    );
++    if (payload.at(-1) !== 0) {
++      this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
++      return;
++    }
++    const password = payload.subarray(0, -1).toString('utf8');
++    this._buffer = this._buffer.subarray(totalLen);
++    await this._completeAuthentication(this._pendingAuth, password);
++  }
++
++  /**
++   * Authenticate through the canonical adapter and finish the startup reply.
++   * @param {Object} pendingAuth - Server-owned pending session identity.
++   * @param {string|undefined} [password] - PasswordMessage value.
++   * @private
++   */
++  async _completeAuthentication(pendingAuth, password) {
++    const {sessionId, tenantId, user, database} = pendingAuth;
+ 
+     try {
+       await this._adapter.authenticate(sessionId, {
+         tenantId,
+         user,
++        password,
+       });
+     } catch (err) {
+-      this._sendError(
+-        PG_SEVERITY.FATAL,
+-        PG_ERROR_CODE.INVALID_AUTHORIZATION,
+-        err.message,
+-      );
+-      this._socket.end();
++      if (this._phase === HANDLER_PHASE.CLOSED) return;
++      this._failAuthentication(err.message);
++      return;
++    }
++
++    if (this._phase === HANDLER_PHASE.CLOSED) {
++      this._adapter.closeSession(sessionId);
+       return;
+     }
+ 
+@@ -278,7 +350,7 @@ class PgWireProtocolHandler {
+       sessionId,
+       tenantId,
+       user,
+-      database: params.database || null,
++      database,
+     });
+     this._session.markAuthenticated();
+ 
+@@ -302,9 +374,26 @@ class PgWireProtocolHandler {
+     );
+ 
+     this._phase = HANDLER_PHASE.NORMAL;
++    this._pendingAuth = null;
+     this._logger.debug(PG_HANDLER_LOG.AUTH_OK, {sessionId});
+   }
+ 
++  /**
++   * Fail a pending authentication exchange without retaining credentials.
++   * @param {string} message - Safe failure detail.
++   * @private
++   */
++  _failAuthentication(message) {
++    this._pendingAuth = null;
++    this._sendError(
++      PG_SEVERITY.FATAL,
++      PG_ERROR_CODE.INVALID_AUTHORIZATION,
++      message,
++    );
++    this._phase = HANDLER_PHASE.CLOSED;
++    this._socket.end();
++  }
++
+   /**
+    * Process normal-phase messages (type + length + payload).
+    * @private
+@@ -767,6 +856,7 @@ export {
+   HANDLER_PHASE,
+   // Message builders (exported for testing)
+   buildAuthOk,
++  buildAuthCleartextPassword,
+   buildParameterStatus,
+   buildBackendKeyData,
+   buildReadyForQuery,
+diff --git a/src/runtime/pgwire-runtime-module.js b/src/runtime/pgwire-runtime-module.js
+index 18b9bc03b8876936a7c0a897f7ef43d9df557b40..23921894f3541d111dda9e9cfdfdb788f97f9039 100644
+--- a/src/runtime/pgwire-runtime-module.js
++++ b/src/runtime/pgwire-runtime-module.js
+@@ -73,6 +73,8 @@ const PGWIRE_MODULE_ERROR = Object.freeze({
+     'TCP listener is not accepting connections',
+   SQL_REQUEST_EXECUTOR_REQUIRED:
+     'replicaContext.sqlRequestExecutor is required',
++  CREDENTIAL_VERIFIER_REQUIRED:
++    'password authentication requires a credential verifier',
+   TRUST_REQUIRES_LOOPBACK:
+     'trust authentication may only bind to a loopback host',
+ });
+@@ -192,9 +194,13 @@ class PostgresWireRuntimeModule {
+     /** @type {Map<string, Object>} Running state by serviceId */
+     this._running = new Map();
+     this._logger = options.logger || console;
++    this._credentialVerifier = options.credentialVerifier || null;
+     this._authHandlerFactory = options.authHandlerFactory ||
+-      ((config) => new PgWireAuthHandler({
++      ((config, replicaContext) => new PgWireAuthHandler({
+         mode: config.authMode,
++        authenticator: config.authMode === PGWIRE_AUTH_MODE.PASSWORD ?
++          (replicaContext.pgwireCredentialVerifier ||
++            this._credentialVerifier) : undefined,
+         policy: {
+           allowedActions: new Set([PGWIRE_AUTH_ACTION.EXECUTE_QUERY]),
+         },
+@@ -319,7 +325,23 @@ class PostgresWireRuntimeModule {
+         PGWIRE_MODULE_ERROR.SQL_REQUEST_EXECUTOR_REQUIRED,
+       );
+     }
+-    const authHandler = this._authHandlerFactory(config, replicaContext);
++    const credentialVerifier =
++      replicaContext.pgwireCredentialVerifier || this._credentialVerifier;
++    if (
++      config.authMode === PGWIRE_AUTH_MODE.PASSWORD &&
++      typeof credentialVerifier !== 'function'
++    ) {
++      return buildStatusResult(
++        START_STATUS.FAILED,
++        PGWIRE_RESULT_FIELD.ERROR,
++        undefined,
++        PGWIRE_MODULE_ERROR.CREDENTIAL_VERIFIER_REQUIRED,
++      );
++    }
++    const authHandler = this._authHandlerFactory(config, {
++      ...replicaContext,
++      pgwireCredentialVerifier: credentialVerifier,
++    });
+     const adapter = new PostgresWireAdapter({
+       sqlCore: {executeRequest: replicaContext.sqlRequestExecutor},
+       authHandler,
+@@ -338,6 +360,7 @@ class PostgresWireRuntimeModule {
+       const handler = new PgWireProtocolHandler({
+         adapter,
+         socket,
++        authMode: config.authMode,
+         logger: this._logger,
+       });
+       handlers.set(socket, handler);
+diff --git a/src/runtime/runtime-startup-wiring.js b/src/runtime/runtime-startup-wiring.js
+index 76187ab463f30f3eae4d9eed226af72ac2257a2a..59513b0de073c573514d8148fb148f6462d858b4 100644
+--- a/src/runtime/runtime-startup-wiring.js
++++ b/src/runtime/runtime-startup-wiring.js
+@@ -18,12 +18,18 @@ import {
+   SqlQueryLoopRuntimeModule,
+ } from './sql-query-loop-runtime-module.js';
+ import {META_SERVICE_RUNTIME_REF} from '../constants/wasm-meta.js';
++import {buildPgwireCredentialVerifier} from
++  './pgwire-credential-verifier.js';
+ 
+ /**
+  * Build runtime wiring used by seed and joining startup flows.
+  *
+  * @param {Object} [options] - Wiring options.
+  * @param {boolean} [options.ociFeatureGateEnabled] - OCI gate state.
++ * @param {Object} [options.pgwireCredentialEnv] - Environment-shaped PG
++ *   credential source. Defaults to process.env.
++ * @param {Function} [options.pgwireCredentialVerifier] - Explicit verifier
++ *   override for an embedding composition root.
+  * @return {{
+  *   runtimeDriverRegistry: RuntimeDriverRegistry,
+  *   serviceRuntimeLifecycle: ServiceRuntimeLifecycle,
+@@ -53,7 +59,12 @@ function createRuntimeStartupWiring(options = {}) {
+   // a placed replica prepares through the wired create path.
+   serviceRuntimeLifecycle.registerNativeJsHandler(
+     META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
+-    new PostgresWireRuntimeModule(),
++    new PostgresWireRuntimeModule({
++      credentialVerifier: options.pgwireCredentialVerifier ||
++        buildPgwireCredentialVerifier(
++          options.pgwireCredentialEnv || process.env,
++        ),
++    }),
+   );
+   serviceRuntimeLifecycle.registerNativeJsHandler(
+     SQL_QUERY_LOOP_RUNTIME_REF,
+diff --git a/test/runtime/pgwire-auth-handler.test.js b/test/runtime/pgwire-auth-handler.test.js
+index 55dc9dee4f7d688b33d379d3f81db89983a75794..bf9f5f8de81e96a540903e33f4712095437c942c 100644
+--- a/test/runtime/pgwire-auth-handler.test.js
++++ b/test/runtime/pgwire-auth-handler.test.js
+@@ -52,6 +52,16 @@ describe('PgWireAuthHandler', () => {
+         new RegExp(PGWIRE_AUTH_ERROR_MSG.POLICY_REQUIRED, 'u'),
+       );
+     });
++
++    it('requires an authenticator for password mode', () => {
++      assert.throws(
++        () => new PgWireAuthHandler({
++          mode: PGWIRE_AUTH_HANDLER_MODE.PASSWORD,
++          policy: trustPolicy,
++        }),
++        new RegExp(PGWIRE_AUTH_ERROR_MSG.MODE_REQUIRED, 'u'),
++      );
++    });
+   });
+ 
+   describe('authenticate', () => {
+@@ -176,21 +186,30 @@ describe('PgWireAuthHandler', () => {
+     });
+ 
+     it('fails closed when authenticator throws', async () => {
+-      const authenticator = async () => {
+-        throw new Error('backend unavailable');
++      const logged = [];
++      const authenticator = async (credentials) => {
++        throw new Error(`backend rejected ${credentials.password}`);
+       };
+       const handler = createAuthHandler({
+         authenticator,
+-        logger: silentLogger,
++        mode: PGWIRE_AUTH_HANDLER_MODE.PASSWORD,
++        logger: {
++          ...silentLogger,
++          info(...args) {
++            logged.push(args);
++          },
++        },
+       });
+       const result = await handler.authenticate({
+         user: 'alice',
+         database: 'mydb',
++        password: 'never-log-this-secret',
+       });
+ 
+       assert.equal(result.authenticated, false);
+       assert.equal(result.context, null);
+-      assert.equal(result.error, 'backend unavailable');
++      assert.equal(result.error, PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED);
++      assert.doesNotMatch(JSON.stringify(logged), /never-log-this-secret/u);
+     });
+ 
+     it('emits audit record on failed auth', async () => {
+diff --git a/test/runtime/pgwire-descriptor.test.js b/test/runtime/pgwire-descriptor.test.js
+index 1fd11f2236001c064ba98b0efe1a37631f542057..1b3faef65771d81cc75b2bd5bf592c914226dfab 100644
+--- a/test/runtime/pgwire-descriptor.test.js
++++ b/test/runtime/pgwire-descriptor.test.js
+@@ -62,7 +62,10 @@ describe('pgwire-descriptor', () => {
+     });
+ 
+     it('should have ALLOWED_AUTH_MODES matching enum', () => {
+-      assert.deepEqual([...ALLOWED_AUTH_MODES], [PGWIRE_AUTH_MODE.TRUST]);
++      assert.deepEqual([...ALLOWED_AUTH_MODES], [
++        PGWIRE_AUTH_MODE.TRUST,
++        PGWIRE_AUTH_MODE.PASSWORD,
++      ]);
+     });
+ 
+     it('should export frozen PGWIRE_TLS_MODE', () => {
+@@ -141,6 +144,28 @@ describe('pgwire-descriptor', () => {
+       ));
+     });
+ 
++    for (const forbidden of [
++      {password: 'must-not-enter-runtime-config'},
++      {credentials: {password: 'must-not-enter-runtime-config'}},
++      {credentialVerifier: 'client-selected-owner'},
++    ]) {
++      it(`rejects unsupported credential field ${Object.keys(forbidden)[0]}`,
++        () => {
++          const result = validatePgwireRuntimeConfig(buildSecureConfig(
++            forbidden,
++          ));
++
++          assert.equal(result.valid, false);
++          assert.ok(result.errors.includes(
++            PGWIRE_DESCRIPTOR_ERROR.CONFIG_UNSUPPORTED_FIELD,
++          ));
++          assert.doesNotMatch(
++            result.errors.join(' '),
++            /must-not-enter-runtime-config/u,
++          );
++        });
++    }
++
+     describe('host validation', () => {
+       it('should accept valid host string', () => {
+         const cfg = buildSecureConfig({host: '127.0.0.1'});
+@@ -184,6 +209,15 @@ describe('pgwire-descriptor', () => {
+           PGWIRE_DESCRIPTOR_ERROR.TRUST_REQUIRES_LOOPBACK,
+         ));
+       });
++
++      it('accepts password authentication on an external bind', () => {
++        const result = validatePgwireRuntimeConfig(buildSecureConfig({
++          host: '0.0.0.0',
++          authMode: 'password',
++        }));
++
++        assert.equal(result.valid, true);
++      });
+     });
+ 
+     describe('port validation', () => {
+@@ -325,10 +359,10 @@ describe('pgwire-descriptor', () => {
+         assert.equal(result.valid, true);
+       });
+ 
+-      it('should reject password until its wire exchange exists', () => {
++      it('should accept password when a runtime verifier is supplied', () => {
+         const cfg = buildSecureConfig({authMode: 'password'});
+         const result = validatePgwireRuntimeConfig(cfg);
+-        assert.equal(result.valid, false);
++        assert.equal(result.valid, true);
+       });
+ 
+       it('should reject SCRAM until its wire exchange exists', () => {
+diff --git a/test/runtime/pgwire-password-authentication-cutover.test.js b/test/runtime/pgwire-password-authentication-cutover.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ef07de6d52cd540f3e8d0410e1e74b3d9087644
+--- /dev/null
++++ b/test/runtime/pgwire-password-authentication-cutover.test.js
+@@ -0,0 +1,402 @@
++import {after, before, describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++import {EventEmitter} from 'node:events';
++
++import Database from 'better-sqlite3';
++import pg from 'pg';
++
++import {RUNTIME_KIND} from '../../src/constants/runtime.js';
++import {
++  META_SERVICE_ID,
++  META_SERVICE_RUNTIME_REF,
++} from '../../src/constants/wasm-meta.js';
++import {isSqlRequest} from '../../src/query/sql-request.js';
++import {PostgresWireRuntimeModule} from
++  '../../src/runtime/pgwire-runtime-module.js';
++import {
++  PGWIRE_CREDENTIAL_CONFIG_ERROR,
++  buildPgwireCredentialVerifier,
++  credentialTupleMatches,
++} from '../../src/runtime/pgwire-credential-verifier.js';
++import {createRuntimeStartupWiring} from
++  '../../src/runtime/runtime-startup-wiring.js';
++import {PgWireProtocolHandler} from
++  '../../src/runtime/pgwire-protocol-handler.js';
++import {
++  PG_AUTH_TYPE,
++  PG_FRONTEND_MSG,
++  PG_PROTOCOL_VERSION,
++} from '../../src/runtime/pgwire-protocol-constants.js';
++
++const HOST = '127.0.0.1';
++const DATABASE = 'portable_app';
++const USER = 'portable_app';
++const PASSWORD = 'correct-horse-battery-staple';
++const WRONG_PASSWORD = 'wrong-password';
++const silentLogger = Object.freeze({
++  debug() {},
++  info() {},
++  warn() {},
++  error() {},
++});
++
++function createExecutor(database, observedRequests) {
++  return async (request) => {
++    assert.equal(isSqlRequest(request), true);
++    observedRequests.push(request);
++    const prepared = database.prepare(request.statement);
++    return {
++      success: true,
++      rows: prepared.all(...request.parameters),
++      columns: prepared.columns().map((column) => column.name),
++    };
++  };
++}
++
++function createClient(port, password, overrides = {}) {
++  return new pg.Client({
++    host: HOST,
++    port,
++    database: DATABASE,
++    user: USER,
++    password,
++    ssl: false,
++    connectionTimeoutMillis: 1000,
++    ...overrides,
++  });
++}
++
++function buildStartupMessage() {
++  const parameters = Buffer.from(
++    `user\0${USER}\0database\0${DATABASE}\0\0`,
++    'utf8',
++  );
++  const message = Buffer.alloc(8 + parameters.length);
++  message.writeInt32BE(message.length, 0);
++  message.writeInt32BE(PG_PROTOCOL_VERSION.CODE, 4);
++  parameters.copy(message, 8);
++  return message;
++}
++
++function buildPasswordMessage(password, terminated = true) {
++  const value = Buffer.from(`${password}${terminated ? '\0' : ''}`, 'utf8');
++  const message = Buffer.alloc(5 + value.length);
++  message[0] = PG_FRONTEND_MSG.PASSWORD;
++  message.writeInt32BE(4 + value.length, 1);
++  value.copy(message, 5);
++  return message;
++}
++
++function settleProtocol() {
++  return new Promise((resolve) => setImmediate(resolve));
++}
++
++class ProtocolSocket extends EventEmitter {
++  constructor() {
++    super();
++    this.written = [];
++    this.ended = false;
++  }
++
++  write(value) {
++    this.written.push(Buffer.from(value));
++    return true;
++  }
++
++  end() {
++    this.ended = true;
++  }
++}
++
++class ProtocolAdapter {
++  constructor(beforeSuccess = null) {
++    this.beforeSuccess = beforeSuccess;
++    this.sessions = new Map();
++    this.authenticateCalls = [];
++  }
++
++  async authenticate(sessionId, credentials) {
++    this.authenticateCalls.push({sessionId, credentials});
++    if (this.beforeSuccess) await this.beforeSuccess();
++    this.sessions.set(sessionId, credentials);
++    return {sessionId, tenantId: credentials.tenantId};
++  }
++
++  closeSession(sessionId) {
++    this.sessions.delete(sessionId);
++  }
++}
++
++describe('pgwire password authentication cutover', () => {
++  const sqlite = new Database(':memory:');
++  const observedRequests = [];
++  const wiring = createRuntimeStartupWiring({
++    pgwireCredentialEnv: {
++      PGWIRE_AUTH_USER: USER,
++      PGWIRE_AUTH_PASSWORD: PASSWORD,
++      PGWIRE_AUTH_DATABASE: DATABASE,
++    },
++  });
++  const runtime = wiring.serviceRuntimeLifecycle;
++  const definition = {
++    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
++    runtimeKind: RUNTIME_KIND.NATIVE_JS,
++    runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
++    runtimeConfig: JSON.stringify({
++      host: HOST,
++      authMode: 'password',
++      tlsMode: 'disable',
++    }),
++  };
++  let port;
++
++  before(async () => {
++    const unconfigured = new PostgresWireRuntimeModule({logger: silentLogger});
++    const directPrepared = await unconfigured.prepare(definition);
++    assert.equal(directPrepared.status, 'ready');
++    const missingVerifier = await unconfigured.start({
++      serviceId: META_SERVICE_ID.POSTGRES_WIRE,
++      host: HOST,
++      port: 0,
++      sqlRequestExecutor: createExecutor(sqlite, []),
++    });
++    assert.equal(missingVerifier.status, 'failed');
++    assert.match(missingVerifier.error, /credential verifier/iu);
++
++    runtime.setQueryExecutorFactory(() => ({
++      executeRequest: createExecutor(sqlite, observedRequests),
++    }));
++    const prepared = await runtime.prepare(definition, {nodeId: 'node-a'});
++    assert.equal(prepared.status, 'ready');
++
++    const started = await runtime.start({
++      ...definition,
++      host: HOST,
++      port: 0,
++    });
++    assert.equal(started.status, 'running');
++    port = started.endpointIntent.port;
++  });
++
++  after(async () => {
++    await runtime.stop({...definition, host: HOST, port});
++    sqlite.close();
++  });
++
++  it('accepts correct credentials before executing a real pg query', async () => {
++    const client = createClient(port, PASSWORD);
++    await client.connect();
++    try {
++      const result = await client.query('SELECT 42 AS answer');
++      assert.deepEqual(result.rows, [{answer: '42'}]);
++    } finally {
++      await client.end();
++    }
++
++    assert.equal(observedRequests.length, 1);
++    assert.equal(observedRequests[0].tenantId, DATABASE);
++  });
++
++  it('rejects a wrong password before a SQL request exists', async () => {
++    const requestsBefore = observedRequests.length;
++    const client = createClient(port, WRONG_PASSWORD);
++
++    await assert.rejects(client.connect(), /Authentication failed/iu);
++    assert.equal(observedRequests.length, requestsBefore);
++  });
++
++  it('rejects wrong user and database identities before SQL', async () => {
++    const requestsBefore = observedRequests.length;
++    for (const overrides of [
++      {user: 'wrong-user'},
++      {database: 'wrong-database'},
++    ]) {
++      const client = createClient(port, PASSWORD, overrides);
++      await assert.rejects(client.connect(), /Authentication failed/iu);
++    }
++    assert.equal(observedRequests.length, requestsBefore);
++  });
++
++  it('keeps password material out of the runtime descriptor', () => {
++    const parsed = JSON.parse(definition.runtimeConfig);
++
++    assert.equal(parsed.authMode, 'password');
++    assert.equal(Object.hasOwn(parsed, 'password'), false);
++    assert.equal(Object.hasOwn(parsed, 'credentials'), false);
++  });
++});
++
++describe('pgwire password protocol framing and disconnect safety', () => {
++  function createHandler(adapter, socket) {
++    const handler = new PgWireProtocolHandler({
++      adapter,
++      socket,
++      authMode: 'password',
++      logger: silentLogger,
++    });
++    handler.start();
++    return handler;
++  }
++
++  it('processes coalesced startup and PasswordMessage bytes', async () => {
++    const adapter = new ProtocolAdapter();
++    const socket = new ProtocolSocket();
++    const handler = createHandler(adapter, socket);
++
++    socket.emit('data', Buffer.concat([
++      buildStartupMessage(),
++      buildPasswordMessage(PASSWORD),
++    ]));
++    await settleProtocol();
++
++    assert.equal(adapter.authenticateCalls.length, 1);
++    assert.ok(handler.getSession());
++    assert.deepEqual(
++      socket.written
++        .filter((message) => message[0] === 0x52)
++        .map((message) => message.readInt32BE(5)),
++      [PG_AUTH_TYPE.CLEARTEXT_PASSWORD, PG_AUTH_TYPE.OK],
++    );
++    handler.destroy();
++  });
++
++  it('processes fragmented PasswordMessage bytes exactly once', async () => {
++    const adapter = new ProtocolAdapter();
++    const socket = new ProtocolSocket();
++    const handler = createHandler(adapter, socket);
++    const passwordMessage = buildPasswordMessage(PASSWORD);
++
++    socket.emit('data', buildStartupMessage());
++    await settleProtocol();
++    socket.emit('data', passwordMessage.subarray(0, 2));
++    socket.emit('data', passwordMessage.subarray(2, 8));
++    socket.emit('data', passwordMessage.subarray(8));
++    await settleProtocol();
++
++    assert.equal(adapter.authenticateCalls.length, 1);
++    assert.ok(handler.getSession());
++    handler.destroy();
++  });
++
++  it('rejects a non-terminated PasswordMessage before authentication',
++    async () => {
++      const adapter = new ProtocolAdapter();
++      const socket = new ProtocolSocket();
++      const handler = createHandler(adapter, socket);
++
++      socket.emit('data', buildStartupMessage());
++      await settleProtocol();
++      socket.emit('data', buildPasswordMessage(PASSWORD, false));
++      await settleProtocol();
++
++      assert.equal(adapter.authenticateCalls.length, 0);
++      assert.equal(socket.ended, true);
++      assert.equal(handler.getSession(), null);
++    });
++
++  it('closes a late adapter session when the client disconnects', async () => {
++    let releaseVerifier;
++    const verifierGate = new Promise((resolve) => {
++      releaseVerifier = resolve;
++    });
++    const adapter = new ProtocolAdapter(() => verifierGate);
++    const socket = new ProtocolSocket();
++    const handler = createHandler(adapter, socket);
++
++    socket.emit('data', Buffer.concat([
++      buildStartupMessage(),
++      buildPasswordMessage(PASSWORD),
++    ]));
++    await settleProtocol();
++    assert.equal(adapter.authenticateCalls.length, 1);
++    const writesAtDisconnect = socket.written.length;
++    socket.emit('close');
++    releaseVerifier();
++    await settleProtocol();
++
++    assert.equal(adapter.sessions.size, 0);
++    assert.equal(handler.getSession(), null);
++    assert.equal(socket.written.length, writesAtDisconnect);
++  });
++});
++
++describe('pgwire production credential owner', () => {
++  it('is absent when password authentication is not configured', () => {
++    assert.equal(buildPgwireCredentialVerifier({}), null);
++  });
++
++  it('rejects partial credential configuration', () => {
++    assert.throws(
++      () => buildPgwireCredentialVerifier({
++        PGWIRE_AUTH_USER: USER,
++        PGWIRE_AUTH_PASSWORD: PASSWORD,
++      }),
++      new RegExp(PGWIRE_CREDENTIAL_CONFIG_ERROR, 'u'),
++    );
++  });
++
++  it('authenticates only the complete server-owned identity', async () => {
++    const verifier = buildPgwireCredentialVerifier({
++      PGWIRE_AUTH_USER: USER,
++      PGWIRE_AUTH_PASSWORD: PASSWORD,
++      PGWIRE_AUTH_DATABASE: DATABASE,
++    });
++
++    assert.deepEqual(await verifier({
++      user: USER,
++      password: PASSWORD,
++      database: DATABASE,
++    }), {authenticated: true, roles: ['application']});
++    assert.deepEqual(await verifier({
++      user: USER,
++      password: WRONG_PASSWORD,
++      database: DATABASE,
++    }), {authenticated: false, roles: []});
++  });
++
++  it('performs all tuple comparisons for every mismatch position', () => {
++    const expected = {user: USER, password: PASSWORD, database: DATABASE};
++    const candidates = [
++      {...expected, user: 'wrong-user'},
++      {...expected, password: WRONG_PASSWORD},
++      {...expected, database: 'wrong-database'},
++    ];
++
++    for (const candidate of candidates) {
++      const compared = [];
++      const matches = credentialTupleMatches(
++        candidate,
++        expected,
++        (actual, wanted) => {
++          compared.push([actual, wanted]);
++          return actual === wanted;
++        },
++      );
++      assert.equal(matches, false);
++      assert.equal(compared.length, 3);
++    }
++  });
++
++  it('production startup wiring fails closed on a partial secret', () => {
++    assert.throws(
++      () => createRuntimeStartupWiring({
++        pgwireCredentialEnv: {
++          PGWIRE_AUTH_USER: USER,
++        },
++      }),
++      new RegExp(PGWIRE_CREDENTIAL_CONFIG_ERROR, 'u'),
++    );
++  });
++
++  it('production startup wiring accepts a complete credential source', () => {
++    const wiring = createRuntimeStartupWiring({
++      pgwireCredentialEnv: {
++        PGWIRE_AUTH_USER: USER,
++        PGWIRE_AUTH_PASSWORD: PASSWORD,
++        PGWIRE_AUTH_DATABASE: DATABASE,
++      },
++    });
++
++    assert.ok(wiring.serviceRuntimeLifecycle);
++  });
++});

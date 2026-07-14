@@ -32,6 +32,7 @@ import {
 } from './pgwire-session.js';
 import {
   buildAuthOk,
+  buildAuthCleartextPassword,
   buildParameterStatus,
   buildBackendKeyData,
   buildReadyForQuery,
@@ -63,6 +64,7 @@ import {
   writeCString,
   readCString,
 } from './pgwire-buffer-codec.js';
+import {PGWIRE_AUTH_MODE} from './pgwire-descriptor.js';
 
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
@@ -81,6 +83,7 @@ const LOCAL_STR_UNNAMED = '(unnamed)';
 
 const HANDLER_PHASE = Object.freeze({
   STARTUP: 'startup',
+  AUTHENTICATION: 'authentication',
   NORMAL: 'normal',
   CLOSED: 'closed',
 });
@@ -97,6 +100,7 @@ class PgWireProtocolHandler {
    * @param {Object} options
    * @param {Object} options.adapter - PostgresWireAdapter instance.
    * @param {import('node:net').Socket} options.socket - TCP socket.
+   * @param {string} [options.authMode] - Explicit descriptor auth mode.
    * @param {Object} [options.logger] - Logger instance.
    */
   constructor(options) {
@@ -109,8 +113,10 @@ class PgWireProtocolHandler {
     this._adapter = options.adapter;
     this._socket = options.socket;
     this._logger = options.logger || console;
+    this._authMode = options.authMode || PGWIRE_AUTH_MODE.TRUST;
     this._phase = HANDLER_PHASE.STARTUP;
     this._session = null;
+    this._pendingAuth = null;
     this._buffer = Buffer.alloc(0);
     this._processing = Promise.resolve();
     this._pid = (Math.random() * LOCAL_NUM_INT32_MAX) | 0;
@@ -144,6 +150,7 @@ class PgWireProtocolHandler {
       this._adapter.closeSession(sid);
       this._session.close();
     }
+    this._pendingAuth = null;
     this._buffer = Buffer.alloc(0);
   }
 
@@ -186,6 +193,9 @@ class PgWireProtocolHandler {
   async _processBuffer() {
     if (this._phase === HANDLER_PHASE.STARTUP) {
       await this._processStartup();
+    }
+    if (this._phase === HANDLER_PHASE.AUTHENTICATION) {
+      await this._processAuthentication();
     }
     if (this._phase === HANDLER_PHASE.NORMAL) {
       await this._processMessages();
@@ -255,22 +265,84 @@ class PgWireProtocolHandler {
    * @private
    */
   async _handleStartup(params) {
-    const sessionId = `pgwire-${randomUUID()}`;
-    const tenantId = params.database || 'default';
-    const user = params.user || 'anonymous';
+    const pendingAuth = Object.freeze({
+      sessionId: `pgwire-${randomUUID()}`,
+      tenantId: params.database || 'default',
+      user: params.user || 'anonymous',
+      database: params.database || null,
+    });
+
+    if (this._authMode === PGWIRE_AUTH_MODE.PASSWORD) {
+      this._pendingAuth = pendingAuth;
+      this._phase = HANDLER_PHASE.AUTHENTICATION;
+      this._socket.write(buildAuthCleartextPassword());
+      return;
+    }
+
+    await this._completeAuthentication(pendingAuth);
+  }
+
+  /**
+   * Process one PostgreSQL PasswordMessage without logging its payload.
+   * @private
+   */
+  async _processAuthentication() {
+    if (this._buffer.length < PG_BUFFER_LIMIT.MSG_HEADER_SIZE) return;
+
+    const type = this._buffer[0];
+    const msgLen = this._buffer.readInt32BE(1);
+    if (msgLen < PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE + 1) {
+      this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
+      return;
+    }
+    if (msgLen > PG_BUFFER_LIMIT.MAX_MESSAGE_SIZE) {
+      this._failProtocol(PG_HANDLER_ERROR.MESSAGE_TOO_LARGE);
+      return;
+    }
+
+    const totalLen = 1 + msgLen;
+    if (this._buffer.length < totalLen) return;
+    if (type !== PG_FRONTEND_MSG.PASSWORD) {
+      this._failAuthentication(PG_HANDLER_ERROR.PASSWORD_MESSAGE_REQUIRED);
+      return;
+    }
+
+    const payload = this._buffer.subarray(
+      PG_BUFFER_LIMIT.MSG_HEADER_SIZE,
+      totalLen,
+    );
+    if (payload.at(-1) !== 0) {
+      this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
+      return;
+    }
+    const password = payload.subarray(0, -1).toString('utf8');
+    this._buffer = this._buffer.subarray(totalLen);
+    await this._completeAuthentication(this._pendingAuth, password);
+  }
+
+  /**
+   * Authenticate through the canonical adapter and finish the startup reply.
+   * @param {Object} pendingAuth - Server-owned pending session identity.
+   * @param {string|undefined} [password] - PasswordMessage value.
+   * @private
+   */
+  async _completeAuthentication(pendingAuth, password) {
+    const {sessionId, tenantId, user, database} = pendingAuth;
 
     try {
       await this._adapter.authenticate(sessionId, {
         tenantId,
         user,
+        password,
       });
     } catch (err) {
-      this._sendError(
-        PG_SEVERITY.FATAL,
-        PG_ERROR_CODE.INVALID_AUTHORIZATION,
-        err.message,
-      );
-      this._socket.end();
+      if (this._phase === HANDLER_PHASE.CLOSED) return;
+      this._failAuthentication(err.message);
+      return;
+    }
+
+    if (this._phase === HANDLER_PHASE.CLOSED) {
+      this._adapter.closeSession(sessionId);
       return;
     }
 
@@ -278,7 +350,7 @@ class PgWireProtocolHandler {
       sessionId,
       tenantId,
       user,
-      database: params.database || null,
+      database,
     });
     this._session.markAuthenticated();
 
@@ -302,7 +374,24 @@ class PgWireProtocolHandler {
     );
 
     this._phase = HANDLER_PHASE.NORMAL;
+    this._pendingAuth = null;
     this._logger.debug(PG_HANDLER_LOG.AUTH_OK, {sessionId});
+  }
+
+  /**
+   * Fail a pending authentication exchange without retaining credentials.
+   * @param {string} message - Safe failure detail.
+   * @private
+   */
+  _failAuthentication(message) {
+    this._pendingAuth = null;
+    this._sendError(
+      PG_SEVERITY.FATAL,
+      PG_ERROR_CODE.INVALID_AUTHORIZATION,
+      message,
+    );
+    this._phase = HANDLER_PHASE.CLOSED;
+    this._socket.end();
   }
 
   /**
@@ -767,6 +856,7 @@ export {
   HANDLER_PHASE,
   // Message builders (exported for testing)
   buildAuthOk,
+  buildAuthCleartextPassword,
   buildParameterStatus,
   buildBackendKeyData,
   buildReadyForQuery,

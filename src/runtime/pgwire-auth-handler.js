@@ -60,7 +60,7 @@ class PgWireAuthHandler {
     }
     if (
       this._mode &&
-      this._mode !== PGWIRE_AUTH_HANDLER_MODE.TRUST
+      !Object.values(PGWIRE_AUTH_HANDLER_MODE).includes(this._mode)
     ) {
       throw new Error(PGWIRE_AUTH_ERROR_MSG.MODE_UNSUPPORTED);
     }
@@ -124,11 +124,11 @@ class PgWireAuthHandler {
           roles: authResult.roles || [],
         });
         return this._succeedAuth(context);
-      } catch (err) {
+      } catch (_err) {
         return this._failAuth(
           {tenantId: credentials.database,
             principal: credentials.user},
-          err.message || PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED,
+          PGWIRE_AUTH_ERROR_MSG.AUTHENTICATOR_FAILED,
         );
       }
     }

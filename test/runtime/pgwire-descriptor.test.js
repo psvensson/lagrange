@@ -62,7 +62,10 @@ describe('pgwire-descriptor', () => {
     });
 
     it('should have ALLOWED_AUTH_MODES matching enum', () => {
-      assert.deepEqual([...ALLOWED_AUTH_MODES], [PGWIRE_AUTH_MODE.TRUST]);
+      assert.deepEqual([...ALLOWED_AUTH_MODES], [
+        PGWIRE_AUTH_MODE.TRUST,
+        PGWIRE_AUTH_MODE.PASSWORD,
+      ]);
     });
 
     it('should export frozen PGWIRE_TLS_MODE', () => {
@@ -141,6 +144,28 @@ describe('pgwire-descriptor', () => {
       ));
     });
 
+    for (const forbidden of [
+      {password: 'must-not-enter-runtime-config'},
+      {credentials: {password: 'must-not-enter-runtime-config'}},
+      {credentialVerifier: 'client-selected-owner'},
+    ]) {
+      it(`rejects unsupported credential field ${Object.keys(forbidden)[0]}`,
+        () => {
+          const result = validatePgwireRuntimeConfig(buildSecureConfig(
+            forbidden,
+          ));
+
+          assert.equal(result.valid, false);
+          assert.ok(result.errors.includes(
+            PGWIRE_DESCRIPTOR_ERROR.CONFIG_UNSUPPORTED_FIELD,
+          ));
+          assert.doesNotMatch(
+            result.errors.join(' '),
+            /must-not-enter-runtime-config/u,
+          );
+        });
+    }
+
     describe('host validation', () => {
       it('should accept valid host string', () => {
         const cfg = buildSecureConfig({host: '127.0.0.1'});
@@ -183,6 +208,15 @@ describe('pgwire-descriptor', () => {
         assert.ok(result.errors.includes(
           PGWIRE_DESCRIPTOR_ERROR.TRUST_REQUIRES_LOOPBACK,
         ));
+      });
+
+      it('accepts password authentication on an external bind', () => {
+        const result = validatePgwireRuntimeConfig(buildSecureConfig({
+          host: '0.0.0.0',
+          authMode: 'password',
+        }));
+
+        assert.equal(result.valid, true);
       });
     });
 
@@ -325,10 +359,10 @@ describe('pgwire-descriptor', () => {
         assert.equal(result.valid, true);
       });
 
-      it('should reject password until its wire exchange exists', () => {
+      it('should accept password when a runtime verifier is supplied', () => {
         const cfg = buildSecureConfig({authMode: 'password'});
         const result = validatePgwireRuntimeConfig(cfg);
-        assert.equal(result.valid, false);
+        assert.equal(result.valid, true);
       });
 
       it('should reject SCRAM until its wire exchange exists', () => {

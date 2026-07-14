@@ -59,13 +59,18 @@ PG Client (psql, pg driver, ORM)
 
 ### Current Security Posture
 
-- Runtime configuration must explicitly select `authMode: "trust"` and
-  `tlsMode: "disable"`; implicit trust is rejected.
-- Trust mode may bind only to `127.0.0.1`, `::1`, or `localhost`. A remote
-  endpoint is unavailable until a real credential exchange is implemented.
-- Password, SCRAM, TLS-prefer, and TLS-require descriptors fail validation.
-  They are not advertised as working modes while the protocol handler cannot
-  perform those exchanges.
+- Runtime configuration must explicitly select `authMode: "trust"` or
+  `authMode: "password"` and must still select `tlsMode: "disable"` until the
+  TLS policy cutover lands; implicit authentication is rejected.
+- Trust mode may bind only to `127.0.0.1`, `::1`, or `localhost`.
+- Password mode performs PostgreSQL `AuthenticationCleartextPassword` before a
+  session exists. The production composition root builds its verifier only from
+  the complete `PGWIRE_AUTH_USER`, `PGWIRE_AUTH_PASSWORD`, and
+  `PGWIRE_AUTH_DATABASE` environment tuple; partial configuration fails startup,
+  and password material is not stored in `runtime_config` or audit records.
+- SCRAM, TLS-prefer, and TLS-require descriptors still fail validation. Password
+  mode is not an externally secure deployment posture until TLS-require is
+  implemented and enabled by `pgwire-tls-policy-cutover`.
 - Every authenticated session carries a security context, and every query is
   authorized before the adapter constructs and dispatches its `SqlRequest`.
 - The admin WebSocket also defaults to loopback. External admin binding is

@@ -73,6 +73,8 @@ const PGWIRE_MODULE_ERROR = Object.freeze({
     'TCP listener is not accepting connections',
   SQL_REQUEST_EXECUTOR_REQUIRED:
     'replicaContext.sqlRequestExecutor is required',
+  CREDENTIAL_VERIFIER_REQUIRED:
+    'password authentication requires a credential verifier',
   TRUST_REQUIRES_LOOPBACK:
     'trust authentication may only bind to a loopback host',
 });
@@ -192,9 +194,13 @@ class PostgresWireRuntimeModule {
     /** @type {Map<string, Object>} Running state by serviceId */
     this._running = new Map();
     this._logger = options.logger || console;
+    this._credentialVerifier = options.credentialVerifier || null;
     this._authHandlerFactory = options.authHandlerFactory ||
-      ((config) => new PgWireAuthHandler({
+      ((config, replicaContext) => new PgWireAuthHandler({
         mode: config.authMode,
+        authenticator: config.authMode === PGWIRE_AUTH_MODE.PASSWORD ?
+          (replicaContext.pgwireCredentialVerifier ||
+            this._credentialVerifier) : undefined,
         policy: {
           allowedActions: new Set([PGWIRE_AUTH_ACTION.EXECUTE_QUERY]),
         },
@@ -319,7 +325,23 @@ class PostgresWireRuntimeModule {
         PGWIRE_MODULE_ERROR.SQL_REQUEST_EXECUTOR_REQUIRED,
       );
     }
-    const authHandler = this._authHandlerFactory(config, replicaContext);
+    const credentialVerifier =
+      replicaContext.pgwireCredentialVerifier || this._credentialVerifier;
+    if (
+      config.authMode === PGWIRE_AUTH_MODE.PASSWORD &&
+      typeof credentialVerifier !== 'function'
+    ) {
+      return buildStatusResult(
+        START_STATUS.FAILED,
+        PGWIRE_RESULT_FIELD.ERROR,
+        undefined,
+        PGWIRE_MODULE_ERROR.CREDENTIAL_VERIFIER_REQUIRED,
+      );
+    }
+    const authHandler = this._authHandlerFactory(config, {
+      ...replicaContext,
+      pgwireCredentialVerifier: credentialVerifier,
+    });
     const adapter = new PostgresWireAdapter({
       sqlCore: {executeRequest: replicaContext.sqlRequestExecutor},
       authHandler,
@@ -338,6 +360,7 @@ class PostgresWireRuntimeModule {
       const handler = new PgWireProtocolHandler({
         adapter,
         socket,
+        authMode: config.authMode,
         logger: this._logger,
       });
       handlers.set(socket, handler);
