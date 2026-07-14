@@ -30,7 +30,8 @@
 - **service-init-scaffold-main** [solved] rung 0, attempts 1, metric 2 -> 0
 
 ## Findings
-_(none recorded)_
+- **service-init-scaffold-main**: Independent exact verification passed for the canonical six-path product patch: three scenario samples and static gates were green, while routing and no-clobber regression controls were red. [subagent:verify_s5a_exact]
+- **service-init-scaffold-main**: Independent post-checkpoint aggregate verification passed for the unchanged canonical six-path product scope and reused complete exact evidence. [subagent:phase1_s5b_preflight]
 
 ## Theories
 _(none recorded)_
