@@ -115,6 +115,9 @@ compatibility. It must not become a fallback when lifecycle SQL is unavailable.
 
 ## Non-goals
 
-This decision does not implement lifecycle SQL, manifests, artifact resolution,
-catalog tables, reconciliation, or CLI commands. It does not select an OCI
-runtime provider and does not introduce enterprise RBAC or tenancy.
+The Phase 1 control surface now implements lifecycle SQL ingress, action
+authorization, server-context propagation, and command composition over the
+manifest, artifact, and desired-state catalog owners. It still does not own
+reconciliation, runtime activation, or CLI commands; those remain separate
+owner-boundary Quests. This decision does not select an OCI runtime provider
+and does not introduce enterprise RBAC or tenancy.
