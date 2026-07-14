@@ -32,6 +32,9 @@
 ## Findings
 - **service-init-scaffold-main**: Independent exact verification passed for the canonical six-path product patch: three scenario samples and static gates were green, while routing and no-clobber regression controls were red. [subagent:verify_s5a_exact]
 - **service-init-scaffold-main**: Independent post-checkpoint aggregate verification passed for the unchanged canonical six-path product scope and reused complete exact evidence. [subagent:phase1_s5b_preflight]
+- **service-init-scaffold-main**: independent verification passed [subagent:verify_scaffold_aggregate]
+- **service-init-scaffold-main**: Ingested evidence from service-init-scaffold-2026-07-14T17-08-07-660Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-init-scaffold/service-init-scaffold-2026-07-14T17-08-07-660Z.report.json]
+- **service-init-scaffold-main**: Ingested evidence from service-init-scaffold-2026-07-14T17-08-07-660Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-init-scaffold/service-init-scaffold-2026-07-14T17-08-07-660Z.report.json]
 
 ## Theories
 _(none recorded)_
