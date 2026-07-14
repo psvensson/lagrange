@@ -35,6 +35,8 @@
 - **solver-package-lock-verification-scope-main**: prefix classification also matched package-lock.json.bak, package-lock.json5, and package-lock.json/nested, violating the sealed exact-root lockfile scope and leaving focused edge coverage incomplete [subagent:phase1_s5a_preflight]
 - **solver-package-lock-verification-scope-main**: Ingested evidence from solver-package-lock-verification-scope-2026-07-14T16-04-06-372Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/solver-package-lock-verification-scope/solver-package-lock-verification-scope-2026-07-14T16-04-06-372Z.report.json]
 - **solver-package-lock-verification-scope-main**: Ingested evidence from solver-package-lock-verification-scope-2026-07-14T16-04-06-372Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/solver-package-lock-verification-scope/solver-package-lock-verification-scope-2026-07-14T16-04-06-372Z.report.json]
+- **solver-package-lock-verification-scope-main**: independent replacement verification passed for exact-root lockfile scope, lookalike attacks, same-base rejection supersession, clean pre-commit, three green scenarios, red revert, and true four-path companion aggregate [subagent:phase1_s5a_preflight]
+- **solver-package-lock-verification-scope-main**: independent aggregate verification passed for the exact three-path checkpoint, resolved rejected attempt, no unrelated scope or drift, and fresh terminal proof [subagent:phase1_s5a_preflight]
 
 ## Theories
 _(none recorded)_
