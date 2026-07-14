@@ -20,15 +20,15 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-02-24-816Z.report.json
+- Latest evidence: test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json
 - Selected theory: theory-20260714-noncanonical-change-artifact-receipt
 - Next move: continue supervised step for service-lifecycle-authoritative-sql-handoff-main
 - No longer current: PASS
 
 ## Continuation
-- Status: blocked-unrecorded-evidence
+- Status: allowed
 - Next action: No open frontier remains; inspect solve report.
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id service-lifecycle-authoritative-sql-handoff --frontier service-lifecycle-authoritative-sql-handoff-main --evidence test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-03-36-653Z.report.json
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 13
@@ -87,6 +87,11 @@
 - **service-lifecycle-authoritative-sql-handoff-main**: Ingested evidence from service-lifecycle-authoritative-sql-handoff-2026-07-14T14-02-24-816Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-02-24-816Z.report.json]
 - **service-lifecycle-authoritative-sql-handoff-main**: independent verification passed [subagent:verify_s0_transport_decision]
 - **service-lifecycle-authoritative-sql-handoff-main**: Ingested evidence from service-lifecycle-authoritative-sql-handoff-2026-07-14T14-02-24-816Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-02-24-816Z.report.json]
+- **service-lifecycle-authoritative-sql-handoff-main**: Ingested evidence from service-lifecycle-authoritative-sql-handoff-2026-07-14T14-03-36-653Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-03-36-653Z.report.json]
+- **service-lifecycle-authoritative-sql-handoff-main**: Ingested evidence from service-lifecycle-authoritative-sql-handoff-2026-07-14T14-03-36-653Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-03-36-653Z.report.json]
+- **service-lifecycle-authoritative-sql-handoff-main**: independent verification passed [subagent:verify_s0_transport_decision]
+- **service-lifecycle-authoritative-sql-handoff-main**: Ingested evidence from service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json]
+- **service-lifecycle-authoritative-sql-handoff-main**: Ingested evidence from service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json]
 
 ## Theories
 - **theory-20260714-the-append-only-exact-receipt-contract** [active] system, mechanism The append-only exact-receipt contract requires a byte-canonical, same-base, same-frontier approved successor for every rejected fingerprint; one cross-base aggregate cannot discharge both obligations., owner solver-verification-receipt, modelGate npm run model:contracts
@@ -103,6 +108,8 @@
 - **theory-20260714-noncanonical-change-artifact-receipt**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-01-08-887Z.report.json]
 - **theory-20260714-noncanonical-change-artifact-receipt**: falsified (scenario=done, theory=falsified, movement=solved) [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-02-24-816Z.report.json]
 - **theory-20260714-noncanonical-change-artifact-receipt**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-02-24-816Z.report.json]
+- **theory-20260714-noncanonical-change-artifact-receipt**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-03-36-653Z.report.json]
+- **theory-20260714-noncanonical-change-artifact-receipt**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/service-lifecycle-authoritative-sql-handoff/service-lifecycle-authoritative-sql-handoff-2026-07-14T14-05-01-162Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
