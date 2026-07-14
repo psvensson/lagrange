@@ -1,0 +1,144 @@
+diff --git a/architecture/runtime-lifecycle.md b/architecture/runtime-lifecycle.md
+index 8a6cbcb54d475f5e4caca03c81650f30342b74ca..66ec0dce6a50ff4a72345310db04ed89df6ca524 100644
+--- a/architecture/runtime-lifecycle.md
++++ b/architecture/runtime-lifecycle.md
+@@ -197,8 +197,13 @@ State labels in this section are explicit and mandatory.
+ | Runtime Kind | Purpose | Status |
+ |-------------|---------|--------|
+ | `native_js` | Run existing in-process handlers as replicated service workloads (admin first) | Active |
+-| `wasm_component` | Run WASI/WASM component workloads with manifest/capability/dependency enforcement | Active |
+-| `oci_container` | Run digest-pinned OCI container workloads under policy gate | Planned, feature-gated |
++| `wasm_component` | Target: run WASI/component workloads with manifest/capability/dependency enforcement | Lifecycle scaffold; current callback example is a JavaScript envelope, not component execution |
++| `oci_container` | Target: run digest-pinned OCI container workloads | Descriptor and in-memory lifecycle scaffold; no real container activation |
++
++The authoritative current support matrix is
++[`../docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
++Architecture sections below describe the intended owner model even where the
++runtime-specific activation provider has not landed.
+ 
+ ## Canonical Owner Rows vs Read Models
+ 
+diff --git a/package.json b/package.json
+index 18b939aea1b416c95b93892a46596632b19c0e01..2ad59b952f8b0fb00c0ac154078f03471f82c5b9 100644
+--- a/package.json
++++ b/package.json
+@@ -79,7 +79,7 @@
+     "test:metadata-gateway:audit": "node scripts/check-unified-system-metadata-gateway.js",
+     "test:mutation": "stryker run",
+     "test:analysis": "npm run test:unused && npm run test:deps && npm run test:complexity && npm run test:metrics",
+-    "test:static": "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run steering:check && npm run lint:scripts && npm run lint",
++    "test:static": "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:service-portability-claims && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run steering:check && npm run lint:scripts && npm run lint",
+     "test:quality": "npm run test:static && npm run test:mutation",
+     "test:chart:endpoint-sync": "node scripts/check-endpoint-sync-chart.js",
+     "test:project-hardening": "node scripts/run-project-hardening-acceptance.js",
+@@ -140,6 +140,7 @@
+     "audit:partition-class-owner": "node scripts/check-partition-class-owner.js",
+     "audit:runtime-grammar": "node scripts/check-runtime-grammar-contracts.js && npm run audit:state-machine-pressure",
+     "audit:runtime-grammar:file": "node scripts/check-runtime-grammar-contracts.js",
++    "audit:service-portability-claims": "node scripts/check-service-portability-claims.js",
+     "audit:state-machine-pressure": "node scripts/check-state-machine-pressure-preflight.js",
+     "audit:operation-progress-authority": "node scripts/check-operation-progress-authority.js",
+     "audit:owner-boundary-segments": "node scripts/check-file-size-thresholds.js --owner-boundary-guidance",
+diff --git a/scripts/check-service-portability-claims.js b/scripts/check-service-portability-claims.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..dc43625db9e302df2761a61ea6070043fab45a70
+--- /dev/null
++++ b/scripts/check-service-portability-claims.js
+@@ -0,0 +1,16 @@
++#!/usr/bin/env node
++
++import {checkServicePortabilityClaimsContract} from
++  './checks/service-portability-claims-contract.js';
++
++const SUCCESS_MESSAGE = 'service-portability claims: valid\n';
++
++const result = checkServicePortabilityClaimsContract();
++if (!result.valid) {
++  for (const problem of result.problems) {
++    process.stderr.write(`service-portability claim violation: ${problem}\n`);
++  }
++  process.exitCode = 1;
++} else {
++  process.stdout.write(SUCCESS_MESSAGE);
++}
+diff --git a/scripts/run-service-portability-claims-contract-scenarios.js b/scripts/run-service-portability-claims-contract-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ccff2c3fa0b88d1428111333c9bb1586d0244752
+--- /dev/null
++++ b/scripts/run-service-portability-claims-contract-scenarios.js
+@@ -0,0 +1,16 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIO = 'service-portability-claims-contract';
++const GUARD_TESTS = Object.freeze([
++  'test/scripts/service-portability-claims-contract.test.js',
++  'test/scripts/service-portability-static-gate.test.js',
++]);
++const REPORT_DIR = 'test-output/reports/service-portability-claims-contract';
++
++runGuardTestScenarios({
++  [SCENARIO]: GUARD_TESTS,
++}, {
++  reportDir: REPORT_DIR,
++});
+diff --git a/test/scripts/service-portability-static-gate.test.js b/test/scripts/service-portability-static-gate.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cad69cca0e307ed0a18c7407a30bfb42d1111ab5
+--- /dev/null
++++ b/test/scripts/service-portability-static-gate.test.js
+@@ -0,0 +1,53 @@
++import {spawnSync} from 'node:child_process';
++import fs from 'node:fs';
++
++import tap from 'tap';
++
++const PACKAGE_PATH = 'package.json';
++const ARCHITECTURE_PATH = 'architecture/runtime-lifecycle.md';
++const AUDIT_SCRIPT = 'node scripts/check-service-portability-claims.js';
++const STATIC_AUDIT_STEP = 'npm run audit:service-portability-claims';
++
++function readPackage() {
++  return JSON.parse(fs.readFileSync(PACKAGE_PATH, 'utf8'));
++}
++
++tap.test('static quality gate invokes the portability claims audit', (t) => {
++  const packageJson = readPackage();
++
++  t.equal(packageJson.scripts['audit:service-portability-claims'], AUDIT_SCRIPT);
++  t.match(packageJson.scripts['test:static'],
++    /npm run audit:service-portability-claims/u);
++  t.end();
++});
++
++tap.test('portability claims audit CLI passes the checked-in surface', (t) => {
++  const result = spawnSync(process.execPath,
++    ['scripts/check-service-portability-claims.js'], {
++      cwd: process.cwd(),
++      encoding: 'utf8',
++    });
++
++  t.equal(result.status, 0, result.stderr);
++  t.equal(result.stdout, 'service-portability claims: valid\n');
++  t.end();
++});
++
++tap.test('runtime architecture points to the truthful capability owner', (t) => {
++  const architecture = fs.readFileSync(ARCHITECTURE_PATH, 'utf8');
++
++  t.match(architecture, /docs\/service-portability-capabilities\.json/u);
++  t.match(architecture,
++    /Lifecycle scaffold; current callback example is a JavaScript envelope/u);
++  t.match(architecture,
++    /Descriptor and in-memory lifecycle scaffold; no real container activation/u);
++  t.end();
++});
++
++tap.test('static script names one canonical audit step', (t) => {
++  const staticScript = readPackage().scripts['test:static'];
++  const occurrences = staticScript.split(STATIC_AUDIT_STEP).length - 1;
++
++  t.equal(occurrences, 1);
++  t.end();
++});

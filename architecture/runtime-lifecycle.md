@@ -197,8 +197,13 @@ State labels in this section are explicit and mandatory.
 | Runtime Kind | Purpose | Status |
 |-------------|---------|--------|
 | `native_js` | Run existing in-process handlers as replicated service workloads (admin first) | Active |
-| `wasm_component` | Run WASI/WASM component workloads with manifest/capability/dependency enforcement | Active |
-| `oci_container` | Run digest-pinned OCI container workloads under policy gate | Planned, feature-gated |
+| `wasm_component` | Target: run WASI/component workloads with manifest/capability/dependency enforcement | Lifecycle scaffold; current callback example is a JavaScript envelope, not component execution |
+| `oci_container` | Target: run digest-pinned OCI container workloads | Descriptor and in-memory lifecycle scaffold; no real container activation |
+
+The authoritative current support matrix is
+[`../docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
+Architecture sections below describe the intended owner model even where the
+runtime-specific activation provider has not landed.
 
 ## Canonical Owner Rows vs Read Models
 
