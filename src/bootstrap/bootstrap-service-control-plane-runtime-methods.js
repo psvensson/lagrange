@@ -70,6 +70,9 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         controlPlaneWriteRetryMaxDelayMs: this.config.controlPlaneWriteRetryMaxDelayMs,
       });
 
+      this.serviceLifecycleCommandOwner =
+        controlPlane.serviceLifecycleCommandOwner;
+      this.systemMetadataOwners = controlPlane.systemMetadataOwners;
       this.heartbeatService = controlPlane.heartbeatService;
       this.leaseService = controlPlane.leaseService;
       this.endpointService = controlPlane.endpointService;

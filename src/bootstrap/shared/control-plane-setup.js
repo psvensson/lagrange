@@ -67,6 +67,9 @@ import {
   SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   ServiceLifecycleCommandOwner,
 } from '../../service/index.js';
+import {
+  bindServiceLifecycleCommandOwnerToSqlRuntime,
+} from './service-lifecycle-command-owner-binding.js';
 
 /**
  * Subsystem identifier for logging.
@@ -119,12 +122,7 @@ function createAndWireServiceLifecycleCommandOwner(
       SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   });
   const sqlQueryEngine = controlPlaneRuntimeBundle.sqlQueryEngine;
-  if (typeof sqlQueryEngine?.setServiceLifecycleCommandOwner ===
-      TYPEOF_FUNCTION) {
-    sqlQueryEngine.setServiceLifecycleCommandOwner(commandOwner);
-  } else {
-    sqlQueryEngine.serviceLifecycleCommandOwner = commandOwner;
-  }
+  bindServiceLifecycleCommandOwnerToSqlRuntime(commandOwner, sqlQueryEngine);
   return commandOwner;
 }
 

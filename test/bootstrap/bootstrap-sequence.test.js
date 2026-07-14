@@ -25,6 +25,8 @@ import {
 import {
   SEED_STARTUP_CHECKPOINT,
 } from '../../src/bootstrap/seed-startup-session-store.js';
+import {ControlPlaneSetup} from
+  '../../src/bootstrap/shared/control-plane-setup.js';
 
 const ports = createPortAllocator(import.meta.url);
 const BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS = 90000;
@@ -136,6 +138,42 @@ function createSeedPlanPhases() {
     run: NOOP_ASYNC,
   }];
 }
+
+test('BootstrapService retains lifecycle catalog owners for SQL handoff',
+  async (t) => {
+    initializeTestEnvironment();
+    const originalCreate = ControlPlaneSetup.create;
+    const commandOwner = {ownerId: 'seed-command-owner'};
+    const systemMetadataOwners = {ownerId: 'seed-metadata-owners'};
+    ControlPlaneSetup.create = async () => ({
+      dispatchService: null,
+      endpointService: null,
+      heartbeatService: {},
+      leaseService: null,
+      rebalanceCoordinator: {},
+      serviceLifecycleCommandOwner: commandOwner,
+      systemMetadataOwners,
+    });
+
+    try {
+      const bootstrap = new BootstrapService({
+        nodeAddress: 'ws://seed.test:19001',
+        nodeId: 'seed-lifecycle-owner-retention',
+      });
+      bootstrap.cdcIntegrationService = {};
+      bootstrap.messageRouter = {};
+      bootstrap.systemTableCache = {};
+      bootstrap.tablePolicyService = {};
+      bootstrap.runtimeSurfaceOwner.bindControlPlaneServices = () => {};
+
+      await bootstrap.initializeControlPlaneService();
+
+      t.equal(bootstrap.serviceLifecycleCommandOwner, commandOwner);
+      t.equal(bootstrap.systemMetadataOwners, systemMetadataOwners);
+    } finally {
+      ControlPlaneSetup.create = originalCreate;
+    }
+  });
 
 test('BootstrapService - seed checkpoint snapshot resolves explicit readiness states',
   async (t) => {

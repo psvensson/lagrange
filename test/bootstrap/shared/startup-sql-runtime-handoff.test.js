@@ -4,6 +4,7 @@ import {CDCIntegrationSetup} from '../../../src/bootstrap/shared/cdc-integration
 import {
   attachSqlRuntimeToStartupOwner,
 } from '../../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
+import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
 
 const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
   partitions: Object.freeze([
@@ -26,6 +27,124 @@ const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
 });
 
 describe('startup-sql-runtime-handoff', () => {
+  it('rebinds the exact lifecycle owner and catalog gateway to the final engine',
+    async () => {
+      const systemTableCache = {
+        filter: () => [],
+        get: () => null,
+        getAll: () => [],
+      };
+      const gatewayBindings = [];
+      const gateway = {
+        sqlQueryEngine: null,
+        setSqlQueryEngine(sqlQueryEngine) {
+          this.sqlQueryEngine = sqlQueryEngine;
+          gatewayBindings.push(sqlQueryEngine);
+        },
+      };
+      const ownerCalls = [];
+      let finalEngine = null;
+      const commandOwner = {
+        catalogOwner: {getGateway: () => gateway},
+        async execute(command, payload, securityContext) {
+          ownerCalls.push({command, payload, securityContext});
+          return {
+            changes: 0,
+            operation: command,
+            rowCount: 1,
+            rows: [{usesFinalGateway: gateway.sqlQueryEngine === finalEngine}],
+            success: true,
+          };
+        },
+      };
+      const owner = {serviceLifecycleCommandOwner: commandOwner};
+      const provisionalEngine = new SQLQueryEngine({
+        autoStartDistributedTransactionRecovery: false,
+        messageRouter: {deliver: async () => ({success: true})},
+        systemCache: systemTableCache,
+      });
+      provisionalEngine.setServiceLifecycleCommandOwner(commandOwner);
+      gateway.setSqlQueryEngine(provisionalEngine);
+      finalEngine = new SQLQueryEngine({
+        autoStartDistributedTransactionRecovery: false,
+        messageRouter: {deliver: async () => ({success: true})},
+        systemCache: systemTableCache,
+      });
+
+      attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine: finalEngine,
+        systemTableCache,
+      });
+      attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine: finalEngine,
+        systemTableCache,
+      });
+      await provisionalEngine.shutdown();
+      const securityContext = Object.freeze({
+        principal: 'phase-one-operator',
+        roles: Object.freeze(['service-operator']),
+        tenantId: 'tenant-phase-one',
+      });
+      const result = await finalEngine.tryExecuteServiceLifecycleSql(
+        'SHOW SERVICES',
+        [],
+        {securityContext, sessionId: 'handoff-session'},
+      );
+
+      assert.equal(result.result.success, true);
+      assert.deepEqual(result.result.rows, [{usesFinalGateway: true}]);
+      assert.equal(ownerCalls.length, 1);
+      assert.equal(ownerCalls[0].securityContext, securityContext);
+      assert.deepEqual(
+        gatewayBindings,
+        [provisionalEngine, finalEngine, finalEngine],
+      );
+      assert.equal(gateway.sqlQueryEngine, finalEngine);
+      assert.equal(
+        finalEngine.serviceLifecycleCommandOwnerBinding.owner,
+        commandOwner,
+      );
+      await finalEngine.shutdown();
+    });
+
+  it('does not synthesize a fallback lifecycle owner during handoff',
+    async () => {
+      const systemTableCache = {
+        filter: () => [],
+        get: () => null,
+        getAll: () => [],
+      };
+      const finalEngine = new SQLQueryEngine({
+        autoStartDistributedTransactionRecovery: false,
+        messageRouter: {deliver: async () => ({success: true})},
+        systemCache: systemTableCache,
+      });
+
+      attachSqlRuntimeToStartupOwner({
+        owner: {},
+        sqlQueryEngine: finalEngine,
+        systemTableCache,
+      });
+      const result = await finalEngine.tryExecuteServiceLifecycleSql(
+        'SHOW SERVICES',
+        [],
+        {
+          securityContext: {
+            principal: 'phase-one-operator',
+            roles: ['service-operator'],
+            tenantId: 'tenant-phase-one',
+          },
+          sessionId: 'missing-owner-session',
+        },
+      );
+      assert.equal(
+        result.result.errorCode,
+        'service_lifecycle_command_owner_unavailable',
+      );
+    });
+
   it('upgrades the canonical startup owner CDC path and re-arms deferred recovery after runtime handoff',
     () => {
       const systemTableCache = {

@@ -370,6 +370,8 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
     const originalCreate = ControlPlaneSetup.create;
     let assignedReporter = null;
     let capturedUpdateOptions = null;
+    const commandOwner = {ownerId: 'join-command-owner'};
+    const systemMetadataOwners = {ownerId: 'join-metadata-owners'};
 
     const service = new NodeJoiningService({
       nodeId: REPORTER_FORWARD_NODE_ID,
@@ -405,6 +407,8 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
       endpointService: null,
       dispatchService: null,
       rebalanceCoordinator: {},
+      serviceLifecycleCommandOwner: commandOwner,
+      systemMetadataOwners,
     });
 
     try {
@@ -412,6 +416,10 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
 
       t.equal(typeof assignedReporter, 'function',
         'control-plane initialization should install one steady-state reporter');
+      t.equal(service.serviceLifecycleCommandOwner, commandOwner,
+        'join should retain the exact lifecycle command owner');
+      t.equal(service.systemMetadataOwners, systemMetadataOwners,
+        'join should retain the exact lifecycle metadata owners');
 
       await assignedReporter({
         state: STATE.READY,

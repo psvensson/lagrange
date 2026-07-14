@@ -1,4 +1,7 @@
 import {CDCIntegrationSetup} from './cdc-integration-setup.js';
+import {
+  bindServiceLifecycleCommandOwnerToSqlRuntime,
+} from './service-lifecycle-command-owner-binding.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -25,6 +28,10 @@ function attachSqlRuntimeToStartupOwner(options) {
     return;
   }
 
+  bindServiceLifecycleCommandOwnerToSqlRuntime(
+    owner.serviceLifecycleCommandOwner || null,
+    sqlQueryEngine,
+  );
   owner.sqlQueryEngine = sqlQueryEngine;
 
   const bootstrapTopologySnapshotOwner =

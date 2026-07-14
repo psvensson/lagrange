@@ -229,6 +229,8 @@ class BootstrapService extends EventEmitter {
     this.endpointService = null;
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
+    this.serviceLifecycleCommandOwner = null;
+    this.systemMetadataOwners = null;
     this.controlPlaneBackgroundWriterActivationPromise = null;
     this.messageGroupServiceHandler = null;
 

@@ -411,6 +411,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,
       controlPlaneWriteRetryMaxDelayMs: this.config.controlPlaneWriteRetryMaxDelayMs,
     });
+    this.serviceLifecycleCommandOwner =
+      controlPlane.serviceLifecycleCommandOwner;
+    this.systemMetadataOwners = controlPlane.systemMetadataOwners;
     this.heartbeatService = controlPlane.heartbeatService;
     if (
       typeof this.heartbeatService?.setNodeStateReporter === 'function'

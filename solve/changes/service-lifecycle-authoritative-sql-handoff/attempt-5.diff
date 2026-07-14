@@ -1,0 +1,591 @@
+diff --git a/scripts/checks/run-service-lifecycle-authoritative-sql-handoff-scenarios.js b/scripts/checks/run-service-lifecycle-authoritative-sql-handoff-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3c42fdf943e83c6ca6e89876ed471d48361a5712
+--- /dev/null
++++ b/scripts/checks/run-service-lifecycle-authoritative-sql-handoff-scenarios.js
+@@ -0,0 +1,18 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIO = 'service-lifecycle-authoritative-sql-handoff';
++const REPORT_DIR =
++  'test-output/reports/service-lifecycle-authoritative-sql-handoff';
++const TEST_FILES = Object.freeze([
++  'test/bootstrap/shared/startup-sql-runtime-handoff.test.js',
++  'test/bootstrap/bootstrap-sequence.test.js',
++  'test/bootstrap/node-joining-service-join-lifecycle-resume.test.js',
++  'test/query/service-lifecycle-sql-control-surface.test.js',
++  'test/runtime/service-lifecycle-pgwire-executor-handoff.test.js',
++]);
++
++runGuardTestScenarios({
++  [SCENARIO]: TEST_FILES,
++}, {reportDir: REPORT_DIR});
+diff --git a/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js b/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js
+index c5ec133550184052bd8c1bb0866423aafc05ced1..d05c3ec422092e5be5d3d018eb4e269fa70ff066 100644
+--- a/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js
++++ b/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js
+@@ -70,6 +70,9 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
+         controlPlaneWriteRetryMaxDelayMs: this.config.controlPlaneWriteRetryMaxDelayMs,
+       });
+ 
++      this.serviceLifecycleCommandOwner =
++        controlPlane.serviceLifecycleCommandOwner;
++      this.systemMetadataOwners = controlPlane.systemMetadataOwners;
+       this.heartbeatService = controlPlane.heartbeatService;
+       this.leaseService = controlPlane.leaseService;
+       this.endpointService = controlPlane.endpointService;
+diff --git a/src/bootstrap/bootstrap-service.js b/src/bootstrap/bootstrap-service.js
+index a5943e41bc17740bc461b535bb945deeb5908047..aae86fdb4487f139d0d4f12f2f66f1600c4b1407 100644
+--- a/src/bootstrap/bootstrap-service.js
++++ b/src/bootstrap/bootstrap-service.js
+@@ -229,6 +229,8 @@ class BootstrapService extends EventEmitter {
+     this.endpointService = null;
+     this.dispatchService = null;
+     this.rebalanceCoordinator = null;
++    this.serviceLifecycleCommandOwner = null;
++    this.systemMetadataOwners = null;
+     this.controlPlaneBackgroundWriterActivationPromise = null;
+     this.messageGroupServiceHandler = null;
+ 
+diff --git a/src/bootstrap/node-joining-owner-construction.js b/src/bootstrap/node-joining-owner-construction.js
+index 467612c125d50b2fe25408bb3d152bd99da6ac04..ec34df76b495fb9793714669b2c8d26416330424 100644
+--- a/src/bootstrap/node-joining-owner-construction.js
++++ b/src/bootstrap/node-joining-owner-construction.js
+@@ -192,6 +192,8 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
+     this.joinMessageGroupReplicas = [];
+     this.inFlightBackfillsByKey = new Map(); // Unified lifecycle owners for joining message-group startup.
+     this.serviceLifecycleManager = null;
++    this.serviceLifecycleCommandOwner = null;
++    this.systemMetadataOwners = null;
+     this.serviceReconciler = null; // Replica handler for CREATE_REPLICA/REMOVE_REPLICA execution
+     this.replicaHandler = null; // Replica state machine for tracking replica lifecycle states
+     this.replicaStateMachine = null; // Decomposed control plane services
+diff --git a/src/bootstrap/node-joining-publication-activation.js b/src/bootstrap/node-joining-publication-activation.js
+index 8c7bbbf1f541ef970c67adf19e46342f9a841b35..cfadb95ffa9c6597763f898ec370ee75cd1cb998 100644
+--- a/src/bootstrap/node-joining-publication-activation.js
++++ b/src/bootstrap/node-joining-publication-activation.js
+@@ -411,6 +411,9 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
+       controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,
+       controlPlaneWriteRetryMaxDelayMs: this.config.controlPlaneWriteRetryMaxDelayMs,
+     });
++    this.serviceLifecycleCommandOwner =
++      controlPlane.serviceLifecycleCommandOwner;
++    this.systemMetadataOwners = controlPlane.systemMetadataOwners;
+     this.heartbeatService = controlPlane.heartbeatService;
+     if (
+       typeof this.heartbeatService?.setNodeStateReporter === 'function'
+diff --git a/src/bootstrap/shared/control-plane-setup.js b/src/bootstrap/shared/control-plane-setup.js
+index dc74e48747ccb24e6c92d14ce61ac00e84411c3d..8b8524ee1dbfb1cfc1dbbf74d574ad7697a7c49f 100644
+--- a/src/bootstrap/shared/control-plane-setup.js
++++ b/src/bootstrap/shared/control-plane-setup.js
+@@ -67,6 +67,9 @@ import {
+   SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
+   ServiceLifecycleCommandOwner,
+ } from '../../service/index.js';
++import {
++  bindServiceLifecycleCommandOwnerToSqlRuntime,
++} from './service-lifecycle-command-owner-binding.js';
+ 
+ /**
+  * Subsystem identifier for logging.
+@@ -119,12 +122,7 @@ function createAndWireServiceLifecycleCommandOwner(
+       SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
+   });
+   const sqlQueryEngine = controlPlaneRuntimeBundle.sqlQueryEngine;
+-  if (typeof sqlQueryEngine?.setServiceLifecycleCommandOwner ===
+-      TYPEOF_FUNCTION) {
+-    sqlQueryEngine.setServiceLifecycleCommandOwner(commandOwner);
+-  } else {
+-    sqlQueryEngine.serviceLifecycleCommandOwner = commandOwner;
+-  }
++  bindServiceLifecycleCommandOwnerToSqlRuntime(commandOwner, sqlQueryEngine);
+   return commandOwner;
+ }
+ 
+diff --git a/src/bootstrap/shared/service-lifecycle-command-owner-binding.js b/src/bootstrap/shared/service-lifecycle-command-owner-binding.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d5d736299f759a7bbde59b33a6c9464c7c813408
+--- /dev/null
++++ b/src/bootstrap/shared/service-lifecycle-command-owner-binding.js
+@@ -0,0 +1,41 @@
++const TYPEOF_FUNCTION = 'function';
++
++const ERROR_MESSAGE = Object.freeze({
++  CATALOG_GATEWAY_REQUIRED:
++    'service lifecycle command owner requires its catalog gateway',
++  SQL_QUERY_ENGINE_REQUIRED:
++    'service lifecycle command owner binding requires a SQL query engine',
++});
++
++/**
++ * Bind one retained lifecycle command owner and its exact catalog gateway to
++ * the SQL runtime that currently owns external query execution.
++ *
++ * @param {Object|null} commandOwner
++ * @param {Object|null} sqlQueryEngine
++ * @return {boolean} true when an owner was bound
++ */
++function bindServiceLifecycleCommandOwnerToSqlRuntime(
++  commandOwner,
++  sqlQueryEngine,
++) {
++  if (!commandOwner) return false;
++  if (!sqlQueryEngine) {
++    throw new Error(ERROR_MESSAGE.SQL_QUERY_ENGINE_REQUIRED);
++  }
++  const catalogGateway = commandOwner.catalogOwner?.getGateway?.() || null;
++  if (typeof catalogGateway?.setSqlQueryEngine !== TYPEOF_FUNCTION) {
++    throw new Error(ERROR_MESSAGE.CATALOG_GATEWAY_REQUIRED);
++  }
++
++  catalogGateway.setSqlQueryEngine(sqlQueryEngine);
++  if (typeof sqlQueryEngine.setServiceLifecycleCommandOwner ===
++      TYPEOF_FUNCTION) {
++    sqlQueryEngine.setServiceLifecycleCommandOwner(commandOwner);
++  } else {
++    sqlQueryEngine.serviceLifecycleCommandOwner = commandOwner;
++  }
++  return true;
++}
++
++export {bindServiceLifecycleCommandOwnerToSqlRuntime};
+diff --git a/src/bootstrap/shared/startup-sql-runtime-handoff.js b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+index 67b1c10852ab27a3793c81a2a4da1534a8acbf07..02f0280b5974336728d97969a78a6ff9e0c411cf 100644
+--- a/src/bootstrap/shared/startup-sql-runtime-handoff.js
++++ b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+@@ -1,4 +1,7 @@
+ import {CDCIntegrationSetup} from './cdc-integration-setup.js';
++import {
++  bindServiceLifecycleCommandOwnerToSqlRuntime,
++} from './service-lifecycle-command-owner-binding.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ 
+@@ -25,6 +28,10 @@ function attachSqlRuntimeToStartupOwner(options) {
+     return;
+   }
+ 
++  bindServiceLifecycleCommandOwnerToSqlRuntime(
++    owner.serviceLifecycleCommandOwner || null,
++    sqlQueryEngine,
++  );
+   owner.sqlQueryEngine = sqlQueryEngine;
+ 
+   const bootstrapTopologySnapshotOwner =
+diff --git a/src/runtime/service-runtime-lifecycle-operation-methods.js b/src/runtime/service-runtime-lifecycle-operation-methods.js
+index 7b01b71111650210f5585cf147a5c2a2909eb10b..01a657842941e88a42ec6b7500e4ccc42594d67e 100644
+--- a/src/runtime/service-runtime-lifecycle-operation-methods.js
++++ b/src/runtime/service-runtime-lifecycle-operation-methods.js
+@@ -1,4 +1,6 @@
+ const RUNTIME_DRIVER_START_FAILED = 'runtime driver start failed';
++const CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE =
++  'current SQL request executor is unavailable';
+ 
+ function createServiceRuntimeLifecycleOperationMethods(deps) {
+   const {
+@@ -26,19 +28,35 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
+       definition.service_id ?? replicaServiceId;
+   }
+ 
++  function executeWithCurrentSqlRequestExecutor(
++    owner, issuingServiceIdentity, request,
++  ) {
++    const currentQueryExecutor = owner._queryExecutorFactory?.(
++      issuingServiceIdentity,
++    );
++    if (typeof currentQueryExecutor?.executeRequest !== 'function') {
++      throw new Error(CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE);
++    }
++    return currentQueryExecutor.executeRequest(request);
++  }
++
+   function injectServiceQueryExecutor(
+     owner, definition, serviceId, replicaContext, runtimeKind,
+   ) {
+     if (!owner._queryExecutorFactory) {
+       return;
+     }
+-    const queryExecutor = owner._queryExecutorFactory(
+-      resolveIssuingServiceIdentity(definition, serviceId),
+-    );
++    const issuingServiceIdentity =
++      resolveIssuingServiceIdentity(definition, serviceId);
++    const queryExecutor = owner._queryExecutorFactory(issuingServiceIdentity);
+     replicaContext.queryExecutor = queryExecutor;
+     if (typeof queryExecutor?.executeRequest === 'function') {
+-      replicaContext.sqlRequestExecutor =
+-        queryExecutor.executeRequest.bind(queryExecutor);
++      replicaContext.sqlRequestExecutor = (request) =>
++        executeWithCurrentSqlRequestExecutor(
++          owner,
++          issuingServiceIdentity,
++          request,
++        );
+     }
+     owner.emit(
+       QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
+diff --git a/test/bootstrap/bootstrap-sequence.test.js b/test/bootstrap/bootstrap-sequence.test.js
+index 0566d793917ed89aefbe2c0e5449001c1e418fea..6a3041a13824fd31cecccb65d7c1241d1e79b0e7 100644
+--- a/test/bootstrap/bootstrap-sequence.test.js
++++ b/test/bootstrap/bootstrap-sequence.test.js
+@@ -25,6 +25,8 @@ import {
+ import {
+   SEED_STARTUP_CHECKPOINT,
+ } from '../../src/bootstrap/seed-startup-session-store.js';
++import {ControlPlaneSetup} from
++  '../../src/bootstrap/shared/control-plane-setup.js';
+ 
+ const ports = createPortAllocator(import.meta.url);
+ const BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS = 90000;
+@@ -137,6 +139,42 @@ function createSeedPlanPhases() {
+   }];
+ }
+ 
++test('BootstrapService retains lifecycle catalog owners for SQL handoff',
++  async (t) => {
++    initializeTestEnvironment();
++    const originalCreate = ControlPlaneSetup.create;
++    const commandOwner = {ownerId: 'seed-command-owner'};
++    const systemMetadataOwners = {ownerId: 'seed-metadata-owners'};
++    ControlPlaneSetup.create = async () => ({
++      dispatchService: null,
++      endpointService: null,
++      heartbeatService: {},
++      leaseService: null,
++      rebalanceCoordinator: {},
++      serviceLifecycleCommandOwner: commandOwner,
++      systemMetadataOwners,
++    });
++
++    try {
++      const bootstrap = new BootstrapService({
++        nodeAddress: 'ws://seed.test:19001',
++        nodeId: 'seed-lifecycle-owner-retention',
++      });
++      bootstrap.cdcIntegrationService = {};
++      bootstrap.messageRouter = {};
++      bootstrap.systemTableCache = {};
++      bootstrap.tablePolicyService = {};
++      bootstrap.runtimeSurfaceOwner.bindControlPlaneServices = () => {};
++
++      await bootstrap.initializeControlPlaneService();
++
++      t.equal(bootstrap.serviceLifecycleCommandOwner, commandOwner);
++      t.equal(bootstrap.systemMetadataOwners, systemMetadataOwners);
++    } finally {
++      ControlPlaneSetup.create = originalCreate;
++    }
++  });
++
+ test('BootstrapService - seed checkpoint snapshot resolves explicit readiness states',
+   async (t) => {
+     initializeTestEnvironment();
+diff --git a/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js b/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
+index 64232d6207361bf2bcc7a464af9ad453ec23303d..4d8eb5568534e488db52c0120441d3b5b1b23f36 100644
+--- a/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
++++ b/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
+@@ -370,6 +370,8 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
+     const originalCreate = ControlPlaneSetup.create;
+     let assignedReporter = null;
+     let capturedUpdateOptions = null;
++    const commandOwner = {ownerId: 'join-command-owner'};
++    const systemMetadataOwners = {ownerId: 'join-metadata-owners'};
+ 
+     const service = new NodeJoiningService({
+       nodeId: REPORTER_FORWARD_NODE_ID,
+@@ -405,6 +407,8 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
+       endpointService: null,
+       dispatchService: null,
+       rebalanceCoordinator: {},
++      serviceLifecycleCommandOwner: commandOwner,
++      systemMetadataOwners,
+     });
+ 
+     try {
+@@ -412,6 +416,10 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
+ 
+       t.equal(typeof assignedReporter, 'function',
+         'control-plane initialization should install one steady-state reporter');
++      t.equal(service.serviceLifecycleCommandOwner, commandOwner,
++        'join should retain the exact lifecycle command owner');
++      t.equal(service.systemMetadataOwners, systemMetadataOwners,
++        'join should retain the exact lifecycle metadata owners');
+ 
+       await assignedReporter({
+         state: STATE.READY,
+diff --git a/test/bootstrap/shared/startup-sql-runtime-handoff.test.js b/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
+index c0cf0ddc368177691e1fd96ffcfcf11e2eb50847..b3e2af6fc976b0065d23014362b7221f161c6689 100644
+--- a/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
++++ b/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
+@@ -4,6 +4,7 @@ import {CDCIntegrationSetup} from '../../../src/bootstrap/shared/cdc-integration
+ import {
+   attachSqlRuntimeToStartupOwner,
+ } from '../../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
++import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
+ 
+ const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
+   partitions: Object.freeze([
+@@ -26,6 +27,124 @@ const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
+ });
+ 
+ describe('startup-sql-runtime-handoff', () => {
++  it('rebinds the exact lifecycle owner and catalog gateway to the final engine',
++    async () => {
++      const systemTableCache = {
++        filter: () => [],
++        get: () => null,
++        getAll: () => [],
++      };
++      const gatewayBindings = [];
++      const gateway = {
++        sqlQueryEngine: null,
++        setSqlQueryEngine(sqlQueryEngine) {
++          this.sqlQueryEngine = sqlQueryEngine;
++          gatewayBindings.push(sqlQueryEngine);
++        },
++      };
++      const ownerCalls = [];
++      let finalEngine = null;
++      const commandOwner = {
++        catalogOwner: {getGateway: () => gateway},
++        async execute(command, payload, securityContext) {
++          ownerCalls.push({command, payload, securityContext});
++          return {
++            changes: 0,
++            operation: command,
++            rowCount: 1,
++            rows: [{usesFinalGateway: gateway.sqlQueryEngine === finalEngine}],
++            success: true,
++          };
++        },
++      };
++      const owner = {serviceLifecycleCommandOwner: commandOwner};
++      const provisionalEngine = new SQLQueryEngine({
++        autoStartDistributedTransactionRecovery: false,
++        messageRouter: {deliver: async () => ({success: true})},
++        systemCache: systemTableCache,
++      });
++      provisionalEngine.setServiceLifecycleCommandOwner(commandOwner);
++      gateway.setSqlQueryEngine(provisionalEngine);
++      finalEngine = new SQLQueryEngine({
++        autoStartDistributedTransactionRecovery: false,
++        messageRouter: {deliver: async () => ({success: true})},
++        systemCache: systemTableCache,
++      });
++
++      attachSqlRuntimeToStartupOwner({
++        owner,
++        sqlQueryEngine: finalEngine,
++        systemTableCache,
++      });
++      attachSqlRuntimeToStartupOwner({
++        owner,
++        sqlQueryEngine: finalEngine,
++        systemTableCache,
++      });
++      await provisionalEngine.shutdown();
++      const securityContext = Object.freeze({
++        principal: 'phase-one-operator',
++        roles: Object.freeze(['service-operator']),
++        tenantId: 'tenant-phase-one',
++      });
++      const result = await finalEngine.tryExecuteServiceLifecycleSql(
++        'SHOW SERVICES',
++        [],
++        {securityContext, sessionId: 'handoff-session'},
++      );
++
++      assert.equal(result.result.success, true);
++      assert.deepEqual(result.result.rows, [{usesFinalGateway: true}]);
++      assert.equal(ownerCalls.length, 1);
++      assert.equal(ownerCalls[0].securityContext, securityContext);
++      assert.deepEqual(
++        gatewayBindings,
++        [provisionalEngine, finalEngine, finalEngine],
++      );
++      assert.equal(gateway.sqlQueryEngine, finalEngine);
++      assert.equal(
++        finalEngine.serviceLifecycleCommandOwnerBinding.owner,
++        commandOwner,
++      );
++      await finalEngine.shutdown();
++    });
++
++  it('does not synthesize a fallback lifecycle owner during handoff',
++    async () => {
++      const systemTableCache = {
++        filter: () => [],
++        get: () => null,
++        getAll: () => [],
++      };
++      const finalEngine = new SQLQueryEngine({
++        autoStartDistributedTransactionRecovery: false,
++        messageRouter: {deliver: async () => ({success: true})},
++        systemCache: systemTableCache,
++      });
++
++      attachSqlRuntimeToStartupOwner({
++        owner: {},
++        sqlQueryEngine: finalEngine,
++        systemTableCache,
++      });
++      const result = await finalEngine.tryExecuteServiceLifecycleSql(
++        'SHOW SERVICES',
++        [],
++        {
++          securityContext: {
++            principal: 'phase-one-operator',
++            roles: ['service-operator'],
++            tenantId: 'tenant-phase-one',
++          },
++          sessionId: 'missing-owner-session',
++        },
++      );
++      assert.equal(
++        result.result.errorCode,
++        'service_lifecycle_command_owner_unavailable',
++      );
++    });
++
+   it('upgrades the canonical startup owner CDC path and re-arms deferred recovery after runtime handoff',
+     () => {
+       const systemTableCache = {
+diff --git a/test/runtime/service-lifecycle-pgwire-executor-handoff.test.js b/test/runtime/service-lifecycle-pgwire-executor-handoff.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2eb9577d34333a46a46d0c94c10dd73ffa85fd67
+--- /dev/null
++++ b/test/runtime/service-lifecycle-pgwire-executor-handoff.test.js
+@@ -0,0 +1,131 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++
++import pg from 'pg';
++
++import {RUNTIME_KIND} from '../../src/constants/runtime.js';
++import {
++  META_SERVICE_ID,
++  META_SERVICE_RUNTIME_REF,
++} from '../../src/constants/wasm-meta.js';
++import {isSqlRequest} from '../../src/query/sql-request.js';
++import {createRuntimeStartupWiring} from
++  '../../src/runtime/runtime-startup-wiring.js';
++
++const HOST = '127.0.0.1';
++const DATABASE = 'executor_handoff';
++const USER = 'executor_handoff';
++const PASSWORD = 'executor-handoff-password';
++
++function createDefinition() {
++  return {
++    runtimeConfig: JSON.stringify({
++      authMode: 'password',
++      host: HOST,
++      tlsMode: 'disable',
++    }),
++    runtimeKind: RUNTIME_KIND.NATIVE_JS,
++    runtimeRef: META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
++    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
++  };
++}
++
++function createWiring() {
++  return createRuntimeStartupWiring({
++    pgwireCredentialEnv: {
++      PGWIRE_AUTH_DATABASE: DATABASE,
++      PGWIRE_AUTH_PASSWORD: PASSWORD,
++      PGWIRE_AUTH_USER: USER,
++    },
++  });
++}
++
++function createClient(port) {
++  return new pg.Client({
++    connectionTimeoutMillis: 1000,
++    database: DATABASE,
++    host: HOST,
++    password: PASSWORD,
++    port,
++    ssl: false,
++    user: USER,
++  });
++}
++
++function successfulExecutor(label, requests) {
++  return async (request) => {
++    assert.equal(isSqlRequest(request), true);
++    requests.push(request);
++    return {
++      columns: ['executor'],
++      rows: [{executor: label}],
++      success: true,
++    };
++  };
++}
++
++async function startRuntime(runtime, definition) {
++  runtime.setQueryExecutorFactory(() => ({
++    executeRequest: async () => {
++      throw new Error('provisional executor was used after shutdown');
++    },
++  }));
++  assert.equal(
++    (await runtime.prepare(definition, {nodeId: 'handoff-node'})).status,
++    'ready',
++  );
++  const started = await runtime.start({...definition, host: HOST, port: 0});
++  assert.equal(started.status, 'running');
++  return started.endpointIntent.port;
++}
++
++describe('PG-wire SQL executor handoff', () => {
++  it('uses the authoritative executor on an already-running listener',
++    async () => {
++      const runtime = createWiring().serviceRuntimeLifecycle;
++      const definition = createDefinition();
++      const port = await startRuntime(runtime, definition);
++      const authoritativeRequests = [];
++      const resolvedIdentities = [];
++      runtime.setQueryExecutorFactory((serviceId) => {
++        resolvedIdentities.push(serviceId);
++        return {
++          executeRequest: successfulExecutor(
++            'authoritative', authoritativeRequests,
++          ),
++        };
++      });
++      const client = createClient(port);
++
++      try {
++        await client.connect();
++        const result = await client.query('SELECT 42 AS answer');
++        assert.deepEqual(result.rows, [{executor: 'authoritative'}]);
++        assert.equal(authoritativeRequests.length, 1);
++        assert.equal(authoritativeRequests[0].tenantId, DATABASE);
++        assert.deepEqual(resolvedIdentities, [META_SERVICE_ID.POSTGRES_WIRE]);
++      } finally {
++        await client.end().catch(() => {});
++        await runtime.stop({...definition, host: HOST, port});
++      }
++    });
++
++  it('fails closed when the current factory lacks executeRequest', async () => {
++    const runtime = createWiring().serviceRuntimeLifecycle;
++    const definition = createDefinition();
++    const port = await startRuntime(runtime, definition);
++    runtime.setQueryExecutorFactory(() => async () => ({success: true}));
++    const client = createClient(port);
++
++    try {
++      await client.connect();
++      await assert.rejects(
++        client.query('SELECT 1'),
++        /current SQL request executor is unavailable/iu,
++      );
++    } finally {
++      await client.end().catch(() => {});
++      await runtime.stop({...definition, host: HOST, port});
++    }
++  });
++});
