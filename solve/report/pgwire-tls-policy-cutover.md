@@ -19,7 +19,7 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json
+- Latest evidence: test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json
 - Selected theory: theory-20260714-inherited-oversized-protocol-owner
 - Next move: continue supervised step for pgwire-tls-policy-cutover-main
 - No longer current: PASS
@@ -63,6 +63,14 @@
 - **pgwire-tls-policy-cutover-main**: Ingested evidence from pgwire-tls-policy-cutover-2026-07-14T08-20-42-786Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-20-42-786Z.report.json]
 - **pgwire-tls-policy-cutover-main**: Ingested evidence from pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json]
 - **pgwire-tls-policy-cutover-main**: Ingested evidence from pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json]
+- **pgwire-tls-policy-cutover-main**: Independent verification passed for the exact full replacement. [subagent:verify_tls_cutover]
+- **pgwire-tls-policy-cutover-main**: Ingested evidence from pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json]
+- **pgwire-tls-policy-cutover-main**: Ingested evidence from pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json]
+- **pgwire-tls-policy-cutover-main**: The sealed TLS policy scenario passes on checkpoint HEAD c1dcf82e; verified TLS queries succeed while plaintext downgrade, malformed SSL negotiation, and bad-CA attempts are rejected before SQL. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json]
+- **pgwire-tls-policy-cutover-main**: Live validation: the real pg client completed a CA-verified TLS query through createRuntimeStartupWiring, ServiceRuntimeLifecycle, and the bound production PG listener; plaintext in require mode and a wrong CA produced no SqlRequest. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json]
+- **pgwire-tls-policy-cutover-main**: Independent terminal aggregate verification passed. [subagent:verify_tls_cutover]
+- **pgwire-tls-policy-cutover-main**: Ingested evidence from pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json]
+- **pgwire-tls-policy-cutover-main**: Ingested evidence from pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json]
 
 ## Theories
 - **theory-20260714-inherited-oversized-protocol-owner** [supported] frontier, frontier pgwire-tls-policy-cutover-main, layer ownership, mechanism inherited_oversized_protocol_owner, owner pgwire_protocol_handler, boundary extended_query_dispatch, modelGate npm run model:contracts
@@ -73,6 +81,8 @@
 ## Theory Results
 - **theory-20260714-inherited-oversized-protocol-owner**: falsified (scenario=done, theory=falsified, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json]
 - **theory-20260714-inherited-oversized-protocol-owner**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json]
+- **theory-20260714-inherited-oversized-protocol-owner**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json]
+- **theory-20260714-inherited-oversized-protocol-owner**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
