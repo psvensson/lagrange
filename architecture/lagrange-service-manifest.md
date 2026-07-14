@@ -489,13 +489,20 @@ not just as an opaque blob.
 
 Typical mapping:
 
--   manifest identity → `sys_service_packages`
--   artifact refs → `sys_service_packages`
--   desired install state → `sys_service_installations`
--   resolved revisions → `sys_service_revisions`
--   runtime instances → `sys_service_instances`
+-   manifest identity and verified artifact refs → `service_packages`
+-   immutable configuration revisions → `service_revisions`
+-   desired install and rollout state → `service_installations`
+-   typed install failures → `service_install_failures`
+-   runtime deployment intent → existing `service_definitions`
+-   runtime instances and endpoints → existing `services` and
+    `service_endpoints`
 
-A raw manifest blob may still be preserved for audit/debugging.
+The catalog stores the normalized manifest for audit/debugging. Its only durable
+runtime link is `service_definition_id`; node, replica, address, health,
+endpoint, process, and running state stay with the existing actual-state owners.
+An installation is initially `recorded_not_running`, including when its desired
+state is `active`. Only the downstream reconciler may move rollout state after
+consulting and mutating the canonical runtime owners.
 
 ------------------------------------------------------------------------
 

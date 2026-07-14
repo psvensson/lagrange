@@ -401,20 +401,42 @@ This preserves one conceptual model for both development and production.
 
 ------------------------------------------------------------------------
 
-# Suggested System Table Families
+# Install Catalog System Tables
 
-The service platform likely needs a small number of core tables:
+The open kernel install catalog owns four replicated, non-cache-propagated
+system tables:
 
--   `sys_service_repositories`
--   `sys_service_packages`
--   `sys_service_installations`
--   `sys_service_revisions`
--   `sys_service_instances`
--   `sys_service_failures`
+-   `service_packages` stores immutable normalized manifest and verified
+    artifact identity.
+-   `service_revisions` stores immutable package/configuration revisions.
+-   `service_installations` stores desired state, rollout state, stable
+    operation identity, and one `service_definition_id` reference.
+-   `service_install_failures` stores closed, typed failure code/phase facts
+    without provider exception text.
+
+The production `service-install-catalog-owner` is composed through the existing
+system-metadata owner factory and reads/writes through the control-plane system
+table gateway. It does not create a storage path of its own. New installation
+intent is durably `recorded_not_running`; the catalog never projects a `running`
+field or accepts caller-supplied actual state.
+
+Overlapping package, revision, installation, operation, and failure mutations
+are serialized within an owner. Durable uniqueness remains the cross-owner
+backstop: an insert conflict is resolved by an authoritative re-read and is
+returned either as an unchanged replay or a typed identity conflict. Rollout
+and latest-failure changes use the observed rollout state and monotonic update
+timestamp as a compare-and-swap fence, so a stale concurrent writer cannot
+overwrite the winner.
+
+Runtime ownership remains unchanged: `service_definitions` owns runtime
+deployment intent, `services` owns instance actuals, and `service_endpoints`
+owns endpoint actuals. The catalog's `service_definition_id` is a correlation
+identity, not a copied instance or endpoint record.
 
 Optional later additions:
 
--   `sys_service_dependencies`
+-   service repository configuration
+-   service dependency records
 -   external commercial entitlement references
 -   external secret-provider references
 
