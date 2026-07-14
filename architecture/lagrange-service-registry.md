@@ -317,6 +317,35 @@ allowed.
 
 This is especially important once third-party services exist.
 
+## Artifact owner boundary
+
+`InstallableServiceArtifactResolver` is the single structural verification
+owner for remote and development sources. A remote registry provider acquires
+an OCI descriptor; a local source reads the standard `oci-layout`,
+`index.json`, and digest-addressed blob. Both acquisitions then use the same
+verification path:
+
+1. bound descriptor size before parsing;
+2. recompute and compare the pinned `sha256` digest;
+3. validate the OCI image-manifest shape and descriptor size;
+4. require container manifests or exactly one `application/wasm` layer,
+   according to the external manifest; and
+5. apply the explicitly configured signature policy.
+
+The signature policy has three modes and no implicit default:
+
+-   `required` --- a detached Ed25519 signature must verify against a
+    configured trusted public key;
+-   `verify_if_present` --- unsigned artifacts are allowed, but a present
+    signature must verify; and
+-   `disabled` --- signature verification is explicitly bypassed for the
+    configured environment.
+
+Detached signatures cover the domain-separated canonical artifact digest,
+not a mutable tag. The owner returns normalized verified metadata; it does not
+store the artifact, write catalog state, authenticate to registries, activate a
+runtime, or substitute for the later container/WASM payload consumer.
+
 ------------------------------------------------------------------------
 
 # External Licensing Extension Point

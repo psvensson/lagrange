@@ -55,3 +55,13 @@ export {
   normalizeExternalServiceManifest,
   validateExternalServiceManifest,
 } from './external-service-manifest.js';
+
+export {
+  ARTIFACT_SIGNATURE_POLICY_MODE,
+  DEFAULT_MAX_DESCRIPTOR_BYTES,
+  INSTALLABLE_ARTIFACT_ERROR_CODE,
+  INSTALLABLE_ARTIFACT_SOURCE_KIND,
+  InstallableServiceArtifactResolver,
+  SIGNATURE_STATUS,
+  buildArtifactSignaturePayload,
+} from './installable-service-artifact-resolver.js';
