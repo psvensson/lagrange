@@ -11,7 +11,12 @@ const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
 });
 
 const SERVICE_COMMAND = Object.freeze({
+  DEV_INSTALL: 'dev-install',
   INIT: 'init',
+  INSTALL: 'install',
+  LIST: 'list',
+  REMOVE: 'remove',
+  STATUS: 'status',
 });
 
 const SERVICE_COMMAND_FLAG = Object.freeze({
@@ -37,10 +42,28 @@ const SERVICE_HELP_FLAGS = Object.freeze(new Set([
 
 const SERVICE_HELP = `Usage:
   lagrange service init <directory>
+  lagrange service install <manifest-file> --idempotency-key <key> [--config <json-file>]
+  lagrange service dev-install <project-directory> --idempotency-key <key> --platform <platform> --source-date-epoch <epoch> [--output-root <directory>]
+  lagrange service list
+  lagrange service status <service-name>
+  lagrange service remove <service-name> --idempotency-key <key>
 
 Commands:
-  init <directory>  Create an OCI-container Node service source project
+  init <directory>                 Create an OCI-container Node service source project
+  install <manifest-file>          Submit a pinned remote OCI service manifest
+  dev-install <project-directory>  Build local OCI layout and submit its pinned manifest
+  list                             List installed service catalog rows
+  status <service-name>            Show one service catalog row
+  remove <service-name>            Record idempotent service removal intent
 `;
+
+const SERVICE_LIFECYCLE_COMMANDS = Object.freeze(new Set([
+  SERVICE_COMMAND.DEV_INSTALL,
+  SERVICE_COMMAND.INSTALL,
+  SERVICE_COMMAND.LIST,
+  SERVICE_COMMAND.REMOVE,
+  SERVICE_COMMAND.STATUS,
+]));
 
 function printHelp() {
   process.stdout.write(SERVICE_HELP);
@@ -95,17 +118,27 @@ function runServiceCommand(args) {
       `unknown option: ${args[0]}`,
     );
   }
-  if (args[0] !== SERVICE_COMMAND.INIT) {
+  if (args.length === 2 && SERVICE_HELP_FLAGS.has(args[1]) &&
+      (args[0] === SERVICE_COMMAND.INIT ||
+        SERVICE_LIFECYCLE_COMMANDS.has(args[0]))) {
+    printHelp();
+    return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
+  }
+  if (args[0] === SERVICE_COMMAND.INIT) {
+    return runInitCommand(args.slice(1));
+  }
+  if (!SERVICE_LIFECYCLE_COMMANDS.has(args[0])) {
     return usageError(
       SERVICE_COMMAND_ERROR_CODE.UNKNOWN_COMMAND,
       `unknown command: ${args[0]}`,
     );
   }
-  if (args.length === 2 && SERVICE_HELP_FLAGS.has(args[1])) {
-    printHelp();
-    return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
-  }
-  return runInitCommand(args.slice(1));
+  return import('./service-lifecycle-command.js')
+    .then(({runServiceLifecycleCommand}) => runServiceLifecycleCommand(args))
+    .catch((error) => {
+      process.stderr.write(`lagrange service failed: ${error.message}\n`);
+      return SERVICE_COMMAND_EXIT_CODE.FAILURE;
+    });
 }
 
 export {SERVICE_COMMAND_EXIT_CODE, runServiceCommand};
