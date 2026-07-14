@@ -51,7 +51,7 @@ const PGWIRE_TLS_MODE = Object.freeze({
 });
 
 const ALLOWED_TLS_MODES = Object.freeze(
-  new Set([PGWIRE_TLS_MODE.DISABLE]),
+  new Set(Object.values(PGWIRE_TLS_MODE)),
 );
 
 const PGWIRE_LOOPBACK_HOSTS = Object.freeze(
@@ -98,7 +98,7 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
   AUTH_MODE_REQUIRED:
     'authMode must be explicitly configured',
   TLS_MODE_INVALID:
-    'tlsMode must be disable until TLS negotiation is implemented',
+    'tlsMode must be disable, prefer, or require',
   TLS_MODE_REQUIRED:
     'tlsMode must be explicitly configured',
   TRUST_REQUIRES_LOOPBACK:

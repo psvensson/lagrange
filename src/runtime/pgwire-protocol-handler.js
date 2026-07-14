@@ -15,21 +15,17 @@ import {randomUUID} from 'node:crypto';
 import {
   PG_PROTOCOL_VERSION,
   PG_SSL_REQUEST_CODE,
+  PG_SSL_RESPONSE,
   PG_FRONTEND_MSG,
   PG_TRANSACTION_STATE,
   PG_SEVERITY,
   PG_ERROR_CODE,
-  PG_DESCRIBE_TYPE,
-  PG_CLOSE_TYPE,
   PG_SERVER_PARAMS,
   PG_HANDLER_ERROR,
   PG_HANDLER_LOG,
   PG_BUFFER_LIMIT,
 } from './pgwire-protocol-constants.js';
-import {
-  PgWireSession,
-  PGWIRE_SESSION_ERROR,
-} from './pgwire-session.js';
+import {PgWireSession} from './pgwire-session.js';
 import {
   buildAuthOk,
   buildAuthCleartextPassword,
@@ -64,7 +60,13 @@ import {
   writeCString,
   readCString,
 } from './pgwire-buffer-codec.js';
-import {PGWIRE_AUTH_MODE} from './pgwire-descriptor.js';
+import {
+  PGWIRE_AUTH_MODE,
+  PGWIRE_TLS_MODE,
+} from './pgwire-descriptor.js';
+import {upgradePgwireSocketToTls} from './pgwire-tls-context.js';
+import {PgWireExtendedQueryHandler} from
+  './pgwire-extended-query-handler.js';
 
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
@@ -73,11 +75,9 @@ const LOCAL_NUM_INT32_MAX = 0x7FFFFFFF;
 const LOCAL_STR_DATA = 'data';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_CLOSE = 'close';
-const LOCAL_NUM_SEVENTY_EIGHT = 0x4E;
 const LOCAL_NUM_SIXTEEN = 16;
 const LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS = 'current transaction is aborted, commands ignored ';
 const LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK = 'until end of transaction block';
-const LOCAL_STR_UNNAMED = '(unnamed)';
 
 // --- Internal handler states ---
 
@@ -114,6 +114,11 @@ class PgWireProtocolHandler {
     this._socket = options.socket;
     this._logger = options.logger || console;
     this._authMode = options.authMode || PGWIRE_AUTH_MODE.TRUST;
+    this._tlsMode = options.tlsMode || PGWIRE_TLS_MODE.DISABLE;
+    this._secureContext = options.secureContext || null;
+    this._tlsSocketFactory = options.tlsSocketFactory ||
+      upgradePgwireSocketToTls;
+    this._tlsActive = false;
     this._phase = HANDLER_PHASE.STARTUP;
     this._session = null;
     this._pendingAuth = null;
@@ -125,6 +130,13 @@ class PgWireProtocolHandler {
     this._onData = this._onData.bind(this);
     this._onError = this._onError.bind(this);
     this._onClose = this._onClose.bind(this);
+    this._extendedQueryHandler = new PgWireExtendedQueryHandler({
+      getSession: () => this._session,
+      getSocket: () => this._socket,
+      executeAndSend: (query, params) => this._executeAndSend(query, params),
+      destroyConnection: () => this.destroy(),
+      logger: this._logger,
+    });
   }
 
   /**
@@ -230,8 +242,21 @@ class PgWireProtocolHandler {
 
     // Check for SSL request
     if (version === PG_SSL_REQUEST_CODE) {
-      // Respond with 'N' (SSL not supported), stay in startup
-      this._socket.write(Buffer.from([LOCAL_NUM_SEVENTY_EIGHT])); // 'N'
+      if (msgLen !== PG_BUFFER_LIMIT.SSL_REQUEST_SIZE) {
+        this._failProtocol(PG_HANDLER_ERROR.INVALID_MESSAGE_LENGTH);
+        return;
+      }
+      this._handleSslRequest();
+      return;
+    }
+
+    if (this._tlsMode === PGWIRE_TLS_MODE.REQUIRE && !this._tlsActive) {
+      this._sendError(
+        PG_SEVERITY.FATAL,
+        PG_ERROR_CODE.CONNECTION_FAILURE,
+        PG_HANDLER_ERROR.TLS_REQUIRED,
+      );
+      this._socket.end();
       return;
     }
 
@@ -255,6 +280,53 @@ class PgWireProtocolHandler {
     });
 
     await this._handleStartup(params);
+  }
+
+  /**
+   * Apply the descriptor-owned SSLRequest policy and upgrade when enabled.
+   * @private
+   */
+  _handleSslRequest() {
+    if (this._buffer.length > 0) {
+      this._failProtocol(PG_HANDLER_ERROR.SSL_REQUEST_PIPELINING_FORBIDDEN);
+      return;
+    }
+    if (this._tlsMode === PGWIRE_TLS_MODE.DISABLE) {
+      this._socket.write(Buffer.from([PG_SSL_RESPONSE.UNSUPPORTED]));
+      return;
+    }
+    if (!this._secureContext || this._tlsActive) {
+      this._sendError(
+        PG_SEVERITY.FATAL,
+        PG_ERROR_CODE.CONNECTION_FAILURE,
+        PG_HANDLER_ERROR.TLS_CONFIGURATION_REQUIRED,
+      );
+      this._socket.end();
+      return;
+    }
+
+    const rawSocket = this._socket;
+    rawSocket.removeListener(LOCAL_STR_DATA, this._onData);
+    rawSocket.removeListener(LOCAL_STR_ERROR, this._onError);
+    rawSocket.removeListener(LOCAL_STR_CLOSE, this._onClose);
+    rawSocket.write(Buffer.from([PG_SSL_RESPONSE.SUPPORTED]));
+    try {
+      this._socket = this._tlsSocketFactory(
+        rawSocket,
+        this._secureContext,
+      );
+      this._tlsActive = true;
+      this._socket.on(LOCAL_STR_DATA, this._onData);
+      this._socket.on(LOCAL_STR_ERROR, this._onError);
+      this._socket.on(LOCAL_STR_CLOSE, this._onClose);
+      this._logger.debug(PG_HANDLER_LOG.TLS_NEGOTIATED);
+    } catch (_error) {
+      this._logger.debug(PG_HANDLER_LOG.CONNECTION_ERROR, {
+        error: PG_HANDLER_ERROR.TLS_NEGOTIATION_FAILED,
+      });
+      rawSocket.destroy();
+      this.destroy();
+    }
   }
 
   /**
@@ -439,25 +511,13 @@ class PgWireProtocolHandler {
       await this._handleSimpleQuery(payload);
       break;
     case PG_FRONTEND_MSG.PARSE:
-      this._handleParse(payload);
-      break;
     case PG_FRONTEND_MSG.BIND:
-      this._handleBind(payload);
-      break;
     case PG_FRONTEND_MSG.DESCRIBE:
-      this._handleDescribe(payload);
-      break;
     case PG_FRONTEND_MSG.EXECUTE:
-      await this._handleExecute(payload);
-      break;
     case PG_FRONTEND_MSG.SYNC:
-      this._handleSync();
-      break;
     case PG_FRONTEND_MSG.CLOSE:
-      this._handleClose(payload);
-      break;
     case PG_FRONTEND_MSG.TERMINATE:
-      this._handleTerminate();
+      await this._extendedQueryHandler.dispatch(type, payload);
       break;
     case PG_FRONTEND_MSG.FLUSH:
       // Flush is a no-op for us (we write immediately)
@@ -524,199 +584,6 @@ class PgWireProtocolHandler {
     this._socket.write(
       buildReadyForQuery(this._session.getTransactionState()),
     );
-  }
-
-  // --- Extended query protocol ---
-
-  /**
-   * Handle Parse ('P') message.
-   * Stores the prepared statement in session state.
-   *
-   * @param {Buffer} payload
-   * @private
-   */
-  _handleParse(payload) {
-    const {name, query, paramTypes} = parseParseMessage(payload);
-
-    this._logger.debug(PG_HANDLER_LOG.PARSE_RECEIVED, {
-      sessionId: this._session.sessionId,
-      name: name || LOCAL_STR_UNNAMED,
-    });
-
-    this._session.setPreparedStatement(name, query, paramTypes);
-    this._socket.write(buildParseComplete());
-  }
-
-  /**
-   * Handle Bind ('B') message.
-   * Binds parameters to a prepared statement, creating a portal.
-   *
-   * @param {Buffer} payload
-   * @private
-   */
-  _handleBind(payload) {
-    const {portal, statement, params} = parseBindMessage(payload);
-
-    this._logger.debug(PG_HANDLER_LOG.BIND_RECEIVED, {
-      sessionId: this._session.sessionId,
-      portal: portal || LOCAL_STR_UNNAMED,
-      statement: statement || LOCAL_STR_UNNAMED,
-    });
-
-    const stmt = this._session.getPreparedStatement(statement);
-    if (!stmt) {
-      this._sendError(
-        PG_SEVERITY.ERROR,
-        PG_ERROR_CODE.INTERNAL_ERROR,
-        `${PGWIRE_SESSION_ERROR.STATEMENT_NOT_FOUND}: ` +
-          `'${statement}'`,
-      );
-      return;
-    }
-
-    this._session.setPortal(portal, statement, params);
-    this._socket.write(buildBindComplete());
-  }
-
-  /**
-   * Handle Describe ('D') message.
-   * Returns RowDescription for a statement or portal.
-   *
-   * @param {Buffer} payload
-   * @private
-   */
-  _handleDescribe(payload) {
-    const {type, name} = parseDescribeMessage(payload);
-
-    if (type === PG_DESCRIBE_TYPE.STATEMENT) {
-      const stmt = this._session.getPreparedStatement(name);
-      if (!stmt) {
-        this._sendError(
-          PG_SEVERITY.ERROR,
-          PG_ERROR_CODE.INTERNAL_ERROR,
-          `${PGWIRE_SESSION_ERROR.STATEMENT_NOT_FOUND}: '${name}'`,
-        );
-        return;
-      }
-      // We don't know columns until execution; send NoData
-      this._socket.write(buildNoData());
-    } else if (type === PG_DESCRIBE_TYPE.PORTAL) {
-      const portal = this._session.getPortal(name);
-      if (!portal) {
-        this._sendError(
-          PG_SEVERITY.ERROR,
-          PG_ERROR_CODE.INTERNAL_ERROR,
-          `Portal not found: '${name}'`,
-        );
-        return;
-      }
-      // We don't know columns until execution; send NoData
-      this._socket.write(buildNoData());
-    } else {
-      this._sendError(
-        PG_SEVERITY.ERROR,
-        PG_ERROR_CODE.PROTOCOL_VIOLATION,
-        `Invalid describe target type: ${type}`,
-      );
-    }
-  }
-
-  /**
-   * Handle Execute ('E') message.
-   * Executes a portal through the adapter.
-   *
-   * @param {Buffer} payload
-   * @private
-   */
-  async _handleExecute(payload) {
-    const {portal: portalName} = parseExecuteMessage(payload);
-
-    this._logger.debug(PG_HANDLER_LOG.EXECUTE_RECEIVED, {
-      sessionId: this._session.sessionId,
-      portal: portalName || LOCAL_STR_UNNAMED,
-    });
-
-    const portal = this._session.getPortal(portalName);
-    if (!portal) {
-      this._sendError(
-        PG_SEVERITY.ERROR,
-        PG_ERROR_CODE.INTERNAL_ERROR,
-        `Portal not found: '${portalName}'`,
-      );
-      return;
-    }
-
-    const stmt = this._session.getPreparedStatement(
-      portal.statementName,
-    );
-    if (!stmt) {
-      this._sendError(
-        PG_SEVERITY.ERROR,
-        PG_ERROR_CODE.INTERNAL_ERROR,
-        `${PGWIRE_SESSION_ERROR.STATEMENT_NOT_FOUND}: ` +
-          `'${portal.statementName}'`,
-      );
-      return;
-    }
-
-    // Check for failed transaction state
-    if (this._session.isInFailedTransaction()) {
-      const upper = stmt.query.trimStart().toUpperCase();
-      if (!upper.startsWith(LOCAL_STR_ROLLBACK)) {
-        this._sendError(
-          PG_SEVERITY.ERROR,
-          PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          LOCAL_STR_CURRENT_TRANSACTION_IS_ABORTED_COMMANDS +
-            LOCAL_STR_UNTIL_END_OF_TRANSACTION_BLOCK,
-        );
-        return;
-      }
-    }
-
-    await this._executeAndSend(stmt.query, portal.params);
-  }
-
-  /**
-   * Handle Sync ('S') message.
-   * Ends an extended query cycle and sends ReadyForQuery.
-   * @private
-   */
-  _handleSync() {
-    this._logger.debug(PG_HANDLER_LOG.SYNC_RECEIVED, {
-      sessionId: this._session.sessionId,
-    });
-    this._socket.write(
-      buildReadyForQuery(this._session.getTransactionState()),
-    );
-  }
-
-  /**
-   * Handle Close ('C') message.
-   * Closes a prepared statement or portal.
-   *
-   * @param {Buffer} payload
-   * @private
-   */
-  _handleClose(payload) {
-    const {type, name} = parseCloseMessage(payload);
-    if (type === PG_CLOSE_TYPE.STATEMENT) {
-      this._session.closePreparedStatement(name);
-    } else if (type === PG_CLOSE_TYPE.PORTAL) {
-      this._session.closePortal(name);
-    }
-    this._socket.write(buildCloseComplete());
-  }
-
-  /**
-   * Handle Terminate ('X') message.
-   * @private
-   */
-  _handleTerminate() {
-    this._logger.debug(PG_HANDLER_LOG.TERMINATE_RECEIVED, {
-      sessionId: this._session?.sessionId,
-    });
-    this.destroy();
-    this._socket.end();
   }
 
   // --- Shared execution ---

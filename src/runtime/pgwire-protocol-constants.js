@@ -23,6 +23,11 @@ const PG_PROTOCOL_VERSION = Object.freeze({
 
 const PG_SSL_REQUEST_CODE = (1234 << 16) | 5679;
 
+const PG_SSL_RESPONSE = Object.freeze({
+  SUPPORTED: 0x53, // 'S'
+  UNSUPPORTED: 0x4E, // 'N'
+});
+
 // --- Frontend (client -> server) message type bytes ---
 
 const PG_FRONTEND_MSG = Object.freeze({
@@ -144,6 +149,14 @@ const PG_HANDLER_ERROR = Object.freeze({
     'Unsupported protocol version',
   SSL_NOT_SUPPORTED:
     'SSL connections are not supported',
+  TLS_REQUIRED:
+    'TLS is required',
+  TLS_CONFIGURATION_REQUIRED:
+    'TLS configuration is required',
+  TLS_NEGOTIATION_FAILED:
+    'TLS negotiation failed',
+  SSL_REQUEST_PIPELINING_FORBIDDEN:
+    'SSLRequest must not include pipelined plaintext',
   MISSING_DATABASE_PARAM:
     'Missing required startup parameter: database',
   UNKNOWN_MESSAGE_TYPE:
@@ -179,6 +192,7 @@ const PG_HANDLER_LOG = Object.freeze({
   TERMINATE_RECEIVED: 'PG wire terminate received',
   CONNECTION_ERROR: 'PG wire connection error',
   CONNECTION_CLOSED: 'PG wire connection closed',
+  TLS_NEGOTIATED: 'PG wire TLS negotiation started',
   UNSUPPORTED_MSG: 'PG wire unsupported message type',
 });
 
@@ -191,6 +205,8 @@ const PG_BUFFER_LIMIT = Object.freeze({
   MSG_HEADER_SIZE: 5,
   /** Startup message header size (length only, no type byte) */
   STARTUP_HEADER_SIZE: 4,
+  /** PostgreSQL SSLRequest message size */
+  SSL_REQUEST_SIZE: 8,
   /** Length field size in bytes */
   LENGTH_FIELD_SIZE: 4,
 });
@@ -198,6 +214,7 @@ const PG_BUFFER_LIMIT = Object.freeze({
 export {
   PG_PROTOCOL_VERSION,
   PG_SSL_REQUEST_CODE,
+  PG_SSL_RESPONSE,
   PG_FRONTEND_MSG,
   PG_BACKEND_MSG,
   PG_AUTH_TYPE,

@@ -46,9 +46,8 @@ function buildAuthOk() {
 /**
  * Build AuthenticationCleartextPassword message.
  *
- * The credential verifier remains server-owned. Transport encryption is a
- * separate policy cutover; callers must not expose this exchange externally
- * until TLS is required.
+ * The credential verifier remains server-owned. Externally bound password
+ * deployments must select the listener-owned `tlsMode: "require"` policy.
  *
  * @return {Buffer}
  */

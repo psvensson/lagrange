@@ -46,6 +46,7 @@ import {
 import {
   PG_PROTOCOL_VERSION,
   PG_SSL_REQUEST_CODE,
+  PG_SSL_RESPONSE,
   PG_FRONTEND_MSG,
   PG_BACKEND_MSG,
   PG_AUTH_TYPE,
@@ -502,7 +503,7 @@ describe('pgwire-protocol-handler', () => {
       await new Promise((r) => setImmediate(r));
 
       // Should have written 'N'
-      assert.equal(socket.written[0][0], 0x4E);
+      assert.equal(socket.written[0][0], PG_SSL_RESPONSE.UNSUPPORTED);
       socket.written = [];
 
       // Now send real startup

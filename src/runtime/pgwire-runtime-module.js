@@ -40,7 +40,12 @@ import {
 import {
   PGWIRE_AUTH_MODE,
   PGWIRE_LOOPBACK_HOSTS,
+  PGWIRE_TLS_MODE,
 } from './pgwire-descriptor.js';
+import {
+  PGWIRE_TLS_ERROR,
+  buildPgwireSecureContext,
+} from './pgwire-tls-context.js';
 
 // --- Default configuration values ---
 
@@ -75,6 +80,10 @@ const PGWIRE_MODULE_ERROR = Object.freeze({
     'replicaContext.sqlRequestExecutor is required',
   CREDENTIAL_VERIFIER_REQUIRED:
     'password authentication requires a credential verifier',
+  TLS_CONFIGURATION_REQUIRED:
+    PGWIRE_TLS_ERROR.CONFIG_REQUIRED,
+  TLS_CONFIGURATION_INVALID:
+    PGWIRE_TLS_ERROR.CONFIG_INVALID,
   TRUST_REQUIRES_LOOPBACK:
     'trust authentication may only bind to a loopback host',
 });
@@ -195,6 +204,7 @@ class PostgresWireRuntimeModule {
     this._running = new Map();
     this._logger = options.logger || console;
     this._credentialVerifier = options.credentialVerifier || null;
+    this._tlsOptions = options.tlsOptions || null;
     this._authHandlerFactory = options.authHandlerFactory ||
       ((config, replicaContext) => new PgWireAuthHandler({
         mode: config.authMode,
@@ -338,6 +348,27 @@ class PostgresWireRuntimeModule {
         PGWIRE_MODULE_ERROR.CREDENTIAL_VERIFIER_REQUIRED,
       );
     }
+    let secureContext = null;
+    if (config.tlsMode !== PGWIRE_TLS_MODE.DISABLE) {
+      if (!this._tlsOptions) {
+        return buildStatusResult(
+          START_STATUS.FAILED,
+          PGWIRE_RESULT_FIELD.ERROR,
+          undefined,
+          PGWIRE_MODULE_ERROR.TLS_CONFIGURATION_REQUIRED,
+        );
+      }
+      try {
+        secureContext = buildPgwireSecureContext(this._tlsOptions);
+      } catch (_error) {
+        return buildStatusResult(
+          START_STATUS.FAILED,
+          PGWIRE_RESULT_FIELD.ERROR,
+          undefined,
+          PGWIRE_MODULE_ERROR.TLS_CONFIGURATION_INVALID,
+        );
+      }
+    }
     const authHandler = this._authHandlerFactory(config, {
       ...replicaContext,
       pgwireCredentialVerifier: credentialVerifier,
@@ -361,6 +392,8 @@ class PostgresWireRuntimeModule {
         adapter,
         socket,
         authMode: config.authMode,
+        tlsMode: config.tlsMode,
+        secureContext,
         logger: this._logger,
       });
       handlers.set(socket, handler);

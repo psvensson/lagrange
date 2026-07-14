@@ -20,6 +20,7 @@ import {
 import {META_SERVICE_RUNTIME_REF} from '../constants/wasm-meta.js';
 import {buildPgwireCredentialVerifier} from
   './pgwire-credential-verifier.js';
+import {loadPgwireTlsOptions} from './pgwire-tls-context.js';
 
 /**
  * Build runtime wiring used by seed and joining startup flows.
@@ -30,6 +31,8 @@ import {buildPgwireCredentialVerifier} from
  *   credential source. Defaults to process.env.
  * @param {Function} [options.pgwireCredentialVerifier] - Explicit verifier
  *   override for an embedding composition root.
+ * @param {Object} [options.pgwireTlsEnv] - Environment-shaped TLS path source.
+ * @param {Object} [options.pgwireTlsOptions] - Explicit server TLS material.
  * @return {{
  *   runtimeDriverRegistry: RuntimeDriverRegistry,
  *   serviceRuntimeLifecycle: ServiceRuntimeLifecycle,
@@ -64,6 +67,8 @@ function createRuntimeStartupWiring(options = {}) {
         buildPgwireCredentialVerifier(
           options.pgwireCredentialEnv || process.env,
         ),
+      tlsOptions: options.pgwireTlsOptions ||
+        loadPgwireTlsOptions(options.pgwireTlsEnv || process.env),
     }),
   );
   serviceRuntimeLifecycle.registerNativeJsHandler(

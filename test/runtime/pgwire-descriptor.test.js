@@ -76,7 +76,11 @@ describe('pgwire-descriptor', () => {
     });
 
     it('should have ALLOWED_TLS_MODES matching enum', () => {
-      assert.deepEqual([...ALLOWED_TLS_MODES], [PGWIRE_TLS_MODE.DISABLE]);
+      assert.deepEqual([...ALLOWED_TLS_MODES], [
+        PGWIRE_TLS_MODE.DISABLE,
+        PGWIRE_TLS_MODE.PREFER,
+        PGWIRE_TLS_MODE.REQUIRE,
+      ]);
     });
 
     it('should export frozen PGWIRE_DESCRIPTOR_ERROR', () => {
@@ -399,16 +403,16 @@ describe('pgwire-descriptor', () => {
         assert.equal(result.valid, true);
       });
 
-      it('should reject prefer until TLS negotiation exists', () => {
+      it('should accept prefer', () => {
         const cfg = buildSecureConfig({tlsMode: 'prefer'});
         const result = validatePgwireRuntimeConfig(cfg);
-        assert.equal(result.valid, false);
+        assert.equal(result.valid, true);
       });
 
-      it('should reject require until TLS negotiation exists', () => {
+      it('should accept require', () => {
         const cfg = buildSecureConfig({tlsMode: 'require'});
         const result = validatePgwireRuntimeConfig(cfg);
-        assert.equal(result.valid, false);
+        assert.equal(result.valid, true);
       });
 
       it('should reject invalid tlsMode', () => {

@@ -60,17 +60,25 @@ PG Client (psql, pg driver, ORM)
 ### Current Security Posture
 
 - Runtime configuration must explicitly select `authMode: "trust"` or
-  `authMode: "password"` and must still select `tlsMode: "disable"` until the
-  TLS policy cutover lands; implicit authentication is rejected.
+  `authMode: "password"` and one `tlsMode`: `disable`, `prefer`, or `require`;
+  implicit authentication and transport policy are rejected.
 - Trust mode may bind only to `127.0.0.1`, `::1`, or `localhost`.
 - Password mode performs PostgreSQL `AuthenticationCleartextPassword` before a
   session exists. The production composition root builds its verifier only from
   the complete `PGWIRE_AUTH_USER`, `PGWIRE_AUTH_PASSWORD`, and
   `PGWIRE_AUTH_DATABASE` environment tuple; partial configuration fails startup,
   and password material is not stored in `runtime_config` or audit records.
-- SCRAM, TLS-prefer, and TLS-require descriptors still fail validation. Password
-  mode is not an externally secure deployment posture until TLS-require is
-  implemented and enabled by `pgwire-tls-policy-cutover`.
+- PostgreSQL `SSLRequest` negotiation is owned by the production listener.
+  `require` rejects plaintext startup before authentication or SQL, `prefer`
+  accepts TLS or plaintext deliberately, and `disable` returns PostgreSQL's
+  no-TLS response. Externally bound password deployments use `require`.
+- Server key/certificate material is loaded from mounted paths named by
+  `PGWIRE_TLS_KEY_PATH`, `PGWIRE_TLS_CERT_PATH`, and optional
+  `PGWIRE_TLS_CA_PATH`, or injected directly by an embedding composition root.
+  TLS material is not part of `runtime_config` and configuration failures do not
+  echo paths or key bytes.
+- Clients remain responsible for hostname and certificate-authority validation;
+  SCRAM is still unsupported.
 - Every authenticated session carries a security context, and every query is
   authorized before the adapter constructs and dispatches its `SqlRequest`.
 - The admin WebSocket also defaults to loopback. External admin binding is
