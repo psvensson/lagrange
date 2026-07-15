@@ -53,6 +53,7 @@ const DIRECTORY_MODE = 0o700;
 const LINE_ENDING = '\n';
 const GENERATION_PADDING = '0';
 const NONCE_KEY_SEPARATOR = '\n';
+const LOCK_RELEASE_FAILURE_KIND = 'lock_release_failed';
 const NONCE_ADMISSION_DECISION = Object.freeze({
   ACCEPT: 'accept',
   LATCH_SATURATED: 'latch_saturated',
@@ -590,8 +591,18 @@ function openOciHostAgentReceiptLedger(rawOptions) {
   } catch (error) {
     try {
       lock?.release();
-    } catch {
-      // The original fail-closed error remains authoritative.
+    } catch (cleanupError) {
+      const authoritativeError =
+        error instanceof OciHostAgentDurableStateError ?
+          error :
+          new OciHostAgentDurableStateError(
+            OCI_HOST_AGENT_DURABLE_ERROR.RECEIPT_UNAVAILABLE,
+          );
+      authoritativeError.cleanupFailure = Object.freeze({
+        kind: LOCK_RELEASE_FAILURE_KIND,
+        error: cleanupError,
+      });
+      throw authoritativeError;
     }
     if (error instanceof OciHostAgentDurableStateError) throw error;
     receiptUnavailable();

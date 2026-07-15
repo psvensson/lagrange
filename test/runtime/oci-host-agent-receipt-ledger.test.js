@@ -10,11 +10,15 @@ import {
   initializeOciHostAgentReceiptLedger,
   openOciHostAgentReceiptLedger,
 } from '../../src/runtime/oci-host-agent-receipt-ledger.js';
+import {OciHostAgentDurableStateError} from
+  '../../src/runtime/oci-host-agent-durable-errors.js';
 
 const DIGEST = `sha256:${'a'.repeat(64)}`;
 const OTHER_DIGEST = `sha256:${'b'.repeat(64)}`;
 const LEDGER_ROOT_ID = '1'.repeat(64);
 const ENROLLMENT_ID = '2'.repeat(64);
+const INVALID_LOCK_TOKEN = 'invalid-lock-token';
+const LOCK_RELEASE_FAILURE_KIND = 'lock_release_failed';
 const IDENTITY = Object.freeze({
   clusterIncarnation: 'cluster-1',
   nodeId: 'node-1',
@@ -278,6 +282,50 @@ describe('OCI host-agent durable receipt ledger', () => {
         (error) => error.code ===
           OCI_HOST_AGENT_DURABLE_ERROR.RECEIPT_UNAVAILABLE,
       );
+      fs.rmSync(root, {recursive: true, force: true});
+    }
+  });
+
+  it('keeps recovery authoritative and exposes a failed lock release', () => {
+    const root = temporaryRoot();
+    try {
+      initialize(root);
+      fs.writeFileSync(path.join(root, 'manifest.json'), '{}\n');
+
+      let observedError;
+      try {
+        openOciHostAgentReceiptLedger(configuration(root, {
+          lockOptions: {token: INVALID_LOCK_TOKEN},
+        }));
+      } catch (error) {
+        observedError = error;
+      }
+
+      assert.equal(observedError instanceof OciHostAgentDurableStateError, true);
+      assert.equal(
+        observedError.code,
+        OCI_HOST_AGENT_DURABLE_ERROR.RECEIPT_UNAVAILABLE,
+        'the ledger recovery failure remains authoritative',
+      );
+      assert.equal(
+        observedError.message,
+        OCI_HOST_AGENT_DURABLE_ERROR.RECEIPT_UNAVAILABLE,
+      );
+      assert.equal(
+        observedError.cleanupFailure.kind,
+        LOCK_RELEASE_FAILURE_KIND,
+      );
+      assert.equal(
+        observedError.cleanupFailure.error instanceof
+        OciHostAgentDurableStateError,
+        true,
+      );
+      assert.equal(
+        observedError.cleanupFailure.error.code,
+        OCI_HOST_AGENT_DURABLE_ERROR.LOCK_UNAVAILABLE,
+      );
+      assert.equal(Object.isFrozen(observedError.cleanupFailure), true);
+    } finally {
       fs.rmSync(root, {recursive: true, force: true});
     }
   });
