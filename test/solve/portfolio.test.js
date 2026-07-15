@@ -13,7 +13,10 @@ import {
 import {readLog} from '../../scripts/solve/store.js';
 import {
   EVENT_ATTEMPT,
+  EVENT_EVIDENCE_INGESTED,
+  EVENT_FINDING,
   EVENT_QUEST,
+  STATUS_OPEN,
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
 } from '../../scripts/solve/constants.js';
@@ -123,6 +126,73 @@ tap.test('portfolio projection (Concern 3)', async (t) => {
     t.equal(row.outcome, STATUS_EXHAUSTED);
     t.notOk(row.solved, 'exhausted is not solved');
     t.notOk(row.open, 'exhausted is not open');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('bound verifier rejection after SOLVED projects the Quest as open', (t) => {
+    const root = tmp();
+    const quest = measuredQuest('rejected-terminal');
+    const sha256 = 'a'.repeat(64);
+    saveQuest(root, quest);
+    appendEvent(root, quest.id, {
+      type: EVENT_ATTEMPT,
+      frontier: 'rejected-terminal-main',
+      rung: 'local-fix',
+      metricBefore: 1,
+      metricAfter: 0,
+      verificationContractVersion: 1,
+      changeRefIdentity: {sha256},
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_QUEST,
+      status: STATUS_SOLVED,
+      evidence: 'passing-report.json',
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_FINDING,
+      frontier: 'rejected-terminal-main',
+      kind: 'verifier-rejection',
+      claim: 'independent verification rejected this exact attempt',
+      evidence: 'subagent:portfolio-rejection-fixture',
+      verification: {
+        schemaVersion: 1,
+        scope: 'attempt',
+        fingerprint: `sha256:${sha256}`,
+        verdict: 'rejected',
+      },
+    });
+
+    const row = questPortfolioRow(quest, readLog(root, quest.id));
+    t.equal(row.outcome, STATUS_OPEN, 'current projected outcome is open');
+    t.ok(row.open, 'open-work consumers include the rejected Quest');
+    t.notOk(row.solved, 'the superseded terminal event is not presented as current');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('fresh failed doneWhen evidence after SOLVED projects the Quest as open', (t) => {
+    const root = tmp();
+    const quest = measuredQuest('fresh-failure');
+    saveQuest(root, quest);
+    appendEvent(root, quest.id, {
+      type: EVENT_QUEST,
+      status: STATUS_SOLVED,
+      evidence: 'passing-report.json',
+    });
+    appendEvent(root, quest.id, {
+      type: EVENT_EVIDENCE_INGESTED,
+      frontier: 'fresh-failure-main',
+      probeScope: 'doneWhen',
+      invalidSample: false,
+      done: false,
+      evidence: 'fresh-failing-report.json',
+    });
+
+    const row = questPortfolioRow(quest, readLog(root, quest.id));
+    t.equal(row.outcome, STATUS_OPEN, 'fresh closure failure reopens the portfolio row');
+    t.ok(row.open, 'open-work consumers include the fresh failure');
+    t.notOk(row.solved, 'the older terminal event is not presented as current');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

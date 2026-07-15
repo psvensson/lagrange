@@ -1,0 +1,47 @@
+{
+  "id": "solver-portfolio-projected-terminal-state",
+  "authoringContractVersion": 1,
+  "statement": "Portfolio, overview, and frontier derive each Quest outcome from projectState over its complete append-only log: a bound verifier rejection or fresh failed doneWhen evidence after a terminal event is OPEN, while unreopened SOLVED and EXHAUSTED outcomes remain terminal.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "3274ad20a73f04a4bbcb61533d05e77548aa20e7"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-portfolio-projected-terminal-state.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-portfolio-projected-terminal-state-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-portfolio-projected-terminal-state.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-projection-owner",
+      "statement": "Reuse projectState as the sole current-outcome owner; do not introduce a second terminal-event fold in any roadmap surface."
+    },
+    {
+      "id": "derived-surface-integration",
+      "statement": "Do not write shared generated overview or frontier files in this Quest; integration regenerates them after parallel Wave 0 lanes merge."
+    }
+  ]
+}

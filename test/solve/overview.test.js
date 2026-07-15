@@ -5,7 +5,13 @@ import os from 'node:os';
 
 import {saveQuest, appendEvent} from '../../scripts/solve/store.js';
 import {buildOverview, renderOverview} from '../../scripts/solve/overview.js';
-import {EVENT_ATTEMPT, EVENT_QUEST, STATUS_SOLVED} from '../../scripts/solve/constants.js';
+import {buildFrontier, renderFrontier} from '../../scripts/solve/frontier.js';
+import {
+  EVENT_ATTEMPT,
+  EVENT_EVIDENCE_INGESTED,
+  EVENT_QUEST,
+  STATUS_SOLVED,
+} from '../../scripts/solve/constants.js';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'overview-'));
@@ -83,6 +89,36 @@ tap.test('work overview projection', async (t) => {
     t.match(md, /### harness-oracle — 2/, 'groups the two harness-oracle records');
     t.match(md, /### membership-publication — 1/, 'groups the single membership record');
     t.notMatch(md, /CL-009/, 'settled (inactive) records are excluded from the frontier');
+    t.end();
+  });
+
+  t.test('overview and frontier include a terminal Quest reopened by fresh evidence', (t) => {
+    const root = tmp();
+    const id = 'q-reopened';
+    saveQuest(root, quest(id, {}));
+    appendEvent(root, id, {
+      type: EVENT_QUEST,
+      status: STATUS_SOLVED,
+      evidence: 'passing-report.json',
+    });
+    appendEvent(root, id, {
+      type: EVENT_EVIDENCE_INGESTED,
+      frontier: `${id}-main`,
+      probeScope: 'doneWhen',
+      invalidSample: false,
+      done: false,
+      evidence: 'fresh-failing-report.json',
+    });
+
+    const overview = renderOverview(buildOverview(root));
+    const frontier = renderFrontier(buildFrontier(root));
+    t.match(overview, /## 4 · Quests — 1 open \/ 0 terminal/u,
+      'overview derives the reopened state from the portfolio projection');
+    t.match(overview, /q-reopened/u, 'overview lists the reopened Quest');
+    t.match(frontier, /## Open quests — 1/u,
+      'frontier derives the reopened state from the portfolio projection');
+    t.match(frontier, /q-reopened/u, 'frontier lists the reopened Quest');
+    fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
 

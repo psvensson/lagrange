@@ -18,7 +18,6 @@ import path from 'node:path';
 import {
   SOLVE_DATA_DIR,
   QUESTS_SUBDIR,
-  EVENT_QUEST,
   EVENT_ATTEMPT,
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
@@ -47,21 +46,12 @@ export function loadAllQuests(root) {
   return listQuestIds(root).map((id) => loadQuest(root, id));
 }
 
-// Terminal outcome is read straight from the last quest event in the log; an
-// absent quest event means the quest is still open (no terminal recorded).
-function terminalOutcome(log) {
-  for (let i = log.length - 1; i >= 0; i -= 1) {
-    if (log[i].type === EVENT_QUEST) return log[i].status;
-  }
-  return STATUS_OPEN;
-}
-
 export function questPortfolioRow(quest, log) {
-  const outcome = terminalOutcome(log);
   const state = projectState(quest, log);
+  const outcome = state.questStatus;
   const reopens = state.frontiers.reduce((sum, f) => sum + (f.reopenCount || 0), 0);
   // Auto-reopens are the SOLVED->fresh-failure flap (distinct from deliberate `reopen`
-  // CLI revivals): they climb toward OSCILLATION_REOPEN_BUDGET and then terminalize the
+  // CLI revivals): they climb toward OSCILLATION_REOPEN_BUDGET and then terminate the
   // quest EXHAUSTED, so they are surfaced separately as a stuck-work signal.
   const autoReopens = state.frontiers.reduce((sum, f) => sum + (f.autoReopenCount || 0), 0);
   const cannotMeasure = state.frontiers.filter(
