@@ -125,6 +125,11 @@ test('MovieLens admits schema after formation and before ratings CREATE',
       'the runner awaits complete five-node formation after launching joiners');
     t.ok(schemaAdmissionIndex > formationIndex,
       'membership formation precedes authoritative schema admission');
+    t.match(
+      runnerSource,
+      /stableWindowMs: PARTITION_EVAL_INTERVAL_MS/,
+      'schema admission spans one production partition evaluation interval',
+    );
     t.ok(createRatingsIndex > schemaAdmissionIndex,
       'stable snapshot admission precedes the durable ratings CREATE');
     t.ok(preloadAdmissionIndex > createRatingsIndex,

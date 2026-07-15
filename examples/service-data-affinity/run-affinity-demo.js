@@ -589,6 +589,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       sleep,
       timeoutMs: CLUSTER_FORM_TIMEOUT_MS,
       pollIntervalMs: POLL_INTERVAL_MS,
+      stableWindowMs: PARTITION_EVAL_INTERVAL_MS,
     });
     phaseEvidence.schemaAdmission = schemaAdmission;
     console.log(

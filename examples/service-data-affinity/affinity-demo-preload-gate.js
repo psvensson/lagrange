@@ -35,8 +35,17 @@ const PRELOAD_BLOCKING_SNAPSHOT_STATES = new Set([
 const RATINGS_TABLE_NAME = 'ratings';
 const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
+const DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS = 60_000;
 const SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT = 2;
 const ZERO = 0;
+const SCHEMA_STABILITY_WINDOW_PHASE = Object.freeze({
+  INACTIVE: 'inactive',
+  OBSERVING: 'observing',
+});
+const INACTIVE_SCHEMA_STABILITY_WINDOW = Object.freeze({
+  phase: SCHEMA_STABILITY_WINDOW_PHASE.INACTIVE,
+  startedAtMs: ZERO,
+});
 const BUDGET_EXHAUSTED_ERROR = 'preload admission budget exhausted';
 const SCHEMA_BUDGET_EXHAUSTED_ERROR = 'schema admission budget exhausted';
 const ADMIN_STREAM_LANE_QUERY_PARAMETER = 'lane';
@@ -218,6 +227,94 @@ function normalizePollIntervalMs(value) {
     DEFAULT_POLL_INTERVAL_MS;
 }
 
+function normalizeSchemaStableWindowMs(value) {
+  return Number.isFinite(value) && value >= ZERO ?
+    Math.floor(value) :
+    DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS;
+}
+
+function advanceSchemaStabilityWindow(
+  snapshot,
+  stabilityWindow,
+  nowMs,
+) {
+  if (
+    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
+    snapshot.ready !== true
+  ) {
+    return INACTIVE_SCHEMA_STABILITY_WINDOW;
+  }
+  if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
+    return stabilityWindow;
+  }
+  return Object.freeze({
+    phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
+    startedAtMs: nowMs,
+  });
+}
+
+function projectSchemaStabilityWindow(
+  snapshot,
+  stabilityWindow,
+  nowMs,
+  stableWindowMs,
+) {
+  if (stabilityWindow.phase !== SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
+    return snapshot;
+  }
+  const stableElapsedMs = Math.max(
+    ZERO,
+    nowMs - stabilityWindow.startedAtMs,
+  );
+  return Object.freeze({
+    ...snapshot,
+    state: stableElapsedMs >= stableWindowMs ?
+      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT :
+      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
+    stableElapsedMs,
+    leaderQuietElapsedMs: stableElapsedMs,
+  });
+}
+
+async function observeSchemaAdmissionSnapshot(options, target, deadlineMs) {
+  const snapshotTimeoutMs = remainingBudgetMs(options.now, deadlineMs);
+  if (snapshotTimeoutMs <= ZERO) {
+    return classifySnapshot(
+      null,
+      SCHEMA_BUDGET_EXHAUSTED_ERROR,
+      options.now(),
+    );
+  }
+  return observeControlSnapshot(options, target, snapshotTimeoutMs);
+}
+
+function buildSchemaStabilityObservation(
+  observedSnapshot,
+  stabilityWindow,
+  stableConfirmationCount,
+  stableWindowMs,
+  nowMs,
+) {
+  const nextStabilityWindow = advanceSchemaStabilityWindow(
+    observedSnapshot,
+    stabilityWindow,
+    nowMs,
+  );
+  const snapshot = projectSchemaStabilityWindow(
+    observedSnapshot,
+    nextStabilityWindow,
+    nowMs,
+    stableWindowMs,
+  );
+  return Object.freeze({
+    snapshot,
+    stabilityWindow: nextStabilityWindow,
+    stableConfirmationCount:
+      snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ?
+        stableConfirmationCount + 1 : ZERO,
+  });
+}
+
 function buildLoadLaneAdmission(state, errorMessage = '') {
   return Object.freeze({
     admitted: state === PRELOAD_ADMISSION_STATE.ADMITTED,
@@ -367,30 +464,38 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
   const normalizedOptions = {...options, now, sleep};
   const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
   const pollIntervalMs = normalizePollIntervalMs(options.pollIntervalMs);
+  const stableWindowMs = normalizeSchemaStableWindowMs(
+    options.stableWindowMs,
+  );
   const deadlineMs = now() + timeoutMs;
   const target = buildAdminLaneTarget(
     options.target,
     ADMIN_STREAM_LANE.SNAPSHOT,
   );
   let stableConfirmationCount = ZERO;
+  let stabilityWindow = INACTIVE_SCHEMA_STABILITY_WINDOW;
   let lastEvidence = null;
 
   while (true) {
     if (lastEvidence && now() >= deadlineMs) {
       throw buildSchemaAdmissionTimeoutError(lastEvidence);
     }
-    const snapshotTimeoutMs = remainingBudgetMs(now, deadlineMs);
-    const snapshot = snapshotTimeoutMs > ZERO ?
-      await observeControlSnapshot(
-        normalizedOptions,
-        target,
-        snapshotTimeoutMs,
-      ) :
-      classifySnapshot(null, SCHEMA_BUDGET_EXHAUSTED_ERROR, now());
-    stableConfirmationCount = snapshot.ready ?
-      stableConfirmationCount + 1 : ZERO;
+    const observedSnapshot = await observeSchemaAdmissionSnapshot(
+      normalizedOptions,
+      target,
+      deadlineMs,
+    );
+    const stabilityObservation = buildSchemaStabilityObservation(
+      observedSnapshot,
+      stabilityWindow,
+      stableConfirmationCount,
+      stableWindowMs,
+      now(),
+    );
+    stabilityWindow = stabilityObservation.stabilityWindow;
+    stableConfirmationCount = stabilityObservation.stableConfirmationCount;
     const evidence = buildSchemaAdmissionEvidence(
-      snapshot,
+      stabilityObservation.snapshot,
       target,
       stableConfirmationCount,
     );

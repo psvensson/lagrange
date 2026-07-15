@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 6
+**Attempts:** 8
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -21,17 +21,17 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json
-- Selected theory: theory-20260715-control-plane-snapshot-owner
+- Selected theory: theory-20260715-sampled-quiescence-window
 - Next move: continue supervised step for movielens-pre-schema-quiescence-live-main
 
 ## Continuation
 - Status: allowed
-- Next action: continue movielens-pre-schema-quiescence-live-main with modelRef or modelNotApplicable evidence
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
 - Changed files: 10
-- Change bytes: 42147
+- Change bytes: 51619
 - Owner areas: examples, scripts/examples, test/admin, test/runtime
 - Categories: other, test
 - Action: land or separate 4 owner areas: examples, scripts/examples, test/admin, test/runtime
@@ -43,7 +43,7 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **movielens-pre-schema-quiescence-live-main** [open] rung 3, attempts 6, metric 1 -> 1
+- **movielens-pre-schema-quiescence-live-main** [parked {exhausted}] rung 5, attempts 8, metric 1 -> 1 — ladder exhausted without metric movement
 
 ## Findings
 - **movielens-pre-schema-quiescence-live-main**: inherited from movielens-ratings-scoped-split-policy-live: At checkpoint 4bd85509 the five-node membership-active barrier returned, but the seed log stopped at 22:11:29.475Z while priority-recovery replacement planning was still active. The sole ratings CREATE request began at 22:11:35.775Z, left no admin/schema/ratings record in any node log, and timed out after 45 seconds; peer logs concurrently recorded control-plane pressure and internal query timeouts. waitForActiveNodes therefore proves membership cardinality, not a safe DDL/load-admission boundary. The existing production preload admission owner must establish quiescence before policy-bearing ratings CREATE, whose typed stable confirmation then gates load; do not add a second retry owner or rerun unchanged. (rules out: Treating membership-active cardinality as control-plane quiescence; merely widening the admin timeout; adding a local CREATE retry loop.) [data/examples/service-data-affinity-demo-archive/wave4-live-create-admin-timeout-2026-07-15T22-12-20-802Z.tar.gz]
@@ -65,15 +65,17 @@
 - **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
 - **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
 - **movielens-pre-schema-quiescence-live-main**: At approved source 04c32b68 the canonical forced-repair transition cleared cache_stale_watermark and admitted schema after two fresh quiescent snapshots. Ratings CREATE attempt 1 then hit the typed admin response deadline and retried correctly, but the fresh session received Workflow transition rejected: ownership lease expired while logs show periodic priority-recovery planning and schema_operations replacement work beginning during the CREATE interval. Report sha256=537d2f1f828ccde9362d54809b60692f9ff9e6e230fe24418c057805e077efdb; comparison sha256=1a1ea946bc9222134a7bb567701fd58602e454501a17a29b99fa1062d9a611dd; immutable archive sha256=05b3cfd7bf214920d8bcb982ffd4e1002e81080b53c73a3dacc8d7a202e0634e. This confirms the pre-recorded falsifier: two point snapshots can precede the scheduled partition-evaluation cycle, so the next deterministic attempt must require one full 60000ms evaluation interval of uninterrupted quiescence; no retry changes or unchanged live rerun. [data/examples/service-data-affinity-demo-archive/wave4-live-schema-lease-expired-2026-07-15T23-30-35-492Z.tar.gz]
+- **movielens-pre-schema-quiescence-live-main**: Independent verification rejected exact attempt: the stability-window timing behavior passes, but waitForAffinityDemoSchemaAdmission introduces a new complexity-ratchet violation and encodes inactive/reset lifecycle state with null contrary to ARCH-0014; replace it with an explicit stability-window state owner and extracted transition helper. [subagent:verify_snapshot_forced_repair_attempt6]
 
 ## Theories
 - **theory-20260715-the-local-control-snapshot-owner-correctly** [active] system, mechanism The local control-snapshot owner correctly marks stale cache evidence pending, but the demo consumer never traverses the owner's existing forced authoritative repair command, so polling cannot refresh the evidence it requires., owner control_plane_snapshot_owner, modelGate npm run model:contracts
 - **theory-20260715-schema-admission-required-fields-optional-discount** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer observation, mechanism The shared admission parser must distinguish required authoritative snapshot fields from an optional client-side in-flight discount; otherwise missing required evidence can fail open, while requiring the non-produced discount makes every production snapshot unavailable., owner MovieLens shared control-snapshot admission parser, boundary authoritative snapshot envelope to quiescence classification, modelGate npm run model:contracts
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism The existing ratings schema retry owner cannot distinguish an ambiguous admin response deadline from a terminal CREATE failure, so its documented fresh-session idempotent replay contract exits after one timed-out request., owner ratings schema retry owner, boundary admin response deadline to idempotent CREATE replay, modelGate npm run model:contracts
 - **theory-20260715-control-plane-snapshot-owner** [supported] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism control_plane_snapshot_owner, owner control_plane_snapshot_owner, boundary snapshot_freshness, modelGate npm run model:contracts
+- **theory-20260715-sampled-quiescence-window** [supported] frontier, frontier movielens-pre-schema-quiescence-live-main, layer scheduling, mechanism sampled_quiescence_window, owner pre_schema_admission_gate, boundary partition_evaluation_cycle_to_schema_lease, modelGate npm run model:contracts
 
 ## Selected Theories
-- **movielens-pre-schema-quiescence-live-main**: theory-20260715-control-plane-snapshot-owner
+- **movielens-pre-schema-quiescence-live-main**: theory-20260715-sampled-quiescence-window
 
 ## Theory Results
 - **theory-20260715-schema-admission-required-fields-optional-discount**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json]
@@ -84,6 +86,8 @@
 - **theory-20260715-control-plane-snapshot-owner**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
 - **theory-20260715-control-plane-snapshot-owner**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
 - **theory-20260715-control-plane-snapshot-owner**: supported (scenario=failed, theory=supported, movement=moved_boundary) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
+- **theory-20260715-sampled-quiescence-window**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
+- **theory-20260715-sampled-quiescence-window**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -94,3 +98,5 @@
 | 2026-07-15T22:52:09.558Z | movielens-pre-schema-quiescence-live-main | widen-scope | 1 -> 1 | flat | same | theory-20260715-idempotent-schema-admin-timeout-retry-owner | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-4.diff |
 | 2026-07-15T22:59:36.637Z | movielens-pre-schema-quiescence-live-main | widen-scope | 1 -> 1 | flat | same | theory-20260715-idempotent-schema-admin-timeout-retry-owner | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-5.diff |
 | 2026-07-15T23:18:01.798Z | movielens-pre-schema-quiescence-live-main | model | 1 -> 1 | flat | same | theory-20260715-control-plane-snapshot-owner | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-6.diff |
+| 2026-07-15T23:38:58.166Z | movielens-pre-schema-quiescence-live-main | model | 1 -> 1 | flat | same | theory-20260715-sampled-quiescence-window | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-7.diff |
+| 2026-07-15T23:47:11.957Z | movielens-pre-schema-quiescence-live-main | change-approach | 1 -> 1 | flat | same | theory-20260715-sampled-quiescence-window | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-8.diff |

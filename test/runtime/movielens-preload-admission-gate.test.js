@@ -56,6 +56,7 @@ function boundedSchemaOptions(query, timeoutMs = 8) {
     },
     timeoutMs,
     pollIntervalMs: 0,
+    stableWindowMs: 0,
   };
 }
 
@@ -166,6 +167,7 @@ test('authoritative snapshot repair cannot reset or outlive schema budget',
         sleep: async () => {},
         timeoutMs: 5,
         pollIntervalMs: 0,
+        stableWindowMs: 0,
         query: async (call) => {
           calls.push(call);
           if (call.sql === SNAPSHOT_SQL) {
@@ -193,6 +195,45 @@ test('authoritative snapshot repair cannot reset or outlive schema budget',
     ]);
     t.equal(error.schemaAdmission.admitted, false,
       'a failed authoritative repair remains a typed denial');
+    t.end();
+  });
+
+test('schema admission survives a full partition evaluation interval',
+  async (t) => {
+    let nowMs = 0;
+    const observationTimes = [];
+    const result = await waitForAffinityDemoSchemaAdmission({
+      target: BASE_TARGET,
+      now: () => nowMs,
+      sleep: async (delayMs) => {
+        nowMs += delayMs;
+      },
+      timeoutMs: 160_000,
+      pollIntervalMs: 20_000,
+      stableWindowMs: 60_000,
+      query: async () => {
+        observationTimes.push(nowMs);
+        if (nowMs === 40_000) {
+          return {rows: [buildControlSnapshot({
+            replicaOperations: {
+              inFlightCount: 1,
+              staleInFlightCount: 0,
+              rows: [{operation_id: 'scheduled-recovery-cycle'}],
+            },
+          })]};
+        }
+        return {rows: [buildControlSnapshot()]};
+      },
+    });
+
+    t.same(observationTimes, [
+      0, 20_000, 40_000, 60_000, 80_000, 100_000, 120_000, 140_000,
+    ], 'scheduled work resets the candidate before one full quiet interval');
+    t.equal(result.stableConfirmationCount, 2,
+      'two confirmations occur only after the full interval closes');
+    t.equal(result.snapshot.state, 'quiescent');
+    t.equal(result.snapshot.stableElapsedMs, 80_000,
+      'the admitted evidence retains the uninterrupted quiet duration');
     t.end();
   });
 
