@@ -15,12 +15,10 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import process from 'node:process';
-import {fileURLToPath} from 'node:url';
+
+import {runAnalyzerCliWhenDirect} from './distributed-analysis-runtime.js';
 
 const ENCODING_UTF8 = 'utf8';
-const EXIT_SUCCESS = 0;
-const EXIT_FAILURE = 1;
 const JSON_INDENT_SPACES = 2;
 const NEWLINE = '\n';
 const FLAG_MARKDOWN = '--markdown';
@@ -150,21 +148,7 @@ async function runCli(argv) {
   };
 }
 
-function isDirectRun() {
-  return process.argv[1] === fileURLToPath(import.meta.url);
-}
-
-if (isDirectRun()) {
-  runCli(process.argv.slice(2))
-    .then((result) => {
-      (result.ok ? process.stdout : process.stderr).write(result.output + NEWLINE);
-      process.exitCode = result.ok ? EXIT_SUCCESS : EXIT_FAILURE;
-    })
-    .catch((error) => {
-      process.stderr.write(String(error?.message ?? error) + NEWLINE);
-      process.exitCode = EXIT_FAILURE;
-    });
-}
+runAnalyzerCliWhenDirect(import.meta.url, runCli);
 
 export {
   PRECONDITIONS,

@@ -36,12 +36,13 @@
 import fs from 'node:fs/promises';
 import {gunzipSync} from 'node:zlib';
 import path from 'node:path';
-import process from 'node:process';
-import {fileURLToPath} from 'node:url';
+
+import {
+  collectLogGzFiles,
+  runAnalyzerCliWhenDirect,
+} from './distributed-analysis-runtime.js';
 
 const ENCODING_UTF8 = 'utf8';
-const EXIT_SUCCESS = 0;
-const EXIT_FAILURE = 1;
 const JSON_INDENT_SPACES = 2;
 const NEWLINE = '\n';
 const FLAG_MARKDOWN = '--markdown';
@@ -49,7 +50,6 @@ const FLAG_SETTLE_MS = '--settle-ms';
 const FLAG_MIN_DISPATCHES = '--min-dispatches';
 const FLAG_HELP = '--help';
 const SCHEMA_VERSION = 'redecision-storm-v1';
-const GZIP_SUFFIX = '.log.gz';
 const DISPATCH_MSG = 'Executing rebalancing move';
 const ADD_REASON = 'increase_replica_count';
 const BELOW_MIN_FRAGMENT = 'replica_count_below_minimum';
@@ -168,27 +168,6 @@ function decompressLines(buffer) {
   return gunzipSync(buffer).toString(ENCODING_UTF8).split(NEWLINE);
 }
 
-async function collectLogGzFiles(target) {
-  const stat = await fs.stat(target);
-  if (stat.isFile()) {
-    return target.endsWith(GZIP_SUFFIX) ? [target] : [];
-  }
-  const found = [];
-  async function visit(dir) {
-    const dirents = await fs.readdir(dir, {withFileTypes: true});
-    for (const dirent of dirents) {
-      const child = path.join(dir, dirent.name);
-      if (dirent.isDirectory()) {
-        await visit(child);
-      } else if (dirent.isFile() && dirent.name.endsWith(GZIP_SUFFIX)) {
-        found.push(child);
-      }
-    }
-  }
-  await visit(target);
-  return found.sort();
-}
-
 async function analyzeTarget(target, options) {
   const files = await collectLogGzFiles(target);
   const dispatches = new Map();
@@ -288,21 +267,7 @@ async function runCli(argv) {
   };
 }
 
-function isDirectRun() {
-  return process.argv[1] === fileURLToPath(import.meta.url);
-}
-
-if (isDirectRun()) {
-  runCli(process.argv.slice(2))
-    .then((result) => {
-      (result.ok ? process.stdout : process.stderr).write(result.output + NEWLINE);
-      process.exitCode = result.ok ? EXIT_SUCCESS : EXIT_FAILURE;
-    })
-    .catch((error) => {
-      process.stderr.write(String(error?.message ?? error) + NEWLINE);
-      process.exitCode = EXIT_FAILURE;
-    });
-}
+runAnalyzerCliWhenDirect(import.meta.url, runCli);
 
 export {
   parseStormEvents,

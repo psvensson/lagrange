@@ -1,0 +1,361 @@
+diff --git a/scripts/analyze-fix-engagement.js b/scripts/analyze-fix-engagement.js
+index bc7f1ee14209e97590703a92bf0e8fb81cb81e7b..c88cdca9431b8b33b3a7bfb4d7c7b031e5d76706 100644
+--- a/scripts/analyze-fix-engagement.js
++++ b/scripts/analyze-fix-engagement.js
+@@ -21,12 +21,13 @@
+ import fs from 'node:fs/promises';
+ import {gunzipSync} from 'node:zlib';
+ import path from 'node:path';
+-import process from 'node:process';
+-import {fileURLToPath} from 'node:url';
++
++import {
++  collectLogGzFiles,
++  runAnalyzerCliWhenDirect,
++} from './distributed-analysis-runtime.js';
+ 
+ const ENCODING_UTF8 = 'utf8';
+-const EXIT_SUCCESS = 0;
+-const EXIT_FAILURE = 1;
+ const JSON_INDENT_SPACES = 2;
+ const NEWLINE = '\n';
+ const FLAG_MARKDOWN = '--markdown';
+@@ -37,7 +38,6 @@ const TRACE_MSG = 'convergence decision trace';
+ const DRIVE_DECISION = 'drive';
+ const COMMITTED_OUTCOME = 'reconcile-committed';
+ const DEFAULT_SIGNAL = 'ownerAckCompletionPendingCount';
+-const GZIP_SUFFIX = '.log.gz';
+ 
+ // Pure: reduce an array of parsed trace objects to an engagement tally for one
+ // run, against the named signal field.
+@@ -99,27 +99,6 @@ function summarizeRuns(runTallies, signalField) {
+   };
+ }
+ 
+-async function collectLogGzFiles(target) {
+-  const stat = await fs.stat(target);
+-  if (stat.isFile()) {
+-    return target.endsWith(GZIP_SUFFIX) ? [target] : [];
+-  }
+-  const found = [];
+-  async function visit(dir) {
+-    const dirents = await fs.readdir(dir, {withFileTypes: true});
+-    for (const dirent of dirents) {
+-      const child = path.join(dir, dirent.name);
+-      if (dirent.isDirectory()) {
+-        await visit(child);
+-      } else if (dirent.isFile() && dirent.name.endsWith(GZIP_SUFFIX)) {
+-        found.push(child);
+-      }
+-    }
+-  }
+-  await visit(target);
+-  return found.sort();
+-}
+-
+ async function tallyTarget(target, signalField) {
+   const files = await collectLogGzFiles(target);
+   const traces = [];
+@@ -195,21 +174,7 @@ async function runCli(argv) {
+   };
+ }
+ 
+-function isDirectRun() {
+-  return process.argv[1] === fileURLToPath(import.meta.url);
+-}
+-
+-if (isDirectRun()) {
+-  runCli(process.argv.slice(2))
+-    .then((result) => {
+-      (result.ok ? process.stdout : process.stderr).write(result.output + NEWLINE);
+-      process.exitCode = result.ok ? EXIT_SUCCESS : EXIT_FAILURE;
+-    })
+-    .catch((error) => {
+-      process.stderr.write(String(error?.message ?? error) + NEWLINE);
+-      process.exitCode = EXIT_FAILURE;
+-    });
+-}
++runAnalyzerCliWhenDirect(import.meta.url, runCli);
+ 
+ export {
+   tallyEngagement,
+diff --git a/scripts/analyze-monotone-drain.js b/scripts/analyze-monotone-drain.js
+index 1ab2f9d83bb79878659c6c37d0a4ed3f7166658b..c377d7b20831fb2b45fdb9d3896077f8559d3385 100644
+--- a/scripts/analyze-monotone-drain.js
++++ b/scripts/analyze-monotone-drain.js
+@@ -37,18 +37,18 @@
+ import fs from 'node:fs/promises';
+ import {gunzipSync, constants as zlibConstants} from 'node:zlib';
+ import path from 'node:path';
+-import process from 'node:process';
+-import {fileURLToPath} from 'node:url';
++
++import {
++  collectLogGzFiles,
++  runAnalyzerCliWhenDirect,
++} from './distributed-analysis-runtime.js';
+ 
+ const ENCODING_UTF8 = 'utf8';
+-const EXIT_SUCCESS = 0;
+-const EXIT_FAILURE = 1;
+ const JSON_INDENT_SPACES = 2;
+ const NEWLINE = '\n';
+ const FLAG_MARKDOWN = '--markdown';
+ const FLAG_HELP = '--help';
+ const SCHEMA_VERSION = 'monotone-drain-v1';
+-const GZIP_SUFFIX = '.log.gz';
+ const CREATE_MSG = 'Creating operation';
+ 
+ // Pure: collect per-op lifetimes from raw log lines.
+@@ -170,27 +170,6 @@ function decompressLines(buffer) {
+     .split(NEWLINE);
+ }
+ 
+-async function collectLogGzFiles(target) {
+-  const stat = await fs.stat(target);
+-  if (stat.isFile()) {
+-    return target.endsWith(GZIP_SUFFIX) ? [target] : [];
+-  }
+-  const found = [];
+-  async function visit(dir) {
+-    const dirents = await fs.readdir(dir, {withFileTypes: true});
+-    for (const dirent of dirents) {
+-      const child = path.join(dir, dirent.name);
+-      if (dirent.isDirectory()) {
+-        await visit(child);
+-      } else if (dirent.isFile() && dirent.name.endsWith(GZIP_SUFFIX)) {
+-        found.push(child);
+-      }
+-    }
+-  }
+-  await visit(target);
+-  return found.sort();
+-}
+-
+ async function analyzeTarget(target) {
+   const files = await collectLogGzFiles(target);
+   // Op lifetimes must be merged ACROSS node logs (an op is created on one node,
+@@ -257,20 +236,6 @@ async function runCli(argv) {
+   };
+ }
+ 
+-function isDirectRun() {
+-  return process.argv[1] === fileURLToPath(import.meta.url);
+-}
+-
+-if (isDirectRun()) {
+-  runCli(process.argv.slice(2))
+-    .then((result) => {
+-      (result.ok ? process.stdout : process.stderr).write(result.output + NEWLINE);
+-      process.exitCode = result.ok ? EXIT_SUCCESS : EXIT_FAILURE;
+-    })
+-    .catch((error) => {
+-      process.stderr.write(String(error?.message ?? error) + NEWLINE);
+-      process.exitCode = EXIT_FAILURE;
+-    });
+-}
++runAnalyzerCliWhenDirect(import.meta.url, runCli);
+ 
+ export {parseOpLifetimes, partitionPostPeakRises, summarizeTarget, renderMarkdown, runCli};
+diff --git a/scripts/analyze-precondition-recurrence.js b/scripts/analyze-precondition-recurrence.js
+index b2bdc03d4cb07afc8a2de0767626437369873aeb..c9dbb7660bbfe51dbb59f65f4feb8585806c9333 100644
+--- a/scripts/analyze-precondition-recurrence.js
++++ b/scripts/analyze-precondition-recurrence.js
+@@ -15,12 +15,10 @@
+ 
+ import fs from 'node:fs/promises';
+ import path from 'node:path';
+-import process from 'node:process';
+-import {fileURLToPath} from 'node:url';
++
++import {runAnalyzerCliWhenDirect} from './distributed-analysis-runtime.js';
+ 
+ const ENCODING_UTF8 = 'utf8';
+-const EXIT_SUCCESS = 0;
+-const EXIT_FAILURE = 1;
+ const JSON_INDENT_SPACES = 2;
+ const NEWLINE = '\n';
+ const FLAG_MARKDOWN = '--markdown';
+@@ -150,21 +148,7 @@ async function runCli(argv) {
+   };
+ }
+ 
+-function isDirectRun() {
+-  return process.argv[1] === fileURLToPath(import.meta.url);
+-}
+-
+-if (isDirectRun()) {
+-  runCli(process.argv.slice(2))
+-    .then((result) => {
+-      (result.ok ? process.stdout : process.stderr).write(result.output + NEWLINE);
+-      process.exitCode = result.ok ? EXIT_SUCCESS : EXIT_FAILURE;
+-    })
+-    .catch((error) => {
+-      process.stderr.write(String(error?.message ?? error) + NEWLINE);
+-      process.exitCode = EXIT_FAILURE;
+-    });
+-}
++runAnalyzerCliWhenDirect(import.meta.url, runCli);
+ 
+ export {
+   PRECONDITIONS,
+diff --git a/scripts/analyze-redecision-storm.js b/scripts/analyze-redecision-storm.js
+index b76b7a0f30466fae1da249cf78ca063af9b9ba06..c00aa21e553173c67e9724970d2bf50be21e3191 100644
+--- a/scripts/analyze-redecision-storm.js
++++ b/scripts/analyze-redecision-storm.js
+@@ -36,12 +36,13 @@
+ import fs from 'node:fs/promises';
+ import {gunzipSync} from 'node:zlib';
+ import path from 'node:path';
+-import process from 'node:process';
+-import {fileURLToPath} from 'node:url';
++
++import {
++  collectLogGzFiles,
++  runAnalyzerCliWhenDirect,
++} from './distributed-analysis-runtime.js';
+ 
+ const ENCODING_UTF8 = 'utf8';
+-const EXIT_SUCCESS = 0;
+-const EXIT_FAILURE = 1;
+ const JSON_INDENT_SPACES = 2;
+ const NEWLINE = '\n';
+ const FLAG_MARKDOWN = '--markdown';
+@@ -49,7 +50,6 @@ const FLAG_SETTLE_MS = '--settle-ms';
+ const FLAG_MIN_DISPATCHES = '--min-dispatches';
+ const FLAG_HELP = '--help';
+ const SCHEMA_VERSION = 'redecision-storm-v1';
+-const GZIP_SUFFIX = '.log.gz';
+ const DISPATCH_MSG = 'Executing rebalancing move';
+ const ADD_REASON = 'increase_replica_count';
+ const BELOW_MIN_FRAGMENT = 'replica_count_below_minimum';
+@@ -168,27 +168,6 @@ function decompressLines(buffer) {
+   return gunzipSync(buffer).toString(ENCODING_UTF8).split(NEWLINE);
+ }
+ 
+-async function collectLogGzFiles(target) {
+-  const stat = await fs.stat(target);
+-  if (stat.isFile()) {
+-    return target.endsWith(GZIP_SUFFIX) ? [target] : [];
+-  }
+-  const found = [];
+-  async function visit(dir) {
+-    const dirents = await fs.readdir(dir, {withFileTypes: true});
+-    for (const dirent of dirents) {
+-      const child = path.join(dir, dirent.name);
+-      if (dirent.isDirectory()) {
+-        await visit(child);
+-      } else if (dirent.isFile() && dirent.name.endsWith(GZIP_SUFFIX)) {
+-        found.push(child);
+-      }
+-    }
+-  }
+-  await visit(target);
+-  return found.sort();
+-}
+-
+ async function analyzeTarget(target, options) {
+   const files = await collectLogGzFiles(target);
+   const dispatches = new Map();
+@@ -288,21 +267,7 @@ async function runCli(argv) {
+   };
+ }
+ 
+-function isDirectRun() {
+-  return process.argv[1] === fileURLToPath(import.meta.url);
+-}
+-
+-if (isDirectRun()) {
+-  runCli(process.argv.slice(2))
+-    .then((result) => {
+-      (result.ok ? process.stdout : process.stderr).write(result.output + NEWLINE);
+-      process.exitCode = result.ok ? EXIT_SUCCESS : EXIT_FAILURE;
+-    })
+-    .catch((error) => {
+-      process.stderr.write(String(error?.message ?? error) + NEWLINE);
+-      process.exitCode = EXIT_FAILURE;
+-    });
+-}
++runAnalyzerCliWhenDirect(import.meta.url, runCli);
+ 
+ export {
+   parseStormEvents,
+diff --git a/scripts/analyze-replace-safety-blocks.js b/scripts/analyze-replace-safety-blocks.js
+index ec06431d7551e6c65a35b8877e0683603f33ce63..10bd62170e8f3ae6bce7d4ebba8e58cb60304662 100644
+--- a/scripts/analyze-replace-safety-blocks.js
++++ b/scripts/analyze-replace-safety-blocks.js
+@@ -29,18 +29,18 @@
+ import fs from 'node:fs/promises';
+ import {gunzipSync, constants as zlibConstants} from 'node:zlib';
+ import path from 'node:path';
+-import process from 'node:process';
+-import {fileURLToPath} from 'node:url';
++
++import {
++  collectLogGzFiles,
++  runAnalyzerCliWhenDirect,
++} from './distributed-analysis-runtime.js';
+ 
+ const ENCODING_UTF8 = 'utf8';
+-const EXIT_SUCCESS = 0;
+-const EXIT_FAILURE = 1;
+ const JSON_INDENT_SPACES = 2;
+ const NEWLINE = '\n';
+ const FLAG_MARKDOWN = '--markdown';
+ const FLAG_HELP = '--help';
+ const SCHEMA_VERSION = 'replace-safety-blocks-v1';
+-const GZIP_SUFFIX = '.log.gz';
+ const DEFER_REASON = 'replace_remove_safety_blocked';
+ 
+ // Sub-reason taxonomy: ordered substring probes against the errorMessage. The
+@@ -172,27 +172,6 @@ function decompressLines(buffer) {
+     .split(NEWLINE);
+ }
+ 
+-async function collectLogGzFiles(target) {
+-  const stat = await fs.stat(target);
+-  if (stat.isFile()) {
+-    return target.endsWith(GZIP_SUFFIX) ? [target] : [];
+-  }
+-  const found = [];
+-  async function visit(dir) {
+-    const dirents = await fs.readdir(dir, {withFileTypes: true});
+-    for (const dirent of dirents) {
+-      const child = path.join(dir, dirent.name);
+-      if (dirent.isDirectory()) {
+-        await visit(child);
+-      } else if (dirent.isFile() && dirent.name.endsWith(GZIP_SUFFIX)) {
+-        found.push(child);
+-      }
+-    }
+-  }
+-  await visit(target);
+-  return found.sort();
+-}
+-
+ async function analyzeTarget(target) {
+   const files = await collectLogGzFiles(target);
+   const events = [];
+@@ -271,21 +250,7 @@ async function runCli(argv) {
+   };
+ }
+ 
+-function isDirectRun() {
+-  return process.argv[1] === fileURLToPath(import.meta.url);
+-}
+-
+-if (isDirectRun()) {
+-  runCli(process.argv.slice(2))
+-    .then((result) => {
+-      (result.ok ? process.stdout : process.stderr).write(result.output + NEWLINE);
+-      process.exitCode = result.ok ? EXIT_SUCCESS : EXIT_FAILURE;
+-    })
+-    .catch((error) => {
+-      process.stderr.write(String(error?.message ?? error) + NEWLINE);
+-      process.exitCode = EXIT_FAILURE;
+-    });
+-}
++runAnalyzerCliWhenDirect(import.meta.url, runCli);
+ 
+ export {
+   classifySubReason,
