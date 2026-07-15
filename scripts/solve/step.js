@@ -46,7 +46,10 @@ import {
   decisionContinues,
 } from './gate.js';
 import {unrecordedEvidenceContinuation} from './continuation.js';
-import {resolveWorkspaceBaseCommit} from './verification.js';
+import {
+  resolveWorkspaceBaseCommit,
+} from './verification.js';
+import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
 
 const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
 const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
@@ -292,9 +295,18 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     );
   }
 
+  const canonicalProblem = canonicalSourceArtifactProblem(
+    root,
+    pending.headCommit,
+    changeInspection,
+  );
+  if (canonicalProblem) throw new Error(canonicalProblem);
+
   const log = readLog(root, quest.id);
   const scopeAdmission = scopeTerminalStatus(
-    analyzeScopePressureCandidate(root, quest, log, changeInspection),
+    analyzeScopePressureCandidate(root, quest, log, changeInspection, {
+      workspaceBaseCommit: pending.headCommit || null,
+    }),
   );
   if (scopeAdmission.terminal) {
     throw new Error(

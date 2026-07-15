@@ -127,6 +127,14 @@ function recordAttempt({root, quest, oracle}, changedPath, metric, name) {
   });
 }
 
+function writeSizedSource(root, changedPath, value, bytes) {
+  const declaration = `export const a = ${value};\n/*`;
+  fs.writeFileSync(
+    path.join(root, changedPath),
+    `${declaration}${'x'.repeat(bytes - declaration.length - 3)}*/\n`,
+  );
+}
+
 tap.test('content-bound verification and explicit handoff', async (t) => {
   t.test('checkpoint requires exact approval and rejects a post-approval edit', (t) => {
     const fx = fixture();
@@ -229,6 +237,39 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.end();
   });
 
+  t.test('a canonical approved superset replaces an older approved checkpoint receipt', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'approved-incremental-state');
+    const first = latestAttempt(fx.root, fx.quest);
+    approve(
+      fx.root,
+      fx.quest,
+      'attempt',
+      `sha256:${first.changeRefIdentity.sha256}`,
+    );
+
+    recordAttempt(fx, 'src/a.js', 0, 'approved-canonical-replacement');
+    const replacement = latestAttempt(fx.root, fx.quest);
+    approve(
+      fx.root,
+      fx.quest,
+      'attempt',
+      `sha256:${replacement.changeRefIdentity.sha256}`,
+    );
+
+    t.equal(
+      checkpointGate(fx.root, fx.quest).status,
+      'pass',
+      'the latest exact-approved same-base superset owns checkpoint identity',
+    );
+    t.match(
+      runCheckpointCommand(fx.root, {id: fx.quest.id, _: []}),
+      /checkpointed/u,
+    );
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('a rejected attempt requires an exact-approved same-base replacement', (t) => {
     const fx = fixture();
     recordAttempt(fx, 'src/a.js', 1, 'rejected-a');
@@ -287,6 +328,87 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       auditQuest(fx.root, fx.quest).problems.map((item) => item.message).join('\n'),
       /explicitly rejected/u,
       'audit advances past the superseded rejection',
+    );
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a large same-base canonical replacement can checkpoint', (t) => {
+    const fx = fixture();
+    const changedPath = 'src/a.js';
+    const sourceBytes = 140_000;
+    const baseCommit = git(fx.root, ['rev-parse', 'HEAD']).trim();
+
+    runStep(fx.root, fx.quest);
+    writeSizedSource(fx.root, changedPath, 2, sourceBytes);
+    fs.writeFileSync(fx.oracle, JSON.stringify({metric: 1, target: 0}));
+    runStep(fx.root, fx.quest, {
+      changeRef: canonicalDiff(
+        fx.root, fx.quest, baseCommit, changedPath, 'large-rejected'),
+      summary: 'large rejected source snapshot',
+    });
+    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
+    reject(
+      fx.root,
+      fx.quest,
+      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`,
+    );
+
+    runStep(fx.root, fx.quest);
+    writeSizedSource(fx.root, changedPath, 3, sourceBytes);
+    fs.writeFileSync(fx.oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(fx.root, fx.quest, {
+      changeRef: canonicalDiff(
+        fx.root, fx.quest, baseCommit, changedPath, 'large-replacement'),
+      summary: 'large canonical replacement snapshot',
+    });
+    const replacement = latestAttempt(fx.root, fx.quest);
+    approve(
+      fx.root,
+      fx.quest,
+      'attempt',
+      `sha256:${replacement.changeRefIdentity.sha256}`,
+    );
+    t.equal(checkpointGate(fx.root, fx.quest).status, 'pass');
+    t.match(
+      runCheckpointCommand(fx.root, {id: fx.quest.id, _: []}),
+      /checkpointed/u,
+    );
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('step rejects an incremental source artifact before recording', (t) => {
+    const fx = fixture();
+    runStep(fx.root, fx.quest);
+    fs.writeFileSync(path.join(fx.root, 'src', 'a.js'), 'export const a = 2;\n');
+    fs.writeFileSync(fx.oracle, JSON.stringify({metric: 1, target: 0}));
+    const artifact = path.join(
+      fx.root,
+      'solve/changes/runtime-verify/incremental.diff',
+    );
+    fs.mkdirSync(path.dirname(artifact), {recursive: true});
+    fs.writeFileSync(artifact, [
+      'diff --git a/src/a.js b/src/a.js',
+      '--- a/src/a.js',
+      '+++ b/src/a.js',
+      '@@ -1 +1 @@',
+      '-export const a = 1;',
+      '+export const a = 2;',
+      '',
+    ].join('\n'));
+    t.throws(
+      () => runStep(fx.root, fx.quest, {
+        changeRef: `diff:${path.relative(fx.root, artifact)}`,
+        summary: 'incremental source artifact',
+      }),
+      /complete canonical Git delta/iu,
+    );
+    t.equal(
+      readLog(fx.root, fx.quest.id)
+        .filter((event) => event.type === 'attempt').length,
+      0,
+      'non-canonical source bytes never receive an attempt receipt',
     );
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();

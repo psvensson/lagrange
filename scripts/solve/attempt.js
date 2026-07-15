@@ -7,7 +7,10 @@ import {ensureSealedGoal, makeRunContext, finalizeAttempt} from './loop.js';
 import {ingestEvidence} from './evidence.js';
 import {stepTheoryGateProblems} from './theory.js';
 import {inspectChangeArtifact} from './change-artifact.js';
-import {analyzeScopePressure} from './scope-pressure.js';
+import {
+  analyzeScopePressure,
+  analyzeScopePressureCandidate,
+} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
 import {continuationIsAllowed} from './continuation.js';
@@ -17,7 +20,13 @@ import {
   theoryGateContinuation,
   decisionContinues,
 } from './gate.js';
-import {resolveWorkspaceBaseCommit} from './verification.js';
+import {
+  resolveWorkspaceBaseCommit,
+} from './verification.js';
+import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
+
+const SCOPE_PRESSURE_BLOCKED_PREFIX =
+  'scope-pressure precommit blocked: split into bounded Quest declarations ';
 
 export function runAttemptCommand(root, args) {
   const questId = args.id;
@@ -106,10 +115,30 @@ export function runAttemptCommand(root, args) {
       `invalid changeRef: ${changeInspection.problems.join('; ')}`,
     );
   }
+  const workspaceBaseCommit = resolveWorkspaceBaseCommit(root);
+  const canonicalProblem = canonicalSourceArtifactProblem(
+    root,
+    workspaceBaseCommit,
+    changeInspection,
+  );
+  if (canonicalProblem) throw new Error(canonicalProblem);
+  const scopeAdmission = scopeTerminalStatus(analyzeScopePressureCandidate(
+    root,
+    quest,
+    log,
+    changeInspection,
+    {workspaceBaseCommit},
+  ));
+  if (scopeAdmission.terminal) {
+    throw new Error(
+      SCOPE_PRESSURE_BLOCKED_PREFIX +
+      `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
+      `bytes=${scopeAdmission.changeBytes})`,
+    );
+  }
 
   // 1. Measure before
   const before = evaluate(def.metric, ctx.probeCtx);
-  const workspaceBaseCommit = resolveWorkspaceBaseCommit(root);
 
   // 2. Run harness command
   console.log(`Running harness command: ${harnessCommand.join(' ')}`);

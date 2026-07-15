@@ -51,6 +51,22 @@ function makeDiff(root, questId, name, changedPath = 'src/demo.js') {
   return `diff:${path.relative(root, file)}`;
 }
 
+function makeCanonicalDiff(root, questId, name, changedPath) {
+  const file = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
+  fs.mkdirSync(path.dirname(file), {recursive: true});
+  const content = execFileSync('git', [
+    'diff',
+    '--binary',
+    '--full-index',
+    '--no-ext-diff',
+    'HEAD',
+    '--',
+    changedPath,
+  ], {cwd: root, encoding: 'utf8'});
+  fs.writeFileSync(file, content);
+  return `diff:${path.relative(root, file)}`;
+}
+
 tap.test('scope-safe handoff (Concern 4)', async (t) => {
   t.test('classifies dirty files into in-scope and out-of-scope', (t) => {
     const scope = {
@@ -300,10 +316,13 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
     // The quest finishes (metric 0) but the source change has no subagent
     // verification finding, so the commit gate is not met.
     runStep(root, quest);
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'export const demo = true;\n');
+    execFileSync('git', ['add', '-N', 'src/demo.js'], {cwd: root});
     fs.writeFileSync(path.join(root, 'oracle.json'),
       JSON.stringify({metric: 0, target: 0}));
     const r = runStep(root, quest, {
-      changeRef: makeDiff(root, quest.id, 'fix', 'src/demo.js'),
+      changeRef: makeCanonicalDiff(root, quest.id, 'fix', 'src/demo.js'),
       summary: 'unverified source change',
     });
     t.notOk(r.commit.committed, 'no commit when the source change is unverified');
@@ -318,9 +337,12 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
     initGit(root);
     const {quest, oracle} = makeQuest(root);
     runStep(root, quest);
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'export const demo = true;\n');
+    execFileSync('git', ['add', '-N', 'src/demo.js'], {cwd: root});
     fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
     const r = runStep(root, quest, {
-      changeRef: makeDiff(root, quest.id, 'fix', 'src/demo.js'),
+      changeRef: makeCanonicalDiff(root, quest.id, 'fix', 'src/demo.js'),
       summary: 'verified source change',
     });
     // Without a verification finding the commit is gated...

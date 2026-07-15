@@ -145,6 +145,33 @@ function sourcePathSuperset(candidate, rejected) {
   return rejected.sourcePaths.every((filePath) => candidatePaths.has(filePath));
 }
 
+function checkpointPathSuperset(candidate, superseded) {
+  const candidatePaths = new Set(candidate.inspection.changedPaths);
+  return superseded.inspection.changedPaths.every(
+    (filePath) => candidatePaths.has(filePath),
+  );
+}
+
+function approvedCheckpointReplacement(log, attempts, superseded) {
+  for (const candidate of attempts) {
+    if (candidate.index <= superseded.index ||
+        candidate.event.frontier !== superseded.event.frontier ||
+        candidate.event.workspaceBaseCommit !==
+          superseded.event.workspaceBaseCommit ||
+        !checkpointPathSuperset(candidate, superseded)) {
+      continue;
+    }
+    const approval = laterApproval(
+      log,
+      candidate,
+      VERIFICATION_SCOPE.ATTEMPT,
+      candidate.fingerprint,
+    );
+    if (approval) return candidate;
+  }
+  return null;
+}
+
 export function findApprovedRejectionReplacement(
   log,
   attempts,
@@ -377,10 +404,22 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
   );
   const checkpointCommit = latestCheckpointCommit(root, quest.id);
   const problems = [];
-  const uncheckpointed = state.attempts.filter((attempt) =>
+  const uncheckpointedCandidates = state.attempts.filter((attempt) =>
     attempt.contracted &&
     !resolvedRejectedIndexes.has(attempt.index) &&
     attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+  const supersededCheckpointIndexes = new Set(
+    uncheckpointedCandidates
+      .filter((attempt) => approvedCheckpointReplacement(
+        log,
+        uncheckpointedCandidates,
+        attempt,
+      ))
+      .map((attempt) => attempt.index),
+  );
+  const uncheckpointed = uncheckpointedCandidates.filter(
+    (attempt) => !supersededCheckpointIndexes.has(attempt.index),
+  );
   const contracted = state.attempts.filter((attempt) => attempt.contracted);
   const coveredPaths = new Set(uncheckpointed.flatMap(
     (attempt) => attempt.inspection.changedPaths));

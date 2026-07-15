@@ -14,8 +14,12 @@ import {
   STATUS_SOLVED,
 } from '../../scripts/solve/constants.js';
 import {buildHandoff} from '../../scripts/solve/handoff.js';
+import {inspectChangeArtifact} from '../../scripts/solve/change-artifact.js';
 import {writeContentAddressedChangeArtifact} from
   '../../scripts/solve/content-addressed-change-artifact.js';
+import {scopeTerminalStatus} from '../../scripts/solve/convergence-guards.js';
+import {analyzeScopePressureCandidate} from
+  '../../scripts/solve/scope-pressure.js';
 import {runStep, stepPending} from '../../scripts/solve/step.js';
 import {appendEvent, readLog, saveQuest} from '../../scripts/solve/store.js';
 
@@ -181,6 +185,98 @@ tap.test('cumulative attempts cannot each stay small while crossing the bound', 
   t.equal(readLog(root, quest.id).filter((event) =>
     event.type === EVENT_ATTEMPT).length, 1,
   'only the bounded first attempt is recorded');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('same-base full snapshots replace overlapping byte charges only', (t) => {
+  const {root, quest} = setup();
+  const baseCommit = '1'.repeat(40);
+  const firstRef = makeDiff(
+    root,
+    ['scripts/solve/overlap.js'],
+    SCOPE_PRESSURE_BYTE_LIMIT - 1,
+    'first-overlap',
+  );
+  appendEvent(root, quest.id, {
+    type: EVENT_ATTEMPT,
+    frontier: quest.frontiers[0].id,
+    changeRef: firstRef,
+    workspaceBaseCommit: baseCommit,
+  });
+  const replacementRef = makeDiff(
+    root,
+    ['scripts/solve/overlap.js'],
+    SCOPE_PRESSURE_BYTE_LIMIT - 1,
+    'replacement-overlap',
+  );
+  const replacement = inspectChangeArtifact(root, quest, replacementRef);
+  const overlapping = analyzeScopePressureCandidate(
+    root,
+    quest,
+    readLog(root, quest.id),
+    replacement,
+    {workspaceBaseCommit: baseCommit},
+  );
+  t.equal(
+    overlapping.changedBytes,
+    SCOPE_PRESSURE_BYTE_LIMIT - 1,
+    'the replacement snapshot is charged once',
+  );
+  t.equal(scopeTerminalStatus(overlapping).terminal, false);
+
+  const oversizedRef = makeDiff(
+    root,
+    ['scripts/solve/overlap.js'],
+    SCOPE_PRESSURE_BYTE_LIMIT + 1,
+    'oversized-overlap',
+  );
+  const oversizedLog = readLog(root, quest.id);
+  oversizedLog.push({
+    type: EVENT_ATTEMPT,
+    frontier: quest.frontiers[0].id,
+    changeRef: oversizedRef,
+    workspaceBaseCommit: baseCommit,
+  });
+  const smallerRef = makeDiff(
+    root,
+    ['scripts/solve/overlap.js'],
+    1_000,
+    'smaller-overlap',
+  );
+  const smallerReplacement = analyzeScopePressureCandidate(
+    root,
+    quest,
+    oversizedLog,
+    inspectChangeArtifact(root, quest, smallerRef),
+    {workspaceBaseCommit: baseCommit},
+  );
+  t.equal(
+    smallerReplacement.changedBytes,
+    SCOPE_PRESSURE_BYTE_LIMIT + 1,
+    'a covering replacement cannot hide an oversized snapshot',
+  );
+  t.equal(scopeTerminalStatus(smallerReplacement).terminal, true);
+
+  const disjointRef = makeDiff(
+    root,
+    ['scripts/solve/disjoint.js'],
+    SCOPE_PRESSURE_BYTE_LIMIT - 1,
+    'disjoint',
+  );
+  const disjoint = analyzeScopePressureCandidate(
+    root,
+    quest,
+    readLog(root, quest.id),
+    inspectChangeArtifact(root, quest, disjointRef),
+    {workspaceBaseCommit: baseCommit},
+  );
+  t.equal(
+    disjoint.changedBytes,
+    (SCOPE_PRESSURE_BYTE_LIMIT - 1) * 2,
+    'disjoint same-base scope remains cumulative',
+  );
+  t.equal(scopeTerminalStatus(disjoint).terminal, true);
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

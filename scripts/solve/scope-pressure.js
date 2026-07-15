@@ -7,6 +7,7 @@ import {inspectChangeArtifact} from './change-artifact.js';
 const BROAD_OWNER_AREA_LIMIT = 2;
 const LARGE_DIFF_FILE_LIMIT = 10;
 const SPLIT_GROUP_FILE_LIMIT = 20;
+const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
 
 function ownerAreaForPath(filePath) {
   const segments = String(filePath || '').split('/');
@@ -68,6 +69,31 @@ function attemptInspections(root, quest, log, options = {}) {
     }));
 }
 
+function effectiveChangeBytes(inspections) {
+  const coveredPathsByBase = new Map();
+  let bytes = 0;
+  let largestSnapshotBytes = 0;
+  for (let index = inspections.length - 1; index >= 0; index -= 1) {
+    const entry = inspections[index];
+    const baseCommit = entry.event?.workspaceBaseCommit;
+    const paths = entry.inspection.changedPaths || [];
+    const payloadBytes = entry.inspection.payloadBytes || 0;
+    largestSnapshotBytes = Math.max(largestSnapshotBytes, payloadBytes);
+    if (!GIT_COMMIT_PATTERN.test(String(baseCommit || '')) ||
+        paths.length === 0) {
+      bytes += payloadBytes;
+      continue;
+    }
+    const covered = coveredPathsByBase.get(baseCommit) || new Set();
+    if (!paths.every((filePath) => covered.has(filePath))) {
+      bytes += payloadBytes;
+    }
+    for (const filePath of paths) covered.add(filePath);
+    coveredPathsByBase.set(baseCommit, covered);
+  }
+  return Math.max(bytes, largestSnapshotBytes);
+}
+
 function summarizeAttempts(inspections) {
   return inspections.map((entry) => {
     const paths = entry.inspection.changedPaths || [];
@@ -119,16 +145,14 @@ function recommendedActions(changedPaths, ownerAreas, categories) {
   return actions;
 }
 
-export function analyzeScopePressure(root, quest, log, options = {}) {
-  const inspections = attemptInspections(root, quest, log, options);
+function summarizeScopePressure(inspections) {
   const changedPaths = [...new Set(inspections.flatMap((entry) =>
     entry.inspection.changedPaths || []))].sort();
   const ownerAreas = [...new Set(changedPaths.map(ownerAreaForPath))].sort();
   const categories = [...new Set(inspections.flatMap((entry) =>
     entry.inspection.categories || []))].sort();
   const signals = [];
-  const changedBytes = inspections.reduce((sum, entry) =>
-    sum + (entry.inspection.payloadBytes || 0), 0);
+  const changedBytes = effectiveChangeBytes(inspections);
   if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
     signals.push({
       type: 'broad-source-scope',
@@ -168,18 +192,28 @@ export function analyzeScopePressure(root, quest, log, options = {}) {
   };
 }
 
-export function analyzeScopePressureCandidate(root, quest, log, inspection) {
-  const current = analyzeScopePressure(root, quest, log, {ignoreBaselines: true});
-  const changedPaths = [...new Set([
-    ...current.changedPaths,
-    ...(inspection.changedPaths || []),
-  ])].sort();
-  return {
-    ...current,
-    changedPaths,
-    changedBytes: current.changedBytes + (inspection.payloadBytes || 0),
-    ownerAreas: [...new Set(changedPaths.map(ownerAreaForPath))].sort(),
-  };
+export function analyzeScopePressure(root, quest, log, options = {}) {
+  return summarizeScopePressure(attemptInspections(root, quest, log, options));
+}
+
+export function analyzeScopePressureCandidate(
+  root,
+  quest,
+  log,
+  inspection,
+  options = {},
+) {
+  const inspections = attemptInspections(
+    root,
+    quest,
+    log,
+    {ignoreBaselines: true},
+  );
+  inspections.push({
+    event: {workspaceBaseCommit: options.workspaceBaseCommit || null},
+    inspection,
+  });
+  return summarizeScopePressure(inspections);
 }
 
 export function renderScopePressure(scopePressure) {
