@@ -20,14 +20,16 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json
-- Selected theory: theory-20260715-idempotent-schema-admin-timeout-retry-owner
-- Next move: continue supervised step for movielens-pre-schema-quiescence-live-main
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json
+- Selected theory: theory-20260715-idempotent-schema-admin-timeout-retry-owner (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for movielens-pre-schema-quiescence-live-main
 
 ## Continuation
 - Status: blocked-theory
 - Next action: record system theory before the next movielens-pre-schema-quiescence-live-main attempt using npm run model:contracts as model discriminator
 - Blocker: system theory required for movielens-pre-schema-quiescence-live-main
+- Blocker: frontier theory required for movielens-pre-schema-quiescence-live-main
+- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 9
@@ -56,10 +58,13 @@
 - **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json]
 - **movielens-pre-schema-quiescence-live-main**: At source 66721ed0 the live gate admitted after two fresh quiet snapshots, but the idempotent ratings CREATE request examples-1784155368834-bf275d18-93f9-4917-bb61-e3d9a295153e timed out at the 30s admin client boundary. Immutable logs later recorded the same CREATE executing during teardown and failing with Workflow transition rejected: ownership lease expired. The 60s schema retry owner propagated this ambiguous timeout because generic admin response timeouts are not classified as retryable. Report sha256=8d59001e53586a2853cb587deed90ee027be6c3f1ca37b1c90d64ffd61f799c4; comparison sha256=4957c9cb3cd957644bffa1beaeb95d27cb4149375b7625c945469529d167555c; archive sha256=497ccc25129e9203ef37a227b57c29a9233fcd8574ae389c98670776ae762634. [data/examples/service-data-affinity-demo-archive/wave4-live-pre-schema-quiescence-2026-07-15T22-43-29-340Z.tar.gz]
 - **movielens-pre-schema-quiescence-live-main**: Independent verification rejected exact attempt sha256:7e76b475ba42ed0d31d3d98e0b1d088dd7f10215350fd35b3bd0c8e7ffee78d0: a fixed 15-second session could start at the exhausted 60-second deadline and run to 75 seconds, and the regression injected an exported timeout helper instead of exercising the real AdminWsClient timer and late-response seam. The cumulative replacement must cap every session by canonical remaining time, create no session at exhaustion, and prove real late responses cannot resurrect expired work. [subagent:verify_schema_timeout_retry_attempt4]
+- **movielens-pre-schema-quiescence-live-main**: Independent verification passed exact cumulative attempt sha256:09ae08d43c4e529e0509b2dd9d5b879bb7fb08293e79092757a81cd3ec71f34d: full-index three-file delta is exact; adversarial clock ends at 60000ms with no client at exhaustion and every attempt capped by remaining budget; a real local WebSocket timer produces typed ADMIN_RESPONSE_TIMEOUT and a deliberately late result cannot resurrect the request; the old code is red through that seam; the existing retry owner remains sole, idempotent CREATE-only, fresh-session and confirmation-reset behavior holds, hard validation remains terminal, and focused/model/lint/audit checks pass. [subagent:verify_schema_timeout_retry_attempt4]
+- **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
+- **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
 
 ## Theories
 - **theory-20260715-schema-admission-required-fields-optional-discount** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer observation, mechanism The shared admission parser must distinguish required authoritative snapshot fields from an optional client-side in-flight discount; otherwise missing required evidence can fail open, while requiring the non-produced discount makes every production snapshot unavailable., owner MovieLens shared control-snapshot admission parser, boundary authoritative snapshot envelope to quiescence classification, modelGate npm run model:contracts
-- **theory-20260715-idempotent-schema-admin-timeout-retry-owner** [supported] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism The existing ratings schema retry owner cannot distinguish an ambiguous admin response deadline from a terminal CREATE failure, so its documented fresh-session idempotent replay contract exits after one timed-out request., owner ratings schema retry owner, boundary admin response deadline to idempotent CREATE replay, modelGate npm run model:contracts
+- **theory-20260715-idempotent-schema-admin-timeout-retry-owner** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism The existing ratings schema retry owner cannot distinguish an ambiguous admin response deadline from a terminal CREATE failure, so its documented fresh-session idempotent replay contract exits after one timed-out request., owner ratings schema retry owner, boundary admin response deadline to idempotent CREATE replay, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-pre-schema-quiescence-live-main**: theory-20260715-idempotent-schema-admin-timeout-retry-owner
@@ -69,6 +74,7 @@
 - **theory-20260715-schema-admission-required-fields-optional-discount**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json]
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json]
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json]
+- **theory-20260715-idempotent-schema-admin-timeout-retry-owner**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
