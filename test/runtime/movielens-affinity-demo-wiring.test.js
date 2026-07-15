@@ -69,7 +69,7 @@ const FAST_INTERVAL_MS = 5;
 const WAIT_TIMEOUT_MS = 1500;
 const WAIT_POLL_MS = 5;
 
-test('MovieLens creates ratings with its split policy before node expansion',
+test('MovieLens creates ratings after formation and before preload admission',
   async (t) => {
     const runnerSource = await readFile(
       'examples/service-data-affinity/run-affinity-demo.js',
@@ -90,6 +90,18 @@ test('MovieLens creates ratings with its split policy before node expansion',
       'for (let i = 1; i < NODE_COUNT; i += 1)',
       runStart,
     );
+    const formationIndex = runnerSource.indexOf(
+      'await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);',
+      runStart,
+    );
+    const preloadAdmissionIndex = runnerSource.indexOf(
+      'const preloadAdmission = await waitForAffinityDemoPreloadAdmission',
+      runStart,
+    );
+    const ratingsLoadIndex = runnerSource.indexOf(
+      'const totalRows = await loadRatingsIntoLagrange',
+      runStart,
+    );
 
     t.notMatch(
       runnerSource,
@@ -103,10 +115,16 @@ test('MovieLens creates ratings with its split policy before node expansion',
     t.match(loaderSource,
       /WITH \(split_storage_threshold = 1048576\)/,
       'ratings carries the sparse override in its CREATE intent');
-    t.ok(createRatingsIndex > runStart,
-      'the runner creates the policy-bearing ratings table on the seed');
-    t.ok(expandNodesIndex > createRatingsIndex,
-      'stable durable CREATE confirmation precedes joiner expansion');
+    t.ok(expandNodesIndex > runStart,
+      'joiner expansion belongs to the production runner path');
+    t.ok(formationIndex > expandNodesIndex,
+      'the runner awaits complete five-node formation after launching joiners');
+    t.ok(createRatingsIndex > formationIndex,
+      'formed topology can satisfy the durable two-replica CREATE contract');
+    t.ok(preloadAdmissionIndex > createRatingsIndex,
+      'stable durable CREATE confirmation precedes preload admission');
+    t.ok(ratingsLoadIndex > preloadAdmissionIndex,
+      'ratings load begins only after the production admission gate');
     t.end();
   });
 

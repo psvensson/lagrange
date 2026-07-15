@@ -1,0 +1,74 @@
+diff --git a/examples/service-data-affinity/run-affinity-demo.js b/examples/service-data-affinity/run-affinity-demo.js
+index 3663626cbc611ed561ab4b197ee22b77f9ef7db9..a9e2951e041d745c132bac158d59d405359df713 100644
+--- a/examples/service-data-affinity/run-affinity-demo.js
++++ b/examples/service-data-affinity/run-affinity-demo.js
+@@ -560,10 +560,6 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+     console.log('[1/5] Bootstrapping the MovieLens schema on the seed...');
+     nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
+     await waitForAdmin();
+-    await createRatingsTableWithRetry({target: TARGET});
+-    // CREATE owns the sparse ratings policy atomically. The production-wide
+-    // 10 GiB default remains intact, so formation logs cannot inherit the
+-    // teaching threshold and become an unrelated preload blocker.
+     // Bootstrap the two small coordination tables on the seed too. Their
+     // schemas then scale out with the cluster instead of exercising unrelated
+     // cold multi-node DDL while the example is teaching service affinity.
+@@ -578,6 +574,11 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+     }
+     await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
+     console.log('      Cluster formed.');
++    await createRatingsTableWithRetry({target: TARGET});
++    // CREATE owns the sparse ratings policy atomically after enough nodes
++    // exist to satisfy its durable replica contract. The production-wide
++    // 10 GiB default remains intact, so formation logs cannot inherit the
++    // teaching threshold and become an unrelated preload blocker.
+     console.log('      Waiting for production ratings-load admission...');
+     const preloadAdmission = await waitForAffinityDemoPreloadAdmission({
+       target: TARGET,
+diff --git a/test/runtime/movielens-affinity-demo-wiring.test.js b/test/runtime/movielens-affinity-demo-wiring.test.js
+index a8d340438526ba2e4205931b6f33fdcb2318b950..eb5748c7d946b59d19f1dbce06e940c4d94ca71a 100644
+--- a/test/runtime/movielens-affinity-demo-wiring.test.js
++++ b/test/runtime/movielens-affinity-demo-wiring.test.js
+@@ -69,7 +69,7 @@ const FAST_INTERVAL_MS = 5;
+ const WAIT_TIMEOUT_MS = 1500;
+ const WAIT_POLL_MS = 5;
+ 
+-test('MovieLens creates ratings with its split policy before node expansion',
++test('MovieLens creates ratings after formation and before preload admission',
+   async (t) => {
+     const runnerSource = await readFile(
+       'examples/service-data-affinity/run-affinity-demo.js',
+@@ -90,6 +90,14 @@ test('MovieLens creates ratings with its split policy before node expansion',
+       'for (let i = 1; i < NODE_COUNT; i += 1)',
+       runStart,
+     );
++    const preloadAdmissionIndex = runnerSource.indexOf(
++      'const preloadAdmission = await waitForAffinityDemoPreloadAdmission',
++      runStart,
++    );
++    const ratingsLoadIndex = runnerSource.indexOf(
++      'const totalRows = await loadRatingsIntoLagrange',
++      runStart,
++    );
+ 
+     t.notMatch(
+       runnerSource,
+@@ -103,10 +111,14 @@ test('MovieLens creates ratings with its split policy before node expansion',
+     t.match(loaderSource,
+       /WITH \(split_storage_threshold = 1048576\)/,
+       'ratings carries the sparse override in its CREATE intent');
+-    t.ok(createRatingsIndex > runStart,
+-      'the runner creates the policy-bearing ratings table on the seed');
+-    t.ok(expandNodesIndex > createRatingsIndex,
+-      'stable durable CREATE confirmation precedes joiner expansion');
++    t.ok(expandNodesIndex > runStart,
++      'joiner expansion belongs to the production runner path');
++    t.ok(createRatingsIndex > expandNodesIndex,
++      'formed topology can satisfy the durable two-replica CREATE contract');
++    t.ok(preloadAdmissionIndex > createRatingsIndex,
++      'stable durable CREATE confirmation precedes preload admission');
++    t.ok(ratingsLoadIndex > preloadAdmissionIndex,
++      'ratings load begins only after the production admission gate');
+     t.end();
+   });
+ 

@@ -560,10 +560,6 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     console.log('[1/5] Bootstrapping the MovieLens schema on the seed...');
     nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
     await waitForAdmin();
-    await createRatingsTableWithRetry({target: TARGET});
-    // CREATE owns the sparse ratings policy atomically. The production-wide
-    // 10 GiB default remains intact, so formation logs cannot inherit the
-    // teaching threshold and become an unrelated preload blocker.
     // Bootstrap the two small coordination tables on the seed too. Their
     // schemas then scale out with the cluster instead of exercising unrelated
     // cold multi-node DDL while the example is teaching service affinity.
@@ -578,6 +574,11 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     }
     await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
     console.log('      Cluster formed.');
+    await createRatingsTableWithRetry({target: TARGET});
+    // CREATE owns the sparse ratings policy atomically after enough nodes
+    // exist to satisfy its durable replica contract. The production-wide
+    // 10 GiB default remains intact, so formation logs cannot inherit the
+    // teaching threshold and become an unrelated preload blocker.
     console.log('      Waiting for production ratings-load admission...');
     const preloadAdmission = await waitForAffinityDemoPreloadAdmission({
       target: TARGET,
