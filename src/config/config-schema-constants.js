@@ -17,6 +17,7 @@ const CONFIG_SCHEMA = {
         statsCollectionIntervalMs: {type: 'number', minimum: 1000},
         maxServicesPerNode: {type: 'number', minimum: 1},
         restApiPort: {type: 'number', minimum: 1, maximum: 65535},
+        wsPort: {type: 'number', minimum: 1, maximum: 65535},
         seedNodeAddress: {type: 'string'},
         storageBudgetBytes: {type: 'number', minimum: 1},
         storageBudgetRatio: {type: 'number', minimum: 0.01, maximum: 1.0},

@@ -9,11 +9,33 @@ import {v4 as uuidv4} from 'uuid';
 import {
   CONFIG_ENV,
   CONFIG_ERROR_MSG,
+  CONFIG_KEY,
   CONFIG_SCHEMA,
   CONFIG_SEPARATOR,
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
 } from './config-constants.js';
+import {
+  LISTENER_PORT_ENV,
+  resolveListenerPorts,
+} from './listener-port-model.js';
+
+const LISTENER_PORT_OVERRIDE_PATH = Object.freeze({
+  ADMIN_WEBSOCKET: Object.freeze(['admin', 'websocketPort']),
+  TRANSPORT_WEBSOCKET: Object.freeze(['node', 'wsPort']),
+});
+
+function hasOwnPath(value, pathParts) {
+  let current = value;
+  for (const part of pathParts) {
+    if (!current || typeof current !== 'object' ||
+        !Object.hasOwn(current, part)) {
+      return false;
+    }
+    current = current[part];
+  }
+  return true;
+}
 
 
 /**
@@ -59,11 +81,27 @@ class ConfigurationManager {
    * @throws {Error} If configuration validation fails.
    */
   initialize(overrides = {}) {
+    const listenerPortOverrides = {
+      adminWebSocketPort:
+        process.env[LISTENER_PORT_ENV.ADMIN_WEBSOCKET] !== undefined ||
+        hasOwnPath(
+          overrides,
+          LISTENER_PORT_OVERRIDE_PATH.ADMIN_WEBSOCKET,
+        ),
+      transportWebSocketPort:
+        process.env[LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET] !== undefined ||
+        hasOwnPath(
+          overrides,
+          LISTENER_PORT_OVERRIDE_PATH.TRANSPORT_WEBSOCKET,
+        ),
+    };
     // Load environment variables
     this.loadEnvironmentVariables();
 
     // Apply overrides
     this.applyOverrides(overrides);
+
+    this.applyListenerPortModel(listenerPortOverrides);
 
     // Generate node ID if not provided
     if (!this.config.node.id) {
@@ -80,6 +118,27 @@ class ConfigurationManager {
     }
 
     this.initialized = true;
+  }
+
+  applyListenerPortModel(overrides) {
+    const ports = resolveListenerPorts({
+      restApiPort: this.get(CONFIG_KEY.NODE_REST_API_PORT),
+      adminWebSocketPort: overrides.adminWebSocketPort ?
+        this.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) :
+        undefined,
+      transportWebSocketPort: overrides.transportWebSocketPort ?
+        this.get(CONFIG_KEY.NODE_WS_PORT) :
+        undefined,
+    });
+    this.setByPath(CONFIG_KEY.NODE_REST_API_PORT, ports.restApiPort);
+    this.setByPath(
+      CONFIG_KEY.ADMIN_WEBSOCKET_PORT,
+      ports.adminWebSocketPort,
+    );
+    this.setByPath(
+      CONFIG_KEY.NODE_WS_PORT,
+      ports.transportWebSocketPort,
+    );
   }
 
   /**

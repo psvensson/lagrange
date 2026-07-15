@@ -1,4 +1,5 @@
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
 import {NUM} from '../constants/index.js';
 
 const ADMIN_SUBSYSTEM = Object.freeze({
@@ -57,7 +58,7 @@ const ADMIN_CONFIG_KEY = Object.freeze({
 
 const ADMIN_DEFAULT = Object.freeze({
   NODE_ID: 'admin-api',
-  WEBSOCKET_PORT: 8081,
+  WEBSOCKET_PORT: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
   QUERY_TIMEOUT_MS: 30000,
   CACHE_DUMP_TIMEOUT_MS: 5000,
   HOST: '127.0.0.1',

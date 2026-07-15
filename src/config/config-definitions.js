@@ -11,6 +11,7 @@ import os from 'os';
 import {STRING} from '../constants/index.js';
 import {CONFIG_KEY} from './config-key-constants.js';
 import {LATENCY_PROPAGATION_MODE} from './config-latency-constants.js';
+import {LISTENER_PORT_DEFAULT} from './listener-port-model.js';
 
 const CONFIG_VALUE_TYPE = Object.freeze({
   STRING: 'string',
@@ -27,7 +28,8 @@ const DEFAULT_CONFIG = {
     heartbeatTimeoutMs: 5000,
     statsCollectionIntervalMs: 10000,
     maxServicesPerNode: 100,
-    restApiPort: 8080,
+    restApiPort: LISTENER_PORT_DEFAULT.REST_API,
+    wsPort: LISTENER_PORT_DEFAULT.TRANSPORT_WEBSOCKET,
     seedNodeAddress: STRING.EMPTY,
   },
   raft: {
@@ -172,7 +174,7 @@ const DEFAULT_CONFIG = {
   admin: {
     queryTimeoutMs: 30000, // Query timeout (30 seconds)
     cacheDumpTimeoutMs: 5000, // Cache dump timeout (5 seconds)
-    websocketPort: 8081, // Admin WebSocket port (matches ADMIN_DEFAULT.WEBSOCKET_PORT)
+    websocketPort: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
     websocketHost: '127.0.0.1',
     allowInsecureExternalBind: false,
   },
@@ -225,6 +227,18 @@ const CONFIG_DEFINITIONS = {
     type: CONFIG_VALUE_TYPE.NUMBER,
     requiresRestart: true,
     description: 'REST API port for node service',
+  },
+  [CONFIG_KEY.NODE_WS_PORT]: {
+    defaultValue: DEFAULT_CONFIG.node.wsPort,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: true,
+    description: 'Cross-node transport WebSocket listener port',
+  },
+  [CONFIG_KEY.ADMIN_WEBSOCKET_PORT]: {
+    defaultValue: DEFAULT_CONFIG.admin.websocketPort,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: true,
+    description: 'Admin WebSocket listener port',
   },
 
   // Raft configuration

@@ -1,0 +1,686 @@
+diff --git a/src/admin/admin-constants.js b/src/admin/admin-constants.js
+index 0663e4f972f443106361306fb6e60b4bab5702ca..162fce00cc2d35b259b16e06ba76f07fb97840cd 100644
+--- a/src/admin/admin-constants.js
++++ b/src/admin/admin-constants.js
+@@ -1,4 +1,5 @@
+ import {CONFIG_KEY} from '../config/config-constants.js';
++import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
+ import {NUM} from '../constants/index.js';
+ 
+ const ADMIN_SUBSYSTEM = Object.freeze({
+@@ -57,7 +58,7 @@ const ADMIN_CONFIG_KEY = Object.freeze({
+ 
+ const ADMIN_DEFAULT = Object.freeze({
+   NODE_ID: 'admin-api',
+-  WEBSOCKET_PORT: 8081,
++  WEBSOCKET_PORT: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
+   QUERY_TIMEOUT_MS: 30000,
+   CACHE_DUMP_TIMEOUT_MS: 5000,
+   HOST: '127.0.0.1',
+diff --git a/src/config/config-constants.js b/src/config/config-constants.js
+index 70c405a693d4afd3f4a1555e5c7f43a0294d6116..f9cdbdc37f0bb5be7292b1ea75c34c9b051896b2 100644
+--- a/src/config/config-constants.js
++++ b/src/config/config-constants.js
+@@ -7,6 +7,7 @@ import {
+   CONFIG_VALUE_TYPE,
+   DEFAULT_CONFIG,
+ } from './config-definitions.js';
++import {LISTENER_PORT_ENV} from './listener-port-model.js';
+ 
+ const CONFIG_CATEGORY = Object.freeze({
+   RAFT: 'raft',
+@@ -120,7 +121,9 @@ const ENV_MAPPINGS = {
+   NODE_ID: CONFIG_KEY.NODE_ID,
+   NODE_ADDRESS: CONFIG_KEY.NODE_ADDRESS,
+   NODE_ADVERTISED_WS_ADDRESS: CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
+-  REST_API_PORT: CONFIG_KEY.NODE_REST_API_PORT,
++  [LISTENER_PORT_ENV.REST_API]: CONFIG_KEY.NODE_REST_API_PORT,
++  [LISTENER_PORT_ENV.ADMIN_WEBSOCKET]: CONFIG_KEY.ADMIN_WEBSOCKET_PORT,
++  [LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET]: CONFIG_KEY.NODE_WS_PORT,
+   LOG_LEVEL: CONFIG_KEY.LOGGING_LEVEL,
+   LOG_PRETTY_PRINT: CONFIG_KEY.LOGGING_PRETTY_PRINT,
+   LOG_PERSIST_METRICS: CONFIG_KEY.LOGGING_PERSIST_METRICS_LOGS,
+@@ -157,7 +160,6 @@ const ENV_MAPPINGS = {
+   WORKER_MIN_THREADS: CONFIG_KEY.WORKER_MIN_THREADS,
+   WORKER_MAX_THREADS: CONFIG_KEY.WORKER_MAX_THREADS,
+   DATA_DIR: CONFIG_KEY.STORAGE_DATA_DIR,
+-  ADMIN_WEBSOCKET_PORT: CONFIG_KEY.ADMIN_WEBSOCKET_PORT,
+ };
+ 
+ 
+diff --git a/src/config/config-definitions.js b/src/config/config-definitions.js
+index 586bb7dcce8093ad767a17c4e6edb3dedfda9ede..0fa3ce733b0c24f4a8a0454630240c3ffc06b56b 100644
+--- a/src/config/config-definitions.js
++++ b/src/config/config-definitions.js
+@@ -11,6 +11,7 @@ import os from 'os';
+ import {STRING} from '../constants/index.js';
+ import {CONFIG_KEY} from './config-key-constants.js';
+ import {LATENCY_PROPAGATION_MODE} from './config-latency-constants.js';
++import {LISTENER_PORT_DEFAULT} from './listener-port-model.js';
+ 
+ const CONFIG_VALUE_TYPE = Object.freeze({
+   STRING: 'string',
+@@ -27,7 +28,8 @@ const DEFAULT_CONFIG = {
+     heartbeatTimeoutMs: 5000,
+     statsCollectionIntervalMs: 10000,
+     maxServicesPerNode: 100,
+-    restApiPort: 8080,
++    restApiPort: LISTENER_PORT_DEFAULT.REST_API,
++    wsPort: LISTENER_PORT_DEFAULT.TRANSPORT_WEBSOCKET,
+     seedNodeAddress: STRING.EMPTY,
+   },
+   raft: {
+@@ -172,7 +174,7 @@ const DEFAULT_CONFIG = {
+   admin: {
+     queryTimeoutMs: 30000, // Query timeout (30 seconds)
+     cacheDumpTimeoutMs: 5000, // Cache dump timeout (5 seconds)
+-    websocketPort: 8081, // Admin WebSocket port (matches ADMIN_DEFAULT.WEBSOCKET_PORT)
++    websocketPort: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
+     websocketHost: '127.0.0.1',
+     allowInsecureExternalBind: false,
+   },
+@@ -226,6 +228,18 @@ const CONFIG_DEFINITIONS = {
+     requiresRestart: true,
+     description: 'REST API port for node service',
+   },
++  [CONFIG_KEY.NODE_WS_PORT]: {
++    defaultValue: DEFAULT_CONFIG.node.wsPort,
++    type: CONFIG_VALUE_TYPE.NUMBER,
++    requiresRestart: true,
++    description: 'Cross-node transport WebSocket listener port',
++  },
++  [CONFIG_KEY.ADMIN_WEBSOCKET_PORT]: {
++    defaultValue: DEFAULT_CONFIG.admin.websocketPort,
++    type: CONFIG_VALUE_TYPE.NUMBER,
++    requiresRestart: true,
++    description: 'Admin WebSocket listener port',
++  },
+ 
+   // Raft configuration
+   [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS]: {
+diff --git a/src/config/config-schema-constants.js b/src/config/config-schema-constants.js
+index 2b93c9c5312fbeba54cb558e6e0089710ecefe2a..f63a8278f06faef0506c0de33b3cf060a8926947 100644
+--- a/src/config/config-schema-constants.js
++++ b/src/config/config-schema-constants.js
+@@ -17,6 +17,7 @@ const CONFIG_SCHEMA = {
+         statsCollectionIntervalMs: {type: 'number', minimum: 1000},
+         maxServicesPerNode: {type: 'number', minimum: 1},
+         restApiPort: {type: 'number', minimum: 1, maximum: 65535},
++        wsPort: {type: 'number', minimum: 1, maximum: 65535},
+         seedNodeAddress: {type: 'string'},
+         storageBudgetBytes: {type: 'number', minimum: 1},
+         storageBudgetRatio: {type: 'number', minimum: 0.01, maximum: 1.0},
+diff --git a/src/config/configuration-manager.js b/src/config/configuration-manager.js
+index 1ee588377875fa471fa0e934abcfaa4c48f2068b..a55597398def73f0a9ac84f6699fbd3264a9ce00 100644
+--- a/src/config/configuration-manager.js
++++ b/src/config/configuration-manager.js
+@@ -9,11 +9,33 @@ import {v4 as uuidv4} from 'uuid';
+ import {
+   CONFIG_ENV,
+   CONFIG_ERROR_MSG,
++  CONFIG_KEY,
+   CONFIG_SCHEMA,
+   CONFIG_SEPARATOR,
+   DEFAULT_CONFIG,
+   ENV_MAPPINGS,
+ } from './config-constants.js';
++import {
++  LISTENER_PORT_ENV,
++  resolveListenerPorts,
++} from './listener-port-model.js';
++
++const LISTENER_PORT_OVERRIDE_PATH = Object.freeze({
++  ADMIN_WEBSOCKET: Object.freeze(['admin', 'websocketPort']),
++  TRANSPORT_WEBSOCKET: Object.freeze(['node', 'wsPort']),
++});
++
++function hasOwnPath(value, pathParts) {
++  let current = value;
++  for (const part of pathParts) {
++    if (!current || typeof current !== 'object' ||
++        !Object.hasOwn(current, part)) {
++      return false;
++    }
++    current = current[part];
++  }
++  return true;
++}
+ 
+ 
+ /**
+@@ -59,12 +81,28 @@ class ConfigurationManager {
+    * @throws {Error} If configuration validation fails.
+    */
+   initialize(overrides = {}) {
++    const listenerPortOverrides = {
++      adminWebSocketPort:
++        process.env[LISTENER_PORT_ENV.ADMIN_WEBSOCKET] !== undefined ||
++        hasOwnPath(
++          overrides,
++          LISTENER_PORT_OVERRIDE_PATH.ADMIN_WEBSOCKET,
++        ),
++      transportWebSocketPort:
++        process.env[LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET] !== undefined ||
++        hasOwnPath(
++          overrides,
++          LISTENER_PORT_OVERRIDE_PATH.TRANSPORT_WEBSOCKET,
++        ),
++    };
+     // Load environment variables
+     this.loadEnvironmentVariables();
+ 
+     // Apply overrides
+     this.applyOverrides(overrides);
+ 
++    this.applyListenerPortModel(listenerPortOverrides);
++
+     // Generate node ID if not provided
+     if (!this.config.node.id) {
+       this.config.node.id = uuidv4();
+@@ -82,6 +120,27 @@ class ConfigurationManager {
+     this.initialized = true;
+   }
+ 
++  applyListenerPortModel(overrides) {
++    const ports = resolveListenerPorts({
++      restApiPort: this.get(CONFIG_KEY.NODE_REST_API_PORT),
++      adminWebSocketPort: overrides.adminWebSocketPort ?
++        this.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) :
++        undefined,
++      transportWebSocketPort: overrides.transportWebSocketPort ?
++        this.get(CONFIG_KEY.NODE_WS_PORT) :
++        undefined,
++    });
++    this.setByPath(CONFIG_KEY.NODE_REST_API_PORT, ports.restApiPort);
++    this.setByPath(
++      CONFIG_KEY.ADMIN_WEBSOCKET_PORT,
++      ports.adminWebSocketPort,
++    );
++    this.setByPath(
++      CONFIG_KEY.NODE_WS_PORT,
++      ports.transportWebSocketPort,
++    );
++  }
++
+   /**
+    * Load configuration from environment variables.
+    * @private
+diff --git a/src/config/listener-port-model.js b/src/config/listener-port-model.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..89b22c99d9f7d3439b196ede9d1ef9689467d42a
+--- /dev/null
++++ b/src/config/listener-port-model.js
+@@ -0,0 +1,163 @@
++const LISTENER_PORT_RANGE = Object.freeze({
++  MINIMUM: 1,
++  MAXIMUM: 65535,
++});
++
++const LISTENER_PORT_OFFSET = Object.freeze({
++  ADMIN_WEBSOCKET: 1,
++  TRANSPORT_WEBSOCKET: 2,
++});
++
++const DEFAULT_REST_API_PORT = 8080;
++
++const LISTENER_PORT_DEFAULT = Object.freeze({
++  REST_API: DEFAULT_REST_API_PORT,
++  ADMIN_WEBSOCKET:
++    DEFAULT_REST_API_PORT + LISTENER_PORT_OFFSET.ADMIN_WEBSOCKET,
++  TRANSPORT_WEBSOCKET:
++    DEFAULT_REST_API_PORT + LISTENER_PORT_OFFSET.TRANSPORT_WEBSOCKET,
++});
++
++const LISTENER_PORT_ENV = Object.freeze({
++  REST_API: 'REST_API_PORT',
++  ADMIN_WEBSOCKET: 'ADMIN_WEBSOCKET_PORT',
++  TRANSPORT_WEBSOCKET: 'NODE_WS_PORT',
++});
++
++const LISTENER_PORT_NAME = Object.freeze({
++  REST_API: 'REST API',
++  ADMIN_WEBSOCKET: 'admin WebSocket',
++  TRANSPORT_WEBSOCKET: 'transport WebSocket',
++});
++
++const LISTENER_PORT_ERROR = Object.freeze({
++  invalid: (name, value) =>
++    `${name} listener port must be an integer between ` +
++    `${LISTENER_PORT_RANGE.MINIMUM} and ${LISTENER_PORT_RANGE.MAXIMUM}; ` +
++    `received ${String(value)}`,
++  collision: (ports) =>
++    'Listener ports must be distinct: ' +
++    `REST=${ports.restApiPort}, ` +
++    `admin WS=${ports.adminWebSocketPort}, ` +
++    `transport WS=${ports.transportWebSocketPort}`,
++});
++
++const WEBSOCKET_PROTOCOL = Object.freeze({
++  PLAIN: 'ws://',
++  SECURE: 'wss://',
++});
++
++const ADDRESS_PORT_SEPARATOR = ':';
++
++function assertListenerPort(port, name) {
++  if (!Number.isInteger(port) ||
++      port < LISTENER_PORT_RANGE.MINIMUM ||
++      port > LISTENER_PORT_RANGE.MAXIMUM) {
++    throw new RangeError(LISTENER_PORT_ERROR.invalid(name, port));
++  }
++  return port;
++}
++
++function deriveOffsetPort(restApiPort, offset, name) {
++  const basePort = assertListenerPort(
++    restApiPort,
++    LISTENER_PORT_NAME.REST_API,
++  );
++  return assertListenerPort(basePort + offset, name);
++}
++
++function deriveAdminWebSocketPort(restApiPort) {
++  return deriveOffsetPort(
++    restApiPort,
++    LISTENER_PORT_OFFSET.ADMIN_WEBSOCKET,
++    LISTENER_PORT_NAME.ADMIN_WEBSOCKET,
++  );
++}
++
++function deriveTransportWebSocketPort(restApiPort) {
++  return deriveOffsetPort(
++    restApiPort,
++    LISTENER_PORT_OFFSET.TRANSPORT_WEBSOCKET,
++    LISTENER_PORT_NAME.TRANSPORT_WEBSOCKET,
++  );
++}
++
++function assertDistinctListenerPorts(ports) {
++  const distinctPorts = new Set([
++    ports.restApiPort,
++    ports.adminWebSocketPort,
++    ports.transportWebSocketPort,
++  ]);
++  if (distinctPorts.size !== 3) {
++    throw new RangeError(LISTENER_PORT_ERROR.collision(ports));
++  }
++}
++
++function resolveListenerPorts(options = {}) {
++  const restApiPort = options.restApiPort === undefined ?
++    LISTENER_PORT_DEFAULT.REST_API :
++    assertListenerPort(options.restApiPort, LISTENER_PORT_NAME.REST_API);
++  const adminWebSocketPort = options.adminWebSocketPort === undefined ?
++    deriveAdminWebSocketPort(restApiPort) :
++    assertListenerPort(
++      options.adminWebSocketPort,
++      LISTENER_PORT_NAME.ADMIN_WEBSOCKET,
++    );
++  const transportWebSocketPort = options.transportWebSocketPort === undefined ?
++    deriveTransportWebSocketPort(restApiPort) :
++    assertListenerPort(
++      options.transportWebSocketPort,
++      LISTENER_PORT_NAME.TRANSPORT_WEBSOCKET,
++    );
++  const ports = Object.freeze({
++    restApiPort,
++    adminWebSocketPort,
++    transportWebSocketPort,
++  });
++  assertDistinctListenerPorts(ports);
++  return ports;
++}
++
++function deriveTransportWebSocketAddress(nodeAddress) {
++  if (typeof nodeAddress !== 'string') {
++    return null;
++  }
++  const normalizedAddress = nodeAddress.trim();
++  if (normalizedAddress.length === 0) {
++    return null;
++  }
++  if (normalizedAddress.startsWith(WEBSOCKET_PROTOCOL.PLAIN) ||
++      normalizedAddress.startsWith(WEBSOCKET_PROTOCOL.SECURE)) {
++    return normalizedAddress;
++  }
++
++  const colonIndex = normalizedAddress.lastIndexOf(ADDRESS_PORT_SEPARATOR);
++  if (colonIndex <= 0) {
++    return null;
++  }
++  const hostname = normalizedAddress.substring(0, colonIndex);
++  const restApiPort = Number(normalizedAddress.substring(colonIndex + 1));
++  if (hostname.length === 0 || !Number.isInteger(restApiPort)) {
++    return null;
++  }
++
++  try {
++    const transportWebSocketPort = deriveTransportWebSocketPort(restApiPort);
++    return `${WEBSOCKET_PROTOCOL.PLAIN}${hostname}` +
++      `${ADDRESS_PORT_SEPARATOR}${transportWebSocketPort}`;
++  } catch (_error) {
++    return null;
++  }
++}
++
++export {
++  LISTENER_PORT_DEFAULT,
++  LISTENER_PORT_ENV,
++  LISTENER_PORT_OFFSET,
++  LISTENER_PORT_RANGE,
++  assertDistinctListenerPorts,
++  deriveAdminWebSocketPort,
++  deriveTransportWebSocketAddress,
++  deriveTransportWebSocketPort,
++  resolveListenerPorts,
++};
+diff --git a/src/constants/entrypoint.js b/src/constants/entrypoint.js
+index 2db0f70f71093d1a6e9d87f4cc1f2fadf9293cd8..ba396d4aaf72b400b70545236703d3ddf7ef0abd 100644
+--- a/src/constants/entrypoint.js
++++ b/src/constants/entrypoint.js
+@@ -1,3 +1,9 @@
++import {
++  LISTENER_PORT_DEFAULT,
++  LISTENER_PORT_ENV,
++  LISTENER_PORT_OFFSET,
++} from '../config/listener-port-model.js';
++
+ // Keep in lockstep with package.json "version"; the drift-guard in
+ // test/release/version-single-source.test.js fails if they diverge. Held as a
+ // literal (not a package.json read) so the SEA single-executable build, which
+@@ -24,7 +30,9 @@ const ENTRYPOINT_FLAG = Object.freeze({
+ const ENTRYPOINT_ENV = Object.freeze({
+   NODE_ID: 'NODE_ID',
+   LOG_LEVEL: 'LOG_LEVEL',
+-  PORT: 'PORT',
++  REST_API_PORT: LISTENER_PORT_ENV.REST_API,
++  ADMIN_WEBSOCKET_PORT: LISTENER_PORT_ENV.ADMIN_WEBSOCKET,
++  NODE_WS_PORT: LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET,
+   NODE_ADVERTISED_WS_ADDRESS: 'NODE_ADVERTISED_WS_ADDRESS',
+   SEED_NODE_ADDRESS: 'SEED_NODE_ADDRESS',
+   JOINING_HTTP_TIMEOUT_MS: 'NODE_JOINING_HTTP_TIMEOUT_MS',
+@@ -38,8 +46,10 @@ const ENTRYPOINT_ENV = Object.freeze({
+ });
+ 
+ const ENTRYPOINT_DEFAULT = Object.freeze({
+-  REST_API_PORT: 8080,
+-  WS_PORT_OFFSET: 2,
++  REST_API_PORT: LISTENER_PORT_DEFAULT.REST_API,
++  // Compatibility-only export. Runtime port derivation is owned by the
++  // listener-port model and no production consumer applies this offset.
++  WS_PORT_OFFSET: LISTENER_PORT_OFFSET.TRANSPORT_WEBSOCKET,
+   READINESS_DRAIN_DEADLINE_MS: 10000,
+   LOCALHOST: 'localhost',
+   HTTP_PREFIX: 'http://',
+@@ -137,7 +147,12 @@ const ENTRYPOINT_TEXT = Object.freeze({
+   ENVIRONMENT_LINES: [
+     '  NODE_ID          Override auto-generated node ID',
+     '  LOG_LEVEL        Set logging level (error, warn, info, debug)',
+-    '  PORT             REST API port (default: 8080); WS uses +2 offset',
++    `  ${LISTENER_PORT_ENV.REST_API}    REST API port ` +
++      `(default: ${LISTENER_PORT_DEFAULT.REST_API})`,
++    `  ${LISTENER_PORT_ENV.ADMIN_WEBSOCKET}`,
++    '                   Admin WebSocket port (default: REST_API_PORT + 1)',
++    `  ${LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET}     ` +
++      'Transport WebSocket port (default: REST_API_PORT + 2)',
+     '  CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED',
+     '                   Require lifecycle probe controls (default: true)',
+     '  CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED',
+diff --git a/src/constants/transport.js b/src/constants/transport.js
+index d5854306e7aef93052ceaeaa7b8615eebb2a8428..d6f18331032eefe793773bf8e087d133d80fcb58 100644
+--- a/src/constants/transport.js
++++ b/src/constants/transport.js
+@@ -7,7 +7,10 @@ import {
+   STRING,
+   TYPEOF,
+ } from './index.js';
+-import {ENTRYPOINT_DEFAULT} from './entrypoint.js';
++import {
++  LISTENER_PORT_DEFAULT,
++  deriveTransportWebSocketAddress,
++} from '../config/listener-port-model.js';
+ 
+ const CONNECTION_STATE = Object.freeze({
+   DISCONNECTED: 'disconnected',
+@@ -64,7 +67,7 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
+ });
+ 
+ const TRANSPORT_DEFAULT = Object.freeze({
+-  WS_PORT: ENTRYPOINT_DEFAULT.REST_API_PORT + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
++  WS_PORT: LISTENER_PORT_DEFAULT.TRANSPORT_WEBSOCKET,
+   WS_HOST: HOST.LOCALHOST,
+   WS_PROTOCOL: PROTOCOL.WS,
+   LOCAL_ADDRESS_PREFIX: 'ws-',
+@@ -144,38 +147,14 @@ const TRANSPORT_FORMAT = Object.freeze({
+  *
+  * If the address already starts with ws:// or wss://, return it as-is.
+  * If it is a bare host:port (REST API address), derive the WebSocket
+- * address by applying the standard WS_PORT_OFFSET.
++ * address through the canonical listener-port model.
+  * Returns null for addresses that cannot be normalized.
+  *
+  * @param {string} nodeAddress - Raw node address.
+  * @return {string|null} WebSocket address or null.
+  */
+ function normalizeToWebSocketAddress(nodeAddress) {
+-  if (!nodeAddress || typeof nodeAddress !== 'string') {
+-    return null;
+-  }
+-  if (nodeAddress.startsWith(PROTOCOL.WS) ||
+-      nodeAddress.startsWith(PROTOCOL.WSS)) {
+-    return nodeAddress;
+-  }
+-
+-  const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+-  if (colonIndex <= 0) {
+-    return null;
+-  }
+-
+-  const hostname = nodeAddress.substring(0, colonIndex);
+-  const restPort = Number(
+-    nodeAddress.substring(colonIndex + 1),
+-  );
+-  if (!hostname || !Number.isFinite(restPort) ||
+-      restPort <= 0) {
+-    return null;
+-  }
+-
+-  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+-  return `${PROTOCOL.WS}${hostname}` +
+-    `${ADDRESS.PORT_SEPARATOR}${wsPort}`;
++  return deriveTransportWebSocketAddress(nodeAddress);
+ }
+ 
+ const TRANSPORT_EVENT = Object.freeze({
+diff --git a/src/node/node-constants.js b/src/node/node-constants.js
+index e9b54992d47e78ec1eb390967f5ff798596cadc8..0233d4c487810eb5a1f2b20de019e10983958b32 100644
+--- a/src/node/node-constants.js
++++ b/src/node/node-constants.js
+@@ -1,5 +1,6 @@
+ import {NODE_STATE, NUM, STRING, TIME_MS} from '../constants/index.js';
+ import {CONFIG_KEY} from '../config/config-constants.js';
++import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
+ 
+ const NODE_LIFECYCLE_SUBSYSTEM = 'node-lifecycle-state-machine';
+ 
+@@ -146,7 +147,7 @@ const NODE_LIFECYCLE_REASON = Object.freeze({
+ });
+ 
+ const NODE_DEFAULT = Object.freeze({
+-  REST_API_PORT: 8080,
++  REST_API_PORT: LISTENER_PORT_DEFAULT.REST_API,
+ });
+ 
+ const FAILURE_DETECTOR_SUBSYSTEM = 'failure-detector';
+diff --git a/test/config/configuration-manager.test.js b/test/config/configuration-manager.test.js
+index e23906c9b80236e014c2b3399c82717785034474..cd62e3137b8f32a7f943a66499e795fc20d4816f 100644
+--- a/test/config/configuration-manager.test.js
++++ b/test/config/configuration-manager.test.js
+@@ -10,6 +10,16 @@ import {
+   ENV_MAPPINGS,
+ } from '../../src/config/configuration-manager.js';
+ 
++const TEST_REST_API_PORT = 9090;
++const TEST_ADMIN_WEBSOCKET_PORT = 9191;
++const TEST_TRANSPORT_WEBSOCKET_PORT = 9292;
++
++function clearListenerPortEnvironment() {
++  delete process.env.REST_API_PORT;
++  delete process.env.ADMIN_WEBSOCKET_PORT;
++  delete process.env.NODE_WS_PORT;
++}
++
+ test('ConfigurationManager singleton', async (t) => {
+   ConfigurationManager.resetInstance();
+   const instance1 = ConfigurationManager.getInstance();
+@@ -62,6 +72,16 @@ test('ConfigurationManager default values', async (t) => {
+     DEFAULT_CONFIG.latency.propagationMode,
+     'should use default latency propagation mode',
+   );
++  t.equal(
++    config.get('admin.websocketPort'),
++    config.get('node.restApiPort') + 1,
++    'admin WebSocket default should derive from the REST base port',
++  );
++  t.equal(
++    config.get('node.wsPort'),
++    config.get('node.restApiPort') + 2,
++    'transport WebSocket default should derive from the REST base port',
++  );
+ 
+   ConfigurationManager.resetInstance();
+ });
+@@ -87,19 +107,120 @@ test('ConfigurationManager environment variables', async (t) => {
+   // Set environment variables
+   process.env.NODE_ID = 'env-node-456';
+   process.env.LOG_LEVEL = 'warn';
+-  process.env.REST_API_PORT = '9090';
++  process.env.REST_API_PORT = String(TEST_REST_API_PORT);
+ 
+   const config = ConfigurationManager.getInstance();
+   config.initialize();
+ 
+   t.equal(config.get('node.id'), 'env-node-456', 'should load NODE_ID from env');
+   t.equal(config.get('logging.level'), 'warn', 'should load LOG_LEVEL from env');
+-  t.equal(config.get('node.restApiPort'), 9090, 'should parse numeric env values');
++  t.equal(
++    config.get('node.restApiPort'),
++    TEST_REST_API_PORT,
++    'should parse numeric env values',
++  );
++  t.equal(
++    config.get('admin.websocketPort'),
++    TEST_REST_API_PORT + 1,
++    'unoverridden admin port should follow the overridden REST base',
++  );
++  t.equal(
++    config.get('node.wsPort'),
++    TEST_REST_API_PORT + 2,
++    'unoverridden transport port should follow the overridden REST base',
++  );
+ 
+   // Clean up
+   delete process.env.NODE_ID;
+   delete process.env.LOG_LEVEL;
+-  delete process.env.REST_API_PORT;
++  clearListenerPortEnvironment();
++  ConfigurationManager.resetInstance();
++});
++
++test('ConfigurationManager accepts individual listener port overrides', async (t) => {
++  ConfigurationManager.resetInstance();
++  clearListenerPortEnvironment();
++  process.env.REST_API_PORT = String(TEST_REST_API_PORT);
++  process.env.ADMIN_WEBSOCKET_PORT = String(TEST_ADMIN_WEBSOCKET_PORT);
++  process.env.NODE_WS_PORT = String(TEST_TRANSPORT_WEBSOCKET_PORT);
++
++  const config = ConfigurationManager.getInstance();
++  config.initialize();
++
++  t.equal(config.get('node.restApiPort'), TEST_REST_API_PORT);
++  t.equal(config.get('admin.websocketPort'), TEST_ADMIN_WEBSOCKET_PORT);
++  t.equal(config.get('node.wsPort'), TEST_TRANSPORT_WEBSOCKET_PORT);
++
++  clearListenerPortEnvironment();
++  ConfigurationManager.resetInstance();
++});
++
++test('explicit WebSocket overrides do not evaluate unused offset ports', async (t) => {
++  ConfigurationManager.resetInstance();
++  clearListenerPortEnvironment();
++  process.env.REST_API_PORT = '65535';
++  process.env.ADMIN_WEBSOCKET_PORT = '10';
++  process.env.NODE_WS_PORT = '11';
++
++  const config = ConfigurationManager.getInstance();
++  config.initialize();
++
++  t.equal(config.get('node.restApiPort'), 65535);
++  t.equal(config.get('admin.websocketPort'), 10);
++  t.equal(config.get('node.wsPort'), 11);
++
++  clearListenerPortEnvironment();
++  ConfigurationManager.resetInstance();
++});
++
++test('derived WebSocket ports must remain within the listener range', async (t) => {
++  ConfigurationManager.resetInstance();
++  clearListenerPortEnvironment();
++  process.env.REST_API_PORT = '65534';
++
++  const config = ConfigurationManager.getInstance();
++  t.throws(
++    () => config.initialize(),
++    /transport WebSocket listener port must be an integer between 1 and 65535/iu,
++  );
++
++  clearListenerPortEnvironment();
++  ConfigurationManager.resetInstance();
++});
++
++test('ConfigurationManager rejects listener port collisions', async (t) => {
++  const collisions = [
++    {
++      node: {id: 'rest-admin-collision', restApiPort: TEST_REST_API_PORT},
++      admin: {websocketPort: TEST_REST_API_PORT},
++    },
++    {
++      node: {
++        id: 'rest-transport-collision',
++        restApiPort: TEST_REST_API_PORT,
++        wsPort: TEST_REST_API_PORT,
++      },
++    },
++    {
++      node: {
++        id: 'admin-transport-collision',
++        restApiPort: TEST_REST_API_PORT,
++        wsPort: TEST_TRANSPORT_WEBSOCKET_PORT,
++      },
++      admin: {websocketPort: TEST_TRANSPORT_WEBSOCKET_PORT},
++    },
++  ];
++
++  for (const overrides of collisions) {
++    ConfigurationManager.resetInstance();
++    const config = ConfigurationManager.getInstance();
++    t.throws(
++      () => config.initialize(overrides),
++      /listener ports must be distinct/iu,
++      'startup validation should reject pairwise listener collisions',
++    );
++  }
++
+   ConfigurationManager.resetInstance();
+ });
+ 
+@@ -205,4 +326,9 @@ test('ENV_MAPPINGS coverage', async (t) => {
+   t.ok(ENV_MAPPINGS.NODE_ID, 'should have NODE_ID mapping');
+   t.ok(ENV_MAPPINGS.LOG_LEVEL, 'should have LOG_LEVEL mapping');
+   t.ok(ENV_MAPPINGS.REST_API_PORT, 'should have REST_API_PORT mapping');
++  t.ok(
++    ENV_MAPPINGS.ADMIN_WEBSOCKET_PORT,
++    'should have ADMIN_WEBSOCKET_PORT mapping',
++  );
++  t.ok(ENV_MAPPINGS.NODE_WS_PORT, 'should have NODE_WS_PORT mapping');
+ });

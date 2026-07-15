@@ -1,0 +1,42 @@
+{
+  "id": "listener-port-model-config-authority",
+  "authoringContractVersion": 1,
+  "statement": "REST, admin WebSocket, and transport WebSocket listener configuration has one range-safe derivation authority with first-class defaults, schema, environment wiring, lazy explicit overrides, and collision rejection.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "listener-port-model-single-authority",
+    "planDoc": null,
+    "draftedAtCommit": "0da03c6d3469ae6e6511d5a6bdaf755ece2a0d31"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "listener-port-model-config-authority",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "listener-port-model-config-authority-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "listener-port-model-config-authority",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

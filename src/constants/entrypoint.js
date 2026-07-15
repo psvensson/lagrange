@@ -1,3 +1,9 @@
+import {
+  LISTENER_PORT_DEFAULT,
+  LISTENER_PORT_ENV,
+  LISTENER_PORT_OFFSET,
+} from '../config/listener-port-model.js';
+
 // Keep in lockstep with package.json "version"; the drift-guard in
 // test/release/version-single-source.test.js fails if they diverge. Held as a
 // literal (not a package.json read) so the SEA single-executable build, which
@@ -24,7 +30,9 @@ const ENTRYPOINT_FLAG = Object.freeze({
 const ENTRYPOINT_ENV = Object.freeze({
   NODE_ID: 'NODE_ID',
   LOG_LEVEL: 'LOG_LEVEL',
-  PORT: 'PORT',
+  REST_API_PORT: LISTENER_PORT_ENV.REST_API,
+  ADMIN_WEBSOCKET_PORT: LISTENER_PORT_ENV.ADMIN_WEBSOCKET,
+  NODE_WS_PORT: LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET,
   NODE_ADVERTISED_WS_ADDRESS: 'NODE_ADVERTISED_WS_ADDRESS',
   SEED_NODE_ADDRESS: 'SEED_NODE_ADDRESS',
   JOINING_HTTP_TIMEOUT_MS: 'NODE_JOINING_HTTP_TIMEOUT_MS',
@@ -38,8 +46,10 @@ const ENTRYPOINT_ENV = Object.freeze({
 });
 
 const ENTRYPOINT_DEFAULT = Object.freeze({
-  REST_API_PORT: 8080,
-  WS_PORT_OFFSET: 2,
+  REST_API_PORT: LISTENER_PORT_DEFAULT.REST_API,
+  // Compatibility-only export. Runtime port derivation is owned by the
+  // listener-port model and no production consumer applies this offset.
+  WS_PORT_OFFSET: LISTENER_PORT_OFFSET.TRANSPORT_WEBSOCKET,
   READINESS_DRAIN_DEADLINE_MS: 10000,
   LOCALHOST: 'localhost',
   HTTP_PREFIX: 'http://',
@@ -137,7 +147,12 @@ const ENTRYPOINT_TEXT = Object.freeze({
   ENVIRONMENT_LINES: [
     '  NODE_ID          Override auto-generated node ID',
     '  LOG_LEVEL        Set logging level (error, warn, info, debug)',
-    '  PORT             REST API port (default: 8080); WS uses +2 offset',
+    `  ${LISTENER_PORT_ENV.REST_API}    REST API port ` +
+      `(default: ${LISTENER_PORT_DEFAULT.REST_API})`,
+    `  ${LISTENER_PORT_ENV.ADMIN_WEBSOCKET}`,
+    '                   Admin WebSocket port (default: REST_API_PORT + 1)',
+    `  ${LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET}     ` +
+      'Transport WebSocket port (default: REST_API_PORT + 2)',
     '  CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED',
     '                   Require lifecycle probe controls (default: true)',
     '  CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED',

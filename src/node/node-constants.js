@@ -1,5 +1,6 @@
 import {NODE_STATE, NUM, STRING, TIME_MS} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
 
 const NODE_LIFECYCLE_SUBSYSTEM = 'node-lifecycle-state-machine';
 
@@ -146,7 +147,7 @@ const NODE_LIFECYCLE_REASON = Object.freeze({
 });
 
 const NODE_DEFAULT = Object.freeze({
-  REST_API_PORT: 8080,
+  REST_API_PORT: LISTENER_PORT_DEFAULT.REST_API,
 });
 
 const FAILURE_DETECTOR_SUBSYSTEM = 'failure-detector';

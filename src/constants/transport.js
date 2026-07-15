@@ -7,7 +7,10 @@ import {
   STRING,
   TYPEOF,
 } from './index.js';
-import {ENTRYPOINT_DEFAULT} from './entrypoint.js';
+import {
+  LISTENER_PORT_DEFAULT,
+  deriveTransportWebSocketAddress,
+} from '../config/listener-port-model.js';
 
 const CONNECTION_STATE = Object.freeze({
   DISCONNECTED: 'disconnected',
@@ -64,7 +67,7 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
 });
 
 const TRANSPORT_DEFAULT = Object.freeze({
-  WS_PORT: ENTRYPOINT_DEFAULT.REST_API_PORT + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
+  WS_PORT: LISTENER_PORT_DEFAULT.TRANSPORT_WEBSOCKET,
   WS_HOST: HOST.LOCALHOST,
   WS_PROTOCOL: PROTOCOL.WS,
   LOCAL_ADDRESS_PREFIX: 'ws-',
@@ -144,38 +147,14 @@ const TRANSPORT_FORMAT = Object.freeze({
  *
  * If the address already starts with ws:// or wss://, return it as-is.
  * If it is a bare host:port (REST API address), derive the WebSocket
- * address by applying the standard WS_PORT_OFFSET.
+ * address through the canonical listener-port model.
  * Returns null for addresses that cannot be normalized.
  *
  * @param {string} nodeAddress - Raw node address.
  * @return {string|null} WebSocket address or null.
  */
 function normalizeToWebSocketAddress(nodeAddress) {
-  if (!nodeAddress || typeof nodeAddress !== 'string') {
-    return null;
-  }
-  if (nodeAddress.startsWith(PROTOCOL.WS) ||
-      nodeAddress.startsWith(PROTOCOL.WSS)) {
-    return nodeAddress;
-  }
-
-  const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-  if (colonIndex <= 0) {
-    return null;
-  }
-
-  const hostname = nodeAddress.substring(0, colonIndex);
-  const restPort = Number(
-    nodeAddress.substring(colonIndex + 1),
-  );
-  if (!hostname || !Number.isFinite(restPort) ||
-      restPort <= 0) {
-    return null;
-  }
-
-  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
-  return `${PROTOCOL.WS}${hostname}` +
-    `${ADDRESS.PORT_SEPARATOR}${wsPort}`;
+  return deriveTransportWebSocketAddress(nodeAddress);
 }
 
 const TRANSPORT_EVENT = Object.freeze({
