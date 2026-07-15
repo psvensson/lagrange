@@ -18,16 +18,17 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: same blocker remains: unknown
-- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json
-- Selected theory: theory-load-after-full-formation-drain (stale: selected theory status is needs-rerun)
+- Movement: unknown: unknown -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json
+- Selected theory: theory-load-after-full-formation-drain (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-three-way-affinity-demo-main
+- No longer current: unknown
 
 ## Continuation
 - Status: blocked-theory
 - Next action: record and select frontier theory for movielens-three-way-affinity-demo-main with npm run model:contracts as discriminator
 - Blocker: frontier theory required for movielens-three-way-affinity-demo-main
-- Blocker: selected theory stale: selected theory status is needs-rerun
+- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 10
@@ -56,11 +57,15 @@
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
 - **movielens-three-way-affinity-demo-main**: Independent verifier approved the move-limit scheduling patch after its recorded attempt, including saturated cleanup composition. [subagent:/root/affinity_parallel_reduce_verify]
 - **movielens-three-way-affinity-demo-main**: Independent verifier approved the bounded full-drain bootstrap sequencing and corrected pre/post-ledger diagnostics. [subagent:/root/affinity_parallel_reduce_verify]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json]
+- **movielens-three-way-affinity-demo-main**: At merged main a49dda6d the five-node cluster formed, but preload admission failed before ratings load because the control snapshot remained stale_usable with cache_stale_watermark and partition_topology_gap; this is a fresh live blocker after the priority-summary and split-policy owner fixes, not live closure. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Immutable run forensics bind partition_topology_gap to the system logs table entering split_preparing at pending partition version 2 while the control-snapshot cache and authoritative tables/partitions projection diverged. The demo's 1 MiB split threshold is global even though its intent is ratings-specific. The next investigation must discriminate table-local scenario policy from platform topology-repair convergence before changing source or rerunning live. [solve/changes/movielens-three-way-affinity-demo/handoff-2026-07-15-wave4-live-preload-topology-gap.md]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json]
 
 ## Theories
 - **theory-ledger-cure-move-limit-starvation** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism scheduling_starvation, owner rebalancer_planning_owner, boundary move_limit_ordering, modelGate npm run model:contracts
 - **theory-ledger-cure-move-limit-starvation-v2** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism scheduling_starvation, owner rebalancer_planning_owner, boundary move_limit_ordering, modelGate npm run model:contracts
-- **theory-load-after-full-formation-drain** [needs-rerun] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism transition_gap, owner demo_bootstrap_owner, boundary formation_to_data_load, modelGate npm run model:contracts
+- **theory-load-after-full-formation-drain** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism transition_gap, owner demo_bootstrap_owner, boundary formation_to_data_load, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-three-way-affinity-demo-main**: theory-load-after-full-formation-drain
@@ -72,6 +77,7 @@
 - **theory-ledger-cure-move-limit-starvation-v2**: supported (scenario=failed, theory=partial, movement=moved_boundary) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T20-30-06-401Z.report.json]
 - **theory-load-after-full-formation-drain**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
 - **theory-load-after-full-formation-drain**: needs-rerun (scenario=failed, theory=inconclusive, movement=moved_boundary) [data/examples/service-data-affinity-demo-archive/run-2026-07-11T20-34-45-161Z.tar.gz]
+- **theory-load-after-full-formation-drain**: falsified (scenario=failed, theory=falsified, movement=unknown) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
