@@ -1,3 +1,5 @@
+import {LISTENER_PORT_DEFAULT} from '../../config/listener-port-model.js';
+
 const LOCAL_STR_NAVIGATION = 'Navigation';
 const LOCAL_STR_1UYVY = '↑/↓';
 const LOCAL_STR_MOVE_SELECTION_UP_DOWN = 'Move selection up/down';
@@ -422,7 +424,7 @@ USAGE:
   lagrange-admin [OPTIONS] [NODE_ADDRESS]
 
 ARGUMENTS:
-  NODE_ADDRESS    Address of node to connect to (e.g., localhost:8080)
+  NODE_ADDRESS    Address of node to connect to (e.g., localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET})
 
 OPTIONS:
   -h, --help              Show this help message and exit
@@ -438,9 +440,9 @@ ENVIRONMENT VARIABLES:
   LAGRANGE_REFRESH_INTERVAL    Default refresh interval
 
 EXAMPLES:
-  lagrange-admin localhost:8080
-  lagrange-admin --view tables --read-only localhost:8080
-  LAGRANGE_NODE_ADDRESS=localhost:8080 lagrange-admin
+  lagrange-admin localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}
+  lagrange-admin --view tables --read-only localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}
+  LAGRANGE_NODE_ADDRESS=localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET} lagrange-admin
 
 For more information, see the documentation at:
   https://github.com/your-org/distributed-database/docs/admin-cli

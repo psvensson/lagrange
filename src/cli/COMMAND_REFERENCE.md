@@ -134,9 +134,9 @@ Connect to a database node.
 
 **Examples:**
 ```
-:connect localhost:8080
-:connect 192.168.1.100:8080
-:c node1.example.com:8080
+:connect localhost:8081
+:connect 192.168.1.100:8081
+:c node1.example.com:8081
 ```
 
 ### refresh
@@ -305,7 +305,7 @@ Default node address to connect to.
 **Example:**
 ```json
 {
-  "node_address": "localhost:8080"
+  "node_address": "localhost:8081"
 }
 ```
 
@@ -474,7 +474,7 @@ Custom keybindings (advanced).
 
 ```json
 {
-  "node_address": "localhost:8080",
+  "node_address": "localhost:8081",
   "refresh_interval": 3000,
   "default_view": "nodes",
   "color_scheme": "default",
@@ -505,7 +505,7 @@ Default node address to connect to.
 
 **Example:**
 ```bash
-export LAGRANGE_NODE_ADDRESS=localhost:8080
+export LAGRANGE_NODE_ADDRESS=localhost:8081
 lagrange-admin
 ```
 
@@ -569,7 +569,7 @@ lagrange-admin -v
 Enable read-only mode. Only SELECT queries are allowed.
 
 ```bash
-lagrange-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8081
 ```
 
 #### --monochrome
@@ -577,7 +577,7 @@ lagrange-admin --read-only localhost:8080
 Use monochrome color scheme (no colors).
 
 ```bash
-lagrange-admin --monochrome localhost:8080
+lagrange-admin --monochrome localhost:8081
 ```
 
 #### --refresh <ms>
@@ -585,7 +585,7 @@ lagrange-admin --monochrome localhost:8080
 Set refresh interval in milliseconds.
 
 ```bash
-lagrange-admin --refresh 5000 localhost:8080
+lagrange-admin --refresh 5000 localhost:8081
 ```
 
 #### --view <name>
@@ -595,7 +595,7 @@ Start with a specific view.
 Valid values: `nodes`, `services`, `tables`, `partitions`, `message_groups`, `sql`, `logs`, `config`, `contexts`
 
 ```bash
-lagrange-admin --view tables localhost:8080
+lagrange-admin --view tables localhost:8081
 ```
 
 ### Positional Arguments
@@ -607,33 +607,33 @@ Node address to connect to (optional).
 Format: `host:port`
 
 ```bash
-lagrange-admin localhost:8080
-lagrange-admin 192.168.1.100:8080
+lagrange-admin localhost:8081
+lagrange-admin 192.168.1.100:8081
 ```
 
 ### Examples
 
 ```bash
 # Basic connection
-lagrange-admin localhost:8080
+lagrange-admin localhost:8081
 
 # Read-only mode
-lagrange-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8081
 
 # Custom refresh interval
-lagrange-admin --refresh 10000 localhost:8080
+lagrange-admin --refresh 10000 localhost:8081
 
 # Start with tables view
-lagrange-admin --view tables localhost:8080
+lagrange-admin --view tables localhost:8081
 
 # Monochrome mode
-lagrange-admin --monochrome localhost:8080
+lagrange-admin --monochrome localhost:8081
 
 # Combined options
-lagrange-admin --read-only --view sql --refresh 5000 localhost:8080
+lagrange-admin --read-only --view sql --refresh 5000 localhost:8081
 
 # Using environment variable
-LAGRANGE_NODE_ADDRESS=localhost:8080 lagrange-admin --read-only
+LAGRANGE_NODE_ADDRESS=localhost:8081 lagrange-admin --read-only
 ```
 
 ---

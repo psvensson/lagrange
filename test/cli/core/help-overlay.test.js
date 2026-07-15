@@ -5,8 +5,14 @@
  */
 
 import {test} from '../../../src/test-helpers/tap.js';
+import fs from 'node:fs';
 import {HelpOverlay} from '../../../src/cli/core/help-overlay.js';
 import {EventBus} from '../../../src/cli/core/event-bus.js';
+import {LISTENER_PORT_DEFAULT} from
+  '../../../src/config/listener-port-model.js';
+
+const ADMIN_CLI_TARGET_PATTERN =
+  /(?:lagrange-admin|LAGRANGE_NODE_ADDRESS|NODE_ADDRESS|:connect|:c\s|node_address)[^\n]*:8080/iu;
 
 test('HelpOverlay', async (t) => {
   await t.test('constructor initializes with shortcuts', async (t) => {
@@ -99,6 +105,17 @@ test('HelpOverlay', async (t) => {
     t.ok(usage.includes('OPTIONS'), 'has options section');
     t.ok(usage.includes('--help'), 'has help option');
     t.ok(usage.includes('EXAMPLES'), 'has examples');
+    t.ok(
+      usage.includes(
+        `localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}`,
+      ),
+      'usage targets the canonical admin WebSocket default',
+    );
+    t.notMatch(
+      usage,
+      ADMIN_CLI_TARGET_PATTERN,
+      'usage must not direct the admin CLI to the REST default',
+    );
   });
 
   await t.test('show() sets visible and emits event', async (t) => {
@@ -187,4 +204,22 @@ test('HelpOverlay', async (t) => {
     const shortcuts = overlay.getViewShortcuts('unknown');
     t.same(shortcuts, []);
   });
+});
+
+test('admin CLI documentation does not target the REST default', async (t) => {
+  const surfaces = [
+    'src/cli/README.md',
+    'src/cli/COMMAND_REFERENCE.md',
+    'src/cli/USER_GUIDE.md',
+    'src/cli/core/help-overlay.js',
+  ];
+
+  for (const path of surfaces) {
+    const source = fs.readFileSync(path, 'utf8');
+    t.notMatch(
+      source,
+      ADMIN_CLI_TARGET_PATTERN,
+      `${path} must not direct admin CLI users to port 8080`,
+    );
+  }
 });

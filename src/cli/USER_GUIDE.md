@@ -430,7 +430,7 @@ For write operations (INSERT/UPDATE/DELETE):
 
 **Read-only mode:**
 ```bash
-lagrange-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8081
 ```
 In read-only mode, only SELECT queries are allowed.
 

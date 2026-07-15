@@ -42,13 +42,13 @@ npm link
 
 ```bash
 # Connect to a specific node
-lagrange-admin localhost:8080
+lagrange-admin localhost:8081
 
 # Start with address prompt
 lagrange-admin
 
 # Connect in read-only mode (SELECT queries only)
-lagrange-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8081
 ```
 
 ### Basic Navigation

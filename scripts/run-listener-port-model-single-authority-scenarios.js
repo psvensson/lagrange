@@ -17,6 +17,7 @@ const SCENARIOS = {
     'test/transport/node-address-resolution-contract.test.js',
     'test/helm/lagrange-node-admin-default-deny.test.js',
     'test/scripts/entrypoint-defaults.test.js',
+    'test/cli/core/help-overlay.test.js',
   ],
   'listener-port-model-config-authority': [
     'test/config/configuration-manager.test.js',
@@ -29,6 +30,9 @@ const SCENARIOS = {
   ],
   'listener-port-model-doc-helper-alignment': [
     'test/scripts/entrypoint-defaults.test.js',
+  ],
+  'listener-port-model-cli-guidance-gap': [
+    'test/cli/core/help-overlay.test.js',
   ],
 };
 
