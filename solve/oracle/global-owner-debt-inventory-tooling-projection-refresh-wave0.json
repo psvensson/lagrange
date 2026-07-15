@@ -1,0 +1,20 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "global-owner-debt-inventory-tooling-projection-refresh-wave0",
+  "detail": {
+    "projectionFresh": true,
+    "idempotent": true,
+    "baselineChanged": false,
+    "inventorySha256": "320a654459c7c8dd8a7d5028780df6b393e9c2c67ceb182775191030b15694f5",
+    "focusedAssertions": 189,
+    "solverTestFilesPassed": 55,
+    "solverTestFilesTotal": 55,
+    "solverAssertions": 2543,
+    "filesWithDebt": 1348,
+    "rankedBoundaryCount": 120,
+    "childQuestCount": 16,
+    "sample": "official projection is byte-idempotent against the fully composed Wave 0 source and Solver graph"
+  }
+}
