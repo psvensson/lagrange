@@ -18,9 +18,9 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json
 - Selected theory: theory-20260715-the-loader-mistakes-transport-resolution-for (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-ratings-scoped-split-policy-live-main
 
@@ -54,6 +54,11 @@
 - **movielens-ratings-scoped-split-policy-live-main**: At successor base 022f27a3, the five-node live run formed but failed preload with partition_topology_gap after the node-wide 1 MiB default selected the system logs table; the immutable archive binds this successor to the live mechanism rather than only its deterministic fixture. [data/examples/service-data-affinity-demo-archive/handoff-live-2026-07-15T19-20-14-034Z.tar.gz]
 - **movielens-ratings-scoped-split-policy-live-main**: Exact attempt fingerprint rejected: ratings policy confirmation is cache-backed rather than authoritative because AdminWebSocketAPI intercepts tables SELECTs through shared SystemTableCache, so fresh clients do not prove durable CREATE metadata; the new bounded local retry loop also violates the decision-boundary audit. [subagent:verify_movielens_attempt5]
 - **movielens-ratings-scoped-split-policy-live-main**: Exact attempt sha256:e0b71800a3b331a6090815db7e9ad425c7d362472be3e416cea94c5e242e4481 is rejected: createRatingsTableWithRetry counted every resolved CREATE query as a stable confirmation, including the durable owner's typed pending/retry outcome. The exact helper witness returned two confirmations from two pending outcomes, so joiner expansion could begin before durable provisioning was ready. Replacement must count only typed ready/proceed outcomes, reset/defer on pending retry, fail closed on missing metadata, and test typed reset/exhaustion paths. All other scoped checks passed except 48 pre-existing runner literal-audit findings. [subagent:verify_movielens_attempt5]
+- **movielens-ratings-scoped-split-policy-live-main**: Independent verification passed for exact attempt sha256:177e3c790375f32d2ed86eab7020222ea748a0a426fb9a0367d4922f161622e9: typed pending resets and exhausts, only ready/proceed confirms, malformed and terminal outcomes fail closed, retry remains canonically owned, atomic ratings-only policy and invocation ordering are proven through real owners, deterministic scenario is 9/9, scoped ratchets are green, and the 48 literal findings are unchanged from base. [subagent:verify_movielens_attempt3]
+- **movielens-ratings-scoped-split-policy-live-main**: Checkpoint e1f687ea removed the logs split/topology-gap mechanism, but the one-time milestone exposed a different deterministic ordering deadlock before expansion: ratings durable CREATE stayed pending because its owner required two replicas while only the seed existed (requiredReplicaCount=2, resolvedReplicaCount=1, maximumProvisionableReplicaCount=1). The table metadata and one replica were created successfully, no logs split was selected, but ten typed pending observations correctly exhausted. Move policy-bearing ratings CREATE after five-node formation while keeping it before preload/load; do not rerun unchanged. [data/examples/service-data-affinity-demo-archive/wave4-live-create-pending-2026-07-15T21-59-01-787Z.tar.gz]
+- **movielens-ratings-scoped-split-policy-live-main**: The same single milestone emitted an honest failed three-way report because the Lagrange phase stopped at durable schema confirmation; PostgreSQL completed and cleaned up, while no comparison result was fabricated. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-15T21-59-01-791Z.report.json]
+- **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
+- **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
 
 ## Theories
 - **theory-20260715-the-loader-mistakes-transport-resolution-for** [falsified] frontier, frontier movielens-ratings-scoped-split-policy-live-main, layer ownership, mechanism The loader mistakes transport resolution for durable readiness and increments stable confirmation on pending/retry outcomes., modelGate npm run model:contracts
@@ -63,6 +68,7 @@
 
 ## Theory Results
 - **theory-20260715-the-loader-mistakes-transport-resolution-for**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T19-20-14-034Z.report.json]
+- **theory-20260715-the-loader-mistakes-transport-resolution-for**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
