@@ -16,6 +16,12 @@
         "allowInsecureExternalBind": {
           "const": false,
           "description": "The chart cannot opt into an unauthenticated external admin bind."
+        },
+        "websocketPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Optional admin WebSocket port; defaults to node.restPort + 1."
         }
       },
       "additionalProperties": false
@@ -23,6 +29,18 @@
     "node": {
       "type": "object",
       "properties": {
+        "restPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "REST base port for the listener-port family."
+        },
+        "wsPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Optional transport WebSocket port; defaults to node.restPort + 2."
+        },
         "extraEnv": {
           "type": "array",
           "items": {
@@ -34,7 +52,9 @@
                   "enum": [
                     "ADMIN_WEBSOCKET_HOST",
                     "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND",
-                    "ADMIN_WEBSOCKET_PORT"
+                    "ADMIN_WEBSOCKET_PORT",
+                    "REST_API_PORT",
+                    "NODE_WS_PORT"
                   ]
                 }
               }

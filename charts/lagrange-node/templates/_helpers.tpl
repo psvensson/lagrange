@@ -41,6 +41,53 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) -}}
 {{- end -}}
 
+{{/* Canonical listener-port family. Optional WS values derive from REST. */}}
+{{- define "lagrange-node.integerListenerPort" -}}
+{{- $name := index . 0 -}}
+{{- $value := index . 1 -}}
+{{- $numericKinds := list "int" "int8" "int16" "int32" "int64" "uint" "uint8" "uint16" "uint32" "uint64" "float32" "float64" -}}
+{{- if not (has (kindOf $value) $numericKinds) -}}
+{{- fail (printf "%s listener port must be an integer; received %s" $name (kindOf $value)) -}}
+{{- end -}}
+{{- $integer := int64 $value -}}
+{{- if ne (float64 $integer) (float64 $value) -}}
+{{- fail (printf "%s listener port must be an integer; received %v" $name $value) -}}
+{{- end -}}
+{{- $integer -}}
+{{- end -}}
+
+{{- define "lagrange-node.restPort" -}}
+{{- include "lagrange-node.integerListenerPort" (list "REST" .Values.node.restPort) -}}
+{{- end -}}
+
+{{- define "lagrange-node.adminWebsocketPort" -}}
+{{- if hasKey .Values.admin "websocketPort" -}}
+{{- include "lagrange-node.integerListenerPort" (list "admin WebSocket" .Values.admin.websocketPort) -}}
+{{- else -}}
+{{- add (int64 (include "lagrange-node.restPort" .)) 1 -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "lagrange-node.transportWebsocketPort" -}}
+{{- if hasKey .Values.node "wsPort" -}}
+{{- include "lagrange-node.integerListenerPort" (list "transport WebSocket" .Values.node.wsPort) -}}
+{{- else -}}
+{{- add (int64 (include "lagrange-node.restPort" .)) 2 -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "lagrange-node.validateListenerPorts" -}}
+{{- $restPort := int64 (include "lagrange-node.restPort" .) -}}
+{{- $adminPort := int64 (include "lagrange-node.adminWebsocketPort" .) -}}
+{{- $transportPort := int64 (include "lagrange-node.transportWebsocketPort" .) -}}
+{{- if or (lt $restPort 1) (gt $restPort 65535) (lt $adminPort 1) (gt $adminPort 65535) (lt $transportPort 1) (gt $transportPort 65535) -}}
+{{- fail (printf "listener ports must be between 1 and 65535: REST=%d, admin WS=%d, transport WS=%d" $restPort $adminPort $transportPort) -}}
+{{- end -}}
+{{- if or (eq $restPort $adminPort) (eq $restPort $transportPort) (eq $adminPort $transportPort) -}}
+{{- fail (printf "listener ports must be distinct: REST=%d, admin WS=%d, transport WS=%d" $restPort $adminPort $transportPort) -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Fail closed even when an operator skips values.schema.json validation. The
 chart does not provide authenticated admin ingress, so neither first-class
@@ -55,8 +102,8 @@ values nor extraEnv may make the pod-local admin listener externally reachable.
 {{- end -}}
 {{- range .Values.node.extraEnv -}}
 {{- $name := toString .name -}}
-{{- if or (eq $name "ADMIN_WEBSOCKET_HOST") (eq $name "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND") (eq $name "ADMIN_WEBSOCKET_PORT") -}}
-{{- fail (printf "node.extraEnv name %s is reserved by the admin safety policy" $name) -}}
+{{- if or (eq $name "ADMIN_WEBSOCKET_HOST") (eq $name "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND") (eq $name "ADMIN_WEBSOCKET_PORT") (eq $name "REST_API_PORT") (eq $name "NODE_WS_PORT") -}}
+{{- fail (printf "node.extraEnv name %s is reserved by the listener port or admin safety policy" $name) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -81,9 +128,9 @@ args:
 {{- end }}
 ports:
   - name: rest
-    containerPort: {{ int .Values.node.restPort }}
+    containerPort: {{ include "lagrange-node.restPort" . }}
   - name: transport-ws
-    containerPort: {{ add (int .Values.node.restPort) 2 }}
+    containerPort: {{ include "lagrange-node.transportWebsocketPort" . }}
 livenessProbe:
   httpGet:
     path: {{ .Values.probes.liveness.path }}
@@ -110,6 +157,7 @@ volumeMounts:
 {{/* Env vars shared by seed and joiner pods */}}
 {{- define "lagrange-node.envCommon" -}}
 {{- include "lagrange-node.validateAdminSafety" . -}}
+{{- include "lagrange-node.validateListenerPorts" . -}}
 - name: POD_NAME
   valueFrom:
     fieldRef:
@@ -122,7 +170,11 @@ volumeMounts:
 # runtime mints one on first boot and restores it from the data directory
 # (rejoin hints) on every restart — identity is durable via the PVC.
 - name: REST_API_PORT
-  value: {{ .Values.node.restPort | quote }}
+  value: {{ include "lagrange-node.restPort" . | quote }}
+- name: ADMIN_WEBSOCKET_PORT
+  value: {{ include "lagrange-node.adminWebsocketPort" . | quote }}
+- name: NODE_WS_PORT
+  value: {{ include "lagrange-node.transportWebsocketPort" . | quote }}
 - name: LOG_LEVEL
   value: {{ .Values.node.logLevel | quote }}
 - name: ADMIN_WEBSOCKET_HOST
@@ -135,9 +187,9 @@ volumeMounts:
 - name: TRANSPORT_WS_HOST
   value: "0.0.0.0"
 - name: NODE_ADDRESS
-  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%d" (include "lagrange-node.headlessService" .) (int .Values.node.restPort) | quote }}
+  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%s" (include "lagrange-node.headlessService" .) (include "lagrange-node.restPort" .) | quote }}
 - name: NODE_ADVERTISED_WS_ADDRESS
-  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%d" (include "lagrange-node.headlessService" .) (add (int .Values.node.restPort) 2) | quote }}
+  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%s" (include "lagrange-node.headlessService" .) (include "lagrange-node.transportWebsocketPort" .) | quote }}
 {{- with .Values.node.extraEnv }}
 {{ toYaml . }}
 {{- end }}
@@ -145,7 +197,7 @@ volumeMounts:
 
 {{/* Seed node REST address joiners bootstrap from (http:// is auto-prefixed) */}}
 {{- define "lagrange-node.seedAddress" -}}
-{{- printf "%s-seed-0.%s.%s.svc.cluster.local:%d" (include "lagrange-node.fullname" .) (include "lagrange-node.headlessService" .) .Release.Namespace (int .Values.node.restPort) -}}
+{{- printf "%s-seed-0.%s.%s.svc.cluster.local:%s" (include "lagrange-node.fullname" .) (include "lagrange-node.headlessService" .) .Release.Namespace (include "lagrange-node.restPort" .) -}}
 {{- end -}}
 
 {{/* PVC template shared by both StatefulSets */}}

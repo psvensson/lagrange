@@ -16,6 +16,6 @@ spec:
     {{- include "lagrange-node.selectorLabels" . | nindent 4 }}
   ports:
     - name: rest
-      port: {{ int .Values.node.restPort }}
+      port: {{ include "lagrange-node.restPort" . }}
     - name: transport-ws
-      port: {{ add (int .Values.node.restPort) 2 }}
+      port: {{ include "lagrange-node.transportWebsocketPort" . }}

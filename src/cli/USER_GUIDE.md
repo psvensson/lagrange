@@ -23,7 +23,8 @@ removed before the first release).
 
 The CLI connects to any node in the cluster via WebSocket. You can specify the address in several ways:
 
-Note: the system admin WebSocket service listens on the fixed port `8081`.
+By default the admin WebSocket uses REST port + 1 (`8081` for the default REST
+port). Set `ADMIN_WEBSOCKET_PORT` when the node uses an individual override.
 
 **Command line:**
 ```bash

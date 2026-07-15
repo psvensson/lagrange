@@ -1,4 +1,5 @@
 import {NUM, STRING} from '../constants/index.js';
+import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
 
 const CLI_APP = Object.freeze({
   NAME: 'Lagrange Admin CLI',
@@ -211,8 +212,10 @@ const CLI_HELP_TEXT = Object.freeze({
   TITLE: `${CLI_APP.NAME} - Terminal-based administration tool`,
   USAGE: `Usage: ${CLI_APP.BIN} [options] [node-address]`,
   EXAMPLES: [
-    `${CLI_APP.BIN}                     Connect to localhost:8081`,
-    `${CLI_APP.BIN} localhost:8081      Connect to specific node`,
+    `${CLI_APP.BIN}                     Connect to localhost:` +
+      `${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}`,
+    `${CLI_APP.BIN} localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}` +
+      '      Connect to specific node',
     `${CLI_APP.BIN} --read-only         Start in read-only mode`,
   ],
 });

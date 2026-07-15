@@ -29,8 +29,9 @@ For local builds, build and push your own image and pass
 - **Durable identity.** `NODE_ID` is not set: join admission requires a UUID,
   so the runtime mints one on first boot and restores it from the data
   directory (rejoin hints) on restart. Identity rides the PVC.
-- **Ports**: REST `node.restPort` (default 8080) and transport WS restPort+2.
-  Admin WS remains pod-local on loopback at the runtime's fixed port `8081`;
+- **Ports**: REST `node.restPort` (default 8080), admin WS restPort+1, and
+  transport WS restPort+2. Set `admin.websocketPort` or `node.wsPort` to
+  override either derived WS port. Admin WS remains pod-local on loopback;
   it is absent from Services and container-port declarations. The pgwire SQL
   endpoint is a managed service started on demand — no 5432 boot listener.
 - **Probes**: liveness `/health`, readiness `/readyz` on the REST port.
@@ -46,7 +47,8 @@ For local builds, build and push your own image and pass
 | --- | --- | --- |
 | `joiners.replicas` | `2` | Non-seed nodes; cluster size = this + 1 |
 | `image.repository` / `image.tag` | `codeberg.org/psvensson/lagrange` / appVersion | Runtime image |
-| `node.restPort` | `8080` | REST port; transport WS = +2, admin WS fixed at 8081 |
+| `node.restPort` | `8080` | REST base port; admin WS = +1 and transport WS = +2 by default |
+| `admin.websocketPort` / `node.wsPort` | derived | Optional individual admin/transport WS overrides |
 | `node.maxOldSpaceSizeMb` | `1536` | V8 heap cap; keep under the memory limit |
 | `admin.websocketHost` / `admin.allowInsecureExternalBind` | `127.0.0.1` / `false` | Fixed pod-local admin posture; insecure overrides fail rendering |
 | `node.extraEnv` | `[]` | Extra env (see `ENV_MAPPINGS` in `src/config/config-constants.js`) |

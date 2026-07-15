@@ -37,6 +37,7 @@ import {
   LOCAL_NUM_ONE,
   LOCAL_NUM_ZERO,
 } from './admin-cli-local-constants.js';
+import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
 
 // Re-export core components
 export {EventBus} from './core/event-bus.js';
@@ -106,7 +107,8 @@ export class AdminCLI {
 
     // Get node address from args or environment
     const nodeAddress = args.find((arg) => !arg.startsWith('-')) ||
-      process.env.LAGRANGE_NODE_ADDRESS || 'localhost:8081';
+      process.env.LAGRANGE_NODE_ADDRESS ||
+      `localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}`;
 
     // Initialize components
     this.initializeComponents();

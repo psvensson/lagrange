@@ -1,0 +1,707 @@
+diff --git a/charts/lagrange-node/README.md b/charts/lagrange-node/README.md
+index 6efd43b45f5091d203af571ffb2f860a67d2c5c1..d3c9af014cc7fdb4babdaa12b561d1a42d08cac8 100644
+--- a/charts/lagrange-node/README.md
++++ b/charts/lagrange-node/README.md
+@@ -29,8 +29,9 @@ For local builds, build and push your own image and pass
+ - **Durable identity.** `NODE_ID` is not set: join admission requires a UUID,
+   so the runtime mints one on first boot and restores it from the data
+   directory (rejoin hints) on restart. Identity rides the PVC.
+-- **Ports**: REST `node.restPort` (default 8080) and transport WS restPort+2.
+-  Admin WS remains pod-local on loopback at the runtime's fixed port `8081`;
++- **Ports**: REST `node.restPort` (default 8080), admin WS restPort+1, and
++  transport WS restPort+2. Set `admin.websocketPort` or `node.wsPort` to
++  override either derived WS port. Admin WS remains pod-local on loopback;
+   it is absent from Services and container-port declarations. The pgwire SQL
+   endpoint is a managed service started on demand — no 5432 boot listener.
+ - **Probes**: liveness `/health`, readiness `/readyz` on the REST port.
+@@ -46,7 +47,8 @@ For local builds, build and push your own image and pass
+ | --- | --- | --- |
+ | `joiners.replicas` | `2` | Non-seed nodes; cluster size = this + 1 |
+ | `image.repository` / `image.tag` | `codeberg.org/psvensson/lagrange` / appVersion | Runtime image |
+-| `node.restPort` | `8080` | REST port; transport WS = +2, admin WS fixed at 8081 |
++| `node.restPort` | `8080` | REST base port; admin WS = +1 and transport WS = +2 by default |
++| `admin.websocketPort` / `node.wsPort` | derived | Optional individual admin/transport WS overrides |
+ | `node.maxOldSpaceSizeMb` | `1536` | V8 heap cap; keep under the memory limit |
+ | `admin.websocketHost` / `admin.allowInsecureExternalBind` | `127.0.0.1` / `false` | Fixed pod-local admin posture; insecure overrides fail rendering |
+ | `node.extraEnv` | `[]` | Extra env (see `ENV_MAPPINGS` in `src/config/config-constants.js`) |
+diff --git a/charts/lagrange-node/templates/_helpers.tpl b/charts/lagrange-node/templates/_helpers.tpl
+index feb027545c96f7a1b3b83b7e787425d4be5d5da7..3148d421ef32685c2c87d2f234812183f6a1cacb 100644
+--- a/charts/lagrange-node/templates/_helpers.tpl
++++ b/charts/lagrange-node/templates/_helpers.tpl
+@@ -41,6 +41,53 @@ app.kubernetes.io/instance: {{ .Release.Name }}
+ {{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) -}}
+ {{- end -}}
+ 
++{{/* Canonical listener-port family. Optional WS values derive from REST. */}}
++{{- define "lagrange-node.integerListenerPort" -}}
++{{- $name := index . 0 -}}
++{{- $value := index . 1 -}}
++{{- $numericKinds := list "int" "int8" "int16" "int32" "int64" "uint" "uint8" "uint16" "uint32" "uint64" "float32" "float64" -}}
++{{- if not (has (kindOf $value) $numericKinds) -}}
++{{- fail (printf "%s listener port must be an integer; received %s" $name (kindOf $value)) -}}
++{{- end -}}
++{{- $integer := int64 $value -}}
++{{- if ne (float64 $integer) (float64 $value) -}}
++{{- fail (printf "%s listener port must be an integer; received %v" $name $value) -}}
++{{- end -}}
++{{- $integer -}}
++{{- end -}}
++
++{{- define "lagrange-node.restPort" -}}
++{{- include "lagrange-node.integerListenerPort" (list "REST" .Values.node.restPort) -}}
++{{- end -}}
++
++{{- define "lagrange-node.adminWebsocketPort" -}}
++{{- if hasKey .Values.admin "websocketPort" -}}
++{{- include "lagrange-node.integerListenerPort" (list "admin WebSocket" .Values.admin.websocketPort) -}}
++{{- else -}}
++{{- add (int64 (include "lagrange-node.restPort" .)) 1 -}}
++{{- end -}}
++{{- end -}}
++
++{{- define "lagrange-node.transportWebsocketPort" -}}
++{{- if hasKey .Values.node "wsPort" -}}
++{{- include "lagrange-node.integerListenerPort" (list "transport WebSocket" .Values.node.wsPort) -}}
++{{- else -}}
++{{- add (int64 (include "lagrange-node.restPort" .)) 2 -}}
++{{- end -}}
++{{- end -}}
++
++{{- define "lagrange-node.validateListenerPorts" -}}
++{{- $restPort := int64 (include "lagrange-node.restPort" .) -}}
++{{- $adminPort := int64 (include "lagrange-node.adminWebsocketPort" .) -}}
++{{- $transportPort := int64 (include "lagrange-node.transportWebsocketPort" .) -}}
++{{- if or (lt $restPort 1) (gt $restPort 65535) (lt $adminPort 1) (gt $adminPort 65535) (lt $transportPort 1) (gt $transportPort 65535) -}}
++{{- fail (printf "listener ports must be between 1 and 65535: REST=%d, admin WS=%d, transport WS=%d" $restPort $adminPort $transportPort) -}}
++{{- end -}}
++{{- if or (eq $restPort $adminPort) (eq $restPort $transportPort) (eq $adminPort $transportPort) -}}
++{{- fail (printf "listener ports must be distinct: REST=%d, admin WS=%d, transport WS=%d" $restPort $adminPort $transportPort) -}}
++{{- end -}}
++{{- end -}}
++
+ {{/*
+ Fail closed even when an operator skips values.schema.json validation. The
+ chart does not provide authenticated admin ingress, so neither first-class
+@@ -55,8 +102,8 @@ values nor extraEnv may make the pod-local admin listener externally reachable.
+ {{- end -}}
+ {{- range .Values.node.extraEnv -}}
+ {{- $name := toString .name -}}
+-{{- if or (eq $name "ADMIN_WEBSOCKET_HOST") (eq $name "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND") (eq $name "ADMIN_WEBSOCKET_PORT") -}}
+-{{- fail (printf "node.extraEnv name %s is reserved by the admin safety policy" $name) -}}
++{{- if or (eq $name "ADMIN_WEBSOCKET_HOST") (eq $name "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND") (eq $name "ADMIN_WEBSOCKET_PORT") (eq $name "REST_API_PORT") (eq $name "NODE_WS_PORT") -}}
++{{- fail (printf "node.extraEnv name %s is reserved by the listener port or admin safety policy" $name) -}}
+ {{- end -}}
+ {{- end -}}
+ {{- end -}}
+@@ -81,9 +128,9 @@ args:
+ {{- end }}
+ ports:
+   - name: rest
+-    containerPort: {{ int .Values.node.restPort }}
++    containerPort: {{ include "lagrange-node.restPort" . }}
+   - name: transport-ws
+-    containerPort: {{ add (int .Values.node.restPort) 2 }}
++    containerPort: {{ include "lagrange-node.transportWebsocketPort" . }}
+ livenessProbe:
+   httpGet:
+     path: {{ .Values.probes.liveness.path }}
+@@ -110,6 +157,7 @@ volumeMounts:
+ {{/* Env vars shared by seed and joiner pods */}}
+ {{- define "lagrange-node.envCommon" -}}
+ {{- include "lagrange-node.validateAdminSafety" . -}}
++{{- include "lagrange-node.validateListenerPorts" . -}}
+ - name: POD_NAME
+   valueFrom:
+     fieldRef:
+@@ -122,7 +170,11 @@ volumeMounts:
+ # runtime mints one on first boot and restores it from the data directory
+ # (rejoin hints) on every restart — identity is durable via the PVC.
+ - name: REST_API_PORT
+-  value: {{ .Values.node.restPort | quote }}
++  value: {{ include "lagrange-node.restPort" . | quote }}
++- name: ADMIN_WEBSOCKET_PORT
++  value: {{ include "lagrange-node.adminWebsocketPort" . | quote }}
++- name: NODE_WS_PORT
++  value: {{ include "lagrange-node.transportWebsocketPort" . | quote }}
+ - name: LOG_LEVEL
+   value: {{ .Values.node.logLevel | quote }}
+ - name: ADMIN_WEBSOCKET_HOST
+@@ -135,9 +187,9 @@ volumeMounts:
+ - name: TRANSPORT_WS_HOST
+   value: "0.0.0.0"
+ - name: NODE_ADDRESS
+-  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%d" (include "lagrange-node.headlessService" .) (int .Values.node.restPort) | quote }}
++  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%s" (include "lagrange-node.headlessService" .) (include "lagrange-node.restPort" .) | quote }}
+ - name: NODE_ADVERTISED_WS_ADDRESS
+-  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%d" (include "lagrange-node.headlessService" .) (add (int .Values.node.restPort) 2) | quote }}
++  value: {{ printf "$(POD_NAME).%s.$(POD_NAMESPACE).svc.cluster.local:%s" (include "lagrange-node.headlessService" .) (include "lagrange-node.transportWebsocketPort" .) | quote }}
+ {{- with .Values.node.extraEnv }}
+ {{ toYaml . }}
+ {{- end }}
+@@ -145,7 +197,7 @@ volumeMounts:
+ 
+ {{/* Seed node REST address joiners bootstrap from (http:// is auto-prefixed) */}}
+ {{- define "lagrange-node.seedAddress" -}}
+-{{- printf "%s-seed-0.%s.%s.svc.cluster.local:%d" (include "lagrange-node.fullname" .) (include "lagrange-node.headlessService" .) .Release.Namespace (int .Values.node.restPort) -}}
++{{- printf "%s-seed-0.%s.%s.svc.cluster.local:%s" (include "lagrange-node.fullname" .) (include "lagrange-node.headlessService" .) .Release.Namespace (include "lagrange-node.restPort" .) -}}
+ {{- end -}}
+ 
+ {{/* PVC template shared by both StatefulSets */}}
+diff --git a/charts/lagrange-node/templates/service-headless.yaml b/charts/lagrange-node/templates/service-headless.yaml
+index f360085dd7e6b6ea9b78a9e875c4a68478e4e085..7f81c184c2ded107cc283171d99df7e8efaece20 100644
+--- a/charts/lagrange-node/templates/service-headless.yaml
++++ b/charts/lagrange-node/templates/service-headless.yaml
+@@ -16,6 +16,6 @@ spec:
+     {{- include "lagrange-node.selectorLabels" . | nindent 4 }}
+   ports:
+     - name: rest
+-      port: {{ int .Values.node.restPort }}
++      port: {{ include "lagrange-node.restPort" . }}
+     - name: transport-ws
+-      port: {{ add (int .Values.node.restPort) 2 }}
++      port: {{ include "lagrange-node.transportWebsocketPort" . }}
+diff --git a/charts/lagrange-node/values.schema.json b/charts/lagrange-node/values.schema.json
+index 2caf9effe129cd6a3a494e3224f2d8e8ec651d75..e78d9c3b7d176a360b87335d2d44d02c9ca06c7e 100644
+--- a/charts/lagrange-node/values.schema.json
++++ b/charts/lagrange-node/values.schema.json
+@@ -16,6 +16,12 @@
+         "allowInsecureExternalBind": {
+           "const": false,
+           "description": "The chart cannot opt into an unauthenticated external admin bind."
++        },
++        "websocketPort": {
++          "type": "integer",
++          "minimum": 1,
++          "maximum": 65535,
++          "description": "Optional admin WebSocket port; defaults to node.restPort + 1."
+         }
+       },
+       "additionalProperties": false
+@@ -23,6 +29,18 @@
+     "node": {
+       "type": "object",
+       "properties": {
++        "restPort": {
++          "type": "integer",
++          "minimum": 1,
++          "maximum": 65535,
++          "description": "REST base port for the listener-port family."
++        },
++        "wsPort": {
++          "type": "integer",
++          "minimum": 1,
++          "maximum": 65535,
++          "description": "Optional transport WebSocket port; defaults to node.restPort + 2."
++        },
+         "extraEnv": {
+           "type": "array",
+           "items": {
+@@ -34,7 +52,9 @@
+                   "enum": [
+                     "ADMIN_WEBSOCKET_HOST",
+                     "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND",
+-                    "ADMIN_WEBSOCKET_PORT"
++                    "ADMIN_WEBSOCKET_PORT",
++                    "REST_API_PORT",
++                    "NODE_WS_PORT"
+                   ]
+                 }
+               }
+diff --git a/charts/lagrange-node/values.yaml b/charts/lagrange-node/values.yaml
+index a88ae5045fce1e92c790526c0d768eda1d75ded8..c691ab46643ab8a37b768ed61534083dd9a8e129 100644
+--- a/charts/lagrange-node/values.yaml
++++ b/charts/lagrange-node/values.yaml
+@@ -21,13 +21,14 @@ joiners:
+ admin:
+   websocketHost: 127.0.0.1
+   allowInsecureExternalBind: false
++  # websocketPort is optional; when omitted it derives as node.restPort + 1.
+ 
+ node:
+-  # REST API port (env REST_API_PORT). Transport WS is restPort+2 (derived by
+-  # the runtime). The admin WS port is a hardcoded runtime constant 8081 and
+-  # does NOT move with restPort — so never set restPort to 8081 or 8079
+-  # (collision with admin WS).
++  # REST API port (env REST_API_PORT). Admin WS and transport WS derive as
++  # restPort+1 and restPort+2 unless admin.websocketPort / node.wsPort override
++  # them. The runtime rejects any collision among the three listeners.
+   restPort: 8080
++  # wsPort is optional; when omitted it derives as node.restPort + 2.
+   logLevel: info
+   # V8 heap cap passed as --max-old-space-size. Keep below the container
+   # memory limit.
+diff --git a/scripts/run-helm-admin-default-deny-live-scenario.js b/scripts/run-helm-admin-default-deny-live-scenario.js
+index 0549c0e85dc9afd48dbbde3684e3a678d382cd79..5ca64b39209cdc2421b21b2f6b21f0d65d7d2ddc 100644
+--- a/scripts/run-helm-admin-default-deny-live-scenario.js
++++ b/scripts/run-helm-admin-default-deny-live-scenario.js
+@@ -16,6 +16,8 @@ import {
+   renderLagrangeNode,
+   workloadContainers,
+ } from './helm/lagrange-node-render.js';
++import {LISTENER_PORT_DEFAULT} from
++  '../src/config/listener-port-model.js';
+ 
+ const LIVE_PROOF = Object.freeze({
+   SCENARIO: 'helm-admin-default-deny-cutover',
+@@ -43,12 +45,12 @@ const ADMIN = Object.freeze({
+   PORT_ENV: 'ADMIN_WEBSOCKET_PORT',
+   HOST: '127.0.0.1',
+   INSECURE: 'false',
+-  PORT: 8081,
++  PORT: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
+   PORT_NAME: 'admin-ws',
+ });
+ 
+ const REST = Object.freeze({
+-  PORT: 8080,
++  PORT: LISTENER_PORT_DEFAULT.REST_API,
+   PORT_NAME: 'rest',
+   HEALTH_PATH: '/health',
+   READINESS_PATH: '/readyz',
+@@ -102,7 +104,7 @@ const ERROR_MESSAGE = Object.freeze({
+   COMMAND_MISMATCH: 'Rendered seed command does not start src/index.js',
+   ADMIN_ENV_DUPLICATE: 'Rendered admin environment is missing or duplicated',
+   ADMIN_ENV_UNSAFE: 'Rendered admin environment is not loopback/false',
+-  ADMIN_PORT_ENV: 'Rendered environment overrides the fixed admin port',
++  ADMIN_PORT_ENV: 'Rendered environment has an invalid admin port',
+   ADMIN_PORT_PUBLISHED: 'Rendered manifest publishes the admin port',
+   REST_PORT_MISSING: 'Rendered Services do not preserve the REST port',
+   REST_PROBES_MISSING: 'Rendered REST health/readiness probes are incomplete',
+@@ -118,7 +120,7 @@ const deadline = Date.now() + 120000;
+ let last = null;
+ while (Date.now() < deadline) {
+   try {
+-    const response = await fetch('http://127.0.0.1:8081/health');
++    const response = await fetch('http://127.0.0.1:${ADMIN.PORT}/health');
+     last = {status: response.status, body: await response.text()};
+     if (response.status === 200) {
+       console.log(JSON.stringify(last));
+@@ -146,7 +148,7 @@ const waitForRest = async () => {
+   let last = null;
+   while (Date.now() < deadline) {
+     try {
+-      const response = await fetch('http://' + nodeHost + ':8080/health');
++      const response = await fetch('http://' + nodeHost + ':${REST.PORT}/health');
+       last = {status: response.status, body: await response.text()};
+       if (response.status === 200) return last;
+     } catch (error) {
+@@ -158,7 +160,7 @@ const waitForRest = async () => {
+ };
+ 
+ const connectAdmin = () => new Promise((resolve) => {
+-  const socket = net.createConnection({host: nodeHost, port: 8081});
++  const socket = net.createConnection({host: nodeHost, port: ${ADMIN.PORT}});
+   const finish = (result) => {
+     socket.destroy();
+     resolve(result);
+@@ -170,7 +172,7 @@ const connectAdmin = () => new Promise((resolve) => {
+ 
+ const health = await waitForRest();
+ const readinessResponse = await fetch(
+-  'http://' + nodeHost + ':8080/readyz',
++  'http://' + nodeHost + ':${REST.PORT}/readyz',
+ );
+ const readinessText = await readinessResponse.text();
+ let readinessBody = null;
+@@ -234,17 +236,18 @@ function requireSeedContainer(manifests) {
+ 
+ function assertAdminEnvironment(container) {
+   if (countEnvironment(container, ADMIN.HOST_ENV) !== 1 ||
+-      countEnvironment(container, ADMIN.INSECURE_ENV) !== 1) {
++      countEnvironment(container, ADMIN.INSECURE_ENV) !== 1 ||
++      countEnvironment(container, ADMIN.PORT_ENV) !== 1) {
+     throw new Error(ERROR_MESSAGE.ADMIN_ENV_DUPLICATE);
+   }
+-  if (countEnvironment(container, ADMIN.PORT_ENV) !== 0) {
+-    throw new Error(ERROR_MESSAGE.ADMIN_PORT_ENV);
+-  }
+   const environment = literalEnvironment(container);
+   if (environment.get(ADMIN.HOST_ENV) !== ADMIN.HOST ||
+       environment.get(ADMIN.INSECURE_ENV) !== ADMIN.INSECURE) {
+     throw new Error(ERROR_MESSAGE.ADMIN_ENV_UNSAFE);
+   }
++  if (environment.get(ADMIN.PORT_ENV) !== String(ADMIN.PORT)) {
++    throw new Error(ERROR_MESSAGE.ADMIN_PORT_ENV);
++  }
+ }
+ 
+ function assertContainerPorts(container) {
+diff --git a/scripts/run-listener-port-model-single-authority-scenarios.js b/scripts/run-listener-port-model-single-authority-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a9c6a85ae5399663e12604111b93a1d80d96b255
+--- /dev/null
++++ b/scripts/run-listener-port-model-single-authority-scenarios.js
+@@ -0,0 +1,35 @@
++#!/usr/bin/env node
++/**
++ * Deterministic scenario runner for the listener-port-model Quest.
++ *
++ * The guard set binds configuration wiring and collision validation, canonical
++ * derivation consumers, Helm alignment, and helper-script defaults. Reports use
++ * the Solver scenario-harness shape so three independent green executions can
++ * satisfy the sealed consecutive-run gate.
++ */
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'listener-port-model-single-authority': [
++    'test/config/configuration-manager.test.js',
++    'test/transport/node-address-resolution-contract.test.js',
++    'test/helm/lagrange-node-admin-default-deny.test.js',
++    'test/scripts/entrypoint-defaults.test.js',
++  ],
++  'listener-port-model-config-authority': [
++    'test/config/configuration-manager.test.js',
++  ],
++  'listener-port-model-runtime-consumers': [
++    'test/transport/node-address-resolution-contract.test.js',
++  ],
++  'listener-port-model-surface-alignment': [
++    'test/helm/lagrange-node-admin-default-deny.test.js',
++  ],
++  'listener-port-model-doc-helper-alignment': [
++    'test/scripts/entrypoint-defaults.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/cli/USER_GUIDE.md b/src/cli/USER_GUIDE.md
+index e0cfaa9fbc71ec23d34515fb47fd9ec07bf7262a..ea74bf5c7407ed1f3e2a072012ac0d6e5c20b4cf 100644
+--- a/src/cli/USER_GUIDE.md
++++ b/src/cli/USER_GUIDE.md
+@@ -23,7 +23,8 @@ removed before the first release).
+ 
+ The CLI connects to any node in the cluster via WebSocket. You can specify the address in several ways:
+ 
+-Note: the system admin WebSocket service listens on the fixed port `8081`.
++By default the admin WebSocket uses REST port + 1 (`8081` for the default REST
++port). Set `ADMIN_WEBSOCKET_PORT` when the node uses an individual override.
+ 
+ **Command line:**
+ ```bash
+diff --git a/src/cli/cli-constants.js b/src/cli/cli-constants.js
+index 02f748464fc11d06a78a9e8b33f4a51a81fc9497..ea023296f60c539b40bd0033c3ca5d4888b93f64 100644
+--- a/src/cli/cli-constants.js
++++ b/src/cli/cli-constants.js
+@@ -1,4 +1,5 @@
+ import {NUM, STRING} from '../constants/index.js';
++import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
+ 
+ const CLI_APP = Object.freeze({
+   NAME: 'Lagrange Admin CLI',
+@@ -211,8 +212,10 @@ const CLI_HELP_TEXT = Object.freeze({
+   TITLE: `${CLI_APP.NAME} - Terminal-based administration tool`,
+   USAGE: `Usage: ${CLI_APP.BIN} [options] [node-address]`,
+   EXAMPLES: [
+-    `${CLI_APP.BIN}                     Connect to localhost:8081`,
+-    `${CLI_APP.BIN} localhost:8081      Connect to specific node`,
++    `${CLI_APP.BIN}                     Connect to localhost:` +
++      `${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}`,
++    `${CLI_APP.BIN} localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}` +
++      '      Connect to specific node',
+     `${CLI_APP.BIN} --read-only         Start in read-only mode`,
+   ],
+ });
+diff --git a/src/cli/index.js b/src/cli/index.js
+index e3bc0cd42238699ab21d757aec55d87ed8367fd2..ecbb26a05bee10bf99ac59c7e6ad504c0c47a9f8 100644
+--- a/src/cli/index.js
++++ b/src/cli/index.js
+@@ -37,6 +37,7 @@ import {
+   LOCAL_NUM_ONE,
+   LOCAL_NUM_ZERO,
+ } from './admin-cli-local-constants.js';
++import {LISTENER_PORT_DEFAULT} from '../config/listener-port-model.js';
+ 
+ // Re-export core components
+ export {EventBus} from './core/event-bus.js';
+@@ -106,7 +107,8 @@ export class AdminCLI {
+ 
+     // Get node address from args or environment
+     const nodeAddress = args.find((arg) => !arg.startsWith('-')) ||
+-      process.env.LAGRANGE_NODE_ADDRESS || 'localhost:8081';
++      process.env.LAGRANGE_NODE_ADDRESS ||
++      `localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}`;
+ 
+     // Initialize components
+     this.initializeComponents();
+diff --git a/test/helm/lagrange-node-admin-default-deny.test.js b/test/helm/lagrange-node-admin-default-deny.test.js
+index 968ea7172b3b2d4217e8f314817ff2029b6efbf8..5304a992fc0b097839df41bd9cde27ac9ebe86e5 100644
+--- a/test/helm/lagrange-node-admin-default-deny.test.js
++++ b/test/helm/lagrange-node-admin-default-deny.test.js
+@@ -1,5 +1,6 @@
+ import {describe, it} from 'node:test';
+ import assert from 'node:assert/strict';
++import fs from 'node:fs';
+ import {
+   literalEnvironment,
+   renderLagrangeNode,
+@@ -15,7 +16,11 @@ import {
+ const ADMIN_HOST_ENV = 'ADMIN_WEBSOCKET_HOST';
+ const ADMIN_INSECURE_ENV = 'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND';
+ const ADMIN_PORT_ENV = 'ADMIN_WEBSOCKET_PORT';
++const REST_PORT_ENV = 'REST_API_PORT';
++const TRANSPORT_PORT_ENV = 'NODE_WS_PORT';
++const REST_PORT = 8080;
+ const ADMIN_PORT = 8081;
++const TRANSPORT_PORT = 8082;
+ const LEGACY_VALUES =
+   'test/fixtures/helm/legacy-insecure-lagrange-node-values.yaml';
+ 
+@@ -25,49 +30,128 @@ function assertRenderRejected(result, expectedPattern) {
+   assert.match(`${result.stdout}\n${result.stderr}`, expectedPattern);
+ }
+ 
+-function assertSafeContainer(container) {
++function assertSafeContainer(container, expectedPorts = {}) {
++  const restPort = expectedPorts.restPort || REST_PORT;
++  const adminPort = expectedPorts.adminPort || ADMIN_PORT;
++  const transportPort = expectedPorts.transportPort || TRANSPORT_PORT;
+   const entries = container.env || [];
+   assert.equal(entries.filter((entry) =>
+     entry.name === ADMIN_HOST_ENV).length, 1);
+   assert.equal(entries.filter((entry) =>
+     entry.name === ADMIN_INSECURE_ENV).length, 1);
+   assert.equal(entries.filter((entry) =>
+-    entry.name === ADMIN_PORT_ENV).length, 0);
++    entry.name === ADMIN_PORT_ENV).length, 1);
+   const environment = literalEnvironment(container);
+   assert.equal(environment.get(ADMIN_HOST_ENV), '127.0.0.1');
+   assert.equal(environment.get(ADMIN_INSECURE_ENV), 'false');
++  assert.equal(environment.get(REST_PORT_ENV), String(restPort));
++  assert.equal(environment.get(ADMIN_PORT_ENV), String(adminPort));
++  assert.equal(environment.get(TRANSPORT_PORT_ENV), String(transportPort));
+   assert.equal(
+     (container.ports || []).some((port) =>
+-      port.name === 'admin-ws' || port.containerPort === ADMIN_PORT),
++      port.name === 'admin-ws' || port.containerPort === adminPort),
+     false,
+   );
++  assert.equal(
++    (container.ports || []).some((port) =>
++      port.name === 'rest' && port.containerPort === restPort),
++    true,
++  );
++  assert.equal(
++    (container.ports || []).some((port) =>
++      port.name === 'transport-ws' && port.containerPort === transportPort),
++    true,
++  );
+   assert.equal(container.livenessProbe?.httpGet?.path, '/health');
+   assert.equal(container.livenessProbe?.httpGet?.port, 'rest');
+   assert.equal(container.readinessProbe?.httpGet?.path, '/readyz');
+   assert.equal(container.readinessProbe?.httpGet?.port, 'rest');
+ }
+ 
+-function assertSafeServices(manifests) {
++function assertSafeServices(manifests, expectedPorts = {}) {
++  const restPort = expectedPorts.restPort || REST_PORT;
++  const adminPort = expectedPorts.adminPort || ADMIN_PORT;
++  const transportPort = expectedPorts.transportPort || TRANSPORT_PORT;
+   const services = manifests.filter((manifest) => manifest.kind === 'Service');
+   assert.equal(services.length, 2);
++  let transportServiceCount = 0;
+   for (const service of services) {
+     const ports = service.spec?.ports || [];
+     assert.equal(ports.some((port) =>
+       port.name === 'admin-ws' ||
+-      port.port === ADMIN_PORT ||
++      port.port === adminPort ||
+       port.targetPort === 'admin-ws'), false);
+-    assert.equal(ports.some((port) => port.name === 'rest'), true);
++    assert.equal(
++      ports.find((port) => port.name === 'rest')?.port,
++      restPort,
++    );
++    const transport = ports.find((port) => port.name === 'transport-ws');
++    if (transport) {
++      transportServiceCount += 1;
++      assert.equal(transport.port, transportPort);
++    }
+   }
++  assert.equal(transportServiceCount, 1);
+ }
+ 
+-function assertSafeRenderedManifests(manifests) {
++function assertSafeRenderedManifests(manifests, expectedPorts) {
+   const containers = workloadContainers(manifests);
+   assert.equal(containers.length, 2);
+-  containers.forEach(assertSafeContainer);
+-  assertSafeServices(manifests);
++  containers.forEach((container) => assertSafeContainer(container, expectedPorts));
++  assertSafeServices(manifests, expectedPorts);
+ }
+ 
+ describe('lagrange-node Helm admin default deny', () => {
++  it('keeps CLI, chart, and live-proof surfaces on the listener authority', () => {
++    const surfaceContracts = [
++      {
++        path: 'src/cli/index.js',
++        required: ['LISTENER_PORT_DEFAULT'],
++        forbidden: /localhost:8081/u,
++      },
++      {
++        path: 'src/cli/cli-constants.js',
++        required: ['LISTENER_PORT_DEFAULT'],
++        forbidden: /localhost:8081/u,
++      },
++      {
++        path: 'src/cli/USER_GUIDE.md',
++        required: ['REST port + 1', 'ADMIN_WEBSOCKET_PORT'],
++        forbidden: /fixed port `8081`/u,
++      },
++      {
++        path: 'charts/lagrange-node/README.md',
++        required: ['admin.websocketPort', 'node.wsPort'],
++        forbidden: /fixed (?:at )?8081/iu,
++      },
++      {
++        path: 'charts/lagrange-node/values.yaml',
++        required: ['admin.websocketPort', 'node.wsPort'],
++        forbidden: /hardcoded runtime constant/iu,
++      },
++      {
++        path: 'scripts/run-helm-admin-default-deny-live-scenario.js',
++        required: ['LISTENER_PORT_DEFAULT'],
++        forbidden: /\bPORT\s*:\s*808[01]\b/u,
++      },
++    ];
++
++    for (const contract of surfaceContracts) {
++      const source = fs.readFileSync(contract.path, 'utf8');
++      for (const requiredText of contract.required) {
++        assert.ok(
++          source.includes(requiredText),
++          `${contract.path} should expose ${requiredText}`,
++        );
++      }
++      assert.doesNotMatch(
++        source,
++        contract.forbidden,
++        `${contract.path} should not retain a contradictory fixed default`,
++      );
++    }
++  });
++
+   it('renders loopback-only admin env without publishing the admin port', () => {
+     const {manifests} = renderLagrangeNode();
+     assertSafeRenderedManifests(manifests);
+@@ -79,6 +163,108 @@ describe('lagrange-node Helm admin default deny', () => {
+     assertSafeRenderedManifests(nodePortRender.manifests);
+   });
+ 
++  it('derives all listener ports from the REST base and honors overrides', () => {
++    const derived = renderLagrangeNode([
++      '--set',
++      'node.restPort=9080',
++    ]);
++    assertSafeRenderedManifests(derived.manifests, {
++      restPort: 9080,
++      adminPort: 9081,
++      transportPort: 9082,
++    });
++
++    const overridden = renderLagrangeNode([
++      '--set',
++      'node.restPort=9080',
++      '--set',
++      'admin.websocketPort=9181',
++      '--set',
++      'node.wsPort=9282',
++    ]);
++    assertSafeRenderedManifests(overridden.manifests, {
++      restPort: 9080,
++      adminPort: 9181,
++      transportPort: 9282,
++    });
++
++    const highBaseWithOverrides = renderLagrangeNode([
++      '--set',
++      'node.restPort=65535',
++      '--set',
++      'admin.websocketPort=10',
++      '--set',
++      'node.wsPort=11',
++    ]);
++    assertSafeRenderedManifests(highBaseWithOverrides.manifests, {
++      restPort: 65535,
++      adminPort: 10,
++      transportPort: 11,
++    });
++  });
++
++  it('rejects every pairwise listener-port collision', () => {
++    for (const [setting, collisionPorts] of [
++      ['admin.websocketPort=9080', {restPort: 9080}],
++      ['node.wsPort=9080', {restPort: 9080}],
++      [
++        'node.wsPort=9181',
++        {restPort: 9080, adminWebsocketPort: 9181},
++      ],
++    ]) {
++      const args = [
++        '--skip-schema-validation',
++        '--set',
++        `node.restPort=${collisionPorts.restPort}`,
++      ];
++      if (collisionPorts.adminWebsocketPort) {
++        args.push(
++          '--set',
++          `admin.websocketPort=${collisionPorts.adminWebsocketPort}`,
++        );
++      }
++      args.push('--set', setting);
++      const result = runHelmTemplate(args);
++      assertRenderRejected(result, /listener ports must be distinct/iu);
++    }
++  });
++
++  it('rejects out-of-range and overflowing listener ports without schema help',
++    () => {
++      for (const setting of [
++        'node.restPort=0',
++        'node.restPort=65534',
++        'node.restPort=65535',
++        'admin.websocketPort=65536',
++        'node.wsPort=65536',
++      ]) {
++        const result = runHelmTemplate([
++          '--skip-schema-validation',
++          '--set',
++          setting,
++        ]);
++        assertRenderRejected(
++          result,
++          /listener ports must be between 1 and 65535/iu,
++        );
++      }
++    });
++
++  it('rejects non-numeric listener values before Helm integer coercion', () => {
++    for (const setting of [
++      'node.restPort=true',
++      'admin.websocketPort=true',
++      'node.wsPort=true',
++    ]) {
++      const result = runHelmTemplate([
++        '--skip-schema-validation',
++        '--set',
++        setting,
++      ]);
++      assertRenderRejected(result, /listener port must be an integer/iu);
++    }
++  });
++
+   it('rejects the legacy insecure values even when schema checks are skipped', () => {
+     for (const schemaArgs of [[], ['--skip-schema-validation']]) {
+       const result = runHelmTemplate([
+@@ -108,6 +294,8 @@ describe('lagrange-node Helm admin default deny', () => {
+       ADMIN_HOST_ENV,
+       ADMIN_INSECURE_ENV,
+       ADMIN_PORT_ENV,
++      REST_PORT_ENV,
++      TRANSPORT_PORT_ENV,
+     ]) {
+       for (const injection of [
+         {name, value: '0.0.0.0'},

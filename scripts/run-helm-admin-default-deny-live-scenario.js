@@ -16,6 +16,8 @@ import {
   renderLagrangeNode,
   workloadContainers,
 } from './helm/lagrange-node-render.js';
+import {LISTENER_PORT_DEFAULT} from
+  '../src/config/listener-port-model.js';
 
 const LIVE_PROOF = Object.freeze({
   SCENARIO: 'helm-admin-default-deny-cutover',
@@ -43,12 +45,12 @@ const ADMIN = Object.freeze({
   PORT_ENV: 'ADMIN_WEBSOCKET_PORT',
   HOST: '127.0.0.1',
   INSECURE: 'false',
-  PORT: 8081,
+  PORT: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
   PORT_NAME: 'admin-ws',
 });
 
 const REST = Object.freeze({
-  PORT: 8080,
+  PORT: LISTENER_PORT_DEFAULT.REST_API,
   PORT_NAME: 'rest',
   HEALTH_PATH: '/health',
   READINESS_PATH: '/readyz',
@@ -102,7 +104,7 @@ const ERROR_MESSAGE = Object.freeze({
   COMMAND_MISMATCH: 'Rendered seed command does not start src/index.js',
   ADMIN_ENV_DUPLICATE: 'Rendered admin environment is missing or duplicated',
   ADMIN_ENV_UNSAFE: 'Rendered admin environment is not loopback/false',
-  ADMIN_PORT_ENV: 'Rendered environment overrides the fixed admin port',
+  ADMIN_PORT_ENV: 'Rendered environment has an invalid admin port',
   ADMIN_PORT_PUBLISHED: 'Rendered manifest publishes the admin port',
   REST_PORT_MISSING: 'Rendered Services do not preserve the REST port',
   REST_PROBES_MISSING: 'Rendered REST health/readiness probes are incomplete',
@@ -118,7 +120,7 @@ const deadline = Date.now() + 120000;
 let last = null;
 while (Date.now() < deadline) {
   try {
-    const response = await fetch('http://127.0.0.1:8081/health');
+    const response = await fetch('http://127.0.0.1:${ADMIN.PORT}/health');
     last = {status: response.status, body: await response.text()};
     if (response.status === 200) {
       console.log(JSON.stringify(last));
@@ -146,7 +148,7 @@ const waitForRest = async () => {
   let last = null;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch('http://' + nodeHost + ':8080/health');
+      const response = await fetch('http://' + nodeHost + ':${REST.PORT}/health');
       last = {status: response.status, body: await response.text()};
       if (response.status === 200) return last;
     } catch (error) {
@@ -158,7 +160,7 @@ const waitForRest = async () => {
 };
 
 const connectAdmin = () => new Promise((resolve) => {
-  const socket = net.createConnection({host: nodeHost, port: 8081});
+  const socket = net.createConnection({host: nodeHost, port: ${ADMIN.PORT}});
   const finish = (result) => {
     socket.destroy();
     resolve(result);
@@ -170,7 +172,7 @@ const connectAdmin = () => new Promise((resolve) => {
 
 const health = await waitForRest();
 const readinessResponse = await fetch(
-  'http://' + nodeHost + ':8080/readyz',
+  'http://' + nodeHost + ':${REST.PORT}/readyz',
 );
 const readinessText = await readinessResponse.text();
 let readinessBody = null;
@@ -234,16 +236,17 @@ function requireSeedContainer(manifests) {
 
 function assertAdminEnvironment(container) {
   if (countEnvironment(container, ADMIN.HOST_ENV) !== 1 ||
-      countEnvironment(container, ADMIN.INSECURE_ENV) !== 1) {
+      countEnvironment(container, ADMIN.INSECURE_ENV) !== 1 ||
+      countEnvironment(container, ADMIN.PORT_ENV) !== 1) {
     throw new Error(ERROR_MESSAGE.ADMIN_ENV_DUPLICATE);
-  }
-  if (countEnvironment(container, ADMIN.PORT_ENV) !== 0) {
-    throw new Error(ERROR_MESSAGE.ADMIN_PORT_ENV);
   }
   const environment = literalEnvironment(container);
   if (environment.get(ADMIN.HOST_ENV) !== ADMIN.HOST ||
       environment.get(ADMIN.INSECURE_ENV) !== ADMIN.INSECURE) {
     throw new Error(ERROR_MESSAGE.ADMIN_ENV_UNSAFE);
+  }
+  if (environment.get(ADMIN.PORT_ENV) !== String(ADMIN.PORT)) {
+    throw new Error(ERROR_MESSAGE.ADMIN_PORT_ENV);
   }
 }
 

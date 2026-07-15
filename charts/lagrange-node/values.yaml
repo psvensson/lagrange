@@ -21,13 +21,14 @@ joiners:
 admin:
   websocketHost: 127.0.0.1
   allowInsecureExternalBind: false
+  # websocketPort is optional; when omitted it derives as node.restPort + 1.
 
 node:
-  # REST API port (env REST_API_PORT). Transport WS is restPort+2 (derived by
-  # the runtime). The admin WS port is a hardcoded runtime constant 8081 and
-  # does NOT move with restPort — so never set restPort to 8081 or 8079
-  # (collision with admin WS).
+  # REST API port (env REST_API_PORT). Admin WS and transport WS derive as
+  # restPort+1 and restPort+2 unless admin.websocketPort / node.wsPort override
+  # them. The runtime rejects any collision among the three listeners.
   restPort: 8080
+  # wsPort is optional; when omitted it derives as node.restPort + 2.
   logLevel: info
   # V8 heap cap passed as --max-old-space-size. Keep below the container
   # memory limit.
