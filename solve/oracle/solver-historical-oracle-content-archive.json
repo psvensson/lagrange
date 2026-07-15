@@ -1,0 +1,28 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "exact_historical_oracle_archive_verified",
+  "detail": {
+    "leadershipFlapSha256": "aa892864ba27ebe1b366f722c0d509bb6700f0c4c2c8095956198ef298e8d99b",
+    "leadershipFlapBytes": 223914,
+    "passfailCensusSha256": "88e36e3e9a533222e4a60a56338be5656f5e4f1de19cca8beedc6892382a1175",
+    "passfailCensusBytes": 2975,
+    "cleanCloneAdmission": true,
+    "failClosedFaults": [
+      "quest-id-mismatch",
+      "sealed-path-mismatch",
+      "terminal-path-mismatch",
+      "terminal-sha256-mismatch",
+      "missing-manifest",
+      "noncanonical-manifest",
+      "duplicate-entry",
+      "tampered-object",
+      "missing-object"
+    ],
+    "focusedAssertions": 108,
+    "scopedStaticViolations": 0,
+    "independentVerifier": "subagent:portfolio_projection_fix-archive-review",
+    "verifiedAttemptSha256": "32c13d2c7ec1e72a4c8f37f85fc63ef124abfb286d32b8d469fb54552286f0ec"
+  }
+}
