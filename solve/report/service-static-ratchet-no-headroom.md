@@ -16,9 +16,9 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: unknown
+- Latest evidence: solve/oracle/service-static-ratchet-no-headroom.json
 - Selected theory: none
 - Next move: continue supervised step for service-static-ratchet-no-headroom-main
 
@@ -38,10 +38,13 @@
 - Signals: none
 
 ## Frontiers
-- **service-static-ratchet-no-headroom-main** [open] rung 0, attempts 1, metric 3 -> 1
+- **service-static-ratchet-no-headroom-main** [open] rung 0, attempts 1, metric 3 -> 0
 
 ## Findings
 - **service-static-ratchet-no-headroom-main**: Independent verification passed: service-owned static debt is eliminated and the residual global duplication excess is outside src/service [subagent:ledger_consistency_fix-service-review]
+- **service-static-ratchet-no-headroom-main**: The sealed service-static symptom does not reproduce on current HEAD fc1a9eaf: service literal and decision audits report zero new violations, all 13 focused service files pass 144 assertions, and both global duplication ratchets are green at 69/2169 and 836/32086 without baseline changes. Global cognitive remains the inherited 184 observed at the Quest base, with zero service-scoped violations and delta zero. [solve/oracle/service-static-ratchet-no-headroom.json]
+- **service-static-ratchet-no-headroom-main**: Ingested evidence from service-static-ratchet-no-headroom.json. Metric: 1 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/service-static-ratchet-no-headroom.json]
+- **service-static-ratchet-no-headroom-main**: Ingested evidence from service-static-ratchet-no-headroom.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/service-static-ratchet-no-headroom.json]
 
 ## Theories
 _(none recorded)_
