@@ -42,7 +42,7 @@
 
 import {execFile, spawn} from 'node:child_process';
 import {createWriteStream, existsSync} from 'node:fs';
-import {mkdir, readdir, rm, stat, writeFile} from 'node:fs/promises';
+import {mkdir, readdir, rm, stat} from 'node:fs/promises';
 import {promisify} from 'node:util';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
@@ -54,6 +54,9 @@ import {
 import {
   waitForAffinityDemoPreloadAdmission,
 } from './affinity-demo-preload-gate.js';
+import {
+  writeAffinityDemoLiveReport,
+} from './affinity-demo-live-report.js';
 import {
   assessAffinityDemoCompletion,
   buildWeightedLocalitySnapshot,
@@ -70,8 +73,6 @@ const BASE_REST_PORT = 8080;
 const BASE_ADMIN_PORT = 8081;
 const PORT_STRIDE = 4;
 const CLUSTER_DATA_ROOT = 'data/examples/service-data-affinity-demo';
-const REPORT_DIR = 'test-output/reports';
-const LIVE_SCENARIO = 'movielens-lagrange-service-affinity-live';
 const TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
 const LOAD_TARGET = `${TARGET}?lane=load`;
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
@@ -548,7 +549,7 @@ async function archivePreviousRun() {
   }
 }
 
-async function runAffinityDemo() {
+async function runAffinityDemo({phaseEvidence = {}} = {}) {
   const nodes = [];
   await archivePreviousRun();
   await rm(CLUSTER_DATA_ROOT, {recursive: true, force: true});
@@ -583,6 +584,7 @@ async function runAffinityDemo() {
       timeoutMs: CLUSTER_FORM_TIMEOUT_MS,
       pollIntervalMs: POLL_INTERVAL_MS,
     });
+    phaseEvidence.preloadAdmission = preloadAdmission;
     console.log(
       '      Ratings load admitted (snapshot=' +
       `${preloadAdmission.snapshot.state}, loadLane=` +
@@ -707,55 +709,17 @@ async function runAffinityDemo() {
   }
 }
 
-async function writeLiveDemoReport(result, error) {
-  const timestamp = new Date().toISOString();
-  const passed = Boolean(result?.converged) && !error;
-  const report = {
-    timestamp,
-    scenario: LIVE_SCENARIO,
-    producer: 'service-data-affinity-demo',
-    fidelity: 'live',
-    summary: {
-      total: 1,
-      passed: passed ? 1 : 0,
-      failed: passed ? 0 : 1,
-    },
-    optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
-    standardSummary: {
-      scenarios: [{
-        scenario: LIVE_SCENARIO,
-        passed,
-        current: {passed, verdict: passed ? 'PASS' : 'FAIL'},
-        detail: {
-          result: result || null,
-          preloadAdmission:
-            result?.preloadAdmission ||
-            error?.preloadAdmission ||
-            {admitted: false, state: 'not_observed'},
-          error: error?.message || null,
-        },
-      }],
-    },
-  };
-  await mkdir(REPORT_DIR, {recursive: true});
-  const fileStamp = timestamp.replace(/[:.]/g, '-');
-  const reportPath = resolve(
-    REPORT_DIR, `${LIVE_SCENARIO}-${fileStamp}.report.json`,
-  );
-  await writeFile(reportPath, JSON.stringify(report, null, 2));
-  console.log(`Live demo report: ${reportPath}`);
-}
-
 if (process.argv[1]?.includes('run-affinity-demo.js')) {
-  runAffinityDemo()
+  const phaseEvidence = {};
+  runAffinityDemo({phaseEvidence})
     .then(async (result) => {
-      await writeLiveDemoReport(result, null);
+      await writeAffinityDemoLiveReport(result, null, phaseEvidence);
       console.log('Affinity demo result:');
       console.log(JSON.stringify(result, null, 2));
       process.exitCode = result.converged ? 0 : 1;
     })
     .catch(async (error) => {
-      await writeLiveDemoReport(null, error);
+      await writeAffinityDemoLiveReport(null, error, phaseEvidence);
       console.error(error);
       process.exitCode = 1;
     });
