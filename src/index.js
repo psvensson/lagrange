@@ -27,7 +27,6 @@ import {
 } from './raft/raft-provider-control.js';
 import {RAFT_PROVIDER_LOG_MSG} from './raft/raft-provider-control-constants.js';
 import {
-  ENTRYPOINT_ENV,
   ENTRYPOINT_ERROR_MSG,
   ENTRYPOINT_LOG_MSG,
   ENTRYPOINT_RUNTIME_VALUE,
@@ -50,7 +49,6 @@ import {
   createSqlRuntimeComposition,
   hydrateBootstrapApiRuntime,
   parseCommandLineArgs,
-  parsePositiveTimeoutMs,
   registerProcessLifecycleDiagnostics,
   registerShutdownSignalHandlers,
   resolveRuntimeAddresses,
@@ -76,6 +74,7 @@ import {
   resolveJoinReattemptPolicy,
   resolveLocalClusterIncarnationFence,
 } from './entrypoint-runtime-provenance.js';
+import {resolveNodeJoiningConfig} from './entrypoint-runtime-join-config.js';
 
 const JOIN_REATTEMPT_POLICY = resolveJoinReattemptPolicy(process.env);
 
@@ -121,20 +120,7 @@ async function startJoinNode(options) {
 
   const seedUrls = resolveSeedContactUrls(seedNodeAddresses);
   const seedUrl = seedUrls[0];
-  const joiningConfig = {};
-  const joinHttpTimeoutMs = parsePositiveTimeoutMs(
-    env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
-  );
-  if (joinHttpTimeoutMs !== null) {
-    joiningConfig.httpTimeoutMs = joinHttpTimeoutMs;
-  }
-  const joinLeadershipWaitTimeoutMs = parsePositiveTimeoutMs(
-    env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
-  );
-  if (joinLeadershipWaitTimeoutMs !== null) {
-    joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
-  }
-  joiningConfig.autoResumeRetryableFailures = true;
+  const joiningConfig = resolveNodeJoiningConfig(env);
 
   const joinReadinessState = createReadinessStateWithDiagnostics(
     mainLogger,

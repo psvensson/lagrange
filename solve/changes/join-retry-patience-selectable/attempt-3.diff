@@ -1,0 +1,540 @@
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+index 648ef10d77251f82bf744c38e79b1f465d41a290..f2940271847fa547570c6bc306650a809e465391 100644
+--- a/scripts/run-placement-affinity-scenarios.js
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -47,6 +47,11 @@
+  *     - test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js
+  *       (stale cache/fresh authority admits, genuine leaderlessness rejects,
+  *        and cache-hit/probe paths perform no authoritative reads)
++ *   join-retry-patience-selectable
++ *     - test/bootstrap/join-retry-patience-selectable.test.js
++ *       (permanent limited/elapsed-only config ingress, retryable leader-metadata
++ *        behavior through both postures, elapsed exhaustion, and unchanged
++ *        non-retryable failure handling)
+  *
+  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
+  *   (default: run all scenarios)
+@@ -93,6 +98,9 @@ const SCENARIOS = {
+   'seed-join-gate-authoritative-refresh': [
+     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
+   ],
++  'join-retry-patience-selectable': [
++    'test/bootstrap/join-retry-patience-selectable.test.js',
++  ],
+ };
+ 
+ runGuardTestScenarios(SCENARIOS);
+diff --git a/src/bootstrap/node-joining-admission-readiness.js b/src/bootstrap/node-joining-admission-readiness.js
+index 572aefe1996c9917860e0b0b68e6d78306ec37e7..d2d22dac188daa3bec67d121a7fba9aa794308ee 100644
+--- a/src/bootstrap/node-joining-admission-readiness.js
++++ b/src/bootstrap/node-joining-admission-readiness.js
+@@ -2,12 +2,19 @@ import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+ import {
+   NodeJoiningReadySignalReadiness,
+ } from './node-joining-ready-signal-readiness.js';
+-import {
+-  BOOTSTRAP_API_PROBE_REASON,
+-} from './bootstrap-api-constants.js';
+ import {
+   BOOTSTRAP_PIPELINE_ERROR_CODE,
+ } from './bootstrap-constants.js';
++import {
++  RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
++  RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
++} from './node-joining-constants.js';
++import {
++  isLimitedResumeBootstrapNotReadyFailure,
++  normalizeRetryableJoinResumeAttemptBudgetMode,
++  resolveRetryableJoinMinimumMaxElapsedMs,
++  resolveRetryableJoinResumeAttemptBudgetMode,
++} from './retryable-join-resume-policy.js';
+ const {
+   JOINING_DEFAULT,
+   JOINING_ERROR_MSG,
+@@ -41,15 +48,6 @@ const RETRYABLE_JOIN_RESUME_ACTION = Object.freeze({
+   RESUME: 'resume',
+   STOP: 'stop',
+ });
+-const RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE = Object.freeze({
+-  LIMITED: 'limited',
+-  ELAPSED_ONLY: 'elapsed_only',
+-});
+-const RETRYABLE_JOIN_RESUME_FAILURE_PROFILE = Object.freeze({
+-  DEFAULT: 'default_retryable_failure',
+-  CONTACTING_SEED_BOOTSTRAP_NOT_READY:
+-    'contacting_seed_bootstrap_not_ready',
+-});
+ const RETRYABLE_JOIN_RESUME_STOP_REASON = Object.freeze({
+   POLICY_DISABLED: 'policy_disabled',
+   ABORT: 'abort',
+@@ -57,32 +55,6 @@ const RETRYABLE_JOIN_RESUME_STOP_REASON = Object.freeze({
+   ATTEMPT_BUDGET_EXHAUSTED: 'attempt_budget_exhausted',
+   ELAPSED_BUDGET_EXHAUSTED: 'elapsed_budget_exhausted',
+ });
+-const BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KINDS = Object.freeze([
+-  JOINING_SEED_CONTACT_FAILURE_KIND.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+-  JOINING_SEED_CONTACT_FAILURE_KIND.REQUEST_EXECUTION_BUDGET_EXHAUSTED,
+-]);
+-const BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES = Object.freeze([
+-  BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+-  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED,
+-]);
+-
+-function hasBootstrapResponseReason(error, reasonCodes) {
+-  const reasons = Array.isArray(error?.bootstrapResponse?.reasons) ?
+-    error.bootstrapResponse.reasons :
+-    [];
+-  return reasonCodes.some((reasonCode) => reasons.includes(reasonCode));
+-}
+-
+-function isLimitedResumeBootstrapNotReadyFailure(error) {
+-  return BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KINDS.includes(
+-    error?.seedContactFailureKind,
+-  ) ||
+-    hasBootstrapResponseReason(
+-      error,
+-      BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES,
+-    );
+-}
+-
+ function normalizeBootstrapResponseReasons(error) {
+   if (!Array.isArray(error?.bootstrapResponse?.reasons)) {
+     return [];
+@@ -124,27 +96,6 @@ function buildSeedContactFailureDiagnostics(error) {
+   return diagnostics;
+ }
+ 
+-function resolveRetryableJoinMinimumMaxElapsedMs(options = {}) {
+-  const retryWindowMs = Number.isFinite(options.retryWindowMs) ?
+-    Math.max(0, Math.floor(options.retryWindowMs)) :
+-    0;
+-  const httpTimeoutMs = Number.isFinite(options.httpTimeoutMs) ?
+-    Math.max(0, Math.floor(options.httpTimeoutMs)) :
+-    0;
+-  const defaultMaxElapsedMs =
+-    JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs;
+-  const contactSeedWindowMs = retryWindowMs + httpTimeoutMs;
+-  const latePhaseWindowMs =
+-    retryWindowMs <= defaultMaxElapsedMs ?
+-      defaultMaxElapsedMs + retryWindowMs :
+-      contactSeedWindowMs;
+-  return Math.max(
+-    0,
+-    contactSeedWindowMs,
+-    latePhaseWindowMs,
+-  );
+-}
+-
+ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+   _buildJoinRuntimeWiringDelegates() {
+     const self = this;
+@@ -561,6 +512,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+     });
+     return {
+       enabled: this.config.autoResumeRetryableFailures === true,
++      attemptBudgetMode: normalizeRetryableJoinResumeAttemptBudgetMode(
++        this.config.retryableFailureResumeAttemptBudgetMode,
++      ),
+       maxAttempts: Number.isFinite(
+         this.config.retryableFailureResumeMaxAttempts,
+       ) ?
+@@ -634,12 +588,10 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+       error,
+       failureResult,
+     );
+-    const attemptBudgetMode =
+-      failureProfile ===
+-      RETRYABLE_JOIN_RESUME_FAILURE_PROFILE
+-        .CONTACTING_SEED_BOOTSTRAP_NOT_READY ?
+-        RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY :
+-        RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED;
++    const attemptBudgetMode = resolveRetryableJoinResumeAttemptBudgetMode(
++      failureProfile,
++      policy?.attemptBudgetMode,
++    );
+     const limitedAttemptBudget =
+       attemptBudgetMode === RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED ?
+         policy?.maxAttempts || null :
+diff --git a/src/bootstrap/node-joining-constants.js b/src/bootstrap/node-joining-constants.js
+index dcb5c00372eff74e70f9107e2ee1f77932bdc67b..167f66efbb8b30b7ab0902c7309f835346bf93f8 100644
+--- a/src/bootstrap/node-joining-constants.js
++++ b/src/bootstrap/node-joining-constants.js
+@@ -3,6 +3,17 @@ import {DEFAULT_HEARTBEAT_INTERVAL_MS} from '../control-plane/control-plane-cons
+ import {NUM, RUNTIME_KIND, TABLES, TIME_MS} from '../constants/index.js';
+ import {DEFAULT_REPLICA_STAGGER_DELAY_MS} from './bootstrap-constants.js';
+ 
++const RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE = Object.freeze({
++  LIMITED: 'limited',
++  ELAPSED_ONLY: 'elapsed_only',
++});
++
++const RETRYABLE_JOIN_RESUME_FAILURE_PROFILE = Object.freeze({
++  DEFAULT: 'default_retryable_failure',
++  CONTACTING_SEED_BOOTSTRAP_NOT_READY:
++    'contacting_seed_bootstrap_not_ready',
++});
++
+ const JOINING_DEFAULT = Object.freeze({
+   httpTimeoutMs: 10000,
+   leadershipWaitTimeoutMs: 30000,
+@@ -15,6 +26,8 @@ const JOINING_DEFAULT = Object.freeze({
+   retryableFailureResumeBaseDelayMs: 250,
+   retryableFailureResumeMaxDelayMs: 5000,
+   retryableFailureResumeMaxElapsedMs: TIME_MS.MINUTE * NUM.THREE,
++  retryableFailureResumeAttemptBudgetMode:
++    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED,
+   readySignalMaxAttempts: 6,
+   readySignalRetryDelayMs: 1000,
+   readySignalRetryMaxDelayMs: 5000,
+@@ -373,4 +386,6 @@ export {
+   JOIN_READINESS_SCHEMA_FIELD,
+   JOIN_READINESS_SCHEMA_FIELDS,
+   JOINING_LOG_MSG,
++  RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
++  RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
+ };
+diff --git a/src/bootstrap/retryable-join-resume-policy.js b/src/bootstrap/retryable-join-resume-policy.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..40cab8eea04d0520a3a4fe635541e95964f467be
+--- /dev/null
++++ b/src/bootstrap/retryable-join-resume-policy.js
+@@ -0,0 +1,74 @@
++import {
++  BOOTSTRAP_API_PROBE_REASON,
++} from './bootstrap-api-constants.js';
++import {
++  JOINING_DEFAULT,
++  JOINING_SEED_CONTACT_FAILURE_KIND,
++  RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
++  RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
++} from './node-joining-constants.js';
++
++const LIMITED_RESUME_FAILURE_KINDS = Object.freeze([
++  JOINING_SEED_CONTACT_FAILURE_KIND.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
++  JOINING_SEED_CONTACT_FAILURE_KIND.REQUEST_EXECUTION_BUDGET_EXHAUSTED,
++]);
++
++const LIMITED_RESUME_REASON_CODES = Object.freeze([
++  BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
++  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED,
++]);
++
++function hasBootstrapResponseReason(error, reasonCodes) {
++  const reasons = Array.isArray(error?.bootstrapResponse?.reasons) ?
++    error.bootstrapResponse.reasons :
++    [];
++  return reasonCodes.some((reasonCode) => reasons.includes(reasonCode));
++}
++
++function isLimitedResumeBootstrapNotReadyFailure(error) {
++  return LIMITED_RESUME_FAILURE_KINDS.includes(
++    error?.seedContactFailureKind,
++  ) || hasBootstrapResponseReason(error, LIMITED_RESUME_REASON_CODES);
++}
++
++function normalizeRetryableJoinResumeAttemptBudgetMode(value) {
++  return Object.values(RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE)
++    .includes(value) ?
++    value :
++    JOINING_DEFAULT.retryableFailureResumeAttemptBudgetMode;
++}
++
++function resolveRetryableJoinResumeAttemptBudgetMode(
++  failureProfile,
++  configuredMode,
++) {
++  if (failureProfile === RETRYABLE_JOIN_RESUME_FAILURE_PROFILE
++    .CONTACTING_SEED_BOOTSTRAP_NOT_READY) {
++    return RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY;
++  }
++  return normalizeRetryableJoinResumeAttemptBudgetMode(configuredMode);
++}
++
++function resolveRetryableJoinMinimumMaxElapsedMs(options = {}) {
++  const retryWindowMs = Number.isFinite(options.retryWindowMs) ?
++    Math.max(0, Math.floor(options.retryWindowMs)) :
++    0;
++  const httpTimeoutMs = Number.isFinite(options.httpTimeoutMs) ?
++    Math.max(0, Math.floor(options.httpTimeoutMs)) :
++    0;
++  const defaultMaxElapsedMs =
++    JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs;
++  const contactSeedWindowMs = retryWindowMs + httpTimeoutMs;
++  const latePhaseWindowMs =
++    retryWindowMs <= defaultMaxElapsedMs ?
++      defaultMaxElapsedMs + retryWindowMs :
++      contactSeedWindowMs;
++  return Math.max(0, contactSeedWindowMs, latePhaseWindowMs);
++}
++
++export {
++  isLimitedResumeBootstrapNotReadyFailure,
++  normalizeRetryableJoinResumeAttemptBudgetMode,
++  resolveRetryableJoinMinimumMaxElapsedMs,
++  resolveRetryableJoinResumeAttemptBudgetMode,
++};
+diff --git a/src/constants/entrypoint.js b/src/constants/entrypoint.js
+index ba396d4aaf72b400b70545236703d3ddf7ef0abd..2b8fd9067cab2b4b95fa2b7c1e757ead784180c8 100644
+--- a/src/constants/entrypoint.js
++++ b/src/constants/entrypoint.js
+@@ -37,6 +37,8 @@ const ENTRYPOINT_ENV = Object.freeze({
+   SEED_NODE_ADDRESS: 'SEED_NODE_ADDRESS',
+   JOINING_HTTP_TIMEOUT_MS: 'NODE_JOINING_HTTP_TIMEOUT_MS',
+   JOINING_LEADERSHIP_WAIT_TIMEOUT_MS: 'NODE_JOINING_LEADERSHIP_WAIT_TIMEOUT_MS',
++  JOINING_RETRYABLE_FAILURE_RESUME_ATTEMPT_BUDGET_MODE:
++    'NODE_JOINING_RETRYABLE_FAILURE_RESUME_ATTEMPT_BUDGET_MODE',
+   CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED:
+     'CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED',
+   CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED:
+@@ -153,6 +155,8 @@ const ENTRYPOINT_TEXT = Object.freeze({
+     '                   Admin WebSocket port (default: REST_API_PORT + 1)',
+     `  ${LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET}     ` +
+       'Transport WebSocket port (default: REST_API_PORT + 2)',
++    '  NODE_JOINING_RETRYABLE_FAILURE_RESUME_ATTEMPT_BUDGET_MODE',
++    '                   limited or elapsed_only (default: limited)',
+     '  CONTROL_PLANE_LIFECYCLE_PROBES_REQUIRED',
+     '                   Require lifecycle probe controls (default: true)',
+     '  CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED',
+diff --git a/src/entrypoint-runtime-join-config.js b/src/entrypoint-runtime-join-config.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..40bbd742e25722c605121e654616166e4a73b73c
+--- /dev/null
++++ b/src/entrypoint-runtime-join-config.js
+@@ -0,0 +1,31 @@
++import {ENTRYPOINT_ENV} from './constants/entrypoint.js';
++import {
++  normalizeRetryableJoinResumeAttemptBudgetMode,
++} from './bootstrap/retryable-join-resume-policy.js';
++import {parsePositiveTimeoutMs} from './entrypoint-runtime-helpers.js';
++
++function resolveNodeJoiningConfig(env = {}) {
++  const joiningConfig = {
++    autoResumeRetryableFailures: true,
++    retryableFailureResumeAttemptBudgetMode:
++      normalizeRetryableJoinResumeAttemptBudgetMode(
++        env[ENTRYPOINT_ENV
++          .JOINING_RETRYABLE_FAILURE_RESUME_ATTEMPT_BUDGET_MODE],
++      ),
++  };
++  const joinHttpTimeoutMs = parsePositiveTimeoutMs(
++    env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
++  );
++  if (joinHttpTimeoutMs !== null) {
++    joiningConfig.httpTimeoutMs = joinHttpTimeoutMs;
++  }
++  const joinLeadershipWaitTimeoutMs = parsePositiveTimeoutMs(
++    env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
++  );
++  if (joinLeadershipWaitTimeoutMs !== null) {
++    joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
++  }
++  return joiningConfig;
++}
++
++export {resolveNodeJoiningConfig};
+diff --git a/src/index.js b/src/index.js
+index 9ed86c8c95cf81e63893201966d7e2bdbd83ba76..91e7ebe888742c9816459b06d29e65adc51d37ac 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -27,7 +27,6 @@ import {
+ } from './raft/raft-provider-control.js';
+ import {RAFT_PROVIDER_LOG_MSG} from './raft/raft-provider-control-constants.js';
+ import {
+-  ENTRYPOINT_ENV,
+   ENTRYPOINT_ERROR_MSG,
+   ENTRYPOINT_LOG_MSG,
+   ENTRYPOINT_RUNTIME_VALUE,
+@@ -50,7 +49,6 @@ import {
+   createSqlRuntimeComposition,
+   hydrateBootstrapApiRuntime,
+   parseCommandLineArgs,
+-  parsePositiveTimeoutMs,
+   registerProcessLifecycleDiagnostics,
+   registerShutdownSignalHandlers,
+   resolveRuntimeAddresses,
+@@ -76,6 +74,7 @@ import {
+   resolveJoinReattemptPolicy,
+   resolveLocalClusterIncarnationFence,
+ } from './entrypoint-runtime-provenance.js';
++import {resolveNodeJoiningConfig} from './entrypoint-runtime-join-config.js';
+ 
+ const JOIN_REATTEMPT_POLICY = resolveJoinReattemptPolicy(process.env);
+ 
+@@ -121,20 +120,7 @@ async function startJoinNode(options) {
+ 
+   const seedUrls = resolveSeedContactUrls(seedNodeAddresses);
+   const seedUrl = seedUrls[0];
+-  const joiningConfig = {};
+-  const joinHttpTimeoutMs = parsePositiveTimeoutMs(
+-    env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
+-  );
+-  if (joinHttpTimeoutMs !== null) {
+-    joiningConfig.httpTimeoutMs = joinHttpTimeoutMs;
+-  }
+-  const joinLeadershipWaitTimeoutMs = parsePositiveTimeoutMs(
+-    env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
+-  );
+-  if (joinLeadershipWaitTimeoutMs !== null) {
+-    joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
+-  }
+-  joiningConfig.autoResumeRetryableFailures = true;
++  const joiningConfig = resolveNodeJoiningConfig(env);
+ 
+   const joinReadinessState = createReadinessStateWithDiagnostics(
+     mainLogger,
+diff --git a/test/bootstrap/join-retry-patience-selectable.test.js b/test/bootstrap/join-retry-patience-selectable.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1a3d084e9910f19ebb39d8e384c37c906caf3d08
+--- /dev/null
++++ b/test/bootstrap/join-retry-patience-selectable.test.js
+@@ -0,0 +1,150 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  NodeJoiningService,
++  JoiningPhase,
++} from '../../src/bootstrap/node-joining-service.js';
++import {
++  RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
++} from '../../src/bootstrap/node-joining-constants.js';
++import {
++  BOOTSTRAP_PIPELINE_ERROR_CODE,
++} from '../../src/bootstrap/bootstrap-constants.js';
++import {
++  resolveNodeJoiningConfig,
++} from '../../src/entrypoint-runtime-join-config.js';
++import {ENTRYPOINT_ENV} from '../../src/constants/entrypoint.js';
++import {
++  initializeTestEnvironment,
++} from './node-joining-service-test-support.js';
++
++const TEST_MAX_ATTEMPTS = 4;
++const TEST_RETRY_AFTER_MS = 1000;
++const TEST_ELAPSED_WITHIN_BUDGET_MS = 41056;
++const TEST_MAX_ELAPSED_MS = 300000;
++const TEST_NODE_ADDRESS = 'ws://localhost:9104';
++const TEST_SEED_ADDRESS = 'http://localhost:8080';
++
++function createLeaderMetadataIncompleteError() {
++  const error = new Error('Leader metadata incomplete');
++  error.code = BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE;
++  error.deferRetry = true;
++  error.retryAfterMs = TEST_RETRY_AFTER_MS;
++  return error;
++}
++
++function createService(attemptBudgetMode) {
++  return new NodeJoiningService({
++    nodeId: `joining-node-${attemptBudgetMode}`,
++    nodeAddress: TEST_NODE_ADDRESS,
++    seedNodeAddress: TEST_SEED_ADDRESS,
++    config: {
++      autoResumeRetryableFailures: true,
++      retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
++      retryableFailureResumeMaxElapsedMs: TEST_MAX_ELAPSED_MS,
++      retryableFailureResumeAttemptBudgetMode: attemptBudgetMode,
++    },
++  });
++}
++
++function resolveDecision(service, error, elapsedMs) {
++  const policy = service.resolveRetryableJoinResumePolicy();
++  service.startTime = 0;
++  service.now = () => elapsedMs;
++  return service.resolveRetryableJoinResumeDecision(
++    error,
++    {
++      phase: JoiningPhase.CONTACTING_SEED,
++      error: error.message,
++    },
++    TEST_MAX_ATTEMPTS,
++    policy,
++  );
++}
++
++test('join retry patience config exposes permanent limited and elapsed-only ' +
++  'operator postures', async (t) => {
++  const limitedConfig = resolveNodeJoiningConfig({
++    [ENTRYPOINT_ENV.JOINING_RETRYABLE_FAILURE_RESUME_ATTEMPT_BUDGET_MODE]:
++      RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED,
++  });
++  const elapsedOnlyConfig = resolveNodeJoiningConfig({
++    [ENTRYPOINT_ENV.JOINING_RETRYABLE_FAILURE_RESUME_ATTEMPT_BUDGET_MODE]:
++      RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY,
++  });
++
++  t.equal(
++    limitedConfig.retryableFailureResumeAttemptBudgetMode,
++    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED,
++    'limited is a selectable permanent operator posture',
++  );
++  t.equal(
++    elapsedOnlyConfig.retryableFailureResumeAttemptBudgetMode,
++    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY,
++    'elapsed-only is a selectable permanent operator posture',
++  );
++  t.equal(
++    resolveNodeJoiningConfig({})
++      .retryableFailureResumeAttemptBudgetMode,
++    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED,
++    'absent operator config preserves the bounded-attempt default',
++  );
++});
++
++test('leader-metadata retry uses selected attempt-budget posture', async (t) => {
++  initializeTestEnvironment();
++
++  const limitedDecision = resolveDecision(
++    createService(RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED),
++    createLeaderMetadataIncompleteError(),
++    TEST_ELAPSED_WITHIN_BUDGET_MS,
++  );
++  const elapsedOnlyDecision = resolveDecision(
++    createService(RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY),
++    createLeaderMetadataIncompleteError(),
++    TEST_ELAPSED_WITHIN_BUDGET_MS,
++  );
++
++  t.equal(limitedDecision.action, 'stop',
++    'limited posture stops retryable leader-metadata failure at attempt cap');
++  t.equal(
++    limitedDecision.attemptBudgetMode,
++    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED,
++    'limited decision reports the selected posture',
++  );
++  t.equal(elapsedOnlyDecision.action, 'resume',
++    'elapsed-only posture keeps retrying while elapsed budget remains');
++  t.equal(
++    elapsedOnlyDecision.attemptBudgetMode,
++    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY,
++    'patient decision reports the selected posture',
++  );
++});
++
++test('elapsed-only posture still stops on elapsed exhaustion and ' +
++  'non-retryable failures', async (t) => {
++  initializeTestEnvironment();
++
++  const elapsedOnlyService = createService(
++    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY,
++  );
++  const elapsedExhaustedDecision = resolveDecision(
++    elapsedOnlyService,
++    createLeaderMetadataIncompleteError(),
++    TEST_MAX_ELAPSED_MS,
++  );
++  const terminalError = new Error('Node ID already registered');
++  const nonRetryableDecision = resolveDecision(
++    elapsedOnlyService,
++    terminalError,
++    TEST_ELAPSED_WITHIN_BUDGET_MS,
++  );
++
++  t.equal(elapsedExhaustedDecision.action, 'stop',
++    'elapsed-only posture stops when its elapsed budget is exhausted');
++  t.equal(elapsedExhaustedDecision.stopReason, 'elapsed_budget_exhausted',
++    'elapsed exhaustion remains a typed stop reason');
++  t.equal(nonRetryableDecision.action, 'stop',
++    'elapsed-only posture never weakens non-retryable failure handling');
++  t.equal(nonRetryableDecision.stopReason, 'non_retryable',
++    'non-retryable failure remains a typed terminal decision');
++});

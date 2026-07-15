@@ -3,11 +3,18 @@ import {
   NodeJoiningReadySignalReadiness,
 } from './node-joining-ready-signal-readiness.js';
 import {
-  BOOTSTRAP_API_PROBE_REASON,
-} from './bootstrap-api-constants.js';
-import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from './bootstrap-constants.js';
+import {
+  RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
+  RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
+} from './node-joining-constants.js';
+import {
+  isLimitedResumeBootstrapNotReadyFailure,
+  normalizeRetryableJoinResumeAttemptBudgetMode,
+  resolveRetryableJoinMinimumMaxElapsedMs,
+  resolveRetryableJoinResumeAttemptBudgetMode,
+} from './retryable-join-resume-policy.js';
 const {
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
@@ -41,15 +48,6 @@ const RETRYABLE_JOIN_RESUME_ACTION = Object.freeze({
   RESUME: 'resume',
   STOP: 'stop',
 });
-const RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE = Object.freeze({
-  LIMITED: 'limited',
-  ELAPSED_ONLY: 'elapsed_only',
-});
-const RETRYABLE_JOIN_RESUME_FAILURE_PROFILE = Object.freeze({
-  DEFAULT: 'default_retryable_failure',
-  CONTACTING_SEED_BOOTSTRAP_NOT_READY:
-    'contacting_seed_bootstrap_not_ready',
-});
 const RETRYABLE_JOIN_RESUME_STOP_REASON = Object.freeze({
   POLICY_DISABLED: 'policy_disabled',
   ABORT: 'abort',
@@ -57,32 +55,6 @@ const RETRYABLE_JOIN_RESUME_STOP_REASON = Object.freeze({
   ATTEMPT_BUDGET_EXHAUSTED: 'attempt_budget_exhausted',
   ELAPSED_BUDGET_EXHAUSTED: 'elapsed_budget_exhausted',
 });
-const BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KINDS = Object.freeze([
-  JOINING_SEED_CONTACT_FAILURE_KIND.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
-  JOINING_SEED_CONTACT_FAILURE_KIND.REQUEST_EXECUTION_BUDGET_EXHAUSTED,
-]);
-const BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES = Object.freeze([
-  BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
-  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED,
-]);
-
-function hasBootstrapResponseReason(error, reasonCodes) {
-  const reasons = Array.isArray(error?.bootstrapResponse?.reasons) ?
-    error.bootstrapResponse.reasons :
-    [];
-  return reasonCodes.some((reasonCode) => reasons.includes(reasonCode));
-}
-
-function isLimitedResumeBootstrapNotReadyFailure(error) {
-  return BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KINDS.includes(
-    error?.seedContactFailureKind,
-  ) ||
-    hasBootstrapResponseReason(
-      error,
-      BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES,
-    );
-}
-
 function normalizeBootstrapResponseReasons(error) {
   if (!Array.isArray(error?.bootstrapResponse?.reasons)) {
     return [];
@@ -122,27 +94,6 @@ function buildSeedContactFailureDiagnostics(error) {
         null,
   };
   return diagnostics;
-}
-
-function resolveRetryableJoinMinimumMaxElapsedMs(options = {}) {
-  const retryWindowMs = Number.isFinite(options.retryWindowMs) ?
-    Math.max(0, Math.floor(options.retryWindowMs)) :
-    0;
-  const httpTimeoutMs = Number.isFinite(options.httpTimeoutMs) ?
-    Math.max(0, Math.floor(options.httpTimeoutMs)) :
-    0;
-  const defaultMaxElapsedMs =
-    JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs;
-  const contactSeedWindowMs = retryWindowMs + httpTimeoutMs;
-  const latePhaseWindowMs =
-    retryWindowMs <= defaultMaxElapsedMs ?
-      defaultMaxElapsedMs + retryWindowMs :
-      contactSeedWindowMs;
-  return Math.max(
-    0,
-    contactSeedWindowMs,
-    latePhaseWindowMs,
-  );
 }
 
 class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
@@ -561,6 +512,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
     });
     return {
       enabled: this.config.autoResumeRetryableFailures === true,
+      attemptBudgetMode: normalizeRetryableJoinResumeAttemptBudgetMode(
+        this.config.retryableFailureResumeAttemptBudgetMode,
+      ),
       maxAttempts: Number.isFinite(
         this.config.retryableFailureResumeMaxAttempts,
       ) ?
@@ -634,12 +588,10 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       error,
       failureResult,
     );
-    const attemptBudgetMode =
-      failureProfile ===
-      RETRYABLE_JOIN_RESUME_FAILURE_PROFILE
-        .CONTACTING_SEED_BOOTSTRAP_NOT_READY ?
-        RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY :
-        RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED;
+    const attemptBudgetMode = resolveRetryableJoinResumeAttemptBudgetMode(
+      failureProfile,
+      policy?.attemptBudgetMode,
+    );
     const limitedAttemptBudget =
       attemptBudgetMode === RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED ?
         policy?.maxAttempts || null :

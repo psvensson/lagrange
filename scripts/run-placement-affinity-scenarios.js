@@ -47,6 +47,11 @@
  *     - test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js
  *       (stale cache/fresh authority admits, genuine leaderlessness rejects,
  *        and cache-hit/probe paths perform no authoritative reads)
+ *   join-retry-patience-selectable
+ *     - test/bootstrap/join-retry-patience-selectable.test.js
+ *       (permanent limited/elapsed-only config ingress, retryable leader-metadata
+ *        behavior through both postures, elapsed exhaustion, and unchanged
+ *        non-retryable failure handling)
  *
  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
  *   (default: run all scenarios)
@@ -92,6 +97,9 @@ const SCENARIOS = {
   ],
   'seed-join-gate-authoritative-refresh': [
     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
+  ],
+  'join-retry-patience-selectable': [
+    'test/bootstrap/join-retry-patience-selectable.test.js',
   ],
 };
 

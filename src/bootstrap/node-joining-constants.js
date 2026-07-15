@@ -3,6 +3,17 @@ import {DEFAULT_HEARTBEAT_INTERVAL_MS} from '../control-plane/control-plane-cons
 import {NUM, RUNTIME_KIND, TABLES, TIME_MS} from '../constants/index.js';
 import {DEFAULT_REPLICA_STAGGER_DELAY_MS} from './bootstrap-constants.js';
 
+const RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE = Object.freeze({
+  LIMITED: 'limited',
+  ELAPSED_ONLY: 'elapsed_only',
+});
+
+const RETRYABLE_JOIN_RESUME_FAILURE_PROFILE = Object.freeze({
+  DEFAULT: 'default_retryable_failure',
+  CONTACTING_SEED_BOOTSTRAP_NOT_READY:
+    'contacting_seed_bootstrap_not_ready',
+});
+
 const JOINING_DEFAULT = Object.freeze({
   httpTimeoutMs: 10000,
   leadershipWaitTimeoutMs: 30000,
@@ -15,6 +26,8 @@ const JOINING_DEFAULT = Object.freeze({
   retryableFailureResumeBaseDelayMs: 250,
   retryableFailureResumeMaxDelayMs: 5000,
   retryableFailureResumeMaxElapsedMs: TIME_MS.MINUTE * NUM.THREE,
+  retryableFailureResumeAttemptBudgetMode:
+    RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED,
   readySignalMaxAttempts: 6,
   readySignalRetryDelayMs: 1000,
   readySignalRetryMaxDelayMs: 5000,
@@ -373,4 +386,6 @@ export {
   JOIN_READINESS_SCHEMA_FIELD,
   JOIN_READINESS_SCHEMA_FIELDS,
   JOINING_LOG_MSG,
+  RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE,
+  RETRYABLE_JOIN_RESUME_FAILURE_PROFILE,
 };
