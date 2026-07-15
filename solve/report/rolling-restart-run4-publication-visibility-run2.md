@@ -1,0 +1,41 @@
+# Solve report: rolling-restart-run4-publication-visibility-run2
+
+**Goal:** Run2-shaped startup_active_gate_owner/publication_visibility stall has deterministic owner-path proof: owner membership-publication reconcile no longer executes without visibility progress for the missing published active node, or the retained shape is proven to be observer-only without a product patch; priority residuals, downstream workflow, and parent Wilson/statistical closure remain outside this child Quest.
+
+**Class:** product · **Closure:** DECISION
+
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
+
+**Attempts:** 0
+
+## Links
+- roadmap row: RM-0.1-fs-rolling-restart
+- spec: membership-lifecycle-placement-hard-cutover
+- parent quest: rolling-restart-run4-drain-residual
+- plan: solve/epics/topology-convergence-hardening.md
+
+## Scope Pressure
+- Changed files: 0
+- Change bytes: 0
+- Owner areas: none
+- Categories: none
+- Signals: none
+
+## Frontiers
+- **rolling-restart-run4-publication-visibility-run2-main** [parked {exhausted}] rung 0, attempts 0, metric ? -> ? — The sealed direct publication-visibility frame was falsified by retained run2 evidence; the corrected operation-owner masking Quest is solved, leaving no honest move within this seal.
+
+## Findings
+- **rolling-restart-run4-publication-visibility-run2-main**: Run2 publication-visibility residual is not a direct membership-publication owner visibility bug: retained full logs and report show active-gate handoff pending at publication epoch 29 with missing node 11601fe0-72d6-5853-8590-ec2881853e72, but the owner write path repeatedly failed UPSERTs for membership-publication:30:56c8f2bbc373b3da06a8b867 because control_plane_publications-p1 participants returned No leader available / ROUTER_MESSAGE_TIMEOUT. The selected priority snapshot for control_plane_publications-p1 is spread_satisfied_in_flight with workflow_progress pending, stepAgeMs far beyond timeout, latestOperationWorkflowStep FAILED/latestOperationStatus failed, and operation_workflow_owner next action advance_existing_operation. Therefore the honest next product lever is self-hosted control_plane_publications operation-workflow failure/masking, not a readiness relaxation or a membership-publication-owner-only patch. (rules out: Do not patch the liveness analyzer to hide owner-drive execution, do not relax active-gate missing-published-node checks, and do not pursue a membership-publication-owner-only source patch for this run2 shape.) [test-output/reports/stat-gate-20260630T143856Z-run2.report.json; test-output/reports/.playback/stat-gate-20260630T143856Z-run2/.full-logs/rolling-restart/7493b0ab-a054-5fad-a91b-5e331db29304.log.gz; subagent:019f196f-cade-7561-b7f5-37cca12a3e44; subagent:019f196f-e006-7b42-af9a-55be3cdd5aa0]
+
+## Theories
+_(none recorded)_
+
+## Selected Theories
+_(none selected)_
+
+## Theory Results
+_(none recorded)_
+
+## Attempt log
+| ts | frontier | rung | metric | result | blocker movement | theory | change |
+| --- | --- | --- | --- | --- | --- | --- | --- |

@@ -1,0 +1,18 @@
+{
+  "metric": 1,
+  "target": 0,
+  "done": false,
+  "classification": "exhausted",
+  "terminalKind": "exhausted",
+  "verdict": "superseded-by-control-plane-publications-failed-operation-mask",
+  "detail": {
+    "sealedDoneWhenSatisfied": false,
+    "whyExhausted": "Retained run2 evidence falsified the direct membership-publication visibility-owner frame: publication writes were attempted but masked by failed control_plane_publications operation-owner state.",
+    "falsifyingFinding": "solve/log/rolling-restart-run4-publication-visibility-run2.ndjson",
+    "successorQuest": "rolling-restart-run4-control-plane-publications-failed-operation-mask",
+    "successorOracle": "solve/oracle/rolling-restart-run4-control-plane-publications-failed-operation-mask.json",
+    "successorSolved": true,
+    "publicationVisibilityOracleRelaxed": false,
+    "parentWilsonClosureClaimed": false
+  }
+}
