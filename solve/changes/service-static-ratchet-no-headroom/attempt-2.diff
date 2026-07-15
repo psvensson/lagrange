@@ -1,0 +1,31 @@
+diff --git a/docs/evidence/service-static-ratchet-no-headroom-reconciliation.json b/docs/evidence/service-static-ratchet-no-headroom-reconciliation.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..22f57e3cbb653ae42019411c19a5fd28dd297168
+--- /dev/null
++++ b/docs/evidence/service-static-ratchet-no-headroom-reconciliation.json
+@@ -0,0 +1,25 @@
++{
++  "classification": "fresh_evidence_reconciliation",
++  "sourceHead": "fc1a9eaf4d4b52bcf9891313555fe5eb2ca8d1ec",
++  "sourceAttemptFingerprint": "98fadf9d28c66f7b4a0f654fdb59f556682bd354a708931003d76afdc52602d3",
++  "oracle": "solve/oracle/service-static-ratchet-no-headroom.json",
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "serviceLiteralNewViolations": 0,
++  "serviceDecisionNewViolations": 0,
++  "focusedServiceFilesPassed": 13,
++  "focusedServiceAssertions": 144,
++  "sourceDuplicationCloneGroups": 69,
++  "sourceDuplicationCloneBaseline": 73,
++  "sourceDuplicationLines": 2169,
++  "sourceDuplicationLineBaseline": 2239,
++  "testDuplicationCloneGroups": 836,
++  "testDuplicationCloneBaseline": 845,
++  "testDuplicationLines": 32086,
++  "testDuplicationLineBaseline": 32308,
++  "questBaseCognitiveViolations": 184,
++  "currentCognitiveViolations": 184,
++  "serviceScopedCognitiveViolations": 0,
++  "sourceOrBaselineChanged": false
++}
