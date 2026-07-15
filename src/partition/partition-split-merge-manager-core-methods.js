@@ -475,8 +475,10 @@ class PartitionSplitMergeManagerCoreMethods {
     if (classifySystemPartition({partitionId}).priorityControlPlane) {
       return false;
     }
-    const storageThreshold = policy.splitStorageThreshold || this.splitStorageThreshold;
-    const trafficThreshold = policy.splitTrafficThreshold || this.splitTrafficThreshold;
+    const storageThreshold =
+      policy.splitStorageThreshold ?? this.splitStorageThreshold;
+    const trafficThreshold =
+      policy.splitTrafficThreshold ?? this.splitTrafficThreshold;
 
     const sizeBytes = metrics.sizeBytes || 0;
     const queriesPerMinute = metrics.queriesPerMinute || 0;
@@ -509,8 +511,10 @@ class PartitionSplitMergeManagerCoreMethods {
    */
   evaluateMergeCriteria(leftPartitionId, rightPartitionId, leftMetrics, rightMetrics,
     policy = {}) {
-    const storageThreshold = policy.mergeStorageThreshold || this.mergeStorageThreshold;
-    const trafficThreshold = policy.mergeTrafficThreshold || this.mergeTrafficThreshold;
+    const storageThreshold =
+      policy.mergeStorageThreshold ?? this.mergeStorageThreshold;
+    const trafficThreshold =
+      policy.mergeTrafficThreshold ?? this.mergeTrafficThreshold;
 
     const combinedStorage = (leftMetrics.sizeBytes || 0) +
       (rightMetrics.sizeBytes || 0);

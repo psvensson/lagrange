@@ -1,0 +1,430 @@
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+index 12dbae7081b84f7c1c92cf147932f584ff8ab331..a045f00d79dd0d3bd36eef11f2347a41269292bd 100644
+--- a/scripts/run-placement-affinity-scenarios.js
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -105,6 +105,11 @@ const SCENARIOS = {
+     'test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js',
+     'test/runtime/movielens-preload-admission-gate.test.js',
+   ],
++  'configured-split-threshold-policy-precedence': [
++    'test/partition/partition-split-policy-precedence.test.js',
++    'test/policy/table-policy-service.test.js',
++    'test/partition/partition-split-merge-manager.test.js',
++  ],
+   'seed-join-gate-authoritative-refresh': [
+     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
+   ],
+diff --git a/src/partition/partition-split-merge-manager-core-methods.js b/src/partition/partition-split-merge-manager-core-methods.js
+index 80f33fa46317a6a11f8bf17b4ce15c94454f02dd..6a8b13ceb6a4cf25e5ea4b63f8df7da3eabea267 100644
+--- a/src/partition/partition-split-merge-manager-core-methods.js
++++ b/src/partition/partition-split-merge-manager-core-methods.js
+@@ -475,8 +475,10 @@ class PartitionSplitMergeManagerCoreMethods {
+     if (classifySystemPartition({partitionId}).priorityControlPlane) {
+       return false;
+     }
+-    const storageThreshold = policy.splitStorageThreshold || this.splitStorageThreshold;
+-    const trafficThreshold = policy.splitTrafficThreshold || this.splitTrafficThreshold;
++    const storageThreshold =
++      policy.splitStorageThreshold ?? this.splitStorageThreshold;
++    const trafficThreshold =
++      policy.splitTrafficThreshold ?? this.splitTrafficThreshold;
+ 
+     const sizeBytes = metrics.sizeBytes || 0;
+     const queriesPerMinute = metrics.queriesPerMinute || 0;
+@@ -509,8 +511,10 @@ class PartitionSplitMergeManagerCoreMethods {
+    */
+   evaluateMergeCriteria(leftPartitionId, rightPartitionId, leftMetrics, rightMetrics,
+     policy = {}) {
+-    const storageThreshold = policy.mergeStorageThreshold || this.mergeStorageThreshold;
+-    const trafficThreshold = policy.mergeTrafficThreshold || this.mergeTrafficThreshold;
++    const storageThreshold =
++      policy.mergeStorageThreshold ?? this.mergeStorageThreshold;
++    const trafficThreshold =
++      policy.mergeTrafficThreshold ?? this.mergeTrafficThreshold;
+ 
+     const combinedStorage = (leftMetrics.sizeBytes || 0) +
+       (rightMetrics.sizeBytes || 0);
+diff --git a/src/policy/table-policy-resolution.js b/src/policy/table-policy-resolution.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2c9ba750d87d6bd10d3f0804a171abef0c18abd
+--- /dev/null
++++ b/src/policy/table-policy-resolution.js
+@@ -0,0 +1,54 @@
++import {CONFIG_KEY} from '../config/config-constants.js';
++import {DEFAULT_TABLE_POLICY} from './policy-constants.js';
++
++const LOCAL_STR_OBJECT = 'object';
++const LOCAL_STR_PLACEMENT_CONSTRAINTS = 'placementConstraints';
++
++function resolveConfiguredTablePolicyDefaults(config) {
++  return {
++    ...DEFAULT_TABLE_POLICY,
++    replicaCount:
++      config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) ??
++      DEFAULT_TABLE_POLICY.replicaCount,
++    splitStorageThreshold:
++      config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_BYTES) ??
++      DEFAULT_TABLE_POLICY.splitStorageThreshold,
++    splitTrafficThreshold:
++      config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_QPM) ??
++      DEFAULT_TABLE_POLICY.splitTrafficThreshold,
++    mergeStorageThreshold:
++      config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_BYTES) ??
++      DEFAULT_TABLE_POLICY.mergeStorageThreshold,
++    mergeTrafficThreshold:
++      config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_QPM) ??
++      DEFAULT_TABLE_POLICY.mergeTrafficThreshold,
++    placementConstraints: {
++      ...DEFAULT_TABLE_POLICY.placementConstraints,
++    },
++  };
++}
++
++function mergeStoredTablePolicyOverrides(storedPolicy, policyUpdates) {
++  const stored = storedPolicy && typeof storedPolicy === LOCAL_STR_OBJECT ?
++    storedPolicy : {};
++  const merged = {...stored, ...policyUpdates};
++  const placementUpdates = policyUpdates?.[LOCAL_STR_PLACEMENT_CONSTRAINTS];
++
++  if (placementUpdates && typeof placementUpdates === LOCAL_STR_OBJECT) {
++    const storedPlacement =
++      stored[LOCAL_STR_PLACEMENT_CONSTRAINTS] &&
++      typeof stored[LOCAL_STR_PLACEMENT_CONSTRAINTS] === LOCAL_STR_OBJECT ?
++        stored[LOCAL_STR_PLACEMENT_CONSTRAINTS] : {};
++    merged[LOCAL_STR_PLACEMENT_CONSTRAINTS] = {
++      ...storedPlacement,
++      ...placementUpdates,
++    };
++  }
++
++  return merged;
++}
++
++export {
++  mergeStoredTablePolicyOverrides,
++  resolveConfiguredTablePolicyDefaults,
++};
+diff --git a/src/policy/table-policy-service.js b/src/policy/table-policy-service.js
+index de74068f8b0f714136ff681f03d67768a66b697e..8778773ee3a9456d078a062cf5f4173ef163a9a7 100644
+--- a/src/policy/table-policy-service.js
++++ b/src/policy/table-policy-service.js
+@@ -32,6 +32,10 @@ import {
+   validatePlacementConstraints as validatePolicyPlacementConstraints,
+   validateTablePolicy,
+ } from './table-policy-validation.js';
++import {
++  mergeStoredTablePolicyOverrides,
++  resolveConfiguredTablePolicyDefaults,
++} from './table-policy-resolution.js';
+ 
+ const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
+ const LOCAL_STR_OBJECT = 'object';
+@@ -60,8 +64,8 @@ class TablePolicyService extends EventEmitter {
+ 
+     // Configuration
+     const config = ConfigurationManager.getInstance();
+-    this.defaultReplicaCount =
+-      config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || POLICY_DEFAULT.REPLICA_COUNT;
++    this.defaultTablePolicy = resolveConfiguredTablePolicyDefaults(config);
++    this.defaultReplicaCount = this.defaultTablePolicy.replicaCount;
+ 
+     // Logging
+     const loggingService = LoggingService.getInstance();
+@@ -93,7 +97,12 @@ class TablePolicyService extends EventEmitter {
+    * @return {Object} Default policy object.
+    */
+   getDefaultPolicy() {
+-    return {...DEFAULT_TABLE_POLICY};
++    return {
++      ...this.defaultTablePolicy,
++      placementConstraints: {
++        ...this.defaultTablePolicy.placementConstraints,
++      },
++    };
+   }
+ 
+   /**
+@@ -181,20 +190,7 @@ class TablePolicyService extends EventEmitter {
+       return this.getDefaultPolicy();
+     }
+ 
+-    // Parse stored policy
+-    let storedPolicy = POLICY_VALUE.EMPTY_POLICY;
+-    if (table.table_policies) {
+-      try {
+-        storedPolicy = typeof table.table_policies === 'string' ?
+-          JSON.parse(table.table_policies) : table.table_policies;
+-      } catch (error) {
+-        this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
+-          tableId,
+-          error: error.message,
+-        });
+-        throw error;
+-      }
+-    }
++    const storedPolicy = this.parseStoredTablePolicy(table, tableId);
+ 
+     // Merge with defaults
+     const mergedPolicy = this.mergeWithDefaults(storedPolicy);
+@@ -232,12 +228,12 @@ class TablePolicyService extends EventEmitter {
+    * @return {Object} Merged policy with all fields.
+    */
+   mergeWithDefaults(storedPolicy) {
+-    const merged = {...DEFAULT_TABLE_POLICY};
++    const merged = this.getDefaultPolicy();
+ 
+     for (const [key, value] of Object.entries(storedPolicy)) {
+       if (key === LOCAL_STR_PLACEMENTCONSTRAINTS && typeof value === LOCAL_STR_OBJECT) {
+         merged.placementConstraints = {
+-          ...DEFAULT_TABLE_POLICY.placementConstraints,
++          ...this.defaultTablePolicy.placementConstraints,
+           ...value,
+         };
+       } else if (key in DEFAULT_TABLE_POLICY) {
+@@ -248,6 +244,22 @@ class TablePolicyService extends EventEmitter {
+     return merged;
+   }
+ 
++  parseStoredTablePolicy(table, tableId) {
++    if (!table?.table_policies) {
++      return POLICY_VALUE.EMPTY_POLICY;
++    }
++    try {
++      return typeof table.table_policies === 'string' ?
++        JSON.parse(table.table_policies) : table.table_policies;
++    } catch (error) {
++      this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
++        tableId,
++        error: error.message,
++      });
++      throw error;
++    }
++  }
++
+   /**
+    * Validate a policy object.
+    * @param {Object} policy - Policy to validate.
+@@ -293,14 +305,14 @@ class TablePolicyService extends EventEmitter {
+       throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
+     }
+ 
+-    // Get current policy
+-    const currentPolicy = await this.getTablePolicy(tableId);
+-
+-    // Merge updates with current policy
+-    const newPolicy = this.mergeWithDefaults({
+-      ...currentPolicy,
+-      ...policyUpdates,
+-    });
++    const table = await this.readTableRow(tableId);
++    const storedPolicy = this.parseStoredTablePolicy(table, tableId);
++    const currentPolicy = this.mergeWithDefaults(storedPolicy);
++    const updatedStoredPolicy = mergeStoredTablePolicyOverrides(
++      storedPolicy,
++      policyUpdates,
++    );
++    const newPolicy = this.mergeWithDefaults(updatedStoredPolicy);
+ 
+     // Validate the merged policy
+     const mergedValidation = this.validatePolicy(newPolicy);
+@@ -322,7 +334,7 @@ class TablePolicyService extends EventEmitter {
+         tableName: TABLES.TABLES,
+         whereClause: {table_id: tableId},
+         data: {
+-          table_policies: JSON.stringify(newPolicy),
++          table_policies: JSON.stringify(updatedStoredPolicy),
+           updated_at: Date.now(),
+         },
+       }, {
+diff --git a/test/partition/partition-split-policy-precedence.test.js b/test/partition/partition-split-policy-precedence.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ea9a89fa738b395d5434815a37f45b364206cd8
+--- /dev/null
++++ b/test/partition/partition-split-policy-precedence.test.js
+@@ -0,0 +1,186 @@
++import {afterEach, beforeEach, test} from '../../src/test-helpers/tap.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {PartitionSplitMergeManager} from
++  '../../src/partition/partition-split-merge-manager.js';
++import {TablePolicyService} from '../../src/policy/table-policy-service.js';
++
++const CONFIGURED_SPLIT_THRESHOLD_BYTES = 1024 * 1024;
++const EXPLICIT_SPLIT_THRESHOLD_BYTES = 20 * 1024 * 1024;
++const OBSERVED_RATINGS_SIZE_BYTES = 12635760;
++const LOCAL_NODE_ID = 'node-a';
++const DEFAULT_TABLE_ID = 'tbl-ratings-default';
++const DEFAULT_PARTITION_ID = 'ratings-default-p1';
++
++function createPolicyCache() {
++  const tables = [{
++    table_id: DEFAULT_TABLE_ID,
++    table_name: 'ratings_default',
++    table_policies: JSON.stringify({minReplicaCount: 3}),
++  }, {
++    table_id: 'tbl-ratings-override',
++    table_name: 'ratings_override',
++    table_policies: JSON.stringify({
++      splitStorageThreshold: EXPLICIT_SPLIT_THRESHOLD_BYTES,
++    }),
++  }];
++  const partitions = [{
++    partition_id: DEFAULT_PARTITION_ID,
++    table_id: DEFAULT_TABLE_ID,
++    table_name: 'ratings_default',
++    size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
++  }, {
++    partition_id: 'ratings-override-p1',
++    table_id: 'tbl-ratings-override',
++    table_name: 'ratings_override',
++    size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
++  }];
++
++  return {
++    tables,
++    partitions,
++    getAll(tableName) {
++      if (tableName === 'tables') {
++        return tables;
++      }
++      if (tableName === 'partitions') {
++        return partitions;
++      }
++      return [];
++    },
++  };
++}
++
++function createPolicyMutationCapture() {
++  const updates = [];
++  return {
++    updates,
++    async updateSystemTableRow(tableName, whereClause, data) {
++      updates.push({tableName, whereClause, data});
++      return {success: true};
++    },
++  };
++}
++
++function createManager(cache, policyService, executedPartitionIds) {
++  return new PartitionSplitMergeManager({
++    listPartitions: async () => cache.partitions,
++    getPartitionMetrics: async (_partitionId, partition) => ({
++      sizeBytes: partition.size_bytes,
++      queriesPerMinute: 0,
++    }),
++    tablePolicyService: policyService,
++    executeSplitCandidate: async (partitionId) => {
++      executedPartitionIds.push(partitionId);
++      return {success: true, partitionId};
++    },
++    pressureGovernor: {
++      evaluate() {
++        return {action: 'allow', retryAfterMs: 0, summary: null};
++      },
++    },
++  });
++}
++
++beforeEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  ConfigurationManager.getInstance().initialize({
++    node: {id: LOCAL_NODE_ID},
++    partition: {
++      splitThresholdBytes: CONFIGURED_SPLIT_THRESHOLD_BYTES,
++    },
++  });
++  LoggingService.getInstance().initialize({level: 'error'});
++});
++
++afterEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++});
++
++test('managed split policy uses configured defaults and explicit table ' +
++  'overrides', async (t) => {
++  const cache = createPolicyCache();
++  const executedPartitionIds = [];
++  const policyService = new TablePolicyService({systemTableCache: cache});
++  const manager = createManager(cache, policyService, executedPartitionIds);
++
++  const results = await manager.evaluateAllPartitions({
++    triggerReason: 'reactive_request',
++    reasonCodes: ['write_activity'],
++  });
++
++  t.same(
++    results.splitCandidates,
++    [DEFAULT_PARTITION_ID],
++    'a sparse table policy inherits the configured split threshold while an ' +
++      'explicit table threshold still wins',
++  );
++  t.same(
++    executedPartitionIds,
++    [DEFAULT_PARTITION_ID],
++    'the effective policy drives the real managed split execution seam',
++  );
++
++  manager.shutdown();
++});
++
++test('unrelated policy updates preserve configured split threshold ' +
++  'provenance', async (t) => {
++  const cache = createPolicyCache();
++  const cdcIntegrationService = createPolicyMutationCapture();
++  const policyService = new TablePolicyService({
++    systemTableCache: cache,
++    cdcIntegrationService,
++  });
++
++  await policyService.updateTablePolicy(DEFAULT_TABLE_ID, {replicaCount: 5});
++
++  const persistedPolicy = JSON.parse(
++    cdcIntegrationService.updates[0].data.table_policies,
++  );
++  t.same(
++    persistedPolicy,
++    {minReplicaCount: 3, replicaCount: 5},
++    'an unrelated update persists only stored and explicitly updated fields',
++  );
++  t.notOk(
++    Object.hasOwn(persistedPolicy, 'splitStorageThreshold'),
++    'the inherited split threshold is not materialized as an override',
++  );
++
++  cache.tables[0].table_policies = JSON.stringify(persistedPolicy);
++  ConfigurationManager.resetInstance();
++  ConfigurationManager.getInstance().initialize({
++    node: {id: LOCAL_NODE_ID},
++    partition: {splitThresholdBytes: EXPLICIT_SPLIT_THRESHOLD_BYTES},
++  });
++
++  const refreshedPolicyService = new TablePolicyService({
++    systemTableCache: cache,
++  });
++  const executedPartitionIds = [];
++  const manager = createManager(
++    cache,
++    refreshedPolicyService,
++    executedPartitionIds,
++  );
++  const results = await manager.evaluateAllPartitions({
++    triggerReason: 'reactive_request',
++    reasonCodes: ['write_activity'],
++  });
++
++  t.same(
++    results.splitCandidates,
++    [],
++    'the later configured default governs split candidacy after the update',
++  );
++  t.same(
++    executedPartitionIds,
++    [],
++    'no split executes when the refreshed configured threshold is not met',
++  );
++
++  manager.shutdown();
++});

@@ -32,6 +32,10 @@ import {
   validatePlacementConstraints as validatePolicyPlacementConstraints,
   validateTablePolicy,
 } from './table-policy-validation.js';
+import {
+  mergeStoredTablePolicyOverrides,
+  resolveConfiguredTablePolicyDefaults,
+} from './table-policy-resolution.js';
 
 const LOCAL_STR_PLACEMENTCONSTRAINTS = 'placementConstraints';
 const LOCAL_STR_OBJECT = 'object';
@@ -60,8 +64,8 @@ class TablePolicyService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.defaultReplicaCount =
-      config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || POLICY_DEFAULT.REPLICA_COUNT;
+    this.defaultTablePolicy = resolveConfiguredTablePolicyDefaults(config);
+    this.defaultReplicaCount = this.defaultTablePolicy.replicaCount;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -93,7 +97,12 @@ class TablePolicyService extends EventEmitter {
    * @return {Object} Default policy object.
    */
   getDefaultPolicy() {
-    return {...DEFAULT_TABLE_POLICY};
+    return {
+      ...this.defaultTablePolicy,
+      placementConstraints: {
+        ...this.defaultTablePolicy.placementConstraints,
+      },
+    };
   }
 
   /**
@@ -181,20 +190,7 @@ class TablePolicyService extends EventEmitter {
       return this.getDefaultPolicy();
     }
 
-    // Parse stored policy
-    let storedPolicy = POLICY_VALUE.EMPTY_POLICY;
-    if (table.table_policies) {
-      try {
-        storedPolicy = typeof table.table_policies === 'string' ?
-          JSON.parse(table.table_policies) : table.table_policies;
-      } catch (error) {
-        this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
-          tableId,
-          error: error.message,
-        });
-        throw error;
-      }
-    }
+    const storedPolicy = this.parseStoredTablePolicy(table, tableId);
 
     // Merge with defaults
     const mergedPolicy = this.mergeWithDefaults(storedPolicy);
@@ -232,12 +228,12 @@ class TablePolicyService extends EventEmitter {
    * @return {Object} Merged policy with all fields.
    */
   mergeWithDefaults(storedPolicy) {
-    const merged = {...DEFAULT_TABLE_POLICY};
+    const merged = this.getDefaultPolicy();
 
     for (const [key, value] of Object.entries(storedPolicy)) {
       if (key === LOCAL_STR_PLACEMENTCONSTRAINTS && typeof value === LOCAL_STR_OBJECT) {
         merged.placementConstraints = {
-          ...DEFAULT_TABLE_POLICY.placementConstraints,
+          ...this.defaultTablePolicy.placementConstraints,
           ...value,
         };
       } else if (key in DEFAULT_TABLE_POLICY) {
@@ -246,6 +242,22 @@ class TablePolicyService extends EventEmitter {
     }
 
     return merged;
+  }
+
+  parseStoredTablePolicy(table, tableId) {
+    if (!table?.table_policies) {
+      return POLICY_VALUE.EMPTY_POLICY;
+    }
+    try {
+      return typeof table.table_policies === 'string' ?
+        JSON.parse(table.table_policies) : table.table_policies;
+    } catch (error) {
+      this.logger.warn(POLICY_LOG_MSG.POLICY_PARSE_FAILED, {
+        tableId,
+        error: error.message,
+      });
+      throw error;
+    }
   }
 
   /**
@@ -293,14 +305,14 @@ class TablePolicyService extends EventEmitter {
       throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
     }
 
-    // Get current policy
-    const currentPolicy = await this.getTablePolicy(tableId);
-
-    // Merge updates with current policy
-    const newPolicy = this.mergeWithDefaults({
-      ...currentPolicy,
-      ...policyUpdates,
-    });
+    const table = await this.readTableRow(tableId);
+    const storedPolicy = this.parseStoredTablePolicy(table, tableId);
+    const currentPolicy = this.mergeWithDefaults(storedPolicy);
+    const updatedStoredPolicy = mergeStoredTablePolicyOverrides(
+      storedPolicy,
+      policyUpdates,
+    );
+    const newPolicy = this.mergeWithDefaults(updatedStoredPolicy);
 
     // Validate the merged policy
     const mergedValidation = this.validatePolicy(newPolicy);
@@ -322,7 +334,7 @@ class TablePolicyService extends EventEmitter {
         tableName: TABLES.TABLES,
         whereClause: {table_id: tableId},
         data: {
-          table_policies: JSON.stringify(newPolicy),
+          table_policies: JSON.stringify(updatedStoredPolicy),
           updated_at: Date.now(),
         },
       }, {

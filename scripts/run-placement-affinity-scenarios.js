@@ -105,6 +105,11 @@ const SCENARIOS = {
     'test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js',
     'test/runtime/movielens-preload-admission-gate.test.js',
   ],
+  'configured-split-threshold-policy-precedence': [
+    'test/partition/partition-split-policy-precedence.test.js',
+    'test/policy/table-policy-service.test.js',
+    'test/partition/partition-split-merge-manager.test.js',
+  ],
   'seed-join-gate-authoritative-refresh': [
     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
   ],
