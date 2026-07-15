@@ -1,0 +1,32 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "source_owner_scope_isolated_from_artifact_tokens",
+  "detail": {
+    "redOnCurrentReproduced": true,
+    "focusedClassifierRegression": {
+      "passed": true,
+      "auditAssertions": 59
+    },
+    "focusedAuditRegression": {
+      "passed": true,
+      "relatedAssertions": 195
+    },
+    "genericProseHeuristicPreserved": true,
+    "genuineSourcePathClassificationPreserved": true,
+    "mixedArtifactRejectionPreserved": true,
+    "lint": {
+      "scripts": true,
+      "sourceAndTests": true,
+      "quest": true
+    },
+    "scopedStaticChecks": {
+      "literalDebt": 0,
+      "decisionBoundaryDebt": 0,
+      "opaqueConstantNames": 0,
+      "runtimeGrammarDebt": 0,
+      "oversizedTouchedFileDebt": 0
+    }
+  }
+}
