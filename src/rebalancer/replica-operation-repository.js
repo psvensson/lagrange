@@ -390,6 +390,7 @@ const REPLICA_OPERATION_VISIBILITY_READ_MODE = Object.freeze({
   CACHE_ONLY: 'cache_only',
   CACHE_PREFERRED_SQL_FALLBACK: 'cache_preferred_sql_fallback',
   OWNER_RPC_REQUIRED: 'owner_rpc_required',
+  OWNER_RPC_SINGLE_ATTEMPT: 'owner_rpc_single_attempt',
 });
 const INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE = Object.freeze({
   NONE: 'none',
@@ -439,6 +440,9 @@ function normalizeReplicaOperationVisibilityReadMode(value) {
   if (value === REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
     return REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED;
   }
+  if (value === REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT) {
+    return REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT;
+  }
   return null;
 }
 
@@ -476,18 +480,24 @@ function resolveIncompleteOperationVisibilitySupplementMode(options = {}) {
 }
 
 function buildReplicaOperationVisibilityReadOptions(readMode) {
-  if (readMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY) {
+  switch (readMode) {
+  case REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_ONLY:
     return null;
-  }
-  if (readMode === REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
+  case REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED:
     return {
       ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
       retryOnRetryableFailure: true,
     };
+  case REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT:
+    return {
+      ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+      retryOnRetryableFailure: false,
+    };
+  default:
+    return {
+      ...REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS,
+    };
   }
-  return {
-    ...REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS,
-  };
 }
 
 /**

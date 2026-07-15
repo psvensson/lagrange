@@ -265,7 +265,12 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         buildReplicaOperationVisibilityReadOptions(visibilityReadMode);
       const cachedOperations = this.queryCachedIncompleteOperations();
 
-      if (visibilityReadMode !== REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED) {
+      if (
+        visibilityReadMode !==
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED &&
+        visibilityReadMode !==
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT
+      ) {
         if (
           cachedOperations.length === 0 &&
         this.nextIncompleteOperationSqlRetryAtMs > Date.now()

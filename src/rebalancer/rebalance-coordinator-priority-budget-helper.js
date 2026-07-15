@@ -418,11 +418,11 @@ async function resolveAuthoritativeAddAdmission(
   coordinator,
   options,
   concurrentAddLimit,
+  visibilityReadMode = REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
 ) {
   const authoritativeReadOptions = {
     partitionId: options.partitionId,
-    visibilityReadMode:
-      REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+    visibilityReadMode,
   };
   const authoritativeOperations = await filterConcurrentAddBudgetOperations(
     coordinator,
@@ -458,12 +458,11 @@ async function canStartAddOperation(coordinator, options = {}) {
   if (concurrentAddLimit <= 0) {
     return false;
   }
-  // When a priority-recovery slot is reserved, the reservation is already
-  // subtracted from concurrentAddLimit. A stale cached undercount must not let
-  // a normal add consume the last reserved slot, so confirm normal-add
-  // admission against an authoritative owner read (the same discipline already
-  // applied to priority-control-plane partition adds). The cached fast-paths
-  // below are only safe when no slot is reserved.
+  // Check create reservation only where cache would admit, preserving cache
+  // saturation and empty-query backoff while blocking stale undercounts.
+  const hasReservedCreateAddSlot =
+    typeof coordinator.getReservedCreateAddSlots === 'function' &&
+    coordinator.getReservedCreateAddSlots(options) > 0;
   if (coordinator.getReservedPriorityRecoveryAddSlots(options) > 0) {
     return resolveAuthoritativeAddAdmission(
       coordinator,
@@ -516,6 +515,14 @@ async function canStartAddOperation(coordinator, options = {}) {
   }
   if (cachedCount > 0) {
     if (cachedCount < cachedEffectiveLimit) {
+      if (hasReservedCreateAddSlot) {
+        return resolveAuthoritativeAddAdmission(
+          coordinator,
+          options,
+          concurrentAddLimit,
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT,
+        );
+      }
       return true;
     }
     if (
@@ -538,6 +545,14 @@ async function canStartAddOperation(coordinator, options = {}) {
     coordinator.shouldDelayEmptyIncompleteOperationQuery()
   ) {
     return false;
+  }
+  if (hasReservedCreateAddSlot) {
+    return resolveAuthoritativeAddAdmission(
+      coordinator,
+      options,
+      concurrentAddLimit,
+      REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT,
+    );
   }
   const count = await getConcurrentAddCount(coordinator, {
     partitionId: options.partitionId,
@@ -758,40 +773,6 @@ async function canStartRemoveOperation(coordinator, options = {}) {
   return count < coordinator.config.maxConcurrentRemoves;
 }
 
-function shouldDelayEmptyIncompleteOperationQuery(coordinator, now = Date.now()) {
-  const wfOwner = coordinator.workflowOwner;
-  if (
-    !wfOwner ||
-    wfOwner.incompleteOperationQueryEmptyBackoffMs <= 0
-  ) {
-    return false;
-  }
-  if (wfOwner.lastEmptyIncompleteOperationQueryAtMs <= 0) {
-    wfOwner.lastEmptyIncompleteOperationQueryAtMs = now;
-    return true;
-  }
-  if (
-    now - wfOwner.lastEmptyIncompleteOperationQueryAtMs <
-    wfOwner.incompleteOperationQueryEmptyBackoffMs
-  ) {
-    return true;
-  }
-  wfOwner.lastEmptyIncompleteOperationQueryAtMs = 0;
-  return false;
-}
-
-function markEmptyIncompleteOperationQueryAt(coordinator, now = Date.now()) {
-  if (coordinator.workflowOwner) {
-    coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = now;
-  }
-}
-
-function clearEmptyIncompleteOperationQueryDelay(coordinator) {
-  if (coordinator.workflowOwner) {
-    coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = 0;
-  }
-}
-
 export {
   getConcurrentAddCount,
   getConcurrentAddCountByPriorityClass,
@@ -811,7 +792,4 @@ export {
   canStartAddOperation,
   canStartPriorityAddOperation,
   canStartRemoveOperation,
-  shouldDelayEmptyIncompleteOperationQuery,
-  markEmptyIncompleteOperationQueryAt,
-  clearEmptyIncompleteOperationQueryDelay,
 };

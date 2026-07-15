@@ -65,6 +65,8 @@ class RebalanceCoordinatorOperationReadMethods {
     if (
       visibilityReadMode !==
         REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED &&
+      visibilityReadMode !==
+        REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT &&
       this.shouldPauseAdmissionReadForLocalRouterPressure(options)
     ) {
       return this.queryCachedIncompleteOperations();
@@ -97,6 +99,12 @@ class RebalanceCoordinatorOperationReadMethods {
       REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED
     ) {
       return REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED;
+    }
+    if (
+      options?.visibilityReadMode ===
+      REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT
+    ) {
+      return REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_SINGLE_ATTEMPT;
     }
     return REPLICA_OPERATION_VISIBILITY_READ_MODE.CACHE_PREFERRED_SQL_FALLBACK;
   }

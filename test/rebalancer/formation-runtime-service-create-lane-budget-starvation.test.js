@@ -1,0 +1,408 @@
+/**
+ * Deterministic binding scenario for the runtime-service create reservation.
+ *
+ * Three non-priority REPLACEs fill the ordinary share of the plain ADD lane
+ * while priority recovery holds one global slot. Repeated ordinary churn is
+ * rejected, but a genuine runtime-service ADD crosses the real coordinator,
+ * in-process router, runtime handler, lifecycle, services projection, and
+ * UnifiedRebalancer replica read model.
+ */
+
+import {test} from '../../src/test-helpers/tap.js';
+import {RuntimeServiceHandlerSetup} from
+  '../../src/bootstrap/shared/runtime-service-handler-setup.js';
+import {SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {RUNTIME_KIND, RUNTIME_REPLICA_STATUS} from
+  '../../src/constants/runtime.js';
+import {projectRuntimeReplicaServicesRow} from
+  '../../src/query/runtime-replica-state-projection.js';
+import {
+  ReplicaOperationMessageType,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {OperationType, ReplicaStatus} from
+  '../../src/rebalancer/replica-status.js';
+import {
+  REBALANCE_COORDINATOR_EVENT,
+  REBALANCER_SKIP_REASON,
+} from '../../src/rebalancer/rebalancer-constants.js';
+import {EntityType, MoveType} from
+  '../../src/rebalancer/unified-rebalancer.js';
+import {NativeJsDriver} from '../../src/runtime/native-js-driver.js';
+import {RuntimeDriverRegistry} from
+  '../../src/runtime/runtime-driver-registry.js';
+import {ServiceRuntimeLifecycle} from
+  '../../src/runtime/service-runtime-lifecycle.js';
+import {RuntimeServiceAdapter} from
+  '../../src/service/adapters/runtime-service-adapter.js';
+import {ServiceLifecycleManager} from
+  '../../src/service/service-lifecycle-manager.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {
+  createMockCache,
+  createMockControlPlaneReadinessService,
+  createTestCoordinator,
+  createTestRebalancer,
+} from './test-helpers.js';
+
+const FIXED_NOW_MS = 1_900_000_000_000;
+const NODE_ID = 'node-runtime-create-lane';
+const SERVICE_ENTITY_ID = 'movielens-topn';
+const RUNTIME_REF = 'movielens-topn-runtime';
+const REPLICA_ID = `${SERVICE_ENTITY_ID}-r1`;
+const OPERATION_ID = 'op-runtime-create-lane';
+const HANDLER_ADDRESS = `${NODE_ID}/service/runtime-service-handler`;
+
+const QUIET_LOGGER = Object.freeze({
+  debug() {},
+  error() {},
+  info() {},
+  warn() {},
+});
+
+function buildChurnOperation(index) {
+  const partitionId = `movie-spread-p${index}`;
+  return {
+    operation_id: `op-spread-replace-${index}`,
+    type: OperationType.REPLACE,
+    partition_id: partitionId,
+    replica_id: `${partitionId}-r2`,
+    source_node_id: NODE_ID,
+    // Same-node REPLACE/self-move churn is one of the ordinary consumers of
+    // this lane. Keeping both owner fields local also makes the shared test
+    // SQL fixture faithfully select the row despite its source/target AND
+    // simplification of production's owner-query OR predicate.
+    target_node_id: NODE_ID,
+    status: 'creating',
+    workflow_step: 'CREATING',
+    created_at: FIXED_NOW_MS,
+    updated_at: FIXED_NOW_MS,
+    completed_at: null,
+    error_message: null,
+    steps_history: '[]',
+    entity_type: EntityType.PARTITION,
+    entity_id: partitionId,
+  };
+}
+
+function attachServiceDefinition(cache) {
+  const definition = Object.freeze({
+    service_id: SERVICE_ENTITY_ID,
+    service_type: EntityType.RUNTIME_SERVICE,
+    replica_count: 1,
+    runtime_kind: RUNTIME_KIND.NATIVE_JS,
+    runtime_ref: RUNTIME_REF,
+    runtime_config: '{}',
+  });
+  const baseGet = cache.get.bind(cache);
+  cache.get = (tableName, key) => {
+    if (
+      tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS &&
+      key === SERVICE_ENTITY_ID
+    ) {
+      return definition;
+    }
+    return baseGet(tableName, key);
+  };
+  return cache;
+}
+
+function createServicesProjectionGateway(cache) {
+  return {
+    async updateSystemTableRow(tableName, where, updateData) {
+      const serviceId = where?.service_id;
+      if (!serviceId || !cache.get(tableName, serviceId)) {
+        return {success: true, partitionResult: {affectedRows: 0}};
+      }
+      cache.merge(tableName, serviceId, updateData);
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+    async insertSystemTableRow(tableName, row) {
+      cache.upsert(tableName, row);
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+    async deleteSystemTableRow(tableName, where) {
+      cache.delete(tableName, where?.service_id);
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+  };
+}
+
+function waitForMatchingEvent(emitter, eventName, predicate) {
+  return new Promise((resolve) => {
+    const listener = (event) => {
+      if (!predicate(event)) return;
+      emitter.removeListener(eventName, listener);
+      resolve(event);
+    };
+    emitter.on(eventName, listener);
+  });
+}
+
+test('formation runtime-service create lane survives sustained REPLACE churn ' +
+  'and reaches the authoritative replica read model', async (t) => {
+  const originalDateNow = Date.now;
+  Date.now = () => FIXED_NOW_MS;
+
+  let coordinator = null;
+  let messageRouter = null;
+  let runtimeServiceHandler = null;
+
+  try {
+    const systemTableCache = attachServiceDefinition(createMockCache({
+      nodes: [{
+        node_id: NODE_ID,
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: FIXED_NOW_MS + 60_000,
+      }],
+      replicaOperations: [1, 2, 3].map(buildChurnOperation),
+    }));
+    const cdcIntegrationService = {
+      async insertSystemTableRow() {
+        return {success: true, partitionResult: {affectedRows: 1}};
+      },
+      async updateSystemTableRow() {
+        return {success: true, partitionResult: {affectedRows: 1}};
+      },
+    };
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({systemTableCache});
+    controlPlaneReadinessService.membershipPublicationService = {
+      getLatestClusterPublicationSync() {
+        return {
+          status: 'PUBLISHED',
+          priorityPartitionSummary: {satisfied: false},
+        };
+      },
+    };
+
+    messageRouter = new MessageRouter({nodeId: NODE_ID, inProcess: true});
+    await messageRouter.initialize({startServer: false});
+    messageRouter.logger = QUIET_LOGGER;
+
+    const deliveries = [];
+    const realDeliver = messageRouter.deliver.bind(messageRouter);
+    messageRouter.deliver = async (target, request, options) => {
+      deliveries.push({target, request, options});
+      return realDeliver(target, request, options);
+    };
+
+    coordinator = createTestCoordinator({
+      nodeId: NODE_ID,
+      systemTableCache,
+      cdcIntegrationService,
+      messageRouter,
+      controlPlaneReadinessService,
+      enableTimeouts: false,
+    });
+    coordinator.config.maxConcurrentAdds = 5;
+    coordinator.logger = QUIET_LOGGER;
+    coordinator.workflowOwner.logger = QUIET_LOGGER;
+
+    t.equal(
+      coordinator.getReservedPriorityRecoveryAddSlots({
+        partitionId: SERVICE_ENTITY_ID,
+      }),
+      1,
+      'unsatisfied priority recovery holds one global ADD slot',
+    );
+    t.equal(
+      coordinator.getConcurrentAddBudgetLimit({
+        partitionId: SERVICE_ENTITY_ID,
+      }),
+      4,
+      'four non-priority ADD slots remain after the recovery reservation',
+    );
+    t.equal(
+      await coordinator.getConcurrentAddCount({
+        partitionId: SERVICE_ENTITY_ID,
+      }),
+      3,
+      'the authoritative budget owner observes all three churn operations',
+    );
+    t.equal(
+      await coordinator.canStartAddOperation({
+        partitionId: 'movie-spread-boundary',
+        isGenuineCreate: false,
+      }),
+      false,
+      'the real admission helper closes the ordinary lane at that boundary',
+    );
+
+    for (const partitionId of ['movie-spread-p4', 'movie-spread-p5']) {
+      let rejection = null;
+      try {
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.REPLACE,
+          {
+            partitionId,
+            entityType: EntityType.PARTITION,
+            entityId: partitionId,
+          },
+        );
+      } catch (error) {
+        rejection = error;
+      }
+      t.equal(
+        rejection?.rebalanceSkipReason,
+        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+        `${partitionId} churn cannot consume the create-reserved slot`,
+      );
+    }
+
+    const nativeDriver = new NativeJsDriver();
+    const runtimeDriverRegistry = new RuntimeDriverRegistry();
+    runtimeDriverRegistry.register(nativeDriver);
+    runtimeDriverRegistry.freeze();
+
+    const runtimeLifecycle =
+      new ServiceRuntimeLifecycle(runtimeDriverRegistry);
+    const nativeHandler = () => ({rows: []});
+    runtimeLifecycle.registerNativeJsHandler(RUNTIME_REF, nativeHandler);
+
+    const servicesProjectionGateway =
+      createServicesProjectionGateway(systemTableCache);
+    let resolveActiveProjection;
+    const activeProjection = new Promise((resolve) => {
+      resolveActiveProjection = resolve;
+    });
+    runtimeLifecycle.setStateProjectionWriter(async (serviceId, stateRow) => {
+      await projectRuntimeReplicaServicesRow(
+        servicesProjectionGateway,
+        NODE_ID,
+        serviceId,
+        stateRow,
+      );
+      if (stateRow.status === RUNTIME_REPLICA_STATUS.ACTIVE) {
+        resolveActiveProjection({serviceId, stateRow});
+      }
+    });
+
+    const serviceLifecycleManager = new ServiceLifecycleManager({
+      logger: QUIET_LOGGER,
+    });
+    serviceLifecycleManager.registerAdapter(new RuntimeServiceAdapter({
+      serviceRuntimeLifecycle: runtimeLifecycle,
+    }));
+
+    ({runtimeServiceHandler} = RuntimeServiceHandlerSetup.create({
+      nodeId: NODE_ID,
+      messageRouter,
+      cdcIntegrationService,
+      systemTableCache,
+      serviceLifecycleManager,
+      executorOutcomeEmitter: coordinator.executorOutcomeEmitter,
+    }));
+    runtimeServiceHandler.logger = QUIET_LOGGER;
+
+    const runtimeRebalancer = createTestRebalancer({
+      entityId: SERVICE_ENTITY_ID,
+      entityType: EntityType.RUNTIME_SERVICE,
+      nodeId: NODE_ID,
+      systemTableCache,
+      cdcIntegrationService,
+      messageRouter,
+      rebalanceCoordinator: coordinator,
+      controlPlaneReadinessService,
+      nowFn: () => FIXED_NOW_MS,
+    });
+    runtimeRebalancer.logger = QUIET_LOGGER;
+
+    const createOperation = coordinator.createOperation.bind(coordinator);
+    coordinator.createOperation = (move) => createOperation({
+      ...move,
+      operationIntentId: OPERATION_ID,
+    });
+
+    const moveResult = await runtimeRebalancer.executeMoveViaCoordinator({
+      type: MoveType.ADD,
+      partitionId: SERVICE_ENTITY_ID,
+      entityType: EntityType.RUNTIME_SERVICE,
+      entityId: SERVICE_ENTITY_ID,
+      nodeId: NODE_ID,
+      replicaId: REPLICA_ID,
+    });
+
+    t.equal(moveResult.success, true,
+      'runtime-service ADD is scheduled through UnifiedRebalancer');
+    t.equal(moveResult.operationId, OPERATION_ID,
+      'the real coordinator returns the fixed operation identity');
+
+    const persistedRow = systemTableCache.get(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      OPERATION_ID,
+    );
+    t.ok(persistedRow, 'the coordinator persisted a replica_operations row');
+    t.equal(persistedRow.entity_type, EntityType.RUNTIME_SERVICE,
+      'persistence preserves the runtime-service entity type');
+    t.equal(persistedRow.entity_id, SERVICE_ENTITY_ID,
+      'persistence preserves the runtime-service entity identity');
+    t.equal(persistedRow.replica_id, REPLICA_ID,
+      'persistence preserves the canonical replica identity');
+    t.equal(persistedRow.created_at, FIXED_NOW_MS,
+      'operation persistence uses the deterministic timestamp');
+
+    const persistedOperation = coordinator.rowToOperation(persistedRow);
+    t.equal(persistedOperation.entityType, EntityType.RUNTIME_SERVICE,
+      'the real row translator restores runtime-service dispatch routing');
+
+    const operationCompleted = waitForMatchingEvent(
+      coordinator,
+      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+      (event) => event?.operation?.operationId === OPERATION_ID,
+    );
+    const dispatchResult = await coordinator.dispatchOperation(persistedRow);
+    t.equal(dispatchResult.success, true,
+      'public coordinator dispatch accepts the runtime create');
+
+    const projected = await activeProjection;
+    const completed = await operationCompleted;
+    t.equal(projected.serviceId, REPLICA_ID,
+      'real runtime lifecycle projects the replica identity ACTIVE');
+    t.equal(completed.operation.workflowStep, 'ACTIVE',
+      'executor outcome completes the coordinator-owned workflow');
+
+    t.equal(deliveries.length, 1,
+      'the coordinator performs one runtime create delivery');
+    t.equal(deliveries[0].target, HANDLER_ADDRESS,
+      'dispatch targets the registered runtime-service handler');
+    t.equal(
+      deliveries[0].request.type,
+      ReplicaOperationMessageType.CREATE_REPLICA,
+      'dispatch uses the real CREATE_REPLICA envelope',
+    );
+
+    const localReplica = runtimeServiceHandler.getLocalReplica(REPLICA_ID);
+    t.equal(localReplica?.status, ReplicaStatus.ACTIVE,
+      'the real runtime handler materializes an active local replica');
+    t.equal(nativeDriver.getHandler(REPLICA_ID), nativeHandler,
+      'the real native_js driver has started the registered runtime');
+
+    const servicesRow = systemTableCache.get(
+      SYSTEM_TABLE_NAME.SERVICES,
+      REPLICA_ID,
+    );
+    t.equal(servicesRow?.service_type, EntityType.RUNTIME_SERVICE,
+      'authoritative services projection records runtime_service');
+    t.equal(servicesRow?.node_id, NODE_ID,
+      'authoritative services projection records the target node');
+    t.equal(servicesRow?.status, RUNTIME_REPLICA_STATUS.ACTIVE,
+      'authoritative services projection reaches ACTIVE');
+
+    const currentReplicas = runtimeRebalancer.getCurrentReplicas();
+    t.equal(currentReplicas.length, 1,
+      'UnifiedRebalancer now observes replicas > 0');
+    t.equal(currentReplicas[0].service_id, REPLICA_ID,
+      'the observed replica is the dispatched canonical replica');
+  } finally {
+    if (runtimeServiceHandler && messageRouter) {
+      runtimeServiceHandler.unregisterFromRouter(messageRouter);
+    }
+    if (coordinator) await coordinator.shutdown();
+    if (messageRouter) await messageRouter.shutdown();
+    Date.now = originalDateNow;
+  }
+
+  t.end();
+});

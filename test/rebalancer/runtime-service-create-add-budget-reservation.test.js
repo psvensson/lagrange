@@ -190,6 +190,38 @@ test('A5 clamp: non-create limit never drops below 1 (ordinary REPLACEs cannot '
   t.end();
 });
 
+test('A6 stale cache: a create reservation forces authoritative admission even ' +
+  'when priority recovery is inactive', async (t) => {
+  // limit 4, create reserve 1, priority reserve 0. The cache under-reports two
+  // ordinary adds, but the owner sees the three that fill the ordinary cap.
+  // A cached fast-path would admit another ordinary add into the create slot.
+  let cachedReadCount = 0;
+  let authoritativeReadCount = 0;
+  const coordinator = buildFakeCoordinator({
+    reservedPrioritySlots: 0,
+    reservedCreateSlots: 1,
+    cachedOperations: nonCreateAdds(2),
+    authoritativeOperations: nonCreateAdds(3),
+    async queryCachedIncompleteOperations() {
+      cachedReadCount += 1;
+      return coordinator.cachedOperations;
+    },
+    async queryIncompleteOperations() {
+      authoritativeReadCount += 1;
+      return coordinator.authoritativeOperations;
+    },
+  });
+
+  const allowed = await canStartAddOperation(coordinator, NON_CREATE);
+  t.equal(allowed, false,
+    'owner count denies the ordinary add at the create-reserved boundary');
+  t.equal(authoritativeReadCount, 1,
+    'create reservation performs exactly one authoritative owner read');
+  t.equal(cachedReadCount, 1,
+    'cached observation triggers but cannot authorize reserved-slot admission');
+  t.end();
+});
+
 test('regression: no create reservation configured preserves prior behaviour ' +
   '(non-create admitted at count 3 under limit 4)', async (t) => {
   const coordinator = buildFakeCoordinator();

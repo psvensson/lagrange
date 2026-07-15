@@ -38,10 +38,12 @@ import {
   canStartAddOperation,
   canStartPriorityAddOperation,
   canStartRemoveOperation,
+} from './rebalance-coordinator-priority-budget-helper.js';
+import {
   shouldDelayEmptyIncompleteOperationQuery,
   markEmptyIncompleteOperationQueryAt,
   clearEmptyIncompleteOperationQueryDelay,
-} from './rebalance-coordinator-priority-budget-helper.js';
+} from './rebalance-coordinator-empty-query-delay.js';
 import {
   isLocalRouterBackpressured,
   shouldPauseAdmissionReadForLocalRouterPressure,
