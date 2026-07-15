@@ -34,6 +34,21 @@ import {
   resolveFunctionParameterValue,
 } from './partition-class-owner-parameter-flow.js';
 
+const LOCAL_STR_OWNED_001 = '/';
+const LOCAL_STR_OWNED_002 = '<module>';
+const LOCAL_STR_OWNED_003 = 'bind';
+const LOCAL_STR_OWNED_004 = '||';
+const LOCAL_STR_OWNED_005 = 'has';
+const LOCAL_STR_OWNED_006 = '+';
+const LOCAL_STR_OWNED_007 = '.js';
+const LOCAL_STR_OWNED_008 = 'owner module not scanned';
+const LOCAL_STR_OWNED_009 = 'partition-class-single-owner-census';
+const LOCAL_STR_OWNED_010 = 'scripts/check-partition-class-owner.js';
+const LOCAL_STR_OWNED_011 = 'The six literal critical||priority ladders each have two predicate ';
+const LOCAL_STR_OWNED_012 = 'call edges but one canonical decision site: 122 predicate edges + ';
+const LOCAL_STR_OWNED_013 = '3 set memberships - 6 duplicate ladder edges = 119 sites.';
+const LOCAL_STR_OWNED_014 = 'use a distinct --oracle-file for a bounded child Quest';
+
 const REPO_ROOT = path.resolve(
   path.dirname(new globalThis.URL(import.meta.url).pathname),
   '..',
@@ -63,11 +78,12 @@ const LEGACY_NAME_KIND = Object.freeze(new Map([
   ['isPriorityControlPlanePartition', VIOLATION_KIND.PRIORITY_CALL],
   ['isSystemTablePartition', VIOLATION_KIND.SYSTEM_TABLE_CALL],
 ]));
+const NO_LEGACY_VALUE_KIND = false;
 const EXIT_CODE = Object.freeze({SUCCESS: 0, FAILURE: 1});
 function normalizeRepoPath(filePath) {
   return path.relative(REPO_ROOT, path.resolve(filePath))
     .split(path.sep)
-    .join('/');
+    .join(LOCAL_STR_OWNED_001);
 }
 
 function findEnclosingIdentifier(ancestors) {
@@ -89,7 +105,7 @@ function findEnclosingIdentifier(ancestors) {
       return resolvePropertyName(ancestor);
     }
   }
-  return '<module>';
+  return LOCAL_STR_OWNED_002;
 }
 
 function resolveLegacyValueKind(
@@ -102,11 +118,11 @@ function resolveLegacyValueKind(
   if (identifierName) {
     return legacyKindByLocalName.get(identifierName) ||
       LEGACY_NAME_KIND.get(identifierName) ||
-      null;
+      NO_LEGACY_VALUE_KIND;
   }
   if (normalized?.type === NODE_TYPE.MEMBER) {
     const propertyName = resolvePropertyName(normalized);
-    if (propertyName === 'bind') {
+    if (propertyName === LOCAL_STR_OWNED_003) {
       return resolveLegacyValueKind(
         normalized.object,
         legacyKindByLocalName,
@@ -115,7 +131,7 @@ function resolveLegacyValueKind(
     }
     return legacyKindByAccessPath.get(resolveAccessPath(normalized)) ||
       LEGACY_NAME_KIND.get(propertyName) ||
-      null;
+      NO_LEGACY_VALUE_KIND;
   }
   if (normalized?.type === NODE_TYPE.CALL) {
     return resolveLegacyValueKind(
@@ -124,7 +140,7 @@ function resolveLegacyValueKind(
       legacyKindByAccessPath,
     );
   }
-  return null;
+  return NO_LEGACY_VALUE_KIND;
 }
 
 function resolvesCriticalSet(node, criticalSetLocalNames) {
@@ -462,7 +478,7 @@ function collectAliasState(ast, source) {
 
 function findNearestOrExpression(ancestors) {
   return [...ancestors].reverse().find((ancestor) =>
-    ancestor.type === NODE_TYPE.LOGICAL && ancestor.operator === '||') || null;
+    ancestor.type === NODE_TYPE.LOGICAL && ancestor.operator === LOCAL_STR_OWNED_004) || null;
 }
 
 function buildSite(repoPath, node, ancestors, kind, detail) {
@@ -523,7 +539,7 @@ function collectFileCensus(filePath, source) {
         }
       }
       const callee = unwrapChain(node.callee);
-      if (resolvePropertyName(callee) === 'has' &&
+      if (resolvePropertyName(callee) === LOCAL_STR_OWNED_005 &&
           (resolvesCriticalSet(callee?.object, criticalSetLocalNames) ||
             resolveFunctionParameterValue(
               callee?.object,
@@ -595,8 +611,8 @@ function collectFileCensus(filePath, source) {
       filePath: repoPath,
       line: orExpression.loc?.start?.line ?? 0,
       kind: VIOLATION_KIND.ORDERED_LADDER,
-      enclosingIdentifier: edges[0]?.enclosingIdentifier || '<module>',
-      detail: [...kinds].sort().join('+'),
+      enclosingIdentifier: edges[0]?.enclosingIdentifier || LOCAL_STR_OWNED_002,
+      detail: [...kinds].sort().join(LOCAL_STR_OWNED_006),
       collapsedEdgeCount: edges.filter((edge) =>
         suppressedEdges.has(edge)).length - 1,
     });
@@ -620,7 +636,7 @@ function collectFileSites(filePath, source) {
 
 async function collectJavaScriptFiles(entryPath) {
   const stat = await fs.stat(entryPath);
-  if (stat.isFile()) return entryPath.endsWith('.js') ? [entryPath] : [];
+  if (stat.isFile()) return entryPath.endsWith(LOCAL_STR_OWNED_007) ? [entryPath] : [];
   if (!stat.isDirectory()) return [];
   const children = await fs.readdir(entryPath, {withFileTypes: true});
   const collected = [];
@@ -628,7 +644,7 @@ async function collectJavaScriptFiles(entryPath) {
     const childPath = path.join(entryPath, child.name);
     if (child.isDirectory()) {
       collected.push(...await collectJavaScriptFiles(childPath));
-    } else if (child.isFile() && childPath.endsWith('.js')) {
+    } else if (child.isFile() && childPath.endsWith(LOCAL_STR_OWNED_007)) {
       collected.push(childPath);
     }
   }
@@ -640,7 +656,7 @@ async function collectCensus() {
   const counted = [];
   let predicateEdgeCount = 0;
   let collapsedLadderEdges = 0;
-  let ownerContract = {passed: false, problems: ['owner module not scanned']};
+  let ownerContract = {passed: false, problems: [LOCAL_STR_OWNED_008]};
   for (const filePath of files.sort()) {
     const source = await fs.readFile(filePath, 'utf8');
     const repoPath = normalizeRepoPath(filePath);
@@ -668,10 +684,10 @@ function buildOraclePayload(census, gateResults, doneAt) {
     metric,
     target: doneAt,
     done: metric <= doneAt && census.ownerContract.passed && gatesGreen,
-    classification: 'partition-class-single-owner-census',
+    classification: LOCAL_STR_OWNED_009,
     detail: {
       analyzerContractVersion: ANALYZER_CONTRACT_VERSION,
-      generatedBy: 'scripts/check-partition-class-owner.js',
+      generatedBy: LOCAL_STR_OWNED_010,
       ownerModule: OWNER_MODULE,
       ownerContract: census.ownerContract,
       baselineReconciliation: {
@@ -680,9 +696,9 @@ function buildOraclePayload(census, gateResults, doneAt) {
         headDirectCriticalSetMemberships: HEAD_BASELINE_SET_MEMBERSHIPS,
         collapsedDuplicateLadderEdges: HEAD_BASELINE_COLLAPSED_LADDER_EDGES,
         explanation:
-          'The six literal critical||priority ladders each have two predicate ' +
-          'call edges but one canonical decision site: 122 predicate edges + ' +
-          '3 set memberships - 6 duplicate ladder edges = 119 sites.',
+          LOCAL_STR_OWNED_011 +
+          LOCAL_STR_OWNED_012 +
+          LOCAL_STR_OWNED_013,
       },
       currentRawPredicateEdges: census.predicateEdgeCount,
       currentCollapsedLadderEdges: census.collapsedLadderEdges,
@@ -710,7 +726,7 @@ function resolveDoneAt(oracleFile, doneAtRaw) {
   if (writesParentOracle && doneAt !== ORACLE_TARGET) {
     throw new Error(
       `--done-at cannot change the sealed parent target ${ORACLE_TARGET}; ` +
-      'use a distinct --oracle-file for a bounded child Quest',
+      LOCAL_STR_OWNED_014,
     );
   }
   return doneAt;

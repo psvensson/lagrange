@@ -1,5 +1,12 @@
 import {SYSTEM_TABLE_NAME} from '../src/bootstrap/system-table-schemas-constants.js';
 
+const LOCAL_STR_OWNED_001 = '+';
+const LOCAL_STR_OWNED_002 = 'Set';
+const LOCAL_STR_OWNED_003 = 'legacyKindByAccessPath';
+const LOCAL_STR_OWNED_004 = 'criticalSetLocalNames';
+const LOCAL_STR_OWNED_005 = 'criticalCollectionLocalNames';
+const LOCAL_STR_OWNED_006 = 'objectPropertyPaths';
+
 const NODE_TYPE = Object.freeze({
   ARRAY: 'ArrayExpression',
   ASSIGNMENT: 'AssignmentExpression',
@@ -74,7 +81,7 @@ function literalStringValue(node) {
   if (normalized?.type !== NODE_TYPE.TEMPLATE_LITERAL ||
       normalized.expressions?.length > 0) {
     if (normalized?.type !== NODE_TYPE.BINARY ||
-        normalized.operator !== '+') return null;
+        normalized.operator !== LOCAL_STR_OWNED_001) return null;
     const left = literalStringValue(normalized.left);
     const right = literalStringValue(normalized.right);
     return left === null || right === null ? null : `${left}${right}`;
@@ -138,7 +145,7 @@ function isCriticalCollectionExpression(node, source, knownCollections) {
 function isCriticalSetConstruction(node, source, knownCollections) {
   const normalized = unwrapChain(node);
   return normalized?.type === NODE_TYPE.NEW &&
-    resolveIdentifierName(normalized.callee) === 'Set' &&
+    resolveIdentifierName(normalized.callee) === LOCAL_STR_OWNED_002 &&
     isCriticalCollectionExpression(
       normalized.arguments?.[0],
       source,
@@ -359,10 +366,10 @@ function applyObjectAliases({
     evaluateProperty,
   );
   return [
-    ['legacyKindByAccessPath', aliasState.legacyKindByAccessPath],
-    ['criticalSetLocalNames', aliasState.criticalSetLocalNames],
-    ['criticalCollectionLocalNames', aliasState.criticalCollectionLocalNames],
-    ['objectPropertyPaths', aliasState.objectPropertyPaths],
+    [LOCAL_STR_OWNED_003, aliasState.legacyKindByAccessPath],
+    [LOCAL_STR_OWNED_004, aliasState.criticalSetLocalNames],
+    [LOCAL_STR_OWNED_005, aliasState.criticalCollectionLocalNames],
+    [LOCAL_STR_OWNED_006, aliasState.objectPropertyPaths],
   ].reduce((changed, [key, target]) =>
     syncAliasCollection(
       target,
