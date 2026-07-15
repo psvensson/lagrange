@@ -23,6 +23,9 @@ import {
   SQL_QUERY_LOOP_RUNTIME_REF,
 } from '../../src/runtime/sql-query-loop-runtime-module.js';
 import {
+  ReplicaOperationRepository,
+} from '../../src/rebalancer/replica-operation-repository.js';
+import {
   createMockMessageRouter,
   createMockSystemCache,
 } from '../query/sql-query-engine-test-support.js';
@@ -33,6 +36,35 @@ config.initialize();
 
 const HOST_NODE_ID = 'host-node';
 const SVC_ID = 'svc-projection';
+const RUNTIME_ENTITY_ID = 'svc';
+const INCLUDED_RUNTIME_SERVICE_IDS = Object.freeze([
+  RUNTIME_ENTITY_ID,
+  `${RUNTIME_ENTITY_ID}-r1`,
+  `${RUNTIME_ENTITY_ID}-r12`,
+]);
+const EXCLUDED_RUNTIME_SERVICE_IDS = Object.freeze([
+  `${RUNTIME_ENTITY_ID}-report-r1`,
+  `${RUNTIME_ENTITY_ID}-r`,
+  `${RUNTIME_ENTITY_ID}-r0`,
+  `${RUNTIME_ENTITY_ID}-r01`,
+  `${RUNTIME_ENTITY_ID}-r-1`,
+  `${RUNTIME_ENTITY_ID}-rx`,
+  `${RUNTIME_ENTITY_ID}-r1-extra`,
+]);
+
+function runtimeServiceIdentityRows() {
+  return [
+    ...INCLUDED_RUNTIME_SERVICE_IDS,
+    ...EXCLUDED_RUNTIME_SERVICE_IDS,
+  ].map((serviceId, index) => ({
+    service_id: serviceId,
+    service_type: 'runtime_service',
+    node_id: `node-${index + 1}`,
+    status: 'active',
+    created_at: 1,
+    updated_at: 1,
+  }));
+}
 
 function buildHarness() {
   const {serviceRuntimeLifecycle} = createRuntimeStartupWiring();
@@ -133,50 +165,66 @@ test('placed replica lifecycle projects create-once-then-update ' +
   );
 });
 
-test('the rebalancer currentReplicas view sees dispatched replica rows ' +
-  '(the strict-equality blind spot)', async (t) => {
-  const {UnifiedRebalancer} = await import(
-    '../../src/rebalancer/unified-rebalancer.js');
-  const entityId = 'svc-vision';
-  const projectedRows = [
-    {
-      service_id: `${entityId}-r1`,
-      service_type: 'runtime_service',
-      node_id: 'node-a',
-      status: 'active',
-      created_at: 1,
-      updated_at: 1,
-    },
-    {
-      service_id: 'svc-OTHER-r1',
-      service_type: 'runtime_service',
-      node_id: 'node-b',
-      status: 'active',
-      created_at: 1,
-      updated_at: 1,
-    },
-  ];
-  const cache = {
-    filter: (table, predicate) => projectedRows.filter(predicate),
-    get: () => null,
-    getAll: () => [],
-  };
-  const rebalancer = new UnifiedRebalancer({
-    entityId,
-    entityType: 'runtime_service',
-    systemTableCache: cache,
-    cdcIntegrationService: {},
-    tablePolicyService: {},
-    nodeId: 'node-a',
-    messageRouter: {},
-    rebalanceCoordinator: {},
+test('the rebalancer currentReplicas view uses exact canonical runtime IDs',
+  async (t) => {
+    const {UnifiedRebalancer} = await import(
+      '../../src/rebalancer/unified-rebalancer.js');
+    const projectedRows = runtimeServiceIdentityRows();
+    const cache = {
+      filter: (table, predicate) => projectedRows.filter(predicate),
+      get: () => null,
+      getAll: () => [],
+    };
+    const rebalancer = new UnifiedRebalancer({
+      entityId: RUNTIME_ENTITY_ID,
+      entityType: 'runtime_service',
+      systemTableCache: cache,
+      cdcIntegrationService: {},
+      tablePolicyService: {},
+      nodeId: 'node-a',
+      messageRouter: {},
+      rebalanceCoordinator: {},
+    });
+    const replicas = rebalancer.getCurrentReplicas();
+    t.same(
+      replicas.map((row) => row.service_id),
+      INCLUDED_RUNTIME_SERVICE_IDS,
+      'bare and positive-decimal replica ids belong; overlapping prefixes ' +
+        'and malformed ordinals do not',
+    );
   });
-  const replicas = rebalancer.getCurrentReplicas();
-  t.equal(replicas.length, 1,
-    'a dispatched ${entityId}-rN row belongs to its entity');
-  t.equal(replicas[0].service_id, `${entityId}-r1`,
-    'and only that entity — other services are excluded');
-});
+
+test('the replica-operation repository uses exact canonical runtime IDs',
+  async (t) => {
+    const projectedRows = runtimeServiceIdentityRows();
+    const repository = new ReplicaOperationRepository({
+      nodeId: 'node-a',
+      systemTableCache: {
+        filter: (_tableName, predicate) => projectedRows.filter(predicate),
+      },
+      cdcIntegrationService: {},
+      controlPlaneSystemTableGateway: {},
+      logger: {
+        debug() {},
+        info() {},
+        warn() {},
+        error() {},
+      },
+    });
+
+    const serviceRows = repository.getEntityServiceRows({
+      partitionId: RUNTIME_ENTITY_ID,
+      entityType: 'runtime_service',
+      entityId: RUNTIME_ENTITY_ID,
+    });
+
+    t.same(
+      serviceRows.map((row) => row.service_id),
+      INCLUDED_RUNTIME_SERVICE_IDS,
+      'bare and positive-decimal replica ids belong; overlapping prefixes ' +
+        'and malformed ordinals do not',
+    );
+  });
 
 test('a start failure projects the failed state onto the existing row',
   async (t) => {

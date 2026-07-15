@@ -1,3 +1,7 @@
+import {
+  runtimeServiceReplicaBelongsToEntity,
+} from './runtime-service-replica-identity.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignReplicaOperationRepositoryEntityReadMethods(
@@ -286,9 +290,10 @@ function assignReplicaOperationRepositoryEntityReadMethods(
             return row.group_id === entityId;
           }
           if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
-            // Dispatched replica rows carry `${entityId}-rN` ids.
-            return row.service_id === entityId ||
-              String(row.service_id || '').startsWith(`${entityId}-r`);
+            return runtimeServiceReplicaBelongsToEntity(
+              row.service_id,
+              entityId,
+            );
           }
           return row.partition_id === partitionId;
         }) || []
