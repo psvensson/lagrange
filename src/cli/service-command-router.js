@@ -64,6 +64,8 @@ const SERVICE_LIFECYCLE_COMMANDS = Object.freeze(new Set([
   SERVICE_COMMAND.REMOVE,
   SERVICE_COMMAND.STATUS,
 ]));
+const loadServiceLifecycleCommand = () =>
+  import('./service-lifecycle-command.js');
 
 function printHelp() {
   process.stdout.write(SERVICE_HELP);
@@ -133,7 +135,7 @@ function runServiceCommand(args) {
       `unknown command: ${args[0]}`,
     );
   }
-  return import('./service-lifecycle-command.js')
+  return loadServiceLifecycleCommand()
     .then(({runServiceLifecycleCommand}) => runServiceLifecycleCommand(args))
     .catch((error) => {
       process.stderr.write(`lagrange service failed: ${error.message}\n`);

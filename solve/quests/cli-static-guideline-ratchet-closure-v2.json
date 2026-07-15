@@ -1,0 +1,51 @@
+{
+  "id": "cli-static-guideline-ratchet-closure-v2",
+  "authoringContractVersion": 1,
+  "statement": "src/cli reports zero new literal-guideline and decision-boundary violations, focused CLI lifecycle/build behavior remains green, no static baseline changes occur, global source duplication does not exceed 76 clone groups or 2343 duplicated lines, and global cognitive-complexity violations do not exceed 184.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "cli-static-guideline-ratchet-closure",
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "bbd35a062cb691eb9fd6e9693758cc9c5d0874e6"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/cli-static-guideline-ratchet-closure-v2.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "cli-static-guideline-ratchet-closure-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/cli-static-guideline-ratchet-closure-v2.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "narrow-cli-owner-scope",
+      "statement": "Change only src/cli/service-command-router.js, src/cli/service-lifecycle-command.js, src/cli/service-lifecycle-sql-client.js, src/cli/service-project-build-input.js, and the focused static import contract in test/cli/service-install-lifecycle-cli.test.js; do not change scripts/solve, src/service, generated shards, or unrelated owners."
+    },
+    {
+      "id": "no-static-baseline-headroom",
+      "statement": "Do not raise, weaken, bypass, or otherwise change literal, decision-boundary, duplication, cognitive-complexity, lint, metric, or test baselines and gates."
+    },
+    {
+      "id": "cli-behavior-preserved",
+      "statement": "Preserve service lifecycle routing, lazy dependency loading, PostgreSQL client cleanup and error precedence, project identity stability checks, deterministic build-context collection, and manifest finalization while owning literals and explicit state locally."
+    }
+  ]
+}

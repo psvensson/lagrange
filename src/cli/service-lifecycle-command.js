@@ -46,6 +46,35 @@ const PLATFORM_PATTERN = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*(?:\/[a-z0-
 const NONNEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/u;
 const MAXIMUM_IDEMPOTENCY_KEY_LENGTH = 256;
 const DEFAULT_OUTPUT_DIRECTORY = 'lagrange-service-oci-layouts';
+const SERVICE_LIFECYCLE_USAGE_ERROR_NAME = 'ServiceLifecycleUsageError';
+const SERVICE_LIFECYCLE_TOKEN = Object.freeze({
+  MISSING_OPTION: '(missing)',
+  OPTION_PREFIX: '-',
+  VALUE_OPTION_PREFIX: '--',
+});
+const SERVICE_LIFECYCLE_USAGE_MESSAGE = Object.freeze({
+  IDEMPOTENCY_KEY_LENGTH:
+    '--idempotency-key must contain 1 to 256 characters',
+  IDEMPOTENCY_KEY_REQUIRED: '--idempotency-key is required',
+  LIFECYCLE_COMMAND_REQUIRED: 'one lifecycle command is required',
+  LIST_ARGUMENTS_FORBIDDEN: 'list does not accept arguments',
+  PLATFORM_INVALID:
+    '--platform must be an explicit os/architecture[/variant] value',
+  SERVICE_NAME_INVALID:
+    'service name must match the external service manifest contract',
+  SOURCE_DATE_EPOCH_INVALID:
+    '--source-date-epoch must be a nonnegative integer',
+  SOURCE_DATE_EPOCH_UNSAFE: '--source-date-epoch must be a safe integer',
+  STATUS_ARGUMENT_INVALID: 'status accepts one service name',
+});
+const SERVICE_LIFECYCLE_RESULT_MESSAGE = Object.freeze({
+  CONFIG_INVALID: 'service config must be a JSON object',
+  RESULT_ROWS_INVALID: 'PostgreSQL lifecycle result must contain rows',
+  ROW_FIELDS_INVALID: 'PostgreSQL lifecycle row has an invalid field set',
+  ROW_INVALID: 'PostgreSQL lifecycle rows must be objects',
+  ROW_SERVICE_NAME_INVALID:
+    'PostgreSQL lifecycle row is missing service_name',
+});
 const MUTATION_ROW_FIELDS = Object.freeze(new Set([
   'action',
   'desired_state',
@@ -73,7 +102,7 @@ const STATUS_ROW_FIELDS = Object.freeze(new Set([
 class ServiceLifecycleUsageError extends Error {
   constructor(message) {
     super(message);
-    this.name = 'ServiceLifecycleUsageError';
+    this.name = SERVICE_LIFECYCLE_USAGE_ERROR_NAME;
   }
 }
 
@@ -82,7 +111,8 @@ function usage(message) {
 }
 
 function requiredPositional(value, label) {
-  if (typeof value !== 'string' || value.length === 0 || value.startsWith('-')) {
+  if (typeof value !== 'string' || value.length === 0 ||
+      value.startsWith(SERVICE_LIFECYCLE_TOKEN.OPTION_PREFIX)) {
     usage(`${label} is required`);
   }
   return value;
@@ -93,9 +123,12 @@ function parseOptions(tokens, allowedFlags) {
   for (let index = 0; index < tokens.length; index += 2) {
     const flag = tokens[index];
     const value = tokens[index + 1];
-    if (!allowedFlags.has(flag)) usage(`unknown option: ${flag || '(missing)'}`);
+    if (!allowedFlags.has(flag)) {
+      usage(`unknown option: ${flag || SERVICE_LIFECYCLE_TOKEN.MISSING_OPTION}`);
+    }
     if (options.has(flag)) usage(`duplicate option: ${flag}`);
-    if (typeof value !== 'string' || value.length === 0 || value.startsWith('--')) {
+    if (typeof value !== 'string' || value.length === 0 ||
+        value.startsWith(SERVICE_LIFECYCLE_TOKEN.VALUE_OPTION_PREFIX)) {
       usage(`${flag} requires one value`);
     }
     options.set(flag, value);
@@ -105,35 +138,37 @@ function parseOptions(tokens, allowedFlags) {
 
 function idempotencyKey(options) {
   const value = options.get(SERVICE_LIFECYCLE_FLAG.IDEMPOTENCY_KEY);
-  if (typeof value !== 'string') usage('--idempotency-key is required');
+  if (typeof value !== 'string') {
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.IDEMPOTENCY_KEY_REQUIRED);
+  }
   const normalized = value.trim();
   if (!normalized || normalized.length > MAXIMUM_IDEMPOTENCY_KEY_LENGTH) {
-    usage('--idempotency-key must contain 1 to 256 characters');
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.IDEMPOTENCY_KEY_LENGTH);
   }
   return normalized;
 }
 
 function serviceName(value) {
   if (!SERVICE_NAME_PATTERN.test(value || '')) {
-    usage('service name must match the external service manifest contract');
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.SERVICE_NAME_INVALID);
   }
   return value;
 }
 
 function sourceDateEpoch(value) {
   if (!NONNEGATIVE_INTEGER_PATTERN.test(value || '')) {
-    usage('--source-date-epoch must be a nonnegative integer');
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.SOURCE_DATE_EPOCH_INVALID);
   }
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed)) {
-    usage('--source-date-epoch must be a safe integer');
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.SOURCE_DATE_EPOCH_UNSAFE);
   }
   return parsed;
 }
 
 function platform(value) {
   if (!PLATFORM_PATTERN.test(value || '')) {
-    usage('--platform must be an explicit os/architecture[/variant] value');
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.PLATFORM_INVALID);
   }
   return value;
 }
@@ -141,10 +176,12 @@ function platform(value) {
 function parseLifecycleCommand(argv) {
   const command = argv[0];
   if (!Object.values(SERVICE_LIFECYCLE_COMMAND).includes(command)) {
-    usage('one lifecycle command is required');
+    usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.LIFECYCLE_COMMAND_REQUIRED);
   }
   if (command === SERVICE_LIFECYCLE_COMMAND.LIST) {
-    if (argv.length !== 1) usage('list does not accept arguments');
+    if (argv.length !== 1) {
+      usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.LIST_ARGUMENTS_FORBIDDEN);
+    }
     return {command};
   }
   const target = requiredPositional(argv[1],
@@ -165,7 +202,9 @@ function parseLifecycleCommand(argv) {
   }
   const options = parseOptions(argv.slice(2), allowedFlags);
   if (command === SERVICE_LIFECYCLE_COMMAND.STATUS) {
-    if (options.size > 0 || argv.length !== 2) usage('status accepts one service name');
+    if (options.size > 0 || argv.length !== 2) {
+      usage(SERVICE_LIFECYCLE_USAGE_MESSAGE.STATUS_ARGUMENT_INVALID);
+    }
     return {command, serviceName: serviceName(target)};
   }
   if (command === SERVICE_LIFECYCLE_COMMAND.REMOVE) {
@@ -199,7 +238,7 @@ function parseLifecycleCommand(argv) {
 
 function validateRows(result, command) {
   if (!result || !Array.isArray(result.rows)) {
-    throw new Error('PostgreSQL lifecycle result must contain rows');
+    throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.RESULT_ROWS_INVALID);
   }
   if (command !== SERVICE_LIFECYCLE_COMMAND.LIST && result.rows.length !== 1) {
     const label = command === SERVICE_LIFECYCLE_COMMAND.STATUS ?
@@ -212,12 +251,12 @@ function validateRows(result, command) {
     MUTATION_ROW_FIELDS : STATUS_ROW_FIELDS;
   for (const row of result.rows) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) {
-      throw new Error('PostgreSQL lifecycle rows must be objects');
+      throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_INVALID);
     }
     const rowFields = Object.keys(row);
     if (rowFields.length !== expectedFields.size ||
         [...expectedFields].some((field) => !Object.hasOwn(row, field))) {
-      throw new Error('PostgreSQL lifecycle row has an invalid field set');
+      throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_FIELDS_INVALID);
     }
     for (const [field, value] of Object.entries(row)) {
       const nullableFailureId = expectedFields === STATUS_ROW_FIELDS &&
@@ -228,7 +267,9 @@ function validateRows(result, command) {
       }
     }
     if (!SERVICE_NAME_PATTERN.test(row.service_name || '')) {
-      throw new Error('PostgreSQL lifecycle row is missing service_name');
+      throw new Error(
+        SERVICE_LIFECYCLE_RESULT_MESSAGE.ROW_SERVICE_NAME_INVALID,
+      );
     }
   }
   return result.rows;
@@ -287,7 +328,7 @@ async function runInstall(command, dependencies) {
   if (command.configPath) {
     config = await readBoundedJsonFile(command.configPath);
     if (!config || typeof config !== 'object' || Array.isArray(config)) {
-      throw new Error('service config must be a JSON object');
+      throw new Error(SERVICE_LIFECYCLE_RESULT_MESSAGE.CONFIG_INVALID);
     }
   }
   const payload = {

@@ -57,6 +57,7 @@ const PROJECT_INPUT_PATH = path.join(
   'src/cli/service-project-build-input.js',
 );
 const LIFECYCLE_OWNER_SPECIFIER = './service-lifecycle-command.js';
+const LIFECYCLE_OWNER_LOADER = 'loadServiceLifecycleCommand';
 const PLATFORM = 'linux/amd64';
 const SOURCE_DATE_EPOCH = 1_700_000_000;
 const IDEMPOTENCY_KEY = 'dev-install-weather-service';
@@ -153,8 +154,25 @@ async function writeContainerLayout(layoutPath, platform) {
   );
 }
 
-function collectImports(node, imports = {dynamic: [], static: []}) {
+function collectOwnedDynamicLoader(node, imports) {
+  const loaderBody = node.init?.type === 'ArrowFunctionExpression' ?
+    node.init.body : null;
+  if (node.type === 'VariableDeclarator' &&
+      node.id?.type === 'Identifier' &&
+      loaderBody?.type === 'ImportExpression') {
+    imports.ownedDynamic.push({
+      name: node.id.name,
+      specifier: loaderBody.source.value,
+    });
+  }
+}
+
+function collectImports(
+  node,
+  imports = {dynamic: [], ownedDynamic: [], static: []},
+) {
   if (!node || typeof node !== 'object') return imports;
+  collectOwnedDynamicLoader(node, imports);
   if (node.type === 'ImportDeclaration') {
     imports.static.push(node.source.value);
   }
@@ -218,6 +236,10 @@ describe('service lifecycle CLI contract', () => {
       './service-project-scaffold.js',
     ]);
     assert.deepEqual(imports.dynamic, [LIFECYCLE_OWNER_SPECIFIER]);
+    assert.deepEqual(imports.ownedDynamic, [{
+      name: LIFECYCLE_OWNER_LOADER,
+      specifier: LIFECYCLE_OWNER_SPECIFIER,
+    }]);
     assert.doesNotMatch(
       source,
       /from\s+['"](?:pg|node:(?:child_process|net)|\.\.\/service\/service-local-oci-layout-builder\.js)['"]/u,

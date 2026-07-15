@@ -42,11 +42,52 @@ const FILE_SYSTEM_ERROR_CODE = Object.freeze({
   ALREADY_EXISTS: 'EEXIST',
   NOT_FOUND: 'ENOENT',
 });
+const SERVICE_PROJECT_BUILD_INPUT_ERROR_NAME =
+  'ServiceProjectBuildInputError';
+const SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE = Object.freeze({
+  CONTEXT_LINK_FORBIDDEN: 'context_link_forbidden',
+  CONTEXT_PATH_INVALID: 'context_path_invalid',
+  CONTEXT_SPECIAL_FORBIDDEN: 'context_special_forbidden',
+  CONTEXT_TOO_DEEP: 'context_too_deep',
+  CONTEXT_TOO_LARGE: 'context_too_large',
+  CONTEXT_UNREADABLE: 'context_unreadable',
+  DOCKERFILE_MISSING: 'dockerfile_missing',
+  DOCKERIGNORE_UNSUPPORTED: 'dockerignore_unsupported',
+  FINAL_MANIFEST_CONFLICT: 'final_manifest_conflict',
+  FINAL_MANIFEST_INVALID: 'final_manifest_invalid',
+  INPUT_INVALID: 'input_invalid',
+  INPUT_UNREADABLE: 'input_unreadable',
+  JSON_INVALID: 'json_invalid',
+  MANIFEST_INVALID: 'manifest_invalid',
+  MANIFEST_TEMPLATE_INVALID: 'manifest_template_invalid',
+  OUTPUT_ROOT_INVALID: 'output_root_invalid',
+  PROJECT_IDENTITY_CHANGED: 'project_identity_changed',
+  PROJECT_INVALID: 'project_invalid',
+  PROJECT_UNREADABLE: 'project_unreadable',
+});
+const SERVICE_PROJECT_BUILD_INPUT_MESSAGE = Object.freeze({
+  CONTEXT_TOO_DEEP: 'service build context is too deeply nested',
+  CONTEXT_TOO_LARGE: 'service build context exceeds deterministic bounds',
+  OUTPUT_ROOT_INVALID:
+    'service OCI output root must not be the service project directory',
+  PROJECT_IDENTITY_CHANGED:
+    'service project identity changed during dev-install',
+});
+const BUILD_INPUT_TOKEN = Object.freeze({
+  DIGEST_FIELD: 'digest',
+  DOCKERIGNORE_COMMENT_PREFIX: '#',
+  DOCKERIGNORE_NEGATION_PREFIX: '!',
+  EXCLUSIVE_CREATE_FLAG: 'wx',
+  HASH_OUTPUT_ENCODING: 'hex',
+  NORMALIZED_PATH_SEPARATOR: '/',
+  PARENT_PATH_SEGMENT: '..',
+});
+const FILE_PERMISSION_MASK = 0o777;
 
 class ServiceProjectBuildInputError extends Error {
   constructor(code, message, options = {}) {
     super(message, options);
-    this.name = 'ServiceProjectBuildInputError';
+    this.name = SERVICE_PROJECT_BUILD_INPUT_ERROR_NAME;
     this.code = code;
   }
 }
@@ -62,7 +103,7 @@ function uint64(value) {
 }
 
 function normalizedRelativePath(value) {
-  return value.split(path.sep).join('/');
+  return value.split(path.sep).join(BUILD_INPUT_TOKEN.NORMALIZED_PATH_SEPARATOR);
 }
 
 function projectIdentity(projectStat) {
@@ -78,14 +119,19 @@ async function requirePinnedProjectIdentity(templateInput) {
   try {
     observedStat = await lstat(templateInput.projectPath, {bigint: true});
   } catch (error) {
-    inputFailure('project_identity_changed',
-      'service project identity changed during dev-install', error);
+    inputFailure(
+      SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.PROJECT_IDENTITY_CHANGED,
+      SERVICE_PROJECT_BUILD_INPUT_MESSAGE.PROJECT_IDENTITY_CHANGED,
+      error,
+    );
   }
   const observed = projectIdentity(observedStat);
   if (!observedStat.isDirectory() || observedStat.isSymbolicLink() ||
       !sameProjectIdentity(observed, templateInput.projectIdentity)) {
-    inputFailure('project_identity_changed',
-      'service project identity changed during dev-install');
+    inputFailure(
+      SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.PROJECT_IDENTITY_CHANGED,
+      SERVICE_PROJECT_BUILD_INPUT_MESSAGE.PROJECT_IDENTITY_CHANGED,
+    );
   }
 }
 
@@ -97,19 +143,27 @@ async function ordinaryFileBytes(filePath, maximumBytes = MAXIMUM_INPUT_BYTES) {
       FILE_OPEN_FLAG.O_RDONLY | FILE_OPEN_FLAG.O_NOFOLLOW,
     );
   } catch (error) {
-    inputFailure('input_unreadable', `input file is not readable: ${filePath}`, error);
+    inputFailure(
+      SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.INPUT_UNREADABLE,
+      `input file is not readable: ${filePath}`,
+      error,
+    );
   }
   try {
     const fileStat = await fileHandle.stat();
     if (!fileStat.isFile() || fileStat.nlink !== 1 ||
         fileStat.size > maximumBytes) {
-      inputFailure('input_invalid',
+      inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.INPUT_INVALID,
         `input must be a bounded ordinary file: ${filePath}`);
     }
     return await fileHandle.readFile();
   } catch (error) {
     if (error instanceof ServiceProjectBuildInputError) throw error;
-    inputFailure('input_unreadable', `input file is not readable: ${filePath}`, error);
+    inputFailure(
+      SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.INPUT_UNREADABLE,
+      `input file is not readable: ${filePath}`,
+      error,
+    );
   } finally {
     await fileHandle.close();
   }
@@ -119,7 +173,11 @@ function parseJson(bytes, filePath) {
   try {
     return JSON.parse(bytes.toString(TEXT_ENCODING));
   } catch (error) {
-    inputFailure('json_invalid', `input must contain valid JSON: ${filePath}`, error);
+    inputFailure(
+      SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.JSON_INVALID,
+      `input must contain valid JSON: ${filePath}`,
+      error,
+    );
   }
 }
 
@@ -131,11 +189,16 @@ function dockerIgnorePatterns(bytes) {
   const patterns = [];
   for (const rawLine of bytes.toString(TEXT_ENCODING).split(/\r?\n/u)) {
     const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    if (line.startsWith('!') || path.isAbsolute(line) ||
-        line.split('/').includes('..') || GLOB_META_PATTERN.test(line)) {
+    if (!line || line.startsWith(BUILD_INPUT_TOKEN.DOCKERIGNORE_COMMENT_PREFIX)) {
+      continue;
+    }
+    if (line.startsWith(BUILD_INPUT_TOKEN.DOCKERIGNORE_NEGATION_PREFIX) ||
+        path.isAbsolute(line) ||
+        line.split(BUILD_INPUT_TOKEN.NORMALIZED_PATH_SEPARATOR)
+          .includes(BUILD_INPUT_TOKEN.PARENT_PATH_SEGMENT) ||
+        GLOB_META_PATTERN.test(line)) {
       inputFailure(
-        'dockerignore_unsupported',
+        SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.DOCKERIGNORE_UNSUPPORTED,
         `.dockerignore entry is outside the deterministic subset: ${line}`,
       );
     }
@@ -166,7 +229,8 @@ async function readIgnoreInput(projectPath) {
 
 function outputRootIgnore(projectPath, outputRoot) {
   const relative = path.relative(projectPath, outputRoot);
-  if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) ||
+  if (!relative || relative === BUILD_INPUT_TOKEN.PARENT_PATH_SEGMENT ||
+      relative.startsWith(`${BUILD_INPUT_TOKEN.PARENT_PATH_SEGMENT}${path.sep}`) ||
       path.isAbsolute(relative)) return null;
   return normalizedRelativePath(relative);
 }
@@ -178,13 +242,20 @@ async function collectContextFiles(projectPath, patterns, outputRoot) {
 
   async function visit(directoryPath, relativeDirectory, depth) {
     if (depth > MAXIMUM_RECURSION_DEPTH) {
-      inputFailure('context_too_deep', 'service build context is too deeply nested');
+      inputFailure(
+        SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_TOO_DEEP,
+        SERVICE_PROJECT_BUILD_INPUT_MESSAGE.CONTEXT_TOO_DEEP,
+      );
     }
     let entries;
     try {
       entries = await readdir(directoryPath, {withFileTypes: true});
     } catch (error) {
-      inputFailure('context_unreadable', `service build context is unreadable: ${directoryPath}`, error);
+      inputFailure(
+        SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_UNREADABLE,
+        `service build context is unreadable: ${directoryPath}`,
+        error,
+      );
     }
     entries.sort((left, right) => Buffer.from(left.name).compare(Buffer.from(right.name)));
     for (const entry of entries) {
@@ -194,7 +265,10 @@ async function collectContextFiles(projectPath, patterns, outputRoot) {
       const sourcePath = path.join(directoryPath, entry.name);
       const entryStat = await lstat(sourcePath);
       if (entryStat.isSymbolicLink()) {
-        inputFailure('context_link_forbidden', `service build context contains a link: ${relativePath}`);
+        inputFailure(
+          SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_LINK_FORBIDDEN,
+          `service build context contains a link: ${relativePath}`,
+        );
       }
       if (pathIsIgnored(relativePath, patterns) ||
           (explicitOutputIgnore && (relativePath === explicitOutputIgnore ||
@@ -206,17 +280,30 @@ async function collectContextFiles(projectPath, patterns, outputRoot) {
         continue;
       }
       if (!entryStat.isFile()) {
-        inputFailure('context_special_forbidden', `service build context contains a special file: ${relativePath}`);
+        inputFailure(
+          SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_SPECIAL_FORBIDDEN,
+          `service build context contains a special file: ${relativePath}`,
+        );
       }
       const pathBytes = Buffer.byteLength(relativePath);
       if (pathBytes === 0 || pathBytes > MAXIMUM_PATH_BYTES) {
-        inputFailure('context_path_invalid', `service build context path is invalid: ${relativePath}`);
+        inputFailure(
+          SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_PATH_INVALID,
+          `service build context path is invalid: ${relativePath}`,
+        );
       }
       const bytes = await ordinaryFileBytes(sourcePath, MAXIMUM_CONTEXT_BYTES);
-      files.push({bytes, mode: entryStat.mode & 0o777, relativePath});
+      files.push({
+        bytes,
+        mode: entryStat.mode & FILE_PERMISSION_MASK,
+        relativePath,
+      });
       totalBytes += bytes.length;
       if (files.length > MAXIMUM_CONTEXT_FILES || totalBytes > MAXIMUM_CONTEXT_BYTES) {
-        inputFailure('context_too_large', 'service build context exceeds deterministic bounds');
+        inputFailure(
+          SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_TOO_LARGE,
+          SERVICE_PROJECT_BUILD_INPUT_MESSAGE.CONTEXT_TOO_LARGE,
+        );
       }
     }
   }
@@ -236,7 +323,7 @@ function fingerprintContext(files) {
     hash.update(uint64(file.bytes.length));
     hash.update(file.bytes);
   }
-  return `${SHA256_PREFIX}${hash.digest('hex')}`;
+  return `${SHA256_PREFIX}${hash.digest(BUILD_INPUT_TOKEN.HASH_OUTPUT_ENCODING)}`;
 }
 
 async function writeSnapshot(files) {
@@ -248,7 +335,10 @@ async function writeSnapshot(files) {
     for (const file of files) {
       const destination = path.join(contextPath, file.relativePath);
       await mkdir(path.dirname(destination), {recursive: true, mode: DIRECTORY_MODE});
-      await writeFile(destination, file.bytes, {flag: 'wx', mode: file.mode});
+      await writeFile(destination, file.bytes, {
+        flag: BUILD_INPUT_TOKEN.EXCLUSIVE_CREATE_FLAG,
+        mode: file.mode,
+      });
       await chmod(destination, file.mode);
     }
     return {contextPath, snapshotRoot};
@@ -273,11 +363,12 @@ async function copySourceSnapshot(projectPath, ignoreInput) {
           path.relative(projectPath, sourceEntry),
         );
         if (entryStat.isSymbolicLink()) {
-          inputFailure('context_link_forbidden',
+          inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_LINK_FORBIDDEN,
             `service build context contains a link: ${sourceEntry}`);
         }
         if (!entryStat.isDirectory() && !entryStat.isFile()) {
-          inputFailure('context_special_forbidden',
+          inputFailure(
+            SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_SPECIAL_FORBIDDEN,
             `service build context contains a special file: ${sourceEntry}`);
         }
         if (relativePath === DOCKERIGNORE_NAME ||
@@ -289,8 +380,10 @@ async function copySourceSnapshot(projectPath, ignoreInput) {
           totalBytes += entryStat.size;
           if (fileCount > MAXIMUM_CONTEXT_FILES ||
               totalBytes > MAXIMUM_CONTEXT_BYTES) {
-            inputFailure('context_too_large',
-              'service build context exceeds deterministic bounds');
+            inputFailure(
+              SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.CONTEXT_TOO_LARGE,
+              SERVICE_PROJECT_BUILD_INPUT_MESSAGE.CONTEXT_TOO_LARGE,
+            );
           }
         }
         return true;
@@ -302,7 +395,7 @@ async function copySourceSnapshot(projectPath, ignoreInput) {
     if (ignoreInput.bytes) {
       const ignoreDestination = path.join(sourcePath, DOCKERIGNORE_NAME);
       await writeFile(ignoreDestination, ignoreInput.bytes, {
-        flag: 'wx',
+        flag: BUILD_INPUT_TOKEN.EXCLUSIVE_CREATE_FLAG,
         mode: FILE_MODE,
       });
       await chmod(ignoreDestination, FILE_MODE);
@@ -322,8 +415,10 @@ async function createServiceProjectBuildInput(
   const projectPath = path.resolve(projectDirectory);
   const resolvedOutputRoot = path.resolve(outputRoot);
   if (resolvedOutputRoot === projectPath) {
-    inputFailure('output_root_invalid',
-      'service OCI output root must not be the service project directory');
+    inputFailure(
+      SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.OUTPUT_ROOT_INVALID,
+      SERVICE_PROJECT_BUILD_INPUT_MESSAGE.OUTPUT_ROOT_INVALID,
+    );
   }
   await requirePinnedProjectIdentity(templateInput);
   const pinnedProjectPath = templateInput.pinnedProjectPath;
@@ -339,7 +434,7 @@ async function createServiceProjectBuildInput(
       resolvedOutputRoot,
     );
     if (!files.some((file) => file.relativePath === DOCKERFILE_NAME)) {
-      inputFailure('dockerfile_missing',
+      inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.DOCKERFILE_MISSING,
         `service project must contain ${DOCKERFILE_NAME}`);
     }
     const sourceFingerprint = fingerprintContext(files);
@@ -367,7 +462,7 @@ async function readServiceManifestTemplate(projectDirectory) {
     );
     const handleStat = await projectDirectoryHandle.stat({bigint: true});
     if (!handleStat.isDirectory()) {
-      inputFailure('project_invalid',
+      inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.PROJECT_INVALID,
         `service project must be an ordinary directory: ${projectPath}`);
     }
     const pinnedProjectPath = `/proc/self/fd/${projectDirectoryHandle.fd}/.`;
@@ -382,8 +477,9 @@ async function readServiceManifestTemplate(projectDirectory) {
     if (!template || typeof template !== 'object' || Array.isArray(template) ||
         !template.artifact || typeof template.artifact !== 'object' ||
         Array.isArray(template.artifact) ||
-        Object.hasOwn(template.artifact, 'digest')) {
-      inputFailure('manifest_template_invalid',
+        Object.hasOwn(template.artifact, BUILD_INPUT_TOKEN.DIGEST_FIELD)) {
+      inputFailure(
+        SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.MANIFEST_TEMPLATE_INVALID,
         `${MANIFEST_TEMPLATE_NAME} must be an object whose artifact omits digest`);
     }
     return Object.freeze({
@@ -399,7 +495,7 @@ async function readServiceManifestTemplate(projectDirectory) {
   } catch (error) {
     await projectDirectoryHandle?.close().catch(() => {});
     if (error instanceof ServiceProjectBuildInputError) throw error;
-    inputFailure('project_unreadable',
+    inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.PROJECT_UNREADABLE,
       `service project is unreadable: ${projectPath}`, error);
   }
 }
@@ -412,7 +508,10 @@ function finalManifestBytes(template, digest) {
   const validation = validateExternalServiceManifest(candidate);
   if (!validation.valid) {
     const detail = validation.errors.map((error) => error.message).join('; ');
-    inputFailure('manifest_invalid', `generated service manifest is invalid: ${detail}`);
+    inputFailure(
+      SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.MANIFEST_INVALID,
+      `generated service manifest is invalid: ${detail}`,
+    );
   }
   return {
     bytes: Buffer.from(`${JSON.stringify(validation.manifest, null, 2)}${TEXT_NEWLINE}`),
@@ -424,13 +523,13 @@ async function existingFinalManifest(finalManifestPath) {
   try {
     const stat = await lstat(finalManifestPath);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAXIMUM_INPUT_BYTES) {
-      inputFailure('final_manifest_invalid',
+      inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.FINAL_MANIFEST_INVALID,
         `${FINAL_MANIFEST_NAME} must be an ordinary bounded file when it exists`);
     }
     const bytes = await ordinaryFileBytes(finalManifestPath);
     const value = parseJson(bytes, finalManifestPath);
     if (!validateExternalServiceManifest(value).valid) {
-      inputFailure('final_manifest_invalid',
+      inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.FINAL_MANIFEST_INVALID,
         `${FINAL_MANIFEST_NAME} is not a valid external service manifest`);
     }
     return bytes;
@@ -446,7 +545,10 @@ async function writeFinalManifest(finalManifestPath, bytes) {
     path.dirname(finalManifestPath),
     `.${FINAL_MANIFEST_NAME}.${randomUUID()}.tmp`,
   );
-  await writeFile(temporaryPath, bytes, {flag: 'wx', mode: FILE_MODE});
+  await writeFile(temporaryPath, bytes, {
+    flag: BUILD_INPUT_TOKEN.EXCLUSIVE_CREATE_FLAG,
+    mode: FILE_MODE,
+  });
   await chmod(temporaryPath, FILE_MODE);
   try {
     await link(temporaryPath, finalManifestPath);
@@ -454,7 +556,7 @@ async function writeFinalManifest(finalManifestPath, bytes) {
     if (error.code !== FILE_SYSTEM_ERROR_CODE.ALREADY_EXISTS) throw error;
     const existing = await ordinaryFileBytes(finalManifestPath);
     if (!existing.equals(bytes)) {
-      inputFailure('final_manifest_conflict',
+      inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.FINAL_MANIFEST_CONFLICT,
         `${FINAL_MANIFEST_NAME} already exists with different content`);
     }
   } finally {
@@ -469,7 +571,7 @@ async function materializeFinalServiceManifest(templateInput, digest) {
     templateInput.pinnedFinalManifestPath,
   );
   if (existing && !existing.equals(expected.bytes)) {
-    inputFailure('final_manifest_conflict',
+    inputFailure(SERVICE_PROJECT_BUILD_INPUT_ERROR_CODE.FINAL_MANIFEST_CONFLICT,
       `${FINAL_MANIFEST_NAME} already exists with different content`);
   }
   if (!existing) {
