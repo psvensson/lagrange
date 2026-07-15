@@ -9,6 +9,7 @@ const BASE_TARGET = 'ws://127.0.0.1:8081/api/admin/stream';
 const SNAPSHOT_TARGET = `${BASE_TARGET}?lane=snapshot`;
 const LOAD_TARGET = `${BASE_TARGET}?lane=load`;
 const SNAPSHOT_SQL = 'SELECT * FROM control_snapshot_local()';
+const FORCE_REPAIR_SNAPSHOT_SQL = 'SELECT * FROM control_snapshot_local(true)';
 const RATINGS_PROBE_SQL = 'SELECT 1 FROM ratings LIMIT 1';
 const NOW_MS = 10_000;
 
@@ -113,6 +114,85 @@ test('pre-schema pressure resets stable confirmation and fails closed',
     );
     t.equal(error.schemaAdmission.admitted, false);
     t.equal(error.schemaAdmission.snapshot.state, 'control_plane_pressure');
+    t.end();
+  });
+
+test('stale schema observations use canonical repair inside the outer budget',
+  async (t) => {
+    const calls = [];
+    const result = await waitForAffinityDemoSchemaAdmission(
+      boundedSchemaOptions(async (call) => {
+        calls.push(call);
+        if (call.sql === SNAPSHOT_SQL) {
+          return {rows: [buildControlSnapshot({
+            snapshotObservation: {
+              state: 'stale_usable',
+              reasonCodes: ['cache_stale_watermark'],
+            },
+          })]};
+        }
+        return {rows: [buildControlSnapshot()]};
+      }),
+    );
+
+    t.equal(result.admitted, true);
+    t.equal(result.stableConfirmationCount, 2,
+      'only fresh post-repair observations count as confirmations');
+    t.same(calls, [
+      {target: SNAPSHOT_TARGET, sql: SNAPSHOT_SQL, timeoutMs: 8},
+      {
+        target: SNAPSHOT_TARGET,
+        sql: FORCE_REPAIR_SNAPSHOT_SQL,
+        timeoutMs: 8,
+      },
+      {target: SNAPSHOT_TARGET, sql: SNAPSHOT_SQL, timeoutMs: 7},
+      {
+        target: SNAPSHOT_TARGET,
+        sql: FORCE_REPAIR_SNAPSHOT_SQL,
+        timeoutMs: 7,
+      },
+    ], 'stale local evidence traverses the existing snapshot owner command');
+    t.end();
+  });
+
+test('authoritative snapshot repair cannot reset or outlive schema budget',
+  async (t) => {
+    let nowMs = 0;
+    const calls = [];
+    const error = await t.rejects(
+      waitForAffinityDemoSchemaAdmission({
+        target: BASE_TARGET,
+        now: () => nowMs,
+        sleep: async () => {},
+        timeoutMs: 5,
+        pollIntervalMs: 0,
+        query: async (call) => {
+          calls.push(call);
+          if (call.sql === SNAPSHOT_SQL) {
+            nowMs = 4;
+            return {rows: [buildControlSnapshot({
+              snapshotObservation: {
+                state: 'stale_usable',
+                reasonCodes: ['cache_stale_watermark'],
+              },
+            })]};
+          }
+          nowMs = 6;
+          throw new Error('forced repair exceeded its remaining budget');
+        },
+      }),
+      /forced repair exceeded its remaining budget/,
+    );
+    t.same(calls, [
+      {target: SNAPSHOT_TARGET, sql: SNAPSHOT_SQL, timeoutMs: 5},
+      {
+        target: SNAPSHOT_TARGET,
+        sql: FORCE_REPAIR_SNAPSHOT_SQL,
+        timeoutMs: 1,
+      },
+    ]);
+    t.equal(error.schemaAdmission.admitted, false,
+      'a failed authoritative repair remains a typed denial');
     t.end();
   });
 

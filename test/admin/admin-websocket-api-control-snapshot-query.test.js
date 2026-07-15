@@ -1077,7 +1077,7 @@ test(
       nowFn: () => nowMs,
     });
 
-    await api.buildControlSnapshotQueryResult({
+    const result = await api.buildControlSnapshotQueryResult({
       forceAuthoritativeRepair: true,
     });
 
@@ -1095,6 +1095,11 @@ test(
       writableCache.get(TABLES.NODES, 'node-peer')?.last_heartbeat,
       freshHeartbeatMs,
       'peer node heartbeat should be refreshed from the authoritative repair rows',
+    );
+    t.equal(
+      result.rows[0].snapshotObservation.state,
+      'fresh',
+      'the canonical repair owner returns fresh evidence after repairing the stale watermark',
     );
   },
 );

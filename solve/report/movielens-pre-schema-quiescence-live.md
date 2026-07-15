@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 5
+**Attempts:** 6
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -30,19 +30,20 @@
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 9
-- Change bytes: 35974
-- Owner areas: examples, scripts/examples, test/runtime
+- Changed files: 10
+- Change bytes: 42147
+- Owner areas: examples, scripts/examples, test/admin, test/runtime
 - Categories: other, test
-- Action: land or separate 3 owner areas: examples, scripts/examples, test/runtime
+- Action: land or separate 4 owner areas: examples, scripts/examples, test/admin, test/runtime
 - Split plan:
   - examples: 4 file(s)
   - test/runtime: 4 file(s)
   - scripts/examples: 1 file(s)
+  - test/admin: 1 file(s)
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **movielens-pre-schema-quiescence-live-main** [open] rung 3, attempts 5, metric 1 -> 1
+- **movielens-pre-schema-quiescence-live-main** [open] rung 3, attempts 6, metric 1 -> 1
 
 ## Findings
 - **movielens-pre-schema-quiescence-live-main**: inherited from movielens-ratings-scoped-split-policy-live: At checkpoint 4bd85509 the five-node membership-active barrier returned, but the seed log stopped at 22:11:29.475Z while priority-recovery replacement planning was still active. The sole ratings CREATE request began at 22:11:35.775Z, left no admin/schema/ratings record in any node log, and timed out after 45 seconds; peer logs concurrently recorded control-plane pressure and internal query timeouts. waitForActiveNodes therefore proves membership cardinality, not a safe DDL/load-admission boundary. The existing production preload admission owner must establish quiescence before policy-bearing ratings CREATE, whose typed stable confirmation then gates load; do not add a second retry owner or rerun unchanged. (rules out: Treating membership-active cardinality as control-plane quiescence; merely widening the admin timeout; adding a local CREATE retry loop.) [data/examples/service-data-affinity-demo-archive/wave4-live-create-admin-timeout-2026-07-15T22-12-20-802Z.tar.gz]
@@ -65,7 +66,7 @@
 - **theory-20260715-the-local-control-snapshot-owner-correctly** [active] system, mechanism The local control-snapshot owner correctly marks stale cache evidence pending, but the demo consumer never traverses the owner's existing forced authoritative repair command, so polling cannot refresh the evidence it requires., owner control_plane_snapshot_owner, modelGate npm run model:contracts
 - **theory-20260715-schema-admission-required-fields-optional-discount** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer observation, mechanism The shared admission parser must distinguish required authoritative snapshot fields from an optional client-side in-flight discount; otherwise missing required evidence can fail open, while requiring the non-produced discount makes every production snapshot unavailable., owner MovieLens shared control-snapshot admission parser, boundary authoritative snapshot envelope to quiescence classification, modelGate npm run model:contracts
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism The existing ratings schema retry owner cannot distinguish an ambiguous admin response deadline from a terminal CREATE failure, so its documented fresh-session idempotent replay contract exits after one timed-out request., owner ratings schema retry owner, boundary admin response deadline to idempotent CREATE replay, modelGate npm run model:contracts
-- **theory-20260715-control-plane-snapshot-owner** [active] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism control_plane_snapshot_owner, owner control_plane_snapshot_owner, boundary snapshot_freshness, modelGate npm run model:contracts
+- **theory-20260715-control-plane-snapshot-owner** [supported] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism control_plane_snapshot_owner, owner control_plane_snapshot_owner, boundary snapshot_freshness, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-pre-schema-quiescence-live-main**: theory-20260715-control-plane-snapshot-owner
@@ -76,6 +77,7 @@
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json]
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-43-29-340Z.report.json]
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
+- **theory-20260715-control-plane-snapshot-owner**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -85,3 +87,4 @@
 | 2026-07-15T22:35:46.276Z | movielens-pre-schema-quiescence-live-main | widen-scope | 1 -> 1 | flat | no_previous | theory-20260715-schema-admission-required-fields-optional-discount | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-3.diff |
 | 2026-07-15T22:52:09.558Z | movielens-pre-schema-quiescence-live-main | widen-scope | 1 -> 1 | flat | same | theory-20260715-idempotent-schema-admin-timeout-retry-owner | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-4.diff |
 | 2026-07-15T22:59:36.637Z | movielens-pre-schema-quiescence-live-main | widen-scope | 1 -> 1 | flat | same | theory-20260715-idempotent-schema-admin-timeout-retry-owner | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-5.diff |
+| 2026-07-15T23:18:01.798Z | movielens-pre-schema-quiescence-live-main | model | 1 -> 1 | flat | same | theory-20260715-control-plane-snapshot-owner | diff:solve/changes/movielens-pre-schema-quiescence-live/attempt-6.diff |

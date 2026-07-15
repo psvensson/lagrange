@@ -166,6 +166,7 @@ function classifySnapshot(snapshot, snapshotError, nowMs) {
 }
 
 async function observeControlSnapshot(options, target, timeoutMs) {
+  const deadlineMs = options.now() + timeoutMs;
   let snapshotResult;
   let snapshotError = '';
   try {
@@ -178,7 +179,27 @@ async function observeControlSnapshot(options, target, timeoutMs) {
     snapshotResult = {rows: []};
     snapshotError = String(error?.message || error);
   }
-  const snapshotRow = resolveRows(snapshotResult)[ZERO];
+  let snapshotRow = resolveRows(snapshotResult)[ZERO];
+  if (
+    !snapshotError &&
+    snapshotRow?.snapshotObservation?.state ===
+      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE
+  ) {
+    const repairTimeoutMs = remainingBudgetMs(options.now, deadlineMs);
+    if (repairTimeoutMs > ZERO) {
+      try {
+        snapshotResult = await options.query({
+          target,
+          sql: ADMIN_CONTROL_SNAPSHOT.QUERY_SQL_FORCE_REPAIR,
+          timeoutMs: repairTimeoutMs,
+        });
+        snapshotRow = resolveRows(snapshotResult)[ZERO];
+      } catch (error) {
+        snapshotRow = null;
+        snapshotError = String(error?.message || error);
+      }
+    }
+  }
   snapshotError = snapshotError || resolveSnapshotObservationError(snapshotRow);
   snapshotError = snapshotError ||
     resolveSnapshotAdmissionFieldsError(snapshotRow);
