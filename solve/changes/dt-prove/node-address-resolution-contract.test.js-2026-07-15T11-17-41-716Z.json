@@ -1,0 +1,20 @@
+{
+  "test": "test/transport/node-address-resolution-contract.test.js",
+  "src": [
+    "src/bootstrap/phases/connect-websocket-phase.js",
+    "src/cdc/cdc-event-handler.js",
+    "src/cdc/cdc-integration-service-node-join.js",
+    "src/entrypoint-runtime-options.js",
+    "src/transport/node-address-resolution.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-15T11:17:41.667Z"
+}
