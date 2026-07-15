@@ -1,0 +1,34 @@
+diff --git a/solve/oracle/solver-snapshot-scope-accounting.json b/solve/oracle/solver-snapshot-scope-accounting.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..4e9b965ce1e6ac02ae35229b28e318c9d62c919f
+--- /dev/null
++++ b/solve/oracle/solver-snapshot-scope-accounting.json
+@@ -0,0 +1,28 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "canonical_snapshot_scope_accounting_closed",
++  "detail": {
++    "focusedScopePressureTests": {
++      "passed": true,
++      "assertions": 27
++    },
++    "focusedVerificationTests": {
++      "passed": true,
++      "assertions": 175
++    },
++    "checkpointRegression": true,
++    "approvedSupersetWinsCheckpoint": true,
++    "disjointScopeStillBlocked": true,
++    "hardLimitsUnchanged": true,
++    "scopedStaticChecks": {
++      "literalDebt": 0,
++      "decisionBoundaryDebt": 0,
++      "opaqueConstantNames": 0,
++      "runtimeGrammarDebt": 0,
++      "oversizedFileDebt": 0
++    },
++    "lintScripts": true
++  }
++}
