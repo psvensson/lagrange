@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 2
 
@@ -12,25 +12,9 @@
 - parent quest: rolling-restart-run4-critical-spread
 - plan: solve/epics/topology-convergence-hardening.md
 
-## Current Blocker
-- Frontier: rolling-restart-run4-join-runtime-activation-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: leadership_unstable
-- Mechanism: transition_gap
-- Movement: narrowed: convergence_timeout -> leadership_unstable
-- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
-- Selected theory: startup-readiness-support-evidence-handoff-residual
-- Next move: continue supervised step for rolling-restart-run4-join-runtime-activation-main
-- No longer current: convergence_timeout; Do not treat stat-gate-20260630T173805Z-run3 as a join-runtime activation regression after the leadership-quiescence child closure.
-
-## Continuation
-- Status: blocked-theory
-- Next action: run the 15-run consecutive proof for rolling-restart-run4-join-runtime-activation-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
-- Blocker: theory result required when metric is 0 but done is false
-
 ## Scope Pressure
 - Changed files: 4
+- Change bytes: 15057
 - Owner areas: src/bootstrap, test/bootstrap
 - Categories: runtime
 - Split plan:
@@ -39,7 +23,7 @@
 - Signals: none
 
 ## Frontiers
-- **rolling-restart-run4-join-runtime-activation-main** [open] rung 2, attempts 2, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-join-runtime-activation-main** [parked {exhausted}] rung 2, attempts 2, metric 3 -> 0 — The join-runtime activation defect is landed and revalidated on current main, while the only unmet sealed condition is an over-broad whole-scenario N>=15 convergence bar whose residuals are outside this owner boundary and already split. No honest in-seal source move remains; operator EXHAUSTED records retirement without asserting SOLVED or N15 closure.
 
 ## Findings
 - **rolling-restart-run4-join-runtime-activation-main**: Ingested evidence from stat-gate-20260630T002604Z-run1.report.json. Metric: unknown -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T002604Z-run1.report.json]
@@ -83,6 +67,7 @@
 - **rolling-restart-run4-join-runtime-activation-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 2 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **rolling-restart-run4-join-runtime-activation-main**: Ingested evidence from stat-gate-20260630T173805Z-run3.report.json. Metric: 0 -> 0. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: leadership_unstable. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T173805Z-run3.report.json]
 - **rolling-restart-run4-join-runtime-activation-main**: Latest leadership_unstable residual from stat-gate-20260630T173805Z-run3 is now split to and deterministically addressed by rolling-restart-run4-leadership-quiescence-signature (commit 6e39ff16). The initialized-runtime NODE_EXIT family remains fixed/absent in this retained sample; do not reopen join-runtime activation from the leadership-quiescence evidence. Next evidence for this Quest should be fresh post-fix measurement or the sealed consecutive proof. (rules out: Do not treat stat-gate-20260630T173805Z-run3 as a join-runtime activation regression after the leadership-quiescence child closure.) [solve/report/rolling-restart-run4-leadership-quiescence-signature.md]
+- **rolling-restart-run4-join-runtime-activation-main**: Current main retains and deterministically revalidates the durable-rejoin stale-runtime recreation and post-reconciler exact-runtime enforcement landed by b98d9ee1 and 04863fce. The recorded N=15 evidence already showed zero NODE_EXIT and zero initialized-runtime fatal occurrences, while its non-passing samples belonged to readiness, publication, operation-drain, or topology owners outside this join-runtime boundary; the sealed consecutive-15 bar remains explicitly unclaimed. (rules out: Do not run or credit another N=15 rolling-restart gate to retire this already-landed narrow defect, do not claim SOLVED, and do not widen join-runtime activation to chase residuals already split to other owner-specific Quests.) [commit:e7c1de4941fe; commit:b98d9ee1; commit:04863fce; npm run test:file -- --jobs=1 test/bootstrap/node-joining-service.test.js test/bootstrap/partition-service-activation.test.js]
 
 ## Theories
 - **durable-rejoin-runtime-proof-after-reconciler** [falsified] frontier, frontier rolling-restart-run4-join-runtime-activation-main, layer ownership, mechanism Durable rejoin restore treated a completed reconciler cycle as proof that exact local partition runtimes were initialized, but ServiceReconciler records per-action failures without throwing, so explicit restore activation can still see stale initialized=false PartitionService entries., owner NodeJoiningPublicationActivation durable-rejoin restore owner, boundary restoreDurableRejoinLocalPartitionServices -> activateJoinPartitionServiceRows, modelGate npm run model:contracts

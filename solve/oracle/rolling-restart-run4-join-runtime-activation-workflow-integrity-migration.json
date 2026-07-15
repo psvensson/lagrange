@@ -1,0 +1,45 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "legacy-integrity-workflow-migration",
+  "detail": {
+    "parentQuest": "rolling-restart-run4-join-runtime-activation",
+    "parentOutcome": "EXHAUSTED",
+    "parentTerminalProvenance": "operator",
+    "legacyAuditProblem": "legacy_integrity_unverifiable",
+    "testedCommit": "e7c1de4941feab23dc9ef43142ecbbf90b1cc0c4",
+    "fixCommits": [
+      "b98d9ee1",
+      "04863fce"
+    ],
+    "fixCommitsAreTestedCommitAncestors": true,
+    "deterministicRevalidation": {
+      "command": "npm run test:file -- --jobs=1 test/bootstrap/node-joining-service.test.js test/bootstrap/partition-service-activation.test.js",
+      "files": 2,
+      "passedAssertions": 100,
+      "failedAssertions": 0,
+      "exitCode": 0
+    },
+    "claims": {
+      "productSourceChanged": false,
+      "liveRollingRestartRun": false,
+      "consecutive15Satisfied": false,
+      "originalProductQuestSolved": false,
+      "narrowJoinRuntimeDefectRevalidated": true
+    },
+    "parentArtifactSha256": {
+      "quest": "e9d9ca5fee9ef1d98e0d0cd4ccd8fc02cfbb77501c61205edb5b7923d125e892",
+      "durableRejoinAttempt": "3c4a6fcfc479e93449dfd4122fede5cf4331715e9d78ce93be3ffe2fcc8cb2e2",
+      "staleRuntimeAttempt": "996b6b3e042ce851fcc979b6bef0b58af69b5127a25c43ad1a842e7bf1086c97",
+      "terminalLog": "7084151a8b52e90a1d551e283d7cb2550f788c70dc576fa1c4caccc84c2f862f",
+      "terminalReport": "f0d53ba7369c6c146a09a5b15b908cba76ee33ad3dacbf151df7b36cb7763f4d"
+    },
+    "supersededMigrationSha256": {
+      "quest": "918fd20c03ae73a48449d6f751ba9c5589391dc205615c8b386be04d5d50fc9a",
+      "oracle": "e67680c0b70847118fdad0a9b2bcc33f461e79625672779925e8ec8d2e0aee23",
+      "terminalLog": "d7517ecb6ec9057af385d43f37f63729f722be3e759c98cf973e656988f3ae26",
+      "terminalReport": "2da3886b6595731ed4115b3da8b508aa4a740e966d434af17f356acf6ec4d8ab"
+    }
+  }
+}
