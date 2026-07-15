@@ -46,23 +46,6 @@ const MERGE_ACK_STATUS = Object.freeze({
 });
 
 /**
- * Terminal status values for merge acknowledgements.
- * An acknowledgement with one of these statuses indicates the participant
- * has reached a final state for its execution boundary.
- *
- * @type {ReadonlySet<string>}
- */
-const MERGE_ACK_TERMINAL_STATUSES = Object.freeze(new Set([
-  MERGE_ACK_STATUS.TARGET_PROVISIONED,
-  MERGE_ACK_STATUS.TARGET_PROVISION_FAILED,
-  MERGE_ACK_STATUS.SOURCE_DISSOLVED,
-  MERGE_ACK_STATUS.SNAPSHOT_FAILED,
-  MERGE_ACK_STATUS.BACKFILL_FAILED,
-  MERGE_ACK_STATUS.CUTOVER_FAILED,
-  MERGE_ACK_STATUS.DISSOLUTION_FAILED,
-]));
-
-/**
  * Failure status values for merge acknowledgements.
  *
  * @type {ReadonlySet<string>}
@@ -145,30 +128,12 @@ function buildMergeSourceParticipantKey(partitionId) {
     String(partitionId || '');
 }
 
-/**
- * Log messages for merge participant acknowledgement processing.
- *
- * @enum {string}
- */
-const MERGE_ACK_LOG_MSG = Object.freeze({
-  ACK_RECEIVED: 'Merge participant acknowledgement received',
-  ACK_ACCEPTED: 'Merge participant acknowledgement accepted',
-  CUTOVER_READY: 'Merge cutover precondition satisfied by all sources',
-  CUTOVER_AWAITING_SOURCES:
-    'Merge cutover deferred: awaiting remaining source catch-up',
-  DISSOLUTION_READY:
-    'Merge dissolution precondition satisfied by all sources',
-});
-
 export {
   MERGE_ACK_STATUS,
-  MERGE_ACK_TERMINAL_STATUSES,
   MERGE_ACK_FAILURE_STATUSES,
   MERGE_ACK_CATCHUP_SATISFIED_STATUSES,
   MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
   MERGE_ACK_CHECKPOINT_FIELD,
   MERGE_PARTICIPANT_PREFIX,
-  MERGE_PARTICIPANT_KEY_SEPARATOR,
-  MERGE_ACK_LOG_MSG,
   buildMergeSourceParticipantKey,
 };

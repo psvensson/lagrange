@@ -601,7 +601,6 @@ function openOciHostAgentReceiptLedger(rawOptions) {
 export {
   OCI_HOST_AGENT_DURABILITY_POINT,
   OCI_HOST_AGENT_DURABLE_ERROR,
-  OciHostAgentDurableStateError,
   initializeOciHostAgentReceiptLedger,
   openOciHostAgentReceiptLedger,
   readOciHostAgentReceiptLedgerHeader,

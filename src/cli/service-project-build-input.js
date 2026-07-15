@@ -489,7 +489,6 @@ async function validateExistingFinalServiceManifest(templateInput) {
 }
 
 export {
-  ServiceProjectBuildInputError,
   createServiceProjectBuildInput,
   materializeFinalServiceManifest,
   readBoundedJsonFile,

@@ -313,8 +313,6 @@ function buildMergeWorkflow(options = {}) {
 
 export {
   createRecordingCdcIntegrationService,
-  FIXTURE_BOUNDARY_KEY,
-  FIXTURE_SIBLING_BOUNDARY_KEY,
   FIXTURE_LEFT_PARTITION_ID,
   FIXTURE_RIGHT_PARTITION_ID,
   FIXTURE_SIBLING_PARTITION_ID,
@@ -323,5 +321,4 @@ export {
   buildMergeWorkflow,
   createDefaultPartitionInfos,
   createThreePartitionInfos,
-  parseDurablePartitionTransition,
 };

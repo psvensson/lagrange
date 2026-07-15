@@ -69,4 +69,4 @@ function createServiceLifecycleSqlClient(options = {}) {
   });
 }
 
-export {ServiceLifecycleSqlClientError, createServiceLifecycleSqlClient};
+export {createServiceLifecycleSqlClient};

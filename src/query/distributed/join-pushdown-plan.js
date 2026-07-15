@@ -793,13 +793,8 @@ function buildJoinPushdownPlan(ast, params = []) {
     ),
   };
 }
-
 export {
-  JOIN_PUSHDOWN_PLAN_KIND,
-  SEMI_FILTER_KIND,
-  andCombineConjuncts,
-  buildJoinKeyInFilter,
-  buildJoinPushdownPlan,
-  collectDistinctJoinKeyValues,
+  SEMI_FILTER_KIND, andCombineConjuncts, buildJoinKeyInFilter,
+  buildJoinPushdownPlan, collectDistinctJoinKeyValues,
   resolveResidualConjunctForRow,
 };

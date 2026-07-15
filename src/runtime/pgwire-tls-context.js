@@ -92,7 +92,6 @@ function upgradePgwireSocketToTls(socket, secureContext) {
 }
 
 export {
-  PGWIRE_TLS_ENV,
   PGWIRE_TLS_ERROR,
   loadPgwireTlsOptions,
   buildPgwireSecureContext,

@@ -7,7 +7,6 @@ import {
 } from './oci-host-agent-json.js';
 import {
   OCI_HOST_AGENT_PROTOCOL_ERROR,
-  OciHostAgentProtocolError,
   protocolError,
 } from './oci-host-agent-protocol-errors.js';
 import {
@@ -326,7 +325,6 @@ function decodeOciHostAgentResponseFrame(frame, options = {}) {
 
 export {
   OCI_HOST_AGENT_PROTOCOL_ERROR,
-  OciHostAgentProtocolError,
   canonicalizeOciHostAgentJson,
   decodeOciHostAgentRequestFrame,
   decodeOciHostAgentResponseFrame,

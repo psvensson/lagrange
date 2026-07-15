@@ -141,4 +141,4 @@ function runServiceCommand(args) {
     });
 }
 
-export {SERVICE_COMMAND_EXIT_CODE, runServiceCommand};
+export {runServiceCommand};

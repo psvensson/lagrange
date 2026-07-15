@@ -723,7 +723,6 @@ export {
   HANDLER_PHASE,
   // Message builders (exported for testing)
   buildAuthOk,
-  buildAuthCleartextPassword,
   buildParameterStatus,
   buildBackendKeyData,
   buildReadyForQuery,

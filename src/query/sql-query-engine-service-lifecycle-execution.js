@@ -167,7 +167,5 @@ class SQLQueryEngineServiceLifecycleExecution extends
 }
 
 export {
-  SERVICE_LIFECYCLE_EXECUTION_DISPOSITION,
-  SERVICE_LIFECYCLE_EXECUTION_ERROR_CODE,
   SQLQueryEngineServiceLifecycleExecution,
 };
