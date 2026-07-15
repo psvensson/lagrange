@@ -82,6 +82,38 @@ test('metadata gateway audit rejects unsanctioned cache mutations',
       'audit should report direct cache mutation');
   });
 
+test('metadata gateway audit keeps the extracted replica-create cache seed ' +
+  'narrowly sanctioned', async (t) => {
+  const rootDir = createTempRoot();
+  const directCacheMutation =
+    'export function seed(cache, row) {' +
+    ' cache.applySystemTableChange("services", "UPSERT", row); }';
+  writeRuntimeFile(
+    rootDir,
+    'src/node/replica-handler-create-status-methods.js',
+    directCacheMutation,
+  );
+
+  const sanctionedResult = runAudit(rootDir);
+
+  t.equal(sanctionedResult.status, 0,
+    'extracted create-status owner should retain the inherited sanction');
+
+  fs.rmSync(path.join(rootDir, 'src/node/replica-handler-create-status-methods.js'));
+  writeRuntimeFile(
+    rootDir,
+    'src/node/replica-handler-create-methods.js',
+    directCacheMutation,
+  );
+
+  const retiredPathResult = runAudit(rootDir);
+
+  t.equal(retiredPathResult.status, 1,
+    'the pre-extraction owner path should no longer be sanctioned');
+  t.match(retiredPathResult.stderr, /direct-cache-mutation/,
+    'retired owner path should be reported as a direct cache mutation');
+});
+
 test('metadata gateway audit allows sanctioned bootstrap direct writers',
   async (t) => {
     const rootDir = createTempRoot();

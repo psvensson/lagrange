@@ -63,7 +63,7 @@ const DIRECT_CACHE_APPLY_ALLOWLIST = [
   // Inherited debt, anchored 2026-07-02 for the 0.1.0 gate (violation exists
   // at the pre-release base; audit was silently red — no full gate had ever
   // executed it). Un-allowlist when the create path routes via the gateway.
-  'src/node/replica-handler-create-methods.js',
+  'src/node/replica-handler-create-status-methods.js',
   'src/bootstrap/',
   'src/cdc/',
   'src/cdc/cdc-integration-service-',
