@@ -409,10 +409,17 @@ const bootstrapRequestOwnerHandlerMethods = {
         });
       }
 
-      const leaderStatus = await this.waitForServiceLeaders({
-        startupMode: requestStartupMode,
-        membershipOwnerOutcome,
-      });
+      const budgetedLeaderReadinessOptions =
+        this.attachBootstrapRequestExecutionBudget(
+          {
+            startupMode: requestStartupMode,
+            membershipOwnerOutcome,
+          },
+          requestExecutionBudget,
+        );
+      const leaderStatus = await this.waitForServiceLeaders(
+        budgetedLeaderReadinessOptions,
+      );
       if (!leaderStatus.ready) {
         const responseTimestamp = Date.now();
         const startupAuthority =

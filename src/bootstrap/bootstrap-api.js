@@ -523,6 +523,8 @@ class BootstrapAPI {
               null :
               this.getMissingServiceLeaders(),
           getLogger: () => this.logger,
+          getAuthoritativeControlPlaneView: () =>
+            this.getAuthoritativeControlPlaneView(),
         },
       });
 
