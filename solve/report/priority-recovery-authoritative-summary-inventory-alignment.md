@@ -53,6 +53,8 @@
 - **priority-recovery-authoritative-summary-inventory-alignment-main**: Independent verification passed [subagent:priority_summary_independent_verify]
 - **priority-recovery-authoritative-summary-inventory-alignment-main**: Ingested evidence from priority-recovery-authoritative-summary-inventory-alignment-2026-07-15T18-57-53-109Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/priority-recovery-authoritative-summary-inventory-alignment-2026-07-15T18-57-53-109Z.report.json]
 - **priority-recovery-authoritative-summary-inventory-alignment-main**: Ingested evidence from priority-recovery-authoritative-summary-inventory-alignment-2026-07-15T18-57-53-109Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/priority-recovery-authoritative-summary-inventory-alignment-2026-07-15T18-57-53-109Z.report.json]
+- **priority-recovery-authoritative-summary-inventory-alignment-main**: The sealed stale schema_operations SYNCING witness reproduces on the current Quest base when only the revision fence is reverted, and disappears when the sealed source diff is restored. [test-output/reports/priority-recovery-authoritative-summary-inventory-alignment-2026-07-15T18-57-09-338Z.report.json]
+- **priority-recovery-authoritative-summary-inventory-alignment-main**: System contract binding and the complete architecture model suite passed after the owner-boundary update, including contract records, invariants, decision tables, statecharts, owner traces, Alloy, and TLC checks. [architecture/contracts/core-system-logic.md]
 
 ## Theories
 _(none recorded)_
