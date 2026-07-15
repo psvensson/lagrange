@@ -1,0 +1,21 @@
+diff --git a/docs/evidence/partition-class-ladder-census-proof-final-reconciliation.json b/docs/evidence/partition-class-ladder-census-proof-final-reconciliation.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..2623fd6737bf07af3b15cb4edc9630a980c7bd87
+--- /dev/null
++++ b/docs/evidence/partition-class-ladder-census-proof-final-reconciliation.json
+@@ -0,0 +1,15 @@
++{
++  "classification": "fresh_evidence_reconciliation",
++  "sourceHead": "6aeeed6f6f26bced7a13f8c0c35ce902423c8e0b",
++  "command": "node scripts/check-partition-class-owner.js --oracle --with-gates",
++  "oracle": "solve/oracle/partition-class-ladder-single-owner-table.json",
++  "oracleSha256": "29e1f92b662bf17f4875f65514bd37bdcb98241810446cea0fa71ffa75b3c5b0",
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "ownerContractPassed": true,
++  "currentRawPredicateEdges": 0,
++  "currentCollapsedLadderEdges": 0,
++  "allGatesPassed": true,
++  "sourceOrBaselineChanged": false
++}

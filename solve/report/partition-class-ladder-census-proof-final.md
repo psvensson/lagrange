@@ -4,46 +4,30 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/partition-class-ladder-single-owner-table.json
 
-**Attempts:** 3
+**Attempts:** 4
 
 ## Links
 - spec: solve/epics/self-hosting-circularity-generic-treatment.md
 - parent quest: partition-class-ladder-census-proof
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
 
-## Current Blocker
-- Frontier: partition-class-ladder-census-proof-final-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: ownership_gap
-- Movement: solved: unknown -> unknown
-- Latest evidence: solve/oracle/partition-class-ladder-single-owner-table.json
-- Selected theory: theory-20260713-static-owner-contract-accepts-mutable-or
-- Next move: continue supervised step for partition-class-ladder-census-proof-final-main
-- No longer current: unknown
-
-## Continuation
-- Status: blocked-theory
-- Next action: record system theory before the next partition-class-ladder-census-proof-final-main attempt using npm run model:contracts as model discriminator
-- Blocker: system theory required for partition-class-ladder-census-proof-final-main
-
 ## Scope Pressure
-- Changed files: 3
-- Change bytes: 62053
-- Owner areas: architecture, scripts/check-partition-class-owner.js, test/scripts
+- Changed files: 4
+- Change bytes: 63025
+- Owner areas: architecture, docs, scripts/check-partition-class-owner.js, test/scripts
 - Categories: docs, other, test
-- Action: land or separate 3 owner areas: architecture, scripts/check-partition-class-owner.js, test/scripts
+- Action: land or separate 4 owner areas: architecture, docs, scripts/check-partition-class-owner.js, test/scripts
 - Split plan:
   - architecture: 1 file(s)
+  - docs: 1 file(s)
   - scripts/check-partition-class-owner.js: 1 file(s)
   - test/scripts: 1 file(s)
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **partition-class-ladder-census-proof-final-main** [open] rung 3, attempts 3, metric 119 -> 0
+- **partition-class-ladder-census-proof-final-main** [solved] rung 4, attempts 4, metric 119 -> 0
 
 ## Findings
 - **partition-class-ladder-census-proof-final-main**: Independent verifier rejected the exact census proof because locally named constant inputs could spoof canonical provenance and a reachable conditional wrong return could precede a validated but dead final return. [subagent:verify_rung5_census]
@@ -60,7 +44,7 @@
 - **partition-class-ladder-census-proof-final-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 119 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
 
 ## Theories
-- **theory-20260713-static-owner-contract-accepts-mutable-or** [supported] frontier, frontier partition-class-ladder-census-proof-final-main, layer observation, mechanism static_owner_contract_accepts_mutable_or_spread_overridden_shapes, modelGate npm run model:contracts
+- **theory-20260713-static-owner-contract-accepts-mutable-or** [falsified] frontier, frontier partition-class-ladder-census-proof-final-main, layer observation, mechanism static_owner_contract_accepts_mutable_or_spread_overridden_shapes, modelGate npm run model:contracts
 
 ## Selected Theories
 - **partition-class-ladder-census-proof-final-main**: theory-20260713-static-owner-contract-accepts-mutable-or
@@ -69,6 +53,7 @@
 - **theory-20260713-static-owner-contract-accepts-mutable-or**: falsified (scenario=failed, theory=falsified, movement=same) [solve/oracle/partition-class-ladder-single-owner-table.json]
 - **theory-20260713-static-owner-contract-accepts-mutable-or**: falsified (scenario=failed, theory=falsified, movement=same) [solve/oracle/partition-class-ladder-single-owner-table.json]
 - **theory-20260713-static-owner-contract-accepts-mutable-or**: supported (scenario=done, theory=supported, movement=solved) [solve/oracle/partition-class-ladder-single-owner-table.json]
+- **theory-20260713-static-owner-contract-accepts-mutable-or**: falsified (scenario=done, theory=falsified, movement=solved) [solve/oracle/partition-class-ladder-single-owner-table.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -76,3 +61,4 @@
 | 2026-07-13T16:45:42.476Z | partition-class-ladder-census-proof-final-main | observe | 119 -> 119 | flat | no_evidence |  | diff:solve/changes/partition-class-ladder-census-proof-final/attempt-1.diff.json |
 | 2026-07-13T16:52:08.103Z | partition-class-ladder-census-proof-final-main | local-fix | 119 -> 119 | flat | no_previous |  | diff:solve/changes/partition-class-ladder-census-proof-final/attempt-2.diff.json |
 | 2026-07-13T17:05:31.452Z | partition-class-ladder-census-proof-final-main | widen-scope | 119 -> 119 | flat | same | theory-20260713-static-owner-contract-accepts-mutable-or | diff:solve/changes/partition-class-ladder-census-proof-final/attempt-3.diff.json |
+| 2026-07-15T06:59:01.228Z | partition-class-ladder-census-proof-final-main | model | 0 -> 0 | flat | solved | theory-20260713-static-owner-contract-accepts-mutable-or | diff:solve/changes/partition-class-ladder-census-proof-final/attempt-4.diff |
