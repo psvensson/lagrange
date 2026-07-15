@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "solve-historical-oracle-archive",
+  "hashAlgorithm": "sha256",
+  "contentEncoding": "gzip",
+  "entries": [
+    {
+      "questId": "leadership-flap-attribution-census",
+      "sealedPath": "test-output/reports/leadership-flap-attribution.verdict.json",
+      "terminalEvidenceSha256": "aa892864ba27ebe1b366f722c0d509bb6700f0c4c2c8095956198ef298e8d99b",
+      "payloadBytes": 223914,
+      "objectPath": "solve/artifacts/historical-oracles/sha256/aa/aa892864ba27ebe1b366f722c0d509bb6700f0c4c2c8095956198ef298e8d99b.oracle.json.gz",
+      "objectStorageSha256": "4a88cda6bfb0a262f24d7eb567045a34e6cc85628e045dcd6c8e38d8fb8ae818"
+    },
+    {
+      "questId": "rolling-restart-run4-passfail-discriminator-census",
+      "sealedPath": "test-output/reports/passfail-discriminator-census.verdict.json",
+      "terminalEvidenceSha256": "88e36e3e9a533222e4a60a56338be5656f5e4f1de19cca8beedc6892382a1175",
+      "payloadBytes": 2975,
+      "objectPath": "solve/artifacts/historical-oracles/sha256/88/88e36e3e9a533222e4a60a56338be5656f5e4f1de19cca8beedc6892382a1175.oracle.json.gz",
+      "objectStorageSha256": "4b3cbc1e41b5d2eaaf69526842abbd0d0954b3189ee20f83e84c644bc4411c6b"
+    }
+  ]
+}

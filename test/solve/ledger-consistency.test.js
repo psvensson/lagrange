@@ -3,6 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {checkLedgerConsistency} from '../../scripts/solve/ledger-consistency.js';
+import {
+  canonicalHistoricalOracleManifestBytes,
+  historicalOracleArchivePaths,
+  writeHistoricalOracleArchive,
+} from '../../scripts/solve/historical-oracle-archive.js';
 
 // Deterministic guard for the Solver ledger-consistency check. Builds throwaway
 // fixture ledgers and asserts each structured rule fires on a planted defect and is
@@ -40,6 +45,17 @@ function writeJsonFile(root, file, obj) {
   const target = path.join(root, file);
   fs.mkdirSync(path.dirname(target), {recursive: true});
   fs.writeFileSync(target, JSON.stringify(obj));
+}
+function solvedEvidenceEvent(file, sha256) {
+  return {
+    type: 'quest',
+    status: 'solved',
+    evidence: file,
+    evidenceIdentity: {sha256},
+  };
+}
+function writeArchive(root, id, sealedPath, payload = '{"done":true}\n') {
+  return writeHistoricalOracleArchive(root, [{questId: id, sealedPath, payload}]);
 }
 const errText = (r) => r.errors.join('\n');
 const warnText = (r) => r.warnings.join('\n');
@@ -110,7 +126,7 @@ t.test('Q1: solved quest with a missing oracle-probe target is an ERROR', (t) =>
   // NB: no solve/oracle/orphan.json written
   const withDefect = checkLedgerConsistency(root);
   t.match(errText(withDefect),
-    /quest orphan: questStatus=solved but its oracle-probe target .* is missing \(Q1\)/,
+    /quest orphan: questStatus=solved but its oracle-probe target .* is missing; .* \(Q1\)/,
     'Q1 fires when a solved quest lacks its oracle-probe target');
 
   // revert: create the target -> finding disappears
@@ -118,6 +134,110 @@ t.test('Q1: solved quest with a missing oracle-probe target is an ERROR', (t) =>
   t.equal(checkLedgerConsistency(root).errors.length, 0, 'Q1 clears once the target exists');
   t.end();
 });
+
+t.test('Q1: clean clone accepts exact content-addressed historical evidence', (t) => {
+  const root = mkFixture();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const id = 'archived';
+  const sealedPath = 'test-output/reports/archived.verdict.json';
+  writeQuest(root, id, {probe: 'oracle', args: {file: sealedPath}});
+  const prepared = writeArchive(root, id, sealedPath);
+  writeLog(root, id, [solvedEvidenceEvent(
+    sealedPath, prepared.objects[0].entry.terminalEvidenceSha256)]);
+
+  const result = checkLedgerConsistency(root);
+  t.equal(fs.existsSync(path.join(root, sealedPath)), false,
+    'ignored live oracle is absent');
+  t.equal(fs.existsSync(path.join(root, 'solve/state')), false,
+    'derived state cache is absent');
+  t.equal(result.errors.length, 0, `archive satisfies Q1: ${errText(result)}`);
+  t.end();
+});
+
+t.test('Q1: archive identity binding fails closed', async (t) => {
+  const cases = [
+    {
+      name: 'Quest id mismatch',
+      archiveId: 'other',
+      archivePath: 'test-output/reports/archived.verdict.json',
+      eventPath: 'test-output/reports/archived.verdict.json',
+    },
+    {
+      name: 'sealed path mismatch',
+      archiveId: 'archived',
+      archivePath: 'test-output/reports/other.verdict.json',
+      eventPath: 'test-output/reports/archived.verdict.json',
+    },
+    {
+      name: 'terminal path mismatch',
+      archiveId: 'archived',
+      archivePath: 'test-output/reports/archived.verdict.json',
+      eventPath: 'test-output/reports/other.verdict.json',
+    },
+    {
+      name: 'terminal SHA-256 mismatch',
+      archiveId: 'archived',
+      archivePath: 'test-output/reports/archived.verdict.json',
+      eventPath: 'test-output/reports/archived.verdict.json',
+      eventSha256: 'f'.repeat(64),
+    },
+  ];
+  for (const item of cases) {
+    await t.test(item.name, (t) => {
+      const root = mkFixture();
+      t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+      const sealedPath = 'test-output/reports/archived.verdict.json';
+      writeQuest(root, 'archived', {probe: 'oracle', args: {file: sealedPath}});
+      const prepared = writeArchive(root, item.archiveId, item.archivePath);
+      const sha256 = item.eventSha256 ||
+        prepared.objects[0].entry.terminalEvidenceSha256;
+      writeLog(root, 'archived', [solvedEvidenceEvent(item.eventPath, sha256)]);
+      t.match(errText(checkLedgerConsistency(root)), /historical archive invalid:.*\(Q1\)/u,
+        'identity mismatch remains Q1');
+      t.end();
+    });
+  }
+  t.end();
+});
+
+t.test('Q1: missing, noncanonical, duplicate, and tampered archive fails closed',
+  async (t) => {
+    const sealedPath = 'test-output/reports/archived.verdict.json';
+    const fixture = () => {
+      const root = mkFixture();
+      writeQuest(root, 'archived', {probe: 'oracle', args: {file: sealedPath}});
+      const prepared = writeArchive(root, 'archived', sealedPath);
+      writeLog(root, 'archived', [solvedEvidenceEvent(
+        sealedPath, prepared.objects[0].entry.terminalEvidenceSha256)]);
+      return {root, prepared};
+    };
+    const paths = historicalOracleArchivePaths();
+    const cases = [
+      ['missing manifest', ({root}) => fs.rmSync(path.join(root, paths.manifest))],
+      ['noncanonical manifest', ({root}) => fs.appendFileSync(
+        path.join(root, paths.manifest), '\n')],
+      ['duplicate entry', ({root, prepared}) => {
+        prepared.manifest.entries.push({...prepared.manifest.entries[0]});
+        fs.writeFileSync(path.join(root, paths.manifest),
+          canonicalHistoricalOracleManifestBytes(prepared.manifest));
+      }],
+      ['tampered object', ({root, prepared}) => fs.appendFileSync(
+        path.join(root, prepared.objects[0].entry.objectPath), 'tamper')],
+      ['missing object', ({root, prepared}) => fs.rmSync(
+        path.join(root, prepared.objects[0].entry.objectPath))],
+    ];
+    for (const [name, mutate] of cases) {
+      await t.test(name, (t) => {
+        const setup = fixture();
+        t.teardown(() => fs.rmSync(setup.root, {recursive: true, force: true}));
+        mutate(setup);
+        t.match(errText(checkLedgerConsistency(setup.root)),
+          /historical archive invalid:.*\(Q1\)/u, 'archive fault remains Q1');
+        t.end();
+      });
+    }
+    t.end();
+  });
 
 t.test('Q2: the exact sealed oracle done=true without terminal state is a WARNING', (t) => {
   const root = mkFixture();

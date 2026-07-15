@@ -19,6 +19,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {verifyHistoricalOracleArchive} from './historical-oracle-archive.js';
 import {projectState, readLog} from './store.js';
 
 const EPICS_DIR = 'solve/epics';
@@ -87,23 +88,37 @@ function projectQuestLedger(root, id, quest) {
   const probeFile = isOracleProbe && doneWhen.args ? doneWhen.args.file : null;
   const probePath = probeFile ? path.join(root, probeFile) : null;
   const probeFileExists = probePath ? fs.existsSync(probePath) : null;
+  const log = readLog(root, id);
+  const questStatus = projectState(quest, log).questStatus;
+  const terminalEvent = [...log].reverse().find(
+    (event) => event.type === 'quest' && event.status === 'solved');
+  const archive = questStatus === 'solved' && isOracleProbe && probeFile &&
+    !probeFileExists ? verifyHistoricalOracleArchive(root, {
+      questId: id,
+      sealedPath: probeFile,
+      terminalEvidencePath: terminalEvent?.evidence,
+      terminalEvidenceSha256: terminalEvent?.evidenceIdentity?.sha256,
+    }) : null;
   return {
+    archive,
     isOracleProbe,
     oracle: probeFileExists ? readJson(probePath) : null,
     probeFile,
     probeFileExists,
-    questStatus: projectState(quest, readLog(root, id)).questStatus,
+    questStatus,
   };
 }
 
 function missingSolvedOracleError(id, projection) {
-  const {isOracleProbe, probeFile, probeFileExists, questStatus} =
+  const {archive, isOracleProbe, probeFile, probeFileExists, questStatus} =
     projection;
   // Q1 (ERROR): a quest recorded solved whose closure probe is an oracle file
   // MUST have that file present — else its sealed closure cannot be re-evaluated.
-  if (questStatus === 'solved' && isOracleProbe && probeFile && !probeFileExists) {
+  if (questStatus === 'solved' && isOracleProbe && probeFile && !probeFileExists &&
+    archive?.valid !== true) {
+    const problem = archive?.problems?.[0] || 'no verified archive entry';
     return `quest ${id}: questStatus=solved but its oracle-probe target ` +
-      `\`${probeFile}\` is missing (Q1)`;
+      `\`${probeFile}\` is missing; historical archive invalid: ${problem} (Q1)`;
   }
   return null;
 }
