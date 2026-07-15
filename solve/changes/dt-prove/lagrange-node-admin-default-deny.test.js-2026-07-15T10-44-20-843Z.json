@@ -1,0 +1,21 @@
+{
+  "test": "test/helm/lagrange-node-admin-default-deny.test.js",
+  "src": [
+    "charts/lagrange-node/templates/_helpers.tpl",
+    "charts/lagrange-node/templates/service.yaml",
+    "charts/lagrange-node/templates/service-headless.yaml",
+    "charts/lagrange-node/values.yaml",
+    "charts/lagrange-node/values.schema.json",
+    "scripts/run-helm-admin-default-deny-live-scenario.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-15T10:44:20.794Z"
+}

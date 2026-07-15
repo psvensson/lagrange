@@ -1,0 +1,24 @@
+{
+  "test": "test/config/configuration-manager.test.js",
+  "src": [
+    "src/config/listener-port-model.js",
+    "src/config/config-constants.js",
+    "src/config/config-definitions.js",
+    "src/config/config-schema-constants.js",
+    "src/config/configuration-manager.js",
+    "src/admin/admin-constants.js",
+    "src/constants/entrypoint.js",
+    "src/constants/transport.js",
+    "src/node/node-constants.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-15T11:12:27.009Z"
+}
