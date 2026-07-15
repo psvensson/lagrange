@@ -1,0 +1,18 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": false,
+  "classification": "solver-static-guideline-ratchet-closure",
+  "detail": {
+    "literalViolations": 0,
+    "decisionBoundaryViolations": 0,
+    "baselineChanged": false,
+    "solverTestFilesPassed": 53,
+    "solverTestFilesTotal": 55,
+    "inheritedProjectionBlockers": [
+      "global-owner-debt-inventory checked-in projection freshness",
+      "priority-recovery-owner-inventory checked-in projection freshness"
+    ],
+    "sample": "scoped audits are zero; both remaining suite failures reproduce at base 0ecb3f98 and pass after their official projection refreshes"
+  }
+}

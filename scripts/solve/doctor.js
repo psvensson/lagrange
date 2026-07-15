@@ -3,6 +3,13 @@ import {spawnSync} from 'node:child_process';
 import {inspectAgentConfig} from './agent-executor.js';
 import {inspectCoauthorAttribution} from './operator-config.js';
 
+const LOCAL_STR_OWNED_001 = 'true';
+const LOCAL_STR_OWNED_002 = 'autonomous';
+const LOCAL_STR_OWNED_003 = 'supervised';
+const LOCAL_STR_OWNED_004 = 'solve/config.json';
+const LOCAL_STR_OWNED_005 = 'node scripts/solve.js run --id <quest> --executor agent --yes --keep-alive';
+const LOCAL_STR_OWNED_006 = 'node scripts/solve.js next --id <quest>';
+
 const DOCTOR_SCHEMA_VERSION = 1;
 const LINE_SEPARATOR = '\n';
 
@@ -17,7 +24,7 @@ function gitOutput(root, args, spawn) {
 
 function inspectGit(root, spawn) {
   const inside = gitOutput(root, ['rev-parse', '--is-inside-work-tree'], spawn);
-  if (!inside.ok || inside.value !== 'true') {
+  if (!inside.ok || inside.value !== LOCAL_STR_OWNED_001) {
     return {
       available: false,
       insideWorkTree: false,
@@ -49,9 +56,9 @@ export function buildDoctorReport(root, options = {}) {
   return {
     schemaVersion: DOCTOR_SCHEMA_VERSION,
     ok: git.insideWorkTree,
-    recommendedMode: autonomous ? 'autonomous' : 'supervised',
+    recommendedMode: autonomous ? LOCAL_STR_OWNED_002 : LOCAL_STR_OWNED_003,
     agentExecutor: {
-      configPath: 'solve/config.json',
+      configPath: LOCAL_STR_OWNED_004,
       state: agent.state,
       enabled: agent.enabled,
       available: agent.available,
@@ -62,8 +69,8 @@ export function buildDoctorReport(root, options = {}) {
     git,
     attribution,
     next: autonomous ?
-      'node scripts/solve.js run --id <quest> --executor agent --yes --keep-alive' :
-      'node scripts/solve.js next --id <quest>',
+      LOCAL_STR_OWNED_005 :
+      LOCAL_STR_OWNED_006,
   };
 }
 

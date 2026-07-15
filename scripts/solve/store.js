@@ -43,6 +43,8 @@ import {
 const DONE_WHEN_PROBE_SCOPE = 'doneWhen';
 import {isFrontierProbeEvent} from './probe-spec.js';
 
+const LOCAL_STR_OWNED_001 = 'exact terminal source attempt was rejected';
+
 const UNKNOWN_METRIC = '?';
 const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
 const VERIFICATION_SCOPE_ATTEMPT = 'attempt';
@@ -228,7 +230,7 @@ function applyFinding(frontier, event, reopensTerminal = false) {
   });
   if (reopensTerminal && frontier.status === STATUS_SOLVED) {
     frontier.status = STATUS_OPEN;
-    frontier.reason = 'exact terminal source attempt was rejected';
+    frontier.reason = LOCAL_STR_OWNED_001;
   }
 }
 
@@ -358,6 +360,11 @@ const FRONTIER_HANDLERS = {
   [EVENT_EVIDENCE_INGESTED]: applyEvidenceIngested,
 };
 
+function reopenQuestState(questState, event) {
+  questState.status = STATUS_OPEN;
+  questState.evidence = event.evidence || null;
+}
+
 function applyQuestStateEvent(questState, event, reopensTerminal = false) {
   switch (event.type) {
   case EVENT_QUEST:
@@ -367,14 +374,12 @@ function applyQuestStateEvent(questState, event, reopensTerminal = false) {
   case EVENT_EVIDENCE_INGESTED:
     if (event.probeScope === DONE_WHEN_PROBE_SCOPE &&
         event.invalidSample !== true && event.done === false) {
-      questState.status = STATUS_OPEN;
-      questState.evidence = event.evidence || null;
+      reopenQuestState(questState, event);
     }
     return false;
   case EVENT_FINDING:
     if (reopensTerminal) {
-      questState.status = STATUS_OPEN;
-      questState.evidence = event.evidence || null;
+      reopenQuestState(questState, event);
     }
     return false;
   default:

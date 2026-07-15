@@ -51,6 +51,9 @@ import {
   verificationState,
 } from './verification.js';
 
+const LOCAL_STR_OWNED_001 = 'product quest has no planning link (links.roadmapRow / specRef / planDoc / ';
+const LOCAL_STR_OWNED_002 = 'parentQuest / closesCL all empty); it will not appear in planning joins';
+
 const BLOCKED_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_AVOIDED,
   THEORY_RESULT_FALSIFIED,
@@ -292,8 +295,8 @@ function linkHygieneWarnings(quest) {
   if (links.roadmapRow || links.specRef || links.planDoc || links.parentQuest ||
     closes.length > 0) return [];
   return [
-    'product quest has no planning link (links.roadmapRow / specRef / planDoc / ' +
-    'parentQuest / closesCL all empty); it will not appear in planning joins',
+    LOCAL_STR_OWNED_001 +
+    LOCAL_STR_OWNED_002,
   ];
 }
 

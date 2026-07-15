@@ -129,6 +129,13 @@ import {
 } from './probe-spec.js';
 import {typedNextAction} from './next-action.js';
 
+const LOCAL_STR_OWNED_001 = 'Repair the measurement harness, then resume the Quest.';
+const LOCAL_STR_OWNED_002 = 'Execute the reported judgment action, then resume the Quest.';
+const LOCAL_STR_OWNED_003 = 'judgment';
+const LOCAL_STR_OWNED_004 = 'Add durable evidence or revise the approach before resuming the Quest.';
+const LOCAL_STR_OWNED_005 = 'no-progress';
+const LOCAL_STR_OWNED_006 = 'Review the supervisor budget stop and choose the next evidence-bearing move.';
+
 function defaultFileExists(p) {
   return Boolean(p) && fs.existsSync(p);
 }
@@ -1068,7 +1075,7 @@ export function runSupervised(root, quest, options = {}) {
         outcome: OUTCOME_SUPERVISOR_PAUSED_MEASUREMENT,
         nextAction: resultNextAction(
           result,
-          'Repair the measurement harness, then resume the Quest.',
+          LOCAL_STR_OWNED_001,
         ),
         supervisor: {restarts, stop: 'measurement', innerOutcome: result.outcome},
       };
@@ -1078,9 +1085,9 @@ export function runSupervised(root, quest, options = {}) {
         ...result,
         nextAction: resultNextAction(
           result,
-          'Execute the reported judgment action, then resume the Quest.',
+          LOCAL_STR_OWNED_002,
         ),
-        supervisor: {restarts, stop: 'judgment', innerOutcome: result.outcome},
+        supervisor: {restarts, stop: LOCAL_STR_OWNED_003, innerOutcome: result.outcome},
       };
     }
     const progress = durableProgressCount(readLog(root, quest.id));
@@ -1089,9 +1096,9 @@ export function runSupervised(root, quest, options = {}) {
         ...result,
         nextAction: resultNextAction(
           result,
-          'Add durable evidence or revise the approach before resuming the Quest.',
+          LOCAL_STR_OWNED_004,
         ),
-        supervisor: {restarts, stop: 'no-progress', innerOutcome: result.outcome},
+        supervisor: {restarts, stop: LOCAL_STR_OWNED_005, innerOutcome: result.outcome},
       };
     }
     if (restarts >= maxRestarts) {
@@ -1100,7 +1107,7 @@ export function runSupervised(root, quest, options = {}) {
         outcome: OUTCOME_SUPERVISOR_BUDGET,
         nextAction: resultNextAction(
           result,
-          'Review the supervisor budget stop and choose the next evidence-bearing move.',
+          LOCAL_STR_OWNED_006,
         ),
         supervisor: {restarts, stop: 'budget', innerOutcome: result.outcome},
       };

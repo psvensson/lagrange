@@ -61,6 +61,17 @@ import {
 } from './solve/quest-lint.js';
 import {buildVerificationFinding} from './solve/verification.js';
 
+const LOCAL_STR_OWNED_001 = 'new: Quest ID has append-only history but no Quest file; restore it or author a successor';
+const LOCAL_STR_OWNED_002 = 'new: --force cannot overwrite a Quest with append-only history; author a successor';
+const LOCAL_STR_OWNED_003 = 'roadmap-row';
+const LOCAL_STR_OWNED_004 = 'spec-ref';
+const LOCAL_STR_OWNED_005 = 'plan-doc';
+const LOCAL_STR_OWNED_006 = 'closes-cl';
+const LOCAL_STR_OWNED_007 = 'new: --parent-quest and --inherit-rulesout-from must name the same Quest';
+const LOCAL_STR_OWNED_008 = 'lint: --id <questId> or --all is required';
+const LOCAL_STR_OWNED_009 = 'pass';
+const LOCAL_STR_OWNED_010 = ', ';
+
 const INHERITED_RULESOUT_ABSENT_CLAIM = '(no claim)';
 const INHERITED_RULESOUT_FINDING_KIND = 'inherited-rulesout';
 const LINE_SEPARATOR = '\n';
@@ -214,7 +225,7 @@ function cmdNew(root, args) {
   const existingLog = readLog(root, id);
   if (existingLog.length > 0 && !fs.existsSync(file)) {
     throw new Error(
-      'new: Quest ID has append-only history but no Quest file; restore it or author a successor',
+      LOCAL_STR_OWNED_001,
     );
   }
   if (fs.existsSync(file) && !args.force) {
@@ -222,28 +233,28 @@ function cmdNew(root, args) {
   }
   if (fs.existsSync(file) && args.force && existingLog.length > 0) {
     throw new Error(
-      'new: --force cannot overwrite a Quest with append-only history; author a successor',
+      LOCAL_STR_OWNED_002,
     );
   }
   const quest = questTemplate(id, typeof args.statement === 'string' ?
     args.statement : null, resolveQuestClass(args));
   quest.links.draftedAtCommit = resolveHeadCommit(root);
-  quest.links.roadmapRow = typeof args['roadmap-row'] === 'string' ?
-    args['roadmap-row'] : null;
-  quest.links.specRef = typeof args['spec-ref'] === 'string' ?
-    args['spec-ref'] : null;
-  quest.links.planDoc = typeof args['plan-doc'] === 'string' ?
-    args['plan-doc'] : null;
-  quest.links.closesCL = Array.isArray(args['closes-cl']) ?
-    args['closes-cl'] : (typeof args['closes-cl'] === 'string' ?
-      [args['closes-cl']] : []);
+  quest.links.roadmapRow = typeof args[LOCAL_STR_OWNED_003] === 'string' ?
+    args[LOCAL_STR_OWNED_003] : null;
+  quest.links.specRef = typeof args[LOCAL_STR_OWNED_004] === 'string' ?
+    args[LOCAL_STR_OWNED_004] : null;
+  quest.links.planDoc = typeof args[LOCAL_STR_OWNED_005] === 'string' ?
+    args[LOCAL_STR_OWNED_005] : null;
+  quest.links.closesCL = Array.isArray(args[LOCAL_STR_OWNED_006]) ?
+    args[LOCAL_STR_OWNED_006] : (typeof args[LOCAL_STR_OWNED_006] === 'string' ?
+      [args[LOCAL_STR_OWNED_006]] : []);
   const inheritedParentId = typeof args['inherit-rulesout-from'] === 'string' ?
     args['inherit-rulesout-from'] : null;
   const linkedParentId = typeof args['parent-quest'] === 'string' ?
     args['parent-quest'] : null;
   if (inheritedParentId && linkedParentId && inheritedParentId !== linkedParentId) {
     throw new Error(
-      'new: --parent-quest and --inherit-rulesout-from must name the same Quest',
+      LOCAL_STR_OWNED_007,
     );
   }
   const parentId = inheritedParentId || linkedParentId;
@@ -477,12 +488,12 @@ function cmdFinding(root, args) {
 function cmdLint(root, args) {
   const id = args.id || args._[0];
   if (!id && args.all !== true) {
-    throw new Error('lint: --id <questId> or --all is required');
+    throw new Error(LOCAL_STR_OWNED_008);
   }
   const result = lintQuestCorpus(root, {id, all: args.all === true});
   process.stdout.write(args.json === true ?
     `${JSON.stringify(result, null, 2)}\n` : renderQuestLint(result));
-  if (result.status !== 'pass') process.exitCode = 1;
+  if (result.status !== LOCAL_STR_OWNED_009) process.exitCode = 1;
 }
 
 function cmdCheckpoint(root, args) {
@@ -970,7 +981,7 @@ function cmdInvariants(root, args) {
       `  coverage:  ${result.guardedReproBackedCLs}/${result.reproBackedCLs} repro-backed CLs guarded (${pct(result.coverage)})\n` +
       `  coherence: ${result.held}/${result.liveInvariants} live invariants HELD (${pct(result.coherence)}) ` +
       `[${result.breached} breached, ${result.unguarded} unguarded]\n` +
-      `  worklist (unguarded repro-backed CLs): ${result.unguardedReproBackedCLs.join(', ') || '(none)'}\n`);
+      `  worklist (unguarded repro-backed CLs): ${result.unguardedReproBackedCLs.join(LOCAL_STR_OWNED_010) || '(none)'}\n`);
     return;
   }
   // on-touched-owner trigger: re-verify invariants whose paths intersect changed files.

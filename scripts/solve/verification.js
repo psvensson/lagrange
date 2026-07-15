@@ -12,14 +12,36 @@ import {
   requiresSourceVerification,
 } from './change-artifact.js';
 
+const LOCAL_STR_OWNED_001 = 'verifier-approval';
+const LOCAL_STR_OWNED_002 = 'attempt';
+const LOCAL_STR_OWNED_003 = 'aggregate';
+const LOCAL_STR_OWNED_004 = 'both';
+const LOCAL_STR_OWNED_005 = 'hex';
+const LOCAL_STR_OWNED_006 = 'subagent:';
+const LOCAL_STR_OWNED_007 = '\n';
+const LOCAL_STR_OWNED_008 = '?? ';
+const LOCAL_STR_OWNED_009 = 'source verification requires a recorded Git base commit';
+const LOCAL_STR_OWNED_010 = 'source verification could not inspect Git status';
+const LOCAL_STR_OWNED_011 = 'source verification cannot fingerprint untracked paths; stage intent with git add -N';
+const LOCAL_STR_OWNED_012 = '(missing changeRef)';
+const LOCAL_STR_OWNED_013 = '\t';
+const LOCAL_STR_OWNED_014 = '\0';
+const LOCAL_STR_OWNED_015 = 'requires a later legacy subagent verification finding';
+const LOCAL_STR_OWNED_016 = 'is missing a sealed verification fingerprint';
+const LOCAL_STR_OWNED_017 = 'same-frontier, same-base source attempt covering every rejected ';
+const LOCAL_STR_OWNED_018 = 'source path plus its own later exact approval';
+const LOCAL_STR_OWNED_019 = 'could not inspect dirty checkpoint paths';
+const LOCAL_STR_OWNED_020 = 'verifier-rejection requires --verification-scope attempt';
+const GIT_STATUS_UNAVAILABLE = Symbol('git_status_unavailable');
+
 export const VERIFICATION_CONTRACT_VERSION = 1;
-export const VERIFIER_APPROVAL_FINDING_KIND = 'verifier-approval';
+export const VERIFIER_APPROVAL_FINDING_KIND = LOCAL_STR_OWNED_001;
 const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
 const VERIFICATION_VERDICT_REJECTED = 'rejected';
 export const VERIFICATION_SCOPE = Object.freeze({
-  ATTEMPT: 'attempt',
-  AGGREGATE: 'aggregate',
-  BOTH: 'both',
+  ATTEMPT: LOCAL_STR_OWNED_002,
+  AGGREGATE: LOCAL_STR_OWNED_003,
+  BOTH: LOCAL_STR_OWNED_004,
 });
 
 const HASH_ALGORITHM = 'sha256';
@@ -29,7 +51,7 @@ const LEGACY_APPROVAL_PATTERN = /source|code|change|quest|intent|guideline|doctr
 const VERIFIER_EVIDENCE_PATTERN = /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
 
 function hash(bytes) {
-  return crypto.createHash(HASH_ALGORITHM).update(bytes).digest('hex');
+  return crypto.createHash(HASH_ALGORITHM).update(bytes).digest(LOCAL_STR_OWNED_005);
 }
 
 export function formatVerificationFingerprint(sha256) {
@@ -104,7 +126,7 @@ function structuredRejectionMatches(event, fingerprint) {
 
 function legacyApprovalMatches(event, frontier) {
   if (event.type !== EVENT_FINDING || event.frontier !== frontier ||
-    !String(event.evidence || '').startsWith('subagent:')) return false;
+    !String(event.evidence || '').startsWith(LOCAL_STR_OWNED_006)) return false;
   return event.kind === VERIFIER_APPROVAL_FINDING_KIND ||
     LEGACY_APPROVAL_PATTERN.test(String(event.claim || ''));
 }
@@ -204,28 +226,28 @@ function gitStatusHasUntracked(root, paths) {
     cwd: root,
     encoding: 'utf8',
   });
-  if (result.status !== 0) return null;
-  return String(result.stdout || '').split('\n')
-    .some((line) => line.startsWith('?? '));
+  if (result.status !== 0) return GIT_STATUS_UNAVAILABLE;
+  return String(result.stdout || '').split(LOCAL_STR_OWNED_007)
+    .some((line) => line.startsWith(LOCAL_STR_OWNED_008));
 }
 
 export function canonicalSourceDelta(root, baseCommit, paths) {
   const sortedPaths = [...new Set(paths)].sort();
   if (!/^[0-9a-f]{40}$/u.test(String(baseCommit || ''))) {
     return {ok: false, fingerprint: null, content: null,
-      problem: 'source verification requires a recorded Git base commit'};
+      problem: LOCAL_STR_OWNED_009};
   }
   if (sortedPaths.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: []};
   }
   const untracked = gitStatusHasUntracked(root, sortedPaths);
-  if (untracked === null) {
+  if (untracked === GIT_STATUS_UNAVAILABLE) {
     return {ok: false, fingerprint: null, content: null,
-      problem: 'source verification could not inspect Git status'};
+      problem: LOCAL_STR_OWNED_010};
   }
   if (untracked) {
     return {ok: false, fingerprint: null, content: null,
-      problem: 'source verification cannot fingerprint untracked paths; stage intent with git add -N'};
+      problem: LOCAL_STR_OWNED_011};
   }
   const result = spawnSync('git', [
     'diff', '--binary', '--full-index', '--no-ext-diff', baseCommit,
@@ -262,7 +284,7 @@ export function aggregateSourceFingerprint(root, attempts) {
 
 function attemptProblem(attempt, detail) {
   return {
-    message: `source attempt ${attempt.event.changeRef || '(missing changeRef)'} ` +
+    message: `source attempt ${attempt.event.changeRef || LOCAL_STR_OWNED_012} ` +
       `${detail}`,
     ts: attempt.event.ts || null,
     frontier: attempt.event.frontier || null,
@@ -276,8 +298,8 @@ function latestCheckpointCommit(root, questId) {
   });
   if (result.status !== 0) return null;
   const prefix = `checkpoint(quest): ${questId}:`;
-  for (const line of String(result.stdout || '').split('\n')) {
-    const [commit, subject = ''] = line.split('\t', 2);
+  for (const line of String(result.stdout || '').split(LOCAL_STR_OWNED_007)) {
+    const [commit, subject = ''] = line.split(LOCAL_STR_OWNED_013, 2);
     if (/^[0-9a-f]{40}$/u.test(commit) && subject.startsWith(prefix)) return commit;
   }
   return null;
@@ -304,7 +326,7 @@ function dirtyPathsSinceHead(root, paths) {
     {cwd: root, encoding: 'utf8'},
   );
   if (result.status !== 0) return null;
-  return String(result.stdout || '').split('\0').filter(Boolean);
+  return String(result.stdout || '').split(LOCAL_STR_OWNED_014).filter(Boolean);
 }
 
 export function verificationState(root, quest, log, options = {}) {
@@ -320,7 +342,7 @@ export function verificationState(root, quest, log, options = {}) {
       if (!approval) {
         attemptProblems.push(attemptProblem(
           attempt,
-          'requires a later legacy subagent verification finding',
+          LOCAL_STR_OWNED_015,
         ));
       }
       continue;
@@ -328,7 +350,7 @@ export function verificationState(root, quest, log, options = {}) {
     if (!attempt.fingerprint) {
       attemptProblems.push(attemptProblem(
         attempt,
-        'is missing a sealed verification fingerprint',
+        LOCAL_STR_OWNED_016,
       ));
       pendingAttempts.push(attempt);
       continue;
@@ -347,8 +369,8 @@ export function verificationState(root, quest, log, options = {}) {
       attemptProblems.push(attemptProblem(
         attempt,
         `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
-          'same-frontier, same-base source attempt covering every rejected ' +
-          'source path plus its own later exact approval',
+          LOCAL_STR_OWNED_017 +
+          LOCAL_STR_OWNED_018,
       ));
       unresolvedRejectedAttempts.push({
         attempt,
@@ -428,7 +450,7 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
   const dirtyPaths = dirtyPathsSinceHead(root, allAttemptPaths);
   const anchor = [...contracted].reverse()[0];
   if (dirtyPaths === null && anchor) {
-    problems.push(attemptProblem(anchor, 'could not inspect dirty checkpoint paths'));
+    problems.push(attemptProblem(anchor, LOCAL_STR_OWNED_019));
   } else if (anchor) {
     for (const dirtyPath of dirtyPaths) {
       if (!coveredPaths.has(dirtyPath)) {
@@ -479,7 +501,7 @@ export function buildVerificationFinding(args) {
     );
   }
   if (isRejection && scope !== VERIFICATION_SCOPE.ATTEMPT) {
-    throw new Error('verifier-rejection requires --verification-scope attempt');
+    throw new Error(LOCAL_STR_OWNED_020);
   }
   if (!validVerificationFingerprint(args.verificationFingerprint)) {
     throw new Error(

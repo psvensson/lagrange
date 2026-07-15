@@ -22,6 +22,15 @@ import {
   STATUS_EXHAUSTED,
 } from './constants.js';
 
+const LOCAL_STR_OWNED_001 = '--summary "<what changed>"';
+const LOCAL_STR_OWNED_002 = '--kind verifier-approval --claim "independent verification passed" ';
+const LOCAL_STR_OWNED_003 = '--evidence subagent:<id> ';
+const LOCAL_STR_OWNED_004 = 'attempt';
+const LOCAL_STR_OWNED_005 = 'sha256:<missing>';
+const LOCAL_STR_OWNED_006 = 'aggregate';
+const LOCAL_STR_OWNED_007 = 'sha256:<unavailable>';
+const LOCAL_STR_OWNED_008 = 'pass';
+
 const TERMINAL_STATUSES = Object.freeze([STATUS_SOLVED, STATUS_EXHAUSTED]);
 const FILE_NOT_FOUND_CODE = 'ENOENT';
 const UNKNOWN_METRIC = '?';
@@ -42,15 +51,15 @@ function lastEventGateStop(log) {
 
 function pendingCommitCommand(questId) {
   return `node scripts/solve.js step --id ${questId} --commit --auto-diff ` +
-    '--summary "<what changed>"';
+    LOCAL_STR_OWNED_001;
 }
 
 function verifierAction(questId, frontier, scope, fingerprint) {
   return typedNextAction(
     `spawn an independent verifier for ${scope} ${fingerprint}, then record: ` +
     `node scripts/solve.js finding --id ${questId} --frontier ${frontier} ` +
-    '--kind verifier-approval --claim "independent verification passed" ' +
-    '--evidence subagent:<id> ' +
+    LOCAL_STR_OWNED_002 +
+    LOCAL_STR_OWNED_003 +
     `--verification-scope ${scope} --verification-fingerprint ${fingerprint}`,
   );
 }
@@ -62,8 +71,8 @@ function nextAction({questId, state, pending, gateStop, blocker,
     return verifierAction(
       questId,
       pendingVerification.event.frontier,
-      'attempt',
-      pendingVerification.fingerprint || 'sha256:<missing>',
+      LOCAL_STR_OWNED_004,
+      pendingVerification.fingerprint || LOCAL_STR_OWNED_005,
     );
   }
   if (verification.unresolvedRejectedAttempts.length > 0) {
@@ -79,14 +88,14 @@ function nextAction({questId, state, pending, gateStop, blocker,
       return verifierAction(
         questId,
         latest.event.frontier,
-        'aggregate',
-        verification.aggregate.fingerprint || 'sha256:<unavailable>',
+        LOCAL_STR_OWNED_006,
+        verification.aggregate.fingerprint || LOCAL_STR_OWNED_007,
       );
     }
     if (audit.problems.some((item) => /report is older/u.test(item.message))) {
       return typedNextAction(`node scripts/solve.js report --id ${questId}`);
     }
-    if (audit.status === 'pass') {
+    if (audit.status === LOCAL_STR_OWNED_008) {
       return typedNextAction(
         `node scripts/solve.js handoff --id ${questId} --commit`);
     }

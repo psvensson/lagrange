@@ -1,0 +1,47 @@
+{
+  "id": "solver-static-guideline-ratchet-closure",
+  "authoringContractVersion": 1,
+  "statement": "Solver CLI and implementation modules introduce zero literal-guideline and decision-boundary violations without baseline growth while preserving all workflow behavior. doneWhen: solve/oracle/solver-static-guideline-ratchet-closure.json is done only when scoped guideline audits, the complete deterministic Solver test suite, focused lint, and no-regression duplication/cognitive checks are green.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "0ecb3f98aea64cff9f28c2b7a102bdf2aaf30ff2"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-static-guideline-ratchet-closure.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-static-guideline-ratchet-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-static-guideline-ratchet-closure.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "solver-source-bound",
+      "statement": "Limit source changes to scripts/solve.js and scripts/solve/** files that are present in the sealed pre-change violation census."
+    },
+    {
+      "id": "no-baseline-growth",
+      "statement": "Do not raise or weaken guideline, duplication, complexity, or unused-export baselines."
+    }
+  ]
+}

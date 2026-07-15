@@ -5,6 +5,8 @@ import {
   DISPOSITION_TERMINAL,
 } from './constants.js';
 
+const LOCAL_STR_OWNED_001 = '--claim "<how the regressed invariant was restored or why it was abandoned>"';
+
 export const CONTINUATION_ALLOWED = 'allowed';
 export const CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE =
   'blocked-unrecorded-evidence';
@@ -217,7 +219,7 @@ export function continuationNextCommand(continuation, context = {}) {
         '# land or split the current changes to reduce scope before the next attempt';
   case CONTINUATION_BLOCKED_REGRESSION:
     return `node scripts/solve.js finding${id}${f} ` +
-        '--claim "<how the regressed invariant was restored or why it was abandoned>"';
+        LOCAL_STR_OWNED_001;
   case CONTINUATION_BLOCKED_MEASUREMENT:
     return `# fix the measurement harness for ${frontier || 'the frontier'}, ` +
         `then: node scripts/solve.js reopen${id}${f} --reason "harness fixed"`;

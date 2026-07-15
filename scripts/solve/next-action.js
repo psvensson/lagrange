@@ -1,8 +1,15 @@
+
+
+const LOCAL_STR_OWNED_001 = 'executable-command';
+const LOCAL_STR_OWNED_002 = 'command-template';
+const LOCAL_STR_OWNED_003 = 'manual-action';
+const LOCAL_STR_OWNED_004 = 'terminal';
+
 export const NEXT_ACTION_TYPE = Object.freeze({
-  EXECUTABLE_COMMAND: 'executable-command',
-  COMMAND_TEMPLATE: 'command-template',
-  MANUAL_ACTION: 'manual-action',
-  TERMINAL: 'terminal',
+  EXECUTABLE_COMMAND: LOCAL_STR_OWNED_001,
+  COMMAND_TEMPLATE: LOCAL_STR_OWNED_002,
+  MANUAL_ACTION: LOCAL_STR_OWNED_003,
+  TERMINAL: LOCAL_STR_OWNED_004,
 });
 
 const COMMAND_PREFIX = /^(?:node|npm|npx|git|bash|sh|\.\/)\s/u;

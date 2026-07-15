@@ -12,6 +12,12 @@ import {
   GRADIENT_REFINEMENT_METRICS,
 } from './constants.js';
 
+const LOCAL_STR_OWNED_001 = 'quest authoring contract version changed after declaration';
+const LOCAL_STR_OWNED_002 = 'quest statement changed after declaration';
+const LOCAL_STR_OWNED_003 = 'quest class changed after declaration';
+const LOCAL_STR_OWNED_004 = 'quest constraints changed after declaration';
+const LOCAL_STR_OWNED_005 = 'frontier identities changed after declaration';
+
 export const METRIC_DIRECTION_LOWER_IS_BETTER = 'lower-is-better';
 
 function isFiniteNumber(value) {
@@ -145,23 +151,23 @@ export function validateGoalpostsImmutable(quest, declaredEvent) {
   const sealedVersion = declaredEvent.sealed.authoringContractVersion;
   if (sealedVersion !== undefined) {
     if (quest.authoringContractVersion !== sealedVersion) {
-      violations.push('quest authoring contract version changed after declaration');
+      violations.push(LOCAL_STR_OWNED_001);
     }
     if (JSON.stringify(quest.statement) !==
       JSON.stringify(declaredEvent.sealed.statement)) {
-      violations.push('quest statement changed after declaration');
+      violations.push(LOCAL_STR_OWNED_002);
     }
     if (JSON.stringify(quest.class) !== JSON.stringify(declaredEvent.sealed.class)) {
-      violations.push('quest class changed after declaration');
+      violations.push(LOCAL_STR_OWNED_003);
     }
     if (JSON.stringify(quest.constraints || []) !==
       JSON.stringify(declaredEvent.sealed.constraints || [])) {
-      violations.push('quest constraints changed after declaration');
+      violations.push(LOCAL_STR_OWNED_004);
     }
     const frontierIds = quest.frontiers.map((frontier) => frontier.id);
     if (JSON.stringify(frontierIds) !==
       JSON.stringify(declaredEvent.sealed.frontierIds || [])) {
-      violations.push('frontier identities changed after declaration');
+      violations.push(LOCAL_STR_OWNED_005);
     }
   }
   return violations;

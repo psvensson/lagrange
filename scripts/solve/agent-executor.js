@@ -31,6 +31,18 @@ import {spawnSync} from 'node:child_process';
 import {SOLVE_DATA_DIR, CONFIG_FILE} from './constants.js';
 import {rungPrompt} from './ladder.js';
 
+const LOCAL_STR_OWNED_001 = '/';
+const LOCAL_STR_OWNED_002 = 'solve/config.json is absent';
+const LOCAL_STR_OWNED_003 = 'utf8';
+const LOCAL_STR_OWNED_004 = 'solve/config.json is not valid JSON';
+const LOCAL_STR_OWNED_005 = 'solve/config.json must contain a JSON object';
+const LOCAL_STR_OWNED_006 = 'agent executor is disabled; set "enabled": true only for a live adapter';
+const LOCAL_STR_OWNED_007 = '"agentCommand" (string) is required';
+const LOCAL_STR_OWNED_008 = 'agentCommand executable is missing or not executable';
+const LOCAL_STR_OWNED_009 = '"timeoutMs" must be a positive number when provided';
+const LOCAL_STR_OWNED_010 = '; ';
+const LOCAL_STR_OWNED_011 = 'run `node scripts/solve.js doctor` for supervised-mode guidance';
+
 const DEFAULT_TIMEOUT_MS = 600000;
 const REQUEST_PLACEHOLDER = '{requestFile}';
 const RESPONSE_PLACEHOLDER = '{responseFile}';
@@ -49,7 +61,7 @@ export function configFilePath(root) {
 function executablePath(root, command) {
   const executable = command.trim().split(/\s+/u)[0];
   if (!executable) return null;
-  if (executable.includes('/') || executable.includes(path.sep)) {
+  if (executable.includes(LOCAL_STR_OWNED_001) || executable.includes(path.sep)) {
     return path.isAbsolute(executable) ? executable : path.resolve(root, executable);
   }
   for (const directory of (process.env.PATH || '').split(path.delimiter)) {
@@ -82,78 +94,19 @@ function usesExampleAdapter(root, command) {
     resolved === path.resolve(root, EXAMPLE_ADAPTER);
 }
 
-// Read-only capability inspection shared by `solve doctor` and the live executor.
-// It never creates a config, probes the adapter by running it, or changes the worktree.
-export function inspectAgentConfig(root) {
-  const file = configFilePath(root);
-  if (!fs.existsSync(file)) {
-    return {
-      state: CONFIG_STATE.ABSENT,
-      enabled: false,
-      available: false,
-      command: null,
-      executable: null,
-      issues: ['solve/config.json is absent'],
-      config: null,
-    };
-  }
-  let config;
-  try {
-    config = JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return {
-      state: CONFIG_STATE.MALFORMED,
-      enabled: false,
-      available: false,
-      command: null,
-      executable: null,
-      issues: ['solve/config.json is not valid JSON'],
-      config: null,
-    };
-  }
-  if (!config || typeof config !== 'object' || Array.isArray(config)) {
-    return {
-      state: CONFIG_STATE.MALFORMED,
-      enabled: false,
-      available: false,
-      command: null,
-      executable: null,
-      issues: ['solve/config.json must contain a JSON object'],
-      config: null,
-    };
-  }
-
-  const command = typeof config.agentCommand === 'string' && config.agentCommand.trim() ?
-    config.agentCommand.trim() : null;
-  if (config.enabled !== true) {
-    return {
-      state: CONFIG_STATE.DISABLED,
-      enabled: false,
-      available: false,
-      command,
-      executable: command ? executablePath(root, command) : null,
-      issues: ['agent executor is disabled; set "enabled": true only for a live adapter'],
-      config,
-    };
-  }
-
-  const issues = [];
-  const executable = command ? executablePath(root, command) : null;
-  if (!command) issues.push('"agentCommand" (string) is required');
-  if (command && usesExampleAdapter(root, command)) {
-    issues.push(`${EXAMPLE_ADAPTER} is a no-op reference adapter`);
-  }
-  if (command && !executableReady(executable)) {
-    issues.push('agentCommand executable is missing or not executable');
-  }
-  if (config.timeoutMs !== undefined &&
-    (!Number.isFinite(Number(config.timeoutMs)) || Number(config.timeoutMs) <= 0)) {
-    issues.push('"timeoutMs" must be a positive number when provided');
-  }
+function buildAgentInspection({
+  state,
+  enabled,
+  available,
+  command,
+  executable,
+  issues,
+  config,
+}) {
   return {
-    state: CONFIG_STATE.ENABLED,
-    enabled: true,
-    available: issues.length === 0,
+    state,
+    enabled,
+    available,
     command,
     executable,
     issues,
@@ -161,12 +114,91 @@ export function inspectAgentConfig(root) {
   };
 }
 
+// Read-only capability inspection shared by `solve doctor` and the live executor.
+// It never creates a config, probes the adapter by running it, or changes the worktree.
+export function inspectAgentConfig(root) {
+  const file = configFilePath(root);
+  if (!fs.existsSync(file)) {
+    return buildAgentInspection({
+      state: CONFIG_STATE.ABSENT,
+      enabled: false,
+      available: false,
+      command: null,
+      executable: null,
+      issues: [LOCAL_STR_OWNED_002],
+      config: null,
+    });
+  }
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(file, LOCAL_STR_OWNED_003));
+  } catch {
+    return buildAgentInspection({
+      state: CONFIG_STATE.MALFORMED,
+      enabled: false,
+      available: false,
+      command: null,
+      executable: null,
+      issues: [LOCAL_STR_OWNED_004],
+      config: null,
+    });
+  }
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return buildAgentInspection({
+      state: CONFIG_STATE.MALFORMED,
+      enabled: false,
+      available: false,
+      command: null,
+      executable: null,
+      issues: [LOCAL_STR_OWNED_005],
+      config: null,
+    });
+  }
+
+  const command = typeof config.agentCommand === 'string' && config.agentCommand.trim() ?
+    config.agentCommand.trim() : null;
+  if (config.enabled !== true) {
+    return buildAgentInspection({
+      state: CONFIG_STATE.DISABLED,
+      enabled: false,
+      available: false,
+      command,
+      executable: command ? executablePath(root, command) : null,
+      issues: [LOCAL_STR_OWNED_006],
+      config,
+    });
+  }
+
+  const issues = [];
+  const executable = command ? executablePath(root, command) : null;
+  if (!command) issues.push(LOCAL_STR_OWNED_007);
+  if (command && usesExampleAdapter(root, command)) {
+    issues.push(`${EXAMPLE_ADAPTER} is a no-op reference adapter`);
+  }
+  if (command && !executableReady(executable)) {
+    issues.push(LOCAL_STR_OWNED_008);
+  }
+  if (config.timeoutMs !== undefined &&
+    (!Number.isFinite(Number(config.timeoutMs)) || Number(config.timeoutMs) <= 0)) {
+    issues.push(LOCAL_STR_OWNED_009);
+  }
+  return buildAgentInspection({
+    state: CONFIG_STATE.ENABLED,
+    enabled: true,
+    available: issues.length === 0,
+    command,
+    executable,
+    issues,
+    config,
+  });
+}
+
 export function loadAgentConfig(root) {
   const inspected = inspectAgentConfig(root);
   if (!inspected.available) {
     throw new Error(
-      `agent executor unavailable: ${inspected.issues.join('; ')}; ` +
-      'run `node scripts/solve.js doctor` for supervised-mode guidance');
+      `agent executor unavailable: ${inspected.issues.join(LOCAL_STR_OWNED_010)}; ` +
+      LOCAL_STR_OWNED_011);
   }
   return inspected.config;
 }

@@ -14,6 +14,23 @@ import {
   QUESTS_SUBDIR,
 } from './constants.js';
 
+const LOCAL_STR_OWNED_001 = 'statement must be a concrete terminal result predicate';
+const LOCAL_STR_OWNED_002 = '|';
+const LOCAL_STR_OWNED_003 = 'constraints must be an array';
+const LOCAL_STR_OWNED_004 = 'every constraint requires non-empty id and statement strings';
+const LOCAL_STR_OWNED_005 = 'doneWhen must declare a probe and argument object';
+const LOCAL_STR_OWNED_006 = 'at least one frontier is required';
+const LOCAL_STR_OWNED_007 = 'every frontier requires an id';
+const LOCAL_STR_OWNED_008 = '(unnamed)';
+const LOCAL_STR_OWNED_009 = 'product Quest requires a planning link';
+const LOCAL_STR_OWNED_010 = 'product Quest requires measured non-oracle doneWhen evidence';
+const LOCAL_STR_OWNED_011 = 'statement names several concerns but declares one frontier; confirm they are not independent';
+const LOCAL_STR_OWNED_012 = 'pass';
+const LOCAL_STR_OWNED_013 = 'fail';
+const LOCAL_STR_OWNED_014 = '; ';
+const LOCAL_STR_OWNED_015 = '.json';
+const LOCAL_STR_OWNED_016 = '\n';
+
 export const QUEST_AUTHORING_CONTRACT_VERSION = 1;
 
 const LONG_STATEMENT_CHARACTER_LIMIT = 500;
@@ -54,18 +71,18 @@ function authoringErrors(quest) {
     );
   }
   if (!text(quest.statement) || text(quest.statement) === DEFAULT_STATEMENT) {
-    errors.push('statement must be a concrete terminal result predicate');
+    errors.push(LOCAL_STR_OWNED_001);
   }
   if (!QUEST_CLASSES.includes(quest.class)) {
-    errors.push(`class must be one of ${QUEST_CLASSES.join('|')}`);
+    errors.push(`class must be one of ${QUEST_CLASSES.join(LOCAL_STR_OWNED_002)}`);
   }
   if (!Array.isArray(quest.constraints)) {
-    errors.push('constraints must be an array');
+    errors.push(LOCAL_STR_OWNED_003);
   } else {
     const constraintIds = new Set();
     for (const constraint of quest.constraints) {
       if (!validConstraint(constraint)) {
-        errors.push('every constraint requires non-empty id and statement strings');
+        errors.push(LOCAL_STR_OWNED_004);
         continue;
       }
       if (constraintIds.has(constraint.id.trim())) {
@@ -75,29 +92,29 @@ function authoringErrors(quest) {
     }
   }
   if (!validProbe(quest.doneWhen)) {
-    errors.push('doneWhen must declare a probe and argument object');
+    errors.push(LOCAL_STR_OWNED_005);
   }
   if (!Array.isArray(quest.frontiers) || quest.frontiers.length === 0) {
-    errors.push('at least one frontier is required');
+    errors.push(LOCAL_STR_OWNED_006);
   } else {
     const ids = new Set();
     for (const frontier of quest.frontiers) {
       const id = text(frontier?.id);
-      if (!id) errors.push('every frontier requires an id');
+      if (!id) errors.push(LOCAL_STR_OWNED_007);
       if (ids.has(id)) errors.push(`frontier id is duplicated: ${id}`);
       ids.add(id);
       if (!validProbe(frontier?.metric)) {
-        errors.push(`frontier ${id || '(unnamed)'} requires a metric probe`);
+        errors.push(`frontier ${id || LOCAL_STR_OWNED_008} requires a metric probe`);
       }
     }
   }
   if (QUEST_CLASSES.includes(quest.class) &&
     questClass(quest) === QUEST_CLASS_PRODUCT) {
     if (!recognizedPlanningLink(quest.links)) {
-      errors.push('product Quest requires a planning link');
+      errors.push(LOCAL_STR_OWNED_009);
     }
     if (quest.doneWhen?.probe === ORACLE_PROBE) {
-      errors.push('product Quest requires measured non-oracle doneWhen evidence');
+      errors.push(LOCAL_STR_OWNED_010);
     }
   }
   return errors;
@@ -115,7 +132,7 @@ function authoringWarnings(quest) {
   if (conjunctions.length >= CONJUNCTION_ADVISORY_THRESHOLD &&
     quest.frontiers?.length === 1) {
     warnings.push(
-      'statement names several concerns but declares one frontier; confirm they are not independent',
+      LOCAL_STR_OWNED_011,
     );
   }
   return warnings;
@@ -130,7 +147,7 @@ export function lintQuest(quest) {
     questId: quest?.id || null,
     authoringContractVersion: legacy ? null : version,
     legacy,
-    status: errors.length === 0 ? 'pass' : 'fail',
+    status: errors.length === 0 ? LOCAL_STR_OWNED_012 : LOCAL_STR_OWNED_013,
     errors,
     warnings,
   };
@@ -139,7 +156,7 @@ export function lintQuest(quest) {
 export function assertQuestReadyToSeal(quest) {
   const result = lintQuest(quest);
   if (result.errors.length > 0) {
-    throw new Error(`quest lint failed: ${result.errors.join('; ')}`);
+    throw new Error(`quest lint failed: ${result.errors.join(LOCAL_STR_OWNED_014)}`);
   }
   return result;
 }
@@ -148,8 +165,8 @@ function questIds(root) {
   const dir = path.join(root, SOLVE_DATA_DIR, QUESTS_SUBDIR);
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir)
-    .filter((name) => name.endsWith('.json'))
-    .map((name) => name.slice(0, -'.json'.length))
+    .filter((name) => name.endsWith(LOCAL_STR_OWNED_015))
+    .map((name) => name.slice(0, -LOCAL_STR_OWNED_015.length))
     .sort();
 }
 
@@ -157,7 +174,8 @@ export function lintQuestCorpus(root, options = {}) {
   const ids = options.all ? questIds(root) : [options.id];
   const quests = ids.filter(Boolean).map((id) => lintQuest(loadQuest(root, id)));
   return {
-    status: quests.every((item) => item.status === 'pass') ? 'pass' : 'fail',
+    status: quests.every((item) => item.status === LOCAL_STR_OWNED_012) ?
+      LOCAL_STR_OWNED_012 : LOCAL_STR_OWNED_013,
     questCount: quests.length,
     legacyCount: quests.filter((item) => item.legacy).length,
     errorCount: quests.reduce((sum, item) => sum + item.errors.length, 0),
@@ -176,5 +194,5 @@ export function renderQuestLint(result) {
     for (const error of quest.errors) lines.push(`ERROR ${quest.questId}: ${error}`);
     for (const warning of quest.warnings) lines.push(`WARN  ${quest.questId}: ${warning}`);
   }
-  return `${lines.join('\n')}\n`;
+  return `${lines.join(LOCAL_STR_OWNED_016)}\n`;
 }
