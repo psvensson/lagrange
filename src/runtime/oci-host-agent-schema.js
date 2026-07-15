@@ -483,6 +483,12 @@ function validateOciHostAgentCallerIdentity(identity) {
   return identity;
 }
 
+function validateOciHostAgentIdentity(identity) {
+  assertNoNull(identity);
+  validateIdentity(identity);
+  return identity;
+}
+
 function validateStableLabels(labels, identity) {
   assertExactObject(labels, STABLE_LABEL_FIELDS);
   if (labels[MANAGED_LABEL] !== MANAGED_LABEL_VALUE) fail();
@@ -680,6 +686,13 @@ function validateResult(result, envelope) {
   validateCreateCleanupProvenance(result, envelope);
 }
 
+function validateOciHostAgentResult(result, operationId) {
+  assertNoNull(result);
+  assertOwnerId(operationId, MAXIMUM.OPERATION_ID_BYTES);
+  validateResult(result, {operationId});
+  return result;
+}
+
 function validateOciHostAgentResponseEnvelope(envelope) {
   assertNoNull(envelope);
   assertExactObject(envelope, RESPONSE_FIELDS);
@@ -698,6 +711,8 @@ function validateOciHostAgentResponseEnvelope(envelope) {
 
 export {
   validateOciHostAgentCallerIdentity,
+  validateOciHostAgentIdentity,
   validateOciHostAgentRequestEnvelope,
+  validateOciHostAgentResult,
   validateOciHostAgentResponseEnvelope,
 };

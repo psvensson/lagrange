@@ -9,6 +9,12 @@ const SCENARIOS = Object.freeze({
   'oci-host-agent-protocol-admission': Object.freeze([
     'test/runtime/oci-host-agent-protocol-admission.test.js',
   ]),
+  'oci-host-agent-durable-state': Object.freeze([
+    'test/runtime/oci-host-agent-admission-table.test.js',
+    'test/runtime/oci-host-agent-receipt-ledger.test.js',
+    'test/runtime/oci-host-agent-enrollment.test.js',
+    'test/runtime/oci-host-agent-tpm-counter.test.js',
+  ]),
 });
 
 runGuardTestScenarios(SCENARIOS, {reportDir: REPORT_DIR});

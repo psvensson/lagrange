@@ -6,44 +6,46 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 6
+**Attempts:** 8
 
 ## Links
 - spec: solve/specs/service-portability-ladder/requirements.md#r4--real-oci-supervision
 - plan: solve/specs/service-portability-ladder/tasks.md
 
 ## Current Blocker
-- Frontier: oci-container-driver-live-activation-protocol-admission
+- Frontier: oci-container-driver-live-activation-durable-state
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: solved: unknown -> unknown
-- Latest evidence: test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T04-51-36-566Z.report.json
-- Selected theory: theory-20260715-canonical-snapshot-identity
-- Next move: continue supervised step for oci-container-driver-live-activation-protocol-admission
+- Latest evidence: test-output/reports/oci-container-driver-live-activation/oci-host-agent-durable-state-2026-07-15T05-53-53-469Z.report.json
+- Selected theory: none
+- Next move: continue supervised step for oci-container-driver-live-activation-durable-state
 - No longer current: unknown
 
 ## Continuation
 - Status: allowed
-- Next action: continue supervised step for oci-container-driver-live-activation-durable-state
+- Next action: continue supervised step for oci-container-driver-live-activation-engine-translation
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 6
-- Change bytes: 70290
+- Changed files: 17
+- Change bytes: 179154
 - Owner areas: scripts/checks, src/runtime, test/runtime
 - Categories: other, runtime, test
+- Action: split by owner area before the next attempt (17 files)
 - Action: land or separate 3 owner areas: scripts/checks, src/runtime, test/runtime
 - Split plan:
-  - src/runtime: 4 file(s)
+  - src/runtime: 11 file(s)
+  - test/runtime: 5 file(s)
   - scripts/checks: 1 file(s)
-  - test/runtime: 1 file(s)
 - Signal: broad-source-scope severity=medium
+- Signal: large-diff-stack severity=medium
 
 ## Frontiers
 - **oci-container-driver-live-activation-protocol-admission** [solved] rung 5, attempts 6, metric 1 -> 0 — exact terminal source attempt was rejected
-- **oci-container-driver-live-activation-durable-state** [open] rung 0, attempts 0, metric ? -> ?
+- **oci-container-driver-live-activation-durable-state** [solved] rung 2, attempts 2, metric 0 -> 0
 - **oci-container-driver-live-activation-engine-translation** [open] rung 0, attempts 0, metric ? -> ?
 - **oci-container-driver-live-activation-owner-handoff** [open] rung 0, attempts 0, metric ? -> ?
 - **oci-container-driver-live-activation-production-engagement** [open] rung 0, attempts 0, metric ? -> ?
@@ -60,6 +62,11 @@
 - **oci-container-driver-live-activation-protocol-admission**: Ingested evidence from oci-host-agent-protocol-admission-2026-07-15T04-50-46-864Z.report.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T04-50-46-864Z.report.json]
 - **oci-container-driver-live-activation-protocol-admission**: Independent exact verification passed: the full six-path artifact equals the canonical base-to-worktree delta, focused and scenario suites pass, the hostile meta-shape red check is non-vacuous, and all prior rejection classes remain closed. [subagent:verify_protocol_attempt_6]
 - **oci-container-driver-live-activation-protocol-admission**: Ingested evidence from oci-host-agent-protocol-admission-2026-07-15T04-51-36-566Z.report.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T04-51-36-566Z.report.json]
+- **oci-container-driver-live-activation-protocol-admission**: Ingested evidence from oci-host-agent-protocol-admission-2026-07-15T05-18-19-821Z.report.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T05-18-19-821Z.report.json]
+- **oci-container-driver-live-activation-durable-state**: The sealed durable-state symptom reproduces on current HEAD: both receipt/fence/nonce recovery and TPM-monotonic enrollment guard files fail because no production durable substrate exists. [test-output/reports/oci-container-driver-live-activation/oci-host-agent-durable-state-2026-07-15T05-10-10-067Z.report.json]
+- **oci-container-driver-live-activation-durable-state**: Ingested evidence from oci-host-agent-durable-state-2026-07-15T05-51-13-448Z.report.json. Metric: unknown -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/oci-container-driver-live-activation/oci-host-agent-durable-state-2026-07-15T05-51-13-448Z.report.json]
+- **oci-container-driver-live-activation-durable-state**: Ingested evidence from oci-host-agent-durable-state-2026-07-15T05-53-53-469Z.report.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/oci-container-driver-live-activation/oci-host-agent-durable-state-2026-07-15T05-53-53-469Z.report.json]
+- **oci-container-driver-live-activation-durable-state**: Independent exact verification approved the complete 13-path durable-state snapshot: canonical artifact identity, 4/4 scenario guards, 46 focused assertions, model/static owner checks, and adversarial admission, recovery, fence, TPM, and enrollment review all passed with no blocking defect. [subagent:verify_durable_attempt_7]
 
 ## Theories
 - **theory-20260714-enrollment-ingress-normalization** [active] system, mechanism raw_enrolled_record_meta_shape_trust, owner oci_host_agent_enrollment_admission, modelGate npm run model:contracts
@@ -79,6 +86,7 @@
 - **theory-20260715-canonical-snapshot-identity**: falsified (scenario=done, theory=falsified, movement=solved) [test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T04-50-46-864Z.report.json]
 - **theory-20260715-canonical-snapshot-identity**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T04-50-46-864Z.report.json]
 - **theory-20260715-canonical-snapshot-identity**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T04-51-36-566Z.report.json]
+- **theory-20260715-canonical-snapshot-identity**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/oci-container-driver-live-activation/oci-host-agent-protocol-admission-2026-07-15T05-18-19-821Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -89,3 +97,5 @@
 | 2026-07-14T20:41:30.723Z | oci-container-driver-live-activation-protocol-admission | widen-scope | 0 -> 0 | flat | no_evidence | theory-20260714-enrolled-identity-schema-gap | diff:solve/changes/oci-container-driver-live-activation/attempt-4.diff |
 | 2026-07-14T21:28:09.612Z | oci-container-driver-live-activation-protocol-admission | model | 0 -> 0 | flat | solved | theory-20260714-enrolled-record-ordinary-data | diff:solve/changes/oci-container-driver-live-activation/attempt-5.diff |
 | 2026-07-15T04:50:46.870Z | oci-container-driver-live-activation-protocol-admission | change-approach | 0 -> 0 | flat | solved | theory-20260715-canonical-snapshot-identity | diff:solve/changes/oci-container-driver-live-activation/attempt-6.diff |
+| 2026-07-15T05:52:52.684Z | oci-container-driver-live-activation-durable-state | observe | 0 -> 0 | flat | solved |  | diff:solve/changes/oci-container-driver-live-activation/attempt-7.diff |
+| 2026-07-15T05:59:08.535Z | oci-container-driver-live-activation-durable-state | local-fix | 0 -> 0 | flat | solved |  | diff:solve/changes/oci-container-driver-live-activation/attempt-7.diff |
