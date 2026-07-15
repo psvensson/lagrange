@@ -47,6 +47,7 @@
 - **solver-ledger-consistency-log-projection-main**: REUSED: projectState and readLog remain the existing append-only-log projection owners. EXTENDED: ledger consistency consumes that projection and the exact sealed doneWhen oracle target. NEW: only deterministic fixture coverage was added; no new state fold, projection owner, or generated roadmap surface was introduced. [scripts/solve/ledger-consistency.js]
 - **solver-ledger-consistency-log-projection-main**: Focused fixture and scoped source gates pass. Repo-wide integration still truthfully reports the separately owned epic E1 plus two historical solved Quests whose exact sealed oracle targets live under ignored test-output; this lane does not weaken Q1 or rewrite sibling sealed Quests. [solve/epics/roadmap-integrity-wave-0.md]
 - **solver-ledger-consistency-log-projection-main**: Independent verification rejected the exact attempt because its oracle claimed done while the complete focused test file still failed on three truthful Wave 0 ledger errors. [subagent:scope_classifier_fix]
+- **solver-ledger-consistency-log-projection-main**: Independent verification passed for checkpoint safety; the replacement preserves strict log/probe behavior and truthfully remains nonterminal on three Wave 0 integration errors. [subagent:scope_classifier_fix]
 
 ## Theories
 _(none recorded)_
