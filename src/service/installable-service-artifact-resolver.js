@@ -66,6 +66,94 @@ const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/
 const ED25519_SIGNATURE_BYTES = 64;
 const SIGNATURE_DOMAIN = 'lagrange.installable-service-artifact.v1';
 
+const ARTIFACT_RESOLUTION_STATUS = Object.freeze({
+  REJECTED: 'rejected',
+  RESOLVED: 'resolved',
+});
+
+const ARTIFACT_DATA_ENCODING = Object.freeze({
+  BASE64: 'base64',
+  HEX: 'hex',
+  UTF8: 'utf8',
+});
+
+const ARTIFACT_SIGNATURE_ALGORITHM = Object.freeze({
+  ED25519: 'ed25519',
+});
+
+const OCI_LAYOUT_ENTRY = Object.freeze({
+  BLOBS: 'blobs',
+  INDEX: 'index.json',
+  LAYOUT: 'oci-layout',
+  SHA256: 'sha256',
+});
+
+const INSTALLABLE_ARTIFACT_PATH = Object.freeze({
+  DESCRIPTOR: '/artifact/descriptor',
+  DESCRIPTOR_CONFIG: '/artifact/descriptor/config',
+  DESCRIPTOR_DIGEST: '/artifact/descriptor/digest',
+  DESCRIPTOR_MEDIA_TYPE: '/artifact/descriptor/mediaType',
+  DESCRIPTOR_SIZE: '/artifact/descriptor/size',
+  MANIFEST_ARTIFACT_MEDIA_TYPE: '/manifest/artifact/media_type',
+  MANIFEST_ARTIFACT_SIGNATURE: '/manifest/artifact/signature',
+  MANIFEST_ARTIFACT_SIGNATURE_KEY_ID: '/manifest/artifact/signature/key_id',
+  MANIFEST_ARTIFACT_SIGNATURE_VALUE: '/manifest/artifact/signature/value',
+  SIGNATURE_POLICY_MODE: '/signaturePolicy/mode',
+  SIGNATURE_POLICY_TRUSTED_KEYS: '/signaturePolicy/trusted_keys',
+  SOURCE: '/source',
+  SOURCE_BLOBS: '/source/blobs',
+  SOURCE_BYTES: '/source/bytes',
+  SOURCE_DESCRIPTOR: '/source/descriptor',
+  SOURCE_INDEX: '/source/index.json',
+  SOURCE_INDEX_MANIFESTS: '/source/index.json/manifests',
+  SOURCE_KIND: '/source/kind',
+  SOURCE_LAYOUT: '/source/oci-layout',
+  SOURCE_LAYOUT_VERSION: '/source/oci-layout/imageLayoutVersion',
+  SOURCE_LOCATION: '/source/location',
+});
+
+const INSTALLABLE_ARTIFACT_MESSAGE = Object.freeze({
+  CONTAINER_MEDIA_TYPE_MISMATCH:
+    'container artifact media type does not match the OCI descriptor',
+  DESCRIPTOR_DIGEST_MISMATCH:
+    'OCI descriptor digest does not match the manifest pin',
+  DESCRIPTOR_INVALID: 'OCI descriptor is invalid',
+  DESCRIPTOR_MEDIA_TYPE_MISMATCH:
+    'OCI descriptor media type does not match an image manifest',
+  DESCRIPTOR_SIZE_MISMATCH: 'OCI descriptor size does not match its bytes',
+  DESCRIPTOR_TOO_LARGE: 'OCI descriptor exceeds the configured size bound',
+  FILE_NOT_REGULAR: 'artifact source path is not a file',
+  FILE_TOO_LARGE: 'artifact source file exceeds its size bound',
+  FILE_UNREADABLE: 'artifact source file could not be read',
+  INDEX_DESCRIPTOR_NOT_UNIQUE:
+    'OCI image layout must contain exactly one pinned descriptor',
+  INDEX_INVALID: 'OCI image layout index shape is invalid',
+  LAYOUT_METADATA_INVALID: 'OCI layout metadata is not valid JSON',
+  LAYOUT_PATH_REQUIRED: 'local OCI layout path is required',
+  LAYOUT_VERSION_UNSUPPORTED: 'OCI image layout version is unsupported',
+  MANIFEST_DESCRIPTOR_INVALID: 'OCI manifest descriptor is not valid JSON',
+  MANIFEST_INVALID: 'external service manifest is invalid',
+  MANIFEST_SHAPE_INVALID: 'OCI image manifest shape is invalid',
+  MAX_DESCRIPTOR_BYTES_INVALID:
+    'maxDescriptorBytes must be a positive safe integer',
+  REMOTE_ACQUISITION_FAILED: 'remote OCI descriptor acquisition failed',
+  REMOTE_PROVIDER_INVALID: 'remote OCI provider returned an invalid result',
+  REMOTE_PROVIDER_MISSING: 'remote OCI provider is not configured',
+  SIGNATURE_INVALID: 'artifact signature metadata is invalid',
+  SIGNATURE_KEY_INVALID: 'trusted artifact signature key is invalid',
+  SIGNATURE_KEY_UNTRUSTED: 'artifact signature key is not trusted by policy',
+  SIGNATURE_POLICY_REQUIRED:
+    'an explicit supported signature policy mode is required',
+  SIGNATURE_REQUIRED: 'artifact signature is required by policy',
+  SIGNATURE_VALUE_INVALID: 'artifact signature value is invalid',
+  SIGNATURE_VERIFICATION_FAILED: 'artifact signature verification failed',
+  SOURCE_BYTES_REQUIRED: 'artifact source must return descriptor bytes',
+  SOURCE_KIND_UNSUPPORTED: 'artifact source kind is unsupported',
+  SOURCE_UNREADABLE: 'artifact source could not be read',
+  WASM_LAYER_INVALID:
+    'WASM artifact must contain exactly one application/wasm layer',
+});
+
 class ArtifactResolutionFailure extends Error {
   constructor(code, pathValue, message) {
     super(message);
@@ -87,22 +175,28 @@ function deepFreeze(value) {
 function rejected(error) {
   const known = error instanceof ArtifactResolutionFailure;
   return deepFreeze({
-    status: 'rejected',
+    status: ARTIFACT_RESOLUTION_STATUS.REJECTED,
     errors: [{
       code: known ? error.code :
         INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-      path: known ? error.pathValue : '/source',
-      message: known ? error.message : 'artifact source could not be read',
+      path: known ? error.pathValue : INSTALLABLE_ARTIFACT_PATH.SOURCE,
+      message: known ? error.message :
+        INSTALLABLE_ARTIFACT_MESSAGE.SOURCE_UNREADABLE,
     }],
   });
 }
 
 function buildArtifactSignaturePayload(artifactDigest) {
-  return Buffer.from(`${SIGNATURE_DOMAIN}\n${artifactDigest}`, 'utf8');
+  return Buffer.from(
+    `${SIGNATURE_DOMAIN}\n${artifactDigest}`,
+    ARTIFACT_DATA_ENCODING.UTF8,
+  );
 }
 
 function sha256(bytes) {
-  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  return `sha256:${createHash(OCI_LAYOUT_ENTRY.SHA256)
+    .update(bytes)
+    .digest(ARTIFACT_DATA_ENCODING.HEX)}`;
 }
 
 function normalizeBytes(value) {
@@ -110,8 +204,8 @@ function normalizeBytes(value) {
   if (value instanceof Uint8Array) return Buffer.from(value);
   fail(
     INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_RESULT_INVALID,
-    '/source/bytes',
-    'artifact source must return descriptor bytes',
+    INSTALLABLE_ARTIFACT_PATH.SOURCE_BYTES,
+    INSTALLABLE_ARTIFACT_MESSAGE.SOURCE_BYTES_REQUIRED,
   );
 }
 
@@ -121,8 +215,8 @@ function validateSignaturePolicy(signaturePolicy) {
       !Object.values(ARTIFACT_SIGNATURE_POLICY_MODE).includes(mode)) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_POLICY_INVALID,
-      '/signaturePolicy/mode',
-      'an explicit supported signature policy mode is required',
+      INSTALLABLE_ARTIFACT_PATH.SIGNATURE_POLICY_MODE,
+      INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_POLICY_REQUIRED,
     );
   }
   return signaturePolicy;
@@ -130,29 +224,30 @@ function validateSignaturePolicy(signaturePolicy) {
 
 function decodeEd25519Signature(value) {
   if (typeof value !== 'string' || !BASE64_PATTERN.test(value)) return null;
-  const decoded = Buffer.from(value, 'base64');
+  const decoded = Buffer.from(value, ARTIFACT_DATA_ENCODING.BASE64);
   if (decoded.length !== ED25519_SIGNATURE_BYTES ||
-      decoded.toString('base64') !== value) {
+      decoded.toString(ARTIFACT_DATA_ENCODING.BASE64) !== value) {
     return null;
   }
   return decoded;
 }
 
 function validatedSignatureMetadata(signature) {
-  if (typeof signature !== 'object' || signature.algorithm !== 'ed25519' ||
+  if (typeof signature !== 'object' ||
+      signature.algorithm !== ARTIFACT_SIGNATURE_ALGORITHM.ED25519 ||
       typeof signature.key_id !== 'string' || signature.key_id.length === 0) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_INVALID,
-      '/manifest/artifact/signature',
-      'artifact signature metadata is invalid',
+      INSTALLABLE_ARTIFACT_PATH.MANIFEST_ARTIFACT_SIGNATURE,
+      INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_INVALID,
     );
   }
   const signatureBytes = decodeEd25519Signature(signature.value);
   if (!signatureBytes) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_INVALID,
-      '/manifest/artifact/signature/value',
-      'artifact signature value is invalid',
+      INSTALLABLE_ARTIFACT_PATH.MANIFEST_ARTIFACT_SIGNATURE_VALUE,
+      INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_VALUE_INVALID,
     );
   }
   return {keyId: signature.key_id, signatureBytes};
@@ -163,8 +258,8 @@ function trustedPublicKey(signaturePolicy, keyId) {
   if (typeof trustedKey !== 'string' && !Buffer.isBuffer(trustedKey)) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_UNTRUSTED,
-      '/manifest/artifact/signature/key_id',
-      'artifact signature key is not trusted by policy',
+      INSTALLABLE_ARTIFACT_PATH.MANIFEST_ARTIFACT_SIGNATURE_KEY_ID,
+      INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_KEY_UNTRUSTED,
     );
   }
   try {
@@ -172,8 +267,8 @@ function trustedPublicKey(signaturePolicy, keyId) {
   } catch (_error) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_POLICY_INVALID,
-      '/signaturePolicy/trusted_keys',
-      'trusted artifact signature key is invalid',
+      INSTALLABLE_ARTIFACT_PATH.SIGNATURE_POLICY_TRUSTED_KEYS,
+      INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_KEY_INVALID,
     );
   }
 }
@@ -181,18 +276,29 @@ function trustedPublicKey(signaturePolicy, keyId) {
 function verifyArtifactSignature(artifact, signaturePolicy) {
   const mode = signaturePolicy.mode;
   const signature = artifact.signature;
-  if (mode === ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED) {
+  switch (mode) {
+  case ARTIFACT_SIGNATURE_POLICY_MODE.DISABLED:
     return {status: SIGNATURE_STATUS.VERIFICATION_DISABLED, keyId: null};
-  }
-  if (!signature) {
-    if (mode === ARTIFACT_SIGNATURE_POLICY_MODE.REQUIRED) {
+  case ARTIFACT_SIGNATURE_POLICY_MODE.REQUIRED:
+    if (!signature) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_REQUIRED,
-        '/manifest/artifact/signature',
-        'artifact signature is required by policy',
+        INSTALLABLE_ARTIFACT_PATH.MANIFEST_ARTIFACT_SIGNATURE,
+        INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_REQUIRED,
       );
     }
-    return {status: SIGNATURE_STATUS.UNSIGNED_ALLOWED, keyId: null};
+    break;
+  case ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT:
+    if (!signature) {
+      return {status: SIGNATURE_STATUS.UNSIGNED_ALLOWED, keyId: null};
+    }
+    break;
+  default:
+    fail(
+      INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_POLICY_INVALID,
+      INSTALLABLE_ARTIFACT_PATH.SIGNATURE_POLICY_MODE,
+      INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_POLICY_REQUIRED,
+    );
   }
   const {keyId, signatureBytes} = validatedSignatureMetadata(signature);
   const publicKey = trustedPublicKey(signaturePolicy, keyId);
@@ -204,8 +310,8 @@ function verifyArtifactSignature(artifact, signaturePolicy) {
   )) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SIGNATURE_INVALID,
-      '/manifest/artifact/signature/value',
-      'artifact signature verification failed',
+      INSTALLABLE_ARTIFACT_PATH.MANIFEST_ARTIFACT_SIGNATURE_VALUE,
+      INSTALLABLE_ARTIFACT_MESSAGE.SIGNATURE_VERIFICATION_FAILED,
     );
   }
   return {status: SIGNATURE_STATUS.VERIFIED, keyId};
@@ -219,7 +325,7 @@ function validateOciDescriptor(descriptor, pathValue) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_RESULT_INVALID,
       pathValue,
-      'OCI descriptor is invalid',
+      INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_INVALID,
     );
   }
   return descriptor;
@@ -227,12 +333,12 @@ function validateOciDescriptor(descriptor, pathValue) {
 
 function decodeOciManifest(bytes) {
   try {
-    return JSON.parse(bytes.toString('utf8'));
+    return JSON.parse(bytes.toString(ARTIFACT_DATA_ENCODING.UTF8));
   } catch (_error) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_MANIFEST_INVALID,
-      '/artifact/descriptor',
-      'OCI manifest descriptor is not valid JSON',
+      INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR,
+      INSTALLABLE_ARTIFACT_MESSAGE.MANIFEST_DESCRIPTOR_INVALID,
     );
   }
 }
@@ -244,11 +350,14 @@ function validateOciManifestShape(manifest) {
       !Array.isArray(manifest.layers)) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_MANIFEST_INVALID,
-      '/artifact/descriptor',
-      'OCI image manifest shape is invalid',
+      INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR,
+      INSTALLABLE_ARTIFACT_MESSAGE.MANIFEST_SHAPE_INVALID,
     );
   }
-  validateOciDescriptor(manifest.config, '/artifact/descriptor/config');
+  validateOciDescriptor(
+    manifest.config,
+    INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR_CONFIG,
+  );
   for (const [index, layer] of manifest.layers.entries()) {
     validateOciDescriptor(layer, `/artifact/descriptor/layers/${index}`);
   }
@@ -260,8 +369,8 @@ function validateOciManifestMediaType(manifest, descriptor) {
        manifest.mediaType !== descriptor.mediaType)) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.MEDIA_TYPE_MISMATCH,
-      '/artifact/descriptor/mediaType',
-      'OCI descriptor media type does not match an image manifest',
+      INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR_MEDIA_TYPE,
+      INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_MEDIA_TYPE_MISMATCH,
     );
   }
 }
@@ -278,8 +387,8 @@ function resolvePayload(manifest, ociManifest, descriptor) {
     if (manifest.artifact.media_type !== descriptor.mediaType) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.MEDIA_TYPE_MISMATCH,
-        '/manifest/artifact/media_type',
-        'container artifact media type does not match the OCI descriptor',
+        INSTALLABLE_ARTIFACT_PATH.MANIFEST_ARTIFACT_MEDIA_TYPE,
+        INSTALLABLE_ARTIFACT_MESSAGE.CONTAINER_MEDIA_TYPE_MISMATCH,
       );
     }
     return {payloadMediaType: descriptor.mediaType, payloadDescriptor: null};
@@ -291,8 +400,8 @@ function resolvePayload(manifest, ociManifest, descriptor) {
       wasmLayers.length !== 1) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.MEDIA_TYPE_MISMATCH,
-      '/manifest/artifact/media_type',
-      'WASM artifact must contain exactly one application/wasm layer',
+      INSTALLABLE_ARTIFACT_PATH.MANIFEST_ARTIFACT_MEDIA_TYPE,
+      INSTALLABLE_ARTIFACT_MESSAGE.WASM_LAYER_INVALID,
     );
   }
   return {
@@ -309,18 +418,18 @@ async function readBounded(file, maximumBytes, oversizedCode, pathValue) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
       pathValue,
-      'artifact source file could not be read',
+      INSTALLABLE_ARTIFACT_MESSAGE.FILE_UNREADABLE,
     );
   }
   if (!fileStat.isFile()) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
       pathValue,
-      'artifact source path is not a file',
+      INSTALLABLE_ARTIFACT_MESSAGE.FILE_NOT_REGULAR,
     );
   }
   if (fileStat.size > maximumBytes) {
-    fail(oversizedCode, pathValue, 'artifact source file exceeds its size bound');
+    fail(oversizedCode, pathValue, INSTALLABLE_ARTIFACT_MESSAGE.FILE_TOO_LARGE);
   }
   try {
     return await readFile(file);
@@ -328,7 +437,7 @@ async function readBounded(file, maximumBytes, oversizedCode, pathValue) {
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
       pathValue,
-      'artifact source file could not be read',
+      INSTALLABLE_ARTIFACT_MESSAGE.FILE_UNREADABLE,
     );
   }
 }
@@ -336,9 +445,9 @@ async function readBounded(file, maximumBytes, oversizedCode, pathValue) {
 async function readJson(file, maximumBytes, code, pathValue) {
   const bytes = await readBounded(file, maximumBytes, code, pathValue);
   try {
-    return JSON.parse(bytes.toString('utf8'));
+    return JSON.parse(bytes.toString(ARTIFACT_DATA_ENCODING.UTF8));
   } catch (_error) {
-    fail(code, pathValue, 'OCI layout metadata is not valid JSON');
+    fail(code, pathValue, INSTALLABLE_ARTIFACT_MESSAGE.LAYOUT_METADATA_INVALID);
   }
 }
 
@@ -349,7 +458,9 @@ class InstallableServiceArtifactResolver {
       DEFAULT_MAX_DESCRIPTOR_BYTES;
     if (!Number.isSafeInteger(this.maxDescriptorBytes) ||
         this.maxDescriptorBytes <= 0) {
-      throw new TypeError('maxDescriptorBytes must be a positive safe integer');
+      throw new TypeError(
+        INSTALLABLE_ARTIFACT_MESSAGE.MAX_DESCRIPTOR_BYTES_INVALID,
+      );
     }
   }
 
@@ -361,7 +472,7 @@ class InstallableServiceArtifactResolver {
         fail(
           INSTALLABLE_ARTIFACT_ERROR_CODE.MANIFEST_INVALID,
           `/manifest${first?.path || ''}`,
-          'external service manifest is invalid',
+          INSTALLABLE_ARTIFACT_MESSAGE.MANIFEST_INVALID,
         );
       }
       const manifest = manifestResult.manifest;
@@ -373,7 +484,7 @@ class InstallableServiceArtifactResolver {
         signaturePolicy,
       );
       return deepFreeze({
-        status: 'resolved',
+        status: ARTIFACT_RESOLUTION_STATUS.RESOLVED,
         artifact: {
           sourceKind: acquisition.sourceKind,
           location: acquisition.location,
@@ -401,8 +512,8 @@ class InstallableServiceArtifactResolver {
     }
     fail(
       INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_UNSUPPORTED,
-      '/source/kind',
-      'artifact source kind is unsupported',
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_KIND,
+      INSTALLABLE_ARTIFACT_MESSAGE.SOURCE_KIND_UNSUPPORTED,
     );
   }
 
@@ -411,8 +522,8 @@ class InstallableServiceArtifactResolver {
         typeof this.remoteProvider.resolveDescriptor !== 'function') {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-        '/source',
-        'remote OCI provider is not configured',
+        INSTALLABLE_ARTIFACT_PATH.SOURCE,
+        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_MISSING,
       );
     }
     let result;
@@ -425,21 +536,24 @@ class InstallableServiceArtifactResolver {
     } catch (_error) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
-        '/source',
-        'remote OCI descriptor acquisition failed',
+        INSTALLABLE_ARTIFACT_PATH.SOURCE,
+        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_ACQUISITION_FAILED,
       );
     }
     if (!result || typeof result !== 'object') {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_RESULT_INVALID,
-        '/source',
-        'remote OCI provider returned an invalid result',
+        INSTALLABLE_ARTIFACT_PATH.SOURCE,
+        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_INVALID,
       );
     }
     return {
       sourceKind: INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI,
       location,
-      descriptor: validateOciDescriptor(result.descriptor, '/source/descriptor'),
+      descriptor: validateOciDescriptor(
+        result.descriptor,
+        INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
+      ),
       bytes: normalizeBytes(result.bytes),
     };
   }
@@ -448,35 +562,35 @@ class InstallableServiceArtifactResolver {
     if (typeof location !== 'string' || location.length === 0) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-        '/source/location',
-        'local OCI layout path is required',
+        INSTALLABLE_ARTIFACT_PATH.SOURCE_LOCATION,
+        INSTALLABLE_ARTIFACT_MESSAGE.LAYOUT_PATH_REQUIRED,
       );
     }
     const root = path.resolve(location);
     const marker = await readJson(
-      path.join(root, 'oci-layout'),
+      path.join(root, OCI_LAYOUT_ENTRY.LAYOUT),
       MAX_LAYOUT_MARKER_BYTES,
       INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-      '/source/oci-layout',
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_LAYOUT,
     );
     if (marker?.imageLayoutVersion !== OCI_IMAGE_LAYOUT_VERSION) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-        '/source/oci-layout/imageLayoutVersion',
-        'OCI image layout version is unsupported',
+        INSTALLABLE_ARTIFACT_PATH.SOURCE_LAYOUT_VERSION,
+        INSTALLABLE_ARTIFACT_MESSAGE.LAYOUT_VERSION_UNSUPPORTED,
       );
     }
     const index = await readJson(
-      path.join(root, 'index.json'),
+      path.join(root, OCI_LAYOUT_ENTRY.INDEX),
       MAX_INDEX_BYTES,
       INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-      '/source/index.json',
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX,
     );
     if (index?.schemaVersion !== 2 || !Array.isArray(index.manifests)) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.OCI_LAYOUT_INVALID,
-        '/source/index.json',
-        'OCI image layout index shape is invalid',
+        INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX,
+        INSTALLABLE_ARTIFACT_MESSAGE.INDEX_INVALID,
       );
     }
     const matches = index.manifests.filter((entry) =>
@@ -484,19 +598,24 @@ class InstallableServiceArtifactResolver {
     if (matches.length !== 1) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_NOT_FOUND,
-        '/source/index.json/manifests',
-        'OCI image layout must contain exactly one pinned descriptor',
+        INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX_MANIFESTS,
+        INSTALLABLE_ARTIFACT_MESSAGE.INDEX_DESCRIPTOR_NOT_UNIQUE,
       );
     }
     const descriptor = validateOciDescriptor(
       matches[0],
-      '/source/index.json/manifests',
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_INDEX_MANIFESTS,
     );
     const bytes = await readBounded(
-      path.join(root, 'blobs', 'sha256', descriptor.digest.slice(7)),
+      path.join(
+        root,
+        OCI_LAYOUT_ENTRY.BLOBS,
+        OCI_LAYOUT_ENTRY.SHA256,
+        descriptor.digest.slice(7),
+      ),
       this.maxDescriptorBytes,
       INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE,
-      '/source/blobs',
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_BLOBS,
     );
     return {
       sourceKind: INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
@@ -511,15 +630,15 @@ class InstallableServiceArtifactResolver {
     if (bytes.length > this.maxDescriptorBytes) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE,
-        '/artifact/descriptor',
-        'OCI descriptor exceeds the configured size bound',
+        INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR,
+        INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_TOO_LARGE,
       );
     }
     if (descriptor.size !== bytes.length) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_SIZE_MISMATCH,
-        '/artifact/descriptor/size',
-        'OCI descriptor size does not match its bytes',
+        INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR_SIZE,
+        INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_SIZE_MISMATCH,
       );
     }
     const computedDigest = sha256(bytes);
@@ -527,8 +646,8 @@ class InstallableServiceArtifactResolver {
         computedDigest !== manifest.artifact.digest) {
       fail(
         INSTALLABLE_ARTIFACT_ERROR_CODE.DIGEST_MISMATCH,
-        '/artifact/descriptor/digest',
-        'OCI descriptor digest does not match the manifest pin',
+        INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR_DIGEST,
+        INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_DIGEST_MISMATCH,
       );
     }
     const ociManifest = parseOciManifest(bytes, descriptor);

@@ -10,6 +10,7 @@ import {ServiceLifecycleManager} from '../../src/service/service-lifecycle-manag
 import {ServiceTypeAdapter} from '../../src/service/service-type-adapter.js';
 import {
   ServiceDescriptorValidationError,
+  ServiceOperationJournalError,
   ServicePolicyViolationError,
   ServiceLifecycleTransitionError,
   UnknownServiceTypeError,
@@ -208,6 +209,39 @@ describe('ServiceLifecycleManager journaling and idempotency', () => {
     assert.ok(writes[0].sql.includes('INSERT INTO wasm_operations'));
     assert.ok(writes[1].sql.includes('UPDATE wasm_operations'));
     assert.ok(writes[2].sql.includes('UPDATE wasm_operations'));
+  });
+
+  it('records failure when the completion journal transition rejects', async () => {
+    const manager = new ServiceLifecycleManager();
+    const adapter = new StubServiceAdapter(UNIFIED_SERVICE_TYPE.PARTITION);
+    const handle = serviceHandle('svc-journal-completion-failure');
+    const journalFailure = new Error('completion write failed');
+    let writeCount = 0;
+
+    manager.registerAdapter(adapter);
+    manager.setOperationWriter(async () => {
+      writeCount += 1;
+      if (writeCount === 3) throw journalFailure;
+    });
+    manager.setIdempotencyReader(async () => []);
+
+    await assert.rejects(
+      () => manager.startReplica(handle),
+      (error) => {
+        assert.equal(error instanceof ServiceOperationJournalError, true);
+        assert.equal(error.cause, journalFailure);
+        return true;
+      },
+    );
+
+    assert.equal(writeCount, 4);
+    assert.equal(
+      manager.getReplicaState(handle),
+      SERVICE_LIFECYCLE_STATE.FAILED,
+    );
+    const metrics = manager.getMetrics();
+    assert.equal(metrics.operationSuccess, 0);
+    assert.equal(metrics.operationFailure, 1);
   });
 
   it('returns idempotent result without invoking adapter on duplicate key', async () => {

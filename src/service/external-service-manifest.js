@@ -31,6 +31,35 @@ const EXTERNAL_SERVICE_MANIFEST_ERROR_CODE = Object.freeze({
   UNSUPPORTED_SCHEMA_VERSION: 'unsupported_schema_version',
 });
 
+const EXTERNAL_SERVICE_MANIFEST_STATUS = Object.freeze({
+  ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+});
+
+const JSON_SCHEMA_KEYWORD = Object.freeze({
+  CONST: 'const',
+  REQUIRED: 'required',
+});
+
+const EXTERNAL_SERVICE_MANIFEST_PATH = Object.freeze({
+  ARTIFACT_DIGEST: '/artifact/digest',
+  ARTIFACT_MEDIA_TYPE: '/artifact/media_type',
+  ARTIFACT_REF: '/artifact/ref',
+  ARTIFACT_TYPE: '/artifact/type',
+  ROOT: '/',
+  RUNTIME_KIND: '/runtime/kind',
+  SCHEMA_VERSION: '/schema_version',
+});
+
+const EXTERNAL_SERVICE_MANIFEST_MESSAGE = Object.freeze({
+  INVALID_SCHEMA_VALUE: 'is invalid',
+  NOT_JSON_OBJECT: 'external service manifest must be a JSON object',
+  NOT_NORMALIZED_JSON_OBJECT:
+    'external service manifest must normalize to a JSON object',
+  NOT_SERIALIZABLE_JSON:
+    'external service manifest must contain serializable JSON data',
+});
+
 const EXPECTED_MEDIA_TYPE = Object.freeze({
   [RUNTIME_KIND.OCI_CONTAINER]: EXTERNAL_SERVICE_MEDIA_TYPE.OCI_CONTAINER,
   [RUNTIME_KIND.WASM_COMPONENT]: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
@@ -206,7 +235,7 @@ function cloneJsonObject(input) {
     return {
       ok: false,
       code: EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.MANIFEST_NOT_OBJECT,
-      message: 'external service manifest must be a JSON object',
+      message: EXTERNAL_SERVICE_MANIFEST_MESSAGE.NOT_JSON_OBJECT,
     };
   }
   try {
@@ -215,7 +244,7 @@ function cloneJsonObject(input) {
       return {
         ok: false,
         code: EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.MANIFEST_NOT_OBJECT,
-        message: 'external service manifest must normalize to a JSON object',
+        message: EXTERNAL_SERVICE_MANIFEST_MESSAGE.NOT_NORMALIZED_JSON_OBJECT,
       };
     }
     return {ok: true, value};
@@ -223,37 +252,40 @@ function cloneJsonObject(input) {
     return {
       ok: false,
       code: EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.MANIFEST_NOT_JSON,
-      message: 'external service manifest must contain serializable JSON data',
+      message: EXTERNAL_SERVICE_MANIFEST_MESSAGE.NOT_SERIALIZABLE_JSON,
     };
   }
 }
 
 function pathForSchemaError(error) {
-  if (error.keyword !== 'required') return error.instancePath || '/';
+  if (error.keyword !== JSON_SCHEMA_KEYWORD.REQUIRED) {
+    return error.instancePath || EXTERNAL_SERVICE_MANIFEST_PATH.ROOT;
+  }
   const prefix = error.instancePath || '';
   return `${prefix}/${error.params.missingProperty}`;
 }
 
 function codeForSchemaError(error, path) {
-  if (error.keyword === 'required') {
+  if (error.keyword === JSON_SCHEMA_KEYWORD.REQUIRED) {
     return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.REQUIRED_FIELD;
   }
-  if (path === '/schema_version' && error.keyword === 'const') {
+  if (path === EXTERNAL_SERVICE_MANIFEST_PATH.SCHEMA_VERSION &&
+      error.keyword === JSON_SCHEMA_KEYWORD.CONST) {
     return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.UNSUPPORTED_SCHEMA_VERSION;
   }
-  if (path === '/artifact/type') {
+  if (path === EXTERNAL_SERVICE_MANIFEST_PATH.ARTIFACT_TYPE) {
     return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.UNSUPPORTED_ARTIFACT_TYPE;
   }
-  if (path === '/artifact/ref') {
+  if (path === EXTERNAL_SERVICE_MANIFEST_PATH.ARTIFACT_REF) {
     return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.INVALID_ARTIFACT_REF;
   }
-  if (path === '/artifact/digest') {
+  if (path === EXTERNAL_SERVICE_MANIFEST_PATH.ARTIFACT_DIGEST) {
     return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.INVALID_DIGEST;
   }
-  if (path === '/artifact/media_type') {
+  if (path === EXTERNAL_SERVICE_MANIFEST_PATH.ARTIFACT_MEDIA_TYPE) {
     return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.UNSUPPORTED_MEDIA_TYPE;
   }
-  if (path === '/runtime/kind') {
+  if (path === EXTERNAL_SERVICE_MANIFEST_PATH.RUNTIME_KIND) {
     return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.UNSUPPORTED_RUNTIME_KIND;
   }
   return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.INVALID_FIELD;
@@ -265,7 +297,8 @@ function schemaErrors() {
     return {
       code: codeForSchemaError(error, path),
       path,
-      message: `${path} ${error.message || 'is invalid'}`,
+      message: `${path} ${error.message ||
+        EXTERNAL_SERVICE_MANIFEST_MESSAGE.INVALID_SCHEMA_VALUE}`,
     };
   });
 }
@@ -280,15 +313,19 @@ function mismatchError(manifest) {
   }
   return {
     code: EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.RUNTIME_MEDIA_MISMATCH,
-    path: '/artifact/media_type',
-    message: `/artifact/media_type must be ${expected} for runtime ${kind}`,
+    path: EXTERNAL_SERVICE_MANIFEST_PATH.ARTIFACT_MEDIA_TYPE,
+    message: `${EXTERNAL_SERVICE_MANIFEST_PATH.ARTIFACT_MEDIA_TYPE} ` +
+      `must be ${expected} for runtime ${kind}`,
   };
 }
 
 function rejectedResult(errors) {
   const sorted = errors.sort((left, right) =>
     `${left.path}:${left.code}`.localeCompare(`${right.path}:${right.code}`));
-  return deepFreeze({status: 'rejected', errors: sorted});
+  return deepFreeze({
+    status: EXTERNAL_SERVICE_MANIFEST_STATUS.REJECTED,
+    errors: sorted,
+  });
 }
 
 function normalizedManifest(manifest) {
@@ -319,7 +356,7 @@ function normalizeExternalServiceManifest(input) {
   if (!clone.ok) {
     return rejectedResult([{
       code: clone.code,
-      path: '/',
+      path: EXTERNAL_SERVICE_MANIFEST_PATH.ROOT,
       message: clone.message,
     }]);
   }
@@ -331,14 +368,14 @@ function normalizeExternalServiceManifest(input) {
   if (errors.length > 0) return rejectedResult(errors);
 
   return deepFreeze({
-    status: 'accepted',
+    status: EXTERNAL_SERVICE_MANIFEST_STATUS.ACCEPTED,
     manifest: normalizedManifest(clone.value),
   });
 }
 
 function validateExternalServiceManifest(input) {
   const result = normalizeExternalServiceManifest(input);
-  if (result.status === 'rejected') {
+  if (result.status === EXTERNAL_SERVICE_MANIFEST_STATUS.REJECTED) {
     return deepFreeze({valid: false, errors: result.errors});
   }
   return deepFreeze({valid: true, manifest: result.manifest});
