@@ -131,7 +131,7 @@ class OperationWorkflowTransitionPersistence
         const mutationBudget =
           this.buildPriorityDispatchTransitionMutationBudget(
             operation,
-            operation.createdAt ?? now,
+            now,
           );
         let transitionCommitted;
         try {

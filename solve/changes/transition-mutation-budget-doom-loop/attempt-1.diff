@@ -1,0 +1,265 @@
+diff --git a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+index a2315e44b68a0daa9e957181d9e91ce6807f9095..21cb2f37434a8084078b0eab2193ec23da269d55 100644
+--- a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
++++ b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+@@ -18,5 +18,5 @@
+   "expectationMet": true,
+   "temporalViolated": false,
+   "exitCode": 0,
+-  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-07-14 01:18:15.\nProgress(7) at 2026-07-14 01:18:15: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-07-14 01:18:15)\nFinished checking temporal properties in 00s at 2026-07-14 01:18:15\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-07-14 01:18:15)"
++  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-07-15 13:08:23.\nProgress(7) at 2026-07-15 13:08:23: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-07-15 13:08:23)\nFinished checking temporal properties in 00s at 2026-07-15 13:08:23\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-07-15 13:08:23)"
+ }
+diff --git a/src/rebalancer/operation-workflow-transition-orchestration.js b/src/rebalancer/operation-workflow-transition-orchestration.js
+index b171ace6e50a5d62a74809be3366241f53b63b71..29405e6c61ddf6b94cf28fe26290533b49b2b076 100644
+--- a/src/rebalancer/operation-workflow-transition-orchestration.js
++++ b/src/rebalancer/operation-workflow-transition-orchestration.js
+@@ -192,7 +192,7 @@ class OperationWorkflowTransitionOrchestration
+             timeoutBudget:
+               this.buildPriorityDispatchTransitionMutationBudget(
+                 operation,
+-                operation.createdAt ?? now,
++                now,
+               ),
+           } :
+           persistOptions;
+diff --git a/src/rebalancer/operation-workflow-transition-persistence.js b/src/rebalancer/operation-workflow-transition-persistence.js
+index 891d899feb18c566de5d58dd03787a44b6cb98e4..e3ee3f6e36142819f59abd6ee6891136314782d8 100644
+--- a/src/rebalancer/operation-workflow-transition-persistence.js
++++ b/src/rebalancer/operation-workflow-transition-persistence.js
+@@ -131,7 +131,7 @@ class OperationWorkflowTransitionPersistence
+         const mutationBudget =
+           this.buildPriorityDispatchTransitionMutationBudget(
+             operation,
+-            operation.createdAt ?? now,
++            now,
+           );
+         let transitionCommitted;
+         try {
+diff --git a/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js b/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+index 564dfcc16b80b0d84d83908366193d095f32dbe3..4903e161306d7757a29dc726ceb07901f23b2607 100644
+--- a/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
++++ b/test/rebalancer/priority-recovery-sql-dispatch-timeout-reentry-test-cases.js
+@@ -208,115 +208,119 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
+       timestamp: operationRow.updated_at - TEST_STEP_HISTORY_LAG_MS,
+     }]);
+ 
+-    coordinator.initialize();
++    const originalDateNow = Date.now;
++    Date.now = () => nowMs;
+ 
+-    const cachedOperation =
+-    coordinator.repository.queryCachedIncompleteOperations()[0];
++    try {
++      coordinator.initialize();
+ 
+-    t.equal(
+-      coordinator.repository.isOperationLocallyOwned(cachedOperation),
+-      true,
+-      TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER,
+-    );
+-    t.equal(
+-      coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+-        cachedOperation,
+-        TEST_ACTUAL_STATUS_ABSENT,
+-        {now: nowMs},
+-      ),
+-      true,
+-      TEST_ASSERT_SQL_PRIORITY_REARM,
+-    );
+-    t.equal(
+-      coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+-        {
+-          ...cachedOperation,
+-          workflowStep: WORKFLOW_STEP.CREATING,
+-          status: TEST_STATUS_CREATING,
+-        },
+-        TEST_STATUS_CREATING,
+-        {now: nowMs},
+-      ),
+-      false,
+-      'visible CREATING target progress should not replay duplicate create dispatch',
+-    );
++      const cachedOperation =
++      coordinator.repository.queryCachedIncompleteOperations()[0];
+ 
+-    await coordinator.checkTimeouts();
++      t.equal(
++        coordinator.repository.isOperationLocallyOwned(cachedOperation),
++        true,
++        TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER,
++      );
++      t.equal(
++        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
++          cachedOperation,
++          TEST_ACTUAL_STATUS_ABSENT,
++          {now: nowMs},
++        ),
++        true,
++        TEST_ASSERT_SQL_PRIORITY_REARM,
++      );
++      t.equal(
++        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
++          {
++            ...cachedOperation,
++            workflowStep: WORKFLOW_STEP.CREATING,
++            status: TEST_STATUS_CREATING,
++          },
++          TEST_STATUS_CREATING,
++          {now: nowMs},
++        ),
++        false,
++        'visible CREATING target progress should not replay duplicate create dispatch',
++      );
+ 
+-    t.equal(
+-      deliveries.length,
+-      1,
+-      TEST_ASSERT_SQL_PRIORITY_DISPATCH,
+-    );
+-    t.equal(
+-      deliveries[0]?.target,
+-      TEST_REPLICA_HANDLER_DISPATCH_TARGET,
+-      TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET,
+-    );
+-    t.equal(
+-      deliveries[0]?.options?.timeoutMs,
+-      TEST_HANDOFF_TIMEOUT_MS,
+-      TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT,
+-    );
+-    t.equal(
+-      deliveries[0]?.options?.deliverySource,
+-      TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
+-      TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE,
+-    );
+-    t.equal(
+-      operationRow.workflow_step,
+-      TEST_STEP_CREATING,
+-      TEST_ASSERT_SQL_PRIORITY_STEP,
+-    );
+-    t.equal(
+-      operationRow.status,
+-      TEST_STATUS_CREATING,
+-      TEST_ASSERT_SQL_PRIORITY_STATUS,
+-    );
+-    t.equal(
+-      updateCount,
+-      2,
+-      TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
+-    );
+-    t.equal(
+-      updateOptions[0]?.disableSystemWriteSession,
+-      true,
+-      TEST_ASSERT_SQL_PRIORITY_CLAIM_NO_SESSION,
+-    );
+-    t.equal(
+-      Object.hasOwn(updateOptions[0] || {}, 'sessionId'),
+-      false,
+-      TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT,
+-    );
+-    t.equal(
+-      updateParams[0]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+-      TEST_STEP_PENDING,
+-      TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS,
+-    );
+-    t.equal(
+-      updateOptions[0]?.timeoutBudget?.configuredBudgetMs,
+-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+-      TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
+-    );
+-    t.ok(
+-      updateOptions[0]?.timeoutMs <=
+-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
+-      updateOptions[0]?.timeoutMs > 0,
+-      TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
+-    );
+-    t.equal(
+-      updateOptions[1]?.timeoutBudget?.configuredBudgetMs,
+-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+-      TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+-    );
+-    t.ok(
+-      updateOptions[1]?.timeoutMs <=
+-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
+-      updateOptions[1]?.timeoutMs > 0,
+-      TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+-    );
++      await coordinator.checkTimeouts();
+ 
+-    await coordinator.shutdown();
++      t.equal(
++        deliveries.length,
++        1,
++        TEST_ASSERT_SQL_PRIORITY_DISPATCH,
++      );
++      t.equal(
++        deliveries[0]?.target,
++        TEST_REPLICA_HANDLER_DISPATCH_TARGET,
++        TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET,
++      );
++      t.equal(
++        deliveries[0]?.options?.timeoutMs,
++        TEST_HANDOFF_TIMEOUT_MS,
++        TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT,
++      );
++      t.equal(
++        deliveries[0]?.options?.deliverySource,
++        TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
++        TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE,
++      );
++      t.equal(
++        operationRow.workflow_step,
++        TEST_STEP_CREATING,
++        TEST_ASSERT_SQL_PRIORITY_STEP,
++      );
++      t.equal(
++        operationRow.status,
++        TEST_STATUS_CREATING,
++        TEST_ASSERT_SQL_PRIORITY_STATUS,
++      );
++      t.equal(
++        updateCount,
++        2,
++        TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
++      );
++      t.equal(
++        updateOptions[0]?.disableSystemWriteSession,
++        true,
++        TEST_ASSERT_SQL_PRIORITY_CLAIM_NO_SESSION,
++      );
++      t.equal(
++        Object.hasOwn(updateOptions[0] || {}, 'sessionId'),
++        false,
++        TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT,
++      );
++      t.equal(
++        updateParams[0]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
++        TEST_STEP_PENDING,
++        TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS,
++      );
++      t.equal(
++        updateOptions[0]?.timeoutBudget?.configuredBudgetMs,
++        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
++        TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
++      );
++      t.equal(
++        updateOptions[0]?.timeoutMs,
++        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
++        TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
++      );
++      t.equal(
++        updateOptions[1]?.timeoutBudget?.configuredBudgetMs,
++        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
++        TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
++      );
++      t.equal(
++        updateOptions[1]?.timeoutMs,
++        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
++        TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
++      );
++    } finally {
++      Date.now = originalDateNow;
++      await coordinator.shutdown();
++    }
+   });
+ 
+   registerCase(

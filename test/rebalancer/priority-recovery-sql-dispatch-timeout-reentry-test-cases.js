@@ -208,115 +208,119 @@ export function registerPriorityRecoverySqlDispatchTimeoutReentryTestCases({
       timestamp: operationRow.updated_at - TEST_STEP_HISTORY_LAG_MS,
     }]);
 
-    coordinator.initialize();
+    const originalDateNow = Date.now;
+    Date.now = () => nowMs;
 
-    const cachedOperation =
-    coordinator.repository.queryCachedIncompleteOperations()[0];
+    try {
+      coordinator.initialize();
 
-    t.equal(
-      coordinator.repository.isOperationLocallyOwned(cachedOperation),
-      true,
-      TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER,
-    );
-    t.equal(
-      coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
-        cachedOperation,
-        TEST_ACTUAL_STATUS_ABSENT,
-        {now: nowMs},
-      ),
-      true,
-      TEST_ASSERT_SQL_PRIORITY_REARM,
-    );
-    t.equal(
-      coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
-        {
-          ...cachedOperation,
-          workflowStep: WORKFLOW_STEP.CREATING,
-          status: TEST_STATUS_CREATING,
-        },
+      const cachedOperation =
+      coordinator.repository.queryCachedIncompleteOperations()[0];
+
+      t.equal(
+        coordinator.repository.isOperationLocallyOwned(cachedOperation),
+        true,
+        TEST_ASSERT_SQL_PRIORITY_LOCAL_OWNER,
+      );
+      t.equal(
+        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+          cachedOperation,
+          TEST_ACTUAL_STATUS_ABSENT,
+          {now: nowMs},
+        ),
+        true,
+        TEST_ASSERT_SQL_PRIORITY_REARM,
+      );
+      t.equal(
+        coordinator.workflowOwner.shouldRearmDispatchFromProgressReconcile(
+          {
+            ...cachedOperation,
+            workflowStep: WORKFLOW_STEP.CREATING,
+            status: TEST_STATUS_CREATING,
+          },
+          TEST_STATUS_CREATING,
+          {now: nowMs},
+        ),
+        false,
+        'visible CREATING target progress should not replay duplicate create dispatch',
+      );
+
+      await coordinator.checkTimeouts();
+
+      t.equal(
+        deliveries.length,
+        1,
+        TEST_ASSERT_SQL_PRIORITY_DISPATCH,
+      );
+      t.equal(
+        deliveries[0]?.target,
+        TEST_REPLICA_HANDLER_DISPATCH_TARGET,
+        TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET,
+      );
+      t.equal(
+        deliveries[0]?.options?.timeoutMs,
+        TEST_HANDOFF_TIMEOUT_MS,
+        TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT,
+      );
+      t.equal(
+        deliveries[0]?.options?.deliverySource,
+        TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
+        TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE,
+      );
+      t.equal(
+        operationRow.workflow_step,
+        TEST_STEP_CREATING,
+        TEST_ASSERT_SQL_PRIORITY_STEP,
+      );
+      t.equal(
+        operationRow.status,
         TEST_STATUS_CREATING,
-        {now: nowMs},
-      ),
-      false,
-      'visible CREATING target progress should not replay duplicate create dispatch',
-    );
-
-    await coordinator.checkTimeouts();
-
-    t.equal(
-      deliveries.length,
-      1,
-      TEST_ASSERT_SQL_PRIORITY_DISPATCH,
-    );
-    t.equal(
-      deliveries[0]?.target,
-      TEST_REPLICA_HANDLER_DISPATCH_TARGET,
-      TEST_ASSERT_SQL_PRIORITY_DISPATCH_TARGET,
-    );
-    t.equal(
-      deliveries[0]?.options?.timeoutMs,
-      TEST_HANDOFF_TIMEOUT_MS,
-      TEST_ASSERT_SQL_PRIORITY_DISPATCH_TIMEOUT,
-    );
-    t.equal(
-      deliveries[0]?.options?.deliverySource,
-      TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
-      TEST_ASSERT_SQL_PRIORITY_DISPATCH_SOURCE,
-    );
-    t.equal(
-      operationRow.workflow_step,
-      TEST_STEP_CREATING,
-      TEST_ASSERT_SQL_PRIORITY_STEP,
-    );
-    t.equal(
-      operationRow.status,
-      TEST_STATUS_CREATING,
-      TEST_ASSERT_SQL_PRIORITY_STATUS,
-    );
-    t.equal(
-      updateCount,
-      2,
-      TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
-    );
-    t.equal(
-      updateOptions[0]?.disableSystemWriteSession,
-      true,
-      TEST_ASSERT_SQL_PRIORITY_CLAIM_NO_SESSION,
-    );
-    t.equal(
-      Object.hasOwn(updateOptions[0] || {}, 'sessionId'),
-      false,
-      TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT,
-    );
-    t.equal(
-      updateParams[0]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
-      TEST_STEP_PENDING,
-      TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS,
-    );
-    t.equal(
-      updateOptions[0]?.timeoutBudget?.configuredBudgetMs,
-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
-      TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
-    );
-    t.ok(
-      updateOptions[0]?.timeoutMs <=
-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
-      updateOptions[0]?.timeoutMs > 0,
-      TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
-    );
-    t.equal(
-      updateOptions[1]?.timeoutBudget?.configuredBudgetMs,
-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
-      TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
-    );
-    t.ok(
-      updateOptions[1]?.timeoutMs <=
-      TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS &&
-      updateOptions[1]?.timeoutMs > 0,
-      TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
-    );
-
-    await coordinator.shutdown();
+        TEST_ASSERT_SQL_PRIORITY_STATUS,
+      );
+      t.equal(
+        updateCount,
+        2,
+        TEST_ASSERT_SQL_PRIORITY_TRANSITIONS,
+      );
+      t.equal(
+        updateOptions[0]?.disableSystemWriteSession,
+        true,
+        TEST_ASSERT_SQL_PRIORITY_CLAIM_NO_SESSION,
+      );
+      t.equal(
+        Object.hasOwn(updateOptions[0] || {}, 'sessionId'),
+        false,
+        TEST_ASSERT_SQL_PRIORITY_CLAIM_SESSION_ABSENT,
+      );
+      t.equal(
+        updateParams[0]?.[TEST_EXPECTED_WORKFLOW_STEP_PARAM_INDEX],
+        TEST_STEP_PENDING,
+        TEST_ASSERT_SQL_PRIORITY_CLAIM_CAS,
+      );
+      t.equal(
+        updateOptions[0]?.timeoutBudget?.configuredBudgetMs,
+        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+        TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
+      );
+      t.equal(
+        updateOptions[0]?.timeoutMs,
+        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+        TEST_ASSERT_SQL_PRIORITY_CLAIM_BOUNDED_BUDGET,
+      );
+      t.equal(
+        updateOptions[1]?.timeoutBudget?.configuredBudgetMs,
+        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+        TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+      );
+      t.equal(
+        updateOptions[1]?.timeoutMs,
+        TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS,
+        TEST_ASSERT_SQL_PRIORITY_CREATING_BOUNDED_BUDGET,
+      );
+    } finally {
+      Date.now = originalDateNow;
+      await coordinator.shutdown();
+    }
   });
 
   registerCase(

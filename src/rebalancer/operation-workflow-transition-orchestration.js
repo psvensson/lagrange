@@ -192,7 +192,7 @@ class OperationWorkflowTransitionOrchestration
             timeoutBudget:
               this.buildPriorityDispatchTransitionMutationBudget(
                 operation,
-                operation.createdAt ?? now,
+                now,
               ),
           } :
           persistOptions;
