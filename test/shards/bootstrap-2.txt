@@ -68,6 +68,7 @@ test/bootstrap/seed-registration-phase.test.js
 test/bootstrap/shared/cdc-integration-setup.test.js
 test/bootstrap/shared/message-router-setup.test.js
 test/bootstrap/shared/replica-handler-setup.test.js
+test/bootstrap/shared/service-installation-reconciler-setup.test.js
 test/bootstrap/startup-authority-consumption.test.js
 test/bootstrap/startup-recovery-coordinator.test.js
 test/bootstrap/startup-runtime-surface-owner.test.js

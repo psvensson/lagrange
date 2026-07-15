@@ -72,5 +72,6 @@ test/bootstrap/shared/startup-sql-runtime-handoff.test.js
 test/bootstrap/startup-convergence-gate.test.js
 test/bootstrap/startup-runtime-handoff-owner.test.js
 test/bootstrap/storage-budget-bootstrap.test.js
+test/bootstrap/system-partition-classification-owner.test.js
 test/bootstrap/traffic-readiness-utils.test.js
 test/bootstrap/wasm-meta-table-schemas.test.js

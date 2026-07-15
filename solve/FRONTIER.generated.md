@@ -61,10 +61,11 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 23
+## Open quests — 31
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
+| cli-static-guideline-ratchet-closure | process | 0 | 0 | — |
 | coordinator-reconcile-lane-ledger-write-head-of-line | product | 0 | 0 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
@@ -75,16 +76,23 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | managed-partition-merge-live-validation | product | 0 | 0 | — |
 | movielens-three-way-affinity-demo | product | 4 | 0 | — |
 | newcomer-onboarding-friction | product | 0 | 0 | — |
+| oci-container-driver-live-activation | product | 8 | 0 | — |
+| partition-class-ladder-single-owner-table | process | 7 | 0 | — |
+| pgwire-authentication-cutover | product | 5 | 0 | — |
+| pgwire-tls-policy-cutover | product | 3 | 0 | — |
+| priority-recovery-owner-inventory-projection-refresh | process | 0 | 0 | — |
 | rebalancer-own-create-memory-duplicate-replace | product | 0 | 0 | — |
 | rolling-restart-core-stability | product | 74 | 13 | CL-001, CL-004, CL-030 |
 | rolling-restart-run4-critical-spread | product | 1 | 0 | — |
 | rolling-restart-run4-join-runtime-activation | product | 2 | 0 | — |
 | rolling-restart-run4-observer-staleness | product | 1 | 0 | — |
-| rolling-restart-run4-publication-visibility-run2 | product | 0 | 0 | — |
 | routed-mutation-silent-ledger-write-loss | product | 0 | 0 | — |
 | runtime-owner-reconcile-alignment | product | 0 | 0 | — |
 | runtime-replica-state-projection | product | 0 | 0 | — |
 | seed-join-gate-authoritative-refresh | product | 0 | 0 | — |
+| service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | — |
+| solver-verifier-rejection-supersession-core | process | 1 | 0 | — |
+| solver-verifier-rejection-supersession-steering | process | 1 | 0 | — |
 | transition-mutation-budget-doom-loop | product | 0 | 0 | — |
 | unwired-event-adjudication | product | 0 | 0 | — |
 | write-path-internal-pacing | product | 0 | 0 | — |
