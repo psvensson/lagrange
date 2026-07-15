@@ -24,13 +24,26 @@ function normalizeBootstrapLeaderReadinessOptions(options = {}) {
         BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.STARTUP_MODE
       ],
   });
-  return {
+  const result = {
     ...normalizedOptions,
     [BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.MEMBERSHIP_OWNER_OUTCOME]:
       membershipOwnerOutcome,
     [BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.STARTUP_MODE]:
       membershipOwnerOutcome.startupMode,
   };
+  if (
+    Object.hasOwn(normalizedOptions, 'timeoutBudget') &&
+    normalizedOptions.timeoutBudget &&
+    typeof normalizedOptions.timeoutBudget === 'object'
+  ) {
+    Object.defineProperty(result, 'timeoutBudget', {
+      value: normalizedOptions.timeoutBudget,
+      enumerable: false,
+      configurable: true,
+      writable: false,
+    });
+  }
+  return result;
 }
 
 function isBootstrapLeaderReadinessBlockedOwnerOutcome(

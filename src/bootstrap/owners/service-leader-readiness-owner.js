@@ -14,6 +14,11 @@ import {
   resolveCanonicalLeaderService,
 } from '../../cache/leader-readiness-gate.js';
 import {
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+} from '../../cdc/cdc-integration-service.js';
+import {getRemainingBudgetMs} from
+  '../../control-plane/timeout-budget.js';
+import {
   BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT,
 } from '../bootstrap-constants.js';
 import {
@@ -25,6 +30,7 @@ import {
 } from '../../control-plane/membership-lifecycle-controller.js';
 
 const LOCAL_STR_ALL_SERVICE_LEADERS_READY = 'All service leaders ready';
+const AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS = 1500;
 
 const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODES,
@@ -64,6 +70,38 @@ function isLiveServiceLeader(service) {
       service.isLeaderReplica());
 }
 
+function collectMissingPartitionIds(missing = {}) {
+  return [...new Set([
+    ...(missing.missingPartitionLeaders || []),
+    ...(missing.missingPartitionLeaderNodes || []),
+    ...(missing.missingPartitionLeaderAddresses || []),
+  ])];
+}
+
+function buildAggregatePartitionReadQuery(tableName, partitionIds) {
+  const placeholders = partitionIds.map(() => '?').join(', ');
+  return `SELECT * FROM ${tableName} ` +
+    `WHERE ${COLUMN.PARTITION_ID} IN (${placeholders})`;
+}
+
+function createAuthoritativeLeaderMetadataCache(partitions, services) {
+  return {
+    getAll(tableName) {
+      if (tableName === TABLES.PARTITIONS) {
+        return partitions;
+      }
+      if (tableName === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+}
+
+function authoritativeLeaderReadsSucceeded(results) {
+  return results.every((result) => result?.success === true);
+}
+
 class ServiceLeaderReadinessOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -87,6 +125,10 @@ class ServiceLeaderReadinessOwner {
 
   getLogger() {
     return this.delegates.getLogger?.() || console;
+  }
+
+  getAuthoritativeControlPlaneView() {
+    return this.delegates.getAuthoritativeControlPlaneView?.() || null;
   }
 
   getLeaderReadinessStatusForProbe() {
@@ -224,12 +266,19 @@ class ServiceLeaderReadinessOwner {
     );
   }
 
-  getCachedLeaderMetadataByServiceType(serviceType, idColumn) {
-    const systemTableCache = assertCritical(
-      this.getSystemTableCache(),
+  getCachedLeaderMetadataByServiceType(
+    serviceType,
+    idColumn,
+    systemTableCache = this.getSystemTableCache(),
+  ) {
+    const resolvedSystemTableCache = assertCritical(
+      systemTableCache,
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
     );
-    const ownerRecords = getOwnerRecords(systemTableCache, serviceType);
+    const ownerRecords = getOwnerRecords(
+      resolvedSystemTableCache,
+      serviceType,
+    );
     const metadata = new Map();
 
     for (const ownerRecord of ownerRecords) {
@@ -241,7 +290,7 @@ class ServiceLeaderReadinessOwner {
         leaderNodeId,
         leaderService,
       } = resolveCanonicalLeaderService(
-        systemTableCache,
+        resolvedSystemTableCache,
         serviceType,
         entityId,
       );
@@ -322,6 +371,109 @@ class ServiceLeaderReadinessOwner {
     };
   }
 
+  resolveAuthoritativeLeaderRefreshQueryTimeoutMs(options = {}) {
+    const configuredTimeoutMs =
+      Number.isFinite(options.queryTimeoutMs) && options.queryTimeoutMs > 0 ?
+        Math.floor(options.queryTimeoutMs) :
+        AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS;
+    if (!options.timeoutBudget || typeof options.timeoutBudget !== 'object') {
+      return configuredTimeoutMs;
+    }
+    const remainingBudgetMs = getRemainingBudgetMs(options.timeoutBudget);
+    if (remainingBudgetMs <= 0) {
+      return 0;
+    }
+    return Math.max(
+      1,
+      Math.min(configuredTimeoutMs, Math.floor(remainingBudgetMs)),
+    );
+  }
+
+  applyAuthoritativePartitionLeaderMetadata(missing, metadata) {
+    return {
+      ...missing,
+      missingPartitionLeaders:
+        (missing.missingPartitionLeaders || []).filter((partitionId) => {
+          return metadata.get(partitionId)?.hasLeaderRecord !== true;
+        }),
+      missingPartitionLeaderNodes:
+        (missing.missingPartitionLeaderNodes || []).filter((partitionId) => {
+          const leader = metadata.get(partitionId);
+          return leader?.hasLeaderRecord !== true || leader.hasNodeId !== true;
+        }),
+      missingPartitionLeaderAddresses:
+        (missing.missingPartitionLeaderAddresses || [])
+          .filter((partitionId) => {
+            const leader = metadata.get(partitionId);
+            return leader?.hasLeaderRecord !== true ||
+              leader.hasAddress !== true;
+          }),
+    };
+  }
+
+  async refreshAuthoritativePartitionLeaderStatus(missing, options = {}) {
+    const partitionIds = collectMissingPartitionIds(missing);
+    const authoritativeControlPlaneView =
+      this.getAuthoritativeControlPlaneView();
+    const queryTimeoutMs =
+      this.resolveAuthoritativeLeaderRefreshQueryTimeoutMs(options);
+    if (
+      partitionIds.length === 0 ||
+      typeof authoritativeControlPlaneView?.readRows !== 'function' ||
+      queryTimeoutMs <= 0
+    ) {
+      return null;
+    }
+
+    const readOptions = {
+      allowSqlFallback: false,
+      replicaFallbackConsistency:
+        LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      queryTimeoutMs,
+    };
+    try {
+      const results = await Promise.all([
+        authoritativeControlPlaneView.readRows(
+          TABLES.PARTITIONS,
+          buildAggregatePartitionReadQuery(TABLES.PARTITIONS, partitionIds),
+          [...partitionIds],
+          readOptions,
+        ),
+        authoritativeControlPlaneView.readRows(
+          TABLES.SERVICES,
+          buildAggregatePartitionReadQuery(TABLES.SERVICES, partitionIds),
+          [...partitionIds],
+          readOptions,
+        ),
+      ]);
+      if (!authoritativeLeaderReadsSucceeded(results)) {
+        return null;
+      }
+      const [partitionResult, serviceResult] = results;
+
+      const partitionIdSet = new Set(partitionIds);
+      const partitions = (partitionResult.rows || []).filter((partition) =>
+        partitionIdSet.has(partition?.[COLUMN.PARTITION_ID]),
+      );
+      const services = (serviceResult.rows || []).filter((service) =>
+        service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
+        partitionIdSet.has(service?.[COLUMN.PARTITION_ID]),
+      );
+      const metadataCache = createAuthoritativeLeaderMetadataCache(
+        partitions,
+        services,
+      );
+      const metadata = this.getCachedLeaderMetadataByServiceType(
+        SERVICE_TYPE.PARTITION,
+        COLUMN.PARTITION_ID,
+        metadataCache,
+      );
+      return this.applyAuthoritativePartitionLeaderMetadata(missing, metadata);
+    } catch (_error) {
+      return null;
+    }
+  }
+
   resolveRequiredLeaderTables(options = {}) {
     return isMembershipOwnerRestartReentryOutcome({
       membershipOwnerOutcome: options.membershipOwnerOutcome,
@@ -333,10 +485,20 @@ class ServiceLeaderReadinessOwner {
 
   async waitForServiceLeaders(options = {}) {
     const requiredTables = this.resolveRequiredLeaderTables(options);
-    const missing = this.normalizeLeaderStatusForRequiredTables(
+    const cachedMissing = this.normalizeLeaderStatusForRequiredTables(
       this.getMissingServiceLeaders(),
       requiredTables,
     );
+    const cachedBlockingMissing =
+      this.getBlockingLeaderStatusForReadiness(cachedMissing);
+    const authoritativeMissing =
+      this.countMissingLeaderInfo(cachedBlockingMissing) === 0 ?
+        null :
+        await this.refreshAuthoritativePartitionLeaderStatus(
+          cachedMissing,
+          options,
+        );
+    const missing = authoritativeMissing || cachedMissing;
     const blockingMissing = this.getBlockingLeaderStatusForReadiness(missing);
     const missingCount = this.countMissingLeaderInfo(blockingMissing);
     const ready = missingCount === 0;
