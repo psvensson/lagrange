@@ -1,0 +1,28 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "tooling-static-steering-scenario-ratchet",
+  "detail": {
+    "scopeFile": "scripts/run-llm-steering-usability-scenarios.js",
+    "literalViolations": 0,
+    "decisionBoundaryViolations": 0,
+    "baselineChanged": false,
+    "scenarioGroupsPassed": 6,
+    "scenarioGroupsTotal": 6,
+    "reportDirectoryPreserved": "test-output/reports/llm-steering-usability",
+    "eslintPassed": true,
+    "duplicationBefore": {
+      "groups": 78,
+      "lines": 2435
+    },
+    "duplicationAfter": {
+      "groups": 78,
+      "lines": 2435
+    },
+    "duplicationRegressed": false,
+    "cognitiveBefore": 184,
+    "cognitiveAfter": 184,
+    "cognitiveRegressed": false
+  }
+}

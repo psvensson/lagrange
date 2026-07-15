@@ -2,6 +2,8 @@
 
 import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
 
+const REPORT_DIRECTORY = 'test-output/reports/llm-steering-usability';
+
 const SCENARIOS = Object.freeze({
   'llm-steering-operator-orientation-isolated-evidence': Object.freeze([
     'test/solve/doctor.test.js',
@@ -37,5 +39,5 @@ const SCENARIOS = Object.freeze({
 });
 
 runGuardTestScenarios(SCENARIOS, {
-  reportDir: 'test-output/reports/llm-steering-usability',
+  reportDir: REPORT_DIRECTORY,
 });

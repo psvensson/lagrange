@@ -1,0 +1,47 @@
+{
+  "id": "tooling-static-steering-scenario-ratchet",
+  "authoringContractVersion": 1,
+  "statement": "The LLM steering usability scenario runner introduces zero literal-guideline violations while preserving every scenario outcome and report path. doneWhen: solve/oracle/tooling-static-steering-scenario-ratchet.json is done only when its scoped guideline audits, all six scenario groups, focused lint, and no-regression metric checks are green without baseline changes.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "425f5f7602c771d39f0998bd15c9eef0c420ed35"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/tooling-static-steering-scenario-ratchet.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "tooling-static-steering-scenario-ratchet-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/tooling-static-steering-scenario-ratchet.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-owner-source-bound",
+      "statement": "Limit source changes to scripts/run-llm-steering-usability-scenarios.js."
+    },
+    {
+      "id": "no-baseline-growth",
+      "statement": "Do not raise or weaken guideline, duplication, or complexity baselines."
+    }
+  ]
+}
