@@ -1,4 +1,13 @@
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+import {
+  COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
+  resolveExecutorOutcomeRemoteOwnerHandoffMode,
+} from './operation-workflow-coordinator-created-handoff-scheduling.js';
+import {
+  EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION,
+  EXECUTOR_OUTCOME_VISIBILITY_ABSENCE,
+  applyOperationWorkflowExecutorOutcomeVisibility,
+} from './operation-workflow-executor-outcome-visibility.js';
 
 const {
   EXECUTOR_OUTCOME_ACTION,
@@ -6,7 +15,6 @@ const {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
   EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
   NUM,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_TRANSITION_REASON,
@@ -38,54 +46,6 @@ const EXECUTOR_FAILURE_RECONCILE_STATE_TABLE = Object.freeze([
   }),
 ]);
 
-const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE = Object.freeze({
-  PRESENT: 'present',
-  DEFERRED: 'deferred',
-  EMPTY: 'empty',
-});
-
-const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION = Object.freeze({
-  USE_OPERATION: 'use_operation',
-  RETRY_OUTCOME: 'retry_outcome',
-  SKIP_OUTCOME: 'skip_outcome',
-});
-
-const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION_BY_STATE = Object.freeze(
-  new Map([
-    [
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.PRESENT,
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.USE_OPERATION,
-    ],
-    [
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.DEFERRED,
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.RETRY_OUTCOME,
-    ],
-    [
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.EMPTY,
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME,
-    ],
-  ]),
-);
-
-const EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRYABLE_TYPES = Object.freeze(
-  new Set([
-    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
-    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
-    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
-  ]),
-);
-
-const EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
-  new Set([
-    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_CREATING,
-    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
-    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
-  ]),
-);
-
-const EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRY_WINDOW_MS =
-  SHARED.TIME_MS.MINUTE;
-
 // CL-029: bound on consecutive lane waits in the re-drive loop (each wait
 // is a full holder execution, not a poll); past it the timed retry owns
 // the evidence.
@@ -96,29 +56,6 @@ const EXECUTOR_OUTCOME_REDRIVE_MAX_LANE_WAITS = 50;
 // quarter-second cadence with a warn per arm is an observer-effect storm
 // while the blocking condition persists.
 const EXECUTOR_OUTCOME_RETRY_MAX_DELAY_MS = SHARED.TIME_MS.SECOND * 30;
-
-const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE = Object.freeze([
-  Object.freeze({
-    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.PRESENT,
-    matches: (evidence) => evidence.operationAvailable === true,
-  }),
-  Object.freeze({
-    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.DEFERRED,
-    matches: (evidence) => evidence.visibilityDeferred === true,
-  }),
-  Object.freeze({
-    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.DEFERRED,
-    matches: (evidence) =>
-      evidence.emptyVisibility === true &&
-      evidence.emptyVisibilityReplicaOutcome === true &&
-      evidence.emptyVisibilityRetryableOutcome === true &&
-      evidence.freshEmptyVisibilityOutcome === true,
-  }),
-  Object.freeze({
-    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.EMPTY,
-    matches: () => true,
-  }),
-]);
 
 const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
   [WORKFLOW_STEP.PENDING, 1],
@@ -133,17 +70,6 @@ const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
 
 const EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE =
   'Executor outcome operation visibility deferred';
-
-const EXECUTOR_OUTCOME_VISIBILITY_ABSENCE = Object.freeze({
-  DEFERRED_OUTCOME: Object.freeze({
-    state: 'executor_outcome_deferred_outcome_unavailable',
-  }),
-  OPERATION: Object.freeze({
-    state: 'executor_outcome_operation_unavailable',
-  }),
-  PARTITION_ID: 'executor_outcome_partition_unavailable',
-  WORKFLOW_STEP: 'executor_outcome_workflow_step_unavailable',
-});
 
 class OperationWorkflowExecutorOutcomeReconcileMethods {
   handleExecutorOutcome(outcome) {
@@ -301,154 +227,11 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     );
   }
 
-  shouldWakeRemoteOwnerForExecutorOutcome(operation, outcome) {
-    const outcomeType = outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
-    return (
-      EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES.has(outcomeType) &&
-      this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) === true &&
-      this.isDispatchRetryableWorkflowStep(operation) === true
-    );
-  }
-
-  isFreshExecutorOutcomeForEmptyVisibility(outcome) {
-    const timestamp = outcome?.[EXECUTOR_OUTCOME_FIELD.TIMESTAMP];
-    if (!Number.isFinite(timestamp)) {
-      return false;
-    }
-    const outcomeAgeMs = Date.now() - timestamp;
-    return (
-      outcomeAgeMs >= 0 &&
-      outcomeAgeMs <= EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRY_WINDOW_MS
-    );
-  }
-
-  buildExecutorOutcomeOperationVisibilityEvidence(
-    visibilityObservation,
-    outcome,
-  ) {
-    const replicaId = outcome?.[EXECUTOR_OUTCOME_FIELD.REPLICA_ID];
-    return Object.freeze({
-      emptyVisibility:
-        visibilityObservation?.state ===
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
-      emptyVisibilityReplicaOutcome:
-        typeof replicaId === 'string' && replicaId.length > 0,
-      emptyVisibilityRetryableOutcome:
-        EXECUTOR_OUTCOME_EMPTY_VISIBILITY_RETRYABLE_TYPES.has(
-          outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
-        ),
-      freshEmptyVisibilityOutcome:
-        this.isFreshExecutorOutcomeForEmptyVisibility(outcome),
-      operationAvailable: Boolean(visibilityObservation?.operation),
-      visibilityDeferred:
-        visibilityObservation?.state ===
-          INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
-        Boolean(visibilityObservation?.deferredOutcome),
-    });
-  }
-
-  getExecutorOutcomeStringField(source, field) {
-    const value = source?.[field];
-    return typeof value === 'string' && value.length > 0 ?
-      value :
-      null;
-  }
-
-  buildExecutorOutcomeRetryContext(outcome, visibilityObservation = null) {
-    const operation = visibilityObservation?.operation &&
-      typeof visibilityObservation.operation === 'object' ?
-      visibilityObservation.operation :
-      null;
-    const deferredOutcome =
-      visibilityObservation?.deferredOutcome &&
-      typeof visibilityObservation.deferredOutcome === 'object' ?
-        visibilityObservation.deferredOutcome :
-        null;
-    const partitionId =
-      this.getExecutorOutcomeStringField(operation, 'partitionId') ||
-      this.getExecutorOutcomeStringField(
-        outcome,
-        EXECUTOR_OUTCOME_FIELD.PARTITION_ID,
-      ) ||
-      this.getExecutorOutcomeStringField(deferredOutcome, 'partitionId') ||
-      EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.PARTITION_ID;
-    const workflowStep =
-      this.getExecutorOutcomeStringField(operation, 'workflowStep') ||
-      this.getExecutorOutcomeStringField(
-        outcome,
-        EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP,
-      ) ||
-      EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.WORKFLOW_STEP;
-    return Object.freeze({
-      boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
-      workflowStep,
-      partitionId,
-      operationSnapshot: operation,
-      completionState:
-        this.getExecutorOutcomeStringField(deferredOutcome, 'completionState'),
-      reasonCode:
-        this.getExecutorOutcomeStringField(deferredOutcome, 'reasonCode'),
-    });
-  }
-
-  buildExecutorOutcomeRetryVisibilityObservation(
-    error,
-    priorVisibilityObservation = null,
-  ) {
-    const retryAfterMs = Number.isFinite(error?.retryAfterMs) &&
-      error.retryAfterMs > 0 ?
-      Math.floor(error.retryAfterMs) :
-      OBSERVED_PROGRESS_RETRY_DELAY_MS;
-    const priorDeferredOutcome =
-      priorVisibilityObservation?.deferredOutcome &&
-      typeof priorVisibilityObservation.deferredOutcome === 'object' ?
-        priorVisibilityObservation.deferredOutcome :
-        null;
-    const deferredOutcome = {
-      ...(priorDeferredOutcome || {}),
-      retryAfterMs,
-    };
-    if (
-      !deferredOutcome.completionState &&
-      typeof error?.completionState === 'string'
-    ) {
-      deferredOutcome.completionState = error.completionState;
-    }
-    if (
-      !deferredOutcome.reasonCode &&
-      typeof error?.reasonCode === 'string'
-    ) {
-      deferredOutcome.reasonCode = error.reasonCode;
-    }
-    return Object.freeze({
-      state: INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
-      operation:
-        priorVisibilityObservation?.operation &&
-        typeof priorVisibilityObservation.operation === 'object' ?
-          priorVisibilityObservation.operation :
-          null,
-      deferredOutcome,
-      retryAfterMs,
-    });
-  }
-
-  resolveExecutorOutcomeOperationVisibilityAction(
-    visibilityObservation,
-    outcome,
-  ) {
-    const evidence =
-      this.buildExecutorOutcomeOperationVisibilityEvidence(
-        visibilityObservation,
-        outcome,
-      );
-    const state =
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE.find((entry) =>
-        entry.matches(evidence),
-      )?.state ||
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.EMPTY;
-    return (
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION_BY_STATE.get(state) ||
-      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME
+  resolveRemoteOwnerHandoffModeForExecutorOutcome(operation, outcome) {
+    return resolveExecutorOutcomeRemoteOwnerHandoffMode(
+      this,
+      operation,
+      outcome,
     );
   }
 
@@ -748,8 +531,16 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       // executor evidence; retaining the payload locally would leave a
       // driverless entry that can mask later outcomes (CL-029).
       this.clearExecutorOutcomeRetry(operationId);
-      if (this.shouldWakeRemoteOwnerForExecutorOutcome(operation, outcome)) {
-        const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
+      const handoffMode =
+        this.resolveRemoteOwnerHandoffModeForExecutorOutcome(
+          operation,
+          outcome,
+        );
+      if (handoffMode !== COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.NONE) {
+        const woken = await this.wakeCoordinatorCreatedRemoteOwner(
+          operation,
+          {handoffMode},
+        );
         this.logger.debug(
           REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
           {
@@ -892,6 +683,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
 }
 
 function applyOperationWorkflowExecutorOutcomeReconcileMethods(targetClass) {
+  applyOperationWorkflowExecutorOutcomeVisibility(targetClass);
   const sourcePrototype =
     OperationWorkflowExecutorOutcomeReconcileMethods.prototype;
   for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {

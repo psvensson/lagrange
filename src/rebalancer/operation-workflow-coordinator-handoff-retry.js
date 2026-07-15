@@ -76,13 +76,17 @@ function buildCoordinatorCreatedRemoteHandoffRetryEvidence(
   context,
   operation,
   errorLike,
+  options = {},
 ) {
   const operationId = operation?.operationId || null;
   return Object.freeze({
     operationId,
     operationAvailable: Boolean(operationId),
     remoteHandoffEligible:
-      context.shouldRetryCoordinatorCreatedRemoteHandoff(operation),
+      context.shouldRetryCoordinatorCreatedRemoteHandoff(
+        operation,
+        options,
+      ),
     retryableControlPlaneError: isRetryableControlPlaneError(errorLike),
     locallyOwned: context.isCoordinatorCreatedOperationLocallyOwned(operation),
     transitionRetryGraceActive:
@@ -108,11 +112,13 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
   context,
   operation,
   errorLike,
+  options = {},
 ) {
   const evidence =
     context.buildCoordinatorCreatedRemoteHandoffRetryEvidence(
       operation,
       errorLike,
+      options,
     );
   const action =
     context.resolveCoordinatorCreatedRemoteHandoffRetryAction(evidence);
@@ -129,14 +135,20 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
   }
 
   const operationId = evidence.operationId;
-  const targetNodeId = operation?.targetNodeId || null;
+  const ownerNodeId =
+    context.resolveCoordinatorCreatedOperationOwnerNodeId(operation);
+  const diagnosticDestination =
+    context.resolveCoordinatorCreatedHandoffDiagnosticDestination(
+      operation,
+      options,
+    );
   const alreadyScheduled =
     context.hasActiveCreatedOperationHandoffRetry(operationId);
   if (
     !alreadyScheduled &&
-    targetNodeId &&
+    ownerNodeId &&
     context.countActiveCreatedOperationHandoffRetriesByTargetNode(
-      targetNodeId,
+      ownerNodeId,
     ) >= COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET
   ) {
     context.logger.warn(
@@ -144,11 +156,11 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
       {
         operationId,
         partitionId: operation?.partitionId || null,
-        targetNodeId,
+        ...diagnosticDestination.logFields,
         workflowStep: operation?.workflowStep || null,
         activeRetriesPerTarget:
           context.countActiveCreatedOperationHandoffRetriesByTargetNode(
-            targetNodeId,
+            ownerNodeId,
           ),
         maxActiveRetriesPerTarget:
           COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET,
@@ -158,6 +170,7 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
           context,
           operation,
           errorLike,
+          diagnosticDestination.nodeId,
         ),
       },
     );
@@ -181,7 +194,7 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
     {
       operationId,
       partitionId: operation?.partitionId || null,
-      targetNodeId: operation?.targetNodeId || null,
+      ...diagnosticDestination.logFields,
       workflowStep: operation?.workflowStep || null,
       delayMs,
       errorMessage,
@@ -191,6 +204,7 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
         context,
         operation,
         errorLike,
+        diagnosticDestination.nodeId,
       ),
     },
   );
@@ -198,6 +212,7 @@ function deferCoordinatorCreatedRemoteHandoffRetry(
   return context.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
     operation,
     delayMs,
+    options,
   );
 }
 

@@ -464,12 +464,14 @@ function resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence(
  * @param {Object} owner - Owner with an injected messageRouter.
  * @param {Object|null} operation - Operation carrying the targetNodeId.
  * @param {Error|Object|null} errorLike - Transport delivery outcome or error.
+ * @param {string|null} destinationNodeId - Node whose connection is relevant.
  * @return {Object} Flat diagnostics fields to spread into the deferral log.
  */
 function buildHandoffDeferralTransportDiagnostics(
   owner,
   operation,
   errorLike = null,
+  destinationNodeId = operation?.targetNodeId || null,
 ) {
   const diagnostics = {};
   if (errorLike && typeof errorLike === 'object') {
@@ -482,14 +484,15 @@ function buildHandoffDeferralTransportDiagnostics(
       diagnostics.transportReasonCode = reasonCode;
     }
   }
-  const targetNodeId = operation?.targetNodeId || null;
   const router = owner?.messageRouter || null;
   if (
-    targetNodeId &&
+    destinationNodeId &&
     router &&
     typeof router.getConnectionHandoffDiagnostics === 'function'
   ) {
-    const connection = router.getConnectionHandoffDiagnostics(targetNodeId);
+    const connection = router.getConnectionHandoffDiagnostics(
+      destinationNodeId,
+    );
     diagnostics.targetConnectionPresent = connection?.present === true;
     if (connection?.present === true) {
       diagnostics.targetConnectionState = connection.state ?? null;

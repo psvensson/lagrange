@@ -115,12 +115,17 @@ function withOwnerHandoffState(Base) {
       );
     }
 
-    buildCoordinatorCreatedRemoteHandoffRetryEvidence(operation, errorLike) {
+    buildCoordinatorCreatedRemoteHandoffRetryEvidence(
+      operation,
+      errorLike,
+      options = {},
+    ) {
       return COORDINATOR_HANDOFF_RETRY
         .buildCoordinatorCreatedRemoteHandoffRetryEvidence(
           this,
           operation,
           errorLike,
+          options,
         );
     }
 
@@ -129,12 +134,17 @@ function withOwnerHandoffState(Base) {
         .resolveCoordinatorCreatedRemoteHandoffRetryAction(evidence);
     }
 
-    deferCoordinatorCreatedRemoteHandoffRetry(operation, errorLike) {
+    deferCoordinatorCreatedRemoteHandoffRetry(
+      operation,
+      errorLike,
+      options = {},
+    ) {
       return COORDINATOR_HANDOFF_RETRY
         .deferCoordinatorCreatedRemoteHandoffRetry(
           this,
           operation,
           errorLike,
+          options,
         );
     }
 
@@ -180,8 +190,15 @@ function withOwnerHandoffState(Base) {
     handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
       operation,
       error,
+      options = {},
     ) {
-      if (this.deferCoordinatorCreatedRemoteHandoffRetry(operation, error)) {
+      if (
+        this.deferCoordinatorCreatedRemoteHandoffRetry(
+          operation,
+          error,
+          options,
+        )
+      ) {
         return;
       }
       this.logger.error(
@@ -189,6 +206,10 @@ function withOwnerHandoffState(Base) {
         {
           operationId: operation?.operationId || null,
           partitionId: operation?.partitionId || null,
+          ...this.resolveCoordinatorCreatedHandoffDiagnosticDestination(
+            operation,
+            options,
+          ).logFields,
           workflowStep: operation?.workflowStep || null,
           error: error?.message || error?.error || String(error),
           boundary:
@@ -202,7 +223,7 @@ function withOwnerHandoffState(Base) {
      * @return {Promise<boolean>}
      * @private
      */
-    async wakeCoordinatorCreatedRemoteOwner(operation) {
+    async wakeCoordinatorCreatedRemoteOwner(operation, options = {}) {
       if (!operation?.operationId) {
         return false;
       }
@@ -271,6 +292,7 @@ function withOwnerHandoffState(Base) {
             this.deferCoordinatorCreatedRemoteHandoffRetry(
               operation,
               response,
+              options,
             )
           ) {
             return false;
@@ -284,7 +306,7 @@ function withOwnerHandoffState(Base) {
         }
 
         if (response?.noHandler === true) {
-          return this.handleDroppedNoHandlerWake(operation);
+          return this.handleDroppedNoHandlerWake(operation, options);
         }
 
         this.resetCreatedOperationHandoffRetryAttempts(operation.operationId);
@@ -292,12 +314,19 @@ function withOwnerHandoffState(Base) {
           operation,
           COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
           {
+            ...options,
             replaceExisting: true,
           },
         );
         return true;
       } catch (error) {
-        if (this.deferCoordinatorCreatedRemoteHandoffRetry(operation, error)) {
+        if (
+          this.deferCoordinatorCreatedRemoteHandoffRetry(
+            operation,
+            error,
+            options,
+          )
+        ) {
           return false;
         }
         throw error;
@@ -316,7 +345,7 @@ function withOwnerHandoffState(Base) {
      * @return {boolean}
      * @private
      */
-    handleDroppedNoHandlerWake(operation) {
+    handleDroppedNoHandlerWake(operation, options = {}) {
       const noHandlerError = new Error(
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
       );
@@ -325,6 +354,7 @@ function withOwnerHandoffState(Base) {
         this.deferCoordinatorCreatedRemoteHandoffRetry(
           operation,
           noHandlerError,
+          options,
         )
       ) {
         return false;
@@ -379,10 +409,15 @@ function withOwnerHandoffState(Base) {
           return;
         }
         this.resetCreatedOperationHandoffRetryAttempts(operationId);
+        const handoffMode =
+          this.createdOperationHandoffRetryModeByOperationId.get(operationId);
         this.scheduleCoordinatorCreatedRemoteHandoffFollowUp(
           operation,
           COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
-          {replaceExisting: true},
+          {
+            ...(handoffMode ? {handoffMode} : {}),
+            replaceExisting: true,
+          },
         );
       } catch (error) {
         this.logger.debug(

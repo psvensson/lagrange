@@ -1,5 +1,8 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowTransitionRetryGrace} from './operation-workflow-transition-retry-grace.js';
+import {
+  OperationWorkflowCoordinatorCreatedHandoffRetryRegistry,
+} from './operation-workflow-coordinator-created-handoff-retry-registry.js';
 import * as DISPATCH_REARM_EVIDENCE
   from './operation-workflow-dispatch-rearm-evidence.js';
 
@@ -14,7 +17,8 @@ const {
   classifySystemPartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
-class OperationWorkflowOwnerRetryRegistry {
+class OperationWorkflowOwnerRetryRegistry extends
+  OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
   /**
    * @param {Function} options.allocateCanonicalReplicaId -
    *   Replica ID allocation callback.
@@ -24,6 +28,7 @@ class OperationWorkflowOwnerRetryRegistry {
    * @param {Function} [options.clearTimeoutFn] - Deferred retry timer cleanup.
    */
   constructor(options) {
+    super();
     this.repository = options.repository;
     this.operationLane = options.operationLane;
     this.operationWorkflowCoordinator = options.operationWorkflowCoordinator;
@@ -74,6 +79,7 @@ class OperationWorkflowOwnerRetryRegistry {
     this.createdOperationHandoffRetryDeadlineMsByOperationId = new Map();
     this.createdOperationHandoffRetryAttemptByOperationId = new Map();
     this.createdOperationHandoffRetryTargetNodeByOperationId = new Map();
+    this.createdOperationHandoffRetryModeByOperationId = new Map();
     this.operationDispatchDeferredRetryDeadlineMsByOperationId = new Map();
     this.operationDispatchDeferredRetrySnapshotByOperationId = new Map();
     this.transitionRetryTimerByOperationId = new Map();
@@ -144,6 +150,7 @@ class OperationWorkflowOwnerRetryRegistry {
     this.createdOperationHandoffRetryDeadlineMsByOperationId.clear();
     this.createdOperationHandoffRetryAttemptByOperationId.clear();
     this.createdOperationHandoffRetryTargetNodeByOperationId.clear();
+    this.createdOperationHandoffRetryModeByOperationId.clear();
     this.operationDispatchDeferredRetryDeadlineMsByOperationId.clear();
     this.operationDispatchDeferredRetrySnapshotByOperationId.clear();
     for (const timerHandle of this.transitionRetryTimerByOperationId.values()) {
@@ -284,12 +291,14 @@ class OperationWorkflowOwnerRetryRegistry {
       this.createdOperationHandoffRetryTargetNodeByOperationId.delete(
         operationId,
       );
+      this.createdOperationHandoffRetryModeByOperationId.delete(operationId);
       return;
     }
     this.clearTimeoutFn(timerHandle);
     this.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
     this.createdOperationHandoffRetryDeadlineMsByOperationId.delete(operationId);
     this.createdOperationHandoffRetryTargetNodeByOperationId.delete(operationId);
+    this.createdOperationHandoffRetryModeByOperationId.delete(operationId);
   }
 
   /**
@@ -745,74 +754,6 @@ class OperationWorkflowOwnerRetryRegistry {
       error,
       context,
     );
-  }
-
-  cloneOperationSnapshot(operation) {
-    return DISPATCH_REARM_EVIDENCE.cloneOperationSnapshot(operation);
-  }
-
-  resolveCoordinatorCreatedOperationOwnerNodeId(operation) {
-    return DISPATCH_REARM_EVIDENCE
-      .resolveCoordinatorCreatedOperationOwnerNodeId(this, operation);
-  }
-
-  isCoordinatorCreatedOperationLocallyOwned(operation) {
-    return DISPATCH_REARM_EVIDENCE.isCoordinatorCreatedOperationLocallyOwned(
-      this,
-      operation,
-    );
-  }
-
-  buildCoordinatorCreatedDispatchIngress(nodeId) {
-    return DISPATCH_REARM_EVIDENCE.buildCoordinatorCreatedDispatchIngress(
-      nodeId,
-    );
-  }
-
-  buildCoordinatorCreatedDispatchRow(operation) {
-    return DISPATCH_REARM_EVIDENCE.buildCoordinatorCreatedDispatchRow(
-      operation,
-    );
-  }
-
-  shouldRetryCoordinatorCreatedRemoteHandoff(operation) {
-    return DISPATCH_REARM_EVIDENCE
-      .shouldRetryCoordinatorCreatedRemoteHandoff(this, operation);
-  }
-
-  buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
-    operation,
-    now = Date.now(),
-  ) {
-    return DISPATCH_REARM_EVIDENCE
-      .buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
-        this,
-        operation,
-        now,
-      );
-  }
-
-  canContinueCoordinatorCreatedRemoteHandoff(operation, delayMs) {
-    return DISPATCH_REARM_EVIDENCE
-      .canContinueCoordinatorCreatedRemoteHandoff(
-        this,
-        operation,
-        delayMs,
-      );
-  }
-
-  scheduleCoordinatorCreatedRemoteHandoffFollowUp(
-    operation,
-    delayMs,
-    options = {},
-  ) {
-    return DISPATCH_REARM_EVIDENCE
-      .scheduleCoordinatorCreatedRemoteHandoffFollowUp(
-        this,
-        operation,
-        delayMs,
-        options,
-      );
   }
 }
 
