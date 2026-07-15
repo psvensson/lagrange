@@ -1,3 +1,10 @@
+---
+id: core-logic-live-validation
+roadmapRow: null
+status: discussing
+graduatesTo: null
+---
+
 # Epic: Live validation of the 2026-07-12 core-logic quest batch
 
 **Status:** plan only — nothing below has been executed.
