@@ -424,9 +424,10 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
   // and loses control_plane_publications-p1 leadership (CL-001 variant B). The
   // merge is a pure function of publication + node/service/partition state for the
   // publisher node, so memoize its (already Object.frozen) output per publisher
-  // node and reuse it until the SAME readiness invalidation CL-033 uses supersedes
-  // it — publication cluster marker (ack/epoch/status writes) OR this node's
-  // node/service change — plus the identical epoch/status freshness recheck. The
+  // node and reuse it until the cluster-wide planning source revision changes,
+  // plus the identical epoch/status freshness recheck. A remote replica
+  // transition changes every publisher's summary without changing that
+  // publisher's per-node readiness evidence. The
   // side-effectful per-node layer (resolvePriorityRecoveryPlanningAnswer) and the
   // input planning answer stay OUTSIDE this memo and run every call.
   resolveMemoizedMembershipPublicationPlanningSnapshotSync(
@@ -442,7 +443,8 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       if (
         cached &&
         cached.fn === this.resolveMembershipPublicationPlanningSnapshot &&
-        !this.isReadinessSnapshotInvalidated(memoKey, cached.capturedAtMs) &&
+        cached.sourceRevision ===
+          this.membershipPublicationPlanningSourceRevision &&
         this.isReadinessPlanningMemoWithinStaleGrace(
           observedAt,
           cached.capturedAtMs,
@@ -469,6 +471,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       memo.set(memoKey, {
         projection,
         capturedAtMs,
+        sourceRevision: this.membershipPublicationPlanningSourceRevision,
         fn: this.resolveMembershipPublicationPlanningSnapshot,
       });
     }

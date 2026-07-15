@@ -141,6 +141,12 @@
       "transition": "read-model contract consumers observe canonical owner state without replacing the owner"
     },
     {
+      "path": "src/control-plane/control-plane-readiness-snapshot-store.js",
+      "owner": "read_model_contract_owner",
+      "boundary": "membership_publication_planning_projection",
+      "transition": "a cluster-wide nodes/services/partitions/publications source revision fences memoized priority summaries while per-node readiness invalidation remains node-scoped"
+    },
+    {
       "path": "src/control-plane/control-plane-readiness-service.js",
       "owner": "control_plane_readiness_owner",
       "boundary": "readiness_gating",
@@ -288,5 +294,8 @@ own contracts.
 FMEA/STPA treat the architecture itself as the controller for the core logic
 shape. The unsafe actions are accepting owner-flow drift without model updates
 and allowing observer-only or degraded evidence to become readiness authority.
+Membership-publication priority summaries are cluster-wide projections: every
+node, service, partition, or publication change advances their source revision,
+even though ordinary readiness snapshot invalidation remains per-node.
 `npm run model:contracts` is the gate that keeps the architecture record,
 statechart, invariant registry, and narrower protocol models aligned.

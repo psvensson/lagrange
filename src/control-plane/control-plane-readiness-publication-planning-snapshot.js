@@ -188,9 +188,9 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   // call, amplifying into the seed event-loop freeze↔leadership-churn spiral.
   // The projection is a pure function of publication + node/service/partition
   // state for a given publisher node, so memoize it per publisher node and
-  // reuse until the EXISTING readiness invalidation supersedes it: the same
-  // isReadinessSnapshotInvalidated predicate the stored-snapshot fast path uses
-  // (publication cluster marker OR this node's node/service change). The
+  // reuse only while the cluster-wide planning source revision is unchanged.
+  // Per-node readiness invalidation is insufficient because a replica row on
+  // another node still changes this publisher's priority-spread summary. The
   // per-node retain/active layers in getPriorityRecoveryPlanningAnswerSync stay
   // OUTSIDE this memo and run every call on the (shared, frozen) projection.
   // CL-033/CL-034 (regression repair): the wall-time stale-grace bound for the
@@ -266,7 +266,8 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       if (
         cached &&
         cached.fn === this.getMembershipPublicationPlanningSnapshotSync &&
-        !this.isReadinessSnapshotInvalidated(memoKey, cached.capturedAtMs) &&
+        cached.sourceRevision ===
+          this.membershipPublicationPlanningSourceRevision &&
         this.isReadinessPlanningMemoWithinStaleGrace(
           observedAt,
           cached.capturedAtMs,
@@ -290,6 +291,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       memo.set(memoKey, {
         projection,
         capturedAtMs,
+        sourceRevision: this.membershipPublicationPlanningSourceRevision,
         fn: this.getMembershipPublicationPlanningSnapshotSync,
       });
     }

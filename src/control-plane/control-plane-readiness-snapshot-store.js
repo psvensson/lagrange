@@ -667,6 +667,14 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   handleCacheChange(tableName, record) {
+    if (
+      tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ||
+      tableName === TABLES.NODES ||
+      tableName === TABLES.SERVICES ||
+      tableName === TABLES.PARTITIONS
+    ) {
+      this.membershipPublicationPlanningSourceRevision += 1;
+    }
     if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
       // CL-019: publication content feeds the memoized membership-publication
       // diagnostics AND the publication-derived dimensions baked into every

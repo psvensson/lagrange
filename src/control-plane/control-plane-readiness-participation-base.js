@@ -138,6 +138,8 @@ class ControlPlaneReadinessParticipationBase {
     this.lastReadinessSnapshotAtMsByNodeId = new Map();
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId = new Map();
     this.lastReadinessSnapshotClusterInvalidatedAtMs = 0;
+    // Priority summaries depend on cluster-wide topology, not one node's rows.
+    this.membershipPublicationPlanningSourceRevision = 0;
     this.membershipPublicationDiagnosticsMemo = null;
     this.lastActivePriorityRecoveryPlanningSnapshotByNodeId = new Map();
     this.lastActivePriorityRecoveryPlanningSnapshotAtMsByNodeId = new Map();
@@ -392,6 +394,7 @@ class ControlPlaneReadinessParticipationBase {
       this.lastReadinessSnapshotAtMsByNodeId.clear();
       this.lastReadinessSnapshotInvalidatedAtMsByNodeId.clear();
       this.lastReadinessSnapshotClusterInvalidatedAtMs = 0;
+      this.membershipPublicationPlanningSourceRevision += 1;
       this.membershipPublicationDiagnosticsMemo = null;
       this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
       this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
