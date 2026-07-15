@@ -21,15 +21,13 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json
-- Selected theory: theory-20260715-idempotent-schema-admin-timeout-retry-owner (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-pre-schema-quiescence-live-main
+- Selected theory: theory-20260715-control-plane-snapshot-owner
+- Next move: continue supervised step for movielens-pre-schema-quiescence-live-main
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record system theory before the next movielens-pre-schema-quiescence-live-main attempt using npm run model:contracts as model discriminator
-- Blocker: system theory required for movielens-pre-schema-quiescence-live-main
-- Blocker: frontier theory required for movielens-pre-schema-quiescence-live-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Status: allowed
+- Next action: continue movielens-pre-schema-quiescence-live-main with modelRef or modelNotApplicable evidence
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 9
@@ -61,13 +59,16 @@
 - **movielens-pre-schema-quiescence-live-main**: Independent verification passed exact cumulative attempt sha256:09ae08d43c4e529e0509b2dd9d5b879bb7fb08293e79092757a81cd3ec71f34d: full-index three-file delta is exact; adversarial clock ends at 60000ms with no client at exhaustion and every attempt capped by remaining budget; a real local WebSocket timer produces typed ADMIN_RESPONSE_TIMEOUT and a deliberately late result cannot resurrect the request; the old code is red through that seam; the existing retry owner remains sole, idempotent CREATE-only, fresh-session and confirmation-reset behavior holds, hard validation remains terminal, and focused/model/lint/audit checks pass. [subagent:verify_schema_timeout_retry_attempt4]
 - **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
 - **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
+- **movielens-pre-schema-quiescence-live-main**: The single changed-live run at source 288cd00a formed five nodes but failed closed before ratings DDL: the 180-second pre-schema gate obtained zero stable confirmations because its final authoritative observation was rejected as stale_usable/cache_stale_watermark. The Lagrange report sha256 is e535d8330d727f6159d0f69a8f3909ad6794c2e899227cb4d5a0a49b081f1dc7, comparison report sha256 is a04963ffecd1bac1601653a5cb47d5d6a0be6378d92f5bb5343b509916d70934, and immutable log archive sha256 is 729b4a545774aa3e1e22671a99fa309d606a515e4cdd671f8a2558c2cdb6e73f. This falsifies the selected admin-timeout theory for the current boundary; no unchanged live rerun is permitted. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-09-54-219Z.report.json]
 
 ## Theories
+- **theory-20260715-the-local-control-snapshot-owner-correctly** [active] system, mechanism The local control-snapshot owner correctly marks stale cache evidence pending, but the demo consumer never traverses the owner's existing forced authoritative repair command, so polling cannot refresh the evidence it requires., owner control_plane_snapshot_owner, modelGate npm run model:contracts
 - **theory-20260715-schema-admission-required-fields-optional-discount** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer observation, mechanism The shared admission parser must distinguish required authoritative snapshot fields from an optional client-side in-flight discount; otherwise missing required evidence can fail open, while requiring the non-produced discount makes every production snapshot unavailable., owner MovieLens shared control-snapshot admission parser, boundary authoritative snapshot envelope to quiescence classification, modelGate npm run model:contracts
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism The existing ratings schema retry owner cannot distinguish an ambiguous admin response deadline from a terminal CREATE failure, so its documented fresh-session idempotent replay contract exits after one timed-out request., owner ratings schema retry owner, boundary admin response deadline to idempotent CREATE replay, modelGate npm run model:contracts
+- **theory-20260715-control-plane-snapshot-owner** [active] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism control_plane_snapshot_owner, owner control_plane_snapshot_owner, boundary snapshot_freshness, modelGate npm run model:contracts
 
 ## Selected Theories
-- **movielens-pre-schema-quiescence-live-main**: theory-20260715-idempotent-schema-admin-timeout-retry-owner
+- **movielens-pre-schema-quiescence-live-main**: theory-20260715-control-plane-snapshot-owner
 
 ## Theory Results
 - **theory-20260715-schema-admission-required-fields-optional-discount**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json]
