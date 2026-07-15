@@ -41,7 +41,7 @@
 - **service-static-ratchet-no-headroom-main** [open] rung 0, attempts 1, metric 3 -> 1
 
 ## Findings
-_(none recorded)_
+- **service-static-ratchet-no-headroom-main**: Independent verification passed: service-owned static debt is eliminated and the residual global duplication excess is outside src/service [subagent:ledger_consistency_fix-service-review]
 
 ## Theories
 _(none recorded)_
