@@ -535,10 +535,7 @@ class ReplicaOperationRepository {
     this.lastIncompleteOperationReadOutcome = null;
     this.lastAuthoritativeOperationVisibilityOutcome = null;
     this.ownerPersistedTransitionVisibilityWitnesses = new Map();
-    this.replicaOperationTransitionQueues = new Map([
-      [REPLICA_OPERATION_TRANSITION_LANE.DEFAULT, Promise.resolve()],
-      [REPLICA_OPERATION_TRANSITION_LANE.PRIORITY_RECOVERY, Promise.resolve()],
-    ]);
+    this.replicaOperationTransitionQueues = new Map();
     this.replicaOperationAuthoritativeVisibilityTimeoutMs =
       Number.isFinite(options.authoritativeVisibilityTimeoutMs) &&
       options.authoritativeVisibilityTimeoutMs >= 0 ?

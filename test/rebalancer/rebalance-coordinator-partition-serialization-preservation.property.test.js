@@ -7,8 +7,8 @@
  * single-flight keys continue to prevent concurrent reconciliation
  * of the same operation.
  *
- * These tests MUST PASS on UNFIXED code — they capture baseline
- * behavior that must remain unchanged after the fix.
+ * Different operation IDs may progress independently, while the same stable
+ * operation identity remains the transition serialization boundary.
  *
  * **Validates: Requirements 3.8, 3.9**
  */
@@ -138,30 +138,57 @@ async (t) => {
 });
 
 test('Property 2 Preservation E: ' +
-  'runReplicaOperationTransitionExclusive serializes concurrent ' +
-  'mutations sequentially ' +
+  'runReplicaOperationTransitionExclusive lets distinct operation ' +
+  'mutations overlap ' +
   '(uses runReplicaOperationTransitionExclusive owner path)',
 async (t) => {
   const coordinator = createCoordinator();
   const executionOrder = [];
+  let releaseFirstMutation;
+  const firstMutationBlocked = new Promise((resolve) => {
+    releaseFirstMutation = resolve;
+  });
 
   const p1 = coordinator
-    .runReplicaOperationTransitionExclusive(async () => {
-      executionOrder.push('first-start');
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      executionOrder.push('first-end');
-      return 'first';
-    });
+    .runReplicaOperationTransitionExclusive(
+      async () => {
+        executionOrder.push('first-start');
+        await firstMutationBlocked;
+        executionOrder.push('first-end');
+        return 'first';
+      },
+      {
+        operation: {
+          operationId: 'operation-first',
+          partitionId: 'user-data-p17',
+        },
+      },
+    );
+  await new Promise((resolve) => setImmediate(resolve));
   const p2 = coordinator
-    .runReplicaOperationTransitionExclusive(async () => {
-      executionOrder.push('second-start');
-      return 'second';
-    });
+    .runReplicaOperationTransitionExclusive(
+      async () => {
+        executionOrder.push('second-start');
+        return 'second';
+      },
+      {
+        operation: {
+          operationId: 'operation-second',
+          partitionId: 'user-data-p17',
+        },
+      },
+    );
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(
+    executionOrder,
+    ['first-start', 'second-start'],
+    'a distinct operation starts before the first operation is released',
+  );
+  releaseFirstMutation();
 
   const [r1, r2] = await Promise.all([p1, p2]);
 
-  // Preservation: mutations are serialized — second starts only
-  // after first completes.
   assert.equal(
     r1,
     'first',
@@ -179,13 +206,13 @@ async (t) => {
   );
   assert.equal(
     executionOrder[1],
-    'first-end',
-    'First mutation should end before second starts',
+    'second-start',
+    'Second operation should start independently',
   );
   assert.equal(
     executionOrder[2],
-    'second-start',
-    'Second mutation should start after first ends',
+    'first-end',
+    'First mutation should end after its explicit release',
   );
   t.end();
 });

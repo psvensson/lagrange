@@ -1,0 +1,558 @@
+diff --git a/scripts/run-coordinator-reconcile-lane-ledger-write-head-of-line-scenarios.js b/scripts/run-coordinator-reconcile-lane-ledger-write-head-of-line-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..69dea41d4a0e8fc97a8cd678f9ad509c7aa2346b
+--- /dev/null
++++ b/scripts/run-coordinator-reconcile-lane-ledger-write-head-of-line-scenarios.js
+@@ -0,0 +1,12 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'coordinator-reconcile-lane-ledger-write-head-of-line': [
++    'test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/rebalancer/replica-operation-repository-mutation-transition-methods.js b/src/rebalancer/replica-operation-repository-mutation-transition-methods.js
+index 7b7812411702180badae3e75823af15720156f12..5564e3e47f24b637e1a42be388452a18ff838d68 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-transition-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-transition-methods.js
+@@ -1,4 +1,9 @@
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
++const REPLICA_OPERATION_TRANSITION_OWNER_KEY_PREFIX = Object.freeze({
++  FALLBACK_LANE: 'fallback-lane',
++  OPERATION: 'operation',
++});
++const REPLICA_OPERATION_TRANSITION_OWNER_KEY_SEPARATOR = ':';
+ 
+ function assignReplicaOperationRepositoryMutationTransitionMethods(
+   ReplicaOperationRepository,
+@@ -11,18 +16,44 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
+ 
+   class ReplicaOperationRepositoryMutationTransitionMethods {
+     runReplicaOperationTransitionExclusive(executionFactory, options = {}) {
+-      const lane = this.resolveReplicaOperationTransitionLane(options);
+-      const activeQueue = this.getReplicaOperationTransitionQueue(lane);
++      const ownerKey = this.resolveReplicaOperationTransitionOwnerKey(options);
++      const activeQueue = this.getReplicaOperationTransitionQueue(ownerKey);
+       const queuedExecution = activeQueue
+         .catch(() => {})
+         .then(async () => executionFactory());
+-      this.replicaOperationTransitionQueues.set(
+-        lane,
+-        queuedExecution.catch(() => {}),
+-      );
++      const settledQueue = queuedExecution.catch(() => {});
++      this.replicaOperationTransitionQueues.set(ownerKey, settledQueue);
++      void settledQueue.then(() => {
++        this.releaseSettledReplicaOperationTransitionQueue(
++          ownerKey,
++          settledQueue,
++        );
++      });
+       return queuedExecution;
+     }
+ 
++    resolveReplicaOperationTransitionOwnerKey(options = {}) {
++      const operationIdCandidate =
++        options.operationId ??
++        options.operation?.operationId ??
++        options.operation?.operation_id;
++      const operationId =
++        typeof operationIdCandidate === 'string' ?
++          operationIdCandidate.trim() :
++          '';
++      if (operationId.length > 0) {
++        return [
++          REPLICA_OPERATION_TRANSITION_OWNER_KEY_PREFIX.OPERATION,
++          operationId,
++        ].join(REPLICA_OPERATION_TRANSITION_OWNER_KEY_SEPARATOR);
++      }
++      const fallbackLane = this.resolveReplicaOperationTransitionLane(options);
++      return [
++        REPLICA_OPERATION_TRANSITION_OWNER_KEY_PREFIX.FALLBACK_LANE,
++        fallbackLane,
++      ].join(REPLICA_OPERATION_TRANSITION_OWNER_KEY_SEPARATOR);
++    }
++
+     resolveReplicaOperationTransitionLane(options = {}) {
+       const explicitLane = this.normalizeReplicaOperationTransitionLane(
+         options.transitionLane || options.lane,
+@@ -75,17 +106,20 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
+       };
+     }
+ 
+-    getReplicaOperationTransitionQueue(lane) {
+-      const normalizedLane =
+-        this.normalizeReplicaOperationTransitionLane(lane) ||
+-        REPLICA_OPERATION_TRANSITION_LANE.DEFAULT;
+-      if (!this.replicaOperationTransitionQueues.has(normalizedLane)) {
++    getReplicaOperationTransitionQueue(ownerKey) {
++      if (!this.replicaOperationTransitionQueues.has(ownerKey)) {
+         this.replicaOperationTransitionQueues.set(
+-          normalizedLane,
++          ownerKey,
+           Promise.resolve(),
+         );
+       }
+-      return this.replicaOperationTransitionQueues.get(normalizedLane);
++      return this.replicaOperationTransitionQueues.get(ownerKey);
++    }
++
++    releaseSettledReplicaOperationTransitionQueue(ownerKey, settledQueue) {
++      if (this.replicaOperationTransitionQueues.get(ownerKey) === settledQueue) {
++        this.replicaOperationTransitionQueues.delete(ownerKey);
++      }
+     }
+   }
+ 
+diff --git a/src/rebalancer/replica-operation-repository.js b/src/rebalancer/replica-operation-repository.js
+index d46fa122660d32538804df7fe4cdd987c3899c6f..3c9afbe473b454a1b25115c69c38caa256120131 100644
+--- a/src/rebalancer/replica-operation-repository.js
++++ b/src/rebalancer/replica-operation-repository.js
+@@ -535,10 +535,7 @@ class ReplicaOperationRepository {
+     this.lastIncompleteOperationReadOutcome = null;
+     this.lastAuthoritativeOperationVisibilityOutcome = null;
+     this.ownerPersistedTransitionVisibilityWitnesses = new Map();
+-    this.replicaOperationTransitionQueues = new Map([
+-      [REPLICA_OPERATION_TRANSITION_LANE.DEFAULT, Promise.resolve()],
+-      [REPLICA_OPERATION_TRANSITION_LANE.PRIORITY_RECOVERY, Promise.resolve()],
+-    ]);
++    this.replicaOperationTransitionQueues = new Map();
+     this.replicaOperationAuthoritativeVisibilityTimeoutMs =
+       Number.isFinite(options.authoritativeVisibilityTimeoutMs) &&
+       options.authoritativeVisibilityTimeoutMs >= 0 ?
+diff --git a/test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js b/test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ae3a473bb65abf4f86edcffc992a3aaf365658c2
+--- /dev/null
++++ b/test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js
+@@ -0,0 +1,298 @@
++/**
++ * Run-22 deterministic reproduction: one replica_operations INSERT for the
++ * operation-ledger partition remained in flight while a sibling priority
++ * operation had already reached ACTIVE replica truth. The repository's
++ * mutation lane must let the sibling owner reconcile persist independently,
++ * while retaining serialization for two mutations of the same operation.
++ */
++import {setImmediate as waitForImmediate} from 'node:timers/promises';
++import {test} from '../../src/test-helpers/tap.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {
++  INITIAL_PARTITION_IDS,
++  SYSTEM_TABLE_NAME,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  RebalanceCoordinator,
++} from '../../src/rebalancer/rebalance-coordinator.js';
++import {
++  createOperation,
++  OperationType,
++  ReplicaStatus,
++} from '../../src/rebalancer/replica-status.js';
++import {
++  createMockCache,
++  createMockControlPlaneSystemTableGateway,
++  createMockMessageRouter,
++  createMockPolicyService,
++} from './test-helpers.js';
++
++const TEST_NODE_ID = 'coordinator-hol-owner-node';
++const TEST_SLOW_OPERATION_ID = 'coordinator-hol-slow-ledger-insert';
++const TEST_SIBLING_OPERATION_ID = 'coordinator-hol-sibling-reconcile';
++const TEST_SLOW_REPLICA_ID = 'replica_operations-p1-r4';
++const TEST_SIBLING_REPLICA_ID = 'control_plane_publications-p1-r4';
++const TEST_OBSERVATION_TURN_BUDGET = 20;
++const TEST_SQL_INSERT_PREFIX = 'INSERT';
++const TEST_SQL_UPDATE_PREFIX = 'UPDATE';
++const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
++
++function createDeferred() {
++  let resolvePromise;
++  const promise = new Promise((resolve) => {
++    resolvePromise = resolve;
++  });
++  return {promise, resolve: resolvePromise};
++}
++
++function buildOperation({operationId, partitionId, replicaId, step}) {
++  const operation = createOperation({
++    operationId,
++    type: OperationType.ADD,
++    partitionId,
++    replicaId,
++    sourceNodeId: TEST_NODE_ID,
++    targetNodeId: TEST_NODE_ID,
++  });
++  if (step !== WORKFLOW_STEP.PENDING) {
++    operation.workflowStep = step;
++    operation.status = ReplicaStatus.SYNCING;
++    operation.stepsHistory.push({
++      step,
++      timestamp: operation.updatedAt,
++      previousStep: WORKFLOW_STEP.PENDING,
++    });
++  }
++  return operation;
++}
++
++function updateTrackedOperationRow(rowsByOperationId, params) {
++  const [
++    status,
++    workflowStep,
++    updatedAt,
++    completedAt,
++    errorMessage,
++    stepsHistory,
++    replicaId,
++    operationId,
++  ] = params;
++  const existing = rowsByOperationId.get(operationId) || {};
++  rowsByOperationId.set(operationId, {
++    ...existing,
++    operation_id: operationId,
++    status,
++    workflow_step: workflowStep,
++    updated_at: updatedAt,
++    completed_at: completedAt,
++    error_message: errorMessage,
++    steps_history: stepsHistory,
++    replica_id: replicaId,
++  });
++}
++
++function createCoordinatorHarness() {
++  const slowWriteStarted = createDeferred();
++  const releaseSlowWrite = createDeferred();
++  const siblingWriteStarted = createDeferred();
++  const rowsByOperationId = new Map();
++  const slowOperation = buildOperation({
++    operationId: TEST_SLOW_OPERATION_ID,
++    partitionId:
++      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
++    replicaId: TEST_SLOW_REPLICA_ID,
++    step: WORKFLOW_STEP.PENDING,
++  });
++  const siblingOperation = buildOperation({
++    operationId: TEST_SIBLING_OPERATION_ID,
++    partitionId:
++      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
++    replicaId: TEST_SIBLING_REPLICA_ID,
++    step: WORKFLOW_STEP.SYNCING,
++  });
++
++  const sqlQueryEngine = {
++    async executeQuery(sql, params = []) {
++      const normalizedSql = String(sql).trim();
++      if (
++        normalizedSql.startsWith(TEST_SQL_INSERT_PREFIX) &&
++        normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE) &&
++        params[0] === TEST_SLOW_OPERATION_ID
++      ) {
++        slowWriteStarted.resolve();
++        await releaseSlowWrite.promise;
++        rowsByOperationId.set(
++          slowOperation.operationId,
++          coordinator.repository.buildReplicaOperationRow(slowOperation),
++        );
++        return {success: true, affectedRows: 1, changes: 1};
++      }
++      if (
++        normalizedSql.startsWith(TEST_SQL_UPDATE_PREFIX) &&
++        normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE)
++      ) {
++        updateTrackedOperationRow(rowsByOperationId, params);
++        if (params[7] === TEST_SIBLING_OPERATION_ID) {
++          siblingWriteStarted.resolve();
++        }
++        return {success: true, affectedRows: 1, changes: 1};
++      }
++      if (normalizedSql.includes(TEST_REPLICA_OPERATIONS_TABLE)) {
++        const operationId = params[0];
++        if (operationId && rowsByOperationId.has(operationId)) {
++          return {
++            success: true,
++            rows: [rowsByOperationId.get(operationId)],
++          };
++        }
++        return {success: true, rows: Array.from(rowsByOperationId.values())};
++      }
++      return {success: true, rows: []};
++    },
++  };
++  const coordinator = new RebalanceCoordinator({
++    nodeId: TEST_NODE_ID,
++    systemTableCache: createMockCache(),
++    cdcIntegrationService: {},
++    messageRouter: createMockMessageRouter(),
++    tablePolicyService: createMockPolicyService(),
++    sqlQueryEngine,
++    controlPlaneSystemTableGateway:
++      createMockControlPlaneSystemTableGateway(sqlQueryEngine),
++    storageAdmissionService: {
++      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
++    },
++    storageAccountingService: {estimateReplicaBytes: () => 1},
++    enableTimeouts: false,
++  });
++  rowsByOperationId.set(
++    siblingOperation.operationId,
++    coordinator.repository.buildReplicaOperationRow(siblingOperation),
++  );
++  return {
++    coordinator,
++    slowOperation,
++    siblingOperation,
++    slowWriteStarted,
++    releaseSlowWrite,
++    siblingWriteStarted,
++  };
++}
++
++async function settlesWithinEventLoopTurns(promise) {
++  let settled = false;
++  void promise.then(() => {
++    settled = true;
++  });
++  for (
++    let turn = 0;
++    turn < TEST_OBSERVATION_TURN_BUDGET && !settled;
++    turn += 1
++  ) {
++    await waitForImmediate();
++  }
++  return settled;
++}
++
++test(
++  'a frozen ledger INSERT does not block a sibling owner reconciliation',
++  async (t) => {
++    const harness = createCoordinatorHarness();
++    const {
++      coordinator,
++      slowOperation,
++      siblingOperation,
++      slowWriteStarted,
++      releaseSlowWrite,
++      siblingWriteStarted,
++    } = harness;
++    coordinator.initialize();
++    const slowWrite = coordinator.repository.persistNewOperation(
++      slowOperation,
++    );
++    let siblingReconcile;
++    try {
++      await slowWriteStarted.promise;
++      siblingReconcile = coordinator.operationWorkflowRunExclusive(
++        coordinator.getOperationOwnerSingleFlightKey(
++          siblingOperation.operationId,
++        ),
++        () => coordinator.workflowOwner.applyReconciledReplicaStatus(
++          siblingOperation,
++          ReplicaStatus.ACTIVE,
++          {cause: 'progress'},
++        ),
++      );
++
++      t.equal(
++        await settlesWithinEventLoopTurns(siblingWriteStarted.promise),
++        true,
++        'the sibling SYNCING->ACTIVE ledger write starts while the unrelated ' +
++          'INSERT remains frozen',
++      );
++    } finally {
++      releaseSlowWrite.resolve();
++      await Promise.all([slowWrite, siblingReconcile].filter(Boolean));
++      t.equal(
++        siblingOperation.workflowStep,
++        WORKFLOW_STEP.ACTIVE,
++        'the fixture reaches ACTIVE after the frozen write is released',
++      );
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'two ledger mutations for the same operation remain serialized',
++  async (t) => {
++    const {coordinator, siblingOperation} = createCoordinatorHarness();
++    const releaseFirstMutation = createDeferred();
++    const firstMutationStarted = createDeferred();
++    const executionOrder = [];
++    coordinator.initialize();
++    try {
++      const firstMutation = coordinator.repository
++        .runReplicaOperationTransitionExclusive(
++          async () => {
++            executionOrder.push('first-start');
++            firstMutationStarted.resolve();
++            await releaseFirstMutation.promise;
++            executionOrder.push('first-end');
++          },
++          {operation: siblingOperation},
++        );
++      await firstMutationStarted.promise;
++      const secondMutation = coordinator.repository
++        .runReplicaOperationTransitionExclusive(
++          async () => {
++            executionOrder.push('second-start');
++          },
++          {operation: siblingOperation},
++        );
++
++      await waitForImmediate();
++      t.same(
++        executionOrder,
++        ['first-start'],
++        'the second mutation cannot enter while the same operation is active',
++      );
++      releaseFirstMutation.resolve();
++      await Promise.all([firstMutation, secondMutation]);
++      t.same(
++        executionOrder,
++        ['first-start', 'first-end', 'second-start'],
++        'same-operation mutation order remains single-flight',
++      );
++      await waitForImmediate();
++      t.equal(
++        coordinator.repository.replicaOperationTransitionQueues.size,
++        0,
++        'settled operation queues are released instead of accumulating',
++      );
++    } finally {
++      releaseFirstMutation.resolve();
++      await coordinator.shutdown();
++    }
++  },
++);
+diff --git a/test/rebalancer/rebalance-coordinator-atomic-transitions.test.js b/test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+index 4e1cecd60beef7b85c1b4a4ccd3357c0e2cc15e8..ede8bc6eb1d3bb5febf31f12d0487836e33d3cba 100644
+--- a/test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
++++ b/test/rebalancer/rebalance-coordinator-atomic-transitions.test.js
+@@ -130,7 +130,7 @@ test('honest persistence refusal leaves the operation projection uncommitted',
+     }
+   });
+ 
+-test('transition owner serializes independent operation persistence',
++test('transition owner lets independent operation persistence overlap',
+   async (t) => {
+     let inFlight = 0;
+     let maxInFlight = 0;
+@@ -150,7 +150,7 @@ test('transition owner serializes independent operation persistence',
+         coordinator.updateStep(first, WORKFLOW_STEP.SENDING),
+         coordinator.updateStep(second, WORKFLOW_STEP.SENDING),
+       ]);
+-      t.equal(maxInFlight, 1);
++      t.equal(maxInFlight, 2);
+       t.equal(first.workflowStep, WORKFLOW_STEP.SENDING);
+       t.equal(second.workflowStep, WORKFLOW_STEP.SENDING);
+     } finally {
+diff --git a/test/rebalancer/rebalance-coordinator-partition-serialization-preservation.property.test.js b/test/rebalancer/rebalance-coordinator-partition-serialization-preservation.property.test.js
+index ec85f288b55824d2339a9a19465c56ecfa6b78ec..a83657cf10d20c382cd52f62cbb65dcdd6f0412b 100644
+--- a/test/rebalancer/rebalance-coordinator-partition-serialization-preservation.property.test.js
++++ b/test/rebalancer/rebalance-coordinator-partition-serialization-preservation.property.test.js
+@@ -7,8 +7,8 @@
+  * single-flight keys continue to prevent concurrent reconciliation
+  * of the same operation.
+  *
+- * These tests MUST PASS on UNFIXED code — they capture baseline
+- * behavior that must remain unchanged after the fix.
++ * Different operation IDs may progress independently, while the same stable
++ * operation identity remains the transition serialization boundary.
+  *
+  * **Validates: Requirements 3.8, 3.9**
+  */
+@@ -138,30 +138,57 @@ async (t) => {
+ });
+ 
+ test('Property 2 Preservation E: ' +
+-  'runReplicaOperationTransitionExclusive serializes concurrent ' +
+-  'mutations sequentially ' +
++  'runReplicaOperationTransitionExclusive lets distinct operation ' +
++  'mutations overlap ' +
+   '(uses runReplicaOperationTransitionExclusive owner path)',
+ async (t) => {
+   const coordinator = createCoordinator();
+   const executionOrder = [];
++  let releaseFirstMutation;
++  const firstMutationBlocked = new Promise((resolve) => {
++    releaseFirstMutation = resolve;
++  });
+ 
+   const p1 = coordinator
+-    .runReplicaOperationTransitionExclusive(async () => {
+-      executionOrder.push('first-start');
+-      await new Promise((resolve) => setTimeout(resolve, 5));
+-      executionOrder.push('first-end');
+-      return 'first';
+-    });
++    .runReplicaOperationTransitionExclusive(
++      async () => {
++        executionOrder.push('first-start');
++        await firstMutationBlocked;
++        executionOrder.push('first-end');
++        return 'first';
++      },
++      {
++        operation: {
++          operationId: 'operation-first',
++          partitionId: 'user-data-p17',
++        },
++      },
++    );
++  await new Promise((resolve) => setImmediate(resolve));
+   const p2 = coordinator
+-    .runReplicaOperationTransitionExclusive(async () => {
+-      executionOrder.push('second-start');
+-      return 'second';
+-    });
++    .runReplicaOperationTransitionExclusive(
++      async () => {
++        executionOrder.push('second-start');
++        return 'second';
++      },
++      {
++        operation: {
++          operationId: 'operation-second',
++          partitionId: 'user-data-p17',
++        },
++      },
++    );
++
++  await new Promise((resolve) => setImmediate(resolve));
++  assert.deepEqual(
++    executionOrder,
++    ['first-start', 'second-start'],
++    'a distinct operation starts before the first operation is released',
++  );
++  releaseFirstMutation();
+ 
+   const [r1, r2] = await Promise.all([p1, p2]);
+ 
+-  // Preservation: mutations are serialized — second starts only
+-  // after first completes.
+   assert.equal(
+     r1,
+     'first',
+@@ -179,13 +206,13 @@ async (t) => {
+   );
+   assert.equal(
+     executionOrder[1],
+-    'first-end',
+-    'First mutation should end before second starts',
++    'second-start',
++    'Second operation should start independently',
+   );
+   assert.equal(
+     executionOrder[2],
+-    'second-start',
+-    'Second mutation should start after first ends',
++    'first-end',
++    'First mutation should end after its explicit release',
+   );
+   t.end();
+ });

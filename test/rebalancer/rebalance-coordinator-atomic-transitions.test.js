@@ -130,7 +130,7 @@ test('honest persistence refusal leaves the operation projection uncommitted',
     }
   });
 
-test('transition owner serializes independent operation persistence',
+test('transition owner lets independent operation persistence overlap',
   async (t) => {
     let inFlight = 0;
     let maxInFlight = 0;
@@ -150,7 +150,7 @@ test('transition owner serializes independent operation persistence',
         coordinator.updateStep(first, WORKFLOW_STEP.SENDING),
         coordinator.updateStep(second, WORKFLOW_STEP.SENDING),
       ]);
-      t.equal(maxInFlight, 1);
+      t.equal(maxInFlight, 2);
       t.equal(first.workflowStep, WORKFLOW_STEP.SENDING);
       t.equal(second.workflowStep, WORKFLOW_STEP.SENDING);
     } finally {

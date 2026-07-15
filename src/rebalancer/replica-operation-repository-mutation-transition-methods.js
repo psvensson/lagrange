@@ -1,4 +1,9 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const REPLICA_OPERATION_TRANSITION_OWNER_KEY_PREFIX = Object.freeze({
+  FALLBACK_LANE: 'fallback-lane',
+  OPERATION: 'operation',
+});
+const REPLICA_OPERATION_TRANSITION_OWNER_KEY_SEPARATOR = ':';
 
 function assignReplicaOperationRepositoryMutationTransitionMethods(
   ReplicaOperationRepository,
@@ -11,16 +16,42 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
 
   class ReplicaOperationRepositoryMutationTransitionMethods {
     runReplicaOperationTransitionExclusive(executionFactory, options = {}) {
-      const lane = this.resolveReplicaOperationTransitionLane(options);
-      const activeQueue = this.getReplicaOperationTransitionQueue(lane);
+      const ownerKey = this.resolveReplicaOperationTransitionOwnerKey(options);
+      const activeQueue = this.getReplicaOperationTransitionQueue(ownerKey);
       const queuedExecution = activeQueue
         .catch(() => {})
         .then(async () => executionFactory());
-      this.replicaOperationTransitionQueues.set(
-        lane,
-        queuedExecution.catch(() => {}),
-      );
+      const settledQueue = queuedExecution.catch(() => {});
+      this.replicaOperationTransitionQueues.set(ownerKey, settledQueue);
+      void settledQueue.then(() => {
+        this.releaseSettledReplicaOperationTransitionQueue(
+          ownerKey,
+          settledQueue,
+        );
+      });
       return queuedExecution;
+    }
+
+    resolveReplicaOperationTransitionOwnerKey(options = {}) {
+      const operationIdCandidate =
+        options.operationId ??
+        options.operation?.operationId ??
+        options.operation?.operation_id;
+      const operationId =
+        typeof operationIdCandidate === 'string' ?
+          operationIdCandidate.trim() :
+          '';
+      if (operationId.length > 0) {
+        return [
+          REPLICA_OPERATION_TRANSITION_OWNER_KEY_PREFIX.OPERATION,
+          operationId,
+        ].join(REPLICA_OPERATION_TRANSITION_OWNER_KEY_SEPARATOR);
+      }
+      const fallbackLane = this.resolveReplicaOperationTransitionLane(options);
+      return [
+        REPLICA_OPERATION_TRANSITION_OWNER_KEY_PREFIX.FALLBACK_LANE,
+        fallbackLane,
+      ].join(REPLICA_OPERATION_TRANSITION_OWNER_KEY_SEPARATOR);
     }
 
     resolveReplicaOperationTransitionLane(options = {}) {
@@ -75,17 +106,20 @@ function assignReplicaOperationRepositoryMutationTransitionMethods(
       };
     }
 
-    getReplicaOperationTransitionQueue(lane) {
-      const normalizedLane =
-        this.normalizeReplicaOperationTransitionLane(lane) ||
-        REPLICA_OPERATION_TRANSITION_LANE.DEFAULT;
-      if (!this.replicaOperationTransitionQueues.has(normalizedLane)) {
+    getReplicaOperationTransitionQueue(ownerKey) {
+      if (!this.replicaOperationTransitionQueues.has(ownerKey)) {
         this.replicaOperationTransitionQueues.set(
-          normalizedLane,
+          ownerKey,
           Promise.resolve(),
         );
       }
-      return this.replicaOperationTransitionQueues.get(normalizedLane);
+      return this.replicaOperationTransitionQueues.get(ownerKey);
+    }
+
+    releaseSettledReplicaOperationTransitionQueue(ownerKey, settledQueue) {
+      if (this.replicaOperationTransitionQueues.get(ownerKey) === settledQueue) {
+        this.replicaOperationTransitionQueues.delete(ownerKey);
+      }
     }
   }
 
