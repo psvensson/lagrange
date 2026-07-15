@@ -52,6 +52,9 @@ import {
   loadRatingsIntoLagrange,
 } from './lagrange-loader.js';
 import {
+  waitForAffinityDemoPreloadAdmission,
+} from './affinity-demo-preload-gate.js';
+import {
   assessAffinityDemoCompletion,
   buildWeightedLocalitySnapshot,
   topNRowsEqual,
@@ -69,16 +72,8 @@ const PORT_STRIDE = 4;
 const CLUSTER_DATA_ROOT = 'data/examples/service-data-affinity-demo';
 const REPORT_DIR = 'test-output/reports';
 const LIVE_SCENARIO = 'movielens-lagrange-service-affinity-live';
-// Quest-scoped scenario entry (solve/quests/
-// formation-ledger-self-move-blocks-cluster-ops.json): its sealed doneWhen is
-// "the cold-formation control plane settles and load completes", i.e. exactly
-// the demo's settle + ratings-load milestones — NOT the full affinity
-// convergence the primary scenario asserts. The live report carries both
-// entries so the Solver's scenario-harness probe measures each quest against
-// its own bar from the same run.
-const FORMATION_QUEST_SCENARIO =
-  'formation-ledger-self-move-blocks-cluster-ops';
 const TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
+const LOAD_TARGET = `${TARGET}?lane=load`;
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 2000;
 const OBSERVE_INTERVAL_MS = 10000;
@@ -91,24 +86,6 @@ const OBSERVE_INTERVAL_MS = 10000;
 const CONVERGE_TIMEOUT_MS = 600000;
 const STALL_TIMEOUT_MS = 300000;
 const NODE_STATUS_ACTIVE = 'active';
-const OPERATION_LEDGER_PARTITION_ID = 'replica_operations-p1';
-const LEDGER_VOTER_STATUSES = new Set(['active', 'removing']);
-const LEDGER_VOTER_ROLES = new Set(['leader', 'follower', 'candidate']);
-
-// Cluster transitions (formation, data load) leave replica operations
-// running; writes to a partition mid-move can transiently fail, so the
-// demo waits for IN-FLIGHT operations (no completed_at yet) to drain
-// before the next stage. Bounded and fail-closed on timeout.
-const SETTLE_POLL_INTERVAL_MS = 10000;
-const SETTLE_QUIET_POLLS = 3;
-// Staleness-based settle (same principle as the phase-3 convergence watch):
-// keep waiting while formation ops are COMPLETING — runs 15-19 proved a
-// fixed elapsed-time cap fires mid-churn and the load phase then starves
-// behind the rebalance storm. Cut only when nothing completes for the
-// stall window (genuine wedge — proceed and let the run fail loudly) or at
-// a generous absolute ceiling.
-const SETTLE_STALL_MS = 120000;
-const SETTLE_HARD_CAP_MS = 900000;
 
 const PARTITION_SPLIT_BYTES = 1048576;
 // Config floor: partition.evaluationIntervalMs must be >= 60000.
@@ -178,14 +155,22 @@ async function startNode(index, dataRoot) {
   return {index, process: child};
 }
 
-async function queryRows(sql) {
-  const client = new AdminWsClient({target: TARGET, timeoutMs: 15000});
+async function queryAdmin(sql, target = TARGET, timeoutMs = 15000) {
+  const boundedTimeoutMs = Math.max(
+    1,
+    Math.min(15000, Math.floor(timeoutMs)),
+  );
+  const client = new AdminWsClient({target, timeoutMs: boundedTimeoutMs});
   try {
-    const result = await client.query(sql);
-    return result?.results || result?.rows || [];
+    return await client.query(sql);
   } finally {
     await client.close();
   }
+}
+
+async function queryRows(sql, target = TARGET) {
+  const result = await queryAdmin(sql, target);
+  return result?.results || result?.rows || [];
 }
 
 async function waitFor(label, predicate, timeoutMs) {
@@ -250,135 +235,6 @@ async function waitForActiveNodes(expectedCount, nodes, dataRoot) {
 
 function sqlQuote(value) {
   return `'${String(value).replace(/'/g, '\'\'')}'`;
-}
-
-function evaluateLedgerSpreadRows(rows) {
-  const voters = (Array.isArray(rows) ? rows : []).filter((row) =>
-    LEDGER_VOTER_STATUSES.has(String(row?.status || '').toLowerCase()) &&
-    LEDGER_VOTER_ROLES.has(String(row?.raft_role || '').toLowerCase()));
-  if (voters.length < 3) {
-    return {ready: false, voterCount: voters.length, maxOnOneNode: null};
-  }
-  const perNode = new Map();
-  for (const voter of voters) {
-    const nodeId = String(voter?.node_id || '');
-    perNode.set(nodeId, (perNode.get(nodeId) || 0) + 1);
-  }
-  const maxOnOneNode = Math.max(...perNode.values());
-  const majority = Math.floor(voters.length / 2) + 1;
-  return {
-    ready: voters.length - maxOnOneNode >= majority,
-    voterCount: voters.length,
-    maxOnOneNode,
-  };
-}
-
-async function waitForControlPlaneSettling() {
-  const start = Date.now();
-  let quietPolls = 0;
-  let lastPartitionCount = -1;
-  let lastCompletedCount = -1;
-  let lastLedgerShape = null;
-  let lastProgressAt = Date.now();
-  let lastObservedInFlight = null;
-  let lastObservedLedgerSpread = null;
-  while (Date.now() - start < SETTLE_HARD_CAP_MS) {
-    let inFlight = null;
-    let ledgerInFlight = null;
-    let completedCount = null;
-    let partitionCount = -1;
-    let ledgerSpread = null;
-    try {
-      const rows = await queryRows(
-        'SELECT operation_id, partition_id, completed_at FROM ' +
-        'replica_operations');
-      inFlight = rows.filter((r) => !r.completed_at).length;
-      ledgerInFlight = rows.filter((row) =>
-        !row.completed_at &&
-        row.partition_id === OPERATION_LEDGER_PARTITION_ID).length;
-      completedCount = rows.length - inFlight;
-      const partitions = await queryRows(
-        'SELECT partition_id FROM partitions');
-      partitionCount = partitions.length;
-      const ledgerRows = await queryRows(
-        'SELECT node_id, status, raft_role FROM services WHERE ' +
-        `partition_id = ${sqlQuote(OPERATION_LEDGER_PARTITION_ID)}`);
-      ledgerSpread = evaluateLedgerSpreadRows(ledgerRows);
-      lastObservedInFlight = inFlight;
-      lastObservedLedgerSpread = ledgerSpread;
-    } catch {
-      inFlight = null;
-    }
-    const partitionsStable = partitionCount === lastPartitionCount;
-    lastPartitionCount = partitionCount;
-    const ledgerShape = ledgerSpread ?
-      `${ledgerSpread.voterCount}/${ledgerSpread.maxOnOneNode}/` +
-        `${ledgerSpread.ready}` : null;
-    const ledgerChanged = ledgerShape !== null && ledgerShape !== lastLedgerShape;
-    lastLedgerShape = ledgerShape;
-    if (
-      inFlight === 0 &&
-      ledgerInFlight === 0 &&
-      partitionsStable &&
-      ledgerSpread?.ready === true
-    ) {
-      quietPolls += 1;
-      if (quietPolls >= SETTLE_QUIET_POLLS) {
-        console.log(
-          '      Control plane settled (ledger quorum spread and no ' +
-          'formation operation in flight for ' +
-          `${Math.round((SETTLE_QUIET_POLLS * SETTLE_POLL_INTERVAL_MS) /
-            1000)}s).`);
-        return true;
-      }
-    } else {
-      quietPolls = 0;
-      // Completions (or the op set shrinking) are PROGRESS — keep waiting.
-      // Only a genuine stall (nothing completes for the stall window) cuts
-      // the settle early; a fixed elapsed cap fired mid-churn every run
-      // and starved the load phase behind the formation rebalance storm.
-      if (
-        completedCount !== null &&
-        (completedCount !== lastCompletedCount || ledgerChanged)
-      ) {
-        lastCompletedCount = completedCount;
-        lastProgressAt = Date.now();
-      }
-      if (inFlight !== null) {
-        console.log(
-          `      ...${inFlight} operations in flight ` +
-          `(${ledgerInFlight ?? '?'} ledger, ${completedCount} completed); ` +
-          'ledger voters=' +
-          `${ledgerSpread?.voterCount ?? '?'} max-on-node=` +
-          `${ledgerSpread?.maxOnOneNode ?? '?'} ` +
-          `spread=${ledgerSpread?.ready === true ? 'yes' : 'no'}`);
-      }
-      if (Date.now() - lastProgressAt >= SETTLE_STALL_MS) {
-        if (lastObservedLedgerSpread?.ready === true) {
-          throw new Error(
-            'Control plane settling stalled after the operation-ledger ' +
-            `quorum spread with ${lastObservedInFlight ?? '?'} formation ` +
-            `operations still in flight (${Math.round(SETTLE_STALL_MS /
-              1000)}s without operation progress)`);
-        }
-        throw new Error(
-          'Control plane settling stalled before the operation-ledger ' +
-          `quorum spread (${Math.round(SETTLE_STALL_MS / 1000)}s without ` +
-          'operation or ledger-placement progress)');
-      }
-    }
-    await sleep(SETTLE_POLL_INTERVAL_MS);
-  }
-  if (lastObservedLedgerSpread?.ready === true) {
-    throw new Error(
-      'Control plane did not drain all formation operations after the ' +
-      'operation-ledger quorum spread within ' +
-      `${Math.round(SETTLE_HARD_CAP_MS / 1000)}s ` +
-      `(in flight: ${lastObservedInFlight ?? '?'})`);
-  }
-  throw new Error(
-    'Control plane did not reach a spread operation-ledger quorum within ' +
-    `${Math.round(SETTLE_HARD_CAP_MS / 1000)}s`);
 }
 
 async function deployQueryLoopService() {
@@ -692,15 +548,8 @@ async function archivePreviousRun() {
   }
 }
 
-// Mutable milestone record for the formation-quest scenario entry. Updated
-// in-place as runAffinityDemo passes each milestone so a thrown phase still
-// reports exactly how far the run got.
-const formationMilestones = {settled: false, loadCompleted: false};
-
 async function runAffinityDemo() {
   const nodes = [];
-  formationMilestones.settled = false;
-  formationMilestones.loadCompleted = false;
   await archivePreviousRun();
   await rm(CLUSTER_DATA_ROOT, {recursive: true, force: true});
   await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
@@ -724,12 +573,23 @@ async function runAffinityDemo() {
     }
     await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
     console.log('      Cluster formed.');
-    console.log('      Waiting for formation settling...');
-    await waitForControlPlaneSettling();
-    formationMilestones.settled = true;
-
+    console.log('      Waiting for production ratings-load admission...');
+    const preloadAdmission = await waitForAffinityDemoPreloadAdmission({
+      target: TARGET,
+      query: ({target, sql, timeoutMs}) =>
+        queryAdmin(sql, target, timeoutMs),
+      now: Date.now,
+      sleep,
+      timeoutMs: CLUSTER_FORM_TIMEOUT_MS,
+      pollIntervalMs: POLL_INTERVAL_MS,
+    });
+    console.log(
+      '      Ratings load admitted (snapshot=' +
+      `${preloadAdmission.snapshot.state}, loadLane=` +
+      `${preloadAdmission.loadLaneAdmission.state}).`,
+    );
     console.log('      Loading 100,000 ratings into the routable source...');
-    const totalRows = await loadRatingsIntoLagrange({target: TARGET});
+    const totalRows = await loadRatingsIntoLagrange({target: LOAD_TARGET});
     console.log(`      Loaded ${totalRows} ratings.`);
 
     console.log('      Waiting for ratings partitions to split and spread...');
@@ -745,8 +605,6 @@ async function runAffinityDemo() {
     console.log(
       `      Ratings partitions: ${dataNodes.partitionCount}, ` +
       `data on nodes: ${JSON.stringify([...dataNodes.holderNodeIds])}`);
-    formationMilestones.loadCompleted = true;
-
     console.log('[3/5] Running Lagrange distributed grouped SQL...');
     const distributedSqlStart = Date.now();
     const aggregateRows = await queryRows(RATINGS_AGGREGATE_SQL);
@@ -813,6 +671,7 @@ async function runAffinityDemo() {
     console.log('');
     return {
       converged: learned.assessment.complete,
+      preloadAdmission,
       lagrangeDistributedSql: {
         inputRatings: totalRows,
         returnedAggregateRows: aggregateRows.length,
@@ -851,23 +710,17 @@ async function runAffinityDemo() {
 async function writeLiveDemoReport(result, error) {
   const timestamp = new Date().toISOString();
   const passed = Boolean(result?.converged) && !error;
-  const formationPassed =
-    formationMilestones.settled && formationMilestones.loadCompleted;
-  const outstandingMilestones =
-    (formationMilestones.settled ? 0 : 1) +
-    (formationMilestones.loadCompleted ? 0 : 1) +
-    (passed ? 0 : 1);
   const report = {
     timestamp,
     scenario: LIVE_SCENARIO,
     producer: 'service-data-affinity-demo',
     fidelity: 'live',
     summary: {
-      total: 2,
-      passed: (passed ? 1 : 0) + (formationPassed ? 1 : 0),
-      failed: (passed ? 0 : 1) + (formationPassed ? 0 : 1),
+      total: 1,
+      passed: passed ? 1 : 0,
+      failed: passed ? 0 : 1,
     },
-    optimizationSummary: {totalPriorityItems: outstandingMilestones},
+    optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
     standardSummary: {
       scenarios: [{
         scenario: LIVE_SCENARIO,
@@ -875,17 +728,10 @@ async function writeLiveDemoReport(result, error) {
         current: {passed, verdict: passed ? 'PASS' : 'FAIL'},
         detail: {
           result: result || null,
-          error: error?.message || null,
-        },
-      }, {
-        scenario: FORMATION_QUEST_SCENARIO,
-        passed: formationPassed,
-        current: {
-          passed: formationPassed,
-          verdict: formationPassed ? 'PASS' : 'FAIL',
-        },
-        detail: {
-          milestones: {...formationMilestones},
+          preloadAdmission:
+            result?.preloadAdmission ||
+            error?.preloadAdmission ||
+            {admitted: false, state: 'not_observed'},
           error: error?.message || null,
         },
       }],
@@ -915,4 +761,4 @@ if (process.argv[1]?.includes('run-affinity-demo.js')) {
     });
 }
 
-export {evaluateLedgerSpreadRows, runAffinityDemo, summarizePhase};
+export {runAffinityDemo, summarizePhase};

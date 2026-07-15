@@ -197,10 +197,7 @@ const REACHABILITY_SOURCE_ADMIN_WS = 'admin_ws';
 const REACHABILITY_SOURCE_SQL_PROBE = 'sql_probe';
 const REACHABILITY_STATUS_HTTP = 'http_status_';
 const REACHABILITY_ERROR_UNKNOWN = 'unknown reachability error';
-const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ADMIN_SOCKET_LANE_LOAD = 'load';
-const BENCHMARK_ADMISSION_PROBE_SQL_PREFIX = 'SELECT 1 FROM ';
-const BENCHMARK_ADMISSION_PROBE_SQL_SUFFIX = ' LIMIT 1';
 const ACTIVE_PROBE_REASON_ADMIN_NOT_READY = 'admin_not_ready';
 const ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX = 'admin_probe_error=';
 const ACTIVE_PROBE_REASON_PUBLICATION_CONVERGENCE_MISSING =
@@ -764,19 +761,6 @@ function extractBenchmarkAdmissionReasonCodesFromError(error) {
   );
 }
 
-function buildBenchmarkAdmissionProbeSql(tableName) {
-  const normalizedTableName =
-    typeof tableName === 'string' ? tableName.trim() : '';
-  if (!IDENTIFIER_PATTERN.test(normalizedTableName)) {
-    return null;
-  }
-  return (
-    BENCHMARK_ADMISSION_PROBE_SQL_PREFIX +
-    normalizedTableName +
-    BENCHMARK_ADMISSION_PROBE_SQL_SUFFIX
-  );
-}
-
 function isRetryableBenchmarkAdmissionError(error) {
   if (isRetryableControlPlaneError(error)) {
     return true;
@@ -1147,10 +1131,7 @@ export const CLUSTER_BASE_LAYER = {
   REACHABILITY_SOURCE_SQL_PROBE,
   REACHABILITY_STATUS_HTTP,
   REACHABILITY_ERROR_UNKNOWN,
-  IDENTIFIER_PATTERN,
   ADMIN_SOCKET_LANE_LOAD,
-  BENCHMARK_ADMISSION_PROBE_SQL_PREFIX,
-  BENCHMARK_ADMISSION_PROBE_SQL_SUFFIX,
   ACTIVE_PROBE_REASON_ADMIN_NOT_READY,
   ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX,
   ACTIVE_PROBE_REASON_PUBLICATION_CONVERGENCE_MISSING,
@@ -1291,7 +1272,6 @@ export const CLUSTER_BASE_LAYER = {
   collectBenchmarkAdmissionReasonCodes,
   normalizeBenchmarkAdmissionRetryAfterMs,
   extractBenchmarkAdmissionReasonCodesFromError,
-  buildBenchmarkAdmissionProbeSql,
   isRetryableBenchmarkAdmissionError,
   verifyBenchmarkLoadLaneAdmission,
   DOCKER_HOST_CONFIG_BINDS_KEY,

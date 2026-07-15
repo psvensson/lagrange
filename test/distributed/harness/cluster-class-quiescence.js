@@ -6,7 +6,7 @@ import {
   buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
   CONTROL_PLANE_QUIESCENCE_REASON,
-} from './control-plane-quiescence-snapshot.js';
+} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
 import {
   buildOracleBlindFailureMessage,
   createOracleBlindnessTracker,

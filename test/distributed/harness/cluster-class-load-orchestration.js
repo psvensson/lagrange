@@ -1,4 +1,7 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
+import {
+  buildLoadLaneTableAdmissionProbeSql,
+} from '../../../src/admin/load-lane-table-admission-probe.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -19,7 +22,6 @@ const {
   RESTART_POLL_INTERVAL_MS,
   UNKNOWN_STATE,
   ZERO,
-  buildBenchmarkAdmissionProbeSql,
   buildBenchmarkCriticalControlPlaneStabilitySnapshot,
   buildBenchmarkLoadAdmissionEvaluation,
   buildBenchmarkLoadAdmissionSnapshot,
@@ -624,7 +626,7 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
       tableName: options?.tableName,
       tableId: options?.tableId,
     });
-    const loadAdmissionProbeSql = buildBenchmarkAdmissionProbeSql(
+    const loadAdmissionProbeSql = buildLoadLaneTableAdmissionProbeSql(
       options?.tableName,
     );
     const requiredPublicationEpoch =

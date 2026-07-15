@@ -5,7 +5,7 @@ import {isPostRebalanceCdcProjectionVisibleSatisfied} from './post-rebalance-clo
 import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
-} from './control-plane-quiescence-snapshot.js';
+} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
 import {
   ACTIVE_WAIT_TIMEOUT_EVENT_INTERVAL_DIVISOR,
   CONTROL_SNAPSHOT_DEFAULT_PROBE_TIMEOUT_SCALE,

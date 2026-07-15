@@ -95,6 +95,12 @@ const SCENARIOS = {
   'runtime-replica-state-projection': [
     'test/runtime/runtime-replica-state-projection-wiring.test.js',
   ],
+  'movielens-preload-admission-gate-cutover': [
+    'test/runtime/movielens-preload-admission-gate.test.js',
+    'test/distributed/harness/__tests__/' +
+      'control-plane-quiescence-snapshot.test.js',
+    'test/admin/admin-websocket-api-messaging-and-errors.test.js',
+  ],
   'seed-join-gate-authoritative-refresh': [
     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
   ],

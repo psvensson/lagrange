@@ -18,7 +18,7 @@ import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
-} from '../control-plane-quiescence-snapshot.js';
+} from '../../../../src/diagnostics/control-plane-quiescence-snapshot.js';
 import {
   ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
   buildCriticalSystemDiscoverySnapshot,

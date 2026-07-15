@@ -10,7 +10,7 @@ import {
   CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
   CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
-} from '../control-plane-quiescence-snapshot.js';
+} from '../../../../src/diagnostics/control-plane-quiescence-snapshot.js';
 import {FAILURE_BUNDLE_FOUNDATION} from
   '../failure-bundle-foundation.js';
 import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from

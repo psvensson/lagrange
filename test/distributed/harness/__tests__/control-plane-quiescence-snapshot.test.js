@@ -7,7 +7,7 @@ import {
   CONTROL_PLANE_QUIESCENCE_STATE,
   buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
-} from '../control-plane-quiescence-snapshot.js';
+} from '../../../../src/diagnostics/control-plane-quiescence-snapshot.js';
 
 const NOW_MS = 10_000;
 const STABLE_WINDOW_STARTED_AT_MS = 4_000;
@@ -21,7 +21,7 @@ const LEADER_COUNT = 1;
 const IN_FLIGHT_COUNT = 1;
 const STALE_IN_FLIGHT_COUNT = IN_FLIGHT_COUNT;
 const CACHE_VISIBLE_SATISFIED_PRIORITY_RECOVERY_OPERATION_COUNT =
-  IN_FLIGHT_COUNT;
+  3;
 const OPERATION_NO_PROGRESS_ELAPSED_MS = 30_000;
 const OPERATION_NO_PROGRESS_TIMEOUT_MS = 15_000;
 const SNAPSHOT_PRESSURE_ERROR = 'Admin API query timed out';
@@ -142,7 +142,7 @@ test('control-plane quiescence snapshot discounts stale replica operations when 
     assert.equal(snapshot.staleInFlightCount, STALE_IN_FLIGHT_COUNT);
   });
 
-test('control-plane quiescence snapshot discounts cache-visible satisfied priority recovery operations when requested',
+test('control-plane quiescence snapshot requires an owner-resolved additional discount',
   () => {
     const snapshot = buildControlPlaneQuiescenceSnapshot({
       snapshotProbe: buildSnapshotProbe({
@@ -159,17 +159,18 @@ test('control-plane quiescence snapshot discounts cache-visible satisfied priori
       ignoreStaleInFlightReplicaOperations: true,
     });
 
-    assert.equal(snapshot.state, CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT);
-    assert.equal(snapshot.ready, true);
-    assert.equal(snapshot.effectiveInFlightCount, MAX_IN_FLIGHT_COUNT);
+    assert.equal(
+      snapshot.state,
+      CONTROL_PLANE_QUIESCENCE_STATE.OPERATION_DRAIN_PROGRESSING,
+    );
+    assert.equal(snapshot.ready, false);
+    assert.equal(snapshot.effectiveInFlightCount, IN_FLIGHT_COUNT);
     assert.equal(
       snapshot.cacheVisibleSatisfiedPriorityRecoveryOperationCount,
       CACHE_VISIBLE_SATISFIED_PRIORITY_RECOVERY_OPERATION_COUNT,
     );
-    assert.equal(
-      snapshot.staleInFlightDiscountCount,
-      CACHE_VISIBLE_SATISFIED_PRIORITY_RECOVERY_OPERATION_COUNT,
-    );
+    assert.equal(snapshot.additionalInFlightDiscountCount, 0);
+    assert.equal(snapshot.staleInFlightDiscountCount, 0);
   });
 
 test('control-plane quiescence snapshot combines stale and explicit additional operation discounts',

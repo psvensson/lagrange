@@ -23,9 +23,6 @@ import {
   CREATE_LAGRANGE_RATINGS_SQL,
   createRatingsTableWithRetry,
 } from '../../examples/service-data-affinity/lagrange-loader.js';
-import {
-  evaluateLedgerSpreadRows,
-} from '../../examples/service-data-affinity/run-affinity-demo.js';
 
 const RAW_RATINGS = [
   {movie_id: 1, rating: 5},
@@ -188,34 +185,6 @@ test('Lagrange loader retries idempotent schema creation with fresh clients',
       'the split-capable Lagrange table has one deterministic partition key');
     t.end();
   });
-
-test('MovieLens readiness requires the actual ledger quorum to spread', (t) => {
-  const row = (nodeId, raftRole = 'follower') => ({
-    node_id: nodeId,
-    status: 'active',
-    raft_role: raftRole,
-  });
-  t.equal(
-    evaluateLedgerSpreadRows([
-      row('seed', 'leader'), row('seed'), row('node-1'),
-    ]).ready,
-    false,
-    'a quiet operation table cannot hide a 2-of-3 voter concentration',
-  );
-  t.equal(
-    evaluateLedgerSpreadRows([
-      row('seed', 'leader'), row('node-1'), row('node-2'),
-    ]).ready,
-    true,
-    'three voters on three nodes satisfy the readiness contract',
-  );
-  t.equal(
-    evaluateLedgerSpreadRows([row('seed', 'leader'), row('node-1')]).ready,
-    false,
-    'a transient two-voter shape is never demo-ready',
-  );
-  t.end();
-});
 
 test('obsolete callback demo and orchestration are absent', (t) => {
   t.equal(existsSync(

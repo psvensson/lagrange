@@ -10,7 +10,7 @@ import {
 import {
   CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
-} from './control-plane-quiescence-snapshot.js';
+} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
 import {
   buildCanonicalControlPlaneDiagnosticsFromControlPlane,
   buildCanonicalPublicationEvidenceFromControlPlane,

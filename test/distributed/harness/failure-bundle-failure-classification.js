@@ -6,7 +6,7 @@ import {
 } from './post-rebalance-closure-contract.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
-} from './control-plane-quiescence-snapshot.js';
+} from '../../../src/diagnostics/control-plane-quiescence-snapshot.js';
 import {
   hasMeaningfulPriorityRecoveryProgressWitness,
 } from './priority-recovery-summary-normalization.js';
