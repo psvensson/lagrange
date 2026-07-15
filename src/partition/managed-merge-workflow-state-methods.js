@@ -23,6 +23,9 @@ const DURABLE_ROW_CREATED_AT_KEYS = Object.freeze([
 const DURABLE_ROW_UPDATED_AT_KEYS = Object.freeze([
   'updated_at', 'updatedAt', 'created_at', 'createdAt',
 ]);
+const MANAGED_MERGE_WORKFLOW_STATE = Object.freeze({
+  UNAVAILABLE: Symbol('managed_merge_workflow_unavailable'),
+});
 
 /**
  * Resolve the first defined, non-null value among the listed keys.
@@ -124,13 +127,13 @@ class ManagedMergeWorkflowStateMethods {
    * transition row when async source-side execution resumes after
    * execute() returns.
    * @param {string} workflowId
-   * @return {Object|null}
+   * @return {Object|symbol}
    * @private
    */
   resolveWorkflowState(workflowId) {
     const normalizedWorkflowId = String(workflowId || '');
     if (!normalizedWorkflowId) {
-      return null;
+      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
     }
     const existingWorkflow =
       this.workflowCoordinator.getWorkflowById(normalizedWorkflowId);
@@ -144,13 +147,13 @@ class ManagedMergeWorkflowStateMethods {
    * Recover one merge workflow snapshot from the canonical tables
    * transition row.
    * @param {string} workflowId
-   * @return {Object|null}
+   * @return {Object|symbol}
    * @private
    */
   recoverWorkflowState(workflowId) {
     const durableTransition = this.findDurableMergeTransition(workflowId);
     if (!durableTransition) {
-      return null;
+      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
     }
     return this.rebuildWorkflowFromDurableTransition(
       workflowId,
@@ -186,7 +189,7 @@ class ManagedMergeWorkflowStateMethods {
    * Rebuild an in-memory workflow record from one durable transition row.
    * @param {string} workflowId
    * @param {{tableInfo: Object, transition: Object}} durableTransition
-   * @return {Object|null}
+   * @return {Object|symbol}
    * @private
    */
   rebuildWorkflowFromDurableTransition(workflowId, durableTransition) {
@@ -195,7 +198,7 @@ class ManagedMergeWorkflowStateMethods {
       transition.metadata,
     );
     if (sourcePartitionIds.length !== MERGE_SOURCE_PARTITION_COUNT) {
-      return null;
+      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
     }
 
     const workflow = this.workflowCoordinator.createWorkflowRecord({
@@ -234,6 +237,16 @@ class ManagedMergeWorkflowStateMethods {
       workflow.metadata,
     );
     return workflow;
+  }
+
+  /**
+   * Test the explicit unavailable variant returned by workflow recovery.
+   * @param {Object|symbol} workflow
+   * @return {boolean}
+   * @private
+   */
+  isMergeWorkflowStateUnavailable(workflow) {
+    return workflow === MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
   }
 
   /**

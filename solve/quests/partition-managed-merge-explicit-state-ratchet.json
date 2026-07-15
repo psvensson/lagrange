@@ -1,0 +1,51 @@
+{
+  "id": "partition-managed-merge-explicit-state-ratchet",
+  "authoringContractVersion": 1,
+  "statement": "src/partition/managed-merge-workflow.js and its state, execution-gate, persistence, and dissolution method owners use explicit named variants for missing workflow state, non-retryable post-admission outcomes, and merge gate decisions while preserving managed-merge lifecycle behavior. doneWhen: solve/oracle/partition-managed-merge-explicit-state-ratchet.json reaches zero only when the scoped decision audit, focused managed-merge tests, lint, file-size, and no-regression global metric gates pass without baseline changes.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "fc1a9eaf4d4b52bcf9891313555fe5eb2ca8d1ec"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/partition-managed-merge-explicit-state-ratchet.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-managed-merge-explicit-state-ratchet-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/partition-managed-merge-explicit-state-ratchet.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Obtain independent exact-attempt and aggregate source verification before checkpoint and terminal handoff."
+    },
+    {
+      "id": "managed-merge-owner-bound",
+      "statement": "Limit source changes to managed-merge-workflow.js plus its state, execution-gate, persistence, and dissolution method modules; do not change split behavior, shared coordinator semantics, or partition constants."
+    },
+    {
+      "id": "no-baseline-growth",
+      "statement": "Do not raise or weaken decision, literal, duplication, complexity, file-size, or unused-export baselines."
+    },
+    {
+      "id": "lifecycle-semantics-preserved",
+      "statement": "Preserve missing-workflow failure behavior, owner-lane serialization, admission/defer precedence, durable retry metadata, cutover, abort, and dissolution behavior."
+    }
+  ]
+}

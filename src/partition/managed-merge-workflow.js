@@ -483,7 +483,7 @@ class ManagedMergeWorkflow {
             ] || null,
           error,
         });
-      if (deferredExecution) {
+      if (this.isManagedMergeDeferredExecutionOutcome(deferredExecution)) {
         return deferredExecution;
       }
       await this.persistExecutionFailure(workflowId, error);

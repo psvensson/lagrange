@@ -62,6 +62,9 @@ function findTransitionStates(updateCalls) {
     .filter(Boolean);
 }
 
+const NON_RETRYABLE_EXECUTION_ERROR =
+  'non-retryable merge execution failure';
+
 test('managed merge - successful start runs the durable lifecycle in ' +
     'order and starts both source mirrors', async (t) => {
   const fixture = buildMergeWorkflow();
@@ -274,3 +277,55 @@ test('managed merge - candidate aliases {leftId, rightId} are accepted',
     t.equal(result.success, true);
     t.equal(result.tableName, FIXTURE_TABLE_NAME);
   });
+
+test('managed merge - missing workflow uses explicit unavailable state while ' +
+    'preserving public failure outcomes', async (t) => {
+  const fixture = buildMergeWorkflow();
+  const missingWorkflowId = 'missing-merge-workflow';
+
+  await t.rejects(
+    fixture.workflow.advanceMergePhase(
+      missingWorkflowId,
+      PARTITION_TRANSITION_STATE.MERGE_PREPARING,
+    ),
+    new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND),
+  );
+  t.equal(await fixture.workflow.abortMergeOnSourceFailure(
+    missingWorkflowId,
+    MERGE_ACK_STATUS.SNAPSHOT_FAILED,
+  ), false);
+  t.equal(await fixture.workflow.applyMergeCutoverIfReady(
+    missingWorkflowId,
+  ), false);
+  t.equal(await fixture.workflow.finalizeMergeDissolutionIfReady(
+    missingWorkflowId,
+  ), false);
+  t.equal(await fixture.workflow.completeMergeTerminalIfDissolved(
+    missingWorkflowId,
+  ), false);
+  await fixture.workflow.settleMergeOwnerLaneForWorkflow(missingWorkflowId);
+  t.pass('missing owner lane settles without creating workflow state');
+});
+
+test('managed merge - non-retryable post-admission failure still persists ' +
+    'FAILED and rethrows', async (t) => {
+  const fixture = buildMergeWorkflow({
+    startMergeReplicationOnSourcePartition: async () => {
+      throw new Error(NON_RETRYABLE_EXECUTION_ERROR);
+    },
+  });
+
+  await t.rejects(
+    fixture.workflow.execute(buildMergeCandidate()),
+    new Error(NON_RETRYABLE_EXECUTION_ERROR),
+  );
+  t.equal(
+    fixture.durableTableRow.partition_transition_state,
+    PARTITION_TRANSITION_STATE.FAILED,
+  );
+  const failure = JSON.parse(
+    fixture.durableTableRow.partition_transition_metadata,
+  )[PARTITION_TRANSITION_METADATA_FIELD.FAILURE];
+  t.equal(failure.message, NON_RETRYABLE_EXECUTION_ERROR);
+  t.equal(failure.retryable, undefined);
+});

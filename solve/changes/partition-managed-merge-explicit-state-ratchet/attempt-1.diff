@@ -1,0 +1,373 @@
+diff --git a/src/partition/managed-merge-workflow-dissolution-methods.js b/src/partition/managed-merge-workflow-dissolution-methods.js
+index d6074fb6bdf786c84c21edb140c3ca3436fc090d..3be038867e40fb6b07b848917fcabe046f833f80 100644
+--- a/src/partition/managed-merge-workflow-dissolution-methods.js
++++ b/src/partition/managed-merge-workflow-dissolution-methods.js
+@@ -81,7 +81,7 @@ class ManagedMergeWorkflowDissolutionMethods {
+    */
+   async finalizeMergeDissolutionIfReady(workflowId) {
+     const workflow = this.resolveWorkflowState(workflowId);
+-    if (!workflow) {
++    if (this.isMergeWorkflowStateUnavailable(workflow)) {
+       return false;
+     }
+     if (!this.areAllMergeSourcesAtStatus(
+@@ -113,7 +113,7 @@ class ManagedMergeWorkflowDissolutionMethods {
+    */
+   async completeMergeTerminalIfDissolved(workflowId) {
+     const workflow = this.resolveWorkflowState(workflowId);
+-    if (!workflow ||
++    if (this.isMergeWorkflowStateUnavailable(workflow) ||
+         !this.areAllMergeSourcesAtStatus(
+           workflow,
+           MERGE_SOURCES_DISSOLVED_STATUSES,
+diff --git a/src/partition/managed-merge-workflow-execution-gate-methods.js b/src/partition/managed-merge-workflow-execution-gate-methods.js
+index d37e77097820d5f2314418248363d63e92adb4d5..8c6b25f55222a5c3c94d0babcac3c5c7522ce314 100644
+--- a/src/partition/managed-merge-workflow-execution-gate-methods.js
++++ b/src/partition/managed-merge-workflow-execution-gate-methods.js
+@@ -64,6 +64,12 @@ const MERGE_ABORT_OUTCOME = Object.freeze({
+   ALREADY_ABORTED: 'already_aborted',
+   REFUSED_POST_CUTOVER: 'refused_post_cutover',
+ });
++const MERGE_EXECUTION_GATE_STATE = Object.freeze({
++  SCHEDULED_RETRY: 'scheduled_retry',
++  PRESSURE_DEFERRED: 'pressure_deferred',
++  ADMISSION_DENIED: 'admission_denied',
++  ALLOWED: 'allowed',
++});
+ 
+ class ManagedMergeWorkflowExecutionGateMethods {
+   /**
+@@ -109,7 +115,8 @@ class ManagedMergeWorkflowExecutionGateMethods {
+    */
+   async settleMergeOwnerLaneForWorkflow(workflowId) {
+     const workflow = this.resolveWorkflowState(workflowId);
+-    const ownerKey = String(workflow?.ownerKey || '');
++    const ownerKey = this.isMergeWorkflowStateUnavailable(workflow) ?
++      '' : String(workflow.ownerKey || '');
+     await (this.mergeOwnerLaneTailByOwnerKey.get(ownerKey) ||
+       Promise.resolve());
+   }
+@@ -264,7 +271,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
+     }
+ 
+     const workflow = this.resolveWorkflowState(workflowId);
+-    if (!workflow) {
++    if (this.isMergeWorkflowStateUnavailable(workflow)) {
+       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
+     }
+ 
+@@ -333,7 +340,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
+       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
+     }
+     const workflow = this.resolveWorkflowState(workflowId);
+-    if (!workflow) {
++    if (this.isMergeWorkflowStateUnavailable(workflow)) {
+       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
+     }
+     this.ensureCanonicalMergeParticipants(
+@@ -392,7 +399,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
+    */
+   async abortMergeOnSourceFailure(workflowId, ackStatus) {
+     const workflow = this.resolveWorkflowState(workflowId);
+-    if (!workflow) {
++    if (this.isMergeWorkflowStateUnavailable(workflow)) {
+       return false;
+     }
+     if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
+@@ -441,7 +448,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
+       return abortOutcome === MERGE_ABORT_OUTCOME.ALREADY_ABORTED;
+     }
+     const abortedWorkflow = this.resolveWorkflowState(workflowId);
+-    if (abortedWorkflow) {
++    if (!this.isMergeWorkflowStateUnavailable(abortedWorkflow)) {
+       await this.teardownAbortedMergeTarget(workflowId, abortedWorkflow);
+       await this.restoreAbortedMergeSiblings(abortedWorkflow);
+     }
+@@ -500,7 +507,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
+    */
+   async applyMergeCutoverIfReady(workflowId) {
+     const workflow = this.resolveWorkflowState(workflowId);
+-    if (!workflow) {
++    if (this.isMergeWorkflowStateUnavailable(workflow)) {
+       return false;
+     }
+     if (workflow.status ===
+@@ -655,6 +662,22 @@ class ManagedMergeWorkflowExecutionGateMethods {
+     };
+   }
+ 
++  /**
++   * Select the single execution-gate state from normalized evidence.
++   * @param {Object} input
++   * @return {string}
++   * @private
++   */
++  resolveMergeExecutionGateState(input) {
++    return input.scheduledRetry?.retryDue === false ?
++      MERGE_EXECUTION_GATE_STATE.SCHEDULED_RETRY :
++      input.pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
++        MERGE_EXECUTION_GATE_STATE.PRESSURE_DEFERRED :
++        input.admissionResult?.allowed === false ?
++          MERGE_EXECUTION_GATE_STATE.ADMISSION_DENIED :
++          MERGE_EXECUTION_GATE_STATE.ALLOWED;
++  }
++
+   /**
+    * Resolve one canonical execution-gate outcome for merge admission.
+    * @param {Object} input - Execution-gate evidence.
+@@ -662,16 +685,14 @@ class ManagedMergeWorkflowExecutionGateMethods {
+    * @private
+    */
+   async resolveMergeExecutionGateOutcome(input) {
+-    if (input.scheduledRetry &&
+-        input.scheduledRetry.retryDue === false) {
++    const gateState = this.resolveMergeExecutionGateState(input);
++    switch (gateState) {
++    case MERGE_EXECUTION_GATE_STATE.SCHEDULED_RETRY:
+       return {
+         blocked: true,
+         result: this.buildScheduledRetryExecutionResult(input),
+       };
+-    }
+-
+-    if (input.pressureDecision &&
+-        input.pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
++    case MERGE_EXECUTION_GATE_STATE.PRESSURE_DEFERRED:
+       return {
+         blocked: true,
+         result: this.buildPressureDeferredResult({
+@@ -684,10 +705,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
+           pressureDecision: input.pressureDecision,
+         }),
+       };
+-    }
+-
+-    if (input.admissionResult &&
+-        input.admissionResult.allowed === false) {
++    case MERGE_EXECUTION_GATE_STATE.ADMISSION_DENIED: {
+       const deniedState = this.resolveAdmissionDeniedState(
+         input.admissionResult.decisionType,
+       );
+@@ -720,8 +738,9 @@ class ManagedMergeWorkflowExecutionGateMethods {
+         }),
+       };
+     }
+-
+-    return {blocked: false};
++    default:
++      return {blocked: false};
++    }
+   }
+ }
+ 
+diff --git a/src/partition/managed-merge-workflow-persistence-methods.js b/src/partition/managed-merge-workflow-persistence-methods.js
+index ed2ec79e08e028b7ab6d2fd88f9b4cac9999cae6..5c809d6112598bfdcfe903097832b0d4db79847c 100644
+--- a/src/partition/managed-merge-workflow-persistence-methods.js
++++ b/src/partition/managed-merge-workflow-persistence-methods.js
+@@ -21,6 +21,9 @@ const LOCAL_STR_MERGE_EXECUTION_FAILURE = 'merge_execution_failure';
+ const LOCAL_STR_MERGE_EXECUTION_DEFERRED = 'merge_execution_deferred';
+ const LOCAL_STR_PARTITION_ID = 'partition_id';
+ const LOCAL_STR_TABLE_ID = 'table_id';
++const POST_ADMISSION_EXECUTION_FAILURE_OUTCOME = Object.freeze({
++  NOT_RETRYABLE: Symbol('post_admission_execution_failure_not_retryable'),
++});
+ 
+ /**
+  * Durable persistence methods for ManagedMergeWorkflow.
+@@ -76,12 +79,12 @@ class ManagedMergeWorkflowPersistenceMethods {
+    * discovered after admission has already been accepted. Reuses the
+    * message-classification retry policy shared with the split workflow.
+    * @param {Object} options
+-   * @return {Promise<Object|null>}
++   * @return {Promise<Object|symbol>}
+    * @private
+    */
+   async handleRetryablePostAdmissionExecutionFailure(options) {
+     if (!isRetryableManagedSplitExecutionFailure(options.error)) {
+-      return null;
++      return POST_ADMISSION_EXECUTION_FAILURE_OUTCOME.NOT_RETRYABLE;
+     }
+ 
+     const decisionType = resolveRetryableManagedSplitExecutionDecisionType(
+@@ -133,6 +136,17 @@ class ManagedMergeWorkflowPersistenceMethods {
+     };
+   }
+ 
++  /**
++   * Test whether post-admission failure handling produced a deferral result.
++   * @param {Object|symbol} outcome
++   * @return {boolean}
++   * @private
++   */
++  isManagedMergeDeferredExecutionOutcome(outcome) {
++    return outcome !==
++      POST_ADMISSION_EXECUTION_FAILURE_OUTCOME.NOT_RETRYABLE;
++  }
++
+   /**
+    * Persist workflow state through the canonical tables transition row.
+    *
+diff --git a/src/partition/managed-merge-workflow-state-methods.js b/src/partition/managed-merge-workflow-state-methods.js
+index 06848bba1bff8be86bf2b78c1834407d66de3d80..284fa4311549706af5231c062711fca9c9b5c10c 100644
+--- a/src/partition/managed-merge-workflow-state-methods.js
++++ b/src/partition/managed-merge-workflow-state-methods.js
+@@ -23,6 +23,9 @@ const DURABLE_ROW_CREATED_AT_KEYS = Object.freeze([
+ const DURABLE_ROW_UPDATED_AT_KEYS = Object.freeze([
+   'updated_at', 'updatedAt', 'created_at', 'createdAt',
+ ]);
++const MANAGED_MERGE_WORKFLOW_STATE = Object.freeze({
++  UNAVAILABLE: Symbol('managed_merge_workflow_unavailable'),
++});
+ 
+ /**
+  * Resolve the first defined, non-null value among the listed keys.
+@@ -124,13 +127,13 @@ class ManagedMergeWorkflowStateMethods {
+    * transition row when async source-side execution resumes after
+    * execute() returns.
+    * @param {string} workflowId
+-   * @return {Object|null}
++   * @return {Object|symbol}
+    * @private
+    */
+   resolveWorkflowState(workflowId) {
+     const normalizedWorkflowId = String(workflowId || '');
+     if (!normalizedWorkflowId) {
+-      return null;
++      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
+     }
+     const existingWorkflow =
+       this.workflowCoordinator.getWorkflowById(normalizedWorkflowId);
+@@ -144,13 +147,13 @@ class ManagedMergeWorkflowStateMethods {
+    * Recover one merge workflow snapshot from the canonical tables
+    * transition row.
+    * @param {string} workflowId
+-   * @return {Object|null}
++   * @return {Object|symbol}
+    * @private
+    */
+   recoverWorkflowState(workflowId) {
+     const durableTransition = this.findDurableMergeTransition(workflowId);
+     if (!durableTransition) {
+-      return null;
++      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
+     }
+     return this.rebuildWorkflowFromDurableTransition(
+       workflowId,
+@@ -186,7 +189,7 @@ class ManagedMergeWorkflowStateMethods {
+    * Rebuild an in-memory workflow record from one durable transition row.
+    * @param {string} workflowId
+    * @param {{tableInfo: Object, transition: Object}} durableTransition
+-   * @return {Object|null}
++   * @return {Object|symbol}
+    * @private
+    */
+   rebuildWorkflowFromDurableTransition(workflowId, durableTransition) {
+@@ -195,7 +198,7 @@ class ManagedMergeWorkflowStateMethods {
+       transition.metadata,
+     );
+     if (sourcePartitionIds.length !== MERGE_SOURCE_PARTITION_COUNT) {
+-      return null;
++      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
+     }
+ 
+     const workflow = this.workflowCoordinator.createWorkflowRecord({
+@@ -236,6 +239,16 @@ class ManagedMergeWorkflowStateMethods {
+     return workflow;
+   }
+ 
++  /**
++   * Test the explicit unavailable variant returned by workflow recovery.
++   * @param {Object|symbol} workflow
++   * @return {boolean}
++   * @private
++   */
++  isMergeWorkflowStateUnavailable(workflow) {
++    return workflow === MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
++  }
++
+   /**
+    * Ensure the canonical merge participants (two sources plus the merged
+    * target) exist on the workflow snapshot.
+diff --git a/src/partition/managed-merge-workflow.js b/src/partition/managed-merge-workflow.js
+index e28a14379f3901276826366b0ae8211e357c3039..e6361ebdd862b25fd8e590cc4da1e8107268810b 100644
+--- a/src/partition/managed-merge-workflow.js
++++ b/src/partition/managed-merge-workflow.js
+@@ -483,7 +483,7 @@ class ManagedMergeWorkflow {
+             ] || null,
+           error,
+         });
+-      if (deferredExecution) {
++      if (this.isManagedMergeDeferredExecutionOutcome(deferredExecution)) {
+         return deferredExecution;
+       }
+       await this.persistExecutionFailure(workflowId, error);
+diff --git a/test/partition/managed-merge-workflow.test.js b/test/partition/managed-merge-workflow.test.js
+index 2b020114de763f0f307e0b44976116872b8b22b8..49a284e0f51f817548fa1d88bab829b1a3354225 100644
+--- a/test/partition/managed-merge-workflow.test.js
++++ b/test/partition/managed-merge-workflow.test.js
+@@ -62,6 +62,9 @@ function findTransitionStates(updateCalls) {
+     .filter(Boolean);
+ }
+ 
++const NON_RETRYABLE_EXECUTION_ERROR =
++  'non-retryable merge execution failure';
++
+ test('managed merge - successful start runs the durable lifecycle in ' +
+     'order and starts both source mirrors', async (t) => {
+   const fixture = buildMergeWorkflow();
+@@ -274,3 +277,55 @@ test('managed merge - candidate aliases {leftId, rightId} are accepted',
+     t.equal(result.success, true);
+     t.equal(result.tableName, FIXTURE_TABLE_NAME);
+   });
++
++test('managed merge - missing workflow uses explicit unavailable state while ' +
++    'preserving public failure outcomes', async (t) => {
++  const fixture = buildMergeWorkflow();
++  const missingWorkflowId = 'missing-merge-workflow';
++
++  await t.rejects(
++    fixture.workflow.advanceMergePhase(
++      missingWorkflowId,
++      PARTITION_TRANSITION_STATE.MERGE_PREPARING,
++    ),
++    new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND),
++  );
++  t.equal(await fixture.workflow.abortMergeOnSourceFailure(
++    missingWorkflowId,
++    MERGE_ACK_STATUS.SNAPSHOT_FAILED,
++  ), false);
++  t.equal(await fixture.workflow.applyMergeCutoverIfReady(
++    missingWorkflowId,
++  ), false);
++  t.equal(await fixture.workflow.finalizeMergeDissolutionIfReady(
++    missingWorkflowId,
++  ), false);
++  t.equal(await fixture.workflow.completeMergeTerminalIfDissolved(
++    missingWorkflowId,
++  ), false);
++  await fixture.workflow.settleMergeOwnerLaneForWorkflow(missingWorkflowId);
++  t.pass('missing owner lane settles without creating workflow state');
++});
++
++test('managed merge - non-retryable post-admission failure still persists ' +
++    'FAILED and rethrows', async (t) => {
++  const fixture = buildMergeWorkflow({
++    startMergeReplicationOnSourcePartition: async () => {
++      throw new Error(NON_RETRYABLE_EXECUTION_ERROR);
++    },
++  });
++
++  await t.rejects(
++    fixture.workflow.execute(buildMergeCandidate()),
++    new Error(NON_RETRYABLE_EXECUTION_ERROR),
++  );
++  t.equal(
++    fixture.durableTableRow.partition_transition_state,
++    PARTITION_TRANSITION_STATE.FAILED,
++  );
++  const failure = JSON.parse(
++    fixture.durableTableRow.partition_transition_metadata,
++  )[PARTITION_TRANSITION_METADATA_FIELD.FAILURE];
++  t.equal(failure.message, NON_RETRYABLE_EXECUTION_ERROR);
++  t.equal(failure.retryable, undefined);
++});

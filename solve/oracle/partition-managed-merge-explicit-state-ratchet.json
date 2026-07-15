@@ -1,0 +1,21 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "partition-managed-merge-explicit-state-ratchet",
+  "detail": {
+    "decisionBoundaryViolations": 0,
+    "baselineChanged": false,
+    "focusedAssertions": 63,
+    "literalViolations": 0,
+    "duplicationCloneGroups": 68,
+    "duplicationLines": 2146,
+    "unusedExports": 1624,
+    "dependencyViolations": 0,
+    "fileSizeGate": "green",
+    "cognitiveViolations": 184,
+    "cognitiveBaseline": 183,
+    "cognitiveDeltaFromBase": 0,
+    "sample": "explicit missing-workflow, non-retryable execution, and merge-gate states preserve lifecycle behavior"
+  }
+}

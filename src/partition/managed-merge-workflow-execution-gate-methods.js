@@ -64,6 +64,12 @@ const MERGE_ABORT_OUTCOME = Object.freeze({
   ALREADY_ABORTED: 'already_aborted',
   REFUSED_POST_CUTOVER: 'refused_post_cutover',
 });
+const MERGE_EXECUTION_GATE_STATE = Object.freeze({
+  SCHEDULED_RETRY: 'scheduled_retry',
+  PRESSURE_DEFERRED: 'pressure_deferred',
+  ADMISSION_DENIED: 'admission_denied',
+  ALLOWED: 'allowed',
+});
 
 class ManagedMergeWorkflowExecutionGateMethods {
   /**
@@ -109,7 +115,8 @@ class ManagedMergeWorkflowExecutionGateMethods {
    */
   async settleMergeOwnerLaneForWorkflow(workflowId) {
     const workflow = this.resolveWorkflowState(workflowId);
-    const ownerKey = String(workflow?.ownerKey || '');
+    const ownerKey = this.isMergeWorkflowStateUnavailable(workflow) ?
+      '' : String(workflow.ownerKey || '');
     await (this.mergeOwnerLaneTailByOwnerKey.get(ownerKey) ||
       Promise.resolve());
   }
@@ -264,7 +271,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
     }
 
     const workflow = this.resolveWorkflowState(workflowId);
-    if (!workflow) {
+    if (this.isMergeWorkflowStateUnavailable(workflow)) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
     }
 
@@ -333,7 +340,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
     }
     const workflow = this.resolveWorkflowState(workflowId);
-    if (!workflow) {
+    if (this.isMergeWorkflowStateUnavailable(workflow)) {
       throw new Error(MANAGED_MERGE_ERROR_MSG.WORKFLOW_NOT_FOUND);
     }
     this.ensureCanonicalMergeParticipants(
@@ -392,7 +399,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
    */
   async abortMergeOnSourceFailure(workflowId, ackStatus) {
     const workflow = this.resolveWorkflowState(workflowId);
-    if (!workflow) {
+    if (this.isMergeWorkflowStateUnavailable(workflow)) {
       return false;
     }
     if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
@@ -441,7 +448,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
       return abortOutcome === MERGE_ABORT_OUTCOME.ALREADY_ABORTED;
     }
     const abortedWorkflow = this.resolveWorkflowState(workflowId);
-    if (abortedWorkflow) {
+    if (!this.isMergeWorkflowStateUnavailable(abortedWorkflow)) {
       await this.teardownAbortedMergeTarget(workflowId, abortedWorkflow);
       await this.restoreAbortedMergeSiblings(abortedWorkflow);
     }
@@ -500,7 +507,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
    */
   async applyMergeCutoverIfReady(workflowId) {
     const workflow = this.resolveWorkflowState(workflowId);
-    if (!workflow) {
+    if (this.isMergeWorkflowStateUnavailable(workflow)) {
       return false;
     }
     if (workflow.status ===
@@ -656,22 +663,36 @@ class ManagedMergeWorkflowExecutionGateMethods {
   }
 
   /**
+   * Select the single execution-gate state from normalized evidence.
+   * @param {Object} input
+   * @return {string}
+   * @private
+   */
+  resolveMergeExecutionGateState(input) {
+    return input.scheduledRetry?.retryDue === false ?
+      MERGE_EXECUTION_GATE_STATE.SCHEDULED_RETRY :
+      input.pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
+        MERGE_EXECUTION_GATE_STATE.PRESSURE_DEFERRED :
+        input.admissionResult?.allowed === false ?
+          MERGE_EXECUTION_GATE_STATE.ADMISSION_DENIED :
+          MERGE_EXECUTION_GATE_STATE.ALLOWED;
+  }
+
+  /**
    * Resolve one canonical execution-gate outcome for merge admission.
    * @param {Object} input - Execution-gate evidence.
    * @return {Promise<{blocked: boolean, result?: Object}>} Gate outcome.
    * @private
    */
   async resolveMergeExecutionGateOutcome(input) {
-    if (input.scheduledRetry &&
-        input.scheduledRetry.retryDue === false) {
+    const gateState = this.resolveMergeExecutionGateState(input);
+    switch (gateState) {
+    case MERGE_EXECUTION_GATE_STATE.SCHEDULED_RETRY:
       return {
         blocked: true,
         result: this.buildScheduledRetryExecutionResult(input),
       };
-    }
-
-    if (input.pressureDecision &&
-        input.pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+    case MERGE_EXECUTION_GATE_STATE.PRESSURE_DEFERRED:
       return {
         blocked: true,
         result: this.buildPressureDeferredResult({
@@ -684,10 +705,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
           pressureDecision: input.pressureDecision,
         }),
       };
-    }
-
-    if (input.admissionResult &&
-        input.admissionResult.allowed === false) {
+    case MERGE_EXECUTION_GATE_STATE.ADMISSION_DENIED: {
       const deniedState = this.resolveAdmissionDeniedState(
         input.admissionResult.decisionType,
       );
@@ -720,8 +738,9 @@ class ManagedMergeWorkflowExecutionGateMethods {
         }),
       };
     }
-
-    return {blocked: false};
+    default:
+      return {blocked: false};
+    }
   }
 }
 

@@ -81,7 +81,7 @@ class ManagedMergeWorkflowDissolutionMethods {
    */
   async finalizeMergeDissolutionIfReady(workflowId) {
     const workflow = this.resolveWorkflowState(workflowId);
-    if (!workflow) {
+    if (this.isMergeWorkflowStateUnavailable(workflow)) {
       return false;
     }
     if (!this.areAllMergeSourcesAtStatus(
@@ -113,7 +113,7 @@ class ManagedMergeWorkflowDissolutionMethods {
    */
   async completeMergeTerminalIfDissolved(workflowId) {
     const workflow = this.resolveWorkflowState(workflowId);
-    if (!workflow ||
+    if (this.isMergeWorkflowStateUnavailable(workflow) ||
         !this.areAllMergeSourcesAtStatus(
           workflow,
           MERGE_SOURCES_DISSOLVED_STATUSES,

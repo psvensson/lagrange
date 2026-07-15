@@ -21,6 +21,9 @@ const LOCAL_STR_MERGE_EXECUTION_FAILURE = 'merge_execution_failure';
 const LOCAL_STR_MERGE_EXECUTION_DEFERRED = 'merge_execution_deferred';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_TABLE_ID = 'table_id';
+const POST_ADMISSION_EXECUTION_FAILURE_OUTCOME = Object.freeze({
+  NOT_RETRYABLE: Symbol('post_admission_execution_failure_not_retryable'),
+});
 
 /**
  * Durable persistence methods for ManagedMergeWorkflow.
@@ -76,12 +79,12 @@ class ManagedMergeWorkflowPersistenceMethods {
    * discovered after admission has already been accepted. Reuses the
    * message-classification retry policy shared with the split workflow.
    * @param {Object} options
-   * @return {Promise<Object|null>}
+   * @return {Promise<Object|symbol>}
    * @private
    */
   async handleRetryablePostAdmissionExecutionFailure(options) {
     if (!isRetryableManagedSplitExecutionFailure(options.error)) {
-      return null;
+      return POST_ADMISSION_EXECUTION_FAILURE_OUTCOME.NOT_RETRYABLE;
     }
 
     const decisionType = resolveRetryableManagedSplitExecutionDecisionType(
@@ -131,6 +134,17 @@ class ManagedMergeWorkflowPersistenceMethods {
       retry,
       error: errorMessage,
     };
+  }
+
+  /**
+   * Test whether post-admission failure handling produced a deferral result.
+   * @param {Object|symbol} outcome
+   * @return {boolean}
+   * @private
+   */
+  isManagedMergeDeferredExecutionOutcome(outcome) {
+    return outcome !==
+      POST_ADMISSION_EXECUTION_FAILURE_OUTCOME.NOT_RETRYABLE;
   }
 
   /**
