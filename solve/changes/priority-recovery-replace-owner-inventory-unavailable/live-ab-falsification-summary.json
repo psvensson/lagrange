@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "priority-recovery-live-ab-falsification-v1",
+  "questId": "priority-recovery-replace-owner-inventory-unavailable",
+  "attemptFingerprint": "sha256:f737d558b4a61cb4205dcf10edf76d440058a10a1d5d24f7dc51aacf5f48e0fb",
+  "question": "Does the typed owner-unavailable priority-recovery REPLACE admission create recovery operations under the five-node partition-merge-under-load formation workload without increasing touched-path retry or persistence errors versus the exact same-base source reversion across N>=2 runs per arm?",
+  "presealedPrimaryCriterion": {
+    "fixedRequired": "Both fixed samples create owner recovery work and move the first priority residual away from rebalancer_leader/operation_scheduling/needs_operation/eligible_but_no_operation_created/create_recovery_operation.",
+    "revertedRequired": "Both reverted samples retain the old rebalancer scheduling residual.",
+    "safetyRequired": "Fixed samples introduce no consistent touched-path error amplification.",
+    "mixedRule": "A mixed 1/2 primary result is inconclusive and requires one additional balanced pair."
+  },
+  "sourceSnapshots": {
+    "fixed": {
+      "baseGitHash": "a20051440f9ef5460646ea30a622bdfd89feb9d0",
+      "srcFingerprint": "18523398c038e3bc",
+      "srcFingerprintAlgo": "sha256-content-v1"
+    },
+    "reverted": {
+      "baseGitHash": "a20051440f9ef5460646ea30a622bdfd89feb9d0",
+      "srcFingerprint": "94bea9501fb44709",
+      "srcFingerprintAlgo": "sha256-content-v1"
+    }
+  },
+  "samples": [
+    {
+      "id": "fixed-1",
+      "arm": "fixed",
+      "valid": true,
+      "reportPath": "test-output/reports/priority-recovery-live-ab/fixed-1.report.json",
+      "reportSha256": "90c6a35af3d062dc224cd7689c4e9a2da2d5544677a54cc325ad6ed4047101e5",
+      "durationMs": 546224,
+      "bootProvenance": "5/5 expected and booted fingerprints match with srcFingerprintMatches=true",
+      "formationPreconditionRecurred": true,
+      "scenarioOutcome": "partition growth stalled at 1 partition with spread 3",
+      "primaryPriorityOutcome": "operation_workflow_owner/workflow_progress/priority_recovery_event_driven_wait",
+      "oldSchedulingResidualPresent": true,
+      "oldSchedulingResidualWasFirst": false,
+      "replaceCreates": 13,
+      "replaceInventorySkips": 257,
+      "persistFailures": 7,
+      "deferredTransitions": 9,
+      "replicaOperationParticipantFailures": 8,
+      "moveFailures": 0,
+      "loadSuccesses": 230,
+      "loadAttemptErrors": 1588,
+      "loadOpsPerSec": 0.760,
+      "monotoneDrain": "OSCILLATING"
+    },
+    {
+      "id": "reverted-1",
+      "arm": "reverted",
+      "valid": true,
+      "reportPath": "test-output/reports/priority-recovery-live-ab/reverted-1.report.json",
+      "reportSha256": "e4eea1d1515c11fadb53ffeca2fe61aea3ac316765a10aacbbd65c921314e877",
+      "durationMs": 642738,
+      "bootProvenance": "5/5 expected and booted fingerprints match with srcFingerprintMatches=true",
+      "formationPreconditionRecurred": true,
+      "scenarioOutcome": "partition growth stalled at 1 partition with spread 2",
+      "primaryPriorityOutcome": "operation_workflow_owner/workflow_progress/wait_for_operation_progress",
+      "oldSchedulingResidualPresent": false,
+      "oldSchedulingResidualWasFirst": false,
+      "replaceCreates": 16,
+      "replaceInventorySkips": 144,
+      "persistFailures": 45,
+      "deferredTransitions": 44,
+      "replicaOperationParticipantFailures": 51,
+      "moveFailures": 0,
+      "loadSuccesses": 38,
+      "loadAttemptErrors": 1123,
+      "loadOpsPerSec": 0.123,
+      "monotoneDrain": "OSCILLATING"
+    },
+    {
+      "id": "reverted-2",
+      "arm": "reverted",
+      "valid": false,
+      "reportPath": "test-output/reports/priority-recovery-live-ab/reverted-2.report.json",
+      "reportSha256": "1f45ed31295169f6c7673f5d44e2fe83f63411b4bb0bd4b5b84d23ee44d8cc18",
+      "durationMs": 144283,
+      "discardReason": "Benchmark table visibility/bootstrap failed before the formation precondition and sustained load."
+    },
+    {
+      "id": "reverted-2-retry-1",
+      "arm": "reverted",
+      "valid": true,
+      "reportPath": "test-output/reports/priority-recovery-live-ab/reverted-2-retry-1.report.json",
+      "reportSha256": "ebf382e12cc8b778cd50727cbe0119f67aa15dd69be298da098a8b182a114011",
+      "durationMs": 604624,
+      "bootProvenance": "5/5 expected and booted fingerprints match with srcFingerprintMatches=true",
+      "formationPreconditionRecurred": true,
+      "scenarioOutcome": "partition growth reached 3 of 4 required partitions with spread 3",
+      "primaryPriorityOutcome": "priority recovery satisfied; zero residual witnesses",
+      "oldSchedulingResidualPresent": false,
+      "oldSchedulingResidualWasFirst": false,
+      "replaceCreates": 9,
+      "replaceInventorySkips": 98,
+      "persistFailures": 21,
+      "deferredTransitions": 20,
+      "replicaOperationParticipantFailures": 21,
+      "moveFailures": 0,
+      "loadSuccesses": 1510,
+      "loadAttemptErrors": 1329,
+      "loadOpsPerSec": 4.882844078823979,
+      "monotoneDrain": "OSCILLATING"
+    }
+  ],
+  "corpusSoftWarningStrikes": {
+    "runsSeen": 4,
+    "strikes": 0,
+    "errors": 0
+  },
+  "decision": {
+    "verdict": "FALSIFIED_DO_NOT_SHIP",
+    "reason": "Both valid reverted controls failed the required retention of the old scheduling residual, so another fixed sample cannot make the presealed 2/2 reverted discriminator pass.",
+    "fixed2Run": "not_run_after_terminal_primary_falsifier",
+    "merge": false
+  }
+}

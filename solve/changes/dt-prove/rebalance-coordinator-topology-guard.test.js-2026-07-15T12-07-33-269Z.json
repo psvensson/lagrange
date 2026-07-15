@@ -1,0 +1,17 @@
+{
+  "test": "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+  "src": [
+    "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
+    "src/rebalancer/replica-placement-cure-policy.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-15T12:07:33.219Z"
+}
