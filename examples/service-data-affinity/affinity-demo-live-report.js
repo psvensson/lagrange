@@ -3,6 +3,10 @@ import {resolve} from 'node:path';
 
 const REPORT_DIR = 'test-output/reports';
 const LIVE_SCENARIO = 'movielens-lagrange-service-affinity-live';
+const NOT_OBSERVED_ADMISSION = Object.freeze({
+  admitted: false,
+  state: 'not_observed',
+});
 
 /**
  * Build the live report without discarding evidence from phases that completed
@@ -40,11 +44,16 @@ function buildAffinityDemoLiveReport({
         current: {passed, verdict: passed ? 'PASS' : 'FAIL'},
         detail: {
           result,
+          schemaAdmission:
+            result?.schemaAdmission ||
+            phaseEvidence?.schemaAdmission ||
+            error?.schemaAdmission ||
+            NOT_OBSERVED_ADMISSION,
           preloadAdmission:
             result?.preloadAdmission ||
             phaseEvidence?.preloadAdmission ||
             error?.preloadAdmission ||
-            {admitted: false, state: 'not_observed'},
+            NOT_OBSERVED_ADMISSION,
           error: error?.message || null,
         },
       }],

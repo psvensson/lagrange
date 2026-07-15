@@ -1,0 +1,42 @@
+{
+  "id": "movielens-pre-schema-quiescence-live",
+  "authoringContractVersion": 1,
+  "statement": "One production five-node MovieLens milestone uses the authoritative control snapshot to admit pre-schema DDL only after control-plane quiescence, then reaches stable policy-bearing ratings CREATE, ratings-specific preload admission, loads 100000 rows, converges ratings-only splitting, and emits the successful three-way report; deterministic guards prove formation before pre-schema admission before CREATE before load admission before load and fail closed under snapshot pressure.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "movielens-ratings-scoped-split-policy-live",
+    "planDoc": "solve/epics/service-data-affinity-placement.md",
+    "draftedAtCommit": "9b73d401b6b987aeca06fa838735dbddabb4bab7"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-pre-schema-quiescence-live-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

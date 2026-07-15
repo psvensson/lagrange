@@ -1,6 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  waitForAffinityDemoSchemaAdmission,
   waitForAffinityDemoPreloadAdmission,
 } from '../../examples/service-data-affinity/affinity-demo-preload-gate.js';
 
@@ -43,6 +44,141 @@ function oneAttemptOptions(query) {
   };
 }
 
+function boundedSchemaOptions(query, timeoutMs = 8) {
+  let currentNowMs = NOW_MS;
+  return {
+    target: BASE_TARGET,
+    query,
+    now: () => currentNowMs,
+    sleep: async () => {
+      currentNowMs += 1;
+    },
+    timeoutMs,
+    pollIntervalMs: 0,
+  };
+}
+
+test('pre-schema admission requires two quiet snapshots without ratings SQL',
+  async (t) => {
+    const calls = [];
+    const result = await waitForAffinityDemoSchemaAdmission(
+      boundedSchemaOptions(async (call) => {
+        calls.push(call);
+        return {rows: [buildControlSnapshot()]};
+      }),
+    );
+
+    t.equal(result.admitted, true);
+    t.equal(result.stableConfirmationCount, 2,
+      'one transient quiet observation cannot release schema mutation');
+    t.same(calls.map(({target, sql}) => ({target, sql})), [
+      {target: SNAPSHOT_TARGET, sql: SNAPSHOT_SQL},
+      {target: SNAPSHOT_TARGET, sql: SNAPSHOT_SQL},
+    ], 'schema admission only observes the authoritative snapshot lane');
+    t.notMatch(JSON.stringify(calls), /ratings/,
+      'schema admission cannot depend on the not-yet-created table');
+    t.end();
+  });
+
+test('pre-schema pressure resets stable confirmation and fails closed',
+  async (t) => {
+    const snapshots = [
+      buildControlSnapshot(),
+      buildControlSnapshot({
+        replicaOperations: {
+          inFlightCount: 1,
+          staleInFlightCount: 0,
+          rows: [{operation_id: 'formation-replace'}],
+        },
+      }),
+      buildControlSnapshot(),
+      buildControlSnapshot(),
+    ];
+    let index = 0;
+    const result = await waitForAffinityDemoSchemaAdmission(
+      boundedSchemaOptions(async () => ({rows: [snapshots[index++]]})),
+    );
+    t.equal(index, 4,
+      'a non-quiet observation invalidates the earlier confirmation');
+    t.equal(result.stableConfirmationCount, 2);
+
+    const error = await t.rejects(
+      waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+        async () => {
+          throw new Error('Admin API query timed out under pressure');
+        },
+        1,
+      )),
+      /MovieLens schema admission timed out/,
+    );
+    t.equal(error.schemaAdmission.admitted, false);
+    t.equal(error.schemaAdmission.snapshot.state, 'control_plane_pressure');
+    t.end();
+  });
+
+test('fresh but incomplete snapshots cannot admit schema mutation',
+  async (t) => {
+    const incompleteSnapshots = [
+      (snapshot) => delete snapshot.replicaOperations,
+      (snapshot) => {
+        snapshot.replicaOperations.inFlightCount = undefined;
+      },
+      (snapshot) => {
+        snapshot.replicaOperations.staleInFlightCount = '0';
+      },
+      (snapshot) => {
+        snapshot.leaders = null;
+      },
+      (snapshot) => {
+        snapshot.controlPlaneDiagnostics = null;
+      },
+    ];
+    for (const makeIncomplete of incompleteSnapshots) {
+      const snapshot = buildControlSnapshot();
+      makeIncomplete(snapshot);
+      const error = await t.rejects(
+        waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+          async () => ({rows: [snapshot]}),
+          1,
+        )),
+        /control snapshot admission fields unavailable/,
+      );
+      t.equal(error.schemaAdmission.admitted, false);
+      t.equal(
+        error.schemaAdmission.snapshot.state,
+        'observation_unavailable',
+      );
+    }
+    t.end();
+  });
+
+test('absent optional in-flight discount is conservative zero',
+  async (t) => {
+    const snapshot = buildControlSnapshot({
+      replicaOperations: {
+        inFlightCount: 1,
+        staleInFlightCount: 0,
+        rows: [{operation_id: 'formation-replace'}],
+      },
+    });
+    t.equal(
+      snapshot.replicaOperations.additionalInFlightDiscountCount,
+      undefined,
+      'the authoritative snapshot shape does not produce the optional field',
+    );
+    const error = await t.rejects(
+      waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+        async () => ({rows: [snapshot]}),
+        1,
+      )),
+      /replica_operations_in_flight=1/,
+    );
+    t.equal(error.schemaAdmission.snapshot.effectiveInFlightCount, 1,
+      'absence cannot discount the observed operation');
+    t.equal(error.schemaAdmission.snapshot.ready, false);
+    t.end();
+  });
+
 test('production ratings admission overrides unrelated global operation churn',
   async (t) => {
     const calls = [];
@@ -72,6 +208,8 @@ test('production ratings admission overrides unrelated global operation churn',
     t.equal(result.snapshot.ready, false,
       'typed snapshot preserves the global-operation observation');
     t.equal(result.snapshot.state, 'operation_drain_progressing');
+    t.equal(result.snapshot.effectiveInFlightCount, 1,
+      'the absent optional discount does not hide unrelated work');
     t.same(calls, [
       {target: SNAPSHOT_TARGET, sql: SNAPSHOT_SQL, timeoutMs: 1},
       {target: LOAD_TARGET, sql: RATINGS_PROBE_SQL, timeoutMs: 1},

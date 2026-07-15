@@ -23,6 +23,8 @@ const PRELOAD_ADMISSION_STATE = Object.freeze({
 const PRELOAD_SNAPSHOT_ERROR = Object.freeze({
   MISSING_ROW: 'control snapshot rows unavailable',
   OBSERVATION_FAILED: 'control snapshot observation failed',
+  ADMISSION_FIELDS_UNAVAILABLE:
+    'control snapshot admission fields unavailable',
 });
 const PRELOAD_BLOCKING_SNAPSHOT_STATES = new Set([
   CONTROL_PLANE_QUIESCENCE_STATE.OBSERVATION_UNAVAILABLE,
@@ -33,8 +35,10 @@ const PRELOAD_BLOCKING_SNAPSHOT_STATES = new Set([
 const RATINGS_TABLE_NAME = 'ratings';
 const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
+const SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT = 2;
 const ZERO = 0;
 const BUDGET_EXHAUSTED_ERROR = 'preload admission budget exhausted';
+const SCHEMA_BUDGET_EXHAUSTED_ERROR = 'schema admission budget exhausted';
 const ADMIN_STREAM_LANE_QUERY_PARAMETER = 'lane';
 const PRELOAD_ADMISSION_QUERY_REQUIRED_ERROR =
   'MovieLens preload admission requires query';
@@ -54,6 +58,38 @@ function resolveRows(result) {
 
 function normalizeNonNegativeInteger(value) {
   return Number.isInteger(value) && value >= ZERO ? value : ZERO;
+}
+
+function isPlainRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveSnapshotAdmissionFieldsError(snapshot) {
+  const replicaOperations = snapshot?.replicaOperations;
+  if (
+    !isPlainRecord(replicaOperations) ||
+    !Number.isInteger(replicaOperations.inFlightCount) ||
+    replicaOperations.inFlightCount < ZERO ||
+    !Number.isInteger(replicaOperations.staleInFlightCount) ||
+    replicaOperations.staleInFlightCount < ZERO ||
+    // The authoritative snapshot does not produce this consumer-derived
+    // discount. Absence is conservative zero; only a present malformed value
+    // is unavailable evidence because zero cannot hide observed work.
+    (
+      replicaOperations.additionalInFlightDiscountCount !== undefined &&
+      (
+        !Number.isInteger(
+          replicaOperations.additionalInFlightDiscountCount,
+        ) ||
+        replicaOperations.additionalInFlightDiscountCount < ZERO
+      )
+    ) ||
+    !isPlainRecord(snapshot?.leaders) ||
+    !isPlainRecord(snapshot?.controlPlaneDiagnostics)
+  ) {
+    return PRELOAD_SNAPSHOT_ERROR.ADMISSION_FIELDS_UNAVAILABLE;
+  }
+  return '';
 }
 
 function buildSnapshotProbe(snapshot, snapshotError) {
@@ -129,6 +165,26 @@ function classifySnapshot(snapshot, snapshotError, nowMs) {
   });
 }
 
+async function observeControlSnapshot(options, target, timeoutMs) {
+  let snapshotResult;
+  let snapshotError = '';
+  try {
+    snapshotResult = await options.query({
+      target,
+      sql: ADMIN_CONTROL_SNAPSHOT.QUERY_SQL,
+      timeoutMs,
+    });
+  } catch (error) {
+    snapshotResult = {rows: []};
+    snapshotError = String(error?.message || error);
+  }
+  const snapshotRow = resolveRows(snapshotResult)[ZERO];
+  snapshotError = snapshotError || resolveSnapshotObservationError(snapshotRow);
+  snapshotError = snapshotError ||
+    resolveSnapshotAdmissionFieldsError(snapshotRow);
+  return classifySnapshot(snapshotRow, snapshotError, options.now());
+}
+
 function normalizeTimeoutMs(value) {
   return Number.isFinite(value) && value >= ZERO ?
     Math.floor(value) :
@@ -170,6 +226,33 @@ function buildTimeoutError(evidence) {
   return error;
 }
 
+function buildSchemaAdmissionEvidence(
+  snapshot,
+  target,
+  stableConfirmationCount,
+) {
+  const admitted =
+    stableConfirmationCount >= SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
+  return Object.freeze({
+    admitted,
+    state: admitted ?
+      PRELOAD_ADMISSION_STATE.ADMITTED :
+      PRELOAD_ADMISSION_STATE.DENIED,
+    snapshot,
+    stableConfirmationCount,
+    target,
+  });
+}
+
+function buildSchemaAdmissionTimeoutError(evidence) {
+  const detail = evidence.snapshot.reasons?.[ZERO] || evidence.snapshot.state;
+  const error = new Error(
+    'MovieLens schema admission timed out: ' + detail,
+  );
+  error.schemaAdmission = evidence;
+  return error;
+}
+
 function remainingBudgetMs(now, deadlineMs) {
   return Math.max(ZERO, deadlineMs - now());
 }
@@ -191,21 +274,11 @@ async function observePreloadAdmission(options, targets, probeSql, deadlineMs) {
   if (snapshotTimeoutMs <= ZERO) {
     return buildBudgetExhaustedEvidence(options.now, targets);
   }
-  let snapshotResult;
-  let snapshotError = '';
-  try {
-    snapshotResult = await options.query({
-      target: targets.snapshot,
-      sql: ADMIN_CONTROL_SNAPSHOT.QUERY_SQL,
-      timeoutMs: snapshotTimeoutMs,
-    });
-  } catch (error) {
-    snapshotResult = {rows: []};
-    snapshotError = String(error?.message || error);
-  }
-  const snapshotRow = resolveRows(snapshotResult)[ZERO];
-  snapshotError = snapshotError || resolveSnapshotObservationError(snapshotRow);
-  const snapshot = classifySnapshot(snapshotRow, snapshotError, options.now());
+  const snapshot = await observeControlSnapshot(
+    options,
+    targets.snapshot,
+    snapshotTimeoutMs,
+  );
   if (PRELOAD_BLOCKING_SNAPSHOT_STATES.has(snapshot.state)) {
     return buildPreloadEvidence(
       snapshot,
@@ -245,6 +318,70 @@ async function observePreloadAdmission(options, targets, probeSql, deadlineMs) {
       ),
       targets,
     );
+  }
+}
+
+/**
+ * Wait until the authoritative control snapshot is quiet enough to admit the
+ * policy-bearing ratings schema mutation. This phase intentionally performs no
+ * ratings query: the table does not exist yet. Two consecutive fresh, quiet
+ * snapshots prevent a transient gap between formation and priority recovery
+ * from releasing DDL into a still-busy control plane.
+ *
+ * @param {Object} options
+ * @param {string} options.target
+ * @param {Function} options.query
+ * @param {Function} options.now
+ * @param {Function} options.sleep
+ * @return {Promise<Object>}
+ */
+async function waitForAffinityDemoSchemaAdmission(options = {}) {
+  if (typeof options.query !== 'function') {
+    throw new TypeError(PRELOAD_ADMISSION_QUERY_REQUIRED_ERROR);
+  }
+  const now = typeof options.now === 'function' ? options.now : Date.now;
+  const sleep = typeof options.sleep === 'function' ?
+    options.sleep :
+    (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+  const normalizedOptions = {...options, now, sleep};
+  const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
+  const pollIntervalMs = normalizePollIntervalMs(options.pollIntervalMs);
+  const deadlineMs = now() + timeoutMs;
+  const target = buildAdminLaneTarget(
+    options.target,
+    ADMIN_STREAM_LANE.SNAPSHOT,
+  );
+  let stableConfirmationCount = ZERO;
+  let lastEvidence = null;
+
+  while (true) {
+    if (lastEvidence && now() >= deadlineMs) {
+      throw buildSchemaAdmissionTimeoutError(lastEvidence);
+    }
+    const snapshotTimeoutMs = remainingBudgetMs(now, deadlineMs);
+    const snapshot = snapshotTimeoutMs > ZERO ?
+      await observeControlSnapshot(
+        normalizedOptions,
+        target,
+        snapshotTimeoutMs,
+      ) :
+      classifySnapshot(null, SCHEMA_BUDGET_EXHAUSTED_ERROR, now());
+    stableConfirmationCount = snapshot.ready ?
+      stableConfirmationCount + 1 : ZERO;
+    const evidence = buildSchemaAdmissionEvidence(
+      snapshot,
+      target,
+      stableConfirmationCount,
+    );
+    lastEvidence = evidence;
+    if (evidence.admitted) {
+      return evidence;
+    }
+    const remainingMs = remainingBudgetMs(now, deadlineMs);
+    if (remainingMs <= ZERO) {
+      throw buildSchemaAdmissionTimeoutError(evidence);
+    }
+    await sleep(Math.min(pollIntervalMs, remainingMs));
   }
 }
 
@@ -304,5 +441,6 @@ async function waitForAffinityDemoPreloadAdmission(options = {}) {
 
 export {
   PRELOAD_ADMISSION_STATE,
+  waitForAffinityDemoSchemaAdmission,
   waitForAffinityDemoPreloadAdmission,
 };

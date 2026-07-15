@@ -69,7 +69,7 @@ const FAST_INTERVAL_MS = 5;
 const WAIT_TIMEOUT_MS = 1500;
 const WAIT_POLL_MS = 5;
 
-test('MovieLens creates ratings after formation and before preload admission',
+test('MovieLens admits schema after formation and before ratings CREATE',
   async (t) => {
     const runnerSource = await readFile(
       'examples/service-data-affinity/run-affinity-demo.js',
@@ -92,6 +92,10 @@ test('MovieLens creates ratings after formation and before preload admission',
     );
     const formationIndex = runnerSource.indexOf(
       'await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);',
+      runStart,
+    );
+    const schemaAdmissionIndex = runnerSource.indexOf(
+      'const schemaAdmission = await waitForAffinityDemoSchemaAdmission',
       runStart,
     );
     const preloadAdmissionIndex = runnerSource.indexOf(
@@ -119,8 +123,10 @@ test('MovieLens creates ratings after formation and before preload admission',
       'joiner expansion belongs to the production runner path');
     t.ok(formationIndex > expandNodesIndex,
       'the runner awaits complete five-node formation after launching joiners');
-    t.ok(createRatingsIndex > formationIndex,
-      'formed topology can satisfy the durable two-replica CREATE contract');
+    t.ok(schemaAdmissionIndex > formationIndex,
+      'membership formation precedes authoritative schema admission');
+    t.ok(createRatingsIndex > schemaAdmissionIndex,
+      'stable snapshot admission precedes the durable ratings CREATE');
     t.ok(preloadAdmissionIndex > createRatingsIndex,
       'stable durable CREATE confirmation precedes preload admission');
     t.ok(ratingsLoadIndex > preloadAdmissionIndex,

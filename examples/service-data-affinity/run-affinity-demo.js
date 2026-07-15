@@ -9,11 +9,12 @@
  * placement learns the best production-weighted node set.
  *
  * The story:
- *   1. The ratings schema bootstraps on the seed, then four nodes join (no
+ *   1. Coordination schemas bootstrap on the seed, then four nodes join (no
  *      zone pinning — one latency domain). Once the expanded control plane is
- *      routable, the dataset loads and a deliberately small split threshold
- *      forces several partitions across the cluster — real parallelism:
- *      multiple raft groups and multiple leaders.
+ *      quiescent, the ratings schema is created and the dataset loads with a
+ *      deliberately small split threshold that forces several partitions
+ *      across the cluster — real parallelism: multiple raft groups and
+ *      multiple leaders.
  *   2. The movielens ratings are loaded and split across partitions
  *      whose replicas land on different node subsets. Distributed
  *      grouped SQL emits one AVG/COUNT row per movie and establishes the
@@ -53,6 +54,7 @@ import {
 } from './lagrange-loader.js';
 import {
   waitForAffinityDemoPreloadAdmission,
+  waitForAffinityDemoSchemaAdmission,
 } from './affinity-demo-preload-gate.js';
 import {
   writeAffinityDemoLiveReport,
@@ -87,6 +89,10 @@ const OBSERVE_INTERVAL_MS = 10000;
 const CONVERGE_TIMEOUT_MS = 600000;
 const STALL_TIMEOUT_MS = 300000;
 const NODE_STATUS_ACTIVE = 'active';
+const SCHEMA_ADMISSION_WAIT_MESSAGE =
+  '      Waiting for production schema admission...';
+const SCHEMA_ADMISSION_SUCCESS_PREFIX =
+  '      Schema mutation admitted after stable control snapshots ';
 
 // Config floor: partition.evaluationIntervalMs must be >= 60000.
 const PARTITION_EVAL_INTERVAL_MS = 60000;
@@ -574,11 +580,27 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     }
     await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
     console.log('      Cluster formed.');
+    console.log(SCHEMA_ADMISSION_WAIT_MESSAGE);
+    const schemaAdmission = await waitForAffinityDemoSchemaAdmission({
+      target: TARGET,
+      query: ({target, sql, timeoutMs}) =>
+        queryAdmin(sql, target, timeoutMs),
+      now: Date.now,
+      sleep,
+      timeoutMs: CLUSTER_FORM_TIMEOUT_MS,
+      pollIntervalMs: POLL_INTERVAL_MS,
+    });
+    phaseEvidence.schemaAdmission = schemaAdmission;
+    console.log(
+      SCHEMA_ADMISSION_SUCCESS_PREFIX +
+      `(state=${schemaAdmission.snapshot.state}).`,
+    );
     await createRatingsTableWithRetry({target: TARGET});
-    // CREATE owns the sparse ratings policy atomically after enough nodes
-    // exist to satisfy its durable replica contract. The production-wide
-    // 10 GiB default remains intact, so formation logs cannot inherit the
-    // teaching threshold and become an unrelated preload blocker.
+    // The authoritative snapshot gate prevents DDL from racing formation
+    // recovery. CREATE then owns the sparse ratings policy atomically after
+    // enough nodes exist to satisfy its durable replica contract. The
+    // production-wide 10 GiB default remains intact, so formation logs cannot
+    // inherit the teaching threshold and become an unrelated preload blocker.
     console.log('      Waiting for production ratings-load admission...');
     const preloadAdmission = await waitForAffinityDemoPreloadAdmission({
       target: TARGET,
@@ -678,6 +700,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     console.log('');
     return {
       converged: learned.assessment.complete,
+      schemaAdmission,
       preloadAdmission,
       lagrangeDistributedSql: {
         inputRatings: totalRows,

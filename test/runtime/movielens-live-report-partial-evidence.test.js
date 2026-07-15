@@ -12,6 +12,11 @@ function reportDetail(report) {
 
 test('live report retains admitted preload evidence when a later phase fails',
   (t) => {
+    const schemaAdmission = {
+      admitted: true,
+      snapshot: {ready: true, state: 'ready'},
+      stableConfirmationCount: 2,
+    };
     const preloadAdmission = {
       admitted: true,
       snapshot: {ready: true, state: 'operation_drain_progressing'},
@@ -20,10 +25,15 @@ test('live report retains admitted preload evidence when a later phase fails',
     const report = buildAffinityDemoLiveReport({
       timestamp: TIMESTAMP,
       error: new Error('ratings split timed out'),
-      phaseEvidence: {preloadAdmission},
+      phaseEvidence: {schemaAdmission, preloadAdmission},
     });
 
     t.equal(report.summary.failed, 1, 'the later failure remains honest');
+    t.same(
+      reportDetail(report).schemaAdmission,
+      schemaAdmission,
+      'completed schema admission survives the later failure boundary',
+    );
     t.same(
       reportDetail(report).preloadAdmission,
       preloadAdmission,
@@ -44,6 +54,18 @@ test('live report retains gate-owned evidence when preload itself fails', (t) =>
   t.end();
 });
 
+test('live report retains gate-owned evidence when schema admission fails',
+  (t) => {
+    const error = new Error('schema admission denied');
+    error.schemaAdmission = {
+      admitted: false,
+      snapshot: {ready: false, state: 'control_plane_pressure'},
+    };
+    const report = buildAffinityDemoLiveReport({timestamp: TIMESTAMP, error});
+    t.same(reportDetail(report).schemaAdmission, error.schemaAdmission);
+    t.end();
+  });
+
 test('live runner passes one phase evidence accumulator to success and failure reports',
   async (t) => {
     const source = await readFile(
@@ -51,6 +73,7 @@ test('live runner passes one phase evidence accumulator to success and failure r
       'utf8',
     );
     t.match(source, /runAffinityDemo\(\{phaseEvidence = \{\}\} = \{\}\)/u);
+    t.match(source, /phaseEvidence\.schemaAdmission = schemaAdmission/u);
     t.match(source, /phaseEvidence\.preloadAdmission = preloadAdmission/u);
     t.match(
       source,
