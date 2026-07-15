@@ -1,0 +1,33 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "tooling-static-step-voter-ratchet",
+  "detail": {
+    "scopeFiles": [
+      "scripts/check-step-coverage-owner.js",
+      "scripts/check-voter-readiness-single-owner.js"
+    ],
+    "literalViolations": 0,
+    "decisionBoundaryViolations": 0,
+    "baselineChanged": false,
+    "stepCoverageMetric": 0,
+    "stepCoverageGatesPassed": true,
+    "voterReadinessMetric": 0,
+    "voterReadinessGatesPassed": true,
+    "eslintPassed": true,
+    "duplicationBefore": {
+      "groups": 78,
+      "lines": 2435
+    },
+    "duplicationAfter": {
+      "groups": 76,
+      "lines": 2342
+    },
+    "duplicationRegressed": false,
+    "cognitiveBefore": 184,
+    "cognitiveAfter": 184,
+    "cognitiveRegressed": false,
+    "globalAggregateStillAboveCommittedBaselines": true
+  }
+}

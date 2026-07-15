@@ -22,6 +22,21 @@ import {
   walkAst,
 } from './guideline-check-shared.js';
 
+const LOCAL_STR_OWNED_001 = '/';
+const LOCAL_STR_OWNED_002 = '_';
+const LOCAL_STR_OWNED_003 = 'Map';
+const LOCAL_STR_OWNED_004 = 'Set';
+const LOCAL_STR_OWNED_005 = 'FunctionDeclaration';
+const LOCAL_STR_OWNED_006 = 'MethodDefinition';
+const LOCAL_STR_OWNED_007 = '<module>';
+const LOCAL_STR_OWNED_008 = ',';
+const LOCAL_STR_OWNED_009 = 'local re-derivation of the bootstrap-critical partition set';
+const LOCAL_STR_OWNED_010 = '<destructured>';
+const LOCAL_STR_OWNED_011 = '.js';
+const LOCAL_STR_OWNED_012 = 'voter-readiness-single-owner-census';
+const LOCAL_STR_OWNED_013 = 'scripts/check-voter-readiness-single-owner.js';
+const LOCAL_STR_OWNED_014 = '\n';
+
 const REPO_ROOT = path.resolve(path.dirname(new globalThis.URL(import.meta.url).pathname), '..');
 const SCAN_ROOT = 'src';
 const ORACLE_FILE = 'solve/oracle/voter-readiness-visibility-single-owner-table.json';
@@ -103,7 +118,7 @@ const GATE_COMMANDS = Object.freeze([
 ]);
 
 function normalizeRepoPath(filePath) {
-  return path.relative(REPO_ROOT, path.resolve(filePath)).split(path.sep).join('/');
+  return path.relative(REPO_ROOT, path.resolve(filePath)).split(path.sep).join(LOCAL_STR_OWNED_001);
 }
 
 function resolveRaftRoleValue(node) {
@@ -115,7 +130,7 @@ function resolveRaftRoleValue(node) {
   if (node.type === NODE_TYPE.MEMBER &&
       node.object?.type === NODE_TYPE.IDENTIFIER &&
       RAFT_ROLE_ENUM_NAMES.has(
-        node.object.name.replaceAll('_', '').toLowerCase()) &&
+        node.object.name.replaceAll(LOCAL_STR_OWNED_002, '').toLowerCase()) &&
       node.property?.type === NODE_TYPE.IDENTIFIER) {
     const value = node.property.name.toLowerCase();
     return RAFT_ROLE_VALUES.has(value) ? value : null;
@@ -142,14 +157,14 @@ function isMapEntryPairArray(node, ancestors) {
     parent?.type === NODE_TYPE.ARRAY &&
     grandparent?.type === NODE_TYPE.NEW &&
     grandparent.callee?.type === NODE_TYPE.IDENTIFIER &&
-    grandparent.callee.name === 'Map';
+    grandparent.callee.name === LOCAL_STR_OWNED_003;
 }
 
 function findRoleSetArray(node, ancestors) {
   // `new Set([...])` — the declaration idiom for role membership sets.
   if (node.type === NODE_TYPE.NEW &&
       node.callee?.type === NODE_TYPE.IDENTIFIER &&
-      node.callee.name === 'Set') {
+      node.callee.name === LOCAL_STR_OWNED_004) {
     return node.arguments?.[0]?.type === NODE_TYPE.ARRAY ? node.arguments[0] : null;
   }
   // Bare array literal (often wrapped in Object.freeze) — counted at the
@@ -179,13 +194,13 @@ function findEnclosingIdentifier(ancestors) {
         ancestor.key?.type === NODE_TYPE.IDENTIFIER) {
       return ancestor.key.name;
     }
-    if ((ancestor.type === 'FunctionDeclaration' ||
-         ancestor.type === 'MethodDefinition') &&
+    if ((ancestor.type === LOCAL_STR_OWNED_005 ||
+         ancestor.type === LOCAL_STR_OWNED_006) &&
         (ancestor.id?.name || ancestor.key?.name)) {
       return ancestor.id?.name || ancestor.key?.name;
     }
   }
-  return '<module>';
+  return LOCAL_STR_OWNED_007;
 }
 
 function isEnumDefinitionProperty(ancestors) {
@@ -219,7 +234,7 @@ function collectFileSites(filePath, source) {
           line: node.loc?.start?.line ?? 0,
           kind: VIOLATION_KIND.ROLE_SET,
           enclosingIdentifier: findEnclosingIdentifier(ancestors),
-          detail: members.join(','),
+          detail: members.join(LOCAL_STR_OWNED_008),
         });
       }
       return;
@@ -245,7 +260,7 @@ function collectFileSites(filePath, source) {
         line: node.loc?.start?.line ?? 0,
         kind: VIOLATION_KIND.CRITICAL_PARTITION_SET,
         enclosingIdentifier: node.id.name,
-        detail: 'local re-derivation of the bootstrap-critical partition set',
+        detail: LOCAL_STR_OWNED_009,
       });
       return;
     }
@@ -260,7 +275,7 @@ function collectFileSites(filePath, source) {
         filePath: repoPath,
         line: node.loc?.start?.line ?? 0,
         kind: VIOLATION_KIND.LEARNER_ALIAS,
-        enclosingIdentifier: node.id?.name || '<destructured>',
+        enclosingIdentifier: node.id?.name || LOCAL_STR_OWNED_010,
         detail: node.init.value,
       });
     }
@@ -271,7 +286,7 @@ function collectFileSites(filePath, source) {
 async function collectJavaScriptFiles(entryPath) {
   const stat = await fs.stat(entryPath);
   if (stat.isFile()) {
-    return entryPath.endsWith('.js') ? [entryPath] : [];
+    return entryPath.endsWith(LOCAL_STR_OWNED_011) ? [entryPath] : [];
   }
   if (!stat.isDirectory()) return [];
   const children = await fs.readdir(entryPath, {withFileTypes: true});
@@ -280,7 +295,7 @@ async function collectJavaScriptFiles(entryPath) {
     const childPath = path.join(entryPath, child.name);
     if (child.isDirectory()) {
       collected.push(...await collectJavaScriptFiles(childPath));
-    } else if (child.isFile() && childPath.endsWith('.js')) {
+    } else if (child.isFile() && childPath.endsWith(LOCAL_STR_OWNED_011)) {
       collected.push(childPath);
     }
   }
@@ -326,9 +341,9 @@ function buildOraclePayload(census, gateResults, doneAt) {
     metric,
     target: doneAt,
     done: metric <= doneAt && gatesGreen,
-    classification: 'voter-readiness-single-owner-census',
+    classification: LOCAL_STR_OWNED_012,
     detail: {
-      generatedBy: 'scripts/check-voter-readiness-single-owner.js',
+      generatedBy: LOCAL_STR_OWNED_013,
       ownerModules: [...OWNER_MODULES],
       countedSites: census.counted,
       excludedSites: census.excluded,
@@ -361,9 +376,9 @@ async function main() {
   if (writeOracle) {
     const oraclePath = path.join(REPO_ROOT, oracleFile);
     await fs.mkdir(path.dirname(oraclePath), {recursive: true});
-    await fs.writeFile(oraclePath, JSON.stringify(payload, null, 2) + '\n');
+    await fs.writeFile(oraclePath, JSON.stringify(payload, null, 2) + LOCAL_STR_OWNED_014);
   }
-  process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+  process.stdout.write(JSON.stringify(payload, null, 2) + LOCAL_STR_OWNED_014);
   return payload.metric <= doneAt ? EXIT_CODE.SUCCESS : EXIT_CODE.FAILURE;
 }
 

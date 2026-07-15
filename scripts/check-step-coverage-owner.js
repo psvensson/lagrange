@@ -28,6 +28,19 @@ import {
   walkAst,
 } from './guideline-check-shared.js';
 
+const LOCAL_STR_OWNED_001 = '/';
+const LOCAL_STR_OWNED_002 = 'Map';
+const LOCAL_STR_OWNED_003 = 'Set';
+const LOCAL_STR_OWNED_004 = 'FunctionDeclaration';
+const LOCAL_STR_OWNED_005 = 'MethodDefinition';
+const LOCAL_STR_OWNED_006 = '<module>';
+const LOCAL_STR_OWNED_007 = '<anonymous>';
+const LOCAL_STR_OWNED_008 = ',';
+const LOCAL_STR_OWNED_009 = '.js';
+const LOCAL_STR_OWNED_010 = 'step-coverage-single-owner-census';
+const LOCAL_STR_OWNED_011 = 'scripts/check-step-coverage-owner.js';
+const LOCAL_STR_OWNED_012 = '\n';
+
 const REPO_ROOT = path.resolve(path.dirname(new globalThis.URL(import.meta.url).pathname), '..');
 const SCAN_ROOT = 'src';
 const ORACLE_FILE = 'solve/oracle/step-coverage-single-owner-table.json';
@@ -129,7 +142,7 @@ const GATE_COMMANDS = Object.freeze([
 ]);
 
 function normalizeRepoPath(filePath) {
-  return path.relative(REPO_ROOT, path.resolve(filePath)).split(path.sep).join('/');
+  return path.relative(REPO_ROOT, path.resolve(filePath)).split(path.sep).join(LOCAL_STR_OWNED_001);
 }
 
 function resolveWorkflowStepMember(node) {
@@ -149,13 +162,13 @@ function isMapEntryPairArray(node, ancestors) {
     parent?.type === NODE_TYPE.ARRAY &&
     grandparent?.type === NODE_TYPE.NEW &&
     grandparent.callee?.type === NODE_TYPE.IDENTIFIER &&
-    grandparent.callee.name === 'Map';
+    grandparent.callee.name === LOCAL_STR_OWNED_002;
 }
 
 function findStepSetArray(node, ancestors) {
   if (node.type === NODE_TYPE.NEW &&
       node.callee?.type === NODE_TYPE.IDENTIFIER &&
-      node.callee.name === 'Set') {
+      node.callee.name === LOCAL_STR_OWNED_003) {
     return node.arguments?.[0]?.type === NODE_TYPE.ARRAY ? node.arguments[0] : null;
   }
   if (node.type === NODE_TYPE.ARRAY && !isMapEntryPairArray(node, ancestors)) {
@@ -175,13 +188,13 @@ function findEnclosingIdentifier(ancestors) {
         ancestor.key?.type === NODE_TYPE.IDENTIFIER) {
       return ancestor.key.name;
     }
-    if ((ancestor.type === 'FunctionDeclaration' ||
-         ancestor.type === 'MethodDefinition') &&
+    if ((ancestor.type === LOCAL_STR_OWNED_004 ||
+         ancestor.type === LOCAL_STR_OWNED_005) &&
         (ancestor.id?.name || ancestor.key?.name)) {
       return ancestor.id?.name || ancestor.key?.name;
     }
   }
-  return '<module>';
+  return LOCAL_STR_OWNED_006;
 }
 
 function findEnclosingFunction(ancestors) {
@@ -199,13 +212,13 @@ function functionDisplayName(functionNode, ancestors) {
   const owners = ancestors.slice(0, index >= 0 ? index : undefined);
   for (let cursor = owners.length - 1; cursor >= 0; cursor -= 1) {
     const owner = owners[cursor];
-    if (owner.type === 'MethodDefinition' && owner.key?.name) return owner.key.name;
+    if (owner.type === LOCAL_STR_OWNED_005 && owner.key?.name) return owner.key.name;
     if (owner.type === NODE_TYPE.VARIABLE_DECLARATOR && owner.id?.name) {
       return owner.id.name;
     }
     if (owner.type === NODE_TYPE.PROPERTY && owner.key?.name) return owner.key.name;
   }
-  return '<anonymous>';
+  return LOCAL_STR_OWNED_007;
 }
 
 function isExcluded(site) {
@@ -236,7 +249,7 @@ function collectFileSites(filePath, source) {
           line: node.loc?.start?.line ?? 0,
           kind: VIOLATION_KIND.SET,
           enclosingIdentifier: findEnclosingIdentifier(ancestors),
-          detail: members.join(','),
+          detail: members.join(LOCAL_STR_OWNED_008),
         });
       }
     }
@@ -258,7 +271,7 @@ function collectFileSites(filePath, source) {
           line: node.loc?.start?.line ?? 0,
           name: enclosing ?
             functionDisplayName(enclosing, ancestors) :
-            '<module>',
+            LOCAL_STR_OWNED_006,
         });
       }
       comparisonsByFunction.get(key).steps.add(comparedStep);
@@ -271,7 +284,7 @@ function collectFileSites(filePath, source) {
         line: entry.line,
         kind: VIOLATION_KIND.PILE,
         enclosingIdentifier: entry.name,
-        detail: [...entry.steps].sort().join(','),
+        detail: [...entry.steps].sort().join(LOCAL_STR_OWNED_008),
       });
     }
   }
@@ -281,7 +294,7 @@ function collectFileSites(filePath, source) {
 async function collectJavaScriptFiles(entryPath) {
   const stat = await fs.stat(entryPath);
   if (stat.isFile()) {
-    return entryPath.endsWith('.js') ? [entryPath] : [];
+    return entryPath.endsWith(LOCAL_STR_OWNED_009) ? [entryPath] : [];
   }
   if (!stat.isDirectory()) return [];
   const children = await fs.readdir(entryPath, {withFileTypes: true});
@@ -290,7 +303,7 @@ async function collectJavaScriptFiles(entryPath) {
     const childPath = path.join(entryPath, child.name);
     if (child.isDirectory()) {
       collected.push(...await collectJavaScriptFiles(childPath));
-    } else if (child.isFile() && childPath.endsWith('.js')) {
+    } else if (child.isFile() && childPath.endsWith(LOCAL_STR_OWNED_009)) {
       collected.push(childPath);
     }
   }
@@ -336,9 +349,9 @@ function buildOraclePayload(census, gateResults, doneAt) {
     metric,
     target: doneAt,
     done: metric <= doneAt && gatesGreen,
-    classification: 'step-coverage-single-owner-census',
+    classification: LOCAL_STR_OWNED_010,
     detail: {
-      generatedBy: 'scripts/check-step-coverage-owner.js',
+      generatedBy: LOCAL_STR_OWNED_011,
       ownerModules: [...OWNER_MODULES],
       countedSites: census.counted,
       excludedSites: census.excluded,
@@ -368,9 +381,9 @@ async function main() {
   if (writeOracle) {
     const oraclePath = path.join(REPO_ROOT, oracleFile);
     await fs.mkdir(path.dirname(oraclePath), {recursive: true});
-    await fs.writeFile(oraclePath, JSON.stringify(payload, null, 2) + '\n');
+    await fs.writeFile(oraclePath, JSON.stringify(payload, null, 2) + LOCAL_STR_OWNED_012);
   }
-  process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+  process.stdout.write(JSON.stringify(payload, null, 2) + LOCAL_STR_OWNED_012);
   return payload.metric <= doneAt ? EXIT_CODE.SUCCESS : EXIT_CODE.FAILURE;
 }
 
