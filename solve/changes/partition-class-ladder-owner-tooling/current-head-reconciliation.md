@@ -1,0 +1,20 @@
+# Current-HEAD reconciliation
+
+The historical attempt remains exact at
+`sha256:a2bf81fbdc2c252a6a2e07b35bbc96bed1290eea2edbbac584ced22e3a959188`.
+Its current aggregate source scope is the sorted three-path union:
+
+- `package.json`
+- `scripts/check-partition-class-owner.js`
+- `test/scripts/check-partition-class-owner.test.js`
+
+From the recorded base `c28bae46da4f393cf6d0e745bcd631978f8de56d`,
+the canonical current-HEAD delta fingerprints as
+`sha256:a087f3ece18889efa9966d1b17d01944c887fe853b7b81322db013f606b09b63`.
+Independent review confirmed that the package command still names the committed
+analyzer, the owner contract still requires `resolvePartitionTableId(options)`,
+rebuilt resolver inputs remain rejected, and the targeted owner suites pass 123
+assertions. The official `--oracle --with-gates` run reports contract v3,
+owner-contract passed, raw/collapsed census `0/0`, metric/target `0/0`, and green
+lint, decision-table-model, and targeted-suite gates. No runtime source or
+baseline changed during this reconciliation.

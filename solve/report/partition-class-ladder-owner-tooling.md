@@ -4,46 +4,30 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/partition-class-ladder-single-owner-table.json
 
-**Attempts:** 1
+**Attempts:** 2
 
 ## Links
 - spec: solve/epics/self-hosting-circularity-generic-treatment.md
 - parent quest: partition-class-ladder-census-proof-final
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
 
-## Current Blocker
-- Frontier: partition-class-ladder-owner-tooling-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: ownership_gap
-- Movement: solved: unknown -> unknown
-- Latest evidence: solve/oracle/partition-class-ladder-single-owner-table.json
-- Selected theory: none
-- Next move: continue supervised step for partition-class-ladder-owner-tooling-main
-- No longer current: unknown
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for partition-class-ladder-owner-tooling-main
-- Blocker: none
-
 ## Scope Pressure
-- Changed files: 3
-- Change bytes: 5077
-- Owner areas: package.json, scripts/check-partition-class-owner.js, test/scripts
+- Changed files: 4
+- Change bytes: 6540
+- Owner areas: package.json, scripts/check-partition-class-owner.js, solve, test/scripts
 - Categories: other, test, workflow
-- Action: land or separate 3 owner areas: package.json, scripts/check-partition-class-owner.js, test/scripts
+- Action: land or separate 4 owner areas: package.json, scripts/check-partition-class-owner.js, solve, test/scripts
 - Split plan:
   - package.json: 1 file(s)
   - scripts/check-partition-class-owner.js: 1 file(s)
+  - solve: 1 file(s)
   - test/scripts: 1 file(s)
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **partition-class-ladder-owner-tooling-main** [open] rung 1, attempts 1, metric 119 -> 0
+- **partition-class-ladder-owner-tooling-main** [solved] rung 2, attempts 2, metric 119 -> 0
 
 ## Findings
 - **partition-class-ladder-owner-tooling-main**: The package.json change adds one audit script entry and does not touch the reverted release CI memory-mode lever from 75544369; focused diff inspection rules out retreading that revert. [git:package-json-one-line-audit-script]
@@ -53,6 +37,7 @@
 - **partition-class-ladder-owner-tooling-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 119 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
 - **partition-class-ladder-owner-tooling-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
 - **partition-class-ladder-owner-tooling-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
+- **partition-class-ladder-owner-tooling-main**: Independent current-HEAD aggregate verification passed: the canonical three-path delta from recorded base c28bae46 is sha256:a087f3ece18889efa9966d1b17d01944c887fe853b7b81322db013f606b09b63; the package command, original-options resolver contract, rebuilt-input rejection, strict file sizes, 123 focused assertions, and official contract-v3 0/0 census with all gates are green without baseline changes. [subagent:partition_q2_closure]
 
 ## Theories
 _(none recorded)_
@@ -67,3 +52,4 @@ _(none recorded)_
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-13T17:27:17.480Z | partition-class-ladder-owner-tooling-main | observe | 119 -> 119 | flat | no_evidence |  | diff:solve/changes/partition-class-ladder-owner-tooling/attempt-1.diff |
+| 2026-07-15T08:10:30.510Z | partition-class-ladder-owner-tooling-main | local-fix | 0 -> 0 | flat | solved |  | diff:solve/changes/partition-class-ladder-owner-tooling/attempt-2.diff |
