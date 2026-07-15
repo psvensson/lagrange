@@ -20,9 +20,9 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json
-- Selected theory: theory-20260715-sampled-quiescence-window
-- Next move: continue supervised step for movielens-pre-schema-quiescence-live-main
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json
+- Selected theory: theory-20260715-sampled-quiescence-window (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for movielens-pre-schema-quiescence-live-main
 
 ## Continuation
 - Status: allowed
@@ -66,13 +66,16 @@
 - **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
 - **movielens-pre-schema-quiescence-live-main**: At approved source 04c32b68 the canonical forced-repair transition cleared cache_stale_watermark and admitted schema after two fresh quiescent snapshots. Ratings CREATE attempt 1 then hit the typed admin response deadline and retried correctly, but the fresh session received Workflow transition rejected: ownership lease expired while logs show periodic priority-recovery planning and schema_operations replacement work beginning during the CREATE interval. Report sha256=537d2f1f828ccde9362d54809b60692f9ff9e6e230fe24418c057805e077efdb; comparison sha256=1a1ea946bc9222134a7bb567701fd58602e454501a17a29b99fa1062d9a611dd; immutable archive sha256=05b3cfd7bf214920d8bcb982ffd4e1002e81080b53c73a3dacc8d7a202e0634e. This confirms the pre-recorded falsifier: two point snapshots can precede the scheduled partition-evaluation cycle, so the next deterministic attempt must require one full 60000ms evaluation interval of uninterrupted quiescence; no retry changes or unchanged live rerun. [data/examples/service-data-affinity-demo-archive/wave4-live-schema-lease-expired-2026-07-15T23-30-35-492Z.tar.gz]
 - **movielens-pre-schema-quiescence-live-main**: Independent verification rejected exact attempt: the stability-window timing behavior passes, but waitForAffinityDemoSchemaAdmission introduces a new complexity-ratchet violation and encodes inactive/reset lifecycle state with null contrary to ARCH-0014; replace it with an explicit stability-window state owner and extracted transition helper. [subagent:verify_snapshot_forced_repair_attempt6]
+- **movielens-pre-schema-quiescence-live-main**: Independent verification passed: exact cumulative same-base supersession uses explicit INACTIVE/OBSERVING stability state, preserves the full 60000ms reset and budget proofs plus forced-repair fail-closed behavior, adds no timing/retry/freshness owner, and returns scoped complexity to the base ratchet. [subagent:verify_snapshot_forced_repair_attempt6]
+- **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
+- **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 
 ## Theories
 - **theory-20260715-the-local-control-snapshot-owner-correctly** [active] system, mechanism The local control-snapshot owner correctly marks stale cache evidence pending, but the demo consumer never traverses the owner's existing forced authoritative repair command, so polling cannot refresh the evidence it requires., owner control_plane_snapshot_owner, modelGate npm run model:contracts
 - **theory-20260715-schema-admission-required-fields-optional-discount** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer observation, mechanism The shared admission parser must distinguish required authoritative snapshot fields from an optional client-side in-flight discount; otherwise missing required evidence can fail open, while requiring the non-produced discount makes every production snapshot unavailable., owner MovieLens shared control-snapshot admission parser, boundary authoritative snapshot envelope to quiescence classification, modelGate npm run model:contracts
 - **theory-20260715-idempotent-schema-admin-timeout-retry-owner** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism The existing ratings schema retry owner cannot distinguish an ambiguous admin response deadline from a terminal CREATE failure, so its documented fresh-session idempotent replay contract exits after one timed-out request., owner ratings schema retry owner, boundary admin response deadline to idempotent CREATE replay, modelGate npm run model:contracts
 - **theory-20260715-control-plane-snapshot-owner** [supported] frontier, frontier movielens-pre-schema-quiescence-live-main, layer ownership, mechanism control_plane_snapshot_owner, owner control_plane_snapshot_owner, boundary snapshot_freshness, modelGate npm run model:contracts
-- **theory-20260715-sampled-quiescence-window** [supported] frontier, frontier movielens-pre-schema-quiescence-live-main, layer scheduling, mechanism sampled_quiescence_window, owner pre_schema_admission_gate, boundary partition_evaluation_cycle_to_schema_lease, modelGate npm run model:contracts
+- **theory-20260715-sampled-quiescence-window** [falsified] frontier, frontier movielens-pre-schema-quiescence-live-main, layer scheduling, mechanism sampled_quiescence_window, owner pre_schema_admission_gate, boundary partition_evaluation_cycle_to_schema_lease, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-pre-schema-quiescence-live-main**: theory-20260715-sampled-quiescence-window
@@ -88,6 +91,7 @@
 - **theory-20260715-control-plane-snapshot-owner**: supported (scenario=failed, theory=supported, movement=moved_boundary) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
 - **theory-20260715-sampled-quiescence-window**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
 - **theory-20260715-sampled-quiescence-window**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-30-35-492Z.report.json]
+- **theory-20260715-sampled-quiescence-window**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
