@@ -301,21 +301,16 @@ function classifyConjunct(conjunct, index) {
     paramIndexes: [],
   };
   analyzeConjunctNode(conjunct, index, state);
-  if (!state.supported) {
-    return {kind: CONJUNCT_CLASS.UNSUPPORTED, paramIndexes: []};
-  }
-  if (state.unknownOwner || state.ownerRefs.size > 1) {
-    return {
-      kind: CONJUNCT_CLASS.RESIDUAL,
-      paramIndexes: state.paramIndexes,
-    };
-  }
+  const kind = !state.supported ? CONJUNCT_CLASS.UNSUPPORTED :
+    state.unknownOwner || state.ownerRefs.size > 1 ?
+      CONJUNCT_CLASS.RESIDUAL : CONJUNCT_CLASS.OWNED;
   const [firstOwner] = state.ownerRefs;
   const ownerRef = state.ownerRefs.size === 0 ? index.mainRef : firstOwner;
   return {
-    kind: CONJUNCT_CLASS.OWNED,
-    ownerRef,
-    paramIndexes: state.paramIndexes,
+    kind,
+    ...(kind === CONJUNCT_CLASS.OWNED ? {ownerRef} : {}),
+    paramIndexes: kind === CONJUNCT_CLASS.UNSUPPORTED ?
+      [] : state.paramIndexes,
   };
 }
 

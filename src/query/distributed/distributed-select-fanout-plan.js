@@ -25,6 +25,13 @@ const FANOUT_PLAN_KIND = {
   PARTIAL_AGGREGATE: 'partial_aggregate',
 };
 
+/** Internal construction states before the public plan kind is emitted. */
+const FANOUT_BUILD_STATE = {
+  ORIGINAL_RAW_ROWS: 'original_raw_rows',
+  DISTRIBUTED_RAW_ROWS: 'distributed_raw_rows',
+  PARTIAL_AGGREGATE: 'partial_aggregate',
+};
+
 /**
  * Deterministic partition-side aliases for combinable partial columns.
  * Prefixed so they can never collide with user column names, and stable
@@ -709,19 +716,25 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
   const renderExpr = renderExpression ||
     ((expr) => canonicalExpressionKey(expr));
 
-  if (!fanoutRewriteApplies(workingAst) ||
-    (hasAggregatesOrGroupBy(workingAst, specs) &&
-      (!allAggregatesCombinable(specs) ||
-        hasUnsupportedAggregateExpression(workingAst)))) {
+  const hasAggregatePlan = hasAggregatesOrGroupBy(workingAst, specs);
+  const mustUseOriginalRows = !fanoutRewriteApplies(workingAst) ||
+    (hasAggregatePlan && (!allAggregatesCombinable(specs) ||
+      hasUnsupportedAggregateExpression(workingAst)));
+  const buildState = mustUseOriginalRows ?
+    FANOUT_BUILD_STATE.ORIGINAL_RAW_ROWS :
+    hasAggregatePlan ?
+      FANOUT_BUILD_STATE.PARTIAL_AGGREGATE :
+      FANOUT_BUILD_STATE.DISTRIBUTED_RAW_ROWS;
+
+  switch (buildState) {
+  case FANOUT_BUILD_STATE.ORIGINAL_RAW_ROWS:
     return {
       kind: FANOUT_PLAN_KIND.RAW_ROWS,
       partitionAst: ast,
       partitionParams: params,
       combineSpec: null,
     };
-  }
-
-  if (!hasAggregatesOrGroupBy(workingAst, specs)) {
+  case FANOUT_BUILD_STATE.DISTRIBUTED_RAW_ROWS: {
     const partitionAst = workingAst;
     if (partitionAst.limit) {
       partitionAst.limit = buildOverfetchLimit(partitionAst.limit);
@@ -733,6 +746,9 @@ function buildSelectFanoutPlan(ast, params = [], renderExpression = null) {
       partitionParams: ordinals.map((ordinal) => params[ordinal]),
       combineSpec: null,
     };
+  }
+  default:
+    break;
   }
 
   const {partitionAst, combineSpec} = buildPartialAggregateParts(
