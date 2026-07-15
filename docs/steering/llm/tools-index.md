@@ -75,6 +75,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:partition-class-owner` — `node scripts/check-partition-class-owner.js`
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
 - `audit:runtime-grammar:file` — Check runtime owner-contract and grammar drift.
+- `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
 - `audit:shards` — `node scripts/generate-test-shards.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
@@ -279,4 +280,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-183 scripts indexed; 71 have a curated description, 112 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+184 scripts indexed; 71 have a curated description, 113 fall back to their raw command. Improve coverage in the two sources named in the header comment.
