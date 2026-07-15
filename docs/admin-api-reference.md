@@ -7,8 +7,9 @@ only, never a node-local mutation owner:
 - `sys-admin-meta` — cluster/node state queries, cache dumps
 - `sys-wasm-meta` — WASM module and service lifecycle
 
-Ingress is fixed on `ws://<host>:8081/api/admin/stream`. Dispatchable admin
-messages (`query`, `partition_callback`, `refresh`) are translated into
+Ingress defaults to `ws://<host>:8081/api/admin/stream` (REST port + 1) and can
+be overridden with `ADMIN_WEBSOCKET_PORT`. Dispatchable admin messages
+(`query`, `partition_callback`, `refresh`) are translated into
 canonical `Service_Message` envelopes (`messageId`, `serviceId`,
 `serviceType`, `operation`, `payload`, `traceId`) by
 `adaptAdminMessageToServiceMessage(...)` before execution, so one envelope

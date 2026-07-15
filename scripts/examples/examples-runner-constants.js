@@ -2,7 +2,11 @@
  * Shared constants for distributed SQL examples runner modules.
  */
 
-const DEFAULT_TARGET = 'ws://127.0.0.1:8081/api/admin/stream';
+import {LISTENER_PORT_DEFAULT} from
+  '../../src/config/listener-port-model.js';
+
+const DEFAULT_TARGET = 'ws://127.0.0.1:' +
+  `${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}/api/admin/stream`;
 const DEFAULT_EXAMPLES_DIR = 'examples/distributed-sql';
 const DEFAULT_OUTPUT_DIR = 'test-output/examples';
 const DEFAULT_TIMEOUT_MS = 30000;

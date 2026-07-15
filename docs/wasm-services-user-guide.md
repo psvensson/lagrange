@@ -41,7 +41,7 @@ Active operator path:
 ## 2. Prerequisites for the Current Rehearsal
 
 1. Node is running (`npm start`), and you know the admin WebSocket port.
-   - Fixed port: `8081` (system admin service port)
+   - Default port: REST port + 1 (`8081` when REST uses `8080`)
 2. You can connect to the admin stream:
    - `ws://<node-host>:8081/api/admin/stream`
 3. Use the JavaScript callback examples under `examples/distributed-sql/`.

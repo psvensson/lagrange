@@ -1,0 +1,235 @@
+diff --git a/docs/admin-api-reference.md b/docs/admin-api-reference.md
+index 46e4345efc8a032e7a0c94ad8e937e9073040151..aae7980549a280b5635ac9f638c8a7c410bd9534 100644
+--- a/docs/admin-api-reference.md
++++ b/docs/admin-api-reference.md
+@@ -7,8 +7,9 @@ only, never a node-local mutation owner:
+ - `sys-admin-meta` — cluster/node state queries, cache dumps
+ - `sys-wasm-meta` — WASM module and service lifecycle
+ 
+-Ingress is fixed on `ws://<host>:8081/api/admin/stream`. Dispatchable admin
+-messages (`query`, `partition_callback`, `refresh`) are translated into
++Ingress defaults to `ws://<host>:8081/api/admin/stream` (REST port + 1) and can
++be overridden with `ADMIN_WEBSOCKET_PORT`. Dispatchable admin messages
++(`query`, `partition_callback`, `refresh`) are translated into
+ canonical `Service_Message` envelopes (`messageId`, `serviceId`,
+ `serviceType`, `operation`, `payload`, `traceId`) by
+ `adaptAdminMessageToServiceMessage(...)` before execution, so one envelope
+diff --git a/docs/dockerhub-overview.md b/docs/dockerhub-overview.md
+index 7dc1dc6b6c1f7ac7f63af20872e9d47215baec02..a17c49bd9f8a32329d35e36668b0d5b215edc761 100644
+--- a/docs/dockerhub-overview.md
++++ b/docs/dockerhub-overview.md
+@@ -64,7 +64,7 @@ cluster. It opens three ports:
+ | Port | Purpose |
+ | --- | --- |
+ | `8080` | REST API (`/health` liveness, `/readyz` readiness) |
+-| `8081` | Admin websocket (fixed; does not move with the REST port) |
++| `8081` | Admin websocket (REST port + 1 by default) |
+ | `8082` | Node-to-node transport websocket (REST port + 2) |
+ 
+ To interact with the node, connect the admin CLI from a checkout of the
+@@ -78,9 +78,9 @@ npm run cli    # interactive terminal UI against localhost:8081
+ 
+ ## Multi-node cluster
+ 
+-One container per node — two nodes cannot share a network namespace because
+-the admin port is fixed at `8081`. Joiners point `SEED_NODE_ADDRESS` at the
+-seed and advertise an address other nodes can reach:
++One container per node is the normal deployment model. Listener ports derive
++from each node's REST base unless individually overridden. Joiners point
++`SEED_NODE_ADDRESS` at the seed and advertise an address other nodes can reach:
+ 
+ ```bash
+ docker network create lagrange-net
+@@ -118,7 +118,9 @@ Set via environment variables (`-e`):
+ | `TRANSPORT_WS_HOST` | localhost | Transport bind host; use `0.0.0.0` in containers |
+ | `ADMIN_WEBSOCKET_HOST` | `127.0.0.1` | Admin bind host; external binds require the explicit opt-in below |
+ | `ADMIN_ALLOW_INSECURE_EXTERNAL_BIND` | `false` | Set `true` only with an external host and authenticated ingress |
+-| `REST_API_PORT` | `8080` | REST port (transport = this + 2; admin stays `8081`) |
++| `REST_API_PORT` | `8080` | REST base port (admin = +1; transport = +2) |
++| `ADMIN_WEBSOCKET_PORT` | `REST_API_PORT + 1` | Optional admin WebSocket override |
++| `NODE_WS_PORT` | `REST_API_PORT + 2` | Optional transport WebSocket override |
+ | `DATA_DIR` | `./data` | Storage directory — `/app/data` inside the container |
+ | `NODE_ID` | unset | Leave unset (UUID minted and persisted on first start) |
+ | `LOG_LEVEL` / `LOG_PRETTY_PRINT` | `info` / `false` | Logging |
+@@ -143,7 +145,8 @@ The repository ships a Helm chart (1 seed + N joiner StatefulSets, name-first
+ addressing, per-pod PVCs) that deploys this image:
+ [charts/lagrange-node](https://codeberg.org/psvensson/lagrange/src/branch/main/charts/lagrange-node).
+ The chart publishes REST and transport only; its unauthenticated admin listener
+-is fixed to pod-local loopback and cannot be enabled through chart values.
++stays pod-local on loopback and cannot be externally enabled through chart
++values. Its port derives from `node.restPort` unless explicitly overridden.
+ 
+ ## Memory
+ 
+diff --git a/docs/wasm-services-user-guide.md b/docs/wasm-services-user-guide.md
+index 846e102231a893ab23d5920bf1df5df5af4b3b3c..f3297b1da819a3f8815ff8a3835e6fd16123a635 100644
+--- a/docs/wasm-services-user-guide.md
++++ b/docs/wasm-services-user-guide.md
+@@ -41,7 +41,7 @@ Active operator path:
+ ## 2. Prerequisites for the Current Rehearsal
+ 
+ 1. Node is running (`npm start`), and you know the admin WebSocket port.
+-   - Fixed port: `8081` (system admin service port)
++   - Default port: REST port + 1 (`8081` when REST uses `8080`)
+ 2. You can connect to the admin stream:
+    - `ws://<node-host>:8081/api/admin/stream`
+ 3. Use the JavaScript callback examples under `examples/distributed-sql/`.
+diff --git a/scripts/debug/admin-ws-connection-check.mjs b/scripts/debug/admin-ws-connection-check.mjs
+index e463d78860952d7a76498e3c4d9f5c0116357ff9..0b3cfa548ccde35d3deb573e5b0319a0d6a2dc73 100755
+--- a/scripts/debug/admin-ws-connection-check.mjs
++++ b/scripts/debug/admin-ws-connection-check.mjs
+@@ -7,6 +7,8 @@
+  */
+ 
+ import WebSocket from 'ws';
++import {LISTENER_PORT_DEFAULT} from
++  '../../src/config/listener-port-model.js';
+ 
+ const LOCAL_STR_HELP = '--help';
+ const LOCAL_STR_H = '-h';
+@@ -36,7 +38,8 @@ if (process.argv.includes(LOCAL_STR_HELP) || process.argv.includes(LOCAL_STR_H))
+   process.exit(LOCAL_NUM_ZERO);
+ }
+ 
+-const nodeAddress = process.argv[2] || 'localhost:8081';
++const nodeAddress = process.argv[2] ||
++  `localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}`;
+ const wsUrl = `ws://${nodeAddress}/api/admin/stream`;
+ 
+ console.log(`Connecting to ${wsUrl}...`);
+diff --git a/scripts/entrypoint-defaults.js b/scripts/entrypoint-defaults.js
+index 77aca471518215a63cd8e94caeea84b6437039cb..c60bfd313bab913d4240a1853916162e16186171 100644
+--- a/scripts/entrypoint-defaults.js
++++ b/scripts/entrypoint-defaults.js
+@@ -2,11 +2,12 @@
+ 
+ import {ADMIN_DEFAULT} from '../src/admin/admin-constants.js';
+ import {ENTRYPOINT_DEFAULT} from '../src/constants/entrypoint.js';
++import {TRANSPORT_DEFAULT} from '../src/constants/transport.js';
+ 
+ const payload = {
+   restApiPort: ENTRYPOINT_DEFAULT.REST_API_PORT,
+   adminPort: ADMIN_DEFAULT.WEBSOCKET_PORT,
+-  wsPortOffset: ENTRYPOINT_DEFAULT.WS_PORT_OFFSET,
++  transportWebSocketPort: TRANSPORT_DEFAULT.WS_PORT,
+   localhost: ENTRYPOINT_DEFAULT.LOCALHOST,
+ };
+ 
+diff --git a/scripts/examples/examples-runner-constants.js b/scripts/examples/examples-runner-constants.js
+index 2a51331da41323b46fe431bced41ece7bd3cb8ca..7cc494e8e2fbe4a3be6d2da254e3130b6c501084 100644
+--- a/scripts/examples/examples-runner-constants.js
++++ b/scripts/examples/examples-runner-constants.js
+@@ -2,7 +2,11 @@
+  * Shared constants for distributed SQL examples runner modules.
+  */
+ 
+-const DEFAULT_TARGET = 'ws://127.0.0.1:8081/api/admin/stream';
++import {LISTENER_PORT_DEFAULT} from
++  '../../src/config/listener-port-model.js';
++
++const DEFAULT_TARGET = 'ws://127.0.0.1:' +
++  `${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}/api/admin/stream`;
+ const DEFAULT_EXAMPLES_DIR = 'examples/distributed-sql';
+ const DEFAULT_OUTPUT_DIR = 'test-output/examples';
+ const DEFAULT_TIMEOUT_MS = 30000;
+diff --git a/scripts/start-admin-cli.sh b/scripts/start-admin-cli.sh
+index 33b9c3458b64d7edf7b6ce9a77f596dc57c6ac42..6cba3ce2f3d9f7457cf8383a1ae6614757abe5c7 100755
+--- a/scripts/start-admin-cli.sh
++++ b/scripts/start-admin-cli.sh
+@@ -5,7 +5,7 @@
+ # Usage: ./scripts/start-admin-cli.sh [node-address]
+ #
+ # Examples:
+-#   ./scripts/start-admin-cli.sh                    # Connect to localhost:8081
++#   ./scripts/start-admin-cli.sh                    # Connect to default admin port
+ #   ./scripts/start-admin-cli.sh localhost:8083    # Connect to second node
+ #
+ 
+diff --git a/test/scripts/entrypoint-defaults.test.js b/test/scripts/entrypoint-defaults.test.js
+index 96fe70e3284684e37fb8fa27b0722770598df8e4..42141ba6dada3ccb1a76de790eb8e97b6d70f997 100644
+--- a/test/scripts/entrypoint-defaults.test.js
++++ b/test/scripts/entrypoint-defaults.test.js
+@@ -1,10 +1,12 @@
+ import {describe, it} from 'node:test';
+ import assert from 'node:assert/strict';
++import fs from 'node:fs';
+ import path from 'node:path';
+ import {fileURLToPath} from 'node:url';
+ import {spawnSync} from 'node:child_process';
+ import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
+ import {ADMIN_DEFAULT} from '../../src/admin/admin-constants.js';
++import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ const ENTRYPOINT_DEFAULTS_SCRIPT = path.resolve(
+@@ -13,6 +15,61 @@ const ENTRYPOINT_DEFAULTS_SCRIPT = path.resolve(
+ );
+ 
+ describe('entrypoint-defaults script', () => {
++  it('keeps documentation and helpers aligned with listener defaults', () => {
++    const surfaceContracts = [
++      {
++        path: 'docs/admin-api-reference.md',
++        required: ['REST port + 1', 'ADMIN_WEBSOCKET_PORT'],
++        forbidden: /Ingress is fixed/iu,
++      },
++      {
++        path: 'docs/dockerhub-overview.md',
++        required: ['ADMIN_WEBSOCKET_PORT', 'NODE_WS_PORT'],
++        forbidden: /fixed at `8081`|admin stays `8081`/iu,
++      },
++      {
++        path: 'docs/wasm-services-user-guide.md',
++        required: ['REST port + 1'],
++        forbidden: /Fixed port:/u,
++      },
++      {
++        path: 'scripts/debug/admin-ws-connection-check.mjs',
++        required: ['LISTENER_PORT_DEFAULT'],
++        forbidden: /nodeAddress\s*=.*localhost:8081/u,
++      },
++      {
++        path: 'scripts/examples/examples-runner-constants.js',
++        required: ['LISTENER_PORT_DEFAULT'],
++        forbidden: /DEFAULT_TARGET\s*=\s*'ws:\/\/127\.0\.0\.1:8081/u,
++      },
++      {
++        path: 'scripts/start-admin-cli.sh',
++        required: ['default admin port'],
++        forbidden: /# Connect to localhost:8081/u,
++      },
++      {
++        path: 'scripts/entrypoint-defaults.js',
++        required: ['TRANSPORT_DEFAULT', 'transportWebSocketPort'],
++        forbidden: /wsPortOffset/u,
++      },
++    ];
++
++    for (const contract of surfaceContracts) {
++      const source = fs.readFileSync(contract.path, 'utf8');
++      for (const requiredText of contract.required) {
++        assert.ok(
++          source.includes(requiredText),
++          `${contract.path} should expose ${requiredText}`,
++        );
++      }
++      assert.doesNotMatch(
++        source,
++        contract.forbidden,
++        `${contract.path} should not retain a contradictory fixed default`,
++      );
++    }
++  });
++
+   it('returns expected default ports for helper scripts', () => {
+     const result = spawnSync(
+       'node',
+@@ -25,7 +82,7 @@ describe('entrypoint-defaults script', () => {
+ 
+     assert.equal(payload.restApiPort, ENTRYPOINT_DEFAULT.REST_API_PORT);
+     assert.equal(payload.adminPort, ADMIN_DEFAULT.WEBSOCKET_PORT);
+-    assert.equal(payload.wsPortOffset, ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
++    assert.equal(payload.transportWebSocketPort, TRANSPORT_DEFAULT.WS_PORT);
+     assert.equal(payload.localhost, ENTRYPOINT_DEFAULT.LOCALHOST);
+   });
+ });

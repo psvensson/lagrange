@@ -7,6 +7,8 @@
  */
 
 import WebSocket from 'ws';
+import {LISTENER_PORT_DEFAULT} from
+  '../../src/config/listener-port-model.js';
 
 const LOCAL_STR_HELP = '--help';
 const LOCAL_STR_H = '-h';
@@ -36,7 +38,8 @@ if (process.argv.includes(LOCAL_STR_HELP) || process.argv.includes(LOCAL_STR_H))
   process.exit(LOCAL_NUM_ZERO);
 }
 
-const nodeAddress = process.argv[2] || 'localhost:8081';
+const nodeAddress = process.argv[2] ||
+  `localhost:${LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET}`;
 const wsUrl = `ws://${nodeAddress}/api/admin/stream`;
 
 console.log(`Connecting to ${wsUrl}...`);

@@ -64,7 +64,7 @@ cluster. It opens three ports:
 | Port | Purpose |
 | --- | --- |
 | `8080` | REST API (`/health` liveness, `/readyz` readiness) |
-| `8081` | Admin websocket (fixed; does not move with the REST port) |
+| `8081` | Admin websocket (REST port + 1 by default) |
 | `8082` | Node-to-node transport websocket (REST port + 2) |
 
 To interact with the node, connect the admin CLI from a checkout of the
@@ -78,9 +78,9 @@ npm run cli    # interactive terminal UI against localhost:8081
 
 ## Multi-node cluster
 
-One container per node — two nodes cannot share a network namespace because
-the admin port is fixed at `8081`. Joiners point `SEED_NODE_ADDRESS` at the
-seed and advertise an address other nodes can reach:
+One container per node is the normal deployment model. Listener ports derive
+from each node's REST base unless individually overridden. Joiners point
+`SEED_NODE_ADDRESS` at the seed and advertise an address other nodes can reach:
 
 ```bash
 docker network create lagrange-net
@@ -118,7 +118,9 @@ Set via environment variables (`-e`):
 | `TRANSPORT_WS_HOST` | localhost | Transport bind host; use `0.0.0.0` in containers |
 | `ADMIN_WEBSOCKET_HOST` | `127.0.0.1` | Admin bind host; external binds require the explicit opt-in below |
 | `ADMIN_ALLOW_INSECURE_EXTERNAL_BIND` | `false` | Set `true` only with an external host and authenticated ingress |
-| `REST_API_PORT` | `8080` | REST port (transport = this + 2; admin stays `8081`) |
+| `REST_API_PORT` | `8080` | REST base port (admin = +1; transport = +2) |
+| `ADMIN_WEBSOCKET_PORT` | `REST_API_PORT + 1` | Optional admin WebSocket override |
+| `NODE_WS_PORT` | `REST_API_PORT + 2` | Optional transport WebSocket override |
 | `DATA_DIR` | `./data` | Storage directory — `/app/data` inside the container |
 | `NODE_ID` | unset | Leave unset (UUID minted and persisted on first start) |
 | `LOG_LEVEL` / `LOG_PRETTY_PRINT` | `info` / `false` | Logging |
@@ -143,7 +145,8 @@ The repository ships a Helm chart (1 seed + N joiner StatefulSets, name-first
 addressing, per-pod PVCs) that deploys this image:
 [charts/lagrange-node](https://codeberg.org/psvensson/lagrange/src/branch/main/charts/lagrange-node).
 The chart publishes REST and transport only; its unauthenticated admin listener
-is fixed to pod-local loopback and cannot be enabled through chart values.
+stays pod-local on loopback and cannot be externally enabled through chart
+values. Its port derives from `node.restPort` unless explicitly overridden.
 
 ## Memory
 

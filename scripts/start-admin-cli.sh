@@ -5,7 +5,7 @@
 # Usage: ./scripts/start-admin-cli.sh [node-address]
 #
 # Examples:
-#   ./scripts/start-admin-cli.sh                    # Connect to localhost:8081
+#   ./scripts/start-admin-cli.sh                    # Connect to default admin port
 #   ./scripts/start-admin-cli.sh localhost:8083    # Connect to second node
 #
 
