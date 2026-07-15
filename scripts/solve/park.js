@@ -37,6 +37,7 @@ import {appendEvent, loadQuest, readLog, projectState, rebuildState} from './sto
 import {REFLECTION_KIND_ALTITUDE} from './reflection.js';
 import {pendingFilePath} from './step.js';
 import {writeReport} from './report.js';
+import {buildEvidenceIdentity} from './evidence-identity.js';
 
 export {PARK_PROVENANCE_OPERATOR};
 
@@ -51,6 +52,9 @@ const PARK_ERROR_REASON_REQUIRED =
   'park: --reason <text> is required to justify the park';
 const PARK_ERROR_FRONTIER_REQUIRED =
   'park: --frontier <id> is required (no single open frontier to default to)';
+const PARK_ERROR_EVIDENCE_REQUIRED =
+  'park: --evidence must name a non-empty evidence path';
+const PARK_ERROR_EVIDENCE_MISSING = 'park evidence file not found';
 const PARK_OUTPUT_NEWLINE = '\n';
 const ABSENT_PARK_EXPLANATION = null;
 
@@ -77,6 +81,27 @@ function defaultOpenFrontier(state) {
 function allFrontiersParkedExhausted(state) {
   return state.frontiers.every(
     (f) => f.status === STATUS_PARKED && f.parkKind === PARK_KIND_EXHAUSTED);
+}
+
+function parkTerminalEvidence(root, quest, evidence) {
+  if (evidence === undefined || evidence === null) {
+    return {evidence: null};
+  }
+  if (typeof evidence !== 'string' || evidence.trim().length === 0) {
+    throw new Error(PARK_ERROR_EVIDENCE_REQUIRED);
+  }
+  const evidenceIdentity = buildEvidenceIdentity(root, evidence, {
+    probe: quest.doneWhen?.probe || null,
+    args: quest.doneWhen?.args || null,
+  });
+  if (evidenceIdentity.exists !== true) {
+    throw new Error(`${PARK_ERROR_EVIDENCE_MISSING}: ${evidence}`);
+  }
+  return {
+    evidence,
+    evidenceIdentity,
+    evidenceFingerprint: evidenceIdentity.fingerprint,
+  };
 }
 
 export function assessPark(root, quest, frontierId) {
@@ -126,6 +151,7 @@ export function parkFrontier(root, args = {}) {
   if (!assessment.ok) {
     throw new Error(`park refused: ${assessment.reason}`);
   }
+  const terminalEvidence = parkTerminalEvidence(root, quest, args.evidence);
   const event = appendEvent(root, id, {
     type: EVENT_PARK,
     frontier: frontierId,
@@ -144,7 +170,7 @@ export function parkFrontier(root, args = {}) {
     appendEvent(root, id, {
       type: EVENT_QUEST,
       status: STATUS_EXHAUSTED,
-      evidence: args.evidence || null,
+      ...terminalEvidence,
       provenance: PARK_PROVENANCE_OPERATOR,
     });
   }

@@ -1,0 +1,180 @@
+diff --git a/scripts/solve/park.js b/scripts/solve/park.js
+index f6e1ff8420225abc82c5d92282d18337245380e8..5eb17d30e2d7fcefe4a90cf018101bcef142c1e4 100644
+--- a/scripts/solve/park.js
++++ b/scripts/solve/park.js
+@@ -37,6 +37,7 @@ import {appendEvent, loadQuest, readLog, projectState, rebuildState} from './sto
+ import {REFLECTION_KIND_ALTITUDE} from './reflection.js';
+ import {pendingFilePath} from './step.js';
+ import {writeReport} from './report.js';
++import {buildEvidenceIdentity} from './evidence-identity.js';
+ 
+ export {PARK_PROVENANCE_OPERATOR};
+ 
+@@ -51,6 +52,9 @@ const PARK_ERROR_REASON_REQUIRED =
+   'park: --reason <text> is required to justify the park';
+ const PARK_ERROR_FRONTIER_REQUIRED =
+   'park: --frontier <id> is required (no single open frontier to default to)';
++const PARK_ERROR_EVIDENCE_REQUIRED =
++  'park: --evidence must name a non-empty evidence path';
++const PARK_ERROR_EVIDENCE_MISSING = 'park evidence file not found';
+ const PARK_OUTPUT_NEWLINE = '\n';
+ const ABSENT_PARK_EXPLANATION = null;
+ 
+@@ -79,6 +83,27 @@ function allFrontiersParkedExhausted(state) {
+     (f) => f.status === STATUS_PARKED && f.parkKind === PARK_KIND_EXHAUSTED);
+ }
+ 
++function parkTerminalEvidence(root, quest, evidence) {
++  if (evidence === undefined || evidence === null) {
++    return {evidence: null};
++  }
++  if (typeof evidence !== 'string' || evidence.trim().length === 0) {
++    throw new Error(PARK_ERROR_EVIDENCE_REQUIRED);
++  }
++  const evidenceIdentity = buildEvidenceIdentity(root, evidence, {
++    probe: quest.doneWhen?.probe || null,
++    args: quest.doneWhen?.args || null,
++  });
++  if (evidenceIdentity.exists !== true) {
++    throw new Error(`${PARK_ERROR_EVIDENCE_MISSING}: ${evidence}`);
++  }
++  return {
++    evidence,
++    evidenceIdentity,
++    evidenceFingerprint: evidenceIdentity.fingerprint,
++  };
++}
++
+ export function assessPark(root, quest, frontierId) {
+   const log = readLog(root, quest.id);
+   const state = projectState(quest, log);
+@@ -126,6 +151,7 @@ export function parkFrontier(root, args = {}) {
+   if (!assessment.ok) {
+     throw new Error(`park refused: ${assessment.reason}`);
+   }
++  const terminalEvidence = parkTerminalEvidence(root, quest, args.evidence);
+   const event = appendEvent(root, id, {
+     type: EVENT_PARK,
+     frontier: frontierId,
+@@ -144,7 +170,7 @@ export function parkFrontier(root, args = {}) {
+     appendEvent(root, id, {
+       type: EVENT_QUEST,
+       status: STATUS_EXHAUSTED,
+-      evidence: args.evidence || null,
++      ...terminalEvidence,
+       provenance: PARK_PROVENANCE_OPERATOR,
+     });
+   }
+diff --git a/test/solve/park.test.js b/test/solve/park.test.js
+index d0e319acbf759f196b2b4d64e6825c3b67bf6e7c..daade8d456bfe1a2313448371b4d62258b95b800 100644
+--- a/test/solve/park.test.js
++++ b/test/solve/park.test.js
+@@ -1,4 +1,5 @@
+ import tap from 'tap';
++import crypto from 'node:crypto';
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import os from 'node:os';
+@@ -8,6 +9,8 @@ import {saveQuest, appendEvent, projectState, readLog}
+ import {parkFrontier, assessPark, PARK_PROVENANCE_OPERATOR}
+   from '../../scripts/solve/park.js';
+ import {pendingFilePath} from '../../scripts/solve/step.js';
++import {auditQuest} from '../../scripts/solve/audit.js';
++import {buildNextProjection} from '../../scripts/solve/next.js';
+ 
+ const SC = 'operator-park-demo';
+ 
+@@ -30,6 +33,20 @@ function makeQuest(root, frontiers = null) {
+   return quest;
+ }
+ 
++function makeOracleQuest(root, evidence) {
++  const probe = {probe: 'oracle', args: {file: evidence}};
++  const quest = {
++    id: 'park-oracle-demo',
++    statement: 'operator-park oracle evidence demo quest.',
++    priority: 1,
++    class: 'process',
++    doneWhen: probe,
++    frontiers: [{id: 'park-oracle-demo-main', priority: 1, metric: probe}],
++  };
++  saveQuest(root, quest);
++  return quest;
++}
++
+ function recordAltitudeReflection(root, quest, note) {
+   appendEvent(root, quest.id, {
+     type: 'reflection',
+@@ -127,6 +144,72 @@ tap.test('park (operator-decision frontier terminal)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('content-addresses done:false evidence and keeps exhaustion terminal',
++    (t) => {
++      const root = tmp();
++      const evidence = 'solve/oracle/park-oracle-demo.json';
++      const evidencePath = path.join(root, evidence);
++      const evidenceBytes = '{"metric":1,"target":0,"done":false}\n';
++      fs.mkdirSync(path.dirname(evidencePath), {recursive: true});
++      fs.writeFileSync(evidencePath, evidenceBytes);
++      const quest = makeOracleQuest(root, evidence);
++      recordAltitudeReflection(root, quest, 'frame refuted; preserve evidence');
++
++      const result = parkFrontier(root, {
++        id: quest.id,
++        reason: 'frame refuted; done:false is the honest terminal evidence',
++        evidence,
++      });
++      t.equal(result.questExhausted, true);
++
++      const log = readLog(root, quest.id);
++      const terminal = log.find((event) =>
++        event.type === 'quest' && event.status === 'exhausted');
++      t.equal(terminal.evidence, evidence);
++      t.equal(terminal.evidenceIdentity.exists, true);
++      t.equal(terminal.evidenceIdentity.path, evidence);
++      t.equal(
++        terminal.evidenceIdentity.sha256,
++        crypto.createHash('sha256').update(evidenceBytes).digest('hex'),
++        'terminal identity binds the exact oracle bytes',
++      );
++      t.equal(
++        terminal.evidenceFingerprint,
++        terminal.evidenceIdentity.fingerprint,
++        'terminal fingerprint is the content identity fingerprint',
++      );
++      t.equal(terminal.evidenceIdentity.probe, 'oracle');
++      t.same(terminal.evidenceIdentity.args, quest.doneWhen.args);
++
++      const audit = auditQuest(root, quest);
++      t.equal(audit.status, 'pass', audit.problems.map((item) => item.message));
++      t.equal(audit.state.questStatus, 'exhausted');
++      const next = buildNextProjection(root, quest.id);
++      t.equal(next.quest.status, 'exhausted');
++      t.match(next.action.value, /handoff --id park-oracle-demo --commit/u,
++        'next remains on terminal handoff instead of evidence ingestion');
++      fs.rmSync(root, {recursive: true, force: true});
++      t.end();
++    });
++
++  t.test('refuses missing supplied evidence before appending a park', (t) => {
++    const root = tmp();
++    const quest = makeOracleQuest(root, 'solve/oracle/missing.json');
++    recordAltitudeReflection(root, quest, 'frame refuted; evidence required');
++    t.throws(
++      () => parkFrontier(root, {
++        id: quest.id,
++        reason: 'operator decision',
++        evidence: 'solve/oracle/missing.json',
++      }),
++      /park evidence file not found/u,
++    );
++    t.notOk(readLog(root, quest.id).some((event) => event.type === 'park'),
++      'validation failure leaves the append-only log without a partial park');
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('quest stays open while another frontier is still active', (t) => {
+     const root = tmp();
+     const metric = {probe: 'scenario-harness',

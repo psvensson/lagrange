@@ -1,4 +1,5 @@
 import tap from 'tap';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -8,6 +9,8 @@ import {saveQuest, appendEvent, projectState, readLog}
 import {parkFrontier, assessPark, PARK_PROVENANCE_OPERATOR}
   from '../../scripts/solve/park.js';
 import {pendingFilePath} from '../../scripts/solve/step.js';
+import {auditQuest} from '../../scripts/solve/audit.js';
+import {buildNextProjection} from '../../scripts/solve/next.js';
 
 const SC = 'operator-park-demo';
 
@@ -25,6 +28,20 @@ function makeQuest(root, frontiers = null) {
     doneWhen: {probe: 'scenario-harness',
       args: {scenario: SC, reportDir: 'reports', metric: 'priority', consecutive: 3}},
     frontiers: frontiers || [{id: 'park-demo-main', priority: 1, metric}],
+  };
+  saveQuest(root, quest);
+  return quest;
+}
+
+function makeOracleQuest(root, evidence) {
+  const probe = {probe: 'oracle', args: {file: evidence}};
+  const quest = {
+    id: 'park-oracle-demo',
+    statement: 'operator-park oracle evidence demo quest.',
+    priority: 1,
+    class: 'process',
+    doneWhen: probe,
+    frontiers: [{id: 'park-oracle-demo-main', priority: 1, metric: probe}],
   };
   saveQuest(root, quest);
   return quest;
@@ -123,6 +140,72 @@ tap.test('park (operator-decision frontier terminal)', async (t) => {
     t.equal(frontier.status, 'parked');
     t.equal(frontier.parkKind, 'exhausted');
     t.equal(state.questStatus, 'exhausted', 'quest-level terminal recorded');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('content-addresses done:false evidence and keeps exhaustion terminal',
+    (t) => {
+      const root = tmp();
+      const evidence = 'solve/oracle/park-oracle-demo.json';
+      const evidencePath = path.join(root, evidence);
+      const evidenceBytes = '{"metric":1,"target":0,"done":false}\n';
+      fs.mkdirSync(path.dirname(evidencePath), {recursive: true});
+      fs.writeFileSync(evidencePath, evidenceBytes);
+      const quest = makeOracleQuest(root, evidence);
+      recordAltitudeReflection(root, quest, 'frame refuted; preserve evidence');
+
+      const result = parkFrontier(root, {
+        id: quest.id,
+        reason: 'frame refuted; done:false is the honest terminal evidence',
+        evidence,
+      });
+      t.equal(result.questExhausted, true);
+
+      const log = readLog(root, quest.id);
+      const terminal = log.find((event) =>
+        event.type === 'quest' && event.status === 'exhausted');
+      t.equal(terminal.evidence, evidence);
+      t.equal(terminal.evidenceIdentity.exists, true);
+      t.equal(terminal.evidenceIdentity.path, evidence);
+      t.equal(
+        terminal.evidenceIdentity.sha256,
+        crypto.createHash('sha256').update(evidenceBytes).digest('hex'),
+        'terminal identity binds the exact oracle bytes',
+      );
+      t.equal(
+        terminal.evidenceFingerprint,
+        terminal.evidenceIdentity.fingerprint,
+        'terminal fingerprint is the content identity fingerprint',
+      );
+      t.equal(terminal.evidenceIdentity.probe, 'oracle');
+      t.same(terminal.evidenceIdentity.args, quest.doneWhen.args);
+
+      const audit = auditQuest(root, quest);
+      t.equal(audit.status, 'pass', audit.problems.map((item) => item.message));
+      t.equal(audit.state.questStatus, 'exhausted');
+      const next = buildNextProjection(root, quest.id);
+      t.equal(next.quest.status, 'exhausted');
+      t.match(next.action.value, /handoff --id park-oracle-demo --commit/u,
+        'next remains on terminal handoff instead of evidence ingestion');
+      fs.rmSync(root, {recursive: true, force: true});
+      t.end();
+    });
+
+  t.test('refuses missing supplied evidence before appending a park', (t) => {
+    const root = tmp();
+    const quest = makeOracleQuest(root, 'solve/oracle/missing.json');
+    recordAltitudeReflection(root, quest, 'frame refuted; evidence required');
+    t.throws(
+      () => parkFrontier(root, {
+        id: quest.id,
+        reason: 'operator decision',
+        evidence: 'solve/oracle/missing.json',
+      }),
+      /park evidence file not found/u,
+    );
+    t.notOk(readLog(root, quest.id).some((event) => event.type === 'park'),
+      'validation failure leaves the append-only log without a partial park');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
