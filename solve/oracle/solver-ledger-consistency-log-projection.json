@@ -1,0 +1,26 @@
+{
+  "metric": 3,
+  "target": 0,
+  "done": false,
+  "classification": "implementation_green_wave0_ledger_reconciliation_pending",
+  "evidence": {
+    "cleanCloneWithoutStatePassed": true,
+    "nonIdOracleTargetPassed": true,
+    "freshDoneWhenFailureReopenPassed": true,
+    "verifierRejectionReopenPassed": true,
+    "missingOpenProbeWarningPreserved": true,
+    "focusedFixtureAssertionsPassed": 20,
+    "completeFocusedTestPassed": false,
+    "eslintPassed": true,
+    "scopedComplexityPassed": true,
+    "scopedCognitiveComplexityPassed": true,
+    "scopedGuidelineAuditsPassed": true,
+    "fileSizeAuditPassed": true,
+    "sharedGeneratedSurfacesWritten": false,
+    "wave0IntegrationErrorCount": 3,
+    "wave0IntegrationResidue": [
+      "core-logic-live-validation epic lacks status frontmatter",
+      "two historical solved Quests seal ignored test-output oracle targets"
+    ]
+  }
+}

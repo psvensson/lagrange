@@ -1,9 +1,9 @@
 // Ledger consistency check — a repo-wide guard against metadata/state drift in the
-// Solver planning ledger (epics + quests + oracles + state).
+// Solver planning ledger (epics + quests + logs + oracles).
 //
 // WHY THIS EXISTS. An audit (2026-07-01) found the ledger's write-once metadata rots:
 // an epic's `status:` lags a terminal outcome, a quest is recorded solved while its
-// closure evidence is absent, an oracle says done while no terminal state was written.
+// closure evidence is absent, an oracle says done while no terminal outcome was written.
 // The bodies stay accurate; the small structured fields drift because they are hand-
 // maintained copies. This check keys ONLY on those structured fields — never on prose
 // keywords (a decision-log that mentions "EXHAUSTED" about a sub-lever does NOT mean
@@ -11,18 +11,18 @@
 // Each rule below fired on a real, verified inconsistency or is a hard structural
 // invariant; none flags a case that was confirmed legitimate.
 //
-// Pure projection: reads the sealed quest files, epic frontmatter, oracle verdicts,
-// and state snapshots; asserts nothing they do not already contain. `checkLedgerConsistency`
-// takes a root so it is testable over fixtures; run directly, it checks the repo and
-// exits non-zero on any ERROR (WARNINGS never gate).
+// Pure projection: reads sealed quest files, append-only event logs, epic frontmatter,
+// and the exact oracle targets named by those quests; asserts nothing they do not
+// already contain. `checkLedgerConsistency` takes a root so it is testable over
+// fixtures; run directly, it checks the repo and exits non-zero on any ERROR
+// (WARNINGS never gate).
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {projectState, readLog} from './store.js';
 
 const EPICS_DIR = 'solve/epics';
 const QUESTS_DIR = 'solve/quests';
-const ORACLE_DIR = 'solve/oracle';
-const STATE_DIR = 'solve/state';
 const EPIC_SKIP = new Set(['README.md', '_template.md']);
 
 // Base status vocabulary. A status is valid if it equals or is prefixed by one of
@@ -81,6 +81,66 @@ function checkEpics(root, errors, warnings) {
 }
 
 // --- Quest rules -----------------------------------------------------------
+function projectQuestLedger(root, id, quest) {
+  const doneWhen = quest.doneWhen || {};
+  const isOracleProbe = doneWhen.probe === 'oracle';
+  const probeFile = isOracleProbe && doneWhen.args ? doneWhen.args.file : null;
+  const probePath = probeFile ? path.join(root, probeFile) : null;
+  const probeFileExists = probePath ? fs.existsSync(probePath) : null;
+  return {
+    isOracleProbe,
+    oracle: probeFileExists ? readJson(probePath) : null,
+    probeFile,
+    probeFileExists,
+    questStatus: projectState(quest, readLog(root, id)).questStatus,
+  };
+}
+
+function missingSolvedOracleError(id, projection) {
+  const {isOracleProbe, probeFile, probeFileExists, questStatus} =
+    projection;
+  // Q1 (ERROR): a quest recorded solved whose closure probe is an oracle file
+  // MUST have that file present — else its sealed closure cannot be re-evaluated.
+  if (questStatus === 'solved' && isOracleProbe && probeFile && !probeFileExists) {
+    return `quest ${id}: questStatus=solved but its oracle-probe target ` +
+      `\`${probeFile}\` is missing (Q1)`;
+  }
+  return null;
+}
+
+function openDoneOracleWarning(id, projection) {
+  const {oracle, questStatus} = projection;
+  // Q2 (WARN): the sealed oracle says done:true but no terminal outcome was
+  // recorded in the append-only log — the verdict landed without closure.
+  if (oracle && oracle.done === true && !TERMINAL_STATE.has(questStatus)) {
+    return `quest ${id}: oracle done=true but projected questStatus=` +
+      `${questStatus ?? 'MISSING'} (not terminal) (Q2)`;
+  }
+  return null;
+}
+
+function missingOpenOracleWarning(id, projection) {
+  const {isOracleProbe, probeFile, probeFileExists, questStatus} = projection;
+  // Q3 (WARN): a not-yet-solved quest whose oracle-probe target is missing cannot
+  // ever evaluate its own closure (latent orphan). Not an ERROR — a freshly authored
+  // quest legitimately has no oracle yet — but worth surfacing.
+  if (questStatus !== 'solved' && isOracleProbe && probeFile && !probeFileExists) {
+    return `quest ${id}: oracle-probe target \`${probeFile}\` missing ` +
+      `(questStatus=${questStatus ?? 'none'}; cannot evaluate closure) (Q3)`;
+  }
+  return null;
+}
+
+function checkQuestProjection(id, projection) {
+  return {
+    errors: [missingSolvedOracleError(id, projection)].filter(Boolean),
+    warnings: [
+      openDoneOracleWarning(id, projection),
+      missingOpenOracleWarning(id, projection),
+    ].filter(Boolean),
+  };
+}
+
 function checkQuests(root, errors, warnings) {
   const qdir = path.join(root, QUESTS_DIR);
   for (const name of listFiles(qdir, '.json')) {
@@ -90,38 +150,9 @@ function checkQuests(root, errors, warnings) {
       errors.push(`quest ${name}: not valid JSON`);
       continue;
     }
-    const state = readJson(path.join(root, STATE_DIR, `${id}.json`));
-    const questStatus = state && state.questStatus;
-    const oraclePath = path.join(root, ORACLE_DIR, `${id}.json`);
-    const oracle = fs.existsSync(oraclePath) ? readJson(oraclePath) : null;
-
-    const dw = quest.doneWhen || {};
-    const isOracleProbe = dw.probe === 'oracle';
-    const probeFile = isOracleProbe && dw.args ? dw.args.file : null;
-    const probeFileExists = probeFile ?
-      fs.existsSync(path.join(root, probeFile)) : null;
-
-    // Q1 (ERROR): a quest recorded solved whose closure probe is an oracle file
-    // MUST have that file present — else `solve status` re-reads it as undecided.
-    if (questStatus === 'solved' && isOracleProbe && probeFile && !probeFileExists) {
-      errors.push(`quest ${id}: questStatus=solved but its oracle-probe target ` +
-        `\`${probeFile}\` is missing (Q1)`);
-    }
-
-    // Q2 (WARN): an oracle verdict says done:true but no terminal state was recorded
-    // — the verdict landed without the ledger closing the quest.
-    if (oracle && oracle.done === true && !TERMINAL_STATE.has(questStatus)) {
-      warnings.push(`quest ${id}: oracle done=true but state questStatus=` +
-        `${questStatus ?? 'MISSING'} (not terminal) (Q2)`);
-    }
-
-    // Q3 (WARN): a not-yet-solved quest whose oracle-probe target is missing cannot
-    // ever evaluate its own closure (latent orphan). Not an ERROR — a freshly authored
-    // quest legitimately has no oracle yet — but worth surfacing.
-    if (questStatus !== 'solved' && isOracleProbe && probeFile && !probeFileExists) {
-      warnings.push(`quest ${id}: oracle-probe target \`${probeFile}\` missing ` +
-        `(questStatus=${questStatus ?? 'none'}; cannot evaluate closure) (Q3)`);
-    }
+    const findings = checkQuestProjection(id, projectQuestLedger(root, id, quest));
+    errors.push(...findings.errors);
+    warnings.push(...findings.warnings);
   }
 }
 

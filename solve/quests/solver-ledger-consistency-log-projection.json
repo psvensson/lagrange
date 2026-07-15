@@ -1,0 +1,47 @@
+{
+  "id": "solver-ledger-consistency-log-projection",
+  "authoringContractVersion": 1,
+  "statement": "Ledger consistency projects every Quest from its sealed file and append-only event log via projectState, evaluates the exact oracle-probe file sealed in doneWhen, never depends on ignored solve/state cache files, and preserves warnings for open Quests whose sealed oracle probe is missing. doneWhen: solve/oracle/solver-ledger-consistency-log-projection.json is done only when deterministic regressions cover clean-clone/no-state, a non-ID oracle target, terminal reopen by fresh failed closure evidence, terminal reopen by verifier rejection, and the intended missing-probe warning, with focused Solver tests and static checks green.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "3274ad20a73f04a4bbcb61533d05e77548aa20e7"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-ledger-consistency-log-projection.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-ledger-consistency-log-projection-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-ledger-consistency-log-projection.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "append-only-log-authority",
+      "statement": "Read current Quest status only by folding solve/log/<id>.ndjson through projectState; solve/state remains a deletable cache and must not affect the result."
+    },
+    {
+      "id": "sealed-probe-authority",
+      "statement": "Oracle consistency checks must evaluate quest.doneWhen.args.file exactly and must not derive an oracle filename from the Quest id."
+    }
+  ]
+}
