@@ -21,7 +21,7 @@
 - Latest evidence: solve/oracle/partition-class-ladder-single-owner-table.json
 - Selected theory: none
 - Next move: continue supervised step for partition-class-ladder-single-owner-table-main
-- No longer current: unknown
+- No longer current: unknown; Do not terminalize this parent by approving the current aggregate alone, overriding scope pressure, rewriting historical events, or changing runtime source; none repairs legacy_integrity_unverifiable.
 
 ## Continuation
 - Status: blocked-scope
@@ -30,7 +30,7 @@
 
 ## Scope Pressure
 - Changed files: 10
-- Change bytes: 481185
+- Change bytes: 193366
 - Owner areas: architecture, package.json, scripts/check-partition-class-owner.js, scripts/partition-class-owner-ast.js, scripts/partition-class-owner-contract.js, scripts/partition-class-owner-gates.js, scripts/partition-class-owner-parameter-flow.js, solve, test/scripts
 - Categories: docs, other, test, workflow
 - Action: land or separate 9 owner areas: architecture, package.json, scripts/check-partition-class-owner.js, scripts/partition-class-owner-ast.js, scripts/partition-class-owner-contract.js, scripts/partition-class-owner-gates.js, scripts/partition-class-owner-parameter-flow.js, solve, test/scripts
@@ -85,6 +85,9 @@
 - **partition-class-ladder-single-owner-table-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
 - **partition-class-ladder-single-owner-table-main**: Independent isolated verification passed stabilized attempt-8: canonical eight-path same-base delta and main postimages remained exact, every rejected source path is covered, 63 adversarial cases and 123 focused assertions pass, public exports and strict sizes hold, lint/dependencies/cycles/model contracts are green, and live metric/raw/collapsed census is 0/0/0 without mutating the reviewed worktree. [subagent:verify_node_partition_class]
 - **partition-class-ladder-single-owner-table-main**: Independent aggregate verification passed the stable 97,581-byte eight-path delta: it is byte-identical to attempt-8, excludes solve control-plane files, covers every rejected same-base source path, preserves the reviewed model-report blob and main canonical hash, and the isolated corpus, focused tests, strict sizes, lint, dependencies, cycles, models, exports, package command, and live 0/0 census are green. [subagent:verify_node_partition_class]
+- **partition-class-ladder-single-owner-table-main**: Current-HEAD reconciliation fails closed: audit reports legacy_integrity_unverifiable from a pre-v2 violation followed by an accepted attempt, seven historical attempts whose mixed workflow changes belong in bounded tooling Quests, and no approval for the current aggregate sha256:9e3eb74a6154f430b7061c367b9ced3a6d9793e049b0c3543c6684a8544a6756. The green contract-v3 0/0 oracle proves the source outcome but cannot repair append-only integrity. Decompose the residual into a new process migration Quest limited to replacement evidence and control-plane reconciliation; retain the already-landed bounded child Quests as source authority and make no parent source attempt. (rules out: Do not terminalize this parent by approving the current aggregate alone, overriding scope pressure, rewriting historical events, or changing runtime source; none repairs legacy_integrity_unverifiable.) [subagent:partition_q2_closure]
+- **partition-class-ladder-single-owner-table-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
+- **partition-class-ladder-single-owner-table-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
 
 ## Theories
 - **option5-parent-generated-evidence-system** [active] system, mechanism generated_evidence_postimage_drift, owner model_contract_evidence_generator, modelGate npm run model:contracts
