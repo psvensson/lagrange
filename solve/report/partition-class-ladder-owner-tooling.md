@@ -19,10 +19,11 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: ownership_gap
-- Movement: first blocker observed: unknown
+- Movement: solved: unknown -> unknown
 - Latest evidence: solve/oracle/partition-class-ladder-single-owner-table.json
 - Selected theory: none
 - Next move: continue supervised step for partition-class-ladder-owner-tooling-main
+- No longer current: unknown
 
 ## Continuation
 - Status: allowed
@@ -50,6 +51,8 @@
 - **partition-class-ladder-owner-tooling-main**: The sealed unresolved owner-tooling symptom does not reproduce on exact source HEAD 6aeeed6f: package.json still exposes audit:partition-class-owner, the analyzer's full --oracle --with-gates run reports contract v3, owner contract passed, raw/collapsed 0/0, metric/target 0/0, done true, and every required gate green. [solve/oracle/partition-class-ladder-single-owner-table.json]
 - **partition-class-ladder-owner-tooling-main**: Current committed contract/model evidence remains the active-gate TLC route report, while the exact source-HEAD analyzer rerun passed its decision-table-model gate; this is later model evidence for the historical tooling attempt without modifying source or baselines. [contract:architecture/contracts/evidence/active-gate-tlc-route.model.report.json]
 - **partition-class-ladder-owner-tooling-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 119 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
+- **partition-class-ladder-owner-tooling-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
+- **partition-class-ladder-owner-tooling-main**: Ingested evidence from partition-class-ladder-single-owner-table.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-single-owner-table.json]
 
 ## Theories
 _(none recorded)_
