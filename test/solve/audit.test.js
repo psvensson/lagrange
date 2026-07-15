@@ -4,6 +4,10 @@ import path from 'node:path';
 import os from 'node:os';
 
 import {auditQuest} from '../../scripts/solve/audit.js';
+import {
+  classifyQuestScope,
+  inspectChangeArtifact,
+} from '../../scripts/solve/change-artifact.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {writeReport} from '../../scripts/solve/report.js';
 import {appendEvent, readLog, saveQuest} from '../../scripts/solve/store.js';
@@ -59,6 +63,88 @@ function approveLatestAttempt(root, quest, frontier = `${quest.id}-main`) {
 }
 
 tap.test('Quest audit', async (t) => {
+  t.test('source citations own scope while artifact filename tokens do not', (t) => {
+    const root = tmp();
+    const runtimeQuest = {
+      id: 'partition-owner-runtime',
+      class: 'process',
+      statement: 'src/bootstrap/system-partition-classification.js owns the ' +
+        'runtime result; evidence is solve/oracle/partition-owner-contract.json.',
+      frontiers: [{id: 'partition-owner-runtime-main'}],
+    };
+    const workflowQuest = {
+      id: 'scope-owner-check',
+      class: 'process',
+      statement: 'scripts/solve/change-artifact.js owns source classification.',
+      frontiers: [{id: 'scope-owner-check-main'}],
+    };
+    const designQuest = {
+      id: 'owner-record',
+      class: 'process',
+      statement: 'architecture/contracts/core-system-logic.md is the ' +
+        'authoritative design.',
+      frontiers: [{id: 'owner-record-main'}],
+    };
+
+    t.equal(classifyQuestScope(runtimeQuest), 'runtime',
+      'an evidence filename cannot override the cited runtime source owner');
+    t.equal(classifyQuestScope({
+      id: 'artifact-reference-only',
+      class: 'process',
+      statement: 'Evidence is solve/oracle/owner-contract.json and ' +
+        'solve/changes/artifact-reference-only/contract.diff.',
+      frontiers: [{id: 'artifact-reference-only-main'}],
+    }), 'runtime', 'artifact filenames alone do not create source-owner scope');
+    t.equal(classifyQuestScope(workflowQuest), 'workflow',
+      'a genuine Solver source path classifies as workflow scope');
+    t.equal(classifyQuestScope(designQuest), 'workflow',
+      'a genuine architecture-contract citation survives artifact masking');
+    t.equal(classifyQuestScope({
+      id: 'generic-scope-check',
+      class: 'process',
+      statement: 'The architecture contract remains the governing result.',
+      frontiers: [{id: 'generic-scope-check-main'}],
+    }), 'workflow', 'generic workflow prose keeps the legacy fallback');
+    t.equal(classifyQuestScope({
+      ...workflowQuest,
+      class: 'product',
+    }), 'runtime', 'declared product scope remains authoritative');
+
+    const runtimeChange = makeDiff(
+      root, runtimeQuest.id, 'runtime', 'src/bootstrap/runtime-owner.js');
+    const workflowChange = makeDiff(
+      root, runtimeQuest.id, 'workflow', 'scripts/solve/runtime-owner.js');
+    t.same(inspectChangeArtifact(root, runtimeQuest, runtimeChange).problems, [],
+      'runtime source is accepted under the runtime citation');
+    t.match(
+      inspectChangeArtifact(root, runtimeQuest, workflowChange).problems.join(' '),
+      /workflow changes must be recorded/u,
+      'a workflow artifact remains rejected under runtime scope',
+    );
+
+    const workflowRuntimeChange = makeDiff(
+      root, workflowQuest.id, 'runtime', 'src/bootstrap/runtime-owner.js');
+    const workflowOwnerChange = makeDiff(
+      root, workflowQuest.id, 'workflow', 'scripts/solve/scope-owner.js');
+    t.same(
+      inspectChangeArtifact(root, workflowQuest, workflowOwnerChange).problems,
+      [],
+      'a genuine workflow owner citation accepts a workflow artifact',
+    );
+    t.match(
+      inspectChangeArtifact(root, workflowQuest, workflowRuntimeChange)
+        .problems.join(' '),
+      /runtime changes must be recorded/u,
+      'a runtime artifact remains rejected under genuine workflow scope',
+    );
+    const designOwnerChange = makeDiff(
+      root, designQuest.id, 'workflow', 'scripts/solve/model-owner.js');
+    t.same(inspectChangeArtifact(root, designQuest, designOwnerChange).problems, [],
+      'the design citation accepts its genuine workflow owner artifact');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('passes a valid fingerprinted attempt with scoped patch artifact', (t) => {
     const root = tmp();
     const {quest, oracle} = makeQuest(root);

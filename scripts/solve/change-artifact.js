@@ -16,6 +16,19 @@ const DESCRIPTOR_EXTENSION = '.diff.json';
 const GZIP_EXTENSION = '.diff.gz';
 const CONTENT_ADDRESSED_STORAGE_KIND = 'content-addressed';
 const ROOT_PACKAGE_LOCK_PATH = 'package-lock.json';
+const QUEST_SCOPE_RUNTIME = 'runtime';
+const QUEST_SCOPE_WORKFLOW = 'workflow';
+const SCOPE_CITATION_FILE_TOKEN =
+  /[A-Za-z0-9_./*-]*[A-Za-z0-9_*-]+\.(?:js|mjs|cjs|json|md|diff|sh|yaml|yml)\b/gu;
+const NON_OWNER_SCOPE_CITATION_PREFIXES = Object.freeze([
+  `${SOLVE_DATA_DIR}/artifacts/`,
+  `${SOLVE_DATA_DIR}/changes/`,
+  `${SOLVE_DATA_DIR}/log/`,
+  `${SOLVE_DATA_DIR}/oracle/`,
+  `${SOLVE_DATA_DIR}/report/`,
+  `${SOLVE_DATA_DIR}/state/`,
+  'test-output/',
+]);
 const PROBLEM_MISSING_UNIFIED_DIFF =
   'changeRef artifact must contain a unified diff hunk or Git binary patch';
 const WORKFLOW_PATH_PREFIXES = Object.freeze([
@@ -201,10 +214,10 @@ function hasGitBinaryPatch(content) {
 export function classifyPath(filePath) {
   const normalized = normalizeSlash(filePath);
   if (WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return 'workflow';
+    return QUEST_SCOPE_WORKFLOW;
   }
   if (RUNTIME_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return 'runtime';
+    return QUEST_SCOPE_RUNTIME;
   }
   if (normalized.startsWith('test/')) return 'test';
   if (normalized.startsWith('docs/') || normalized.startsWith('architecture/')) {
@@ -226,6 +239,34 @@ export function requiresModelEvidence(filePath) {
     normalized.startsWith(prefix));
 }
 
+function sourceOwnerScopeFromCitation(filePath) {
+  const normalized = normalizeSlash(filePath);
+  if (NON_OWNER_SCOPE_CITATION_PREFIXES.some((prefix) =>
+    normalized.startsWith(prefix))) return null;
+  const category = classifyPath(normalized);
+  if (category === QUEST_SCOPE_RUNTIME || category === QUEST_SCOPE_WORKFLOW) {
+    return category;
+  }
+  return null;
+}
+
+function maskNonOwnerScopeCitations(value) {
+  return value.replace(SCOPE_CITATION_FILE_TOKEN, (citation) =>
+    NON_OWNER_SCOPE_CITATION_PREFIXES.some((prefix) =>
+      citation.startsWith(prefix)) ? '' : citation);
+}
+
+function citedSourceOwnerScope(statement) {
+  const scopes = new Set(
+    (String(statement || '').match(SCOPE_CITATION_FILE_TOKEN) || [])
+      .map(sourceOwnerScopeFromCitation)
+      .filter(Boolean),
+  );
+  if (scopes.has(QUEST_SCOPE_WORKFLOW)) return QUEST_SCOPE_WORKFLOW;
+  if (scopes.has(QUEST_SCOPE_RUNTIME)) return QUEST_SCOPE_RUNTIME;
+  return null;
+}
+
 export function classifyQuestScope(quest) {
   // The declared quest class is authoritative when present: a `product` quest
   // is never Solver/workflow-tooling scope, no matter what runtime subsystem
@@ -233,26 +274,33 @@ export function classifyQuestScope(quest) {
   // runtime vocabulary ("operation-workflow", "the REPLACE workflow", ...);
   // it remains only as the fallback for quests without a declared class.
   if (quest?.class === QUEST_CLASS_PRODUCT) {
-    return 'runtime';
+    return QUEST_SCOPE_RUNTIME;
   }
+  // Process Quests may own either runtime migration scaffolding or the Solver
+  // itself. A cited owner source is stronger than prose vocabulary. Evidence
+  // and generated bookkeeping paths are not source-owner citations; their
+  // basenames must not turn a runtime owner Quest into a workflow Quest.
+  const citedScope = citedSourceOwnerScope(quest?.statement);
+  if (citedScope) return citedScope;
   const haystack = [
     quest?.id,
     quest?.statement,
     ...(quest?.frontiers || []).map((frontier) => frontier.id),
   ].join(' ').toLowerCase();
+  const sourceOnlyHaystack = maskNonOwnerScopeCitations(haystack);
   // "operation-workflow" is a RUNTIME subsystem name (src/rebalancer/
   // operation-workflow-*), not Solver/workflow tooling; \b matches at the
   // hyphen, so it must be masked before the keyword scan or every runtime
   // quest that names that subsystem misclassifies as a workflow quest.
-  const runtimeSubsystemMaskedHaystack = haystack.replaceAll(
+  const runtimeSubsystemMaskedHaystack = sourceOnlyHaystack.replaceAll(
     'operation-workflow',
     'operation-subsystem',
   );
   if (/\b(solver|workflow|work-tracker|tooling|steering|command|model|architecture|contract)\b/u
     .test(runtimeSubsystemMaskedHaystack)) {
-    return 'workflow';
+    return QUEST_SCOPE_WORKFLOW;
   }
-  return 'runtime';
+  return QUEST_SCOPE_RUNTIME;
 }
 
 export function inspectChangeArtifact(root, quest, changeRef) {
@@ -287,10 +335,12 @@ export function inspectChangeArtifact(root, quest, changeRef) {
   if (content && !hasUnifiedDiffHunk(content) && !hasGitBinaryPatch(content)) {
     problems.push(PROBLEM_MISSING_UNIFIED_DIFF);
   }
-  if (questScope !== 'workflow' && categories.includes('workflow')) {
+  if (questScope !== QUEST_SCOPE_WORKFLOW &&
+    categories.includes(QUEST_SCOPE_WORKFLOW)) {
     problems.push('workflow changes must be recorded in a workflow/Quest tooling Quest');
   }
-  if (questScope === 'workflow' && categories.includes('runtime')) {
+  if (questScope === QUEST_SCOPE_WORKFLOW &&
+    categories.includes(QUEST_SCOPE_RUNTIME)) {
     problems.push('runtime changes must be recorded in a runtime Quest');
   }
 
