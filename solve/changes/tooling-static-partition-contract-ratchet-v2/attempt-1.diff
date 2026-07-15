@@ -1,0 +1,465 @@
+diff --git a/scripts/partition-class-owner-contract.js b/scripts/partition-class-owner-contract.js
+index 90866b7526fed63ef9965d0e290e68c88adce300..b7aab8d16f8a197074cb3e289014703e990c310e 100644
+--- a/scripts/partition-class-owner-contract.js
++++ b/scripts/partition-class-owner-contract.js
+@@ -7,6 +7,40 @@ import {
+   unwrapChain,
+ } from './partition-class-owner-ast.js';
+ 
++const LOCAL_STR_OWNED_001 = 'Object';
++const LOCAL_STR_OWNED_002 = 'freeze';
++const LOCAL_STR_OWNED_003 = 'SYSTEM_PARTITION_CLASS must declare exactly three classes';
++const LOCAL_STR_OWNED_004 = 'ArrowFunctionExpression';
++const LOCAL_STR_OWNED_005 = 'FunctionExpression';
++const LOCAL_STR_OWNED_006 = 'BlockStatement';
++const LOCAL_STR_OWNED_007 = 'ReturnStatement';
++const LOCAL_STR_OWNED_008 = 'ObjectPattern';
++const LOCAL_STR_OWNED_009 = 'has';
++const LOCAL_STR_OWNED_010 = 'VariableDeclaration';
++const LOCAL_STR_OWNED_011 = 'AssignmentPattern';
++const LOCAL_STR_OWNED_012 = 'options';
++const LOCAL_STR_OWNED_013 = 'classifySystemPartition must receive options = {}';
++const LOCAL_STR_OWNED_014 = 'classifySystemPartition must contain four canonical const declarations ';
++const LOCAL_STR_OWNED_015 = 'and one direct return';
++const LOCAL_STR_OWNED_016 = '||';
++const LOCAL_STR_OWNED_017 = 'getPartitionIdFromPartitionRow';
++const LOCAL_STR_OWNED_018 = 'options.partitionRow';
++const LOCAL_STR_OWNED_019 = 'normalizeNonEmptyString';
++const LOCAL_STR_OWNED_020 = 'options.partitionId';
++const LOCAL_STR_OWNED_021 = 'partitionId must derive from partitionRow then options.partitionId';
++const LOCAL_STR_OWNED_022 = 'resolvePartitionTableId';
++const LOCAL_STR_OWNED_023 = 'tableId must derive from resolvePartitionTableId original options';
++const LOCAL_NUM_OWNED_024 = 3;
++const LOCAL_STR_OWNED_025 = 'SYSTEM_PARTITION_CLASS_ROWS must declare exactly three ordered rows';
++const LOCAL_STR_OWNED_026 = 'partitionClass';
++const LOCAL_STR_OWNED_027 = 'matches';
++const LOCAL_STR_OWNED_028 = 'partitionId';
++const LOCAL_STR_OWNED_029 = 'tableId';
++const LOCAL_STR_OWNED_030 = 'find';
++const LOCAL_STR_OWNED_031 = 'canonical partitionClass must come from the selected row';
++const LOCAL_STR_OWNED_032 = 'classifySystemPartition must select from SYSTEM_PARTITION_CLASS_ROWS';
++const LOCAL_STR_OWNED_033 = 'classifySystemPartition must have one top-level frozen canonical return';
++
+ const OWNER_CONTRACT_NAME = Object.freeze({
+   CLASS: 'SYSTEM_PARTITION_CLASS',
+   ROWS: 'SYSTEM_PARTITION_CLASS_ROWS',
+@@ -25,13 +59,14 @@ const EXPECTED_CLASSIFIER_OUTCOME_FIELDS = Object.freeze([
+   'priorityControlPlane',
+   'systemTable',
+ ]);
++const NO_CLASSIFIER_PROBLEMS = Object.freeze([]);
+ 
+ function isObjectFreezeCall(node) {
+   const normalized = unwrapChain(node);
+   return normalized?.type === NODE_TYPE.CALL &&
+     normalized.callee?.type === NODE_TYPE.MEMBER &&
+-    resolveIdentifierName(normalized.callee.object) === 'Object' &&
+-    resolvePropertyName(normalized.callee) === 'freeze';
++    resolveIdentifierName(normalized.callee.object) === LOCAL_STR_OWNED_001 &&
++    resolvePropertyName(normalized.callee) === LOCAL_STR_OWNED_002;
+ }
+ 
+ function objectFreezeArgument(node) {
+@@ -80,7 +115,7 @@ function classVocabularyProblems(classDeclaration) {
+     classObject,
+     expectedEntries.map(([name]) => name),
+   )) {
+-    problems.push('SYSTEM_PARTITION_CLASS must declare exactly three classes');
++    problems.push(LOCAL_STR_OWNED_003);
+   }
+   for (const [name, value] of expectedEntries) {
+     if (properties.get(name)?.value?.value !== value) {
+@@ -95,13 +130,13 @@ function rowSource(source, node) {
+ }
+ 
+ function functionReturnExpression(node) {
+-  if (!node || (node.type !== 'ArrowFunctionExpression' &&
+-      node.type !== 'FunctionExpression')) {
++  if (!node || (node.type !== LOCAL_STR_OWNED_004 &&
++      node.type !== LOCAL_STR_OWNED_005)) {
+     return null;
+   }
+-  if (node.body?.type !== 'BlockStatement') return unwrapChain(node.body);
++  if (node.body?.type !== LOCAL_STR_OWNED_006) return unwrapChain(node.body);
+   if (node.body.body?.length !== 1 ||
+-      node.body.body[0]?.type !== 'ReturnStatement') {
++      node.body.body[0]?.type !== LOCAL_STR_OWNED_007) {
+     return null;
+   }
+   return unwrapChain(node.body.body[0].argument);
+@@ -109,7 +144,7 @@ function functionReturnExpression(node) {
+ 
+ function destructuredContextBinding(node, propertyName) {
+   const parameter = node?.params?.[0];
+-  if (parameter?.type !== 'ObjectPattern') return null;
++  if (parameter?.type !== LOCAL_STR_OWNED_008) return null;
+   for (const property of parameter.properties || []) {
+     if (property.type !== NODE_TYPE.PROPERTY ||
+         resolvePropertyName(property) !== propertyName) {
+@@ -132,7 +167,7 @@ function isDirectSetMembership(node, setName, argumentName) {
+   const callee = unwrapChain(expression.callee);
+   return callee?.type === NODE_TYPE.MEMBER &&
+     resolveAccessPath(callee.object) === setName &&
+-    resolvePropertyName(callee) === 'has';
++    resolvePropertyName(callee) === LOCAL_STR_OWNED_009;
+ }
+ 
+ function rowOwnsSetMembership(rowObject, setName, contextProperty) {
+@@ -154,7 +189,7 @@ function rowOwnsDefaultMatch(rowObject) {
+ function topLevelDeclarationByName(classifierNode) {
+   const declarations = new Map();
+   for (const statement of classifierNode?.body?.body || []) {
+-    if (statement.type !== 'VariableDeclaration') continue;
++    if (statement.type !== LOCAL_STR_OWNED_010) continue;
+     for (const declaration of statement.declarations || []) {
+       if (declaration.id?.type === NODE_TYPE.IDENTIFIER) {
+         declarations.set(declaration.id.name, declaration);
+@@ -176,12 +211,12 @@ function canonicalClassifierInputProblems(classifierNode) {
+   const problems = [];
+   const parameter = classifierNode?.params?.[0];
+   if (classifierNode?.params?.length !== 1 ||
+-      parameter?.type !== 'AssignmentPattern' ||
++      parameter?.type !== LOCAL_STR_OWNED_011 ||
+       parameter.left?.type !== NODE_TYPE.IDENTIFIER ||
+-      parameter.left.name !== 'options' ||
++      parameter.left.name !== LOCAL_STR_OWNED_012 ||
+       parameter.right?.type !== NODE_TYPE.OBJECT ||
+       parameter.right.properties?.length !== 0) {
+-    problems.push('classifySystemPartition must receive options = {}');
++    problems.push(LOCAL_STR_OWNED_013);
+   }
+ 
+   const declarations = topLevelDeclarationByName(classifierNode);
+@@ -203,33 +238,33 @@ function canonicalClassifierInputProblems(classifierNode) {
+     }) && statements[4]?.type === 'ReturnStatement';
+   if (!canonicalStatementOrder) {
+     problems.push(
+-      'classifySystemPartition must contain four canonical const declarations ' +
+-      'and one direct return',
++      LOCAL_STR_OWNED_014 +
++      LOCAL_STR_OWNED_015,
+     );
+   }
+   const partitionIdInitializer = unwrapChain(declarations.get('partitionId')?.init);
+   if (partitionIdInitializer?.type !== NODE_TYPE.LOGICAL ||
+-      partitionIdInitializer.operator !== '||' ||
++      partitionIdInitializer.operator !== LOCAL_STR_OWNED_016 ||
+       !isNamedCallWithArgument(
+         partitionIdInitializer.left,
+-        'getPartitionIdFromPartitionRow',
+-        'options.partitionRow',
++        LOCAL_STR_OWNED_017,
++        LOCAL_STR_OWNED_018,
+       ) ||
+       !isNamedCallWithArgument(
+         partitionIdInitializer.right,
+-        'normalizeNonEmptyString',
+-        'options.partitionId',
++        LOCAL_STR_OWNED_019,
++        LOCAL_STR_OWNED_020,
+       )) {
+-    problems.push('partitionId must derive from partitionRow then options.partitionId');
++    problems.push(LOCAL_STR_OWNED_021);
+   }
+ 
+   const tableIdInitializer = unwrapChain(declarations.get('tableId')?.init);
+   if (tableIdInitializer?.type !== NODE_TYPE.CALL ||
+-      resolveAccessPath(tableIdInitializer.callee) !== 'resolvePartitionTableId' ||
++      resolveAccessPath(tableIdInitializer.callee) !== LOCAL_STR_OWNED_022 ||
+       tableIdInitializer.arguments?.length !== 1 ||
+-      resolveAccessPath(tableIdInitializer.arguments[0]) !== 'options') {
++      resolveAccessPath(tableIdInitializer.arguments[0]) !== LOCAL_STR_OWNED_012) {
+     problems.push(
+-      'tableId must derive from resolvePartitionTableId original options',
++      LOCAL_STR_OWNED_023,
+     );
+   }
+   return problems;
+@@ -240,8 +275,8 @@ function orderedRowProblems(rowsDeclaration) {
+   const rowElements = rowsArray?.type === 'ArrayExpression' ?
+     rowsArray.elements || [] : [];
+   const problems = [];
+-  if (rowElements.length !== 3) {
+-    return ['SYSTEM_PARTITION_CLASS_ROWS must declare exactly three ordered rows'];
++  if (rowElements.length !== LOCAL_NUM_OWNED_024) {
++    return [LOCAL_STR_OWNED_025];
+   }
+   const expectedRows = [
+     {
+@@ -265,7 +300,7 @@ function orderedRowProblems(rowsDeclaration) {
+   for (const [index, expected] of expectedRows.entries()) {
+     const rowObject = objectFreezeArgument(rowElements[index]);
+     const properties = objectPropertiesByName(rowObject);
+-    if (!hasExactObjectProperties(rowObject, ['partitionClass', 'matches'])) {
++    if (!hasExactObjectProperties(rowObject, [LOCAL_STR_OWNED_026, LOCAL_STR_OWNED_027])) {
+       problems.push(
+         `row ${index + 1} must declare exactly partitionClass and matches`,
+       );
+@@ -274,7 +309,7 @@ function orderedRowProblems(rowsDeclaration) {
+     if (classPath !== `SYSTEM_PARTITION_CLASS.${expected.className}`) {
+       problems.push(`row ${index + 1} must classify ${expected.className}`);
+     }
+-    if (!properties.has('matches') || !expected.ownsPredicate(rowObject)) {
++    if (!properties.has(LOCAL_STR_OWNED_027) || !expected.ownsPredicate(rowObject)) {
+       problems.push(`row ${index + 1} must own its declared match predicate`);
+     }
+   }
+@@ -284,16 +319,16 @@ function orderedRowProblems(rowsDeclaration) {
+ function canonicalContextNames(classifierNode) {
+   const names = new Set();
+   for (const statement of classifierNode?.body?.body || []) {
+-    if (statement.type !== 'VariableDeclaration') continue;
++    if (statement.type !== LOCAL_STR_OWNED_010) continue;
+     for (const node of statement.declarations || []) {
+       if (node.id?.type !== NODE_TYPE.IDENTIFIER) continue;
+       const contextObject = objectFreezeArgument(node.init);
+       const fields = objectPropertiesByName(contextObject);
+-      if (hasExactObjectProperties(contextObject, ['partitionId', 'tableId']) &&
+-          fields.get('partitionId')?.value?.type === NODE_TYPE.IDENTIFIER &&
+-          fields.get('partitionId').value.name === 'partitionId' &&
+-          fields.get('tableId')?.value?.type === NODE_TYPE.IDENTIFIER &&
+-          fields.get('tableId').value.name === 'tableId') {
++      if (hasExactObjectProperties(contextObject, [LOCAL_STR_OWNED_028, LOCAL_STR_OWNED_029]) &&
++          fields.get(LOCAL_STR_OWNED_028)?.value?.type === NODE_TYPE.IDENTIFIER &&
++          fields.get(LOCAL_STR_OWNED_028).value.name === LOCAL_STR_OWNED_028 &&
++          fields.get(LOCAL_STR_OWNED_029)?.value?.type === NODE_TYPE.IDENTIFIER &&
++          fields.get(LOCAL_STR_OWNED_029).value.name === LOCAL_STR_OWNED_029) {
+         names.add(node.id.name);
+       }
+     }
+@@ -315,14 +350,14 @@ function findInvokesRowMatch(callback, contextNames) {
+     callee?.type === NODE_TYPE.MEMBER &&
+     callee.object?.type === NODE_TYPE.IDENTIFIER &&
+     callee.object.name === candidateName &&
+-    resolvePropertyName(callee) === 'matches';
++    resolvePropertyName(callee) === LOCAL_STR_OWNED_027;
+ }
+ 
+ function selectedRowNames(classifierNode) {
+   const names = new Set();
+   const contextNames = canonicalContextNames(classifierNode);
+   for (const statement of classifierNode?.body?.body || []) {
+-    if (statement.type !== 'VariableDeclaration') continue;
++    if (statement.type !== LOCAL_STR_OWNED_010) continue;
+     for (const node of statement.declarations || []) {
+       if (node.id?.type !== NODE_TYPE.IDENTIFIER) continue;
+       const initializer = unwrapChain(node.init);
+@@ -330,7 +365,7 @@ function selectedRowNames(classifierNode) {
+       if (initializer?.type === NODE_TYPE.CALL &&
+           callee?.type === NODE_TYPE.MEMBER &&
+           resolveAccessPath(callee.object) === OWNER_CONTRACT_NAME.ROWS &&
+-          resolvePropertyName(callee) === 'find' &&
++          resolvePropertyName(callee) === LOCAL_STR_OWNED_030 &&
+           findInvokesRowMatch(initializer.arguments?.[0], contextNames)) {
+         names.add(node.id.name);
+       }
+@@ -344,13 +379,13 @@ function isSelectedPartitionClass(node, rowNames) {
+   return expression?.type === NODE_TYPE.MEMBER &&
+     expression.object?.type === NODE_TYPE.IDENTIFIER &&
+     rowNames.has(expression.object.name) &&
+-    resolvePropertyName(expression) === 'partitionClass';
++    resolvePropertyName(expression) === LOCAL_STR_OWNED_026;
+ }
+ 
+ function canonicalOutcomeProblems(fields, rowNames) {
+   const problems = [];
+-  if (!isSelectedPartitionClass(fields.get('partitionClass')?.value, rowNames)) {
+-    problems.push('canonical partitionClass must come from the selected row');
++  if (!isSelectedPartitionClass(fields.get(LOCAL_STR_OWNED_026)?.value, rowNames)) {
++    problems.push(LOCAL_STR_OWNED_031);
+   }
+   const membershipFields = [
+     ['bootstrapCritical', 'CRITICAL_SYSTEM_PARTITION_IDS', 'partitionId'],
+@@ -372,20 +407,20 @@ function canonicalOutcomeProblems(fields, rowNames) {
+ }
+ 
+ function classifierOutcomeProblems(classifierNode, source) {
+-  if (!classifierNode) return [];
++  if (!classifierNode) return NO_CLASSIFIER_PROBLEMS;
+   const classifierSource = rowSource(source, classifierNode);
+   const problems = canonicalClassifierInputProblems(classifierNode);
+   if (!classifierSource.includes(OWNER_CONTRACT_NAME.ROWS) ||
+       !/SYSTEM_PARTITION_CLASS_ROWS\s*\.\s*find|for\s*\([^)]*SYSTEM_PARTITION_CLASS_ROWS/u
+         .test(classifierSource)) {
+     problems.push(
+-      'classifySystemPartition must select from SYSTEM_PARTITION_CLASS_ROWS',
++      LOCAL_STR_OWNED_032,
+     );
+   }
+   const rowNames = selectedRowNames(classifierNode);
+   const classifierReturns = [];
+   walkAst(classifierNode, (node, _parent, ancestors) => {
+-    if (node.type !== 'ReturnStatement') return;
++    if (node.type !== LOCAL_STR_OWNED_007) return;
+     const belongsToNestedFunction = ancestors.some((ancestor) =>
+       ancestor !== classifierNode && [
+         'ArrowFunctionExpression',
+@@ -408,7 +443,7 @@ function classifierOutcomeProblems(classifierNode, source) {
+       ) ||
+       !EXPECTED_CLASSIFIER_OUTCOME_FIELDS.every((field) => fields.has(field))) {
+     problems.push(
+-      'classifySystemPartition must have one top-level frozen canonical return',
++      LOCAL_STR_OWNED_033,
+     );
+   } else {
+     problems.push(...canonicalOutcomeProblems(fields, rowNames));
+diff --git a/scripts/partition-class-owner-parameter-flow.js b/scripts/partition-class-owner-parameter-flow.js
+index b79180e90e216ad79749e543f04bbd512dfc2f1e..3997e9f4a44d39458b0e853c4d98edf1f82b7699 100644
+--- a/scripts/partition-class-owner-parameter-flow.js
++++ b/scripts/partition-class-owner-parameter-flow.js
+@@ -6,6 +6,15 @@ import {
+   unwrapChain,
+ } from './partition-class-owner-ast.js';
+ 
++const LOCAL_STR_OWNED_001 = 'ArrowFunctionExpression';
++const LOCAL_STR_OWNED_002 = 'FunctionExpression';
++const LOCAL_STR_OWNED_003 = '.';
++const ARGUMENT_PROPERTY_NOT_FOUND = Object.freeze({
++  found: false,
++  kind: false,
++  criticalSet: false,
++});
++
+ function collectFunctionByName(entries) {
+   const functionByName = new Map();
+   for (const {node} of entries) {
+@@ -13,7 +22,7 @@ function collectFunctionByName(entries) {
+       functionByName.set(node.id.name, node);
+     }
+     if (node.type === NODE_TYPE.VARIABLE_DECLARATOR && node.id?.name &&
+-        ['ArrowFunctionExpression', 'FunctionExpression'].includes(
++        [LOCAL_STR_OWNED_001, LOCAL_STR_OWNED_002].includes(
+           node.init?.type,
+         )) {
+       functionByName.set(node.id.name, node.init);
+@@ -32,31 +41,59 @@ function resolveArgumentProperty(
+   const [propertyName, ...remainingPath] = Array.isArray(propertyPath) ?
+     propertyPath : [propertyPath];
+   const normalized = unwrapChain(argument);
+-  if (normalized?.type === NODE_TYPE.OBJECT) {
+-    for (const property of [...(normalized.properties || [])].reverse()) {
+-      if (property.type === NODE_TYPE.SPREAD) {
+-        const resolved = resolveArgumentProperty(
+-          property.argument,
+-          [propertyName, ...remainingPath],
+-          aliasState,
+-          resolveLegacyValueKind,
+-          isCriticalSetValue,
+-        );
+-        if (resolved.found) return resolved;
+-        continue;
+-      }
+-      if (property.type !== NODE_TYPE.PROPERTY ||
+-          resolvePropertyName(property) !== propertyName) continue;
+-      if (remainingPath.length > 0) {
+-        return resolveArgumentProperty(
+-          property.value,
+-          remainingPath,
+-          aliasState,
+-          resolveLegacyValueKind,
+-          isCriticalSetValue,
+-        );
++  return normalized?.type === NODE_TYPE.OBJECT ?
++    resolveObjectArgumentProperty(
++      normalized,
++      propertyName,
++      remainingPath,
++      aliasState,
++      resolveLegacyValueKind,
++      isCriticalSetValue,
++    ) :
++    resolveAccessPathArgumentProperty(
++      normalized,
++      propertyName,
++      remainingPath,
++      aliasState,
++    );
++}
++
++function resolveObjectArgumentProperty(
++  normalized,
++  propertyName,
++  remainingPath,
++  aliasState,
++  resolveLegacyValueKind,
++  isCriticalSetValue,
++) {
++  let outcome = ARGUMENT_PROPERTY_NOT_FOUND;
++  propertySearch:
++  for (const property of [...(normalized.properties || [])].reverse()) {
++    if (property.type === NODE_TYPE.SPREAD) {
++      const spreadOutcome = resolveArgumentProperty(
++        property.argument,
++        [propertyName, ...remainingPath],
++        aliasState,
++        resolveLegacyValueKind,
++        isCriticalSetValue,
++      );
++      if (spreadOutcome.found) {
++        outcome = spreadOutcome;
++        break propertySearch;
+       }
+-      return {
++      continue;
++    }
++    if (property.type !== NODE_TYPE.PROPERTY ||
++        resolvePropertyName(property) !== propertyName) continue;
++    outcome = remainingPath.length > 0 ?
++      resolveArgumentProperty(
++        property.value,
++        remainingPath,
++        aliasState,
++        resolveLegacyValueKind,
++        isCriticalSetValue,
++      ) :
++      {
+         found: true,
+         kind: resolveLegacyValueKind(
+           property.value,
+@@ -65,14 +102,23 @@ function resolveArgumentProperty(
+         ),
+         criticalSet: isCriticalSetValue(property.value),
+       };
+-    }
+-    return {found: false, kind: null, criticalSet: false};
++    break propertySearch;
+   }
++  return outcome;
++}
++
++function resolveAccessPathArgumentProperty(
++  normalized,
++  propertyName,
++  remainingPath,
++  aliasState,
++) {
+   const argumentPath = resolveAccessPath(normalized);
+-  const suffix = [propertyName, ...remainingPath].join('.');
+-  const accessPath = argumentPath ? `${argumentPath}.${suffix}` : null;
++  const suffix = [propertyName, ...remainingPath].join(LOCAL_STR_OWNED_003);
++  const accessPath = argumentPath ?
++    `${argumentPath}.${suffix}` : false;
+   const kind = accessPath ?
+-    aliasState.legacyKindByAccessPath.get(accessPath) || null : null;
++    aliasState.legacyKindByAccessPath.get(accessPath) || false : false;
+   const criticalSet = accessPath ?
+     aliasState.criticalSetLocalNames.has(accessPath) : false;
+   return {
+@@ -260,7 +306,7 @@ function collectPatternParameterAliases(
+         for (const [accessPath, kind] of allKinds) {
+           if (!accessPath.startsWith(prefix)) continue;
+           const relativePath = accessPath.slice(prefix.length);
+-          const [propertyName] = relativePath.split('.');
++          const [propertyName] = relativePath.split(LOCAL_STR_OWNED_003);
+           if (!excludedPropertyNames.has(propertyName)) {
+             parameterKinds.set(`${localName}.${relativePath}`, kind);
+           }
+@@ -268,7 +314,7 @@ function collectPatternParameterAliases(
+         for (const accessPath of allSets) {
+           if (!accessPath.startsWith(prefix)) continue;
+           const relativePath = accessPath.slice(prefix.length);
+-          const [propertyName] = relativePath.split('.');
++          const [propertyName] = relativePath.split(LOCAL_STR_OWNED_003);
+           if (!excludedPropertyNames.has(propertyName)) {
+             parameterSets.add(`${localName}.${relativePath}`);
+           }

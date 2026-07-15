@@ -6,6 +6,15 @@ import {
   unwrapChain,
 } from './partition-class-owner-ast.js';
 
+const LOCAL_STR_OWNED_001 = 'ArrowFunctionExpression';
+const LOCAL_STR_OWNED_002 = 'FunctionExpression';
+const LOCAL_STR_OWNED_003 = '.';
+const ARGUMENT_PROPERTY_NOT_FOUND = Object.freeze({
+  found: false,
+  kind: false,
+  criticalSet: false,
+});
+
 function collectFunctionByName(entries) {
   const functionByName = new Map();
   for (const {node} of entries) {
@@ -13,7 +22,7 @@ function collectFunctionByName(entries) {
       functionByName.set(node.id.name, node);
     }
     if (node.type === NODE_TYPE.VARIABLE_DECLARATOR && node.id?.name &&
-        ['ArrowFunctionExpression', 'FunctionExpression'].includes(
+        [LOCAL_STR_OWNED_001, LOCAL_STR_OWNED_002].includes(
           node.init?.type,
         )) {
       functionByName.set(node.id.name, node.init);
@@ -32,31 +41,59 @@ function resolveArgumentProperty(
   const [propertyName, ...remainingPath] = Array.isArray(propertyPath) ?
     propertyPath : [propertyPath];
   const normalized = unwrapChain(argument);
-  if (normalized?.type === NODE_TYPE.OBJECT) {
-    for (const property of [...(normalized.properties || [])].reverse()) {
-      if (property.type === NODE_TYPE.SPREAD) {
-        const resolved = resolveArgumentProperty(
-          property.argument,
-          [propertyName, ...remainingPath],
-          aliasState,
-          resolveLegacyValueKind,
-          isCriticalSetValue,
-        );
-        if (resolved.found) return resolved;
-        continue;
+  return normalized?.type === NODE_TYPE.OBJECT ?
+    resolveObjectArgumentProperty(
+      normalized,
+      propertyName,
+      remainingPath,
+      aliasState,
+      resolveLegacyValueKind,
+      isCriticalSetValue,
+    ) :
+    resolveAccessPathArgumentProperty(
+      normalized,
+      propertyName,
+      remainingPath,
+      aliasState,
+    );
+}
+
+function resolveObjectArgumentProperty(
+  normalized,
+  propertyName,
+  remainingPath,
+  aliasState,
+  resolveLegacyValueKind,
+  isCriticalSetValue,
+) {
+  let outcome = ARGUMENT_PROPERTY_NOT_FOUND;
+  propertySearch:
+  for (const property of [...(normalized.properties || [])].reverse()) {
+    if (property.type === NODE_TYPE.SPREAD) {
+      const spreadOutcome = resolveArgumentProperty(
+        property.argument,
+        [propertyName, ...remainingPath],
+        aliasState,
+        resolveLegacyValueKind,
+        isCriticalSetValue,
+      );
+      if (spreadOutcome.found) {
+        outcome = spreadOutcome;
+        break propertySearch;
       }
-      if (property.type !== NODE_TYPE.PROPERTY ||
-          resolvePropertyName(property) !== propertyName) continue;
-      if (remainingPath.length > 0) {
-        return resolveArgumentProperty(
-          property.value,
-          remainingPath,
-          aliasState,
-          resolveLegacyValueKind,
-          isCriticalSetValue,
-        );
-      }
-      return {
+      continue;
+    }
+    if (property.type !== NODE_TYPE.PROPERTY ||
+        resolvePropertyName(property) !== propertyName) continue;
+    outcome = remainingPath.length > 0 ?
+      resolveArgumentProperty(
+        property.value,
+        remainingPath,
+        aliasState,
+        resolveLegacyValueKind,
+        isCriticalSetValue,
+      ) :
+      {
         found: true,
         kind: resolveLegacyValueKind(
           property.value,
@@ -65,14 +102,23 @@ function resolveArgumentProperty(
         ),
         criticalSet: isCriticalSetValue(property.value),
       };
-    }
-    return {found: false, kind: null, criticalSet: false};
+    break propertySearch;
   }
+  return outcome;
+}
+
+function resolveAccessPathArgumentProperty(
+  normalized,
+  propertyName,
+  remainingPath,
+  aliasState,
+) {
   const argumentPath = resolveAccessPath(normalized);
-  const suffix = [propertyName, ...remainingPath].join('.');
-  const accessPath = argumentPath ? `${argumentPath}.${suffix}` : null;
+  const suffix = [propertyName, ...remainingPath].join(LOCAL_STR_OWNED_003);
+  const accessPath = argumentPath ?
+    `${argumentPath}.${suffix}` : false;
   const kind = accessPath ?
-    aliasState.legacyKindByAccessPath.get(accessPath) || null : null;
+    aliasState.legacyKindByAccessPath.get(accessPath) || false : false;
   const criticalSet = accessPath ?
     aliasState.criticalSetLocalNames.has(accessPath) : false;
   return {
@@ -260,7 +306,7 @@ function collectPatternParameterAliases(
         for (const [accessPath, kind] of allKinds) {
           if (!accessPath.startsWith(prefix)) continue;
           const relativePath = accessPath.slice(prefix.length);
-          const [propertyName] = relativePath.split('.');
+          const [propertyName] = relativePath.split(LOCAL_STR_OWNED_003);
           if (!excludedPropertyNames.has(propertyName)) {
             parameterKinds.set(`${localName}.${relativePath}`, kind);
           }
@@ -268,7 +314,7 @@ function collectPatternParameterAliases(
         for (const accessPath of allSets) {
           if (!accessPath.startsWith(prefix)) continue;
           const relativePath = accessPath.slice(prefix.length);
-          const [propertyName] = relativePath.split('.');
+          const [propertyName] = relativePath.split(LOCAL_STR_OWNED_003);
           if (!excludedPropertyNames.has(propertyName)) {
             parameterSets.add(`${localName}.${relativePath}`);
           }

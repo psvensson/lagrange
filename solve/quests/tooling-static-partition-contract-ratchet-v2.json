@@ -1,0 +1,51 @@
+{
+  "id": "tooling-static-partition-contract-ratchet-v2",
+  "authoringContractVersion": 1,
+  "statement": "Partition-class contract and parameter-flow analyzer modules introduce zero literal-guideline and decision-boundary violations without baseline growth while preserving analyzer semantics. doneWhen: solve/oracle/tooling-static-partition-contract-ratchet-v2.json is done only when both scoped guideline audits, the partition owner regression, the live analyzer census, and focused lint are green, with no global duplication or cognitive-complexity regression from the lane baseline.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "66315169ee600dd0c6f8b87ba443426ec8a2c83a"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/tooling-static-partition-contract-ratchet-v2.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "tooling-static-partition-contract-ratchet-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/tooling-static-partition-contract-ratchet-v2.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "successor-recovery",
+      "statement": "This Quest supersedes the history-bearing tooling-static-partition-contract-ratchet draft, whose first attempt was invalid because its initial oracle sample was absent."
+    },
+    {
+      "id": "two-owner-source-bound",
+      "statement": "Limit source changes to scripts/partition-class-owner-contract.js and scripts/partition-class-owner-parameter-flow.js."
+    },
+    {
+      "id": "no-baseline-growth",
+      "statement": "Do not raise or weaken guideline, duplication, or complexity baselines."
+    }
+  ]
+}
