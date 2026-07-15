@@ -1,0 +1,40 @@
+diff --git a/solve/oracle/solver-ledger-consistency-log-projection.json b/solve/oracle/solver-ledger-consistency-log-projection.json
+index 6ba0696583c2d01c754e641947cfeac15a4ec9d9..0e495af2da4a16882468e2ba063bea2554258072 100644
+--- a/solve/oracle/solver-ledger-consistency-log-projection.json
++++ b/solve/oracle/solver-ledger-consistency-log-projection.json
+@@ -1,26 +1,25 @@
+ {
+-  "metric": 3,
++  "metric": 0,
+   "target": 0,
+-  "done": false,
+-  "classification": "implementation_green_wave0_ledger_reconciliation_pending",
++  "done": true,
++  "classification": "implementation_and_wave0_ledger_reconciliation_green",
+   "evidence": {
+     "cleanCloneWithoutStatePassed": true,
+     "nonIdOracleTargetPassed": true,
+     "freshDoneWhenFailureReopenPassed": true,
+     "verifierRejectionReopenPassed": true,
+     "missingOpenProbeWarningPreserved": true,
+-    "focusedFixtureAssertionsPassed": 20,
+-    "completeFocusedTestPassed": false,
++    "focusedFixtureAssertionsPassed": 33,
++    "completeFocusedTestPassed": true,
+     "eslintPassed": true,
+     "scopedComplexityPassed": true,
+     "scopedCognitiveComplexityPassed": true,
+     "scopedGuidelineAuditsPassed": true,
+     "fileSizeAuditPassed": true,
+     "sharedGeneratedSurfacesWritten": false,
+-    "wave0IntegrationErrorCount": 3,
+-    "wave0IntegrationResidue": [
+-      "core-logic-live-validation epic lacks status frontmatter",
+-      "two historical solved Quests seal ignored test-output oracle targets"
+-    ]
++    "historicalOracleArchiveVerified": true,
++    "wave0IntegrationErrorCount": 0,
++    "wave0IntegrationWarningCount": 4,
++    "wave0IntegrationResidue": []
+   }
+ }
