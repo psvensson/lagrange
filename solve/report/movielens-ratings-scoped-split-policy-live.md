@@ -19,8 +19,8 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json
 - Selected theory: theory-20260715-the-order-guard-observes-joiner-loop (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-ratings-scoped-split-policy-live-main
 
@@ -58,6 +58,9 @@
 - **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
 - **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
 - **movielens-ratings-scoped-split-policy-live-main**: Exact attempt sha256:945fb995ba90dedb05b91d916df10fc3b78258f9fc5b2e5778e4c2b6801b3e62 is rejected despite correct implementation: the deterministic guard proves only joiner-loop start before ratings CREATE, not waitForActiveNodes formation completion. A mutant can place CREATE after joiner launch but before formation, pass all assertions, and retain maximumProvisionableReplicaCount=1. Replacement must assert joiner expansion < waitForActiveNodes completion < ratings CREATE < preload admission < ratings load. [subagent:verify_movielens_attempt3]
+- **movielens-ratings-scoped-split-policy-live-main**: Independent verification passed for exact attempt sha256:1856ec62cd52622a07f6861af288db3026666c1785705d30b631d3acf72d09bc: strict joiner expansion < awaited five-node formation < sole stable ratings CREATE < preload < load is proven, the CREATE-between-loop-and-formation mutant fails, deterministic scenario is 9/9, scoped audits are green, literal identities remain 48/48, and all prior typed-owner/atomic-ratings-only guarantees remain intact. [subagent:verify_movielens_attempt3]
+- **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json]
+- **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json]
 
 ## Theories
 - **theory-20260715-runner-ordering-invokes-policy-bearing-ratings** [active] system, mechanism Runner ordering invokes policy-bearing ratings CREATE before joiner expansion; the owner correctly reports requiredReplicaCount=2, resolvedReplicaCount=1, maximumProvisionableReplicaCount=1 forever on that topology., owner MovieLens runner ordering at the durable schema-owner boundary, modelGate npm run model:contracts
@@ -73,6 +76,7 @@
 - **theory-20260715-the-loader-mistakes-transport-resolution-for**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
 - **theory-20260715-the-scenario-s-create-before-expansion**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
 - **theory-20260715-the-order-guard-observes-joiner-loop**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T21-59-01-787Z.report.json]
+- **theory-20260715-the-order-guard-observes-joiner-loop**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
