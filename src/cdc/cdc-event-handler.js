@@ -9,10 +9,11 @@
  * @module cdc/cdc-event-handler
  */
 
-import {ADDRESS, COLUMN, NUM, PROTOCOL, CDC_OPERATION, STATE} from
+import {COLUMN, CDC_OPERATION, STATE} from
   '../constants/index.js';
 import {METRICS_LOG_TAG} from '../constants/index.js';
-import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
+import {deriveTransportWebSocketAddress} from
+  '../config/listener-port-model.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
@@ -665,32 +666,7 @@ class CDCEventHandler {
    * @return {string|null} WebSocket address or null if cannot derive.
    */
   deriveWsAddressFromNodeAddress(nodeAddress) {
-    if (!nodeAddress || typeof nodeAddress !== 'string') {
-      return null;
-    }
-
-    // Parse hostname:port format
-    const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-    if (colonIndex === -1 || colonIndex === 0) {
-      // No colon found or colon at start (empty hostname)
-      return null;
-    }
-
-    const hostname = nodeAddress.substring(0, colonIndex);
-    if (!hostname || hostname.length === 0) {
-      return null;
-    }
-
-    const portStr = nodeAddress.substring(colonIndex + 1);
-    const restPort = parseInt(portStr, NUM.TEN);
-
-    if (!Number.isFinite(restPort) || restPort <= 0) {
-      return null;
-    }
-
-    // WebSocket port = REST port + WS_PORT_OFFSET
-    const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
-    return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
+    return deriveTransportWebSocketAddress(nodeAddress);
   }
 
   /**

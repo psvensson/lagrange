@@ -1,7 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {deriveTransportWebSocketAddress} from
+  '../config/listener-port-model.js';
 
 const {
-  ADDRESS,
   CDC_ERROR_MSG,
   CDC_EVENT,
   CDC_INTEGRATION_SERVICE_ERROR,
@@ -10,10 +11,7 @@ const {
   CDC_SKIP_REASON,
   CDC_SOURCE,
   COLUMN,
-  ENTRYPOINT_DEFAULT,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
-  NUM,
-  PROTOCOL,
   STATE,
   SYSTEM_TABLE_NAME,
   buildCDCNodeJoinedResult,
@@ -26,29 +24,7 @@ const {
  * @return {string|null} WebSocket address or null if cannot derive.
  */
 export function deriveWsAddressFromNodeAddress(nodeAddress) {
-  if (!nodeAddress || typeof nodeAddress !== 'string') {
-    return null;
-  }
-
-  // Parse hostname:port format
-  const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-  if (colonIndex === -1 || colonIndex === 0) {
-    // No colon found or colon at start (empty hostname)
-    return null;
-  }
-  const hostname = nodeAddress.substring(0, colonIndex);
-  if (!hostname || hostname.length === 0) {
-    return null;
-  }
-  const portStr = nodeAddress.substring(colonIndex + 1);
-  const restPort = parseInt(portStr, NUM.TEN);
-  if (!Number.isFinite(restPort) || restPort <= 0) {
-    return null;
-  }
-
-  // WebSocket port = REST port + WS_PORT_OFFSET
-  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
-  return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
+  return deriveTransportWebSocketAddress(nodeAddress);
 }
 
 /**

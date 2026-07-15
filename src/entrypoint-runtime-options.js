@@ -1,6 +1,7 @@
 import {CONFIG_KEY} from './config/config-constants.js';
 import {resolveControlPlaneRolloutControls} from
   './runtime/control-plane-rollout-controls.js';
+import {resolveListenerPorts} from './config/listener-port-model.js';
 import {TRANSPORT_CONFIG_KEY} from './constants/transport.js';
 import {resolveAdvertisedWebSocketAddress} from
   './transport/node-address-resolution.js';
@@ -12,6 +13,7 @@ import {
 } from './constants/entrypoint.js';
 
 const LOCAL_STR_OPTIONS = 'Options:';
+const LOCAL_STR_ENVIRONMENT = 'Environment:';
 
 /**
  * Check for version flag.
@@ -37,6 +39,11 @@ function checkVersionFlag(version) {
     console.log('');
     console.log(LOCAL_STR_OPTIONS);
     for (const line of ENTRYPOINT_TEXT.OPTIONS_LINES) {
+      console.log(line);
+    }
+    console.log('');
+    console.log(LOCAL_STR_ENVIRONMENT);
+    for (const line of ENTRYPOINT_TEXT.ENVIRONMENT_LINES) {
       console.log(line);
     }
     return true;
@@ -105,12 +112,15 @@ function resolveRolloutControlsFromEnvironment(env) {
  * @return {Object}
  */
 function resolveRuntimeAddresses(config) {
-  const restApiPort =
-    config.get(CONFIG_KEY.NODE_REST_API_PORT) ||
-    ENTRYPOINT_DEFAULT.REST_API_PORT;
-  const wsPort =
-    config.get(CONFIG_KEY.NODE_WS_PORT) ||
-    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+  const listenerPorts = resolveListenerPorts({
+    restApiPort: config.get(CONFIG_KEY.NODE_REST_API_PORT),
+    adminWebSocketPort:
+      config.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) ?? undefined,
+    transportWebSocketPort:
+      config.get(CONFIG_KEY.NODE_WS_PORT) ?? undefined,
+  });
+  const restApiPort = listenerPorts.restApiPort;
+  const wsPort = listenerPorts.transportWebSocketPort;
   const nodeHttpAddress =
     config.get(CONFIG_KEY.NODE_ADDRESS) ||
     `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
@@ -125,6 +135,7 @@ function resolveRuntimeAddresses(config) {
     });
   return {
     restApiPort,
+    adminWebSocketPort: listenerPorts.adminWebSocketPort,
     wsPort,
     nodeHttpAddress,
     advertisedNodeWsAddress,

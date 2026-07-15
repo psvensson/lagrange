@@ -8,7 +8,8 @@ import {
   TABLES,
   TRANSPORT_TYPE,
 } from '../constants/index.js';
-import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
+import {deriveTransportWebSocketPort} from
+  '../config/listener-port-model.js';
 import {normalizeToWebSocketAddress} from '../constants/transport.js';
 
 const LOCAL_STR_LBRACKET = '[';
@@ -302,7 +303,11 @@ function resolveDerivedAdvertisedWebSocketPort(
       nodeAddressProtocol === WEBSOCKET_URL_PROTOCOL.WSS) {
     return nodeAddressPort;
   }
-  return nodeAddressPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+  try {
+    return deriveTransportWebSocketPort(nodeAddressPort);
+  } catch (_error) {
+    return null;
+  }
 }
 
 function shouldPreferRoutableAdvertisedHost(options, host) {

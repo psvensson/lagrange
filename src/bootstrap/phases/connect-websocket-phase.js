@@ -15,12 +15,11 @@ import {
   JOINING_UNIFIED_RECONCILE,
 } from '../node-joining-constants.js';
 import {
-  ADDRESS,
   NUM,
-  PROTOCOL,
   STATE,
 } from '../../constants/index.js';
-import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
+import {deriveTransportWebSocketAddress} from
+  '../../config/listener-port-model.js';
 import {CONNECTION_STATE} from '../../constants/transport.js';
 import {
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
@@ -736,71 +735,7 @@ class ConnectWebSocketPhase {
  * @return {string|null} WebSocket address or null if cannot derive.
  */
 function deriveWsAddressFromNodeAddress(nodeAddress) {
-  if (!nodeAddress || typeof nodeAddress !== 'string') {
-    return null;
-  }
-
-  let hostname;
-  let restPort;
-
-  // Check if address is already a full WebSocket URL (ws:// or wss://)
-  if (nodeAddress.startsWith(PROTOCOL.WS) ||
-      nodeAddress.startsWith(PROTOCOL.WSS)) {
-    // Parse URL format: ws://hostname:port or wss://hostname:port
-    const isSecure = nodeAddress.startsWith(PROTOCOL.WSS);
-    const protocolPrefix = isSecure ? PROTOCOL.WSS : PROTOCOL.WS;
-    const withoutProtocol =
-      nodeAddress.substring(protocolPrefix.length);
-
-    const colonIndex =
-      withoutProtocol.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-    if (colonIndex === -1 ||
-        colonIndex === 0) {
-      return null;
-    }
-
-    hostname =
-      withoutProtocol.substring(0, colonIndex);
-    const portStr =
-      withoutProtocol.substring(colonIndex + 1);
-    restPort = parseInt(portStr, NUM.TEN);
-
-    if (!hostname || hostname.length === 0) {
-      return null;
-    }
-
-    if (!Number.isFinite(restPort) || restPort <= 0) {
-      return null;
-    }
-
-    // For WebSocket URLs, the port is already the WS port, return as-is
-    return nodeAddress;
-  }
-
-  // Parse hostname:port format (REST API address)
-  const colonIndex =
-    nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-  if (colonIndex === -1 ||
-      colonIndex === 0) {
-    // No colon found or colon at start (empty hostname)
-    return null;
-  }
-
-  hostname = nodeAddress.substring(0, colonIndex);
-  if (!hostname || hostname.length === 0) {
-    return null;
-  }
-
-  const portStr = nodeAddress.substring(colonIndex + 1);
-  restPort = parseInt(portStr, NUM.TEN);
-
-  if (!Number.isFinite(restPort) || restPort <= 0) {
-    return null;
-  }
-
-  // WebSocket port = REST port + WS_PORT_OFFSET
-  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
-  return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
+  return deriveTransportWebSocketAddress(nodeAddress);
 }
 
 export {

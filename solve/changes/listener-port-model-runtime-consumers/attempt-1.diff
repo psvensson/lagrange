@@ -1,0 +1,339 @@
+diff --git a/src/bootstrap/phases/connect-websocket-phase.js b/src/bootstrap/phases/connect-websocket-phase.js
+index a86c8b24f558310e980ada2a98a18271c9b22eb6..128a07b0c9d516876888f75bf5bc5a89f56ecb21 100644
+--- a/src/bootstrap/phases/connect-websocket-phase.js
++++ b/src/bootstrap/phases/connect-websocket-phase.js
+@@ -15,12 +15,11 @@ import {
+   JOINING_UNIFIED_RECONCILE,
+ } from '../node-joining-constants.js';
+ import {
+-  ADDRESS,
+   NUM,
+-  PROTOCOL,
+   STATE,
+ } from '../../constants/index.js';
+-import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
++import {deriveTransportWebSocketAddress} from
++  '../../config/listener-port-model.js';
+ import {CONNECTION_STATE} from '../../constants/transport.js';
+ import {
+   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
+@@ -736,71 +735,7 @@ class ConnectWebSocketPhase {
+  * @return {string|null} WebSocket address or null if cannot derive.
+  */
+ function deriveWsAddressFromNodeAddress(nodeAddress) {
+-  if (!nodeAddress || typeof nodeAddress !== 'string') {
+-    return null;
+-  }
+-
+-  let hostname;
+-  let restPort;
+-
+-  // Check if address is already a full WebSocket URL (ws:// or wss://)
+-  if (nodeAddress.startsWith(PROTOCOL.WS) ||
+-      nodeAddress.startsWith(PROTOCOL.WSS)) {
+-    // Parse URL format: ws://hostname:port or wss://hostname:port
+-    const isSecure = nodeAddress.startsWith(PROTOCOL.WSS);
+-    const protocolPrefix = isSecure ? PROTOCOL.WSS : PROTOCOL.WS;
+-    const withoutProtocol =
+-      nodeAddress.substring(protocolPrefix.length);
+-
+-    const colonIndex =
+-      withoutProtocol.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+-    if (colonIndex === -1 ||
+-        colonIndex === 0) {
+-      return null;
+-    }
+-
+-    hostname =
+-      withoutProtocol.substring(0, colonIndex);
+-    const portStr =
+-      withoutProtocol.substring(colonIndex + 1);
+-    restPort = parseInt(portStr, NUM.TEN);
+-
+-    if (!hostname || hostname.length === 0) {
+-      return null;
+-    }
+-
+-    if (!Number.isFinite(restPort) || restPort <= 0) {
+-      return null;
+-    }
+-
+-    // For WebSocket URLs, the port is already the WS port, return as-is
+-    return nodeAddress;
+-  }
+-
+-  // Parse hostname:port format (REST API address)
+-  const colonIndex =
+-    nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+-  if (colonIndex === -1 ||
+-      colonIndex === 0) {
+-    // No colon found or colon at start (empty hostname)
+-    return null;
+-  }
+-
+-  hostname = nodeAddress.substring(0, colonIndex);
+-  if (!hostname || hostname.length === 0) {
+-    return null;
+-  }
+-
+-  const portStr = nodeAddress.substring(colonIndex + 1);
+-  restPort = parseInt(portStr, NUM.TEN);
+-
+-  if (!Number.isFinite(restPort) || restPort <= 0) {
+-    return null;
+-  }
+-
+-  // WebSocket port = REST port + WS_PORT_OFFSET
+-  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+-  return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
++  return deriveTransportWebSocketAddress(nodeAddress);
+ }
+ 
+ export {
+diff --git a/src/cdc/cdc-event-handler.js b/src/cdc/cdc-event-handler.js
+index 82f63d1bd7b89ede41bddd21a42e57e338537247..0bd81e16fb4380b8cbd2c6d66924e803df5c9061 100644
+--- a/src/cdc/cdc-event-handler.js
++++ b/src/cdc/cdc-event-handler.js
+@@ -9,10 +9,11 @@
+  * @module cdc/cdc-event-handler
+  */
+ 
+-import {ADDRESS, COLUMN, NUM, PROTOCOL, CDC_OPERATION, STATE} from
++import {COLUMN, CDC_OPERATION, STATE} from
+   '../constants/index.js';
+ import {METRICS_LOG_TAG} from '../constants/index.js';
+-import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
++import {deriveTransportWebSocketAddress} from
++  '../config/listener-port-model.js';
+ import {LoggingService} from '../logging/logging-service.js';
+ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+ import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
+@@ -665,32 +666,7 @@ class CDCEventHandler {
+    * @return {string|null} WebSocket address or null if cannot derive.
+    */
+   deriveWsAddressFromNodeAddress(nodeAddress) {
+-    if (!nodeAddress || typeof nodeAddress !== 'string') {
+-      return null;
+-    }
+-
+-    // Parse hostname:port format
+-    const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+-    if (colonIndex === -1 || colonIndex === 0) {
+-      // No colon found or colon at start (empty hostname)
+-      return null;
+-    }
+-
+-    const hostname = nodeAddress.substring(0, colonIndex);
+-    if (!hostname || hostname.length === 0) {
+-      return null;
+-    }
+-
+-    const portStr = nodeAddress.substring(colonIndex + 1);
+-    const restPort = parseInt(portStr, NUM.TEN);
+-
+-    if (!Number.isFinite(restPort) || restPort <= 0) {
+-      return null;
+-    }
+-
+-    // WebSocket port = REST port + WS_PORT_OFFSET
+-    const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+-    return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
++    return deriveTransportWebSocketAddress(nodeAddress);
+   }
+ 
+   /**
+diff --git a/src/cdc/cdc-integration-service-node-join.js b/src/cdc/cdc-integration-service-node-join.js
+index 8d1600432db80ed9674be5e0754c226e272411e8..7b824e1424aa5993e18716047e78ef570de45477 100644
+--- a/src/cdc/cdc-integration-service-node-join.js
++++ b/src/cdc/cdc-integration-service-node-join.js
+@@ -1,7 +1,8 @@
+ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
++import {deriveTransportWebSocketAddress} from
++  '../config/listener-port-model.js';
+ 
+ const {
+-  ADDRESS,
+   CDC_ERROR_MSG,
+   CDC_EVENT,
+   CDC_INTEGRATION_SERVICE_ERROR,
+@@ -10,10 +11,7 @@ const {
+   CDC_SKIP_REASON,
+   CDC_SOURCE,
+   COLUMN,
+-  ENTRYPOINT_DEFAULT,
+   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
+-  NUM,
+-  PROTOCOL,
+   STATE,
+   SYSTEM_TABLE_NAME,
+   buildCDCNodeJoinedResult,
+@@ -26,29 +24,7 @@ const {
+  * @return {string|null} WebSocket address or null if cannot derive.
+  */
+ export function deriveWsAddressFromNodeAddress(nodeAddress) {
+-  if (!nodeAddress || typeof nodeAddress !== 'string') {
+-    return null;
+-  }
+-
+-  // Parse hostname:port format
+-  const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+-  if (colonIndex === -1 || colonIndex === 0) {
+-    // No colon found or colon at start (empty hostname)
+-    return null;
+-  }
+-  const hostname = nodeAddress.substring(0, colonIndex);
+-  if (!hostname || hostname.length === 0) {
+-    return null;
+-  }
+-  const portStr = nodeAddress.substring(colonIndex + 1);
+-  const restPort = parseInt(portStr, NUM.TEN);
+-  if (!Number.isFinite(restPort) || restPort <= 0) {
+-    return null;
+-  }
+-
+-  // WebSocket port = REST port + WS_PORT_OFFSET
+-  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+-  return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
++  return deriveTransportWebSocketAddress(nodeAddress);
+ }
+ 
+ /**
+diff --git a/src/entrypoint-runtime-options.js b/src/entrypoint-runtime-options.js
+index a3fc2193f638cc25b0fd3e2e90e1b5838463c802..9a10da8e1bb95be2c2b5d8aebb6a7d4bd0c49534 100644
+--- a/src/entrypoint-runtime-options.js
++++ b/src/entrypoint-runtime-options.js
+@@ -1,6 +1,7 @@
+ import {CONFIG_KEY} from './config/config-constants.js';
+ import {resolveControlPlaneRolloutControls} from
+   './runtime/control-plane-rollout-controls.js';
++import {resolveListenerPorts} from './config/listener-port-model.js';
+ import {TRANSPORT_CONFIG_KEY} from './constants/transport.js';
+ import {resolveAdvertisedWebSocketAddress} from
+   './transport/node-address-resolution.js';
+@@ -12,6 +13,7 @@ import {
+ } from './constants/entrypoint.js';
+ 
+ const LOCAL_STR_OPTIONS = 'Options:';
++const LOCAL_STR_ENVIRONMENT = 'Environment:';
+ 
+ /**
+  * Check for version flag.
+@@ -39,6 +41,11 @@ function checkVersionFlag(version) {
+     for (const line of ENTRYPOINT_TEXT.OPTIONS_LINES) {
+       console.log(line);
+     }
++    console.log('');
++    console.log(LOCAL_STR_ENVIRONMENT);
++    for (const line of ENTRYPOINT_TEXT.ENVIRONMENT_LINES) {
++      console.log(line);
++    }
+     return true;
+   }
+   return false;
+@@ -105,12 +112,15 @@ function resolveRolloutControlsFromEnvironment(env) {
+  * @return {Object}
+  */
+ function resolveRuntimeAddresses(config) {
+-  const restApiPort =
+-    config.get(CONFIG_KEY.NODE_REST_API_PORT) ||
+-    ENTRYPOINT_DEFAULT.REST_API_PORT;
+-  const wsPort =
+-    config.get(CONFIG_KEY.NODE_WS_PORT) ||
+-    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
++  const listenerPorts = resolveListenerPorts({
++    restApiPort: config.get(CONFIG_KEY.NODE_REST_API_PORT),
++    adminWebSocketPort:
++      config.get(CONFIG_KEY.ADMIN_WEBSOCKET_PORT) ?? undefined,
++    transportWebSocketPort:
++      config.get(CONFIG_KEY.NODE_WS_PORT) ?? undefined,
++  });
++  const restApiPort = listenerPorts.restApiPort;
++  const wsPort = listenerPorts.transportWebSocketPort;
+   const nodeHttpAddress =
+     config.get(CONFIG_KEY.NODE_ADDRESS) ||
+     `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
+@@ -125,6 +135,7 @@ function resolveRuntimeAddresses(config) {
+     });
+   return {
+     restApiPort,
++    adminWebSocketPort: listenerPorts.adminWebSocketPort,
+     wsPort,
+     nodeHttpAddress,
+     advertisedNodeWsAddress,
+diff --git a/src/transport/node-address-resolution.js b/src/transport/node-address-resolution.js
+index 4e1e7a023bf7cf081f9256bc12bf87948ce99228..c18dd4831c4bb1a81bd2eb7feb0beb17edd147ec 100644
+--- a/src/transport/node-address-resolution.js
++++ b/src/transport/node-address-resolution.js
+@@ -8,7 +8,8 @@ import {
+   TABLES,
+   TRANSPORT_TYPE,
+ } from '../constants/index.js';
+-import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
++import {deriveTransportWebSocketPort} from
++  '../config/listener-port-model.js';
+ import {normalizeToWebSocketAddress} from '../constants/transport.js';
+ 
+ const LOCAL_STR_LBRACKET = '[';
+@@ -302,7 +303,11 @@ function resolveDerivedAdvertisedWebSocketPort(
+       nodeAddressProtocol === WEBSOCKET_URL_PROTOCOL.WSS) {
+     return nodeAddressPort;
+   }
+-  return nodeAddressPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
++  try {
++    return deriveTransportWebSocketPort(nodeAddressPort);
++  } catch (_error) {
++    return null;
++  }
+ }
+ 
+ function shouldPreferRoutableAdvertisedHost(options, host) {
+diff --git a/test/transport/node-address-resolution-contract.test.js b/test/transport/node-address-resolution-contract.test.js
+index f4347d345f621dea3e75818193bb424e5e0020bd..581336039cceef068992bd8079d56f76e13450da 100644
+--- a/test/transport/node-address-resolution-contract.test.js
++++ b/test/transport/node-address-resolution-contract.test.js
+@@ -1,4 +1,5 @@
+ import {test} from '../../src/test-helpers/tap.js';
++import fs from 'node:fs';
+ import {
+   parseAddressPartsResult,
+   resolveNodeWebSocketAddressResult,
+@@ -60,3 +61,39 @@ test('resolveNodeWebSocketAddressResult exposes explicit unavailable state',
+       'websocket address resolution should return a contract state instead of null',
+     );
+   });
++
++test('listener port and address consumers use the single derivation authority',
++  async (t) => {
++    const consumerContracts = new Map([
++      ['src/entrypoint-runtime-options.js', 'resolveListenerPorts'],
++      [
++        'src/transport/node-address-resolution.js',
++        'deriveTransportWebSocketPort',
++      ],
++      [
++        'src/cdc/cdc-integration-service-node-join.js',
++        'deriveTransportWebSocketAddress',
++      ],
++      ['src/cdc/cdc-event-handler.js', 'deriveTransportWebSocketAddress'],
++      [
++        'src/bootstrap/phases/connect-websocket-phase.js',
++        'deriveTransportWebSocketAddress',
++      ],
++      ['src/constants/transport.js', 'deriveTransportWebSocketAddress'],
++      ['src/node/node-constants.js', 'LISTENER_PORT_DEFAULT'],
++    ]);
++
++    for (const [path, authoritySymbol] of consumerContracts) {
++      const source = fs.readFileSync(path, 'utf8');
++      t.match(
++        source,
++        new RegExp(`\\b${authoritySymbol}\\b`, 'u'),
++        `${path} should consume ${authoritySymbol}`,
++      );
++      t.notMatch(
++        source,
++        /WS_PORT_OFFSET|restPort\s*\+\s*2|8080|8081/iu,
++        `${path} should not hardcode or re-derive listener ports locally`,
++      );
++    }
++  });
