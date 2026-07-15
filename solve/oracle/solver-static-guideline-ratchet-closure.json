@@ -1,18 +1,25 @@
 {
   "metric": 0,
   "target": 0,
-  "done": false,
+  "done": true,
   "classification": "solver-static-guideline-ratchet-closure",
   "detail": {
     "literalViolations": 0,
     "decisionBoundaryViolations": 0,
     "baselineChanged": false,
-    "solverTestFilesPassed": 53,
+    "solverTestFilesPassed": 55,
     "solverTestFilesTotal": 55,
-    "inheritedProjectionBlockers": [
-      "global-owner-debt-inventory checked-in projection freshness",
-      "priority-recovery-owner-inventory checked-in projection freshness"
-    ],
-    "sample": "scoped audits are zero; both remaining suite failures reproduce at base 0ecb3f98 and pass after their official projection refreshes"
+    "solverAssertions": 2543,
+    "inheritedProjectionBlockers": [],
+    "cognitiveViolations": 183,
+    "cognitiveBaseline": 183,
+    "cyclomaticViolations": 1852,
+    "cyclomaticBaseline": 1855,
+    "duplicationCloneGroups": 68,
+    "duplicationLines": 2146,
+    "unusedExports": 1624,
+    "dependencyViolations": 0,
+    "silentCatchViolations": 0,
+    "sample": "all scoped audits and all 55 Solver test files pass after official owner-inventory projection refreshes"
   }
 }

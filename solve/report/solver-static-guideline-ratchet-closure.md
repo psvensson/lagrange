@@ -26,7 +26,10 @@
 - **solver-static-guideline-ratchet-closure-main** [solved] rung 0, attempts 1, metric 109 -> 0
 
 ## Findings
-_(none recorded)_
+- **solver-static-guideline-ratchet-closure-main**: Independent exact-attempt verification confirmed all 109 scoped violations are removed with equivalent Solver behavior, identical base/candidate test failures limited to two inherited projection-freshness bugs, and no metric or baseline regression. [subagent:verify_solver_static-8ab8025f]
+- **solver-static-guideline-ratchet-closure-main**: The sealed Solver static symptom no longer reproduces on the fully composed Wave 0 HEAD: literal and decision violations are zero and all 55 Solver test files pass. [solve/oracle/solver-static-guideline-ratchet-closure.json]
+- **solver-static-guideline-ratchet-closure-main**: Ingested evidence from solver-static-guideline-ratchet-closure.json. Metric: 0 -> 0. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/solver-static-guideline-ratchet-closure.json]
+- **solver-static-guideline-ratchet-closure-main**: independent aggregate verification passed [subagent:solver_static_aggregate_review_8ab8025f_20260715T1200CEST]
 
 ## Theories
 _(none recorded)_
