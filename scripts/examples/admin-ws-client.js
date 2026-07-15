@@ -12,6 +12,20 @@ const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED = 'Admin examples socket closed';
 const LOCAL_STR_MESSAGE = 'message';
 const LOCAL_STR_CLOSE = 'close';
+const ADMIN_EXAMPLES_ERROR_CODE = Object.freeze({
+  RESPONSE_TIMEOUT: 'ADMIN_RESPONSE_TIMEOUT',
+});
+
+function buildAdminResponseTimeoutError(queryId, timeoutMs) {
+  const error = new Error(
+    `Timed out waiting for admin response: ${queryId}`,
+  );
+  error.code = ADMIN_EXAMPLES_ERROR_CODE.RESPONSE_TIMEOUT;
+  error.deferRetry = true;
+  error.queryId = queryId;
+  error.timeoutMs = timeoutMs;
+  return error;
+}
 
 /**
  * Admin websocket client used by the examples runner.
@@ -127,7 +141,7 @@ class AdminWsClient {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(queryId);
-        reject(new Error(`Timed out waiting for admin response: ${queryId}`));
+        reject(buildAdminResponseTimeoutError(queryId, this.timeoutMs));
       }, this.timeoutMs);
 
       this.pending.set(queryId, {resolve, reject, timeout});

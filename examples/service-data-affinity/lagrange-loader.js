@@ -42,6 +42,7 @@ const RATINGS_SCHEMA_CREATE_TRANSITION = Object.freeze({
 // idempotent, so fresh admin sessions keep observing the same provisioning
 // job without widening any server-side timeout or admission budget.
 const CREATE_TABLE_RETRY_TIMEOUT_MS = 60000;
+const CREATE_TABLE_ATTEMPT_TIMEOUT_MS = 15000;
 const CREATE_TABLE_RETRY_DELAY_MS = 5000;
 const CREATE_TABLE_STABLE_CONFIRMATION_COUNT = 2;
 const RATINGS_FIELD_DELIMITER = '\t';
@@ -100,9 +101,15 @@ function resolveRatingsSchemaCreateOutcome(result) {
 async function createRatingsTableWithRetry(options = {}) {
   const target = options.target || DEFAULT_TARGET;
   const clientFactory = options.clientFactory ||
-    ((clientTarget) => new AdminWsClient({target: clientTarget}));
-  const timeoutMs = Number.isFinite(options.timeoutMs) ?
-    options.timeoutMs : CREATE_TABLE_RETRY_TIMEOUT_MS;
+    ((clientTarget, clientOptions) => new AdminWsClient({
+      target: clientTarget,
+      ...clientOptions,
+    }));
+  const timeoutMs = Number.isFinite(options.timeoutMs) &&
+    options.timeoutMs >= 0 ?
+    Math.floor(options.timeoutMs) : CREATE_TABLE_RETRY_TIMEOUT_MS;
+  const now = typeof options.now === 'function' ? options.now : Date.now;
+  const deadlineMs = now() + timeoutMs;
   const onRetry = options.onRetry || (({attempt, resultOrError}) => {
     console.log(
       `      Ratings schema attempt ${attempt} is not yet stable: ` +
@@ -112,8 +119,14 @@ async function createRatingsTableWithRetry(options = {}) {
   let stableConfirmationCount = 0;
 
   const result = await runRetryableControlPlaneWrite(async () => {
+    const remainingMs = Math.max(0, deadlineMs - now());
+    if (remainingMs <= 0) {
+      return {success: false};
+    }
     attempts += 1;
-    const client = clientFactory(target);
+    const client = clientFactory(target, {
+      timeoutMs: Math.min(CREATE_TABLE_ATTEMPT_TIMEOUT_MS, remainingMs),
+    });
     try {
       const createResult = await client.query(CREATE_LAGRANGE_RATINGS_SQL);
       const createOutcome = resolveRatingsSchemaCreateOutcome(createResult);
@@ -145,7 +158,7 @@ async function createRatingsTableWithRetry(options = {}) {
     timeoutMs,
     baseDelayMs: CREATE_TABLE_RETRY_DELAY_MS,
     maxDelayMs: CREATE_TABLE_RETRY_DELAY_MS,
-    ...(typeof options.now === 'function' ? {now: options.now} : {}),
+    now,
     ...(typeof options.sleep === 'function' ? {sleep: options.sleep} : {}),
     onRetry,
   });

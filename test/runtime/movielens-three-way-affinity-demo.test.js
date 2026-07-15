@@ -1,4 +1,6 @@
 import {existsSync} from 'node:fs';
+import {once} from 'node:events';
+import {WebSocketServer} from 'ws';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   computeReduction,
@@ -28,6 +30,11 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
+import {isRetryableControlPlaneError} from
+  '../../src/control-plane/control-plane-error-classification.js';
+import {
+  AdminWsClient,
+} from '../../scripts/examples/admin-ws-client.js';
 
 const READY_CREATE_RESULT = Object.freeze({
   contractState: OWNER_CONTRACT_STATE.READY,
@@ -262,6 +269,154 @@ test('MovieLens durable CREATE confirmation resets after a transport failure',
     t.end();
   });
 
+test('MovieLens durable CREATE retries a typed ambiguous admin timeout on ' +
+  'fresh bounded sessions', async (t) => {
+  const server = new WebSocketServer({host: '127.0.0.1', port: 0});
+  await once(server, 'listening');
+  const serverAddress = server.address();
+  const target = `ws://127.0.0.1:${serverAddress.port}`;
+  let resolveRequest;
+  const requestReceived = new Promise((resolve) => {
+    resolveRequest = resolve;
+  });
+  let serverSocket = null;
+  server.on('connection', (socket) => {
+    serverSocket = socket;
+    socket.once('message', (data) => {
+      resolveRequest(JSON.parse(data.toString()));
+    });
+  });
+  const timeoutClient = new AdminWsClient({target, timeoutMs: 20});
+  let timeoutError = null;
+  let timedOutRequest = null;
+  try {
+    try {
+      await timeoutClient.query(CREATE_LAGRANGE_RATINGS_SQL);
+    } catch (error) {
+      timeoutError = error;
+    }
+    timedOutRequest = await requestReceived;
+    t.equal(timeoutError?.code, 'ADMIN_RESPONSE_TIMEOUT');
+    t.equal(timeoutError?.deferRetry, true);
+    t.equal(timeoutError?.queryId, timedOutRequest.queryId);
+    t.equal(timeoutError?.timeoutMs, 20);
+    t.equal(timeoutClient.pending.size, 0,
+      'the real timer removes the expired request before rejecting');
+    t.equal(isRetryableControlPlaneError(timeoutError), true,
+      'the canonical retry owner receives the real typed timeout');
+
+    const lateFrameObserved = once(timeoutClient.socket, 'message');
+    serverSocket.send(JSON.stringify({
+      type: 'query_result',
+      queryId: timedOutRequest.queryId,
+      results: [{contractState: OWNER_CONTRACT_STATE.READY}],
+    }));
+    await lateFrameObserved;
+    t.equal(timeoutClient.pending.size, 0,
+      'a late result cannot resurrect or satisfy the expired attempt');
+  } finally {
+    const socketClosed = serverSocket ? once(serverSocket, 'close') : null;
+    await timeoutClient.close();
+    if (socketClosed) {
+      await socketClosed;
+    }
+    await new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+  }
+
+  t.ok(timeoutError instanceof Error,
+    'the retry witness comes from the AdminWsClient timer seam');
+  t.equal(timeoutError.deferRetry, true);
+
+  const outcomes = [
+    READY_CREATE_RESULT,
+    timeoutError,
+    READY_CREATE_RESULT,
+    READY_CREATE_RESULT,
+  ];
+  const clientOptions = [];
+  let clientsCreated = 0;
+  let clientsClosed = 0;
+  let nowMs = 0;
+  const retryAttempts = [];
+  const result = await createRatingsTableWithRetry({
+    target: 'ws://demo',
+    clientFactory: (_target, factoryOptions) => {
+      const outcome = outcomes[clientsCreated];
+      clientsCreated += 1;
+      clientOptions.push(factoryOptions);
+      return {
+        query: async () => {
+          if (outcome instanceof Error) {
+            nowMs += 15000;
+            throw outcome;
+          }
+          return outcome;
+        },
+        close: async () => {
+          clientsClosed += 1;
+        },
+      };
+    },
+    timeoutMs: 50000,
+    now: () => nowMs,
+    sleep: async (delayMs) => {
+      nowMs += delayMs;
+    },
+    onRetry: ({attempt}) => {
+      retryAttempts.push(attempt);
+    },
+  });
+
+  t.same(result, {
+    attempts: 4,
+    confirmations: 2,
+    policy: RATINGS_TABLE_SPLIT_POLICY,
+  });
+  t.equal(clientsCreated, 4);
+  t.equal(clientsClosed, 4,
+    'every ambiguous or confirming attempt closes its fresh session');
+  t.same(clientOptions, Array.from({length: 4}, () => ({timeoutMs: 15000})),
+    'each attempt deadline is shorter than the non-resetting outer budget');
+  t.same(retryAttempts, [1, 2, 3],
+    'the timeout resets the first confirmation before two new READY results');
+  t.ok(nowMs < 50000,
+    'typed timeout replay and confirmations remain inside the outer budget');
+  t.end();
+});
+
+test('MovieLens durable CREATE does not replay a hard validation error',
+  async (t) => {
+    let clientsCreated = 0;
+    let clientsClosed = 0;
+    await t.rejects(
+      createRatingsTableWithRetry({
+        target: 'ws://demo',
+        clientFactory: () => {
+          clientsCreated += 1;
+          return {
+            query: async () => {
+              throw new Error('ratings schema validation failed');
+            },
+            close: async () => {
+              clientsClosed += 1;
+            },
+          };
+        },
+        onRetry: () => {
+          throw new Error('hard validation must not enter retry delay');
+        },
+      }),
+      /ratings schema validation failed/,
+    );
+    t.equal(clientsCreated, 1,
+      'a non-retryable failure stops at the existing owner boundary');
+    t.equal(clientsClosed, 1,
+      'the terminal attempt still closes its admin session');
+    t.end();
+  });
+
 test('MovieLens durable CREATE confirmation resets after typed pending',
   async (t) => {
     const outcomes = [
@@ -313,12 +468,14 @@ test('MovieLens durable CREATE confirmation exhausts at its time bound',
     let clientsCreated = 0;
     let clientsClosed = 0;
     let nowMs = 0;
+    const attemptTimeouts = [];
     await t.rejects(
       createRatingsTableWithRetry({
         target: 'ws://demo',
-        clientFactory: () => {
+        clientFactory: (_target, factoryOptions) => {
           const shouldFail = clientsCreated % 2 === 1;
           clientsCreated += 1;
+          attemptTimeouts.push(factoryOptions.timeoutMs);
           return {
             query: async () => {
               if (shouldFail) {
@@ -341,9 +498,11 @@ test('MovieLens durable CREATE confirmation exhausts at its time bound',
       /stable durable confirmation/,
       'the terminal incomplete confirmation is surfaced loudly',
     );
-    t.equal(clientsCreated, 3,
-      'the canonical owner stops once the virtual deadline is reached');
-    t.equal(clientsClosed, 3);
+    t.equal(clientsCreated, 2,
+      'the canonical owner creates no fresh client at its virtual deadline');
+    t.equal(clientsClosed, 2);
+    t.same(attemptTimeouts, [10000, 5000],
+      'each fresh session is capped by the canonical remaining budget');
     t.end();
   });
 
@@ -373,9 +532,9 @@ test('MovieLens durable CREATE confirmation never counts typed pending',
       }),
       /stable durable confirmation/,
     );
-    t.equal(clientsCreated, 3,
-      'pending-only CREATE replays exhaust the canonical virtual deadline');
-    t.equal(clientsClosed, 3);
+    t.equal(clientsCreated, 2,
+      'pending-only replay creates no client after deadline exhaustion');
+    t.equal(clientsClosed, 2);
     t.end();
   });
 
