@@ -1,5 +1,16 @@
+import {
+  REPLICA_OPERATION_INSERT_DISPOSITION,
+} from './replica-operation-insert-disposition.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
+
+function buildNewOperationPersistResult(options, disposition, operation) {
+  if (options?.returnDisposition !== true) {
+    return true;
+  }
+  return Object.freeze({persisted: true, disposition, operation});
+}
 
 function assignReplicaOperationRepositoryMutationPersistenceMethods(
   ReplicaOperationRepository,
@@ -23,10 +34,49 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     buildDivergenceEvent,
   } = options;
 
+  async function resolveNewOperationInsertCollision(
+    repository,
+    operation,
+    resultOptions,
+  ) {
+    const existingOperation =
+      await repository.queryAuthoritativeOperationById(operation.operationId, {
+        authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        requireOwnerRpcRead: true,
+      });
+    if (!existingOperation) {
+      throw new Error(
+        REPLICA_OPERATION_REPOSITORY_LITERAL
+          .AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED +
+          operation.operationId,
+      );
+    }
+    if (
+      resultOptions?.returnDisposition !== true &&
+      !repository.isReplicaOperationVisibilitySatisfied(
+        operation,
+        existingOperation,
+      )
+    ) {
+      throw new Error(
+        REPLICA_OPERATION_REPOSITORY_LITERAL
+          .AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED +
+          operation.operationId,
+      );
+    }
+    repository.emitReplicaOperationPersistenceDivergence(existingOperation);
+    return buildNewOperationPersistResult(
+      resultOptions,
+      REPLICA_OPERATION_INSERT_DISPOSITION.EXISTING,
+      existingOperation,
+    );
+  }
+
   class ReplicaOperationRepositoryMutationPersistenceMethods {
-    async persistNewOperation(operation) {
+    async persistNewOperation(operation, options = {}) {
       return this.runReplicaOperationTransitionExclusive(
-        async () => this.persistNewOperationUnlocked(operation),
+        async () => this.persistNewOperationUnlocked(operation, options),
         {operation},
       );
     }
@@ -42,14 +92,16 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
      * (post-apply delivery failure now honestly surfaced instead of silently
      * acked) lands on its own earlier row with zero changes instead of a
      * UNIQUE-constraint participant failure. The already-applied claim is
-     * then proven by the authoritative visibility confirmation below — never
-     * inferred from the write result alone. (The raw-SQL fallback lane keeps
-     * the plain INSERT: production gateways always expose the canonical
-     * ingress, and the fallback exists for reduced test harnesses.)
+     * then proven by an authoritative read — never inferred from the write
+     * result alone. Callers that own deterministic operation identities may
+     * request the insert disposition to reuse a non-terminal row or advance
+     * after a terminal row. The default boolean contract still requires a
+     * content match. The raw-SQL fallback remains for reduced test harnesses.
      * @param {Object} operation
-     * @return {Promise<boolean>}
+     * @param {Object} [options={}] - Optional typed-disposition request.
+     * @return {Promise<boolean|Object>}
      */
-    async persistNewOperationUnlocked(operation) {
+    async persistNewOperationUnlocked(operation, options = {}) {
       const result =
             await this.executeReplicaOperationGatewayMutationWithRetry(
               {
@@ -103,28 +155,31 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           throw persistError;
         }
         this.syncIncompleteOperationObservation(operation);
-        return true;
+        return buildNewOperationPersistResult(
+          options,
+          REPLICA_OPERATION_INSERT_DISPOSITION.UNKNOWN,
+          operation,
+        );
       }
       if (result.recoveredAfterRetryableFailure === true) {
         this.syncIncompleteOperationObservation(operation);
-        return true;
+        return buildNewOperationPersistResult(
+          options,
+          REPLICA_OPERATION_INSERT_DISPOSITION.UNKNOWN,
+          operation,
+        );
       }
-      const visibility =
-        await this.confirmPersistenceThroughWitness(operation);
       const changeCount = this.extractMutationChangeCount(result);
-      if (changeCount === null || changeCount > 0) {
-        return true;
+      if (changeCount !== null && changeCount <= 0) {
+        return resolveNewOperationInsertCollision(this, operation, options);
       }
-      // OR-IGNORE collision: zero changed rows means an identical-id row
-      // already exists — a lost-outcome retry landing on its own earlier
-      // write. The visibility confirmation above is the already-applied
-      // witness: it either observed the expected row (CONFIRMED, with the
-      // authoritative operation attached) or threw. Anything short of that
-      // observed row stays a failed persist.
-      return Boolean(
-        visibility?.confirmationState ===
-          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
-          visibility?.operation,
+      const visibility = await this.confirmPersistenceThroughWitness(operation);
+      return buildNewOperationPersistResult(
+        options,
+        changeCount === null ?
+          REPLICA_OPERATION_INSERT_DISPOSITION.UNKNOWN :
+          REPLICA_OPERATION_INSERT_DISPOSITION.INSERTED,
+        visibility?.operation || operation,
       );
     }
 

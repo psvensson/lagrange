@@ -1,4 +1,12 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  applyReplaceIntentIdentity,
+  buildCoordinatorReplaceIntentIdentity,
+  normalizeOperationPersistResult,
+} from './rebalance-replace-intent-identity.js';
+import {
+  REPLICA_OPERATION_INSERT_DISPOSITION,
+} from './replica-operation-insert-disposition.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const LOCAL_STR_FUNCTION = 'function';
@@ -97,6 +105,18 @@ class RebalanceCoordinatorOperationCreation {
       entityType,
       entityId,
     );
+    const replaceIntentIdentity = buildCoordinatorReplaceIntentIdentity({
+      move,
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+      criticalAddLikeIntentKey,
+    });
+    const moveForCreate = applyReplaceIntentIdentity(
+      move,
+      replaceIntentIdentity,
+    );
     const createOperationIntentKey = criticalAddLikeIntentKey || dedupeKey;
     const singleFlightKey = this.getCreateOperationSingleFlightKey(
       createOperationIntentKey,
@@ -130,8 +150,8 @@ class RebalanceCoordinatorOperationCreation {
     }
 
     return this.operationWorkflowRunExclusive(singleFlightKey, () =>
-      this.runOperationLedgerInterlockAccountedCreate(move, () =>
-        this.createOperationInternal(move),
+      this.runOperationLedgerInterlockAccountedCreate(moveForCreate, () =>
+        this.createOperationInternal(moveForCreate, {replaceIntentIdentity}),
       ),
     );
   }
@@ -208,7 +228,7 @@ class RebalanceCoordinatorOperationCreation {
    * @return {Promise<Object>} Created or existing operation record.
    * @private
    */
-  async createOperationInternal(move) {
+  async createOperationInternal(move, creationContext = {}) {
     this.assertMembershipPublicationEpoch(move);
 
     const normalizedMoveType = this.normalizeMoveType(move?.type);
@@ -352,6 +372,7 @@ class RebalanceCoordinatorOperationCreation {
             dedupeKey,
             criticalAddLikeIntentKey,
             sourceNodeId,
+            replaceIntentIdentity: creationContext.replaceIntentIdentity,
           }),
       );
     }
@@ -367,6 +388,7 @@ class RebalanceCoordinatorOperationCreation {
       dedupeKey,
       criticalAddLikeIntentKey,
       sourceNodeId,
+      replaceIntentIdentity: creationContext.replaceIntentIdentity,
     });
   }
 
@@ -550,12 +572,13 @@ class RebalanceCoordinatorOperationCreation {
       normalizedMoveType === OperationType.REPLACE &&
       (!operationReplicaId || operationReplicaId === sourceReplicaId)
     ) {
-      operationReplicaId = await this.allocateCanonicalReplicaId({
-        partitionId,
-        entityType,
-        entityId,
-        excludeReplicaIds: sourceReplicaId ? [sourceReplicaId] : [],
-      });
+      operationReplicaId = move.replicaIntentId ||
+        await this.allocateCanonicalReplicaId({
+          partitionId,
+          entityType,
+          entityId,
+          excludeReplicaIds: sourceReplicaId ? [sourceReplicaId] : [],
+        });
     }
 
     // Create operation using the helper from replica-status.js
@@ -629,27 +652,21 @@ class RebalanceCoordinatorOperationCreation {
     });
 
     // Persist via SQL engine (writes to partition leader)
-    const inserted = await this.persistNewOperation(operation);
-    if (!inserted) {
-      const existingAfterInsert =
-        await this.queryExistingOperationAfterInsertConflict({
-          operationIntentId: move.operationIntentId,
-          operationId,
-          partitionId,
-          targetNodeId: move.nodeId,
-          entityType,
-          entityId,
-          normalizedMove,
-        });
-      if (existingAfterInsert) {
-        this.rememberOperationIntents(
-          [dedupeKey, criticalAddLikeIntentKey],
-          existingAfterInsert,
-        );
-        return this.maybeRearmReusedPendingOperation(existingAfterInsert, {
-          shouldEmitOperationCreated,
-        });
-      }
+    const persistResult = normalizeOperationPersistResult(
+      await this.persistNewOperation(
+        operation,
+        context.replaceIntentIdentity ? {returnDisposition: true} : undefined,
+      ),
+    );
+    if (
+      persistResult.disposition ===
+      REPLICA_OPERATION_INSERT_DISPOSITION.EXISTING
+    ) {
+      return this.resolveCreatedOperationPersistenceCollision({
+        ...context,
+        operation,
+        persistResult,
+      });
     }
 
     this.stats.operationsCreated++;

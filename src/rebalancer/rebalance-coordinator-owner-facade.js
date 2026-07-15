@@ -82,11 +82,12 @@ class RebalanceCoordinatorOwnerFacade {
    * @readModel COORDINATOR_OPERATION_PERSIST —
    *   READ_MODEL_SOURCE.AUTHORITATIVE_SQL
    * @param {Object} operation - Operation to persist.
-   * @return {Promise<boolean>} True when row inserted, false when ignored.
+   * @param {Object} [options={}] - Optional persistence-result shape.
+   * @return {Promise<boolean|Object>} Persistence result.
    * @private
    */
-  async persistNewOperation(operation) {
-    return this.repository.persistNewOperation(operation);
+  async persistNewOperation(operation, options = {}) {
+    return this.repository.persistNewOperation(operation, options);
   }
 
   /**

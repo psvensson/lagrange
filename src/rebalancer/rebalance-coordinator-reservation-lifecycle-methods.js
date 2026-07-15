@@ -233,6 +233,32 @@ class RebalanceCoordinatorReservationLifecycleMethods {
   }
 
   /**
+   * Repair the post-persist reservation side effect when a deterministic
+   * operation collision reveals that the first creator did not finish its
+   * local handoff. The reservation primary key remains operation-derived, so
+   * concurrent repair attempts converge on the same row.
+   * @param {Object} operation - Reused non-terminal operation.
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureReservationForOperation(operation) {
+    if (!this.isStorageIncreasingOperation(operation?.type)) {
+      return;
+    }
+    const activeResult = await readAuthoritativeControlPlaneRows(
+      this.controlPlaneSystemTableGateway,
+      SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
+      SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
+      [operation.operationId, RESERVATION_STATUS.ACTIVE],
+      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
+    );
+    if (activeResult.success && activeResult.rows?.length > 0) {
+      return;
+    }
+    await this.createReservationForOperation(operation);
+  }
+
+  /**
    * Release the storage reservation tied to an operation.
    * Called on terminal outcomes (completed, failed, cancelled).
    * Requirements: 4.3
