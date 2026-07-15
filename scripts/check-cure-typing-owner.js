@@ -45,6 +45,17 @@ import {
   walkAst,
 } from './guideline-check-shared.js';
 
+const ANALYZER_SOURCE_FORMAT = Object.freeze({
+  JAVASCRIPT_EXTENSION: '.js',
+  MODULE_SCOPE: '<module>',
+  PATH_SEPARATOR: '/',
+});
+const CURE_TYPING_ANALYZER_OUTPUT = Object.freeze({
+  CLASSIFICATION: 'cure-typing-single-owner-census',
+  GENERATED_BY: 'scripts/check-cure-typing-owner.js',
+  NEWLINE: '\n',
+});
+
 const REPO_ROOT = path.resolve(path.dirname(new globalThis.URL(import.meta.url).pathname), '..');
 const SCAN_ROOT = 'src';
 const ORACLE_FILE = 'solve/oracle/cure-typing-single-owner-table.json';
@@ -98,6 +109,7 @@ const EXCLUDED_SITES = Object.freeze([
 
 const NODE_TYPE = Object.freeze({
   CALL: 'CallExpression',
+  FUNCTION_DECLARATION: 'FunctionDeclaration',
   IDENTIFIER: 'Identifier',
   MEMBER: 'MemberExpression',
   METHOD: 'MethodDefinition',
@@ -125,7 +137,9 @@ const GATE_COMMANDS = Object.freeze([
 ]);
 
 function normalizeRepoPath(filePath) {
-  return path.relative(REPO_ROOT, path.resolve(filePath)).split(path.sep).join('/');
+  return path.relative(REPO_ROOT, path.resolve(filePath))
+    .split(path.sep)
+    .join(ANALYZER_SOURCE_FORMAT.PATH_SEPARATOR);
 }
 
 function resolveCalleeName(callee) {
@@ -149,7 +163,7 @@ function findEnclosingIdentifier(ancestors) {
     if (ancestor.type === NODE_TYPE.METHOD && ancestor.key?.name) {
       return ancestor.key.name;
     }
-    if (ancestor.type === 'FunctionDeclaration' && ancestor.id?.name) {
+    if (ancestor.type === NODE_TYPE.FUNCTION_DECLARATION && ancestor.id?.name) {
       return ancestor.id.name;
     }
   }
@@ -164,7 +178,7 @@ function findEnclosingIdentifier(ancestors) {
       return ancestor.key.name;
     }
   }
-  return '<module>';
+  return ANALYZER_SOURCE_FORMAT.MODULE_SCOPE;
 }
 
 // A `type: MoveType.X` / `type: OperationType.X` member of an object literal:
@@ -233,7 +247,8 @@ function collectFileSites(filePath, source) {
 async function collectJavaScriptFiles(entryPath) {
   const stat = await fs.stat(entryPath);
   if (stat.isFile()) {
-    return entryPath.endsWith('.js') ? [entryPath] : [];
+    return entryPath.endsWith(ANALYZER_SOURCE_FORMAT.JAVASCRIPT_EXTENSION) ?
+      [entryPath] : [];
   }
   if (!stat.isDirectory()) return [];
   const children = await fs.readdir(entryPath, {withFileTypes: true});
@@ -242,7 +257,8 @@ async function collectJavaScriptFiles(entryPath) {
     const childPath = path.join(entryPath, child.name);
     if (child.isDirectory()) {
       collected.push(...await collectJavaScriptFiles(childPath));
-    } else if (child.isFile() && childPath.endsWith('.js')) {
+    } else if (child.isFile() &&
+        childPath.endsWith(ANALYZER_SOURCE_FORMAT.JAVASCRIPT_EXTENSION)) {
       collected.push(childPath);
     }
   }
@@ -288,9 +304,9 @@ function buildOraclePayload(census, gateResults, doneAt) {
     metric,
     target: doneAt,
     done: metric <= doneAt && gatesGreen,
-    classification: 'cure-typing-single-owner-census',
+    classification: CURE_TYPING_ANALYZER_OUTPUT.CLASSIFICATION,
     detail: {
-      generatedBy: 'scripts/check-cure-typing-owner.js',
+      generatedBy: CURE_TYPING_ANALYZER_OUTPUT.GENERATED_BY,
       ownerModules: [...OWNER_MODULES],
       countedSites: census.counted,
       excludedSites: census.excluded,
@@ -320,9 +336,14 @@ async function main() {
   if (writeOracle) {
     const oraclePath = path.join(REPO_ROOT, oracleFile);
     await fs.mkdir(path.dirname(oraclePath), {recursive: true});
-    await fs.writeFile(oraclePath, JSON.stringify(payload, null, 2) + '\n');
+    await fs.writeFile(
+      oraclePath,
+      JSON.stringify(payload, null, 2) + CURE_TYPING_ANALYZER_OUTPUT.NEWLINE,
+    );
   }
-  process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+  process.stdout.write(
+    JSON.stringify(payload, null, 2) + CURE_TYPING_ANALYZER_OUTPUT.NEWLINE,
+  );
   return payload.metric <= doneAt ? EXIT_CODE.SUCCESS : EXIT_CODE.FAILURE;
 }
 

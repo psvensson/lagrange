@@ -1,0 +1,45 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "tooling-static-cure-hold-ratchet",
+  "detail": {
+    "literalGuideline": {
+      "passed": true,
+      "newViolations": 0,
+      "cureTypingOwner": 0,
+      "holdEngagementOwner": 0
+    },
+    "decisionBoundary": {
+      "passed": true,
+      "newViolations": 0,
+      "sentinelOwner": "resolveMarkerKind"
+    },
+    "analyzerMetrics": {
+      "passed": true,
+      "cureTypingOwner": 0,
+      "holdEngagementOwner": 0
+    },
+    "focusedSemantics": {
+      "passed": true,
+      "status": "both owner analyzers completed at metric 0 with lint and targeted-suites gates passed"
+    },
+    "globalDuplication": {
+      "passed": true,
+      "cloneGroups": 78,
+      "duplicatedLines": 2405,
+      "configuredRatchetPassed": false,
+      "ceilings": {
+        "cloneGroups": 78,
+        "duplicatedLines": 2435
+      }
+    },
+    "globalCognitiveComplexity": {
+      "passed": true,
+      "violations": 184,
+      "ceiling": 184,
+      "configuredRatchetPassed": false
+    },
+    "baselinesChanged": false
+  }
+}

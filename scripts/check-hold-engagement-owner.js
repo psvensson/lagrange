@@ -43,6 +43,17 @@ import {
   walkAst,
 } from './guideline-check-shared.js';
 
+const ANALYZER_SOURCE_FORMAT = Object.freeze({
+  JAVASCRIPT_EXTENSION: '.js',
+  MODULE_SCOPE: '<module>',
+  PATH_SEPARATOR: '/',
+});
+const HOLD_ENGAGEMENT_ANALYZER_OUTPUT = Object.freeze({
+  CLASSIFICATION: 'hold-engagement-single-owner-census',
+  GENERATED_BY: 'scripts/check-hold-engagement-owner.js',
+  NEWLINE: '\n',
+});
+
 const REPO_ROOT = path.resolve(path.dirname(new globalThis.URL(import.meta.url).pathname), '..');
 const SCAN_ROOT = 'src';
 const ORACLE_FILE = 'solve/oracle/hold-engagement-single-owner-table.json';
@@ -79,6 +90,7 @@ const MARKERS_BY_KIND = Object.freeze(new Map([
     'isConcentratedOperationLedgerPartition',
   ]))],
 ]));
+const MARKER_KIND_NOT_FOUND = Symbol('marker_kind_not_found');
 
 const CURE_EVIDENCE_SURFACE_NAME =
   'isOperationLedgerQuorumConcentratedForPartition';
@@ -137,6 +149,7 @@ const EXCLUDED_SITES = Object.freeze([
 const NODE_TYPE = Object.freeze({
   BINARY: 'BinaryExpression',
   CALL: 'CallExpression',
+  FUNCTION_DECLARATION: 'FunctionDeclaration',
   IDENTIFIER: 'Identifier',
   MEMBER: 'MemberExpression',
   METHOD: 'MethodDefinition',
@@ -169,7 +182,9 @@ const GATE_COMMANDS = Object.freeze([
 ]);
 
 function normalizeRepoPath(filePath) {
-  return path.relative(REPO_ROOT, path.resolve(filePath)).split(path.sep).join('/');
+  return path.relative(REPO_ROOT, path.resolve(filePath))
+    .split(path.sep)
+    .join(ANALYZER_SOURCE_FORMAT.PATH_SEPARATOR);
 }
 
 function resolveCalleeName(callee) {
@@ -189,7 +204,7 @@ function resolveMarkerKind(calleeName) {
       return kind;
     }
   }
-  return null;
+  return MARKER_KIND_NOT_FOUND;
 }
 
 // The decision unit for a marker call is the OUTERMOST named function
@@ -202,7 +217,7 @@ function findEnclosingIdentifier(ancestors) {
     if (ancestor.type === NODE_TYPE.METHOD && ancestor.key?.name) {
       return ancestor.key.name;
     }
-    if (ancestor.type === 'FunctionDeclaration' && ancestor.id?.name) {
+    if (ancestor.type === NODE_TYPE.FUNCTION_DECLARATION && ancestor.id?.name) {
       return ancestor.id.name;
     }
   }
@@ -217,7 +232,7 @@ function findEnclosingIdentifier(ancestors) {
       return ancestor.key.name;
     }
   }
-  return '<module>';
+  return ANALYZER_SOURCE_FORMAT.MODULE_SCOPE;
 }
 
 // Outermost, not nearest: a hand-rolled cure classifier is typically an
@@ -261,8 +276,9 @@ function collectFileSites(filePath, source) {
   walkAst(ast, (node, _parent, ancestors) => {
     if (node.type === NODE_TYPE.CALL) {
       const calleeName = resolveCalleeName(node.callee);
-      const kind = calleeName === null ? null : resolveMarkerKind(calleeName);
-      if (kind !== null) {
+      const kind = calleeName === null ?
+        MARKER_KIND_NOT_FOUND : resolveMarkerKind(calleeName);
+      if (kind !== MARKER_KIND_NOT_FOUND) {
         const enclosingIdentifier = findEnclosingIdentifier(ancestors);
         // A delegation wrapper — a function itself named as a marker of the
         // SAME kind (exact or renamed alias) — declares no decision of its
@@ -324,7 +340,8 @@ function collectFileSites(filePath, source) {
 async function collectJavaScriptFiles(entryPath) {
   const stat = await fs.stat(entryPath);
   if (stat.isFile()) {
-    return entryPath.endsWith('.js') ? [entryPath] : [];
+    return entryPath.endsWith(ANALYZER_SOURCE_FORMAT.JAVASCRIPT_EXTENSION) ?
+      [entryPath] : [];
   }
   if (!stat.isDirectory()) return [];
   const children = await fs.readdir(entryPath, {withFileTypes: true});
@@ -333,7 +350,8 @@ async function collectJavaScriptFiles(entryPath) {
     const childPath = path.join(entryPath, child.name);
     if (child.isDirectory()) {
       collected.push(...await collectJavaScriptFiles(childPath));
-    } else if (child.isFile() && childPath.endsWith('.js')) {
+    } else if (child.isFile() &&
+        childPath.endsWith(ANALYZER_SOURCE_FORMAT.JAVASCRIPT_EXTENSION)) {
       collected.push(childPath);
     }
   }
@@ -379,9 +397,9 @@ function buildOraclePayload(census, gateResults, doneAt) {
     metric,
     target: doneAt,
     done: metric <= doneAt && gatesGreen,
-    classification: 'hold-engagement-single-owner-census',
+    classification: HOLD_ENGAGEMENT_ANALYZER_OUTPUT.CLASSIFICATION,
     detail: {
-      generatedBy: 'scripts/check-hold-engagement-owner.js',
+      generatedBy: HOLD_ENGAGEMENT_ANALYZER_OUTPUT.GENERATED_BY,
       ownerModules: [...OWNER_MODULES],
       countedSites: census.counted,
       excludedSites: census.excluded,
@@ -411,9 +429,16 @@ async function main() {
   if (writeOracle) {
     const oraclePath = path.join(REPO_ROOT, oracleFile);
     await fs.mkdir(path.dirname(oraclePath), {recursive: true});
-    await fs.writeFile(oraclePath, JSON.stringify(payload, null, 2) + '\n');
+    await fs.writeFile(
+      oraclePath,
+      JSON.stringify(payload, null, 2) +
+        HOLD_ENGAGEMENT_ANALYZER_OUTPUT.NEWLINE,
+    );
   }
-  process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+  process.stdout.write(
+    JSON.stringify(payload, null, 2) +
+      HOLD_ENGAGEMENT_ANALYZER_OUTPUT.NEWLINE,
+  );
   return payload.metric <= doneAt ? EXIT_CODE.SUCCESS : EXIT_CODE.FAILURE;
 }
 
