@@ -1,0 +1,219 @@
+diff --git a/scripts/solve/handoff.js b/scripts/solve/handoff.js
+index d5f5eecf02ff745fb148c8ec6298154ffafa3143..1fa8e70ebdbd3556219c7a16d04e9e96f37581fc 100644
+--- a/scripts/solve/handoff.js
++++ b/scripts/solve/handoff.js
+@@ -1,10 +1,10 @@
+ // Scope-safe git handoff — compute the exact pathspec for committing ONE Quest.
+ //
+ // The repository convention is that a Quest's commit must contain only that
+-// Quest's work: its sealed quest file, its append-only log, its regenerated
+-// report/state, its recorded change artifacts, and the source/test files those
+-// artifacts actually touched. A mixed working tree (several Quests' edits, plus
+-// unrelated dirty files) must never be swept into one commit — `audit.js`
++// Quest's work: its sealed quest file, append-only log, exact id-owned oracle,
++// regenerated report/state, recorded change artifacts, and the source/test files
++// those artifacts actually touched. A mixed working tree (several Quests' edits,
++// plus unrelated dirty files) must never be swept into one commit — `audit.js`
+ // already rejects mis-scoped change artifacts, but nothing computed the safe
+ // pathspec for the operator. This module does.
+ //
+@@ -36,11 +36,16 @@ import {
+   expectedChangeDir,
+   inspectChangeArtifact,
+ } from './change-artifact.js';
++import {SOLVE_DATA_DIR} from './constants.js';
+ import {resolveCoauthorTrailer} from './operator-config.js';
+ 
+ const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
++const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
+ const GIT_COMMAND = 'git';
+ const STDIO_IGNORE = 'ignore';
++const CHECKPOINT_ID_REQUIRED_PROBLEM =
++  'checkpoint: --id <questId> is required';
++const DRY_RUN_ARGUMENT = 'dry-run';
+ const GIT_ARGUMENT = Object.freeze({
+   ADD: 'add',
+   ALL: '--all',
+@@ -54,6 +59,15 @@ function toRootRelative(root, absolute) {
+   return path.relative(root, absolute).replaceAll(path.sep, '/');
+ }
+ 
++function questOracleFilePath(root, questId) {
++  return path.resolve(
++    root,
++    SOLVE_DATA_DIR,
++    ORACLE_ARTIFACT_DIRECTORY,
++    `${questId}.json`,
++  );
++}
++
+ // The fixed solve/ artifacts a Quest owns by construction, whether or not they
+ // are currently dirty. The change directory is expressed as a prefix.
+ function questArtifactPaths(root, questId) {
+@@ -63,6 +77,7 @@ function questArtifactPaths(root, questId) {
+       logFilePath(root, questId),
+       stateFilePath(root, questId),
+       reportFilePath(root, questId),
++      questOracleFilePath(root, questId),
+     ].map((absolute) => toRootRelative(root, absolute)),
+     changeDirPrefix: `${toRootRelative(root, expectedChangeDir(root, questId))}/`,
+   };
+@@ -201,6 +216,15 @@ function gitCommands(handoff) {
+   ];
+ }
+ 
++function appendPathSection(lines, title, paths, emptyLine) {
++  lines.push('', title);
++  if (paths.length === 0) {
++    lines.push(emptyLine);
++    return;
++  }
++  for (const file of paths) lines.push(`- ${file}`);
++}
++
+ export function renderHandoff(handoff) {
+   const lines = ['# Quest handoff', '', `- quest: ${handoff.questId}`,
+     `- audit: ${handoff.audit.status}`];
+@@ -216,18 +240,18 @@ export function renderHandoff(handoff) {
+     lines.push('');
+     return lines.join('\n');
+   }
+-  lines.push('', '## In scope (will be committed)');
+-  if (handoff.inScope.length === 0) {
+-    lines.push('_(no dirty in-scope files — nothing to commit)_');
+-  } else {
+-    for (const file of handoff.inScope) lines.push(`- ${file}`);
+-  }
+-  lines.push('', '## Out of scope (excluded, NOT committed)');
+-  if (handoff.outOfScope.length === 0) {
+-    lines.push('_(none)_');
+-  } else {
+-    for (const file of handoff.outOfScope) lines.push(`- ${file}`);
+-  }
++  appendPathSection(
++    lines,
++    '## In scope (will be committed)',
++    handoff.inScope,
++    '_(no dirty in-scope files — nothing to commit)_',
++  );
++  appendPathSection(
++    lines,
++    '## Out of scope (excluded, NOT committed)',
++    handoff.outOfScope,
++    '_(none)_',
++  );
+   lines.push('', '## Commands');
+   const commands = gitCommands(handoff);
+   if (commands.length === 0) {
+@@ -339,10 +363,10 @@ export function runHandoffCommand(root, args) {
+ // verifier records the exact attempt approval, the operator chooses this action.
+ export function runCheckpointCommand(root, args) {
+   const id = args.id || args._[0];
+-  if (!id) throw new Error('checkpoint: --id <questId> is required');
++  if (!id) throw new Error(CHECKPOINT_ID_REQUIRED_PROBLEM);
+   const handoff = buildHandoff(root, loadQuest(root, id), {checkpoint: true});
+   const rendered = renderHandoff(handoff);
+-  if (args['dry-run']) {
++  if (args[DRY_RUN_ARGUMENT]) {
+     return `${rendered}\n(dry run — omit --dry-run to execute checkpoint)\n`;
+   }
+   if (!handoff.ok) {
+diff --git a/test/solve/handoff.test.js b/test/solve/handoff.test.js
+index 350da020a25fcf305377e62f5be930f7aae60e2d..61416c9795ca692227aeda81031e054dd6cdcacf 100644
+--- a/test/solve/handoff.test.js
++++ b/test/solve/handoff.test.js
+@@ -18,8 +18,8 @@ function tmp() {
+   return fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-'));
+ }
+ 
+-function makeQuest(root, id = 'demo') {
+-  const oracle = path.join(root, 'oracle.json');
++function makeQuest(root, id = 'demo', oracle = path.join(root, 'oracle.json')) {
++  fs.mkdirSync(path.dirname(oracle), {recursive: true});
+   fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+   const quest = {
+     id,
+@@ -36,6 +36,11 @@ function makeQuest(root, id = 'demo') {
+   return {quest, oracle};
+ }
+ 
++function makeOwnedOracleQuest(root, id = 'demo') {
++  return makeQuest(root, id,
++    path.join(root, 'solve', 'oracle', `${id}.json`));
++}
++
+ function makeDiff(root, questId, name, changedPath = 'src/demo.js') {
+   const file = path.join(root, 'solve', 'changes', questId, `${name}.diff`);
+   fs.mkdirSync(path.dirname(file), {recursive: true});
+@@ -146,6 +151,35 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('dry-run and checkpoint own only the current Quest oracle', (t) => {
++    const root = tmp();
++    const {quest, oracle} = makeOwnedOracleQuest(root);
++    const siblingOracle = path.join(root, 'solve/oracle/sibling.json');
++    fs.writeFileSync(siblingOracle, JSON.stringify({metric: 0, target: 0}));
++    runStep(root, quest);
++    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
++    runStep(root, quest, {
++      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
++      summary: 'scoped fix',
++    });
++    writeReport(root, quest.id);
++    const dirtyFiles = [
++      'solve/oracle/demo.json',
++      'solve/oracle/sibling.json',
++      'solve/quests/demo.json',
++    ];
++
++    for (const checkpoint of [false, true]) {
++      const handoff = buildHandoff(root, quest, {checkpoint, dirtyFiles});
++      t.ok(handoff.inScope.includes('solve/oracle/demo.json'),
++        `${checkpoint ? 'checkpoint' : 'terminal'} includes current oracle`);
++      t.ok(handoff.outOfScope.includes('solve/oracle/sibling.json'),
++        `${checkpoint ? 'checkpoint' : 'terminal'} excludes sibling oracle`);
++    }
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('refuses to commit until the quest has finished (commit gate)', (t) => {
+     const root = tmp();
+     const {quest, oracle} = makeQuest(root);
+@@ -275,6 +309,35 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
+     t.end();
+   });
+ 
++  t.test('terminal commit includes its oracle and leaves a sibling dirty', (t) => {
++    const root = tmp();
++    initGit(root);
++    const {quest, oracle} = makeOwnedOracleQuest(root);
++    const siblingOracle = path.join(root, 'solve/oracle/sibling.json');
++    fs.writeFileSync(siblingOracle, JSON.stringify({metric: 0, target: 0}));
++    runStep(root, quest);
++    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
++    runStep(root, quest, {
++      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
++      summary: 'scoped doc fix',
++    });
++
++    const committed = autoCommitQuest(root, quest.id);
++    t.ok(committed.committed, 'terminal handoff commits');
++    t.ok(committedFiles(root).includes('solve/oracle/demo.json'),
++      'commit contains the exact current Quest oracle');
++    t.notOk(committedFiles(root).includes('solve/oracle/sibling.json'),
++      'commit excludes the sibling oracle');
++    const status = execFileSync('git', ['status', '--porcelain', '-uall'], {
++      cwd: root,
++      encoding: 'utf8',
++    });
++    t.match(status, /solve\/oracle\/sibling\.json/u,
++      'sibling oracle remains visibly dirty');
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('already-staged tracked deletion commits without unrelated staged work',
+     (t) => {
+       const root = tmp();

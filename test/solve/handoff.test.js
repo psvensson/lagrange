@@ -18,8 +18,8 @@ function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-'));
 }
 
-function makeQuest(root, id = 'demo') {
-  const oracle = path.join(root, 'oracle.json');
+function makeQuest(root, id = 'demo', oracle = path.join(root, 'oracle.json')) {
+  fs.mkdirSync(path.dirname(oracle), {recursive: true});
   fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
   const quest = {
     id,
@@ -34,6 +34,11 @@ function makeQuest(root, id = 'demo') {
   };
   saveQuest(root, quest);
   return {quest, oracle};
+}
+
+function makeOwnedOracleQuest(root, id = 'demo') {
+  return makeQuest(root, id,
+    path.join(root, 'solve', 'oracle', `${id}.json`));
 }
 
 function makeDiff(root, questId, name, changedPath = 'src/demo.js') {
@@ -142,6 +147,35 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
     t.match(md, /In scope/, 'renders an in-scope section');
     t.match(md, /Out of scope/, 'renders an out-of-scope section');
     t.match(md, /git add/, 'prints the git add command');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('dry-run and checkpoint own only the current Quest oracle', (t) => {
+    const root = tmp();
+    const {quest, oracle} = makeOwnedOracleQuest(root);
+    const siblingOracle = path.join(root, 'solve/oracle/sibling.json');
+    fs.writeFileSync(siblingOracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped fix',
+    });
+    writeReport(root, quest.id);
+    const dirtyFiles = [
+      'solve/oracle/demo.json',
+      'solve/oracle/sibling.json',
+      'solve/quests/demo.json',
+    ];
+
+    for (const checkpoint of [false, true]) {
+      const handoff = buildHandoff(root, quest, {checkpoint, dirtyFiles});
+      t.ok(handoff.inScope.includes('solve/oracle/demo.json'),
+        `${checkpoint ? 'checkpoint' : 'terminal'} includes current oracle`);
+      t.ok(handoff.outOfScope.includes('solve/oracle/sibling.json'),
+        `${checkpoint ? 'checkpoint' : 'terminal'} excludes sibling oracle`);
+    }
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -271,6 +305,35 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
     const committed = autoCommitQuest(root, quest.id);
     t.ok(committed.committed, 'explicit terminal handoff commits');
     t.equal(committed.pushed, false, 'never pushes');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('terminal commit includes its oracle and leaves a sibling dirty', (t) => {
+    const root = tmp();
+    initGit(root);
+    const {quest, oracle} = makeOwnedOracleQuest(root);
+    const siblingOracle = path.join(root, 'solve/oracle/sibling.json');
+    fs.writeFileSync(siblingOracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped doc fix',
+    });
+
+    const committed = autoCommitQuest(root, quest.id);
+    t.ok(committed.committed, 'terminal handoff commits');
+    t.ok(committedFiles(root).includes('solve/oracle/demo.json'),
+      'commit contains the exact current Quest oracle');
+    t.notOk(committedFiles(root).includes('solve/oracle/sibling.json'),
+      'commit excludes the sibling oracle');
+    const status = execFileSync('git', ['status', '--porcelain', '-uall'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    t.match(status, /solve\/oracle\/sibling\.json/u,
+      'sibling oracle remains visibly dirty');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

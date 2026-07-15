@@ -1,0 +1,26 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "quest_oracle_owned_by_checkpoint_and_handoff",
+  "detail": {
+    "redOnCurrentReproduced": true,
+    "dryRunOwnOracleIncluded": true,
+    "siblingOracleExcluded": true,
+    "checkpointScopeIncluded": true,
+    "realCommitOwnOracleIncluded": true,
+    "realCommitSiblingOracleExcluded": true,
+    "focusedTests": {
+      "handoffAssertions": 64,
+      "relatedAssertions": 220
+    },
+    "scopedStaticChecks": {
+      "cyclomaticDebt": 0,
+      "cognitiveDebt": 0,
+      "literalDebt": 0,
+      "decisionBoundaryDebt": 0,
+      "opaqueConstantNames": 0,
+      "runtimeGrammarDebt": 0
+    }
+  }
+}
