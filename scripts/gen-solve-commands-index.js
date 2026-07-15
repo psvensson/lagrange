@@ -22,6 +22,8 @@ import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {dirname, join} from 'node:path';
 
+import {parseSourceFile, walkAst} from './guideline-check-shared.js';
+
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(SCRIPT_DIR, '..');
 const SOLVE_JS_PATH = join(REPO_ROOT, 'scripts/solve.js');
@@ -33,6 +35,12 @@ const NEWLINE = '\n';
 const UNDOCUMENTED = '(undocumented — add an entry to `docs/steering/solve-commands.json`)';
 const SOURCE_FILE_EXTENSION = '.js';
 const TEXT_ENCODING = 'utf8';
+const ARGUMENTS_IDENTIFIER = 'args';
+const IDENTIFIER_NODE = 'Identifier';
+const LITERAL_NODE = 'Literal';
+const MEMBER_EXPRESSION_NODE = 'MemberExpression';
+const VARIABLE_DECLARATION_NODE = 'VariableDeclaration';
+const CONST_DECLARATION = 'const';
 const REGEXP_ESCAPE_REPLACEMENT = '\\$&';
 const SOLVE_SOURCE_TREE_LOCATION = 'in scripts/solve.js or scripts/solve/*.js';
 const STALE_FLAG_FAILURE_HEADER =
@@ -75,7 +83,7 @@ function loadSolveSourceTree() {
       chunks.push(readFileSync(join(SOLVE_MODULES_DIR, name), TEXT_ENCODING));
     }
   }
-  return chunks.join(NEWLINE);
+  return chunks;
 }
 
 // Extract `--flag` tokens from a sidecar usage row. `<...>` placeholder and
@@ -101,16 +109,50 @@ function escapeRegExp(value) {
   );
 }
 
+function computedArgumentConstantKnown(source, flag) {
+  const syntaxTree = parseSourceFile(source);
+  const declaredConstants = new Set();
+  for (const statement of syntaxTree.body) {
+    if (statement.type !== VARIABLE_DECLARATION_NODE ||
+        statement.kind !== CONST_DECLARATION) {
+      continue;
+    }
+    for (const declaration of statement.declarations) {
+      if (declaration.id?.type === IDENTIFIER_NODE &&
+          declaration.init?.type === LITERAL_NODE &&
+          declaration.init.value === flag) {
+        declaredConstants.add(declaration.id.name);
+      }
+    }
+  }
+  if (declaredConstants.size === 0) return false;
+
+  let found = false;
+  walkAst(syntaxTree, (node) => {
+    if (node.type === MEMBER_EXPRESSION_NODE &&
+        node.computed === true &&
+        node.object?.type === IDENTIFIER_NODE &&
+        node.object.name === ARGUMENTS_IDENTIFIER &&
+        node.property?.type === IDENTIFIER_NODE &&
+        declaredConstants.has(node.property.name)) {
+      found = true;
+    }
+  });
+  return found;
+}
+
 // A flag is "known" when the solve source tree references it in any of the
 // shapes its parseArgs produces: `args.<flag>` / `args['<flag>']` /
 // `args["<flag>"]`, or the literal `--<flag>` (help text, string dispatch).
-function flagKnownToSource(source, flag) {
+export function flagKnownToSource(source, flag) {
+  const chunks = Array.isArray(source) ? source : [source];
   const escaped = escapeRegExp(flag);
   const pattern = new RegExp(
     `args\\.${escaped}\\b|args\\[['"]${escaped}['"]\\]|--${escaped}(?![A-Za-z0-9-])`,
     'u',
   );
-  return pattern.test(source);
+  return chunks.some((chunk) =>
+    pattern.test(chunk) || computedArgumentConstantKnown(chunk, flag));
 }
 
 // Verify every `--flag` in every sidecar usage row against the actual solve
@@ -214,4 +256,6 @@ function main() {
   process.stdout.write(`Wrote ${OUTPUT_PATH}${NEWLINE}`);
 }
 
-main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main();
+}
