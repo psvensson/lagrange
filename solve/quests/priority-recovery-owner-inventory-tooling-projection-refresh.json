@@ -1,0 +1,51 @@
+{
+  "id": "priority-recovery-owner-inventory-tooling-projection-refresh",
+  "authoringContractVersion": 1,
+  "statement": "The checked-in priority-recovery owner-inventory tooling projection exactly matches the current production recovery graph without source, generator, or baseline changes. doneWhen: solve/oracle/priority-recovery-owner-inventory-tooling-projection-refresh.json is done only when the official generator is idempotent, the focused owner-inventory test is green, and independent review confirms that only derived graph facts changed.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "priority-recovery-owner-inventory-projection-refresh",
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "05835dddb4467a85ba878156471f8835c191e730"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/priority-recovery-owner-inventory-tooling-projection-refresh.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "priority-recovery-owner-inventory-tooling-projection-refresh-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/priority-recovery-owner-inventory-tooling-projection-refresh.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "successor-scope-correction",
+      "statement": "This tooling-scoped Quest supersedes the exhausted runtime-classified predecessor, which could not honestly record a solve/changes projection path."
+    },
+    {
+      "id": "projection-only",
+      "statement": "Change only solve/changes/priority-recovery-owner-inventory/inventory.json plus this Quest's owned artifacts; do not change production source, tests, generators, or baselines."
+    },
+    {
+      "id": "independent-owner-contract-review",
+      "statement": "Before terminal handoff, obtain independent verification that the regenerated inventory is an exact derived projection and does not invent or weaken owner-boundary facts."
+    },
+    {
+      "id": "deterministic-idempotence",
+      "statement": "A second official generator run must produce a byte-identical inventory."
+    }
+  ]
+}
