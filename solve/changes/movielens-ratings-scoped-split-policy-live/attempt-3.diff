@@ -1,0 +1,1970 @@
+diff --git a/examples/service-data-affinity/lagrange-loader.js b/examples/service-data-affinity/lagrange-loader.js
+index 9d44ac34786d2f1c63739e3e3fc07ba3892f2753..0c49b70574db08e43e10b18c7106890587438cff 100644
+--- a/examples/service-data-affinity/lagrange-loader.js
++++ b/examples/service-data-affinity/lagrange-loader.js
+@@ -2,16 +2,53 @@ import {createReadStream} from 'node:fs';
+ import {stat} from 'node:fs/promises';
+ import {createInterface} from 'node:readline';
+ import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
++import {runRetryableControlPlaneWrite} from
++  '../../src/bootstrap/shared/retryable-control-plane-write.js';
++import {
++  OWNER_CONTRACT_NEXT_ACTION,
++  OWNER_CONTRACT_STATE,
++} from '../../src/control-plane/owner-contract-outcome.js';
+ import {RATINGS_FILE} from './movie-ranking.js';
+ 
+ const DEFAULT_TARGET = 'ws://127.0.0.1:8081/api/admin/stream';
+ const BATCH_SIZE = 500;
++const RATINGS_SPLIT_STORAGE_THRESHOLD_BYTES = 1048576;
++const RATINGS_TABLE_SPLIT_POLICY = Object.freeze({
++  splitStorageThreshold: RATINGS_SPLIT_STORAGE_THRESHOLD_BYTES,
++});
++const RATINGS_SCHEMA_CREATE_DECISION = Object.freeze({
++  READY: 'ready',
++  RETRY: 'retry',
++  STOP: 'stop',
++});
++const RATINGS_SCHEMA_CREATE_TRANSITION = Object.freeze({
++  [OWNER_CONTRACT_STATE.READY]: Object.freeze({
++    [OWNER_CONTRACT_NEXT_ACTION.PROCEED]:
++      RATINGS_SCHEMA_CREATE_DECISION.READY,
++  }),
++  [OWNER_CONTRACT_STATE.PENDING]: Object.freeze({
++    [OWNER_CONTRACT_NEXT_ACTION.RETRY]:
++      RATINGS_SCHEMA_CREATE_DECISION.RETRY,
++    [OWNER_CONTRACT_NEXT_ACTION.WAIT]: RATINGS_SCHEMA_CREATE_DECISION.RETRY,
++  }),
++  [OWNER_CONTRACT_STATE.DEFERRED]: Object.freeze({
++    [OWNER_CONTRACT_NEXT_ACTION.RETRY]:
++      RATINGS_SCHEMA_CREATE_DECISION.RETRY,
++    [OWNER_CONTRACT_NEXT_ACTION.WAIT]: RATINGS_SCHEMA_CREATE_DECISION.RETRY,
++  }),
++});
+ // Cold five-node formation may finish the three physical replicas shortly
+ // before their new leader becomes routable. CREATE IF NOT EXISTS is
+ // idempotent, so fresh admin sessions keep observing the same provisioning
+ // job without widening any server-side timeout or admission budget.
+-const CREATE_TABLE_MAX_ATTEMPTS = 12;
++const CREATE_TABLE_RETRY_TIMEOUT_MS = 60000;
+ const CREATE_TABLE_RETRY_DELAY_MS = 5000;
++const CREATE_TABLE_STABLE_CONFIRMATION_COUNT = 2;
++const RATINGS_FIELD_DELIMITER = '\t';
++const RATINGS_FILE_MISSING_GUIDANCE =
++  'Run examples/service-data-affinity/download-movielens.js first.';
++const RATINGS_SCHEMA_CONFIRMATION_ERROR =
++  'ratings schema did not reach stable durable confirmation';
+ // Managed splitting currently needs one partition-key column. The source
+ // dataset has a natural composite identity, so the loader assigns the stable
+ // input ordinal as rating_id while preserving every MovieLens field used by
+@@ -23,7 +60,7 @@ const CREATE_LAGRANGE_RATINGS_SQL = `
+     movie_id INTEGER,
+     rating INTEGER,
+     rating_ts INTEGER
+-  );
++  ) WITH (split_storage_threshold = 1048576);
+ `;
+ 
+ async function ensureRatingsFile() {
+@@ -32,40 +69,95 @@ async function ensureRatingsFile() {
+   } catch {
+     throw new Error(
+       `Ratings file not found at ${RATINGS_FILE}. ` +
+-      'Run examples/service-data-affinity/download-movielens.js first.',
++      RATINGS_FILE_MISSING_GUIDANCE,
+     );
+   }
+ }
+ 
++function resolveRatingsSchemaRetryAfterMs(result) {
++  return Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0 ?
++    Math.floor(result.retryAfterMs) :
++    CREATE_TABLE_RETRY_DELAY_MS;
++}
++
++function resolveRatingsSchemaCreateOutcome(result) {
++  const decision = RATINGS_SCHEMA_CREATE_TRANSITION[result?.contractState]?.[
++    result?.nextAction
++  ] || RATINGS_SCHEMA_CREATE_DECISION.STOP;
++  switch (decision) {
++  case RATINGS_SCHEMA_CREATE_DECISION.READY:
++    return {ready: true, retryAfterMs: 0};
++  case RATINGS_SCHEMA_CREATE_DECISION.RETRY:
++    return {
++      ready: false,
++      retryAfterMs: resolveRatingsSchemaRetryAfterMs(result),
++    };
++  default:
++    throw new Error(result?.error || RATINGS_SCHEMA_CONFIRMATION_ERROR);
++  }
++}
++
+ async function createRatingsTableWithRetry(options = {}) {
+   const target = options.target || DEFAULT_TARGET;
+   const clientFactory = options.clientFactory ||
+     ((clientTarget) => new AdminWsClient({target: clientTarget}));
+-  const wait = options.wait ||
+-    ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+-  const maxAttempts = options.maxAttempts || CREATE_TABLE_MAX_ATTEMPTS;
+-  const onRetry = options.onRetry || (({attempt, error}) => {
++  const timeoutMs = Number.isFinite(options.timeoutMs) ?
++    options.timeoutMs : CREATE_TABLE_RETRY_TIMEOUT_MS;
++  const onRetry = options.onRetry || (({attempt, resultOrError}) => {
+     console.log(
+-      `      Ratings schema attempt ${attempt}/${maxAttempts} failed: ` +
+-      `${error?.message || String(error)}; retrying...`);
++      `      Ratings schema attempt ${attempt} is not yet stable: ` +
++      `${resultOrError?.message || 'awaiting durable replay'}; retrying...`);
+   });
+-  let lastError = null;
+-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
++  let attempts = 0;
++  let stableConfirmationCount = 0;
++
++  const result = await runRetryableControlPlaneWrite(async () => {
++    attempts += 1;
+     const client = clientFactory(target);
+     try {
+-      await client.query(CREATE_LAGRANGE_RATINGS_SQL);
+-      return {attempts: attempt};
++      const createResult = await client.query(CREATE_LAGRANGE_RATINGS_SQL);
++      const createOutcome = resolveRatingsSchemaCreateOutcome(createResult);
++      if (!createOutcome.ready) {
++        stableConfirmationCount = 0;
++        return {
++          success: false,
++          deferRetry: true,
++          retryAfterMs: createOutcome.retryAfterMs,
++        };
++      }
++      stableConfirmationCount += 1;
+     } catch (error) {
+-      lastError = error;
++      stableConfirmationCount = 0;
++      throw error;
+     } finally {
+       await client.close();
+     }
+-    if (attempt < maxAttempts) {
+-      onRetry({attempt, maxAttempts, error: lastError});
+-      await wait(CREATE_TABLE_RETRY_DELAY_MS);
++
++    if (stableConfirmationCount < CREATE_TABLE_STABLE_CONFIRMATION_COUNT) {
++      return {
++        success: false,
++        deferRetry: true,
++        retryAfterMs: CREATE_TABLE_RETRY_DELAY_MS,
++      };
+     }
++    return {success: true};
++  }, {
++    timeoutMs,
++    baseDelayMs: CREATE_TABLE_RETRY_DELAY_MS,
++    maxDelayMs: CREATE_TABLE_RETRY_DELAY_MS,
++    ...(typeof options.now === 'function' ? {now: options.now} : {}),
++    ...(typeof options.sleep === 'function' ? {sleep: options.sleep} : {}),
++    onRetry,
++  });
++
++  if (result?.success !== true) {
++    throw new Error(RATINGS_SCHEMA_CONFIRMATION_ERROR);
+   }
+-  throw lastError;
++  return {
++    attempts,
++    confirmations: stableConfirmationCount,
++    policy: RATINGS_TABLE_SPLIT_POLICY,
++  };
+ }
+ 
+ async function loadRatingsIntoLagrange({target = DEFAULT_TARGET} = {}) {
+@@ -84,7 +176,9 @@ async function loadRatingsIntoLagrange({target = DEFAULT_TARGET} = {}) {
+     if (!line) {
+       continue;
+     }
+-    const [userId, movieId, rating, ts] = line.split('\t');
++    const [userId, movieId, rating, ts] = line.split(
++      RATINGS_FIELD_DELIMITER,
++    );
+     total += 1;
+     batch.push([
+       total,
+@@ -108,15 +202,10 @@ async function loadRatingsIntoLagrange({target = DEFAULT_TARGET} = {}) {
+   return total;
+ }
+ 
+-const FLUSH_MAX_ATTEMPTS = 4;
+-const FLUSH_RETRY_BASE_DELAY_MS = 500;
+-
+ // A 100k-row load is ~200 batches against a cluster that may still be
+-// settling (control-plane replica creates, leadership moves) — a single
+-// transient participant failure/timeout should not abort the whole
+-// load. Batches use plain INSERTs with a composite primary key, so a
+-// retried batch that partially landed is idempotent at worst-case
+-// duplicate-key level for this dataset (one row per (user, movie)).
++// settling (control-plane replica creates, leadership moves). The query owner
++// owns participant/leader retry; the example sends each logical batch once so
++// it cannot introduce a second retry boundary above that owner.
+ async function flushBatch(client, rows) {
+   const values = rows
+     .map((row) =>
+@@ -125,24 +214,12 @@ async function flushBatch(client, rows) {
+   const sql =
+     'INSERT INTO ratings ' +
+     '(rating_id, user_id, movie_id, rating, rating_ts) VALUES ' + values;
+-  let lastError = null;
+-  for (let attempt = 1; attempt <= FLUSH_MAX_ATTEMPTS; attempt += 1) {
+-    try {
+-      await client.query(sql);
+-      return;
+-    } catch (error) {
+-      lastError = error;
+-      if (attempt < FLUSH_MAX_ATTEMPTS) {
+-        await new Promise((resolve) =>
+-          setTimeout(resolve, FLUSH_RETRY_BASE_DELAY_MS * attempt));
+-      }
+-    }
+-  }
+-  throw lastError;
++  await client.query(sql);
+ }
+ 
+ export {
+   CREATE_LAGRANGE_RATINGS_SQL,
++  RATINGS_TABLE_SPLIT_POLICY,
+   createRatingsTableWithRetry,
+   loadRatingsIntoLagrange,
+   DEFAULT_TARGET,
+diff --git a/examples/service-data-affinity/run-affinity-demo.js b/examples/service-data-affinity/run-affinity-demo.js
+index 1e71ba5148bbd0b5ddce43e9d8409a47e02bdd8f..3663626cbc611ed561ab4b197ee22b77f9ef7db9 100644
+--- a/examples/service-data-affinity/run-affinity-demo.js
++++ b/examples/service-data-affinity/run-affinity-demo.js
+@@ -88,7 +88,6 @@ const CONVERGE_TIMEOUT_MS = 600000;
+ const STALL_TIMEOUT_MS = 300000;
+ const NODE_STATUS_ACTIVE = 'active';
+ 
+-const PARTITION_SPLIT_BYTES = 1048576;
+ // Config floor: partition.evaluationIntervalMs must be >= 60000.
+ const PARTITION_EVAL_INTERVAL_MS = 60000;
+ 
+@@ -138,11 +137,6 @@ async function startNode(index, dataRoot) {
+     ADMIN_WEBSOCKET_PORT: String(adminPort),
+     DATA_DIR: dataDir,
+     LOG_LEVEL: 'info',
+-    // Force the ~2MB ratings table to split into several partitions
+-    // (default threshold is 10GB): more raft groups, more leaders,
+-    // more parallelism — and a sharper demo (the service converges on
+-    // the nodes holding the SPECIFIC shard it reads).
+-    PARTITION_SPLIT_THRESHOLD_BYTES: String(PARTITION_SPLIT_BYTES),
+     PARTITION_EVALUATION_INTERVAL_MS: String(PARTITION_EVAL_INTERVAL_MS),
+   };
+   const args = ['src/index.js', '--data-dir', dataDir];
+@@ -488,21 +482,28 @@ function summarizePhase(state) {
+   };
+ }
+ 
++function isNodeProcessRunning(node) {
++  return Boolean(node?.process && node.process.exitCode === null);
++}
++
++async function awaitNodeProcessStop(node, deadline) {
++  while (isNodeProcessRunning(node) && Date.now() < deadline) {
++    await sleep(250);
++  }
++  if (isNodeProcessRunning(node)) {
++    node.process.kill('SIGKILL');
++  }
++}
++
+ async function stopNodes(nodes) {
+   for (const node of nodes) {
+-    if (node?.process && node.process.exitCode === null) {
++    if (isNodeProcessRunning(node)) {
+       node.process.kill('SIGTERM');
+     }
+   }
+   const deadline = Date.now() + 15000;
+   for (const node of nodes) {
+-    while (node?.process && node.process.exitCode === null &&
+-      Date.now() < deadline) {
+-      await sleep(250);
+-    }
+-    if (node?.process && node.process.exitCode === null) {
+-      node.process.kill('SIGKILL');
+-    }
++    await awaitNodeProcessStop(node, deadline);
+   }
+ }
+ 
+@@ -560,6 +561,9 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+     nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
+     await waitForAdmin();
+     await createRatingsTableWithRetry({target: TARGET});
++    // CREATE owns the sparse ratings policy atomically. The production-wide
++    // 10 GiB default remains intact, so formation logs cannot inherit the
++    // teaching threshold and become an unrelated preload blocker.
+     // Bootstrap the two small coordination tables on the seed too. Their
+     // schemas then scale out with the cluster instead of exercising unrelated
+     // cold multi-node DDL while the example is teaching service affinity.
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+index a045f00d79dd0d3bd36eef11f2347a41269292bd..8f9fa1773bcf0e58bbd28f1b5d6ba003647c4e0e 100644
+--- a/scripts/run-placement-affinity-scenarios.js
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -84,6 +84,8 @@ const SCENARIOS = {
+     'test/node/runtime-service-handler.test.js',
+   ],
+   'movielens-three-way-affinity-demo': [
++    'test/query/create-table-policy-option.test.js',
++    'test/partition/partition-split-policy-precedence.test.js',
+     'test/runtime/movielens-three-way-affinity-demo.test.js',
+     'test/runtime/movielens-affinity-demo-wiring.test.js',
+     'test/runtime/sql-query-loop-parallel-reduce-sql.test.js',
+diff --git a/src/query/sql-parser-schema-mutation-methods.js b/src/query/sql-parser-schema-mutation-methods.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..766b1d622e68a9bda7fde26bc33d2c63496db437
+--- /dev/null
++++ b/src/query/sql-parser-schema-mutation-methods.js
+@@ -0,0 +1,120 @@
++import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
++
++const LOCAL_STR_COLUMN_REF = 'column_ref';
++const LOCAL_STR_EMPTY = '';
++const LOCAL_STR_RENAME = 'rename';
++const LOCAL_STR_STRING = 'string';
++const LOCAL_STR_VALUE = 'value';
++const STAR_VALUE = '*';
++
++function resolveFirstAlterExpression(ast) {
++  const expressions = Array.isArray(ast?.expr) ? ast.expr : [];
++  return expressions[0] || null;
++}
++
++function normalizeAlterLabel(value) {
++  return typeof value === LOCAL_STR_STRING ?
++    value.toLowerCase() : LOCAL_STR_EMPTY;
++}
++
++function resolveOptionalAlterValue(value) {
++  return value === undefined ? null : value;
++}
++
++function selectAlterColumnName(oldColumnName, columnName) {
++  return oldColumnName || columnName;
++}
++
++function resolveRenamedColumnName(action, columnName) {
++  return action === LOCAL_STR_RENAME ? columnName : null;
++}
++
++function resolveReturningColumnName(column) {
++  const expression = column?.expr;
++  if (expression?.type !== LOCAL_STR_COLUMN_REF) {
++    return null;
++  }
++  const columnRef = expression.column;
++  if (typeof columnRef === LOCAL_STR_STRING) {
++    return columnRef;
++  }
++  return columnRef?.expr?.value || null;
++}
++
++function isReturningStar(columns) {
++  return columns.length === 1 &&
++    columns[0]?.expr?.type === LOCAL_STR_COLUMN_REF &&
++    columns[0]?.expr?.column === STAR_VALUE;
++}
++
++const sqlParserSchemaMutationMethods = {
++  /**
++   * Convert a RETURNING clause from node-sql-parser AST.
++   * Handles both SQLite and PG mode AST shapes.
++   * @param {Object|null} returning - Raw returning clause from parser AST.
++   * @return {string[]|string|null} Column names, '*', or null.
++   * @private
++   */
++  convertReturning(returning) {
++    const columns = Array.isArray(returning?.columns) ?
++      returning.columns : [];
++    if (columns.length === 0) {
++      return null;
++    }
++    if (isReturningStar(columns)) {
++      return STAR_VALUE;
++    }
++    const names = columns
++      .map(resolveReturningColumnName)
++      .filter((name) => typeof name === LOCAL_STR_STRING);
++    return names.length > 0 ? names : null;
++  },
++
++  convertAlter(ast) {
++    const expression = resolveFirstAlterExpression(ast);
++    const action = normalizeAlterLabel(expression?.action);
++    const columnName = this.resolveAlterColumnName(expression?.column);
++    const oldColumnName = this.resolveAlterColumnName(expression?.old_column);
++    return {
++      type: AST_TYPE.ALTER_TABLE,
++      table: resolveOptionalAlterValue(ast.table?.[0]?.table),
++      operation: {
++        action,
++        resource: normalizeAlterLabel(expression?.resource),
++        columnName: selectAlterColumnName(oldColumnName, columnName),
++        newColumnName: resolveRenamedColumnName(action, columnName),
++        dataType: resolveOptionalAlterValue(
++          expression?.definition?.dataType,
++        ),
++        defaultValue: this.convertAlterDefaultValue(expression?.default_val),
++        keyword: resolveOptionalAlterValue(expression?.keyword),
++      },
++    };
++  },
++
++  resolveAlterColumnName(columnRef) {
++    if (typeof columnRef?.column === LOCAL_STR_STRING) {
++      return columnRef.column;
++    }
++    return columnRef?.column?.expr?.value || null;
++  },
++
++  convertAlterDefaultValue(defaultNode) {
++    if (!Object.prototype.hasOwnProperty.call(
++      defaultNode || {},
++      LOCAL_STR_VALUE,
++    )) {
++      return null;
++    }
++    const converted = this.convertValue(defaultNode.value);
++    if (
++      converted?.type === EXPR_TYPE.LITERAL &&
++      Object.prototype.hasOwnProperty.call(converted, LOCAL_STR_VALUE)
++    ) {
++      return converted.value;
++    }
++    return converted;
++  },
++};
++
++export {sqlParserSchemaMutationMethods};
+diff --git a/src/query/sql-parser.js b/src/query/sql-parser.js
+index 11d398daf16ce88756a193306b310c8dc0bea070..6a319c0261fcd669a7acb44ff7eb773dbc3f7e0c 100644
+--- a/src/query/sql-parser.js
++++ b/src/query/sql-parser.js
+@@ -8,9 +8,11 @@
+ import nodeSqlParser from 'node-sql-parser';
+ 
+ 
+-const LOCAL_STR_VALUE = 'value';
+ const LOCAL_STR_PRIMARY_KEY = 'PRIMARY_KEY';
+ const LOCAL_STR_UNIQUE = 'UNIQUE';
++const CREATE_TABLE_PREFIX_PATTERN = /^\s*CREATE\s+TABLE\b/iu;
++const CREATE_TABLE_STORAGE_OPTIONS_PATTERN =
++  /\s+WITH\s*\(\s*split_storage_threshold\s*=\s*(\d+)\s*\)\s*;?\s*$/iu;
+ 
+ const {Parser} = nodeSqlParser;
+ import {LoggingService} from '../logging/logging-service.js';
+@@ -21,6 +23,8 @@ import {
+   translateOnConflict,
+ } from './pg/pg-translate.js';
+ import {sqlParserExpressionMethods} from './sql-parser-expression-methods.js';
++import {sqlParserSchemaMutationMethods} from
++  './sql-parser-schema-mutation-methods.js';
+ 
+ /**
+  * Parser-specific error message constants.
+@@ -28,6 +32,8 @@ import {sqlParserExpressionMethods} from './sql-parser-expression-methods.js';
+ const PARSER_ERROR_MSG = Object.freeze({
+   SQL_PARSE_ERROR_PREFIX: 'SQL Parse Error: ',
+   EMPTY_SQL_STATEMENT: 'Empty SQL statement',
++  SPLIT_STORAGE_THRESHOLD_SAFE_INTEGER:
++    'split_storage_threshold must be a safe integer',
+   UNSUPPORTED_CREATE_TYPE_PREFIX: 'Unsupported CREATE type: ',
+   UNSUPPORTED_DROP_TYPE_PREFIX: 'Unsupported DROP type: ',
+   UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
+@@ -110,6 +116,29 @@ const SQL_KEYWORD = Object.freeze({
+   ROLLBACK: 'ROLLBACK',
+ });
+ 
++function extractCreateTableStorageOptions(sql) {
++  if (
++    typeof sql !== 'string' ||
++    !CREATE_TABLE_PREFIX_PATTERN.test(sql)
++  ) {
++    return {sql, options: null};
++  }
++  const match = CREATE_TABLE_STORAGE_OPTIONS_PATTERN.exec(sql);
++  if (!match) {
++    return {sql, options: null};
++  }
++  const splitStorageThreshold = Number(match[1]);
++  if (!Number.isSafeInteger(splitStorageThreshold)) {
++    throw new Error(PARSER_ERROR_MSG.SPLIT_STORAGE_THRESHOLD_SAFE_INTEGER);
++  }
++  return {
++    sql: sql.slice(0, match.index).trimEnd(),
++    options: {
++      tablePolicy: {splitStorageThreshold},
++    },
++  };
++}
++
+ class SQLParser {
+   constructor(sql, options = {}) {
+     this.sql = sql;
+@@ -152,8 +181,15 @@ class SQLParser {
+       const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?
+         PARSER_CONFIG.DATABASE_PG :
+         PARSER_CONFIG.DATABASE;
+-      const externalAst = this.parser.astify(this.sql, {database: dbMode});
++      const createTableInput = extractCreateTableStorageOptions(this.sql);
++      const externalAst = this.parser.astify(
++        createTableInput.sql,
++        {database: dbMode},
++      );
+       const ast = this.convertAst(externalAst);
++      if (createTableInput.options && ast.type === AST_TYPE.CREATE_TABLE) {
++        ast.options = createTableInput.options;
++      }
+       ast.rawSql = this.sql;
+       if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
+           this.positionalParams.length > 0) {
+@@ -364,99 +400,6 @@ class SQLParser {
+     };
+   }
+ 
+-  /**
+-   * Convert a RETURNING clause from node-sql-parser AST.
+-   * Handles both SQLite and PG mode AST shapes.
+-   * @param {Object|null} returning - Raw returning clause from parser AST.
+-   * @return {string[]|string|null} Column names, '*', or null.
+-   * @private
+-   */
+-  convertReturning(returning) {
+-    if (!returning || !returning.columns || returning.columns.length === 0) {
+-      return null;
+-    }
+-    const columns = returning.columns;
+-    // Check for RETURNING * — column is the string '*' in both modes
+-    if (columns.length === 1 && columns[0].expr &&
+-        columns[0].expr.type === EXT_EXPR_TYPE.COLUMN_REF &&
+-        columns[0].expr.column === STAR_VALUE) {
+-      return STAR_VALUE;
+-    }
+-    // Extract column names — handle both PG and SQLite AST shapes
+-    const names = [];
+-    for (const col of columns) {
+-      const expr = col.expr;
+-      if (expr && expr.type === EXT_EXPR_TYPE.COLUMN_REF) {
+-        const colRef = expr.column;
+-        if (typeof colRef === 'string') {
+-          // SQLite mode: column is a plain string
+-          names.push(colRef);
+-        } else if (colRef && colRef.expr && colRef.expr.value) {
+-          // PG mode: column is {expr: {type: 'default', value: 'name'}}
+-          names.push(colRef.expr.value);
+-        }
+-      }
+-    }
+-    return names.length > 0 ? names : null;
+-  }
+-
+-  convertAlter(ast) {
+-    const tableName = ast.table?.[0]?.table || null;
+-    const expression = Array.isArray(ast.expr) && ast.expr.length > 0 ?
+-      ast.expr[0] :
+-      null;
+-    const action = String(expression?.action || '').toLowerCase();
+-    const resource = String(expression?.resource || '').toLowerCase();
+-    const columnName = this.resolveAlterColumnName(expression?.column);
+-    const oldColumnName = this.resolveAlterColumnName(expression?.old_column);
+-    const defaultValue = this.convertAlterDefaultValue(expression?.default_val);
+-
+-    const operation = {
+-      action,
+-      resource,
+-      columnName: oldColumnName || columnName,
+-      newColumnName: action === 'rename' ? columnName : null,
+-      dataType: expression?.definition?.dataType || null,
+-      defaultValue,
+-      keyword: expression?.keyword || null,
+-    };
+-
+-    return {
+-      type: AST_TYPE.ALTER_TABLE,
+-      table: tableName,
+-      operation,
+-    };
+-  }
+-
+-  resolveAlterColumnName(columnRef) {
+-    if (!columnRef) {
+-      return null;
+-    }
+-    if (typeof columnRef.column === 'string') {
+-      return columnRef.column;
+-    }
+-    if (columnRef.column?.expr?.value) {
+-      return columnRef.column.expr.value;
+-    }
+-    return null;
+-  }
+-
+-  convertAlterDefaultValue(defaultNode) {
+-    if (!defaultNode) {
+-      return null;
+-    }
+-    if (Object.prototype.hasOwnProperty.call(defaultNode, LOCAL_STR_VALUE)) {
+-      const converted = this.convertValue(defaultNode.value);
+-      if (converted &&
+-        converted.type === EXPR_TYPE.LITERAL &&
+-        Object.prototype.hasOwnProperty.call(converted, LOCAL_STR_VALUE)) {
+-        return converted.value;
+-      }
+-      return converted;
+-    }
+-    return null;
+-  }
+-
+   convertCreate(ast) {
+     if (ast.keyword === SQL_SCHEMA_KEYWORD.TABLE) {
+       return this.convertCreateTable(ast);
+@@ -657,5 +600,6 @@ class SQLParser {
+ }
+ 
+ Object.assign(SQLParser.prototype, sqlParserExpressionMethods);
++Object.assign(SQLParser.prototype, sqlParserSchemaMutationMethods);
+ 
+ export {SQLParser, AST_TYPE, EXPR_TYPE};
+diff --git a/src/query/table-creation-service-create-table.js b/src/query/table-creation-service-create-table.js
+index 8e943764659dd22fa995e594d96ff05bb58f35e6..c04805913af684560344b9fdd3e0197fbf10af89 100644
+--- a/src/query/table-creation-service-create-table.js
++++ b/src/query/table-creation-service-create-table.js
+@@ -3,6 +3,7 @@ import {STATE, TABLES} from '../constants/index.js';
+ import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
+ import {resolveControlPlaneSystemTableVisibilityState} from '../control-plane/control-plane-system-table-visibility-constants.js';
+ import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
++import {validateTablePolicy} from '../policy/table-policy-validation.js';
+ import {
+   QUERY_ERROR_CODE,
+   QUERY_ERROR_MSG,
+@@ -20,6 +21,20 @@ import {
+ } from './table-creation-service-completion.js';
+ 
+ const EMPTY_SCHEMA_DEFINITION_JSON = '{}';
++const LOCAL_STR_COMMA_SPACE = ', ';
++
++function resolveCreateTablePolicy(ast) {
++  const tablePolicy = ast?.options?.tablePolicy || {};
++  const validation = validateTablePolicy(tablePolicy);
++  if (!validation.valid) {
++    throw new Error(
++      `Invalid CREATE TABLE policy: ${validation.errors.join(
++        LOCAL_STR_COMMA_SPACE,
++      )}`,
++    );
++  }
++  return tablePolicy;
++}
+ 
+ function sortObject(value) {
+   if (Array.isArray(value)) return value.map(sortObject);
+@@ -66,261 +81,311 @@ function requireDurableMetadataGateway(service, options) {
+   throw error;
+ }
+ 
++function firstTruthyValue(...values) {
++  return values.find(Boolean) || null;
++}
++
++function assertCreateTablePrimaryKey(tableName, primaryKey) {
++  if (Array.isArray(primaryKey) && primaryKey.length > 0) {
++    return;
++  }
++  const error = new Error(
++    `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
++    `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` +
++    QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL,
++  );
++  error.code = QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED;
++  throw error;
++}
++
++function createTableExistsError(tableName) {
++  const error = new Error(
++    `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
++    QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
++  );
++  error.code = QUERY_ERROR_CODE.TABLE_EXISTS;
++  return error;
++}
++
++function buildExistingReconciliationOptions(options) {
++  return {
++    timeoutBudget: options?.timeoutBudget,
++    cancellationToken: options?.cancellationToken || null,
++    schemaJobId: options.schemaJobId || null,
++    schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
++    assertProvisioningOwnership:
++      options.assertProvisioningOwnership || null,
++  };
++}
++
++function buildExistingTableResult(ast, existingTable, reconciliation) {
++  const visibilityState = String(
++    reconciliation?.visibilityState ||
++    TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
++  );
++  const provisioningSummary = reconciliation?.provisioningSummary || null;
++  const completion = resolveTableCreationCompletion({
++    visibilityState,
++    provisioningSummary,
++    metadataContractOutcome: reconciliation,
++  });
++  return buildCreateTableSuccessResult({
++    tableId: firstTruthyValue(
++      reconciliation?.tableId,
++      existingTable.table_id,
++      existingTable.tableId,
++    ),
++    tableName: ast.tableName,
++    partitionKey: firstTruthyValue(
++      existingTable.partition_key,
++      existingTable.partitionKey,
++    ),
++    partitionId: reconciliation?.partitionId || null,
++    columns: ast.columns.length,
++    skipped: true,
++    completionState: completion.completionState,
++    completionReason: completion.completionReason,
++    contractState: completion.contractState,
++    nextAction: completion.nextAction,
++    visibilityState,
++    visibilityPending:
++      visibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
++    partitionMetadataCreated:
++      reconciliation?.partitionMetadataCreated === true,
++    provisioningSummary,
++    message:
++      `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${ast.tableName}` +
++      QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
++  });
++}
++
++async function reconcileExistingCreateTable(
++  service,
++  ast,
++  options,
++  existingTable,
++) {
++  assertDurableMetadataIdentity(service, existingTable, ast, options);
++  if (!ast.ifNotExists && !options.schemaJobId) {
++    throw createTableExistsError(ast.tableName);
++  }
++  const reconciliation = await service.reconcileExistingInitialPartition(
++    ast.tableName,
++    existingTable,
++    buildExistingReconciliationOptions(options),
++  );
++  service.logger.debug(QUERY_LOG_MSG.TABLE_EXISTS_SKIP, {
++    tableName: ast.tableName,
++  });
++  return buildExistingTableResult(ast, existingTable, reconciliation);
++}
++
++function buildCreateTableMetadataContext(service, ast, options) {
++  const partitionKey = service.derivePartitionKey(ast.primaryKey);
++  const tableId = options.tableId || `tbl-${uuidv4()}`;
++  const partitionId = options.partitionId || `${tableId}-p1`;
++  const tableMetadata = {
++    table_id: tableId,
++    table_name: ast.tableName,
++    schema_definition: JSON.stringify(
++      service.buildSchemaDefinition(ast.columns),
++    ),
++    partition_key: partitionKey,
++    table_policies: JSON.stringify(resolveCreateTablePolicy(ast)),
++    partition_count: 1,
++    active_partition_version: 1,
++    pending_partition_version: null,
++    partition_transition_state: null,
++    partition_transition_metadata: null,
++    created_at: Date.now(),
++    updated_at: Date.now(),
++  };
++  const partitionMetadata = {
++    partition_id: partitionId,
++    table_id: tableId,
++    table_name: ast.tableName,
++    partition_key_start: null,
++    partition_key_end: null,
++    partition_version: 1,
++    replica_count: service.defaultReplicaCount,
++    size_bytes: 0,
++    leader_node_id: null,
++    state: STATE.NORMAL,
++    created_at: Date.now(),
++    updated_at: Date.now(),
++  };
++  return {
++    columns: ast.columns,
++    partitionId,
++    partitionKey,
++    partitionMetadata,
++    tableId,
++    tableMetadata,
++    tableName: ast.tableName,
++  };
++}
++
++function buildBaseProvisioningInput(context, options) {
++  return {
++    tableId: context.tableId,
++    tableName: context.tableName,
++    tableMetadata: context.tableMetadata,
++    partitionId: context.partitionId,
++    partitionMetadata: context.partitionMetadata,
++    replicaCount: context.partitionMetadata.replica_count,
++    timeoutBudget: options?.timeoutBudget,
++    cancellationToken: options?.cancellationToken || null,
++  };
++}
++
++function buildDurableProvisioningInput(context, options) {
++  return {
++    ...buildBaseProvisioningInput(context, options),
++    schemaJobId: options.schemaJobId || null,
++    schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
++    assertProvisioningOwnership:
++      options.assertProvisioningOwnership || null,
++  };
++}
++
++async function submitCreateTableMetadata(metadataGateway, context, options) {
++  await options.assertProvisioningOwnership?.();
++  const tableMutation = await metadataGateway.submitMutation(
++    {
++      operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
++      tableName: TABLES.TABLES,
++      row: context.tableMetadata,
++    },
++    {
++      allowPendingVisibility: true,
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      deliveryPriority: 'critical',
++    },
++  );
++  await options.assertProvisioningOwnership?.();
++  const partitionMutation = await metadataGateway.submitMutation(
++    {
++      operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
++      tableName: TABLES.PARTITIONS,
++      row: context.partitionMetadata,
++    },
++    {
++      allowPendingVisibility: true,
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      deliveryPriority: 'critical',
++    },
++  );
++  const visibilityState = resolveControlPlaneSystemTableVisibilityState(
++    [tableMutation?.visibilityState, partitionMutation?.visibilityState],
++    TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
++  );
++  return {
++    contractOutcome: resolveTableCreationMutationContractOutcome(
++      [tableMutation, partitionMutation],
++      visibilityState,
++    ),
++    visibilityState,
++  };
++}
++
++async function buildCreatedTableResult(
++  service,
++  context,
++  visibilityState,
++  provisioningSummary,
++  metadataContractOutcome = null,
++) {
++  await service.evaluateSplitMergeLifecycle();
++  service.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
++    tableId: context.tableId,
++    tableName: context.tableName,
++    partitionKey: context.partitionKey,
++    partitionId: context.partitionId,
++  });
++  const completion = resolveTableCreationCompletion({
++    visibilityState,
++    provisioningSummary,
++    metadataContractOutcome,
++  });
++  return {
++    success: true,
++    operation: QUERY_OPERATION.CREATE_TABLE,
++    tableId: context.tableId,
++    tableName: context.tableName,
++    partitionKey: context.partitionKey,
++    partitionId: context.partitionId,
++    columns: context.columns.length,
++    completionState: completion.completionState,
++    completionReason: completion.completionReason,
++    contractState: completion.contractState,
++    nextAction: completion.nextAction,
++    visibilityState,
++    visibilityPending:
++      visibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
++    provisioningSummary,
++  };
++}
++
++async function executePersistedCreateTable(service, context, options, gateway) {
++  const metadata = await submitCreateTableMetadata(gateway, context, options);
++  await options.assertProvisioningOwnership?.();
++  const provisioningSummary = await service.provisionInitialPartition(
++    buildDurableProvisioningInput(context, options),
++  );
++  return buildCreatedTableResult(
++    service,
++    context,
++    metadata.visibilityState,
++    provisioningSummary,
++    metadata.contractOutcome,
++  );
++}
++
++async function executeUnpersistedCreateTable(service, context, options) {
++  const provisioningSummary = await service.provisionInitialPartition(
++    buildBaseProvisioningInput(context, options),
++  );
++  return buildCreatedTableResult(
++    service,
++    context,
++    TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
++    provisioningSummary,
++  );
++}
++
+ const tableCreationCreateTableMethods = {
+   async executeCreateTableProvisioning(ast, options = {}) {
+-    const {tableName, columns, primaryKey, ifNotExists} = ast;
+     this.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
+-      tableName,
+-      columnCount: columns.length,
+-      primaryKey,
+-      ifNotExists,
++      tableName: ast.tableName,
++      columnCount: ast.columns.length,
++      primaryKey: ast.primaryKey,
++      ifNotExists: ast.ifNotExists,
+     });
++    assertCreateTablePrimaryKey(ast.tableName, ast.primaryKey);
+ 
+-    // Validate PRIMARY KEY requirement (Requirement 20.2)
+-    if (!primaryKey || primaryKey.length === 0) {
+-      const error = new Error(
+-        `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
+-        `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` +
+-        QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL,
+-      );
+-      error.code = QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED;
+-      throw error;
+-    }
+-
+-    // Check if table already exists
+-    const existingTable = await this.findExistingTableRecord(tableName);
++    const existingTable = await this.findExistingTableRecord(ast.tableName);
+     if (existingTable) {
+-      assertDurableMetadataIdentity(this, existingTable, ast, options);
+-      if (ifNotExists || options.schemaJobId) {
+-        const reconciliation = await this.reconcileExistingInitialPartition(
+-          tableName,
+-          existingTable,
+-          {
+-            timeoutBudget: options?.timeoutBudget,
+-            cancellationToken: options?.cancellationToken || null,
+-            schemaJobId: options.schemaJobId || null,
+-            schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
+-            assertProvisioningOwnership:
+-              options.assertProvisioningOwnership || null,
+-          },
+-        );
+-        const visibilityState = String(
+-          reconciliation?.visibilityState ||
+-          TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
+-        );
+-        const completion = resolveTableCreationCompletion({
+-          visibilityState,
+-          provisioningSummary: reconciliation?.provisioningSummary || null,
+-          metadataContractOutcome: reconciliation,
+-        });
+-        this.logger.debug(QUERY_LOG_MSG.TABLE_EXISTS_SKIP, {
+-          tableName,
+-        });
+-        return buildCreateTableSuccessResult({
+-          tableId:
+-            reconciliation?.tableId ||
+-            existingTable.table_id || existingTable.tableId || null,
+-          tableName,
+-          partitionKey:
+-            existingTable.partition_key || existingTable.partitionKey || null,
+-          partitionId: reconciliation?.partitionId || null,
+-          columns: columns.length,
+-          skipped: true,
+-          completionState: completion.completionState,
+-          completionReason: completion.completionReason,
+-          contractState: completion.contractState,
+-          nextAction: completion.nextAction,
+-          visibilityState,
+-          visibilityPending:
+-          visibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+-          partitionMetadataCreated:
+-          reconciliation?.partitionMetadataCreated === true,
+-          provisioningSummary: reconciliation?.provisioningSummary || null,
+-          message:
+-          `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
+-          QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
+-        });
+-      }
+-      const error = new Error(
+-        `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
+-        QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
++      return reconcileExistingCreateTable(
++        this,
++        ast,
++        options,
++        existingTable,
+       );
+-      error.code = QUERY_ERROR_CODE.TABLE_EXISTS;
+-      throw error;
+     }
+ 
+-    // Derive partition key from PRIMARY KEY (Requirement 20.1)
+-    const partitionKey = this.derivePartitionKey(primaryKey);
+-
+-    // Generate table ID
+-    const tableId = options.tableId || `tbl-${uuidv4()}`;
+-
+-    // Build schema definition
+-    const schemaDefinition = this.buildSchemaDefinition(columns);
+-
+-    // Create table metadata
+-    const tableMetadata = {
+-      table_id: tableId,
+-      table_name: tableName,
+-      schema_definition: JSON.stringify(schemaDefinition),
+-      partition_key: partitionKey,
+-      table_policies: JSON.stringify({}),
+-      partition_count: 1,
+-      active_partition_version: 1,
+-      pending_partition_version: null,
+-      partition_transition_state: null,
+-      partition_transition_metadata: null,
+-      created_at: Date.now(),
+-      updated_at: Date.now(),
+-    };
+-
+-    // Create initial partition with full key range [NULL, NULL) (Requirement 20.3)
+-    const partitionId = options.partitionId || `${tableId}-p1`;
+-    const partitionMetadata = {
+-      partition_id: partitionId,
+-      table_id: tableId,
+-      table_name: tableName,
+-      partition_key_start: null,
+-      // NULL means unbounded lower
+-      partition_key_end: null,
+-      // NULL means unbounded upper
+-      partition_version: 1,
+-      replica_count: this.defaultReplicaCount,
+-      size_bytes: 0,
+-      leader_node_id: null,
+-      state: STATE.NORMAL,
+-      created_at: Date.now(),
+-      updated_at: Date.now(),
+-    };
+-
++    const context = buildCreateTableMetadataContext(this, ast, options);
+     const durableMetadataGateway = requireDurableMetadataGateway(this, options);
+-    // Durable jobs use the canonical gateway even when CDC wiring is detached.
+     if (this.cdcIntegrationService || durableMetadataGateway) {
+       const metadataGateway = durableMetadataGateway ||
+         this.getControlPlaneSystemTableGateway();
+-      await options.assertProvisioningOwnership?.();
+-      const tableMetadataMutation =
+-      await metadataGateway.submitMutation(
+-        {
+-          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+-          tableName: TABLES.TABLES,
+-          row: tableMetadata,
+-        },
+-        {
+-          allowPendingVisibility: true,
+-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+-          deliveryPriority: 'critical',
+-        },
+-      );
+-      await options.assertProvisioningOwnership?.();
+-      const partitionMetadataMutation =
+-      await metadataGateway.submitMutation(
+-        {
+-          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+-          tableName: TABLES.PARTITIONS,
+-          row: partitionMetadata,
+-        },
+-        {
+-          allowPendingVisibility: true,
+-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+-          deliveryPriority: 'critical',
+-        },
+-      );
+-      const metadataVisibilityState =
+-      resolveControlPlaneSystemTableVisibilityState(
+-        [
+-          tableMetadataMutation?.visibilityState,
+-          partitionMetadataMutation?.visibilityState,
+-        ],
+-        TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
++      return executePersistedCreateTable(
++        this,
++        context,
++        options,
++        metadataGateway,
+       );
+-      const metadataContractOutcome =
+-      resolveTableCreationMutationContractOutcome(
+-        [tableMetadataMutation, partitionMetadataMutation],
+-        metadataVisibilityState,
+-      );
+-      await options.assertProvisioningOwnership?.();
+-      const provisioningSummary = await this.provisionInitialPartition({
+-        tableId,
+-        tableName,
+-        tableMetadata,
+-        partitionId,
+-        partitionMetadata,
+-        replicaCount: partitionMetadata.replica_count,
+-        timeoutBudget: options?.timeoutBudget,
+-        cancellationToken: options?.cancellationToken || null,
+-        schemaJobId: options.schemaJobId || null,
+-        schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
+-        assertProvisioningOwnership:
+-          options.assertProvisioningOwnership || null,
+-      });
+-      await this.evaluateSplitMergeLifecycle();
+-      this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
+-        tableId,
+-        tableName,
+-        partitionKey,
+-        partitionId,
+-      });
+-      const completion = resolveTableCreationCompletion({
+-        visibilityState: metadataVisibilityState,
+-        provisioningSummary,
+-        metadataContractOutcome,
+-      });
+-      return {
+-        success: true,
+-        operation: QUERY_OPERATION.CREATE_TABLE,
+-        tableId,
+-        tableName,
+-        partitionKey,
+-        partitionId,
+-        columns: columns.length,
+-        completionState: completion.completionState,
+-        completionReason: completion.completionReason,
+-        contractState: completion.contractState,
+-        nextAction: completion.nextAction,
+-        visibilityState: metadataVisibilityState,
+-        visibilityPending:
+-        metadataVisibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+-        provisioningSummary,
+-      };
+     }
+-    const provisioningSummary = await this.provisionInitialPartition({
+-      tableId,
+-      tableName,
+-      tableMetadata,
+-      partitionId,
+-      partitionMetadata,
+-      replicaCount: partitionMetadata.replica_count,
+-      timeoutBudget: options?.timeoutBudget,
+-      cancellationToken: options?.cancellationToken || null,
+-    });
+-    await this.evaluateSplitMergeLifecycle();
+-    this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
+-      tableId,
+-      tableName,
+-      partitionKey,
+-      partitionId,
+-    });
+-    const completion = resolveTableCreationCompletion({
+-      visibilityState: TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
+-      provisioningSummary,
+-    });
+-    return {
+-      success: true,
+-      operation: QUERY_OPERATION.CREATE_TABLE,
+-      tableId,
+-      tableName,
+-      partitionKey,
+-      partitionId,
+-      columns: columns.length,
+-      completionState: completion.completionState,
+-      completionReason: completion.completionReason,
+-      contractState: completion.contractState,
+-      nextAction: completion.nextAction,
+-      visibilityState: TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+-      visibilityPending: false,
+-      provisioningSummary,
+-    };
++    return executeUnpersistedCreateTable(this, context, options);
+   },
+ };
+ 
+diff --git a/test/partition/partition-split-policy-precedence.test.js b/test/partition/partition-split-policy-precedence.test.js
+index 2ea9a89fa738b395d5434815a37f45b364206cd8..0c90de57b4ba2c069da2a775fcf98e6a6d680e93 100644
+--- a/test/partition/partition-split-policy-precedence.test.js
++++ b/test/partition/partition-split-policy-precedence.test.js
+@@ -1,9 +1,12 @@
+ import {afterEach, beforeEach, test} from '../../src/test-helpers/tap.js';
+ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {DEFAULT_CONFIG} from '../../src/config/config-definitions.js';
+ import {LoggingService} from '../../src/logging/logging-service.js';
+ import {PartitionSplitMergeManager} from
+   '../../src/partition/partition-split-merge-manager.js';
+ import {TablePolicyService} from '../../src/policy/table-policy-service.js';
++import {RATINGS_TABLE_SPLIT_POLICY} from
++  '../../examples/service-data-affinity/lagrange-loader.js';
+ 
+ const CONFIGURED_SPLIT_THRESHOLD_BYTES = 1024 * 1024;
+ const EXPLICIT_SPLIT_THRESHOLD_BYTES = 20 * 1024 * 1024;
+@@ -11,6 +14,9 @@ const OBSERVED_RATINGS_SIZE_BYTES = 12635760;
+ const LOCAL_NODE_ID = 'node-a';
+ const DEFAULT_TABLE_ID = 'tbl-ratings-default';
+ const DEFAULT_PARTITION_ID = 'ratings-default-p1';
++const SCENARIO_TABLE_ID = 'tbl-ratings-scenario';
++const SCENARIO_PARTITION_ID = 'ratings-scenario-p1';
++const SYSTEM_LOGS_PARTITION_ID = 'logs-p1';
+ 
+ function createPolicyCache() {
+   const tables = [{
+@@ -184,3 +190,60 @@ test('unrelated policy updates preserve configured split threshold ' +
+ 
+   manager.shutdown();
+ });
++
++test('MovieLens ratings override leaves system logs on the production ' +
++  'split default through the real policy and split owners', async (t) => {
++  ConfigurationManager.resetInstance();
++  ConfigurationManager.getInstance().initialize({
++    node: {id: LOCAL_NODE_ID},
++    partition: {
++      splitThresholdBytes: DEFAULT_CONFIG.partition.splitThresholdBytes,
++    },
++  });
++  const cache = {
++    tables: [{
++      table_id: SCENARIO_TABLE_ID,
++      table_name: 'ratings',
++      table_policies: JSON.stringify(RATINGS_TABLE_SPLIT_POLICY),
++    }, {
++      table_id: 'logs',
++      table_name: 'logs',
++      table_policies: JSON.stringify({}),
++    }],
++    partitions: [{
++      partition_id: SCENARIO_PARTITION_ID,
++      table_id: SCENARIO_TABLE_ID,
++      table_name: 'ratings',
++      size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
++    }, {
++      partition_id: SYSTEM_LOGS_PARTITION_ID,
++      table_id: 'logs',
++      table_name: 'logs',
++      size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
++    }],
++    getAll(tableName) {
++      if (tableName === 'tables') {
++        return this.tables;
++      }
++      if (tableName === 'partitions') {
++        return this.partitions;
++      }
++      return [];
++    },
++  };
++  const executedPartitionIds = [];
++  const policyService = new TablePolicyService({systemTableCache: cache});
++  const manager = createManager(cache, policyService, executedPartitionIds);
++
++  const results = await manager.evaluateAllPartitions({
++    triggerReason: 'reactive_request',
++    reasonCodes: ['write_activity'],
++  });
++
++  t.same(results.splitCandidates, [SCENARIO_PARTITION_ID]);
++  t.same(executedPartitionIds, [SCENARIO_PARTITION_ID]);
++  t.notOk(results.splitCandidates.includes(SYSTEM_LOGS_PARTITION_ID),
++    'the teaching threshold cannot select the system logs partition');
++
++  manager.shutdown();
++});
+diff --git a/test/query/create-table-policy-option.test.js b/test/query/create-table-policy-option.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..765fe9ac638fccabea53ed3f40a93e90d0681781
+--- /dev/null
++++ b/test/query/create-table-policy-option.test.js
+@@ -0,0 +1,128 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {
++  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
++} from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
++import {SQLParser} from '../../src/query/sql-parser.js';
++import {canonicalizeSchemaProvisioningIntent} from
++  '../../src/query/schema-provisioning-intent.js';
++import {TableCreationService} from
++  '../../src/query/table-creation-service.js';
++
++const SPLIT_STORAGE_THRESHOLD_BYTES = 1048576;
++const CREATE_WITH_POLICY_SQL =
++  'CREATE TABLE ratings (rating_id INTEGER PRIMARY KEY) ' +
++  `WITH (split_storage_threshold = ${SPLIT_STORAGE_THRESHOLD_BYTES});`;
++
++const config = ConfigurationManager.getInstance();
++if (!config.isInitialized()) {
++  config.initialize();
++}
++
++function createService(submittedMutations) {
++  return new TableCreationService({
++    systemCache: {
++      find() {
++        return null;
++      },
++    },
++    cdcIntegrationService: {},
++    controlPlaneSystemTableGateway: {
++      async submitMutation(mutation, options) {
++        submittedMutations.push({mutation, options});
++        return {
++          success: true,
++          visibilityState:
++            CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
++        };
++      },
++    },
++    partitionProvisioner: async () => ({
++      resolvedReplicaCount: 3,
++      routableReplicaCount: 3,
++      fullReplicaCountConverged: true,
++      contractState: 'ready',
++      nextAction: 'proceed',
++    }),
++  });
++}
++
++test('CREATE TABLE parses a sparse split policy into durable intent options',
++  (t) => {
++    const ast = new SQLParser(CREATE_WITH_POLICY_SQL).parse();
++
++    t.equal(ast.type, 'CREATE_TABLE');
++    t.same(ast.options, {
++      tablePolicy: {
++        splitStorageThreshold: SPLIT_STORAGE_THRESHOLD_BYTES,
++      },
++    });
++    t.equal(ast.rawSql, CREATE_WITH_POLICY_SQL,
++      'the original statement remains available for diagnostics');
++    t.end();
++  });
++
++test('CREATE TABLE split policy participates in durable idempotency identity',
++  (t) => {
++    const policyAst = new SQLParser(CREATE_WITH_POLICY_SQL).parse();
++    const defaultAst = new SQLParser(
++      'CREATE TABLE ratings (rating_id INTEGER PRIMARY KEY)',
++    ).parse();
++    const policyIntent = canonicalizeSchemaProvisioningIntent(policyAst);
++    const defaultIntent = canonicalizeSchemaProvisioningIntent(defaultAst);
++
++    t.same(policyIntent.intent.options, policyAst.options,
++      'the durable schema job records the sparse policy as intent');
++    t.not(policyIntent.intentHash, defaultIntent.intentHash,
++      'policy-bearing CREATE cannot attach to an empty-policy job');
++    t.end();
++  });
++
++test('CREATE TABLE projects its sparse split policy in the table insert',
++  async (t) => {
++    const submittedMutations = [];
++    const service = createService(submittedMutations);
++
++    const result = await service.executeCreateTableProvisioning(
++      new SQLParser(CREATE_WITH_POLICY_SQL).parse(),
++    );
++
++    t.equal(result.success, true);
++    t.equal(submittedMutations.length, 2);
++    t.equal(submittedMutations[0].mutation.tableName, 'tables');
++    t.same(
++      JSON.parse(submittedMutations[0].mutation.row.table_policies),
++      {splitStorageThreshold: SPLIT_STORAGE_THRESHOLD_BYTES},
++      'the schema owner persists policy in the initial metadata mutation',
++    );
++    t.same(
++      Object.keys(
++        JSON.parse(submittedMutations[0].mutation.row.table_policies),
++      ),
++      ['splitStorageThreshold'],
++      'inherited production policy defaults are not materialized',
++    );
++    await service.shutdown();
++    t.end();
++  });
++
++test('CREATE TABLE validates programmatic table-policy options before writes',
++  async (t) => {
++    const submittedMutations = [];
++    const service = createService(submittedMutations);
++    const ast = new SQLParser(
++      'CREATE TABLE ratings (rating_id INTEGER PRIMARY KEY)',
++    ).parse();
++    ast.options = {
++      tablePolicy: {splitStorageThreshold: -1},
++    };
++
++    await t.rejects(
++      service.executeCreateTableProvisioning(ast),
++      /Invalid CREATE TABLE policy/,
++    );
++    t.equal(submittedMutations.length, 0,
++      'invalid policy cannot partially persist table or partition metadata');
++    await service.shutdown();
++    t.end();
++  });
+diff --git a/test/runtime/movielens-affinity-demo-wiring.test.js b/test/runtime/movielens-affinity-demo-wiring.test.js
+index 9df2953b0bc4e8459af96ea88445bd807fe57cad..a8d340438526ba2e4205931b6f33fdcb2318b950 100644
+--- a/test/runtime/movielens-affinity-demo-wiring.test.js
++++ b/test/runtime/movielens-affinity-demo-wiring.test.js
+@@ -22,6 +22,7 @@
+ 
+ import {test} from '../../src/test-helpers/tap.js';
+ import assert from 'node:assert/strict';
++import {readFile} from 'node:fs/promises';
+ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ import {LoggingService} from '../../src/logging/logging-service.js';
+ import {COLUMN, NODE_STATE, TABLES} from '../../src/constants/index.js';
+@@ -68,6 +69,47 @@ const FAST_INTERVAL_MS = 5;
+ const WAIT_TIMEOUT_MS = 1500;
+ const WAIT_POLL_MS = 5;
+ 
++test('MovieLens creates ratings with its split policy before node expansion',
++  async (t) => {
++    const runnerSource = await readFile(
++      'examples/service-data-affinity/run-affinity-demo.js',
++      'utf8',
++    );
++    const loaderSource = await readFile(
++      'examples/service-data-affinity/lagrange-loader.js',
++      'utf8',
++    );
++    const runStart = runnerSource.indexOf('async function runAffinityDemo');
++    const createRatingsStatement =
++      'await createRatingsTableWithRetry({target: TARGET});';
++    const createRatingsIndex = runnerSource.indexOf(
++      createRatingsStatement,
++      runStart,
++    );
++    const expandNodesIndex = runnerSource.indexOf(
++      'for (let i = 1; i < NODE_COUNT; i += 1)',
++      runStart,
++    );
++
++    t.notMatch(
++      runnerSource,
++      /PARTITION_SPLIT_THRESHOLD_BYTES/,
++      'the old node-wide low threshold is absent at the runner/config seam',
++    );
++    t.equal(runnerSource.split(createRatingsStatement).length - 1, 1,
++      'the exact awaited durable CREATE invocation occurs once');
++    t.notMatch(runnerSource, /applyRatingsSplitPolicyWithRetry/,
++      'no late system-table policy mutation remains in the runner');
++    t.match(loaderSource,
++      /WITH \(split_storage_threshold = 1048576\)/,
++      'ratings carries the sparse override in its CREATE intent');
++    t.ok(createRatingsIndex > runStart,
++      'the runner creates the policy-bearing ratings table on the seed');
++    t.ok(expandNodesIndex > createRatingsIndex,
++      'stable durable CREATE confirmation precedes joiner expansion');
++    t.end();
++  });
++
+ function setupConfig(latencyOverrides = {}) {
+   ConfigurationManager.resetInstance();
+   LoggingService.resetInstance();
+@@ -89,6 +131,74 @@ function teardownConfig() {
+   LoggingService.resetInstance();
+ }
+ 
++function applyReduceSlotFixtureClaim(slot, claiming) {
++  if (claiming && slot.lease_expires_at <= Date.now()) {
++    slot.replica_id = claiming;
++    slot.partial_json = '[]';
++    slot.computed_at = 0;
++  }
++}
++
++function executeReduceSlotFixtureSql(sql, slots) {
++  const slotId = Number(/slot_id = (\d+)/.exec(sql)?.[1]);
++  const slot = slots.find((row) => row.slot_id === slotId);
++  const claiming = /replica_id = '([^']+)'/.exec(sql)?.[1];
++  const requiredOwner = /AND replica_id = '([^']+)'/.exec(sql)?.[1];
++  applyReduceSlotFixtureClaim(slot, claiming);
++  if (requiredOwner && slot.replica_id !== requiredOwner) {
++    return {success: true};
++  }
++  const lease = /lease_expires_at = (\d+)/.exec(sql)?.[1];
++  if (lease) {
++    slot.lease_expires_at = Number(lease);
++  }
++  const partial = /partial_json = '(\[[^']*\])'/.exec(sql)?.[1];
++  if (partial) {
++    slot.partial_json = partial;
++    slot.computed_at = Number(/computed_at = (\d+)/.exec(sql)?.[1]);
++  }
++  return {success: true};
++}
++
++function executeParallelReduceFixtureSql(context, serviceId, sql) {
++  const ownStatements = context.statements.get(serviceId) || [];
++  ownStatements.push(sql);
++  context.statements.set(serviceId, ownStatements);
++  if (sql.startsWith('SELECT slot_id')) {
++    return {success: true, results: context.slots.map((row) => ({...row}))};
++  }
++  if (sql.startsWith('UPDATE reduce_slots')) {
++    return executeReduceSlotFixtureSql(sql, context.slots);
++  }
++  if (sql === context.config.parallelReduce.shardSqlBySlot[1]) {
++    return {success: true, results: [
++      {movie_id: 50, rating: 5},
++      {movie_id: 100, rating: 3},
++    ]};
++  }
++  if (sql === context.config.parallelReduce.shardSqlBySlot[2]) {
++    return {success: true, results: [
++      {movie_id: 258, rating: 4},
++      {movie_id: 300, rating: 2},
++    ]};
++  }
++  if (sql.startsWith('UPDATE final_topn')) {
++    context.result.finalRows = JSON.parse(
++      /result_json = '(\[[^']*\])'/.exec(sql)[1],
++    );
++    context.result.finalUpdateCount += 1;
++    return {success: true};
++  }
++  return {success: true, results: []};
++}
++
++function createParallelReduceFixtureExecutor(context, serviceId) {
++  const execute = async (sql) =>
++    executeParallelReduceFixtureSql(context, serviceId, sql);
++  execute.executeInternal = execute;
++  return execute;
++}
++
+ function nodeRow(nodeId, groupId = null) {
+   return {
+     [COLUMN.NODE_ID]: nodeId,
+@@ -329,7 +439,7 @@ test('in-service reduce: a full-scan query loop reduces rows to a ' +
+     {movie_id: 100, rating: 4}, {movie_id: 100, rating: 2},
+     {movie_id: 258, rating: 1},
+   ];
+-  const statements = [];
++  const statements = Array.of();
+   const queryExecutor = async (sql) => {
+     statements.push(sql);
+     if (sql.startsWith('SELECT')) {
+@@ -447,63 +557,11 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
+     partial_json: '[]',
+     computed_at: 0,
+   }));
+-  let finalRows = [];
+-  let finalUpdateCount = 0;
+   const statements = new Map();
+-  const executorFor = (serviceId) => {
+-    const execute = async (sql) => {
+-      const ownStatements = statements.get(serviceId) || [];
+-      ownStatements.push(sql);
+-      statements.set(serviceId, ownStatements);
+-      if (sql.startsWith('SELECT slot_id')) {
+-        return {success: true, results: slots.map((row) => ({...row}))};
+-      }
+-      if (sql.startsWith('UPDATE reduce_slots')) {
+-        const slotId = Number(/slot_id = (\d+)/.exec(sql)?.[1]);
+-        const slot = slots.find((row) => row.slot_id === slotId);
+-        const claiming = /replica_id = '([^']+)'/.exec(sql)?.[1];
+-        const requiredOwner = /AND replica_id = '([^']+)'/.exec(sql)?.[1];
+-        if (claiming && slot.lease_expires_at <= Date.now()) {
+-          slot.replica_id = claiming;
+-          slot.partial_json = '[]';
+-          slot.computed_at = 0;
+-        }
+-        if (requiredOwner && slot.replica_id !== requiredOwner) {
+-          return {success: true};
+-        }
+-        const lease = /lease_expires_at = (\d+)/.exec(sql)?.[1];
+-        if (lease) {
+-          slot.lease_expires_at = Number(lease);
+-        }
+-        const partial = /partial_json = '(\[[^']*\])'/.exec(sql)?.[1];
+-        if (partial) {
+-          slot.partial_json = partial;
+-          slot.computed_at = Number(/computed_at = (\d+)/.exec(sql)?.[1]);
+-        }
+-        return {success: true};
+-      }
+-      if (sql === config.parallelReduce.shardSqlBySlot[1]) {
+-        return {success: true, results: [
+-          {movie_id: 50, rating: 5},
+-          {movie_id: 100, rating: 3},
+-        ]};
+-      }
+-      if (sql === config.parallelReduce.shardSqlBySlot[2]) {
+-        return {success: true, results: [
+-          {movie_id: 258, rating: 4},
+-          {movie_id: 300, rating: 2},
+-        ]};
+-      }
+-      if (sql.startsWith('UPDATE final_topn')) {
+-        finalRows = JSON.parse(/result_json = '(\[[^']*\])'/.exec(sql)[1]);
+-        finalUpdateCount += 1;
+-        return {success: true};
+-      }
+-      return {success: true, results: []};
+-    };
+-    execute.executeInternal = execute;
+-    return execute;
+-  };
++  const result = {finalRows: [], finalUpdateCount: 0};
++  const executorContext = {config, result, slots, statements};
++  const executorFor = (serviceId) =>
++    createParallelReduceFixtureExecutor(executorContext, serviceId);
+   const replacements = ['svc-parallel-r3', 'svc-parallel-r4'];
+   const modules = replacements.map(() => new SqlQueryLoopRuntimeModule());
+   for (let index = 0; index < modules.length; index += 1) {
+@@ -518,14 +576,14 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
+     await waitFor(() => slots[index].replica_id === replacements[index]);
+     if (index === 0) {
+       await new Promise((resolve) => setTimeout(resolve, 20));
+-      t.same(finalRows, [],
++      t.same(result.finalRows, [],
+         'an incomplete slot set never overwrites the result snapshot');
+     }
+   }
+-  await waitFor(() => finalRows.length === 2);
++  await waitFor(() => result.finalRows.length === 2);
+   t.same(slots.map((row) => row.replica_id), replacements,
+     'replacement generations r3/r4 acquire stable slots 1/2');
+-  t.same(finalRows, [
++  t.same(result.finalRows, [
+     {groupKey: 50, aggValue: 5},
+     {groupKey: 258, aggValue: 4},
+   ], 'the coordinator atomically publishes the exact global top-N');
+@@ -535,7 +593,7 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
+   t.equal(health.mergeCandidates, 4,
+     'the coordinator observes replicas×N bounded candidates');
+   await modules[0].stop({serviceId: replacements[0]});
+-  const updatesBeforeReplacement = finalUpdateCount;
++  const updatesBeforeReplacement = result.finalUpdateCount;
+   const replacementId = 'svc-parallel-r5';
+   const replacementModule = new SqlQueryLoopRuntimeModule();
+   await replacementModule.prepare({
+@@ -548,7 +606,7 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
+   });
+   await waitFor(() =>
+     slots[0].replica_id === replacementId &&
+-    finalUpdateCount > updatesBeforeReplacement);
++    result.finalUpdateCount > updatesBeforeReplacement);
+   t.equal(slots[0].replica_id, replacementId,
+     'a later replacement generation reclaims stable slot 1 and resumes');
+   t.notOk([...statements.values()].flat().some((sql) =>
+diff --git a/test/runtime/movielens-three-way-affinity-demo.test.js b/test/runtime/movielens-three-way-affinity-demo.test.js
+index f9697d8e5829b3b9804f3d39eac150b343e53bb8..fd847fe6c5dd8ca91284884be40f529e0d0c7848 100644
+--- a/test/runtime/movielens-three-way-affinity-demo.test.js
++++ b/test/runtime/movielens-three-way-affinity-demo.test.js
+@@ -20,9 +20,24 @@ import {
+   buildPsqlCommand,
+ } from '../../examples/service-data-affinity/run-postgres-baseline.js';
+ import {
++  RATINGS_TABLE_SPLIT_POLICY,
+   CREATE_LAGRANGE_RATINGS_SQL,
+   createRatingsTableWithRetry,
+ } from '../../examples/service-data-affinity/lagrange-loader.js';
++import {
++  OWNER_CONTRACT_NEXT_ACTION,
++  OWNER_CONTRACT_STATE,
++} from '../../src/control-plane/owner-contract-outcome.js';
++
++const READY_CREATE_RESULT = Object.freeze({
++  contractState: OWNER_CONTRACT_STATE.READY,
++  nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
++});
++const PENDING_CREATE_RESULT = Object.freeze({
++  contractState: OWNER_CONTRACT_STATE.PENDING,
++  nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
++  retryAfterMs: 5000,
++});
+ 
+ const RAW_RATINGS = [
+   {movie_id: 1, rating: 5},
+@@ -152,37 +167,236 @@ test('PostgreSQL baseline fails closed on replica readiness and emits ' +
+   t.end();
+ });
+ 
+-test('Lagrange loader retries idempotent schema creation with fresh clients',
++test('Lagrange loader confirms one atomic ratings policy through durable CREATE',
+   async (t) => {
+     let queries = 0;
+     let closes = 0;
+-    let waits = 0;
++    let nowMs = 0;
++    const retryAttempts = Array.of();
++    const sleepDelays = [];
+     const result = await createRatingsTableWithRetry({
+       target: 'ws://demo',
+-      maxAttempts: 3,
+       clientFactory: () => ({
+         query: async () => {
+           queries += 1;
+-          if (queries < 3) {
+-            throw new Error('transient admission timeout');
+-          }
++          return READY_CREATE_RESULT;
+         },
+         close: async () => {
+           closes += 1;
+         },
+       }),
+-      wait: async () => {
+-        waits += 1;
++      now: () => nowMs,
++      sleep: async (delayMs) => {
++        sleepDelays.push(delayMs);
++        nowMs += delayMs;
+       },
+-      onRetry: () => {},
++      onRetry: ({attempt}) => {
++        retryAttempts.push(attempt);
++      },
++    });
++    t.same(result, {
++      attempts: 2,
++      confirmations: 2,
++      policy: RATINGS_TABLE_SPLIT_POLICY,
+     });
+-    t.same(result, {attempts: 3});
+-    t.equal(queries, 3);
+-    t.equal(closes, 3, 'each failed admin session is discarded');
+-    t.equal(waits, 2, 'only failed non-terminal attempts back off');
++    t.equal(queries, 2);
++    t.equal(closes, 2,
++      'each durable confirmation uses and closes a fresh admin session');
++    t.same(retryAttempts, [1]);
++    t.same(sleepDelays, [5000]);
+     t.match(CREATE_LAGRANGE_RATINGS_SQL,
+       /rating_id INTEGER PRIMARY KEY/,
+       'the split-capable Lagrange table has one deterministic partition key');
++    t.match(CREATE_LAGRANGE_RATINGS_SQL,
++      /WITH \(split_storage_threshold = 1048576\)/,
++      'the sparse teaching policy is part of the durable CREATE intent');
++    t.notMatch(CREATE_LAGRANGE_RATINGS_SQL, /UPDATE tables|SELECT table_id/,
++      'the loader cannot race CREATE with cache-backed policy SQL');
++    t.end();
++  });
++
++test('MovieLens durable CREATE confirmation resets after a transport failure',
++  async (t) => {
++    const outcomes = ['success', 'closed', 'success', 'success'];
++    let clientsCreated = 0;
++    let clientsClosed = 0;
++    let nowMs = 0;
++    const retryAttempts = Array.of();
++    const result = await createRatingsTableWithRetry({
++      target: 'ws://demo',
++      clientFactory: () => {
++        const outcome = outcomes[clientsCreated];
++        clientsCreated += 1;
++        return {
++          query: async () => {
++            if (outcome === 'closed') {
++              throw new Error('admin websocket closed during durable replay');
++            }
++            return READY_CREATE_RESULT;
++          },
++          close: async () => {
++            clientsClosed += 1;
++          },
++        };
++      },
++      timeoutMs: 20000,
++      now: () => nowMs,
++      sleep: async (delayMs) => {
++        nowMs += delayMs;
++      },
++      onRetry: ({attempt}) => {
++        retryAttempts.push(attempt);
++      },
++    });
++
++    t.same(result, {
++      attempts: 4,
++      confirmations: 2,
++      policy: RATINGS_TABLE_SPLIT_POLICY,
++    });
++    t.equal(clientsCreated, 4);
++    t.equal(clientsClosed, 4,
++      'the failed durable replay also closes its client');
++    t.same(retryAttempts, [1, 2, 3],
++      'a failure between successes resets stable confirmation');
++    t.end();
++  });
++
++test('MovieLens durable CREATE confirmation resets after typed pending',
++  async (t) => {
++    const outcomes = [
++      READY_CREATE_RESULT,
++      PENDING_CREATE_RESULT,
++      READY_CREATE_RESULT,
++      READY_CREATE_RESULT,
++    ];
++    let clientsCreated = 0;
++    let clientsClosed = 0;
++    let nowMs = 0;
++    const retryAttempts = Array.of();
++    const result = await createRatingsTableWithRetry({
++      target: 'ws://demo',
++      clientFactory: () => {
++        const outcome = outcomes[clientsCreated];
++        clientsCreated += 1;
++        return {
++          query: async () => outcome,
++          close: async () => {
++            clientsClosed += 1;
++          },
++        };
++      },
++      timeoutMs: 20000,
++      now: () => nowMs,
++      sleep: async (delayMs) => {
++        nowMs += delayMs;
++      },
++      onRetry: ({attempt}) => {
++        retryAttempts.push(attempt);
++      },
++    });
++
++    t.same(result, {
++      attempts: 4,
++      confirmations: 2,
++      policy: RATINGS_TABLE_SPLIT_POLICY,
++    });
++    t.equal(clientsCreated, 4);
++    t.equal(clientsClosed, 4);
++    t.same(retryAttempts, [1, 2, 3],
++      'pending resets the streak before two new ready outcomes');
++    t.end();
++  });
++
++test('MovieLens durable CREATE confirmation exhausts at its time bound',
++  async (t) => {
++    let clientsCreated = 0;
++    let clientsClosed = 0;
++    let nowMs = 0;
++    await t.rejects(
++      createRatingsTableWithRetry({
++        target: 'ws://demo',
++        clientFactory: () => {
++          const shouldFail = clientsCreated % 2 === 1;
++          clientsCreated += 1;
++          return {
++            query: async () => {
++              if (shouldFail) {
++                throw new Error('admin websocket closed before replay');
++              }
++              return READY_CREATE_RESULT;
++            },
++            close: async () => {
++              clientsClosed += 1;
++            },
++          };
++        },
++        timeoutMs: 10000,
++        now: () => nowMs,
++        sleep: async (delayMs) => {
++          nowMs += delayMs;
++        },
++        onRetry: () => {},
++      }),
++      /stable durable confirmation/,
++      'the terminal incomplete confirmation is surfaced loudly',
++    );
++    t.equal(clientsCreated, 3,
++      'the canonical owner stops once the virtual deadline is reached');
++    t.equal(clientsClosed, 3);
++    t.end();
++  });
++
++test('MovieLens durable CREATE confirmation never counts typed pending',
++  async (t) => {
++    let clientsCreated = 0;
++    let clientsClosed = 0;
++    let nowMs = 0;
++    await t.rejects(
++      createRatingsTableWithRetry({
++        target: 'ws://demo',
++        clientFactory: () => {
++          clientsCreated += 1;
++          return {
++            query: async () => PENDING_CREATE_RESULT,
++            close: async () => {
++              clientsClosed += 1;
++            },
++          };
++        },
++        timeoutMs: 10000,
++        now: () => nowMs,
++        sleep: async (delayMs) => {
++          nowMs += delayMs;
++        },
++        onRetry: () => {},
++      }),
++      /stable durable confirmation/,
++    );
++    t.equal(clientsCreated, 3,
++      'pending-only CREATE replays exhaust the canonical virtual deadline');
++    t.equal(clientsClosed, 3);
++    t.end();
++  });
++
++test('MovieLens durable CREATE confirmation fails closed without metadata',
++  async (t) => {
++    let closes = 0;
++    await t.rejects(
++      createRatingsTableWithRetry({
++        target: 'ws://demo',
++        clientFactory: () => ({
++          query: async () => ({}),
++          close: async () => {
++            closes += 1;
++          },
++        }),
++        onRetry: () => {},
++      }),
++      /stable durable confirmation/,
++    );
++    t.equal(closes, 1,
++      'an untyped response closes its session and cannot be retried as ready');
+     t.end();
+   });
+ 

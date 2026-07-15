@@ -84,6 +84,8 @@ const SCENARIOS = {
     'test/node/runtime-service-handler.test.js',
   ],
   'movielens-three-way-affinity-demo': [
+    'test/query/create-table-policy-option.test.js',
+    'test/partition/partition-split-policy-precedence.test.js',
     'test/runtime/movielens-three-way-affinity-demo.test.js',
     'test/runtime/movielens-affinity-demo-wiring.test.js',
     'test/runtime/sql-query-loop-parallel-reduce-sql.test.js',

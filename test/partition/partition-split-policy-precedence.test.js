@@ -1,9 +1,12 @@
 import {afterEach, beforeEach, test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {DEFAULT_CONFIG} from '../../src/config/config-definitions.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionSplitMergeManager} from
   '../../src/partition/partition-split-merge-manager.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
+import {RATINGS_TABLE_SPLIT_POLICY} from
+  '../../examples/service-data-affinity/lagrange-loader.js';
 
 const CONFIGURED_SPLIT_THRESHOLD_BYTES = 1024 * 1024;
 const EXPLICIT_SPLIT_THRESHOLD_BYTES = 20 * 1024 * 1024;
@@ -11,6 +14,9 @@ const OBSERVED_RATINGS_SIZE_BYTES = 12635760;
 const LOCAL_NODE_ID = 'node-a';
 const DEFAULT_TABLE_ID = 'tbl-ratings-default';
 const DEFAULT_PARTITION_ID = 'ratings-default-p1';
+const SCENARIO_TABLE_ID = 'tbl-ratings-scenario';
+const SCENARIO_PARTITION_ID = 'ratings-scenario-p1';
+const SYSTEM_LOGS_PARTITION_ID = 'logs-p1';
 
 function createPolicyCache() {
   const tables = [{
@@ -181,6 +187,63 @@ test('unrelated policy updates preserve configured split threshold ' +
     [],
     'no split executes when the refreshed configured threshold is not met',
   );
+
+  manager.shutdown();
+});
+
+test('MovieLens ratings override leaves system logs on the production ' +
+  'split default through the real policy and split owners', async (t) => {
+  ConfigurationManager.resetInstance();
+  ConfigurationManager.getInstance().initialize({
+    node: {id: LOCAL_NODE_ID},
+    partition: {
+      splitThresholdBytes: DEFAULT_CONFIG.partition.splitThresholdBytes,
+    },
+  });
+  const cache = {
+    tables: [{
+      table_id: SCENARIO_TABLE_ID,
+      table_name: 'ratings',
+      table_policies: JSON.stringify(RATINGS_TABLE_SPLIT_POLICY),
+    }, {
+      table_id: 'logs',
+      table_name: 'logs',
+      table_policies: JSON.stringify({}),
+    }],
+    partitions: [{
+      partition_id: SCENARIO_PARTITION_ID,
+      table_id: SCENARIO_TABLE_ID,
+      table_name: 'ratings',
+      size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
+    }, {
+      partition_id: SYSTEM_LOGS_PARTITION_ID,
+      table_id: 'logs',
+      table_name: 'logs',
+      size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
+    }],
+    getAll(tableName) {
+      if (tableName === 'tables') {
+        return this.tables;
+      }
+      if (tableName === 'partitions') {
+        return this.partitions;
+      }
+      return [];
+    },
+  };
+  const executedPartitionIds = [];
+  const policyService = new TablePolicyService({systemTableCache: cache});
+  const manager = createManager(cache, policyService, executedPartitionIds);
+
+  const results = await manager.evaluateAllPartitions({
+    triggerReason: 'reactive_request',
+    reasonCodes: ['write_activity'],
+  });
+
+  t.same(results.splitCandidates, [SCENARIO_PARTITION_ID]);
+  t.same(executedPartitionIds, [SCENARIO_PARTITION_ID]);
+  t.notOk(results.splitCandidates.includes(SYSTEM_LOGS_PARTITION_ID),
+    'the teaching threshold cannot select the system logs partition');
 
   manager.shutdown();
 });

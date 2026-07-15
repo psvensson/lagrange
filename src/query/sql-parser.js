@@ -8,9 +8,11 @@
 import nodeSqlParser from 'node-sql-parser';
 
 
-const LOCAL_STR_VALUE = 'value';
 const LOCAL_STR_PRIMARY_KEY = 'PRIMARY_KEY';
 const LOCAL_STR_UNIQUE = 'UNIQUE';
+const CREATE_TABLE_PREFIX_PATTERN = /^\s*CREATE\s+TABLE\b/iu;
+const CREATE_TABLE_STORAGE_OPTIONS_PATTERN =
+  /\s+WITH\s*\(\s*split_storage_threshold\s*=\s*(\d+)\s*\)\s*;?\s*$/iu;
 
 const {Parser} = nodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
@@ -21,6 +23,8 @@ import {
   translateOnConflict,
 } from './pg/pg-translate.js';
 import {sqlParserExpressionMethods} from './sql-parser-expression-methods.js';
+import {sqlParserSchemaMutationMethods} from
+  './sql-parser-schema-mutation-methods.js';
 
 /**
  * Parser-specific error message constants.
@@ -28,6 +32,8 @@ import {sqlParserExpressionMethods} from './sql-parser-expression-methods.js';
 const PARSER_ERROR_MSG = Object.freeze({
   SQL_PARSE_ERROR_PREFIX: 'SQL Parse Error: ',
   EMPTY_SQL_STATEMENT: 'Empty SQL statement',
+  SPLIT_STORAGE_THRESHOLD_SAFE_INTEGER:
+    'split_storage_threshold must be a safe integer',
   UNSUPPORTED_CREATE_TYPE_PREFIX: 'Unsupported CREATE type: ',
   UNSUPPORTED_DROP_TYPE_PREFIX: 'Unsupported DROP type: ',
   UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
@@ -110,6 +116,29 @@ const SQL_KEYWORD = Object.freeze({
   ROLLBACK: 'ROLLBACK',
 });
 
+function extractCreateTableStorageOptions(sql) {
+  if (
+    typeof sql !== 'string' ||
+    !CREATE_TABLE_PREFIX_PATTERN.test(sql)
+  ) {
+    return {sql, options: null};
+  }
+  const match = CREATE_TABLE_STORAGE_OPTIONS_PATTERN.exec(sql);
+  if (!match) {
+    return {sql, options: null};
+  }
+  const splitStorageThreshold = Number(match[1]);
+  if (!Number.isSafeInteger(splitStorageThreshold)) {
+    throw new Error(PARSER_ERROR_MSG.SPLIT_STORAGE_THRESHOLD_SAFE_INTEGER);
+  }
+  return {
+    sql: sql.slice(0, match.index).trimEnd(),
+    options: {
+      tablePolicy: {splitStorageThreshold},
+    },
+  };
+}
+
 class SQLParser {
   constructor(sql, options = {}) {
     this.sql = sql;
@@ -152,8 +181,15 @@ class SQLParser {
       const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?
         PARSER_CONFIG.DATABASE_PG :
         PARSER_CONFIG.DATABASE;
-      const externalAst = this.parser.astify(this.sql, {database: dbMode});
+      const createTableInput = extractCreateTableStorageOptions(this.sql);
+      const externalAst = this.parser.astify(
+        createTableInput.sql,
+        {database: dbMode},
+      );
       const ast = this.convertAst(externalAst);
+      if (createTableInput.options && ast.type === AST_TYPE.CREATE_TABLE) {
+        ast.options = createTableInput.options;
+      }
       ast.rawSql = this.sql;
       if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
           this.positionalParams.length > 0) {
@@ -364,99 +400,6 @@ class SQLParser {
     };
   }
 
-  /**
-   * Convert a RETURNING clause from node-sql-parser AST.
-   * Handles both SQLite and PG mode AST shapes.
-   * @param {Object|null} returning - Raw returning clause from parser AST.
-   * @return {string[]|string|null} Column names, '*', or null.
-   * @private
-   */
-  convertReturning(returning) {
-    if (!returning || !returning.columns || returning.columns.length === 0) {
-      return null;
-    }
-    const columns = returning.columns;
-    // Check for RETURNING * — column is the string '*' in both modes
-    if (columns.length === 1 && columns[0].expr &&
-        columns[0].expr.type === EXT_EXPR_TYPE.COLUMN_REF &&
-        columns[0].expr.column === STAR_VALUE) {
-      return STAR_VALUE;
-    }
-    // Extract column names — handle both PG and SQLite AST shapes
-    const names = [];
-    for (const col of columns) {
-      const expr = col.expr;
-      if (expr && expr.type === EXT_EXPR_TYPE.COLUMN_REF) {
-        const colRef = expr.column;
-        if (typeof colRef === 'string') {
-          // SQLite mode: column is a plain string
-          names.push(colRef);
-        } else if (colRef && colRef.expr && colRef.expr.value) {
-          // PG mode: column is {expr: {type: 'default', value: 'name'}}
-          names.push(colRef.expr.value);
-        }
-      }
-    }
-    return names.length > 0 ? names : null;
-  }
-
-  convertAlter(ast) {
-    const tableName = ast.table?.[0]?.table || null;
-    const expression = Array.isArray(ast.expr) && ast.expr.length > 0 ?
-      ast.expr[0] :
-      null;
-    const action = String(expression?.action || '').toLowerCase();
-    const resource = String(expression?.resource || '').toLowerCase();
-    const columnName = this.resolveAlterColumnName(expression?.column);
-    const oldColumnName = this.resolveAlterColumnName(expression?.old_column);
-    const defaultValue = this.convertAlterDefaultValue(expression?.default_val);
-
-    const operation = {
-      action,
-      resource,
-      columnName: oldColumnName || columnName,
-      newColumnName: action === 'rename' ? columnName : null,
-      dataType: expression?.definition?.dataType || null,
-      defaultValue,
-      keyword: expression?.keyword || null,
-    };
-
-    return {
-      type: AST_TYPE.ALTER_TABLE,
-      table: tableName,
-      operation,
-    };
-  }
-
-  resolveAlterColumnName(columnRef) {
-    if (!columnRef) {
-      return null;
-    }
-    if (typeof columnRef.column === 'string') {
-      return columnRef.column;
-    }
-    if (columnRef.column?.expr?.value) {
-      return columnRef.column.expr.value;
-    }
-    return null;
-  }
-
-  convertAlterDefaultValue(defaultNode) {
-    if (!defaultNode) {
-      return null;
-    }
-    if (Object.prototype.hasOwnProperty.call(defaultNode, LOCAL_STR_VALUE)) {
-      const converted = this.convertValue(defaultNode.value);
-      if (converted &&
-        converted.type === EXPR_TYPE.LITERAL &&
-        Object.prototype.hasOwnProperty.call(converted, LOCAL_STR_VALUE)) {
-        return converted.value;
-      }
-      return converted;
-    }
-    return null;
-  }
-
   convertCreate(ast) {
     if (ast.keyword === SQL_SCHEMA_KEYWORD.TABLE) {
       return this.convertCreateTable(ast);
@@ -657,5 +600,6 @@ class SQLParser {
 }
 
 Object.assign(SQLParser.prototype, sqlParserExpressionMethods);
+Object.assign(SQLParser.prototype, sqlParserSchemaMutationMethods);
 
 export {SQLParser, AST_TYPE, EXPR_TYPE};

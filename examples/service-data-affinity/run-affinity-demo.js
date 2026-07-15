@@ -88,7 +88,6 @@ const CONVERGE_TIMEOUT_MS = 600000;
 const STALL_TIMEOUT_MS = 300000;
 const NODE_STATUS_ACTIVE = 'active';
 
-const PARTITION_SPLIT_BYTES = 1048576;
 // Config floor: partition.evaluationIntervalMs must be >= 60000.
 const PARTITION_EVAL_INTERVAL_MS = 60000;
 
@@ -138,11 +137,6 @@ async function startNode(index, dataRoot) {
     ADMIN_WEBSOCKET_PORT: String(adminPort),
     DATA_DIR: dataDir,
     LOG_LEVEL: 'info',
-    // Force the ~2MB ratings table to split into several partitions
-    // (default threshold is 10GB): more raft groups, more leaders,
-    // more parallelism — and a sharper demo (the service converges on
-    // the nodes holding the SPECIFIC shard it reads).
-    PARTITION_SPLIT_THRESHOLD_BYTES: String(PARTITION_SPLIT_BYTES),
     PARTITION_EVALUATION_INTERVAL_MS: String(PARTITION_EVAL_INTERVAL_MS),
   };
   const args = ['src/index.js', '--data-dir', dataDir];
@@ -488,21 +482,28 @@ function summarizePhase(state) {
   };
 }
 
+function isNodeProcessRunning(node) {
+  return Boolean(node?.process && node.process.exitCode === null);
+}
+
+async function awaitNodeProcessStop(node, deadline) {
+  while (isNodeProcessRunning(node) && Date.now() < deadline) {
+    await sleep(250);
+  }
+  if (isNodeProcessRunning(node)) {
+    node.process.kill('SIGKILL');
+  }
+}
+
 async function stopNodes(nodes) {
   for (const node of nodes) {
-    if (node?.process && node.process.exitCode === null) {
+    if (isNodeProcessRunning(node)) {
       node.process.kill('SIGTERM');
     }
   }
   const deadline = Date.now() + 15000;
   for (const node of nodes) {
-    while (node?.process && node.process.exitCode === null &&
-      Date.now() < deadline) {
-      await sleep(250);
-    }
-    if (node?.process && node.process.exitCode === null) {
-      node.process.kill('SIGKILL');
-    }
+    await awaitNodeProcessStop(node, deadline);
   }
 }
 
@@ -560,6 +561,9 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
     await waitForAdmin();
     await createRatingsTableWithRetry({target: TARGET});
+    // CREATE owns the sparse ratings policy atomically. The production-wide
+    // 10 GiB default remains intact, so formation logs cannot inherit the
+    // teaching threshold and become an unrelated preload blocker.
     // Bootstrap the two small coordination tables on the seed too. Their
     // schemas then scale out with the cluster instead of exercising unrelated
     // cold multi-node DDL while the example is teaching service affinity.

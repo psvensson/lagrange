@@ -20,9 +20,24 @@ import {
   buildPsqlCommand,
 } from '../../examples/service-data-affinity/run-postgres-baseline.js';
 import {
+  RATINGS_TABLE_SPLIT_POLICY,
   CREATE_LAGRANGE_RATINGS_SQL,
   createRatingsTableWithRetry,
 } from '../../examples/service-data-affinity/lagrange-loader.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from '../../src/control-plane/owner-contract-outcome.js';
+
+const READY_CREATE_RESULT = Object.freeze({
+  contractState: OWNER_CONTRACT_STATE.READY,
+  nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+});
+const PENDING_CREATE_RESULT = Object.freeze({
+  contractState: OWNER_CONTRACT_STATE.PENDING,
+  nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+  retryAfterMs: 5000,
+});
 
 const RAW_RATINGS = [
   {movie_id: 1, rating: 5},
@@ -152,37 +167,236 @@ test('PostgreSQL baseline fails closed on replica readiness and emits ' +
   t.end();
 });
 
-test('Lagrange loader retries idempotent schema creation with fresh clients',
+test('Lagrange loader confirms one atomic ratings policy through durable CREATE',
   async (t) => {
     let queries = 0;
     let closes = 0;
-    let waits = 0;
+    let nowMs = 0;
+    const retryAttempts = Array.of();
+    const sleepDelays = [];
     const result = await createRatingsTableWithRetry({
       target: 'ws://demo',
-      maxAttempts: 3,
       clientFactory: () => ({
         query: async () => {
           queries += 1;
-          if (queries < 3) {
-            throw new Error('transient admission timeout');
-          }
+          return READY_CREATE_RESULT;
         },
         close: async () => {
           closes += 1;
         },
       }),
-      wait: async () => {
-        waits += 1;
+      now: () => nowMs,
+      sleep: async (delayMs) => {
+        sleepDelays.push(delayMs);
+        nowMs += delayMs;
       },
-      onRetry: () => {},
+      onRetry: ({attempt}) => {
+        retryAttempts.push(attempt);
+      },
     });
-    t.same(result, {attempts: 3});
-    t.equal(queries, 3);
-    t.equal(closes, 3, 'each failed admin session is discarded');
-    t.equal(waits, 2, 'only failed non-terminal attempts back off');
+    t.same(result, {
+      attempts: 2,
+      confirmations: 2,
+      policy: RATINGS_TABLE_SPLIT_POLICY,
+    });
+    t.equal(queries, 2);
+    t.equal(closes, 2,
+      'each durable confirmation uses and closes a fresh admin session');
+    t.same(retryAttempts, [1]);
+    t.same(sleepDelays, [5000]);
     t.match(CREATE_LAGRANGE_RATINGS_SQL,
       /rating_id INTEGER PRIMARY KEY/,
       'the split-capable Lagrange table has one deterministic partition key');
+    t.match(CREATE_LAGRANGE_RATINGS_SQL,
+      /WITH \(split_storage_threshold = 1048576\)/,
+      'the sparse teaching policy is part of the durable CREATE intent');
+    t.notMatch(CREATE_LAGRANGE_RATINGS_SQL, /UPDATE tables|SELECT table_id/,
+      'the loader cannot race CREATE with cache-backed policy SQL');
+    t.end();
+  });
+
+test('MovieLens durable CREATE confirmation resets after a transport failure',
+  async (t) => {
+    const outcomes = ['success', 'closed', 'success', 'success'];
+    let clientsCreated = 0;
+    let clientsClosed = 0;
+    let nowMs = 0;
+    const retryAttempts = Array.of();
+    const result = await createRatingsTableWithRetry({
+      target: 'ws://demo',
+      clientFactory: () => {
+        const outcome = outcomes[clientsCreated];
+        clientsCreated += 1;
+        return {
+          query: async () => {
+            if (outcome === 'closed') {
+              throw new Error('admin websocket closed during durable replay');
+            }
+            return READY_CREATE_RESULT;
+          },
+          close: async () => {
+            clientsClosed += 1;
+          },
+        };
+      },
+      timeoutMs: 20000,
+      now: () => nowMs,
+      sleep: async (delayMs) => {
+        nowMs += delayMs;
+      },
+      onRetry: ({attempt}) => {
+        retryAttempts.push(attempt);
+      },
+    });
+
+    t.same(result, {
+      attempts: 4,
+      confirmations: 2,
+      policy: RATINGS_TABLE_SPLIT_POLICY,
+    });
+    t.equal(clientsCreated, 4);
+    t.equal(clientsClosed, 4,
+      'the failed durable replay also closes its client');
+    t.same(retryAttempts, [1, 2, 3],
+      'a failure between successes resets stable confirmation');
+    t.end();
+  });
+
+test('MovieLens durable CREATE confirmation resets after typed pending',
+  async (t) => {
+    const outcomes = [
+      READY_CREATE_RESULT,
+      PENDING_CREATE_RESULT,
+      READY_CREATE_RESULT,
+      READY_CREATE_RESULT,
+    ];
+    let clientsCreated = 0;
+    let clientsClosed = 0;
+    let nowMs = 0;
+    const retryAttempts = Array.of();
+    const result = await createRatingsTableWithRetry({
+      target: 'ws://demo',
+      clientFactory: () => {
+        const outcome = outcomes[clientsCreated];
+        clientsCreated += 1;
+        return {
+          query: async () => outcome,
+          close: async () => {
+            clientsClosed += 1;
+          },
+        };
+      },
+      timeoutMs: 20000,
+      now: () => nowMs,
+      sleep: async (delayMs) => {
+        nowMs += delayMs;
+      },
+      onRetry: ({attempt}) => {
+        retryAttempts.push(attempt);
+      },
+    });
+
+    t.same(result, {
+      attempts: 4,
+      confirmations: 2,
+      policy: RATINGS_TABLE_SPLIT_POLICY,
+    });
+    t.equal(clientsCreated, 4);
+    t.equal(clientsClosed, 4);
+    t.same(retryAttempts, [1, 2, 3],
+      'pending resets the streak before two new ready outcomes');
+    t.end();
+  });
+
+test('MovieLens durable CREATE confirmation exhausts at its time bound',
+  async (t) => {
+    let clientsCreated = 0;
+    let clientsClosed = 0;
+    let nowMs = 0;
+    await t.rejects(
+      createRatingsTableWithRetry({
+        target: 'ws://demo',
+        clientFactory: () => {
+          const shouldFail = clientsCreated % 2 === 1;
+          clientsCreated += 1;
+          return {
+            query: async () => {
+              if (shouldFail) {
+                throw new Error('admin websocket closed before replay');
+              }
+              return READY_CREATE_RESULT;
+            },
+            close: async () => {
+              clientsClosed += 1;
+            },
+          };
+        },
+        timeoutMs: 10000,
+        now: () => nowMs,
+        sleep: async (delayMs) => {
+          nowMs += delayMs;
+        },
+        onRetry: () => {},
+      }),
+      /stable durable confirmation/,
+      'the terminal incomplete confirmation is surfaced loudly',
+    );
+    t.equal(clientsCreated, 3,
+      'the canonical owner stops once the virtual deadline is reached');
+    t.equal(clientsClosed, 3);
+    t.end();
+  });
+
+test('MovieLens durable CREATE confirmation never counts typed pending',
+  async (t) => {
+    let clientsCreated = 0;
+    let clientsClosed = 0;
+    let nowMs = 0;
+    await t.rejects(
+      createRatingsTableWithRetry({
+        target: 'ws://demo',
+        clientFactory: () => {
+          clientsCreated += 1;
+          return {
+            query: async () => PENDING_CREATE_RESULT,
+            close: async () => {
+              clientsClosed += 1;
+            },
+          };
+        },
+        timeoutMs: 10000,
+        now: () => nowMs,
+        sleep: async (delayMs) => {
+          nowMs += delayMs;
+        },
+        onRetry: () => {},
+      }),
+      /stable durable confirmation/,
+    );
+    t.equal(clientsCreated, 3,
+      'pending-only CREATE replays exhaust the canonical virtual deadline');
+    t.equal(clientsClosed, 3);
+    t.end();
+  });
+
+test('MovieLens durable CREATE confirmation fails closed without metadata',
+  async (t) => {
+    let closes = 0;
+    await t.rejects(
+      createRatingsTableWithRetry({
+        target: 'ws://demo',
+        clientFactory: () => ({
+          query: async () => ({}),
+          close: async () => {
+            closes += 1;
+          },
+        }),
+        onRetry: () => {},
+      }),
+      /stable durable confirmation/,
+    );
+    t.equal(closes, 1,
+      'an untyped response closes its session and cannot be retried as ready');
     t.end();
   });
 

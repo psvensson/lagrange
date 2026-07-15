@@ -22,6 +22,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, NODE_STATE, TABLES} from '../../src/constants/index.js';
@@ -68,6 +69,47 @@ const FAST_INTERVAL_MS = 5;
 const WAIT_TIMEOUT_MS = 1500;
 const WAIT_POLL_MS = 5;
 
+test('MovieLens creates ratings with its split policy before node expansion',
+  async (t) => {
+    const runnerSource = await readFile(
+      'examples/service-data-affinity/run-affinity-demo.js',
+      'utf8',
+    );
+    const loaderSource = await readFile(
+      'examples/service-data-affinity/lagrange-loader.js',
+      'utf8',
+    );
+    const runStart = runnerSource.indexOf('async function runAffinityDemo');
+    const createRatingsStatement =
+      'await createRatingsTableWithRetry({target: TARGET});';
+    const createRatingsIndex = runnerSource.indexOf(
+      createRatingsStatement,
+      runStart,
+    );
+    const expandNodesIndex = runnerSource.indexOf(
+      'for (let i = 1; i < NODE_COUNT; i += 1)',
+      runStart,
+    );
+
+    t.notMatch(
+      runnerSource,
+      /PARTITION_SPLIT_THRESHOLD_BYTES/,
+      'the old node-wide low threshold is absent at the runner/config seam',
+    );
+    t.equal(runnerSource.split(createRatingsStatement).length - 1, 1,
+      'the exact awaited durable CREATE invocation occurs once');
+    t.notMatch(runnerSource, /applyRatingsSplitPolicyWithRetry/,
+      'no late system-table policy mutation remains in the runner');
+    t.match(loaderSource,
+      /WITH \(split_storage_threshold = 1048576\)/,
+      'ratings carries the sparse override in its CREATE intent');
+    t.ok(createRatingsIndex > runStart,
+      'the runner creates the policy-bearing ratings table on the seed');
+    t.ok(expandNodesIndex > createRatingsIndex,
+      'stable durable CREATE confirmation precedes joiner expansion');
+    t.end();
+  });
+
 function setupConfig(latencyOverrides = {}) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -87,6 +129,74 @@ function setupConfig(latencyOverrides = {}) {
 function teardownConfig() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
+}
+
+function applyReduceSlotFixtureClaim(slot, claiming) {
+  if (claiming && slot.lease_expires_at <= Date.now()) {
+    slot.replica_id = claiming;
+    slot.partial_json = '[]';
+    slot.computed_at = 0;
+  }
+}
+
+function executeReduceSlotFixtureSql(sql, slots) {
+  const slotId = Number(/slot_id = (\d+)/.exec(sql)?.[1]);
+  const slot = slots.find((row) => row.slot_id === slotId);
+  const claiming = /replica_id = '([^']+)'/.exec(sql)?.[1];
+  const requiredOwner = /AND replica_id = '([^']+)'/.exec(sql)?.[1];
+  applyReduceSlotFixtureClaim(slot, claiming);
+  if (requiredOwner && slot.replica_id !== requiredOwner) {
+    return {success: true};
+  }
+  const lease = /lease_expires_at = (\d+)/.exec(sql)?.[1];
+  if (lease) {
+    slot.lease_expires_at = Number(lease);
+  }
+  const partial = /partial_json = '(\[[^']*\])'/.exec(sql)?.[1];
+  if (partial) {
+    slot.partial_json = partial;
+    slot.computed_at = Number(/computed_at = (\d+)/.exec(sql)?.[1]);
+  }
+  return {success: true};
+}
+
+function executeParallelReduceFixtureSql(context, serviceId, sql) {
+  const ownStatements = context.statements.get(serviceId) || [];
+  ownStatements.push(sql);
+  context.statements.set(serviceId, ownStatements);
+  if (sql.startsWith('SELECT slot_id')) {
+    return {success: true, results: context.slots.map((row) => ({...row}))};
+  }
+  if (sql.startsWith('UPDATE reduce_slots')) {
+    return executeReduceSlotFixtureSql(sql, context.slots);
+  }
+  if (sql === context.config.parallelReduce.shardSqlBySlot[1]) {
+    return {success: true, results: [
+      {movie_id: 50, rating: 5},
+      {movie_id: 100, rating: 3},
+    ]};
+  }
+  if (sql === context.config.parallelReduce.shardSqlBySlot[2]) {
+    return {success: true, results: [
+      {movie_id: 258, rating: 4},
+      {movie_id: 300, rating: 2},
+    ]};
+  }
+  if (sql.startsWith('UPDATE final_topn')) {
+    context.result.finalRows = JSON.parse(
+      /result_json = '(\[[^']*\])'/.exec(sql)[1],
+    );
+    context.result.finalUpdateCount += 1;
+    return {success: true};
+  }
+  return {success: true, results: []};
+}
+
+function createParallelReduceFixtureExecutor(context, serviceId) {
+  const execute = async (sql) =>
+    executeParallelReduceFixtureSql(context, serviceId, sql);
+  execute.executeInternal = execute;
+  return execute;
 }
 
 function nodeRow(nodeId, groupId = null) {
@@ -329,7 +439,7 @@ test('in-service reduce: a full-scan query loop reduces rows to a ' +
     {movie_id: 100, rating: 4}, {movie_id: 100, rating: 2},
     {movie_id: 258, rating: 1},
   ];
-  const statements = [];
+  const statements = Array.of();
   const queryExecutor = async (sql) => {
     statements.push(sql);
     if (sql.startsWith('SELECT')) {
@@ -447,63 +557,11 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
     partial_json: '[]',
     computed_at: 0,
   }));
-  let finalRows = [];
-  let finalUpdateCount = 0;
   const statements = new Map();
-  const executorFor = (serviceId) => {
-    const execute = async (sql) => {
-      const ownStatements = statements.get(serviceId) || [];
-      ownStatements.push(sql);
-      statements.set(serviceId, ownStatements);
-      if (sql.startsWith('SELECT slot_id')) {
-        return {success: true, results: slots.map((row) => ({...row}))};
-      }
-      if (sql.startsWith('UPDATE reduce_slots')) {
-        const slotId = Number(/slot_id = (\d+)/.exec(sql)?.[1]);
-        const slot = slots.find((row) => row.slot_id === slotId);
-        const claiming = /replica_id = '([^']+)'/.exec(sql)?.[1];
-        const requiredOwner = /AND replica_id = '([^']+)'/.exec(sql)?.[1];
-        if (claiming && slot.lease_expires_at <= Date.now()) {
-          slot.replica_id = claiming;
-          slot.partial_json = '[]';
-          slot.computed_at = 0;
-        }
-        if (requiredOwner && slot.replica_id !== requiredOwner) {
-          return {success: true};
-        }
-        const lease = /lease_expires_at = (\d+)/.exec(sql)?.[1];
-        if (lease) {
-          slot.lease_expires_at = Number(lease);
-        }
-        const partial = /partial_json = '(\[[^']*\])'/.exec(sql)?.[1];
-        if (partial) {
-          slot.partial_json = partial;
-          slot.computed_at = Number(/computed_at = (\d+)/.exec(sql)?.[1]);
-        }
-        return {success: true};
-      }
-      if (sql === config.parallelReduce.shardSqlBySlot[1]) {
-        return {success: true, results: [
-          {movie_id: 50, rating: 5},
-          {movie_id: 100, rating: 3},
-        ]};
-      }
-      if (sql === config.parallelReduce.shardSqlBySlot[2]) {
-        return {success: true, results: [
-          {movie_id: 258, rating: 4},
-          {movie_id: 300, rating: 2},
-        ]};
-      }
-      if (sql.startsWith('UPDATE final_topn')) {
-        finalRows = JSON.parse(/result_json = '(\[[^']*\])'/.exec(sql)[1]);
-        finalUpdateCount += 1;
-        return {success: true};
-      }
-      return {success: true, results: []};
-    };
-    execute.executeInternal = execute;
-    return execute;
-  };
+  const result = {finalRows: [], finalUpdateCount: 0};
+  const executorContext = {config, result, slots, statements};
+  const executorFor = (serviceId) =>
+    createParallelReduceFixtureExecutor(executorContext, serviceId);
   const replacements = ['svc-parallel-r3', 'svc-parallel-r4'];
   const modules = replacements.map(() => new SqlQueryLoopRuntimeModule());
   for (let index = 0; index < modules.length; index += 1) {
@@ -518,14 +576,14 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
     await waitFor(() => slots[index].replica_id === replacements[index]);
     if (index === 0) {
       await new Promise((resolve) => setTimeout(resolve, 20));
-      t.same(finalRows, [],
+      t.same(result.finalRows, [],
         'an incomplete slot set never overwrites the result snapshot');
     }
   }
-  await waitFor(() => finalRows.length === 2);
+  await waitFor(() => result.finalRows.length === 2);
   t.same(slots.map((row) => row.replica_id), replacements,
     'replacement generations r3/r4 acquire stable slots 1/2');
-  t.same(finalRows, [
+  t.same(result.finalRows, [
     {groupKey: 50, aggValue: 5},
     {groupKey: 258, aggValue: 4},
   ], 'the coordinator atomically publishes the exact global top-N');
@@ -535,7 +593,7 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
   t.equal(health.mergeCandidates, 4,
     'the coordinator observes replicas×N bounded candidates');
   await modules[0].stop({serviceId: replacements[0]});
-  const updatesBeforeReplacement = finalUpdateCount;
+  const updatesBeforeReplacement = result.finalUpdateCount;
   const replacementId = 'svc-parallel-r5';
   const replacementModule = new SqlQueryLoopRuntimeModule();
   await replacementModule.prepare({
@@ -548,7 +606,7 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
   });
   await waitFor(() =>
     slots[0].replica_id === replacementId &&
-    finalUpdateCount > updatesBeforeReplacement);
+    result.finalUpdateCount > updatesBeforeReplacement);
   t.equal(slots[0].replica_id, replacementId,
     'a later replacement generation reclaims stable slot 1 and resumes');
   t.notOk([...statements.values()].flat().some((sql) =>
