@@ -67,7 +67,6 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   READY_LEASE_EXPIRES_AT_CAMEL: 'readyLeaseExpiresAt',
   COMMA: ',',
 });
-const CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS = 5000;
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -734,11 +733,10 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
     const replicaOperationSummary =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, options);
     const evaluation = evaluateAuthoritativeRepairPolicy({
-      cacheStalenessMs: this.resolveControlSnapshotCacheStalenessMs(
+      cacheStaleWatermark: this.resolveControlSnapshotCacheStaleWatermark(
         nodeRows,
         capturedAt,
       ),
-      staleThresholdMs: CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS,
       nodeCoverageGap:
         nodeCoverage.hasCoverageGap ||
         connectedNodeCoverage.hasCoverageGap ||

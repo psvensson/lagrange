@@ -1,0 +1,333 @@
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+index 1b0416ef6a58f5f56ffefc4ac02d9d2daa750201..12dbae7081b84f7c1c92cf147932f584ff8ab331 100644
+--- a/scripts/run-placement-affinity-scenarios.js
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -101,6 +101,10 @@ const SCENARIOS = {
+       'control-plane-quiescence-snapshot.test.js',
+     'test/admin/admin-websocket-api-messaging-and-errors.test.js',
+   ],
++  'control-snapshot-heartbeat-lease-freshness': [
++    'test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js',
++    'test/runtime/movielens-preload-admission-gate.test.js',
++  ],
+   'seed-join-gate-authoritative-refresh': [
+     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
+   ],
+diff --git a/src/admin/admin-authoritative-repair-policy.js b/src/admin/admin-authoritative-repair-policy.js
+index 2b0a0bdf59f87727e572847e11bd6ed8b5ea2a51..b659213eae4f9dc78bc871bfcaf541c04e112297 100644
+--- a/src/admin/admin-authoritative-repair-policy.js
++++ b/src/admin/admin-authoritative-repair-policy.js
+@@ -75,6 +75,16 @@ function isCacheStalenessOverThreshold(stalenessMs, staleThresholdMs) {
+   return normalizedStalenessMs >= Math.floor(staleThresholdMs);
+ }
+ 
++function resolveCacheStaleWatermark(options = {}) {
++  if (typeof options.cacheStaleWatermark === 'boolean') {
++    return options.cacheStaleWatermark;
++  }
++  return isCacheStalenessOverThreshold(
++    options.cacheStalenessMs,
++    options.staleThresholdMs,
++  );
++}
++
+ function hasDiscoverySelectionGap(selectedNodeCount, serviceEndpointsCount) {
+   const normalizedSelectedNodeCount =
+     normalizeNonNegativeInteger(selectedNodeCount);
+@@ -185,10 +195,7 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
+   const scopedQuery = options.scopedQuery === true;
+   const allowScopedStaleWatermarkRepair =
+     options.allowScopedStaleWatermarkRepair === true;
+-  const cacheStaleWatermark = isCacheStalenessOverThreshold(
+-    options.cacheStalenessMs,
+-    options.staleThresholdMs,
+-  );
++  const cacheStaleWatermark = resolveCacheStaleWatermark(options);
+   const shouldTriggerStaleWatermarkRepair = cacheStaleWatermark &&
+     (!scopedQuery || allowScopedStaleWatermarkRepair);
+   if (shouldTriggerStaleWatermarkRepair) {
+diff --git a/src/admin/admin-control-snapshot-control-plane-diagnostics.js b/src/admin/admin-control-snapshot-control-plane-diagnostics.js
+index 34a20d252beb996c9f207a28273a16a4b483e926..610618cbfcb580627f5d7be214be687b993ef54d 100644
+--- a/src/admin/admin-control-snapshot-control-plane-diagnostics.js
++++ b/src/admin/admin-control-snapshot-control-plane-diagnostics.js
+@@ -11,6 +11,7 @@
+  * admin-helpers.js.
+  */
+ import {COLUMN, TABLES} from '../constants/index.js';
++import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+ import {
+   ADMIN_CACHE_DUMP,
+ } from './admin-constants.js';
+@@ -246,19 +247,22 @@ function hasControlSnapshotRuntimeReaderAvailable(runtimeReader = null) {
+ class AdminControlSnapshotControlPlaneDiagnostics
+   extends AdminControlSnapshotCoverageGapEvaluation {
+   /**
+-   * Compute local cache staleness for active node heartbeat rows.
+-   * Stale live-node rows indicate the control snapshot should rebuild from
+-   * the authoritative owner path before consumers trust the local projection.
++   * Resolve whether the cached active-node projection has crossed the
++   * heartbeat owner's explicit ready-lease boundary. Heartbeat rows are
++   * intentionally coalesced, so raw heartbeat age cannot independently make
++   * a snapshot stale while its owner-authored lease is still valid.
+    * @param {Array<Object>} nodeRows
+    * @param {number} capturedAtMs
+-   * @return {number}
++   * @return {boolean}
+    * @private
+    */
+-  resolveControlSnapshotCacheStalenessMs(nodeRows = [], capturedAtMs = null) {
++  resolveControlSnapshotCacheStaleWatermark(
++    nodeRows = [],
++    capturedAtMs = null,
++  ) {
+     const observedAtMs = Number.isFinite(capturedAtMs) ?
+       capturedAtMs :
+       this.nowFn();
+-    let maxStalenessMs = 0;
+     for (const nodeRow of Array.isArray(nodeRows) ? nodeRows : []) {
+       const status = String(
+         firstStringField(nodeRow, COLUMN.STATUS, 'status') || '',
+@@ -278,23 +282,14 @@ class AdminControlSnapshotControlPlaneDiagnostics
+       if (!considerForStaleness) {
+         continue;
+       }
+-      const lastHeartbeatMs = Number(
+-        nodeRow?.[COLUMN.LAST_HEARTBEAT] ??
+-          nodeRow?.last_heartbeat ??
+-          nodeRow?.updated_at ??
+-          nodeRow?.updatedAt ??
+-          nodeRow?.created_at ??
+-          nodeRow?.createdAt,
+-      );
+-      if (!Number.isFinite(lastHeartbeatMs)) {
+-        return Number.POSITIVE_INFINITY;
++      if (!isNodeRecordReady(nodeRow, {
++        now: observedAtMs,
++        requireActiveStatus: status === STATUS_ACTIVE,
++      })) {
++        return true;
+       }
+-      maxStalenessMs = Math.max(
+-        maxStalenessMs,
+-        Math.max(0, observedAtMs - lastHeartbeatMs),
+-      );
+     }
+-    return maxStalenessMs;
++    return false;
+   }
+   /**
+    * Build structured control-plane diagnostics for admin snapshots.
+diff --git a/src/admin/admin-control-snapshot-node-view-projection.js b/src/admin/admin-control-snapshot-node-view-projection.js
+index 2fce1c2cbc36feb42e53b6d4c84a2bb52599701b..5258374d2df6aea0ddc7f2d02a060dd07772cde2 100644
+--- a/src/admin/admin-control-snapshot-node-view-projection.js
++++ b/src/admin/admin-control-snapshot-node-view-projection.js
+@@ -67,7 +67,6 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
+   READY_LEASE_EXPIRES_AT_CAMEL: 'readyLeaseExpiresAt',
+   COMMA: ',',
+ });
+-const CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS = 5000;
+ /**
+  * Normalize one arbitrary value to a non-negative integer.
+  * @param {*} value
+@@ -734,11 +733,10 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
+     const replicaOperationSummary =
+       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, options);
+     const evaluation = evaluateAuthoritativeRepairPolicy({
+-      cacheStalenessMs: this.resolveControlSnapshotCacheStalenessMs(
++      cacheStaleWatermark: this.resolveControlSnapshotCacheStaleWatermark(
+         nodeRows,
+         capturedAt,
+       ),
+-      staleThresholdMs: CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS,
+       nodeCoverageGap:
+         nodeCoverage.hasCoverageGap ||
+         connectedNodeCoverage.hasCoverageGap ||
+diff --git a/test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js b/test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8c74bff257be52e73d89a08dc0d78802ce745ebf
+--- /dev/null
++++ b/test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js
+@@ -0,0 +1,183 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {AdminControlSnapshot} from '../../src/admin/admin-control-snapshot.js';
++import {
++  AUTHORITATIVE_REPAIR_TRIGGER,
++} from '../../src/admin/admin-authoritative-repair-policy.js';
++import {
++  ControlPlaneSnapshotOwner,
++  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
++  CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
++} from '../../src/control-plane/control-plane-snapshot-owner.js';
++import {TABLES} from '../../src/constants/index.js';
++
++const NOW_MS = 100_000;
++const NODE_STATUS_ACTIVE = 'active';
++const NODE_STATUS_STOPPED = 'stopped';
++const CONNECTION_STATE_READY = 'ready';
++const CONNECTION_STATE_DISCONNECTED = 'disconnected';
++
++function buildNodeRow(nodeId, overrides = {}) {
++  return {
++    node_id: nodeId,
++    status: NODE_STATUS_ACTIVE,
++    connection_state: CONNECTION_STATE_READY,
++    last_heartbeat: NOW_MS - 12_000,
++    ready_lease_expires_at: NOW_MS + 3_000,
++    ...overrides,
++  };
++}
++
++function buildSystemTableCache(nodeRows) {
++  return {
++    getAll(tableName) {
++      return tableName === TABLES.NODES ? nodeRows : [];
++    },
++  };
++}
++
++function buildControlSnapshot(nodeRows) {
++  return new AdminControlSnapshot({
++    nodeId: 'node-seed',
++    systemTableCache: buildSystemTableCache(nodeRows),
++    cacheMutationTarget: {applySystemTableChange() {}},
++    ensureAuthoritativeDiscoveryCacheRepair: async () => ({applied: true}),
++    nowFn: () => NOW_MS,
++  });
++}
++
++function buildLocalSnapshot() {
++  return {
++    capturedAt: NOW_MS,
++    replicaOperations: {
++      inFlightCount: 0,
++      staleInFlightCount: 0,
++    },
++    leaders: {},
++    controlPlaneDiagnostics: {},
++  };
++}
++
++test('snapshot owner treats staggered heartbeats as fresh within owner leases',
++  async (t) => {
++    const controlSnapshot = buildControlSnapshot([
++      buildNodeRow('node-seed'),
++      buildNodeRow('node-1', {last_heartbeat: NOW_MS - 9_000}),
++      buildNodeRow('node-2', {last_heartbeat: NOW_MS - 7_000}),
++      buildNodeRow('node-3', {last_heartbeat: NOW_MS - 5_500}),
++      buildNodeRow('node-4', {last_heartbeat: NOW_MS - 2_500}),
++    ]);
++    const owner = new ControlPlaneSnapshotOwner({controlSnapshot});
++
++    const result = await owner.resolveControlSnapshot(
++      buildLocalSnapshot(),
++      {allowAuthoritativeRepair: false},
++    );
++
++    t.equal(
++      result.snapshotObservation.state,
++      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FRESH,
++      'owner-authored unexpired leases bound tolerated heartbeat age',
++    );
++    t.notOk(
++      result.snapshotObservation.reasonCodes.includes(
++        AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
++      ),
++      'heartbeat cadence alone cannot create a stale watermark',
++    );
++    t.end();
++  });
++
++test('snapshot owner keeps expired or missing lease evidence stale',
++  async (t) => {
++    for (const nodeRow of [
++      buildNodeRow('expired', {
++        last_heartbeat: NOW_MS - 1_000,
++        ready_lease_expires_at: NOW_MS - 1,
++      }),
++      buildNodeRow('missing', {
++        last_heartbeat: NOW_MS - 1_000,
++        ready_lease_expires_at: null,
++      }),
++    ]) {
++      const controlSnapshot = buildControlSnapshot([nodeRow]);
++      const owner = new ControlPlaneSnapshotOwner({controlSnapshot});
++      const result = await owner.resolveControlSnapshot(
++        buildLocalSnapshot(),
++        {allowAuthoritativeRepair: false},
++      );
++
++      t.equal(
++        result.snapshotObservation.state,
++        CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
++        `${nodeRow.node_id} lease evidence remains fail-closed`,
++      );
++      t.ok(
++        result.snapshotObservation.reasonCodes.includes(
++          AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
++        ),
++        `${nodeRow.node_id} lease evidence schedules freshness repair`,
++      );
++    }
++
++    const stoppedSnapshot = buildControlSnapshot([
++      buildNodeRow('stopped', {
++        status: NODE_STATUS_STOPPED,
++        connection_state: CONNECTION_STATE_DISCONNECTED,
++        last_heartbeat: null,
++        ready_lease_expires_at: null,
++      }),
++    ]);
++    const stoppedOwner = new ControlPlaneSnapshotOwner({
++      controlSnapshot: stoppedSnapshot,
++    });
++    const stoppedResult = await stoppedOwner.resolveControlSnapshot(
++      buildLocalSnapshot(),
++      {allowAuthoritativeRepair: false},
++    );
++    t.equal(
++      stoppedResult.snapshotObservation.state,
++      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FRESH,
++      'terminal disconnected rows do not poison active-node freshness',
++    );
++    t.end();
++  });
++
++test('snapshot owner schedules bounded repair after lease expiry',
++  async (t) => {
++    const scheduledRepairs = [];
++    const controlSnapshot = buildControlSnapshot([
++      buildNodeRow('expired', {
++        ready_lease_expires_at: NOW_MS - 1,
++      }),
++    ]);
++    const owner = new ControlPlaneSnapshotOwner({
++      controlSnapshot,
++      serviceDiscovery: {
++        buildAuthoritativeDiscoveryRepairScheduleDecision() {
++          return {state: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED};
++        },
++        scheduleAuthoritativeDiscoveryCacheRepair(options) {
++          scheduledRepairs.push(options);
++        },
++      },
++    });
++
++    const result = await owner.resolveControlSnapshot(
++      buildLocalSnapshot(),
++      {allowAuthoritativeRepair: true},
++    );
++
++    t.equal(
++      result.snapshotObservation.state,
++      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
++    );
++    t.equal(
++      result.snapshotObservation.refreshState,
++      CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED,
++    );
++    t.equal(scheduledRepairs.length, 1);
++    t.ok(scheduledRepairs[0].triggerCodes.includes(
++      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
++    ));
++    t.end();
++  });

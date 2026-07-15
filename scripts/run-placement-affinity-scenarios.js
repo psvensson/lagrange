@@ -101,6 +101,10 @@ const SCENARIOS = {
       'control-plane-quiescence-snapshot.test.js',
     'test/admin/admin-websocket-api-messaging-and-errors.test.js',
   ],
+  'control-snapshot-heartbeat-lease-freshness': [
+    'test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js',
+    'test/runtime/movielens-preload-admission-gate.test.js',
+  ],
   'seed-join-gate-authoritative-refresh': [
     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
   ],

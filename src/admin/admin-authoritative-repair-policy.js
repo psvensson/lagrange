@@ -75,6 +75,16 @@ function isCacheStalenessOverThreshold(stalenessMs, staleThresholdMs) {
   return normalizedStalenessMs >= Math.floor(staleThresholdMs);
 }
 
+function resolveCacheStaleWatermark(options = {}) {
+  if (typeof options.cacheStaleWatermark === 'boolean') {
+    return options.cacheStaleWatermark;
+  }
+  return isCacheStalenessOverThreshold(
+    options.cacheStalenessMs,
+    options.staleThresholdMs,
+  );
+}
+
 function hasDiscoverySelectionGap(selectedNodeCount, serviceEndpointsCount) {
   const normalizedSelectedNodeCount =
     normalizeNonNegativeInteger(selectedNodeCount);
@@ -185,10 +195,7 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
   const scopedQuery = options.scopedQuery === true;
   const allowScopedStaleWatermarkRepair =
     options.allowScopedStaleWatermarkRepair === true;
-  const cacheStaleWatermark = isCacheStalenessOverThreshold(
-    options.cacheStalenessMs,
-    options.staleThresholdMs,
-  );
+  const cacheStaleWatermark = resolveCacheStaleWatermark(options);
   const shouldTriggerStaleWatermarkRepair = cacheStaleWatermark &&
     (!scopedQuery || allowScopedStaleWatermarkRepair);
   if (shouldTriggerStaleWatermarkRepair) {

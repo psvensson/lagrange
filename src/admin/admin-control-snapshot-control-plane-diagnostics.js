@@ -11,6 +11,7 @@
  * admin-helpers.js.
  */
 import {COLUMN, TABLES} from '../constants/index.js';
+import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {
   ADMIN_CACHE_DUMP,
 } from './admin-constants.js';
@@ -246,19 +247,22 @@ function hasControlSnapshotRuntimeReaderAvailable(runtimeReader = null) {
 class AdminControlSnapshotControlPlaneDiagnostics
   extends AdminControlSnapshotCoverageGapEvaluation {
   /**
-   * Compute local cache staleness for active node heartbeat rows.
-   * Stale live-node rows indicate the control snapshot should rebuild from
-   * the authoritative owner path before consumers trust the local projection.
+   * Resolve whether the cached active-node projection has crossed the
+   * heartbeat owner's explicit ready-lease boundary. Heartbeat rows are
+   * intentionally coalesced, so raw heartbeat age cannot independently make
+   * a snapshot stale while its owner-authored lease is still valid.
    * @param {Array<Object>} nodeRows
    * @param {number} capturedAtMs
-   * @return {number}
+   * @return {boolean}
    * @private
    */
-  resolveControlSnapshotCacheStalenessMs(nodeRows = [], capturedAtMs = null) {
+  resolveControlSnapshotCacheStaleWatermark(
+    nodeRows = [],
+    capturedAtMs = null,
+  ) {
     const observedAtMs = Number.isFinite(capturedAtMs) ?
       capturedAtMs :
       this.nowFn();
-    let maxStalenessMs = 0;
     for (const nodeRow of Array.isArray(nodeRows) ? nodeRows : []) {
       const status = String(
         firstStringField(nodeRow, COLUMN.STATUS, 'status') || '',
@@ -278,23 +282,14 @@ class AdminControlSnapshotControlPlaneDiagnostics
       if (!considerForStaleness) {
         continue;
       }
-      const lastHeartbeatMs = Number(
-        nodeRow?.[COLUMN.LAST_HEARTBEAT] ??
-          nodeRow?.last_heartbeat ??
-          nodeRow?.updated_at ??
-          nodeRow?.updatedAt ??
-          nodeRow?.created_at ??
-          nodeRow?.createdAt,
-      );
-      if (!Number.isFinite(lastHeartbeatMs)) {
-        return Number.POSITIVE_INFINITY;
+      if (!isNodeRecordReady(nodeRow, {
+        now: observedAtMs,
+        requireActiveStatus: status === STATUS_ACTIVE,
+      })) {
+        return true;
       }
-      maxStalenessMs = Math.max(
-        maxStalenessMs,
-        Math.max(0, observedAtMs - lastHeartbeatMs),
-      );
     }
-    return maxStalenessMs;
+    return false;
   }
   /**
    * Build structured control-plane diagnostics for admin snapshots.
