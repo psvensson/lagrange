@@ -466,6 +466,43 @@ class RebalanceCoordinatorOperationCreation {
   }
 
   /**
+   * Resolve the authoritative operation that won a persistence collision.
+   * Deterministic intent IDs take precedence over the broader in-flight key.
+   *
+   * @param {Object} context
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async queryExistingOperationAfterInsertConflict(context) {
+    const {
+      operationIntentId,
+      operationId,
+      partitionId,
+      targetNodeId,
+      entityType,
+      entityId,
+      normalizedMove,
+    } = context;
+
+    if (operationIntentId) {
+      const existingByDeterministicId =
+        await this.repository.queryAuthoritativeOperationById(operationId);
+      if (existingByDeterministicId) {
+        return existingByDeterministicId;
+      }
+    }
+
+    return this.queryExistingInFlightOperation(
+      partitionId,
+      targetNodeId,
+      entityType,
+      entityId,
+      normalizedMove,
+      STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
+    );
+  }
+
+  /**
    * Create and persist one operation after dedupe checks pass.
    * @param {Object} context
    * @return {Promise<Object>}
@@ -594,18 +631,16 @@ class RebalanceCoordinatorOperationCreation {
     // Persist via SQL engine (writes to partition leader)
     const inserted = await this.persistNewOperation(operation);
     if (!inserted) {
-      const existingByDeterministicId = move.operationIntentId ?
-        await this.repository.queryAuthoritativeOperationById(operationId) :
-        null;
-      const existingAfterInsert = existingByDeterministicId ||
-        await this.queryExistingInFlightOperation(
+      const existingAfterInsert =
+        await this.queryExistingOperationAfterInsertConflict({
+          operationIntentId: move.operationIntentId,
+          operationId,
           partitionId,
-          move.nodeId,
+          targetNodeId: move.nodeId,
           entityType,
           entityId,
           normalizedMove,
-          STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-        );
+        });
       if (existingAfterInsert) {
         this.rememberOperationIntents(
           [dedupeKey, criticalAddLikeIntentKey],

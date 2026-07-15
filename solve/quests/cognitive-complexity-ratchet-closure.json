@@ -1,0 +1,51 @@
+{
+  "id": "cognitive-complexity-ratchet-closure",
+  "authoringContractVersion": 1,
+  "statement": "The global cognitive-complexity ratchet passes at no more than 183 violations, createOperationRecordInternal is at or below the threshold of 20, operation-creation behavior remains green, and literal, decision-boundary, duplication, unused-code, lint, and baseline contracts do not regress.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "fc1a9eaf4d4b52bcf9891313555fe5eb2ca8d1ec"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/cognitive-complexity-ratchet-closure.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "cognitive-complexity-ratchet-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/cognitive-complexity-ratchet-closure.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-operation-creation-owner-scope",
+      "statement": "Change only src/rebalancer/rebalance-coordinator-operation-creation.js; preserve the existing RebalanceCoordinator composition seam and do not change tests, Solver implementation, generated shards, baselines, or unrelated owners."
+    },
+    {
+      "id": "no-static-baseline-headroom",
+      "statement": "Do not raise, weaken, bypass, or otherwise change cognitive-complexity, duplication, literal, decision-boundary, unused-code, lint, metric, or test baselines and gates."
+    },
+    {
+      "id": "operation-creation-semantics-preserved",
+      "statement": "Preserve deterministic operation and replica intent IDs, admission recheck, replica allocation, topology and readiness snapshots, persistence collision recovery, intent remembering, reservation, event emission, and progression arming semantics."
+    }
+  ]
+}
