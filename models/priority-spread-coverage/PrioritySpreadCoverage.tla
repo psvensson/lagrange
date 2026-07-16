@@ -6,6 +6,7 @@
 (*  2. operations can cover that gap only on distinct eligible targets;    *)
 (*  3. publication closure may certify satisfaction only after coverage;   *)
 (*  4. uncovered demand must retain its follow-up scheduling obligation.   *)
+(*  5. pre-schema admission consumes that published satisfaction as data.  *)
 (*                                                                         *)
 (* CountAwareClosure = FALSE models the observed bug: one qualifying       *)
 (* operation is collapsed to a Boolean and can close a gap of two. TRUE    *)
@@ -13,7 +14,8 @@
 (***************************************************************************)
 EXTENDS FiniteSets, Naturals
 
-CONSTANT CountAwareClosure
+CONSTANTS CountAwareClosure,
+          SpreadRequiredForSchemaAdmission
 
 RequiredDistinct == 3
 EligibleTargets == {"node-b", "node-c"}
@@ -21,13 +23,15 @@ EligibleTargets == {"node-b", "node-c"}
 VARIABLES readyDistinct,
           operationTargets,
           publishedSatisfied,
-          followupPending
+          followupPending,
+          schemaAdmitted
 
 vars == <<
   readyDistinct,
   operationTargets,
   publishedSatisfied,
-  followupPending
+  followupPending,
+  schemaAdmitted
 >>
 
 CoveredDistinct == readyDistinct + Cardinality(operationTargets)
@@ -39,19 +43,26 @@ TypeOK ==
   /\ CoveredDistinct <= RequiredDistinct
   /\ publishedSatisfied \in BOOLEAN
   /\ followupPending \in BOOLEAN
+  /\ schemaAdmitted \in BOOLEAN
 
 Init ==
   /\ readyDistinct = 1
   /\ operationTargets = {}
   /\ publishedSatisfied = FALSE
   /\ followupPending = TRUE
+  /\ schemaAdmitted = FALSE
 
 ScheduleTarget(target) ==
   /\ followupPending
   /\ Uncovered
   /\ target \in EligibleTargets \ operationTargets
   /\ operationTargets' = operationTargets \cup {target}
-  /\ UNCHANGED <<readyDistinct, publishedSatisfied, followupPending>>
+  /\ UNCHANGED <<
+       readyDistinct,
+       publishedSatisfied,
+       followupPending,
+       schemaAdmitted
+     >>
 
 ScheduleAnyTarget ==
   \E target \in EligibleTargets:
@@ -67,11 +78,28 @@ PublishClosure ==
   /\ ClosureCoverageSatisfied
   /\ publishedSatisfied' = TRUE
   /\ followupPending' = FALSE
-  /\ UNCHANGED <<readyDistinct, operationTargets>>
+  /\ UNCHANGED <<readyDistinct, operationTargets, schemaAdmitted>>
+
+SchemaAdmissionAllowed ==
+  IF SpreadRequiredForSchemaAdmission
+    THEN publishedSatisfied
+    ELSE TRUE
+
+AdmitSchema ==
+  /\ ~schemaAdmitted
+  /\ SchemaAdmissionAllowed
+  /\ schemaAdmitted' = TRUE
+  /\ UNCHANGED <<
+       readyDistinct,
+       operationTargets,
+       publishedSatisfied,
+       followupPending
+     >>
 
 Next ==
   \/ ScheduleAnyTarget
   \/ PublishClosure
+  \/ AdmitSchema
 
 Spec == Init /\ [][Next]_vars
 
@@ -80,5 +108,11 @@ PublicationRequiresCoveredSpread ==
 
 UncoveredSpreadRetainsFollowup ==
   Uncovered => followupPending
+
+SchemaAdmissionRequiresCoveredSpread ==
+  schemaAdmitted => ~Uncovered
+
+SchemaAdmissionRequiresPublishedSummary ==
+  schemaAdmitted => publishedSatisfied
 
 =============================================================================

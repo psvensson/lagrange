@@ -3,6 +3,7 @@ import {
   buildLoadLaneTableAdmissionProbeSql,
 } from '../../src/admin/load-lane-table-admission-probe.js';
 import {
+  CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   CONTROL_PLANE_QUIESCENCE_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
   buildControlPlaneQuiescenceSnapshot,
@@ -51,6 +52,9 @@ const SCHEMA_BUDGET_EXHAUSTED_ERROR = 'schema admission budget exhausted';
 const ADMIN_STREAM_LANE_QUERY_PARAMETER = 'lane';
 const PRELOAD_ADMISSION_QUERY_REQUIRED_ERROR =
   'MovieLens preload admission requires query';
+const PRIORITY_SPREAD_SUMMARY_SOURCE =
+  'controlPlaneDiagnostics.priorityRecoveryObservation.' +
+  'priorityPartitionSummary';
 
 function buildAdminLaneTarget(target, lane) {
   const url = new URL(target);
@@ -139,6 +143,40 @@ function buildSnapshotProbe(snapshot, snapshotError) {
   };
 }
 
+function buildPrioritySpreadTopology(snapshot) {
+  const priorityPartitionSummary =
+    snapshot?.controlPlaneDiagnostics?.priorityRecoveryObservation
+      ?.priorityPartitionSummary;
+  const summaryAvailable =
+    isPlainRecord(priorityPartitionSummary) &&
+    typeof priorityPartitionSummary.satisfied === 'boolean' &&
+    Number.isInteger(priorityPartitionSummary.totalSpreadGap) &&
+    priorityPartitionSummary.totalSpreadGap >= ZERO;
+  if (!summaryAvailable) {
+    return Object.freeze({
+      enabled: true,
+      ready: false,
+      totalSpreadGap: ZERO,
+      observationState:
+        CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+          .SNAPSHOT_LANE_UNAVAILABLE,
+      snapshotLaneUnavailableTableCount: 1,
+      source: PRIORITY_SPREAD_SUMMARY_SOURCE,
+    });
+  }
+  const totalSpreadGap = priorityPartitionSummary.totalSpreadGap;
+  return Object.freeze({
+    enabled: true,
+    ready:
+      priorityPartitionSummary.satisfied === true &&
+      totalSpreadGap === ZERO,
+    totalSpreadGap,
+    observationState:
+      CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE.AVAILABLE,
+    source: PRIORITY_SPREAD_SUMMARY_SOURCE,
+  });
+}
+
 function resolveSnapshotObservationError(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') {
     return PRELOAD_SNAPSHOT_ERROR.MISSING_ROW;
@@ -165,6 +203,7 @@ function resolveSnapshotObservationError(snapshot) {
 function classifySnapshot(snapshot, snapshotError, nowMs) {
   return buildControlPlaneQuiescenceSnapshot({
     snapshotProbe: buildSnapshotProbe(snapshot, snapshotError),
+    criticalSystemTopology: buildPrioritySpreadTopology(snapshot),
     nowMs,
     stableWindowStartedAtMs: nowMs,
     stableWindowMs: ZERO,

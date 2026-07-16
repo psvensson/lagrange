@@ -26,8 +26,37 @@ function buildControlSnapshot(overrides = {}) {
       rows: [],
     },
     leaders: {'ratings-p1': 'node-a'},
-    controlPlaneDiagnostics: {},
+    controlPlaneDiagnostics: {
+      priorityRecoveryObservation: {
+        priorityPartitionSummary: {
+          satisfied: true,
+          blockedPartitionCount: 0,
+          largestSpreadGap: 0,
+          totalSpreadGap: 0,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+        },
+      },
+    },
     ...overrides,
+  };
+}
+
+function buildOpenPrioritySpreadDiagnostics(totalSpreadGap = 2) {
+  return {
+    priorityRecoveryObservation: {
+      priorityPartitionSummary: {
+        satisfied: false,
+        blockedPartitionCount: 1,
+        largestSpreadGap: totalSpreadGap,
+        totalSpreadGap,
+        missingPartitionIds: ['replica_operations-p1'],
+        blockedPartitions: [{
+          partitionId: 'replica_operations-p1',
+          spreadGap: totalSpreadGap,
+        }],
+      },
+    },
   };
 }
 
@@ -115,6 +144,66 @@ test('pre-schema pressure resets stable confirmation and fails closed',
     );
     t.equal(error.schemaAdmission.admitted, false);
     t.equal(error.schemaAdmission.snapshot.state, 'control_plane_pressure');
+    t.end();
+  });
+
+test('pre-schema admission consumes authoritative numeric priority spread data',
+  async (t) => {
+    const snapshots = [
+      buildControlSnapshot(),
+      buildControlSnapshot({
+        controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(),
+      }),
+      buildControlSnapshot(),
+      buildControlSnapshot(),
+    ];
+    let index = 0;
+    const result = await waitForAffinityDemoSchemaAdmission(
+      boundedSchemaOptions(async () => ({rows: [snapshots[index++]]})),
+    );
+
+    t.equal(index, 4,
+      'an open numeric gap resets rather than contributing confirmation');
+    t.equal(result.stableConfirmationCount, 2);
+    t.equal(result.snapshot.criticalSystemTopology.enabled, true);
+    t.equal(result.snapshot.criticalSystemTopology.ready, true);
+    t.equal(result.snapshot.criticalSystemTopology.totalSpreadGap, 0);
+
+    const openGapError = await t.rejects(
+      waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+        async () => ({rows: [buildControlSnapshot({
+          controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(2),
+        })]}),
+        1,
+      )),
+      /critical_system_spread_gap=2/,
+    );
+    t.equal(openGapError.schemaAdmission.admitted, false);
+    t.equal(
+      openGapError.schemaAdmission.snapshot.state,
+      'critical_spread_open',
+    );
+    t.equal(
+      openGapError.schemaAdmission.snapshot.criticalSystemTopology
+        .totalSpreadGap,
+      2,
+      'the gate retains the owner-published numeric deficit',
+    );
+
+    const blindError = await t.rejects(
+      waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+        async () => ({rows: [buildControlSnapshot({
+          controlPlaneDiagnostics: {},
+        })]}),
+        1,
+      )),
+      /critical_system_snapshot_reachability_unavailable=1/,
+    );
+    t.equal(
+      blindError.schemaAdmission.snapshot.state,
+      'critical_spread_observation_unavailable',
+      'missing priority owner data cannot look like zero spread demand',
+    );
     t.end();
   });
 

@@ -1,0 +1,54 @@
+{
+  "id": "movielens-pre-schema-priority-spread-admission-authority-measured",
+  "authoringContractVersion": 1,
+  "statement": "The production MovieLens pre-schema admission consumes the authoritative priority-partition numeric spread summary as mandatory data, cannot accumulate or admit its unchanged stability window while any priority spread gap or evidence blindness remains open, and admits only after the published summary is satisfied with zero total spread gap.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "movielens-pre-schema-priority-spread-admission-authority",
+    "planDoc": "solve/epics/service-data-affinity-placement.md",
+    "draftedAtCommit": "71428943a7b722b446a06e865eecd5803c01914a"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-pre-schema-priority-spread-admission-authority",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-pre-schema-priority-spread-admission-authority-measured-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-pre-schema-priority-spread-admission-authority",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-data-owner",
+      "statement": "Consume the canonical priorityPartitionSummary already present in the authoritative admin snapshot; do not query placement separately, reconstruct spread demand, or create a caller-local Boolean owner."
+    },
+    {
+      "id": "composed-admission-model",
+      "statement": "Extend the focused priority-spread model across the schema-admission boundary so TLC exhibits the bypass counterexample and proves that schema admission implies zero uncovered spread."
+    },
+    {
+      "id": "unchanged-live-policy",
+      "statement": "Do not widen the 180000ms schema budget, weaken the 60000ms stability policy, alter the MovieLens workload or joins, weaken operation-ledger concentration safety, suppress topology or stale evidence, or rerun live until the deterministic seam and composed model are green."
+    }
+  ]
+}

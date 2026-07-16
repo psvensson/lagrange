@@ -191,6 +191,27 @@ const CONFIGS = [
       'Invariant PublicationRequiresCoveredSpread is violated',
   },
   {
+    id: 'priority-spread-schema-admission-bypass',
+    mode: 'priority-spread-schema-admission-bypass',
+    module: path.resolve(
+      'models',
+      'priority-spread-coverage',
+      'PrioritySpreadCoverage.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'priority-spread-coverage',
+      'PrioritySpreadCoverage_schema_bypass.cfg',
+    ),
+    expectConverged: false,
+    report: 'priority-spread-schema-admission-bypass.model.report.json',
+    scenario: 'movielens-pre-schema-priority-spread-admission-counterexample',
+    owner: 'movielens_pre_schema_admission_owner',
+    boundary: 'published_priority_spread_summary_admission',
+    expectedFailurePattern:
+      'Invariant SchemaAdmissionRequiresCoveredSpread is violated',
+  },
+  {
     id: 'leadership-failback-reconciled',
     mode: 'leadership-failback-reconciled',
     module: path.resolve(
