@@ -351,6 +351,94 @@ const CONFIGS = [
     boundary: 'serialized_replace_spread_nonregression',
     expectedFailurePattern: 'Invariant SpreadNeverRegresses is violated',
   },
+  {
+    id: 'local-leader-row-visibility-fixed',
+    mode: 'local-leader-row-visibility-fixed',
+    module: path.resolve(
+      'models', 'local-leader-row-visibility', 'LocalLeaderRowVisibility.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'local-leader-row-visibility',
+      'LocalLeaderRowVisibility_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'local-leader-row-visibility-fixed.model.report.json',
+    scenario: 'movielens-local-leader-row-visibility-model',
+    owner: 'partition_metadata_publication_owner',
+    boundary: 'raft_local_row_durable_row_composition',
+  },
+  {
+    id: 'local-leader-row-visibility-missing-seed',
+    mode: 'local-leader-row-visibility-missing-seed',
+    module: path.resolve(
+      'models', 'local-leader-row-visibility', 'LocalLeaderRowVisibility.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'local-leader-row-visibility',
+      'LocalLeaderRowVisibility_missing_seed_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'local-leader-row-visibility-missing-seed.model.report.json',
+    scenario: 'movielens-local-leader-row-visibility-counterexample',
+    owner: 'partition_metadata_publication_owner',
+    boundary: 'raft_local_row_durable_row_composition',
+    expectedFailurePattern:
+      'Invariant LocalLeaderHasImmediateEvidence is violated',
+  },
+  {
+    id: 'local-leader-row-visibility-stale-publish',
+    mode: 'local-leader-row-visibility-stale-publish',
+    module: path.resolve(
+      'models', 'local-leader-row-visibility', 'LocalLeaderRowVisibility.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'local-leader-row-visibility',
+      'LocalLeaderRowVisibility_stale_publish_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'local-leader-row-visibility-stale-publish.model.report.json',
+    scenario: 'movielens-local-leader-row-stale-publish-counterexample',
+    owner: 'partition_metadata_publication_owner',
+    boundary: 'raft_local_row_durable_row_composition',
+    expectedFailurePattern:
+      'Invariant DemotedLeaderCannotAuthorizeRemoval is violated',
+  },
+  {
+    id: 'local-leader-row-visibility-timestamp-bump',
+    mode: 'local-leader-row-visibility-timestamp-bump',
+    module: path.resolve(
+      'models', 'local-leader-row-visibility', 'LocalLeaderRowVisibility.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'local-leader-row-visibility',
+      'LocalLeaderRowVisibility_timestamp_bump_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'local-leader-row-visibility-timestamp-bump.model.report.json',
+    scenario: 'movielens-local-leader-row-timestamp-bump-counterexample',
+    owner: 'partition_metadata_publication_owner',
+    boundary: 'local_projection_successor_lww_composition',
+    expectedFailurePattern:
+      'Invariant SuccessorPublicationWins is violated',
+  },
+  {
+    id: 'local-leader-row-visibility-demoted-replay',
+    mode: 'local-leader-row-visibility-demoted-replay',
+    module: path.resolve(
+      'models', 'local-leader-row-visibility', 'LocalLeaderRowVisibility.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'local-leader-row-visibility',
+      'LocalLeaderRowVisibility_demoted_replay_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'local-leader-row-visibility-demoted-replay.model.report.json',
+    scenario: 'movielens-local-leader-row-demoted-replay-counterexample',
+    owner: 'partition_metadata_publication_owner',
+    boundary: 'demotion_durable_self_replay_composition',
+    expectedFailurePattern:
+      'Invariant DemotedLeaderCannotAuthorizeRemoval is violated',
+  },
 ];
 
 function download(url, dest) {
