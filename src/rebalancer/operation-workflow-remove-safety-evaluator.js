@@ -593,6 +593,7 @@ async function evaluateRemoveSafety(context, operation) {
       removingReplicaRow,
       replacementLeaderCandidateRow,
       {
+        currentVoterReadyRows,
         priorityRecoveryCompletionSafe,
         replacementLeaderElectionNotFoundTerminal:
           requiresSourceLeaderHandoff &&

@@ -98,6 +98,41 @@ const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_DECISION_LOG =
 // completed-election ACK itself all remain in force.
 
 class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
+  // leader_node_id identifies the canonical leader node, not a replica when
+  // multiple voters share that node. A distinct voter-ready LEADER row can
+  // therefore corroborate that this explicitly observed FOLLOWER is not it.
+  // A lone follower row never suffices because saturated nodes can publish a
+  // stale replica role while the canonical leader-node row still names them.
+  hasCoLocatedLeaderSiblingEvidence(
+    sourceReplicaId,
+    sourceNodeId,
+    observedSourceRoleState,
+    currentVoterReadyRows,
+  ) {
+    if (
+      observedSourceRoleState !==
+        PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER ||
+      sourceReplicaId === null ||
+      sourceNodeId === null ||
+      !Array.isArray(currentVoterReadyRows)
+    ) {
+      return false;
+    }
+    return currentVoterReadyRows.some((row) => {
+      const replicaId = this.getReplicaRowIdentity(row);
+      const nodeId =
+        typeof row?.node_id === 'string' ? row.node_id.trim() : null;
+      return (
+        replicaId !== null &&
+        replicaId !== sourceReplicaId &&
+        nodeId === sourceNodeId &&
+        this.isVoterReadyReplicaTopology(row) &&
+        this.getPriorityPublicationSourceRoleState(row) ===
+          PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER
+      );
+    });
+  }
+
   buildPriorityPublicationLeaderRemoveSafetySnapshot(
     operation,
     sourceReplicaRow,
@@ -209,6 +244,13 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
       partitionLeaderNodeId !== null &&
       sourceNodeId !== null &&
       partitionLeaderNodeId === sourceNodeId;
+    const coLocatedLeaderSiblingObserved =
+      this.hasCoLocatedLeaderSiblingEvidence(
+        sourceReplicaId,
+        sourceNodeId,
+        observedSourceRoleState,
+        options.currentVoterReadyRows,
+      );
     const replacementLeaderOwnershipObserved =
       replacementRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER ||
       (replacementNodeId !== null &&
@@ -236,6 +278,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
             replacementReplicaRow,
           ),
         partitionLeaderStillSource,
+        coLocatedLeaderSiblingObserved,
         sourceLeadershipReleaseObserved,
       }));
     const priorityRecoveryFollowerSourceRemovalSafe =
@@ -340,6 +383,7 @@ class PriorityPublicationLeaderSafety extends PriorityPublicationSafetyRows {
           escalateReplacementLeaderElection,
           replacementLeaderOwnershipObserved,
           sourceLeadershipReleaseObserved,
+          coLocatedLeaderSiblingObserved,
           sourceLeaderHandoffStalled,
           sourceLeaderHandoffStallMs,
           handoffRequestRetrySuppressed,

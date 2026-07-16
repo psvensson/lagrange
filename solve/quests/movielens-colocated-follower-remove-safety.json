@@ -1,0 +1,46 @@
+{
+  "id": "movielens-colocated-follower-remove-safety",
+  "authoringContractVersion": 1,
+  "statement": "When a count-neutral replacement source is an explicit follower and a distinct voter-ready replica on the same node is the explicit leader, replacement remove safety uses that sibling evidence to avoid an unnecessary target election while missing, stale, or conflicting evidence remains conservative, and the production five-node MovieLens milestone completes schema admission, durable ratings creation, 100000-row preload, ratings-only split convergence, and the successful three-way report.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "movielens-colocated-follower-replacement-source",
+    "planDoc": "solve/epics/service-data-affinity-placement.md",
+    "draftedAtCommit": "fcf53301dd4cd655edbfab98b0e1c17e669a4e11"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-colocated-follower-remove-safety-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "changed-live-only",
+      "statement": "Do not widen the schema budget, weaken the 60000ms quiescence window, serialize scenario joins, reduce production logging, or rerun live without a changed deterministic owner invariant."
+    }
+  ]
+}
