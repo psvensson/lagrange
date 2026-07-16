@@ -51,6 +51,9 @@ describe('MessageRouter same-nodeId new-address recovery', () => {
         pingTimeoutMs: 100,
         pingMaxMissed: 2,
         reconnectIntervalMs: 100,
+        // Keep the production bounded-liveness invariant while scaling its
+        // 30-second window to this test's 100ms keepalive cadence.
+        ackTimeoutQuarantineLivenessWindowMs: 300,
       },
     });
     LoggingService.getInstance().initialize({level: 'error'});

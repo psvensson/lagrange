@@ -124,6 +124,24 @@ test('quarantine is SKIPPED when the peer recently ACKed (lastAckAt)',
       'a recent ACK is liveness evidence — connection preserved');
   });
 
+test('keepalive timeout is SKIPPED when the peer has recent inbound activity',
+  async (t) => {
+    initializeEnvironment();
+    const router = await buildRouter(t);
+    const {connection, ws} = installPeerConnection(router);
+    connection.missedPings = router.pingMaxMissed - 1;
+
+    router.recordNodeInboundActivity(PEER_NODE_ID);
+    router.recordMissedKeepalivePing(connection);
+
+    t.equal(ws.terminateCalled, false,
+      'missed PONGs must not sever a peer that is still sending traffic');
+    t.equal(router.nodeConnections.get(PEER_NODE_ID), connection,
+      'the current live connection must remain authoritative');
+    t.equal(connection.missedPings, 0,
+      'fresh peer traffic should reset the missed-PONG streak');
+  });
+
 test('quarantine still fires when the peer has NO recent liveness evidence',
   async (t) => {
     initializeEnvironment();

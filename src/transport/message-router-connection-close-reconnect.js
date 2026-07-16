@@ -15,6 +15,23 @@ const {
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
+function buildRecentPeerLivenessEvidence(
+  lastInboundAt,
+  livenessWindowMs,
+  nowMs = Date.now(),
+) {
+  const lastInboundAgoMs = nowMs - lastInboundAt;
+  return {
+    lastInboundAgoMs,
+    recent:
+      Number.isFinite(livenessWindowMs) &&
+      livenessWindowMs > TRANSPORT_NUM.ZERO &&
+      Number.isFinite(lastInboundAt) &&
+      lastInboundAt > TRANSPORT_NUM.ZERO &&
+      lastInboundAgoMs < livenessWindowMs,
+  };
+}
+
 /**
  * Connection-close handling and reconnect scheduling for the message router:
  * decide a close disposition (shutdown / retired / self-disconnect / reconnect),
@@ -298,6 +315,25 @@ class MessageRouterConnectionCloseReconnect {
     connectionInfo.missedPings =
       (connectionInfo.missedPings ?? TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
     if (connectionInfo.missedPings < this.pingMaxMissed) {
+      return;
+    }
+    const livenessWindowMs = this.ackTimeoutQuarantineLivenessWindowMs;
+    const lastInboundAt = this.getNodeInboundActivityAt(
+      connectionInfo.nodeId,
+    );
+    const livenessEvidence = buildRecentPeerLivenessEvidence(
+      lastInboundAt,
+      livenessWindowMs,
+    );
+    if (livenessEvidence.recent) {
+      this.logger.info(ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE, {
+        nodeId: connectionInfo.nodeId,
+        connectionId: connectionInfo.connectionId,
+        missedPings: connectionInfo.missedPings,
+        lastInboundAgoMs: livenessEvidence.lastInboundAgoMs,
+        livenessWindowMs,
+      });
+      connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
       return;
     }
     this.logger.info(ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT, {
