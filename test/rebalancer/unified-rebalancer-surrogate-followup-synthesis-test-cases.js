@@ -318,6 +318,10 @@ export function registerUnifiedRebalancerSurrogateFollowupSynthesisTests(context
           },
           {
             partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+            schedulingOwner: {
+              partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+              mode: 'surrogate_owner',
+            },
             semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
             blockerReasons: [
               PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
@@ -595,6 +599,18 @@ export function registerUnifiedRebalancerSurrogateFollowupSynthesisTests(context
         priorityRecoveryClosureWitness,
       },
       priorityRecoveryClosureWitness,
+      priorityRecoveryDecisionSnapshots: {
+        snapshots: [{
+          partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          schedulingOwner: {
+            partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+            mode: 'surrogate_owner',
+          },
+          semanticState:
+          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+          blockerReasons: [],
+        }],
+      },
     };
     const cache = createMockCache(
       nodeRows,

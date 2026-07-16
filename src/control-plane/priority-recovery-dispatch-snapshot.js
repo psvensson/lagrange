@@ -435,6 +435,9 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
       learnerPromotion,
     ),
     blockerReasons: assessment.blockerReasons,
+    ...(options.schedulingOwner ? {
+      schedulingOwner: options.schedulingOwner,
+    } : {}),
   };
   const snapshotWithTopologyOperatorWitness =
     attachPriorityRecoveryTopologyOperatorWitness(snapshot);

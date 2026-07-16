@@ -160,6 +160,18 @@ export function registerUnifiedRebalancerClosureWitnessFollowupTests(context) {
         priorityRecoveryClosureWitness,
       },
       priorityRecoveryClosureWitness,
+      priorityRecoveryDecisionSnapshots: {
+        snapshots: [{
+          partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          schedulingOwner: {
+            partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+            mode: 'surrogate_owner',
+          },
+          semanticState:
+          PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+          blockerReasons: [],
+        }],
+      },
     };
     const cache = createMockCache(
       nodeRows,
@@ -379,6 +391,30 @@ export function registerUnifiedRebalancerClosureWitnessFollowupTests(context) {
         priorityRecoveryClosureWitness,
       },
       priorityRecoveryClosureWitness,
+      priorityRecoveryDecisionSnapshots: {
+        snapshots: [
+          {
+            partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+            schedulingOwner: {
+              partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+              mode: 'surrogate_owner',
+            },
+            semanticState:
+            PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+            blockerReasons: [],
+          },
+          {
+            partitionId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+            schedulingOwner: {
+              partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+              mode: 'surrogate_owner',
+            },
+            semanticState:
+            PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+            blockerReasons: [],
+          },
+        ],
+      },
     };
     const cache = createMockCache(
       nodeRows,
@@ -604,6 +640,10 @@ export function registerUnifiedRebalancerClosureWitnessFollowupTests(context) {
           },
           {
             partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+            schedulingOwner: {
+              partitionId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+              mode: 'surrogate_owner',
+            },
             semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
             blockerReasons: [
               PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,

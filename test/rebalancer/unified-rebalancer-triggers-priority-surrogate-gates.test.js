@@ -481,6 +481,10 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 3', async (t) => {
         priorityRecoveryDecisionSnapshots: Object.freeze({
           snapshots: Object.freeze([Object.freeze({
             partitionId: TEST_BLOCKED_PARTITION_ID,
+            schedulingOwner: Object.freeze({
+              partitionId: TEST_OWNER_PARTITION_ID,
+              mode: 'surrogate_owner',
+            }),
             semanticState: TEST_SEMANTIC_STATE_NEEDS_OPERATION,
             blockerReasons: Object.freeze([
               TEST_BLOCKER_ELIGIBLE_NO_OPERATION,

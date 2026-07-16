@@ -138,6 +138,11 @@ export async function registerPriorityRecoverySerialWaitTestCases(t, context) {
           snapshots: [
             {
               partitionId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+              schedulingOwner: {
+                partitionId:
+                  SQL_TRANSACTION_PARTICIPANTS_PRIORITY_PARTITION_ID,
+                mode: 'surrogate_owner',
+              },
               semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
               blockerReasons: [
                 PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,

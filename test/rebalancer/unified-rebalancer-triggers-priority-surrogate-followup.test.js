@@ -278,6 +278,10 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
           snapshots: Object.freeze([
             Object.freeze({
               partitionId: TEST_FIRST_BLOCKED_PARTITION_ID,
+              schedulingOwner: Object.freeze({
+                partitionId: TEST_OWNER_PARTITION_ID,
+                mode: 'surrogate_owner',
+              }),
               semanticState: TEST_SEMANTIC_STATE_NEEDS_OPERATION,
               blockerReasons: Object.freeze([
                 TEST_BLOCKER_ELIGIBLE_NO_OPERATION,
@@ -319,6 +323,10 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
             }),
             Object.freeze({
               partitionId: TEST_SECOND_BLOCKED_PARTITION_ID,
+              schedulingOwner: Object.freeze({
+                partitionId: TEST_OWNER_PARTITION_ID,
+                mode: 'surrogate_owner',
+              }),
               semanticState: TEST_SEMANTIC_STATE_NEEDS_OPERATION,
               blockerReasons: Object.freeze([
                 TEST_BLOCKER_ELIGIBLE_NO_OPERATION,
@@ -881,6 +889,10 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
             }),
             Object.freeze({
               partitionId: TEST_FIRST_REMAINING_PARTITION_ID,
+              schedulingOwner: Object.freeze({
+                partitionId: TEST_OWNER_PARTITION_ID,
+                mode: 'surrogate_owner',
+              }),
               semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
               blockerReasons: Object.freeze([
                 PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,

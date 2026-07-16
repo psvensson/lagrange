@@ -9,7 +9,14 @@ const SETTLED_STATE = 'spread_satisfied';
 const ELIGIBLE_STATE = 'needs_operation';
 
 function decisionSnapshot(partitionId, semanticState) {
-  return Object.freeze({partitionId, semanticState});
+  return Object.freeze({
+    partitionId,
+    semanticState,
+    schedulingOwner: Object.freeze({
+      partitionId: OWNER_PARTITION_ID,
+      mode: 'surrogate_owner',
+    }),
+  });
 }
 
 function createSurrogateDecisionOwner(decisionsByPartitionId) {

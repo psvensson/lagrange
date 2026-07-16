@@ -24,6 +24,9 @@ import {
 } from './priority-recovery-snapshot-rebalancer.js';
 import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryAdmissionByPartitionId, buildPriorityRecoveryLearnerPromotionByPartitionId, buildPriorityRecoveryPublicationNodeDecisions} from './priority-recovery-snapshot-burndown.js';
 import {appendPriorityRecoveryPartitionSnapshots, buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, buildPriorityRecoveryDecisionSnapshot, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap, recordPriorityRecoveryDecisionSnapshotSummary} from './priority-recovery-dispatch-snapshot.js';
+import {
+  buildPriorityRecoverySchedulingOwnersByPartitionId,
+} from './priority-recovery-scheduling-owner-policy.js';
 
 function buildPriorityRecoveryDecisionSnapshots(options = {}) {
   const publicationConvergence =
@@ -79,6 +82,12 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
     ...Object.keys(replicaOperationContexts.byPartitionId),
     ...Object.keys(learnerPromotionByPartitionId),
   ]);
+  const schedulingOwnersByPartitionId =
+    buildPriorityRecoverySchedulingOwnersByPartitionId({
+      partitionIds: [...allPartitionIds],
+      serviceRows: options.serviceRows,
+      availableNodeIds: publicationContext.recoveryActiveNodeIds,
+    });
   const snapshots = [];
   const blockerPartitionIdsByReason =
     buildPriorityRecoveryBlockerPartitionSetMap();
@@ -135,6 +144,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
       stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
       authoritativeOperationReadDeferred: false,
       logsTable: options.logsTable,
+      schedulingOwner: schedulingOwnersByPartitionId.get(partitionId),
     });
     if (!partitionSnapshot) {
       continue;

@@ -5,6 +5,9 @@ import {readAllSharedRows} from '../cache/shared-row-read.js';
 import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
+import {
+  inheritPriorityRecoverySchedulingOwner,
+} from '../control-plane/priority-recovery-scheduling-owner-policy.js';
 
 const {
   EntityType,
@@ -122,6 +125,10 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
           planningDecisionSnapshot :
           reconstructedDecisionSnapshot;
     }
+    selectedDecisionSnapshot = inheritPriorityRecoverySchedulingOwner(
+      selectedDecisionSnapshot,
+      planningDecisionSnapshot,
+    );
     return this.attachPriorityRecoveryClosureWitnessOperationObservation(
       planningSnapshot,
       partitionId,

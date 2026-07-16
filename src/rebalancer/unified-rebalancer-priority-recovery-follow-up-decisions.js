@@ -2,6 +2,10 @@ import {UNIFIED_REBALANCER_FOLLOW_UP_SHARED as SHARED} from './unified-rebalance
 import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
+import {
+  inheritPriorityRecoverySchedulingOwner,
+  isPriorityRecoverySchedulingOwner,
+} from '../control-plane/priority-recovery-scheduling-owner-policy.js';
 
 const {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY,
@@ -137,29 +141,27 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         planningSnapshot,
         {partitionId: this.entityId},
       ) || null;
-    if (coordinatorDecisionSnapshot) {
-      if (
-        this.shouldPreferPlanningPriorityRecoveryOperationCreation({
-          coordinatorDecisionSnapshot,
-          planningDecisionSnapshot,
-        })
-      ) {
-        return Object.freeze({
-          planningSnapshot,
-          decisionSnapshot: planningDecisionSnapshot,
-        });
-      }
-      return Object.freeze({
-        planningSnapshot,
-        decisionSnapshot: coordinatorDecisionSnapshot,
-      });
-    }
-    if (!planningDecisionSnapshot) {
+    const coordinatorDecisionSelected = Boolean(
+      coordinatorDecisionSnapshot,
+    ) && !this.shouldPreferPlanningPriorityRecoveryOperationCreation({
+      coordinatorDecisionSnapshot,
+      planningDecisionSnapshot,
+    });
+    const selectedDecisionSnapshot = coordinatorDecisionSelected ?
+      coordinatorDecisionSnapshot :
+      planningDecisionSnapshot;
+    if (
+      !selectedDecisionSnapshot ||
+      !isPriorityRecoverySchedulingOwner(
+        selectedDecisionSnapshot,
+        this.entityId,
+      )
+    ) {
       return null;
     }
     return Object.freeze({
       planningSnapshot,
-      decisionSnapshot: planningDecisionSnapshot,
+      decisionSnapshot: selectedDecisionSnapshot,
     });
   }
 
@@ -175,7 +177,10 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     }
     const decisionSnapshot =
       this.buildPriorityRecoverySurrogateDecisionFromPlanning(planningSnapshot);
-    return decisionSnapshot ?
+    return decisionSnapshot && isPriorityRecoverySchedulingOwner(
+      decisionSnapshot,
+      this.entityId,
+    ) ?
       Object.freeze({
         planningSnapshot,
         decisionSnapshot,
@@ -200,7 +205,8 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     decisionSnapshot,
   ) {
     if (
-      !this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)
+      !this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot) ||
+      !isPriorityRecoverySchedulingOwner(decisionSnapshot, this.entityId)
     ) {
       return false;
     }
@@ -243,7 +249,10 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
         {partitionId: normalizedPartitionId},
       );
     if (operationRequiredSnapshot) {
-      return operationRequiredSnapshot;
+      return inheritPriorityRecoverySchedulingOwner(
+        operationRequiredSnapshot,
+        decisionSnapshot,
+      );
     }
     const closureWitnessEvidence =
       this.buildPriorityRecoveryClosureWitnessFollowUpEvidence(planningSnapshot);
