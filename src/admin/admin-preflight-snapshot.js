@@ -47,6 +47,67 @@ const PREFLIGHT_ERROR_CODE = Object.freeze({
   LEADER_NODE_ID_MISSING: 'leader_node_id_missing',
 });
 const PREFLIGHT_REPAIR_REASON = 'preflight_critical_path_snapshot';
+const PREFLIGHT_CACHE_FRESHNESS_SOURCE = Object.freeze({
+  AUTHORITATIVE_OBSERVATION: 'authoritative_observation',
+  MUTATION: 'mutation',
+});
+
+function readCacheTableEvidence(cache, methodName, tableName) {
+  if (typeof cache?.[methodName] !== 'function') {
+    return null;
+  }
+  return cache[methodName](tableName);
+}
+
+function normalizeCacheEvidenceAtMs(value) {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Math.floor(numericValue) : null;
+}
+
+function buildCacheCauseIdSnapshot(cache, tableNames, methodName) {
+  const causesByTableName = {};
+  for (const tableName of tableNames) {
+    causesByTableName[tableName] = readCacheTableEvidence(
+      cache,
+      methodName,
+      tableName,
+    );
+  }
+  return causesByTableName;
+}
+
+function selectNewestCacheFreshnessEvidence(
+  lastAppliedAtMs,
+  lastAuthoritativeObservedAtMs,
+) {
+  if (
+    Number.isFinite(lastAuthoritativeObservedAtMs) &&
+    (!Number.isFinite(lastAppliedAtMs) ||
+      lastAuthoritativeObservedAtMs >= lastAppliedAtMs)
+  ) {
+    return {
+      observedAtMs: lastAuthoritativeObservedAtMs,
+      source: PREFLIGHT_CACHE_FRESHNESS_SOURCE.AUTHORITATIVE_OBSERVATION,
+    };
+  }
+  if (Number.isFinite(lastAppliedAtMs)) {
+    return {
+      observedAtMs: lastAppliedAtMs,
+      source: PREFLIGHT_CACHE_FRESHNESS_SOURCE.MUTATION,
+    };
+  }
+  return {observedAtMs: null, source: null};
+}
+
+function calculateCacheStalenessMs(capturedAtMs, observedAtMs) {
+  if (!Number.isFinite(capturedAtMs) || !Number.isFinite(observedAtMs)) {
+    return null;
+  }
+  return Math.max(0, Math.floor(capturedAtMs - observedAtMs));
+}
 
 // ── AdminPreflightSnapshot class ────────────────────────────────────────────
 
@@ -505,54 +566,60 @@ class AdminPreflightSnapshot {
    */
   buildPreflightCacheFreshnessSummary(options) {
     const capturedAtMs = Number(options?.capturedAtMs);
-    const lastAppliedAtMs =
-      typeof this.systemTableCache?.getLastAppliedAtMs ===
-        'function' ?
-        this.systemTableCache.getLastAppliedAtMs(
-          TABLES.SERVICE_ENDPOINTS,
-        ) :
-        null;
+    const lastAppliedAtMs = normalizeCacheEvidenceAtMs(
+      readCacheTableEvidence(
+        this.systemTableCache,
+        'getLastAppliedAtMs',
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+    );
+    const lastAuthoritativeObservedAtMs = normalizeCacheEvidenceAtMs(
+      readCacheTableEvidence(
+        this.systemTableCache,
+        'getLastAuthoritativeObservedAtMs',
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+    );
     const tableNames = [
       TABLES.SERVICES,
       TABLES.NODE_ENDPOINTS,
       TABLES.SERVICE_ENDPOINTS,
     ];
-    const lastAppliedCauseIdByTableName = {};
-    for (const tableName of tableNames) {
-      lastAppliedCauseIdByTableName[tableName] =
-        typeof this.systemTableCache?.getLastAppliedCauseId ===
-          'function' ?
-          this.systemTableCache.getLastAppliedCauseId(tableName) :
-          null;
-    }
-    const appliedSchemaVersion =
-      typeof this.systemTableCache?.getAppliedSchemaVersion ===
-        'function' ?
-        normalizeSchemaVersionValue(
-          this.systemTableCache.getAppliedSchemaVersion(
-            TABLES.SERVICE_ENDPOINTS,
-          ),
-        ) :
-        null;
-    const numericLastAppliedAtMs = Number(lastAppliedAtMs);
-    const hasNumericLastAppliedAtMs =
-      lastAppliedAtMs !== null &&
-      typeof lastAppliedAtMs !== 'undefined' &&
-      Number.isFinite(numericLastAppliedAtMs);
-    const stalenessMs = Number.isFinite(capturedAtMs) &&
-      hasNumericLastAppliedAtMs ?
-      Math.max(
-        0,
-        Math.floor(capturedAtMs - numericLastAppliedAtMs),
-      ) :
-      null;
+    const lastAppliedCauseIdByTableName = buildCacheCauseIdSnapshot(
+      this.systemTableCache,
+      tableNames,
+      'getLastAppliedCauseId',
+    );
+    const lastAuthoritativeObservedCauseIdByTableName =
+      buildCacheCauseIdSnapshot(
+        this.systemTableCache,
+        tableNames,
+        'getLastAuthoritativeObservedCauseId',
+      );
+    const appliedSchemaVersion = normalizeSchemaVersionValue(
+      readCacheTableEvidence(
+        this.systemTableCache,
+        'getAppliedSchemaVersion',
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+    );
+    const freshness = selectNewestCacheFreshnessEvidence(
+      lastAppliedAtMs,
+      lastAuthoritativeObservedAtMs,
+    );
+    const stalenessMs = calculateCacheStalenessMs(
+      capturedAtMs,
+      freshness.observedAtMs,
+    );
     return {
-      lastAppliedAtMs: hasNumericLastAppliedAtMs ?
-        Math.floor(numericLastAppliedAtMs) :
-        null,
+      lastAppliedAtMs,
+      lastAuthoritativeObservedAtMs,
+      freshnessObservedAtMs: freshness.observedAtMs,
+      freshnessSource: freshness.source,
       appliedSchemaVersion,
       stalenessMs,
       lastAppliedCauseIdByTableName,
+      lastAuthoritativeObservedCauseIdByTableName,
     };
   }
 

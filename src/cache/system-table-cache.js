@@ -6,11 +6,8 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {COLUMN, STATE, TABLES} from '../constants/index.js';
-import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
-import {deepFreeze} from '../utils/deep-freeze.js';
 import {
   CACHE_CDC_OPERATIONS,
   CACHE_DEFAULT,
@@ -35,6 +32,11 @@ import {
   shouldUsePublicationMerge,
   tryParseHLCTimestamp,
 } from './system-table-cache-row-merge.js';
+import {
+  assignSystemTableCacheObservationMethods,
+  getSharedRowReadStats,
+  resetSharedRowReadStats,
+} from './system-table-cache-observation-methods.js';
 
 /**
  * System table names that are cached.
@@ -66,25 +68,6 @@ const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
  */
 const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
 
-let sharedRowReadEngagements = 0;
-
-/**
- * Engagement counter for the directed micro-repro: proves the no-clone shared
- * read path FIRES (rows returned without a per-read clone) rather than
- * silently delegating to the cloning path.
- * @return {{engagements: number}}
- */
-function getSharedRowReadStats() {
-  return {engagements: sharedRowReadEngagements};
-}
-
-/**
- * Reset the shared-row read engagement counter. Test-only seam.
- */
-function resetSharedRowReadStats() {
-  sharedRowReadEngagements = 0;
-}
-
 /**
  * SystemTableCache provides in-memory caching for system tables.
  * Only CDC event handlers should have write access to this cache.
@@ -103,6 +86,8 @@ class SystemTableCache {
     this.appliedSchemaVersions = new Map();
     this.lastAppliedAtMsByTableName = new Map();
     this.lastAppliedCauseIdByTableName = new Map();
+    this.lastAuthoritativeObservedAtMsByTableName = new Map();
+    this.lastAuthoritativeObservedCauseIdByTableName = new Map();
     this.listeners = new Set();
     this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
     this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
@@ -116,377 +101,6 @@ class SystemTableCache {
       this.tables.set(tableName, new Map());
       this.tombstones.set(tableName, new Map());
     }
-  }
-
-  /**
-   * Record the latest applied schema version for one system table.
-   * Keeps the watermark monotonic when out-of-order CDC events are observed.
-   * @param {string} tableName - Name of the system table.
-   * @param {string|number} version - Applied schema/version watermark.
-   * @return {string|number|null} Current stored watermark for this table.
-   */
-  recordAppliedSchemaVersion(tableName, version) {
-    this.validateTableName(tableName);
-    if (version === null || typeof version === 'undefined') {
-      return this.getAppliedSchemaVersion(tableName);
-    }
-
-    const currentVersion = this.appliedSchemaVersions.get(tableName);
-    if (typeof currentVersion === 'undefined' ||
-        this.compareSchemaVersions(version, currentVersion) >= 0) {
-      this.appliedSchemaVersions.set(tableName, version);
-      return version;
-    }
-
-    return currentVersion;
-  }
-
-  /**
-   * Get the latest applied schema/version watermark for one table.
-   * @param {string} tableName - Name of the system table.
-   * @return {string|number|null} Stored watermark, or null if unknown.
-   */
-  getAppliedSchemaVersion(tableName) {
-    this.validateTableName(tableName);
-    return this.appliedSchemaVersions.get(tableName) ?? null;
-  }
-
-  /**
-   * Get a read-only snapshot of applied schema/version watermarks.
-   * @return {Object<string, string|number>} Table-to-watermark map.
-   */
-  getAppliedSchemaVersions() {
-    const snapshot = {};
-    for (const [tableName, version] of this.appliedSchemaVersions.entries()) {
-      snapshot[tableName] = version;
-    }
-    return snapshot;
-  }
-
-  /**
-   * Get the last local wall-clock time (ms) we applied a change for a system table.
-   * @param {string} tableName - Name of the system table.
-   * @return {number|null}
-   */
-  getLastAppliedAtMs(tableName) {
-    this.validateTableName(tableName);
-    return this.lastAppliedAtMsByTableName.get(tableName) ?? null;
-  }
-
-  /**
-   * Get the last applied causal correlation ID for a system table, when available.
-   * @param {string} tableName - Name of the system table.
-   * @return {string|null}
-   */
-  getLastAppliedCauseId(tableName) {
-    this.validateTableName(tableName);
-    return this.lastAppliedCauseIdByTableName.get(tableName) ?? null;
-  }
-
-  /**
-   * Get the current epoch number.
-   * Requirements: 7.1, 7.2
-   * @return {number} The current epoch number
-   */
-  getEpoch() {
-    return this.currentEpoch;
-  }
-
-  /**
-   * Update the cache from an AssignmentEpoch object.
-   * Requirements: 7.1, 7.2, 7.5
-   * @param {Object} epoch - AssignmentEpoch object with epoch, assignments,
-   *                         timestamp, and proposedBy fields
-   * @return {boolean} True if the update was applied, false if rejected
-   *                   due to stale epoch
-   * @throws {Error} If epoch is invalid or missing required fields
-   */
-  updateFromEpoch(epoch) {
-    if (!epoch || typeof epoch !== 'object') {
-      throw new Error(CACHE_ERROR_MSG.EPOCH_INVALID_OBJECT);
-    }
-
-    if (typeof epoch.epoch !== 'number') {
-      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_NUMBER);
-    }
-
-    if (!epoch.assignments || typeof epoch.assignments !== 'object') {
-      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_ASSIGNMENTS);
-    }
-
-    // Requirement 7.5: Reject updates from older epochs
-    if (epoch.epoch <= this.currentEpoch) {
-      this.logger.debug(CACHE_LOG_MSG.REJECTED_STALE_EPOCH, {
-        incomingEpoch: epoch.epoch,
-        currentEpoch: this.currentEpoch,
-      });
-      return false;
-    }
-
-    // Atomic update: update epoch number
-    this.currentEpoch = epoch.epoch;
-    this.logger.debug(CACHE_LOG_MSG.UPDATED_EPOCH, {epoch: this.currentEpoch});
-    return true;
-  }
-
-  /**
-   * Get all nodes that are in the 'ready' state.
-   * Requirements: 5.9 - Cache should filter nodes by state
-   * @return {string[]} Array of node IDs that are in ready state
-   */
-  getReadyNodes() {
-    const now = Date.now();
-    const allNodes = this.getAll(TABLES.NODES) || [];
-
-    this.logger.debug(CACHE_LOG_MSG.GET_READY_NODES_DEBUG, {
-      totalNodes: allNodes.length,
-      now,
-      nodes: allNodes.map((n) => ({
-        nodeId: n?.[COLUMN.NODE_ID],
-        wsState: n?.[COLUMN.CONNECTION_STATE],
-        leaseExpiry: n?.[COLUMN.READY_LEASE_EXPIRES_AT],
-        leaseValid: n?.[COLUMN.READY_LEASE_EXPIRES_AT] > now,
-      })),
-    });
-
-    const readyNodes = this.filter(TABLES.NODES, (node) => {
-      const wsState = node?.[COLUMN.CONNECTION_STATE];
-      const leaseExpiry = node?.[COLUMN.READY_LEASE_EXPIRES_AT];
-      return wsState === STATE.READY && leaseExpiry && leaseExpiry > now;
-    });
-
-    return readyNodes.map((node) => {
-      const nodeId = node?.[COLUMN.NODE_ID];
-      assertCritical(nodeId, CACHE_ERROR_MSG.NODE_ID_MISSING);
-      return nodeId;
-    });
-  }
-
-  /**
-   * Get all endpoints for a specific node from the node_endpoints table.
-   * Endpoints are sorted by priority (lower priority value = higher preference).
-   * Requirements: 6.6 - System_Cache SHALL provide methods to query endpoints by node_id
-   * @param {string} nodeId - The node ID to get endpoints for
-   * @return {Array<Object>} Array of endpoint records sorted by priority (ascending)
-   */
-  getEndpointsForNode(nodeId) {
-    const endpoints = this.filter(TABLES.NODE_ENDPOINTS, (endpoint) => {
-      return endpoint[COLUMN.NODE_ID] === nodeId;
-    });
-
-    // Sort by priority (lower value = higher preference)
-    return endpoints.sort((a, b) => {
-      const priorityA = a[COLUMN.PRIORITY] ?? 0;
-      const priorityB = b[COLUMN.PRIORITY] ?? 0;
-      return priorityA - priorityB;
-    });
-  }
-
-  /**
-   * Filter endpoints by status.
-   * Requirements: 6.6 - System_Cache SHALL provide methods to query endpoints
-   * @param {Array<Object>} endpoints - Array of endpoint records to filter
-   * @param {string} status - Status to filter by (e.g., 'active', 'inactive')
-   * @return {Array<Object>} Array of endpoints matching the specified status
-   */
-  filterEndpointsByStatus(endpoints, status) {
-    if (!Array.isArray(endpoints)) {
-      return [];
-    }
-    return endpoints.filter((endpoint) => {
-      return endpoint[COLUMN.STATUS] === status;
-    });
-  }
-
-  /**
-   * Subscribe to cache change notifications.
-   * Listeners receive (tableName, operation, record) on each change.
-   * @param {Function} listener - Called with (tableName, operation, record)
-   */
-  onCacheChange(listener) {
-    if (typeof listener !== 'function') {
-      throw new Error(CACHE_ERROR_MSG.LISTENER_REQUIRED);
-    }
-    this.listeners.add(listener);
-  }
-
-  /**
-   * Unsubscribe from cache change notifications.
-   * @param {Function} listener - The listener to remove
-   * @return {boolean} True if the listener was removed
-   */
-  offCacheChange(listener) {
-    return this.listeners.delete(listener);
-  }
-
-  /**
-   * Notify all listeners of a cache change.
-   * Uses setImmediate to make notifications non-blocking.
-   * @param {string} tableName - Name of the system table
-   * @param {string} operation - CDC operation (INSERT, UPDATE, DELETE)
-   * @param {Object} record - The record data
-   * @private
-   */
-  notifyListeners(tableName, operation, record, metadata) {
-    if (this.listeners.size === 0) {
-      return;
-    }
-
-    const normalizedMetadata = metadata && typeof metadata === 'object' ?
-      metadata :
-      null;
-
-    // Use setImmediate to make notifications non-blocking
-    setImmediate(() => {
-      for (const listener of this.listeners) {
-        try {
-          listener(tableName, operation, record, normalizedMetadata);
-        } catch (error) {
-          // Log but don't re-throw - listener errors should not break other listeners
-          this.logger.warn(CACHE_LOG_MSG.CACHE_LISTENER_ERROR, {error: error.message});
-        }
-      }
-    });
-  }
-
-  /**
-   * Get all data from the cache for a cache dump.
-   * @return {Object} All cache data by table name { tableName: [...rows] }
-   */
-  getAllData() {
-    const data = {};
-    for (const [tableName, table] of this.tables) {
-      data[tableName] = Array.from(table.values()).map((r) => this.deepClone(r));
-    }
-    return data;
-  }
-
-  /**
-   * Get a single record by key from a table.
-   * @param {string} tableName - Name of the system table.
-   * @param {string} key - Primary key of the record.
-   * @return {Object|undefined} The record or undefined if not found.
-   */
-  get(tableName, key) {
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-    const record = table.get(key);
-    return record ? this.deepClone(record) : undefined;
-  }
-
-  /**
-   * Find the first record matching a predicate.
-   * @param {string} tableName - Name of the system table.
-   * @param {Function} predicate - Function that returns true for matching records.
-   * @return {Object|undefined} The first matching record or undefined.
-   */
-  find(tableName, predicate) {
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-
-    for (const record of table.values()) {
-      if (predicate(record)) {
-        return this.deepClone(record);
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Read-isolation view of a stored row for the scan reads (getAll/filter).
-   * The row is deep-FROZEN and shared (isolation by immutability, amortized once
-   * per stored row vs. cloned every read) instead of deep-cloned — eliminating
-   * the V8 profiler's #1 cluster-wide self-time frame (`fastJsonClone`) on the
-   * saturated rejoiner. The returned ARRAY (built by the callers below) stays
-   * mutable, so rows.sort()/filter()/push() are unaffected; only in-place
-   * row-field mutation throws (subagent-audited + full-suite-verified read-only
-   * consumers — the cache itself never mutates a stored row in place, every write
-   * replaces wholesale via table.set, so any latent mutator fails loud, not
-   * silent). The prior default-off lever was baked in.
-   * @param {Object} record - Stored row.
-   * @return {Object} Frozen shared row.
-   * @private
-   */
-  readView(record) {
-    sharedRowReadEngagements += 1;
-    return deepFreeze(record);
-  }
-
-  /**
-   * Filter records matching a predicate.
-   * @param {string} tableName - Name of the system table.
-   * @param {Function} predicate - Function that returns true for matching records.
-   * @return {Array<Object>} Array of matching records.
-   */
-  filter(tableName, predicate) {
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-    const results = [];
-
-    for (const record of table.values()) {
-      if (predicate(record)) {
-        results.push(this.readView(record));
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * Get all records from a table.
-   * @param {string} tableName - Name of the system table.
-   * @return {Array<Object>} Array of all records in the table.
-   */
-  getAll(tableName) {
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-    return Array.from(table.values()).map((record) => this.readView(record));
-  }
-
-  /**
-   * Alias of {@link getAll}; scan reads already return frozen-shared rows via
-   * {@link readView}. Retained as a stable name for call sites (and the
-   * mock-cache fallback in shared-row-read.js) that opt into the no-clone read.
-   * @param {string} tableName - Name of the system table.
-   * @return {Array<Object>} Frozen shared rows.
-   */
-  getAllShared(tableName) {
-    return this.getAll(tableName);
-  }
-
-  /**
-   * Alias of {@link filter}; scan reads already return frozen-shared rows via
-   * {@link readView}.
-   * @param {string} tableName - Name of the system table.
-   * @param {Function} predicate - Returns true for matching records.
-   * @return {Array<Object>} Frozen shared matches.
-   */
-  filterShared(tableName, predicate) {
-    return this.filter(tableName, predicate);
-  }
-
-  /**
-   * Check if a record exists in a table.
-   * @param {string} tableName - Name of the system table.
-   * @param {string} key - Primary key of the record.
-   * @return {boolean} True if the record exists.
-   */
-  has(tableName, key) {
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-    return table.has(key);
-  }
-
-  /**
-   * Get the count of records in a table.
-   * @param {string} tableName - Name of the system table.
-   * @return {number} Number of records in the table.
-   */
-  count(tableName) {
-    this.validateTableName(tableName);
-    const table = this.tables.get(tableName);
-    return table.size;
   }
 
   /**
@@ -877,6 +491,8 @@ class SystemTableCache {
     this.appliedSchemaVersions.clear();
     this.lastAppliedAtMsByTableName.clear();
     this.lastAppliedCauseIdByTableName.clear();
+    this.lastAuthoritativeObservedAtMsByTableName.clear();
+    this.lastAuthoritativeObservedCauseIdByTableName.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }
 
@@ -1034,6 +650,8 @@ class SystemTableCache {
     return tryParseHLCTimestamp(value);
   }
 }
+
+assignSystemTableCacheObservationMethods(SystemTableCache);
 
 export {
   SystemTableCache,

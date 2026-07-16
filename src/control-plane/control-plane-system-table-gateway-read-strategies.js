@@ -1,12 +1,76 @@
 import {
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
   CONTROL_PLANE_READ_OUTCOME,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
+  canonicalizeSystemTableRow,
   buildAuthoritativeControlPlaneReadRequestOptions,
   normalizePhaseScope,
+  stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
+
+const COMPLETE_TABLE_READ_SQL_PATTERN =
+  /^SELECT\s+\*\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*;?$/iu;
+const AUTHORITATIVE_READ_FAILURE_COLLECTION_FIELDS = Object.freeze([
+  'failedPartitions',
+  'partitionErrors',
+  'participantFailures',
+]);
+const authoritativeObservationReceiptsByGateway = new WeakMap();
+
+function resolveAuthoritativeObservationReceiptRegistry(gateway) {
+  let receipts = authoritativeObservationReceiptsByGateway.get(gateway);
+  if (!receipts) {
+    receipts = new WeakMap();
+    authoritativeObservationReceiptsByGateway.set(gateway, receipts);
+  }
+  return receipts;
+}
+
+function snapshotAuthoritativeReadRows(tableName, rows) {
+  return Object.freeze(rows.map((row) => stableSerialize(
+    canonicalizeSystemTableRow(tableName, row),
+  )));
+}
+
+function authoritativeReadRowsMatchSnapshot(tableName, rows, snapshot) {
+  if (!Array.isArray(rows) || rows.length !== snapshot?.length) {
+    return false;
+  }
+  const currentSnapshot = snapshotAuthoritativeReadRows(tableName, rows);
+  return currentSnapshot.every((row, index) => row === snapshot[index]);
+}
+
+function hasAuthoritativeReadFailureEvidence(result = {}) {
+  if (result?.partial === true) {
+    return true;
+  }
+  return AUTHORITATIVE_READ_FAILURE_COLLECTION_FIELDS.some((fieldName) => {
+    const value = result?.[fieldName];
+    return Array.isArray(value) ?
+      value.length > 0 :
+      Number.isFinite(value) && value > 0;
+  });
+}
+
+function isCompleteAuthoritativeReadResult(result = {}) {
+  return result?.success === true &&
+    Array.isArray(result?.rows) &&
+    !hasAuthoritativeReadFailureEvidence(result);
+}
+
+function isCompleteTableReadRequest(tableName, sql, params) {
+  if (!Array.isArray(params) || params.length > 0) {
+    return false;
+  }
+  const match = String(sql || '').trim().match(
+    COMPLETE_TABLE_READ_SQL_PATTERN,
+  );
+  return match?.[1] === tableName;
+}
 
 const controlPlaneSystemTableGatewayReadStrategyMethods = {
   /**
@@ -81,14 +145,104 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
     outcome,
     extra = {},
   ) {
+    const rows = Array.isArray(baseResult?.rows) ? baseResult.rows : [];
+    const rowSetComplete = isCompleteAuthoritativeReadResult(baseResult);
     return {
       ...baseResult,
+      ...extra,
       tableName,
-      rows: Array.isArray(baseResult?.rows) ? baseResult.rows : [],
+      rows,
+      rowSetComplete,
       outcome,
       strategyUsed,
-      ...extra,
     };
+  },
+
+  /**
+   * Mint complete-table observation evidence only after the canonical read
+   * gateway has validated both the request scope and the returned row set.
+   * Callers may request this receipt, but they cannot assert completeness.
+   * @param {Object} result
+   * @param {string} tableName
+   * @param {string|null} sql
+   * @param {Array<*>} params
+   * @param {string} strategy
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  attachAuthoritativeObservationReceipt(
+    result,
+    tableName,
+    sql,
+    params,
+    strategy,
+    options,
+  ) {
+    if (
+      options?.authoritativeObservationScope !==
+      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE
+    ) {
+      return result;
+    }
+    const causeId =
+      typeof options?.sessionId === 'string' && options.sessionId.length > 0 ?
+        options.sessionId :
+        null;
+    if (
+      result?.rowSetComplete !== true ||
+      !isCompleteTableReadRequest(tableName, sql, params) ||
+      causeId === null
+    ) {
+      return {
+        ...result,
+        success: false,
+        rows: [],
+        rowSetComplete: false,
+        authoritativeObservation: null,
+        outcome: this.resolveAuthoritativeReadFailureOutcome(strategy),
+        error:
+          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
+      };
+    }
+    const authoritativeObservation = Object.freeze({
+      scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
+      tableName,
+      observedAtMs: Math.floor(this.now()),
+      causeId,
+      rowSetComplete: true,
+    });
+    resolveAuthoritativeObservationReceiptRegistry(this).set(
+      authoritativeObservation,
+      Object.freeze({
+        tableName,
+        rows: result.rows,
+        snapshot: snapshotAuthoritativeReadRows(tableName, result.rows),
+      }),
+    );
+    return {...result, authoritativeObservation};
+  },
+
+  /**
+   * Consume a gateway-minted receipt exactly once and bind it to the exact row
+   * array returned by that complete authoritative read. Shape-compatible
+   * caller objects are not observation evidence.
+   * @param {Object} receipt
+   * @param {string} tableName
+   * @param {Array<Object>} rows
+   * @return {boolean}
+   * @private
+   */
+  consumeAuthoritativeObservationReceipt(receipt, tableName, rows) {
+    if (!receipt || typeof receipt !== 'object') {
+      return false;
+    }
+    const receipts = resolveAuthoritativeObservationReceiptRegistry(this);
+    const mintedRead = receipts.get(receipt) || null;
+    receipts.delete(receipt);
+    return mintedRead?.tableName === tableName &&
+      mintedRead?.rows === rows &&
+      authoritativeReadRowsMatchSnapshot(tableName, rows, mintedRead?.snapshot);
   },
 
   /**
@@ -191,18 +345,25 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
             params,
             queryOptions,
           );
-          return this.buildGatewayReadResult(
-            result,
+          return this.attachAuthoritativeObservationReceipt(
+            this.buildGatewayReadResult(
+              result,
+              tableName,
+              strategy,
+              result?.success === true ?
+                CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+                CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+              {
+                source:
+                  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
+                usedSqlFallback: true,
+              },
+            ),
             tableName,
+            sql,
+            params,
             strategy,
-            result?.success === true ?
-              CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
-              CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-            {
-              source:
-                CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
-              usedSqlFallback: true,
-            },
+            options,
           );
         }
       }
@@ -222,13 +383,20 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
         requestOptions,
       );
 
-    return this.buildGatewayReadResult(
-      authoritativeResult,
+    return this.attachAuthoritativeObservationReceipt(
+      this.buildGatewayReadResult(
+        authoritativeResult,
+        tableName,
+        strategy,
+        authoritativeResult?.success === true ?
+          CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+          this.resolveAuthoritativeReadFailureOutcome(strategy),
+      ),
       tableName,
+      sql,
+      params,
       strategy,
-      authoritativeResult?.success === true ?
-        CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
-        this.resolveAuthoritativeReadFailureOutcome(strategy),
+      options,
     );
   },
 

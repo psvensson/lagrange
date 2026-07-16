@@ -6,6 +6,26 @@ const LOCAL_STR_REPAIR_REQUIRED = 'repair_required';
 const LOCAL_STR_REPAIR = 'repair';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
+function hasValidAuthoritativeReadTime(receipt) {
+  return Number.isFinite(receipt?.observedAtMs);
+}
+
+function hasValidAuthoritativeReadCause(receipt) {
+  return typeof receipt?.causeId === 'string' && receipt.causeId.length > 0;
+}
+
+function hasCompleteAuthoritativeReadResult(result, tableName, completeScope) {
+  const receipt = result?.authoritativeObservation;
+  return Boolean(
+    result?.rowSetComplete === true &&
+    receipt?.scope === completeScope &&
+    receipt?.tableName === tableName &&
+    receipt?.rowSetComplete === true &&
+    hasValidAuthoritativeReadTime(receipt) &&
+    hasValidAuthoritativeReadCause(receipt),
+  );
+}
+
 function assignAdminServiceDiscoveryReadinessContextMethods(
   AdminServiceDiscovery,
   options = {},
@@ -19,6 +39,8 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
     buildControlPlaneWorkloadProfile,
     COLUMN,
     CONTROL_PLANE_DELIVERY_PRIORITY,
+    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
     CONTROL_PLANE_WORKLOAD_CLASS,
     CONTROL_PLANE_READINESS_DIMENSION,
     CONTROL_PLANE_READ_STRATEGY,
@@ -407,11 +429,30 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       if (queryResult?.success !== true) {
         throw this.buildAuthoritativeDiscoveryReadError(queryResult, tableName);
       }
+      const authoritativeObservation = queryResult?.authoritativeObservation;
+      if (!hasCompleteAuthoritativeReadResult(
+        queryResult,
+        tableName,
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
+      )) {
+        throw this.buildAuthoritativeDiscoveryReadError(
+          {
+            ...queryResult,
+            success: false,
+            error:
+              queryResult?.error ||
+              CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
+            errorCode:
+              queryResult?.errorCode ||
+              CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
+          },
+          tableName,
+        );
+      }
       return {
         tableName,
-        rows: Array.isArray(queryResult?.rows) ?
-          queryResult.rows :
-          ADMIN_CACHE_DUMP.EMPTY,
+        rows: queryResult.rows,
+        authoritativeObservation,
       };
     }
 
@@ -458,6 +499,8 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         workClass: transportProfile.workClass,
         deliveryPriority: transportProfile.deliveryPriority,
         routingReadinessDimension,
+        authoritativeObservationScope:
+          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
       };
     }
 

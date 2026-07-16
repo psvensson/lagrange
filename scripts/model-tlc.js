@@ -533,6 +533,63 @@ const CONFIGS = [
     expectedFailurePattern:
       'Invariant SerializationHoldReleaseRequiresAuthoritativeTerminal is violated',
   },
+  {
+    id: 'authoritative-observation-watermark-fixed',
+    mode: 'authoritative-observation-watermark-fixed',
+    module: path.resolve(
+      'models', 'authoritative-observation-watermark',
+      'AuthoritativeObservationWatermark.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'authoritative-observation-watermark',
+      'AuthoritativeObservationWatermark_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'authoritative-observation-watermark-fixed.model.report.json',
+    scenario: 'movielens-authoritative-observation-watermark-model',
+    owner: 'control_plane_authoritative_reconcile_owner',
+    boundary: 'authoritative_observation_cache_freshness_admission_composition',
+  },
+  {
+    id: 'authoritative-observation-watermark-mutation-only',
+    mode: 'authoritative-observation-watermark-mutation-only',
+    module: path.resolve(
+      'models', 'authoritative-observation-watermark',
+      'AuthoritativeObservationWatermark.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'authoritative-observation-watermark',
+      'AuthoritativeObservationWatermark_mutation_only_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'authoritative-observation-watermark-mutation-only.model.report.json',
+    scenario: 'movielens-mutation-only-freshness-counterexample',
+    owner: 'control_plane_authoritative_reconcile_owner',
+    boundary: 'mutation_watermark_snapshot_admission_composition',
+    expectedFailurePattern:
+      'Temporal property EventuallySchemaAdmitted was violated',
+  },
+  {
+    id: 'authoritative-observation-watermark-exact-equality',
+    mode: 'authoritative-observation-watermark-exact-equality',
+    module: path.resolve(
+      'models', 'authoritative-observation-watermark',
+      'AuthoritativeObservationWatermark.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'authoritative-observation-watermark',
+      'AuthoritativeObservationWatermark_exact_equality_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'authoritative-observation-watermark-exact-equality.model.report.json',
+    scenario: 'movielens-exact-equality-reconcile-counterexample',
+    owner: 'control_plane_authoritative_reconcile_owner',
+    boundary: 'authoritative_observation_cache_freshness_admission_composition',
+    expectedFailurePattern:
+      'Temporal property EventuallySchemaAdmitted was violated',
+  },
 ];
 
 function download(url, dest) {

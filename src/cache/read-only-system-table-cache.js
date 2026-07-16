@@ -117,6 +117,24 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * Get the last successful authoritative observation time for one table.
+   * @param {string} tableName - Name of the system table.
+   * @return {number|null}
+   */
+  getLastAuthoritativeObservedAtMs(tableName) {
+    return this._cache.getLastAuthoritativeObservedAtMs(tableName);
+  }
+
+  /**
+   * Get the last authoritative observation cause ID for one table.
+   * @param {string} tableName - Name of the system table.
+   * @return {string|null}
+   */
+  getLastAuthoritativeObservedCauseId(tableName) {
+    return this._cache.getLastAuthoritativeObservedCauseId(tableName);
+  }
+
+  /**
    * Get the list of supported system table names.
    * @return {Array<string>} Array of system table names.
    */

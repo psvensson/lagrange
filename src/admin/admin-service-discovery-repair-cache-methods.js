@@ -1,5 +1,21 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
+function assertAuthoritativeCacheReconcileResult(result, receipt, constants) {
+  if (result?.success !== true) {
+    throw new Error(
+      result?.error || constants.error.CACHE_NOT_RECONCILED,
+    );
+  }
+  const completeObservationRequested = receipt?.scope ===
+    constants.scope.COMPLETE_TABLE;
+  if (
+    completeObservationRequested &&
+    !Number.isFinite(result?.authoritativeObservedAtMs)
+  ) {
+    throw new Error(constants.error.STORAGE_UNAVAILABLE);
+  }
+}
+
 function assignAdminServiceDiscoveryRepairCacheMethods(
   AdminServiceDiscovery,
   options = {},
@@ -10,6 +26,8 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
     AUTHORITATIVE_DISCOVERY_REPAIR,
     AUTHORITATIVE_REPAIR_FAILURE_ACTION,
     AUTHORITATIVE_REPAIR_FAILURE_CLASS,
+    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
     CONTROL_PLANE_CACHE_RECONCILE_INTENT,
     CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
     deriveAuthoritativeRepairTables,
@@ -328,9 +346,16 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
      * @param {string} tableName
      * @param {Array<Object>} rows
      * @param {string} causeId
+     * @param {Object} options
+     * @param {Object|null} options.authoritativeObservation
      * @return {number}
      */
-    async applyAuthoritativeSystemTableRows(tableName, rows, causeId) {
+    async applyAuthoritativeSystemTableRows(
+      tableName,
+      rows,
+      causeId,
+      options = {},
+    ) {
       const authoritativeRows = Array.isArray(rows) ?
         rows :
         ADMIN_CACHE_DUMP.EMPTY;
@@ -348,8 +373,18 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
             cachedRows,
             cacheMutationTarget: this.cacheMutationTarget,
             systemTableCache: this.systemTableCache,
+            authoritativeObservation:
+              options.authoritativeObservation || null,
           },
         );
+      assertAuthoritativeCacheReconcileResult(
+        result,
+        options.authoritativeObservation,
+        {
+          error: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+          scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+        },
+      );
       return result?.mutationCount || 0;
     }
 

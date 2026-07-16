@@ -32,6 +32,8 @@ export {
   getRemainingBudgetMs,
 } from './timeout-budget.js';
 export {
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
 } from './control-plane-cache-reconcile-constants.js';
 export {

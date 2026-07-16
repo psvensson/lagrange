@@ -183,6 +183,7 @@ function assignAdminServiceDiscoveryRepairMethods(
           repairState.authoritativeRowsByTable.set(tableName, {
             tableName: result.tableName,
             rows: result.rows,
+            authoritativeObservation: result.authoritativeObservation,
           });
         } catch (error) {
           const errorSummary = this.recordAuthoritativeDiscoveryRepairFailure(
@@ -210,6 +211,10 @@ function assignAdminServiceDiscoveryRepairMethods(
               result?.tableName || tableName,
               result?.rows || ADMIN_CACHE_DUMP.EMPTY,
               causeId,
+              {
+                authoritativeObservation:
+                  result?.authoritativeObservation || null,
+              },
             );
           repairState.repairedTableCount += 1;
           repairState.repairedTableNames.push(tableName);

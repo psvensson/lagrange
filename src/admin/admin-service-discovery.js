@@ -37,7 +37,11 @@ import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../control-plane/control-plane-workload-profile.js';
-import {CONTROL_PLANE_CACHE_RECONCILE_INTENT} from '../control-plane/control-plane-cache-reconcile-constants.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+} from '../control-plane/control-plane-cache-reconcile-constants.js';
 import {CONTROL_PLANE_READ_STRATEGY} from '../control-plane/control-plane-system-table-gateway.js';
 import {CONTROL_PLANE_SNAPSHOT_REFRESH_STATE} from '../control-plane/control-plane-snapshot-owner.js';
 import {getControlPlaneRetryAfterMs} from '../control-plane/control-plane-error-classification.js';
@@ -561,6 +565,8 @@ assignAdminServiceDiscoveryReadinessMethods(AdminServiceDiscovery, {
   COLUMN,
   CONTROL_PLANE_WORKLOAD_CLASS,
   CONTROL_PLANE_DELIVERY_PRIORITY,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READ_STRATEGY,
   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
@@ -616,6 +622,8 @@ assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, {
   BENCHMARK_DEGRADATION_PRIORITY,
   BENCHMARK_DEGRADATION_STATE,
   CANONICAL_LEADER_ROUTING_GAP_STATE,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
+  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
   CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
