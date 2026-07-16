@@ -81,3 +81,150 @@ test('live runner passes one phase evidence accumulator to success and failure r
     );
     t.end();
   });
+
+test('comparison entry point emits the sealed live report from the same run',
+  async (t) => {
+    const schemaAdmission = {admitted: true, state: 'ready'};
+    const liveReports = [];
+    const {runComparison} = await t.mockImport(
+      '../../examples/service-data-affinity/run-comparison.js',
+      {
+        '../../examples/service-data-affinity/download-movielens.js': {
+          downloadRatings: async () => {},
+        },
+        '../../examples/service-data-affinity/run-postgres-baseline.js': {
+          runPostgresBaseline: async () => ({
+            queryDurationMs: 1,
+            returnedAggregateRows: 1,
+            topMovies: [{movieId: 1, score: 2}],
+          }),
+        },
+        '../../examples/service-data-affinity/run-affinity-demo.js': {
+          runAffinityDemo: async ({phaseEvidence} = {}) => {
+            t.type(
+              phaseEvidence,
+              'object',
+              'comparison supplies the live phase evidence accumulator',
+            );
+            phaseEvidence = phaseEvidence || {};
+            phaseEvidence.schemaAdmission = schemaAdmission;
+            return {
+              converged: true,
+              ranking: [{movieId: 1, score: 2}],
+              lagrangeDistributedSql: {},
+              parallelReduce: {replicas: 2, mergeCandidates: 2},
+              learnedAffinity: {},
+            };
+          },
+        },
+        '../../examples/service-data-affinity/affinity-demo-live-report.js': {
+          writeAffinityDemoLiveReport: async (...args) => {
+            liveReports.push(args);
+          },
+        },
+      },
+    );
+
+    const comparison = await runComparison();
+
+    t.equal(comparison.resultsIdentical, true);
+    t.equal(liveReports.length, 1, 'one run emits one sealed live report');
+    t.equal(liveReports[0]?.[0]?.converged, true);
+    t.equal(liveReports[0]?.[1], null);
+    t.same(liveReports[0]?.[2], {schemaAdmission});
+    t.end();
+  });
+
+test('comparison entry point reports three-way validation failure with phase evidence',
+  async (t) => {
+    const preloadAdmission = {admitted: true, state: 'admitted'};
+    const liveReports = [];
+    const {runComparison} = await t.mockImport(
+      '../../examples/service-data-affinity/run-comparison.js',
+      {
+        '../../examples/service-data-affinity/download-movielens.js': {
+          downloadRatings: async () => {},
+        },
+        '../../examples/service-data-affinity/run-postgres-baseline.js': {
+          runPostgresBaseline: async () => ({
+            queryDurationMs: 1,
+            returnedAggregateRows: 1,
+            topMovies: [{movieId: 1, score: 2}],
+          }),
+        },
+        '../../examples/service-data-affinity/run-affinity-demo.js': {
+          runAffinityDemo: async ({phaseEvidence} = {}) => {
+            t.type(
+              phaseEvidence,
+              'object',
+              'comparison supplies the failure evidence accumulator',
+            );
+            phaseEvidence = phaseEvidence || {};
+            phaseEvidence.preloadAdmission = preloadAdmission;
+            return {
+              converged: true,
+              ranking: [{movieId: 2, score: 2}],
+              lagrangeDistributedSql: {},
+              parallelReduce: {replicas: 2, mergeCandidates: 2},
+              learnedAffinity: {},
+            };
+          },
+        },
+        '../../examples/service-data-affinity/affinity-demo-live-report.js': {
+          writeAffinityDemoLiveReport: async (...args) => {
+            liveReports.push(args);
+          },
+        },
+      },
+    );
+
+    const error = await t.rejects(
+      runComparison(),
+      /PostgreSQL and Lagrange rankings differ/u,
+    );
+
+    t.equal(liveReports.length, 1, 'failed run still emits one sealed report');
+    t.equal(liveReports[0]?.[0], null);
+    t.equal(liveReports[0]?.[1], error);
+    t.same(liveReports[0]?.[2], {preloadAdmission});
+    t.end();
+  });
+
+test('comparison entry point reports failures before the Lagrange phase starts',
+  async (t) => {
+    const liveReports = [];
+    let lagrangeRuns = 0;
+    const baselineError = new Error('PostgreSQL baseline failed');
+    const {runComparison} = await t.mockImport(
+      '../../examples/service-data-affinity/run-comparison.js',
+      {
+        '../../examples/service-data-affinity/download-movielens.js': {
+          downloadRatings: async () => {},
+        },
+        '../../examples/service-data-affinity/run-postgres-baseline.js': {
+          runPostgresBaseline: async () => {
+            throw baselineError;
+          },
+        },
+        '../../examples/service-data-affinity/run-affinity-demo.js': {
+          runAffinityDemo: async () => {
+            lagrangeRuns += 1;
+          },
+        },
+        '../../examples/service-data-affinity/affinity-demo-live-report.js': {
+          writeAffinityDemoLiveReport: async (...args) => {
+            liveReports.push(args);
+          },
+        },
+      },
+    );
+
+    const error = await t.rejects(runComparison(), /PostgreSQL baseline failed/u);
+
+    t.equal(lagrangeRuns, 0, 'failed prerequisite does not start Lagrange');
+    t.equal(liveReports.length, 1, 'failed prerequisite emits one sealed report');
+    t.equal(liveReports[0]?.[0], null);
+    t.equal(liveReports[0]?.[1], error);
+    t.same(liveReports[0]?.[2], {});
+    t.end();
+  });

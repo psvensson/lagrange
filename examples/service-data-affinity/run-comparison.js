@@ -3,6 +3,9 @@ import {resolve} from 'node:path';
 import {downloadRatings} from './download-movielens.js';
 import {runAffinityDemo} from './run-affinity-demo.js';
 import {runPostgresBaseline} from './run-postgres-baseline.js';
+import {
+  writeAffinityDemoLiveReport,
+} from './affinity-demo-live-report.js';
 
 const REPORT_DIR = resolve('test-output/reports');
 const REPORT_SCENARIO = 'movielens-three-way-affinity-demo-live';
@@ -76,15 +79,24 @@ async function writeComparisonReport(comparison, error = null) {
 }
 
 async function runComparison() {
-  await downloadRatings();
-  console.log('[A/3] PostgreSQL grouped-SQL baseline...');
-  const postgres = await runPostgresBaseline();
-  console.log('[B+C/3] Lagrange distributed SQL and replicated service...');
-  const lagrange = await runAffinityDemo();
-  const comparison = buildComparison(postgres, lagrange);
-  if (!comparison.resultsIdentical) {
-    throw new Error('PostgreSQL and Lagrange rankings differ');
+  const phaseEvidence = {};
+  let lagrange;
+  let comparison;
+  try {
+    await downloadRatings();
+    console.log('[A/3] PostgreSQL grouped-SQL baseline...');
+    const postgres = await runPostgresBaseline();
+    console.log('[B+C/3] Lagrange distributed SQL and replicated service...');
+    lagrange = await runAffinityDemo({phaseEvidence});
+    comparison = buildComparison(postgres, lagrange);
+    if (!comparison.resultsIdentical) {
+      throw new Error('PostgreSQL and Lagrange rankings differ');
+    }
+  } catch (error) {
+    await writeAffinityDemoLiveReport(null, error, phaseEvidence);
+    throw error;
   }
+  await writeAffinityDemoLiveReport(lagrange, null, phaseEvidence);
   return comparison;
 }
 
