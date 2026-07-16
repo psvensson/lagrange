@@ -18,9 +18,9 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: unknown
+- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for movielens-ready-lease-maintenance-critical-owner-lane-main
 
@@ -47,6 +47,9 @@
 
 ## Findings
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: Independent exact-patch verification approved attempt 1 with no blocking findings: only publication-pressure deferred slots are displaced; transient retry coalescing, steady-heartbeat background containment, bounded sender retries, silent-peer reconciliation, enqueue-before-ACK ownership, critical write-health classification, and model contracts remain valid. Eight focused/adjacent suites passed 542 assertions; exact lint, diff, size, runtime grammar, state-machine, contract, invariant, statechart, owner-trace, Alloy, and active-gate checks passed. [subagent:verify_wave4_lease_attempt1]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]
 
 ## Theories
 _(none recorded)_
