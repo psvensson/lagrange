@@ -1,0 +1,270 @@
+{
+  "schemaVersion": "nodes-priority-recovery-live-ab-v1",
+  "questId": "movielens-nodes-priority-recovery-escape",
+  "attemptFingerprint": "sha256:062a459f95694793732150987dfc7745b061279e0677d414859e2d5a48172438",
+  "question": "Does adding nodes-p1 to the canonical priority-recovery class engage the existing quorum-bounded recovery lane without amplifying aggregate live errors or worsening the five-node MovieLens schema-admission outcome versus the exact same-base one-line source reversion?",
+  "governingRules": [
+    "TEST-0022",
+    "TEST-0023"
+  ],
+  "comparisonContract": {
+    "minimumSamplesPerArm": 2,
+    "outcome": "Compare pass/fail and the terminal canonical blocker on the same live workload.",
+    "aggregateErrors": "Compare all level-50 log events, retaining message-level counts so repeated transport pairs remain visible rather than being misrepresented as independent failures.",
+    "engagement": "The fixed arm must emit nodes-p1 priority-recovery planning and operation evidence while the exact reversion must not; otherwise the comparison is inert.",
+    "safety": "Reject shipping on consistent error amplification without outcome improvement."
+  },
+  "sourceSnapshots": {
+    "fixed": {
+      "gitHash": "54b672c441ad5d1bb1cd79a9d35766bd8568dae2",
+      "classificationFileSha256": "a012160eefb628216f42b94a1a80b5ca07e1e56ea041300765e8418334699e38",
+      "classification": "SYSTEM_TABLE_NAME.NODES is in PRIORITY_CONTROL_PLANE_TABLE_IDS"
+    },
+    "reverted": {
+      "gitHash": "ebf651ea0b53151ce878638ed2ef65019b542702",
+      "classificationFileSha256": "bc7066d83ef2480ab86a5b9c413a90ca4cf1dccac6fb18e16eeded1e45088e10",
+      "classification": "Exact one-line removal of SYSTEM_TABLE_NAME.NODES from PRIORITY_CONTROL_PLANE_TABLE_IDS"
+    }
+  },
+  "samples": [
+    {
+      "id": "fixed-1",
+      "arm": "fixed",
+      "valid": true,
+      "reportPath": "test-output/reports/nodes-priority-ab/fixed-1.report.json",
+      "reportSha256": "8d2e0971478068bce30b6a244146aba614dcaad13b40a72917d67c4771cc7e54",
+      "archivePath": "data/examples/service-data-affinity-demo-archive/nodes-priority-ab/wave4-live-nodes-priority-ab-fixed-1-2026-07-16T17-10-45-450Z.tar.gz",
+      "archiveSha256": "afcd1516887528989fc9bd2c2fbf8cb2538391d92efe13a677ab115cd12f44db",
+      "firstLogTime": "2026-07-16T17:07:15.928Z",
+      "lastLogTime": "2026-07-16T17:10:45.189Z",
+      "durationMs": 209261,
+      "outcome": "FAIL",
+      "canonicalBlocker": "replica_operations_in_flight",
+      "effectiveInFlightCount": 3,
+      "logRows": 23931,
+      "warnings": 2021,
+      "errors": 2628,
+      "errorCensus": {
+        "websocketErrors": 1269,
+        "reconnectionFailures": 1267,
+        "cdcDeliveryFailures": 12,
+        "raftCdcCommandFailures": 4,
+        "refusedCommittedTruncations": 61,
+        "parallelQueryFailures": 12,
+        "failedMoveExecutions": 0,
+        "rebalanceCheckErrors": 0,
+        "terminalRepairAbandoned": 2
+      },
+      "nodesPriorityEngagement": {
+        "planningDiagnostics": 40,
+        "addDispatches": 9,
+        "replaceDispatches": 9,
+        "operationsCreated": 2,
+        "drainSettledOperations": 3
+      },
+      "mechanismCharacterizers": {
+        "redecisionStorm": "RE_DECISION",
+        "monotoneDrain": "OSCILLATING",
+        "replaceRemoveSafetyDeferrals": 0
+      }
+    },
+    {
+      "id": "fixed-2",
+      "arm": "fixed",
+      "valid": true,
+      "reportPath": "test-output/reports/nodes-priority-ab/fixed-2.report.json",
+      "reportSha256": "5ae4bd09424ef7e21473e25c9889ac2885dbf4284f9c2b435703dffa6179035c",
+      "archivePath": "data/examples/service-data-affinity-demo-archive/nodes-priority-ab/wave4-live-nodes-priority-ab-fixed-2-2026-07-16T17-15-41-632Z.tar.gz",
+      "archiveSha256": "5e95aca720873cb3ef1066a55f8908639db936c2e838d7914aebf95644a0d54d",
+      "firstLogTime": "2026-07-16T17:12:12.368Z",
+      "lastLogTime": "2026-07-16T17:15:41.630Z",
+      "durationMs": 209262,
+      "outcome": "FAIL",
+      "canonicalBlocker": "replica_operations_in_flight",
+      "effectiveInFlightCount": 4,
+      "logRows": 14682,
+      "warnings": 1488,
+      "errors": 2994,
+      "errorCensus": {
+        "websocketErrors": 1480,
+        "reconnectionFailures": 1480,
+        "cdcDeliveryFailures": 5,
+        "raftCdcCommandFailures": 4,
+        "refusedCommittedTruncations": 6,
+        "parallelQueryFailures": 14,
+        "failedMoveExecutions": 2,
+        "rebalanceCheckErrors": 2,
+        "terminalRepairAbandoned": 0
+      },
+      "nodesPriorityEngagement": {
+        "planningDiagnostics": 40,
+        "addDispatches": 1,
+        "replaceDispatches": 8,
+        "operationsCreated": 2,
+        "drainSettledOperations": 3
+      },
+      "mechanismCharacterizers": {
+        "redecisionStorm": "RE_DECISION",
+        "monotoneDrain": "OSCILLATING",
+        "replaceRemoveSafetyDeferrals": 0
+      }
+    },
+    {
+      "id": "reverted-1",
+      "arm": "reverted",
+      "valid": true,
+      "reportPath": "test-output/reports/nodes-priority-ab/reverted-1.report.json",
+      "reportSha256": "de55f48446a7955556c0b182d70cfa4ad3c5cb02e8b0d2175405579c436f3644",
+      "archivePath": "data/examples/service-data-affinity-demo-archive/nodes-priority-ab/wave4-live-nodes-priority-ab-reverted-1-2026-07-16T17-19-58-929Z.tar.gz",
+      "archiveSha256": "21f3b54b92564afc32a176146af67c6889be3e072ccfced96d08b137a4196250",
+      "firstLogTime": "2026-07-16T17:16:29.705Z",
+      "lastLogTime": "2026-07-16T17:19:58.914Z",
+      "durationMs": 209209,
+      "outcome": "FAIL",
+      "canonicalBlocker": "replica_operations_in_flight",
+      "effectiveInFlightCount": 2,
+      "logRows": 11918,
+      "warnings": 1147,
+      "errors": 1021,
+      "errorCensus": {
+        "websocketErrors": 490,
+        "reconnectionFailures": 490,
+        "cdcDeliveryFailures": 15,
+        "raftCdcCommandFailures": 7,
+        "refusedCommittedTruncations": 18,
+        "parallelQueryFailures": 0,
+        "failedMoveExecutions": 0,
+        "rebalanceCheckErrors": 0,
+        "terminalRepairAbandoned": 0
+      },
+      "nodesPriorityEngagement": {
+        "planningDiagnostics": 0,
+        "addDispatches": 0,
+        "replaceDispatches": 2,
+        "operationsCreated": 0,
+        "drainSettledOperations": 0
+      },
+      "mechanismCharacterizers": {
+        "redecisionStorm": "RE_DECISION",
+        "monotoneDrain": "OSCILLATING",
+        "replaceRemoveSafetyDeferrals": 0
+      }
+    },
+    {
+      "id": "reverted-2",
+      "arm": "reverted",
+      "valid": true,
+      "reportPath": "test-output/reports/nodes-priority-ab/reverted-2.report.json",
+      "reportSha256": "059100b43c23a31c1021610383a5a1686ed3d2c366f06bd269ccff4622d17601",
+      "archivePath": "data/examples/service-data-affinity-demo-archive/nodes-priority-ab/wave4-live-nodes-priority-ab-reverted-2-2026-07-16T17-24-48-508Z.tar.gz",
+      "archiveSha256": "cfb10dcb2d1af098b3d2e8a281f3c39e5dc167be5fe13b94160af9109e12bb28",
+      "firstLogTime": "2026-07-16T17:21:26.342Z",
+      "lastLogTime": "2026-07-16T17:24:48.381Z",
+      "durationMs": 202039,
+      "outcome": "FAIL",
+      "canonicalBlocker": "replica_operations_in_flight",
+      "effectiveInFlightCount": 2,
+      "logRows": 13008,
+      "warnings": 1485,
+      "errors": 690,
+      "errorCensus": {
+        "websocketErrors": 328,
+        "reconnectionFailures": 328,
+        "cdcDeliveryFailures": 20,
+        "raftCdcCommandFailures": 11,
+        "refusedCommittedTruncations": 2,
+        "parallelQueryFailures": 0,
+        "failedMoveExecutions": 0,
+        "rebalanceCheckErrors": 0,
+        "terminalRepairAbandoned": 0
+      },
+      "nodesPriorityEngagement": {
+        "planningDiagnostics": 0,
+        "addDispatches": 0,
+        "replaceDispatches": 0,
+        "operationsCreated": 0,
+        "drainSettledOperations": 0
+      },
+      "mechanismCharacterizers": {
+        "redecisionStorm": "RE_DECISION",
+        "monotoneDrain": "OSCILLATING",
+        "replaceRemoveSafetyDeferrals": 0
+      }
+    }
+  ],
+  "aggregate": {
+    "fixed": {
+      "validRuns": 2,
+      "passedRuns": 0,
+      "failedRuns": 2,
+      "errors": 5622,
+      "warnings": 3509,
+      "websocketErrors": 2749,
+      "reconnectionFailures": 2747,
+      "meanEffectiveInFlightCount": 3.5,
+      "nodesPriorityPlanningDiagnostics": 80,
+      "nodesAddDispatches": 10,
+      "nodesOperationsCreated": 4,
+      "meanDurationMs": 209261.5
+    },
+    "reverted": {
+      "validRuns": 2,
+      "passedRuns": 0,
+      "failedRuns": 2,
+      "errors": 1711,
+      "warnings": 2632,
+      "websocketErrors": 818,
+      "reconnectionFailures": 818,
+      "meanEffectiveInFlightCount": 2,
+      "nodesPriorityPlanningDiagnostics": 0,
+      "nodesAddDispatches": 0,
+      "nodesOperationsCreated": 0,
+      "meanDurationMs": 205624
+    },
+    "fixedToReverted": {
+      "errorRatio": 3.2858,
+      "warningRatio": 1.3332,
+      "websocketErrorRatio": 3.3606,
+      "reconnectionFailureRatio": 3.3582,
+      "effectiveInFlightRatio": 1.75,
+      "durationRatio": 1.0177
+    }
+  },
+  "analysis": {
+    "engagementVerdict": "MEASURED_NOT_INERT",
+    "engagementReason": "Both fixed samples emitted 40 nodes-p1 priority planning diagnostics and created priority operations; neither reverted sample emitted those signals.",
+    "outcomeVerdict": "NO_IMPROVEMENT",
+    "outcomeReason": "All four samples failed at replica_operations_in_flight; fixed ended at 3 and 4 while reverted ended at 2 and 2.",
+    "errorVerdict": "CONSISTENT_AMPLIFICATION",
+    "errorReason": "Each fixed sample had more level-50 errors than either reverted sample, with near-equal durations. Repeated WebSocket-error/reconnection-failure pairs dominate the counts and are reported as log events, not independent root failures.",
+    "mechanismVerdict": "CLASSIFICATION_ADVANCES_WORK_DURING_UPSTREAM_LEDGER_CHURN",
+    "mechanismReason": "The fixed arm performs nodes-p1 priority planning and dispatch while the shared operation-ledger blocker remains open; the reverted arm retains the defer and avoids that extra nodes-p1 work.",
+    "causalLimit": "N=2 per arm is sufficient for the mandatory controlled comparison but too small to estimate a general pass rate or attribute every transport error exclusively to the one-line classification change. Fixed preceded reverted rather than being interleaved, and preload admission was not observed in any sample; these caveats justify investigation, not approval against the consistent adverse signal.",
+    "existingAnalyzerResults": {
+      "redecisionStorm": "All four samples classified RE_DECISION, with substantial run-to-run variation; this mechanism characterizer does not provide a pass/fail oracle.",
+      "monotoneDrain": "All four samples classified OSCILLATING; the analyzer explicitly warns this is not a pass/fail oracle.",
+      "replaceRemoveSafetyBlocks": "Zero deferrals in all four samples.",
+      "fixEngagementDefaultSignal": "ownerAckCompletionPendingCount was inert and is not the mechanism-specific engagement signal for this change."
+    }
+  },
+  "decision": {
+    "verdict": "REJECTED_DO_NOT_SHIP",
+    "ship": false,
+    "reason": "The advance-now classification engaged but did not improve the sealed outcome, ended with more in-flight work, and consistently amplified aggregate error events. The independent exact-aggregate verifier therefore rejected release approval.",
+    "independentVerification": {
+      "verdict": "REJECT",
+      "evidence": "subagent:design_completion_discriminator",
+      "scope": "aggregate",
+      "fingerprint": "sha256:062a459f95694793732150987dfc7745b061279e0677d414859e2d5a48172438",
+      "proceduralSampleFloorSatisfied": true,
+      "sourceAndArtifactHashesMatched": true,
+      "fixedErrorRatePerMinute": [753.5, 858.4],
+      "revertedErrorRatePerMinute": [292.8, 204.9],
+      "nodesLinkedWarnings": {
+        "fixed": [157, 187],
+        "reverted": [12, 17]
+      },
+      "futureApprovalCondition": "Explain or remove reconnect and nodes-linked warning amplification, then run an interleaved controlled A/B that shows non-regressed aggregate load and a meaningful outcome or sealed-milestone improvement. Use N>=8 for any pass-rate or variance claim."
+    }
+  }
+}
