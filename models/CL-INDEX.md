@@ -22,6 +22,7 @@ via `npm run model:check` in `test:ci`.
 | Priority spread closure and schema admission | `priority-spread-coverage/PrioritySpreadCoverage.tla` | `PublicationRequiresCoveredSpread`, `UncoveredSpreadRetainsFollowup`, `SchemaAdmissionRequiresCoveredSpread`, `SchemaAdmissionRequiresPublishedSummary` | consume the numeric spread gap and distinct eligible operation targets instead of collapsing operation presence to a Boolean, then require the published zero-gap summary before schema admission |
 | **CL-039 publication write-leadership fail-back** | **`leadership-failback/LeadershipFailback.tla`** | **`EventuallyClosed`** | **`FailBack` — leadership transfers back to a reachable seed when stranded on a restarting replica** |
 | Ledger self-move re-mint livelock (formation-ledger-self-move-blocks-cluster-ops) | `ledger-selfmove-remint/LedgerSelfMoveRemint.tla` | `EventuallySettled` | `IdempotentReplan` — a leadership flap carries the in-flight spread self-move over (authoritative in-flight recognition, c7a3bf19) instead of re-minting it, so it terminalizes |
+| Serialized incremental REPLACE spread | `incremental-replace-spread/IncrementalReplaceSpread.tla` | `OpenGapRetainsSerializedProgressOwner`, `SpreadNeverRegresses`, `EventuallyReachesPublishedTarget` | enforce the published target as an eventual destination and current→projected non-regression as the per-operation remove-safety floor, so `1→2→3` can complete without admitting `2→1` |
 
 ## Adding a spec for a design-class CL
 

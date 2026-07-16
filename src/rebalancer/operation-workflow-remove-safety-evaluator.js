@@ -30,6 +30,72 @@ const QUORUM_PROJECTION_SCOPE = Object.freeze({
 });
 
 /**
+ * Project the distinct-node spread floor for one serialized removal.
+ * @param {Object} input
+ * @param {Object[]} projectedVoterReadyRows
+ * @param {number} projectedVoterReadyCount
+ * @param {number} effectiveProjectedVoterReadyCount
+ * @returns {Object}
+ */
+function projectPublishedSpreadAfterRemoval(
+  input,
+  projectedVoterReadyRows,
+  projectedVoterReadyCount,
+  effectiveProjectedVoterReadyCount,
+) {
+  const requiredDistinctNodeCount = Number(input.requiredDistinctNodeCount);
+  const projectedDistinctNodeCount = normalizeReplicaRowNodeIds(
+    projectedVoterReadyRows,
+  ).length;
+  const currentVoterReadyRows =
+    Array.isArray(input.currentVoterReadyRows) &&
+    input.currentVoterReadyRows.length > 0 ?
+      input.currentVoterReadyRows :
+      null;
+  const currentDistinctNodeCount = currentVoterReadyRows === null ?
+    null :
+    normalizeReplicaRowNodeIds(currentVoterReadyRows).length;
+  const publishedTargetApplies =
+    Number.isFinite(requiredDistinctNodeCount) &&
+    requiredDistinctNodeCount > 1;
+  // The published value is the convergence destination, not a requirement
+  // that every serialized intermediate REPLACE can satisfy by itself. During
+  // cold formation a first count-neutral move can take a partition from one
+  // node to two while the final target is three. Requiring 3/3 before its
+  // source may be removed strands that operation behind the ledger interlock,
+  // so the second move that reaches three can never start. The remove-safety
+  // owner instead protects the stronger local invariant: a step may close or
+  // preserve the current spread deficit, never enlarge it. If callers do not
+  // supply a current authoritative row set, retain the old final-target floor
+  // (fail closed rather than inferring a weaker baseline).
+  const requiredPostRemovalDistinctNodeCount =
+    publishedTargetApplies && currentDistinctNodeCount !== null ?
+      Math.min(currentDistinctNodeCount, requiredDistinctNodeCount) :
+      requiredDistinctNodeCount;
+  const floorSatisfied =
+    !publishedTargetApplies ||
+    projectedDistinctNodeCount >= requiredPostRemovalDistinctNodeCount;
+  const reason = floorSatisfied ?
+    null :
+    {
+      kind: 'below-spread',
+      got: projectedDistinctNodeCount,
+      need: requiredPostRemovalDistinctNodeCount,
+    };
+  return Object.freeze({
+    projectedVoterReadyCount,
+    effectiveProjectedVoterReadyCount,
+    projectedDistinctNodeCount,
+    currentDistinctNodeCount,
+    requiredDistinctNodeCount,
+    requiredPostRemovalDistinctNodeCount,
+    completionSafe: input.completionSafe === true,
+    floorSatisfied,
+    reason,
+  });
+}
+
+/**
  * One authoritative projection of the post-removal quorum, shared by the three floor
  * sites in this module. Pure and synchronous — the caller resolves the async planning
  * snapshot (see resolvePriorityRecoveryQuorumProjection) and passes its
@@ -56,7 +122,15 @@ function projectQuorumAfterRemoval(input) {
     input.completionSafe === true && recoveryProjectionNodeIds ?
       Math.max(projectedVoterReadyCount, recoveryProjectionNodeIds.length) :
       projectedVoterReadyCount;
-  const requiredDistinctNodeCount = Number(input.requiredDistinctNodeCount);
+
+  if (input.scope === QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD) {
+    return projectPublishedSpreadAfterRemoval(
+      input,
+      projectedVoterReadyRows,
+      projectedVoterReadyCount,
+      effectiveProjectedVoterReadyCount,
+    );
+  }
 
   let floorSatisfied = true;
   let reason = null;
@@ -70,26 +144,6 @@ function projectQuorumAfterRemoval(input) {
     if (!floorSatisfied) {
       reason = {kind: 'below-min', got: effectiveProjectedVoterReadyCount, need: input.minReplicaCount};
     }
-  } else if (input.scope === QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD) {
-    const projectedDistinctNodeCount = normalizeReplicaRowNodeIds(
-      projectedVoterReadyRows,
-    ).length;
-    floorSatisfied =
-      !Number.isFinite(requiredDistinctNodeCount) ||
-      requiredDistinctNodeCount <= 1 ||
-      projectedDistinctNodeCount >= requiredDistinctNodeCount;
-    if (!floorSatisfied) {
-      reason = {kind: 'below-spread', got: projectedDistinctNodeCount, need: requiredDistinctNodeCount};
-    }
-    return Object.freeze({
-      projectedVoterReadyCount,
-      effectiveProjectedVoterReadyCount,
-      projectedDistinctNodeCount,
-      requiredDistinctNodeCount,
-      completionSafe: input.completionSafe === true,
-      floorSatisfied,
-      reason,
-    });
   }
 
   return Object.freeze({
@@ -204,6 +258,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
   context,
   operation,
   projectedVoterReadyRows,
+  currentVoterReadyRows,
 ) {
   if (
     !operation ||
@@ -329,6 +384,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
     priorityPartitionSummary.requiredDistinctNodeCount,
   );
   const spreadFloor = projectQuorumAfterRemoval({
+    currentVoterReadyRows,
     projectedVoterReadyRows,
     requiredDistinctNodeCount,
     scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
@@ -340,7 +396,8 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
         operation.partitionId +
         OPERATION_WORKFLOW_OWNER_LITERAL.PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED +
         OPERATION_WORKFLOW_OWNER_LITERAL.REQUIREMENT +
-        ` (${spreadFloor.projectedDistinctNodeCount}/${requiredDistinctNodeCount})`,
+        ` (${spreadFloor.projectedDistinctNodeCount}/` +
+        `${spreadFloor.requiredPostRemovalDistinctNodeCount})`,
     );
   }
 
@@ -570,6 +627,7 @@ async function evaluateRemoveSafety(context, operation) {
       await context.evaluatePriorityPublishedMembershipRemoveSafety(
         operation,
         projectedVoterReadyRows,
+        currentVoterReadyRows,
       );
     if (
       priorityPublishedMembershipRemoveSafetyEvaluation.classification !==

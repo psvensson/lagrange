@@ -19,6 +19,14 @@ function rows(n) {
   }));
 }
 
+function rowsOnNodes(nodeIds) {
+  return nodeIds.map((nodeId, index) => ({
+    replica_id: `p-r${index}`,
+    service_id: `p-r${index}`,
+    node_id: nodeId,
+  }));
+}
+
 test('simple-floor: defers when voter-ready rows drop below min (the non-completion-safe site)', (t) => {
   const below = projectQuorumAfterRemoval({
     projectedVoterReadyRows: rows(2), minReplicaCount: 3,
@@ -82,6 +90,52 @@ test('published-spread: defers when distinct nodes fall below requiredDistinctNo
     scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
   });
   t.equal(at.floorSatisfied, true);
+  t.end();
+});
+
+test('published-spread: a serialized intermediate REPLACE may preserve current spread ' +
+  'below the final target, but may not regress it', (t) => {
+  const currentTwoNodeSpread = rowsOnNodes([
+    'node-seed',
+    'node-seed',
+    'node-seed',
+    'node-target',
+  ]);
+  const preservedTwoNodeSpread = rowsOnNodes([
+    'node-seed',
+    'node-seed',
+    'node-target',
+  ]);
+  const preserved = projectQuorumAfterRemoval({
+    currentVoterReadyRows: currentTwoNodeSpread,
+    projectedVoterReadyRows: preservedTwoNodeSpread,
+    requiredDistinctNodeCount: 3,
+    scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
+  });
+  t.equal(
+    preserved.floorSatisfied,
+    true,
+    '2 -> 2 is non-regressing and must release the serialized operation so a later REPLACE can reach 3',
+  );
+  t.equal(preserved.currentDistinctNodeCount, 2);
+  t.equal(preserved.requiredPostRemovalDistinctNodeCount, 2);
+
+  const regressed = projectQuorumAfterRemoval({
+    currentVoterReadyRows: currentTwoNodeSpread,
+    projectedVoterReadyRows: rowsOnNodes([
+      'node-seed',
+      'node-seed',
+      'node-seed',
+    ]),
+    requiredDistinctNodeCount: 3,
+    scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
+  });
+  t.equal(
+    regressed.floorSatisfied,
+    false,
+    '2 -> 1 still blocks: the intermediate operation may preserve deficit, never increase it',
+  );
+  t.equal(regressed.requiredPostRemovalDistinctNodeCount, 2);
   t.end();
 });
 

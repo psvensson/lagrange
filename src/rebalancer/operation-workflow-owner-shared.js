@@ -176,7 +176,7 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
   PROGRESS: 'progress',
   PROJECTED_VOTER_DASH_READY_SPREAD: 'projected voter-ready spread',
   PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED:
-    ' projected voter-ready spread would fall below the published ',
+    ' projected voter-ready spread would fall below the protected per-operation ',
   PUBLISHED_MEMBERSHIP: 'published membership',
   PUBLISHED_MEMBERSHIP_SAFETY_IS_UNAVAILABLE:
     ' published membership safety is unavailable',

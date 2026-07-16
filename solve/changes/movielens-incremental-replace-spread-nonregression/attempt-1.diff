@@ -1,0 +1,737 @@
+diff --git a/models/CL-INDEX.md b/models/CL-INDEX.md
+index 0a798667c1e16f616e814ba3feb4960140408b73..b9f3bdfff7edf46802e43b41d8e323284d1ba47b 100644
+--- a/models/CL-INDEX.md
++++ b/models/CL-INDEX.md
+@@ -22,6 +22,7 @@ via `npm run model:check` in `test:ci`.
+ | Priority spread closure and schema admission | `priority-spread-coverage/PrioritySpreadCoverage.tla` | `PublicationRequiresCoveredSpread`, `UncoveredSpreadRetainsFollowup`, `SchemaAdmissionRequiresCoveredSpread`, `SchemaAdmissionRequiresPublishedSummary` | consume the numeric spread gap and distinct eligible operation targets instead of collapsing operation presence to a Boolean, then require the published zero-gap summary before schema admission |
+ | **CL-039 publication write-leadership fail-back** | **`leadership-failback/LeadershipFailback.tla`** | **`EventuallyClosed`** | **`FailBack` — leadership transfers back to a reachable seed when stranded on a restarting replica** |
+ | Ledger self-move re-mint livelock (formation-ledger-self-move-blocks-cluster-ops) | `ledger-selfmove-remint/LedgerSelfMoveRemint.tla` | `EventuallySettled` | `IdempotentReplan` — a leadership flap carries the in-flight spread self-move over (authoritative in-flight recognition, c7a3bf19) instead of re-minting it, so it terminalizes |
++| Serialized incremental REPLACE spread | `incremental-replace-spread/IncrementalReplaceSpread.tla` | `OpenGapRetainsSerializedProgressOwner`, `SpreadNeverRegresses`, `EventuallyReachesPublishedTarget` | enforce the published target as an eventual destination and current→projected non-regression as the per-operation remove-safety floor, so `1→2→3` can complete without admitting `2→1` |
+ 
+ ## Adding a spec for a design-class CL
+ 
+diff --git a/models/incremental-replace-spread/IncrementalReplaceSpread.tla b/models/incremental-replace-spread/IncrementalReplaceSpread.tla
+new file mode 100644
+index 0000000000000000000000000000000000000000..baa86444222adbb607e4a388c1e5c24af063a455
+--- /dev/null
++++ b/models/incremental-replace-spread/IncrementalReplaceSpread.tla
+@@ -0,0 +1,121 @@
++-------------------- MODULE IncrementalReplaceSpread --------------------
++(***************************************************************************)
++(* Serialized priority-REPLACE spread model.                               *)
++(*                                                                         *)
++(* A count-neutral REPLACE first makes its voter-ready target visible, then *)
++(* removes one source. The operation-ledger self-move interlock permits only*)
++(* one such workflow at a time. During cold formation, the first operation  *)
++(* can preserve two-node spread while the final published target is three;  *)
++(* after it terminalizes, a second serialized operation reaches three.      *)
++(*                                                                         *)
++(* RequireFinalTargetPerStep models the production bug: source removal is   *)
++(* allowed only when this one operation already satisfies the eventual      *)
++(* target. It strands the first operation at 2/3 and prevents the second.    *)
++(* The fixed policy requires only non-regression per step.                   *)
++(* AllowRegressingRemoval is an adversarial safety mutant used to prove the  *)
++(* fixed liveness policy does not permit a spread-reducing removal.          *)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANTS RequiredSpread,
++          InitialSpread,
++          RequireFinalTargetPerStep,
++          AllowRegressingRemoval
++
++VARIABLES spread,
++          previousSpread,
++          phase,
++          candidateSpread,
++          completedReplaces
++
++vars == << spread, previousSpread, phase, candidateSpread, completedReplaces >>
++
++Phases == {"idle", "target_ready"}
++
++TypeOK ==
++  /\ RequiredSpread \in Nat
++  /\ RequiredSpread > 1
++  /\ InitialSpread \in 1..RequiredSpread
++  /\ spread \in 1..RequiredSpread
++  /\ previousSpread \in 1..RequiredSpread
++  /\ candidateSpread \in 1..RequiredSpread
++  /\ phase \in Phases
++  /\ completedReplaces \in Nat
++
++Init ==
++  /\ spread = InitialSpread
++  /\ previousSpread = InitialSpread
++  /\ phase = "idle"
++  /\ candidateSpread = InitialSpread
++  /\ completedReplaces = 0
++
++(* One serialized workflow makes a voter-ready target visible. *)
++StartReplace ==
++  /\ phase = "idle"
++  /\ spread < RequiredSpread
++  /\ phase' = "target_ready"
++  /\ candidateSpread' = spread + 1
++  /\ UNCHANGED << spread, previousSpread, completedReplaces >>
++
++(* Fixed completion: removing the source commits the non-regressing candidate.
++ * The buggy toggle additionally demands final-target satisfaction now. *)
++CompleteNonRegressing ==
++  /\ phase = "target_ready"
++  /\ (~RequireFinalTargetPerStep \/ candidateSpread >= RequiredSpread)
++  /\ previousSpread' = spread
++  /\ spread' = candidateSpread
++  /\ phase' = "idle"
++  /\ completedReplaces' = completedReplaces + 1
++  /\ UNCHANGED candidateSpread
++
++(* Safety mutant: a remove owner accepts a source removal that loses one
++ * distinct voter-ready node while a safe alternative exists. *)
++CompleteRegressing ==
++  /\ AllowRegressingRemoval
++  /\ phase = "target_ready"
++  /\ spread > 1
++  /\ previousSpread' = spread
++  /\ spread' = spread - 1
++  /\ phase' = "idle"
++  /\ completedReplaces' = completedReplaces + 1
++  /\ UNCHANGED candidateSpread
++
++(* Intentional stutter exposes the final-target-per-step deadlock as a stable
++ * state instead of relying on TLC deadlock checking. *)
++WaitForImpossibleFinalTarget ==
++  /\ phase = "target_ready"
++  /\ RequireFinalTargetPerStep
++  /\ candidateSpread < RequiredSpread
++  /\ UNCHANGED vars
++
++SettledStutter ==
++  /\ spread = RequiredSpread
++  /\ phase = "idle"
++  /\ UNCHANGED vars
++
++Next ==
++  \/ StartReplace
++  \/ CompleteNonRegressing
++  \/ CompleteRegressing
++  \/ WaitForImpossibleFinalTarget
++  \/ SettledStutter
++
++Fairness ==
++  /\ WF_vars(StartReplace)
++  /\ WF_vars(CompleteNonRegressing)
++
++Spec == Init /\ [][Next]_vars /\ Fairness
++
++(* Every open serialized operation retains an enabled completion owner. *)
++OpenGapRetainsSerializedProgressOwner ==
++  \/ spread = RequiredSpread
++  \/ phase = "idle"
++  \/ ~RequireFinalTargetPerStep
++  \/ candidateSpread >= RequiredSpread
++
++(* A completed source removal never reduces authoritative distinct-node spread. *)
++SpreadNeverRegresses == spread >= previousSpread
++
++EventuallyReachesPublishedTarget == <>(spread = RequiredSpread)
++
++=============================================================================
+diff --git a/models/incremental-replace-spread/IncrementalReplaceSpread_final_target_bug.cfg b/models/incremental-replace-spread/IncrementalReplaceSpread_final_target_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2d53f94ced5bd4d16ede95e1e55fafb19002dc8
+--- /dev/null
++++ b/models/incremental-replace-spread/IncrementalReplaceSpread_final_target_bug.cfg
+@@ -0,0 +1,10 @@
++CONSTANTS
++  RequiredSpread = 3
++  InitialSpread = 1
++  RequireFinalTargetPerStep = TRUE
++  AllowRegressingRemoval = FALSE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT OpenGapRetainsSerializedProgressOwner
++INVARIANT SpreadNeverRegresses
+diff --git a/models/incremental-replace-spread/IncrementalReplaceSpread_fixed.cfg b/models/incremental-replace-spread/IncrementalReplaceSpread_fixed.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..16978cb184f3d25a13aff9d8ffca5ab8456eff49
+--- /dev/null
++++ b/models/incremental-replace-spread/IncrementalReplaceSpread_fixed.cfg
+@@ -0,0 +1,11 @@
++CONSTANTS
++  RequiredSpread = 3
++  InitialSpread = 1
++  RequireFinalTargetPerStep = FALSE
++  AllowRegressingRemoval = FALSE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT OpenGapRetainsSerializedProgressOwner
++INVARIANT SpreadNeverRegresses
++PROPERTY EventuallyReachesPublishedTarget
+diff --git a/models/incremental-replace-spread/IncrementalReplaceSpread_regression_bug.cfg b/models/incremental-replace-spread/IncrementalReplaceSpread_regression_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..47b139e15eca9f96564f5cc62ffe1b306ebf0847
+--- /dev/null
++++ b/models/incremental-replace-spread/IncrementalReplaceSpread_regression_bug.cfg
+@@ -0,0 +1,10 @@
++CONSTANTS
++  RequiredSpread = 3
++  InitialSpread = 1
++  RequireFinalTargetPerStep = FALSE
++  AllowRegressingRemoval = TRUE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT OpenGapRetainsSerializedProgressOwner
++INVARIANT SpreadNeverRegresses
+diff --git a/models/incremental-replace-spread/abstract-protocol.md b/models/incremental-replace-spread/abstract-protocol.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..98c83c2500534624ef0dbaf8ea9cde56155eda87
+--- /dev/null
++++ b/models/incremental-replace-spread/abstract-protocol.md
+@@ -0,0 +1,29 @@
++# Incremental REPLACE spread — abstract protocol ↔ runtime
++
++Model: `IncrementalReplaceSpread.tla`.
++Quest: `movielens-incremental-replace-spread-nonregression`.
++
++The model composes three runtime layers that were previously covered only
++separately: the published final spread target, the remove-safety owner, and the
++operation-ledger self-move serialization boundary.
++
++| Model | Runtime |
++| --- | --- |
++| `spread` | distinct nodes in the current authoritative voter-ready service rows |
++| `candidateSpread` | distinct nodes after excluding this REPLACE's declared source from those rows |
++| `RequiredSpread = 3` | published `priorityPartitionSummary.requiredDistinctNodeCount` |
++| `phase = "target_ready"` | REPLACE is `ACTIVE`; the replacement is voter-ready and source removal is next |
++| `StartReplace` | the serialized ledger owner admits one count-neutral spread REPLACE |
++| `CompleteNonRegressing` | remove safety permits source removal, the workflow terminalizes, and the interlock releases |
++| `RequireFinalTargetPerStep` | old `projectedDistinctNodeCount >= requiredDistinctNodeCount` gate |
++| non-regression policy | `projectedDistinctNodeCount >= min(currentDistinctNodeCount, requiredDistinctNodeCount)` |
++
++The fixed config proves two serialized moves progress `1 → 2 → 3`, never reduce
++spread, and eventually reach the published target. The final-target bug config
++exhibits the live `2/3` ownership gap: the first operation cannot complete, so the
++second cannot start. The regression-mutant config proves that replacing the final
++target with a blanket allow would be unsafe; a `2 → 1` removal violates
++`SpreadNeverRegresses`.
++
++This is a focused composition model, not a claim that every cross-layer runtime
++interaction is represented in TLA+ or Alloy.
+diff --git a/scripts/model-tlc.js b/scripts/model-tlc.js
+index e9fe387df696302014ed5a05c4465e48f2ebd5bd..4874e3ab1185bc94621a024de92735c3b73639d7 100644
+--- a/scripts/model-tlc.js
++++ b/scripts/model-tlc.js
+@@ -289,6 +289,68 @@ const CONFIGS = [
+     boundary: 'ledger_self_move_serialization',
+     expectedFailurePattern: 'Temporal property EventuallySettled was violated',
+   },
++  {
++    id: 'incremental-replace-spread-nonregression',
++    mode: 'incremental-replace-spread-nonregression',
++    module: path.resolve(
++      'models',
++      'incremental-replace-spread',
++      'IncrementalReplaceSpread.tla',
++    ),
++    cfg: path.resolve(
++      'models',
++      'incremental-replace-spread',
++      'IncrementalReplaceSpread_fixed.cfg',
++    ),
++    expectConverged: true,
++    report:
++      'incremental-replace-spread-nonregression.model.report.json',
++    scenario: 'movielens-incremental-replace-spread-nonregression-model',
++    owner: 'operation_workflow_remove_safety_owner',
++    boundary: 'serialized_replace_spread_nonregression',
++  },
++  {
++    id: 'incremental-replace-spread-final-target-deadlock',
++    mode: 'incremental-replace-spread-final-target-deadlock',
++    module: path.resolve(
++      'models',
++      'incremental-replace-spread',
++      'IncrementalReplaceSpread.tla',
++    ),
++    cfg: path.resolve(
++      'models',
++      'incremental-replace-spread',
++      'IncrementalReplaceSpread_final_target_bug.cfg',
++    ),
++    expectConverged: false,
++    report:
++      'incremental-replace-spread-final-target-deadlock.model.report.json',
++    scenario: 'movielens-incremental-replace-spread-final-target-counterexample',
++    owner: 'operation_workflow_remove_safety_owner',
++    boundary: 'serialized_replace_spread_nonregression',
++    expectedFailurePattern:
++      'Invariant OpenGapRetainsSerializedProgressOwner is violated',
++  },
++  {
++    id: 'incremental-replace-spread-regression',
++    mode: 'incremental-replace-spread-regression',
++    module: path.resolve(
++      'models',
++      'incremental-replace-spread',
++      'IncrementalReplaceSpread.tla',
++    ),
++    cfg: path.resolve(
++      'models',
++      'incremental-replace-spread',
++      'IncrementalReplaceSpread_regression_bug.cfg',
++    ),
++    expectConverged: false,
++    report: 'incremental-replace-spread-regression.model.report.json',
++    scenario: 'movielens-incremental-replace-spread-regression-counterexample',
++    owner: 'operation_workflow_remove_safety_owner',
++    boundary: 'serialized_replace_spread_nonregression',
++    expectedFailurePattern: 'Invariant SpreadNeverRegresses is violated',
++  },
+ ];
+ 
+ function download(url, dest) {
+diff --git a/scripts/run-movielens-incremental-replace-spread-nonregression-scenarios.js b/scripts/run-movielens-incremental-replace-spread-nonregression-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bf31aa8757c777a01535e25b68a30ab125f075fb
+--- /dev/null
++++ b/scripts/run-movielens-incremental-replace-spread-nonregression-scenarios.js
+@@ -0,0 +1,20 @@
++#!/usr/bin/env node
++/**
++ * Deterministic guard for serialized priority-REPLACE spread non-regression.
++ *
++ * The pure projection pins the safety/target distinction and the owner-path
++ * suite proves the existing current/projected voter-ready row data reaches it.
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'movielens-incremental-replace-spread-nonregression': [
++    'test/rebalancer/operation-workflow-remove-safety-quorum-predicate.test.js',
++    'test/rebalancer/priority-remove-safety-spread-nonregression.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/rebalancer/operation-workflow-owner-shared.js b/src/rebalancer/operation-workflow-owner-shared.js
+index 52ab66460887b02b9b5091d111d99ce9bf6d30be..20508cf491d2da45f6422de13e3684bc1c25f6bb 100644
+--- a/src/rebalancer/operation-workflow-owner-shared.js
++++ b/src/rebalancer/operation-workflow-owner-shared.js
+@@ -176,7 +176,7 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
+   PROGRESS: 'progress',
+   PROJECTED_VOTER_DASH_READY_SPREAD: 'projected voter-ready spread',
+   PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED:
+-    ' projected voter-ready spread would fall below the published ',
++    ' projected voter-ready spread would fall below the protected per-operation ',
+   PUBLISHED_MEMBERSHIP: 'published membership',
+   PUBLISHED_MEMBERSHIP_SAFETY_IS_UNAVAILABLE:
+     ' published membership safety is unavailable',
+diff --git a/src/rebalancer/operation-workflow-remove-safety-evaluator.js b/src/rebalancer/operation-workflow-remove-safety-evaluator.js
+index ceb798c3678c8592a76e0389144c550595bf2ec5..904f64a319e009f31263191232214e5248e95414 100644
+--- a/src/rebalancer/operation-workflow-remove-safety-evaluator.js
++++ b/src/rebalancer/operation-workflow-remove-safety-evaluator.js
+@@ -29,6 +29,72 @@ const QUORUM_PROJECTION_SCOPE = Object.freeze({
+   PUBLISHED_SPREAD: 'published-spread',
+ });
+ 
++/**
++ * Project the distinct-node spread floor for one serialized removal.
++ * @param {Object} input
++ * @param {Object[]} projectedVoterReadyRows
++ * @param {number} projectedVoterReadyCount
++ * @param {number} effectiveProjectedVoterReadyCount
++ * @returns {Object}
++ */
++function projectPublishedSpreadAfterRemoval(
++  input,
++  projectedVoterReadyRows,
++  projectedVoterReadyCount,
++  effectiveProjectedVoterReadyCount,
++) {
++  const requiredDistinctNodeCount = Number(input.requiredDistinctNodeCount);
++  const projectedDistinctNodeCount = normalizeReplicaRowNodeIds(
++    projectedVoterReadyRows,
++  ).length;
++  const currentVoterReadyRows =
++    Array.isArray(input.currentVoterReadyRows) &&
++    input.currentVoterReadyRows.length > 0 ?
++      input.currentVoterReadyRows :
++      null;
++  const currentDistinctNodeCount = currentVoterReadyRows === null ?
++    null :
++    normalizeReplicaRowNodeIds(currentVoterReadyRows).length;
++  const publishedTargetApplies =
++    Number.isFinite(requiredDistinctNodeCount) &&
++    requiredDistinctNodeCount > 1;
++  // The published value is the convergence destination, not a requirement
++  // that every serialized intermediate REPLACE can satisfy by itself. During
++  // cold formation a first count-neutral move can take a partition from one
++  // node to two while the final target is three. Requiring 3/3 before its
++  // source may be removed strands that operation behind the ledger interlock,
++  // so the second move that reaches three can never start. The remove-safety
++  // owner instead protects the stronger local invariant: a step may close or
++  // preserve the current spread deficit, never enlarge it. If callers do not
++  // supply a current authoritative row set, retain the old final-target floor
++  // (fail closed rather than inferring a weaker baseline).
++  const requiredPostRemovalDistinctNodeCount =
++    publishedTargetApplies && currentDistinctNodeCount !== null ?
++      Math.min(currentDistinctNodeCount, requiredDistinctNodeCount) :
++      requiredDistinctNodeCount;
++  const floorSatisfied =
++    !publishedTargetApplies ||
++    projectedDistinctNodeCount >= requiredPostRemovalDistinctNodeCount;
++  const reason = floorSatisfied ?
++    null :
++    {
++      kind: 'below-spread',
++      got: projectedDistinctNodeCount,
++      need: requiredPostRemovalDistinctNodeCount,
++    };
++  return Object.freeze({
++    projectedVoterReadyCount,
++    effectiveProjectedVoterReadyCount,
++    projectedDistinctNodeCount,
++    currentDistinctNodeCount,
++    requiredDistinctNodeCount,
++    requiredPostRemovalDistinctNodeCount,
++    completionSafe: input.completionSafe === true,
++    floorSatisfied,
++    reason,
++  });
++}
++
+ /**
+  * One authoritative projection of the post-removal quorum, shared by the three floor
+  * sites in this module. Pure and synchronous — the caller resolves the async planning
+@@ -56,7 +122,15 @@ function projectQuorumAfterRemoval(input) {
+     input.completionSafe === true && recoveryProjectionNodeIds ?
+       Math.max(projectedVoterReadyCount, recoveryProjectionNodeIds.length) :
+       projectedVoterReadyCount;
+-  const requiredDistinctNodeCount = Number(input.requiredDistinctNodeCount);
++
++  if (input.scope === QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD) {
++    return projectPublishedSpreadAfterRemoval(
++      input,
++      projectedVoterReadyRows,
++      projectedVoterReadyCount,
++      effectiveProjectedVoterReadyCount,
++    );
++  }
+ 
+   let floorSatisfied = true;
+   let reason = null;
+@@ -70,26 +144,6 @@ function projectQuorumAfterRemoval(input) {
+     if (!floorSatisfied) {
+       reason = {kind: 'below-min', got: effectiveProjectedVoterReadyCount, need: input.minReplicaCount};
+     }
+-  } else if (input.scope === QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD) {
+-    const projectedDistinctNodeCount = normalizeReplicaRowNodeIds(
+-      projectedVoterReadyRows,
+-    ).length;
+-    floorSatisfied =
+-      !Number.isFinite(requiredDistinctNodeCount) ||
+-      requiredDistinctNodeCount <= 1 ||
+-      projectedDistinctNodeCount >= requiredDistinctNodeCount;
+-    if (!floorSatisfied) {
+-      reason = {kind: 'below-spread', got: projectedDistinctNodeCount, need: requiredDistinctNodeCount};
+-    }
+-    return Object.freeze({
+-      projectedVoterReadyCount,
+-      effectiveProjectedVoterReadyCount,
+-      projectedDistinctNodeCount,
+-      requiredDistinctNodeCount,
+-      completionSafe: input.completionSafe === true,
+-      floorSatisfied,
+-      reason,
+-    });
+   }
+ 
+   return Object.freeze({
+@@ -204,6 +258,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
+   context,
+   operation,
+   projectedVoterReadyRows,
++  currentVoterReadyRows,
+ ) {
+   if (
+     !operation ||
+@@ -329,6 +384,7 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
+     priorityPartitionSummary.requiredDistinctNodeCount,
+   );
+   const spreadFloor = projectQuorumAfterRemoval({
++    currentVoterReadyRows,
+     projectedVoterReadyRows,
+     requiredDistinctNodeCount,
+     scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
+@@ -340,7 +396,8 @@ async function evaluatePriorityPublishedMembershipRemoveSafety(
+         operation.partitionId +
+         OPERATION_WORKFLOW_OWNER_LITERAL.PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED +
+         OPERATION_WORKFLOW_OWNER_LITERAL.REQUIREMENT +
+-        ` (${spreadFloor.projectedDistinctNodeCount}/${requiredDistinctNodeCount})`,
++        ` (${spreadFloor.projectedDistinctNodeCount}/` +
++        `${spreadFloor.requiredPostRemovalDistinctNodeCount})`,
+     );
+   }
+ 
+@@ -570,6 +627,7 @@ async function evaluateRemoveSafety(context, operation) {
+       await context.evaluatePriorityPublishedMembershipRemoveSafety(
+         operation,
+         projectedVoterReadyRows,
++        currentVoterReadyRows,
+       );
+     if (
+       priorityPublishedMembershipRemoveSafetyEvaluation.classification !==
+diff --git a/src/rebalancer/priority-recovery-superseded-target.js b/src/rebalancer/priority-recovery-superseded-target.js
+index ae8d76274583f23b085f2d8a77566e4c68b26b00..8511bb74b403c640c9ae579ac6d0900eaf69e0ed 100644
+--- a/src/rebalancer/priority-recovery-superseded-target.js
++++ b/src/rebalancer/priority-recovery-superseded-target.js
+@@ -257,17 +257,20 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
+   /**
+    * @param {Object} operation
+    * @param {Object[]} projectedVoterReadyRows
++   * @param {Object[]} currentVoterReadyRows
+    * @return {Promise<Object>}
+    * @private
+    */
+   async evaluatePriorityPublishedMembershipRemoveSafety(
+     operation,
+     projectedVoterReadyRows,
++    currentVoterReadyRows,
+   ) {
+     return evaluatePriorityPublishedMembershipRemoveSafety(
+       this,
+       operation,
+       projectedVoterReadyRows,
++      currentVoterReadyRows,
+     );
+   }
+ 
+diff --git a/test/rebalancer/operation-workflow-remove-safety-quorum-predicate.test.js b/test/rebalancer/operation-workflow-remove-safety-quorum-predicate.test.js
+index 0bae8d8f9f770c6bb70d0d1f9e39841a596c376a..07d89ee5925547b8799b5cad5a12f769fe4436b1 100644
+--- a/test/rebalancer/operation-workflow-remove-safety-quorum-predicate.test.js
++++ b/test/rebalancer/operation-workflow-remove-safety-quorum-predicate.test.js
+@@ -19,6 +19,14 @@ function rows(n) {
+   }));
+ }
+ 
++function rowsOnNodes(nodeIds) {
++  return nodeIds.map((nodeId, index) => ({
++    replica_id: `p-r${index}`,
++    service_id: `p-r${index}`,
++    node_id: nodeId,
++  }));
++}
++
+ test('simple-floor: defers when voter-ready rows drop below min (the non-completion-safe site)', (t) => {
+   const below = projectQuorumAfterRemoval({
+     projectedVoterReadyRows: rows(2), minReplicaCount: 3,
+@@ -85,6 +93,52 @@ test('published-spread: defers when distinct nodes fall below requiredDistinctNo
+   t.end();
+ });
+ 
++test('published-spread: a serialized intermediate REPLACE may preserve current spread ' +
++  'below the final target, but may not regress it', (t) => {
++  const currentTwoNodeSpread = rowsOnNodes([
++    'node-seed',
++    'node-seed',
++    'node-seed',
++    'node-target',
++  ]);
++  const preservedTwoNodeSpread = rowsOnNodes([
++    'node-seed',
++    'node-seed',
++    'node-target',
++  ]);
++  const preserved = projectQuorumAfterRemoval({
++    currentVoterReadyRows: currentTwoNodeSpread,
++    projectedVoterReadyRows: preservedTwoNodeSpread,
++    requiredDistinctNodeCount: 3,
++    scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
++  });
++  t.equal(
++    preserved.floorSatisfied,
++    true,
++    '2 -> 2 is non-regressing and must release the serialized operation so a later REPLACE can reach 3',
++  );
++  t.equal(preserved.currentDistinctNodeCount, 2);
++  t.equal(preserved.requiredPostRemovalDistinctNodeCount, 2);
++
++  const regressed = projectQuorumAfterRemoval({
++    currentVoterReadyRows: currentTwoNodeSpread,
++    projectedVoterReadyRows: rowsOnNodes([
++      'node-seed',
++      'node-seed',
++      'node-seed',
++    ]),
++    requiredDistinctNodeCount: 3,
++    scope: QUORUM_PROJECTION_SCOPE.PUBLISHED_SPREAD,
++  });
++  t.equal(
++    regressed.floorSatisfied,
++    false,
++    '2 -> 1 still blocks: the intermediate operation may preserve deficit, never increase it',
++  );
++  t.equal(regressed.requiredPostRemovalDistinctNodeCount, 2);
++  t.end();
++});
++
+ test('published-spread: a non-finite or <=1 requirement is always satisfied (the former early-out)', (t) => {
+   for (const req of [NaN, undefined, 0, 1]) {
+     const r = projectQuorumAfterRemoval({
+diff --git a/test/rebalancer/priority-remove-safety-spread-nonregression.test.js b/test/rebalancer/priority-remove-safety-spread-nonregression.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..fba3f6b04ef9944790f6043f492e4b48de0b02c1
+--- /dev/null
++++ b/test/rebalancer/priority-remove-safety-spread-nonregression.test.js
+@@ -0,0 +1,144 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {PriorityRecoverySupersededTarget} from '../../src/rebalancer/priority-recovery-superseded-target.js';
++import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
++
++const {REMOVE_SAFETY_EVALUATION_CLASSIFICATION} =
++  OPERATION_WORKFLOW_OWNER_SHARED;
++
++const PARTITION_ID = 'replica_operations-p1';
++
++function rowsOnNodes(nodeIds) {
++  return nodeIds.map((nodeId, index) => ({
++    service_id: `${PARTITION_ID}-r${index + 1}`,
++    replica_id: `${PARTITION_ID}-r${index + 1}`,
++    partition_id: PARTITION_ID,
++    service_type: 'partition',
++    node_id: nodeId,
++    status: 'active',
++    raft_role: index === 0 ? 'leader' : 'follower',
++  }));
++}
++
++function makeRemoveSafetyOwner() {
++  const owner = Object.create(PriorityRecoverySupersededTarget.prototype);
++  owner.repository = {
++    isReplaceRemovePhase: () => true,
++  };
++  owner.getPriorityRecoveryPlanningSnapshot = async () => ({
++    publishedActiveNodeIdsPresent: true,
++    publishedActiveNodeIds: ['node-seed', 'node-target'],
++    recoveryActiveNodeIds: ['node-seed', 'node-target'],
++    projectedServingNodeIds: ['node-seed', 'node-target'],
++    locallyEligibleNodeIds: ['node-seed', 'node-target'],
++  });
++  owner.buildPriorityRecoveryAssessmentContextForOperation = () => ({
++    completion: {state: 'spread_pending'},
++    priorityPartitionSummary: {
++      satisfied: false,
++      requiredDistinctNodeCount: 3,
++    },
++  });
++  owner.isPriorityRecoveryRemoveSafetySatisfied = () => false;
++  owner.getPriorityRecoverySupersededTargetErrorFromContext = () => null;
++  owner.resolvePriorityRemoveSafetyMembershipSnapshot = (
++    _planningSnapshot,
++    _priorityRecoveryContext,
++    projectedVoterReadyRows,
++  ) => ({
++    publishedActiveNodeIdsPresent: true,
++    recoveryProjectionNodeIds: ['node-seed', 'node-target'],
++    projectedVoterReadyNodeIds: [
++      ...new Set(projectedVoterReadyRows.map((row) => row.node_id)),
++    ],
++    membershipSource: 'recovery projection membership',
++    missingMembershipNodeIds: [],
++    useRecoveryProjectionMembership: true,
++  });
++  return owner;
++}
++
++function replaceOperation() {
++  return {
++    operationId: 'replace-spread-1-to-2',
++    type: 'REPLACE',
++    partitionId: PARTITION_ID,
++    sourceNodeId: 'node-seed',
++    targetNodeId: 'node-target',
++  };
++}
++
++test('priority remove-safety owner releases a 2 -> 2 intermediate REPLACE ' +
++  'while the final published spread target remains 3', async (t) => {
++  const owner = makeRemoveSafetyOwner();
++  const currentVoterReadyRows = rowsOnNodes([
++    'node-seed',
++    'node-seed',
++    'node-seed',
++    'node-target',
++  ]);
++  const projectedVoterReadyRows = rowsOnNodes([
++    'node-seed',
++    'node-seed',
++    'node-target',
++  ]);
++
++  const evaluation =
++    await owner.evaluatePriorityPublishedMembershipRemoveSafety(
++      replaceOperation(),
++      projectedVoterReadyRows,
++      currentVoterReadyRows,
++    );
++
++  t.equal(
++    evaluation.classification,
++    REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
++    'the current and projected authoritative row sets prove spread is preserved, so the serialized next move retains an owner',
++  );
++  t.equal(evaluation.error, null);
++  t.end();
++});
++
++test('priority remove-safety owner still blocks 2 -> 1 spread regression',
++  async (t) => {
++    const owner = makeRemoveSafetyOwner();
++    const evaluation =
++      await owner.evaluatePriorityPublishedMembershipRemoveSafety(
++        replaceOperation(),
++        rowsOnNodes(['node-seed', 'node-seed', 'node-seed']),
++        rowsOnNodes([
++          'node-seed',
++          'node-seed',
++          'node-seed',
++          'node-target',
++        ]),
++      );
++
++    t.equal(
++      evaluation.classification,
++      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
++    );
++    t.match(
++      evaluation.error,
++      /protected per-operation requirement \(1\/2\)$/,
++      'the diagnostic exposes the protected local floor, not the final target',
++    );
++    t.end();
++  });
++
++test('missing current-row evidence fails closed on the final published target',
++  async (t) => {
++    const owner = makeRemoveSafetyOwner();
++    const evaluation =
++      await owner.evaluatePriorityPublishedMembershipRemoveSafety(
++        replaceOperation(),
++        rowsOnNodes(['node-seed', 'node-seed', 'node-target']),
++        null,
++      );
++
++    t.equal(
++      evaluation.classification,
++      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
++    );
++    t.match(evaluation.error, /\(2\/3\)$/);
++    t.end();
++  });

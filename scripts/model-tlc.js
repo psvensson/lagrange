@@ -289,6 +289,68 @@ const CONFIGS = [
     boundary: 'ledger_self_move_serialization',
     expectedFailurePattern: 'Temporal property EventuallySettled was violated',
   },
+  {
+    id: 'incremental-replace-spread-nonregression',
+    mode: 'incremental-replace-spread-nonregression',
+    module: path.resolve(
+      'models',
+      'incremental-replace-spread',
+      'IncrementalReplaceSpread.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'incremental-replace-spread',
+      'IncrementalReplaceSpread_fixed.cfg',
+    ),
+    expectConverged: true,
+    report:
+      'incremental-replace-spread-nonregression.model.report.json',
+    scenario: 'movielens-incremental-replace-spread-nonregression-model',
+    owner: 'operation_workflow_remove_safety_owner',
+    boundary: 'serialized_replace_spread_nonregression',
+  },
+  {
+    id: 'incremental-replace-spread-final-target-deadlock',
+    mode: 'incremental-replace-spread-final-target-deadlock',
+    module: path.resolve(
+      'models',
+      'incremental-replace-spread',
+      'IncrementalReplaceSpread.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'incremental-replace-spread',
+      'IncrementalReplaceSpread_final_target_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'incremental-replace-spread-final-target-deadlock.model.report.json',
+    scenario: 'movielens-incremental-replace-spread-final-target-counterexample',
+    owner: 'operation_workflow_remove_safety_owner',
+    boundary: 'serialized_replace_spread_nonregression',
+    expectedFailurePattern:
+      'Invariant OpenGapRetainsSerializedProgressOwner is violated',
+  },
+  {
+    id: 'incremental-replace-spread-regression',
+    mode: 'incremental-replace-spread-regression',
+    module: path.resolve(
+      'models',
+      'incremental-replace-spread',
+      'IncrementalReplaceSpread.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'incremental-replace-spread',
+      'IncrementalReplaceSpread_regression_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'incremental-replace-spread-regression.model.report.json',
+    scenario: 'movielens-incremental-replace-spread-regression-counterexample',
+    owner: 'operation_workflow_remove_safety_owner',
+    boundary: 'serialized_replace_spread_nonregression',
+    expectedFailurePattern: 'Invariant SpreadNeverRegresses is violated',
+  },
 ];
 
 function download(url, dest) {

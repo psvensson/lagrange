@@ -257,17 +257,20 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
   /**
    * @param {Object} operation
    * @param {Object[]} projectedVoterReadyRows
+   * @param {Object[]} currentVoterReadyRows
    * @return {Promise<Object>}
    * @private
    */
   async evaluatePriorityPublishedMembershipRemoveSafety(
     operation,
     projectedVoterReadyRows,
+    currentVoterReadyRows,
   ) {
     return evaluatePriorityPublishedMembershipRemoveSafety(
       this,
       operation,
       projectedVoterReadyRows,
+      currentVoterReadyRows,
     );
   }
 

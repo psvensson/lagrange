@@ -204,7 +204,8 @@ function renderMarkdown(summaries) {
     '',
     'The deferReason is an umbrella; the dominant sub-reason is the binding root ' +
       'for that run. `concurrent_op` = REPLACE over-creation standoff; ' +
-      '`spread_floor` = source removal would drop voter-ready spread below 2/3; ' +
+      '`spread_floor` = source removal would drop voter-ready spread below its ' +
+      'protected per-operation floor; ' +
       '`uncontactable_peer` = a quorum peer (often the slow rejoiner) unreachable; ' +
       '`replacement_not_voter_ready` = the REPLACE replacement has not promoted.',
     '',
