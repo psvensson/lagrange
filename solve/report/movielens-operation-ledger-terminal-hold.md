@@ -18,9 +18,9 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for movielens-operation-ledger-terminal-hold-main
 
@@ -54,6 +54,10 @@
 - **movielens-operation-ledger-terminal-hold-main**: DT red-on-revert proven for test/convergence/dt6-operation-ledger-terminal-hold.test.js [dt:solve/changes/dt-prove/dt6-operation-ledger-terminal-hold.test.js-2026-07-16T12-12-40-329Z.json]
 - **movielens-operation-ledger-terminal-hold-main**: Independent source verification passed after rejecting and then closing the delayed-old-terminal-read/new-holder compare-and-clear TOCTOU; timeout release, single lifecycle owner, run-20/run-22/CL-043 preservation, red-on-revert, and focused TLA composition were all verified [subagent:/root/terminal_hold_verifier]
 - **movielens-operation-ledger-terminal-hold-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T11-45-37-305Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T11-45-37-305Z.report.json]
+- **movielens-operation-ledger-terminal-hold-main**: independent verification passed [subagent:terminal_hold_verifier]
+- **movielens-operation-ledger-terminal-hold-main**: sealed premature-release symptom does not reproduce on checkpoint b1a960eb: stale durable timeout with active owner progress remains held, and delayed old terminal evidence cannot clear a newer holder [dt:solve/changes/dt-prove/dt6-operation-ledger-terminal-hold.test.js-2026-07-16T12-12-40-329Z.json]
+- **movielens-operation-ledger-terminal-hold-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
+- **movielens-operation-ledger-terminal-hold-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
 
 ## Theories
 _(none recorded)_
