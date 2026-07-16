@@ -439,6 +439,63 @@ const CONFIGS = [
     expectedFailurePattern:
       'Invariant DemotedLeaderCannotAuthorizeRemoval is violated',
   },
+  {
+    id: 'exact-election-evidence-same-turn-fixed',
+    mode: 'exact-election-evidence-same-turn-fixed',
+    module: path.resolve(
+      'models', 'exact-election-evidence-same-turn',
+      'ExactElectionEvidenceSameTurn.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'exact-election-evidence-same-turn',
+      'ExactElectionEvidenceSameTurn_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'exact-election-evidence-same-turn-fixed.model.report.json',
+    scenario: 'movielens-exact-election-evidence-same-turn-model',
+    owner: 'operation_workflow_remove_safety_owner',
+    boundary: 'election_evidence_continuation_remove_safety_composition',
+  },
+  {
+    id: 'exact-election-evidence-delayed-continuation',
+    mode: 'exact-election-evidence-delayed-continuation',
+    module: path.resolve(
+      'models', 'exact-election-evidence-same-turn',
+      'ExactElectionEvidenceSameTurn.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'exact-election-evidence-same-turn',
+      'ExactElectionEvidenceSameTurn_delayed_continuation_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'exact-election-evidence-delayed-continuation.model.report.json',
+    scenario: 'movielens-exact-election-evidence-retarget-counterexample',
+    owner: 'operation_workflow_remove_safety_owner',
+    boundary: 'election_evidence_continuation_retry_expiry_composition',
+    expectedFailurePattern:
+      'Invariant ExactCompletedEvidenceCannotBeRetargeted is violated',
+  },
+  {
+    id: 'exact-election-evidence-continuation-authority',
+    mode: 'exact-election-evidence-continuation-authority',
+    module: path.resolve(
+      'models', 'exact-election-evidence-same-turn',
+      'ExactElectionEvidenceSameTurn.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'exact-election-evidence-same-turn',
+      'ExactElectionEvidenceSameTurn_continuation_authority_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'exact-election-evidence-continuation-authority.model.report.json',
+    scenario: 'movielens-exact-election-evidence-owner-counterexample',
+    owner: 'operation_workflow_remove_safety_owner',
+    boundary: 'continuation_remove_authorization_interlock_composition',
+    expectedFailurePattern:
+      'Invariant ContinuationCannotAuthorizeRemoval is violated',
+  },
 ];
 
 function download(url, dest) {
