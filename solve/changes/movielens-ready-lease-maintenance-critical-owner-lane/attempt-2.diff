@@ -1,0 +1,61 @@
+diff --git a/src/control-plane/replica-dispatch-state-publication.js b/src/control-plane/replica-dispatch-state-publication.js
+index a052f66f34a413d9619b6ca8cac615b3587b1aa2..76e32c689bb2c2f1b3427b2f9328ebb6c87ba42f 100644
+--- a/src/control-plane/replica-dispatch-state-publication.js
++++ b/src/control-plane/replica-dispatch-state-publication.js
+@@ -99,20 +99,17 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
+     const heartbeatAt = Number.isFinite(requestedHeartbeatAt) ?
+       Math.max(requestedHeartbeatAt, now) :
+       now;
+-    const requestedLeaseExpiry =
+-      payload[ControlPlaneField.READY_LEASE_EXPIRES_AT];
+     const promotedToReadyFromConnected =
+       state === STATE.CONNECTED &&
+       existingConnectionState === STATE.READY &&
+       Number.isFinite(existingReadyLeaseExpiresAt) &&
+       existingReadyLeaseExpiresAt > now;
+     const nextState = promotedToReadyFromConnected ? STATE.READY : state;
++    // The canonical write owner grants the lease. Forwarding latency must not
++    // consume a sender-stamped lease before the nodes row becomes durable.
+     const readyLeaseExpiresAt =
+       nextState === STATE.READY ?
+-        Number.isFinite(requestedLeaseExpiry) &&
+-          requestedLeaseExpiry > heartbeatAt ?
+-          requestedLeaseExpiry :
+-          heartbeatAt + this.readyLeaseMs :
++        heartbeatAt + this.readyLeaseMs :
+         null;
+     const existingWatermark = getNodeHeartbeatWatermark(existing);
+     const effectiveReadyWatermark = {
+diff --git a/test/control-plane/replica-dispatch-node-state-update-payload-wakeup-slow-write.test.js b/test/control-plane/replica-dispatch-node-state-update-payload-wakeup-slow-write.test.js
+index 7da46fb5bb71b6711243f0537eb0876961f0e5b6..899f02aef0a79b6a2c7d6804bce8f19ca73ae167 100644
+--- a/test/control-plane/replica-dispatch-node-state-update-payload-wakeup-slow-write.test.js
++++ b/test/control-plane/replica-dispatch-node-state-update-payload-wakeup-slow-write.test.js
+@@ -390,7 +390,7 @@ test('ReplicaDispatchService ignores stale CONNECTED regression after READY',
+     service.stop();
+   });
+ 
+-test('ReplicaDispatchService accepts lagged READY heartbeat timestamps',
++test('ReplicaDispatchService rebases lagged READY heartbeats to a full owner lease',
+   async (t) => {
+     initEnv();
+ 
+@@ -433,6 +433,7 @@ test('ReplicaDispatchService accepts lagged READY heartbeat timestamps',
+       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
+       [ControlPlaneField.STATE]: STATE.READY,
+       [ControlPlaneField.HEARTBEAT_AT]: now - 60000,
++      [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 5000,
+     });
+ 
+     t.equal(
+@@ -444,6 +445,11 @@ test('ReplicaDispatchService accepts lagged READY heartbeat timestamps',
+       updates[0]?.row?.last_heartbeat >= now,
+       'applies a fresh heartbeat timestamp at write time',
+     );
++    t.equal(
++      updates[0]?.row?.ready_lease_expires_at,
++      updates[0]?.row?.last_heartbeat + service.readyLeaseMs,
++      'canonical write owner grants the full lease after delivery latency',
++    );
+ 
+     service.stop();
+   });

@@ -99,20 +99,17 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     const heartbeatAt = Number.isFinite(requestedHeartbeatAt) ?
       Math.max(requestedHeartbeatAt, now) :
       now;
-    const requestedLeaseExpiry =
-      payload[ControlPlaneField.READY_LEASE_EXPIRES_AT];
     const promotedToReadyFromConnected =
       state === STATE.CONNECTED &&
       existingConnectionState === STATE.READY &&
       Number.isFinite(existingReadyLeaseExpiresAt) &&
       existingReadyLeaseExpiresAt > now;
     const nextState = promotedToReadyFromConnected ? STATE.READY : state;
+    // The canonical write owner grants the lease. Forwarding latency must not
+    // consume a sender-stamped lease before the nodes row becomes durable.
     const readyLeaseExpiresAt =
       nextState === STATE.READY ?
-        Number.isFinite(requestedLeaseExpiry) &&
-          requestedLeaseExpiry > heartbeatAt ?
-          requestedLeaseExpiry :
-          heartbeatAt + this.readyLeaseMs :
+        heartbeatAt + this.readyLeaseMs :
         null;
     const existingWatermark = getNodeHeartbeatWatermark(existing);
     const effectiveReadyWatermark = {

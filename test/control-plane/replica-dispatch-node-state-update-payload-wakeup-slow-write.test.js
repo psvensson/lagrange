@@ -390,7 +390,7 @@ test('ReplicaDispatchService ignores stale CONNECTED regression after READY',
     service.stop();
   });
 
-test('ReplicaDispatchService accepts lagged READY heartbeat timestamps',
+test('ReplicaDispatchService rebases lagged READY heartbeats to a full owner lease',
   async (t) => {
     initEnv();
 
@@ -433,6 +433,7 @@ test('ReplicaDispatchService accepts lagged READY heartbeat timestamps',
       [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
       [ControlPlaneField.STATE]: STATE.READY,
       [ControlPlaneField.HEARTBEAT_AT]: now - 60000,
+      [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 5000,
     });
 
     t.equal(
@@ -443,6 +444,11 @@ test('ReplicaDispatchService accepts lagged READY heartbeat timestamps',
     t.ok(
       updates[0]?.row?.last_heartbeat >= now,
       'applies a fresh heartbeat timestamp at write time',
+    );
+    t.equal(
+      updates[0]?.row?.ready_lease_expires_at,
+      updates[0]?.row?.last_heartbeat + service.readyLeaseMs,
+      'canonical write owner grants the full lease after delivery latency',
     );
 
     service.stop();
