@@ -709,6 +709,88 @@ export async function registerReplicaHandlerCreateTopologyTests({
   );
 
   t.test(
+    'explicit REPLACE bootstrap cohort excludes stale cache-only voters',
+    async (t) => {
+      const partitionId = 'replica_operations-p1';
+      const tableId = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
+      const cache = createMetadataOnlyCache({partitionId, tableId});
+      const createdAt = Date.now() - 60000;
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'UPDATE', {
+        partition_id: partitionId,
+        table_id: tableId,
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: 'node-1',
+        created_at: createdAt,
+        updated_at: createdAt + 5000,
+      });
+      const currentReplicaIds = [
+        'replica_operations-p1-r1',
+        'replica_operations-p1-r4',
+      ];
+      const retiredReplicaId = 'replica_operations-p1-r3';
+      for (const [index, serviceId] of [
+        ...currentReplicaIds,
+        retiredReplicaId,
+      ].entries()) {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+          service_id: serviceId,
+          service_type: 'partition',
+          partition_id: partitionId,
+          node_id: `node-${index + 1}`,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: index === 0 ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
+          address: `node-${index + 1}/partition/${serviceId}`,
+          created_at: createdAt,
+          updated_at: createdAt,
+        });
+      }
+      const targetReplicaId = 'replica_operations-p1-r5';
+      const bootstrapReplicaIds = [...currentReplicaIds, targetReplicaId];
+      const bootstrapPeerAddresses = [
+        'node-1/partition/replica_operations-p1-r1',
+        'node-2/partition/replica_operations-p1-r4',
+        `node-target/partition/${targetReplicaId}`,
+      ];
+      const handler = new ReplicaHandler({
+        nodeId: 'node-target',
+        cdcIntegrationService: createMockCDCService(cache),
+        systemTableCache: cache,
+        dataDir: getTempDir(),
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+      handler.initialize();
+
+      const context = handler.resolveReplicaContext(
+        partitionId,
+        targetReplicaId,
+        {
+          explicitOperationType: 'REPLACE',
+          bootstrapReplicaIds,
+          bootstrapPeerAddresses,
+        },
+      );
+
+      t.same(
+        context.replicaIds,
+        bootstrapReplicaIds,
+        'placement-owned cohort is the complete replica membership',
+      );
+      t.same(
+        context.peerAddresses,
+        bootstrapPeerAddresses,
+        'placement-owned cohort is the complete peer-address membership',
+      );
+      t.notOk(
+        context.replicaIds.includes(retiredReplicaId),
+        'a stale target cache cannot reintroduce the retired voter',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
     'CL-013: explicit REPLACE join with no hints and self-only cache view ' +
       'fails retryably instead of solo-bootstrapping an isolated group',
     async (t) => {
@@ -831,4 +913,3 @@ export async function registerReplicaHandlerCreateTopologyTests({
     },
   );
 }
-

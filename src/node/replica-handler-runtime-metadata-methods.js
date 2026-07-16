@@ -171,7 +171,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           service.partition_id === partitionId &&
           service.service_type === REPLICA_HANDLER_SERVICE.TYPE,
       );
-      const services = this.mergeHydratedServices(
+      const observedServices = this.mergeHydratedServices(
         cachedServices,
         hydratedMetadata?.serviceRows || [],
       );
@@ -182,9 +182,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         }).priorityControlPlane;
       const now = Date.now();
       const addressManager = AddressManager.getInstance();
-      const replicaIds = [];
-      const peerAddresses = [];
-      const seenReplicaIds = new Set();
       const requestedReplicaIds = Array.isArray(options.bootstrapReplicaIds) ?
         options.bootstrapReplicaIds.filter(
           (value) =>
@@ -201,6 +198,38 @@ function assignReplicaHandlerRuntimeMetadataMethods(
               value.length > 0,
         ) :
         [];
+      const isExplicitReplaceJoin =
+        typeof options.explicitOperationType ===
+          REPLICA_HANDLER_TYPEOF.STRING &&
+        options.explicitOperationType.trim().toUpperCase() ===
+          EXPLICIT_REPLACE_OPERATION_TYPE;
+      // A REPLACE operation's dispatched cohort is the placement owner's
+      // closed-world membership decision. Local and hydrated service rows are
+      // still useful for leader/voter readiness, but they cannot add a voter
+      // that the owner excluded (for example, a just-retired source whose CDC
+      // removal has not reached this target yet).
+      const explicitReplaceReplicaIds = isExplicitReplaceJoin ?
+        new Set(requestedReplicaIds) :
+        null;
+      const hasExplicitReplaceCohort =
+        explicitReplaceReplicaIds?.size > 0;
+      const services = hasExplicitReplaceCohort ?
+        observedServices.filter((service) =>
+          explicitReplaceReplicaIds.has(
+            service?.service_id || service?.replica_id,
+          ),
+        ) :
+        observedServices;
+      const replicaIds = hasExplicitReplaceCohort ?
+        [...requestedReplicaIds] :
+        [];
+      const peerAddresses =
+        hasExplicitReplaceCohort && requestedPeerAddresses.length > 0 ?
+          [...requestedPeerAddresses] :
+          [];
+      const seenReplicaIds = new Set(replicaIds);
+      const hasExplicitReplacePeerAddresses =
+        hasExplicitReplaceCohort && requestedPeerAddresses.length > 0;
       // Count only established voters from sibling services. Freshly staged
       // rows in pending/creating/syncing states do not imply an existing group.
       const establishedExistingReplicaIds = new Set();
@@ -255,7 +284,10 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             REPLICA_HANDLER_SERVICE.TYPE,
             serviceReplicaId,
           );
-        if (!peerAddresses.includes(peerAddress)) {
+        if (
+          !hasExplicitReplacePeerAddresses &&
+          !peerAddresses.includes(peerAddress)
+        ) {
           peerAddresses.push(peerAddress);
         }
       }
@@ -328,11 +360,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       // re-reads authoritative rows instead of proceeding. (Join MODE is
       // unchanged: with peers present but no viable leader, voter-mode
       // re-formation remains the designed dead-leader recovery behavior.)
-      const isExplicitReplaceJoin =
-        typeof options.explicitOperationType ===
-          REPLICA_HANDLER_TYPEOF.STRING &&
-        options.explicitOperationType.trim().toUpperCase() ===
-          EXPLICIT_REPLACE_OPERATION_TYPE;
       if (isExplicitReplaceJoin) {
         const siblingPeerCount = replicaIds.filter(
           (candidateReplicaId) => candidateReplicaId !== replicaId,
