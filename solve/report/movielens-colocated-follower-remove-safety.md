@@ -18,9 +18,9 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json
 - Selected theory: theory-20260716-colocated-follower-sibling-disambiguates-source-replica (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-colocated-follower-remove-safety-main
 
@@ -58,6 +58,9 @@
 - **movielens-colocated-follower-remove-safety-main**: The real evaluateRemoveSafety -> PriorityPublicationHandoff owner path is red on current and green after the bounded change: a completion-safe replica_operations REPLACE whose selected source is explicit follower r3 and whose distinct voter-ready same-node sibling r1 is explicit leader changes from DEFER with replace_target_leader_election to SAFE with no handoff. Five negative controls retain replacement election for a lone/stale follower, wrong-node leader evidence, and an explicit leader source, and retain the control_plane_publications exception. Five focused safety/DT suites pass 78 assertions; four formation/interlock suites pass 69 assertions; 633 additional REPLACE assertions pass while four pre-existing create-allocation assertions unrelated to remove safety still expect canonical IDs but receive the existing UUID fallback; lint, diff, size, runtime grammar, state pressure, scoped complexity ratchets, and all contract/TLC models pass. [test/rebalancer/colocated-follower-remove-safety.test.js]
 - **movielens-colocated-follower-remove-safety-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
 - **movielens-colocated-follower-remove-safety-main**: Independent verification rejected this exact attempt because buildPriorityPublicationLeaderRemoveSafetySnapshot cyclomatic complexity increased from 88 to 89; all correctness, red-on-base, safety, formation, adjacent, static, and architecture checks completed before the rejection otherwise passed. [subagent:verify_wave4_colocated_remove_safety_attempt1]
+- **movielens-colocated-follower-remove-safety-main**: Independent exact-attempt verification APPROVED. Artifact/base/current canonical diff matched; exact base reversal failed only the two claimed SAFE/no-handoff assertions with DEFER and replace_target_leader_election while all negative controls stayed green. Focused, supplemental production-shaped ACTIVE-path, safety/R3/CL-038/CL-043/DT6, adjacent remove-safety, formation/interlock/deadlock, state pressure, static checks, full contracts, and all 13 TLC cases passed. Cyclomatic and cognitive complexity remain exactly at base 88 and 40. The four broad REPLACE canonical-ID/UUID failures reproduce identically on base and patch and are upstream of remove safety. [subagent:verify_wave4_colocated_remove_safety_attempt1]
+- **movielens-colocated-follower-remove-safety-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
+- **movielens-colocated-follower-remove-safety-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
 
 ## Theories
 - **theory-20260716-colocated-follower-sibling-disambiguates-source-replica** [falsified] frontier, frontier movielens-colocated-follower-remove-safety-main, layer ownership, mechanism colocated_follower_sibling_disambiguates_source_replica, owner operation_workflow_owner, boundary rebalancer_handoff_replica_identity, modelGate npm run model:contracts
@@ -68,6 +71,7 @@
 ## Theory Results
 - **theory-20260716-colocated-follower-sibling-disambiguates-source-replica**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
 - **theory-20260716-colocated-follower-sibling-disambiguates-source-replica**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
+- **theory-20260716-colocated-follower-sibling-disambiguates-source-replica**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
