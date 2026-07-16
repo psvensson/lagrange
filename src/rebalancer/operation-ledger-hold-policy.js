@@ -52,6 +52,45 @@ const OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME = Object.freeze({
   DEFER: 'defer',
 });
 
+// The lifecycle evidence that may release a locally or remotely observed
+// SELF_MOVE_SERIALIZATION hold. Workflow age is intentionally absent: timeout
+// makes the operation eligible for the workflow recovery owner, but does not
+// prove that target/source work stopped. The recovery owner releases the hold
+// by committing its normal terminal transition, which is then observed here as
+// AUTHORITATIVE_TERMINAL. Missing/deferred reads fail closed.
+const OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE = Object.freeze({
+  AUTHORITATIVE_TERMINAL: 'authoritative_terminal',
+  AUTHORITATIVE_NON_TERMINAL: 'authoritative_non_terminal',
+  UNRESOLVED: 'unresolved',
+});
+
+const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION = Object.freeze({
+  HOLD: 'hold',
+  RELEASE: 'release',
+});
+
+// Single declared lifecycle relation for the run-20 serialization hold.
+// Admission consumes this table; it does not reinterpret workflow timestamps,
+// retry timers, or reaper candidacy as permission to release.
+const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE =
+  Object.freeze(
+    new Map([
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE,
+      ],
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
+          .AUTHORITATIVE_NON_TERMINAL,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+      ],
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+      ],
+    ]),
+  );
+
 // The move classes of the relation. Classification order is significant and
 // owned here: a disruptive ledger self-move is never also an emergency ADD
 // (ADD is not a disruptive type), and everything unclassified is DEPENDENT.
@@ -195,6 +234,43 @@ function resolveOperationLedgerHoldEngagement(holdKind, moveClass) {
 }
 
 /**
+ * Classify authoritative workflow-owner evidence for a ledger self-move.
+ * Terminality remains owned by the operation repository/workflow owner and is
+ * supplied as a predicate; this policy owns only the evidence -> hold action
+ * relation. A null operation includes absent, failed, and deferred owner reads.
+ * @param {Object|null} authoritativeOperation
+ * @param {Function} isOperationTerminal
+ * @return {string} OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
+ */
+function classifyOperationLedgerSelfMoveLifecycleEvidence(
+  authoritativeOperation,
+  isOperationTerminal,
+) {
+  if (
+    !authoritativeOperation ||
+    typeof isOperationTerminal !== 'function'
+  ) {
+    return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED;
+  }
+  return isOperationTerminal(authoritativeOperation) ?
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL :
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_NON_TERMINAL;
+}
+
+/**
+ * Resolve the single declared lifecycle action. Unknown evidence fails closed.
+ * @param {string} lifecycleEvidence
+ * @return {string} OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION
+ */
+function resolveOperationLedgerSelfMoveHoldAction(lifecycleEvidence) {
+  return (
+    OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE.get(
+      lifecycleEvidence,
+    ) ?? OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD
+  );
+}
+
+/**
  * Resolve the quorum-spread hold from actuals, as a policy decision surface:
  * null when the hold is not engaged; otherwise the evaluation plus the first
  * spread-actionable partition (engagement guarantees one exists).
@@ -299,11 +375,16 @@ export {
   OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
   OPERATION_LEDGER_HOLD_MOVE_CLASS,
+  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
+  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE,
+  OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE,
   classifyOperationLedgerHoldMove,
+  classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
   isEngagedLedgerQuorumSpreadCureReplace,
   isLedgerQuorumConcentratedPartition,
   orderLedgerQuorumCureMovesFirst,
   resolveEngagedLedgerQuorumSpreadHold,
   resolveOperationLedgerHoldEngagement,
+  resolveOperationLedgerSelfMoveHoldAction,
 };

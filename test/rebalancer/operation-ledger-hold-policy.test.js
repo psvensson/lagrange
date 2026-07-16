@@ -7,10 +7,15 @@ import {
   OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
   OPERATION_LEDGER_HOLD_MOVE_CLASS,
+  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
+  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE,
+  OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE,
   classifyOperationLedgerHoldMove,
+  classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
   orderLedgerQuorumCureMovesFirst,
   resolveOperationLedgerHoldEngagement,
+  resolveOperationLedgerSelfMoveHoldAction,
 } from '../../src/rebalancer/operation-ledger-hold-policy.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 
@@ -145,6 +150,52 @@ test('unknown holds and move classes fail closed to DEFER', (t) => {
       OPERATION_LEDGER_HOLD.SELF_MOVE_SERIALIZATION, 'no_such_class'),
     OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.DEFER,
     'an undeclared combination must never silently bypass a hold');
+  t.end();
+});
+
+test('self-move lifecycle evidence has one fail-closed hold action table', (t) => {
+  t.strictSame(
+    [...OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE],
+    [
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE,
+      ],
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
+          .AUTHORITATIVE_NON_TERMINAL,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+      ],
+      [
+        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
+        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+      ],
+    ],
+    'only authoritative terminal workflow evidence releases serialization',
+  );
+
+  const terminal = {status: 'removed'};
+  const nonTerminal = {status: 'sending'};
+  const isTerminal = (operation) => operation.status === 'removed';
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(terminal, isTerminal),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
+  );
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(nonTerminal, isTerminal),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
+      .AUTHORITATIVE_NON_TERMINAL,
+    'durable age is not an input: every authoritative non-terminal row holds',
+  );
+  t.equal(
+    classifyOperationLedgerSelfMoveLifecycleEvidence(null, isTerminal),
+    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
+  );
+  t.equal(
+    resolveOperationLedgerSelfMoveHoldAction('unknown_evidence'),
+    OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
+    'unknown lifecycle evidence fails closed',
+  );
   t.end();
 });
 

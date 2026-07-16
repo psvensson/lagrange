@@ -1,0 +1,1038 @@
+diff --git a/models/CL-INDEX.md b/models/CL-INDEX.md
+index b9f3bdfff7edf46802e43b41d8e323284d1ba47b..cd6fee1b3d4f298d54eb880bf702c37d3c201d3a 100644
+--- a/models/CL-INDEX.md
++++ b/models/CL-INDEX.md
+@@ -23,6 +23,7 @@ via `npm run model:check` in `test:ci`.
+ | **CL-039 publication write-leadership fail-back** | **`leadership-failback/LeadershipFailback.tla`** | **`EventuallyClosed`** | **`FailBack` — leadership transfers back to a reachable seed when stranded on a restarting replica** |
+ | Ledger self-move re-mint livelock (formation-ledger-self-move-blocks-cluster-ops) | `ledger-selfmove-remint/LedgerSelfMoveRemint.tla` | `EventuallySettled` | `IdempotentReplan` — a leadership flap carries the in-flight spread self-move over (authoritative in-flight recognition, c7a3bf19) instead of re-minting it, so it terminalizes |
+ | Serialized incremental REPLACE spread | `incremental-replace-spread/IncrementalReplaceSpread.tla` | `OpenGapRetainsSerializedProgressOwner`, `SpreadNeverRegresses`, `EventuallyReachesPublishedTarget` | enforce the published target as an eventual destination and current→projected non-regression as the per-operation remove-safety floor, so `1→2→3` can complete without admitting `2→1` |
++| Operation-ledger terminal hold | `operation-ledger-terminal-hold/OperationLedgerTerminalHold.tla` | `SerializationHoldReleaseRequiresAuthoritativeTerminal`, `DependentBatchNeverOverlapsLedgerSurgery`, `EventuallySnapshotClosed` | route durable timeout to the workflow recovery owner while keeping the serialization hold engaged until its canonical authoritative terminal transition; a timeout-only-release mutant violates the hold invariant |
+ 
+ ## Adding a spec for a design-class CL
+ 
+diff --git a/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold.tla b/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold.tla
+new file mode 100644
+index 0000000000000000000000000000000000000000..23a800c9de5970c58729530f001b808d95f731ba
+--- /dev/null
++++ b/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold.tla
+@@ -0,0 +1,225 @@
++---------------- MODULE OperationLedgerTerminalHold ----------------
++(***************************************************************************)
++(* Focused operation-ledger self-move lifecycle -> admission -> snapshot  *)
++(* composition (quest movielens-operation-ledger-terminal-hold).          *)
++(*                                                                         *)
++(* The physical target/source workflow can continue while its self-hosted  *)
++(* durable row is unable to refresh. Crossing the durable step timeout     *)
++(* transfers responsibility to the workflow recovery owner; it is not     *)
++(* terminal evidence. The recovery owner releases serialization only by   *)
++(* publishing the canonical terminal transition.                          *)
++(*                                                                         *)
++(* This is a deliberately narrow cross-layer proof, not exhaustive formal *)
++(* coverage of repository-layer interactions.                             *)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANT TimeoutOnlyReleasesHold
++
++TargetProgress == "target_progress"
++SourceProgress == "source_progress"
++PhysicalDone == "physical_done"
++PhysicalPhases == {TargetProgress, SourceProgress, PhysicalDone}
++
++DurableSending == "durable_sending"
++DurableTerminal == "durable_terminal"
++DurablePhases == {DurableSending, DurableTerminal}
++
++VARIABLES physicalPhase,
++          durablePhase,
++          durableStepTimedOut,
++          recoveryOwnerClaimed,
++          holdEngaged,
++          dependentBatchAdmitted,
++          workflowWritesAvailable,
++          dependentBatchComplete,
++          snapshotClosed
++
++vars == << physicalPhase,
++           durablePhase,
++           durableStepTimedOut,
++           recoveryOwnerClaimed,
++           holdEngaged,
++           dependentBatchAdmitted,
++           workflowWritesAvailable,
++           dependentBatchComplete,
++           snapshotClosed >>
++
++TypeOK ==
++  /\ physicalPhase \in PhysicalPhases
++  /\ durablePhase \in DurablePhases
++  /\ durableStepTimedOut \in BOOLEAN
++  /\ recoveryOwnerClaimed \in BOOLEAN
++  /\ holdEngaged \in BOOLEAN
++  /\ dependentBatchAdmitted \in BOOLEAN
++  /\ workflowWritesAvailable \in BOOLEAN
++  /\ dependentBatchComplete \in BOOLEAN
++  /\ snapshotClosed \in BOOLEAN
++
++Init ==
++  /\ physicalPhase = TargetProgress
++  /\ durablePhase = DurableSending
++  /\ durableStepTimedOut = FALSE
++  /\ recoveryOwnerClaimed = FALSE
++  /\ holdEngaged = TRUE
++  /\ dependentBatchAdmitted = FALSE
++  /\ workflowWritesAvailable = FALSE
++  /\ dependentBatchComplete = FALSE
++  /\ snapshotClosed = FALSE
++
++(* Durable age makes recovery actionable. The mutant incorrectly treats the *)
++(* same fact as permission for admission to release serialization.          *)
++CrossDurableStepTimeout ==
++  /\ ~durableStepTimedOut
++  /\ durableStepTimedOut' = TRUE
++  /\ holdEngaged' =
++       IF TimeoutOnlyReleasesHold THEN FALSE ELSE holdEngaged
++  /\ UNCHANGED << physicalPhase,
++                  durablePhase,
++                  recoveryOwnerClaimed,
++                  dependentBatchAdmitted,
++                  workflowWritesAvailable,
++                  dependentBatchComplete,
++                  snapshotClosed >>
++
++(* Target creation/election continues while the durable ledger row remains *)
++(* stuck at SENDING: owner progress and durable visibility are distinct.    *)
++FinishTargetProgress ==
++  /\ physicalPhase = TargetProgress
++  /\ physicalPhase' = SourceProgress
++  /\ UNCHANGED << durablePhase,
++                  durableStepTimedOut,
++                  recoveryOwnerClaimed,
++                  holdEngaged,
++                  dependentBatchAdmitted,
++                  workflowWritesAvailable,
++                  dependentBatchComplete,
++                  snapshotClosed >>
++
++(* Source removal completes the ledger surgery and restores progress writes, *)
++(* but the authoritative workflow row may still lag until recovery publishes. *)
++FinishSourceProgress ==
++  /\ physicalPhase = SourceProgress
++  /\ physicalPhase' = PhysicalDone
++  /\ workflowWritesAvailable' = TRUE
++  /\ UNCHANGED << durablePhase,
++                  durableStepTimedOut,
++                  recoveryOwnerClaimed,
++                  holdEngaged,
++                  dependentBatchAdmitted,
++                  dependentBatchComplete,
++                  snapshotClosed >>
++
++(* Timeout belongs to the workflow recovery/reaper owner. Claiming recovery *)
++(* does not itself release the hold or assert that physical work has stopped. *)
++RecoveryOwnerClaimsTimedOutRow ==
++  /\ durableStepTimedOut
++  /\ durablePhase # DurableTerminal
++  /\ ~recoveryOwnerClaimed
++  /\ recoveryOwnerClaimed' = TRUE
++  /\ UNCHANGED << physicalPhase,
++                  durablePhase,
++                  durableStepTimedOut,
++                  holdEngaged,
++                  dependentBatchAdmitted,
++                  workflowWritesAvailable,
++                  dependentBatchComplete,
++                  snapshotClosed >>
++
++(* The recovery owner supplies release evidence through its canonical terminal *)
++(* transition after physical progress is reconciled.                         *)
++RecoveryOwnerPublishesTerminal ==
++  /\ recoveryOwnerClaimed
++  /\ physicalPhase = PhysicalDone
++  /\ durablePhase # DurableTerminal
++  /\ durablePhase' = DurableTerminal
++  /\ holdEngaged' = FALSE
++  /\ UNCHANGED << physicalPhase,
++                  durableStepTimedOut,
++                  recoveryOwnerClaimed,
++                  dependentBatchAdmitted,
++                  workflowWritesAvailable,
++                  dependentBatchComplete,
++                  snapshotClosed >>
++
++AdmitDependentBatch ==
++  /\ ~holdEngaged
++  /\ ~dependentBatchAdmitted
++  /\ dependentBatchAdmitted' = TRUE
++  /\ UNCHANGED << physicalPhase,
++                  durablePhase,
++                  durableStepTimedOut,
++                  recoveryOwnerClaimed,
++                  holdEngaged,
++                  workflowWritesAvailable,
++                  dependentBatchComplete,
++                  snapshotClosed >>
++
++PersistDependentWorkflowRows ==
++  /\ dependentBatchAdmitted
++  /\ workflowWritesAvailable
++  /\ ~dependentBatchComplete
++  /\ dependentBatchComplete' = TRUE
++  /\ UNCHANGED << physicalPhase,
++                  durablePhase,
++                  durableStepTimedOut,
++                  recoveryOwnerClaimed,
++                  holdEngaged,
++                  dependentBatchAdmitted,
++                  workflowWritesAvailable,
++                  snapshotClosed >>
++
++PublishClosedSnapshot ==
++  /\ dependentBatchComplete
++  /\ ~snapshotClosed
++  /\ snapshotClosed' = TRUE
++  /\ UNCHANGED << physicalPhase,
++                  durablePhase,
++                  durableStepTimedOut,
++                  recoveryOwnerClaimed,
++                  holdEngaged,
++                  dependentBatchAdmitted,
++                  workflowWritesAvailable,
++                  dependentBatchComplete >>
++
++SettledStutter ==
++  /\ snapshotClosed
++  /\ UNCHANGED vars
++
++Next ==
++  \/ CrossDurableStepTimeout
++  \/ FinishTargetProgress
++  \/ FinishSourceProgress
++  \/ RecoveryOwnerClaimsTimedOutRow
++  \/ RecoveryOwnerPublishesTerminal
++  \/ AdmitDependentBatch
++  \/ PersistDependentWorkflowRows
++  \/ PublishClosedSnapshot
++  \/ SettledStutter
++
++Fairness ==
++  /\ WF_vars(CrossDurableStepTimeout)
++  /\ WF_vars(FinishTargetProgress)
++  /\ WF_vars(FinishSourceProgress)
++  /\ WF_vars(RecoveryOwnerClaimsTimedOutRow)
++  /\ WF_vars(RecoveryOwnerPublishesTerminal)
++  /\ WF_vars(AdmitDependentBatch)
++  /\ WF_vars(PersistDependentWorkflowRows)
++  /\ WF_vars(PublishClosedSnapshot)
++
++Spec == Init /\ [][Next]_vars /\ Fairness
++
++SerializationHoldReleaseRequiresAuthoritativeTerminal ==
++  holdEngaged \/ durablePhase = DurableTerminal
++
++DependentBatchNeverOverlapsLedgerSurgery ==
++  ~dependentBatchAdmitted \/ physicalPhase = PhysicalDone
++
++SnapshotClosureRequiresDurableWorkflowWrites ==
++  ~snapshotClosed \/
++    /\ dependentBatchComplete
++    /\ workflowWritesAvailable
++
++EventuallySnapshotClosed == <>snapshotClosed
++
++=============================================================================
+diff --git a/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold_fixed.cfg b/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold_fixed.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..5c3132a26fea9962fc1de9314de751b1e86e5553
+--- /dev/null
++++ b/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold_fixed.cfg
+@@ -0,0 +1,8 @@
++CONSTANT TimeoutOnlyReleasesHold = FALSE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT SerializationHoldReleaseRequiresAuthoritativeTerminal
++INVARIANT DependentBatchNeverOverlapsLedgerSurgery
++INVARIANT SnapshotClosureRequiresDurableWorkflowWrites
++PROPERTY EventuallySnapshotClosed
+diff --git a/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold_timeout_release_bug.cfg b/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold_timeout_release_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..64be40022665c7d55a472c534ab4547225a1c43b
+--- /dev/null
++++ b/models/operation-ledger-terminal-hold/OperationLedgerTerminalHold_timeout_release_bug.cfg
+@@ -0,0 +1,5 @@
++CONSTANT TimeoutOnlyReleasesHold = TRUE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT SerializationHoldReleaseRequiresAuthoritativeTerminal
+diff --git a/models/operation-ledger-terminal-hold/abstract-protocol.md b/models/operation-ledger-terminal-hold/abstract-protocol.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..0089f49d9050316ced07954ea6cc9abed0567de1
+--- /dev/null
++++ b/models/operation-ledger-terminal-hold/abstract-protocol.md
+@@ -0,0 +1,30 @@
++# Operation-ledger terminal hold — abstract protocol ↔ runtime
++
++Model: `OperationLedgerTerminalHold.tla`.
++Quest: `movielens-operation-ledger-terminal-hold`.
++
++This focused model composes physical ledger self-move progress, lagging durable
++workflow state, step timeout and recovery ownership, serialization-hold release,
++dependent batch admission, workflow-row persistence, and snapshot closure.
++
++| Model | Runtime |
++| --- | --- |
++| `physicalPhase` | target creation/election followed by source removal for a `replica_operations` REPLACE |
++| `durablePhase` | authoritative `replica_operations` workflow row, which can lag while its own raft group is under surgery |
++| `CrossDurableStepTimeout` | `isConcurrentOperationStalePastStepTimeout` / timeout-reaper eligibility |
++| `RecoveryOwnerClaimsTimedOutRow` | level-triggered operation workflow recovery takes responsibility for a stale row |
++| `RecoveryOwnerPublishesTerminal` | the normal workflow owner commits `REMOVED` or `FAILED`; this is the release evidence consumed by admission |
++| `holdEngaged` | locally accounted and observed operation-ledger self-move serialization hold |
++| `AdmitDependentBatch` | subsequent system-partition REPLACEs enter `createOperation` |
++| `workflowWritesAvailable` | `replica_operations` progress UPDATEs can commit after ledger surgery |
++| `PublishClosedSnapshot` | the stable Wave-4 snapshot is queryable after dependent workflows finish |
++
++The fixed configuration proves that hold release requires authoritative terminal
++evidence, dependent admission never overlaps ledger surgery, a closed snapshot
++requires durable dependent workflow writes, and the composed protocol eventually
++closes. The timeout-release mutant reuses durable row age as release permission
++and violates the serialization-hold invariant while physical progress remains
++active.
++
++This is intentionally not a claim that every interaction between repository
++layers is modeled in TLA+ or Alloy.
+diff --git a/scripts/model-tlc.js b/scripts/model-tlc.js
+index 0cfbdf58fc10ecf77f5dee23b2eca8384ee822a6..bba13cd9e3fbc78463d1a00b52d0ffa52d3fcd37 100644
+--- a/scripts/model-tlc.js
++++ b/scripts/model-tlc.js
+@@ -496,6 +496,43 @@ const CONFIGS = [
+     expectedFailurePattern:
+       'Invariant ContinuationCannotAuthorizeRemoval is violated',
+   },
++  {
++    id: 'operation-ledger-terminal-hold-fixed',
++    mode: 'operation-ledger-terminal-hold-fixed',
++    module: path.resolve(
++      'models', 'operation-ledger-terminal-hold',
++      'OperationLedgerTerminalHold.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'operation-ledger-terminal-hold',
++      'OperationLedgerTerminalHold_fixed.cfg',
++    ),
++    expectConverged: true,
++    report: 'operation-ledger-terminal-hold-fixed.model.report.json',
++    scenario: 'movielens-operation-ledger-terminal-hold-model',
++    owner: 'operation_workflow_lifecycle_owner',
++    boundary: 'ledger_self_move_hold_admission_snapshot_composition',
++  },
++  {
++    id: 'operation-ledger-terminal-hold-timeout-release',
++    mode: 'operation-ledger-terminal-hold-timeout-release',
++    module: path.resolve(
++      'models', 'operation-ledger-terminal-hold',
++      'OperationLedgerTerminalHold.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'operation-ledger-terminal-hold',
++      'OperationLedgerTerminalHold_timeout_release_bug.cfg',
++    ),
++    expectConverged: false,
++    report:
++      'operation-ledger-terminal-hold-timeout-release.model.report.json',
++    scenario: 'movielens-operation-ledger-timeout-release-counterexample',
++    owner: 'operation_workflow_lifecycle_owner',
++    boundary: 'durable_timeout_serialization_release_composition',
++    expectedFailurePattern:
++      'Invariant SerializationHoldReleaseRequiresAuthoritativeTerminal is violated',
++  },
+ ];
+ 
+ function download(url, dest) {
+diff --git a/src/rebalancer/operation-ledger-hold-policy.js b/src/rebalancer/operation-ledger-hold-policy.js
+index 77264d64286b3292d103dfc9461c944cf5d287f1..8dc47cea5955e7b3ec82a32161d77deab1885e1f 100644
+--- a/src/rebalancer/operation-ledger-hold-policy.js
++++ b/src/rebalancer/operation-ledger-hold-policy.js
+@@ -52,6 +52,45 @@ const OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME = Object.freeze({
+   DEFER: 'defer',
+ });
+ 
++// The lifecycle evidence that may release a locally or remotely observed
++// SELF_MOVE_SERIALIZATION hold. Workflow age is intentionally absent: timeout
++// makes the operation eligible for the workflow recovery owner, but does not
++// prove that target/source work stopped. The recovery owner releases the hold
++// by committing its normal terminal transition, which is then observed here as
++// AUTHORITATIVE_TERMINAL. Missing/deferred reads fail closed.
++const OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE = Object.freeze({
++  AUTHORITATIVE_TERMINAL: 'authoritative_terminal',
++  AUTHORITATIVE_NON_TERMINAL: 'authoritative_non_terminal',
++  UNRESOLVED: 'unresolved',
++});
++
++const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION = Object.freeze({
++  HOLD: 'hold',
++  RELEASE: 'release',
++});
++
++// Single declared lifecycle relation for the run-20 serialization hold.
++// Admission consumes this table; it does not reinterpret workflow timestamps,
++// retry timers, or reaper candidacy as permission to release.
++const OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE =
++  Object.freeze(
++    new Map([
++      [
++        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
++        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE,
++      ],
++      [
++        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
++          .AUTHORITATIVE_NON_TERMINAL,
++        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
++      ],
++      [
++        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
++        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
++      ],
++    ]),
++  );
++
+ // The move classes of the relation. Classification order is significant and
+ // owned here: a disruptive ledger self-move is never also an emergency ADD
+ // (ADD is not a disruptive type), and everything unclassified is DEPENDENT.
+@@ -194,6 +233,43 @@ function resolveOperationLedgerHoldEngagement(holdKind, moveClass) {
+   );
+ }
+ 
++/**
++ * Classify authoritative workflow-owner evidence for a ledger self-move.
++ * Terminality remains owned by the operation repository/workflow owner and is
++ * supplied as a predicate; this policy owns only the evidence -> hold action
++ * relation. A null operation includes absent, failed, and deferred owner reads.
++ * @param {Object|null} authoritativeOperation
++ * @param {Function} isOperationTerminal
++ * @return {string} OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
++ */
++function classifyOperationLedgerSelfMoveLifecycleEvidence(
++  authoritativeOperation,
++  isOperationTerminal,
++) {
++  if (
++    !authoritativeOperation ||
++    typeof isOperationTerminal !== 'function'
++  ) {
++    return OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED;
++  }
++  return isOperationTerminal(authoritativeOperation) ?
++    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL :
++    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_NON_TERMINAL;
++}
++
++/**
++ * Resolve the single declared lifecycle action. Unknown evidence fails closed.
++ * @param {string} lifecycleEvidence
++ * @return {string} OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION
++ */
++function resolveOperationLedgerSelfMoveHoldAction(lifecycleEvidence) {
++  return (
++    OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE.get(
++      lifecycleEvidence,
++    ) ?? OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD
++  );
++}
++
+ /**
+  * Resolve the quorum-spread hold from actuals, as a policy decision surface:
+  * null when the hold is not engaged; otherwise the evaluation plus the first
+@@ -299,11 +375,16 @@ export {
+   OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS,
+   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
+   OPERATION_LEDGER_HOLD_MOVE_CLASS,
++  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
++  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE,
++  OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE,
+   classifyOperationLedgerHoldMove,
++  classifyOperationLedgerSelfMoveLifecycleEvidence,
+   isDisruptiveOperationLedgerSelfMove,
+   isEngagedLedgerQuorumSpreadCureReplace,
+   isLedgerQuorumConcentratedPartition,
+   orderLedgerQuorumCureMovesFirst,
+   resolveEngagedLedgerQuorumSpreadHold,
+   resolveOperationLedgerHoldEngagement,
++  resolveOperationLedgerSelfMoveHoldAction,
+ };
+diff --git a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+index d9e32d469c44e23c7f1f0922baf959e3c3929bd9..f901be2a248b107a1895517d1f09facf70f48e7b 100644
+--- a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
++++ b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+@@ -3,11 +3,14 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+ import {
+   OPERATION_LEDGER_HOLD,
+   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
++  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
+   classifyOperationLedgerHoldMove,
++  classifyOperationLedgerSelfMoveLifecycleEvidence,
+   isDisruptiveOperationLedgerSelfMove,
+   isLedgerQuorumConcentratedPartition,
+   resolveEngagedLedgerQuorumSpreadHold,
+   resolveOperationLedgerHoldEngagement,
++  resolveOperationLedgerSelfMoveHoldAction,
+ } from './operation-ledger-hold-policy.js';
+ 
+ const {
+@@ -71,12 +74,12 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+   }
+ 
+   /**
+-   * A ledger-interlock participant is an operation that still writes progress
+-   * into the operation ledger: non-terminal AND not already stale past its
+-   * step timeout (the CL-043 exclusion — a wedged phantom is a reaper
+-   * candidate, not a serialization holder, so it must not dam admission).
+-   * When the staleness predicate is unavailable the operation is
+-   * conservatively treated as live.
++   * A non-self-move ledger participant still writes progress while non-terminal
++   * and inside its step timeout. The CL-043 timeout exclusion remains valid for
++   * these dependent rows: it delegates their recovery to the workflow reaper.
++   * A disruptive ledger SELF-MOVE is deliberately handled separately by the
++   * authoritative lifecycle relation; timeout alone cannot release the
++   * stronger self-hosting serialization hold.
+    * @param {Object} operation
+    * @param {number} nowMs
+    * @return {boolean}
+@@ -116,8 +119,9 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+    * planner retries next cycle:
+    * - IDLE_ONLY (the disruptive ledger self-move) admits only when no other
+    *   live operation exists.
+-   * - DEFER waits out a live ledger self-move, then the quorum-spread hold;
+-   *   the staleness exclusion still bounds a wedged self-move.
++   * - DEFER waits out an authoritatively non-terminal ledger self-move, then
++   *   the quorum-spread hold. The workflow reaper releases a wedged self-move
++   *   by applying its canonical terminal transition; raw age cannot release it.
+    * - EXEMPT (emergency quorum-restore ADDs) proceeds without observation.
+    *
+    * Inputs are actuals only: committed replica_operations rows via the
+@@ -156,11 +160,20 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     const currentOperationId = String(
+       context?.move?.operationId || '',
+     ).trim();
+-    const liveOperations = observedOperations.filter(
+-      (operation) =>
+-        operation?.operationId !== currentOperationId &&
+-        this.isLiveOperationLedgerInterlockOperation(operation, nowMs),
+-    );
++    const liveOperations = observedOperations.filter((operation) => {
++      if (operation?.operationId === currentOperationId) {
++        return false;
++      }
++      if (
++        this.isDisruptiveOperationLedgerSelfMove(
++          operation?.type,
++          operation?.partitionId,
++        )
++      ) {
++        return !this.isOperationTerminal(operation);
++      }
++      return this.isLiveOperationLedgerInterlockOperation(operation, nowMs);
++    });
+ 
+     if (isDisruptiveSelfMove) {
+       const conflictingOperation = await this.resolveDisruptiveSelfMoveConflict(
+@@ -197,11 +210,8 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     // Every other operation defers while a live ledger self-move exists. This
+     // direction gates only on OBSERVED rows (absence of actuals never blocks
+     // routine admission).
+-    const liveLedgerSelfMove = liveOperations.find((operation) =>
+-      this.isDisruptiveOperationLedgerSelfMove(
+-        operation?.type,
+-        operation?.partitionId,
+-      ),
++    const liveLedgerSelfMove = await this.resolveHeldLedgerSelfMove(
++      liveOperations,
+     );
+     if (!liveLedgerSelfMove) {
+       // The run-22 release-too-early gap: with no self-move in flight the
+@@ -281,13 +291,41 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     return null;
+   }
+ 
++  /**
++   * Resolve the first ledger self-move whose authoritative lifecycle evidence
++   * still maps to HOLD. Cache ghosts that are authoritatively terminal are
++   * skipped; unreadable and non-terminal rows fail closed.
++   * @param {Array<Object>} liveOperations
++   * @return {Promise<Object|null>}
++   * @private
++   */
++  async resolveHeldLedgerSelfMove(liveOperations) {
++    for (const operation of liveOperations) {
++      if (
++        !this.isDisruptiveOperationLedgerSelfMove(
++          operation?.type,
++          operation?.partitionId,
++        )
++      ) {
++        continue;
++      }
++      const action = await this.resolveAuthoritativeLedgerSelfMoveHoldAction(
++        operation?.operationId,
++      );
++      if (action !== OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE) {
++        return operation;
++      }
++    }
++    return null;
++  }
++
+   /**
+    * A same-ledger-partition self-move blocker is a stale ghost only when a
+    * CACHE-BYPASSING authoritative owner read confirms it terminal. An unreadable
+    * or deferred authoritative visibility keeps it blocking (conservative: while
+    * the ledger is mid-move its reads failing IS the condition being serialized
+-   * against, and the CL-043 staleness bound still releases a truly wedged
+-   * self-move once its row is readable).
++   * against; a truly wedged self-move releases only after the workflow recovery
++   * owner publishes its canonical terminal transition).
+    * @param {Object} operation
+    * @return {Promise<boolean>}
+    * @private
+@@ -297,20 +335,39 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     if (operationId.length === 0) {
+       return false;
+     }
++    return (
++      (await this.resolveAuthoritativeLedgerSelfMoveHoldAction(operationId)) ===
++      OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE
++    );
++  }
++
++  /**
++   * Query the existing cache-bypassing workflow visibility owner, then consume
++   * the policy module's single evidence -> action relation. This mechanism does
++   * not inspect raw timestamps or invent a second recovery/reaper decision.
++   * @param {string|null} operationId
++   * @return {Promise<string>} OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION
++   * @private
++   */
++  async resolveAuthoritativeLedgerSelfMoveHoldAction(operationId) {
++    const normalizedOperationId = String(operationId || '').trim();
++    if (normalizedOperationId.length === 0) {
++      return OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD;
++    }
+     let observation = null;
+     try {
+       observation = await this.queryAuthoritativeOperationVisibilityObservation(
+-        operationId,
++        normalizedOperationId,
+         {requireOwnerRpcRead: true},
+       );
+     } catch {
+-      return false;
++      return OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD;
+     }
+-    const authoritativeOperation = observation?.operation || null;
+-    if (!authoritativeOperation) {
+-      return false;
+-    }
+-    return this.isOperationTerminal(authoritativeOperation);
++    const lifecycleEvidence = classifyOperationLedgerSelfMoveLifecycleEvidence(
++      observation?.operation || null,
++      (operation) => this.isOperationTerminal(operation),
++    );
++    return resolveOperationLedgerSelfMoveHoldAction(lifecycleEvidence);
+   }
+ 
+   /**
+@@ -589,12 +646,11 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+   }
+ 
+   /**
+-   * Resolve whether the held (locally created) ledger self-move has finished,
+-   * via an authoritative point read of its row. Terminal or stale rows clear
+-   * the hold; an unreadable ledger keeps it held — while the ledger is
+-   * mid-move its reads failing IS the condition being serialized against, and
+-   * the staleness bound still releases a wedged self-move once its row is
+-   * readable again.
++   * Resolve whether the held (locally created) ledger self-move has finished
++   * via the authoritative workflow-owner evidence relation. Timeout/reaper
++   * candidacy alone keeps the hold engaged; the reaper releases it by applying
++   * a terminal workflow transition. An unreadable ledger also keeps it held —
++   * while the ledger is mid-move its reads failing IS the serialized condition.
+    * @param {Object} state
+    * @return {Promise<boolean>} True when the hold was cleared.
+    * @private
+@@ -604,20 +660,17 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     if (!operationId) {
+       return true;
+     }
+-    let operation = null;
+-    try {
+-      operation = await this.queryOperationById(operationId);
+-    } catch {
+-      return false;
+-    }
+-    if (!operation) {
++    const action = await this.resolveAuthoritativeLedgerSelfMoveHoldAction(
++      operationId,
++    );
++    // Compare-and-clear: another waiter may have cleared this holder and
++    // installed a newer self-move while the owner-RPC read was in flight. An
++    // old terminal response is evidence only about operationId; it must never
++    // clear the newer holder (the caller will retry against the current ID).
++    if (state.heldSelfMoveOperationId !== operationId) {
+       return false;
+     }
+-    const nowMs = this.timeSource?.now?.() ?? Date.now();
+-    if (
+-      this.isOperationTerminal(operation) ||
+-      !this.isLiveOperationLedgerInterlockOperation(operation, nowMs)
+-    ) {
++    if (action === OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE) {
+       state.heldSelfMoveOperationId = null;
+       state.heldSelfMovePartitionId = null;
+       return true;
+diff --git a/test/convergence/dt6-operation-ledger-terminal-hold.test.js b/test/convergence/dt6-operation-ledger-terminal-hold.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0bfacd75ea65af74337bf16c761e2acc69be052e
+--- /dev/null
++++ b/test/convergence/dt6-operation-ledger-terminal-hold.test.js
+@@ -0,0 +1,267 @@
++import t from 'tap';
++import {VirtualTimeSource} from '../../src/time/time-source.js';
++import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
++import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {OperationType} from '../../src/rebalancer/replica-status.js';
++import {createTimeoutTestCoordinator} from '../rebalancer/timeout-test-coordinator.js';
++
++// Quest movielens-operation-ledger-terminal-hold — deterministic reproduction
++// of the Wave-4 live overlap. The locally created replica_operations REPLACE
++// is still owned by an armed transition-retry lane, but its durable workflow
++// row cannot refresh while that same ledger partition is under surgery. Once
++// the durable SENDING step crosses its timeout, admission must NOT reinterpret
++// age as terminality and release the exclusive run-20 hold. Only authoritative
++// terminal evidence (including a terminal transition applied by the timeout
++// reaper) releases it.
++
++const START_MS = 9_000_000;
++const STEP_TIMEOUT_MS = 10;
++const LEDGER_PARTITION_ID = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
++const NEXT_LEDGER_PARTITION_ID =
++  `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p2`;
++const DEPENDENT_PARTITION_ID =
++  `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`;
++const SOURCE_NODE_ID = 'node-1';
++const TARGET_NODE_ID = 'node-2';
++const HOLD_REASON = 'operation_ledger_self_move_in_flight';
++
++function buildReplace(partitionId) {
++  return {
++    type: OperationType.REPLACE,
++    partitionId,
++    entityType: 'partition',
++    entityId: partitionId,
++    replicaId: `${partitionId}-r4`,
++    sourceNodeId: SOURCE_NODE_ID,
++    nodeId: TARGET_NODE_ID,
++    enforceConcurrentOperationBudget: true,
++  };
++}
++
++function moveDurableRowToSending(row) {
++  const history = JSON.parse(row.steps_history);
++  history.push({step: WORKFLOW_STEP.SENDING, timestamp: START_MS});
++  row.status = 'sending';
++  row.workflow_step = WORKFLOW_STEP.SENDING;
++  row.updated_at = START_MS;
++  row.steps_history = JSON.stringify(history);
++}
++
++async function attemptCreate(coordinator, move) {
++  try {
++    return {
++      admitted: true,
++      operation: await coordinator.createOperation(move),
++      reason: null,
++    };
++  } catch (error) {
++    return {
++      admitted: false,
++      operation: null,
++      reason:
++        error?.admissionResult?.reason ||
++        error?.rebalanceSkipReason ||
++        error?.message ||
++        'unknown',
++    };
++  }
++}
++
++t.test(
++  'durable step timeout cannot release a locally held ledger self-move while ' +
++    'owner progress remains active; authoritative terminal evidence can',
++  async (t) => {
++    const timeSource = new VirtualTimeSource({startMs: START_MS});
++    const fixture = createTimeoutTestCoordinator({
++      timeSource,
++      nodeId: SOURCE_NODE_ID,
++      pendingTimeoutMs: STEP_TIMEOUT_MS,
++    });
++    const {coordinator, trackedOperations} = fixture;
++    try {
++      const selfMove = await coordinator.createOperation(
++        buildReplace(LEDGER_PARTITION_ID),
++      );
++      const durableRow = trackedOperations.get(selfMove.operationId);
++      moveDurableRowToSending(durableRow);
++
++      // Owner-side retry/progress remains explicitly armed even though the
++      // self-hosted durable row is no longer refreshing. This is the live
++      // target/source-progress vs durable-ledger-lag split in one virtual turn.
++      coordinator.workflowOwner.transitionRetryTimerByOperationId.set(
++        selfMove.operationId,
++        'active-owner-progress',
++      );
++      timeSource.advance(STEP_TIMEOUT_MS + 1);
++
++      const staleOperation = await coordinator.queryOperationById(
++        selfMove.operationId,
++      );
++      t.ok(
++        coordinator.workflowOwner.isConcurrentOperationStalePastStepTimeout(
++          staleOperation,
++          timeSource.now(),
++        ),
++        'the durable SENDING row has crossed the workflow timeout',
++      );
++      t.ok(
++        coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
++          selfMove.operationId,
++        ),
++        'the operation owner still has active progress/retry responsibility',
++      );
++
++      let ownerRpcReads = 0;
++      coordinator.queryAuthoritativeOperationVisibilityObservation = async (
++        operationId,
++        options = {},
++      ) => {
++        if (options.requireOwnerRpcRead === true) {
++          ownerRpcReads += 1;
++        }
++        return {
++          operation: await coordinator.queryOperationById(operationId),
++          deferredOutcome: null,
++        };
++      };
++
++      const whileNonTerminal = await attemptCreate(
++        coordinator,
++        buildReplace(DEPENDENT_PARTITION_ID),
++      );
++      t.equal(
++        whileNonTerminal.reason,
++        HOLD_REASON,
++        'a stale-but-authoritatively-nonterminal self-move keeps dependent ' +
++          'operation creation deferred',
++      );
++      t.equal(
++        whileNonTerminal.admitted,
++        false,
++        'the dependent batch cannot overlap the ledger self-move',
++      );
++      t.equal(
++        ownerRpcReads,
++        1,
++        'hold release is decided from the cache-bypassing lifecycle owner read',
++      );
++
++      durableRow.status = 'removed';
++      durableRow.workflow_step = WORKFLOW_STEP.REMOVED;
++      durableRow.updated_at = timeSource.now();
++      durableRow.completed_at = timeSource.now();
++
++      const afterTerminal = await attemptCreate(
++        coordinator,
++        buildReplace(DEPENDENT_PARTITION_ID),
++      );
++      t.ok(
++        afterTerminal.admitted,
++        'authoritative terminal evidence releases the hold and admits the dependent',
++      );
++      t.equal(
++        ownerRpcReads,
++        2,
++        'the terminal release uses the same authoritative lifecycle owner read',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++t.test(
++  'a delayed terminal read for an old holder cannot clear a newer ledger ' +
++    'self-move (compare-and-clear TOCTOU)',
++  async (t) => {
++    const timeSource = new VirtualTimeSource({startMs: START_MS});
++    const fixture = createTimeoutTestCoordinator({
++      timeSource,
++      nodeId: SOURCE_NODE_ID,
++    });
++    const {coordinator, trackedOperations} = fixture;
++    try {
++      const oldSelfMove = await coordinator.createOperation(
++        buildReplace(LEDGER_PARTITION_ID),
++      );
++      const oldRow = trackedOperations.get(oldSelfMove.operationId);
++      oldRow.status = 'removed';
++      oldRow.workflow_step = WORKFLOW_STEP.REMOVED;
++      oldRow.updated_at = timeSource.now();
++      oldRow.completed_at = timeSource.now();
++      const oldTerminalOperation = await coordinator.queryOperationById(
++        oldSelfMove.operationId,
++      );
++
++      // Model the local/cache visibility gap that makes the synchronous holder
++      // accounting necessary: the newer row is not yet visible to the async
++      // incomplete-operation scan.
++      coordinator.queryIncompleteOperations = async () => [];
++
++      let oldReadCount = 0;
++      let releaseDelayedOldRead;
++      let markDelayedReadStarted;
++      const delayedReadStarted = new Promise((resolve) => {
++        markDelayedReadStarted = resolve;
++      });
++      coordinator.queryAuthoritativeOperationVisibilityObservation = async (
++        operationId,
++      ) => {
++        if (operationId === oldSelfMove.operationId) {
++          oldReadCount += 1;
++          if (oldReadCount === 1) {
++            markDelayedReadStarted();
++            return new Promise((resolve) => {
++              releaseDelayedOldRead = () => resolve({
++                operation: oldTerminalOperation,
++                deferredOutcome: null,
++              });
++            });
++          }
++          return {
++            operation: oldTerminalOperation,
++            deferredOutcome: null,
++          };
++        }
++        return {
++          operation: await coordinator.queryOperationById(operationId),
++          deferredOutcome: null,
++        };
++      };
++
++      const delayedDependent = attemptCreate(
++        coordinator,
++        buildReplace(DEPENDENT_PARTITION_ID),
++      );
++      await delayedReadStarted;
++
++      // A second waiter gets the same old terminal truth first, clears the old
++      // holder, and installs a genuinely live new self-move.
++      const newSelfMove = await coordinator.createOperation(
++        buildReplace(NEXT_LEDGER_PARTITION_ID),
++      );
++      const state = coordinator.getOperationLedgerInterlockAdmissionState();
++      t.equal(
++        state.heldSelfMoveOperationId,
++        newSelfMove.operationId,
++        'the newer ledger self-move owns the hold before the delayed response',
++      );
++
++      releaseDelayedOldRead();
++      const delayedOutcome = await delayedDependent;
++      t.equal(
++        delayedOutcome.reason,
++        HOLD_REASON,
++        'the old response cannot admit a dependent across the newer holder',
++      );
++      t.equal(delayedOutcome.admitted, false);
++      t.equal(
++        state.heldSelfMoveOperationId,
++        newSelfMove.operationId,
++        'compare-and-clear retains the holder installed after the read began',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
+diff --git a/test/rebalancer/operation-ledger-hold-policy.test.js b/test/rebalancer/operation-ledger-hold-policy.test.js
+index 069939655e2d4c148176396cc99349ce40c90126..3411662a29d3272f6c7cc79fc24138870b8ad4a2 100644
+--- a/test/rebalancer/operation-ledger-hold-policy.test.js
++++ b/test/rebalancer/operation-ledger-hold-policy.test.js
+@@ -7,10 +7,15 @@ import {
+   OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS,
+   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
+   OPERATION_LEDGER_HOLD_MOVE_CLASS,
++  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
++  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE,
++  OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE,
+   classifyOperationLedgerHoldMove,
++  classifyOperationLedgerSelfMoveLifecycleEvidence,
+   isDisruptiveOperationLedgerSelfMove,
+   orderLedgerQuorumCureMovesFirst,
+   resolveOperationLedgerHoldEngagement,
++  resolveOperationLedgerSelfMoveHoldAction,
+ } from '../../src/rebalancer/operation-ledger-hold-policy.js';
+ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+ 
+@@ -148,6 +153,52 @@ test('unknown holds and move classes fail closed to DEFER', (t) => {
+   t.end();
+ });
+ 
++test('self-move lifecycle evidence has one fail-closed hold action table', (t) => {
++  t.strictSame(
++    [...OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE],
++    [
++      [
++        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
++        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE,
++      ],
++      [
++        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
++          .AUTHORITATIVE_NON_TERMINAL,
++        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
++      ],
++      [
++        OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
++        OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
++      ],
++    ],
++    'only authoritative terminal workflow evidence releases serialization',
++  );
++
++  const terminal = {status: 'removed'};
++  const nonTerminal = {status: 'sending'};
++  const isTerminal = (operation) => operation.status === 'removed';
++  t.equal(
++    classifyOperationLedgerSelfMoveLifecycleEvidence(terminal, isTerminal),
++    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.AUTHORITATIVE_TERMINAL,
++  );
++  t.equal(
++    classifyOperationLedgerSelfMoveLifecycleEvidence(nonTerminal, isTerminal),
++    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE
++      .AUTHORITATIVE_NON_TERMINAL,
++    'durable age is not an input: every authoritative non-terminal row holds',
++  );
++  t.equal(
++    classifyOperationLedgerSelfMoveLifecycleEvidence(null, isTerminal),
++    OPERATION_LEDGER_SELF_MOVE_LIFECYCLE_EVIDENCE.UNRESOLVED,
++  );
++  t.equal(
++    resolveOperationLedgerSelfMoveHoldAction('unknown_evidence'),
++    OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD,
++    'unknown lifecycle evidence fails closed',
++  );
++  t.end();
++});
++
+ test('cure-first ordering owns the cure-move typing', (t) => {
+   const cure = {type: 'replace', partitionId: LEDGER_PARTITION_ID};
+   const implicitCure = {type: 'replace'};

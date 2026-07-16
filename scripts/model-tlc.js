@@ -496,6 +496,43 @@ const CONFIGS = [
     expectedFailurePattern:
       'Invariant ContinuationCannotAuthorizeRemoval is violated',
   },
+  {
+    id: 'operation-ledger-terminal-hold-fixed',
+    mode: 'operation-ledger-terminal-hold-fixed',
+    module: path.resolve(
+      'models', 'operation-ledger-terminal-hold',
+      'OperationLedgerTerminalHold.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'operation-ledger-terminal-hold',
+      'OperationLedgerTerminalHold_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'operation-ledger-terminal-hold-fixed.model.report.json',
+    scenario: 'movielens-operation-ledger-terminal-hold-model',
+    owner: 'operation_workflow_lifecycle_owner',
+    boundary: 'ledger_self_move_hold_admission_snapshot_composition',
+  },
+  {
+    id: 'operation-ledger-terminal-hold-timeout-release',
+    mode: 'operation-ledger-terminal-hold-timeout-release',
+    module: path.resolve(
+      'models', 'operation-ledger-terminal-hold',
+      'OperationLedgerTerminalHold.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'operation-ledger-terminal-hold',
+      'OperationLedgerTerminalHold_timeout_release_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'operation-ledger-terminal-hold-timeout-release.model.report.json',
+    scenario: 'movielens-operation-ledger-timeout-release-counterexample',
+    owner: 'operation_workflow_lifecycle_owner',
+    boundary: 'durable_timeout_serialization_release_composition',
+    expectedFailurePattern:
+      'Invariant SerializationHoldReleaseRequiresAuthoritativeTerminal is violated',
+  },
 ];
 
 function download(url, dest) {

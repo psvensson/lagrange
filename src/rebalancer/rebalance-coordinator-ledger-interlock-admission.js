@@ -3,11 +3,14 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   OPERATION_LEDGER_HOLD,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
+  OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
   classifyOperationLedgerHoldMove,
+  classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
   isLedgerQuorumConcentratedPartition,
   resolveEngagedLedgerQuorumSpreadHold,
   resolveOperationLedgerHoldEngagement,
+  resolveOperationLedgerSelfMoveHoldAction,
 } from './operation-ledger-hold-policy.js';
 
 const {
@@ -71,12 +74,12 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
   }
 
   /**
-   * A ledger-interlock participant is an operation that still writes progress
-   * into the operation ledger: non-terminal AND not already stale past its
-   * step timeout (the CL-043 exclusion — a wedged phantom is a reaper
-   * candidate, not a serialization holder, so it must not dam admission).
-   * When the staleness predicate is unavailable the operation is
-   * conservatively treated as live.
+   * A non-self-move ledger participant still writes progress while non-terminal
+   * and inside its step timeout. The CL-043 timeout exclusion remains valid for
+   * these dependent rows: it delegates their recovery to the workflow reaper.
+   * A disruptive ledger SELF-MOVE is deliberately handled separately by the
+   * authoritative lifecycle relation; timeout alone cannot release the
+   * stronger self-hosting serialization hold.
    * @param {Object} operation
    * @param {number} nowMs
    * @return {boolean}
@@ -116,8 +119,9 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
    * planner retries next cycle:
    * - IDLE_ONLY (the disruptive ledger self-move) admits only when no other
    *   live operation exists.
-   * - DEFER waits out a live ledger self-move, then the quorum-spread hold;
-   *   the staleness exclusion still bounds a wedged self-move.
+   * - DEFER waits out an authoritatively non-terminal ledger self-move, then
+   *   the quorum-spread hold. The workflow reaper releases a wedged self-move
+   *   by applying its canonical terminal transition; raw age cannot release it.
    * - EXEMPT (emergency quorum-restore ADDs) proceeds without observation.
    *
    * Inputs are actuals only: committed replica_operations rows via the
@@ -156,11 +160,20 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     const currentOperationId = String(
       context?.move?.operationId || '',
     ).trim();
-    const liveOperations = observedOperations.filter(
-      (operation) =>
-        operation?.operationId !== currentOperationId &&
-        this.isLiveOperationLedgerInterlockOperation(operation, nowMs),
-    );
+    const liveOperations = observedOperations.filter((operation) => {
+      if (operation?.operationId === currentOperationId) {
+        return false;
+      }
+      if (
+        this.isDisruptiveOperationLedgerSelfMove(
+          operation?.type,
+          operation?.partitionId,
+        )
+      ) {
+        return !this.isOperationTerminal(operation);
+      }
+      return this.isLiveOperationLedgerInterlockOperation(operation, nowMs);
+    });
 
     if (isDisruptiveSelfMove) {
       const conflictingOperation = await this.resolveDisruptiveSelfMoveConflict(
@@ -197,11 +210,8 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     // Every other operation defers while a live ledger self-move exists. This
     // direction gates only on OBSERVED rows (absence of actuals never blocks
     // routine admission).
-    const liveLedgerSelfMove = liveOperations.find((operation) =>
-      this.isDisruptiveOperationLedgerSelfMove(
-        operation?.type,
-        operation?.partitionId,
-      ),
+    const liveLedgerSelfMove = await this.resolveHeldLedgerSelfMove(
+      liveOperations,
     );
     if (!liveLedgerSelfMove) {
       // The run-22 release-too-early gap: with no self-move in flight the
@@ -282,12 +292,40 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
   }
 
   /**
+   * Resolve the first ledger self-move whose authoritative lifecycle evidence
+   * still maps to HOLD. Cache ghosts that are authoritatively terminal are
+   * skipped; unreadable and non-terminal rows fail closed.
+   * @param {Array<Object>} liveOperations
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveHeldLedgerSelfMove(liveOperations) {
+    for (const operation of liveOperations) {
+      if (
+        !this.isDisruptiveOperationLedgerSelfMove(
+          operation?.type,
+          operation?.partitionId,
+        )
+      ) {
+        continue;
+      }
+      const action = await this.resolveAuthoritativeLedgerSelfMoveHoldAction(
+        operation?.operationId,
+      );
+      if (action !== OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE) {
+        return operation;
+      }
+    }
+    return null;
+  }
+
+  /**
    * A same-ledger-partition self-move blocker is a stale ghost only when a
    * CACHE-BYPASSING authoritative owner read confirms it terminal. An unreadable
    * or deferred authoritative visibility keeps it blocking (conservative: while
    * the ledger is mid-move its reads failing IS the condition being serialized
-   * against, and the CL-043 staleness bound still releases a truly wedged
-   * self-move once its row is readable).
+   * against; a truly wedged self-move releases only after the workflow recovery
+   * owner publishes its canonical terminal transition).
    * @param {Object} operation
    * @return {Promise<boolean>}
    * @private
@@ -297,20 +335,39 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     if (operationId.length === 0) {
       return false;
     }
+    return (
+      (await this.resolveAuthoritativeLedgerSelfMoveHoldAction(operationId)) ===
+      OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE
+    );
+  }
+
+  /**
+   * Query the existing cache-bypassing workflow visibility owner, then consume
+   * the policy module's single evidence -> action relation. This mechanism does
+   * not inspect raw timestamps or invent a second recovery/reaper decision.
+   * @param {string|null} operationId
+   * @return {Promise<string>} OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION
+   * @private
+   */
+  async resolveAuthoritativeLedgerSelfMoveHoldAction(operationId) {
+    const normalizedOperationId = String(operationId || '').trim();
+    if (normalizedOperationId.length === 0) {
+      return OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD;
+    }
     let observation = null;
     try {
       observation = await this.queryAuthoritativeOperationVisibilityObservation(
-        operationId,
+        normalizedOperationId,
         {requireOwnerRpcRead: true},
       );
     } catch {
-      return false;
+      return OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.HOLD;
     }
-    const authoritativeOperation = observation?.operation || null;
-    if (!authoritativeOperation) {
-      return false;
-    }
-    return this.isOperationTerminal(authoritativeOperation);
+    const lifecycleEvidence = classifyOperationLedgerSelfMoveLifecycleEvidence(
+      observation?.operation || null,
+      (operation) => this.isOperationTerminal(operation),
+    );
+    return resolveOperationLedgerSelfMoveHoldAction(lifecycleEvidence);
   }
 
   /**
@@ -589,12 +646,11 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
   }
 
   /**
-   * Resolve whether the held (locally created) ledger self-move has finished,
-   * via an authoritative point read of its row. Terminal or stale rows clear
-   * the hold; an unreadable ledger keeps it held — while the ledger is
-   * mid-move its reads failing IS the condition being serialized against, and
-   * the staleness bound still releases a wedged self-move once its row is
-   * readable again.
+   * Resolve whether the held (locally created) ledger self-move has finished
+   * via the authoritative workflow-owner evidence relation. Timeout/reaper
+   * candidacy alone keeps the hold engaged; the reaper releases it by applying
+   * a terminal workflow transition. An unreadable ledger also keeps it held —
+   * while the ledger is mid-move its reads failing IS the serialized condition.
    * @param {Object} state
    * @return {Promise<boolean>} True when the hold was cleared.
    * @private
@@ -604,20 +660,17 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     if (!operationId) {
       return true;
     }
-    let operation = null;
-    try {
-      operation = await this.queryOperationById(operationId);
-    } catch {
+    const action = await this.resolveAuthoritativeLedgerSelfMoveHoldAction(
+      operationId,
+    );
+    // Compare-and-clear: another waiter may have cleared this holder and
+    // installed a newer self-move while the owner-RPC read was in flight. An
+    // old terminal response is evidence only about operationId; it must never
+    // clear the newer holder (the caller will retry against the current ID).
+    if (state.heldSelfMoveOperationId !== operationId) {
       return false;
     }
-    if (!operation) {
-      return false;
-    }
-    const nowMs = this.timeSource?.now?.() ?? Date.now();
-    if (
-      this.isOperationTerminal(operation) ||
-      !this.isLiveOperationLedgerInterlockOperation(operation, nowMs)
-    ) {
+    if (action === OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION.RELEASE) {
       state.heldSelfMoveOperationId = null;
       state.heldSelfMovePartitionId = null;
       return true;
