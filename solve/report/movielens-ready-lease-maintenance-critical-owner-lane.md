@@ -19,16 +19,16 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: first blocker observed: unknown
-- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json
-- Selected theory: theory-20260716-comparison-emits-sealed-live-report
-- Next move: continue supervised step for movielens-ready-lease-maintenance-critical-owner-lane-main
-- No longer current: Do not change the sealed Quest scenario, manually relabel the comparison report, or run run-affinity-demo.js separately; repair the production comparison entrypoint's success/failure reporting handoff.; The single changed production run will now produce the sealed Lagrange report and final comparison report; do not relabel reports, edit the Quest probe, or execute a second Lagrange run.
+- Movement: unknown: unknown -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json
+- Selected theory: theory-20260716-comparison-emits-sealed-live-report (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for movielens-ready-lease-maintenance-critical-owner-lane-main
+- No longer current: unknown
 
 ## Continuation
-- Status: allowed
-- Next action: continue supervised step for movielens-ready-lease-maintenance-critical-owner-lane-main
-- Blocker: none
+- Status: blocked-theory
+- Next action: record or select a fresh frontier theory for movielens-ready-lease-maintenance-critical-owner-lane-main
+- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 11
@@ -61,10 +61,13 @@
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: Independent verification APPROVED exact attempt 2. Artifact/base/current scoped diff matched; red-on-revert failed solely on the shortened sender lease, exact focused suite passed 40 assertions, six adjacent suites passed 401 assertions, and ESLint, diff, size, runtime grammar, state-machine pressure, and full contract/model checks passed. READY lease ownership, stale ordering, READY-from-CONNECTED, non-READY clearing, missing-row bootstrap, critical maintenance enqueue-before-ACK, and sender/owner configuration equivalence were reviewed with no blocking findings. [subagent:verify_wave4_owner_lease_attempt2]
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: The production command npm run demo:movielens executes run-comparison.js, which imports runAffinityDemo as a library. The Lagrange live report is currently emitted only by run-affinity-demo.js's CLI guard, so the changed failure produced a fresh movielens-three-way-affinity-demo-live report but no fresh movielens-lagrange-service-affinity-live report watched by the sealed Quest probe. The last watched report remains 2026-07-15T23:55:31.481Z. One live execution must emit both the sealed Lagrange phase report and the final three-way comparison report; manual report conversion or a second unchanged live run is forbidden. (rules out: Do not change the sealed Quest scenario, manually relabel the comparison report, or run run-affinity-demo.js separately; repair the production comparison entrypoint's success/failure reporting handoff.) [examples/service-data-affinity/run-comparison.js]
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: The production runComparison entrypoint test was red on current HEAD because it supplied no phaseEvidence to runAffinityDemo and never invoked writeAffinityDemoLiveReport on success or three-way validation failure. After the change, the exact entrypoint emits one sealed live report only after successful three-way validation, emits one failed report with the same accumulated evidence on validation failure, and emits an honest not-observed failure report when PostgreSQL fails before Lagrange starts. The focused suite passes 35 assertions and five adjacent MovieLens suites pass 337 assertions; ESLint, diff, size, and scoped complexity/cognitive ratchets pass. (rules out: The single changed production run will now produce the sealed Lagrange report and final comparison report; do not relabel reports, edit the Quest probe, or execute a second Lagrange run.) [test/runtime/movielens-live-report-partial-evidence.test.js]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: Independent verification APPROVED exact attempt 3. Artifact/base/current scoped diff matched and reverse application was clean; focused report suite passed 35 assertions, five MovieLens suites passed 344 assertions, and ESLint, size, complexity, cognitive, and diff checks passed. Review confirmed one demo execution, one shared phaseEvidence object, success only after ranking validation, honest download/PostgreSQL/Lagrange/validation failure reporting, awaited non-swallowed writer calls, unchanged scenario IDs/Quest probe, real t.mockImport bindings, and red-on-revert for the missing production report/evidence calls. [subagent:verify_wave4_report_attempt3]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json]
 
 ## Theories
 - **theory-20260716-publication-owner-rebases-ready-lease** [supported] frontier, frontier movielens-ready-lease-maintenance-critical-owner-lane-main, layer ownership, mechanism The canonical node-state publication owner advances last_heartbeat to owner receive time but preserves a still-future sender-stamped expiry, so delivery and queue latency shorten the durable ready lease before commit and CDC visibility., owner replica-dispatch-node-state-publication-owner, boundary heartbeat sender to canonical nodes-row write owner, modelGate npm run model:contracts
-- **theory-20260716-comparison-emits-sealed-live-report** [supported] frontier, frontier movielens-ready-lease-maintenance-critical-owner-lane-main, layer observation, mechanism The production comparison entrypoint invokes the Lagrange demo as a library, bypassing its CLI-only live-report writer, so the single changed run cannot update the sealed movielens-lagrange-service-affinity-live probe even though it emits the three-way report., owner movielens-comparison-entrypoint, boundary Lagrange live phase result to sealed scenario report and final comparison report, modelGate npm run model:contracts
+- **theory-20260716-comparison-emits-sealed-live-report** [falsified] frontier, frontier movielens-ready-lease-maintenance-critical-owner-lane-main, layer observation, mechanism The production comparison entrypoint invokes the Lagrange demo as a library, bypassing its CLI-only live-report writer, so the single changed run cannot update the sealed movielens-lagrange-service-affinity-live probe even though it emits the three-way report., owner movielens-comparison-entrypoint, boundary Lagrange live phase result to sealed scenario report and final comparison report, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: theory-20260716-comparison-emits-sealed-live-report
@@ -72,6 +75,7 @@
 ## Theory Results
 - **theory-20260716-publication-owner-rebases-ready-lease**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 - **theory-20260716-comparison-emits-sealed-live-report**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
+- **theory-20260716-comparison-emits-sealed-live-report**: falsified (scenario=failed, theory=falsified, movement=unknown) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
