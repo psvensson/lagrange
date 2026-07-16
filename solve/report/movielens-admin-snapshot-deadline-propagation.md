@@ -19,8 +19,8 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json
 - Selected theory: theory-20260716-admin-client-propagates-query-deadline (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-admin-snapshot-deadline-propagation-main
 
@@ -59,6 +59,8 @@
 - **movielens-admin-snapshot-deadline-propagation-main**: Independent exact-attempt verification APPROVED. Artifact identity and the canonical full-index delta from base ff58ef22 match exactly. Isolated base failed only the new on-wire deadline assertion (undefined versus 20); exact patch passed 79/79. Focused runtime passed 167/167, server consumers 181/181, all MovieLens runtime tests 345/345, static/grammar/pressure/complexity/file-size checks passed, and the complete contract/model stack including 13 TLC outcomes passed. The existing default remains 30000ms and no deadline, admission, stale-evidence, logging, join, or snapshot-path policy was weakened. [subagent:verify_wave4_admin_snapshot_deadline_attempt1]
 - **movielens-admin-snapshot-deadline-propagation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
 - **movielens-admin-snapshot-deadline-propagation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
+- **movielens-admin-snapshot-deadline-propagation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
+- **movielens-admin-snapshot-deadline-propagation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
 
 ## Theories
 - **theory-20260716-admin-client-propagates-query-deadline** [falsified] frontier, frontier movielens-admin-snapshot-deadline-propagation-main, layer ownership, mechanism admin_client_query_deadline_omission, owner examples_admin_ws_client, boundary admin_query_deadline_handoff, modelGate npm run model:contracts
@@ -69,6 +71,8 @@
 ## Theory Results
 - **theory-20260716-admin-client-propagates-query-deadline**: supported (scenario=failed, theory=supported, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
 - **theory-20260716-admin-client-propagates-query-deadline**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
+- **theory-20260716-admin-client-propagates-query-deadline**: supported (scenario=failed, theory=supported, movement=narrowed) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
+- **theory-20260716-admin-client-propagates-query-deadline**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
