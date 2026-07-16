@@ -15,6 +15,9 @@ import {
   PROJECTION_READINESS_INPUT_CLASS,
   PROJECTION_READINESS_REASON,
 } from './projection-readiness-constants.js';
+import {
+  hasPriorityRecoverySpreadGap,
+} from './priority-recovery-planning-intent.js';
 
 const PROJECTION_READINESS_EMPTY = Object.freeze({
   LIST: Object.freeze([]),
@@ -335,6 +338,21 @@ function hasProjectionReadinessPriorityRecoveryEvidence(
   );
 }
 
+function resolveProjectionReadinessDurablePrioritySpreadPending(
+  priorityRecovery = null,
+) {
+  const durablePriorityPartitionSummary =
+    priorityRecovery?.publicationRecoveryGate
+      ?.durablePriorityPartitionSummary;
+  if (
+    !durablePriorityPartitionSummary ||
+    typeof durablePriorityPartitionSummary !== 'object'
+  ) {
+    return false;
+  }
+  return hasPriorityRecoverySpreadGap(durablePriorityPartitionSummary);
+}
+
 function resolveProjectionReadinessRevisionEvidence(
   source,
   publicationOwnerStream,
@@ -483,6 +501,8 @@ function buildProjectionReadinessEvidence(source = {}) {
     priorityRecoveryActive:
       priorityRecovery?.active === true &&
       hasProjectionReadinessPriorityRecoveryEvidence(priorityRecovery),
+    durablePrioritySpreadPending:
+      resolveProjectionReadinessDurablePrioritySpreadPending(priorityRecovery),
     priorityRecoveryReasonCodes: normalizeProjectionReadinessReasonCodes(
       priorityRecovery?.reasonCodes,
     ),

@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 3
+**Attempts:** 5
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -21,7 +21,7 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: unknown
 - Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json
-- Selected theory: theory-20260716-canonical-projection-readiness-marks-priority-recovery
+- Selected theory: theory-20260716-readiness-owner-preserves-durable-priority-summary
 - Next move: continue supervised step for movielens-formation-alive-peer-keepalive-liveness-main
 
 ## Continuation
@@ -30,19 +30,23 @@
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 6
-- Change bytes: 13485
-- Owner areas: src/constants, src/transport, test/transport
+- Changed files: 11
+- Change bytes: 26281
+- Owner areas: src/constants, src/control-plane, src/transport, test/control-plane, test/transport
 - Categories: runtime, test
-- Action: land or separate 3 owner areas: src/constants, src/transport, test/transport
+- Action: split by owner area before the next attempt (11 files)
+- Action: land or separate 5 owner areas: src/constants, src/control-plane, src/transport, test/control-plane, test/transport
 - Split plan:
+  - src/control-plane: 4 file(s)
   - src/transport: 3 file(s)
   - test/transport: 2 file(s)
   - src/constants: 1 file(s)
+  - test/control-plane: 1 file(s)
 - Signal: broad-source-scope severity=medium
+- Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **movielens-formation-alive-peer-keepalive-liveness-main** [open] rung 3, attempts 3, metric 1 -> 1
+- **movielens-formation-alive-peer-keepalive-liveness-main** [open] rung 3, attempts 5, metric 1 -> 1
 
 ## Findings
 - **movielens-formation-alive-peer-keepalive-liveness-main**: inherited from movielens-pre-schema-quiescence-live: inherited from movielens-ratings-scoped-split-policy-live: At checkpoint 4bd85509 the five-node membership-active barrier returned, but the seed log stopped at 22:11:29.475Z while priority-recovery replacement planning was still active. The sole ratings CREATE request began at 22:11:35.775Z, left no admin/schema/ratings record in any node log, and timed out after 45 seconds; peer logs concurrently recorded control-plane pressure and internal query timeouts. waitForActiveNodes therefore proves membership cardinality, not a safe DDL/load-admission boundary. The existing production preload admission owner must establish quiescence before policy-bearing ratings CREATE, whose typed stable confirmation then gates load; do not add a second retry owner or rerun unchanged. (rules out: Treating membership-active cardinality as control-plane quiescence; merely widening the admin timeout; adding a local CREATE retry loop.) [data/examples/service-data-affinity-demo-archive/wave4-live-create-admin-timeout-2026-07-15T22-12-20-802Z.tar.gz]
@@ -59,18 +63,22 @@
 - **movielens-formation-alive-peer-keepalive-liveness-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json]
 - **movielens-formation-alive-peer-keepalive-liveness-main**: After checkpoint 48257c25, one authorized changed production npm run demo:movielens run passed the PostgreSQL baseline and five-node formation. The prior remove-safety uncontactable-peer symptom did not surface in the runner, but schema admission timed out on a distinct control_plane_pressure owner symptom: an admin snapshot request itself timed out. Report sha256 is 9cad6f502f0c50e330c689a0ca183b9ef3421ac09ee5c7aa69476f8cca0baa9f; immutable 180 MB node-state archive sha256 is 9b7d05b90a2ed53763f0e26c8cbb54eed026061328456cc6c34d862f6ce837e0. Ports/processes were clean after teardown and the only container remained the pre-existing Forgejo runner. This forbids an unchanged rerun and requires deterministic archive analysis. [data/examples/service-data-affinity-demo-archive/wave4-live-ping-timeout-owner-2026-07-16T01-02-20-938Z.tar.gz]
 - **movielens-formation-alive-peer-keepalive-liveness-main**: Immutable live archive pins a false-open background mutation boundary. Publication owner node 4 reported prioritySpreadPending=false and steady_published at 01:01:43.445Z and 01:01:52.656Z, so ordinary indices-p1 began rebalancing at 01:01:52.066Z and package_registry_overrides-p1 at 01:01:52.832Z. Yet priority replace-op-8e51fddcd520cd5ac2cbbee85d7336c7 for sql_transaction_participants-p1 was still nonterminal: REMOVE dispatch began at 01:01:47.253Z, drain settled at 01:01:52.739Z, and completion was not observed until 01:01:58.033Z/01:02:01.422Z. The publication gate deliberately exposes strict durablePriorityPartitionSummary beside an optimistic closure summary, but projection readiness only propagates optimistic gate active; background published-convergence therefore cannot distinguish in-flight recovery optimism from durable spread. Broad planner fan-out then coincided with the terminal admin snapshot request hanging until schema-admission timeout. [data/examples/service-data-affinity-demo-archive/wave4-live-ping-timeout-owner-2026-07-16T01-02-20-938Z.tar.gz]
+- **movielens-formation-alive-peer-keepalive-liveness-main**: Independent verifier REJECTED exact attempt 4: the regression bypasses ControlPlaneReadinessService.buildPriorityControlPlaneRecoveryProjection, whose production owner path replaces the publication gate's strict unsatisfied durablePriorityPartitionSummary with the optimistic satisfied summary before projection readiness consumes it; live durableSpreadPending can therefore remain false. [subagent:verify_durable_spread_attempt4]
 
 ## Theories
 - **theory-20260716-projection-readiness-discards-the-publication-gate** [active] system, mechanism projection readiness discards the publication gate's durable priority summary and exports only optimistic priorityRecovery.active, owner projection_readiness_owner, modelGate npm run model:contracts
 - **theory-20260716-ping-timeout-classifies-historical-fresh-inbound** [falsified] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism ping timeout classifies historical fresh inbound without revalidating that the connection which initiated the ping remains the current connected socket, so remove-safety can accept a peer disconnected during the wait, modelGate npm run model:contracts
-- **theory-20260716-canonical-projection-readiness-marks-priority-recovery** [active] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism canonical projection readiness marks priority recovery inactive from the optimistic closure gate even when its durablePriorityPartitionSummary still has a spread gap, so stable background mutation opens early, owner projection_readiness_owner, boundary stable_background_mutation_admission, modelGate npm run model:contracts
+- **theory-20260716-canonical-projection-readiness-marks-priority-recovery** [supported] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism canonical projection readiness marks priority recovery inactive from the optimistic closure gate even when its durablePriorityPartitionSummary still has a spread gap, so stable background mutation opens early, owner projection_readiness_owner, boundary stable_background_mutation_admission, modelGate npm run model:contracts
+- **theory-20260716-readiness-owner-preserves-durable-priority-summary** [supported] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism buildPriorityControlPlaneRecoveryProjection recomposes the strict durable publication summary from optimistic closure evidence before canonical projection readiness consumes it, owner control_plane_readiness_service, boundary stable_background_mutation_admission, modelGate npm run model:contracts
 
 ## Selected Theories
-- **movielens-formation-alive-peer-keepalive-liveness-main**: theory-20260716-canonical-projection-readiness-marks-priority-recovery
+- **movielens-formation-alive-peer-keepalive-liveness-main**: theory-20260716-readiness-owner-preserves-durable-priority-summary
 
 ## Theory Results
 - **theory-20260716-ping-timeout-classifies-historical-fresh-inbound**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 - **theory-20260716-ping-timeout-classifies-historical-fresh-inbound**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json]
+- **theory-20260716-canonical-projection-readiness-marks-priority-recovery**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
+- **theory-20260716-readiness-owner-preserves-durable-priority-summary**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -78,3 +86,5 @@
 | 2026-07-16T00:12:44.023Z | movielens-formation-alive-peer-keepalive-liveness-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/movielens-formation-alive-peer-keepalive-liveness/attempt-1.diff |
 | 2026-07-16T00:39:41.804Z | movielens-formation-alive-peer-keepalive-liveness-main | local-fix | 1 -> 1 | flat | no_previous |  | diff:solve/changes/movielens-formation-alive-peer-keepalive-liveness/attempt-2.diff |
 | 2026-07-16T00:49:08.860Z | movielens-formation-alive-peer-keepalive-liveness-main | widen-scope | 1 -> 1 | flat | no_previous | theory-20260716-ping-timeout-classifies-historical-fresh-inbound | diff:solve/changes/movielens-formation-alive-peer-keepalive-liveness/attempt-3.diff |
+| 2026-07-16T01:20:47.822Z | movielens-formation-alive-peer-keepalive-liveness-main | model | 1 -> 1 | flat | same | theory-20260716-canonical-projection-readiness-marks-priority-recovery | diff:solve/changes/movielens-formation-alive-peer-keepalive-liveness/attempt-4.diff |
+| 2026-07-16T01:36:47.009Z | movielens-formation-alive-peer-keepalive-liveness-main | model | 1 -> 1 | flat | same | theory-20260716-readiness-owner-preserves-durable-priority-summary | diff:solve/changes/movielens-formation-alive-peer-keepalive-liveness/attempt-5.diff |

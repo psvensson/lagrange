@@ -54,6 +54,13 @@ import {normalizeDistinctStringArray} from
   './publication-recovery-evidence-values.js';
 
 function resolveCanonicalPriorityPartitionSummary(context) {
+  if (
+    context.rawPublicationConvergenceGate
+      ?.durablePriorityPartitionSummary
+  ) {
+    return context.rawPublicationConvergenceGate
+      .durablePriorityPartitionSummary;
+  }
   if (context.rawPublicationConvergenceGate?.priorityPartitionSummary) {
     return context.rawPublicationConvergenceGate.priorityPartitionSummary;
   }
@@ -479,6 +486,7 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       priorityRecoveryObservation?.priorityRecoveryReasonCodes ??
       PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
     priorityPartitionSummary:
+      rawPublicationConvergenceGate?.durablePriorityPartitionSummary ??
       rawPublicationConvergenceGate?.priorityPartitionSummary ??
       publicationConvergence?.priorityPartitionSummary ??
       priorityRecoveryObservation?.priorityPartitionSummary ??

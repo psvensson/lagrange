@@ -69,6 +69,10 @@ const PUBLISHED_CONVERGENCE_DECISION_RULES = Object.freeze([
     matches: (evidence) => evidence.priorityRecoveryActive === true,
   }),
   Object.freeze({
+    pending: true,
+    matches: (evidence) => evidence.durablePrioritySpreadPending === true,
+  }),
+  Object.freeze({
     pending: false,
     matches: () => true,
   }),
@@ -173,6 +177,8 @@ function normalizePublishedConvergenceEvidence(readiness = null) {
         publication.ready :
         serveReady,
     priorityRecoveryActive: priorityRecovery?.active === true,
+    durablePrioritySpreadPending:
+      priorityRecovery?.durableSpreadPending === true,
   });
 }
 

@@ -37,6 +37,7 @@ function buildProjectionReadinessState(source = {}) {
     }),
     priorityRecovery: Object.freeze({
       active: evidence.priorityRecoveryActive,
+      durableSpreadPending: evidence.durablePrioritySpreadPending,
       reasonCodes: evidence.priorityRecoveryReasonCodes,
       outcome: evidence.priorityRecovery,
     }),
@@ -95,6 +96,8 @@ function summarizeProjectionReadinessContractForHistory(contract) {
     }),
     priorityRecovery: Object.freeze({
       active: contract.priorityRecovery?.active === true,
+      durableSpreadPending:
+        contract.priorityRecovery?.durableSpreadPending === true,
       reasonCodes: normalizeSummaryReasonCodes(
         contract.priorityRecovery?.reasonCodes,
       ),
