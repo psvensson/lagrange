@@ -154,6 +154,15 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
           success: true,
           tableName,
           rows,
+          rowSetComplete: true,
+          authoritativeObservation: {
+            scope: 'complete_table',
+            tableName,
+            observedAtMs: Date.now(),
+            causeId: readOptions?.sessionId ||
+              `test-authoritative-read:${tableName}`,
+            rowSetComplete: true,
+          },
         };
       },
       async reconcileAuthoritativeCacheRows(
@@ -199,6 +208,8 @@ export function registerAdminWebSocketApiLoadBenchmarkTests({
         return {
           success: true,
           mutationCount,
+          authoritativeObservedAtMs:
+            options?.authoritativeObservation?.observedAtMs || null,
         };
       },
     };
