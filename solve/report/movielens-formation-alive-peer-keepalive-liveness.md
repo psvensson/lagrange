@@ -19,8 +19,8 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: first blocker observed: unknown
-- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T00-23-40-324Z.report.json
+- Movement: same blocker remains: unknown
+- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json
 - Selected theory: theory-20260716-ping-timeout-classifies-historical-fresh-inbound (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-formation-alive-peer-keepalive-liveness-main
 
@@ -56,6 +56,9 @@
 - **movielens-formation-alive-peer-keepalive-liveness-main**: On checkpoint 2bb8b458/HEAD, the sealed keepalive-teardown symptom does not reproduce: the live archive contains no keepalive-timeout sever for the seed peer before teardown. The overall milestone still fails on a distinct contradictory liveness consumer: replace-op-691efb46c505c2053b80785456cab438 reaches ACTIVE after target replica replace-replica-4d14ce36c1987fea240703b442fe5727 becomes voter-ready/active, but replace-removal safety repeatedly reports source seed 3df85469-970f-4afc-b38f-634ed9f6d388 uncontactable at 00:22:24.579Z and later. At the same boundary, node 4 MessageRouter connection 64f9122c-b6ed-4e59-a95c-3f8470366503 records fresh parsed inbound from that same seed (lastInboundAgoMs 1812 at 00:22:24.064Z, 2310 at 00:22:24.562Z, then repeatedly through teardown). The operation ledger is durably ACTIVE on four replica copies and the bounded run times out with one in-flight operation. Thus the original fix is effective, while the same owner-boundary contract must also govern remove-safety ping timeout classification.
 - **movielens-formation-alive-peer-keepalive-liveness-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 - **movielens-formation-alive-peer-keepalive-liveness-main**: Independent verifier rejected exact attempt 2: a ping started on a connected peer with fresh inbound can resolve true after that same connection becomes DISCONNECTED because timeout classification does not revalidate the captured current connection. Attempt 3 must bind fresh evidence to the exact still-current connected socket. [subagent:verify_ping_liveness_attempt2]
+- **movielens-formation-alive-peer-keepalive-liveness-main**: Fresh independent verifier APPROVED exact attempt 3 sha256:7fb6560e48391421b058091d6023c7462adeb679d16a2554d2047dde410e17ac on pinned base 0d3920e118714656dd60eb9c5e9adb12ef623dc0. The canonical five-path full-index artifact is byte-identical and validly supersedes rejected attempt 2. Pinned-base fresh-inbound regression is right-reason red; current focused 26/26, full MessageRouter 585/585, and remove-safety 225/225 pass. Disconnect, connection replacement, WebSocket replacement, stale/absent/window-zero/disconnected-start attacks remain false, exact PONG remains true, immutable live evidence binds the owner, and lint/scoped/static/model checks pass. [subagent:verify_ping_liveness_attempt3]
+- **movielens-formation-alive-peer-keepalive-liveness-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json]
+- **movielens-formation-alive-peer-keepalive-liveness-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json]
 
 ## Theories
 - **theory-20260716-ping-timeout-classifies-historical-fresh-inbound** [falsified] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism ping timeout classifies historical fresh inbound without revalidating that the connection which initiated the ping remains the current connected socket, so remove-safety can accept a peer disconnected during the wait, modelGate npm run model:contracts
@@ -65,6 +68,7 @@
 
 ## Theory Results
 - **theory-20260716-ping-timeout-classifies-historical-fresh-inbound**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
+- **theory-20260716-ping-timeout-classifies-historical-fresh-inbound**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
