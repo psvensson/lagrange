@@ -1,4 +1,7 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {
+  buildRecentPeerLivenessEvidence,
+} from './message-router-peer-liveness.js';
 
 const {
   CONNECTION_CLOSE_DISPOSITION,
@@ -14,23 +17,6 @@ const {
   WebSocket,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
-
-function buildRecentPeerLivenessEvidence(
-  lastInboundAt,
-  livenessWindowMs,
-  nowMs = Date.now(),
-) {
-  const lastInboundAgoMs = nowMs - lastInboundAt;
-  return {
-    lastInboundAgoMs,
-    recent:
-      Number.isFinite(livenessWindowMs) &&
-      livenessWindowMs > TRANSPORT_NUM.ZERO &&
-      Number.isFinite(lastInboundAt) &&
-      lastInboundAt > TRANSPORT_NUM.ZERO &&
-      lastInboundAgoMs < livenessWindowMs,
-  };
-}
 
 /**
  * Connection-close handling and reconnect scheduling for the message router:

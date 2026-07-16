@@ -8,12 +8,12 @@ import {
   hasSelfConnection,
   isRegistered,
   getRegisteredAddresses,
-  pingNode,
   resolveRecoverableDeliveryError,
   sendMessage,
   sendRaw,
   tryDeliverRaftDirect,
 } from './message-router-delivery-behaviors.js';
+import {pingNode} from './message-router-peer-liveness.js';
 import {
   armReconnectAfterConnectFailure,
   buildColdReconnectBudgetFailure,

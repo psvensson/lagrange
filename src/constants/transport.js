@@ -311,6 +311,8 @@ const WS_LOG_MSG = Object.freeze({
     'Severing stale-but-open connection: keepalive pings unanswered',
   CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE:
     'Skipping keepalive teardown: peer demonstrably alive (slow, not dead)',
+  PING_TIMEOUT_SATISFIED_BY_INBOUND:
+    'Treating timed-out ping as alive: peer has fresh inbound traffic',
   MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
   SCHEDULING_RECONNECT: 'Scheduling reconnection',
   RECONNECT_FAILED: 'Reconnection failed',

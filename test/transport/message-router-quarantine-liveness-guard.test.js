@@ -142,6 +142,47 @@ test('keepalive timeout is SKIPPED when the peer has recent inbound activity',
       'fresh peer traffic should reset the missed-PONG streak');
   });
 
+test('bounded ping accepts fresh parsed inbound traffic as peer contact evidence',
+  async (t) => {
+    initializeEnvironment();
+    const router = await buildRouter(t);
+    installPeerConnection(router);
+    router.recordNodeInboundActivity(PEER_NODE_ID);
+
+    const reachable = await router.pingNode(PEER_NODE_ID, 10);
+
+    t.equal(reachable, true,
+      'a slow PONG must not overrule fresh traffic from the same peer');
+  });
+
+test('bounded ping rejects fresh traffic from a connection closed while waiting',
+  async (t) => {
+    initializeEnvironment();
+    const router = await buildRouter(t);
+    const {connection} = installPeerConnection(router);
+    router.recordNodeInboundActivity(PEER_NODE_ID);
+
+    const pendingReachability = router.pingNode(PEER_NODE_ID, 10);
+    connection.state = ConnectionState.DISCONNECTED;
+    const reachable = await pendingReachability;
+
+    t.equal(reachable, false,
+      'historical traffic must not revive a connection closed during ping');
+  });
+
+test('bounded ping rejects stale parsed inbound traffic as peer contact evidence',
+  async (t) => {
+    initializeEnvironment();
+    const router = await buildRouter(t);
+    installPeerConnection(router);
+    router.nodeInboundActivityAt.set(PEER_NODE_ID, Date.now() - 60000);
+
+    const reachable = await router.pingNode(PEER_NODE_ID, 10);
+
+    t.equal(reachable, false,
+      'a silent peer outside the liveness window must remain uncontactable');
+  });
+
 test('quarantine still fires when the peer has NO recent liveness evidence',
   async (t) => {
     initializeEnvironment();
@@ -189,6 +230,10 @@ test('liveness window of 0 disables the guard (pre-change behavior)',
     const router = await buildRouter(t);
     const {connection} = installPeerConnection(router);
     router.recordNodeInboundActivity(PEER_NODE_ID);
+
+    const reachable = await router.pingNode(PEER_NODE_ID, 10);
+    t.equal(reachable, false,
+      'window zero must disable inbound evidence for bounded pings');
 
     await router.deliver(`${PEER_NODE_ID}/service/no-ack`, {type: 'TEST'});
 
