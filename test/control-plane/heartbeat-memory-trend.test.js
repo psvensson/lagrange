@@ -523,6 +523,29 @@ test('HeartbeatService routes confirmed stale refreshes through the ' +
     },
     'confirmed stale refreshes should use the maintenance owner path',
   );
+  t.match(
+    service.buildNodeHeartbeatWriteOptions(1000, decision.publicationMode),
+    {
+      allowPressureDefer: false,
+      deliveryPriority: 'critical',
+      workloadClass: 'node_state_publication_critical',
+      workClass: 'critical',
+    },
+    'mandatory lease maintenance should enter the critical non-deferred write lane',
+  );
+  t.match(
+    service.buildNodeHeartbeatWriteOptions(
+      1000,
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
+    ),
+    {
+      allowPressureDefer: true,
+      deliveryPriority: 'background',
+      workloadClass: 'node_state_publication_background',
+      workClass: 'background',
+    },
+    'steady heartbeat churn should remain contained on the background lane',
+  );
 
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();

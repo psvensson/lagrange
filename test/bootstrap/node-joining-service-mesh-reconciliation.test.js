@@ -58,11 +58,11 @@ import {EventEmitter} from 'events';
 const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
 const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
 
-test('NodeJoiningService - defers heartbeat-maintenance NODE_STATE_UPDATE on publication pressure after exhausting ingress candidates',
+test('NodeJoiningService - keeps heartbeat-maintenance NODE_STATE_UPDATE on the critical non-deferred owner lane',
   async (t) => {
     initializeTestEnvironment();
 
-    let nowMs = 2000;
+    const nowMs = 2000;
     const service = new NodeJoiningService({
       nodeId: 'joining-node-heartbeat-maintenance',
       nodeAddress: 'ws://localhost:9095531',
@@ -99,46 +99,29 @@ test('NodeJoiningService - defers heartbeat-maintenance NODE_STATE_UPDATE on pub
       },
     };
 
-    const deferredOutcome = await service.sendControlPlaneNodeStateUpdate({
-      state: STATE.READY,
-      heartbeatOnly: true,
-      heartbeatAt: nowMs,
-      nodeStatePublicationMode:
-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
-    });
+    const error = await t.rejects(
+      service.sendControlPlaneNodeStateUpdate({
+        state: STATE.READY,
+        heartbeatOnly: true,
+        heartbeatAt: nowMs,
+        nodeStatePublicationMode:
+          CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+      }),
+    );
 
-    t.equal(
-      deferredOutcome.contractState,
-      OWNER_CONTRACT_STATE.DEFERRED,
-      'maintenance heartbeats should expose the shared deferred contract',
-    );
-    t.equal(
-      deferredOutcome.nextAction,
-      OWNER_CONTRACT_NEXT_ACTION.RETRY,
-      'maintenance heartbeats should expose the shared retry action',
-    );
     t.same(
       deliveries.map((delivery) => delivery.targetAddress),
       [
         'seed-node-2/message-group/mg-1-r4',
         'seed-node-1/message-group/mg-1-r3',
+        'seed-node-1/message-group/mg-1-r3',
       ],
-      'maintenance heartbeats should exhaust fallback ingress targets before deferring under publication pressure',
+      'maintenance heartbeats should exhaust fallback ingress and the bounded same-target retry without entering a deferred slot',
     );
-
-    nowMs += 30;
-    await service.sendControlPlaneNodeStateUpdate({
-      state: STATE.READY,
-      heartbeatOnly: true,
-      heartbeatAt: nowMs,
-      nodeStatePublicationMode:
-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
-    });
-
     t.same(
       deliveries.map((delivery) => delivery.options?.deliveryPriority),
-      ['background', 'background', 'background', 'background'],
-      'maintenance heartbeats should stay on the background delivery lane when they resume after deferred pressure',
+      ['critical', 'critical', 'critical'],
+      'mandatory ready-lease maintenance should retain critical delivery priority across ingress retries',
     );
     t.same(
       deliveries.map((delivery) =>
@@ -148,9 +131,13 @@ test('NodeJoiningService - defers heartbeat-maintenance NODE_STATE_UPDATE on pub
         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
       ],
-      'maintenance heartbeats should preserve publication mode across fallback attempts and deferred retries',
+      'maintenance heartbeats should preserve publication mode across fallback attempts and the bounded retry',
+    );
+    t.equal(
+      error?.code,
+      'DISTRIBUTED_PARTICIPANT_FAILURE',
+      'exhausted maintenance publication should surface the canonical owner error instead of parking behind pressure',
     );
   });
 

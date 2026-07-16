@@ -197,6 +197,38 @@ test('createControlPlaneWriteHealthProvider contains background backlog when cri
   cleanupTestEnvironment();
 });
 
+test('createControlPlaneWriteHealthProvider classifies failed lease ' +
+  'maintenance as critical write health', async (t) => {
+  initializeTestEnvironment();
+
+  const provider = createControlPlaneWriteHealthProvider(buildOwner({
+    consecutiveFailures: 5,
+    publicationMode:
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+  }), {
+    failureThreshold: 3,
+  });
+  const health = provider();
+
+  t.equal(
+    health.classification,
+    LIFECYCLE_DEPENDENCY_CLASS.HARD,
+    'failed mandatory lease maintenance should not be contained as background backlog',
+  );
+  t.equal(
+    health.state,
+    CONTROL_PLANE_WRITE_HEALTH_STATE.CRITICAL_WRITE_UNHEALTHY,
+    'maintenance failure should use the critical write-health state',
+  );
+  t.equal(
+    health.details?.pressureSummary?.backpressured,
+    false,
+    'the classification should be critical even while reserve remains available',
+  );
+
+  cleanupTestEnvironment();
+});
+
 test('createControlPlaneWriteHealthProvider keeps recovery heartbeat failures soft when critical reserve remains available', async (t) => {
   initializeTestEnvironment();
 

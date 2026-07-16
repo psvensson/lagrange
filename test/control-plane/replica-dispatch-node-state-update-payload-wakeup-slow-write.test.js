@@ -10,6 +10,7 @@ import {
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
+  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -619,6 +620,121 @@ test('ReplicaDispatchService acknowledges NODE_STATE_UPDATE before slow write co
     await Promise.resolve();
     service.stop();
   });
+
+test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
+  'steady-heartbeat deferred slot into the critical owner queue', async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const writes = [];
+  const acknowledgements = [];
+  let acceptMaintenance = false;
+  let resolveMaintenanceWrite = null;
+  const publicationPressureError = new Error(
+    'Distributed operation failed due to participant failures',
+  );
+  publicationPressureError.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+  publicationPressureError.retryAfterMs = 8000;
+
+  const service = createService({
+    cdcIntegrationService: {},
+    cacheNode: {
+      node_id: 'node-maintenance-ingress',
+      node_address: 'localhost:8086',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      capabilities: '[]',
+      last_heartbeat: now - 1000,
+      ready_lease_expires_at: now + 4000,
+      created_at: now - 10000,
+    },
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow(tableName, whereClause, row, options) {
+        writes.push({tableName, whereClause, row, options});
+        if (!acceptMaintenance) {
+          throw publicationPressureError;
+        }
+        return new Promise((resolve) => {
+          resolveMaintenanceWrite = () => resolve({
+            success: true,
+            partitionResult: {affectedRows: 1},
+          });
+        });
+      },
+    },
+  });
+
+  const steadyPayload = {
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.NODE_ID]: 'node-maintenance-ingress',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8086',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_ONLY]: true,
+    [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+    [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 5000,
+  };
+  await service.reconcileNodeStateUpdate('node-maintenance-ingress', {
+    payload: steadyPayload,
+  });
+  t.equal(
+    service.nodeStateUpdateDeferredRetries.size,
+    1,
+    'steady publication pressure should establish the pre-existing deferred owner slot',
+  );
+
+  acceptMaintenance = true;
+  const mgService = {
+    acknowledgeMessage: async (messageId) => {
+      acknowledgements.push(messageId);
+    },
+    isLeaderReplica: () => true,
+    getMetadataIngressReadiness: () => ({ready: true}),
+  };
+  await service.handleMessageReceived(mgService, {
+    messageId: 'maintenance-msg',
+    payload: {
+      ...steadyPayload,
+      [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+      [ControlPlaneField.HEARTBEAT_AT]: now + 10000,
+      [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 25000,
+    },
+  });
+
+  t.same(
+    acknowledgements,
+    ['maintenance-msg'],
+    'transport should acknowledge the maintenance update after queue ownership is accepted',
+  );
+  t.equal(
+    service.nodeStateUpdateDeferredRetries.size,
+    0,
+    'non-deferrable maintenance ingress should cancel the older deferred slot',
+  );
+  for (let attempt = 0; attempt < 20 && writes.length < 2; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  t.equal(
+    writes.length,
+    2,
+    'maintenance ingress should re-enter the production write owner immediately',
+  );
+  t.match(
+    writes[1]?.options,
+    {
+      allowPressureDefer: false,
+      deliveryPriority: 'critical',
+      workClass: 'critical',
+    },
+    'the ingress-to-write handoff should retain the critical non-deferred profile',
+  );
+
+  resolveMaintenanceWrite?.();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  service.stop();
+});
 
 test('ReplicaDispatchService forwards NODE_STATE_UPDATE when local ingress is not metadata-ready',
   async (t) => {

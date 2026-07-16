@@ -14,12 +14,14 @@ const {
   DISPATCH_QUEUE_NAME,
   DISPATCH_READINESS_MESSAGE,
   DISPATCH_READINESS_REASON,
+  NODE_STATE_UPDATE_RETRY_CLASS,
   OPERATION_METADATA_KEY,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   ReplicaOperationField,
   SERVICE_TYPE,
   STRING,
   classifySystemPartition,
+  getControlPlaneNodeStatePublicationProfile,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
@@ -36,6 +38,22 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
   replaceDeferredNodeStateUpdatePayload(nodeId, payload) {
     const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
     if (!deferredRetry) {
+      return false;
+    }
+    const publicationMode = this.resolveNodeStateUpdatePublicationMode(
+      payload?.[ControlPlaneField.STATE],
+      this.isHeartbeatOnlyNodeStateUpdate(payload),
+      payload,
+    );
+    const publicationProfile = getControlPlaneNodeStatePublicationProfile({
+      publicationMode,
+    });
+    if (
+      publicationProfile?.allowPressureDefer !== true &&
+      deferredRetry.retryClass ===
+        NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE
+    ) {
+      this.clearDeferredNodeStateUpdateRetry(nodeId);
       return false;
     }
     deferredRetry.payload = this.buildDeferredNodeStateUpdatePayload(payload);
