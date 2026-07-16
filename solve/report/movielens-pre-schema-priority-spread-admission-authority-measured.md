@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-09-12-058Z.report.json
 
 **Attempts:** 1
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-pre-schema-priority-spread-admission-authority
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-pre-schema-priority-spread-admission-authority-measured-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: PASS
-- Latest evidence: test-output/reports/movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-06-21-593Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for movielens-pre-schema-priority-spread-admission-authority-measured-main
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 9
@@ -52,6 +36,9 @@
 - **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Post-attempt TLC model evidence proves count-aware publication plus schema admission requires the published covered-spread summary; all fixed invariants hold. [test-output/reports/priority-spread-coverage-tlc-count-aware.model.report.json]
 - **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Post-attempt TLC counterexample evidence exhibits the cross-layer schema-admission bypass and violates SchemaAdmissionRequiresCoveredSpread as expected. [test-output/reports/priority-spread-schema-admission-bypass.model.report.json]
 - **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Independent verifier approved the exact 9-file attempt: single published numeric spread owner, fail-closed gap/blindness admission, unchanged live policy, fixed and counterexample TLC outcomes, and no forbidden shortcuts. [subagent:verify_pre_schema_spread]
+- **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Ingested evidence from movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-09-12-058Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-09-12-058Z.report.json]
+- **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Ingested evidence from movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-09-12-058Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-09-12-058Z.report.json]
+- **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Independent verifier recomputed and approved the exact terminal aggregate; implementation files match the approved attempt and the later checkpoint changed only the generated Quest report. [subagent:verify_pre_schema_spread]
 
 ## Theories
 _(none recorded)_
