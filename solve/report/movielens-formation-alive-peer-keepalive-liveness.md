@@ -20,14 +20,15 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: unknown
-- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json
-- Selected theory: theory-20260716-readiness-owner-preserves-durable-priority-summary
-- Next move: continue supervised step for movielens-formation-alive-peer-keepalive-liveness-main
+- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-50-33-311Z.report.json
+- Selected theory: theory-20260716-readiness-owner-preserves-durable-priority-summary (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for movielens-formation-alive-peer-keepalive-liveness-main
 
 ## Continuation
-- Status: allowed
-- Next action: continue movielens-formation-alive-peer-keepalive-liveness-main with modelRef or modelNotApplicable evidence
-- Blocker: none
+- Status: blocked-theory
+- Next action: record and select frontier theory for movielens-formation-alive-peer-keepalive-liveness-main with npm run model:contracts as discriminator
+- Blocker: frontier theory required for movielens-formation-alive-peer-keepalive-liveness-main
+- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 11
@@ -64,12 +65,15 @@
 - **movielens-formation-alive-peer-keepalive-liveness-main**: After checkpoint 48257c25, one authorized changed production npm run demo:movielens run passed the PostgreSQL baseline and five-node formation. The prior remove-safety uncontactable-peer symptom did not surface in the runner, but schema admission timed out on a distinct control_plane_pressure owner symptom: an admin snapshot request itself timed out. Report sha256 is 9cad6f502f0c50e330c689a0ca183b9ef3421ac09ee5c7aa69476f8cca0baa9f; immutable 180 MB node-state archive sha256 is 9b7d05b90a2ed53763f0e26c8cbb54eed026061328456cc6c34d862f6ce837e0. Ports/processes were clean after teardown and the only container remained the pre-existing Forgejo runner. This forbids an unchanged rerun and requires deterministic archive analysis. [data/examples/service-data-affinity-demo-archive/wave4-live-ping-timeout-owner-2026-07-16T01-02-20-938Z.tar.gz]
 - **movielens-formation-alive-peer-keepalive-liveness-main**: Immutable live archive pins a false-open background mutation boundary. Publication owner node 4 reported prioritySpreadPending=false and steady_published at 01:01:43.445Z and 01:01:52.656Z, so ordinary indices-p1 began rebalancing at 01:01:52.066Z and package_registry_overrides-p1 at 01:01:52.832Z. Yet priority replace-op-8e51fddcd520cd5ac2cbbee85d7336c7 for sql_transaction_participants-p1 was still nonterminal: REMOVE dispatch began at 01:01:47.253Z, drain settled at 01:01:52.739Z, and completion was not observed until 01:01:58.033Z/01:02:01.422Z. The publication gate deliberately exposes strict durablePriorityPartitionSummary beside an optimistic closure summary, but projection readiness only propagates optimistic gate active; background published-convergence therefore cannot distinguish in-flight recovery optimism from durable spread. Broad planner fan-out then coincided with the terminal admin snapshot request hanging until schema-admission timeout. [data/examples/service-data-affinity-demo-archive/wave4-live-ping-timeout-owner-2026-07-16T01-02-20-938Z.tar.gz]
 - **movielens-formation-alive-peer-keepalive-liveness-main**: Independent verifier REJECTED exact attempt 4: the regression bypasses ControlPlaneReadinessService.buildPriorityControlPlaneRecoveryProjection, whose production owner path replaces the publication gate's strict unsatisfied durablePriorityPartitionSummary with the optimistic satisfied summary before projection readiness consumes it; live durableSpreadPending can therefore remain false. [subagent:verify_durable_spread_attempt4]
+- **movielens-formation-alive-peer-keepalive-liveness-main**: Independent verifier APPROVED exact attempt 5 sha256:896dc51693d2cfff9e13cafb35d26aaf784d5e5d7f7cae4097d3841609b120af on pinned base 89e96534ec5ae19b59a71a87f2b3a116ac382763. The canonical five-path full-index artifact is byte-identical and supersedes rejected attempt 4: pinned-base owner-chain regression fails first because readiness reconstruction promotes strict false to true; patched 6/6, focused 681/681, unified rebalancer 172/172, repeated canonicalization, release, missing-evidence, history, stale/direct precedence, models, lint, dependencies, and scoped audits pass. Immutable archive timing binds the fixed boundary. [subagent:verify_durable_spread_attempt5]
+- **movielens-formation-alive-peer-keepalive-liveness-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-16T01-50-33-311Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-50-33-311Z.report.json]
+- **movielens-formation-alive-peer-keepalive-liveness-main**: Ingested evidence from movielens-three-way-affinity-demo-live-2026-07-16T01-50-33-311Z.report.json. Metric: 1 -> 1. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-50-33-311Z.report.json]
 
 ## Theories
 - **theory-20260716-projection-readiness-discards-the-publication-gate** [active] system, mechanism projection readiness discards the publication gate's durable priority summary and exports only optimistic priorityRecovery.active, owner projection_readiness_owner, modelGate npm run model:contracts
 - **theory-20260716-ping-timeout-classifies-historical-fresh-inbound** [falsified] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism ping timeout classifies historical fresh inbound without revalidating that the connection which initiated the ping remains the current connected socket, so remove-safety can accept a peer disconnected during the wait, modelGate npm run model:contracts
 - **theory-20260716-canonical-projection-readiness-marks-priority-recovery** [supported] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism canonical projection readiness marks priority recovery inactive from the optimistic closure gate even when its durablePriorityPartitionSummary still has a spread gap, so stable background mutation opens early, owner projection_readiness_owner, boundary stable_background_mutation_admission, modelGate npm run model:contracts
-- **theory-20260716-readiness-owner-preserves-durable-priority-summary** [supported] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism buildPriorityControlPlaneRecoveryProjection recomposes the strict durable publication summary from optimistic closure evidence before canonical projection readiness consumes it, owner control_plane_readiness_service, boundary stable_background_mutation_admission, modelGate npm run model:contracts
+- **theory-20260716-readiness-owner-preserves-durable-priority-summary** [falsified] frontier, frontier movielens-formation-alive-peer-keepalive-liveness-main, layer ownership, mechanism buildPriorityControlPlaneRecoveryProjection recomposes the strict durable publication summary from optimistic closure evidence before canonical projection readiness consumes it, owner control_plane_readiness_service, boundary stable_background_mutation_admission, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-formation-alive-peer-keepalive-liveness-main**: theory-20260716-readiness-owner-preserves-durable-priority-summary
@@ -79,6 +83,7 @@
 - **theory-20260716-ping-timeout-classifies-historical-fresh-inbound**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-02-20-938Z.report.json]
 - **theory-20260716-canonical-projection-readiness-marks-priority-recovery**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 - **theory-20260716-readiness-owner-preserves-durable-priority-summary**: supported (scenario=failed, theory=supported, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
+- **theory-20260716-readiness-owner-preserves-durable-priority-summary**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T01-50-33-311Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
