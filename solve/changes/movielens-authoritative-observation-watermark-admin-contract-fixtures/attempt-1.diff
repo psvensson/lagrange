@@ -1,0 +1,280 @@
+diff --git a/test/admin/admin-service-discovery.test.js b/test/admin/admin-service-discovery.test.js
+index 5c8b1bebacd5d5dfdf45e712a5ceccaf0f74aef2..3455437a5dfde581b32bca3e612b03b2f76458f4 100644
+--- a/test/admin/admin-service-discovery.test.js
++++ b/test/admin/admin-service-discovery.test.js
+@@ -17,6 +17,7 @@ import {
+   CONTROL_PLANE_DELIVERY_PRIORITY,
+ } from '../../src/control-plane/control-plane-constants.js';
+ import {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+ } from '../../src/control-plane/control-plane-system-table-gateway.js';
+ import {
+@@ -31,9 +32,39 @@ const TEST_DISCOVERY_TABLE_ID = 'services-p1';
+ const TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID = 'benchmark_events-p1';
+ const TEST_DISCOVERY_ROUTING_GAP_OWNER_MISSING = 'owner_missing';
+ const TEST_AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 3349;
++const TEST_AUTHORITATIVE_OBSERVED_AT_MS = 1700000000000;
+ const TEST_SELECTED_SNAPSHOT_SOURCE_NODE_ID =
+   '11601fe0-72d6-5853-8590-ec2881853e72';
+ 
++function buildCompleteAuthoritativeReadResult(
++  tableName,
++  rows = [],
++  causeId = `test-authoritative-read:${tableName}`,
++) {
++  return {
++    success: true,
++    tableName,
++    rows,
++    rowSetComplete: true,
++    authoritativeObservation: {
++      scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++      tableName,
++      observedAtMs: TEST_AUTHORITATIVE_OBSERVED_AT_MS,
++      causeId,
++      rowSetComplete: true,
++    },
++  };
++}
++
++function buildSuccessfulReconcileResult(mutationCount, options = {}) {
++  return {
++    success: true,
++    mutationCount,
++    authoritativeObservedAtMs:
++      options?.authoritativeObservation?.observedAtMs || null,
++  };
++}
++
+ test('AdminServiceDiscovery routes authoritative cache repair through the ' +
+   'gateway instead of mutating the cache directly', async (t) => {
+   const repairCalls = [];
+@@ -214,14 +245,12 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
+             workClass: options?.workClass,
+             deliveryPriority: options?.deliveryPriority,
+           });
+-          return {
+-            success: true,
+-            tableName: readIntent?.tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(
++            readIntent?.tableName,
++          );
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 0};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(0, options);
+         },
+       },
+     });
+@@ -293,14 +322,12 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
+             deliveryPriority: options?.deliveryPriority,
+             routingReadinessDimension: options?.routingReadinessDimension,
+           });
+-          return {
+-            success: true,
+-            tableName: readIntent?.tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(
++            readIntent?.tableName,
++          );
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 0};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(0, options);
+         },
+       },
+     });
+@@ -370,14 +397,12 @@ test('AdminServiceDiscovery table-scoped snapshot repair keeps recovery-eligible
+             allowSqlFallback: options?.allowSqlFallback,
+             routingReadinessDimension: options?.routingReadinessDimension,
+           });
+-          return {
+-            success: true,
+-            tableName: readIntent?.tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(
++            readIntent?.tableName,
++          );
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 0};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(0, options);
+         },
+       },
+     });
+@@ -431,15 +456,11 @@ test(
+               error: 'authoritative_services_unavailable',
+             };
+           }
+-          return {
+-            success: true,
+-            tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(tableName);
+         },
+         async reconcileAuthoritativeCacheRows(tableName, rows, options) {
+           reconcileCalls.push({tableName, rows, options});
+-          return {success: true, mutationCount: 1};
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -540,14 +561,10 @@ test(
+           if (tableName === TABLES.SERVICES) {
+             return participantFailure;
+           }
+-          return {
+-            success: true,
+-            tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(tableName);
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 1};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -612,8 +629,8 @@ test(
+           readCalls.push(String(readIntent?.tableName || ''));
+           return timeoutFailure;
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 1};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -703,8 +720,8 @@ test(
+           readCalls.push(String(readIntent?.tableName || ''));
+           return timeoutFailure;
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 1};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -979,14 +996,10 @@ test(
+               retryAfterMs: 500,
+             };
+           }
+-          return {
+-            success: true,
+-            tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(tableName);
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 1};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -1043,14 +1056,10 @@ test(
+               },
+             };
+           }
+-          return {
+-            success: true,
+-            tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(tableName);
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 1};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -1115,15 +1124,13 @@ test('AdminServiceDiscovery marks repair as applied only after all tables are re
+       },
+       controlPlaneSystemTableGateway: {
+         async executeRead(readIntent) {
+-          return {
+-            success: true,
+-            tableName: String(readIntent?.tableName || ''),
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(
++            String(readIntent?.tableName || ''),
++          );
+         },
+         async reconcileAuthoritativeCacheRows(tableName, rows, options) {
+           reconcileCalls.push({tableName, rows, options});
+-          return {success: true, mutationCount: 1};
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -1172,14 +1179,10 @@ test(
+               error: 'query_timeout',
+             };
+           }
+-          return {
+-            success: true,
+-            tableName,
+-            rows: [],
+-          };
++          return buildCompleteAuthoritativeReadResult(tableName);
+         },
+-        async reconcileAuthoritativeCacheRows() {
+-          return {success: true, mutationCount: 1};
++        async reconcileAuthoritativeCacheRows(_tableName, _rows, options) {
++          return buildSuccessfulReconcileResult(1, options);
+         },
+       },
+     });
+@@ -1225,20 +1228,19 @@ test(
+           tableName,
+           queryTimeoutMs: options.queryTimeoutMs,
+         });
+-        return {
+-          success: true,
++        return buildCompleteAuthoritativeReadResult(
+           tableName,
+-          rows: tableName === TABLES.NODES ?
++          tableName === TABLES.NODES ?
+             [{
+               node_id: TEST_SELECTED_SNAPSHOT_SOURCE_NODE_ID,
+               status: 'active',
+             }] :
+             [],
+-        };
++        );
+       },
+-      async reconcileAuthoritativeCacheRows(tableName, rows) {
++      async reconcileAuthoritativeCacheRows(tableName, rows, options) {
+         reconcileCalls.push({tableName, rows});
+-        return {success: true, mutationCount: rows.length};
++        return buildSuccessfulReconcileResult(rows.length, options);
+       },
+     };
+     const sqlQueryEngine = {
+@@ -1283,6 +1285,9 @@ test(
+           node_id: TEST_SELECTED_SNAPSHOT_SOURCE_NODE_ID,
+           status: 'active',
+         }],
++        authoritativeObservation:
++          buildCompleteAuthoritativeReadResult(TABLES.NODES)
++            .authoritativeObservation,
+       },
+       'selected source forced repair should obtain nodes rows from the late owner',
+     );
