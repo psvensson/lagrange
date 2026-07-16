@@ -466,7 +466,7 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
       }
     });
 
-  test('RebalanceCoordinator - pressure-excluded replacement election completion continues source removal in the same owner turn',
+  test('RebalanceCoordinator - exact replacement election completion with a routing-ready target and retarget candidates continues source removal in the same owner turn',
     async (t) => {
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
@@ -493,11 +493,6 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
         TEST_REPLACEMENT_NODE_ID,
       ]);
       const TEST_EMPTY_PARTITION_IDS = Object.freeze([]);
-      const TEST_TARGET_DIMENSIONS = Object.freeze({
-        controlPlaneRecoveryEligible: false,
-        repairEligible: true,
-        serveEligible: false,
-      });
       const TEST_READY_DIMENSIONS = Object.freeze({
         controlPlaneRecoveryEligible: true,
         repairEligible: true,
@@ -540,9 +535,7 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
           getNodeReadinessSync(nodeId) {
             return {
               nodeId,
-              dimensions: nodeId === TEST_REPLACEMENT_NODE_ID ?
-                TEST_TARGET_DIMENSIONS :
-                TEST_READY_DIMENSIONS,
+              dimensions: TEST_READY_DIMENSIONS,
             };
           },
           async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
@@ -619,7 +612,7 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
         t.equal(
           result.success,
           true,
-          'pressure-excluded target election evidence should close source removal without waiting for a later retry',
+          'exact target election evidence should close source removal before retry expiry can retarget it',
         );
         t.equal(
           deliveries.length,
@@ -640,6 +633,13 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
           deliveries[1].payload.type,
           ReplicaOperationMessageType.REMOVE_REPLICA,
           'the second dispatch should remove the old source replica',
+        );
+        t.same(
+          coordinator.workflowOwner
+            .getPriorityPublicationReplacementLeaderElectionEvidenceMap()
+            .get(operation.operationId)?.completedReplicaIds,
+          [TEST_REPLACEMENT_REPLICA_ID],
+          'the same-turn re-evaluation consumes the exact recorded target ACK',
         );
         t.equal(
           operation.workflowStep,

@@ -7,13 +7,10 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
-  REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION,
   REMOVE_SAFETY_HANDOFF_CONTINUATION_ACTION_BY_STATE,
   REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
-  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  REMOVE_SAFETY_READINESS_DIMENSION,
   ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaOperationReason,
@@ -297,32 +294,10 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
       replacementLeaderElectionHandoff &&
       handoffCompleted &&
       dispatchNodeId.length > 0;
-    const priorityRecoveryCompletionSafe =
-      continuationApplicable ?
-        await this.isRemoveSafetyHandoffPriorityRecoveryCompletionSafe(
-          operation,
-        ) :
-        false;
-    const replacementLeaderRetargetCandidateAvailable =
-      continuationApplicable ?
-        await this.resolveRemoveSafetyHandoffRetargetCandidateAvailability(
-          operation,
-        ) :
-        false;
-    const targetReadyForRouting =
-      continuationApplicable ?
-        this.resolveRemoveSafetyHandoffTargetReadiness(
-          operation,
-          dispatchNodeId,
-        ) :
-        true;
     return Object.freeze({
       continuationApplicable,
       handoffCompleted,
-      priorityRecoveryCompletionSafe,
       replacementLeaderElectionHandoff,
-      replacementLeaderRetargetCandidateAvailable,
-      targetReadyForRouting,
     });
   }
 
@@ -343,93 +318,10 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     ) {
       return REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE.NOT_APPLICABLE;
     }
-    if (
-      snapshot.priorityRecoveryCompletionSafe === true &&
-      snapshot.replacementLeaderRetargetCandidateAvailable !== true
-    ) {
-      return (
-        REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE
-          .PRIORITY_RECOVERY_COMPLETION_READY
-      );
-    }
-    if (snapshot.targetReadyForRouting === false) {
-      return (
-        REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE
-          .PRESSURE_EXCLUDED_TARGET_READY
-      );
-    }
-    return REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE.WAIT_FOR_RETRY;
-  }
-
-  async isRemoveSafetyHandoffPriorityRecoveryCompletionSafe(operation) {
-    const evaluation =
-      await this.evaluatePriorityRecoveryCompletionRemoveSafety(operation);
     return (
-      evaluation?.classification ===
-      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE
+      REMOVE_SAFETY_HANDOFF_CONTINUATION_STATE
+        .EXACT_TARGET_ELECTION_EVIDENCE_RECORDED
     );
-  }
-
-  async resolveRemoveSafetyHandoffRetargetCandidateAvailability(operation) {
-    if (
-      typeof this.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound !==
-      'function'
-    ) {
-      return false;
-    }
-    const criticalReplicaRows =
-      await this.getCriticalReplicaRowsForSafety(operation.partitionId);
-    const removeSafetyReadiness = {
-      partitionId: operation.partitionId,
-      decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
-      participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-    };
-    const currentVoterReadyRows = (Array.isArray(criticalReplicaRows) ?
-      criticalReplicaRows :
-      []).filter((row) =>
-      this.isVoterReadyRoutableReplica(row, removeSafetyReadiness),
-    );
-    const operationReplicaId =
-      this.repository.getReplaceSourceReplicaId(operation);
-    const replacementReplicaId =
-      this.repository.getReplaceTargetReplicaId(operation) ||
-      (typeof operation?.replicaId === 'string' &&
-      operation.replicaId.length > 0 ?
-        operation.replicaId :
-        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING);
-    const replacementReplicaRow =
-      currentVoterReadyRows.find((row) =>
-        this.isOperationReplicaRow(row, {
-          ...operation,
-          replicaId: replacementReplicaId,
-        }),
-      ) || null;
-    return this.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
-      operation,
-      currentVoterReadyRows,
-      operationReplicaId,
-      replacementReplicaRow,
-    );
-  }
-
-  resolveRemoveSafetyHandoffTargetReadiness(operation, dispatchNodeId) {
-    const readinessService = this.controlPlaneReadinessService;
-    const hasReadinessSource =
-      typeof readinessService?.getNodeReadinessSync === 'function' ||
-      typeof readinessService?.getControlPlaneParticipationSync ===
-        'function';
-    if (!hasReadinessSource) {
-      return true;
-    }
-    try {
-      return this.isNodeReadyForRouting(dispatchNodeId, {
-        partitionId: operation.partitionId,
-        decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
-        participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-      });
-    } catch {
-      return true;
-    }
   }
 
   async getPriorityRecoveryPlanningSnapshotForOperation(operation) {

@@ -27,7 +27,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
     installAuthoritativeServicesRead,
   } = context;
 
-  test('RebalanceCoordinator - nudges sql_transactions replacement leader election once source handoff is complete but ownership is still pending',
+  test('RebalanceCoordinator - completed sql_transactions target election continues source removal in the same owner turn',
     async (t) => {
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
@@ -163,8 +163,6 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
         },
       });
 
-      let replacementReplicaRole = 'follower';
-
       coordinator.initialize();
       try {
         installAuthoritativeServicesRead(
@@ -192,7 +190,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
               partitionId: testPartitionId,
               replicaId: testReplacementReplicaId,
               nodeId: testReplacementNodeId,
-              raftRole: replacementReplicaRole,
+              raftRole: 'follower',
             }),
           ],
         );
@@ -227,22 +225,17 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
             }),
           );
 
-        const blockedResult = await coordinator.executeOperation(operation);
+        const result = await coordinator.executeOperation(operation);
 
         t.equal(
-          blockedResult.success,
-          false,
-          'source removal should stay deferred until replacement leader ownership closes',
-        );
-        t.equal(
-          blockedResult.skipped,
+          result.success,
           true,
-          'replacement leader election should defer rather than fail terminally',
+          'the exact completed election response should continue into canonical source removal',
         );
         t.equal(
           deliveries.length,
-          1,
-          'replacement leader election should be nudged once the source handoff is already complete',
+          2,
+          'the same owner turn should nudge target leadership and then remove the source',
         );
         t.equal(
           deliveries[0].target,
@@ -264,30 +257,17 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           testReplacementLeaderElectionReason,
           'the nudge should carry the canonical replacement leader election reason',
         );
-        t.match(
-          blockedResult.error,
-          /replacement leader ownership pending before safe removal/i,
-          'the defer should continue to report replacement leader ownership as the blocker',
-        );
-
-        replacementReplicaRole = 'leader';
-
-        const retryResult = await coordinator.executeOperation(operation);
-
-        t.equal(
-          retryResult.success,
-          true,
-          'explicit replacement leader service evidence should allow source removal even before the partition row catches up',
-        );
-        t.equal(
-          deliveries.length,
-          2,
-          'the next dispatch should remove the old source replica once target ownership is visible',
-        );
         t.equal(
           deliveries[1].payload.type,
           ReplicaOperationMessageType.REMOVE_REPLICA,
-          'source removal should follow the replacement leader election nudge',
+          'canonical remove safety should authorize source removal from the recorded exact ACK',
+        );
+        t.same(
+          coordinator.workflowOwner
+            .getPriorityPublicationReplacementLeaderElectionEvidenceMap()
+            .get(operation.operationId)?.completedReplicaIds,
+          [testReplacementReplicaId],
+          'the same-turn continuation should retain exact target-election evidence',
         );
         t.ok(
           operation.workflowStep === WORKFLOW_STEP.STOPPING ||
@@ -772,7 +752,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
       }
     });
 
-  test('RebalanceCoordinator - retargets replacement leader election after completed election does not produce ownership',
+  test('RebalanceCoordinator - exact completed replacement election terminates before retry expiry can retarget it',
     async (t) => {
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
@@ -790,11 +770,9 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
       const TEST_REPLACEMENT_REPLICA_ID = 'replica_operations-p1-r4';
       const TEST_REPLICA_HANDLER_TARGET_SUFFIX = '/service/replica-handler';
       const TEST_FOLLOWER_ROLE = 'follower';
-      const TEST_LEADER_ROLE = 'leader';
       const TEST_OPERATION_ACTIVE_STATUS = 'active';
       const TEST_MIN_REPLICA_COUNT = 3;
       const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
-      const TEST_RETRY_READY_EVIDENCE_AGE_MS = 6000;
       const TEST_READY_NODE_IDS = Object.freeze([
         TEST_SOURCE_NODE_ID,
         TEST_ALTERNATE_NODE_ID,
@@ -804,12 +782,9 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
       const TEST_EMPTY_PARTITION_IDS = Object.freeze([]);
       const TEST_ORIGINAL_REPLACEMENT_TARGET =
       `${TEST_REPLACEMENT_NODE_ID}${TEST_REPLICA_HANDLER_TARGET_SUFFIX}`;
-      const TEST_ALTERNATE_REPLACEMENT_TARGET =
-      `${TEST_ALTERNATE_NODE_ID}${TEST_REPLICA_HANDLER_TARGET_SUFFIX}`;
       const TEST_SOURCE_REMOVAL_TARGET =
       `${TEST_SOURCE_NODE_ID}${TEST_REPLICA_HANDLER_TARGET_SUFFIX}`;
       const deliveries = [];
-      let alternateReplicaRole = TEST_FOLLOWER_ROLE;
 
       const buildPlanningSnapshot = (nodeId) => ({
         publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
@@ -836,7 +811,7 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
           partitionId: TEST_PARTITION_ID,
           replicaId: TEST_ALTERNATE_REPLICA_ID,
           nodeId: TEST_ALTERNATE_NODE_ID,
-          raftRole: alternateReplicaRole,
+          raftRole: TEST_FOLLOWER_ROLE,
         }),
         createCriticalPartitionServiceRow({
           partitionId: TEST_PARTITION_ID,
@@ -933,62 +908,35 @@ export function registerQuorumConditionedRemoveSafetyTailElectionRetargeting(con
 
         t.equal(
           firstResult.success,
-          false,
-          'source removal should defer while the completed election has not produced replacement leadership',
+          true,
+          'the exact completed ACK should route immediately back through remove safety',
         );
         t.equal(
           deliveries[0].target,
           TEST_ORIGINAL_REPLACEMENT_TARGET,
           'the first nudge should target the original replacement node',
         );
-
-        const evidenceMap = coordinator.workflowOwner
-          .getPriorityPublicationReplacementLeaderElectionEvidenceMap();
-        const firstElectionEvidence = evidenceMap.get(operation.operationId);
-        evidenceMap.set(
-          operation.operationId,
-          Object.freeze({
-            ...firstElectionEvidence,
-            observedAt: Date.now() - TEST_RETRY_READY_EVIDENCE_AGE_MS,
-          }),
-        );
-
-        const secondResult = await coordinator.executeOperation(operation);
-
         t.equal(
-          secondResult.success,
-          false,
-          'source removal should stay deferred while retargeted leadership is pending',
+          deliveries.length,
+          2,
+          'one owner turn should contain only the exact election nudge and source removal',
         );
         t.equal(
           deliveries[1].target,
-          TEST_ALTERNATE_REPLACEMENT_TARGET,
-          'the second nudge should retarget when completed election evidence did not produce ownership',
-        );
-        t.equal(
-          deliveries[1].payload.replicaId,
-          TEST_ALTERNATE_REPLICA_ID,
-          'the retargeted nudge should name the alternate voter replica',
-        );
-
-        alternateReplicaRole = TEST_LEADER_ROLE;
-
-        const finalResult = await coordinator.executeOperation(operation);
-
-        t.equal(
-          finalResult.success,
-          true,
-          'source removal should proceed once the retargeted voter owns leadership',
-        );
-        t.equal(
-          deliveries[2].target,
           TEST_SOURCE_REMOVAL_TARGET,
-          'source removal should go back to the source node handler',
+          'the second dispatch should return to the source node for removal',
         );
         t.equal(
-          deliveries[2].payload.type,
+          deliveries[1].payload.type,
           ReplicaOperationMessageType.REMOVE_REPLICA,
-          'the final dispatch should be source removal',
+          'the exact ACK should be consumed before any alternate-voter retarget',
+        );
+        t.same(
+          coordinator.workflowOwner
+            .getPriorityPublicationReplacementLeaderElectionEvidenceMap()
+            .get(operation.operationId)?.completedReplicaIds,
+          [TEST_REPLACEMENT_REPLICA_ID],
+          'the evidence owner retains the exact replacement identity',
         );
       } finally {
         await coordinator.shutdown();
