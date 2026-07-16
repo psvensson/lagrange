@@ -49,6 +49,9 @@
 ## Findings
 - **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Ingested evidence from movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-06-21-593Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-06-21-593Z.report.json]
 - **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Ingested evidence from movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-06-21-593Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-pre-schema-priority-spread-admission-authority-2026-07-16T09-06-21-593Z.report.json]
+- **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Post-attempt TLC model evidence proves count-aware publication plus schema admission requires the published covered-spread summary; all fixed invariants hold. [test-output/reports/priority-spread-coverage-tlc-count-aware.model.report.json]
+- **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Post-attempt TLC counterexample evidence exhibits the cross-layer schema-admission bypass and violates SchemaAdmissionRequiresCoveredSpread as expected. [test-output/reports/priority-spread-schema-admission-bypass.model.report.json]
+- **movielens-pre-schema-priority-spread-admission-authority-measured-main**: Independent verifier approved the exact 9-file attempt: single published numeric spread owner, fail-closed gap/blindness admission, unchanged live policy, fixed and counterexample TLC outcomes, and no forbidden shortcuts. [subagent:verify_pre_schema_spread]
 
 ## Theories
 _(none recorded)_
