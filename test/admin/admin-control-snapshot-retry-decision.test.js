@@ -6,6 +6,8 @@ import {
 } from '../../src/admin/admin-control-snapshot-retry-decision.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {TIMEOUT_BUDGET_CLASSIFICATION} from
+  '../../src/control-plane/timeout-budget.js';
 
 const INITIAL_ATTEMPT = 0;
 const RETRY_LIMIT_ATTEMPT = 3;
@@ -339,6 +341,185 @@ test('admin websocket control snapshot query retries pressure observations',
       result.rows,
       [CONTROL_SNAPSHOT_ROW],
       'control snapshot query should return the admitted clean result',
+    );
+  });
+
+test('admin websocket control snapshot retries consume one absolute caller budget',
+  async (t) => {
+    let nowMs = 1000;
+    const api = new AdminWebSocketAPI({
+      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
+      nowFn: () => nowMs,
+    });
+    const observedTimeouts = [];
+
+    api.logger = {warn() {}};
+    api.closeStaleSnapshotLaneSockets = () => {};
+    api.controlSnapshot.buildControlSnapshotQueryResult = async (options) => {
+      observedTimeouts.push(options.queryTimeoutMs);
+      if (observedTimeouts.length === 1) {
+        nowMs += 7000;
+        return createRowsResult({
+          ...CONTROL_SNAPSHOT_ROW,
+          snapshotObservation: {
+            state: OBSERVATION_STATE_DEFERRED_REFRESH,
+            reasonCodes: [OBSERVATION_REASON_PRESSURE],
+          },
+        });
+      }
+      return createRowsResult(CONTROL_SNAPSHOT_ROW);
+    };
+
+    const result = await api.buildControlSnapshotQueryResult({
+      activeClientId: 'client-deadline',
+      queryTimeoutMs: 15000,
+    });
+
+    t.same(
+      observedTimeouts,
+      [15000, 8000],
+      'the retry receives only the time remaining on the original request',
+    );
+    t.same(
+      result.rows,
+      [CONTROL_SNAPSHOT_ROW],
+      'the existing pressure retry still returns the admitted clean result',
+    );
+  });
+
+test('admin websocket control snapshot reports typed caller deadline exhaustion',
+  async (t) => {
+    let clockCalls = 0;
+    let buildCount = 0;
+    const api = new AdminWebSocketAPI({
+      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
+      nowFn: () => {
+        clockCalls += 1;
+        return clockCalls === 1 ? 1000 : 20000;
+      },
+    });
+
+    api.controlSnapshot.buildControlSnapshotQueryResult = async () => {
+      buildCount += 1;
+      return createRowsResult(CONTROL_SNAPSHOT_ROW);
+    };
+
+    const error = await t.rejects(
+      api.buildControlSnapshotQueryResult({
+        activeClientId: 'client-immediate-exhaustion',
+        queryTimeoutMs: 15000,
+      }),
+      {message: 'Query timeout after 15000ms'},
+    );
+
+    t.equal(
+      buildCount,
+      0,
+      'expired caller budget starts no control snapshot work',
+    );
+    t.equal(
+      error.timeoutClassification.classification,
+      TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
+      'the retry owner reports deadline exhaustion as a typed query timeout',
+    );
+    t.equal(
+      error.timeoutClassification.nestedOperation,
+      'admin_control_snapshot_query',
+      'the typed timeout identifies the control snapshot query owner',
+    );
+    t.equal(
+      error.timeoutClassification.configuredBudgetMs,
+      15000,
+      'the typed timeout preserves the original caller budget',
+    );
+  });
+
+test('admin websocket control snapshot stops retrying before the caller budget expires',
+  async (t) => {
+    let nowMs = 1000;
+    const api = new AdminWebSocketAPI({
+      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
+      nowFn: () => nowMs,
+    });
+    let buildCount = 0;
+    const pressureRow = {
+      ...CONTROL_SNAPSHOT_ROW,
+      snapshotObservation: {
+        state: OBSERVATION_STATE_FAILED,
+        reasonCodes: [OBSERVATION_REASON_PRESSURE],
+      },
+    };
+
+    api.logger = {warn() {}};
+    api.closeStaleSnapshotLaneSockets = () => {};
+    api.controlSnapshot.buildControlSnapshotQueryResult = async () => {
+      buildCount += 1;
+      nowMs += 14750;
+      return createRowsResult(pressureRow);
+    };
+
+    const result = await api.buildControlSnapshotQueryResult({
+      activeClientId: 'client-near-deadline',
+      queryTimeoutMs: 15000,
+    });
+
+    t.equal(
+      buildCount,
+      1,
+      'the owner does not start a retry whose delay exceeds the remaining budget',
+    );
+    t.same(
+      result.rows,
+      [pressureRow],
+      'deadline exhaustion preserves the fail-closed pressure observation',
+    );
+  });
+
+test('admin websocket control snapshot rechecks the caller budget after retry delay',
+  async (t) => {
+    let nowMs = 1000;
+    const api = new AdminWebSocketAPI({
+      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
+      nowFn: () => nowMs,
+    });
+    const observedTimeouts = [];
+    const pressureRow = {
+      ...CONTROL_SNAPSHOT_ROW,
+      snapshotObservation: {
+        state: OBSERVATION_STATE_FAILED,
+        reasonCodes: [OBSERVATION_REASON_PRESSURE],
+      },
+    };
+
+    api.logger = {warn() {}};
+    api.closeStaleSnapshotLaneSockets = () => {};
+    api.controlSnapshot.buildControlSnapshotQueryResult = async (options) => {
+      observedTimeouts.push(options.queryTimeoutMs);
+      if (observedTimeouts.length === 1) {
+        nowMs += 14499;
+        return createRowsResult(pressureRow);
+      }
+      return createRowsResult(CONTROL_SNAPSHOT_ROW);
+    };
+    const expiryTimer = setTimeout(() => {
+      nowMs += 1501;
+    }, 50);
+    t.teardown(() => clearTimeout(expiryTimer));
+
+    const result = await api.buildControlSnapshotQueryResult({
+      activeClientId: 'client-delay-expiry',
+      queryTimeoutMs: 15000,
+    });
+
+    t.same(
+      observedTimeouts,
+      [15000],
+      'work is not started when the retry delay consumes the last budget',
+    );
+    t.same(
+      result.rows,
+      [pressureRow],
+      'post-delay exhaustion preserves the last fail-closed pressure result',
     );
   });
 

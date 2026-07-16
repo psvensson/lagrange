@@ -1,0 +1,180 @@
+diff --git a/src/admin/admin-websocket-diagnostics-route-methods.js b/src/admin/admin-websocket-diagnostics-route-methods.js
+index c1dbd29dac3ed8fe30c950e8472a9c3edc7a3848..51e0545bfa090c45f41fc3c1b1d115c9620c3411 100644
+--- a/src/admin/admin-websocket-diagnostics-route-methods.js
++++ b/src/admin/admin-websocket-diagnostics-route-methods.js
+@@ -3,12 +3,46 @@ import {
+   CONTROL_SNAPSHOT_RETRY_DELAY_MS,
+   evaluateControlSnapshotRetryDecision,
+ } from './admin-control-snapshot-retry-decision.js';
++import {
++  createTimeoutBudget,
++  getRemainingBudgetMs,
++} from '../control-plane/timeout-budget.js';
+ import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
+ import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+ 
+ const SNAPSHOT_RETRY_LOG_MSG =
+   'Snapshot query encountered pressure or timeout. Retrying after stale socket cleanup...';
+ 
++function createControlSnapshotRetryBudget(options, nowFn) {
++  const queryTimeoutMs = Number(options?.queryTimeoutMs);
++  if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) {
++    return null;
++  }
++  return createTimeoutBudget({
++    configuredBudgetMs: Math.floor(queryTimeoutMs),
++    now: nowFn,
++  });
++}
++
++function resolveControlSnapshotAttemptOptions(options, retryBudget, nowFn) {
++  if (!retryBudget) {
++    return options;
++  }
++  return {
++    ...options,
++    queryTimeoutMs: Math.max(
++      1,
++      getRemainingBudgetMs(retryBudget, {now: nowFn}),
++    ),
++  };
++}
++
++function hasControlSnapshotRetryDelayBudget(retryBudget, nowFn) {
++  return !retryBudget ||
++    getRemainingBudgetMs(retryBudget, {now: nowFn}) >
++      CONTROL_SNAPSHOT_RETRY_DELAY_MS;
++}
++
+ const {
+   ADMIN_CONTROL_SNAPSHOT,
+   ADMIN_ERROR_MESSAGE,
+@@ -287,11 +321,19 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
+ 
+   async buildControlSnapshotQueryResult(options = {}) {
+     let attempts = 0;
++    const retryBudget = createControlSnapshotRetryBudget(
++      options,
++      this.nowFn,
++    );
+     while (true) {
+       let resultOrError;
+       try {
+         resultOrError = await this.controlSnapshot.buildControlSnapshotQueryResult(
+-          options,
++          resolveControlSnapshotAttemptOptions(
++            options,
++            retryBudget,
++            this.nowFn,
++          ),
+         );
+       } catch (error) {
+         resultOrError = error;
+@@ -304,6 +346,12 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
+       );
+ 
+       if (decision.outcome === CONTROL_SNAPSHOT_RETRY_DECISION.RETRY) {
++        if (!hasControlSnapshotRetryDelayBudget(retryBudget, this.nowFn)) {
++          if (resultOrError instanceof Error) {
++            throw resultOrError;
++          }
++          return resolveControlSnapshotQueryResult(resultOrError);
++        }
+         attempts += 1;
+         this.logger.warn(SNAPSHOT_RETRY_LOG_MSG, {
+           attempt: attempts,
+diff --git a/test/admin/admin-control-snapshot-retry-decision.test.js b/test/admin/admin-control-snapshot-retry-decision.test.js
+index 15292c0e4fa18e068c99e331d91c761e3daf25ec..8b72e2d802b920fe6eecd89a95c977e9c3a41a06 100644
+--- a/test/admin/admin-control-snapshot-retry-decision.test.js
++++ b/test/admin/admin-control-snapshot-retry-decision.test.js
+@@ -342,6 +342,90 @@ test('admin websocket control snapshot query retries pressure observations',
+     );
+   });
+ 
++test('admin websocket control snapshot retries consume one absolute caller budget',
++  async (t) => {
++    let nowMs = 1000;
++    const api = new AdminWebSocketAPI({
++      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
++      nowFn: () => nowMs,
++    });
++    const observedTimeouts = [];
++
++    api.logger = {warn() {}};
++    api.closeStaleSnapshotLaneSockets = () => {};
++    api.controlSnapshot.buildControlSnapshotQueryResult = async (options) => {
++      observedTimeouts.push(options.queryTimeoutMs);
++      if (observedTimeouts.length === 1) {
++        nowMs += 7000;
++        return createRowsResult({
++          ...CONTROL_SNAPSHOT_ROW,
++          snapshotObservation: {
++            state: OBSERVATION_STATE_DEFERRED_REFRESH,
++            reasonCodes: [OBSERVATION_REASON_PRESSURE],
++          },
++        });
++      }
++      return createRowsResult(CONTROL_SNAPSHOT_ROW);
++    };
++
++    const result = await api.buildControlSnapshotQueryResult({
++      activeClientId: 'client-deadline',
++      queryTimeoutMs: 15000,
++    });
++
++    t.same(
++      observedTimeouts,
++      [15000, 8000],
++      'the retry receives only the time remaining on the original request',
++    );
++    t.same(
++      result.rows,
++      [CONTROL_SNAPSHOT_ROW],
++      'the existing pressure retry still returns the admitted clean result',
++    );
++  });
++
++test('admin websocket control snapshot stops retrying before the caller budget expires',
++  async (t) => {
++    let nowMs = 1000;
++    const api = new AdminWebSocketAPI({
++      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
++      nowFn: () => nowMs,
++    });
++    let buildCount = 0;
++    const pressureRow = {
++      ...CONTROL_SNAPSHOT_ROW,
++      snapshotObservation: {
++        state: OBSERVATION_STATE_FAILED,
++        reasonCodes: [OBSERVATION_REASON_PRESSURE],
++      },
++    };
++
++    api.logger = {warn() {}};
++    api.closeStaleSnapshotLaneSockets = () => {};
++    api.controlSnapshot.buildControlSnapshotQueryResult = async () => {
++      buildCount += 1;
++      nowMs += 14750;
++      return createRowsResult(pressureRow);
++    };
++
++    const result = await api.buildControlSnapshotQueryResult({
++      activeClientId: 'client-near-deadline',
++      queryTimeoutMs: 15000,
++    });
++
++    t.equal(
++      buildCount,
++      1,
++      'the owner does not start a retry whose delay exceeds the remaining budget',
++    );
++    t.same(
++      result.rows,
++      [pressureRow],
++      'deadline exhaustion preserves the fail-closed pressure observation',
++    );
++  });
++
+ test('closeStaleSnapshotLaneSockets protects active client and open sockets', (t) => {
+   const closedIds = [];
+   const disconnectedClients = [];

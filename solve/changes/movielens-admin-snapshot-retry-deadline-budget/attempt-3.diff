@@ -1,0 +1,283 @@
+diff --git a/src/admin/admin-websocket-diagnostics-route-methods.js b/src/admin/admin-websocket-diagnostics-route-methods.js
+index c1dbd29dac3ed8fe30c950e8472a9c3edc7a3848..24e5f5a7ecf33d17c8ca73f5620647a514b6d451 100644
+--- a/src/admin/admin-websocket-diagnostics-route-methods.js
++++ b/src/admin/admin-websocket-diagnostics-route-methods.js
+@@ -3,11 +3,84 @@ import {
+   CONTROL_SNAPSHOT_RETRY_DELAY_MS,
+   evaluateControlSnapshotRetryDecision,
+ } from './admin-control-snapshot-retry-decision.js';
++import {
++  createTimeoutBudget,
++  getRemainingBudgetMs,
++} from '../control-plane/timeout-budget.js';
+ import {resolveControlSnapshotQueryResult} from './admin-control-snapshot-query-result-helper.js';
+ import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+ 
+ const SNAPSHOT_RETRY_LOG_MSG =
+   'Snapshot query encountered pressure or timeout. Retrying after stale socket cleanup...';
++const CONTROL_SNAPSHOT_RETRY_BUDGET_MODE = Object.freeze({
++  CALLER_DEADLINE: 'caller_deadline',
++  DEFAULT: 'default',
++});
++const CONTROL_SNAPSHOT_ATTEMPT_STATE = Object.freeze({
++  DEADLINE_EXHAUSTED: 'deadline_exhausted',
++  READY: 'ready',
++});
++const NO_CONTROL_SNAPSHOT_RETRY_RESULT = Symbol('noControlSnapshotRetryResult');
++
++function createControlSnapshotRetryBudget(options, nowFn) {
++  const queryTimeoutMs = Number(options?.queryTimeoutMs);
++  if (!Number.isFinite(queryTimeoutMs) || queryTimeoutMs <= 0) {
++    return Object.freeze({
++      mode: CONTROL_SNAPSHOT_RETRY_BUDGET_MODE.DEFAULT,
++    });
++  }
++  return Object.freeze({
++    mode: CONTROL_SNAPSHOT_RETRY_BUDGET_MODE.CALLER_DEADLINE,
++    budget: createTimeoutBudget({
++      configuredBudgetMs: Math.floor(queryTimeoutMs),
++      now: nowFn,
++    }),
++  });
++}
++
++function resolveControlSnapshotAttemptOptions(options, retryBudgetState, nowFn) {
++  if (
++    retryBudgetState.mode !==
++    CONTROL_SNAPSHOT_RETRY_BUDGET_MODE.CALLER_DEADLINE
++  ) {
++    return Object.freeze({
++      state: CONTROL_SNAPSHOT_ATTEMPT_STATE.READY,
++      options,
++    });
++  }
++  const remainingBudgetMs = getRemainingBudgetMs(
++    retryBudgetState.budget,
++    {now: nowFn},
++  );
++  if (remainingBudgetMs <= 0) {
++    return Object.freeze({
++      state: CONTROL_SNAPSHOT_ATTEMPT_STATE.DEADLINE_EXHAUSTED,
++    });
++  }
++  return Object.freeze({
++    state: CONTROL_SNAPSHOT_ATTEMPT_STATE.READY,
++    options: {
++      ...options,
++      queryTimeoutMs: remainingBudgetMs,
++    },
++  });
++}
++
++function hasControlSnapshotRetryDelayBudget(retryBudgetState, nowFn) {
++  return retryBudgetState.mode === CONTROL_SNAPSHOT_RETRY_BUDGET_MODE.DEFAULT ||
++    getRemainingBudgetMs(retryBudgetState.budget, {now: nowFn}) >
++      CONTROL_SNAPSHOT_RETRY_DELAY_MS;
++}
++
++function resolveControlSnapshotTerminalResult(resultOrError, options) {
++  if (resultOrError instanceof Error) {
++    throw resultOrError;
++  }
++  if (resultOrError !== NO_CONTROL_SNAPSHOT_RETRY_RESULT) {
++    return resolveControlSnapshotQueryResult(resultOrError);
++  }
++  throw new Error(ADMIN_ERROR_MESSAGE.queryTimeout(options?.queryTimeoutMs));
++}
+ 
+ const {
+   ADMIN_CONTROL_SNAPSHOT,
+@@ -287,11 +360,23 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
+ 
+   async buildControlSnapshotQueryResult(options = {}) {
+     let attempts = 0;
++    let resultOrError = NO_CONTROL_SNAPSHOT_RETRY_RESULT;
++    const retryBudgetState = createControlSnapshotRetryBudget(
++      options,
++      this.nowFn,
++    );
+     while (true) {
+-      let resultOrError;
++      const attempt = resolveControlSnapshotAttemptOptions(
++        options,
++        retryBudgetState,
++        this.nowFn,
++      );
++      if (attempt.state === CONTROL_SNAPSHOT_ATTEMPT_STATE.DEADLINE_EXHAUSTED) {
++        return resolveControlSnapshotTerminalResult(resultOrError, options);
++      }
+       try {
+         resultOrError = await this.controlSnapshot.buildControlSnapshotQueryResult(
+-          options,
++          attempt.options,
+         );
+       } catch (error) {
+         resultOrError = error;
+@@ -304,6 +389,12 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
+       );
+ 
+       if (decision.outcome === CONTROL_SNAPSHOT_RETRY_DECISION.RETRY) {
++        if (!hasControlSnapshotRetryDelayBudget(
++          retryBudgetState,
++          this.nowFn,
++        )) {
++          return resolveControlSnapshotTerminalResult(resultOrError, options);
++        }
+         attempts += 1;
+         this.logger.warn(SNAPSHOT_RETRY_LOG_MSG, {
+           attempt: attempts,
+@@ -319,10 +410,7 @@ const ADMIN_WEBSOCKET_DIAGNOSTICS_ROUTE_METHODS = {
+       }
+ 
+       if (decision.outcome === CONTROL_SNAPSHOT_RETRY_DECISION.STOP_FAILURE) {
+-        if (resultOrError instanceof Error) {
+-          throw resultOrError;
+-        }
+-        return resolveControlSnapshotQueryResult(resultOrError);
++        return resolveControlSnapshotTerminalResult(resultOrError, options);
+       }
+ 
+       return resolveControlSnapshotQueryResult(resultOrError);
+diff --git a/test/admin/admin-control-snapshot-retry-decision.test.js b/test/admin/admin-control-snapshot-retry-decision.test.js
+index 15292c0e4fa18e068c99e331d91c761e3daf25ec..565e571fa9e213e3f1d30deb915d1dd4e106c65f 100644
+--- a/test/admin/admin-control-snapshot-retry-decision.test.js
++++ b/test/admin/admin-control-snapshot-retry-decision.test.js
+@@ -342,6 +342,138 @@ test('admin websocket control snapshot query retries pressure observations',
+     );
+   });
+ 
++test('admin websocket control snapshot retries consume one absolute caller budget',
++  async (t) => {
++    let nowMs = 1000;
++    const api = new AdminWebSocketAPI({
++      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
++      nowFn: () => nowMs,
++    });
++    const observedTimeouts = [];
++
++    api.logger = {warn() {}};
++    api.closeStaleSnapshotLaneSockets = () => {};
++    api.controlSnapshot.buildControlSnapshotQueryResult = async (options) => {
++      observedTimeouts.push(options.queryTimeoutMs);
++      if (observedTimeouts.length === 1) {
++        nowMs += 7000;
++        return createRowsResult({
++          ...CONTROL_SNAPSHOT_ROW,
++          snapshotObservation: {
++            state: OBSERVATION_STATE_DEFERRED_REFRESH,
++            reasonCodes: [OBSERVATION_REASON_PRESSURE],
++          },
++        });
++      }
++      return createRowsResult(CONTROL_SNAPSHOT_ROW);
++    };
++
++    const result = await api.buildControlSnapshotQueryResult({
++      activeClientId: 'client-deadline',
++      queryTimeoutMs: 15000,
++    });
++
++    t.same(
++      observedTimeouts,
++      [15000, 8000],
++      'the retry receives only the time remaining on the original request',
++    );
++    t.same(
++      result.rows,
++      [CONTROL_SNAPSHOT_ROW],
++      'the existing pressure retry still returns the admitted clean result',
++    );
++  });
++
++test('admin websocket control snapshot stops retrying before the caller budget expires',
++  async (t) => {
++    let nowMs = 1000;
++    const api = new AdminWebSocketAPI({
++      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
++      nowFn: () => nowMs,
++    });
++    let buildCount = 0;
++    const pressureRow = {
++      ...CONTROL_SNAPSHOT_ROW,
++      snapshotObservation: {
++        state: OBSERVATION_STATE_FAILED,
++        reasonCodes: [OBSERVATION_REASON_PRESSURE],
++      },
++    };
++
++    api.logger = {warn() {}};
++    api.closeStaleSnapshotLaneSockets = () => {};
++    api.controlSnapshot.buildControlSnapshotQueryResult = async () => {
++      buildCount += 1;
++      nowMs += 14750;
++      return createRowsResult(pressureRow);
++    };
++
++    const result = await api.buildControlSnapshotQueryResult({
++      activeClientId: 'client-near-deadline',
++      queryTimeoutMs: 15000,
++    });
++
++    t.equal(
++      buildCount,
++      1,
++      'the owner does not start a retry whose delay exceeds the remaining budget',
++    );
++    t.same(
++      result.rows,
++      [pressureRow],
++      'deadline exhaustion preserves the fail-closed pressure observation',
++    );
++  });
++
++test('admin websocket control snapshot rechecks the caller budget after retry delay',
++  async (t) => {
++    let nowMs = 1000;
++    const api = new AdminWebSocketAPI({
++      nodeId: CONTROL_SNAPSHOT_ROW.nodeId,
++      nowFn: () => nowMs,
++    });
++    const observedTimeouts = [];
++    const pressureRow = {
++      ...CONTROL_SNAPSHOT_ROW,
++      snapshotObservation: {
++        state: OBSERVATION_STATE_FAILED,
++        reasonCodes: [OBSERVATION_REASON_PRESSURE],
++      },
++    };
++
++    api.logger = {warn() {}};
++    api.closeStaleSnapshotLaneSockets = () => {};
++    api.controlSnapshot.buildControlSnapshotQueryResult = async (options) => {
++      observedTimeouts.push(options.queryTimeoutMs);
++      if (observedTimeouts.length === 1) {
++        nowMs += 14499;
++        return createRowsResult(pressureRow);
++      }
++      return createRowsResult(CONTROL_SNAPSHOT_ROW);
++    };
++    const expiryTimer = setTimeout(() => {
++      nowMs += 1501;
++    }, 50);
++    t.teardown(() => clearTimeout(expiryTimer));
++
++    const result = await api.buildControlSnapshotQueryResult({
++      activeClientId: 'client-delay-expiry',
++      queryTimeoutMs: 15000,
++    });
++
++    t.same(
++      observedTimeouts,
++      [15000],
++      'work is not started when the retry delay consumes the last budget',
++    );
++    t.same(
++      result.rows,
++      [pressureRow],
++      'post-delay exhaustion preserves the last fail-closed pressure result',
++    );
++  });
++
+ test('closeStaleSnapshotLaneSockets protects active client and open sockets', (t) => {
+   const closedIds = [];
+   const disconnectedClients = [];
