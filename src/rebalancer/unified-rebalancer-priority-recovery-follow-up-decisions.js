@@ -291,20 +291,13 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     }
     const followUpDecisions = [];
     const followUpPartitionIds = new Set();
-    let skippedSettledCandidate = false;
     const addFollowUpDecision = (decisionSnapshot) => {
-      const appended =
-        this.appendPriorityRecoverySurrogateFollowUpDecision(
-          followUpDecisions,
-          followUpPartitionIds,
-          planningSnapshot,
-          decisionSnapshot,
-        );
-      if (appended !== true) {
-        if (decisionSnapshot) {
-          skippedSettledCandidate = true;
-        }
-      }
+      this.appendPriorityRecoverySurrogateFollowUpDecision(
+        followUpDecisions,
+        followUpPartitionIds,
+        planningSnapshot,
+        decisionSnapshot,
+      );
     };
     const closureWitnessPartitionId =
       this.resolvePriorityRecoveryClosureWitnessFollowUpPartitionId(
@@ -369,9 +362,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     const fallbackDecision =
       this.buildPriorityRecoverySurrogateDecisionFromPlanning(planningSnapshot);
     addFollowUpDecision(fallbackDecision);
-    return skippedSettledCandidate === true ?
-      Object.freeze(followUpDecisions) :
-      Object.freeze(followUpDecisions.slice(0, 1));
+    return Object.freeze(followUpDecisions.slice(0, 1));
   }
 
   buildPriorityRecoverySurrogateDecisionFromPlanning(

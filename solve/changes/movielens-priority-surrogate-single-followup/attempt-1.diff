@@ -1,0 +1,146 @@
+diff --git a/src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js b/src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js
+index 1ba78875c0d6a1a9c1569ef3d88bd52551eb82b6..9798abbd6deb3921b4d0e2ac6f2d88d17aefccc5 100644
+--- a/src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js
++++ b/src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js
+@@ -291,20 +291,13 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
+     }
+     const followUpDecisions = [];
+     const followUpPartitionIds = new Set();
+-    let skippedSettledCandidate = false;
+     const addFollowUpDecision = (decisionSnapshot) => {
+-      const appended =
+-        this.appendPriorityRecoverySurrogateFollowUpDecision(
+-          followUpDecisions,
+-          followUpPartitionIds,
+-          planningSnapshot,
+-          decisionSnapshot,
+-        );
+-      if (appended !== true) {
+-        if (decisionSnapshot) {
+-          skippedSettledCandidate = true;
+-        }
+-      }
++      this.appendPriorityRecoverySurrogateFollowUpDecision(
++        followUpDecisions,
++        followUpPartitionIds,
++        planningSnapshot,
++        decisionSnapshot,
++      );
+     };
+     const closureWitnessPartitionId =
+       this.resolvePriorityRecoveryClosureWitnessFollowUpPartitionId(
+@@ -369,9 +362,7 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
+     const fallbackDecision =
+       this.buildPriorityRecoverySurrogateDecisionFromPlanning(planningSnapshot);
+     addFollowUpDecision(fallbackDecision);
+-    return skippedSettledCandidate === true ?
+-      Object.freeze(followUpDecisions) :
+-      Object.freeze(followUpDecisions.slice(0, 1));
++    return Object.freeze(followUpDecisions.slice(0, 1));
+   }
+ 
+   buildPriorityRecoverySurrogateDecisionFromPlanning(
+diff --git a/test/rebalancer/priority-recovery-surrogate-single-followup.test.js b/test/rebalancer/priority-recovery-surrogate-single-followup.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed3f6c75940cf400d04aa72a869788de3811bad5
+--- /dev/null
++++ b/test/rebalancer/priority-recovery-surrogate-single-followup.test.js
+@@ -0,0 +1,98 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
++
++const OWNER_PARTITION_ID = 'control_plane_publications-p1';
++const SETTLED_PARTITION_ID = 'replica_operations-p1';
++const FIRST_ELIGIBLE_PARTITION_ID = 'sql_transactions-p1';
++const SECOND_ELIGIBLE_PARTITION_ID = 'sql_write_operations-p1';
++const SETTLED_STATE = 'spread_satisfied';
++const ELIGIBLE_STATE = 'needs_operation';
++
++function decisionSnapshot(partitionId, semanticState) {
++  return Object.freeze({partitionId, semanticState});
++}
++
++function createSurrogateDecisionOwner(decisionsByPartitionId) {
++  const rebalancer = Object.create(UnifiedRebalancer.prototype);
++  rebalancer.entityId = OWNER_PARTITION_ID;
++  rebalancer.isControlPlanePriorityPartition = () => true;
++  rebalancer.resolvePriorityRecoveryClosureWitnessFollowUpPartitionId = () =>
++    SETTLED_PARTITION_ID;
++  rebalancer.resolvePriorityRecoveryFollowUpPartitionId = (snapshot) =>
++    snapshot?.partitionId || '';
++  rebalancer.normalizePriorityRecoverySurrogateFollowUpDecisionSnapshot =
++    (_planningSnapshot, partitionId) =>
++      decisionsByPartitionId.get(partitionId) || null;
++  rebalancer.isPriorityRecoveryFollowUpOperationRequired = (snapshot) =>
++    snapshot?.semanticState === ELIGIBLE_STATE;
++  rebalancer.buildPriorityRecoverySurrogateDecisionFromPlanning = () => null;
++  return rebalancer;
++}
++
++function planningSnapshot() {
++  return Object.freeze({
++    priorityRecoveryDecisionSnapshots: Object.freeze({
++      snapshots: Object.freeze([
++        decisionSnapshot(FIRST_ELIGIBLE_PARTITION_ID, ELIGIBLE_STATE),
++        decisionSnapshot(SECOND_ELIGIBLE_PARTITION_ID, ELIGIBLE_STATE),
++      ]),
++    }),
++  });
++}
++
++function followUpRecord(snapshot, decision) {
++  return Object.freeze({
++    planningSnapshot: snapshot,
++    decisionSnapshot: decision,
++  });
++}
++
++test(
++  'priority recovery scans past settled candidates but emits one surrogate per pass',
++  (t) => {
++    const decisionsByPartitionId = new Map([
++      [
++        SETTLED_PARTITION_ID,
++        decisionSnapshot(SETTLED_PARTITION_ID, SETTLED_STATE),
++      ],
++      [
++        FIRST_ELIGIBLE_PARTITION_ID,
++        decisionSnapshot(FIRST_ELIGIBLE_PARTITION_ID, ELIGIBLE_STATE),
++      ],
++      [
++        SECOND_ELIGIBLE_PARTITION_ID,
++        decisionSnapshot(SECOND_ELIGIBLE_PARTITION_ID, ELIGIBLE_STATE),
++      ],
++    ]);
++    const rebalancer = createSurrogateDecisionOwner(decisionsByPartitionId);
++    const snapshot = planningSnapshot();
++
++    t.same(
++      rebalancer.buildPriorityRecoverySurrogateFollowUpDecisions(snapshot),
++      [
++        followUpRecord(
++          snapshot,
++          decisionsByPartitionId.get(FIRST_ELIGIBLE_PARTITION_ID),
++        ),
++      ],
++      'the first pass emits only the first eligible surrogate',
++    );
++
++    decisionsByPartitionId.set(
++      FIRST_ELIGIBLE_PARTITION_ID,
++      decisionSnapshot(FIRST_ELIGIBLE_PARTITION_ID, SETTLED_STATE),
++    );
++
++    t.same(
++      rebalancer.buildPriorityRecoverySurrogateFollowUpDecisions(snapshot),
++      [
++        followUpRecord(
++          snapshot,
++          decisionsByPartitionId.get(SECOND_ELIGIBLE_PARTITION_ID),
++        ),
++      ],
++      'the next level-triggered pass advances to the next eligible surrogate',
++    );
++    t.end();
++  },
++);
