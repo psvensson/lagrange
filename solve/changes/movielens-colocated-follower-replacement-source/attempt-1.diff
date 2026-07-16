@@ -1,0 +1,145 @@
+diff --git a/src/rebalancer/move-planner-move-calculation-methods.js b/src/rebalancer/move-planner-move-calculation-methods.js
+index c10f9613e7361c013865d0eb0d53fefe6c9f6d8e..7a4aa4614916c28cecf7a6fb5d11ff21452ca474 100644
+--- a/src/rebalancer/move-planner-move-calculation-methods.js
++++ b/src/rebalancer/move-planner-move-calculation-methods.js
+@@ -240,6 +240,19 @@ class MovePlannerMoveCalculationMethods {
+       if (role === RAFT_ROLE.LEADER) {
+         return true;
+       }
++      // A partition leader_node_id identifies the hosting node, not the
++      // individual replica. During seed formation several replicas can share
++      // that node, so applying the node fallback to an explicit follower would
++      // classify every co-located replica as the leader and restore first-wins
++      // source selection. Preserve per-replica role evidence; use the node-level
++      // owner only when the service row has no recognized role yet.
++      if (
++        role === RAFT_ROLE.FOLLOWER ||
++        role === RAFT_ROLE.CANDIDATE ||
++        role === RAFT_ROLE.LEARNER
++      ) {
++        return false;
++      }
+       const candidateNodeId = replica.node_id || replica.nodeId || null;
+       return (
+         !!partitionLeaderNodeId &&
+diff --git a/test/rebalancer/surplus-drain-prefers-non-leader-source.test.js b/test/rebalancer/surplus-drain-prefers-non-leader-source.test.js
+index e880ec2ceda8dea068e5060bbdbdb14fb35fb2d8..4e2e8647907503cb9397a391016c777e80f5d783 100644
+--- a/test/rebalancer/surplus-drain-prefers-non-leader-source.test.js
++++ b/test/rebalancer/surplus-drain-prefers-non-leader-source.test.js
+@@ -110,6 +110,49 @@ const TARGET_STATE = {
+   availableNodeCount: 5,
+ };
+ 
++const COLOCATED_PARTITION_ID = 'control_plane_publications-p1';
++const COLOCATED_NODE_ID = 'node-seed';
++const COLOCATED_LEADER_REPLICA_ID = `${COLOCATED_PARTITION_ID}-r1`;
++const COLOCATED_FOLLOWER_REPLICA_ID = `${COLOCATED_PARTITION_ID}-r2`;
++
++function buildColocatedPriorityRebalancer(leaderRole = 'leader') {
++  const replicaRows = [
++    {replicaId: COLOCATED_LEADER_REPLICA_ID, role: leaderRole},
++    {replicaId: COLOCATED_FOLLOWER_REPLICA_ID, role: 'follower'},
++    {replicaId: `${COLOCATED_PARTITION_ID}-r3`, role: 'follower'},
++  ].map(({replicaId, role}) => ({
++    service_id: replicaId,
++    replica_id: replicaId,
++    partition_id: COLOCATED_PARTITION_ID,
++    node_id: COLOCATED_NODE_ID,
++    service_type: 'partition',
++    status: ReplicaStatus.ACTIVE,
++    raft_role: role,
++  }));
++
++  return {
++    currentReplicas: replicaRows,
++    rebalancer: createTestRebalancer({
++      entityId: COLOCATED_PARTITION_ID,
++      entityType: EntityType.PARTITION,
++      nodeId: COLOCATED_NODE_ID,
++      cacheData: {
++        nodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'].map(
++          (nodeId) => ({node_id: nodeId, status: 'active'}),
++        ),
++        services: replicaRows,
++        partitions: [{
++          partition_id: COLOCATED_PARTITION_ID,
++          table_id: 'control_plane_publications',
++          leader_node_id: COLOCATED_NODE_ID,
++          replica_count: 3,
++        }],
++        replicaOperations: [],
++      },
++    }),
++  };
++}
++
+ test('surplus drain does NOT pick the partition leader as a REPLACE source ' +
+   'when a non-leader removal candidate exists (RED on revert: legacy ' +
+   'first-wins selection drains the leader via REPLACE -> CL-043 wedge)', (t) => {
+@@ -168,3 +211,66 @@ test('surplus drain removed-replica SET is unchanged by the leader bias ' +
+   t.ok(leaderRemove, 'the leader drains via a plain REMOVE, not a REPLACE source');
+   t.end();
+ });
++
++test('at-target spread preserves an explicit follower when replicas share ' +
++  'the partition leader node', (t) => {
++  setupConfig();
++  const {currentReplicas: replicas, rebalancer} =
++    buildColocatedPriorityRebalancer();
++  rebalancer.initialize();
++  rebalancer.setLeader(true);
++
++  const moves = rebalancer.calculateMoves(replicas, {
++    targetReplicaCount: 3,
++    targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
++    availableNodeCount: 3,
++  });
++  rebalancer.shutdown();
++  teardownConfig();
++
++  const replaceMoves = moves.filter((move) => move.type === MoveType.REPLACE);
++  t.equal(replaceMoves.length, 1,
++    'critical spread serializes the first count-neutral relocation');
++  t.equal(
++    replaceMoves[0].replicaId,
++    COLOCATED_FOLLOWER_REPLICA_ID,
++    'the explicit follower is relocated before the co-located leader',
++  );
++  t.not(
++    replaceMoves[0].replicaId,
++    COLOCATED_LEADER_REPLICA_ID,
++    'partition leader-node fallback cannot overwrite explicit follower role',
++  );
++  t.end();
++});
++
++test('at-target spread retains node-level leadership fallback when the ' +
++  'leader replica role is missing', (t) => {
++  setupConfig();
++  const {currentReplicas: replicas, rebalancer} =
++    buildColocatedPriorityRebalancer(null);
++  t.equal(
++    replicas[0].raft_role,
++    null,
++    'fixture leaves the leader replica role absent so node fallback is tested',
++  );
++  rebalancer.initialize();
++  rebalancer.setLeader(true);
++
++  const moves = rebalancer.calculateMoves(replicas, {
++    targetReplicaCount: 3,
++    targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
++    availableNodeCount: 3,
++  });
++  rebalancer.shutdown();
++  teardownConfig();
++
++  const replaceMove = moves.find((move) => move.type === MoveType.REPLACE);
++  t.equal(
++    replaceMove.replicaId,
++    COLOCATED_FOLLOWER_REPLICA_ID,
++    'a missing-role row on leader_node_id stays conservative while an ' +
++      'explicit follower remains selectable',
++  );
++  t.end();
++});

@@ -110,6 +110,49 @@ const TARGET_STATE = {
   availableNodeCount: 5,
 };
 
+const COLOCATED_PARTITION_ID = 'control_plane_publications-p1';
+const COLOCATED_NODE_ID = 'node-seed';
+const COLOCATED_LEADER_REPLICA_ID = `${COLOCATED_PARTITION_ID}-r1`;
+const COLOCATED_FOLLOWER_REPLICA_ID = `${COLOCATED_PARTITION_ID}-r2`;
+
+function buildColocatedPriorityRebalancer(leaderRole = 'leader') {
+  const replicaRows = [
+    {replicaId: COLOCATED_LEADER_REPLICA_ID, role: leaderRole},
+    {replicaId: COLOCATED_FOLLOWER_REPLICA_ID, role: 'follower'},
+    {replicaId: `${COLOCATED_PARTITION_ID}-r3`, role: 'follower'},
+  ].map(({replicaId, role}) => ({
+    service_id: replicaId,
+    replica_id: replicaId,
+    partition_id: COLOCATED_PARTITION_ID,
+    node_id: COLOCATED_NODE_ID,
+    service_type: 'partition',
+    status: ReplicaStatus.ACTIVE,
+    raft_role: role,
+  }));
+
+  return {
+    currentReplicas: replicaRows,
+    rebalancer: createTestRebalancer({
+      entityId: COLOCATED_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: COLOCATED_NODE_ID,
+      cacheData: {
+        nodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'].map(
+          (nodeId) => ({node_id: nodeId, status: 'active'}),
+        ),
+        services: replicaRows,
+        partitions: [{
+          partition_id: COLOCATED_PARTITION_ID,
+          table_id: 'control_plane_publications',
+          leader_node_id: COLOCATED_NODE_ID,
+          replica_count: 3,
+        }],
+        replicaOperations: [],
+      },
+    }),
+  };
+}
+
 test('surplus drain does NOT pick the partition leader as a REPLACE source ' +
   'when a non-leader removal candidate exists (RED on revert: legacy ' +
   'first-wins selection drains the leader via REPLACE -> CL-043 wedge)', (t) => {
@@ -166,5 +209,68 @@ test('surplus drain removed-replica SET is unchanged by the leader bias ' +
     (m) => m.type === MoveType.REMOVE && m.nodeId === LEADER_NODE,
   );
   t.ok(leaderRemove, 'the leader drains via a plain REMOVE, not a REPLACE source');
+  t.end();
+});
+
+test('at-target spread preserves an explicit follower when replicas share ' +
+  'the partition leader node', (t) => {
+  setupConfig();
+  const {currentReplicas: replicas, rebalancer} =
+    buildColocatedPriorityRebalancer();
+  rebalancer.initialize();
+  rebalancer.setLeader(true);
+
+  const moves = rebalancer.calculateMoves(replicas, {
+    targetReplicaCount: 3,
+    targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
+    availableNodeCount: 3,
+  });
+  rebalancer.shutdown();
+  teardownConfig();
+
+  const replaceMoves = moves.filter((move) => move.type === MoveType.REPLACE);
+  t.equal(replaceMoves.length, 1,
+    'critical spread serializes the first count-neutral relocation');
+  t.equal(
+    replaceMoves[0].replicaId,
+    COLOCATED_FOLLOWER_REPLICA_ID,
+    'the explicit follower is relocated before the co-located leader',
+  );
+  t.not(
+    replaceMoves[0].replicaId,
+    COLOCATED_LEADER_REPLICA_ID,
+    'partition leader-node fallback cannot overwrite explicit follower role',
+  );
+  t.end();
+});
+
+test('at-target spread retains node-level leadership fallback when the ' +
+  'leader replica role is missing', (t) => {
+  setupConfig();
+  const {currentReplicas: replicas, rebalancer} =
+    buildColocatedPriorityRebalancer(null);
+  t.equal(
+    replicas[0].raft_role,
+    null,
+    'fixture leaves the leader replica role absent so node fallback is tested',
+  );
+  rebalancer.initialize();
+  rebalancer.setLeader(true);
+
+  const moves = rebalancer.calculateMoves(replicas, {
+    targetReplicaCount: 3,
+    targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
+    availableNodeCount: 3,
+  });
+  rebalancer.shutdown();
+  teardownConfig();
+
+  const replaceMove = moves.find((move) => move.type === MoveType.REPLACE);
+  t.equal(
+    replaceMove.replicaId,
+    COLOCATED_FOLLOWER_REPLICA_ID,
+    'a missing-role row on leader_node_id stays conservative while an ' +
+      'explicit follower remains selectable',
+  );
   t.end();
 });

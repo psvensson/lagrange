@@ -240,6 +240,19 @@ class MovePlannerMoveCalculationMethods {
       if (role === RAFT_ROLE.LEADER) {
         return true;
       }
+      // A partition leader_node_id identifies the hosting node, not the
+      // individual replica. During seed formation several replicas can share
+      // that node, so applying the node fallback to an explicit follower would
+      // classify every co-located replica as the leader and restore first-wins
+      // source selection. Preserve per-replica role evidence; use the node-level
+      // owner only when the service row has no recognized role yet.
+      if (
+        role === RAFT_ROLE.FOLLOWER ||
+        role === RAFT_ROLE.CANDIDATE ||
+        role === RAFT_ROLE.LEARNER
+      ) {
+        return false;
+      }
       const candidateNodeId = replica.node_id || replica.nodeId || null;
       return (
         !!partitionLeaderNodeId &&

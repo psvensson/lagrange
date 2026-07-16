@@ -1,0 +1,46 @@
+{
+  "id": "movielens-colocated-follower-replacement-source",
+  "authoringContractVersion": 1,
+  "statement": "Explicit per-replica Raft roles are authoritative over a co-located partition leader-node hint when choosing count-neutral replacement sources, missing or unrecognized roles retain conservative node-level fallback, and the production five-node MovieLens milestone completes schema admission, durable ratings creation, 100000-row preload, ratings-only split convergence, and the successful three-way report.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "movielens-ready-lease-maintenance-critical-owner-lane",
+    "planDoc": "solve/epics/service-data-affinity-placement.md",
+    "draftedAtCommit": "328fa64b0849440c3fe48c8bc61c7bcd6e4596e9"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-colocated-follower-replacement-source-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "changed-live-only",
+      "statement": "Do not widen the schema budget, weaken the 60000ms quiescence window, serialize scenario joins, reduce production logging, or rerun live without a changed deterministic owner invariant."
+    }
+  ]
+}
