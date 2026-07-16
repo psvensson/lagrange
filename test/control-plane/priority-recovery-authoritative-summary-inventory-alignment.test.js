@@ -10,6 +10,9 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  PRIORITY_CONTROL_PLANE_TABLE_IDS,
+} from '../../src/bootstrap/system-partition-classification.js';
+import {
   MembershipPublicationCoordinator,
 } from '../../src/control-plane/membership-publication-coordinator.js';
 import {
@@ -22,13 +25,8 @@ import {
 const NODE_IDS = Object.freeze(['seed', 'node-2', 'node-3', 'node-4']);
 const READY_NODE_IDS = Object.freeze(['seed', 'node-2', 'node-4']);
 const PRIORITY_PARTITION_IDS = Object.freeze([
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS],
-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
-]);
+  ...PRIORITY_CONTROL_PLANE_TABLE_IDS,
+].map((tableId) => INITIAL_PARTITION_IDS[tableId]));
 const SCHEMA_OPERATIONS_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS];
 const PUBLICATION_EPOCH = 3;

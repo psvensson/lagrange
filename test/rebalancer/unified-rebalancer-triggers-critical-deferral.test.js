@@ -440,6 +440,100 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
+    'checkRebalance lets nodes-p1 escape its own ready-lease dependency on ' +
+    'a recovery-eligible quorum',
+    async (t) => {
+      const recoveryEligibleNodeIds = new Set([
+        'node-1',
+        'node-2',
+        'node-3',
+      ]);
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          const recoveryEligible = recoveryEligibleNodeIds.has(nodeId);
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
+                recoveryEligible,
+            },
+            reasons: recoveryEligible ? [] : [{code: 'ready_lease_expired'}],
+          };
+        },
+      };
+      const nodes = ['node-1', 'node-2', 'node-3', 'node-4', 'node-5']
+        .map((nodeId) => ({
+          node_id: nodeId,
+          status: NodeStatus.ACTIVE,
+        }));
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes,
+        partitions: [{
+          partition_id: 'nodes-p1',
+          table_id: 'nodes',
+          replica_count: 3,
+        }],
+        nodeEndpoints: [...recoveryEligibleNodeIds]
+          .map((nodeId) => createNodeEndpoint(nodeId)),
+        serviceEndpoints: [...recoveryEligibleNodeIds]
+          .map((nodeId) => createPostgresWireEndpoint(nodeId)),
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      t.equal(
+        rebalancer.getCriticalSystemTopologySettlingBlocker(),
+        null,
+        'nodes-p1 should satisfy the real topology gate from recovery quorum evidence',
+      );
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'nodes-p1 should enter planning once a safe recovery quorum can move its replicas',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'expired non-quorum leases should not preserve the nodes-p1 placement cycle',
+      );
+    });
+
+  await t.test(
     'checkRebalance keeps priority control-plane partitions open when ' +
     'quorum is recovery-eligible during ACK_PENDING convergence',
     async (t) => {
@@ -534,10 +628,11 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance defers critical system partitions while failed membership is pending cleanup',
+    'checkRebalance defers ordinary critical system partitions while failed ' +
+    'membership is pending cleanup',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'services-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -571,7 +666,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       t.equal(
         evaluateCalls,
         0,
-        'failed membership should remain behind the topology-settling gate until cleanup completes',
+        'ordinary system recovery should remain behind the topology-settling gate until cleanup completes',
       );
     });
 

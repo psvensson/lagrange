@@ -105,6 +105,25 @@ test('ordered class preserves all overlapping membership facts', (t) => {
   t.end();
 });
 
+test('nodes table participates in priority recovery to break the liveness ' +
+  'placement cycle', (t) => {
+  const outcome = classifySystemPartition({
+    partitionId: `${SYSTEM_TABLE_NAME.NODES}-p1`,
+  });
+
+  t.equal(
+    outcome.priorityControlPlane,
+    true,
+    'nodes-p1 recovery must not require every lease stored in nodes-p1 to already be current',
+  );
+  t.equal(
+    outcome.bootstrapCritical,
+    true,
+    'priority recovery classification must preserve bootstrap-critical ownership',
+  );
+  t.end();
+});
+
 test('bootstrap-critical ID predicate preserves exact membership', (t) => {
   const criticalPartitionId = partitionId(PRIORITY_TABLE_ID, 1);
   t.equal(isBootstrapCriticalSystemPartitionId(criticalPartitionId), true);
