@@ -18,9 +18,9 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json
 - Selected theory: theory-20260716-admin-retry-deadline-typed-timeout (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-admin-snapshot-retry-deadline-budget-main
 
@@ -60,6 +60,10 @@
 - **movielens-admin-snapshot-retry-deadline-budget-main**: Independent verification rejected exact attempt 1: post-delay clock exhaustion still started a 1ms retry after the absolute caller deadline, and createControlSnapshotRetryBudget introduced a raw-null semantic state. Replacement must recheck immediately before every attempt, preserve the last fail-closed pressure result, and use an explicit budget mode. [subagent:verify_wave4_snapshot_retry_budget_attempt1]
 - **movielens-admin-snapshot-retry-deadline-budget-main**: Independent verification rejected exact attempt 2 despite closing the timing hole: resolveControlSnapshotAttemptOptions still encoded deadline_exhausted as semantic null. Replacement must preserve the green post-delay behavior while returning an explicit ready or deadline_exhausted result variant. [subagent:verify_wave4_snapshot_retry_budget_attempt1]
 - **movielens-admin-snapshot-retry-deadline-budget-main**: Independent verification rejected exact attempt 3 despite green timing, sentinel, adjacent, and model gates: the immediate deadline-exhaustion stop threw a generic query-timeout string without timeoutClassification. Replacement must use the canonical timeout-budget error with QUERY_TIMEOUT classification at the retry owner and assert that typed outcome. [subagent:verify_wave4_snapshot_retry_budget_attempt1]
+- **movielens-admin-snapshot-retry-deadline-budget-main**: Independent verification approved exact attempt 4: the full-index artifact matches base e4f3d4d6 and passes 54 focused plus 932 adjacent assertions; immediate exhaustion starts zero builds and emits QUERY_TIMEOUT with admin_control_snapshot_query and the original 15000ms budget; explicit state, retry/default/error-identity, scoped static, and all 13 TLC checks pass. [subagent:verify_wave4_snapshot_retry_budget_attempt1]
+- **movielens-admin-snapshot-retry-deadline-budget-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json]
+- **movielens-admin-snapshot-retry-deadline-budget-main**: The single changed production run at checkpoint 4d2411d2 formed five nodes and the absolute retry budget fix removed the prior 15000ms response-timeout signature, but the unchanged schema gate returned a fail-closed stale_usable observation until timeout: cache_stale_watermark and stale_replica_operations_in_flight, while critical topology was ready with zero spread gap. Lagrange report sha256 b38b3fbefe46834dc46184e47934f44490793a5b551b3a4f7e8626ced43ee4c5, three-way report sha256 35365d502f35e41b6a2d6b5e9f3a27b8483417ddcdecf330b8035614e2eb2688, immutable archive sha256 1e8ce95cd018af3c0faf443d6b37aa1b159b5d43b77fdffdbc634d8390c4e894. No unchanged live rerun is authorized. [data/examples/service-data-affinity-demo-archive/wave4-live-admin-snapshot-retry-deadline-2026-07-16T05-31-57-709Z.tar.gz]
+- **movielens-admin-snapshot-retry-deadline-budget-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json]
 
 ## Theories
 - **theory-20260716-the-websocket-retry-owner-created-one** [active] system, mechanism The websocket retry owner created one timeout budget but its terminal no-result branch threw an untyped Error instead of the canonical classified timeout-budget error., owner admin_control_snapshot_retry_owner, modelGate npm run model:contracts
@@ -76,6 +80,7 @@
 - **theory-20260716-admin-snapshot-retry-reuses-full-caller**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
 - **theory-20260716-admin-retry-deadline-outcome-semantic-null**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
 - **theory-20260716-admin-retry-deadline-typed-timeout**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
+- **theory-20260716-admin-retry-deadline-typed-timeout**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
