@@ -440,8 +440,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance lets nodes-p1 escape its own ready-lease dependency on ' +
-    'a recovery-eligible quorum',
+    'checkRebalance keeps nodes-p1 load-shedding while full readiness is ' +
+    'incomplete despite a recovery-eligible quorum',
     async (t) => {
       const recoveryEligibleNodeIds = new Set([
         'node-1',
@@ -514,22 +514,21 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         scheduledDelayMs = overrideDelayMs;
       };
 
-      t.equal(
+      t.ok(
         rebalancer.getCriticalSystemTopologySettlingBlocker(),
-        null,
-        'nodes-p1 should satisfy the real topology gate from recovery quorum evidence',
+        'nodes-p1 should retain the full-readiness topology gate after the adverse live A/B',
       );
       await rebalancer.checkRebalance();
 
       t.equal(
         evaluateCalls,
-        1,
-        'nodes-p1 should enter planning once a safe recovery quorum can move its replicas',
+        0,
+        'nodes-p1 should not add recovery work while its readiness prerequisite is incomplete',
       );
       t.equal(
-        scheduledDelayMs,
-        null,
-        'expired non-quorum leases should not preserve the nodes-p1 placement cycle',
+        typeof scheduledDelayMs,
+        'number',
+        'nodes-p1 should schedule the canonical delayed retry rather than advance now',
       );
     });
 
@@ -628,11 +627,10 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance defers ordinary critical system partitions while failed ' +
-    'membership is pending cleanup',
+    'checkRebalance defers critical system partitions while failed membership is pending cleanup',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'services-p1',
+        entityId: 'nodes-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -666,7 +664,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       t.equal(
         evaluateCalls,
         0,
-        'ordinary system recovery should remain behind the topology-settling gate until cleanup completes',
+        'failed membership should remain behind the topology-settling gate until cleanup completes',
       );
     });
 

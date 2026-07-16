@@ -183,7 +183,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         }),
       };
       const rebalancer = createTestRebalancer({
-        entityId: 'services-p1',
+        entityId: 'nodes-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -237,7 +237,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         }),
       };
       const rebalancer = createTestRebalancer({
-        entityId: 'services-p1',
+        entityId: 'nodes-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -313,7 +313,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         }),
       };
       const rebalancer = createTestRebalancer({
-        entityId: 'services-p1',
+        entityId: 'nodes-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [

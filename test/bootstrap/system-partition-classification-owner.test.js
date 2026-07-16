@@ -105,16 +105,16 @@ test('ordered class preserves all overlapping membership facts', (t) => {
   t.end();
 });
 
-test('nodes table participates in priority recovery to break the liveness ' +
-  'placement cycle', (t) => {
+test('nodes table remains bootstrap-critical without entering priority ' +
+  'recovery', (t) => {
   const outcome = classifySystemPartition({
     partitionId: `${SYSTEM_TABLE_NAME.NODES}-p1`,
   });
 
   t.equal(
     outcome.priorityControlPlane,
-    true,
-    'nodes-p1 recovery must not require every lease stored in nodes-p1 to already be current',
+    false,
+    'nodes-p1 must retain full-readiness load shedding after the adverse live A/B',
   );
   t.equal(
     outcome.bootstrapCritical,

@@ -165,15 +165,8 @@ test('traffic-readiness-utils - priority control-plane background work opens for
       isBackgroundWorkReady(readinessState, {
         partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
       }),
-      true,
-      'nodes-p1 liveness recovery should open with other priority control-plane work',
-    );
-    t.equal(
-      isBackgroundWorkReady(readinessState, {
-        partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
-      }),
       false,
-      'ordinary system partitions should still wait for full traffic readiness',
+      'non-priority system partitions should still wait for full traffic readiness',
     );
   });
 
