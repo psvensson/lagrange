@@ -18,16 +18,17 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json
 - Selected theory: theory-20260716-partition-leader-node-id-overclassifies-explicit (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-colocated-follower-replacement-source-main
+- No longer current: Do not tune the schema/stability budgets or retry unchanged; discriminate whether follower selection engaged and why fresh operations were still minted after an earlier steady window.
 
 ## Continuation
-- Status: blocked-unrecorded-evidence
+- Status: blocked-theory
 - Next action: record or select a fresh frontier theory for movielens-colocated-follower-replacement-source-main
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id movielens-colocated-follower-replacement-source --frontier movielens-colocated-follower-replacement-source-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json
+- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 2
@@ -55,6 +56,9 @@
 - **movielens-colocated-follower-replacement-source-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json]
 - **movielens-colocated-follower-replacement-source-main**: Independent exact-attempt verification APPROVED. Artifact/base/current scoped diff matched; isolated source-only revert failed only the three new leader-source behavior assertions while all pre-existing assertions stayed green. Focused and supplemental role cases covered leader, follower, candidate, learner, missing, and unrecognized roles; five adjacent suites, formation/interlock scenarios, state-machine pressure, full model contracts, lint, diff, size, literals, decision-boundary, boundary-mode, and runtime grammar all passed. Move count, target set, critical serialization, removed-set safety, CL-038 retention, and pending accounting are unchanged; complexity is identical to the inherited baseline. [subagent:verify_wave4_colocated_source_attempt1]
 - **movielens-colocated-follower-replacement-source-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
+- **movielens-colocated-follower-replacement-source-main**: The single changed live run at checkpoint 352203cc formed five nodes and reached schema admission, but the unchanged 180000ms gate again ended on three fresh replica operations. The sealed Lagrange report sha256 is 9e5ff7f13b8a336be0c98ba70627d24417e73ded8906bb27b9d4cd3dcba11a38, the three-way failure report sha256 is 068718a269f6cc831caf4f06f65468945a88a7a03a128d755890ec901fd37687, and the immutable log archive sha256 is 9f276d4d7b5beee42999ab051b40e60f19d3a871c808964664fd9293583f799a. No unchanged rerun is authorized. (rules out: Do not tune the schema/stability budgets or retry unchanged; discriminate whether follower selection engaged and why fresh operations were still minted after an earlier steady window.) [data/examples/service-data-affinity-demo-archive/wave4-live-colocated-follower-2026-07-16T03-53-10-846Z.tar.gz]
+- **movielens-colocated-follower-replacement-source-main**: Fresh live authority rows prove the planner fix engaged but expose a downstream replica-vs-node safety ambiguity: replica_operations replacement chose explicit follower r3 on node0 while sibling r1 was leader; at 03:50:18 remove safety requested replace_target_leader_election, promoted the target on node2, and a later replacement moved former leader r1. The remaining invariant must distinguish a follower source from a same-node leader sibling without trusting a lone possibly stale follower row. [data/examples/service-data-affinity-demo-archive/wave4-live-colocated-follower-2026-07-16T03-53-10-846Z.tar.gz]
+- **movielens-colocated-follower-replacement-source-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
 
 ## Theories
 - **theory-20260716-partition-leader-node-id-overclassifies-explicit** [falsified] frontier, frontier movielens-colocated-follower-replacement-source-main, layer ownership, mechanism partition leader_node_id overclassifies explicit co-located follower replicas as leaders during replacement-source ordering, owner move_planner_removal_source_owner, boundary replica raft role to count-neutral replacement source selection, modelGate npm run model:contracts
@@ -64,6 +68,8 @@
 
 ## Theory Results
 - **theory-20260716-partition-leader-node-id-overclassifies-explicit**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json]
+- **theory-20260716-partition-leader-node-id-overclassifies-explicit**: supported (scenario=failed, theory=partial, movement=moved_boundary) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
+- **theory-20260716-partition-leader-node-id-overclassifies-explicit**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
