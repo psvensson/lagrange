@@ -229,3 +229,46 @@ test('strict plannerReady path stays satisfied regardless of stall (un-mask gove
   t.equal(completion.reasonCode, 'planner_ready', 'reason is planner_ready (strict spread), not in-flight');
   t.end();
 });
+
+test('spread completion covers the numeric gap with distinct eligible targets', (t) => {
+  const operationOnNodeB = dispatchPhaseOpUnverified({
+    operationId: 'replace-node-b-1',
+    targetVisibilityState: 'active_operational',
+  });
+  const retryOnNodeB = dispatchPhaseOpUnverified({
+    operationId: 'replace-node-b-2',
+    targetVisibilityState: 'active_operational',
+  });
+  const operationOnNodeC = dispatchPhaseOpUnverified({
+    operationId: 'replace-node-c',
+    targetNodeId: 'nodeC',
+    targetVisibilityState: 'active_operational',
+  });
+  const duplicateTargetCoverage = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [operationOnNodeB, retryOnNodeB],
+    eligibleTargetNodeIds: ['nodeB', 'nodeC'],
+    plannerSpreadGap: 2,
+  });
+  t.equal(
+    duplicateTargetCoverage.satisfied,
+    false,
+    'two operations on one node cover only one unit of a two-node spread gap',
+  );
+  t.same(
+    duplicateTargetCoverage.satisfyingOperationIds,
+    ['replace-node-b-1', 'replace-node-b-2'],
+    'partial qualifying evidence stays inspectable without certifying closure',
+  );
+
+  const distinctTargetCoverage = buildPriorityRecoverySpreadCompletion({
+    activeOperationContexts: [operationOnNodeB, operationOnNodeC],
+    eligibleTargetNodeIds: ['nodeB', 'nodeC'],
+    plannerSpreadGap: 2,
+  });
+  t.equal(
+    distinctTargetCoverage.satisfied,
+    true,
+    'two distinct eligible targets cover the two-node spread gap',
+  );
+  t.end();
+});

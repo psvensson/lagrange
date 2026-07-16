@@ -146,6 +146,18 @@ function resolvePriorityRecoverySpreadSatisfyingReasonCode(
   return PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.UNSATISFIED;
 }
 
+function resolvePriorityRecoveryRequiredSatisfyingTargetCount(
+  plannerSpreadGap,
+) {
+  const normalizedSpreadGap = normalizePriorityRecoveryInteger(
+    plannerSpreadGap,
+  );
+  if (!Number.isFinite(normalizedSpreadGap) || normalizedSpreadGap <= 0) {
+    return 1;
+  }
+  return normalizedSpreadGap;
+}
+
 function buildPriorityRecoverySpreadCompletion(options = {}) {
   const activeOperationContexts = Array.isArray(options.activeOperationContexts) ?
     options.activeOperationContexts :
@@ -155,6 +167,7 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
   );
   const satisfyingOperationIds = [];
   const satisfyingOperationContexts = [];
+  const satisfyingTargetNodeIds = new Set();
   const blockingOperationIds = [];
   for (const operationContext of activeOperationContexts) {
     const operationId = String(operationContext?.operationId || '').trim();
@@ -168,6 +181,7 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
     ) {
       satisfyingOperationIds.push(operationId);
       satisfyingOperationContexts.push(operationContext);
+      satisfyingTargetNodeIds.add(String(operationContext.targetNodeId).trim());
       continue;
     }
     if (isPriorityRecoveryOperationContextTerminal(operationContext)) {
@@ -185,7 +199,11 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
       blockingOperationCount: blockingOperationIds.length,
     });
   }
-  if (satisfyingOperationIds.length > 0) {
+  const requiredSatisfyingTargetCount =
+    resolvePriorityRecoveryRequiredSatisfyingTargetCount(
+      options.plannerSpreadGap,
+    );
+  if (satisfyingTargetNodeIds.size >= requiredSatisfyingTargetCount) {
     return Object.freeze({
       satisfied: true,
       reasonCode: resolvePriorityRecoverySpreadSatisfyingReasonCode(
@@ -203,8 +221,8 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
       blockingOperationIds.length > 0 ?
         PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.ACTIVE_OPERATION_STILL_BLOCKS_SPREAD :
         PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON.UNSATISFIED,
-    satisfyingOperationIds: Object.freeze([]),
-    satisfyingOperationCount: 0,
+    satisfyingOperationIds: Object.freeze([...satisfyingOperationIds]),
+    satisfyingOperationCount: satisfyingOperationIds.length,
     blockingOperationIds: Object.freeze([...blockingOperationIds]),
     blockingOperationCount: blockingOperationIds.length,
   });

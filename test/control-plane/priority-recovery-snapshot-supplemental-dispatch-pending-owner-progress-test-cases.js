@@ -193,7 +193,6 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
     PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
     PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
     PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
-    PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
     PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
     PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED,
     PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
@@ -734,8 +733,8 @@ export function registerPriorityRecoverySnapshotSupplementalDispatchPendingOwner
       );
       t.equal(
         witness?.semanticStateId,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
-        'the failed sibling should keep the unresolved partition state explicit',
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        'the open dispatch should keep the numerically uncovered partition unresolved under workflow ownership',
       );
       t.equal(
         witness?.latestOperationStatus,

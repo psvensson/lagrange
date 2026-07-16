@@ -151,6 +151,46 @@ const CONFIGS = [
     expectedFailurePattern: 'Temporal property EventuallySteady was violated',
   },
   {
+    id: 'priority-spread-coverage-count-aware',
+    mode: 'priority-spread-coverage-count-aware',
+    module: path.resolve(
+      'models',
+      'priority-spread-coverage',
+      'PrioritySpreadCoverage.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'priority-spread-coverage',
+      'PrioritySpreadCoverage_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'priority-spread-coverage-tlc-count-aware.model.report.json',
+    scenario: 'movielens-priority-spread-gap-coverage-authority-model',
+    owner: 'priority_recovery_publication_closure_owner',
+    boundary: 'numeric_spread_gap_operation_coverage',
+  },
+  {
+    id: 'priority-spread-coverage-boolean-collapse',
+    mode: 'priority-spread-coverage-boolean-collapse',
+    module: path.resolve(
+      'models',
+      'priority-spread-coverage',
+      'PrioritySpreadCoverage.tla',
+    ),
+    cfg: path.resolve(
+      'models',
+      'priority-spread-coverage',
+      'PrioritySpreadCoverage_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'priority-spread-coverage-tlc-boolean-collapse.model.report.json',
+    scenario: 'movielens-priority-spread-gap-coverage-counterexample',
+    owner: 'priority_recovery_publication_closure_owner',
+    boundary: 'numeric_spread_gap_operation_coverage',
+    expectedFailurePattern:
+      'Invariant PublicationRequiresCoveredSpread is violated',
+  },
+  {
     id: 'leadership-failback-reconciled',
     mode: 'leadership-failback-reconciled',
     module: path.resolve(

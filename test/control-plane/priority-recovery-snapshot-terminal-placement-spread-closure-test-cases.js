@@ -7,7 +7,6 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
     PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
     PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
     PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
-    PRIORITY_RECOVERY_COMPLETION_STATE,
     PRIORITY_RECOVERY_EMPTY_COUNT,
     PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
     PRIORITY_RECOVERY_NEWER_OPERATION_COMPLETED_AT_MS,
@@ -446,7 +445,7 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
       );
     });
 
-  test('priority recovery decision snapshots treat completed ADD follow-up handoff on an eligible operational target as spread-satisfied',
+  test('priority recovery decision snapshots keep a two-node spread gap open when one eligible target is operational',
     async (t) => {
       const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
         capturedAt: 5000,
@@ -538,20 +537,20 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         decisionSnapshots.partitionIdsBySemanticState,
         {
           converged: [],
-          spread_satisfied_in_flight: [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+          spread_satisfied_in_flight: [],
           needs_operation: [],
           operation_stalled: [],
           learner_promotion_blocked: [],
           coordination_mismatch: [],
           recovering_in_flight: [],
-          blocked_unclassified: [],
+          blocked_unclassified: [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
         },
-        'completed ADD follow-up handoff on an eligible operational target should satisfy spread completion on the shared snapshot path',
+        'one distinct eligible target must not satisfy a canonical spread gap of two',
       );
       t.same(
         decisionSnapshots.unresolvedSemanticStateIds,
-        [],
-        'the touched partition should no longer remain unresolved once the completed follow-up ADD is operationally visible',
+        ['blocked_unclassified'],
+        'the uncovered spread unit must remain visible to the follow-up owner',
       );
 
       const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
@@ -562,36 +561,31 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
       t.same(
         targetSnapshot.spreadCompletion,
         {
-          satisfied: true,
-          reasonCode: 'operational_target_visible_on_eligible_node',
+          satisfied: false,
+          reasonCode: 'unsatisfied',
           satisfyingOperationIds: ['op-replica-followup-add'],
           satisfyingOperationCount: 1,
           blockingOperationIds: [],
           blockingOperationCount: 0,
         },
-        'the completed follow-up ADD should count as spread-satisfying evidence when its target is operationally visible on an eligible node',
+        'partial operation coverage must not collapse the numeric gap to a Boolean',
       );
       t.equal(
         targetSnapshot.semanticState,
-        'spread_satisfied_in_flight',
-        'the partition should leave the blocked-unclassified fallback once the completed follow-up ADD is visible',
+        'blocked_unclassified',
+        'the partition should stay unresolved until a second distinct target covers the gap',
       );
-      t.equal(
-        targetSnapshot.completion?.state,
-        PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
-        'completion should preserve the shared spread-satisfied state for the handoff seam',
-      );
+      t.match(decisionSnapshots.closureWitness, {
+        state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING,
+        prioritySpreadPending: true,
+        refreshedPriorityPartitionSummary: null,
+      }, 'publication closure must remain pending while numeric spread is uncovered');
       t.match(
         targetSnapshot.progress,
         {
-          contractState: 'ready',
-          nextAction: 'proceed',
-          currentOwner: 'none',
-          nextRequiredAction: 'none',
-          blockingBoundary: 'none',
-          waitMode: 'none',
+          contractState: 'blocked',
         },
-        'the shared progress contract should stop reporting a blocked rebalancer-handoff stall once spread-satisfying evidence is present',
+        'the shared progress contract must not publish readiness for partial coverage',
       );
     });
 

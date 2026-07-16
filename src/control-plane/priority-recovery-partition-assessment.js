@@ -82,6 +82,7 @@ export function buildPriorityRecoveryPartitionAssessment(options = {}) {
   );
   const spreadCompletion = buildPriorityRecoverySpreadCompletion({
     plannerReady: planner.ready === true,
+    plannerSpreadGap: planner.spreadGap,
     activeOperationContexts: spreadRelevantOperationContexts,
     eligibleTargetNodeIds: admission.effectiveEligibleNodeIds,
   });
