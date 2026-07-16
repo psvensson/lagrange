@@ -13,7 +13,7 @@ const {
   TABLES,
 } = PARTITION_SERVICE_SHARED;
 
-function hasAuthoritativeRoleReadOwner(gateway) {
+function hasAuthoritativeReadOwner(gateway) {
   if (
     typeof gateway.resolveCdcIntegrationService !==
       PARTITION_SERVICE_LITERAL.FUNCTION ||
@@ -37,13 +37,42 @@ async function readAuthoritativeRoleRow(owner) {
   ) {
     return {supported: false, available: false, row: null};
   }
-  if (!hasAuthoritativeRoleReadOwner(gateway)) {
+  if (!hasAuthoritativeReadOwner(gateway)) {
     return {supported: false, available: false, row: null};
   }
   const readResult = await gateway.readAuthoritativeRows(
     SYSTEM_TABLE_NAME.SERVICES,
     PARTITION_SERVICE_LITERAL.SERVICES_ROW_POINT_READ_SQL,
     [owner.replicaId],
+    {
+      routingReadinessDimension:
+        owner.getMetadataPublicationReadinessDimension(),
+    },
+  );
+  if (readResult?.success !== true) {
+    return {supported: true, available: false, row: null};
+  }
+  const row = Array.isArray(readResult.rows) ?
+    readResult.rows[0] || null :
+    null;
+  return {supported: true, available: true, row};
+}
+
+async function readAuthoritativeLeaderRow(owner) {
+  const gateway = owner.controlPlaneSystemTableGateway;
+  if (
+    typeof gateway?.readAuthoritativeRows !==
+      PARTITION_SERVICE_LITERAL.FUNCTION
+  ) {
+    return {supported: false, available: false, row: null};
+  }
+  if (!hasAuthoritativeReadOwner(gateway)) {
+    return {supported: false, available: false, row: null};
+  }
+  const readResult = await gateway.readAuthoritativeRows(
+    SYSTEM_TABLE_NAME.PARTITIONS,
+    PARTITION_SERVICE_LITERAL.PARTITIONS_ROW_POINT_READ_SQL,
+    [owner.partitionId],
     {
       routingReadinessDimension:
         owner.getMetadataPublicationReadinessDimension(),
@@ -152,15 +181,18 @@ function createLeaderNodeMutationHelper(owner) {
     tableName: SYSTEM_TABLE_NAME.PARTITIONS,
     buildWhereClause: (_leaderNodeId, context = {}) => {
       const whereClause = {[COLUMN.PARTITION_ID]: owner.partitionId};
-      const cachedRow = context.cachedRow;
+      // A locally won election can seed the merged cache before the durable
+      // write lands.  That seed is visibility, not storage proof, so the CAS
+      // must guard on the authoritative row when that read is available.
+      const guardRow = context.authoritativeRow || context.cachedRow;
       if (
-        typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
-        cachedRow[COLUMN.LEADER_NODE_ID].length > 0
+        typeof guardRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
+        guardRow[COLUMN.LEADER_NODE_ID].length > 0
       ) {
-        whereClause[COLUMN.LEADER_NODE_ID] = cachedRow[COLUMN.LEADER_NODE_ID];
+        whereClause[COLUMN.LEADER_NODE_ID] = guardRow[COLUMN.LEADER_NODE_ID];
       }
-      if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
-        whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
+      if (Number.isFinite(guardRow?.[COLUMN.UPDATED_AT])) {
+        whereClause[COLUMN.UPDATED_AT] = guardRow[COLUMN.UPDATED_AT];
       }
       return whereClause;
     },
@@ -202,6 +234,7 @@ function createLeaderNodeMutationHelper(owner) {
         SYSTEM_TABLE_NAME.PARTITIONS,
         owner.partitionId,
       ),
+    readAuthoritativeRow: () => readAuthoritativeLeaderRow(owner),
     onObservedStateChanged: (context = {}) => {
       owner.logger.warn(
         PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,

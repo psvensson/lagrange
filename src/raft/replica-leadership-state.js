@@ -38,6 +38,9 @@ function clearReplicaLeaderUpdateState(replica) {
     clearTimeout(replica.leaderNodeUpdateRetryTimer);
     replica.leaderNodeUpdateRetryTimer = null;
   }
+  if (typeof replica.clearLocalCanonicalLeaderNodeIdIfOwned === 'function') {
+    replica.clearLocalCanonicalLeaderNodeIdIfOwned();
+  }
 }
 
 function applyReplicaDemotion(replica, role) {

@@ -4,6 +4,7 @@ import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 const {
   CONTROL_PLANE_PARTITION_IDS,
   CONTROL_PLANE_READINESS_DIMENSION,
+  COLUMN,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
@@ -11,6 +12,7 @@ const {
   PARTITION_SERVICE_VALUE,
   PRESSURE_WORK_CLASS,
   SYSTEM_TABLE_NAME,
+  TABLES,
   isSystemTableWriteReady,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
@@ -32,7 +34,228 @@ class PartitionServiceMetadataDeliveryMethods {
    * @private
    */
   queueLeaderNodeUpdate(leaderNodeId) {
+    this.seedLocalCanonicalLeaderNodeId(leaderNodeId);
     this.leaderNodeMutationHelper.queue(leaderNodeId);
+  }
+  /**
+   * Make an actually-won local election visible without waiting for the
+   * recovering control plane to carry its own leader publication.  This is the
+   * PARTITIONS-row sibling of CL-035's voter-role seed: it mutates only an
+   * existing row, keeps the row's other identity fields, and is superseded by
+   * the same owner's durable CDC publication.
+   *
+   * The projection preserves the durable row's causal version. Minting a local
+   * `updated_at` or HLC would let an unpropagated observation fence a legitimate
+   * successor CDC row under clock skew. This is a sanctioned owner-local cache
+   * write, not a second leadership authority: the Raft transition invokes it
+   * only after setting `isLeader`, and every safety consumer continues to read
+   * the canonical row projection.
+   * @param {string} leaderNodeId
+   * @return {boolean} Whether local canonical evidence was applied.
+   */
+  seedLocalCanonicalLeaderNodeId(leaderNodeId) {
+    if (
+      this.isLeader !== true ||
+      typeof leaderNodeId !== 'string' ||
+      leaderNodeId.length === 0 ||
+      leaderNodeId !== this.nodeId ||
+      !this.systemTableCache ||
+      typeof this.systemTableCache.get !== PARTITION_SERVICE_LITERAL.FUNCTION
+    ) {
+      return false;
+    }
+    const existingRow = this.systemTableCache.get(
+      TABLES.PARTITIONS,
+      this.partitionId,
+    );
+    if (!existingRow) {
+      return false;
+    }
+    if (this.localCanonicalLeaderObservation?.demoted === true) {
+      this.localCanonicalLeaderObservation = null;
+    }
+    if (this.localCanonicalLeaderObservation?.superseded === true) {
+      return false;
+    }
+    if (!this.localCanonicalLeaderObservation) {
+      this.localCanonicalLeaderObservation = {
+        baseRow: {
+          [COLUMN.PARTITION_ID]: this.partitionId,
+          [COLUMN.CREATED_AT]: existingRow[COLUMN.CREATED_AT],
+          [COLUMN.UPDATED_AT]: existingRow[COLUMN.UPDATED_AT],
+          [COLUMN.UPDATED_AT_HLC]: existingRow[COLUMN.UPDATED_AT_HLC],
+        },
+        demoted: false,
+        superseded: false,
+      };
+    }
+
+    return this.applyLocalCanonicalLeaderObservation(
+      existingRow,
+      leaderNodeId,
+      'elected',
+    );
+  }
+  /**
+   * Remove this node's local-only ownership evidence after Raft demotion, but
+   * only while the row still names this node.  A newer successor observation
+   * therefore cannot be cleared by a late follower/candidate event.
+   * @return {boolean} Whether the owned local observation was cleared.
+   */
+  clearLocalCanonicalLeaderNodeIdIfOwned() {
+    const previousObservation = this.localCanonicalLeaderObservation;
+    if (
+      this.isLeader === true ||
+      !this.systemTableCache ||
+      typeof this.systemTableCache.get !== PARTITION_SERVICE_LITERAL.FUNCTION
+    ) {
+      return false;
+    }
+    const existingRow = this.systemTableCache.get(
+      TABLES.PARTITIONS,
+      this.partitionId,
+    );
+    this.localCanonicalLeaderObservation = {
+      baseRow: previousObservation?.baseRow || {
+        [COLUMN.PARTITION_ID]: this.partitionId,
+        [COLUMN.CREATED_AT]: existingRow?.[COLUMN.CREATED_AT],
+        [COLUMN.UPDATED_AT]: existingRow?.[COLUMN.UPDATED_AT],
+        [COLUMN.UPDATED_AT_HLC]: existingRow?.[COLUMN.UPDATED_AT_HLC],
+      },
+      demoted: true,
+      superseded: previousObservation?.superseded === true,
+    };
+    if (
+      existingRow?.[COLUMN.LEADER_NODE_ID] !== this.nodeId
+    ) {
+      return false;
+    }
+    return this.applyLocalCanonicalLeaderObservation(
+      existingRow,
+      null,
+      'demoted',
+    );
+  }
+  /**
+   * Reconcile an authoritative cache delivery with the active local projection.
+   * Equal/older replays of the pre-election row may temporarily overwrite an
+   * equal-version local projection, so the same publication owner re-projects
+   * current Raft truth. A strictly newer row is successor evidence: it wins and
+   * disables further local seeds until Raft demotion closes this tenure.
+   *
+   * The comparison delegates to SystemTableCache's canonical LWW rule rather
+   * than rebuilding timestamp/HLC semantics in this owner.
+   * @param {Object} record
+   * @return {boolean} Whether local evidence was re-projected.
+   */
+  handleCanonicalLeaderRowCacheChange(record) {
+    const observation = this.localCanonicalLeaderObservation;
+    if (
+      !observation ||
+      record?.[COLUMN.PARTITION_ID] !== this.partitionId
+    ) {
+      return false;
+    }
+    if (this.isLeader !== true) {
+      if (
+        observation.demoted === true &&
+        record?.[COLUMN.LEADER_NODE_ID] === this.nodeId
+      ) {
+        return this.applyLocalCanonicalLeaderObservation(
+          record,
+          null,
+          'demoted-replay',
+        );
+      }
+      return false;
+    }
+    if (
+      observation.demoted === true ||
+      observation.superseded === true ||
+      record?.[COLUMN.LEADER_NODE_ID] === this.nodeId
+    ) {
+      return false;
+    }
+    const cache = this.systemTableCache;
+    const successorIsStrictlyNewer =
+      typeof cache?.isStaleForExistingRecord ===
+        PARTITION_SERVICE_LITERAL.FUNCTION &&
+      cache.isStaleForExistingRecord(
+        TABLES.PARTITIONS,
+        record,
+        observation.baseRow,
+      );
+    if (successorIsStrictlyNewer) {
+      observation.superseded = true;
+      return false;
+    }
+    return this.applyLocalCanonicalLeaderObservation(
+      record,
+      this.nodeId,
+      'replayed',
+    );
+  }
+  /**
+   * Apply one node-local canonical leader projection without changing the
+   * durable row's LWW version. This helper keeps the sanctioned direct-cache-
+   * write surface to one owner call site. A later durable successor can
+   * therefore supersede the projection using the normal cache merge rule.
+   * @param {Object} existingRow
+   * @param {string|null} leaderNodeId
+   * @param {string} transition
+   * @return {boolean}
+   * @private
+   */
+  applyLocalCanonicalLeaderObservation(
+    existingRow,
+    leaderNodeId,
+    transition,
+  ) {
+    if (
+      !existingRow ||
+      typeof this.systemTableCache?.applySystemTableChange !==
+        PARTITION_SERVICE_LITERAL.FUNCTION
+    ) {
+      return false;
+    }
+    const localProjection = {
+      [COLUMN.PARTITION_ID]: this.partitionId,
+      [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+    };
+    if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
+      localProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
+    }
+    if (typeof existingRow[COLUMN.UPDATED_AT_HLC] !== 'undefined') {
+      localProjection[COLUMN.UPDATED_AT_HLC] =
+        existingRow[COLUMN.UPDATED_AT_HLC];
+    }
+    this.systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS,
+      PARTITION_SERVICE_LITERAL.UPDATE,
+      localProjection,
+      {
+        causeId:
+          `local-raft-leader:${transition}:${this.partitionId}:${this.nodeId}`,
+      },
+    );
+    return this.systemTableCache.get(
+      TABLES.PARTITIONS,
+      this.partitionId,
+    )?.[COLUMN.LEADER_NODE_ID] === leaderNodeId;
+  }
+  /**
+   * Level-trigger the durable half from current Raft ownership.  Unlike the
+   * election edge, this can be called again after activation/readiness changes;
+   * the mutation helper performs authoritative dedup when storage already
+   * agrees.
+   * @return {boolean} Whether a durable reassert was queued.
+   */
+  reassertDurableLeaderNodeId() {
+    if (this.isLeader !== true) {
+      return false;
+    }
+    this.leaderNodeMutationHelper.queue(this.nodeId);
+    return true;
   }
   /**
    * Persist the latest pending raft role update.

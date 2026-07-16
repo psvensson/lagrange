@@ -191,6 +191,8 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
   FUNCTION: 'function',
   SERVICES_ROW_POINT_READ_SQL:
     'SELECT * FROM services WHERE service_id = ?',
+  PARTITIONS_ROW_POINT_READ_SQL:
+    'SELECT * FROM partitions WHERE partition_id = ?',
   LEARNERPROMOTIONTIMER: 'learnerPromotionTimer',
   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
   WOULD_EXCEED_TARGET_REPLICA_COUNT: 'would_exceed_target_replica_count',

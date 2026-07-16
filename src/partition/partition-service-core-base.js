@@ -230,6 +230,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
     this.pendingLeaderNodeUpdate = null;
     this.persistedLeaderNodeId = null;
+    this.localCanonicalLeaderObservation = null;
     this.metadataPublicationReadinessTransitionListener =
       this.handleMetadataPublicationReadinessTransition.bind(this);
     this.releaseMetadataPublicationReadinessListener = null;
@@ -519,6 +520,7 @@ class PartitionServiceCoreBase extends EventEmitter {
         if (this.isShutdown || !this.isLeader) {
           return;
         }
+        this.reassertDurableLeaderNodeId();
         if (!this.isJoiningExistingGroup) {
           this.updateRebalancerLeadership();
         }
@@ -736,6 +738,10 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @private
    */
   handleSystemTableCacheChange(tableName, _operation, record) {
+    if (tableName === TABLES.PARTITIONS && record) {
+      this.handleCanonicalLeaderRowCacheChange(record);
+      return;
+    }
     if (tableName !== TABLES.SERVICES || !record) {
       return;
     }

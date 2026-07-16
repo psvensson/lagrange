@@ -286,6 +286,29 @@ class AuthoritativeRowMutationHelper {
         }
         authoritativeRow = authoritativeProbe.row;
       }
+      // Ownership/readiness can change while the authoritative point read is
+      // in flight. Re-run the same owner predicate immediately before submit
+      // so a demoted leader cannot publish a stale owner row after losing Raft
+      // authority. Helpers with an unconditional prepareFlush remain unchanged.
+      const preMutationResult = this.prepareFlush({
+        pendingValue: this.pendingValue,
+        persistedValue: this.persistedValue,
+        phase: 'pre-mutation',
+      }) || {skip: false};
+      if (preMutationResult.clearPending && this.pendingValue === value) {
+        this.pendingValue = null;
+      }
+      if (preMutationResult.skip) {
+        if (!preMutationResult.clearPending &&
+          preMutationResult.retry === true) {
+          this.scheduleRetry(preMutationResult.retryDelayMs);
+        }
+        return this.buildResult({
+          reason:
+            preMutationResult.reason ||
+            AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
+        });
+      }
       const updateData = this.buildUpdateData(value, this.now());
       const cachedRow = typeof this.readRowFromCache === 'function' ?
         this.readRowFromCache(this.systemTableCache) :

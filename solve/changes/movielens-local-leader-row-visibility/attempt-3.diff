@@ -1,0 +1,937 @@
+diff --git a/src/partition/partition-service-core-base.js b/src/partition/partition-service-core-base.js
+index 56a212e33fc138a3ff9ba13ac86eb5e03d1d247b..c56524128a1ac04b101fa55cf7f62a7cd7a93416 100644
+--- a/src/partition/partition-service-core-base.js
++++ b/src/partition/partition-service-core-base.js
+@@ -230,6 +230,7 @@ class PartitionServiceCoreBase extends EventEmitter {
+     this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
+     this.pendingLeaderNodeUpdate = null;
+     this.persistedLeaderNodeId = null;
++    this.localCanonicalLeaderObservation = null;
+     this.metadataPublicationReadinessTransitionListener =
+       this.handleMetadataPublicationReadinessTransition.bind(this);
+     this.releaseMetadataPublicationReadinessListener = null;
+@@ -519,6 +520,7 @@ class PartitionServiceCoreBase extends EventEmitter {
+         if (this.isShutdown || !this.isLeader) {
+           return;
+         }
++        this.reassertDurableLeaderNodeId();
+         if (!this.isJoiningExistingGroup) {
+           this.updateRebalancerLeadership();
+         }
+@@ -736,6 +738,10 @@ class PartitionServiceCoreBase extends EventEmitter {
+    * @private
+    */
+   handleSystemTableCacheChange(tableName, _operation, record) {
++    if (tableName === TABLES.PARTITIONS && record) {
++      this.handleCanonicalLeaderRowCacheChange(record);
++      return;
++    }
+     if (tableName !== TABLES.SERVICES || !record) {
+       return;
+     }
+diff --git a/src/partition/partition-service-metadata-delivery-methods.js b/src/partition/partition-service-metadata-delivery-methods.js
+index 04e2c9f4c4f97b43be4ccff306c4305f1a266d88..ecd4c69bd43b3d2a4be493d46a7ab2f188284852 100644
+--- a/src/partition/partition-service-metadata-delivery-methods.js
++++ b/src/partition/partition-service-metadata-delivery-methods.js
+@@ -4,6 +4,7 @@ import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+ const {
+   CONTROL_PLANE_PARTITION_IDS,
+   CONTROL_PLANE_READINESS_DIMENSION,
++  COLUMN,
+   PARTITION_SERVICE_ERROR_MSG,
+   PARTITION_SERVICE_LITERAL,
+   PARTITION_SERVICE_LOG_MSG,
+@@ -11,6 +12,7 @@ const {
+   PARTITION_SERVICE_VALUE,
+   PRESSURE_WORK_CLASS,
+   SYSTEM_TABLE_NAME,
++  TABLES,
+   isSystemTableWriteReady,
+   normalizePublishedRaftRole,
+ } = PARTITION_SERVICE_SHARED;
+@@ -32,8 +34,229 @@ class PartitionServiceMetadataDeliveryMethods {
+    * @private
+    */
+   queueLeaderNodeUpdate(leaderNodeId) {
++    this.seedLocalCanonicalLeaderNodeId(leaderNodeId);
+     this.leaderNodeMutationHelper.queue(leaderNodeId);
+   }
++  /**
++   * Make an actually-won local election visible without waiting for the
++   * recovering control plane to carry its own leader publication.  This is the
++   * PARTITIONS-row sibling of CL-035's voter-role seed: it mutates only an
++   * existing row, keeps the row's other identity fields, and is superseded by
++   * the same owner's durable CDC publication.
++   *
++   * The projection preserves the durable row's causal version. Minting a local
++   * `updated_at` or HLC would let an unpropagated observation fence a legitimate
++   * successor CDC row under clock skew. This is a sanctioned owner-local cache
++   * write, not a second leadership authority: the Raft transition invokes it
++   * only after setting `isLeader`, and every safety consumer continues to read
++   * the canonical row projection.
++   * @param {string} leaderNodeId
++   * @return {boolean} Whether local canonical evidence was applied.
++   */
++  seedLocalCanonicalLeaderNodeId(leaderNodeId) {
++    if (
++      this.isLeader !== true ||
++      typeof leaderNodeId !== 'string' ||
++      leaderNodeId.length === 0 ||
++      leaderNodeId !== this.nodeId ||
++      !this.systemTableCache ||
++      typeof this.systemTableCache.get !== PARTITION_SERVICE_LITERAL.FUNCTION
++    ) {
++      return false;
++    }
++    const existingRow = this.systemTableCache.get(
++      TABLES.PARTITIONS,
++      this.partitionId,
++    );
++    if (!existingRow) {
++      return false;
++    }
++    if (this.localCanonicalLeaderObservation?.demoted === true) {
++      this.localCanonicalLeaderObservation = null;
++    }
++    if (this.localCanonicalLeaderObservation?.superseded === true) {
++      return false;
++    }
++    if (!this.localCanonicalLeaderObservation) {
++      this.localCanonicalLeaderObservation = {
++        baseRow: {
++          [COLUMN.PARTITION_ID]: this.partitionId,
++          [COLUMN.CREATED_AT]: existingRow[COLUMN.CREATED_AT],
++          [COLUMN.UPDATED_AT]: existingRow[COLUMN.UPDATED_AT],
++          [COLUMN.UPDATED_AT_HLC]: existingRow[COLUMN.UPDATED_AT_HLC],
++        },
++        demoted: false,
++        superseded: false,
++      };
++    }
++
++    return this.applyLocalCanonicalLeaderObservation(
++      existingRow,
++      leaderNodeId,
++      'elected',
++    );
++  }
++  /**
++   * Remove this node's local-only ownership evidence after Raft demotion, but
++   * only while the row still names this node.  A newer successor observation
++   * therefore cannot be cleared by a late follower/candidate event.
++   * @return {boolean} Whether the owned local observation was cleared.
++   */
++  clearLocalCanonicalLeaderNodeIdIfOwned() {
++    const previousObservation = this.localCanonicalLeaderObservation;
++    if (
++      this.isLeader === true ||
++      !this.systemTableCache ||
++      typeof this.systemTableCache.get !== PARTITION_SERVICE_LITERAL.FUNCTION
++    ) {
++      return false;
++    }
++    const existingRow = this.systemTableCache.get(
++      TABLES.PARTITIONS,
++      this.partitionId,
++    );
++    this.localCanonicalLeaderObservation = {
++      baseRow: previousObservation?.baseRow || {
++        [COLUMN.PARTITION_ID]: this.partitionId,
++        [COLUMN.CREATED_AT]: existingRow?.[COLUMN.CREATED_AT],
++        [COLUMN.UPDATED_AT]: existingRow?.[COLUMN.UPDATED_AT],
++        [COLUMN.UPDATED_AT_HLC]: existingRow?.[COLUMN.UPDATED_AT_HLC],
++      },
++      demoted: true,
++      superseded: previousObservation?.superseded === true,
++    };
++    if (
++      existingRow?.[COLUMN.LEADER_NODE_ID] !== this.nodeId
++    ) {
++      return false;
++    }
++    return this.applyLocalCanonicalLeaderObservation(
++      existingRow,
++      null,
++      'demoted',
++    );
++  }
++  /**
++   * Reconcile an authoritative cache delivery with the active local projection.
++   * Equal/older replays of the pre-election row may temporarily overwrite an
++   * equal-version local projection, so the same publication owner re-projects
++   * current Raft truth. A strictly newer row is successor evidence: it wins and
++   * disables further local seeds until Raft demotion closes this tenure.
++   *
++   * The comparison delegates to SystemTableCache's canonical LWW rule rather
++   * than rebuilding timestamp/HLC semantics in this owner.
++   * @param {Object} record
++   * @return {boolean} Whether local evidence was re-projected.
++   */
++  handleCanonicalLeaderRowCacheChange(record) {
++    const observation = this.localCanonicalLeaderObservation;
++    if (
++      !observation ||
++      record?.[COLUMN.PARTITION_ID] !== this.partitionId
++    ) {
++      return false;
++    }
++    if (this.isLeader !== true) {
++      if (
++        observation.demoted === true &&
++        record?.[COLUMN.LEADER_NODE_ID] === this.nodeId
++      ) {
++        return this.applyLocalCanonicalLeaderObservation(
++          record,
++          null,
++          'demoted-replay',
++        );
++      }
++      return false;
++    }
++    if (
++      observation.demoted === true ||
++      observation.superseded === true ||
++      record?.[COLUMN.LEADER_NODE_ID] === this.nodeId
++    ) {
++      return false;
++    }
++    const cache = this.systemTableCache;
++    const successorIsStrictlyNewer =
++      typeof cache?.isStaleForExistingRecord ===
++        PARTITION_SERVICE_LITERAL.FUNCTION &&
++      cache.isStaleForExistingRecord(
++        TABLES.PARTITIONS,
++        record,
++        observation.baseRow,
++      );
++    if (successorIsStrictlyNewer) {
++      observation.superseded = true;
++      return false;
++    }
++    return this.applyLocalCanonicalLeaderObservation(
++      record,
++      this.nodeId,
++      'replayed',
++    );
++  }
++  /**
++   * Apply one node-local canonical leader projection without changing the
++   * durable row's LWW version. This helper keeps the sanctioned direct-cache-
++   * write surface to one owner call site. A later durable successor can
++   * therefore supersede the projection using the normal cache merge rule.
++   * @param {Object} existingRow
++   * @param {string|null} leaderNodeId
++   * @param {string} transition
++   * @return {boolean}
++   * @private
++   */
++  applyLocalCanonicalLeaderObservation(
++    existingRow,
++    leaderNodeId,
++    transition,
++  ) {
++    if (
++      !existingRow ||
++      typeof this.systemTableCache?.applySystemTableChange !==
++        PARTITION_SERVICE_LITERAL.FUNCTION
++    ) {
++      return false;
++    }
++    const localProjection = {
++      [COLUMN.PARTITION_ID]: this.partitionId,
++      [COLUMN.LEADER_NODE_ID]: leaderNodeId,
++    };
++    if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
++      localProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
++    }
++    if (typeof existingRow[COLUMN.UPDATED_AT_HLC] !== 'undefined') {
++      localProjection[COLUMN.UPDATED_AT_HLC] =
++        existingRow[COLUMN.UPDATED_AT_HLC];
++    }
++    this.systemTableCache.applySystemTableChange(
++      TABLES.PARTITIONS,
++      PARTITION_SERVICE_LITERAL.UPDATE,
++      localProjection,
++      {
++        causeId:
++          `local-raft-leader:${transition}:${this.partitionId}:${this.nodeId}`,
++      },
++    );
++    return this.systemTableCache.get(
++      TABLES.PARTITIONS,
++      this.partitionId,
++    )?.[COLUMN.LEADER_NODE_ID] === leaderNodeId;
++  }
++  /**
++   * Level-trigger the durable half from current Raft ownership.  Unlike the
++   * election edge, this can be called again after activation/readiness changes;
++   * the mutation helper performs authoritative dedup when storage already
++   * agrees.
++   * @return {boolean} Whether a durable reassert was queued.
++   */
++  reassertDurableLeaderNodeId() {
++    if (this.isLeader !== true) {
++      return false;
++    }
++    this.leaderNodeMutationHelper.queue(this.nodeId);
++    return true;
++  }
+   /**
+    * Persist the latest pending raft role update.
+    * @return {Promise<void>}
+diff --git a/src/partition/partition-service-metadata-mutation-helpers.js b/src/partition/partition-service-metadata-mutation-helpers.js
+index 0d1deac9dbc7943cfaa37d793b19054c8c29a504..1db22d76aa04ed001287debf8bb0441e075a8bd5 100644
+--- a/src/partition/partition-service-metadata-mutation-helpers.js
++++ b/src/partition/partition-service-metadata-mutation-helpers.js
+@@ -13,7 +13,7 @@ const {
+   TABLES,
+ } = PARTITION_SERVICE_SHARED;
+ 
+-function hasAuthoritativeRoleReadOwner(gateway) {
++function hasAuthoritativeReadOwner(gateway) {
+   if (
+     typeof gateway.resolveCdcIntegrationService !==
+       PARTITION_SERVICE_LITERAL.FUNCTION ||
+@@ -37,7 +37,7 @@ async function readAuthoritativeRoleRow(owner) {
+   ) {
+     return {supported: false, available: false, row: null};
+   }
+-  if (!hasAuthoritativeRoleReadOwner(gateway)) {
++  if (!hasAuthoritativeReadOwner(gateway)) {
+     return {supported: false, available: false, row: null};
+   }
+   const readResult = await gateway.readAuthoritativeRows(
+@@ -58,6 +58,35 @@ async function readAuthoritativeRoleRow(owner) {
+   return {supported: true, available: true, row};
+ }
+ 
++async function readAuthoritativeLeaderRow(owner) {
++  const gateway = owner.controlPlaneSystemTableGateway;
++  if (
++    typeof gateway?.readAuthoritativeRows !==
++      PARTITION_SERVICE_LITERAL.FUNCTION
++  ) {
++    return {supported: false, available: false, row: null};
++  }
++  if (!hasAuthoritativeReadOwner(gateway)) {
++    return {supported: false, available: false, row: null};
++  }
++  const readResult = await gateway.readAuthoritativeRows(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    PARTITION_SERVICE_LITERAL.PARTITIONS_ROW_POINT_READ_SQL,
++    [owner.partitionId],
++    {
++      routingReadinessDimension:
++        owner.getMetadataPublicationReadinessDimension(),
++    },
++  );
++  if (readResult?.success !== true) {
++    return {supported: true, available: false, row: null};
++  }
++  const row = Array.isArray(readResult.rows) ?
++    readResult.rows[0] || null :
++    null;
++  return {supported: true, available: true, row};
++}
++
+ function createRoleMutationHelper(owner) {
+   return new AuthoritativeRowMutationHelper({
+     tableName: SYSTEM_TABLE_NAME.SERVICES,
+@@ -152,15 +181,18 @@ function createLeaderNodeMutationHelper(owner) {
+     tableName: SYSTEM_TABLE_NAME.PARTITIONS,
+     buildWhereClause: (_leaderNodeId, context = {}) => {
+       const whereClause = {[COLUMN.PARTITION_ID]: owner.partitionId};
+-      const cachedRow = context.cachedRow;
++      // A locally won election can seed the merged cache before the durable
++      // write lands.  That seed is visibility, not storage proof, so the CAS
++      // must guard on the authoritative row when that read is available.
++      const guardRow = context.authoritativeRow || context.cachedRow;
+       if (
+-        typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
+-        cachedRow[COLUMN.LEADER_NODE_ID].length > 0
++        typeof guardRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
++        guardRow[COLUMN.LEADER_NODE_ID].length > 0
+       ) {
+-        whereClause[COLUMN.LEADER_NODE_ID] = cachedRow[COLUMN.LEADER_NODE_ID];
++        whereClause[COLUMN.LEADER_NODE_ID] = guardRow[COLUMN.LEADER_NODE_ID];
+       }
+-      if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
+-        whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
++      if (Number.isFinite(guardRow?.[COLUMN.UPDATED_AT])) {
++        whereClause[COLUMN.UPDATED_AT] = guardRow[COLUMN.UPDATED_AT];
+       }
+       return whereClause;
+     },
+@@ -202,6 +234,7 @@ function createLeaderNodeMutationHelper(owner) {
+         SYSTEM_TABLE_NAME.PARTITIONS,
+         owner.partitionId,
+       ),
++    readAuthoritativeRow: () => readAuthoritativeLeaderRow(owner),
+     onObservedStateChanged: (context = {}) => {
+       owner.logger.warn(
+         PARTITION_SERVICE_ERROR_MSG.METADATA_PUBLICATION_GUARD_STALE,
+diff --git a/src/partition/partition-service-shared.js b/src/partition/partition-service-shared.js
+index 9f660559bc668ea6be9bc376caea476e6c9b7360..d4a3c5c0403f35f5910f089f944eb2a84089051b 100644
+--- a/src/partition/partition-service-shared.js
++++ b/src/partition/partition-service-shared.js
+@@ -191,6 +191,8 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
+   FUNCTION: 'function',
+   SERVICES_ROW_POINT_READ_SQL:
+     'SELECT * FROM services WHERE service_id = ?',
++  PARTITIONS_ROW_POINT_READ_SQL:
++    'SELECT * FROM partitions WHERE partition_id = ?',
+   LEARNERPROMOTIONTIMER: 'learnerPromotionTimer',
+   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
+   WOULD_EXCEED_TARGET_REPLICA_COUNT: 'would_exceed_target_replica_count',
+diff --git a/src/raft/authoritative-row-mutation-helper.js b/src/raft/authoritative-row-mutation-helper.js
+index 51e492b5094ca7ca83ae0baf8975083341271518..b0012facd4d6a24f755ce8f8a85545478e79e731 100644
+--- a/src/raft/authoritative-row-mutation-helper.js
++++ b/src/raft/authoritative-row-mutation-helper.js
+@@ -286,6 +286,29 @@ class AuthoritativeRowMutationHelper {
+         }
+         authoritativeRow = authoritativeProbe.row;
+       }
++      // Ownership/readiness can change while the authoritative point read is
++      // in flight. Re-run the same owner predicate immediately before submit
++      // so a demoted leader cannot publish a stale owner row after losing Raft
++      // authority. Helpers with an unconditional prepareFlush remain unchanged.
++      const preMutationResult = this.prepareFlush({
++        pendingValue: this.pendingValue,
++        persistedValue: this.persistedValue,
++        phase: 'pre-mutation',
++      }) || {skip: false};
++      if (preMutationResult.clearPending && this.pendingValue === value) {
++        this.pendingValue = null;
++      }
++      if (preMutationResult.skip) {
++        if (!preMutationResult.clearPending &&
++          preMutationResult.retry === true) {
++          this.scheduleRetry(preMutationResult.retryDelayMs);
++        }
++        return this.buildResult({
++          reason:
++            preMutationResult.reason ||
++            AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
++        });
++      }
+       const updateData = this.buildUpdateData(value, this.now());
+       const cachedRow = typeof this.readRowFromCache === 'function' ?
+         this.readRowFromCache(this.systemTableCache) :
+diff --git a/src/raft/replica-leadership-state.js b/src/raft/replica-leadership-state.js
+index f5eb239671a6db2239778268fb6ddbfcc70f9891..973d87fc15e7f5ab29df4b92a6bcc448b7a42d49 100644
+--- a/src/raft/replica-leadership-state.js
++++ b/src/raft/replica-leadership-state.js
+@@ -38,6 +38,9 @@ function clearReplicaLeaderUpdateState(replica) {
+     clearTimeout(replica.leaderNodeUpdateRetryTimer);
+     replica.leaderNodeUpdateRetryTimer = null;
+   }
++  if (typeof replica.clearLocalCanonicalLeaderNodeIdIfOwned === 'function') {
++    replica.clearLocalCanonicalLeaderNodeIdIfOwned();
++  }
+ }
+ 
+ function applyReplicaDemotion(replica, role) {
+diff --git a/test/config/system-cache-write-callsite-guardrails.test.js b/test/config/system-cache-write-callsite-guardrails.test.js
+index 9eb2a765e0066ea231d97e02da816fc56be131b0..90a4ff83c1f99630aceb1f63e8cd17c780db5b2b 100644
+--- a/test/config/system-cache-write-callsite-guardrails.test.js
++++ b/test/config/system-cache-write-callsite-guardrails.test.js
+@@ -20,7 +20,11 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
+   // fallback; CL-035 seed raft_role at voter-ready). Both are superseded by
+   // the durable write's CDC round-trip (newer updated_at wins in the cache
+   // merge) — same sanctioned-exception class as the bootstrap hydration sites.
+-  'node/replica-handler-create-methods.js': 2,
++  'node/replica-handler-create-status-methods.js': 2,
++  // CL-036 canonical-leader sibling: the actual local Raft leader transition
++  // seeds its existing PARTITIONS row, while the same publication owner queues
++  // and authoritatively confirms the durable leader_node_id write.
++  'partition/partition-service-metadata-delivery-methods.js': 1,
+   // replica_operations-row analog of CL-016/CL-035: seed the owner's locally-
+   // decided operation workflow_step into the local cache when the durable
+   // priority control-plane write defers under formation pressure (the write
+diff --git a/test/control-plane/cl-036-local-leader-row-seed.test.js b/test/control-plane/cl-036-local-leader-row-seed.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4d92c1bf291442d85dc1a00f478fa7ac410e2c55
+--- /dev/null
++++ b/test/control-plane/cl-036-local-leader-row-seed.test.js
+@@ -0,0 +1,481 @@
++import t from 'tap';
++import {SystemTableCache} from '../../src/cache/system-table-cache.js';
++import {SYSTEM_TABLE_NAME} from
++  '../../src/bootstrap/system-table-schemas-constants.js';
++import {PartitionService} from '../../src/partition/partition-service.js';
++import {
++  createLeaderNodeMutationHelper,
++} from '../../src/partition/partition-service-metadata-mutation-helpers.js';
++import {applyReplicaDemotion, applyReplicaLeadership} from
++  '../../src/raft/replica-leadership-state.js';
++
++// CL-036: a locally won Raft election is already authoritative local truth, but
++// the canonical PARTITIONS row currently changes only after a durable write
++// traverses the control plane being recovered.  The REPLACE remove-safety gate
++// reads that row, so the replacement can be leader while the gate waits for the
++// old leader_node_id for minutes.  The existing metadata publication owner must
++// expose the local fact immediately and still prove/reassert durable convergence.
++
++const PARTITION_ID = 'replica_operations-p1';
++const SOURCE_NODE_ID = 'node-source';
++const REPLACEMENT_NODE_ID = 'node-replacement';
++
++function makePartitionRowCache() {
++  const cache = new SystemTableCache();
++  cache.applySystemTableChange(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    'INSERT',
++    {
++      partition_id: PARTITION_ID,
++      table_id: 'replica_operations',
++      leader_node_id: SOURCE_NODE_ID,
++      created_at: 1000,
++      updated_at: 1000,
++    },
++    {causeId: 'durable-before-election'},
++  );
++  return cache;
++}
++
++function makeLocalLeaderContext(cache, options = {}) {
++  const queued = [];
++  const context = Object.create(PartitionService.prototype);
++  context.partitionId = PARTITION_ID;
++  context.nodeId = REPLACEMENT_NODE_ID;
++  context.isLeader = options.isLeader ?? true;
++  context._systemTableCache = cache;
++  context.hlcClock = {
++    update: () => {},
++    now: () => ({
++      physical: 2000,
++      toString: () => `2000-0-${REPLACEMENT_NODE_ID}`,
++    }),
++  };
++  context.leaderNodeMutationHelper = {
++    queue: (leaderNodeId) => queued.push(leaderNodeId),
++  };
++  context.roleMutationHelper = {queue: () => {}};
++  return {context, queued};
++}
++
++t.test(
++  'CL-036 local seed: the actual leader transition updates the existing canonical row before durable delivery',
++  (t) => {
++    const cache = makePartitionRowCache();
++    const {context, queued} = makeLocalLeaderContext(cache);
++
++    context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++
++    const row = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID);
++    t.equal(
++      row.leader_node_id,
++      REPLACEMENT_NODE_ID,
++      'node-local canonical row observes the won election immediately',
++    );
++    t.equal(
++      row.updated_at,
++      1000,
++      'local visibility preserves the durable causal version',
++    );
++    t.equal(row.table_id, 'replica_operations', 'row fields are preserved');
++    t.same(
++      queued,
++      [REPLACEMENT_NODE_ID],
++      'the same owner still queues durable convergence',
++    );
++    t.end();
++  },
++);
++
++t.test('CL-036 wiring: the shared Raft leader transition reaches the row owner', (t) => {
++  const cache = makePartitionRowCache();
++  const {context, queued} = makeLocalLeaderContext(cache, {isLeader: false});
++  context.replicaId = `${PARTITION_ID}-r4`;
++  context.replicaIds = [context.replicaId, `${PARTITION_ID}-r2`];
++
++  applyReplicaLeadership(context, 'leader');
++
++  t.equal(context.isLeader, true, 'Raft transition establishes local ownership');
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
++    REPLACEMENT_NODE_ID,
++    'the real transition reaches the local canonical-row seed',
++  );
++  t.same(queued, [REPLACEMENT_NODE_ID], 'durable convergence remains queued');
++  t.end();
++});
++
++t.test('CL-036 local seed: a non-leader cannot publish local ownership', (t) => {
++  const cache = makePartitionRowCache();
++  const {context} = makeLocalLeaderContext(cache, {isLeader: false});
++
++  context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
++    SOURCE_NODE_ID,
++    'row remains on the observed leader when this replica is not leader',
++  );
++  t.end();
++});
++
++t.test('CL-036 local seed: it never synthesizes an incomplete partition row', (t) => {
++  const cache = new SystemTableCache();
++  const {context, queued} = makeLocalLeaderContext(cache);
++
++  context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID),
++    undefined,
++    'missing durable identity remains missing',
++  );
++  t.same(
++    queued,
++    [REPLACEMENT_NODE_ID],
++    'durable publication is still attempted',
++  );
++  t.end();
++});
++
++t.test('CL-036 level trigger: only the current leader can reassert durability', (t) => {
++  const cache = makePartitionRowCache();
++  const {context, queued} = makeLocalLeaderContext(cache);
++
++  t.equal(
++    context.reassertDurableLeaderNodeId(),
++    true,
++    'current ownership derives a durable reassert from state',
++  );
++  context.isLeader = false;
++  t.equal(
++    context.reassertDurableLeaderNodeId(),
++    false,
++    'demotion suppresses the reassert',
++  );
++  t.same(queued, [REPLACEMENT_NODE_ID], 'only the leader invocation queued');
++  t.end();
++});
++
++t.test('CL-036 activation wiring: stable leader ownership level-triggers reassertion', (t) => {
++  const context = Object.create(PartitionService.prototype);
++  let reassertions = 0;
++  context.isLeader = true;
++  context.isShutdown = false;
++  context.isJoiningExistingGroup = true;
++  context.lastPreparedStateReconstructionTerm = 7;
++  context.replicaId = `${PARTITION_ID}-r4`;
++  context.replicaIds = [context.replicaId, `${PARTITION_ID}-r2`];
++  context.partitionId = PARTITION_ID;
++  context.rebalancer = null;
++  context.logger = {info: () => {}};
++  context.emit = () => {};
++  context.reassertDurableLeaderNodeId = () => {
++    reassertions += 1;
++    return true;
++  };
++  context.leaderActivationGate = {
++    schedule: (_term, activate) => activate(),
++  };
++
++  context.scheduleLeaderOwnedActivation(7);
++
++  t.equal(
++    reassertions,
++    1,
++    'stable activation derives another durable publish from current ownership',
++  );
++  t.end();
++});
++
++t.test('CL-036 replay: equal-version durable history is re-projected without a version bump', (t) => {
++  const cache = makePartitionRowCache();
++  const {context} = makeLocalLeaderContext(cache);
++  context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++
++  cache.applySystemTableChange(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    'UPDATE',
++    {
++      partition_id: PARTITION_ID,
++      leader_node_id: SOURCE_NODE_ID,
++      updated_at: 1000,
++    },
++    {causeId: 'equal-version-durable-replay'},
++  );
++  const replayedRow = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID);
++  t.equal(replayedRow.leader_node_id, SOURCE_NODE_ID, 'replay engages');
++
++  t.equal(
++    context.handleCanonicalLeaderRowCacheChange(replayedRow),
++    true,
++    'the publication owner re-projects actual local Raft ownership',
++  );
++  const reprojectedRow = cache.get(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    PARTITION_ID,
++  );
++  t.equal(reprojectedRow.leader_node_id, REPLACEMENT_NODE_ID);
++  t.equal(reprojectedRow.updated_at, 1000, 're-projection still mints no version');
++  t.end();
++});
++
++t.test('CL-036 demotion: stale local ownership clears but a clock-skewed successor row survives', (t) => {
++  const cache = makePartitionRowCache();
++  const {context} = makeLocalLeaderContext(cache);
++  context.replicaId = `${PARTITION_ID}-r4`;
++  context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++
++  applyReplicaDemotion(context, 'follower');
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
++    null,
++    'demotion clears this node only while it still owns the local row',
++  );
++
++  context.isLeader = true;
++  context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++  cache.applySystemTableChange(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    'UPDATE',
++    {
++      partition_id: PARTITION_ID,
++      leader_node_id: 'node-successor',
++      // The successor clock is behind the election observer's HLC physical
++      // time (2000), but its durable version is newer than the pre-election
++      // row (1000). A local wall-clock seed must not fence it.
++      updated_at: 1999,
++      updated_at_hlc: '1999-0-node-successor',
++    },
++    {causeId: 'clock-skewed-newer-successor'},
++  );
++  const successorRow = cache.get(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    PARTITION_ID,
++  );
++  t.equal(successorRow.leader_node_id, 'node-successor', 'successor CDC wins');
++  t.equal(
++    context.handleCanonicalLeaderRowCacheChange(successorRow),
++    false,
++    'strictly newer successor suppresses local re-projection',
++  );
++  context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
++    'node-successor',
++    'later same-tenure queue cannot reseed over the successor',
++  );
++  applyReplicaDemotion(context, 'follower');
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
++    'node-successor',
++    'late demotion cannot erase a newer successor observation',
++  );
++  t.end();
++});
++
++t.test('CL-036 demotion replay: an equal-version delayed self publication is cleared again', (t) => {
++  const cache = makePartitionRowCache();
++  const {context} = makeLocalLeaderContext(cache);
++  context.replicaId = `${PARTITION_ID}-r4`;
++  context.queueLeaderNodeUpdate(REPLACEMENT_NODE_ID);
++
++  const durableSelfRow = {
++    partition_id: PARTITION_ID,
++    leader_node_id: REPLACEMENT_NODE_ID,
++    updated_at: 2000,
++    updated_at_hlc: '2000-0-node-replacement',
++  };
++  cache.applySystemTableChange(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    'UPDATE',
++    durableSelfRow,
++    {causeId: 'durable-self-before-demotion'},
++  );
++
++  applyReplicaDemotion(context, 'follower');
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
++    null,
++    'demotion clears the observed durable self row',
++  );
++  t.equal(
++    context.localCanonicalLeaderObservation.demoted,
++    true,
++    'demotion retains bounded projection provenance for delayed replay',
++  );
++
++  cache.applySystemTableChange(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    'UPDATE',
++    durableSelfRow,
++    {causeId: 'equal-version-delayed-self-replay'},
++  );
++  const replayedSelfRow = cache.get(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    PARTITION_ID,
++  );
++  t.equal(replayedSelfRow.leader_node_id, REPLACEMENT_NODE_ID, 'replay engages');
++  t.equal(
++    context.handleCanonicalLeaderRowCacheChange(replayedSelfRow),
++    true,
++    'the demoted publication owner clears its own delayed replay',
++  );
++  t.equal(
++    cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID).leader_node_id,
++    null,
++    'a demoted replica cannot remain canonical owner after replay',
++  );
++
++  cache.applySystemTableChange(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    'UPDATE',
++    {
++      partition_id: PARTITION_ID,
++      leader_node_id: 'node-successor',
++      updated_at: 2001,
++      updated_at_hlc: '2001-0-node-successor',
++    },
++    {causeId: 'newer-successor-after-demotion'},
++  );
++  const successorRow = cache.get(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    PARTITION_ID,
++  );
++  t.equal(
++    context.handleCanonicalLeaderRowCacheChange(successorRow),
++    false,
++    'demotion cleanup does not clear a different successor',
++  );
++  t.equal(successorRow.leader_node_id, 'node-successor');
++  t.end();
++});
++
++t.test(
++  'CL-036 durable reassert: a local seed is not mistaken for durable proof or used as the CAS guard',
++  async (t) => {
++    const cache = makePartitionRowCache();
++    cache.applySystemTableChange(
++      SYSTEM_TABLE_NAME.PARTITIONS,
++      'UPSERT',
++      {
++        partition_id: PARTITION_ID,
++        leader_node_id: REPLACEMENT_NODE_ID,
++        updated_at: 2000,
++      },
++      {causeId: 'local-leader-seed'},
++    );
++
++    const mutations = [];
++    const owner = {
++      partitionId: PARTITION_ID,
++      replicaId: `${PARTITION_ID}-r4`,
++      nodeId: REPLACEMENT_NODE_ID,
++      isLeader: true,
++      systemTableCache: cache,
++      cdcIntegrationService: {
++        updateSystemTableRow: async (tableName, whereClause, data, options) => {
++          mutations.push({tableName, whereClause, data, options});
++          return {success: true, affectedRows: 1};
++        },
++      },
++      controlPlaneSystemTableGateway: {
++        readAuthoritativeRows: async () => ({
++          success: true,
++          rows: [{
++            partition_id: PARTITION_ID,
++            leader_node_id: SOURCE_NODE_ID,
++            updated_at: 1000,
++          }],
++        }),
++      },
++      getMetadataPublicationDeliveryPriority: () => 'critical',
++      getMetadataPublicationWorkClass: () => 'critical',
++      shouldMetadataPublicationAllowPressureDefer: () => false,
++      getMetadataPublicationReadinessDimension: () =>
++        'control-plane-recovery-eligible',
++      isPartitionsLeaderAvailable: () => true,
++      refreshMetadataPublicationGuardRow: async () => true,
++      logger: {warn: () => {}},
++    };
++    const helper = createLeaderNodeMutationHelper(owner);
++    helper.pendingValue = REPLACEMENT_NODE_ID;
++
++    const result = await helper.flush();
++
++    t.equal(result.reason, 'applied', 'durable reassert is issued');
++    t.equal(mutations.length, 1, 'one authoritative mutation is submitted');
++    t.same(
++      mutations[0].whereClause,
++      {
++        partition_id: PARTITION_ID,
++        leader_node_id: SOURCE_NODE_ID,
++        updated_at: 1000,
++      },
++      'CAS guard comes from the durable row, not the newer local seed',
++    );
++    t.equal(
++      mutations[0].data.leader_node_id,
++      REPLACEMENT_NODE_ID,
++      'durable row converges to the actual local leader',
++    );
++  },
++);
++
++t.test(
++  'CL-036 durable fence: demotion during the authoritative read prevents a stale owner write',
++  async (t) => {
++    const cache = makePartitionRowCache();
++    let releaseRead;
++    const readGate = new Promise((resolve) => {
++      releaseRead = resolve;
++    });
++    const mutations = [];
++    const owner = {
++      partitionId: PARTITION_ID,
++      replicaId: `${PARTITION_ID}-r4`,
++      nodeId: REPLACEMENT_NODE_ID,
++      isLeader: true,
++      systemTableCache: cache,
++      cdcIntegrationService: {
++        updateSystemTableRow: async (...args) => {
++          mutations.push(args);
++          return {success: true, affectedRows: 1};
++        },
++      },
++      controlPlaneSystemTableGateway: {
++        readAuthoritativeRows: async () => {
++          await readGate;
++          return {
++            success: true,
++            rows: [{
++              partition_id: PARTITION_ID,
++              leader_node_id: SOURCE_NODE_ID,
++              updated_at: 1000,
++            }],
++          };
++        },
++      },
++      getMetadataPublicationDeliveryPriority: () => 'critical',
++      getMetadataPublicationWorkClass: () => 'critical',
++      shouldMetadataPublicationAllowPressureDefer: () => false,
++      getMetadataPublicationReadinessDimension: () =>
++        'control-plane-recovery-eligible',
++      isPartitionsLeaderAvailable: () => true,
++      refreshMetadataPublicationGuardRow: async () => true,
++      logger: {warn: () => {}},
++    };
++    const helper = createLeaderNodeMutationHelper(owner);
++    helper.pendingValue = REPLACEMENT_NODE_ID;
++    const flush = helper.flush();
++    await Promise.resolve();
++
++    owner.isLeader = false;
++    helper.pendingValue = null;
++    releaseRead();
++    const result = await flush;
++
++    t.equal(result.reason, 'not-owner', 'pre-submit ownership is rechecked');
++    t.equal(mutations.length, 0, 'demoted owner submits no stale mutation');
++  },
++);

@@ -20,7 +20,11 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   // fallback; CL-035 seed raft_role at voter-ready). Both are superseded by
   // the durable write's CDC round-trip (newer updated_at wins in the cache
   // merge) — same sanctioned-exception class as the bootstrap hydration sites.
-  'node/replica-handler-create-methods.js': 2,
+  'node/replica-handler-create-status-methods.js': 2,
+  // CL-036 canonical-leader sibling: the actual local Raft leader transition
+  // seeds its existing PARTITIONS row, while the same publication owner queues
+  // and authoritatively confirms the durable leader_node_id write.
+  'partition/partition-service-metadata-delivery-methods.js': 1,
   // replica_operations-row analog of CL-016/CL-035: seed the owner's locally-
   // decided operation workflow_step into the local cache when the durable
   // priority control-plane write defers under formation pressure (the write
