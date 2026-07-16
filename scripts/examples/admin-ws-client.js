@@ -147,7 +147,11 @@ class AdminWsClient {
       this.pending.set(queryId, {resolve, reject, timeout});
 
       try {
-        socket.send(JSON.stringify({...payload, queryId}));
+        socket.send(JSON.stringify({
+          ...payload,
+          queryId,
+          timeoutMs: this.timeoutMs,
+        }));
       } catch (error) {
         this.pending.delete(queryId);
         clearTimeout(timeout);

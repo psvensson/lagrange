@@ -300,6 +300,8 @@ test('MovieLens durable CREATE retries a typed ambiguous admin timeout on ' +
     t.equal(timeoutError?.deferRetry, true);
     t.equal(timeoutError?.queryId, timedOutRequest.queryId);
     t.equal(timeoutError?.timeoutMs, 20);
+    t.equal(timedOutRequest.timeoutMs, 20,
+      'the caller response deadline crosses the websocket owner boundary');
     t.equal(timeoutClient.pending.size, 0,
       'the real timer removes the expired request before rejecting');
     t.equal(isRetryableControlPlaneError(timeoutError), true,

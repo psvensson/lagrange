@@ -1,0 +1,50 @@
+{
+  "id": "movielens-admin-snapshot-deadline-propagation",
+  "authoringContractVersion": 1,
+  "statement": "A caller-supplied admin query deadline is propagated across the websocket request and bounds server-side snapshot observation before the caller expires, while callers that omit a deadline retain the existing default, and the production five-node MovieLens milestone completes schema admission, durable ratings creation, 100000-row preload, ratings-only split convergence, and the successful three-way report.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "movielens-colocated-follower-remove-safety",
+    "planDoc": "solve/epics/service-data-affinity-placement.md",
+    "draftedAtCommit": "ff58ef229889b6508f14884a5218ebc098ab1183"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-admin-snapshot-deadline-propagation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "changed-live-only",
+      "statement": "Do not widen the 180000ms schema budget, weaken the 60000ms quiescence window, serialize scenario joins, reduce production logging, add a parallel freshness path, suppress topology or stale evidence, or rerun live without a changed deterministic owner invariant."
+    },
+    {
+      "id": "deadline-fail-closed",
+      "statement": "A propagated timeout may bound existing work but must not convert missing, stale, pressured, or conflicting snapshot evidence into admission."
+    }
+  ]
+}
