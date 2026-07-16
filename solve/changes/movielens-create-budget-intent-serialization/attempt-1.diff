@@ -1,0 +1,193 @@
+diff --git a/src/rebalancer/rebalance-coordinator-concurrent-add-budget.js b/src/rebalancer/rebalance-coordinator-concurrent-add-budget.js
+index 00ea738415a330ec304ef10d5060686f9502cde5..ddbbd3631de6f9ffb4bd134bda65b162207288fd 100644
+--- a/src/rebalancer/rebalance-coordinator-concurrent-add-budget.js
++++ b/src/rebalancer/rebalance-coordinator-concurrent-add-budget.js
+@@ -62,16 +62,36 @@ async function runConcurrentCreateBudgetGate(
+     normalizedMoveType,
+     budgetContext,
+   );
+-  return coordinator.operationWorkflowRunExclusive(
+-    coordinator.getCreateBudgetSingleFlightKey(scope),
+-    async () => {
+-      await coordinator.ensureConcurrentOperationBudgetAllowed(
+-        normalizedMoveType,
+-        budgetContext,
++  const ownerKey = coordinator.getCreateBudgetSingleFlightKey(scope);
++  let admissionFactoryRan = false;
++  let executionResult;
++  // operationWorkflowRunExclusive coalesces contenders by returning the
++  // holder's promise without running their factory. That is correct for one
++  // deduplicated intent, but this key deliberately spans distinct intents so
++  // the budget check and create remain atomic. Await a holder, then re-enter
++  // the same lane until this caller owns one serialized admission turn.
++  while (!admissionFactoryRan) {
++    try {
++      executionResult = await coordinator.operationWorkflowRunExclusive(
++        ownerKey,
++        async () => {
++          admissionFactoryRan = true;
++          await coordinator.ensureConcurrentOperationBudgetAllowed(
++            normalizedMoveType,
++            budgetContext,
++          );
++          return executionFactory();
++        },
+       );
+-      return executionFactory();
+-    },
+-  );
++    } catch (error) {
++      if (admissionFactoryRan) {
++        throw error;
++      }
++      // A coalesced rejection belongs to the previous holder. Its own caller
++      // receives it; this distinct intent still needs an admission turn.
++    }
++  }
++  return executionResult;
+ }
+ 
+ function resolveConcurrentCreateBudgetScope(
+diff --git a/test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js b/test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..683f0f4861e18557d0e1e04bb5af82b7807472c7
+--- /dev/null
++++ b/test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js
+@@ -0,0 +1,137 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {runConcurrentCreateBudgetGate} from '../../src/rebalancer/rebalance-coordinator-concurrent-add-budget.js';
++import {DurableWorkflowCoordinator} from '../../src/workflow/durable-workflow-coordinator.js';
++
++const ADD_OPERATION_TYPE = 'ADD';
++const FIRST_PARTITION_ID = 'movie_genres-p1';
++const SECOND_PARTITION_ID = 'movie_people-p1';
++const SHARED_BUDGET_KEY = 'create-budget:add';
++
++function createDeferred() {
++  let resolve;
++  const promise = new Promise((resolvePromise) => {
++    resolve = resolvePromise;
++  });
++  return {promise, resolve};
++}
++
++function createBudgetOwner(events) {
++  const workflow = new DurableWorkflowCoordinator();
++  return {
++    getCreateBudgetSingleFlightKey: () => SHARED_BUDGET_KEY,
++    operationWorkflowRunExclusive: workflow.runExclusive.bind(workflow),
++    ensureConcurrentOperationBudgetAllowed: async (_moveType, context) => {
++      events.push(`budget:${context.partitionId}`);
++    },
++  };
++}
++
++function runCreateIntent(coordinator, partitionId, executionFactory) {
++  return runConcurrentCreateBudgetGate(
++    coordinator,
++    ADD_OPERATION_TYPE,
++    {partitionId},
++    executionFactory,
++  );
++}
++
++test(
++  'shared create-budget lane serializes distinct factories and their results',
++  async (t) => {
++    const events = [];
++    const firstStarted = createDeferred();
++    const releaseFirst = createDeferred();
++    const coordinator = createBudgetOwner(events);
++
++    const firstIntent = runCreateIntent(
++      coordinator,
++      FIRST_PARTITION_ID,
++      async () => {
++        events.push(`start:${FIRST_PARTITION_ID}`);
++        firstStarted.resolve();
++        await releaseFirst.promise;
++        events.push(`end:${FIRST_PARTITION_ID}`);
++        return {partitionId: FIRST_PARTITION_ID};
++      },
++    );
++    await firstStarted.promise;
++    const secondIntent = runCreateIntent(
++      coordinator,
++      SECOND_PARTITION_ID,
++      async () => {
++        events.push(`start:${SECOND_PARTITION_ID}`);
++        return {partitionId: SECOND_PARTITION_ID};
++      },
++    );
++
++    t.same(
++      events,
++      [`budget:${FIRST_PARTITION_ID}`, `start:${FIRST_PARTITION_ID}`],
++      'the second distinct intent waits behind the shared atomic budget lane',
++    );
++    releaseFirst.resolve();
++
++    const [firstResult, secondResult] = await Promise.all([
++      firstIntent,
++      secondIntent,
++    ]);
++    t.same(firstResult, {partitionId: FIRST_PARTITION_ID});
++    t.same(secondResult, {partitionId: SECOND_PARTITION_ID});
++    t.same(events, [
++      `budget:${FIRST_PARTITION_ID}`,
++      `start:${FIRST_PARTITION_ID}`,
++      `end:${FIRST_PARTITION_ID}`,
++      `budget:${SECOND_PARTITION_ID}`,
++      `start:${SECOND_PARTITION_ID}`,
++    ]);
++    t.end();
++  },
++);
++
++test(
++  'shared create-budget lane does not leak a holder rejection to a waiter',
++  async (t) => {
++    const events = [];
++    const firstStarted = createDeferred();
++    const releaseFirst = createDeferred();
++    const coordinator = createBudgetOwner(events);
++    const holderError = new Error('first create failed');
++
++    const firstIntent = runCreateIntent(
++      coordinator,
++      FIRST_PARTITION_ID,
++      async () => {
++        events.push(`start:${FIRST_PARTITION_ID}`);
++        firstStarted.resolve();
++        await releaseFirst.promise;
++        throw holderError;
++      },
++    );
++    await firstStarted.promise;
++    const secondIntent = runCreateIntent(
++      coordinator,
++      SECOND_PARTITION_ID,
++      async () => {
++        events.push(`start:${SECOND_PARTITION_ID}`);
++        return {partitionId: SECOND_PARTITION_ID};
++      },
++    );
++    releaseFirst.resolve();
++
++    const [firstOutcome, secondOutcome] = await Promise.allSettled([
++      firstIntent,
++      secondIntent,
++    ]);
++    t.equal(firstOutcome.status, 'rejected');
++    t.equal(firstOutcome.reason, holderError);
++    t.equal(secondOutcome.status, 'fulfilled');
++    t.same(secondOutcome.value, {partitionId: SECOND_PARTITION_ID});
++    t.same(events, [
++      `budget:${FIRST_PARTITION_ID}`,
++      `start:${FIRST_PARTITION_ID}`,
++      `budget:${SECOND_PARTITION_ID}`,
++      `start:${SECOND_PARTITION_ID}`,
++    ]);
++    t.end();
++  },
++);

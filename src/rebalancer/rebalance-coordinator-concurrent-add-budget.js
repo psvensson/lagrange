@@ -62,16 +62,36 @@ async function runConcurrentCreateBudgetGate(
     normalizedMoveType,
     budgetContext,
   );
-  return coordinator.operationWorkflowRunExclusive(
-    coordinator.getCreateBudgetSingleFlightKey(scope),
-    async () => {
-      await coordinator.ensureConcurrentOperationBudgetAllowed(
-        normalizedMoveType,
-        budgetContext,
+  const ownerKey = coordinator.getCreateBudgetSingleFlightKey(scope);
+  let admissionFactoryRan = false;
+  let executionResult;
+  // operationWorkflowRunExclusive coalesces contenders by returning the
+  // holder's promise without running their factory. That is correct for one
+  // deduplicated intent, but this key deliberately spans distinct intents so
+  // the budget check and create remain atomic. Await a holder, then re-enter
+  // the same lane until this caller owns one serialized admission turn.
+  while (!admissionFactoryRan) {
+    try {
+      executionResult = await coordinator.operationWorkflowRunExclusive(
+        ownerKey,
+        async () => {
+          admissionFactoryRan = true;
+          await coordinator.ensureConcurrentOperationBudgetAllowed(
+            normalizedMoveType,
+            budgetContext,
+          );
+          return executionFactory();
+        },
       );
-      return executionFactory();
-    },
-  );
+    } catch (error) {
+      if (admissionFactoryRan) {
+        throw error;
+      }
+      // A coalesced rejection belongs to the previous holder. Its own caller
+      // receives it; this distinct intent still needs an admission turn.
+    }
+  }
+  return executionResult;
 }
 
 function resolveConcurrentCreateBudgetScope(
