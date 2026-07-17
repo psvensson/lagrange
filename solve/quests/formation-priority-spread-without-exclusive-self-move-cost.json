@@ -1,0 +1,58 @@
+{
+  "id": "formation-priority-spread-without-exclusive-self-move-cost",
+  "authoringContractVersion": 1,
+  "statement": "Cold five-node formation reaches schema-admission quiescence within the unchanged 180000ms budget and 60000ms stability window because the priority control-plane partitions (including the replica_operations ledger) reach their spread targets without paying the serialized exclusive ledger self-move cost class measured at 85-110s: replicas of priority partitions are placed or cured such that no schema-admission-blocking window carries back-to-back exclusive ledger self-moves, while the ledger interlock's exclusivity during any live self-move, quorum and voter safety, remove-safety authorities, and the sealed live scenario semantics all remain byte-unchanged.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "formation-ledger-self-move-blocks-cluster-ops",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "bc5d3945057ba328fe724c6f41f2fb6693bc4f4b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-priority-spread-without-exclusive-self-move-cost-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "interlock-safety-preserved",
+      "statement": "The exclusive ledger interlock while a self-move is live, the canonical remove-safety authorities, quorum floors, and voter safety are byte-unchanged; the win must come from avoiding or re-siting the cost class (placement at join time, pre-gate cure scheduling, or fewer required self-moves), never from overlapping work under a live ledger self-move or weakening exclusivity."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change the MovieLens 180000ms schema budget, 60000ms stability window, workload, joins, preload size, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, or live scenario semantics."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Before changing runtime source, deterministically reproduce the cost class (concentrated priority partitions at formation forcing two serialized exclusive ledger self-moves inside the admission window) with the real placement and coordinator owners, and prove red-on-revert for the chosen mechanism."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-16T21:52 run's measured timeline (110s dual self-moves, 182 interlock refusals, wave at T+146s, quiescence deadline ~T+120s, zero historical PASS reports) is the sealed pre-fix witness; the parent quest's falsified persist-lane, ordering, and poll-latency theories must not be re-derived."
+    }
+  ]
+}
