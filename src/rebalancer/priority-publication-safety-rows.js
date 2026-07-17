@@ -145,16 +145,27 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
         [partitionId],
         REMOVE_SAFETY_READ_QUERY_OPTIONS,
       );
+      // Revalidate AFTER the await: a demotion (or successor publication)
+      // landing while the authoritative read was in flight clears or
+      // replaces the cached leader projection, and a pre-await capture must
+      // not resurrect the superseded self-belief into the merge (external
+      // review TOCTOU, 2026-07-17). The post-await cache state is the
+      // freshest local truth the preference may consult.
+      const postAwaitCachedRow =
+        this.getCachedCriticalPartitionRow(partitionId);
       if (
         !result?.success ||
         !Array.isArray(result.rows) ||
         result.rows.length === 0
       ) {
-        return cachedRow;
+        return postAwaitCachedRow;
       }
-      return this.mergePartitionRowForSafety(result.rows[0], cachedRow);
+      return this.mergePartitionRowForSafety(
+        result.rows[0],
+        postAwaitCachedRow,
+      );
     } catch {
-      return cachedRow;
+      return this.getCachedCriticalPartitionRow(partitionId) || cachedRow;
     }
   }
 

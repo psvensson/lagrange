@@ -151,6 +151,63 @@ t.test(
 );
 
 t.test(
+  'demotion during the in-flight authoritative read cannot resurrect the ' +
+    'captured self-belief: the post-await cache state governs the preference',
+  async (t) => {
+    // External-review TOCTOU case: this node believed it led when the safety
+    // read started; it was demoted (the seed lifecycle nulled the cached
+    // leader and a successor publication landed) while the authoritative
+    // read was in flight. The stale pre-await capture must not override the
+    // fresher authoritative successor.
+    const SUCCESSOR = 'node-successor';
+    let cachedNow = cachedSeededRow(LOCAL_NODE);
+    let releaseRead;
+    const readGate = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const instance = Object.create(PriorityPublicationSafetyRows.prototype);
+    instance.repository = {
+      nodeId: LOCAL_NODE,
+      systemTableCache: {
+        get: (tableName, key) =>
+          tableName === SYSTEM_TABLE_NAME.PARTITIONS && key === PARTITION_ID ?
+            cachedNow :
+            null,
+      },
+      controlPlaneSystemTableGateway: {
+        executeRead: async () => {
+          await readGate;
+          return {
+            success: true,
+            rows: [{
+              partition_id: PARTITION_ID,
+              leader_node_id: SUCCESSOR,
+              created_at: 1_000,
+              updated_at: 3_000,
+            }],
+          };
+        },
+      },
+    };
+
+    const pendingRead = instance.getCriticalPartitionRowForSafety(PARTITION_ID);
+    // Demotion lands while the authoritative read is in flight: the seed
+    // lifecycle clears the local claim and the successor publication reaches
+    // the cache.
+    cachedNow = cachedSeededRow(SUCCESSOR);
+    releaseRead();
+    const row = await pendingRead;
+
+    t.equal(
+      row.leader_node_id,
+      SUCCESSOR,
+      'the captured pre-await self-belief must not override the ' +
+        'authoritative successor after an in-flight demotion',
+    );
+  },
+);
+
+t.test(
   'end-to-end: getCriticalPartitionRowForSafety serves the locally-won ' +
     'leadership to the safety evaluation despite a stale authoritative read',
   async (t) => {
