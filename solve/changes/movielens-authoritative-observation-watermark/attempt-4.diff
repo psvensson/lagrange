@@ -1,0 +1,253 @@
+diff --git a/src/bootstrap/system-partition-classification.js b/src/bootstrap/system-partition-classification.js
+index 190779801b663763cc23b8ea4b5beda492f4a9c9..cd4db0e25680bc6759a729f200733145b7e10d00 100644
+--- a/src/bootstrap/system-partition-classification.js
++++ b/src/bootstrap/system-partition-classification.js
+@@ -25,6 +25,7 @@ const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
+ );
+ 
+ const PRIORITY_CONTROL_PLANE_TABLE_IDS = new Set([
++  SYSTEM_TABLE_NAME.NODES,
+   SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+   SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+   SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+diff --git a/test/bootstrap/system-partition-classification-owner.test.js b/test/bootstrap/system-partition-classification-owner.test.js
+index 3d1fb278ce1905c2f2555cbb426b605cd9457db9..fc9a90029e1943b44c160a46bab00127c9fc1135 100644
+--- a/test/bootstrap/system-partition-classification-owner.test.js
++++ b/test/bootstrap/system-partition-classification-owner.test.js
+@@ -105,6 +105,25 @@ test('ordered class preserves all overlapping membership facts', (t) => {
+   t.end();
+ });
+ 
++test('nodes table participates in priority recovery to break the liveness ' +
++  'placement cycle', (t) => {
++  const outcome = classifySystemPartition({
++    partitionId: `${SYSTEM_TABLE_NAME.NODES}-p1`,
++  });
++
++  t.equal(
++    outcome.priorityControlPlane,
++    true,
++    'nodes-p1 recovery must not require every lease stored in nodes-p1 to already be current',
++  );
++  t.equal(
++    outcome.bootstrapCritical,
++    true,
++    'priority recovery classification must preserve bootstrap-critical ownership',
++  );
++  t.end();
++});
++
+ test('bootstrap-critical ID predicate preserves exact membership', (t) => {
+   const criticalPartitionId = partitionId(PRIORITY_TABLE_ID, 1);
+   t.equal(isBootstrapCriticalSystemPartitionId(criticalPartitionId), true);
+diff --git a/test/bootstrap/traffic-readiness-utils.test.js b/test/bootstrap/traffic-readiness-utils.test.js
+index 297cfa8fbe6f837c9b574344a12e35e2152213f1..449a0d4c26d67241ba833986f0e73dbdc5a266c0 100644
+--- a/test/bootstrap/traffic-readiness-utils.test.js
++++ b/test/bootstrap/traffic-readiness-utils.test.js
+@@ -165,8 +165,15 @@ test('traffic-readiness-utils - priority control-plane background work opens for
+       isBackgroundWorkReady(readinessState, {
+         partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
+       }),
++      true,
++      'nodes-p1 liveness recovery should open with other priority control-plane work',
++    );
++    t.equal(
++      isBackgroundWorkReady(readinessState, {
++        partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
++      }),
+       false,
+-      'non-priority system partitions should still wait for full traffic readiness',
++      'ordinary system partitions should still wait for full traffic readiness',
+     );
+   });
+ 
+diff --git a/test/control-plane/priority-recovery-authoritative-summary-inventory-alignment.test.js b/test/control-plane/priority-recovery-authoritative-summary-inventory-alignment.test.js
+index 48db44ff7e3fb728579c08cba02318218f5aa382..9b4f8893ff897165423b27a4663a95e91a7e7c35 100644
+--- a/test/control-plane/priority-recovery-authoritative-summary-inventory-alignment.test.js
++++ b/test/control-plane/priority-recovery-authoritative-summary-inventory-alignment.test.js
+@@ -9,6 +9,9 @@ import {
+   INITIAL_PARTITION_IDS,
+   SYSTEM_TABLE_NAME,
+ } from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  PRIORITY_CONTROL_PLANE_TABLE_IDS,
++} from '../../src/bootstrap/system-partition-classification.js';
+ import {
+   MembershipPublicationCoordinator,
+ } from '../../src/control-plane/membership-publication-coordinator.js';
+@@ -22,13 +25,8 @@ import {
+ const NODE_IDS = Object.freeze(['seed', 'node-2', 'node-3', 'node-4']);
+ const READY_NODE_IDS = Object.freeze(['seed', 'node-2', 'node-4']);
+ const PRIORITY_PARTITION_IDS = Object.freeze([
+-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
+-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS],
+-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
+-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS],
+-  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
+-]);
++  ...PRIORITY_CONTROL_PLANE_TABLE_IDS,
++].map((tableId) => INITIAL_PARTITION_IDS[tableId]));
+ const SCHEMA_OPERATIONS_PARTITION_ID =
+   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS];
+ const PUBLICATION_EPOCH = 3;
+diff --git a/test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js b/test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js
+index 6f38d6251da89677135a6667d4e10d4bdd929b9a..1948798fe9bf4beb9ce1fb50d19b81d038e84222 100644
+--- a/test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js
++++ b/test/rebalancer/unified-rebalancer-triggers-bootstrap-lifecycle.test.js
+@@ -183,7 +183,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
+         }),
+       };
+       const rebalancer = createTestRebalancer({
+-        entityId: 'nodes-p1',
++        entityId: 'services-p1',
+         entityType: EntityType.PARTITION,
+         nodeId: 'node-1',
+         nodes: [
+@@ -237,7 +237,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
+         }),
+       };
+       const rebalancer = createTestRebalancer({
+-        entityId: 'nodes-p1',
++        entityId: 'services-p1',
+         entityType: EntityType.PARTITION,
+         nodeId: 'node-1',
+         nodes: [
+@@ -313,7 +313,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
+         }),
+       };
+       const rebalancer = createTestRebalancer({
+-        entityId: 'nodes-p1',
++        entityId: 'services-p1',
+         entityType: EntityType.PARTITION,
+         nodeId: 'node-1',
+         nodes: [
+diff --git a/test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js b/test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js
+index f6e54b56440b76d6b0e28f373548d2b8c9e10038..0ddb5d8653a28466e58b877199eba4f82d1191d3 100644
+--- a/test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js
++++ b/test/rebalancer/unified-rebalancer-triggers-critical-deferral.test.js
+@@ -439,6 +439,100 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
+       );
+     });
+ 
++  await t.test(
++    'checkRebalance lets nodes-p1 escape its own ready-lease dependency on ' +
++    'a recovery-eligible quorum',
++    async (t) => {
++      const recoveryEligibleNodeIds = new Set([
++        'node-1',
++        'node-2',
++        'node-3',
++      ]);
++      const readinessService = {
++        getNodeReadinessSync(nodeId) {
++          const recoveryEligible = recoveryEligibleNodeIds.has(nodeId);
++          return {
++            nodeId,
++            dimensions: {
++              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
++                recoveryEligible,
++              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]:
++                recoveryEligible,
++              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]:
++                recoveryEligible,
++              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
++                recoveryEligible,
++              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
++                recoveryEligible,
++              [CONTROL_PLANE_READINESS_DIMENSION
++                .METADATA_PUBLICATION_HEALTHY]: true,
++              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
++                recoveryEligible,
++              [CONTROL_PLANE_READINESS_DIMENSION
++                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: recoveryEligible,
++              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
++                recoveryEligible,
++            },
++            reasons: recoveryEligible ? [] : [{code: 'ready_lease_expired'}],
++          };
++        },
++      };
++      const nodes = ['node-1', 'node-2', 'node-3', 'node-4', 'node-5']
++        .map((nodeId) => ({
++          node_id: nodeId,
++          status: NodeStatus.ACTIVE,
++        }));
++      const rebalancer = createTestRebalancer({
++        entityId: 'nodes-p1',
++        entityType: EntityType.PARTITION,
++        nodeId: 'node-1',
++        nodes,
++        partitions: [{
++          partition_id: 'nodes-p1',
++          table_id: 'nodes',
++          replica_count: 3,
++        }],
++        nodeEndpoints: [...recoveryEligibleNodeIds]
++          .map((nodeId) => createNodeEndpoint(nodeId)),
++        serviceEndpoints: [...recoveryEligibleNodeIds]
++          .map((nodeId) => createPostgresWireEndpoint(nodeId)),
++        controlPlaneReadinessService: readinessService,
++      });
++
++      rebalancer.initialize();
++      rebalancer.isLeader = true;
++      rebalancer.isStabilized = () => true;
++
++      let evaluateCalls = 0;
++      rebalancer.evaluateState = async () => {
++        evaluateCalls++;
++        return false;
++      };
++      let scheduledDelayMs = null;
++      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
++        scheduledDelayMs = overrideDelayMs;
++      };
++
++      t.equal(
++        rebalancer.getCriticalSystemTopologySettlingBlocker(),
++        null,
++        'nodes-p1 should satisfy the real topology gate from recovery quorum evidence',
++      );
++      await rebalancer.checkRebalance();
++
++      t.equal(
++        evaluateCalls,
++        1,
++        'nodes-p1 should enter planning once a safe recovery quorum can move its replicas',
++      );
++      t.equal(
++        scheduledDelayMs,
++        null,
++        'expired non-quorum leases should not preserve the nodes-p1 placement cycle',
++      );
++    });
++
+   await t.test(
+     'checkRebalance keeps priority control-plane partitions open when ' +
+     'quorum is recovery-eligible during ACK_PENDING convergence',
+@@ -534,10 +628,11 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
+     });
+ 
+   await t.test(
+-    'checkRebalance defers critical system partitions while failed membership is pending cleanup',
++    'checkRebalance defers ordinary critical system partitions while failed ' +
++    'membership is pending cleanup',
+     async (t) => {
+       const rebalancer = createTestRebalancer({
+-        entityId: 'nodes-p1',
++        entityId: 'services-p1',
+         entityType: EntityType.PARTITION,
+         nodeId: 'node-1',
+         nodes: [
+@@ -571,7 +666,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
+       t.equal(
+         evaluateCalls,
+         0,
+-        'failed membership should remain behind the topology-settling gate until cleanup completes',
++        'ordinary system recovery should remain behind the topology-settling gate until cleanup completes',
+       );
+     });
+ 
+

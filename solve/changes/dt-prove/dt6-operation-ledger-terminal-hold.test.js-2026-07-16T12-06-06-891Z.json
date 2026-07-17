@@ -1,0 +1,16 @@
+{
+  "test": "test/convergence/dt6-operation-ledger-terminal-hold.test.js",
+  "src": [
+    "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-16T12:06:06.841Z"
+}

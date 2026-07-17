@@ -1,0 +1,821 @@
+diff --git a/scripts/solve.js b/scripts/solve.js
+index 2a9e2b6eb657575f7d188e85b299cf7438528edb..4961759d770f5a53332e7e3d0cc45cb20a99b7bf 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -414,6 +414,10 @@ function cmdProbe(root, args) {
+   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+ }
+ 
++function optionalStringArgument(args, name) {
++  return typeof args[name] === 'string' ? args[name] : null;
++}
++
+ function cmdFinding(root, args) {
+   const id = args.id || args._[0];
+   if (!id) throw new Error('finding: --id <questId> is required');
+@@ -448,20 +452,20 @@ function cmdFinding(root, args) {
+           null,
+       } :
+       null;
++  const kind = optionalStringArgument(args, 'kind');
++  const evidence = optionalStringArgument(args, 'evidence');
+   const verification = buildVerificationFinding({
+-    kind: typeof args.kind === 'string' ? args.kind : null,
+-    evidence: typeof args.evidence === 'string' ? args.evidence : null,
+-    verificationScope: typeof args['verification-scope'] === 'string' ?
+-      args['verification-scope'] : null,
++    kind,
++    evidence,
++    verificationScope: optionalStringArgument(args, 'verification-scope'),
+     verificationFingerprint:
+-      typeof args['verification-fingerprint'] === 'string' ?
+-        args['verification-fingerprint'] : null,
++      optionalStringArgument(args, 'verification-fingerprint'),
+   });
+   const stamped = appendFinding(root, id, {
+     frontier: args.frontier,
+     claim: args.claim,
+-    kind: typeof args.kind === 'string' ? args.kind : null,
+-    evidence: typeof args.evidence === 'string' ? args.evidence : null,
++    kind,
++    evidence,
+     rulesOut: typeof args.rulesOut === 'string' ? args.rulesOut : null,
+     regressionClassification,
+     scopePressureClassification,
+@@ -627,16 +631,35 @@ function cmdReflect(root, args) {
+   process.stdout.write(
+     `recorded ${altitude ? 'altitude ' : ''}reflection @ ${stamped.ts}\n`);
+ }
+-function cmdStep(root, args) {
+-  const id = args.id || args._[0];
+-  if (!id) throw new Error('step: --id <questId> is required');
+-  const quest = loadQuest(root, id);
+-  if (args.abort) {
+-    process.stdout.write(stepAbort(root, id) ?
+-      'pending step aborted\n' :
+-      'no pending step\n');
+-    return;
++function writeStepTerminal(root, quest, result) {
++  if (result.terminal === 'theory-required' || result.terminal === 'blocked') {
++    const header = result.terminal === 'theory-required' ?
++      `THEORY REQUIRED — ${result.frontier} rung ${result.rungIndex}` :
++      `BLOCKED (${result.disposition || 'recoverable'}) — ${result.frontier} ` +
++      `rung ${result.rungIndex}`;
++    const next = result.nextCommand ? `\nnext: ${result.nextCommand}` : '';
++    process.stdout.write(
++      `${header}\n` +
++      `${(result.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
++      `${next}\n`);
++    emitAdvisories(root, quest);
++    refreshFrontierBoard(root);
++    return true;
+   }
++  if (result.terminal === 'solved') {
++    process.stdout.write(`SOLVED — evidence: ${result.evidence || '(none)'}\n`);
++    refreshFrontierBoard(root);
++    return true;
++  }
++  if (result.terminal === 'exhausted') {
++    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
++    refreshFrontierBoard(root);
++    return true;
++  }
++  return false;
++}
++
++function validateStepCommitArguments(args) {
+   if (args.changeRef && !args.commit) {
+     throw new Error('step commit requires --commit with --changeRef');
+   }
+@@ -649,6 +672,19 @@ function cmdStep(root, args) {
+   if (args.commit && !args.changeRef && !args[AUTO_DIFF_ARGUMENT]) {
+     throw new Error(STEP_CHANGE_REF_REQUIRED);
+   }
++}
++
++function cmdStep(root, args) {
++  const id = args.id || args._[0];
++  if (!id) throw new Error('step: --id <questId> is required');
++  const quest = loadQuest(root, id);
++  if (args.abort) {
++    process.stdout.write(stepAbort(root, id) ?
++      'pending step aborted\n' :
++      'no pending step\n');
++    return;
++  }
++  validateStepCommitArguments(args);
+   const r = runStep(root, quest, {
+     changeRef: typeof args.changeRef === 'string' ? args.changeRef : undefined,
+     autoDiff: Boolean(args[AUTO_DIFF_ARGUMENT]),
+@@ -656,30 +692,7 @@ function cmdStep(root, args) {
+     force: Boolean(args.force),
+     ...theoryCommitArgs(args),
+   });
+-  if (r.terminal === 'theory-required' || r.terminal === 'blocked') {
+-    const header = r.terminal === 'theory-required' ?
+-      `THEORY REQUIRED — ${r.frontier} rung ${r.rungIndex}` :
+-      `BLOCKED (${r.disposition || 'recoverable'}) — ${r.frontier} ` +
+-      `rung ${r.rungIndex}`;
+-    const next = r.nextCommand ? `\nnext: ${r.nextCommand}` : '';
+-    process.stdout.write(
+-      `${header}\n` +
+-      `${(r.problems || []).map((problem) => `- ${problem}`).join('\n')}` +
+-      `${next}\n`);
+-    emitAdvisories(root, quest);
+-    refreshFrontierBoard(root);
+-    return;
+-  }
+-  if (r.terminal === 'solved') {
+-    process.stdout.write(`SOLVED — evidence: ${r.evidence || '(none)'}\n`);
+-    refreshFrontierBoard(root);
+-    return;
+-  }
+-  if (r.terminal === 'exhausted') {
+-    process.stdout.write('EXHAUSTED — no open frontier; human decision needed\n');
+-    refreshFrontierBoard(root);
+-    return;
+-  }
++  if (writeStepTerminal(root, quest, r)) return;
+   if (!args.commit) {
+     process.stdout.write(
+       `pinned ${r.frontier}: metric ${r.before.metric}\n` +
+diff --git a/scripts/solve/next.js b/scripts/solve/next.js
+index fa9a668dd2a8354836bb2016ce3fb7be0944e211..8e4ae440069d71914e76e8f2e6a33f355002370b 100644
+--- a/scripts/solve/next.js
++++ b/scripts/solve/next.js
+@@ -66,6 +66,11 @@ function nextAction({questId, state, pending, gateStop, blocker,
+       pendingVerification.fingerprint || 'sha256:<missing>',
+     );
+   }
++  if (verification.unresolvedRejectedAttempts.length > 0) {
++    return typedNextAction(pending ?
++      pendingCommitCommand(questId) :
++      `node scripts/solve.js step --id ${questId}`);
++  }
+   if (TERMINAL_STATUSES.includes(state.questStatus)) {
+     if (verification.attempts.some((attempt) => attempt.contracted) &&
+       !verification.aggregateApproval) {
+diff --git a/scripts/solve/store.js b/scripts/solve/store.js
+index e1b471eed5f37da269fa734fbd9a138ef0cde929..d3d5a1195103b4f4a6e79e01f738cf04058e42d6 100644
+--- a/scripts/solve/store.js
++++ b/scripts/solve/store.js
+@@ -44,6 +44,47 @@ const DONE_WHEN_PROBE_SCOPE = 'doneWhen';
+ import {isFrontierProbeEvent} from './probe-spec.js';
+ 
+ const UNKNOWN_METRIC = '?';
++const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
++const VERIFICATION_SCOPE_ATTEMPT = 'attempt';
++const VERIFICATION_VERDICT_REJECTED = 'rejected';
++const VERIFICATION_FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
++const VERIFIER_EVIDENCE_PATTERN =
++  /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
++
++function isStructuredVerifierRejection(event) {
++  return event?.type === EVENT_FINDING &&
++    event.kind === VERIFIER_REJECTION_FINDING_KIND &&
++    event.verification?.schemaVersion === 1 &&
++    event.verification?.scope === VERIFICATION_SCOPE_ATTEMPT &&
++    event.verification?.verdict === VERIFICATION_VERDICT_REJECTED &&
++    VERIFICATION_FINGERPRINT_PATTERN.test(
++      String(event.verification?.fingerprint || ''),
++    ) &&
++    VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''));
++}
++
++function boundVerifierRejectionEvents(log) {
++  const contractedAttemptKeys = new Set();
++  const boundRejections = new Set();
++  for (const event of log) {
++    const fingerprint = `sha256:${event.changeRefIdentity?.sha256 || ''}`;
++    const key = `${event.frontier || ''}\n${fingerprint}`;
++    if (event.type === EVENT_ATTEMPT &&
++        event.verificationContractVersion === 1 &&
++        VERIFICATION_FINGERPRINT_PATTERN.test(fingerprint)) {
++      contractedAttemptKeys.add(key);
++      continue;
++    }
++    if (isStructuredVerifierRejection(event)) {
++      const rejectionKey = `${event.frontier || ''}\n` +
++        event.verification.fingerprint;
++      if (contractedAttemptKeys.has(rejectionKey)) {
++        boundRejections.add(event);
++      }
++    }
++  }
++  return boundRejections;
++}
+ 
+ function ensureDir(dir) {
+   fs.mkdirSync(dir, {recursive: true});
+@@ -173,7 +214,7 @@ function applyReopen(frontier, event) {
+   frontier.reason = event.reason || null;
+ }
+ 
+-function applyFinding(frontier, event) {
++function applyFinding(frontier, event, reopensTerminal = false) {
+   if (!frontier) return;
+   frontier.findings.push({
+     claim: event.claim || null,
+@@ -185,6 +226,10 @@ function applyFinding(frontier, event) {
+     scopePressureClassification: event.scopePressureClassification || null,
+     ts: event.ts || null,
+   });
++  if (reopensTerminal && frontier.status === STATUS_SOLVED) {
++    frontier.status = STATUS_OPEN;
++    frontier.reason = 'exact terminal source attempt was rejected';
++  }
+ }
+ 
+ function applyEvidenceIngested(frontierState, event) {
+@@ -313,7 +358,7 @@ const FRONTIER_HANDLERS = {
+   [EVENT_EVIDENCE_INGESTED]: applyEvidenceIngested,
+ };
+ 
+-function applyQuestStateEvent(questState, event) {
++function applyQuestStateEvent(questState, event, reopensTerminal = false) {
+   switch (event.type) {
+   case EVENT_QUEST:
+     questState.status = event.status;
+@@ -326,6 +371,12 @@ function applyQuestStateEvent(questState, event) {
+       questState.evidence = event.evidence || null;
+     }
+     return false;
++  case EVENT_FINDING:
++    if (reopensTerminal) {
++      questState.status = STATUS_OPEN;
++      questState.evidence = event.evidence || null;
++    }
++    return false;
+   default:
+     return false;
+   }
+@@ -338,10 +389,25 @@ export function projectState(quest, log) {
+   );
+   const questState = {status: STATUS_OPEN, evidence: null};
+   const theories = emptyTheoryState();
++  const boundRejections = boundVerifierRejectionEvents(log);
+   for (const event of log) {
+-    if (applyQuestStateEvent(questState, event)) continue;
++    const reopensTerminal = boundRejections.has(event);
++    if (applyQuestStateEvent(
++      questState,
++      event,
++      reopensTerminal,
++    )) continue;
++    if (event.type === EVENT_FINDING) {
++      applyFinding(
++        event.frontier ? frontiers.get(event.frontier) : null,
++        event,
++        reopensTerminal,
++      );
++    }
+     const handler = FRONTIER_HANDLERS[event.type];
+-    if (handler) handler(event.frontier ? frontiers.get(event.frontier) : null, event);
++    if (handler && event.type !== EVENT_FINDING) {
++      handler(event.frontier ? frontiers.get(event.frontier) : null, event);
++    }
+     if (event.type === EVENT_THEORY_SYSTEM_DECLARED) {
+       addTheory(theories, event, THEORY_SCOPE_SYSTEM);
+     } else if (event.type === EVENT_THEORY_OPTION_DECLARED) {
+diff --git a/scripts/solve/verification.js b/scripts/solve/verification.js
+index ea5e87c3fca9d504ee37178add08f22d932ebf28..ba872e72d84c772c850a59ea718c517d7906045c 100644
+--- a/scripts/solve/verification.js
++++ b/scripts/solve/verification.js
+@@ -14,6 +14,8 @@ import {
+ 
+ export const VERIFICATION_CONTRACT_VERSION = 1;
+ export const VERIFIER_APPROVAL_FINDING_KIND = 'verifier-approval';
++const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
++const VERIFICATION_VERDICT_REJECTED = 'rejected';
+ export const VERIFICATION_SCOPE = Object.freeze({
+   ATTEMPT: 'attempt',
+   AGGREGATE: 'aggregate',
+@@ -89,6 +91,17 @@ function structuredApprovalMatches(event, scope, fingerprint) {
+   return verification.scope === scope || verification.scope === VERIFICATION_SCOPE.BOTH;
+ }
+ 
++function structuredRejectionMatches(event, fingerprint) {
++  if (event.type !== EVENT_FINDING ||
++    event.kind !== VERIFIER_REJECTION_FINDING_KIND ||
++    !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) return false;
++  const verification = verificationOf(event);
++  return verification?.schemaVersion === VERIFICATION_CONTRACT_VERSION &&
++    verification.scope === VERIFICATION_SCOPE.ATTEMPT &&
++    verification.fingerprint === fingerprint &&
++    verification.verdict === VERIFICATION_VERDICT_REJECTED;
++}
++
+ function legacyApprovalMatches(event, frontier) {
+   if (event.type !== EVENT_FINDING || event.frontier !== frontier ||
+     !String(event.evidence || '').startsWith('subagent:')) return false;
+@@ -102,6 +115,63 @@ function laterApproval(log, attempt, scope, fingerprint) {
+     structuredApprovalMatches(event, scope, fingerprint));
+ }
+ 
++function laterRejection(log, attempt, fingerprint) {
++  for (let index = attempt.index + 1; index < log.length; index += 1) {
++    const event = log[index];
++    if (event.frontier === attempt.event.frontier &&
++        structuredRejectionMatches(event, fingerprint)) {
++      return {event, index};
++    }
++  }
++  return null;
++}
++
++function rejectionDisposition(log, attempts, attempt) {
++  const rejection = laterRejection(log, attempt, attempt.fingerprint);
++  if (!rejection) return null;
++  const replacement = findApprovedRejectionReplacement(
++    log,
++    attempts,
++    attempt,
++    rejection.index,
++  );
++  return replacement ?
++    {rejection, replacement} :
++    {rejection, replacement: null};
++}
++
++function sourcePathSuperset(candidate, rejected) {
++  const candidatePaths = new Set(candidate.sourcePaths);
++  return rejected.sourcePaths.every((filePath) => candidatePaths.has(filePath));
++}
++
++export function findApprovedRejectionReplacement(
++  log,
++  attempts,
++  rejectedAttempt,
++  rejectionIndex,
++) {
++  for (const candidate of attempts) {
++    if (candidate.index <= rejectionIndex ||
++        !candidate.contracted ||
++        candidate.fingerprint === rejectedAttempt.fingerprint ||
++        candidate.event.frontier !== rejectedAttempt.event.frontier ||
++        candidate.event.workspaceBaseCommit !==
++          rejectedAttempt.event.workspaceBaseCommit ||
++        !sourcePathSuperset(candidate, rejectedAttempt)) {
++      continue;
++    }
++    const approval = laterApproval(
++      log,
++      candidate,
++      VERIFICATION_SCOPE.ATTEMPT,
++      candidate.fingerprint,
++    );
++    if (approval) return {attempt: candidate, approval};
++  }
++  return null;
++}
++
+ function gitStatusHasUntracked(root, paths) {
+   const result = spawnSync('git', ['status', '--porcelain', '--', ...paths], {
+     cwd: root,
+@@ -214,6 +284,8 @@ export function verificationState(root, quest, log, options = {}) {
+   const attempts = sourceChangingAttempts(root, quest, log, options);
+   const attemptProblems = [];
+   const pendingAttempts = [];
++  const resolvedRejectedAttempts = [];
++  const unresolvedRejectedAttempts = [];
+   for (const attempt of attempts) {
+     if (!attempt.contracted) {
+       const approval = log.slice(attempt.index + 1)
+@@ -234,6 +306,29 @@ export function verificationState(root, quest, log, options = {}) {
+       pendingAttempts.push(attempt);
+       continue;
+     }
++    const rejection = rejectionDisposition(log, attempts, attempt);
++    if (rejection?.replacement) {
++      resolvedRejectedAttempts.push({
++        attempt,
++        rejection: rejection.rejection.event,
++        replacement: rejection.replacement.attempt,
++        approval: rejection.replacement.approval,
++      });
++      continue;
++    }
++    if (rejection) {
++      attemptProblems.push(attemptProblem(
++        attempt,
++        `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
++          'same-frontier, same-base source attempt covering every rejected ' +
++          'source path plus its own later exact approval',
++      ));
++      unresolvedRejectedAttempts.push({
++        attempt,
++        rejection: rejection.rejection.event,
++      });
++      continue;
++    }
+     const approval = laterApproval(
+       log, attempt, VERIFICATION_SCOPE.ATTEMPT, attempt.fingerprint);
+     if (!approval) {
+@@ -269,16 +364,23 @@ export function verificationState(root, quest, log, options = {}) {
+     aggregate,
+     aggregateApproval,
+     aggregateProblems,
++    resolvedRejectedAttempts,
++    unresolvedRejectedAttempts,
+   };
+ }
+ 
+ export function checkpointVerificationProblems(root, quest, log, options = {}) {
+   const state = verificationState(root, quest, log, options);
+   if (state.attemptProblems.length > 0) return state.attemptProblems;
++  const resolvedRejectedIndexes = new Set(
++    state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
++  );
+   const checkpointCommit = latestCheckpointCommit(root, quest.id);
+   const problems = [];
+   const uncheckpointed = state.attempts.filter((attempt) =>
+-    attempt.contracted && attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
++    attempt.contracted &&
++    !resolvedRejectedIndexes.has(attempt.index) &&
++    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+   const contracted = state.attempts.filter((attempt) => attempt.contracted);
+   const coveredPaths = new Set(uncheckpointed.flatMap(
+     (attempt) => attempt.inspection.changedPaths));
+@@ -322,26 +424,33 @@ export function terminalVerificationProblems(root, quest, log, options = {}) {
+ }
+ 
+ export function buildVerificationFinding(args) {
+-  if (args.kind !== VERIFIER_APPROVAL_FINDING_KIND) return null;
++  const isApproval = args.kind === VERIFIER_APPROVAL_FINDING_KIND;
++  const isRejection = args.kind === VERIFIER_REJECTION_FINDING_KIND;
++  if (!isApproval && !isRejection) return null;
++  const label = isRejection ? 'verifier-rejection' : 'verifier-approval';
+   if (!VERIFIER_EVIDENCE_PATTERN.test(String(args.evidence || ''))) {
+     throw new Error(
+-      'verifier-approval requires --evidence subagent:<non-empty-stable-id>',
++      `${label} requires --evidence subagent:<non-empty-stable-id>`,
+     );
+   }
+   const scope = args.verificationScope;
+   if (!Object.values(VERIFICATION_SCOPE).includes(scope)) {
+     throw new Error(
+-      'verifier-approval requires --verification-scope attempt|aggregate|both',
++      `${label} requires --verification-scope attempt|aggregate|both`,
+     );
+   }
++  if (isRejection && scope !== VERIFICATION_SCOPE.ATTEMPT) {
++    throw new Error('verifier-rejection requires --verification-scope attempt');
++  }
+   if (!validVerificationFingerprint(args.verificationFingerprint)) {
+     throw new Error(
+-      'verifier-approval requires --verification-fingerprint sha256:<64 hex>',
++      `${label} requires --verification-fingerprint sha256:<64 hex>`,
+     );
+   }
+   return {
+     schemaVersion: VERIFICATION_CONTRACT_VERSION,
+     scope,
+     fingerprint: args.verificationFingerprint,
++    ...(isRejection ? {verdict: VERIFICATION_VERDICT_REJECTED} : {}),
+   };
+ }
+diff --git a/solve/oracle/solver-verifier-rejection-supersession.json b/solve/oracle/solver-verifier-rejection-supersession.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..a578df0df610fb408d8e0a6fc9c21484cea6c628
+--- /dev/null
++++ b/solve/oracle/solver-verifier-rejection-supersession.json
+@@ -0,0 +1,38 @@
++{
++  "metric": 2,
++  "target": 0,
++  "done": false,
++  "classification": "solver-verifier-rejection-supersession",
++  "detail": {
++    "gates": {
++      "focusedSolverTests": {
++        "passed": true,
++        "assertions": 213
++      },
++      "lintScripts": {
++        "passed": true
++      },
++      "steeringCheck": {
++        "passed": true
++      },
++      "staticTests": {
++        "passed": false,
++        "preExistingAtBase": true,
++        "exactPatchUnusedExports": 1632,
++        "unusedExportBaseline": 1628,
++        "exactPatchCognitiveComplexity": 182,
++        "cognitiveComplexityBaseline": 183,
++        "duplicateCloneGroups": 83,
++        "duplicateCloneGroupBaseline": 73,
++        "duplicatedLines": 2585,
++        "duplicatedLineBaseline": 2239,
++        "baseCommit": "3426245e9be54be1a969de8e52a4ca5619549228"
++      }
++    },
++    "verificationBlockers": [
++      "the inherited unused-export ratchet remains red on the exact isolated process patch",
++      "the inherited source-and-script duplication ratchet remains red on the exact isolated patch"
++    ],
++    "reason": "rejection supersession is corrected; inherited static ratchet debt keeps this process Quest non-terminal"
++  }
++}
+diff --git a/test/solve/cli.test.js b/test/solve/cli.test.js
+index c1db30366cf2dcd1051cd0296c3509b3407de12f..4986a662788d5a8a436fc87bf6b5606865a1bfe7 100644
+--- a/test/solve/cli.test.js
++++ b/test/solve/cli.test.js
+@@ -317,6 +317,29 @@ tap.test('solve CLI smoke (P2)', async (t) => {
+       scope: 'attempt',
+       fingerprint,
+     });
++    t.throws(() => run(root, [
++      'finding', '--id', 'demo', '--frontier', 'demo-main',
++      '--kind', 'verifier-rejection', '--claim', 'rejected',
++      '--evidence', 'subagent:verify-2',
++      '--verification-scope', 'aggregate',
++      '--verification-fingerprint', fingerprint,
++    ]), /verification-scope attempt/u);
++    run(root, [
++      'finding', '--id', 'demo', '--frontier', 'demo-main',
++      '--kind', 'verifier-rejection', '--claim', 'rejected',
++      '--evidence', 'subagent:verify-2',
++      '--verification-scope', 'attempt',
++      '--verification-fingerprint', fingerprint,
++    ]);
++    const rejection = fs.readFileSync(
++      path.join(root, 'solve', 'log', 'demo.ndjson'), 'utf8')
++      .trim().split('\n').map((line) => JSON.parse(line)).at(-1);
++    t.same(rejection.verification, {
++      schemaVersion: 1,
++      scope: 'attempt',
++      fingerprint,
++      verdict: 'rejected',
++    });
+     fs.rmSync(root, {recursive: true, force: true});
+     t.end();
+   });
+diff --git a/test/solve/verification-handoff.test.js b/test/solve/verification-handoff.test.js
+index 2364632a2817ed30f3035db78010c7b3f05ff9e5..302c43223b4e0836396976841be8c07e4e58f81d 100644
+--- a/test/solve/verification-handoff.test.js
++++ b/test/solve/verification-handoff.test.js
+@@ -11,14 +11,17 @@ import {
+ } from '../../scripts/solve/handoff.js';
+ import {runStep} from '../../scripts/solve/step.js';
+ import {writeReport} from '../../scripts/solve/report.js';
++import {buildNextLines} from '../../scripts/solve/next.js';
+ import {
+   appendFinding,
++  projectState,
+   readLog,
+   saveQuest,
+ } from '../../scripts/solve/store.js';
+ import {
+   aggregateSourceFingerprint,
+   buildVerificationFinding,
++  findApprovedRejectionReplacement,
+   sourceChangingAttempts,
+   verificationState,
+ } from '../../scripts/solve/verification.js';
+@@ -90,6 +93,21 @@ function approve(root, quest, scope, fingerprint) {
+   });
+ }
+ 
++function reject(root, quest, fingerprint) {
++  return appendFinding(root, quest.id, {
++    frontier: 'runtime-verify-main',
++    kind: 'verifier-rejection',
++    claim: 'independent verification rejected this exact source attempt',
++    evidence: 'subagent:rejection-verifier',
++    verification: {
++      schemaVersion: 1,
++      scope: 'attempt',
++      fingerprint,
++      verdict: 'rejected',
++    },
++  });
++}
++
+ function recordAttempt({root, quest, oracle}, changedPath, metric, name) {
+   const pending = runStep(root, quest);
+   fs.writeFileSync(path.join(root, changedPath),
+@@ -131,6 +149,67 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+     t.end();
+   });
+ 
++  t.test('rejecting a terminal attempt reopens it for a real replacement step', (t) => {
++    const fx = fixture();
++    recordAttempt(fx, 'src/a.js', 0, 'terminal-rejected-a');
++    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
++    const rejectedFingerprint =
++      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`;
++    const appendCandidateRejection = (frontier, fingerprint, evidence) =>
++      appendFinding(fx.root, fx.quest.id, {
++        frontier,
++        kind: 'verifier-rejection',
++        claim: 'candidate terminal rejection',
++        evidence,
++        verification: {
++          schemaVersion: 1,
++          scope: 'attempt',
++          fingerprint,
++          verdict: 'rejected',
++        },
++      });
++    appendCandidateRejection(
++      'other-frontier',
++      rejectedFingerprint,
++      'subagent:wrong-frontier',
++    );
++    appendCandidateRejection(
++      'runtime-verify-main',
++      `sha256:${'9'.repeat(64)}`,
++      'subagent:unbound-fingerprint',
++    );
++    appendCandidateRejection(
++      'runtime-verify-main',
++      rejectedFingerprint,
++      'subagent:v:bad',
++    );
++    t.equal(
++      projectState(
++        fx.quest,
++        readLog(fx.root, fx.quest.id),
++      ).questStatus,
++      'solved',
++      'wrong-frontier, unbound, and malformed rejections stay terminal',
++    );
++    reject(
++      fx.root,
++      fx.quest,
++      rejectedFingerprint,
++    );
++
++    t.equal(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
++      'terminal aggregate approval never outranks exact rejection replacement',
++    );
++    const replacement = runStep(fx.root, fx.quest);
++    t.equal(replacement.terminal, null,
++      'the rendered replacement step is executable, not refused as solved');
++    t.equal(replacement.before.metric, 0);
++    fs.rmSync(fx.root, {recursive: true, force: true});
++    t.end();
++  });
++
+   t.test('checkpoint rechecks every approved uncheckpointed attempt', (t) => {
+     const fx = fixture();
+     recordAttempt(fx, 'src/a.js', 1, 'a');
+@@ -150,6 +229,154 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+     t.end();
+   });
+ 
++  t.test('a rejected attempt requires an exact-approved same-base replacement', (t) => {
++    const fx = fixture();
++    recordAttempt(fx, 'src/a.js', 1, 'rejected-a');
++    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
++    const rejectedFingerprint =
++      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`;
++    reject(fx.root, fx.quest, rejectedFingerprint);
++
++    let state = verificationState(
++      fx.root,
++      fx.quest,
++      readLog(fx.root, fx.quest.id),
++    );
++    t.match(
++      state.attemptProblems.map((item) => item.message).join('\n'),
++      /was explicitly rejected.*same-frontier, same-base/u,
++    );
++    t.same(state.pendingAttempts, [],
++      'the Solver never asks for approval of the rejected fingerprint');
++    t.equal(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
++      'next advances to a replacement step instead of approving rejected bytes',
++    );
++    t.equal(checkpointGate(fx.root, fx.quest).status, 'fail');
++
++    recordAttempt(fx, 'src/a.js', 0, 'replacement-a');
++    const replacementAttempt = latestAttempt(fx.root, fx.quest);
++    const replacementFingerprint =
++      `sha256:${replacementAttempt.changeRefIdentity.sha256}`;
++    state = verificationState(fx.root, fx.quest, readLog(fx.root, fx.quest.id));
++    t.same(
++      state.pendingAttempts.map((attempt) => attempt.fingerprint),
++      [replacementFingerprint],
++      'next verification work is the replacement, never the rejected attempt',
++    );
++    t.match(buildNextLines(fx.root, fx.quest.id)[0],
++      new RegExp(replacementFingerprint, 'u'));
++    t.match(
++      state.attemptProblems.map((item) => item.message).join('\n'),
++      /explicitly rejected|requires a later exact approval/u,
++    );
++
++    approve(fx.root, fx.quest, 'attempt', replacementFingerprint);
++    state = verificationState(fx.root, fx.quest, readLog(fx.root, fx.quest.id));
++    t.same(state.attemptProblems, []);
++    t.equal(state.resolvedRejectedAttempts.length, 1);
++    t.same(state.unresolvedRejectedAttempts, []);
++    t.equal(
++      state.resolvedRejectedAttempts[0].replacement.fingerprint,
++      replacementFingerprint,
++    );
++    t.equal(checkpointGate(fx.root, fx.quest).status, 'pass',
++      'checkpoint exactness rechecks the approved replacement, not rejected bytes');
++    t.notMatch(
++      auditQuest(fx.root, fx.quest).problems.map((item) => item.message).join('\n'),
++      /explicitly rejected/u,
++      'audit advances past the superseded rejection',
++    );
++    fs.rmSync(fx.root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('rejection findings fail closed on scope and fingerprint shape', (t) => {
++    const fingerprint = `sha256:${'1'.repeat(64)}`;
++    t.throws(() => buildVerificationFinding({
++      kind: 'verifier-rejection',
++      evidence: 'subagent:rejector',
++      verificationScope: 'aggregate',
++      verificationFingerprint: fingerprint,
++    }), /verification-scope attempt/u);
++    t.throws(() => buildVerificationFinding({
++      kind: 'verifier-rejection',
++      evidence: 'subagent:',
++      verificationScope: 'attempt',
++      verificationFingerprint: fingerprint,
++    }), /non-empty-stable-id/u);
++    t.same(buildVerificationFinding({
++      kind: 'verifier-rejection',
++      evidence: 'subagent:rejector',
++      verificationScope: 'attempt',
++      verificationFingerprint: fingerprint,
++    }), {
++      schemaVersion: 1,
++      scope: 'attempt',
++      fingerprint,
++      verdict: 'rejected',
++    });
++    t.end();
++  });
++
++  t.test('rejected replacement matching rejects partial, wrong-base, and cross-frontier attempts', (t) => {
++    const fingerprint = `sha256:${'2'.repeat(64)}`;
++    const rejected = {
++      index: 0,
++      event: {frontier: 'main', workspaceBaseCommit: 'base-a'},
++      sourcePaths: ['src/a.js', 'src/b.js'],
++    };
++    const approval = {
++      type: 'finding',
++      frontier: 'main',
++      kind: 'verifier-approval',
++      evidence: 'subagent:replacement-verifier',
++      verification: {schemaVersion: 1, scope: 'attempt', fingerprint},
++    };
++    const candidate = (overrides = {}) => ({
++      index: 2,
++      contracted: true,
++      fingerprint,
++      event: {frontier: 'main', workspaceBaseCommit: 'base-a'},
++      sourcePaths: ['src/a.js', 'src/b.js'],
++      ...overrides,
++    });
++    const log = [{type: 'attempt'}, {type: 'finding'}, {type: 'attempt'}, approval];
++
++    t.equal(findApprovedRejectionReplacement(
++      log,
++      [candidate({sourcePaths: ['src/a.js']})],
++      rejected,
++      1,
++    ), null, 'partial path coverage is not a replacement');
++    t.equal(findApprovedRejectionReplacement(
++      log,
++      [candidate({event: {frontier: 'main', workspaceBaseCommit: 'base-b'}})],
++      rejected,
++      1,
++    ), null, 'a different Git base is not a replacement');
++    t.equal(findApprovedRejectionReplacement(
++      log,
++      [candidate({event: {frontier: 'other', workspaceBaseCommit: 'base-a'}})],
++      rejected,
++      1,
++    ), null, 'a different frontier is not a replacement');
++    t.equal(findApprovedRejectionReplacement(
++      log,
++      [candidate()],
++      {...rejected, fingerprint},
++      1,
++    ), null, 'identical rejected bytes cannot be laundered by a duplicate attempt');
++    t.equal(
++      findApprovedRejectionReplacement(log, [candidate()], rejected, 1)
++        ?.attempt.fingerprint,
++      fingerprint,
++      'same-base, same-frontier, full-path exact approval resolves rejection',
++    );
++    t.end();
++  });
++
+   t.test('a later exact checkpoint may intentionally revise the same file', (t) => {
+     const fx = fixture();
+     recordAttempt(fx, 'src/a.js', 1, 'a-first');

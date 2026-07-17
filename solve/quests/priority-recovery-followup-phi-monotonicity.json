@@ -1,0 +1,52 @@
+{
+  "id": "priority-recovery-followup-phi-monotonicity",
+  "authoringContractVersion": 1,
+  "statement": "The deterministic Phi self-stabilization prover for the priority-recovery follow-up loop is green on HEAD: from a process-alive rejoiner the real decision kernel's Phi potential decreases monotonically to a zero fixpoint across the full catch-up/completion schedule sweep with zero over-replication overshoot; the repair identifies which kernel or in-flight accounting change since the proof's guarded commit 4700a47b introduced the tick-1 target_unavailable Phi rise in which the created operation is invisible to countPriorityRecoveryFollowUpInFlightAdds, then either restores the kernel invariant or proves the new behavior a bounded safe transient and reseals the prover to the corrected envelope, in both cases with red-on-revert evidence and no weakening of the over-replication zero-overshoot bound.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/topology-convergence-hardening.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "ae838465d17da0414dc831e14b37d28a4336307a"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-recovery-followup-phi-monotonicity",
+      "reportDir": "test-output/reports/priority-recovery-followup-phi-monotonicity",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "priority-recovery-followup-phi-monotonicity-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "priority-recovery-followup-phi-monotonicity",
+          "reportDir": "test-output/reports/priority-recovery-followup-phi-monotonicity",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "real-kernel-fidelity",
+      "statement": "The prover must keep driving the real UnifiedRebalancerCore prototype decision kernel with only environment projections stubbed; do not replace kernel methods with copies, and do not relax the zero over-replication overshoot bound or the monotone-environment scope documented in the test header."
+    },
+    {
+      "id": "classify-before-reseal",
+      "statement": "Deterministically attribute the tick-1 target_unavailable Phi rise to the exact kernel or accounting change since 4700a47b before choosing between restoring the kernel invariant and resealing the prover envelope; a reseal requires proof that the new behavior is a bounded transient reconciled by the separate surplus-drain path, not a sustained cycle."
+    }
+  ]
+}

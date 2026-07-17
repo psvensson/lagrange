@@ -1,0 +1,32 @@
+diff --git a/scripts/checks/run-service-portability-claims-example-fixture-alignment-scenarios.js b/scripts/checks/run-service-portability-claims-example-fixture-alignment-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed09cd38a77d9943dc27dcc5f68fbde5c6a89010
+--- /dev/null
++++ b/scripts/checks/run-service-portability-claims-example-fixture-alignment-scenarios.js
+@@ -0,0 +1,13 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIO = 'service-portability-claims-example-fixture-alignment';
++const GUARD_TEST =
++  'test/distributed/harness/__tests__/examples-catalog-scenario.test.js';
++const REPORT_DIR =
++  'test-output/reports/service-portability-claims-example-fixture-alignment';
++
++runGuardTestScenarios({
++  [SCENARIO]: Object.freeze([GUARD_TEST]),
++}, {reportDir: REPORT_DIR});
+diff --git a/test/distributed/harness/__tests__/examples-catalog-scenario.test.js b/test/distributed/harness/__tests__/examples-catalog-scenario.test.js
+index e110146a6994aaf60f50c1c21fc244325c66f74a..f89420d5da545f4c9ca541e132ea44a018c74e83 100644
+--- a/test/distributed/harness/__tests__/examples-catalog-scenario.test.js
++++ b/test/distributed/harness/__tests__/examples-catalog-scenario.test.js
+@@ -25,7 +25,7 @@ function buildCallbackRows(callbackModuleRef) {
+   }
+   if (callbackModuleRef.includes('06-wasm-remote-replica')) {
+     return [{
+-      wasmCompiled: true,
++      artifactEnvelopeExecuted: true,
+       remotePartitionReplica: true,
+     }];
+   }

@@ -1,0 +1,30 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "partition-class-census-hardening",
+  "detail": {
+    "passedInvariants": [
+      "renamed, recursively nested, forwarded, object-spread, assigned, parameter, and destructured predicate injection is counted",
+      "Object.values, Object.keys, Object.entries, literal, template, concatenated, spread, intermediate, copied, assigned, inline, and parameter-injected rebuilt critical sets are counted",
+      "all touched source files are at most 800 lines",
+      "parent census is gated at 0/0"
+    ],
+    "adversarialAssertions": 64,
+    "sourceLineCounts": {
+      "scripts/check-partition-class-owner.js": 683,
+      "scripts/partition-class-owner-contract.js": 460,
+      "scripts/partition-class-owner-ast.js": 210,
+      "scripts/partition-class-owner-gates.js": 40,
+      "scripts/partition-class-owner-parameter-flow.js": 258
+    },
+    "gates": {
+      "lintScripts": true,
+      "dependencyCruiser": true,
+      "strictFileSize": true,
+      "parentAnalyzer": true,
+      "parentOwnerContract": true,
+      "parentRequiredGates": true
+    }
+  }
+}

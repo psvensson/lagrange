@@ -1,0 +1,84 @@
+{
+  "id": "service-install-lifecycle-cli",
+  "authoringContractVersion": 1,
+  "statement": "The shipped lagrange service install/dev-install/list/status/remove surface uses only authenticated PG-wire lifecycle SQL and returns its typed outcomes. Install submits a validated pinned manifest; dev-install first builds the S5b OCI layout and pins its receipt digest into the same install payload. Mutations require explicit replayable idempotency keys, and every build, validation, transport, authorization, or ambiguous-result failure is nonzero with no fallback.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/service-portability-ladder/requirements.md#r3--one-install-and-control-plane",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/specs/service-portability-ladder/tasks.md",
+    "draftedAtCommit": "e0f150948c8facabd41425a6a4d7a7662aad341c"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-install-lifecycle-cli",
+      "reportDir": "test-output/reports/service-install-lifecycle-cli",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-install-lifecycle-cli-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-install-lifecycle-cli",
+          "reportDir": "test-output/reports/service-install-lifecycle-cli",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "sealed-command-grammar",
+      "statement": "The service router supports exactly init plus install <manifest-file>, dev-install <project-directory>, list, status <service-name>, and remove <service-name>. Install, dev-install, and remove require one explicit bounded --idempotency-key value; install optionally accepts --config <json-file>; dev-install requires explicit --platform and --source-date-epoch values and may accept --output-root. Missing, duplicate, unknown, or extra arguments fail before filesystem build or network connection."
+    },
+    {
+      "id": "selected-transport-only",
+      "statement": "Lifecycle commands use the production pg Client with its standard authenticated connection environment and submit exactly INSTALL SERVICE $1, REMOVE SERVICE $1, SHOW SERVICE $1, or SHOW SERVICES. The first three carry exactly one JSON-string bind parameter and list carries none. The client always closes after one command; connection, authentication, authorization, SQL, disconnect, and ambiguous-result failures exit nonzero and never infer success or try an admin WebSocket, direct table, in-process catalog owner, alternate socket, or local runtime fallback."
+    },
+    {
+      "id": "remote-install-payload",
+      "statement": "Install reads bounded ordinary non-link JSON files, validates the manifest through the existing external-service-manifest owner, and submits manifest, artifact_source kind remote_oci, explicit idempotency_key, and only the optional parsed config. It does not resolve the remote artifact locally, add identity or signature-policy fields, or mutate the manifest."
+    },
+    {
+      "id": "dev-install-composition",
+      "statement": "Dev-install reads the S5a lagrange-service.template.json, requires artifact.digest to be absent, computes a deterministic sha256 source-tree fingerprint without following links, calls the single S5b ServiceLocalOciLayoutBuilder with the OCI-container project, Dockerfile, explicit platform and sourceDateEpoch, then materializes artifact.digest from receipt.topManifestDescriptor.digest. It validates and atomically writes lagrange-service.json before submitting that manifest and artifact_source kind local_oci_layout with the receipt layoutPath through the same INSTALL SQL client. No second builder, resolver, artifact identity, or install path is permitted."
+    },
+    {
+      "id": "typed-output-and-exit",
+      "statement": "Every successful command prints only a deterministic JSON projection of the server-returned rows plus, for dev-install, its immutable build receipt and final-manifest path; list preserves the server's service ordering and status/remove/install never reinterpret rollout or desired state. Empty status, typed server rejection, malformed result, build failure, manifest failure, or local write failure is explicit and nonzero. Secrets, connection strings, passwords, and raw pg Client configuration are never printed."
+    },
+    {
+      "id": "async-router-and-init-isolation",
+      "statement": "src/sea-entry.js awaits the service command result without prematurely exiting, while the service router dynamically loads lifecycle-only dependencies only after selecting a lifecycle command. Existing service init remains synchronous local filesystem work and its help path must not load pg, SQL, network, subprocess, builder, or server modules; global help, version, normal server startup, lagrange-admin, source execution, and bundled SEA behavior remain intact."
+    },
+    {
+      "id": "production-client-packaging",
+      "statement": "pg is a runtime dependency in package.json and package-lock.json, the declared lagrange binary remains src/sea-entry.js, and the SEA build contains the lifecycle CLI and pg client without adding a second executable or external control protocol. A production-path test starts the shipped password-authenticated PG-wire runtime, runs the shipped CLI entry, and observes the exact statement, parameter envelope, typed output, and credential failure."
+    },
+    {
+      "id": "negative-attacks",
+      "statement": "The scenario covers all five lifecycle commands, deterministic source fingerprint and manifest materialization, same-key replay payload stability, remote versus local artifact_source selection, generated final-manifest validation, existing-output replacement safety, unreadable/linked/oversized/malformed inputs, invalid names/platform/epoch/key/options, pg connect/query/result failures, empty status, credential rejection before SQL, and static absence of WebSocket, admin, direct-table, catalog-owner, reconciler, runtime activation, or alternate transport imports."
+    },
+    {
+      "id": "bounded-source-scope",
+      "statement": "Production scope is package.json, package-lock.json, src/sea-entry.js, the existing src/cli/service-command-router.js, and dedicated src/cli lifecycle SQL client, command, project-input, and output modules. Existing S5a tests and SEA smoke proof may be aligned; one focused S5c test, one real-PG-wire CLI integration test, and one scenario runner may be added. Server SQL grammar, catalog, reconciler, runtime activation, S5b build internals, admin CLI, and architecture decisions are excluded."
+    },
+    {
+      "id": "red-on-revert-engagement",
+      "statement": "Independent verification must approve the exact patch and aggregate fingerprint, prove the scenario turns red when shipped lifecycle routing no longer uses the pg client, when dev-install bypasses ServiceLocalOciLayoutBuilder or does not pin the receipt digest, when mutation idempotency is omitted, and when a WebSocket or direct-owner fallback is introduced, and confirm the real password-authenticated PG-wire production seam is engaged before checkpoint and handoff."
+    }
+  ]
+}

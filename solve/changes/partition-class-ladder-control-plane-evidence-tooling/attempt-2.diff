@@ -1,0 +1,184 @@
+diff --git a/solve/oracle/partition-class-ladder-single-owner-table.json b/solve/oracle/partition-class-ladder-single-owner-table.json
+index 47cd5366c2d8f9d24b6d5932450cdb68cf9ed2b9..86608f1e661153cc2ff649492722ada91f01ade3 100644
+--- a/solve/oracle/partition-class-ladder-single-owner-table.json
++++ b/solve/oracle/partition-class-ladder-single-owner-table.json
+@@ -1,5 +1,5 @@
+ {
+-  "metric": 114,
++  "metric": 105,
+   "target": 0,
+   "done": false,
+   "classification": "partition-class-single-owner-census",
+@@ -18,79 +18,16 @@
+       "collapsedDuplicateLadderEdges": 6,
+       "explanation": "The six literal critical||priority ladders each have two predicate call edges but one canonical decision site: 122 predicate edges + 3 set memberships - 6 duplicate ladder edges = 119 sites."
+     },
+-    "currentRawPredicateEdges": 117,
++    "currentRawPredicateEdges": 108,
+     "currentCollapsedLadderEdges": 6,
+     "countsByKind": {
+-      "priority_predicate_call": 69,
+-      "system_table_predicate_call": 8,
++      "priority_predicate_call": 63,
+       "critical_set_membership": 3,
+       "critical_predicate_call": 28,
++      "system_table_predicate_call": 5,
+       "ordered_partition_class_ladder": 6
+     },
+     "countedSites": [
+-      {
+-        "filePath": "src/control-plane/membership-publication-priority-partition-summary.js",
+-        "line": 304,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "buildDerivedPriorityPartitionSummary",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/membership-publication-priority-partition-summary.js",
+-        "line": 334,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "buildDerivedPriorityPartitionSummary",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/membership-publication-row-helpers.js",
+-        "line": 200,
+-        "kind": "system_table_predicate_call",
+-        "enclosingIdentifier": "isDispatchRetryCreateTargetRearmOperation",
+-        "detail": "isSystemTablePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/priority-recovery-admission-constants.js",
+-        "line": 85,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "classifyPriorityRecoveryAdmissionPartitionClass",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/replica-dispatch-direct-wakeup.js",
+-        "line": 83,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "buildDirectDispatchWakeupDeliveryOptions",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/replica-dispatch-operation-execution.js",
+-        "line": 91,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "isPriorityControlPlaneDispatch",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/replica-dispatch-priority-recovery-bootstrap.js",
+-        "line": 188,
+-        "kind": "priority_predicate_call",
+-        "enclosingIdentifier": "shouldAllowPriorityRecoveryDispatchBootstrap",
+-        "detail": "isPriorityControlPlanePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
+-        "line": 304,
+-        "kind": "system_table_predicate_call",
+-        "enclosingIdentifier": "resolveDispatchReadinessDecisionDimension",
+-        "detail": "isSystemTablePartition"
+-      },
+-      {
+-        "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
+-        "line": 183,
+-        "kind": "system_table_predicate_call",
+-        "enclosingIdentifier": "isDispatchReplayCreateTargetRearmOperation",
+-        "detail": "isSystemTablePartition"
+-      },
+       {
+         "filePath": "src/node/replica-handler-create-methods.js",
+         "line": 112,
+diff --git a/solve/quests/partition-class-ladder-single-owner-table.json b/solve/quests/partition-class-ladder-single-owner-table.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..3caaac00d12ecaa36b72a1130931d08733111023
+--- /dev/null
++++ b/solve/quests/partition-class-ladder-single-owner-table.json
+@@ -0,0 +1,39 @@
++{
++  "id": "partition-class-ladder-single-owner-table",
++  "authoringContractVersion": 1,
++  "statement": "Epic self-hosting-circularity-generic-treatment Option 5, fifth ladder rung. The semantic which ordered system-partition class applies to a partition — bootstrap-critical, priority-control-plane, or default — is re-expressed across the epic-censused 119 production sites as direct critical/priority predicate calls, injected wrappers, set membership, and locally ordered OR/if ladders. SEALED RESULT: src/bootstrap/system-partition-classification.js is the single owner of a named, frozen, ordered partition-class decision table and classifier; its outcome preserves the deliberately overlapping membership facts required for exact behavior while emitting one canonical ordered class, and every censused production decision consumes that owner outcome or an owner-derived named predicate instead of re-deriving or locally ordering classification. Behavior is preserved exactly at every migrated site; any classification GAP found during migration is recorded and fixed only in its own pinned follow-up. doneWhen: the committed scripts/check-partition-class-owner.js --oracle --with-gates writes solve/oracle/partition-class-ladder-single-owner-table.json with metric = counted classification re-derivations outside the owner family, done only at metric 0 with the decision-table model, lint, owner tests, and targeted suites green. NOT in scope: critical-transport target classification, table-id parsing, the rung-4 emergency-vs-ordinary admission sub-classification beyond consuming this base owner, numeric budgets, or behavior changes. Execute as bounded child quests by owner-area batch and checkpoint after every attempt.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": null,
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
++    "draftedAtCommit": "3426245e9be54be1a969de8e52a4ca5619549228"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/partition-class-ladder-single-owner-table.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "partition-class-ladder-single-owner-table-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/partition-class-ladder-single-owner-table.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/solve/quests/solver-verifier-rejection-supersession.json b/solve/quests/solver-verifier-rejection-supersession.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..6fa356364394e414ce26f85574a621710b887d4d
+--- /dev/null
++++ b/solve/quests/solver-verifier-rejection-supersession.json
+@@ -0,0 +1,39 @@
++{
++  "id": "solver-verifier-rejection-supersession",
++  "authoringContractVersion": 1,
++  "statement": "A rejected exact source-attempt fingerprint must not require dishonest approval or permanently poison a Quest. SEALED RESULT: the Solver accepts a structured verifier-rejection finding bound to the exact attempt fingerprint and subagent evidence; that rejection keeps checkpoint and terminal handoff blocked until a later contracted source attempt from the same Git base covers every rejected source path and receives its own later exact approval, after which next, checkpoint verification, and audit advance past the rejected attempt without treating it as approved. Unresolved, malformed, cross-frontier, wrong-base, partial-path, unapproved-replacement, and aggregate cases fail closed. doneWhen: solve/oracle/solver-verifier-rejection-supersession.json is done only when focused verification/handoff, next-projection, audit, lint, and static tests are green.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": null,
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "docs/steering/workflow-guidelines/solver-quests.md",
++    "draftedAtCommit": "3426245e9be54be1a969de8e52a4ca5619549228"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/solver-verifier-rejection-supersession.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-verifier-rejection-supersession-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/solver-verifier-rejection-supersession.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}

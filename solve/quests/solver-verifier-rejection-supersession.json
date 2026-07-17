@@ -1,0 +1,39 @@
+{
+  "id": "solver-verifier-rejection-supersession",
+  "authoringContractVersion": 1,
+  "statement": "A rejected exact source-attempt fingerprint must not require dishonest approval or permanently poison a Quest. SEALED RESULT: the Solver accepts a structured verifier-rejection finding bound to the exact attempt fingerprint and subagent evidence; that rejection keeps checkpoint and terminal handoff blocked until a later contracted source attempt from the same Git base covers every rejected source path and receives its own later exact approval, after which next, checkpoint verification, and audit advance past the rejected attempt without treating it as approved. Unresolved, malformed, cross-frontier, wrong-base, partial-path, unapproved-replacement, and aggregate cases fail closed. doneWhen: solve/oracle/solver-verifier-rejection-supersession.json is done only when focused verification/handoff, next-projection, audit, lint, and static tests are green.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "docs/steering/workflow-guidelines/solver-quests.md",
+    "draftedAtCommit": "3426245e9be54be1a969de8e52a4ca5619549228"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-verifier-rejection-supersession.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-verifier-rejection-supersession-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-verifier-rejection-supersession.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

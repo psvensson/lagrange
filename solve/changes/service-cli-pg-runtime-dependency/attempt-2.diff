@@ -1,0 +1,219 @@
+diff --git a/package-lock.json b/package-lock.json
+index 21effd52ee34f99f36c6c9e0930701394c30a00e..d5184cf63aa2559c17b6a03ecbc4fa4351740d8e 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -19,6 +19,7 @@
+         "millisecond": "^0.1.2",
+         "node-fetch": "^3.3.2",
+         "node-sql-parser": "^5.4.0",
++        "pg": "^8.18.0",
+         "pino": "^9.6.0",
+         "piscina": "^4.8.0",
+         "uuid": "^11.0.5",
+@@ -48,7 +49,6 @@
+         "jscpd": "^4.0.9",
+         "knip": "^5.83.1",
+         "madge": "^8.0.0",
+-        "pg": "^8.18.0",
+         "postject": "^1.0.0-alpha.6",
+         "raft-logic": "^0.3.14",
+         "tap": "^21.5.0",
+@@ -10683,7 +10683,6 @@
+       "version": "8.18.0",
+       "resolved": "https://registry.npmjs.org/pg/-/pg-8.18.0.tgz",
+       "integrity": "sha512-xqrUDL1b9MbkydY/s+VZ6v+xiMUmOUk7SS9d/1kpyQxoJ6U9AO1oIJyUWVZojbfe5Cc/oluutcgFG4L9RDP1iQ==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "pg-connection-string": "^2.11.0",
+@@ -10711,7 +10710,6 @@
+       "version": "1.3.0",
+       "resolved": "https://registry.npmjs.org/pg-cloudflare/-/pg-cloudflare-1.3.0.tgz",
+       "integrity": "sha512-6lswVVSztmHiRtD6I8hw4qP/nDm1EJbKMRhf3HCYaqud7frGysPv7FYJ5noZQdhQtN2xJnimfMtvQq21pdbzyQ==",
+-      "dev": true,
+       "license": "MIT",
+       "optional": true
+     },
+@@ -10719,14 +10717,12 @@
+       "version": "2.11.0",
+       "resolved": "https://registry.npmjs.org/pg-connection-string/-/pg-connection-string-2.11.0.tgz",
+       "integrity": "sha512-kecgoJwhOpxYU21rZjULrmrBJ698U2RxXofKVzOn5UDj61BPj/qMb7diYUR1nLScCDbrztQFl1TaQZT0t1EtzQ==",
+-      "dev": true,
+       "license": "MIT"
+     },
+     "node_modules/pg-int8": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/pg-int8/-/pg-int8-1.0.1.tgz",
+       "integrity": "sha512-WCtabS6t3c8SkpDBUlb1kjOs7l66xsGdKpIPZsg4wR+B3+u9UAum2odSsF9tnvxg80h4ZxLWMy4pRjOsFIqQpw==",
+-      "dev": true,
+       "license": "ISC",
+       "engines": {
+         "node": ">=4.0.0"
+@@ -10736,7 +10732,6 @@
+       "version": "3.11.0",
+       "resolved": "https://registry.npmjs.org/pg-pool/-/pg-pool-3.11.0.tgz",
+       "integrity": "sha512-MJYfvHwtGp870aeusDh+hg9apvOe2zmpZJpyt+BMtzUWlVqbhFmMK6bOBXLBUPd7iRtIF9fZplDc7KrPN3PN7w==",
+-      "dev": true,
+       "license": "MIT",
+       "peerDependencies": {
+         "pg": ">=8.0"
+@@ -10746,14 +10741,12 @@
+       "version": "1.11.0",
+       "resolved": "https://registry.npmjs.org/pg-protocol/-/pg-protocol-1.11.0.tgz",
+       "integrity": "sha512-pfsxk2M9M3BuGgDOfuy37VNRRX3jmKgMjcvAcWqNDpZSf4cUmv8HSOl5ViRQFsfARFn0KuUQTgLxVMbNq5NW3g==",
+-      "dev": true,
+       "license": "MIT"
+     },
+     "node_modules/pg-types": {
+       "version": "2.2.0",
+       "resolved": "https://registry.npmjs.org/pg-types/-/pg-types-2.2.0.tgz",
+       "integrity": "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "pg-int8": "1.0.1",
+@@ -10770,7 +10763,6 @@
+       "version": "1.0.5",
+       "resolved": "https://registry.npmjs.org/pgpass/-/pgpass-1.0.5.tgz",
+       "integrity": "sha512-FdW9r/jQZhSeohs1Z3sI1yxFQNFvMcnmfuj4WBMUTxOrAyLMaTcE1aAMBiTlbMNaXvBCQuVi0R7hd8udDSP7ug==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "split2": "^4.1.0"
+@@ -10951,7 +10943,6 @@
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/postgres-array/-/postgres-array-2.0.0.tgz",
+       "integrity": "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==",
+-      "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=4"
+@@ -10961,7 +10952,6 @@
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/postgres-bytea/-/postgres-bytea-1.0.1.tgz",
+       "integrity": "sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==",
+-      "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=0.10.0"
+@@ -10971,7 +10961,6 @@
+       "version": "1.0.7",
+       "resolved": "https://registry.npmjs.org/postgres-date/-/postgres-date-1.0.7.tgz",
+       "integrity": "sha512-suDmjLVQg78nMK2UZ454hAG+OAW+HQPZ6n++TNDUX+L0+uUlLywnoxJKDou51Zm+zTCjrCl0Nq6J9C5hP9vK/Q==",
+-      "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=0.10.0"
+@@ -10981,7 +10970,6 @@
+       "version": "1.2.0",
+       "resolved": "https://registry.npmjs.org/postgres-interval/-/postgres-interval-1.2.0.tgz",
+       "integrity": "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==",
+-      "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "xtend": "^4.0.0"
+@@ -14007,7 +13995,6 @@
+       "version": "4.0.2",
+       "resolved": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
+       "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==",
+-      "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=0.4"
+diff --git a/package.json b/package.json
+index 9ae95d7996819d22cb7977c42c23ad88881e4918..89fe011393f442853e050c2780ffbfffaa0f23b9 100644
+--- a/package.json
++++ b/package.json
+@@ -225,6 +225,7 @@
+     "millisecond": "^0.1.2",
+     "node-fetch": "^3.3.2",
+     "node-sql-parser": "^5.4.0",
++    "pg": "^8.18.0",
+     "pino": "^9.6.0",
+     "piscina": "^4.8.0",
+     "uuid": "^11.0.5",
+@@ -254,7 +255,6 @@
+     "jscpd": "^4.0.9",
+     "knip": "^5.83.1",
+     "madge": "^8.0.0",
+-    "pg": "^8.18.0",
+     "postject": "^1.0.0-alpha.6",
+     "raft-logic": "^0.3.14",
+     "tap": "^21.5.0",
+diff --git a/scripts/checks/run-service-cli-pg-runtime-dependency-scenarios.js b/scripts/checks/run-service-cli-pg-runtime-dependency-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..367d5acf54ffa4e7e1645859597c2fbd35f2b643
+--- /dev/null
++++ b/scripts/checks/run-service-cli-pg-runtime-dependency-scenarios.js
+@@ -0,0 +1,15 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIO = 'service-init-scaffold';
++const REPORT_DIR = 'test-output/reports/service-init-scaffold';
++const TEST_FILES = Object.freeze([
++  'test/cli/service-init-scaffold.test.js',
++  'test/packaging/sea-bundle-smoke.test.js',
++  'test/packaging/service-cli-pg-runtime-dependency.test.js',
++]);
++
++runGuardTestScenarios({
++  [SCENARIO]: TEST_FILES,
++}, {reportDir: REPORT_DIR});
+diff --git a/test/packaging/service-cli-pg-runtime-dependency.test.js b/test/packaging/service-cli-pg-runtime-dependency.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d8d53dd29891cae1f0c39cba9da30f3e31d657e4
+--- /dev/null
++++ b/test/packaging/service-cli-pg-runtime-dependency.test.js
+@@ -0,0 +1,50 @@
++import fs from 'node:fs';
++import path from 'node:path';
++
++import {test} from '../../src/test-helpers/tap.js';
++
++const PROJECT_ROOT = path.resolve(import.meta.dirname, '../..');
++const PACKAGE_PATH = path.join(PROJECT_ROOT, 'package.json');
++const LOCK_PATH = path.join(PROJECT_ROOT, 'package-lock.json');
++const PG_VERSION_RANGE = '^8.18.0';
++const PG_RUNTIME_PACKAGES = Object.freeze([
++  'pg',
++  'pg-cloudflare',
++  'pg-connection-string',
++  'pg-int8',
++  'pg-pool',
++  'pg-protocol',
++  'pg-types',
++  'pgpass',
++  'postgres-array',
++  'postgres-bytea',
++  'postgres-date',
++  'postgres-interval',
++  'xtend',
++]);
++
++function readJson(filePath) {
++  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
++}
++
++test('shipped service CLI retains pg in production installations', (t) => {
++  const packageJson = readJson(PACKAGE_PATH);
++  const packageLock = readJson(LOCK_PATH);
++  const rootLock = packageLock.packages[''];
++
++  t.equal(packageJson.dependencies.pg, PG_VERSION_RANGE);
++  t.equal(Object.hasOwn(packageJson.devDependencies, 'pg'), false);
++  t.equal(rootLock.dependencies.pg, PG_VERSION_RANGE);
++  t.equal(Object.hasOwn(rootLock.devDependencies, 'pg'), false);
++  t.same(rootLock.bin, {
++    lagrange: 'src/sea-entry.js',
++    'lagrange-admin': 'src/cli/bin/lagrange-admin.js',
++  });
++
++  for (const packageName of PG_RUNTIME_PACKAGES) {
++    const entry = packageLock.packages[`node_modules/${packageName}`];
++    t.ok(entry, `${packageName} exists in the lockfile`);
++    t.not(entry.dev === true, `${packageName} is retained without dev dependencies`);
++  }
++  t.end();
++});

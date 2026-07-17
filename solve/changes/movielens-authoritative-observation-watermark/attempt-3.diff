@@ -1,0 +1,3295 @@
+diff --git a/models/CL-INDEX.md b/models/CL-INDEX.md
+index cd6fee1b3d4f298d54eb880bf702c37d3c201d3a..f603178e42f77cadefcb56571c4f84dbeb5e97d0 100644
+--- a/models/CL-INDEX.md
++++ b/models/CL-INDEX.md
+@@ -24,6 +24,7 @@ via `npm run model:check` in `test:ci`.
+ | Ledger self-move re-mint livelock (formation-ledger-self-move-blocks-cluster-ops) | `ledger-selfmove-remint/LedgerSelfMoveRemint.tla` | `EventuallySettled` | `IdempotentReplan` — a leadership flap carries the in-flight spread self-move over (authoritative in-flight recognition, c7a3bf19) instead of re-minting it, so it terminalizes |
+ | Serialized incremental REPLACE spread | `incremental-replace-spread/IncrementalReplaceSpread.tla` | `OpenGapRetainsSerializedProgressOwner`, `SpreadNeverRegresses`, `EventuallyReachesPublishedTarget` | enforce the published target as an eventual destination and current→projected non-regression as the per-operation remove-safety floor, so `1→2→3` can complete without admitting `2→1` |
+ | Operation-ledger terminal hold | `operation-ledger-terminal-hold/OperationLedgerTerminalHold.tla` | `SerializationHoldReleaseRequiresAuthoritativeTerminal`, `DependentBatchNeverOverlapsLedgerSurgery`, `EventuallySnapshotClosed` | route durable timeout to the workflow recovery owner while keeping the serialization hold engaged until its canonical authoritative terminal transition; a timeout-only-release mutant violates the hold invariant |
++| Authoritative observation watermark | `authoritative-observation-watermark/AuthoritativeObservationWatermark.tla` | `ObservationDoesNotFabricateMutation`, `SelectedFreshnessIsNewestEvidence`, `FreshnessClassificationMatchesAge`, `EventuallySchemaAdmitted` | publish successful unchanged/confirmed-empty authoritative reads as per-table observation evidence distinct from CDC mutation time, then select and age the newest mutation-or-observation timestamp; a mutation-only freshness mutant cannot admit schema after a successful no-op repair |
+ 
+ ## Adding a spec for a design-class CL
+ 
+diff --git a/models/authoritative-observation-watermark/AuthoritativeObservationWatermark.tla b/models/authoritative-observation-watermark/AuthoritativeObservationWatermark.tla
+new file mode 100644
+index 0000000000000000000000000000000000000000..d7f86747c433c40ae4b1a51671f5f4463b9971e4
+--- /dev/null
++++ b/models/authoritative-observation-watermark/AuthoritativeObservationWatermark.tla
+@@ -0,0 +1,372 @@
++---------------- MODULE AuthoritativeObservationWatermark ----------------
++(***************************************************************************)
++(* Focused authoritative-repair -> cache evidence -> snapshot admission   *)
++(* composition (quest movielens-authoritative-observation-watermark).      *)
++(*                                                                         *)
++(* A complete authoritative read can confirm unchanged rows or an empty   *)
++(* table. Neither result is a cache mutation, but both are fresh evidence. *)
++(* The fixed protocol publishes the read-completion time separately, then  *)
++(* selects the newest mutation-or-observation watermark and checks its age. *)
++(* The mutant keeps freshness coupled to the old mutation time.            *)
++(*                                                                         *)
++(* This is a deliberately narrow cross-layer proof, not exhaustive formal *)
++(* coverage of repository-layer interactions.                             *)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANT MutationOnlyFreshness
++
++NoRowsObserved == "none"
++UnchangedRowsObserved == "unchanged_rows"
++ConfirmedEmptyObserved == "confirmed_empty"
++AuthoritativeRowStates == {
++  NoRowsObserved,
++  UnchangedRowsObserved,
++  ConfirmedEmptyObserved
++}
++
++FreshnessUnclassified == "unclassified"
++FreshnessFresh == "fresh"
++FreshnessStale == "stale"
++FreshnessStates == {
++  FreshnessUnclassified,
++  FreshnessFresh,
++  FreshnessStale
++}
++
++FreshnessSourceUnavailable == "unavailable"
++FreshnessSourceMutation == "mutation"
++FreshnessSourceAuthoritativeObservation == "authoritative_observation"
++FreshnessSources == {
++  FreshnessSourceUnavailable,
++  FreshnessSourceMutation,
++  FreshnessSourceAuthoritativeObservation
++}
++
++NoEvidenceAt == 0
++InitialMutationAt == 1
++InitialClock == 3
++FreshnessMaxAge == 1
++
++VARIABLES repairRequested,
++          initialReadFailed,
++          repairRetryRequested,
++          authoritativeRowsState,
++          reconcileComplete,
++          independentMutationAdvanced,
++          clock,
++          mutationWatermarkAt,
++          observationCandidateAt,
++          observationWatermarkAt,
++          selectedFreshnessAt,
++          freshnessState,
++          freshnessSource,
++          schemaAdmitted
++
++vars == << repairRequested,
++           initialReadFailed,
++           repairRetryRequested,
++           authoritativeRowsState,
++           reconcileComplete,
++           independentMutationAdvanced,
++           clock,
++           mutationWatermarkAt,
++           observationCandidateAt,
++           observationWatermarkAt,
++           selectedFreshnessAt,
++           freshnessState,
++           freshnessSource,
++           schemaAdmitted >>
++
++NewestEvidenceAt ==
++  IF observationWatermarkAt >= mutationWatermarkAt
++  THEN observationWatermarkAt
++  ELSE mutationWatermarkAt
++
++NewestEvidenceSource ==
++  IF observationWatermarkAt # NoEvidenceAt /\
++     observationWatermarkAt >= mutationWatermarkAt
++  THEN FreshnessSourceAuthoritativeObservation
++  ELSE FreshnessSourceMutation
++
++TypeOK ==
++  /\ repairRequested \in BOOLEAN
++  /\ initialReadFailed \in BOOLEAN
++  /\ repairRetryRequested \in BOOLEAN
++  /\ authoritativeRowsState \in AuthoritativeRowStates
++  /\ reconcileComplete \in BOOLEAN
++  /\ independentMutationAdvanced \in BOOLEAN
++  /\ clock \in Nat
++  /\ mutationWatermarkAt \in Nat
++  /\ observationCandidateAt \in Nat
++  /\ observationWatermarkAt \in Nat
++  /\ selectedFreshnessAt \in Nat
++  /\ freshnessState \in FreshnessStates
++  /\ freshnessSource \in FreshnessSources
++  /\ schemaAdmitted \in BOOLEAN
++
++Init ==
++  /\ repairRequested = FALSE
++  /\ initialReadFailed = FALSE
++  /\ repairRetryRequested = FALSE
++  /\ authoritativeRowsState = NoRowsObserved
++  /\ reconcileComplete = FALSE
++  /\ independentMutationAdvanced = FALSE
++  /\ clock = InitialClock
++  /\ mutationWatermarkAt = InitialMutationAt
++  /\ observationCandidateAt = NoEvidenceAt
++  /\ observationWatermarkAt = NoEvidenceAt
++  /\ selectedFreshnessAt = NoEvidenceAt
++  /\ freshnessState = FreshnessUnclassified
++  /\ freshnessSource = FreshnessSourceUnavailable
++  /\ schemaAdmitted = FALSE
++
++RequestRepair ==
++  /\ ~repairRequested
++  /\ repairRequested' = TRUE
++  /\ UNCHANGED << initialReadFailed,
++                  repairRetryRequested,
++                  authoritativeRowsState,
++                  reconcileComplete,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationCandidateAt,
++                  observationWatermarkAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource,
++                  schemaAdmitted >>
++
++(* A failed or partial read never mints a complete-table observation time. *)
++FailInitialAuthoritativeRead ==
++  /\ repairRequested
++  /\ authoritativeRowsState = NoRowsObserved
++  /\ ~initialReadFailed
++  /\ ~repairRetryRequested
++  /\ initialReadFailed' = TRUE
++  /\ UNCHANGED << repairRequested,
++                  repairRetryRequested,
++                  authoritativeRowsState,
++                  reconcileComplete,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationCandidateAt,
++                  observationWatermarkAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource,
++                  schemaAdmitted >>
++
++RequestRepairRetry ==
++  /\ initialReadFailed
++  /\ ~repairRetryRequested
++  /\ authoritativeRowsState = NoRowsObserved
++  /\ repairRetryRequested' = TRUE
++  /\ UNCHANGED << repairRequested,
++                  initialReadFailed,
++                  authoritativeRowsState,
++                  reconcileComplete,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationCandidateAt,
++                  observationWatermarkAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource,
++                  schemaAdmitted >>
++
++(* TLC explores unchanged and confirmed-empty complete reads, immediately or *)
++(* after retry. The gateway, not the caller, mints observationCandidateAt.    *)
++CompleteAuthoritativeRead ==
++  /\ repairRequested
++  /\ authoritativeRowsState = NoRowsObserved
++  /\ (~initialReadFailed \/ repairRetryRequested)
++  /\ authoritativeRowsState' \in {
++       UnchangedRowsObserved,
++       ConfirmedEmptyObserved
++     }
++  /\ observationCandidateAt' = clock
++  /\ UNCHANGED << repairRequested,
++                  initialReadFailed,
++                  repairRetryRequested,
++                  reconcileComplete,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationWatermarkAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource,
++                  schemaAdmitted >>
++
++(* Equal/empty truth reconciles without changing the CDC mutation time. *)
++ReconcileAuthoritativeTruth ==
++  /\ authoritativeRowsState # NoRowsObserved
++  /\ ~reconcileComplete
++  /\ reconcileComplete' = TRUE
++  /\ UNCHANGED << repairRequested,
++                  initialReadFailed,
++                  repairRetryRequested,
++                  authoritativeRowsState,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationCandidateAt,
++                  observationWatermarkAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource,
++                  schemaAdmitted >>
++
++(* A real CDC mutation may arrive after the authoritative read but before   *)
++(* snapshot classification. It is distinct from reconciliation and newer.   *)
++AdvanceIndependentMutation ==
++  /\ reconcileComplete
++  /\ ~independentMutationAdvanced
++  /\ freshnessState = FreshnessUnclassified
++  /\ independentMutationAdvanced' = TRUE
++  /\ clock' = clock + 1
++  /\ mutationWatermarkAt' = clock + 1
++  /\ UNCHANGED << repairRequested,
++                  initialReadFailed,
++                  repairRetryRequested,
++                  authoritativeRowsState,
++                  reconcileComplete,
++                  observationCandidateAt,
++                  observationWatermarkAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource,
++                  schemaAdmitted >>
++
++(* Publication is a separate owner turn after successful cache reconcile. *)
++PublishAuthoritativeObservation ==
++  /\ reconcileComplete
++  /\ ~MutationOnlyFreshness
++  /\ observationWatermarkAt = NoEvidenceAt
++  /\ observationWatermarkAt' = observationCandidateAt
++  /\ UNCHANGED << repairRequested,
++                  initialReadFailed,
++                  repairRetryRequested,
++                  authoritativeRowsState,
++                  reconcileComplete,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationCandidateAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource,
++                  schemaAdmitted >>
++
++SelectNewestFreshnessEvidence ==
++  /\ reconcileComplete
++  /\ freshnessState = FreshnessUnclassified
++  /\ (MutationOnlyFreshness \/
++      observationWatermarkAt # NoEvidenceAt)
++  /\ selectedFreshnessAt' = NewestEvidenceAt
++  /\ freshnessSource' = NewestEvidenceSource
++  /\ freshnessState' =
++       IF clock - NewestEvidenceAt <= FreshnessMaxAge
++       THEN FreshnessFresh
++       ELSE FreshnessStale
++  /\ UNCHANGED << repairRequested,
++                  initialReadFailed,
++                  repairRetryRequested,
++                  authoritativeRowsState,
++                  reconcileComplete,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationCandidateAt,
++                  observationWatermarkAt,
++                  schemaAdmitted >>
++
++AdmitSchema ==
++  /\ freshnessState = FreshnessFresh
++  /\ ~schemaAdmitted
++  /\ schemaAdmitted' = TRUE
++  /\ UNCHANGED << repairRequested,
++                  initialReadFailed,
++                  repairRetryRequested,
++                  authoritativeRowsState,
++                  reconcileComplete,
++                  independentMutationAdvanced,
++                  clock,
++                  mutationWatermarkAt,
++                  observationCandidateAt,
++                  observationWatermarkAt,
++                  selectedFreshnessAt,
++                  freshnessState,
++                  freshnessSource >>
++
++SettledOrBlockedStutter ==
++  /\ reconcileComplete
++  /\ UNCHANGED vars
++
++Next ==
++  \/ RequestRepair
++  \/ FailInitialAuthoritativeRead
++  \/ RequestRepairRetry
++  \/ CompleteAuthoritativeRead
++  \/ ReconcileAuthoritativeTruth
++  \/ AdvanceIndependentMutation
++  \/ PublishAuthoritativeObservation
++  \/ SelectNewestFreshnessEvidence
++  \/ AdmitSchema
++  \/ SettledOrBlockedStutter
++
++Fairness ==
++  /\ WF_vars(RequestRepair)
++  /\ WF_vars(FailInitialAuthoritativeRead)
++  /\ WF_vars(RequestRepairRetry)
++  /\ WF_vars(CompleteAuthoritativeRead)
++  /\ WF_vars(ReconcileAuthoritativeTruth)
++  /\ WF_vars(PublishAuthoritativeObservation)
++  /\ WF_vars(SelectNewestFreshnessEvidence)
++  /\ WF_vars(AdmitSchema)
++
++Spec == Init /\ [][Next]_vars /\ Fairness
++
++ObservationDoesNotFabricateMutation ==
++  mutationWatermarkAt =
++    IF independentMutationAdvanced
++    THEN InitialClock + 1
++    ELSE InitialMutationAt
++
++NoCompleteReadNoPublishedEvidence ==
++  authoritativeRowsState # NoRowsObserved \/
++    observationWatermarkAt = NoEvidenceAt
++
++PublishedObservationRequiresReconciledCompleteRead ==
++  observationWatermarkAt = NoEvidenceAt \/
++    (authoritativeRowsState # NoRowsObserved /\ reconcileComplete)
++
++PublishedObservationPreservesReadCompletionTime ==
++  observationWatermarkAt = NoEvidenceAt \/
++    observationWatermarkAt = observationCandidateAt
++
++SelectedFreshnessIsNewestEvidence ==
++  freshnessState = FreshnessUnclassified \/
++    selectedFreshnessAt = NewestEvidenceAt
++
++FreshnessSourceMatchesNewestEvidence ==
++  freshnessState = FreshnessUnclassified \/
++    freshnessSource = NewestEvidenceSource
++
++FreshnessClassificationMatchesAge ==
++  /\ (freshnessState # FreshnessFresh \/
++      (selectedFreshnessAt # NoEvidenceAt /\
++       clock - selectedFreshnessAt <= FreshnessMaxAge))
++  /\ (freshnessState # FreshnessStale \/
++      clock - selectedFreshnessAt > FreshnessMaxAge)
++
++SchemaAdmissionRequiresFreshness ==
++  ~schemaAdmitted \/ freshnessState = FreshnessFresh
++
++EventuallySchemaAdmitted == <>schemaAdmitted
++
++=============================================================================
+diff --git a/models/authoritative-observation-watermark/AuthoritativeObservationWatermark_fixed.cfg b/models/authoritative-observation-watermark/AuthoritativeObservationWatermark_fixed.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..d3ccc4c5c00d3a9c04b4c875fe7bfbd86b25306f
+--- /dev/null
++++ b/models/authoritative-observation-watermark/AuthoritativeObservationWatermark_fixed.cfg
+@@ -0,0 +1,13 @@
++CONSTANT MutationOnlyFreshness = FALSE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT ObservationDoesNotFabricateMutation
++INVARIANT NoCompleteReadNoPublishedEvidence
++INVARIANT PublishedObservationRequiresReconciledCompleteRead
++INVARIANT PublishedObservationPreservesReadCompletionTime
++INVARIANT SelectedFreshnessIsNewestEvidence
++INVARIANT FreshnessSourceMatchesNewestEvidence
++INVARIANT FreshnessClassificationMatchesAge
++INVARIANT SchemaAdmissionRequiresFreshness
++PROPERTY EventuallySchemaAdmitted
+diff --git a/models/authoritative-observation-watermark/AuthoritativeObservationWatermark_mutation_only_bug.cfg b/models/authoritative-observation-watermark/AuthoritativeObservationWatermark_mutation_only_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..c6d1da2c4e84bbccd61e17a3d68c6f0f04fc54b1
+--- /dev/null
++++ b/models/authoritative-observation-watermark/AuthoritativeObservationWatermark_mutation_only_bug.cfg
+@@ -0,0 +1,13 @@
++CONSTANT MutationOnlyFreshness = TRUE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT ObservationDoesNotFabricateMutation
++INVARIANT NoCompleteReadNoPublishedEvidence
++INVARIANT PublishedObservationRequiresReconciledCompleteRead
++INVARIANT PublishedObservationPreservesReadCompletionTime
++INVARIANT SelectedFreshnessIsNewestEvidence
++INVARIANT FreshnessSourceMatchesNewestEvidence
++INVARIANT FreshnessClassificationMatchesAge
++INVARIANT SchemaAdmissionRequiresFreshness
++PROPERTY EventuallySchemaAdmitted
+diff --git a/models/authoritative-observation-watermark/abstract-protocol.md b/models/authoritative-observation-watermark/abstract-protocol.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..cde7fb6e0bf531935061bb6bb58c0b6855237471
+--- /dev/null
++++ b/models/authoritative-observation-watermark/abstract-protocol.md
+@@ -0,0 +1,31 @@
++# Authoritative observation watermark — abstract protocol ↔ runtime
++
++Model: `AuthoritativeObservationWatermark.tla`.
++Quest: `movielens-authoritative-observation-watermark`.
++
++This focused model composes a failed-read retry, successful complete
++authoritative reads, unchanged/confirmed-empty reconciliation, separate
++observation-evidence publication, ordered mutation/observation timestamps,
++newest-evidence selection, age-based freshness classification, and schema
++admission.
++
++| Model | Runtime |
++| --- | --- |
++| `FailInitialAuthoritativeRead` / `RequestRepairRetry` | `AdminServiceDiscovery.ensureAuthoritativeDiscoveryCacheRepair` fails closed on incomplete reads and permits a later bounded repair attempt |
++| `CompleteAuthoritativeRead` | the canonical gateway validates `SELECT *`, rejects partial/failure evidence, and mints the complete-table observation receipt consumed by `AdminServiceDiscovery.readAuthoritativeSystemTableRows` |
++| `ReconcileAuthoritativeTruth` | `ControlPlaneSystemTableGateway.reconcileAuthoritativeCacheRows` compares authoritative rows with the local cache without fabricating a CDC mutation |
++| `mutationWatermarkAt` / `AdvanceIndependentMutation` | `SystemTableCache.lastAppliedAtMsByTableName`; no-op reconciliation leaves it unchanged, while a genuinely later CDC event may advance it independently |
++| `observationCandidateAt` / `observationWatermarkAt` | the gateway-owned read completion time and `SystemTableCache.recordAuthoritativeObservation` publication remain distinct from mutation time |
++| `SelectNewestFreshnessEvidence` | `AdminPreflightSnapshot.buildPreflightCacheFreshnessSummary` selects `max(mutation, authoritative observation)`, records its source, and compares its age with the freshness bound |
++| `AdmitSchema` | the MovieLens schema-admission gate accepts a fresh control snapshot |
++
++The fixed configuration proves that authoritative observation does not invent a
++mutation, only a reconciled complete read can publish, the selected timestamp is
++always the newest available evidence (including a later independent mutation),
++freshness matches its age, and successful unchanged/empty repair eventually
++admits schema. The mutation-only mutant keeps the old stale mutation timestamp
++when no independent CDC event arrives and violates eventual admission after a
++successful no-op repair.
++
++This is intentionally not a claim that every interaction between repository
++layers is modeled in TLA+ or Alloy.
+diff --git a/scripts/model-tlc.js b/scripts/model-tlc.js
+index bba13cd9e3fbc78463d1a00b52d0ffa52d3fcd37..222c4761a83b942a1feb94b20b07b50f39bc241a 100644
+--- a/scripts/model-tlc.js
++++ b/scripts/model-tlc.js
+@@ -533,6 +533,43 @@ const CONFIGS = [
+     expectedFailurePattern:
+       'Invariant SerializationHoldReleaseRequiresAuthoritativeTerminal is violated',
+   },
++  {
++    id: 'authoritative-observation-watermark-fixed',
++    mode: 'authoritative-observation-watermark-fixed',
++    module: path.resolve(
++      'models', 'authoritative-observation-watermark',
++      'AuthoritativeObservationWatermark.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'authoritative-observation-watermark',
++      'AuthoritativeObservationWatermark_fixed.cfg',
++    ),
++    expectConverged: true,
++    report: 'authoritative-observation-watermark-fixed.model.report.json',
++    scenario: 'movielens-authoritative-observation-watermark-model',
++    owner: 'control_plane_authoritative_reconcile_owner',
++    boundary: 'authoritative_observation_cache_freshness_admission_composition',
++  },
++  {
++    id: 'authoritative-observation-watermark-mutation-only',
++    mode: 'authoritative-observation-watermark-mutation-only',
++    module: path.resolve(
++      'models', 'authoritative-observation-watermark',
++      'AuthoritativeObservationWatermark.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'authoritative-observation-watermark',
++      'AuthoritativeObservationWatermark_mutation_only_bug.cfg',
++    ),
++    expectConverged: false,
++    report:
++      'authoritative-observation-watermark-mutation-only.model.report.json',
++    scenario: 'movielens-mutation-only-freshness-counterexample',
++    owner: 'control_plane_authoritative_reconcile_owner',
++    boundary: 'mutation_watermark_snapshot_admission_composition',
++    expectedFailurePattern:
++      'Temporal property EventuallySchemaAdmitted was violated',
++  },
+ ];
+ 
+ function download(url, dest) {
+diff --git a/src/admin/admin-preflight-snapshot.js b/src/admin/admin-preflight-snapshot.js
+index c56776a793dfa6bf0418fe2b74a9b74e7f9d93f7..599642bbfa57c9e1933c9b50e36e717bee2fbc8c 100644
+--- a/src/admin/admin-preflight-snapshot.js
++++ b/src/admin/admin-preflight-snapshot.js
+@@ -47,6 +47,67 @@ const PREFLIGHT_ERROR_CODE = Object.freeze({
+   LEADER_NODE_ID_MISSING: 'leader_node_id_missing',
+ });
+ const PREFLIGHT_REPAIR_REASON = 'preflight_critical_path_snapshot';
++const PREFLIGHT_CACHE_FRESHNESS_SOURCE = Object.freeze({
++  AUTHORITATIVE_OBSERVATION: 'authoritative_observation',
++  MUTATION: 'mutation',
++});
++
++function readCacheTableEvidence(cache, methodName, tableName) {
++  if (typeof cache?.[methodName] !== 'function') {
++    return null;
++  }
++  return cache[methodName](tableName);
++}
++
++function normalizeCacheEvidenceAtMs(value) {
++  if (value === null || typeof value === 'undefined') {
++    return null;
++  }
++  const numericValue = Number(value);
++  return Number.isFinite(numericValue) ? Math.floor(numericValue) : null;
++}
++
++function buildCacheCauseIdSnapshot(cache, tableNames, methodName) {
++  const causesByTableName = {};
++  for (const tableName of tableNames) {
++    causesByTableName[tableName] = readCacheTableEvidence(
++      cache,
++      methodName,
++      tableName,
++    );
++  }
++  return causesByTableName;
++}
++
++function selectNewestCacheFreshnessEvidence(
++  lastAppliedAtMs,
++  lastAuthoritativeObservedAtMs,
++) {
++  if (
++    Number.isFinite(lastAuthoritativeObservedAtMs) &&
++    (!Number.isFinite(lastAppliedAtMs) ||
++      lastAuthoritativeObservedAtMs >= lastAppliedAtMs)
++  ) {
++    return {
++      observedAtMs: lastAuthoritativeObservedAtMs,
++      source: PREFLIGHT_CACHE_FRESHNESS_SOURCE.AUTHORITATIVE_OBSERVATION,
++    };
++  }
++  if (Number.isFinite(lastAppliedAtMs)) {
++    return {
++      observedAtMs: lastAppliedAtMs,
++      source: PREFLIGHT_CACHE_FRESHNESS_SOURCE.MUTATION,
++    };
++  }
++  return {observedAtMs: null, source: null};
++}
++
++function calculateCacheStalenessMs(capturedAtMs, observedAtMs) {
++  if (!Number.isFinite(capturedAtMs) || !Number.isFinite(observedAtMs)) {
++    return null;
++  }
++  return Math.max(0, Math.floor(capturedAtMs - observedAtMs));
++}
+ 
+ // ── AdminPreflightSnapshot class ────────────────────────────────────────────
+ 
+@@ -505,54 +566,60 @@ class AdminPreflightSnapshot {
+    */
+   buildPreflightCacheFreshnessSummary(options) {
+     const capturedAtMs = Number(options?.capturedAtMs);
+-    const lastAppliedAtMs =
+-      typeof this.systemTableCache?.getLastAppliedAtMs ===
+-        'function' ?
+-        this.systemTableCache.getLastAppliedAtMs(
+-          TABLES.SERVICE_ENDPOINTS,
+-        ) :
+-        null;
++    const lastAppliedAtMs = normalizeCacheEvidenceAtMs(
++      readCacheTableEvidence(
++        this.systemTableCache,
++        'getLastAppliedAtMs',
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++    );
++    const lastAuthoritativeObservedAtMs = normalizeCacheEvidenceAtMs(
++      readCacheTableEvidence(
++        this.systemTableCache,
++        'getLastAuthoritativeObservedAtMs',
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++    );
+     const tableNames = [
+       TABLES.SERVICES,
+       TABLES.NODE_ENDPOINTS,
+       TABLES.SERVICE_ENDPOINTS,
+     ];
+-    const lastAppliedCauseIdByTableName = {};
+-    for (const tableName of tableNames) {
+-      lastAppliedCauseIdByTableName[tableName] =
+-        typeof this.systemTableCache?.getLastAppliedCauseId ===
+-          'function' ?
+-          this.systemTableCache.getLastAppliedCauseId(tableName) :
+-          null;
+-    }
+-    const appliedSchemaVersion =
+-      typeof this.systemTableCache?.getAppliedSchemaVersion ===
+-        'function' ?
+-        normalizeSchemaVersionValue(
+-          this.systemTableCache.getAppliedSchemaVersion(
+-            TABLES.SERVICE_ENDPOINTS,
+-          ),
+-        ) :
+-        null;
+-    const numericLastAppliedAtMs = Number(lastAppliedAtMs);
+-    const hasNumericLastAppliedAtMs =
+-      lastAppliedAtMs !== null &&
+-      typeof lastAppliedAtMs !== 'undefined' &&
+-      Number.isFinite(numericLastAppliedAtMs);
+-    const stalenessMs = Number.isFinite(capturedAtMs) &&
+-      hasNumericLastAppliedAtMs ?
+-      Math.max(
+-        0,
+-        Math.floor(capturedAtMs - numericLastAppliedAtMs),
+-      ) :
+-      null;
++    const lastAppliedCauseIdByTableName = buildCacheCauseIdSnapshot(
++      this.systemTableCache,
++      tableNames,
++      'getLastAppliedCauseId',
++    );
++    const lastAuthoritativeObservedCauseIdByTableName =
++      buildCacheCauseIdSnapshot(
++        this.systemTableCache,
++        tableNames,
++        'getLastAuthoritativeObservedCauseId',
++      );
++    const appliedSchemaVersion = normalizeSchemaVersionValue(
++      readCacheTableEvidence(
++        this.systemTableCache,
++        'getAppliedSchemaVersion',
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++    );
++    const freshness = selectNewestCacheFreshnessEvidence(
++      lastAppliedAtMs,
++      lastAuthoritativeObservedAtMs,
++    );
++    const stalenessMs = calculateCacheStalenessMs(
++      capturedAtMs,
++      freshness.observedAtMs,
++    );
+     return {
+-      lastAppliedAtMs: hasNumericLastAppliedAtMs ?
+-        Math.floor(numericLastAppliedAtMs) :
+-        null,
++      lastAppliedAtMs,
++      lastAuthoritativeObservedAtMs,
++      freshnessObservedAtMs: freshness.observedAtMs,
++      freshnessSource: freshness.source,
+       appliedSchemaVersion,
+       stalenessMs,
+       lastAppliedCauseIdByTableName,
++      lastAuthoritativeObservedCauseIdByTableName,
+     };
+   }
+ 
+diff --git a/src/admin/admin-service-discovery-readiness-context-methods.js b/src/admin/admin-service-discovery-readiness-context-methods.js
+index e6e4a8a21c993e81be4debc328338f386ad008ab..ad46d925010f77860d756769db6f34a3e7d39609 100644
+--- a/src/admin/admin-service-discovery-readiness-context-methods.js
++++ b/src/admin/admin-service-discovery-readiness-context-methods.js
+@@ -6,6 +6,26 @@ const LOCAL_STR_REPAIR_REQUIRED = 'repair_required';
+ const LOCAL_STR_REPAIR = 'repair';
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
+ 
++function hasValidAuthoritativeReadTime(receipt) {
++  return Number.isFinite(receipt?.observedAtMs);
++}
++
++function hasValidAuthoritativeReadCause(receipt) {
++  return typeof receipt?.causeId === 'string' && receipt.causeId.length > 0;
++}
++
++function hasCompleteAuthoritativeReadResult(result, tableName, completeScope) {
++  const receipt = result?.authoritativeObservation;
++  return Boolean(
++    result?.rowSetComplete === true &&
++    receipt?.scope === completeScope &&
++    receipt?.tableName === tableName &&
++    receipt?.rowSetComplete === true &&
++    hasValidAuthoritativeReadTime(receipt) &&
++    hasValidAuthoritativeReadCause(receipt),
++  );
++}
++
+ function assignAdminServiceDiscoveryReadinessContextMethods(
+   AdminServiceDiscovery,
+   options = {},
+@@ -19,6 +39,8 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
+     buildControlPlaneWorkloadProfile,
+     COLUMN,
+     CONTROL_PLANE_DELIVERY_PRIORITY,
++    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+     CONTROL_PLANE_WORKLOAD_CLASS,
+     CONTROL_PLANE_READINESS_DIMENSION,
+     CONTROL_PLANE_READ_STRATEGY,
+@@ -407,11 +429,30 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
+       if (queryResult?.success !== true) {
+         throw this.buildAuthoritativeDiscoveryReadError(queryResult, tableName);
+       }
++      const authoritativeObservation = queryResult?.authoritativeObservation;
++      if (!hasCompleteAuthoritativeReadResult(
++        queryResult,
++        tableName,
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++      )) {
++        throw this.buildAuthoritativeDiscoveryReadError(
++          {
++            ...queryResult,
++            success: false,
++            error:
++              queryResult?.error ||
++              CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
++            errorCode:
++              queryResult?.errorCode ||
++              CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
++          },
++          tableName,
++        );
++      }
+       return {
+         tableName,
+-        rows: Array.isArray(queryResult?.rows) ?
+-          queryResult.rows :
+-          ADMIN_CACHE_DUMP.EMPTY,
++        rows: queryResult.rows,
++        authoritativeObservation,
+       };
+     }
+ 
+@@ -458,6 +499,8 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
+         workClass: transportProfile.workClass,
+         deliveryPriority: transportProfile.deliveryPriority,
+         routingReadinessDimension,
++        authoritativeObservationScope:
++          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
+       };
+     }
+ 
+diff --git a/src/admin/admin-service-discovery-repair-cache-methods.js b/src/admin/admin-service-discovery-repair-cache-methods.js
+index 946ee5709c41e236a56afb4d2ba089c2efe92fe4..d3ddb7954850d573cc855643509ace9bf141ee5e 100644
+--- a/src/admin/admin-service-discovery-repair-cache-methods.js
++++ b/src/admin/admin-service-discovery-repair-cache-methods.js
+@@ -1,5 +1,21 @@
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
+ 
++function assertAuthoritativeCacheReconcileResult(result, receipt, constants) {
++  if (result?.success !== true) {
++    throw new Error(
++      result?.error || constants.error.CACHE_NOT_RECONCILED,
++    );
++  }
++  const completeObservationRequested = receipt?.scope ===
++    constants.scope.COMPLETE_TABLE;
++  if (
++    completeObservationRequested &&
++    !Number.isFinite(result?.authoritativeObservedAtMs)
++  ) {
++    throw new Error(constants.error.STORAGE_UNAVAILABLE);
++  }
++}
++
+ function assignAdminServiceDiscoveryRepairCacheMethods(
+   AdminServiceDiscovery,
+   options = {},
+@@ -10,6 +26,8 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
+     AUTHORITATIVE_DISCOVERY_REPAIR,
+     AUTHORITATIVE_REPAIR_FAILURE_ACTION,
+     AUTHORITATIVE_REPAIR_FAILURE_CLASS,
++    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++    CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+     CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+     CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
+     deriveAuthoritativeRepairTables,
+@@ -328,9 +346,16 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
+      * @param {string} tableName
+      * @param {Array<Object>} rows
+      * @param {string} causeId
++     * @param {Object} options
++     * @param {Object|null} options.authoritativeObservation
+      * @return {number}
+      */
+-    async applyAuthoritativeSystemTableRows(tableName, rows, causeId) {
++    async applyAuthoritativeSystemTableRows(
++      tableName,
++      rows,
++      causeId,
++      options = {},
++    ) {
+       const authoritativeRows = Array.isArray(rows) ?
+         rows :
+         ADMIN_CACHE_DUMP.EMPTY;
+@@ -348,8 +373,18 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
+             cachedRows,
+             cacheMutationTarget: this.cacheMutationTarget,
+             systemTableCache: this.systemTableCache,
++            authoritativeObservation:
++              options.authoritativeObservation || null,
+           },
+         );
++      assertAuthoritativeCacheReconcileResult(
++        result,
++        options.authoritativeObservation,
++        {
++          error: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++          scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
++        },
++      );
+       return result?.mutationCount || 0;
+     }
+ 
+diff --git a/src/admin/admin-service-discovery-repair-methods.js b/src/admin/admin-service-discovery-repair-methods.js
+index b7f2d051e0fe695dc53e0066acf3a1ce2f7a5dc1..c09f04526df80e2ee6e5d10079a8da4837b16021 100644
+--- a/src/admin/admin-service-discovery-repair-methods.js
++++ b/src/admin/admin-service-discovery-repair-methods.js
+@@ -183,6 +183,7 @@ function assignAdminServiceDiscoveryRepairMethods(
+           repairState.authoritativeRowsByTable.set(tableName, {
+             tableName: result.tableName,
+             rows: result.rows,
++            authoritativeObservation: result.authoritativeObservation,
+           });
+         } catch (error) {
+           const errorSummary = this.recordAuthoritativeDiscoveryRepairFailure(
+@@ -210,6 +211,10 @@ function assignAdminServiceDiscoveryRepairMethods(
+               result?.tableName || tableName,
+               result?.rows || ADMIN_CACHE_DUMP.EMPTY,
+               causeId,
++              {
++                authoritativeObservation:
++                  result?.authoritativeObservation || null,
++              },
+             );
+           repairState.repairedTableCount += 1;
+           repairState.repairedTableNames.push(tableName);
+diff --git a/src/admin/admin-service-discovery.js b/src/admin/admin-service-discovery.js
+index dd8aa9f554d0e21e4e7be80c30bd6a574abbd240..2e697ef34844a68b36e927801fa8b3eca8c3994c 100644
+--- a/src/admin/admin-service-discovery.js
++++ b/src/admin/admin-service-discovery.js
+@@ -37,7 +37,11 @@ import {
+   buildControlPlaneWorkloadProfile,
+   CONTROL_PLANE_WORKLOAD_CLASS,
+ } from '../control-plane/control-plane-workload-profile.js';
+-import {CONTROL_PLANE_CACHE_RECONCILE_INTENT} from '../control-plane/control-plane-cache-reconcile-constants.js';
++import {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
++  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
++} from '../control-plane/control-plane-cache-reconcile-constants.js';
+ import {CONTROL_PLANE_READ_STRATEGY} from '../control-plane/control-plane-system-table-gateway.js';
+ import {CONTROL_PLANE_SNAPSHOT_REFRESH_STATE} from '../control-plane/control-plane-snapshot-owner.js';
+ import {getControlPlaneRetryAfterMs} from '../control-plane/control-plane-error-classification.js';
+@@ -561,6 +565,8 @@ assignAdminServiceDiscoveryReadinessMethods(AdminServiceDiscovery, {
+   COLUMN,
+   CONTROL_PLANE_WORKLOAD_CLASS,
+   CONTROL_PLANE_DELIVERY_PRIORITY,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_READINESS_DIMENSION,
+   CONTROL_PLANE_READ_STRATEGY,
+   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
+@@ -616,6 +622,8 @@ assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, {
+   BENCHMARK_DEGRADATION_PRIORITY,
+   BENCHMARK_DEGRADATION_STATE,
+   CANONICAL_LEADER_ROUTING_GAP_STATE,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+   CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
+   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
+diff --git a/src/cache/read-only-system-table-cache.js b/src/cache/read-only-system-table-cache.js
+index b64de4b0d50e9ba3dba09935da5794902d8b399a..046fa4c741315c2e5f293e1fd9461ac16a41ff68 100644
+--- a/src/cache/read-only-system-table-cache.js
++++ b/src/cache/read-only-system-table-cache.js
+@@ -116,6 +116,24 @@ class ReadOnlySystemTableCache {
+     return this._cache.getLastAppliedCauseId(tableName);
+   }
+ 
++  /**
++   * Get the last successful authoritative observation time for one table.
++   * @param {string} tableName - Name of the system table.
++   * @return {number|null}
++   */
++  getLastAuthoritativeObservedAtMs(tableName) {
++    return this._cache.getLastAuthoritativeObservedAtMs(tableName);
++  }
++
++  /**
++   * Get the last authoritative observation cause ID for one table.
++   * @param {string} tableName - Name of the system table.
++   * @return {string|null}
++   */
++  getLastAuthoritativeObservedCauseId(tableName) {
++    return this._cache.getLastAuthoritativeObservedCauseId(tableName);
++  }
++
+   /**
+    * Get the list of supported system table names.
+    * @return {Array<string>} Array of system table names.
+diff --git a/src/cache/system-table-cache-observation-methods.js b/src/cache/system-table-cache-observation-methods.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1279e08edaa01beebaf3572c55ef8926c51776c3
+--- /dev/null
++++ b/src/cache/system-table-cache-observation-methods.js
+@@ -0,0 +1,321 @@
++import {COLUMN, STATE, TABLES} from '../constants/index.js';
++import {assertCritical} from '../utils/assert.js';
++import {normalizeCauseId} from '../utils/cause-id.js';
++import {deepFreeze} from '../utils/deep-freeze.js';
++import {CACHE_ERROR_MSG, CACHE_LOG_MSG} from './cache-constants.js';
++
++const LOCAL_STR_CONSTRUCTOR = 'constructor';
++const LOCAL_EMPTY_ENDPOINTS = Object.freeze([]);
++
++let sharedRowReadEngagements = 0;
++
++/**
++ * Engagement counter for the directed micro-repro: proves the no-clone shared
++ * read path fires rather than silently delegating to the cloning path.
++ * @return {{engagements: number}}
++ */
++function getSharedRowReadStats() {
++  return {engagements: sharedRowReadEngagements};
++}
++
++/** Reset the shared-row read engagement counter. */
++function resetSharedRowReadStats() {
++  sharedRowReadEngagements = 0;
++}
++
++class SystemTableCacheObservationMethods {
++  /**
++     * Record the latest applied schema version for one system table.
++     * @param {string} tableName
++     * @param {string|number} version
++     * @return {string|number|null}
++     */
++  recordAppliedSchemaVersion(tableName, version) {
++    this.validateTableName(tableName);
++    if (version === null || typeof version === 'undefined') {
++      return this.getAppliedSchemaVersion(tableName);
++    }
++    const currentVersion = this.appliedSchemaVersions.get(tableName);
++    if (typeof currentVersion === 'undefined' ||
++          this.compareSchemaVersions(version, currentVersion) >= 0) {
++      this.appliedSchemaVersions.set(tableName, version);
++      return version;
++    }
++    return currentVersion;
++  }
++
++  /** @return {string|number|null} */
++  getAppliedSchemaVersion(tableName) {
++    this.validateTableName(tableName);
++    return this.appliedSchemaVersions.get(tableName) ?? null;
++  }
++
++  /** @return {Object<string, string|number>} */
++  getAppliedSchemaVersions() {
++    const snapshot = {};
++    for (const [tableName, version] of this.appliedSchemaVersions.entries()) {
++      snapshot[tableName] = version;
++    }
++    return snapshot;
++  }
++
++  /** @return {number|null} */
++  getLastAppliedAtMs(tableName) {
++    this.validateTableName(tableName);
++    return this.lastAppliedAtMsByTableName.get(tableName) ?? null;
++  }
++
++  /** @return {string|null} */
++  getLastAppliedCauseId(tableName) {
++    this.validateTableName(tableName);
++    return this.lastAppliedCauseIdByTableName.get(tableName) ?? null;
++  }
++
++  /**
++     * Record a successful complete authoritative observation without claiming
++     * that a row mutation occurred.
++     * @param {string} tableName
++     * @param {Object} options
++     * @return {number|null}
++     */
++  recordAuthoritativeObservation(tableName, options = {}) {
++    this.validateTableName(tableName);
++    const observedAtMs = Number(options.observedAtMs);
++    if (!Number.isFinite(observedAtMs) || observedAtMs < 0) {
++      return this.getLastAuthoritativeObservedAtMs(tableName);
++    }
++    const normalizedObservedAtMs = Math.floor(observedAtMs);
++    const currentObservedAtMs =
++        this.lastAuthoritativeObservedAtMsByTableName.get(tableName);
++    if (
++      Number.isFinite(currentObservedAtMs) &&
++        currentObservedAtMs > normalizedObservedAtMs
++    ) {
++      return currentObservedAtMs;
++    }
++    this.lastAuthoritativeObservedAtMsByTableName.set(
++      tableName,
++      normalizedObservedAtMs,
++    );
++    this.lastAuthoritativeObservedCauseIdByTableName.set(
++      tableName,
++      normalizeCauseId(options.causeId),
++    );
++    return normalizedObservedAtMs;
++  }
++
++  /** @return {number|null} */
++  getLastAuthoritativeObservedAtMs(tableName) {
++    this.validateTableName(tableName);
++    return this.lastAuthoritativeObservedAtMsByTableName.get(tableName) ??
++        null;
++  }
++
++  /** @return {string|null} */
++  getLastAuthoritativeObservedCauseId(tableName) {
++    this.validateTableName(tableName);
++    return this.lastAuthoritativeObservedCauseIdByTableName.get(tableName) ??
++        null;
++  }
++
++  /** @return {number} */
++  getEpoch() {
++    return this.currentEpoch;
++  }
++
++  /**
++     * @param {Object} epoch
++     * @return {boolean}
++     */
++  updateFromEpoch(epoch) {
++    if (!epoch || typeof epoch !== 'object') {
++      throw new Error(CACHE_ERROR_MSG.EPOCH_INVALID_OBJECT);
++    }
++    if (typeof epoch.epoch !== 'number') {
++      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_NUMBER);
++    }
++    if (!epoch.assignments || typeof epoch.assignments !== 'object') {
++      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_ASSIGNMENTS);
++    }
++    if (epoch.epoch <= this.currentEpoch) {
++      this.logger.debug(CACHE_LOG_MSG.REJECTED_STALE_EPOCH, {
++        incomingEpoch: epoch.epoch,
++        currentEpoch: this.currentEpoch,
++      });
++      return false;
++    }
++    this.currentEpoch = epoch.epoch;
++    this.logger.debug(CACHE_LOG_MSG.UPDATED_EPOCH, {epoch: this.currentEpoch});
++    return true;
++  }
++
++  /** @return {string[]} */
++  getReadyNodes() {
++    const now = Date.now();
++    const allNodes = this.getAll(TABLES.NODES) || [];
++    this.logger.debug(CACHE_LOG_MSG.GET_READY_NODES_DEBUG, {
++      totalNodes: allNodes.length,
++      now,
++      nodes: allNodes.map((node) => ({
++        nodeId: node?.[COLUMN.NODE_ID],
++        wsState: node?.[COLUMN.CONNECTION_STATE],
++        leaseExpiry: node?.[COLUMN.READY_LEASE_EXPIRES_AT],
++        leaseValid: node?.[COLUMN.READY_LEASE_EXPIRES_AT] > now,
++      })),
++    });
++    const readyNodes = this.filter(TABLES.NODES, (node) => {
++      const wsState = node?.[COLUMN.CONNECTION_STATE];
++      const leaseExpiry = node?.[COLUMN.READY_LEASE_EXPIRES_AT];
++      return wsState === STATE.READY && leaseExpiry && leaseExpiry > now;
++    });
++    return readyNodes.map((node) => {
++      const nodeId = node?.[COLUMN.NODE_ID];
++      assertCritical(nodeId, CACHE_ERROR_MSG.NODE_ID_MISSING);
++      return nodeId;
++    });
++  }
++
++  /** @return {Array<Object>} */
++  getEndpointsForNode(nodeId) {
++    const endpoints = this.filter(TABLES.NODE_ENDPOINTS, (endpoint) =>
++      endpoint[COLUMN.NODE_ID] === nodeId,
++    );
++    return endpoints.sort((left, right) => {
++      const leftPriority = left[COLUMN.PRIORITY] ?? 0;
++      const rightPriority = right[COLUMN.PRIORITY] ?? 0;
++      return leftPriority - rightPriority;
++    });
++  }
++
++  /** @return {Array<Object>} */
++  filterEndpointsByStatus(endpoints, status) {
++    if (!Array.isArray(endpoints)) {
++      return [...LOCAL_EMPTY_ENDPOINTS];
++    }
++    return endpoints.filter((endpoint) =>
++      endpoint[COLUMN.STATUS] === status,
++    );
++  }
++
++  onCacheChange(listener) {
++    if (typeof listener !== 'function') {
++      throw new Error(CACHE_ERROR_MSG.LISTENER_REQUIRED);
++    }
++    this.listeners.add(listener);
++  }
++
++  offCacheChange(listener) {
++    return this.listeners.delete(listener);
++  }
++
++  notifyListeners(tableName, operation, record, metadata) {
++    if (this.listeners.size === 0) {
++      return;
++    }
++    const normalizedMetadata = metadata && typeof metadata === 'object' ?
++      metadata :
++      null;
++    setImmediate(() => {
++      for (const listener of this.listeners) {
++        try {
++          listener(tableName, operation, record, normalizedMetadata);
++        } catch (error) {
++          this.logger.warn(CACHE_LOG_MSG.CACHE_LISTENER_ERROR, {
++            error: error.message,
++          });
++        }
++      }
++    });
++  }
++
++  /** @return {Object} */
++  getAllData() {
++    const data = {};
++    for (const [tableName, table] of this.tables) {
++      data[tableName] = Array.from(table.values())
++        .map((record) => this.deepClone(record));
++    }
++    return data;
++  }
++
++  get(tableName, key) {
++    this.validateTableName(tableName);
++    const record = this.tables.get(tableName).get(key);
++    return record ? this.deepClone(record) : undefined;
++  }
++
++  find(tableName, predicate) {
++    this.validateTableName(tableName);
++    for (const record of this.tables.get(tableName).values()) {
++      if (predicate(record)) {
++        return this.deepClone(record);
++      }
++    }
++    return undefined;
++  }
++
++  /** @return {Object} */
++  readView(record) {
++    sharedRowReadEngagements += 1;
++    return deepFreeze(record);
++  }
++
++  filter(tableName, predicate) {
++    this.validateTableName(tableName);
++    const results = [];
++    for (const record of this.tables.get(tableName).values()) {
++      if (predicate(record)) {
++        results.push(this.readView(record));
++      }
++    }
++    return results;
++  }
++
++  getAll(tableName) {
++    this.validateTableName(tableName);
++    return Array.from(this.tables.get(tableName).values())
++      .map((record) => this.readView(record));
++  }
++
++  getAllShared(tableName) {
++    return this.getAll(tableName);
++  }
++
++  filterShared(tableName, predicate) {
++    return this.filter(tableName, predicate);
++  }
++
++  has(tableName, key) {
++    this.validateTableName(tableName);
++    return this.tables.get(tableName).has(key);
++  }
++
++  count(tableName) {
++    this.validateTableName(tableName);
++    return this.tables.get(tableName).size;
++  }
++}
++
++function assignSystemTableCacheObservationMethods(SystemTableCache) {
++  for (const methodName of Object.getOwnPropertyNames(
++    SystemTableCacheObservationMethods.prototype,
++  )) {
++    if (methodName === LOCAL_STR_CONSTRUCTOR) {
++      continue;
++    }
++    Object.defineProperty(
++      SystemTableCache.prototype,
++      methodName,
++      Object.getOwnPropertyDescriptor(
++        SystemTableCacheObservationMethods.prototype,
++        methodName,
++      ),
++    );
++  }
++}
++
++export {
++  assignSystemTableCacheObservationMethods,
++  getSharedRowReadStats,
++  resetSharedRowReadStats,
++};
+diff --git a/src/cache/system-table-cache.js b/src/cache/system-table-cache.js
+index c320558dd5979872a185ce4255b7aa09aeaec30c..0f46e83cfd4414012223c591eee52ab1f798ceb8 100644
+--- a/src/cache/system-table-cache.js
++++ b/src/cache/system-table-cache.js
+@@ -6,11 +6,8 @@
+  */
+ 
+ import {LoggingService} from '../logging/logging-service.js';
+-import {COLUMN, STATE, TABLES} from '../constants/index.js';
+-import {assertCritical} from '../utils/assert.js';
+ import {normalizeCauseId} from '../utils/cause-id.js';
+ import {fastJsonClone} from '../utils/fast-json-clone.js';
+-import {deepFreeze} from '../utils/deep-freeze.js';
+ import {
+   CACHE_CDC_OPERATIONS,
+   CACHE_DEFAULT,
+@@ -35,6 +32,11 @@ import {
+   shouldUsePublicationMerge,
+   tryParseHLCTimestamp,
+ } from './system-table-cache-row-merge.js';
++import {
++  assignSystemTableCacheObservationMethods,
++  getSharedRowReadStats,
++  resetSharedRowReadStats,
++} from './system-table-cache-observation-methods.js';
+ 
+ /**
+  * System table names that are cached.
+@@ -66,25 +68,6 @@ const PRIMARY_KEY_FIELDS = SYSTEM_CACHE_KEY_DESCRIPTOR;
+  */
+ const CDC_OPERATIONS = CACHE_CDC_OPERATIONS;
+ 
+-let sharedRowReadEngagements = 0;
+-
+-/**
+- * Engagement counter for the directed micro-repro: proves the no-clone shared
+- * read path FIRES (rows returned without a per-read clone) rather than
+- * silently delegating to the cloning path.
+- * @return {{engagements: number}}
+- */
+-function getSharedRowReadStats() {
+-  return {engagements: sharedRowReadEngagements};
+-}
+-
+-/**
+- * Reset the shared-row read engagement counter. Test-only seam.
+- */
+-function resetSharedRowReadStats() {
+-  sharedRowReadEngagements = 0;
+-}
+-
+ /**
+  * SystemTableCache provides in-memory caching for system tables.
+  * Only CDC event handlers should have write access to this cache.
+@@ -103,6 +86,8 @@ class SystemTableCache {
+     this.appliedSchemaVersions = new Map();
+     this.lastAppliedAtMsByTableName = new Map();
+     this.lastAppliedCauseIdByTableName = new Map();
++    this.lastAuthoritativeObservedAtMsByTableName = new Map();
++    this.lastAuthoritativeObservedCauseIdByTableName = new Map();
+     this.listeners = new Set();
+     this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
+     this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
+@@ -118,377 +103,6 @@ class SystemTableCache {
+     }
+   }
+ 
+-  /**
+-   * Record the latest applied schema version for one system table.
+-   * Keeps the watermark monotonic when out-of-order CDC events are observed.
+-   * @param {string} tableName - Name of the system table.
+-   * @param {string|number} version - Applied schema/version watermark.
+-   * @return {string|number|null} Current stored watermark for this table.
+-   */
+-  recordAppliedSchemaVersion(tableName, version) {
+-    this.validateTableName(tableName);
+-    if (version === null || typeof version === 'undefined') {
+-      return this.getAppliedSchemaVersion(tableName);
+-    }
+-
+-    const currentVersion = this.appliedSchemaVersions.get(tableName);
+-    if (typeof currentVersion === 'undefined' ||
+-        this.compareSchemaVersions(version, currentVersion) >= 0) {
+-      this.appliedSchemaVersions.set(tableName, version);
+-      return version;
+-    }
+-
+-    return currentVersion;
+-  }
+-
+-  /**
+-   * Get the latest applied schema/version watermark for one table.
+-   * @param {string} tableName - Name of the system table.
+-   * @return {string|number|null} Stored watermark, or null if unknown.
+-   */
+-  getAppliedSchemaVersion(tableName) {
+-    this.validateTableName(tableName);
+-    return this.appliedSchemaVersions.get(tableName) ?? null;
+-  }
+-
+-  /**
+-   * Get a read-only snapshot of applied schema/version watermarks.
+-   * @return {Object<string, string|number>} Table-to-watermark map.
+-   */
+-  getAppliedSchemaVersions() {
+-    const snapshot = {};
+-    for (const [tableName, version] of this.appliedSchemaVersions.entries()) {
+-      snapshot[tableName] = version;
+-    }
+-    return snapshot;
+-  }
+-
+-  /**
+-   * Get the last local wall-clock time (ms) we applied a change for a system table.
+-   * @param {string} tableName - Name of the system table.
+-   * @return {number|null}
+-   */
+-  getLastAppliedAtMs(tableName) {
+-    this.validateTableName(tableName);
+-    return this.lastAppliedAtMsByTableName.get(tableName) ?? null;
+-  }
+-
+-  /**
+-   * Get the last applied causal correlation ID for a system table, when available.
+-   * @param {string} tableName - Name of the system table.
+-   * @return {string|null}
+-   */
+-  getLastAppliedCauseId(tableName) {
+-    this.validateTableName(tableName);
+-    return this.lastAppliedCauseIdByTableName.get(tableName) ?? null;
+-  }
+-
+-  /**
+-   * Get the current epoch number.
+-   * Requirements: 7.1, 7.2
+-   * @return {number} The current epoch number
+-   */
+-  getEpoch() {
+-    return this.currentEpoch;
+-  }
+-
+-  /**
+-   * Update the cache from an AssignmentEpoch object.
+-   * Requirements: 7.1, 7.2, 7.5
+-   * @param {Object} epoch - AssignmentEpoch object with epoch, assignments,
+-   *                         timestamp, and proposedBy fields
+-   * @return {boolean} True if the update was applied, false if rejected
+-   *                   due to stale epoch
+-   * @throws {Error} If epoch is invalid or missing required fields
+-   */
+-  updateFromEpoch(epoch) {
+-    if (!epoch || typeof epoch !== 'object') {
+-      throw new Error(CACHE_ERROR_MSG.EPOCH_INVALID_OBJECT);
+-    }
+-
+-    if (typeof epoch.epoch !== 'number') {
+-      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_NUMBER);
+-    }
+-
+-    if (!epoch.assignments || typeof epoch.assignments !== 'object') {
+-      throw new Error(CACHE_ERROR_MSG.EPOCH_MISSING_ASSIGNMENTS);
+-    }
+-
+-    // Requirement 7.5: Reject updates from older epochs
+-    if (epoch.epoch <= this.currentEpoch) {
+-      this.logger.debug(CACHE_LOG_MSG.REJECTED_STALE_EPOCH, {
+-        incomingEpoch: epoch.epoch,
+-        currentEpoch: this.currentEpoch,
+-      });
+-      return false;
+-    }
+-
+-    // Atomic update: update epoch number
+-    this.currentEpoch = epoch.epoch;
+-    this.logger.debug(CACHE_LOG_MSG.UPDATED_EPOCH, {epoch: this.currentEpoch});
+-    return true;
+-  }
+-
+-  /**
+-   * Get all nodes that are in the 'ready' state.
+-   * Requirements: 5.9 - Cache should filter nodes by state
+-   * @return {string[]} Array of node IDs that are in ready state
+-   */
+-  getReadyNodes() {
+-    const now = Date.now();
+-    const allNodes = this.getAll(TABLES.NODES) || [];
+-
+-    this.logger.debug(CACHE_LOG_MSG.GET_READY_NODES_DEBUG, {
+-      totalNodes: allNodes.length,
+-      now,
+-      nodes: allNodes.map((n) => ({
+-        nodeId: n?.[COLUMN.NODE_ID],
+-        wsState: n?.[COLUMN.CONNECTION_STATE],
+-        leaseExpiry: n?.[COLUMN.READY_LEASE_EXPIRES_AT],
+-        leaseValid: n?.[COLUMN.READY_LEASE_EXPIRES_AT] > now,
+-      })),
+-    });
+-
+-    const readyNodes = this.filter(TABLES.NODES, (node) => {
+-      const wsState = node?.[COLUMN.CONNECTION_STATE];
+-      const leaseExpiry = node?.[COLUMN.READY_LEASE_EXPIRES_AT];
+-      return wsState === STATE.READY && leaseExpiry && leaseExpiry > now;
+-    });
+-
+-    return readyNodes.map((node) => {
+-      const nodeId = node?.[COLUMN.NODE_ID];
+-      assertCritical(nodeId, CACHE_ERROR_MSG.NODE_ID_MISSING);
+-      return nodeId;
+-    });
+-  }
+-
+-  /**
+-   * Get all endpoints for a specific node from the node_endpoints table.
+-   * Endpoints are sorted by priority (lower priority value = higher preference).
+-   * Requirements: 6.6 - System_Cache SHALL provide methods to query endpoints by node_id
+-   * @param {string} nodeId - The node ID to get endpoints for
+-   * @return {Array<Object>} Array of endpoint records sorted by priority (ascending)
+-   */
+-  getEndpointsForNode(nodeId) {
+-    const endpoints = this.filter(TABLES.NODE_ENDPOINTS, (endpoint) => {
+-      return endpoint[COLUMN.NODE_ID] === nodeId;
+-    });
+-
+-    // Sort by priority (lower value = higher preference)
+-    return endpoints.sort((a, b) => {
+-      const priorityA = a[COLUMN.PRIORITY] ?? 0;
+-      const priorityB = b[COLUMN.PRIORITY] ?? 0;
+-      return priorityA - priorityB;
+-    });
+-  }
+-
+-  /**
+-   * Filter endpoints by status.
+-   * Requirements: 6.6 - System_Cache SHALL provide methods to query endpoints
+-   * @param {Array<Object>} endpoints - Array of endpoint records to filter
+-   * @param {string} status - Status to filter by (e.g., 'active', 'inactive')
+-   * @return {Array<Object>} Array of endpoints matching the specified status
+-   */
+-  filterEndpointsByStatus(endpoints, status) {
+-    if (!Array.isArray(endpoints)) {
+-      return [];
+-    }
+-    return endpoints.filter((endpoint) => {
+-      return endpoint[COLUMN.STATUS] === status;
+-    });
+-  }
+-
+-  /**
+-   * Subscribe to cache change notifications.
+-   * Listeners receive (tableName, operation, record) on each change.
+-   * @param {Function} listener - Called with (tableName, operation, record)
+-   */
+-  onCacheChange(listener) {
+-    if (typeof listener !== 'function') {
+-      throw new Error(CACHE_ERROR_MSG.LISTENER_REQUIRED);
+-    }
+-    this.listeners.add(listener);
+-  }
+-
+-  /**
+-   * Unsubscribe from cache change notifications.
+-   * @param {Function} listener - The listener to remove
+-   * @return {boolean} True if the listener was removed
+-   */
+-  offCacheChange(listener) {
+-    return this.listeners.delete(listener);
+-  }
+-
+-  /**
+-   * Notify all listeners of a cache change.
+-   * Uses setImmediate to make notifications non-blocking.
+-   * @param {string} tableName - Name of the system table
+-   * @param {string} operation - CDC operation (INSERT, UPDATE, DELETE)
+-   * @param {Object} record - The record data
+-   * @private
+-   */
+-  notifyListeners(tableName, operation, record, metadata) {
+-    if (this.listeners.size === 0) {
+-      return;
+-    }
+-
+-    const normalizedMetadata = metadata && typeof metadata === 'object' ?
+-      metadata :
+-      null;
+-
+-    // Use setImmediate to make notifications non-blocking
+-    setImmediate(() => {
+-      for (const listener of this.listeners) {
+-        try {
+-          listener(tableName, operation, record, normalizedMetadata);
+-        } catch (error) {
+-          // Log but don't re-throw - listener errors should not break other listeners
+-          this.logger.warn(CACHE_LOG_MSG.CACHE_LISTENER_ERROR, {error: error.message});
+-        }
+-      }
+-    });
+-  }
+-
+-  /**
+-   * Get all data from the cache for a cache dump.
+-   * @return {Object} All cache data by table name { tableName: [...rows] }
+-   */
+-  getAllData() {
+-    const data = {};
+-    for (const [tableName, table] of this.tables) {
+-      data[tableName] = Array.from(table.values()).map((r) => this.deepClone(r));
+-    }
+-    return data;
+-  }
+-
+-  /**
+-   * Get a single record by key from a table.
+-   * @param {string} tableName - Name of the system table.
+-   * @param {string} key - Primary key of the record.
+-   * @return {Object|undefined} The record or undefined if not found.
+-   */
+-  get(tableName, key) {
+-    this.validateTableName(tableName);
+-    const table = this.tables.get(tableName);
+-    const record = table.get(key);
+-    return record ? this.deepClone(record) : undefined;
+-  }
+-
+-  /**
+-   * Find the first record matching a predicate.
+-   * @param {string} tableName - Name of the system table.
+-   * @param {Function} predicate - Function that returns true for matching records.
+-   * @return {Object|undefined} The first matching record or undefined.
+-   */
+-  find(tableName, predicate) {
+-    this.validateTableName(tableName);
+-    const table = this.tables.get(tableName);
+-
+-    for (const record of table.values()) {
+-      if (predicate(record)) {
+-        return this.deepClone(record);
+-      }
+-    }
+-
+-    return undefined;
+-  }
+-
+-  /**
+-   * Read-isolation view of a stored row for the scan reads (getAll/filter).
+-   * The row is deep-FROZEN and shared (isolation by immutability, amortized once
+-   * per stored row vs. cloned every read) instead of deep-cloned — eliminating
+-   * the V8 profiler's #1 cluster-wide self-time frame (`fastJsonClone`) on the
+-   * saturated rejoiner. The returned ARRAY (built by the callers below) stays
+-   * mutable, so rows.sort()/filter()/push() are unaffected; only in-place
+-   * row-field mutation throws (subagent-audited + full-suite-verified read-only
+-   * consumers — the cache itself never mutates a stored row in place, every write
+-   * replaces wholesale via table.set, so any latent mutator fails loud, not
+-   * silent). The prior default-off lever was baked in.
+-   * @param {Object} record - Stored row.
+-   * @return {Object} Frozen shared row.
+-   * @private
+-   */
+-  readView(record) {
+-    sharedRowReadEngagements += 1;
+-    return deepFreeze(record);
+-  }
+-
+-  /**
+-   * Filter records matching a predicate.
+-   * @param {string} tableName - Name of the system table.
+-   * @param {Function} predicate - Function that returns true for matching records.
+-   * @return {Array<Object>} Array of matching records.
+-   */
+-  filter(tableName, predicate) {
+-    this.validateTableName(tableName);
+-    const table = this.tables.get(tableName);
+-    const results = [];
+-
+-    for (const record of table.values()) {
+-      if (predicate(record)) {
+-        results.push(this.readView(record));
+-      }
+-    }
+-
+-    return results;
+-  }
+-
+-  /**
+-   * Get all records from a table.
+-   * @param {string} tableName - Name of the system table.
+-   * @return {Array<Object>} Array of all records in the table.
+-   */
+-  getAll(tableName) {
+-    this.validateTableName(tableName);
+-    const table = this.tables.get(tableName);
+-    return Array.from(table.values()).map((record) => this.readView(record));
+-  }
+-
+-  /**
+-   * Alias of {@link getAll}; scan reads already return frozen-shared rows via
+-   * {@link readView}. Retained as a stable name for call sites (and the
+-   * mock-cache fallback in shared-row-read.js) that opt into the no-clone read.
+-   * @param {string} tableName - Name of the system table.
+-   * @return {Array<Object>} Frozen shared rows.
+-   */
+-  getAllShared(tableName) {
+-    return this.getAll(tableName);
+-  }
+-
+-  /**
+-   * Alias of {@link filter}; scan reads already return frozen-shared rows via
+-   * {@link readView}.
+-   * @param {string} tableName - Name of the system table.
+-   * @param {Function} predicate - Returns true for matching records.
+-   * @return {Array<Object>} Frozen shared matches.
+-   */
+-  filterShared(tableName, predicate) {
+-    return this.filter(tableName, predicate);
+-  }
+-
+-  /**
+-   * Check if a record exists in a table.
+-   * @param {string} tableName - Name of the system table.
+-   * @param {string} key - Primary key of the record.
+-   * @return {boolean} True if the record exists.
+-   */
+-  has(tableName, key) {
+-    this.validateTableName(tableName);
+-    const table = this.tables.get(tableName);
+-    return table.has(key);
+-  }
+-
+-  /**
+-   * Get the count of records in a table.
+-   * @param {string} tableName - Name of the system table.
+-   * @return {number} Number of records in the table.
+-   */
+-  count(tableName) {
+-    this.validateTableName(tableName);
+-    const table = this.tables.get(tableName);
+-    return table.size;
+-  }
+-
+   /**
+    * Read the version stamps used for tombstone fencing from a record/tombstone.
+    * @param {Object} source - Record or tombstone carrying version stamps.
+@@ -877,6 +491,8 @@ class SystemTableCache {
+     this.appliedSchemaVersions.clear();
+     this.lastAppliedAtMsByTableName.clear();
+     this.lastAppliedCauseIdByTableName.clear();
++    this.lastAuthoritativeObservedAtMsByTableName.clear();
++    this.lastAuthoritativeObservedCauseIdByTableName.clear();
+     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
+   }
+ 
+@@ -1035,6 +651,8 @@ class SystemTableCache {
+   }
+ }
+ 
++assignSystemTableCacheObservationMethods(SystemTableCache);
++
+ export {
+   SystemTableCache,
+   SYSTEM_TABLES,
+diff --git a/src/control-plane/control-plane-cache-reconcile-constants.js b/src/control-plane/control-plane-cache-reconcile-constants.js
+index 0f972b840dbbdb1b78690084ecab8b6a0646cecd..4947cc70890aa1bc07c41c12aef91fd549ada512 100644
+--- a/src/control-plane/control-plane-cache-reconcile-constants.js
++++ b/src/control-plane/control-plane-cache-reconcile-constants.js
+@@ -3,6 +3,19 @@ const CONTROL_PLANE_CACHE_RECONCILE_INTENT = Object.freeze({
+   REPLACE_CACHE: 'replace_cache',
+ });
+ 
++const CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE = Object.freeze({
++  COMPLETE_TABLE: 'complete_table',
++});
++
++const CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR = Object.freeze({
++  CACHE_NOT_RECONCILED: 'authoritative_observation_cache_not_reconciled',
++  CONTRACT_INVALID: 'authoritative_observation_contract_invalid',
++  READ_INCOMPLETE: 'authoritative_observation_read_incomplete',
++  STORAGE_UNAVAILABLE: 'authoritative_observation_storage_unavailable',
++});
++
+ export {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+ };
+diff --git a/src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js b/src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js
+index c2ba0b149942ef83d4198744972a64512f6b9566..99db1d95b737f299119a8ca68f481e955e990f2e 100644
+--- a/src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js
++++ b/src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js
+@@ -1,5 +1,7 @@
+ import {
+   CDC_OPERATION,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
+   CONTROL_PLANE_MUTATION_OUTCOME,
+   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
+@@ -10,6 +12,405 @@ import {
+   hasUsablePrimaryKeyValue,
+ } from './control-plane-system-table-gateway-shared.js';
+ 
++function buildAuthoritativeObservationFailure(
++  tableName,
++  reconcileIntent,
++  mutationCount,
++  error,
++) {
++  return {
++    success: false,
++    tableName,
++    reconcileIntent,
++    mutationCount,
++    authoritativeObservedAtMs: null,
++    outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
++    error,
++  };
++}
++
++function buildCacheUnavailableFailure(tableName) {
++  return {
++    success: false,
++    tableName,
++    mutationCount: 0,
++    outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
++    error:
++      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SYSTEM_TABLE_CACHE_UNAVAILABLE,
++  };
++}
++
++function resolveCacheTargets(gateway, options) {
++  const defaultCache = gateway.resolveSystemTableCache();
++  return {
++    writableCache: options?.cacheMutationTarget || defaultCache,
++    readableCache:
++      options?.systemTableCache || defaultCache ||
++      options?.cacheMutationTarget,
++  };
++}
++
++function hasUsableCacheTargets(writableCache, readableCache) {
++  return Boolean(
++    writableCache &&
++    typeof writableCache.applySystemTableChange === 'function' &&
++    readableCache,
++  );
++}
++
++function resolveCachedEntries(readableCache, tableName, options) {
++  if (Array.isArray(options?.cachedRows)) {
++    return options.cachedRows;
++  }
++  if (
++    typeof options?.cachedRowFilter === 'function' &&
++    typeof readableCache.filter === 'function'
++  ) {
++    return readableCache.filter(tableName, options.cachedRowFilter) || [];
++  }
++  if (typeof readableCache.getAll === 'function') {
++    return readableCache.getAll(tableName) || [];
++  }
++  return [];
++}
++
++function hasValidObservationTime(receipt) {
++  const observedAtMs = Number(receipt?.observedAtMs);
++  return Number.isFinite(observedAtMs) && observedAtMs >= 0;
++}
++
++function hasValidObservationCause(receipt) {
++  return typeof receipt?.causeId === 'string' && receipt.causeId.length > 0;
++}
++
++function hasCompleteObservationReceipt(receipt, tableName) {
++  return Boolean(
++    receipt?.scope ===
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE &&
++    receipt?.tableName === tableName &&
++    receipt?.rowSetComplete === true &&
++    hasValidObservationTime(receipt) &&
++    hasValidObservationCause(receipt),
++  );
++}
++
++function hasCompleteObservationInputs(
++  authoritativeRows,
++  options,
++  readableCache,
++) {
++  return Boolean(
++    Array.isArray(authoritativeRows) &&
++    Array.isArray(options?.cachedRows) &&
++    typeof options?.cachedRowFilter !== 'function' &&
++    typeof readableCache.getAll === 'function',
++  );
++}
++
++function hasAuthoritativeObservationStorage(writableCache, readableCache) {
++  return Boolean(
++    typeof writableCache.recordAuthoritativeObservation === 'function' &&
++    typeof readableCache.getLastAuthoritativeObservedAtMs === 'function' &&
++    typeof readableCache.getLastAuthoritativeObservedCauseId === 'function',
++  );
++}
++
++function validateObservationRequest(options) {
++  if (!options.observationRequested) {
++    return null;
++  }
++  const contractValid =
++    options.receiptMinted === true &&
++    hasCompleteObservationReceipt(options.receipt, options.tableName) &&
++    hasCompleteObservationInputs(
++      options.authoritativeRows,
++      options.reconcileOptions,
++      options.readableCache,
++    );
++  if (!contractValid) {
++    return CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID;
++  }
++  if (!hasAuthoritativeObservationStorage(
++    options.writableCache,
++    options.readableCache,
++  )) {
++    return CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE;
++  }
++  return null;
++}
++
++function buildCachedRowIndex(rows, primaryKeyField) {
++  const rowsByKey = new Map();
++  let invalidKeyCount = 0;
++  for (const row of rows) {
++    const key = row?.[primaryKeyField] ?? row?.id;
++    if (!hasUsablePrimaryKeyValue(key)) {
++      invalidKeyCount += 1;
++      continue;
++    }
++    rowsByKey.set(String(key), row);
++  }
++  return {rowsByKey, invalidKeyCount};
++}
++
++function buildAuthoritativeRowIndex(tableName, rows, primaryKeyField) {
++  const rowsByKey = new Map();
++  const keys = new Set();
++  let invalidKeyCount = 0;
++  let duplicateKeyCount = 0;
++  for (const row of rows) {
++    const canonicalRow = canonicalizeSystemTableRow(tableName, row);
++    const key = canonicalRow?.[primaryKeyField] ?? canonicalRow?.id;
++    if (!hasUsablePrimaryKeyValue(key)) {
++      invalidKeyCount += 1;
++      continue;
++    }
++    const normalizedKey = String(key);
++    if (keys.has(normalizedKey)) {
++      duplicateKeyCount += 1;
++    }
++    keys.add(normalizedKey);
++    rowsByKey.set(normalizedKey, canonicalRow);
++  }
++  return {rowsByKey, keys, invalidKeyCount, duplicateKeyCount};
++}
++
++function countUnreconciledCachedKeys(
++  cachedRowsByKey,
++  authoritativeKeys,
++  deleteMissingPolicy,
++) {
++  if (
++    deleteMissingPolicy ===
++    CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY.DELETE_MISSING
++  ) {
++    return 0;
++  }
++  return [...cachedRowsByKey.keys()].filter(
++    (key) => !authoritativeKeys.has(key),
++  ).length;
++}
++
++function canPublishCompleteObservation(indexState) {
++  const invalidKeyCount =
++    indexState.invalidAuthoritativeKeyCount +
++    indexState.invalidCachedKeyCount +
++    indexState.duplicateAuthoritativeKeyCount;
++  return invalidKeyCount === 0 &&
++    indexState.unreconciledCachedKeyCount === 0;
++}
++
++function applyAuthoritativeUpserts(options) {
++  let mutationCount = 0;
++  for (const [normalizedKey, canonicalRow] of
++    options.authoritativeRowsByKey) {
++    const cachedRow = options.cachedRowsByKey.get(normalizedKey) || null;
++    if (options.rowComparator(cachedRow, canonicalRow)) {
++      continue;
++    }
++    options.writableCache.applySystemTableChange(
++      options.tableName,
++      CDC_OPERATION.UPSERT,
++      canonicalRow,
++      options.causeOptions,
++    );
++    mutationCount += 1;
++  }
++  return mutationCount;
++}
++
++function applyMissingRowDeletes(options) {
++  if (
++    options.deleteMissingPolicy !==
++    CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY.DELETE_MISSING
++  ) {
++    return 0;
++  }
++  let mutationCount = 0;
++  for (const cachedRow of options.cachedEntries) {
++    const key = cachedRow?.[options.primaryKeyField] ?? cachedRow?.id;
++    if (
++      !hasUsablePrimaryKeyValue(key) ||
++      options.authoritativeKeys.has(String(key))
++    ) {
++      continue;
++    }
++    options.writableCache.applySystemTableChange(
++      options.tableName,
++      CDC_OPERATION.DELETE,
++      cachedRow,
++      options.causeOptions,
++    );
++    mutationCount += 1;
++  }
++  return mutationCount;
++}
++
++function cacheExactlyMatchesAuthoritativeRows(options) {
++  const reconciledEntries = options.readableCache.getAll(options.tableName) ||
++    [];
++  const reconciledIndex = buildCachedRowIndex(
++    reconciledEntries,
++    options.primaryKeyField,
++  );
++  if (
++    reconciledIndex.invalidKeyCount > 0 ||
++    reconciledIndex.rowsByKey.size !== options.authoritativeRowsByKey.size
++  ) {
++    return false;
++  }
++  return [...options.authoritativeRowsByKey].every(([key, row]) =>
++    options.rowComparator(reconciledIndex.rowsByKey.get(key) || null, row),
++  );
++}
++
++function publishAuthoritativeObservation(options) {
++  if (!options.observationRequested) {
++    return {success: true, observedAtMs: null};
++  }
++  const requestedObservedAtMs = Math.floor(
++    Number(options.receipt.observedAtMs),
++  );
++  let observedAtMs = null;
++  let persistedObservedAtMs = null;
++  let persistedCauseId = null;
++  try {
++    observedAtMs = options.writableCache.recordAuthoritativeObservation(
++      options.tableName,
++      {
++        observedAtMs: requestedObservedAtMs,
++        causeId: options.receipt.causeId,
++      },
++    );
++    persistedObservedAtMs =
++      options.readableCache.getLastAuthoritativeObservedAtMs(
++        options.tableName,
++      );
++    persistedCauseId =
++      options.readableCache.getLastAuthoritativeObservedCauseId(
++        options.tableName,
++      );
++  } catch (_error) {
++    return {success: false, observedAtMs: null};
++  }
++  const storedTimeConfirmed = Number.isFinite(observedAtMs) &&
++    observedAtMs === persistedObservedAtMs &&
++    persistedObservedAtMs >= requestedObservedAtMs;
++  const storedCauseConfirmed = persistedObservedAtMs > requestedObservedAtMs ?
++    typeof persistedCauseId === 'string' && persistedCauseId.length > 0 :
++    persistedCauseId === options.receipt.causeId;
++  return {
++    success: storedTimeConfirmed && storedCauseConfirmed,
++    observedAtMs: storedTimeConfirmed && storedCauseConfirmed ?
++      persistedObservedAtMs :
++      null,
++  };
++}
++
++function buildReconciliationContext(options) {
++  const primaryKeyField = options.reconcileOptions?.primaryKeyField ||
++    getSystemCachePrimaryKeyFieldOrFallback(options.tableName, 'id');
++  const authoritativeEntries = Array.isArray(options.authoritativeRows) ?
++    options.authoritativeRows :
++    [];
++  const cachedEntries = resolveCachedEntries(
++    options.readableCache,
++    options.tableName,
++    options.reconcileOptions,
++  );
++  const rowComparator =
++    typeof options.reconcileOptions?.areRowsEqual === 'function' ?
++      options.reconcileOptions.areRowsEqual :
++      (left, right) => areCanonicalSystemTableRowsEqual(
++        options.tableName,
++        left,
++        right,
++      );
++  const causeOptions =
++    typeof options.reconcileOptions?.causeId === 'string' &&
++    options.reconcileOptions.causeId.length > 0 ?
++      {causeId: options.reconcileOptions.causeId} :
++      undefined;
++  return {
++    ...options,
++    primaryKeyField,
++    authoritativeEntries,
++    cachedEntries,
++    rowComparator,
++    causeOptions,
++  };
++}
++
++function buildReconciliationIndexes(context) {
++  const cachedIndex = buildCachedRowIndex(
++    context.cachedEntries,
++    context.primaryKeyField,
++  );
++  const authoritativeIndex = buildAuthoritativeRowIndex(
++    context.tableName,
++    context.authoritativeEntries,
++    context.primaryKeyField,
++  );
++  const unreconciledCachedKeyCount = countUnreconciledCachedKeys(
++    cachedIndex.rowsByKey,
++    authoritativeIndex.keys,
++    context.deleteMissingPolicy,
++  );
++  return {
++    cachedIndex,
++    authoritativeIndex,
++    publishable: canPublishCompleteObservation({
++      invalidAuthoritativeKeyCount: authoritativeIndex.invalidKeyCount,
++      invalidCachedKeyCount: cachedIndex.invalidKeyCount,
++      duplicateAuthoritativeKeyCount: authoritativeIndex.duplicateKeyCount,
++      unreconciledCachedKeyCount,
++    }),
++  };
++}
++
++function applyCacheReconciliation(context, indexes) {
++  const mutationOptions = {
++    tableName: context.tableName,
++    primaryKeyField: context.primaryKeyField,
++    authoritativeRowsByKey: indexes.authoritativeIndex.rowsByKey,
++    authoritativeKeys: indexes.authoritativeIndex.keys,
++    cachedRowsByKey: indexes.cachedIndex.rowsByKey,
++    cachedEntries: context.cachedEntries,
++    rowComparator: context.rowComparator,
++    writableCache: context.writableCache,
++    causeOptions: context.causeOptions,
++    deleteMissingPolicy: context.deleteMissingPolicy,
++  };
++  return applyAuthoritativeUpserts(mutationOptions) +
++    applyMissingRowDeletes(mutationOptions);
++}
++
++function observationCacheIsVerified(context, indexes) {
++  if (!context.observationRequested) {
++    return true;
++  }
++  return cacheExactlyMatchesAuthoritativeRows({
++    tableName: context.tableName,
++    primaryKeyField: context.primaryKeyField,
++    authoritativeRowsByKey: indexes.authoritativeIndex.rowsByKey,
++    readableCache: context.readableCache,
++    rowComparator: context.rowComparator,
++  });
++}
++
++function buildReconciliationSuccess(context, mutationCount, publication) {
++  return {
++    success: true,
++    tableName: context.tableName,
++    reconcileIntent: context.reconcileIntent,
++    mutationCount,
++    authoritativeObservedAtMs: publication.observedAtMs,
++    outcome: mutationCount > 0 ?
++      CONTROL_PLANE_MUTATION_OUTCOME.APPLIED :
++      CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
++  };
++}
++
+ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
+   /**
+    * Reconcile authoritative rows into the writable system-table cache.
+@@ -22,119 +423,87 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
+    */
+   async reconcileAuthoritativeCacheRows(
+     tableName,
+-    authoritativeRows = [],
++    authoritativeRows = null,
+     options = {},
+   ) {
+-    const defaultCache = this.resolveSystemTableCache();
+-    const writableCache = options?.cacheMutationTarget || defaultCache;
+-    const readableCache =
+-      options?.systemTableCache || defaultCache || writableCache;
+-    if (
+-      !writableCache ||
+-      typeof writableCache.applySystemTableChange !== 'function' ||
+-      !readableCache
+-    ) {
+-      return {
+-        success: false,
+-        tableName,
+-        mutationCount: 0,
+-        outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
+-        error:
+-          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SYSTEM_TABLE_CACHE_UNAVAILABLE,
+-      };
++    const {writableCache, readableCache} = resolveCacheTargets(this, options);
++    if (!hasUsableCacheTargets(writableCache, readableCache)) {
++      return buildCacheUnavailableFailure(tableName);
+     }
+ 
+-    const primaryKeyField =
+-      options?.primaryKeyField ||
+-      getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
+     const {reconcileIntent, deleteMissingPolicy} =
+       buildControlPlaneCacheReconcileContract(options);
+-    const authoritativeEntries = Array.isArray(authoritativeRows) ?
+-      authoritativeRows :
+-      [];
+-    const cachedEntries = Array.isArray(options?.cachedRows) ?
+-      options.cachedRows :
+-      typeof options?.cachedRowFilter === 'function' &&
+-          typeof readableCache.filter === 'function' ?
+-        readableCache.filter(tableName, options.cachedRowFilter) || [] :
+-        typeof readableCache.getAll === 'function' ?
+-          readableCache.getAll(tableName) || [] :
+-          [];
+-    const rowComparator =
+-      typeof options?.areRowsEqual === 'function' ?
+-        options.areRowsEqual :
+-        (left, right) =>
+-          areCanonicalSystemTableRowsEqual(tableName, left, right);
+-    const causeOptions =
+-      typeof options?.causeId === 'string' &&
+-      options.causeId.length > 0 ?
+-        {causeId: options.causeId} :
+-        undefined;
+-    const cachedRowsByKey = new Map();
+-    const authoritativeKeys = new Set();
+-    let mutationCount = 0;
+-
+-    for (const row of cachedEntries) {
+-      const key = row?.[primaryKeyField] ?? row?.id;
+-      if (!hasUsablePrimaryKeyValue(key)) {
+-        continue;
+-      }
+-      cachedRowsByKey.set(String(key), row);
++    const receipt = options?.authoritativeObservation || null;
++    const observationRequested = receipt !== null;
++    const receiptMinted = !observationRequested ||
++      this.consumeAuthoritativeObservationReceipt(
++        receipt,
++        tableName,
++        authoritativeRows,
++      );
++    const observationError = validateObservationRequest({
++      observationRequested,
++      receiptMinted,
++      receipt,
++      tableName,
++      authoritativeRows,
++      reconcileOptions: options,
++      readableCache,
++      writableCache,
++    });
++    if (observationError) {
++      return buildAuthoritativeObservationFailure(
++        tableName,
++        reconcileIntent,
++        0,
++        observationError,
++      );
+     }
+ 
+-    for (const row of authoritativeEntries) {
+-      const canonicalRow = canonicalizeSystemTableRow(tableName, row);
+-      const key = canonicalRow?.[primaryKeyField] ?? canonicalRow?.id;
+-      if (!hasUsablePrimaryKeyValue(key)) {
+-        continue;
+-      }
+-      const normalizedKey = String(key);
+-      authoritativeKeys.add(normalizedKey);
+-      const cachedRow = cachedRowsByKey.get(normalizedKey) || null;
+-      if (rowComparator && rowComparator(cachedRow, canonicalRow)) {
+-        continue;
+-      }
+-      writableCache.applySystemTableChange(
++    const context = buildReconciliationContext({
++      tableName,
++      authoritativeRows,
++      reconcileOptions: options,
++      reconcileIntent,
++      deleteMissingPolicy,
++      observationRequested,
++      receipt,
++      readableCache,
++      writableCache,
++    });
++    const indexes = buildReconciliationIndexes(context);
++    if (observationRequested && !indexes.publishable) {
++      return buildAuthoritativeObservationFailure(
+         tableName,
+-        CDC_OPERATION.UPSERT,
+-        canonicalRow,
+-        causeOptions,
++        reconcileIntent,
++        0,
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
+       );
+-      mutationCount += 1;
+     }
+ 
+-    if (
+-      deleteMissingPolicy ===
+-      CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY.DELETE_MISSING
+-    ) {
+-      for (const cachedRow of cachedEntries) {
+-        const key = cachedRow?.[primaryKeyField] ?? cachedRow?.id;
+-        if (
+-          !hasUsablePrimaryKeyValue(key) ||
+-          authoritativeKeys.has(String(key))
+-        ) {
+-          continue;
+-        }
+-        writableCache.applySystemTableChange(
+-          tableName,
+-          CDC_OPERATION.DELETE,
+-          cachedRow,
+-          causeOptions,
+-        );
+-        mutationCount += 1;
+-      }
++    const mutationCount = applyCacheReconciliation(context, indexes);
++    if (!observationCacheIsVerified(context, indexes)) {
++      return buildAuthoritativeObservationFailure(
++        tableName,
++        reconcileIntent,
++        mutationCount,
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
++      );
+     }
+ 
+-    return {
+-      success: true,
+-      tableName,
+-      reconcileIntent,
+-      mutationCount,
+-      outcome:
+-        mutationCount > 0 ?
+-          CONTROL_PLANE_MUTATION_OUTCOME.APPLIED :
+-          CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
+-    };
++    const publication = publishAuthoritativeObservation({
++      ...context,
++    });
++    if (!publication.success) {
++      return buildAuthoritativeObservationFailure(
++        tableName,
++        reconcileIntent,
++        mutationCount,
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE,
++      );
++    }
++
++    return buildReconciliationSuccess(context, mutationCount, publication);
+   },
+ };
+ 
+diff --git a/src/control-plane/control-plane-system-table-gateway-read-strategies.js b/src/control-plane/control-plane-system-table-gateway-read-strategies.js
+index b9bcb1009a81ed2395d5b8484a79142f720190e2..862b6bb420d1247cfd37d2247778a68a4c92b6e9 100644
+--- a/src/control-plane/control-plane-system-table-gateway-read-strategies.js
++++ b/src/control-plane/control-plane-system-table-gateway-read-strategies.js
+@@ -1,13 +1,77 @@
+ import {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_READ_OUTCOME,
+   CONTROL_PLANE_READ_STRATEGY,
+   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
+   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
+   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
++  canonicalizeSystemTableRow,
+   buildAuthoritativeControlPlaneReadRequestOptions,
+   normalizePhaseScope,
++  stableSerialize,
+ } from './control-plane-system-table-gateway-shared.js';
+ 
++const COMPLETE_TABLE_READ_SQL_PATTERN =
++  /^SELECT\s+\*\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*;?$/iu;
++const AUTHORITATIVE_READ_FAILURE_COLLECTION_FIELDS = Object.freeze([
++  'failedPartitions',
++  'partitionErrors',
++  'participantFailures',
++]);
++const authoritativeObservationReceiptsByGateway = new WeakMap();
++
++function resolveAuthoritativeObservationReceiptRegistry(gateway) {
++  let receipts = authoritativeObservationReceiptsByGateway.get(gateway);
++  if (!receipts) {
++    receipts = new WeakMap();
++    authoritativeObservationReceiptsByGateway.set(gateway, receipts);
++  }
++  return receipts;
++}
++
++function snapshotAuthoritativeReadRows(tableName, rows) {
++  return Object.freeze(rows.map((row) => stableSerialize(
++    canonicalizeSystemTableRow(tableName, row),
++  )));
++}
++
++function authoritativeReadRowsMatchSnapshot(tableName, rows, snapshot) {
++  if (!Array.isArray(rows) || rows.length !== snapshot?.length) {
++    return false;
++  }
++  const currentSnapshot = snapshotAuthoritativeReadRows(tableName, rows);
++  return currentSnapshot.every((row, index) => row === snapshot[index]);
++}
++
++function hasAuthoritativeReadFailureEvidence(result = {}) {
++  if (result?.partial === true) {
++    return true;
++  }
++  return AUTHORITATIVE_READ_FAILURE_COLLECTION_FIELDS.some((fieldName) => {
++    const value = result?.[fieldName];
++    return Array.isArray(value) ?
++      value.length > 0 :
++      Number.isFinite(value) && value > 0;
++  });
++}
++
++function isCompleteAuthoritativeReadResult(result = {}) {
++  return result?.success === true &&
++    Array.isArray(result?.rows) &&
++    !hasAuthoritativeReadFailureEvidence(result);
++}
++
++function isCompleteTableReadRequest(tableName, sql, params) {
++  if (!Array.isArray(params) || params.length > 0) {
++    return false;
++  }
++  const match = String(sql || '').trim().match(
++    COMPLETE_TABLE_READ_SQL_PATTERN,
++  );
++  return match?.[1] === tableName;
++}
++
+ const controlPlaneSystemTableGatewayReadStrategyMethods = {
+   /**
+    * @param {string} tableName
+@@ -81,16 +145,106 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
+     outcome,
+     extra = {},
+   ) {
++    const rows = Array.isArray(baseResult?.rows) ? baseResult.rows : [];
++    const rowSetComplete = isCompleteAuthoritativeReadResult(baseResult);
+     return {
+       ...baseResult,
++      ...extra,
+       tableName,
+-      rows: Array.isArray(baseResult?.rows) ? baseResult.rows : [],
++      rows,
++      rowSetComplete,
+       outcome,
+       strategyUsed,
+-      ...extra,
+     };
+   },
+ 
++  /**
++   * Mint complete-table observation evidence only after the canonical read
++   * gateway has validated both the request scope and the returned row set.
++   * Callers may request this receipt, but they cannot assert completeness.
++   * @param {Object} result
++   * @param {string} tableName
++   * @param {string|null} sql
++   * @param {Array<*>} params
++   * @param {string} strategy
++   * @param {Object} options
++   * @return {Object}
++   * @private
++   */
++  attachAuthoritativeObservationReceipt(
++    result,
++    tableName,
++    sql,
++    params,
++    strategy,
++    options,
++  ) {
++    if (
++      options?.authoritativeObservationScope !==
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE
++    ) {
++      return result;
++    }
++    const causeId =
++      typeof options?.sessionId === 'string' && options.sessionId.length > 0 ?
++        options.sessionId :
++        null;
++    if (
++      result?.rowSetComplete !== true ||
++      !isCompleteTableReadRequest(tableName, sql, params) ||
++      causeId === null
++    ) {
++      return {
++        ...result,
++        success: false,
++        rows: [],
++        rowSetComplete: false,
++        authoritativeObservation: null,
++        outcome: this.resolveAuthoritativeReadFailureOutcome(strategy),
++        error:
++          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
++      };
++    }
++    const authoritativeObservation = Object.freeze({
++      scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++      tableName,
++      observedAtMs: Math.floor(this.now()),
++      causeId,
++      rowSetComplete: true,
++    });
++    resolveAuthoritativeObservationReceiptRegistry(this).set(
++      authoritativeObservation,
++      Object.freeze({
++        tableName,
++        rows: result.rows,
++        snapshot: snapshotAuthoritativeReadRows(tableName, result.rows),
++      }),
++    );
++    return {...result, authoritativeObservation};
++  },
++
++  /**
++   * Consume a gateway-minted receipt exactly once and bind it to the exact row
++   * array returned by that complete authoritative read. Shape-compatible
++   * caller objects are not observation evidence.
++   * @param {Object} receipt
++   * @param {string} tableName
++   * @param {Array<Object>} rows
++   * @return {boolean}
++   * @private
++   */
++  consumeAuthoritativeObservationReceipt(receipt, tableName, rows) {
++    if (!receipt || typeof receipt !== 'object') {
++      return false;
++    }
++    const receipts = resolveAuthoritativeObservationReceiptRegistry(this);
++    const mintedRead = receipts.get(receipt) || null;
++    receipts.delete(receipt);
++    return mintedRead?.tableName === tableName &&
++      mintedRead?.rows === rows &&
++      authoritativeReadRowsMatchSnapshot(tableName, rows, mintedRead?.snapshot);
++  },
++
+   /**
+    * @param {string} tableName
+    * @param {string} strategyUsed
+@@ -191,18 +345,25 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
+             params,
+             queryOptions,
+           );
+-          return this.buildGatewayReadResult(
+-            result,
++          return this.attachAuthoritativeObservationReceipt(
++            this.buildGatewayReadResult(
++              result,
++              tableName,
++              strategy,
++              result?.success === true ?
++                CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
++                CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
++              {
++                source:
++                  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
++                usedSqlFallback: true,
++              },
++            ),
+             tableName,
++            sql,
++            params,
+             strategy,
+-            result?.success === true ?
+-              CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+-              CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+-            {
+-              source:
+-                CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
+-              usedSqlFallback: true,
+-            },
++            options,
+           );
+         }
+       }
+@@ -222,13 +383,20 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
+         requestOptions,
+       );
+ 
+-    return this.buildGatewayReadResult(
+-      authoritativeResult,
++    return this.attachAuthoritativeObservationReceipt(
++      this.buildGatewayReadResult(
++        authoritativeResult,
++        tableName,
++        strategy,
++        authoritativeResult?.success === true ?
++          CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
++          this.resolveAuthoritativeReadFailureOutcome(strategy),
++      ),
+       tableName,
++      sql,
++      params,
+       strategy,
+-      authoritativeResult?.success === true ?
+-        CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+-        this.resolveAuthoritativeReadFailureOutcome(strategy),
++      options,
+     );
+   },
+ 
+diff --git a/src/control-plane/control-plane-system-table-gateway-shared.js b/src/control-plane/control-plane-system-table-gateway-shared.js
+index 6d8da7bae0005961677ddc53d478bf3be06b059a..62c1b3ef6fe4cfa925624ece917cc55b52e866ee 100644
+--- a/src/control-plane/control-plane-system-table-gateway-shared.js
++++ b/src/control-plane/control-plane-system-table-gateway-shared.js
+@@ -32,6 +32,8 @@ export {
+   getRemainingBudgetMs,
+ } from './timeout-budget.js';
+ export {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+ } from './control-plane-cache-reconcile-constants.js';
+ export {
+diff --git a/src/control-plane/control-plane-system-table-gateway.js b/src/control-plane/control-plane-system-table-gateway.js
+index c34733e90299fbcefaf879cd11cd6aa2934b7775..0a8591d1e03af0f4a36be8004585465ec0c3a91d 100644
+--- a/src/control-plane/control-plane-system-table-gateway.js
++++ b/src/control-plane/control-plane-system-table-gateway.js
+@@ -226,6 +226,8 @@ export {
+   readProjectionControlPlaneRows,
+ };
+ export {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
+   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+   CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
+diff --git a/test/convergence/dt6-authoritative-observation-watermark.test.js b/test/convergence/dt6-authoritative-observation-watermark.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..804771b9f75740a0850394b04b21a9a74530b72f
+--- /dev/null
++++ b/test/convergence/dt6-authoritative-observation-watermark.test.js
+@@ -0,0 +1,668 @@
++import t from 'tap';
++import {AdminPreflightSnapshot} from
++  '../../src/admin/admin-preflight-snapshot.js';
++import {AdminServiceDiscovery} from
++  '../../src/admin/admin-service-discovery.js';
++import {ReadOnlySystemTableCache} from
++  '../../src/cache/read-only-system-table-cache.js';
++import {SystemTableCache} from '../../src/cache/system-table-cache.js';
++import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
++import {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR,
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
++  CONTROL_PLANE_READ_STRATEGY,
++  ControlPlaneSystemTableGateway,
++} from
++  '../../src/control-plane/control-plane-system-table-gateway.js';
++
++// Quest movielens-authoritative-observation-watermark — deterministic
++// reproduction of the Wave-4 schema-admission failure. A successful complete
++// authoritative read is evidence about cache freshness even when it causes no
++// row mutation. The mutation watermark must remain historically accurate while
++// a distinct observation watermark lets preflight consume that new evidence.
++
++const OLD_MUTATION_AT_MS = 1_000;
++const AUTHORITATIVE_OBSERVED_AT_MS = 61_000;
++const NEWER_MUTATION_AT_MS = 65_000;
++const PREFLIGHT_CAPTURED_AT_MS = AUTHORITATIVE_OBSERVED_AT_MS + 10;
++const REPAIR_CAUSE_ID = 'authoritative-repair:wave4-schema-admission';
++
++function createFixture(options = {}) {
++  const writableCache = new SystemTableCache();
++  const gateway = new ControlPlaneSystemTableGateway({
++    nodeId: 'node-seed',
++    systemTableCache: writableCache,
++    now: () => AUTHORITATIVE_OBSERVED_AT_MS,
++    cdcIntegrationService: {
++      async executeAuthoritativeSystemTableRead() {
++        return options.authoritativeResult || {
++          success: true,
++          rows: options.authoritativeRows || [],
++        };
++      },
++    },
++  });
++  const readableCache = new ReadOnlySystemTableCache(writableCache);
++  const preflight = new AdminPreflightSnapshot({
++    nodeId: 'node-seed',
++    systemTableCache: readableCache,
++  });
++  const discovery = new AdminServiceDiscovery({
++    nodeId: 'node-seed',
++    systemTableCache: readableCache,
++    cacheMutationTarget: writableCache,
++    controlPlaneSystemTableGateway: gateway,
++    nowFn: () => AUTHORITATIVE_OBSERVED_AT_MS,
++  });
++  return {discovery, gateway, preflight, readableCache, writableCache};
++}
++
++async function reconcileFreshEvidence(fixture) {
++  const authoritativeRead =
++    await fixture.discovery.readAuthoritativeSystemTableRows(
++      TABLES.SERVICE_ENDPOINTS,
++      {
++        nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
++        reason: 'control_snapshot',
++      },
++    );
++  return fixture.discovery.applyAuthoritativeSystemTableRows(
++    TABLES.SERVICE_ENDPOINTS,
++    authoritativeRead.rows,
++    REPAIR_CAUSE_ID,
++    {authoritativeObservation: authoritativeRead.authoritativeObservation},
++  );
++}
++
++function buildCompleteObservationContract(causeId = REPAIR_CAUSE_ID) {
++  return {
++    scope: CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++    tableName: TABLES.SERVICE_ENDPOINTS,
++    observedAtMs: AUTHORITATIVE_OBSERVED_AT_MS,
++    causeId,
++    rowSetComplete: true,
++  };
++}
++
++t.test(
++  'unchanged authoritative rows publish observation evidence without ' +
++    'rewriting the mutation watermark',
++  async (t) => {
++    const row = {
++      endpoint_id: 'endpoint-1',
++      service_id: 'service-1',
++      node_id: 'node-seed',
++      protocol: 'http',
++      address: '127.0.0.1',
++      port: 8080,
++      health_status: 'healthy',
++      metadata: '{}',
++      created_at: OLD_MUTATION_AT_MS,
++      updated_at: OLD_MUTATION_AT_MS,
++    };
++    const fixture = createFixture({authoritativeRows: [row]});
++    fixture.writableCache.applySystemTableChange(
++      TABLES.SERVICE_ENDPOINTS,
++      CDC_OPERATION.UPSERT,
++      row,
++      {causeId: 'cdc:original-mutation'},
++    );
++    fixture.writableCache.lastAppliedAtMsByTableName.set(
++      TABLES.SERVICE_ENDPOINTS,
++      OLD_MUTATION_AT_MS,
++    );
++
++    const mutationCount = await reconcileFreshEvidence(fixture);
++    const freshness = fixture.preflight.buildPreflightCacheFreshnessSummary({
++      capturedAtMs: PREFLIGHT_CAPTURED_AT_MS,
++    });
++
++    t.equal(mutationCount, 0, 'the equal row remains a reconcile no-op');
++    t.equal(
++      fixture.readableCache.getLastAppliedAtMs(TABLES.SERVICE_ENDPOINTS),
++      OLD_MUTATION_AT_MS,
++      'authoritative observation does not fabricate a CDC mutation time',
++    );
++    t.equal(
++      fixture.readableCache.getLastAppliedCauseId(TABLES.SERVICE_ENDPOINTS),
++      'cdc:original-mutation',
++      'authoritative observation does not replace the mutation cause',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      AUTHORITATIVE_OBSERVED_AT_MS,
++      'the successful reconcile publishes a separate observation watermark',
++    );
++    t.equal(
++      freshness.freshnessObservedAtMs,
++      AUTHORITATIVE_OBSERVED_AT_MS,
++      'preflight consumes the newer authoritative observation',
++    );
++    t.equal(freshness.stalenessMs, 10, 'freshness age is observation age');
++    t.equal(
++      freshness.freshnessSource,
++      'authoritative_observation',
++      'diagnostics name the evidence source explicitly',
++    );
++  },
++);
++
++t.test(
++  'confirmed-empty authoritative rows refresh observation evidence without ' +
++    'inventing a row mutation',
++  async (t) => {
++    const fixture = createFixture();
++
++    const mutationCount = await reconcileFreshEvidence(fixture);
++    const freshness = fixture.preflight.buildPreflightCacheFreshnessSummary({
++      capturedAtMs: PREFLIGHT_CAPTURED_AT_MS,
++    });
++
++    t.equal(mutationCount, 0, 'empty authoritative truth mutates no row');
++    t.equal(
++      fixture.readableCache.getLastAppliedAtMs(TABLES.SERVICE_ENDPOINTS),
++      null,
++      'an empty observation does not invent a mutation watermark',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      AUTHORITATIVE_OBSERVED_AT_MS,
++      'confirmed-empty truth still publishes observation evidence',
++    );
++    t.equal(freshness.stalenessMs, 10, 'empty-table freshness can converge');
++    t.equal(
++      freshness.freshnessSource,
++      'authoritative_observation',
++      'the empty-table freshness source remains explicit',
++    );
++  },
++);
++
++t.test(
++  'a scoped reconcile is rejected even when it asks to publish a complete ' +
++    'observation',
++  async (t) => {
++    const fixture = createFixture();
++
++    const scopedResult = await fixture.gateway.reconcileAuthoritativeCacheRows(
++      TABLES.SERVICE_ENDPOINTS,
++      [],
++      {
++        cacheMutationTarget: fixture.writableCache,
++        systemTableCache: fixture.writableCache,
++        cachedRows: [],
++        cachedRowFilter: () => true,
++        authoritativeObservation: buildCompleteObservationContract(
++          'scoped-read-must-not-publish',
++        ),
++      },
++    );
++    t.equal(scopedResult.success, false, 'the contradictory scope fails closed');
++    t.equal(
++      scopedResult.error,
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID,
++      'the gateway exposes the rejected completeness contract',
++    );
++    t.equal(
++      scopedResult.authoritativeObservedAtMs,
++      null,
++      'a scoped reconcile cannot publish despite requesting observation',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      null,
++      'partial/scoped callers cannot become a second freshness owner',
++    );
++  },
++);
++
++t.test(
++  'a shape-compatible caller receipt cannot impersonate gateway evidence',
++  async (t) => {
++    const fixture = createFixture();
++    const result = await fixture.gateway.reconcileAuthoritativeCacheRows(
++      TABLES.SERVICE_ENDPOINTS,
++      [],
++      {
++        cacheMutationTarget: fixture.writableCache,
++        systemTableCache: fixture.writableCache,
++        cachedRows: [],
++        authoritativeObservation: buildCompleteObservationContract(
++          'caller-forged-receipt',
++        ),
++      },
++    );
++
++    t.equal(result.success, false, 'caller-shaped evidence fails closed');
++    t.equal(
++      result.error,
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID,
++      'only a receipt minted by the canonical read gateway is accepted',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      null,
++      'forged receipt shape cannot publish freshness evidence',
++    );
++  },
++);
++
++t.test(
++  'a minted receipt cannot be detached from its authoritative row array',
++  async (t) => {
++    const fixture = createFixture();
++    const authoritativeRead =
++      await fixture.discovery.readAuthoritativeSystemTableRows(
++        TABLES.SERVICE_ENDPOINTS,
++        {
++          nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
++          reason: 'control_snapshot',
++        },
++      );
++    const result = await fixture.gateway.reconcileAuthoritativeCacheRows(
++      TABLES.SERVICE_ENDPOINTS,
++      [...authoritativeRead.rows],
++      {
++        cacheMutationTarget: fixture.writableCache,
++        systemTableCache: fixture.writableCache,
++        cachedRows: [],
++        authoritativeObservation:
++          authoritativeRead.authoritativeObservation,
++      },
++    );
++
++    t.equal(result.success, false, 'row substitution fails closed');
++    t.equal(
++      result.error,
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID,
++      'the receipt is bound to the canonical read result identity',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      null,
++      'detached rows cannot publish observation evidence',
++    );
++  },
++);
++
++t.test(
++  'post-mint mutation of the authoritative row array invalidates its receipt',
++  async (t) => {
++    const fixture = createFixture({
++      authoritativeRows: [{
++        endpoint_id: 'mutable-endpoint',
++        service_id: 'service-1',
++        node_id: 'node-seed',
++      }],
++    });
++    const authoritativeRead =
++      await fixture.discovery.readAuthoritativeSystemTableRows(
++        TABLES.SERVICE_ENDPOINTS,
++        {
++          nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
++          reason: 'control_snapshot',
++        },
++      );
++    authoritativeRead.rows.splice(0, authoritativeRead.rows.length);
++    const result = await fixture.gateway.reconcileAuthoritativeCacheRows(
++      TABLES.SERVICE_ENDPOINTS,
++      authoritativeRead.rows,
++      {
++        cacheMutationTarget: fixture.writableCache,
++        systemTableCache: fixture.writableCache,
++        cachedRows: [],
++        authoritativeObservation:
++          authoritativeRead.authoritativeObservation,
++      },
++    );
++
++    t.equal(result.success, false, 'post-mint row mutation fails closed');
++    t.equal(
++      result.error,
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CONTRACT_INVALID,
++      'receipt authority includes immutable row-content evidence',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      null,
++      'mutated authoritative content cannot publish observation evidence',
++    );
++  },
++);
++
++t.test(
++  'observation publication fails closed when storage support is unavailable',
++  async (t) => {
++    const cacheWithoutObservationStorage = {
++      applySystemTableChange() {},
++      getAll() {
++        return [];
++      },
++    };
++    const gateway = new ControlPlaneSystemTableGateway({
++      nodeId: 'node-no-observation-storage',
++      systemTableCache: cacheWithoutObservationStorage,
++      cdcIntegrationService: {
++        async executeAuthoritativeSystemTableRead() {
++          return {success: true, rows: []};
++        },
++      },
++    });
++    const authoritativeRead = await gateway.executeRead(
++      {
++        tableName: TABLES.SERVICE_ENDPOINTS,
++        sql: `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
++        params: [],
++        strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
++      },
++      {
++        sessionId: 'no-observation-storage',
++        authoritativeObservationScope:
++          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++      },
++    );
++    const result = await gateway.reconcileAuthoritativeCacheRows(
++      TABLES.SERVICE_ENDPOINTS,
++      authoritativeRead.rows,
++      {
++        cacheMutationTarget: cacheWithoutObservationStorage,
++        systemTableCache: cacheWithoutObservationStorage,
++        cachedRows: [],
++        authoritativeObservation:
++          authoritativeRead.authoritativeObservation,
++      },
++    );
++
++    t.equal(result.success, false, 'requested evidence cannot silently no-op');
++    t.equal(
++      result.error,
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE,
++      'the result identifies missing observation storage',
++    );
++  },
++);
++
++t.test(
++  'a finite recorder return cannot replace getter-visible storage evidence',
++  async (t) => {
++    const noOpObservationStorage = {
++      applySystemTableChange() {},
++      getAll() {
++        return [];
++      },
++      recordAuthoritativeObservation(_tableName, options) {
++        return Number(options.observedAtMs);
++      },
++      getLastAuthoritativeObservedAtMs() {
++        return null;
++      },
++      getLastAuthoritativeObservedCauseId() {
++        return null;
++      },
++    };
++    const gateway = new ControlPlaneSystemTableGateway({
++      nodeId: 'node-no-op-observation-storage',
++      systemTableCache: noOpObservationStorage,
++      now: () => AUTHORITATIVE_OBSERVED_AT_MS,
++      cdcIntegrationService: {
++        async executeAuthoritativeSystemTableRead() {
++          return {success: true, rows: []};
++        },
++      },
++    });
++    const authoritativeRead = await gateway.executeRead(
++      {
++        tableName: TABLES.SERVICE_ENDPOINTS,
++        sql: `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
++        params: [],
++        strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
++      },
++      {
++        sessionId: 'no-op-observation-storage',
++        authoritativeObservationScope:
++          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++      },
++    );
++    const result = await gateway.reconcileAuthoritativeCacheRows(
++      TABLES.SERVICE_ENDPOINTS,
++      authoritativeRead.rows,
++      {
++        cacheMutationTarget: noOpObservationStorage,
++        systemTableCache: noOpObservationStorage,
++        cachedRows: [],
++        authoritativeObservation:
++          authoritativeRead.authoritativeObservation,
++      },
++    );
++
++    t.equal(result.success, false, 'finite no-op recorder fails closed');
++    t.equal(
++      result.error,
++      CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.STORAGE_UNAVAILABLE,
++      'publication requires getter-visible observation evidence',
++    );
++    t.equal(
++      result.authoritativeObservedAtMs,
++      null,
++      'unverified storage cannot return a published observation time',
++    );
++  },
++);
++
++t.test(
++  'confirmed-empty evidence cannot bless preserved cached rows as fresh',
++  async (t) => {
++    const fixture = createFixture();
++    fixture.writableCache.applySystemTableChange(
++      TABLES.SERVICE_ENDPOINTS,
++      CDC_OPERATION.UPSERT,
++      {
++        endpoint_id: 'stale-endpoint',
++        service_id: 'stale-service',
++        node_id: 'node-seed',
++        protocol: 'http',
++        address: '127.0.0.1',
++        port: 9090,
++      },
++    );
++
++    await t.rejects(
++      reconcileFreshEvidence(fixture),
++      new RegExp(
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
++      ),
++      'the admin repair owner propagates incomplete reconciliation failure',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      null,
++      'unreconciled cached contents receive no freshness observation',
++    );
++    t.equal(
++      fixture.readableCache.getAll(TABLES.SERVICE_ENDPOINTS).length,
++      1,
++      'refresh-evidence safety still preserves the unmatched cached row',
++    );
++  },
++);
++
++t.test(
++  'preflight selects a newer mutation over an older authoritative observation',
++  async (t) => {
++    const fixture = createFixture();
++
++    await reconcileFreshEvidence(fixture);
++    const currentObservationCauseId =
++      fixture.readableCache.getLastAuthoritativeObservedCauseId(
++        TABLES.SERVICE_ENDPOINTS,
++      );
++    fixture.writableCache.recordAuthoritativeObservation(
++      TABLES.SERVICE_ENDPOINTS,
++      {
++        observedAtMs: AUTHORITATIVE_OBSERVED_AT_MS - 1,
++        causeId: 'older-observation',
++      },
++    );
++    fixture.writableCache.lastAppliedAtMsByTableName.set(
++      TABLES.SERVICE_ENDPOINTS,
++      NEWER_MUTATION_AT_MS,
++    );
++    fixture.writableCache.lastAppliedCauseIdByTableName.set(
++      TABLES.SERVICE_ENDPOINTS,
++      'cdc:newer-mutation',
++    );
++    const freshness = fixture.preflight.buildPreflightCacheFreshnessSummary({
++      capturedAtMs: NEWER_MUTATION_AT_MS + 10,
++    });
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      AUTHORITATIVE_OBSERVED_AT_MS,
++      'out-of-order observations cannot regress the watermark',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedCauseId(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      currentObservationCauseId,
++      'an older observation cannot replace the current evidence cause',
++    );
++    t.equal(
++      freshness.freshnessObservedAtMs,
++      NEWER_MUTATION_AT_MS,
++      'the selected watermark is the maximum available evidence time',
++    );
++    t.equal(freshness.freshnessSource, 'mutation', 'the source remains explicit');
++    t.equal(freshness.stalenessMs, 10, 'freshness age uses the newer mutation');
++  },
++);
++
++t.test(
++  'a successful authoritative response without an explicit row-set contract ' +
++    'cannot enter repair reconciliation',
++  async (t) => {
++    const cache = new SystemTableCache();
++    const gateway = new ControlPlaneSystemTableGateway({
++      nodeId: 'node-incomplete-read',
++      systemTableCache: cache,
++      cdcIntegrationService: {
++        async executeAuthoritativeSystemTableRead() {
++          return {success: true};
++        },
++      },
++    });
++    const discovery = new AdminServiceDiscovery({
++      nodeId: 'node-incomplete-read',
++      systemTableCache: new ReadOnlySystemTableCache(cache),
++      cacheMutationTarget: cache,
++      controlPlaneSystemTableGateway: gateway,
++      nowFn: () => AUTHORITATIVE_OBSERVED_AT_MS,
++    });
++
++    await t.rejects(
++      discovery.readAuthoritativeSystemTableRows(
++        TABLES.SERVICE_ENDPOINTS,
++        {reason: 'control_snapshot'},
++      ),
++      new RegExp(
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
++      ),
++      'normalized empty rows are not treated as confirmed-empty truth',
++    );
++    t.equal(
++      cache.getLastAuthoritativeObservedAtMs(TABLES.SERVICE_ENDPOINTS),
++      null,
++      'an incomplete read cannot publish through the later reconcile path',
++    );
++  },
++);
++
++t.test(
++  'partial authoritative rows cannot mint complete-table observation evidence',
++  async (t) => {
++    const fixture = createFixture({
++      authoritativeResult: {
++        success: true,
++        rows: [{endpoint_id: 'partial-endpoint'}],
++        participantFailures: [{partitionId: 'service_endpoints-p1'}],
++      },
++    });
++
++    await t.rejects(
++      fixture.discovery.readAuthoritativeSystemTableRows(
++        TABLES.SERVICE_ENDPOINTS,
++        {
++          nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
++          reason: 'control_snapshot',
++        },
++      ),
++      new RegExp(
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.READ_INCOMPLETE,
++      ),
++      'the canonical read gateway owns completeness classification',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      null,
++      'partial row delivery cannot reach observation storage',
++    );
++  },
++);
++
++t.test(
++  'a cache apply that is causally rejected cannot publish observation evidence',
++  async (t) => {
++    const authoritativeRow = {
++      endpoint_id: 'endpoint-stale-authority',
++      service_id: 'service-1',
++      node_id: 'node-seed',
++      protocol: 'http',
++      address: '127.0.0.1',
++      port: 8080,
++      updated_at: OLD_MUTATION_AT_MS,
++    };
++    const fixture = createFixture({authoritativeRows: [authoritativeRow]});
++    fixture.writableCache.applySystemTableChange(
++      TABLES.SERVICE_ENDPOINTS,
++      CDC_OPERATION.UPSERT,
++      {
++        ...authoritativeRow,
++        address: '127.0.0.2',
++        updated_at: NEWER_MUTATION_AT_MS,
++      },
++      {causeId: 'cdc:newer-row'},
++    );
++
++    await t.rejects(
++      reconcileFreshEvidence(fixture),
++      new RegExp(
++        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
++      ),
++      'post-apply cache equality is required before observation publication',
++    );
++    t.equal(
++      fixture.readableCache.getLastAuthoritativeObservedAtMs(
++        TABLES.SERVICE_ENDPOINTS,
++      ),
++      null,
++      'a silently ignored stale upsert cannot bless the cache as observed',
++    );
++  },
++);

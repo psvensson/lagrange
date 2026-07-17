@@ -1,0 +1,42 @@
+{
+  "id": "movielens-replace-bootstrap-cohort-authority",
+  "authoringContractVersion": 1,
+  "statement": "An explicit REPLACE bootstrap cohort persisted by the placement owner is consumed as a closed-world membership snapshot at the target replica, so stale local or hydrated service rows cannot add retired voters, while fresh bootstrap, ADD topology, retryable missing-topology behavior, voter safety, and the production five-node MovieLens milestone remain intact.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/changes/movielens-three-way-affinity-demo/handoff-2026-07-15-wave4-live-preload-topology-gap.md",
+    "closesCL": [],
+    "parentQuest": "movielens-priority-surrogate-single-owner-arbitration",
+    "planDoc": null,
+    "draftedAtCommit": "59e6e0315cc174d2520f79f15e82ee689da8c8f1"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-replace-bootstrap-cohort-authority",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-replace-bootstrap-cohort-authority-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-replace-bootstrap-cohort-authority",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

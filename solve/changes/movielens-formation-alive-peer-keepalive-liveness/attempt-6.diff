@@ -1,0 +1,246 @@
+diff --git a/src/control-plane/control-plane-constants.js b/src/control-plane/control-plane-constants.js
+index 15deef27119ddaf6dd79cd3553aa9d8a1161c54d..200db2dc19799f06f1bbd561ceab6aa6745ea528 100644
+--- a/src/control-plane/control-plane-constants.js
++++ b/src/control-plane/control-plane-constants.js
+@@ -64,7 +64,7 @@ const CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE = Object.freeze({
+ const CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER =
+   Object.freeze({
+     HEARTBEAT_STEADY: true,
+-    HEARTBEAT_MAINTENANCE: true,
++    HEARTBEAT_MAINTENANCE: false,
+     HEARTBEAT_RECOVERY: false,
+     READY_TRANSITION: false,
+     LIFECYCLE_BACKGROUND: true,
+@@ -105,8 +105,8 @@ const CONTROL_PLANE_NODE_STATE_PUBLICATION_PROFILE = Object.freeze({
+   [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE]:
+     buildNodeStatePublicationProfile(
+       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+-      CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND,
+-      CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
++      CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL,
++      CONTROL_PLANE_DELIVERY_PRIORITY.CRITICAL,
+       CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER
+         .HEARTBEAT_MAINTENANCE,
+     ),
+diff --git a/test/bootstrap/node-joining-service-mesh-reconciliation.test.js b/test/bootstrap/node-joining-service-mesh-reconciliation.test.js
+index 448242d73247607eb72da252178c9afaa737f783..dbe7e6a1a79c51e3d77f9d72d6d0b2ede6694b49 100644
+--- a/test/bootstrap/node-joining-service-mesh-reconciliation.test.js
++++ b/test/bootstrap/node-joining-service-mesh-reconciliation.test.js
+@@ -58,11 +58,11 @@ import {EventEmitter} from 'events';
+ const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
+ const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
+ 
+-test('NodeJoiningService - defers heartbeat-maintenance NODE_STATE_UPDATE on publication pressure after exhausting ingress candidates',
++test('NodeJoiningService - keeps heartbeat-maintenance NODE_STATE_UPDATE on the critical non-deferred owner lane',
+   async (t) => {
+     initializeTestEnvironment();
+ 
+-    let nowMs = 2000;
++    const nowMs = 2000;
+     const service = new NodeJoiningService({
+       nodeId: 'joining-node-heartbeat-maintenance',
+       nodeAddress: 'ws://localhost:9095531',
+@@ -99,46 +99,29 @@ test('NodeJoiningService - defers heartbeat-maintenance NODE_STATE_UPDATE on pub
+       },
+     };
+ 
+-    const deferredOutcome = await service.sendControlPlaneNodeStateUpdate({
+-      state: STATE.READY,
+-      heartbeatOnly: true,
+-      heartbeatAt: nowMs,
+-      nodeStatePublicationMode:
+-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+-    });
+-
+-    t.equal(
+-      deferredOutcome.contractState,
+-      OWNER_CONTRACT_STATE.DEFERRED,
+-      'maintenance heartbeats should expose the shared deferred contract',
+-    );
+-    t.equal(
+-      deferredOutcome.nextAction,
+-      OWNER_CONTRACT_NEXT_ACTION.RETRY,
+-      'maintenance heartbeats should expose the shared retry action',
++    const error = await t.rejects(
++      service.sendControlPlaneNodeStateUpdate({
++        state: STATE.READY,
++        heartbeatOnly: true,
++        heartbeatAt: nowMs,
++        nodeStatePublicationMode:
++          CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
++      }),
+     );
++
+     t.same(
+       deliveries.map((delivery) => delivery.targetAddress),
+       [
+         'seed-node-2/message-group/mg-1-r4',
+         'seed-node-1/message-group/mg-1-r3',
++        'seed-node-1/message-group/mg-1-r3',
+       ],
+-      'maintenance heartbeats should exhaust fallback ingress targets before deferring under publication pressure',
++      'maintenance heartbeats should exhaust fallback ingress and the bounded same-target retry without entering a deferred slot',
+     );
+-
+-    nowMs += 30;
+-    await service.sendControlPlaneNodeStateUpdate({
+-      state: STATE.READY,
+-      heartbeatOnly: true,
+-      heartbeatAt: nowMs,
+-      nodeStatePublicationMode:
+-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+-    });
+-
+     t.same(
+       deliveries.map((delivery) => delivery.options?.deliveryPriority),
+-      ['background', 'background', 'background', 'background'],
+-      'maintenance heartbeats should stay on the background delivery lane when they resume after deferred pressure',
++      ['critical', 'critical', 'critical'],
++      'mandatory ready-lease maintenance should retain critical delivery priority across ingress retries',
+     );
+     t.same(
+       deliveries.map((delivery) =>
+@@ -148,9 +131,13 @@ test('NodeJoiningService - defers heartbeat-maintenance NODE_STATE_UPDATE on pub
+         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+         CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+       ],
+-      'maintenance heartbeats should preserve publication mode across fallback attempts and deferred retries',
++      'maintenance heartbeats should preserve publication mode across fallback attempts and the bounded retry',
++    );
++    t.equal(
++      error?.code,
++      'DISTRIBUTED_PARTICIPANT_FAILURE',
++      'exhausted maintenance publication should surface the canonical owner error instead of parking behind pressure',
+     );
+   });
+ 
+diff --git a/test/control-plane/heartbeat-memory-trend.test.js b/test/control-plane/heartbeat-memory-trend.test.js
+index 2160cf4505548353df2ce869d71969ce17c055d5..6b8771ecd76554a7ff430ad2e9ebfd5a0e0d39ae 100644
+--- a/test/control-plane/heartbeat-memory-trend.test.js
++++ b/test/control-plane/heartbeat-memory-trend.test.js
+@@ -523,6 +523,29 @@ test('HeartbeatService routes confirmed stale refreshes through the ' +
+     },
+     'confirmed stale refreshes should use the maintenance owner path',
+   );
++  t.match(
++    service.buildNodeHeartbeatWriteOptions(1000, decision.publicationMode),
++    {
++      allowPressureDefer: false,
++      deliveryPriority: 'critical',
++      workloadClass: 'node_state_publication_critical',
++      workClass: 'critical',
++    },
++    'mandatory lease maintenance should enter the critical non-deferred write lane',
++  );
++  t.match(
++    service.buildNodeHeartbeatWriteOptions(
++      1000,
++      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
++    ),
++    {
++      allowPressureDefer: true,
++      deliveryPriority: 'background',
++      workloadClass: 'node_state_publication_background',
++      workClass: 'background',
++    },
++    'steady heartbeat churn should remain contained on the background lane',
++  );
+ 
+   ConfigurationManager.resetInstance();
+   LoggingService.resetInstance();
+diff --git a/test/control-plane/replica-dispatch-node-state-update.test.js b/test/control-plane/replica-dispatch-node-state-update.test.js
+index 4a90321c4804c10037ea5e9a8ce2625951243ad3..a4cde27ef5d4be6eb021586ad1b08e3f2a7a3805 100644
+--- a/test/control-plane/replica-dispatch-node-state-update.test.js
++++ b/test/control-plane/replica-dispatch-node-state-update.test.js
+@@ -377,8 +377,8 @@ async (t) => {
+   service.stop();
+ });
+ 
+-test('ReplicaDispatchService defers heartbeat-maintenance ' +
+-  'NODE_STATE_UPDATE publication pressure', async (t) => {
++test('ReplicaDispatchService surfaces heartbeat-maintenance ' +
++  'NODE_STATE_UPDATE pressure on the non-deferrable contract', async (t) => {
+   initEnv();
+ 
+   const now = Date.now();
+@@ -414,50 +414,52 @@ test('ReplicaDispatchService defers heartbeat-maintenance ' +
+     clearTimeoutFn() {},
+   });
+ 
+-  await service.reconcileNodeStateUpdate('node-heartbeat-maintenance', {
+-    payload: {
+-      [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+-      [ControlPlaneField.NODE_ID]: 'node-heartbeat-maintenance',
+-      [ControlPlaneField.NODE_ADDRESS]: 'localhost:80971',
+-      [ControlPlaneField.STATE]: STATE.READY,
+-      [ControlPlaneField.HEARTBEAT_ONLY]: true,
+-      [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+-      [ControlPlaneField.HEARTBEAT_AT]: now,
+-    },
+-  });
++  const error = await t.rejects(
++    service.reconcileNodeStateUpdate('node-heartbeat-maintenance', {
++      payload: {
++        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
++        [ControlPlaneField.NODE_ID]: 'node-heartbeat-maintenance',
++        [ControlPlaneField.NODE_ADDRESS]: 'localhost:80971',
++        [ControlPlaneField.STATE]: STATE.READY,
++        [ControlPlaneField.HEARTBEAT_ONLY]: true,
++        [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
++          CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
++        [ControlPlaneField.HEARTBEAT_AT]: now,
++      },
++    }),
++  );
+ 
+   t.equal(gatewayCalls.length, 1,
+     'maintenance heartbeat should attempt the canonical update once');
+   t.equal(
+     gatewayCalls[0].options?.allowPressureDefer,
+-    true,
+-    'maintenance heartbeat writes should reuse pressure deferral',
++    false,
++    'maintenance heartbeat writes should use the non-deferrable pressure contract',
+   );
+   t.equal(
+     gatewayCalls[0].options?.deliveryPriority,
+-    'background',
+-    'maintenance heartbeat writes should remain on the background delivery lane',
++    'critical',
++    'maintenance heartbeat writes should use critical delivery priority',
+   );
+   t.equal(
+     gatewayCalls[0].options?.workClass,
+-    'background',
+-    'maintenance heartbeat writes should remain in the background work class',
++    'critical',
++    'maintenance heartbeat writes should use the critical work class',
+   );
+   t.equal(
+-    scheduled.length,
+-    1,
+-    'maintenance heartbeat failures should arm one deferred retry timer',
++    error?.code,
++    'DISTRIBUTED_PARTICIPANT_FAILURE',
++    'maintenance heartbeat failures should surface the canonical pressure error',
+   );
+   t.equal(
+-    scheduled[0].delayMs,
+-    2000,
+-    'maintenance heartbeat retry should honor the publication-pressure retry-after',
++    scheduled.length,
++    0,
++    'maintenance heartbeat failures should not arm a deferred retry timer',
+   );
+   t.equal(
+     service.nodeStateUpdateDeferredRetries.size,
+-    1,
+-    'maintenance heartbeat failures should park one deferred retry by node',
++    0,
++    'maintenance heartbeat failures should not park a deferred retry by node',
+   );
+ 
+   service.stop();

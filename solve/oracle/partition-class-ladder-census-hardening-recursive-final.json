@@ -1,0 +1,34 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "partition-class-census-recursive-final",
+  "detail": {
+    "passedInvariants": [
+      "all reproductions independently rejected in predecessor attempts 1 through 3 are counted",
+      "recursive direct, stored, spread, assigned, computed, parameter, and destructured predicate aliases are counted",
+      "inline object spread, nested destructuring, nested assignment, and safe static object-literal last-write override semantics are covered; time-ordered assignment remains conservatively fail-closed",
+      "values, keys, entries, literal, template, concatenated, spread, intermediate, copied, assigned, inline, and parameter-injected rebuilt critical Sets are counted",
+      "safe static subset, superset, distinct-name, unrelated-member, and object-literal override probes stay uncounted",
+      "all touched source files are below 800 lines",
+      "parent census is gated at raw and collapsed 0/0"
+    ],
+    "adversarialAssertions": 66,
+    "sourceLineCounts": {
+      "scripts/check-partition-class-owner.js": 702,
+      "scripts/partition-class-owner-ast.js": 385,
+      "scripts/partition-class-owner-contract.js": 460,
+      "scripts/partition-class-owner-gates.js": 40,
+      "scripts/partition-class-owner-parameter-flow.js": 325
+    },
+    "gates": {
+      "lintScripts": true,
+      "dependencyCruiser": true,
+      "strictFileSize": true,
+      "modelContracts": true,
+      "parentAnalyzer": true,
+      "parentOwnerContract": true,
+      "parentRequiredGates": true
+    }
+  }
+}
