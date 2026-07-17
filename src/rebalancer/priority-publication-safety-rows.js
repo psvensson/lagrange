@@ -101,10 +101,34 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     if (!cachedRow && !authoritativeRow) {
       return null;
     }
-    return {
+    const mergedRow = {
       ...(cachedRow || {}),
       ...(authoritativeRow || {}),
     };
+    // The owner-local canonical leader seed (the PARTITIONS-row sibling of
+    // CL-035, partition-service-metadata-delivery-methods.js) makes an
+    // actually-won LOCAL election visible before the durable leader
+    // publication lands. A blunt authoritative-wins merge re-imposes the
+    // stale durable leader for the whole publication round-trip (measured
+    // 5-6s per ledger self-move during formation), deferring remove safety
+    // on leadership the local raft already committed. Prefer the cached
+    // leader_node_id ONLY when it names this node: an election won here is
+    // this node's own committed raft decision (cleared on demotion,
+    // superseded flags guard the reverse direction); a cached row naming any
+    // OTHER node keeps deferring to the authoritative read.
+    const cachedLeaderNodeId =
+      typeof cachedRow?.leader_node_id === 'string' &&
+      cachedRow.leader_node_id.length > 0 ?
+        cachedRow.leader_node_id :
+        null;
+    if (
+      cachedLeaderNodeId !== null &&
+      cachedLeaderNodeId === this.repository?.nodeId &&
+      mergedRow.leader_node_id !== cachedLeaderNodeId
+    ) {
+      mergedRow.leader_node_id = cachedLeaderNodeId;
+    }
+    return mergedRow;
   }
 
   async getCriticalPartitionRowForSafety(partitionId) {
