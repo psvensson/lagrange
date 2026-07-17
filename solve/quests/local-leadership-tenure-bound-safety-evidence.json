@@ -1,0 +1,60 @@
+{
+  "id": "local-leadership-tenure-bound-safety-evidence",
+  "authoringContractVersion": 1,
+  "statement": "The remove-safety read's preference for locally-known leadership during durable-publication lag is tenure-bound rather than content-based: the owner-local canonical leader claim carries partition, node, raft term, and the causal version it was minted against, held in the live localCanonicalLeaderObservation state with its demoted and superseded flags exposed to the safety read, and the preference fires only when that live claim is current and revalidated after every authoritative-read await - so an equal-version post-teardown CDC replay of an old tenure can never be preferred over a fresher authoritative successor, the only surviving override window is the irreducible not-yet-noticed-demotion split-brain bounded by the independent quorum, spread, voter-ready, and connectivity floors, and the content-based node-ID preference is retired from the safety path.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/topology-convergence-hardening.md",
+    "closesCL": [],
+    "parentQuest": "formation-priority-spread-without-exclusive-self-move-cost",
+    "planDoc": null,
+    "draftedAtCommit": "f1bb25ed46566fc626ea7781985c0ca49a3dde3c"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "local-leadership-tenure-bound-safety-evidence",
+      "reportDir": "test-output/reports/local-leadership-tenure-bound-safety-evidence",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "local-leadership-tenure-bound-safety-evidence-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "local-leadership-tenure-bound-safety-evidence",
+          "reportDir": "test-output/reports/local-leadership-tenure-bound-safety-evidence",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-precedence-extension-until-tenure-bound",
+      "statement": "Until tenure-binding lands, the content-based leader_node_id preference (checkpointed at 273683cc and hardened at f1bb25ed) must not be extended to any new consumer or any field beyond leader_node_id."
+    },
+    {
+      "id": "floors-untouched",
+      "statement": "The quorum, spread, voter-ready-replacement, connectivity, and concurrent-operation floors, the ledger interlock, and the seed lifecycle (demotion clear, demoted-replay re-null, superseded flags) remain byte-unchanged; tenure-binding only strengthens which local claim the preference may consult."
+    },
+    {
+      "id": "replay-window-discriminator",
+      "statement": "A deterministic regression must reproduce the equal-version post-teardown CDC replay window red on the content-based preference (a replayed old-tenure self-naming row is preferred) and green under tenure-binding, alongside the existing in-flight-demotion and third-party-claim regressions; the irreducible not-yet-noticed-demotion window must be documented as out of scope with its floor bound."
+    },
+    {
+      "id": "model-extension",
+      "statement": "Extend the local-leader-row-visibility or a focused new TLA model with an in-flight safety read holding captured cache evidence, a demotion/successor transition during the read, and an old-tenure replay: the content-based mutant must violate the successor-preference invariant while the tenure-bound spec holds it."
+    }
+  ]
+}

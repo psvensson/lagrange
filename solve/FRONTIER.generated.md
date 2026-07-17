@@ -61,7 +61,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 56
+## Open quests — 57
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
@@ -69,9 +69,10 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | cli-static-guideline-ratchet-closure | process | 0 | 0 | — |
 | control-snapshot-heartbeat-lease-freshness | product | 2 | 0 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | — |
-| formation-priority-spread-without-exclusive-self-move-cost | product | 0 | 0 | — |
+| formation-priority-spread-without-exclusive-self-move-cost | product | 2 | 0 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
 | lagrange-devops-onboarding | product | 0 | 0 | — |
+| local-leadership-tenure-bound-safety-evidence | product | 0 | 0 | — |
 | managed-partition-merge-live-validation | product | 0 | 0 | — |
 | movielens-admin-event-loop-isolation-discriminator | process | 0 | 0 | — |
 | movielens-admin-snapshot-deadline-propagation | product | 1 | 0 | — |

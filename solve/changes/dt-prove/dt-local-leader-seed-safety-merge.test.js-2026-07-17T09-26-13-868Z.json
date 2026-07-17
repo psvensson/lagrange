@@ -1,0 +1,16 @@
+{
+  "test": "test/convergence/dt-local-leader-seed-safety-merge.test.js",
+  "src": [
+    "src/rebalancer/priority-publication-safety-rows.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-17T09:26:13.818Z"
+}
