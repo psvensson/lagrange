@@ -1,0 +1,273 @@
+diff --git a/test/convergence/dt-admin-event-loop-isolation-discriminator.test.js b/test/convergence/dt-admin-event-loop-isolation-discriminator.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..de21a2d349d6c83ee3a2f53a8be06902f8c587ee
+--- /dev/null
++++ b/test/convergence/dt-admin-event-loop-isolation-discriminator.test.js
+@@ -0,0 +1,267 @@
++/**
++ * Quest movielens-admin-event-loop-isolation-discriminator — deterministic
++ * production-seam timing discriminator for the live admin-response timeout
++ * (control_plane_pressure = "Timed out waiting for admin response", seed
++ * event-loop gaps of 1.2-4.1s logged right up to the admission deadline in
++ * the 2026-07-17T10:17 run).
++ *
++ * Distinguishes, with the REAL AdminWebSocketAPI served over a REAL loopback
++ * socket, the two delay families:
++ *
++ *   PRE-DISPATCH MAIN-LOOP STARVATION — the request bytes reached the kernel
++ *   (client-send milestone = net.Socket.write returning true, taken BEFORE
++ *   the stall is armed in the same tick, so the same stalled loop never
++ *   claims a receipt time it cannot know), but the server's JS dispatch
++ *   cannot run until the synchronous stall ends: queue-wait is large,
++ *   handler time is small.
++ *
++ *   POST-DISPATCH CONTRIBUTOR DELAY — dispatch is prompt (small queue-wait)
++ *   but the snapshot build awaits a slow asynchronous contributor: handler
++ *   time is large.
++ *
++ * Also emits the measured isolation fact the quest statement demands: a
++ * second, independent control-snapshot request armed before the stall is
++ * delayed by the SAME stall — the existing control-snapshot serving path has
++ * no resource isolation from the main loop (fallbackSharesLoop=true), so
++ * same-loop serving is insufficient under pre-dispatch starvation.
++ *
++ * Proof-package-only: runtime snapshot, repair, readiness, lease, admission,
++ * timeout, and transport policy are untouched; the handler-entry milestone
++ * is a test-side instance wrapper (measurement, not authority), and the
++ * ControlPlaneSnapshotOwner remains the sole snapshot owner.
++ */
++import t from 'tap';
++import net from 'node:net';
++import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
++import {createReadOnlyCache} from
++  '../../src/cache/read-only-system-table-cache.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {
++  createAuthoritativeRepairCache,
++  createSystemTableRepairQueryEngine,
++  createAuthoritativeCacheGateway,
++} from '../admin/admin-websocket-api-test-support.js';
++
++const STALL_MS = 400;
++const CONTRIBUTOR_DELAY_MS = 400;
++// Generous bounds so scheduler jitter cannot flake the classification.
++const LARGE_FLOOR_MS = Math.floor(STALL_MS * 0.6);
++const SMALL_CEILING_MS = 200;
++
++function busyStall(ms) {
++  const end = Date.now() + ms;
++  while (Date.now() < end) {
++    // synchronous main-loop stall — the injected pre-dispatch delay family
++  }
++}
++
++function buildApi({contributorDelayMs = 0} = {}) {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  ConfigurationManager.getInstance().initialize({});
++  LoggingService.getInstance().initialize({level: 'error'});
++  const writableCache = createAuthoritativeRepairCache('node-local');
++  const repairEngine = createSystemTableRepairQueryEngine({});
++  const api = new AdminWebSocketAPI({
++    nodeId: 'node-local',
++    systemTableCache: createReadOnlyCache(writableCache),
++    cacheMutationTarget: writableCache,
++    controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(
++      writableCache,
++      {queryEngine: repairEngine},
++    ),
++    sqlQueryEngine: repairEngine,
++  });
++  if (contributorDelayMs > 0) {
++    // The slow asynchronous snapshot contributor (post-dispatch family),
++    // injected at the build boundary the route handler actually awaits
++    // (handleControlSnapshot -> this.buildLocalControlSnapshot): the
++    // handler dispatched promptly, then awaits this. Measurement fixture
++    // only — the real build still runs.
++    const originalBuild = api.buildLocalControlSnapshot.bind(api);
++    api.buildLocalControlSnapshot = async (...args) => {
++      await new Promise((resolve) => setTimeout(resolve, contributorDelayMs));
++      return originalBuild(...args);
++    };
++  }
++  return api;
++}
++
++async function startApi(api) {
++  await api.initialize(0, {listen: true, host: '127.0.0.1'});
++  const address = api.fastify.server.address();
++  return address.port;
++}
++
++// One measured control-snapshot request over a raw loopback socket. The
++// client-send milestone is the kernel handoff: connect completes first, then
++// the caller receives an arm() that writes the request bytes and returns the
++// timestamp taken immediately after write() hands the bytes to the kernel —
++// so arming and then synchronously stalling in the SAME tick guarantees the
++// bytes are out before the loop blocks, without claiming kernel-receipt
++// timing from the stalled loop.
++function preparedRequest(port) {
++  const socket = net.connect({port, host: '127.0.0.1'});
++  const connected = new Promise((resolve, reject) => {
++    socket.once('connect', resolve);
++    socket.once('error', reject);
++  });
++  const response = new Promise((resolve, reject) => {
++    let buffer = '';
++    socket.on('data', (chunk) => {
++      buffer += chunk.toString();
++      if (buffer.includes('\r\n\r\n') && /"nodeId"|\}$/.test(buffer)) {
++        resolve({atMs: Date.now(), body: buffer});
++        socket.end();
++      }
++    });
++    socket.once('error', reject);
++  });
++  return {
++    socket,
++    connected,
++    response,
++    arm() {
++      socket.write(
++        'GET /api/admin/control-snapshot HTTP/1.1\r\n' +
++          'Host: 127.0.0.1\r\nConnection: close\r\n\r\n',
++      );
++      return Date.now();
++    },
++  };
++}
++
++function instrumentHandlerEntry(api) {
++  const entries = [];
++  const original = api.handleControlSnapshot.bind(api);
++  api.handleControlSnapshot = async (request, reply) => {
++    entries.push(Date.now());
++    return original(request, reply);
++  };
++  return entries;
++}
++
++t.test(
++  'family A: pre-dispatch main-loop starvation — kernel-delivered request ' +
++    'waits out the stall before JS dispatch; handler itself is fast',
++  async (t) => {
++    const api = buildApi();
++    const port = await startApi(api);
++    const entries = instrumentHandlerEntry(api);
++    try {
++      const probe = preparedRequest(port);
++      const fallbackProbe = preparedRequest(port);
++      await probe.connected;
++      await fallbackProbe.connected;
++
++      const sentAtMs = probe.arm();
++      const fallbackSentAtMs = fallbackProbe.arm();
++      busyStall(STALL_MS);
++
++      const {atMs: respondedAtMs} = await probe.response;
++      const {atMs: fallbackRespondedAtMs} = await fallbackProbe.response;
++      t.equal(entries.length >= 1, true, 'the real handler served the probe');
++      const queueWaitMs = entries[0] - sentAtMs;
++      const handlerMs = respondedAtMs - entries[0];
++      t.ok(
++        queueWaitMs >= LARGE_FLOOR_MS,
++        `classification PRE_DISPATCH_STARVATION: queue wait ${queueWaitMs}ms ` +
++          `carries the ${STALL_MS}ms stall`,
++      );
++      t.ok(
++        handlerMs <= SMALL_CEILING_MS,
++        `the handler itself stayed fast (${handlerMs}ms) — the delay is ` +
++          'NOT in the snapshot build',
++      );
++      const fallbackDelayMs = fallbackRespondedAtMs - fallbackSentAtMs;
++      t.ok(
++        fallbackDelayMs >= LARGE_FLOOR_MS,
++        `measured isolation fact: the second control-snapshot request was ` +
++          `equally stalled (${fallbackDelayMs}ms) — same-loop serving has ` +
++          'no resource isolation under pre-dispatch starvation',
++      );
++    } finally {
++      await api.shutdown?.();
++      await api.fastify?.close?.();
++      ConfigurationManager.resetInstance();
++      LoggingService.resetInstance();
++    }
++  },
++);
++
++t.test(
++  'family B: post-dispatch contributor delay — prompt dispatch, slow ' +
++    'asynchronous snapshot contributor',
++  async (t) => {
++    const api = buildApi({contributorDelayMs: CONTRIBUTOR_DELAY_MS});
++    const port = await startApi(api);
++    const entries = instrumentHandlerEntry(api);
++    try {
++      const probe = preparedRequest(port);
++      await probe.connected;
++      const sentAtMs = probe.arm();
++      const {atMs: respondedAtMs} = await probe.response;
++      t.equal(entries.length >= 1, true, 'the real handler served the probe');
++      const queueWaitMs = entries[0] - sentAtMs;
++      const handlerMs = respondedAtMs - entries[0];
++      t.ok(
++        queueWaitMs <= SMALL_CEILING_MS,
++        `dispatch was prompt (${queueWaitMs}ms) — no loop starvation`,
++      );
++      t.ok(
++        handlerMs >= Math.floor(CONTRIBUTOR_DELAY_MS * 0.6),
++        `classification POST_DISPATCH_CONTRIBUTOR_DELAY: handler time ` +
++          `${handlerMs}ms carries the ${CONTRIBUTOR_DELAY_MS}ms contributor await`,
++      );
++    } finally {
++      await api.shutdown?.();
++      await api.fastify?.close?.();
++      ConfigurationManager.resetInstance();
++      LoggingService.resetInstance();
++    }
++  },
++);
++
++t.test(
++  'the two families are ordering-preserving and separable: the same bounded ' +
++    'injected time lands in opposite milestones',
++  async (t) => {
++    // The discriminator is only useful if the classifications cannot be
++    // confused: family A put >=60% of the injected delay before dispatch
++    // and family B put >=60% after. Re-run both quickly and compare.
++    const apiA = buildApi();
++    const portA = await startApi(apiA);
++    const entriesA = instrumentHandlerEntry(apiA);
++    const apiB = buildApi({contributorDelayMs: CONTRIBUTOR_DELAY_MS});
++    const portB = await startApi(apiB);
++    const entriesB = instrumentHandlerEntry(apiB);
++    try {
++      const probeA = preparedRequest(portA);
++      await probeA.connected;
++      const sentA = probeA.arm();
++      busyStall(STALL_MS);
++      const {atMs: respA} = await probeA.response;
++
++      const probeB = preparedRequest(portB);
++      await probeB.connected;
++      const sentB = probeB.arm();
++      const {atMs: respB} = await probeB.response;
++
++      const preShareA = (entriesA[0] - sentA) / (respA - sentA);
++      const preShareB = (entriesB[0] - sentB) / (respB - sentB);
++      t.ok(
++        preShareA >= 0.5 && preShareB <= 0.5,
++        `separable: pre-dispatch share A=${preShareA.toFixed(2)} vs ` +
++          `B=${preShareB.toFixed(2)}`,
++      );
++    } finally {
++      await apiA.shutdown?.();
++      await apiA.fastify?.close?.();
++      await apiB.shutdown?.();
++      await apiB.fastify?.close?.();
++      ConfigurationManager.resetInstance();
++      LoggingService.resetInstance();
++    }
++  },
++);
