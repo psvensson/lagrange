@@ -33,8 +33,8 @@ class PartitionServiceMetadataDeliveryMethods {
    * @param {string} leaderNodeId - Leader node ID.
    * @private
    */
-  queueLeaderNodeUpdate(leaderNodeId) {
-    this.seedLocalCanonicalLeaderNodeId(leaderNodeId);
+  queueLeaderNodeUpdate(leaderNodeId, raftTerm) {
+    this.seedLocalCanonicalLeaderNodeId(leaderNodeId, raftTerm);
     this.leaderNodeMutationHelper.queue(leaderNodeId);
   }
   /**
@@ -53,7 +53,7 @@ class PartitionServiceMetadataDeliveryMethods {
    * @param {string} leaderNodeId
    * @return {boolean} Whether local canonical evidence was applied.
    */
-  seedLocalCanonicalLeaderNodeId(leaderNodeId) {
+  seedLocalCanonicalLeaderNodeId(leaderNodeId, raftTerm) {
     if (
       this.isLeader !== true ||
       typeof leaderNodeId !== 'string' ||
@@ -88,6 +88,17 @@ class PartitionServiceMetadataDeliveryMethods {
         demoted: false,
         superseded: false,
       };
+    }
+    // The tenure identity of this claim: safety consumers bind their local
+    // leadership preference to it (quest local-leadership-tenure-bound-
+    // safety-evidence) rather than to row content a CDC replay can fake.
+    // Explicit null/undefined rejection: Number(null) is a finite 0.
+    if (
+      raftTerm !== null &&
+      raftTerm !== undefined &&
+      Number.isFinite(Number(raftTerm))
+    ) {
+      this.localCanonicalLeaderObservation.raftTerm = Number(raftTerm);
     }
 
     return this.applyLocalCanonicalLeaderObservation(
@@ -128,6 +139,15 @@ class PartitionServiceMetadataDeliveryMethods {
     if (
       existingRow?.[COLUMN.LEADER_NODE_ID] !== this.nodeId
     ) {
+      // The row already names a successor, so the full demotion projection
+      // must not touch it — but residual tenure-claim annotations from this
+      // node's ended tenure still need stripping (verifier hygiene finding).
+      if (existingRow?.[COLUMN.LEADER_CLAIM_NODE_ID] === this.nodeId) {
+        this.applyLocalLeaderClaimAnnotationClear(
+          existingRow,
+          'demoted-residual-claim',
+        );
+      }
       return false;
     }
     return this.applyLocalCanonicalLeaderObservation(
@@ -135,6 +155,74 @@ class PartitionServiceMetadataDeliveryMethods {
       null,
       'demoted',
     );
+  }
+  /**
+   * A claim must not outlive its replica: teardown without a demotion event
+   * (the REPLACE source-removal shutdown path) would otherwise leave the
+   * tenure annotations on the cached row for an equal-version replay to
+   * resurrect. Unlike the demotion clear this ignores isLeader — we are
+   * dying, so our claim dies with us — and it nulls ONLY the claim fields,
+   * leaving leader_node_id to the durable successor flow.
+   * @return {boolean} Whether a lingering claim was cleared.
+   */
+  clearLocalCanonicalLeaderClaimOnTeardown() {
+    const observation = this.localCanonicalLeaderObservation;
+    this.localCanonicalLeaderObservation = null;
+    const existingRow = this.systemTableCache?.get?.(
+      TABLES.PARTITIONS,
+      this.partitionId,
+    );
+    if (
+      !existingRow ||
+      (existingRow[COLUMN.LEADER_CLAIM_NODE_ID] !== this.nodeId &&
+        !observation)
+    ) {
+      return false;
+    }
+    return this.applyLocalLeaderClaimAnnotationClear(existingRow, 'teardown');
+  }
+  /**
+   * Null ONLY the local tenure-claim annotations on the cached row, leaving
+   * leader_node_id and the observation state untouched. Shared by the
+   * teardown clear and the demotion path's already-named-successor branch
+   * (which must keep its demoted observation for the replay handler while
+   * still stripping residual annotations).
+   * @param {Object} existingRow
+   * @param {string} transition
+   * @return {boolean}
+   * @private
+   */
+  applyLocalLeaderClaimAnnotationClear(existingRow, transition) {
+    if (
+      !existingRow ||
+      typeof this.systemTableCache?.applySystemTableChange !==
+        PARTITION_SERVICE_LITERAL.FUNCTION
+    ) {
+      return false;
+    }
+    const claimClearProjection = {
+      [COLUMN.PARTITION_ID]: this.partitionId,
+      [COLUMN.LEADER_CLAIM_NODE_ID]: null,
+      [COLUMN.LEADER_CLAIM_RAFT_TERM]: null,
+      [COLUMN.LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT]: null,
+    };
+    if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
+      claimClearProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
+    }
+    if (typeof existingRow[COLUMN.UPDATED_AT_HLC] !== 'undefined') {
+      claimClearProjection[COLUMN.UPDATED_AT_HLC] =
+        existingRow[COLUMN.UPDATED_AT_HLC];
+    }
+    this.systemTableCache.applySystemTableChange(
+      TABLES.PARTITIONS,
+      PARTITION_SERVICE_LITERAL.UPDATE,
+      claimClearProjection,
+      {
+        causeId:
+          `local-raft-leader:${transition}:${this.partitionId}:${this.nodeId}`,
+      },
+    );
+    return true;
   }
   /**
    * Reconcile an authoritative cache delivery with the active local projection.
@@ -222,6 +310,24 @@ class PartitionServiceMetadataDeliveryMethods {
       [COLUMN.PARTITION_ID]: this.partitionId,
       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
     };
+    // Tenure claim annotations ride every projection explicitly: the UPDATE
+    // merge preserves absent fields, so a demotion/supersession projection
+    // must null them or a stale claim would outlive its tenure. A live claim
+    // is stamped only when this projection asserts THIS node's leadership
+    // and the observation carries the term the election was won at.
+    const observationTerm = this.localCanonicalLeaderObservation?.raftTerm;
+    const claimActive =
+      leaderNodeId === this.nodeId &&
+      Number.isFinite(observationTerm);
+    localProjection[COLUMN.LEADER_CLAIM_NODE_ID] =
+      claimActive ? this.nodeId : null;
+    localProjection[COLUMN.LEADER_CLAIM_RAFT_TERM] =
+      claimActive ? observationTerm : null;
+    localProjection[COLUMN.LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT] =
+      claimActive ?
+        this.localCanonicalLeaderObservation?.baseRow?.[COLUMN.UPDATED_AT] ??
+          null :
+        null;
     if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
       localProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
     }

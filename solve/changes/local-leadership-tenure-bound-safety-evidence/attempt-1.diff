@@ -1,0 +1,569 @@
+diff --git a/models/local-leader-tenure-claim/LocalLeaderTenureClaim.tla b/models/local-leader-tenure-claim/LocalLeaderTenureClaim.tla
+new file mode 100644
+index 0000000000000000000000000000000000000000..157c971b5783c6a91884b2bd83a62f54d4c3000c
+--- /dev/null
++++ b/models/local-leader-tenure-claim/LocalLeaderTenureClaim.tla
+@@ -0,0 +1,174 @@
++---------------- MODULE LocalLeaderTenureClaim ----------------
++(***************************************************************************)
++(* Tenure-bound local leadership evidence during durable-publication lag   *)
++(* (quest local-leadership-tenure-bound-safety-evidence).                   *)
++(*                                                                          *)
++(* A remove-safety read runs concurrently with leadership transitions: it   *)
++(* captures cache evidence, awaits an authoritative read, then merges. The  *)
++(* local node's election seeds the cached row; demotion and teardown clear  *)
++(* the claim; an equal-version CDC replay can re-impose a FOSSIL row that   *)
++(* NAMES this node without any live claim. The safety merge prefers local   *)
++(* leadership evidence over a lagging authoritative row.                    *)
++(*                                                                          *)
++(* TenureBound = TRUE: the preference fires only while the live local       *)
++(* tenure claim stands (stamped at election with its raft term, cleared on  *)
++(* demotion/teardown, impossible for a replayed durable row to carry), and  *)
++(* the merge consults the post-await cache state.                           *)
++(* TenureBound = FALSE (the content-based mutant): the preference fires     *)
++(* whenever the consulted row NAMES this node.                              *)
++(*                                                                          *)
++(* Invariant MergeNeverTrustsDeadTenure: the merged safety decision never   *)
++(* reports this node as leader when its tenure is not live while the        *)
++(* authoritative truth already names a successor. The mutant violates it    *)
++(* via the fossil replay; the tenure-bound spec holds it.                   *)
++(*                                                                          *)
++(* Deliberately narrow: single partition, one safety read at a time, the    *)
++(* irreducible not-yet-noticed-demotion window is out of scope (the local   *)
++(* tenure is still formally live there; independent quorum floors bound it).*)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANT TenureBound
++
++Me == "me"
++Successor == "successor"
++OldLeader == "old"
++NoLeader == "none"
++
++Leaders == {Me, Successor, OldLeader, NoLeader}
++
++VARIABLES
++  tenureLive,          \* this node's live local claim (seeded by its election)
++  cacheLeader,         \* leader named by the cached row
++  cacheClaim,          \* whether the cached row carries the live-claim stamps
++  authLeader,          \* leader named by the (possibly lagging) durable row
++  readPhase,           \* "idle" / "inflight" / "done"
++  mergedLeader,        \* the safety decision produced by the merge
++  deadTenureOverride,  \* provenance: a merge preferred a DEAD local tenure
++                       \* over an authoritative successor (the replay hazard)
++  liveTenureIgnored    \* provenance: a merge ignored a LIVE stamped claim
++                       \* (the recognition-tax regression)
++
++vars == << tenureLive, cacheLeader, cacheClaim, authLeader, readPhase,
++           mergedLeader, deadTenureOverride, liveTenureIgnored >>
++
++TypeOK ==
++  /\ tenureLive \in BOOLEAN
++  /\ cacheLeader \in Leaders
++  /\ cacheClaim \in BOOLEAN
++  /\ authLeader \in Leaders
++  /\ readPhase \in {"idle", "inflight", "done"}
++  /\ mergedLeader \in Leaders
++  /\ deadTenureOverride \in BOOLEAN
++  /\ liveTenureIgnored \in BOOLEAN
++
++Init ==
++  /\ tenureLive = FALSE
++  /\ cacheLeader = OldLeader
++  /\ cacheClaim = FALSE
++  /\ authLeader = OldLeader
++  /\ readPhase = "idle"
++  /\ mergedLeader = NoLeader
++  /\ deadTenureOverride = FALSE
++  /\ liveTenureIgnored = FALSE
++
++\* This node wins an election: the seed stamps the claim onto the cache row.
++WinElection ==
++  /\ ~tenureLive
++  /\ tenureLive' = TRUE
++  /\ cacheLeader' = Me
++  /\ cacheClaim' = TRUE
++  /\ UNCHANGED << authLeader, readPhase, mergedLeader,
++                  deadTenureOverride, liveTenureIgnored >>
++
++\* Demotion or replica teardown: the claim is cleared synchronously; the
++\* cached leader field is nulled (demotion) — claim stamps never survive.
++LoseTenure ==
++  /\ tenureLive
++  /\ tenureLive' = FALSE
++  /\ cacheLeader' = NoLeader
++  /\ cacheClaim' = FALSE
++  /\ UNCHANGED << authLeader, readPhase, mergedLeader,
++                  deadTenureOverride, liveTenureIgnored >>
++
++\* The durable successor publication lands in the authoritative store (it
++\* may lag arbitrarily behind the local transitions).
++SuccessorPublishes ==
++  /\ authLeader' = Successor
++  /\ UNCHANGED << tenureLive, cacheLeader, cacheClaim, readPhase,
++                  mergedLeader, deadTenureOverride, liveTenureIgnored >>
++
++\* The successor publication is CDC-delivered into the local cache: a
++\* durable row can never carry claim stamps.
++SuccessorReachesCache ==
++  /\ authLeader = Successor
++  /\ cacheLeader' = Successor
++  /\ cacheClaim' = FALSE
++  /\ UNCHANGED << tenureLive, authLeader, readPhase, mergedLeader,
++                  deadTenureOverride, liveTenureIgnored >>
++
++\* The replay window: after this node's tenure ended (claim cleared, maybe
++\* the replica torn down), an equal-version CDC replay of an OLD durable row
++\* naming this node re-imposes a FOSSIL — same name, no claim stamps.
++ReplayFossil ==
++  /\ ~tenureLive
++  /\ cacheLeader' = Me
++  /\ cacheClaim' = FALSE
++  /\ UNCHANGED << tenureLive, authLeader, readPhase, mergedLeader,
++                  deadTenureOverride, liveTenureIgnored >>
++
++StartSafetyRead ==
++  /\ readPhase = "idle"
++  /\ readPhase' = "inflight"
++  /\ UNCHANGED << tenureLive, cacheLeader, cacheClaim, authLeader,
++                  mergedLeader, deadTenureOverride, liveTenureIgnored >>
++
++\* The authoritative read returns and the merge runs. The landed hardening
++\* consults the POST-AWAIT cache state (cacheLeader/cacheClaim), not the
++\* pre-await capture. The preference for local leadership fires under
++\* TenureBound only on a live stamped claim; under the content-based mutant
++\* whenever the consulted row names this node.
++PreferLocal ==
++  IF TenureBound
++  THEN cacheClaim /\ cacheLeader = Me /\ tenureLive
++  ELSE cacheLeader = Me
++
++FinishSafetyRead ==
++  /\ readPhase = "inflight"
++  /\ readPhase' = "done"
++  /\ mergedLeader' = IF PreferLocal THEN Me ELSE authLeader
++  \* Provenance recorded at the decision instant: post-decision transitions
++  \* must not retroactively (in)validate the merge that already happened.
++  /\ deadTenureOverride' = (deadTenureOverride \/ (PreferLocal /\ ~tenureLive /\ authLeader = Successor))
++  /\ liveTenureIgnored' = (liveTenureIgnored \/ (~PreferLocal /\ tenureLive /\ cacheClaim /\ cacheLeader = Me))
++  /\ UNCHANGED << tenureLive, cacheLeader, cacheClaim, authLeader >>
++
++CompleteAndIdle ==
++  /\ readPhase = "done"
++  /\ readPhase' = "idle"
++  /\ mergedLeader' = NoLeader
++  /\ UNCHANGED << tenureLive, cacheLeader, cacheClaim, authLeader,
++                  deadTenureOverride, liveTenureIgnored >>
++
++Next ==
++  \/ WinElection
++  \/ LoseTenure
++  \/ SuccessorPublishes
++  \/ SuccessorReachesCache
++  \/ ReplayFossil
++  \/ StartSafetyRead
++  \/ FinishSafetyRead
++  \/ CompleteAndIdle
++
++Spec == Init /\ [][Next]_vars
++
++\* The safety decision must never prefer a DEAD local tenure over an
++\* authoritative successor: exactly the fossil-replay override the tenure
++\* binding exists to kill (provenance recorded at the decision instant).
++MergeNeverTrustsDeadTenure == ~deadTenureOverride
++
++\* The mechanism must not be silently disabled either: a LIVE stamped claim
++\* is always preferred (the original recognition-tax fix stays effective).
++LiveTenureIsPreferred == ~liveTenureIgnored
++
++=============================================================================
+diff --git a/models/local-leader-tenure-claim/LocalLeaderTenureClaim_content_based_bug.cfg b/models/local-leader-tenure-claim/LocalLeaderTenureClaim_content_based_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..5ff57bb1bec2805981c2b71daa9bc8d7fe578c8f
+--- /dev/null
++++ b/models/local-leader-tenure-claim/LocalLeaderTenureClaim_content_based_bug.cfg
+@@ -0,0 +1,5 @@
++CONSTANT TenureBound = FALSE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT MergeNeverTrustsDeadTenure
+diff --git a/models/local-leader-tenure-claim/LocalLeaderTenureClaim_tenure_bound.cfg b/models/local-leader-tenure-claim/LocalLeaderTenureClaim_tenure_bound.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..b291c554211ef16c020b7c549598ce26fcb8603a
+--- /dev/null
++++ b/models/local-leader-tenure-claim/LocalLeaderTenureClaim_tenure_bound.cfg
+@@ -0,0 +1,6 @@
++CONSTANT TenureBound = TRUE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT MergeNeverTrustsDeadTenure
++INVARIANT LiveTenureIsPreferred
+diff --git a/models/local-leader-tenure-claim/abstract-protocol.md b/models/local-leader-tenure-claim/abstract-protocol.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..5bcb106791f81a2fc220190db8b8172d77d1b60f
+--- /dev/null
++++ b/models/local-leader-tenure-claim/abstract-protocol.md
+@@ -0,0 +1,28 @@
++# Local leadership tenure claim — abstract protocol ↔ runtime
++
++Model: `LocalLeaderTenureClaim.tla`.
++Quest: `local-leadership-tenure-bound-safety-evidence`
++(parent `formation-priority-spread-without-exclusive-self-move-cost`).
++
++Models a remove-safety read running concurrently with leadership transitions:
++capture, await, merge — with the local election seed, demotion/teardown claim
++clearing, successor publication and its CDC delivery, and the equal-version
++replay of an old durable row (a FOSSIL naming this node with no claim stamps).
++
++| Model | Runtime |
++| --- | --- |
++| `WinElection` (claim stamped) | `seedLocalCanonicalLeaderNodeId` + `applyLocalCanonicalLeaderObservation` stamping `leader_claim_node_id` / `leader_claim_raft_term` / `leader_claim_minted_against_updated_at` (local-only annotations, `partition-service-metadata-delivery-methods.js`) with the term from `raft-replica-base.js` `resolveCurrentTermSafe` |
++| `LoseTenure` (claim cleared) | the demotion clear (`clearLocalCanonicalLeaderNodeIdIfOwned`), the demoted-replay re-null, and the teardown clear (`clearLocalCanonicalLeaderClaimOnTeardown`, hooked into partition-service shutdown) |
++| `ReplayFossil` | an equal-version CDC round-trip of an old durable PARTITIONS row: durable columns cannot carry the claim annotations, so the replayed row names this node WITHOUT a live claim |
++| `FinishSafetyRead` / `PreferLocal` | `getCriticalPartitionRowForSafety` merging on the POST-AWAIT cache state; `mergePartitionRowForSafety` firing the preference only on this node's live stamped claim (`priority-publication-safety-rows.js`) |
++| `MergeNeverTrustsDeadTenure` | the sealed invariant: a dead tenure is never preferred over an authoritative successor |
++| `LiveTenureIsPreferred` | the recognition-tax fix stays effective: a live stamped claim is preferred over the lagging durable leader |
++
++Checked configurations (2026-07-17): `_tenure_bound` (TenureBound=TRUE) holds
++both invariants; `_content_based_bug` (TenureBound=FALSE, the pre-fix
++precedence) violates `MergeNeverTrustsDeadTenure` via the fossil replay.
++
++Deliberately out of scope: the irreducible not-yet-noticed-demotion window
++(the local tenure is still formally live; the independent quorum, spread,
++voter-ready, and connectivity floors bound it — see the verifier findings on
++the parent quest), multi-partition composition, and concurrent safety reads.
+diff --git a/src/constants/columns.js b/src/constants/columns.js
+index 8a64276e604e1b253937c8d17c2310345343ef82..7d2289dfa599fb93a4f17f4543dbfea990ffd4f8 100644
+--- a/src/constants/columns.js
++++ b/src/constants/columns.js
+@@ -12,6 +12,12 @@ const COLUMN = Object.freeze({
+   PARTITION_ID: 'partition_id',
+   SIZE_BYTES: 'size_bytes',
+   LEADER_NODE_ID: 'leader_node_id',
++  // Local-only tenure claim annotations stamped by the owner-local canonical
++  // leader projection (never durable columns, so a CDC round-trip of any
++  // durable row cannot carry them — that asymmetry is the replay fence).
++  LEADER_CLAIM_NODE_ID: 'leader_claim_node_id',
++  LEADER_CLAIM_RAFT_TERM: 'leader_claim_raft_term',
++  LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT: 'leader_claim_minted_against_updated_at',
+   TABLE_ID: 'table_id',
+   SERVICE_ID: 'service_id',
+   OPERATION_ID: 'operation_id',
+diff --git a/src/partition/partition-service-lifecycle-methods.js b/src/partition/partition-service-lifecycle-methods.js
+index c10c9f9789417cedcf8ef165c809418fcb1bfcd2..5edf740d2d6cfcf4c6f98d32a48906ea351513e1 100644
+--- a/src/partition/partition-service-lifecycle-methods.js
++++ b/src/partition/partition-service-lifecycle-methods.js
+@@ -89,6 +89,9 @@ class PartitionServiceLifecycleMethods {
+       partitionId: this.partitionId,
+       replicaId: this.replicaId,
+     });
++    // A tenure claim must not outlive its replica (see
++    // clearLocalCanonicalLeaderClaimOnTeardown).
++    this.clearLocalCanonicalLeaderClaimOnTeardown?.();
+     if (this.learnerPromotionTimer) {
+       clearTimeout(this.learnerPromotionTimer);
+       this.learnerPromotionTimer = null;
+diff --git a/src/partition/partition-service-metadata-delivery-methods.js b/src/partition/partition-service-metadata-delivery-methods.js
+index ecd4c69bd43b3d2a4be493d46a7ab2f188284852..1f6d2c6bb4c453acedd3ecea625e77e9cedd61af 100644
+--- a/src/partition/partition-service-metadata-delivery-methods.js
++++ b/src/partition/partition-service-metadata-delivery-methods.js
+@@ -33,8 +33,8 @@ class PartitionServiceMetadataDeliveryMethods {
+    * @param {string} leaderNodeId - Leader node ID.
+    * @private
+    */
+-  queueLeaderNodeUpdate(leaderNodeId) {
+-    this.seedLocalCanonicalLeaderNodeId(leaderNodeId);
++  queueLeaderNodeUpdate(leaderNodeId, raftTerm) {
++    this.seedLocalCanonicalLeaderNodeId(leaderNodeId, raftTerm);
+     this.leaderNodeMutationHelper.queue(leaderNodeId);
+   }
+   /**
+@@ -53,7 +53,7 @@ class PartitionServiceMetadataDeliveryMethods {
+    * @param {string} leaderNodeId
+    * @return {boolean} Whether local canonical evidence was applied.
+    */
+-  seedLocalCanonicalLeaderNodeId(leaderNodeId) {
++  seedLocalCanonicalLeaderNodeId(leaderNodeId, raftTerm) {
+     if (
+       this.isLeader !== true ||
+       typeof leaderNodeId !== 'string' ||
+@@ -89,6 +89,12 @@ class PartitionServiceMetadataDeliveryMethods {
+         superseded: false,
+       };
+     }
++    // The tenure identity of this claim: safety consumers bind their local
++    // leadership preference to it (quest local-leadership-tenure-bound-
++    // safety-evidence) rather than to row content a CDC replay can fake.
++    if (Number.isFinite(Number(raftTerm))) {
++      this.localCanonicalLeaderObservation.raftTerm = Number(raftTerm);
++    }
+ 
+     return this.applyLocalCanonicalLeaderObservation(
+       existingRow,
+@@ -136,6 +142,61 @@ class PartitionServiceMetadataDeliveryMethods {
+       'demoted',
+     );
+   }
++  /**
++   * A claim must not outlive its replica: teardown without a demotion event
++   * (the REPLACE source-removal shutdown path) would otherwise leave the
++   * tenure annotations on the cached row for an equal-version replay to
++   * resurrect. Unlike the demotion clear this ignores isLeader — we are
++   * dying, so our claim dies with us — and it nulls ONLY the claim fields,
++   * leaving leader_node_id to the durable successor flow.
++   * @return {boolean} Whether a lingering claim was cleared.
++   */
++  clearLocalCanonicalLeaderClaimOnTeardown() {
++    const observation = this.localCanonicalLeaderObservation;
++    this.localCanonicalLeaderObservation = null;
++    if (
++      !this.systemTableCache ||
++      typeof this.systemTableCache.get !== PARTITION_SERVICE_LITERAL.FUNCTION ||
++      typeof this.systemTableCache.applySystemTableChange !==
++        PARTITION_SERVICE_LITERAL.FUNCTION
++    ) {
++      return false;
++    }
++    const existingRow = this.systemTableCache.get(
++      TABLES.PARTITIONS,
++      this.partitionId,
++    );
++    if (
++      !existingRow ||
++      (existingRow[COLUMN.LEADER_CLAIM_NODE_ID] !== this.nodeId &&
++        !observation)
++    ) {
++      return false;
++    }
++    const claimClearProjection = {
++      [COLUMN.PARTITION_ID]: this.partitionId,
++      [COLUMN.LEADER_CLAIM_NODE_ID]: null,
++      [COLUMN.LEADER_CLAIM_RAFT_TERM]: null,
++      [COLUMN.LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT]: null,
++    };
++    if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
++      claimClearProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
++    }
++    if (typeof existingRow[COLUMN.UPDATED_AT_HLC] !== 'undefined') {
++      claimClearProjection[COLUMN.UPDATED_AT_HLC] =
++        existingRow[COLUMN.UPDATED_AT_HLC];
++    }
++    this.systemTableCache.applySystemTableChange(
++      TABLES.PARTITIONS,
++      PARTITION_SERVICE_LITERAL.UPDATE,
++      claimClearProjection,
++      {
++        causeId:
++          `local-raft-leader:teardown:${this.partitionId}:${this.nodeId}`,
++      },
++    );
++    return true;
++  }
+   /**
+    * Reconcile an authoritative cache delivery with the active local projection.
+    * Equal/older replays of the pre-election row may temporarily overwrite an
+@@ -222,6 +283,24 @@ class PartitionServiceMetadataDeliveryMethods {
+       [COLUMN.PARTITION_ID]: this.partitionId,
+       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+     };
++    // Tenure claim annotations ride every projection explicitly: the UPDATE
++    // merge preserves absent fields, so a demotion/supersession projection
++    // must null them or a stale claim would outlive its tenure. A live claim
++    // is stamped only when this projection asserts THIS node's leadership
++    // and the observation carries the term the election was won at.
++    const observationTerm = this.localCanonicalLeaderObservation?.raftTerm;
++    const claimActive =
++      leaderNodeId === this.nodeId &&
++      Number.isFinite(observationTerm);
++    localProjection[COLUMN.LEADER_CLAIM_NODE_ID] =
++      claimActive ? this.nodeId : null;
++    localProjection[COLUMN.LEADER_CLAIM_RAFT_TERM] =
++      claimActive ? observationTerm : null;
++    localProjection[COLUMN.LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT] =
++      claimActive ?
++        this.localCanonicalLeaderObservation?.baseRow?.[COLUMN.UPDATED_AT] ??
++          null :
++        null;
+     if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
+       localProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
+     }
+diff --git a/src/raft/raft-replica-base.js b/src/raft/raft-replica-base.js
+index 11965d776a13bd3c32d3e37c072acc51849a7b12..6a0118eb7861aeafbf2aee1cdceeb02b1db74e3e 100644
+--- a/src/raft/raft-replica-base.js
++++ b/src/raft/raft-replica-base.js
+@@ -210,9 +210,9 @@ class RaftReplicaBase extends EventEmitter {
+       this.role = RaftRole.LEADER;
+       this.isLeader = true;
+       this.leaderId = this.replicaId;
++      const term = this.resolveCurrentTermSafe();
+       this.queueRoleUpdate(this.role);
+-      this.queueLeaderNodeUpdate(this.nodeId);
+-      const term = this.raftProvider.getCurrentTerm(this.raft);
++      this.queueLeaderNodeUpdate(this.nodeId, term);
+ 
+       this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.BECAME_LEADER, {
+         term,
+@@ -295,7 +295,7 @@ class RaftReplicaBase extends EventEmitter {
+       this.isLeader = true;
+       this.leaderId = this.replicaId;
+       this.queueRoleUpdate(this.role);
+-      this.queueLeaderNodeUpdate(this.nodeId);
++      this.queueLeaderNodeUpdate(this.nodeId, this.resolveCurrentTermSafe());
+ 
+       this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.SINGLE_REPLICA_LEADER, {
+         replicaId: this.replicaId,
+@@ -465,6 +465,25 @@ class RaftReplicaBase extends EventEmitter {
+     });
+   }
+ 
++  /**
++   * Resolve the current raft term when a live raft instance exists; the
++   * single-replica leadership path can run before raft wiring, where no
++   * term is available yet (the tenure claim is then simply not stamped).
++   * @return {number|null}
++   * @protected
++   */
++  resolveCurrentTermSafe() {
++    if (!this.raft || !this.raftProvider) {
++      return null;
++    }
++    try {
++      const term = Number(this.raftProvider.getCurrentTerm(this.raft));
++      return Number.isFinite(term) ? term : null;
++    } catch {
++      return null;
++    }
++  }
++
+   /**
+    * Queue a leader node update for persistence.
+    * @param {string} leaderNodeId - Leader node ID.
+diff --git a/src/rebalancer/priority-publication-safety-rows.js b/src/rebalancer/priority-publication-safety-rows.js
+index 9769c4af822c9a186ead106fdad75e6b869481f0..de69e76041c4fc8fce83650d4ba35ecd5c1e1a22 100644
+--- a/src/rebalancer/priority-publication-safety-rows.js
++++ b/src/rebalancer/priority-publication-safety-rows.js
+@@ -111,22 +111,35 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
+     // publication lands. A blunt authoritative-wins merge re-imposes the
+     // stale durable leader for the whole publication round-trip (measured
+     // 5-6s per ledger self-move during formation), deferring remove safety
+-    // on leadership the local raft already committed. Prefer the cached
+-    // leader_node_id ONLY when it names this node: an election won here is
+-    // this node's own committed raft decision (cleared on demotion,
+-    // superseded flags guard the reverse direction); a cached row naming any
+-    // OTHER node keeps deferring to the authoritative read.
+-    const cachedLeaderNodeId =
+-      typeof cachedRow?.leader_node_id === 'string' &&
+-      cachedRow.leader_node_id.length > 0 ?
+-        cachedRow.leader_node_id :
++    // on leadership the local raft already committed.
++    //
++    // The preference is TENURE-BOUND, not content-based (quest
++    // local-leadership-tenure-bound-safety-evidence): it fires only when the
++    // cached row carries this node's live tenure claim — the local-only
++    // leader_claim_* annotations the projection stamps at election time with
++    // the raft term the election was won at, nulled on demotion,
++    // supersession, and replica teardown, and impossible for a CDC replay of
++    // any durable row to carry. A row merely NAMING this node (a fossil of
++    // an old tenure) or naming any other node keeps deferring to the
++    // authoritative read.
++    const localNodeId = this.repository?.nodeId;
++    const cachedClaimNodeId =
++      typeof cachedRow?.leader_claim_node_id === 'string' &&
++      cachedRow.leader_claim_node_id.length > 0 ?
++        cachedRow.leader_claim_node_id :
+         null;
+-    if (
+-      cachedLeaderNodeId !== null &&
+-      cachedLeaderNodeId === this.repository?.nodeId &&
+-      mergedRow.leader_node_id !== cachedLeaderNodeId
+-    ) {
+-      mergedRow.leader_node_id = cachedLeaderNodeId;
++    const rawClaimTerm = cachedRow?.leader_claim_raft_term;
++    const cachedClaimTerm =
++      rawClaimTerm === null || rawClaimTerm === undefined ?
++        Number.NaN :
++        Number(rawClaimTerm);
++    const liveLocalClaim =
++      cachedClaimNodeId !== null &&
++      cachedClaimNodeId === localNodeId &&
++      cachedRow?.leader_node_id === cachedClaimNodeId &&
++      Number.isFinite(cachedClaimTerm);
++    if (liveLocalClaim && mergedRow.leader_node_id !== cachedClaimNodeId) {
++      mergedRow.leader_node_id = cachedClaimNodeId;
+     }
+     return mergedRow;
+   }
+diff --git a/test/convergence/dt-local-leader-seed-safety-merge.test.js b/test/convergence/dt-local-leader-seed-safety-merge.test.js
+index 0f25eec7ae28e284c9d1d91278c95c945ade9173..4ba7a007ce43df3f8fcc5ae1861877eb42295e53 100644
+--- a/test/convergence/dt-local-leader-seed-safety-merge.test.js
++++ b/test/convergence/dt-local-leader-seed-safety-merge.test.js
+@@ -47,7 +47,25 @@ function makeSafetyRows({cachedRow, authoritativeRow, nodeId = LOCAL_NODE}) {
+   return instance;
+ }
+ 
+-function cachedSeededRow(leaderNodeId) {
++// A row seeded by the LIVE local tenure: carries the local-only claim
++// annotations the projection stamps at election time (term-bound).
++function cachedSeededRow(leaderNodeId, {claimTerm = 7} = {}) {
++  return {
++    partition_id: PARTITION_ID,
++    leader_node_id: leaderNodeId,
++    leader_claim_node_id: leaderNodeId,
++    leader_claim_raft_term: claimTerm,
++    leader_claim_minted_against_updated_at: 2_000,
++    created_at: 1_000,
++    updated_at: 2_000,
++  };
++}
++
++// A fossil: a row NAMING a node as leader without any tenure claim — the
++// shape every CDC round-trip of a durable row has (durable columns cannot
++// carry the local-only claim annotations), and the shape a stale replay of
++// an old tenure leaves behind after the teardown clear.
++function fossilRow(leaderNodeId) {
+   return {
+     partition_id: PARTITION_ID,
+     leader_node_id: leaderNodeId,
+@@ -91,6 +109,39 @@ t.test(
+   },
+ );
+ 
++t.test(
++  'replay fossil: a cached row merely NAMING this node without a live ' +
++    'tenure claim is never preferred over the authoritative read',
++  async (t) => {
++    // The external review's replay window: an equal-version CDC round-trip
++    // of an old durable row naming this node (the local claim was nulled at
++    // demotion/teardown, and durable rows cannot carry claim annotations).
++    // Content-based precedence resurrects the fossil; tenure-binding must
++    // not.
++    const safetyRows = makeSafetyRows({
++      cachedRow: fossilRow(LOCAL_NODE),
++    });
++    const merged = safetyRows.mergePartitionRowForSafety(
++      authoritativeStaleRow(),
++      fossilRow(LOCAL_NODE),
++    );
++    t.equal(
++      merged.leader_node_id,
++      STALE_LEADER,
++      'an old-tenure fossil naming this node defers to authoritative truth',
++    );
++    const withoutTerm = safetyRows.mergePartitionRowForSafety(
++      authoritativeStaleRow(),
++      {...cachedSeededRow(LOCAL_NODE), leader_claim_raft_term: null},
++    );
++    t.equal(
++      withoutTerm.leader_node_id,
++      STALE_LEADER,
++      'a claim without its raft term is not a live tenure and is not preferred',
++    );
++  },
++);
++
+ t.test(
+   'a cached row naming ANOTHER node still defers to the authoritative read',
+   async (t) => {

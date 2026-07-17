@@ -27,7 +27,16 @@ function applyReplicaLeadership(replica, role) {
     replica.queueRoleUpdate(role);
   }
   if (typeof replica.queueLeaderNodeUpdate === 'function') {
-    replica.queueLeaderNodeUpdate(replica.nodeId);
+    // The tenure claim is minted here: the term travels with the leadership
+    // event so the owner-local canonical leader projection can stamp it
+    // (quest local-leadership-tenure-bound-safety-evidence). Replicas that
+    // cannot resolve a term simply mint no claim — fail-closed.
+    replica.queueLeaderNodeUpdate(
+      replica.nodeId,
+      typeof replica.resolveCurrentTermSafe === 'function' ?
+        replica.resolveCurrentTermSafe() :
+        null,
+    );
   }
 }
 

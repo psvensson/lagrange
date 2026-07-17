@@ -89,6 +89,9 @@ class PartitionServiceLifecycleMethods {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     });
+    // A tenure claim must not outlive its replica (see
+    // clearLocalCanonicalLeaderClaimOnTeardown).
+    this.clearLocalCanonicalLeaderClaimOnTeardown?.();
     if (this.learnerPromotionTimer) {
       clearTimeout(this.learnerPromotionTimer);
       this.learnerPromotionTimer = null;

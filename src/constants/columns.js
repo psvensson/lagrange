@@ -12,6 +12,12 @@ const COLUMN = Object.freeze({
   PARTITION_ID: 'partition_id',
   SIZE_BYTES: 'size_bytes',
   LEADER_NODE_ID: 'leader_node_id',
+  // Local-only tenure claim annotations stamped by the owner-local canonical
+  // leader projection (never durable columns, so a CDC round-trip of any
+  // durable row cannot carry them — that asymmetry is the replay fence).
+  LEADER_CLAIM_NODE_ID: 'leader_claim_node_id',
+  LEADER_CLAIM_RAFT_TERM: 'leader_claim_raft_term',
+  LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT: 'leader_claim_minted_against_updated_at',
   TABLE_ID: 'table_id',
   SERVICE_ID: 'service_id',
   OPERATION_ID: 'operation_id',

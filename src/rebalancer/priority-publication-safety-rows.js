@@ -111,22 +111,35 @@ class PriorityPublicationSafetyRows extends PriorityPublicationSafetyTopology {
     // publication lands. A blunt authoritative-wins merge re-imposes the
     // stale durable leader for the whole publication round-trip (measured
     // 5-6s per ledger self-move during formation), deferring remove safety
-    // on leadership the local raft already committed. Prefer the cached
-    // leader_node_id ONLY when it names this node: an election won here is
-    // this node's own committed raft decision (cleared on demotion,
-    // superseded flags guard the reverse direction); a cached row naming any
-    // OTHER node keeps deferring to the authoritative read.
-    const cachedLeaderNodeId =
-      typeof cachedRow?.leader_node_id === 'string' &&
-      cachedRow.leader_node_id.length > 0 ?
-        cachedRow.leader_node_id :
+    // on leadership the local raft already committed.
+    //
+    // The preference is TENURE-BOUND, not content-based (quest
+    // local-leadership-tenure-bound-safety-evidence): it fires only when the
+    // cached row carries this node's live tenure claim — the local-only
+    // leader_claim_* annotations the projection stamps at election time with
+    // the raft term the election was won at, nulled on demotion,
+    // supersession, and replica teardown, and impossible for a CDC replay of
+    // any durable row to carry. A row merely NAMING this node (a fossil of
+    // an old tenure) or naming any other node keeps deferring to the
+    // authoritative read.
+    const localNodeId = this.repository?.nodeId;
+    const cachedClaimNodeId =
+      typeof cachedRow?.leader_claim_node_id === 'string' &&
+      cachedRow.leader_claim_node_id.length > 0 ?
+        cachedRow.leader_claim_node_id :
         null;
-    if (
-      cachedLeaderNodeId !== null &&
-      cachedLeaderNodeId === this.repository?.nodeId &&
-      mergedRow.leader_node_id !== cachedLeaderNodeId
-    ) {
-      mergedRow.leader_node_id = cachedLeaderNodeId;
+    const rawClaimTerm = cachedRow?.leader_claim_raft_term;
+    const cachedClaimTerm =
+      rawClaimTerm === null || rawClaimTerm === undefined ?
+        Number.NaN :
+        Number(rawClaimTerm);
+    const liveLocalClaim =
+      cachedClaimNodeId !== null &&
+      cachedClaimNodeId === localNodeId &&
+      cachedRow?.leader_node_id === cachedClaimNodeId &&
+      Number.isFinite(cachedClaimTerm);
+    if (liveLocalClaim && mergedRow.leader_node_id !== cachedClaimNodeId) {
+      mergedRow.leader_node_id = cachedClaimNodeId;
     }
     return mergedRow;
   }

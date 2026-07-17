@@ -51,6 +51,25 @@ const {
 
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
+   * Resolve the current raft term when a live raft instance exists; the
+   * leadership-state helper passes it with the leadership event so the
+   * owner-local canonical leader projection can mint a tenure claim. A null
+   * return simply mints no claim — fail-closed.
+   * @return {number|null}
+   */
+  resolveCurrentTermSafe() {
+    if (!this.raft || !this.raftProvider) {
+      return null;
+    }
+    try {
+      const term = Number(this.raftProvider.getCurrentTerm(this.raft));
+      return Number.isFinite(term) ? term : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Join newly visible peers and replace moved peer addresses using the
    * authoritative services cache. Missing rows are ignored conservatively.
    * @private

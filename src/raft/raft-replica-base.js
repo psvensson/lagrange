@@ -210,9 +210,9 @@ class RaftReplicaBase extends EventEmitter {
       this.role = RaftRole.LEADER;
       this.isLeader = true;
       this.leaderId = this.replicaId;
+      const term = this.resolveCurrentTermSafe();
       this.queueRoleUpdate(this.role);
-      this.queueLeaderNodeUpdate(this.nodeId);
-      const term = this.raftProvider.getCurrentTerm(this.raft);
+      this.queueLeaderNodeUpdate(this.nodeId, term);
 
       this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.BECAME_LEADER, {
         term,
@@ -295,7 +295,7 @@ class RaftReplicaBase extends EventEmitter {
       this.isLeader = true;
       this.leaderId = this.replicaId;
       this.queueRoleUpdate(this.role);
-      this.queueLeaderNodeUpdate(this.nodeId);
+      this.queueLeaderNodeUpdate(this.nodeId, this.resolveCurrentTermSafe());
 
       this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
@@ -463,6 +463,25 @@ class RaftReplicaBase extends EventEmitter {
         error: error.message,
       });
     });
+  }
+
+  /**
+   * Resolve the current raft term when a live raft instance exists; the
+   * single-replica leadership path can run before raft wiring, where no
+   * term is available yet (the tenure claim is then simply not stamped).
+   * @return {number|null}
+   * @protected
+   */
+  resolveCurrentTermSafe() {
+    if (!this.raft || !this.raftProvider) {
+      return null;
+    }
+    try {
+      const term = Number(this.raftProvider.getCurrentTerm(this.raft));
+      return Number.isFinite(term) ? term : null;
+    } catch {
+      return null;
+    }
   }
 
   /**
