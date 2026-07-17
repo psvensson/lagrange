@@ -571,6 +571,40 @@ const CONFIGS = [
       'Temporal property EventuallySchemaAdmitted was violated',
   },
   {
+    id: 'local-leader-tenure-claim-tenure-bound',
+    mode: 'local-leader-tenure-claim-tenure-bound',
+    module: path.resolve(
+      'models', 'local-leader-tenure-claim', 'LocalLeaderTenureClaim.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'local-leader-tenure-claim',
+      'LocalLeaderTenureClaim_tenure_bound.cfg',
+    ),
+    expectConverged: true,
+    report: 'local-leader-tenure-claim-tenure-bound.model.report.json',
+    scenario: 'local-leadership-tenure-bound-safety-evidence-model',
+    owner: 'partition_metadata_publication_owner',
+    boundary: 'local_leader_claim_safety_read_merge_composition',
+  },
+  {
+    id: 'local-leader-tenure-claim-content-based',
+    mode: 'local-leader-tenure-claim-content-based',
+    module: path.resolve(
+      'models', 'local-leader-tenure-claim', 'LocalLeaderTenureClaim.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'local-leader-tenure-claim',
+      'LocalLeaderTenureClaim_content_based_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'local-leader-tenure-claim-content-based.model.report.json',
+    scenario: 'local-leadership-content-based-fossil-counterexample',
+    owner: 'partition_metadata_publication_owner',
+    boundary: 'local_leader_claim_safety_read_merge_composition',
+    expectedFailurePattern:
+      'Invariant MergeNeverTrustsDeadTenure is violated',
+  },
+  {
     id: 'authoritative-observation-watermark-exact-equality',
     mode: 'authoritative-observation-watermark-exact-equality',
     module: path.resolve(
