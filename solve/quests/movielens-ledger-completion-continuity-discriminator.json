@@ -1,0 +1,66 @@
+{
+  "id": "movielens-ledger-completion-continuity-discriminator",
+  "authoringContractVersion": 1,
+  "statement": "A deterministic production-seam discriminator emits a measured classification for normal exact-generation operation-ledger REPLACE completion, lost or late response after target leadership, leadership before local PARTITIONS hydration, and independent ACTIVE, STOPPING, terminal-persistence, and visibility-confirmation failure, while stale, wrong-generation, demoted, and no-quorum evidence cannot release canonical remove safety and runtime policy remains unchanged.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "movielens-nodes-priority-recovery-escape",
+    "planDoc": "solve/epics/self-hosting-circularity-generic-treatment.md",
+    "draftedAtCommit": "54b672c441ad5d1bb1cd79a9d35766bd8568dae2"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-ledger-completion-continuity-discriminator",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-ledger-completion-continuity-discriminator-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-ledger-completion-continuity-discriminator",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "proof-package-only",
+      "statement": "This investigative Quest may add deterministic fixtures, scenario adapters, and immutable evidence only; it must not change runtime policy, admission, retry, timeout, lease, membership, quorum, remove-safety, or operation-ledger semantics."
+    },
+    {
+      "id": "exact-physical-leadership-witness",
+      "statement": "A target-handoff response, target-only self-report, or transport acknowledgement is not physical leadership proof; each applicable case must assert the exact replacement generation, leader identity, and finite term from the target plus voting-majority agreement on that leader and term before evaluating continuation or terminality."
+    },
+    {
+      "id": "three-independent-fault-families",
+      "statement": "Response loss or lateness, leader transition before local PARTITIONS-row hydration, and ACTIVE or STOPPING or terminal persistence and visibility-confirmation failure must be injected and classified independently, alongside a normal baseline."
+    },
+    {
+      "id": "negative-safety-matrix",
+      "statement": "Wrong generation, stale prior leader, demoted target, absent quorum, transport acknowledgement without processing evidence, and failed authoritative terminal persistence must never authorize source removal or release the serialized ledger hold."
+    },
+    {
+      "id": "reuse-existing-owners",
+      "statement": "The discriminator must exercise the existing workflow owner, partition metadata publication owner, canonical remove-safety owner, local-deferred progress, terminal-transition repair, and ledger interlock; it must not introduce a second cache, workflow engine, completion authority, or gate-local Raft decision."
+    },
+    {
+      "id": "clean-pinned-baseline",
+      "statement": "All evidence must name a clean source fingerprint based on commit 54b672c441ad5d1bb1cd79a9d35766bd8568dae2, which contains checkpoint 57bad436; the mixed main worktree is not a valid test baseline."
+    }
+  ]
+}
