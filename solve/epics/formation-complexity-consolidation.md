@@ -7,7 +7,7 @@ graduatesTo: null
 
 # Epic: Formation complexity consolidation (verified 2026-07-18 deep review)
 
-## Handoff — start here (state as of 2026-07-18, commit 8e8aad72, tree clean)
+## Handoff — start here (state as of 2026-07-18 evening, F3/O6-adjacent admission cutover landed)
 
 A fresh agent can continue directly from this section; the Decision log below
 holds the full evidence trail.
@@ -16,20 +16,24 @@ holds the full evidence trail.
 (F12, corrected after live falsification of the row-only form); structural
 ReadAuthority token through the gateway read path (O1 core); per-table cache
 mutation versions arbitrating readiness snapshot reuse (O2 core); dead-branch
-and quorum-formula cleanups (O5 first step). First-ever schema-admission
-passes in the quest lineage (2 of 3 fresh runs; the fail was a
-prioritySpreadGap=1 residual, evidence ingested into
-formation-joining-ready-phase-fence-live).
+and quorum-formula cleanups (O5 first step); **the full flagless
+pressure-admission cutover (F3 resolved)** — flagless decision table (DEGRADE
+retired), saturation-derived pacing hints, bounded priority-ordered
+admit-on-capacity queue on the governor, one flagless gateway pressure
+builder, publication parking derived from work class, reason-aware rebalancer
+brake — landed as 7 scope-bounded quests (core
+`pressure-admission-flagless-defer-policy` + 6 sibling slices, commits
+58798c45..a48fd015), independently verified twice (verdict archived in
+solve/artifacts/pressure-admission-flagless-defer-policy/), live-validated to
+schema admission. Companion root-cause fix 0e21d387: schema derivation stored
+string defaults unquoted, so DEFAULT '{}' re-emitted as DEFAULT {} and every
+first replica-provisioning attempt failed into a 15s redrive — live step 1
+only ever passed via the deferred_by_pressure early-completion accident the
+new queue removed. Attempt-2 lesson: pair every live verdict with a
+clean-HEAD control run — HEAD itself failed formation and (twice this
+morning) the learned-affinity phase under the same machine conditions.
 
 **Open quests (run `node scripts/solve.js next --id <id>`):**
-- `pressure-admission-flagless-defer-policy` — direction agreed (NO
-  per-request flags; policy over work class) but the fixed-hint always-DEFER
-  shape is FALSIFIED live (9x slower cold-formation joins; finding recorded).
-  Next attempt must be real queueing (bounded per-work-class queues,
-  admit-on-capacity, priority-ordered) or formation-phase-aware policy.
-  HARD RULE: live-validate any admission-policy change with a full
-  run-affinity-demo before committing — 1074 unit tests passed while live
-  formation failed.
 - `read-authority-structural-threading` — core landed; tail: migrate
   remaining legacy boolean consumers to the token, then delete
   resolveAuthoritativeReadModeContract's re-expansion and the per-hop
@@ -39,9 +43,21 @@ formation-joining-ready-phase-fence-live).
   version CAS, then delete the marker zoo (that code is load-bearing for the
   fence quest — sequence after it closes).
 - `formation-joining-ready-phase-fence-live` (pre-existing) — owns the
-  remaining formation residual (spread-gap rotation). O3/O4 (serial
-  goal-state priority planner + ledger episode state machine — the biggest
-  simplification, options in this epic) unlock when it records a terminal.
+  remaining formation residuals: spread-gap rotation, and (surfaced 2026-07-18
+  on clean HEAD at 11:02/11:19 and again on the cutover run 16-43-20) the
+  learned-affinity attribution stall — attributionRows=0 for 300s while
+  attribution rows demonstrably land in service_partition_access (~4.7min
+  from service deploy to first access window; probe SELECT sees none). O3/O4
+  (serial goal-state priority planner + ledger episode state machine — the
+  biggest simplification, options in this epic) unlock when it records a
+  terminal.
+- Flag-surface tail (small, unqueued): delete the uncalled
+  shouldMetadataPublicationAllowPressureDefer
+  (partition-service-metadata-delivery-methods.js) and the stale
+  allowPressure* options still passed by a few tests; CDC default
+  materialization leaves doubled quotes unescaped for quote-containing
+  string defaults (none exist today) — verifier findings 5/6, archived
+  verdict has details.
 
 **Exhausted (do not reopen without their recorded conditions):**
 `quiescence-observation-lane-decoupling` (symptom absent on HEAD ×2; reopen
@@ -249,17 +265,14 @@ Lifecycle / membership:
 
 ## Open questions
 
-- **F3 resolution path (updated 2026-07-18):** the flagless direction is
-  agreed (no per-request pressure flags; policy over work class), but the
-  first attempt — always-DEFER with a fixed 250ms hint, the APF/CockroachDB
-  shape — was FALSIFIED live: cold-formation joins slowed ~9x and blew the
-  activation budget, because formation relies on tight retry loops pushing
-  through flickering backpressure that fixed-hint pacing serializes. The
-  quest `pressure-admission-flagless-defer-policy` stays open for a design
-  with real queueing (admit-when-capacity, priority-ordered) or a
-  formation-phase-aware policy; a fixed defer hint is ruled out by evidence.
-  All unit suites passed while live formation failed — admission-policy
-  changes MUST be validated with a live formation run before landing.
+- **F3 RESOLVED (2026-07-18 evening):** attempt 2 landed the agreed flagless
+  direction as real queueing — bounded per-work-class admit-on-capacity queue
+  with saturation-derived pacing hints (shallow flicker ~10-15ms, 250ms
+  ceiling) — and was live-validated to schema admission after the masked
+  deterministic blocker (schema default-literal quoting, fixed in 0e21d387)
+  was rooted out. The falsified fixed-hint shape stays ruled out. Standing
+  rule kept: admission-policy changes MUST be validated with a live formation
+  run AND a paired clean-HEAD control run before landing.
 - F3: which `allowPressureDegrade` default is intended? (Behavior decision.)
 - O3 sequencing: before or after the current live quest closes? The cure
   classifiers (F8) are load-bearing for the quest's measured outcome; O3
