@@ -18,9 +18,9 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json
 - Selected theory: theory-20260718-the-approved-concurrency-behavior-is-correct (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for formation-schema-operation-collision-leader-read-closure-main
 
@@ -58,6 +58,9 @@
 - **formation-schema-operation-collision-leader-read-closure-main**: Independent verification passed: cumulative leader-pinned collision confirmation and routing-aware read coalescing remain fail-closed through the real REPLACE path [subagent:formation_barrier_verifier]
 - **formation-schema-operation-collision-leader-read-closure-main**: Checkpoint rejected approved attempt 2 because the new concurrency regression pushed control-plane-system-table-gateway.test.js over the 1500-line test ratchet; replacement must preserve the same behavior in a bounded registered test-case module. [command:node-scripts-solve-checkpoint]
 - **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/control-plane/control-plane-system-table-gateway.test.js [dt:solve/changes/dt-prove/control-plane-system-table-gateway.test.js-2026-07-18T03-35-02-477Z.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: Independent verification approved the exact cumulative attempt-3 leader-pinned collision and routing-aware coalescing artifact, including its bounded registered concurrency regression [subagent:formation_barrier_verifier]
+- **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
 
 ## Theories
 - **theory-20260718-the-approved-concurrency-behavior-is-correct** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer observation, mechanism The approved concurrency behavior is correct, but its regression was placed in a nearly full aggregate test file; registering the same test from a bounded sibling test-case module preserves execution while restoring the file-size contract., owner control_plane_gateway_test_registration, boundary source_attempt_checkpoint, modelGate npm run model:contracts
@@ -67,6 +70,7 @@
 
 ## Theory Results
 - **theory-20260718-the-approved-concurrency-behavior-is-correct**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
+- **theory-20260718-the-approved-concurrency-behavior-is-correct**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
