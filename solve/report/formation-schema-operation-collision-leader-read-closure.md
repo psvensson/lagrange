@@ -21,14 +21,14 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json
-- Selected theory: theory-20260718-a-stored-multi-table-readiness-snapshot (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for formation-schema-operation-collision-leader-read-closure-main
+- Selected theory: theory-20260718-schema-admission-consumes-pre-ready-formation-time
+- Next move: continue supervised step for formation-schema-operation-collision-leader-read-closure-main
+- No longer current: planner-only reordering; timeout increases; treating nodes.status=active as placement-ready
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for formation-schema-operation-collision-leader-read-closure-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for formation-schema-operation-collision-leader-read-closure-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Status: allowed
+- Next action: continue formation-schema-operation-collision-leader-read-closure-main with modelRef or modelNotApplicable evidence
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 10
@@ -68,16 +68,20 @@
 - **formation-schema-operation-collision-leader-read-closure-main**: Independent verification approved exact Attempt 4 after attempt recording; service/publication invalidation defeats regressed-row reuse, node-only bridging remains, focused/supporting tests and red-on-revert proof pass. [subagent:formation_barrier_verifier]
 - **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
 - **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: The cold-formation barrier withholds only the final ready lease: node registration publishes nodes.status=active earlier, and the unchanged MovieLens scenario starts schema admission after counting those active rows. In the failed run the ledger barrier and priority operations continued after that clock began, so eventual zero spread at T+164 left only about 16 seconds for an unchanged 60-second stability condition. Planner-only reordering and timeout increases are ruled out; the missing contract is a canonical placement-ready or available phase between recovery-eligible registration and schema admission. (rules out: planner-only reordering; timeout increases; treating nodes.status=active as placement-ready) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
 
 ## Theories
-- **theory-20260718-the-read-model-snapshot-owner-collapses** [active] system, mechanism The read-model snapshot owner collapses node, service, partition, and publication evidence into one snapshot but uses only the node heartbeat watermark to arbitrate reuse; when that row regresses, a later service invalidation is ignored and stale repairEligible=false survives repeated authoritative repair., owner read_model_contract_owner, modelGate npm run model:contracts
+- **theory-20260718-the-read-model-snapshot-owner-collapses** [superseded] system, mechanism The read-model snapshot owner collapses node, service, partition, and publication evidence into one snapshot but uses only the node heartbeat watermark to arbitrate reuse; when that row regresses, a later service invalidation is ignored and stale repairEligible=false survives repeated authoritative repair., owner read_model_contract_owner, modelGate npm run model:contracts
+- **theory-20260718-registration-active-precedes-placement-ready-admission** [active] system, mechanism The lifecycle collapses recovery-eligible registration and client-admission visibility into nodes.status=active, while the operation-ledger formation barrier gates only the later ready lease. Variable persisted REPLACE transitions can therefore consume the fixed admission window before quiescence can start., owner startup_lifecycle_admission_owner, modelGate npm run model:contracts
 - **theory-20260718-the-approved-concurrency-behavior-is-correct** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer observation, mechanism The approved concurrency behavior is correct, but its regression was placed in a nearly full aggregate test file; registering the same test from a bounded sibling test-case module preserves execution while restoring the file-size contract., owner control_plane_gateway_test_registration, boundary source_attempt_checkpoint, modelGate npm run model:contracts
 - **theory-20260718-a-stored-multi-table-readiness-snapshot** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer observation, mechanism A stored multi-table readiness snapshot with repairEligible=false is retained when the visible node row regresses, because getFresherStoredReadinessSnapshot checks node/service invalidation only on equal node watermarks; authoritative service repair invalidates the target but the older node watermark suppresses that independent revision., modelGate npm run model:contracts
+- **theory-20260718-schema-admission-consumes-pre-ready-formation-time** [active] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer ownership, mechanism The active-node projection admits the scenario clock before the final ready-lease formation barrier owns a placement-ready outcome., owner startup_lifecycle_admission_owner, boundary active_membership_to_schema_admission, modelGate npm run model:contracts
 
 ## Selected Theories
-- **formation-schema-operation-collision-leader-read-closure-main**: theory-20260718-a-stored-multi-table-readiness-snapshot
+- **formation-schema-operation-collision-leader-read-closure-main**: theory-20260718-schema-admission-consumes-pre-ready-formation-time
 
 ## Theory Results
+- **theory-20260718-the-read-model-snapshot-owner-collapses**: superseded [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
 - **theory-20260718-the-approved-concurrency-behavior-is-correct**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
 - **theory-20260718-the-approved-concurrency-behavior-is-correct**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
 - **theory-20260718-a-stored-multi-table-readiness-snapshot**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
