@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 3
+**Attempts:** 4
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -21,31 +21,29 @@
 - Mechanism: transition_gap
 - Movement: first blocker observed: FAIL
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json
-- Selected theory: theory-20260718-the-approved-concurrency-behavior-is-correct (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for formation-schema-operation-collision-leader-read-closure-main
+- Selected theory: theory-20260718-a-stored-multi-table-readiness-snapshot
+- Next move: continue supervised step for formation-schema-operation-collision-leader-read-closure-main
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record system theory before the next formation-schema-operation-collision-leader-read-closure-main attempt using npm run model:contracts as model discriminator
-- Blocker: system theory required for formation-schema-operation-collision-leader-read-closure-main
-- Blocker: frontier theory required for formation-schema-operation-collision-leader-read-closure-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Status: allowed
+- Next action: continue formation-schema-operation-collision-leader-read-closure-main with modelRef or modelNotApplicable evidence
+- Blocker: none
 
 ## Scope Pressure
-- Changed files: 8
-- Change bytes: 17462
+- Changed files: 10
+- Change bytes: 23171
 - Owner areas: src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Categories: runtime, test
 - Action: land or separate 4 owner areas: src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Split plan:
-  - test/control-plane: 3 file(s)
-  - src/control-plane: 2 file(s)
+  - test/control-plane: 4 file(s)
+  - src/control-plane: 3 file(s)
   - src/rebalancer: 2 file(s)
   - test/rebalancer: 1 file(s)
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **formation-schema-operation-collision-leader-read-closure-main** [open] rung 3, attempts 3, metric 1 -> 1
+- **formation-schema-operation-collision-leader-read-closure-main** [open] rung 3, attempts 4, metric 1 -> 1
 
 ## Findings
 - **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/rebalancer/replica-operation-repository.test.js [dt:solve/changes/dt-prove/replica-operation-repository.test.js-2026-07-18T03-05-07-174Z.json]
@@ -61,16 +59,24 @@
 - **formation-schema-operation-collision-leader-read-closure-main**: Independent verification approved the exact cumulative attempt-3 leader-pinned collision and routing-aware coalescing artifact, including its bounded registered concurrency regression [subagent:formation_barrier_verifier]
 - **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
 - **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: Fresh live evidence moved the first blocker beyond schema operation collision: formation admitted quiescent with zero spread gaps, all joiners crossed the ledger barrier and signaled ready, but ordinary service placement remained at one of two replicas because joiner repairEligible stayed false despite repeated authoritative node/service/partition cache repair. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: The readiness reuse predicate ignores node/service invalidation whenever the visible node heartbeat watermark is older than the stored snapshot; therefore an independently fresher service repair cannot rebuild repairEligible while node-row CDC lags, coupling unrelated table revisions and preserving a stale false placement gate. [source:src/control-plane/control-plane-readiness-snapshot-store.js]
+- **formation-schema-operation-collision-leader-read-closure-main**: The core-system-logic model remains the governing ownership invariant but is not a discriminating executable model for this intervention: it names the readiness snapshot store and per-node invalidation boundary at low resolution, while its known residual explicitly delegates subsystem revision-ordering details to focused tests; model:contracts is also excluded because it rewrites the protected user-owned active-gate model report. [architecture/contracts/core-system-logic.md]
+- **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/control-plane/readiness-per-change-reuse.test.js [dt:solve/changes/dt-prove/readiness-per-change-reuse.test.js-2026-07-18T07-11-39-597Z.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: Independent verification approved exact Attempt 4 mixed-revision readiness invalidation artifact, including regressed-node service/publication invalidation, node-only bridge preservation, numeric marker compatibility, equal-time TOCTOU retention, 220 supporting assertions, and red-on-revert proof. [subagent:formation_barrier_verifier]
 
 ## Theories
+- **theory-20260718-the-read-model-snapshot-owner-collapses** [active] system, mechanism The read-model snapshot owner collapses node, service, partition, and publication evidence into one snapshot but uses only the node heartbeat watermark to arbitrate reuse; when that row regresses, a later service invalidation is ignored and stale repairEligible=false survives repeated authoritative repair., owner read_model_contract_owner, modelGate npm run model:contracts
 - **theory-20260718-the-approved-concurrency-behavior-is-correct** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer observation, mechanism The approved concurrency behavior is correct, but its regression was placed in a nearly full aggregate test file; registering the same test from a bounded sibling test-case module preserves execution while restoring the file-size contract., owner control_plane_gateway_test_registration, boundary source_attempt_checkpoint, modelGate npm run model:contracts
+- **theory-20260718-a-stored-multi-table-readiness-snapshot** [supported] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer observation, mechanism A stored multi-table readiness snapshot with repairEligible=false is retained when the visible node row regresses, because getFresherStoredReadinessSnapshot checks node/service invalidation only on equal node watermarks; authoritative service repair invalidates the target but the older node watermark suppresses that independent revision., modelGate npm run model:contracts
 
 ## Selected Theories
-- **formation-schema-operation-collision-leader-read-closure-main**: theory-20260718-the-approved-concurrency-behavior-is-correct
+- **formation-schema-operation-collision-leader-read-closure-main**: theory-20260718-a-stored-multi-table-readiness-snapshot
 
 ## Theory Results
 - **theory-20260718-the-approved-concurrency-behavior-is-correct**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
 - **theory-20260718-the-approved-concurrency-behavior-is-correct**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
+- **theory-20260718-a-stored-multi-table-readiness-snapshot**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -78,3 +84,4 @@
 | 2026-07-18T03:07:16.831Z | formation-schema-operation-collision-leader-read-closure-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-1.diff |
 | 2026-07-18T03:26:11.676Z | formation-schema-operation-collision-leader-read-closure-main | local-fix | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-2.diff |
 | 2026-07-18T06:31:16.976Z | formation-schema-operation-collision-leader-read-closure-main | widen-scope | 1 -> 1 | flat | no_evidence | theory-20260718-the-approved-concurrency-behavior-is-correct | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-3.diff |
+| 2026-07-18T07:22:12.213Z | formation-schema-operation-collision-leader-read-closure-main | model | 1 -> 1 | flat | no_previous | theory-20260718-a-stored-multi-table-readiness-snapshot | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-4.diff |

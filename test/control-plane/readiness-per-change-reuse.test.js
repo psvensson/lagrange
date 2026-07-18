@@ -29,6 +29,8 @@
  *    real rows and never engaged).
  * 8. The list-path reuse (null publication overlay args) falls back to the
  *    stored snapshot's own publication fields instead of nulling them.
+ * 9. A service-row invalidation is not suppressed by an independently
+ *    regressed node-row watermark.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -178,6 +180,46 @@ test('CL-019: per-change readiness snapshot reuse', async (t) => {
       );
 
       t.equal(reused, null, 'invalidated snapshot is not reused');
+    },
+  );
+
+  await t.test(
+    'service invalidation forces rebuild despite a regressed node watermark',
+    async (t) => {
+      const {stub} = createStoreStub();
+      const heartbeat = BASE_NOW_MS - 2_000;
+      const lease = BASE_NOW_MS + 10_000;
+      seedStoredSnapshot(
+        stub,
+        buildStoredSnapshot({
+          lastHeartbeat: heartbeat,
+          readyLeaseExpiresAt: lease,
+        }),
+        BASE_NOW_MS - 1_000,
+      );
+      stub.handleCacheChange('services', {
+        node_id: NODE_ID,
+        service_id: 'svc-repaired',
+      });
+      const regressedNodeRow = {
+        node_id: NODE_ID,
+        last_heartbeat: heartbeat - 5_000,
+        ready_lease_expires_at: lease - 5_000,
+        connection_state: 'ready',
+      };
+
+      const reused = stub.getFresherStoredReadinessSnapshot(
+        NODE_ID,
+        regressedNodeRow,
+        null,
+        null,
+      );
+
+      t.equal(
+        reused,
+        null,
+        'independently repaired service evidence invalidates the snapshot',
+      );
     },
   );
 

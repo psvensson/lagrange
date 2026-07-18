@@ -74,19 +74,21 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         nodeRow,
         storedWatermark,
       );
-      // Rebuild when the visible row is STRICTLY fresher than the stored
-      // snapshot. EQUALITY reuses unless a cache-change marker landed since
-      // capture — a row mutation that does not advance the watermark (e.g. a
-      // status flip) still changes content, and only the marker can see it.
-      // A row that is OLDER than the snapshot (read-cache lag/regression) or
-      // MISSING entirely keeps the original bridge semantics: the stored
-      // snapshot is the best available answer; rebuilding from the lagged
-      // row would move the answer backwards.
+      // Rebuild on a fresher row; equality reuses unless a cache-change marker
+      // landed. A lagged row bridges only while no independent service or
+      // publication input advanced after capture.
       if (watermarkComparison < 0) {
         return null;
       }
+      const invalidation = this.lastReadinessSnapshotInvalidatedAtMsByNodeId
+        .get(nodeId);
+      const independentInvalidatedAtMs = Math.max(
+        Number(invalidation?.independentAtMs) || 0,
+        Number(this.lastReadinessSnapshotClusterInvalidatedAtMs) || 0,
+      );
       if (
-        watermarkComparison === 0 &&
+        (watermarkComparison === 0 ||
+          independentInvalidatedAtMs >= capturedAtMs) &&
         this.isReadinessSnapshotInvalidated(nodeId, capturedAtMs)
       ) {
         return null;
@@ -323,9 +325,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         nowMs;
     this.lastReadinessSnapshotByNodeId.set(nodeId, snapshot);
     this.lastReadinessSnapshotAtMsByNodeId.set(nodeId, capturedAtMs);
-    const invalidatedAtMs = Number(
-      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId),
-    );
+    const invalidation =
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId);
+    const invalidatedAtMs = Number(invalidation?.atMs ?? invalidation);
     if (!Number.isFinite(invalidatedAtMs) || invalidatedAtMs < capturedAtMs) {
       // The marker predates this build's input reads: consumed. A marker at
       // or after capturedAtMs is KEPT so isReadinessSnapshotInvalidated
@@ -691,7 +693,14 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     if (!nodeId) {
       return;
     }
-    this.lastReadinessSnapshotInvalidatedAtMsByNodeId.set(nodeId, this.now());
+    const nowMs = this.now();
+    const previous =
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId);
+    this.lastReadinessSnapshotInvalidatedAtMsByNodeId.set(nodeId, {
+      atMs: nowMs,
+      independentAtMs: tableName === TABLES.SERVICES ?
+        nowMs : Number(previous?.independentAtMs) || 0,
+    });
   },
 
   /**
@@ -706,9 +715,10 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     if (!nodeId) {
       return false;
     }
-    const perNodeInvalidatedAtMs = Number(
-      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId),
-    );
+    const invalidation =
+      this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId);
+    const perNodeInvalidatedAtMs =
+      Number(invalidation?.atMs ?? invalidation);
     const clusterInvalidatedAtMs = Number(
       this.lastReadinessSnapshotClusterInvalidatedAtMs,
     );
