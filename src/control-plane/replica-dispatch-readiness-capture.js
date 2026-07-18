@@ -341,16 +341,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
     if (!dimensions) {
       return false;
     }
-    if (dimensions[decisionDimension] === true) {
-      return true;
-    }
-    if (
-      decisionDimension !==
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-    ) {
-      return false;
-    }
-    return false;
+    return dimensions[decisionDimension] === true;
   }
 
   /**

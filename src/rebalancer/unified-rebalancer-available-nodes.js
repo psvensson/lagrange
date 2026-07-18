@@ -375,10 +375,6 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       !readinessService ||
       (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
         'function' &&
-        typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
-          'function' &&
-        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
-          'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
           'function' &&
         typeof readinessService.getMembershipPublicationPlanningSnapshot !==
