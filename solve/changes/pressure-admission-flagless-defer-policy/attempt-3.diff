@@ -1,0 +1,1469 @@
+diff --git a/scripts/run-pressure-admission-flagless-defer-policy-scenarios.js b/scripts/run-pressure-admission-flagless-defer-policy-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8cea59d9a427091117254a71241afd18f9b3e25e
+--- /dev/null
++++ b/scripts/run-pressure-admission-flagless-defer-policy-scenarios.js
+@@ -0,0 +1,57 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `pressure-admission-flagless-defer-policy` quest scenario.
++ *
++ * Executes the scenario's deterministic guard-test suite (the committed
++ * proof of the quest statement) and writes a scenario-harness report for
++ * the Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests (attempt-2 design after the live falsification of
++ * the fixed-hint always-DEFER shape on 2026-07-18: cold-formation joins rely
++ * on tight retry against flickering backpressure, so pacing must be derived
++ * from measured pressure and hot paths must queue for capacity):
++ *   pressure-admission-flagless-defer-policy
++ *     - test/control-plane/pressure-governor.test.js
++ *       (flagless decision table: admission derives only from work class +
++ *        measured pressure; DEGRADE retired; reserve rows intact; pacing
++ *        hint derived from saturation depth, near-immediate under shallow
++ *        flicker; bounded priority-ordered admit-on-capacity queue)
++ *     - test/control-plane/control-plane-system-table-gateway.test.js
++ *       (both gateway pressure contracts collapse to one flagless builder;
++ *        reads/queries park in the admission queue and surface typed
++ *        deferred outcomes with derived retry hints)
++ *     - test/control-plane/authoritative-control-plane-view.test.js
++ *       (authoritative reads defer instead of running in degraded mode;
++ *        typed pressure result carries the defer action)
++ *     - test/query/sql-query-engine-execution.test.js
++ *       (query-plane ingress defers flaglessly with derived hints; plane
++ *        isolation between query and metadata ingress preserved)
++ *     - test/control-plane/replica-dispatch-node-state-update.test.js
++ *       (node-state publication parking derives from work class, not
++ *        per-call flags: background parks, critical escalates)
++ *
++ * NOTE (live validation): unit evidence alone was proven insufficient for
++ * this policy - 1074 unit tests passed while live formation failed 9x
++ * slower. Any admission-policy change must ALSO be validated with a full
++ * `node examples/service-data-affinity/run-affinity-demo.js` run before
++ * committing (see the quest log finding of 2026-07-18T15:03Z).
++ *
++ * Usage: node scripts/run-pressure-admission-flagless-defer-policy-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'pressure-admission-flagless-defer-policy': [
++    'test/control-plane/pressure-governor.test.js',
++    'test/control-plane/control-plane-system-table-gateway.test.js',
++    'test/control-plane/authoritative-control-plane-view.test.js',
++    'test/query/sql-query-engine-execution.test.js',
++    'test/control-plane/replica-dispatch-node-state-update.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/control-plane/authoritative-control-plane-view.js b/src/control-plane/authoritative-control-plane-view.js
+index 28bd30220ef3b0c6a8b18d6623c709c48e3dd7ec..df421a6974651b1e98ec4e38e7c8893d930e7d21 100644
+--- a/src/control-plane/authoritative-control-plane-view.js
++++ b/src/control-plane/authoritative-control-plane-view.js
+@@ -158,9 +158,6 @@ function resolveAuthoritativeReadWorkloadProfile(
+     }),
+     {
+       workClass: resolvedOptions?.workClass || null,
+-      allowPressureDegrade: resolvedOptions?.allowPressureDegrade,
+-      allowPressureDefer: resolvedOptions?.allowPressureDefer,
+-      retryAfterMs: resolvedOptions?.pressureRetryAfterMs,
+       additionalResourceKeys,
+     },
+   );
+@@ -188,10 +185,6 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
+       queryOptions.workClass ||
+       workloadProfile.workClass ||
+       PRESSURE_WORK_CLASS.INTERACTIVE,
+-    allowPressureDegrade:
+-      workloadProfile.allowPressureDegrade !== false,
+-    allowPressureDefer:
+-      workloadProfile.allowPressureDefer === true,
+     authoritativeReadMode:
+       authoritativeReadModeContract.authoritativeReadMode,
+     preferOwnerRpcReadLeader:
+@@ -410,13 +403,10 @@ class AuthoritativeControlPlaneView {
+           `control-plane:table:${tableName || 'unknown'}`,
+         ],
+       );
+-      const pressureDecision = this.getPressureGovernor().evaluate({
++      const pressureDecision = await this.getPressureGovernor().admit({
+         workClass:
+           workloadProfile.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+         resourceKeys: workloadProfile.resourceKeys,
+-        allowDegrade: workloadProfile.allowPressureDegrade !== false,
+-        allowDefer: workloadProfile.allowPressureDefer === true,
+-        retryAfterMs: workloadProfile.retryAfterMs,
+       });
+       const queryOptions = {
+         ...(resolvedOptions.queryOptions &&
+@@ -503,8 +493,7 @@ class AuthoritativeControlPlaneView {
+             authoritativeReadMode:
+               authoritativeReadModeContract.authoritativeReadMode,
+             allowOwnerRpcFallback:
+-              authoritativeReadModeContract.allowOwnerRpcFallback &&
+-              pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
++              authoritativeReadModeContract.allowOwnerRpcFallback,
+             preferOwnerRpcRead:
+               authoritativeReadModeContract.preferOwnerRpcRead,
+             preferOwnerRpcReadLeader:
+@@ -514,8 +503,7 @@ class AuthoritativeControlPlaneView {
+             confirmEmptyLocalReadWithOwnerRpc:
+               authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc,
+             allowSqlFallback:
+-              authoritativeReadModeContract.allowSqlFallback &&
+-              pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
++              authoritativeReadModeContract.allowSqlFallback,
+             cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
+             queryOptions,
+           },
+@@ -550,23 +538,6 @@ class AuthoritativeControlPlaneView {
+             },
+           );
+       }
+-      if (result?.success !== true &&
+-          pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEGRADE) {
+-        const failure = buildPressureAdmissionFailure(pressureDecision, {
+-          tableName,
+-          error: result?.error || undefined,
+-        });
+-        return Object.freeze({
+-          ...failure,
+-          rows: freezeRows(failure.rows),
+-          rowCount: 0,
+-          source: AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE,
+-          usedSqlFallback: false,
+-          snapshotVersion: null,
+-          observedAt,
+-          observedAtMs,
+-        });
+-      }
+       const rows = freezeRows(result?.rows);
+       const source = normalizeReadSource(result?.source);
+ 
+diff --git a/src/control-plane/control-plane-system-table-gateway-constants.js b/src/control-plane/control-plane-system-table-gateway-constants.js
+index ceeb7fb5c8ff7740de8ae808654654755520258a..2ebeee622a08e83c3d8039c5474e1ab5bd702af8 100644
+--- a/src/control-plane/control-plane-system-table-gateway-constants.js
++++ b/src/control-plane/control-plane-system-table-gateway-constants.js
+@@ -5,8 +5,6 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
+   ACTIVE: 'active',
+   ALLOWCOALESCING: 'allowCoalescing',
+   ALLOWPENDINGVISIBILITY: 'allowPendingVisibility',
+-  ALLOWPRESSUREDEFER: 'allowPressureDefer',
+-  ALLOWPRESSUREDEGRADE: 'allowPressureDegrade',
+   ALLOWSQLFALLBACK: 'allowSqlFallback',
+   AUTHORITATIVEREADMODE: 'authoritativeReadMode',
+   CANCELLATIONTOKEN: 'cancellationToken',
+diff --git a/src/control-plane/control-plane-system-table-gateway-dependency-resolution.js b/src/control-plane/control-plane-system-table-gateway-dependency-resolution.js
+index 9f54afbc41cc4a1d4b3c990425f7d873737aa000..d92517a8e54b29fa062f94ede22c7d249825e093 100644
+--- a/src/control-plane/control-plane-system-table-gateway-dependency-resolution.js
++++ b/src/control-plane/control-plane-system-table-gateway-dependency-resolution.js
+@@ -151,7 +151,6 @@ const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
+    */
+   resolveLocalDeferredMutationReadinessFailure(tableName, writeOptions = {}) {
+     if (
+-      writeOptions?.allowPressureDefer !== true ||
+       !requiresStableLocalControlPlaneMutationReadiness(writeOptions?.workClass)
+     ) {
+       return null;
+diff --git a/src/control-plane/control-plane-system-table-gateway-mutation-contracts.js b/src/control-plane/control-plane-system-table-gateway-mutation-contracts.js
+index 612a64fb1a31677b2f297055714d105314e68a1f..beb1bf464949c44bc37ee741678cb55f94c8ece3 100644
+--- a/src/control-plane/control-plane-system-table-gateway-mutation-contracts.js
++++ b/src/control-plane/control-plane-system-table-gateway-mutation-contracts.js
+@@ -454,10 +454,6 @@ function applyMutationWorkloadProfileDefaults(
+       typeof options?.workClass === 'undefined' ?
+         workloadProfile.workClass :
+         resolvedOptions.workClass,
+-    allowPressureDefer:
+-      typeof options?.allowPressureDefer === 'undefined' ?
+-        workloadProfile.allowPressureDefer :
+-        resolvedOptions.allowPressureDefer,
+     resourceKeys: mergedResourceKeys,
+   };
+ }
+diff --git a/src/control-plane/control-plane-system-table-gateway-options.js b/src/control-plane/control-plane-system-table-gateway-options.js
+index 648aebe857c78bcf9b649165f855ca94969835e9..3c662b0ed4036a71c14115247526292f78d42e6c 100644
+--- a/src/control-plane/control-plane-system-table-gateway-options.js
++++ b/src/control-plane/control-plane-system-table-gateway-options.js
+@@ -164,11 +164,6 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
+     options,
+     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.IGNOREEXISTING,
+   );
+-  writeOptions = copyOption(
+-    writeOptions,
+-    options,
+-    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPRESSUREDEFER,
+-  );
+   writeOptions = copyOption(
+     writeOptions,
+     options,
+diff --git a/src/control-plane/control-plane-system-table-gateway-query-execution.js b/src/control-plane/control-plane-system-table-gateway-query-execution.js
+index 0f71b7276fed895cf9ae4403ba9db89152589e3f..06ff3c1df783a02e8b8f3a9a00b7cf76bacb404e 100644
+--- a/src/control-plane/control-plane-system-table-gateway-query-execution.js
++++ b/src/control-plane/control-plane-system-table-gateway-query-execution.js
+@@ -57,14 +57,22 @@ function buildReadPressureContract(options = {}) {
+   return {
+     workloadClass: options.workloadClass || null,
+     workClass: options.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+-    allowPressureDegrade: options.allowPressureDegrade !== false,
+-    allowPressureDefer: options.allowPressureDefer === true,
+     resourceKeys: Array.isArray(options.resourceKeys) ?
+       normalizeDistinctStringArray(options.resourceKeys) :
+       [],
+   };
+ }
+ 
++// The single flagless pressure request builder for BOTH gateway entry points
++// (reads and system-table queries): admission derives only from the work
++// class and the structural resource identity of the request.
++function buildPressureAdmissionRequest(workClass, resourceKeys) {
++  return {
++    workClass: workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
++    resourceKeys: normalizeDistinctStringArray(resourceKeys),
++  };
++}
++
+ function buildExplicitReadRequestKey(tableName, explicitKey, options) {
+   return `control-plane:read:${
+     tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+@@ -85,20 +93,17 @@ function buildImplicitReadRequestKey(tableName, sql, params, options) {
+ }
+ 
+ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
+-  evaluateReadPressure(tableName, options = {}) {
+-    return this.getPressureGovernor().evaluate({
+-      workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+-      resourceKeys: normalizeDistinctStringArray([
++  admitReadPressure(tableName, options = {}) {
++    return this.getPressureGovernor().admit(buildPressureAdmissionRequest(
++      options?.workClass,
++      [
+         CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_COLON_READ,
+         `control-plane:table:${
+           tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+         }`,
+         ...(Array.isArray(options?.resourceKeys) ? options.resourceKeys : []),
+-      ]),
+-      allowDegrade: options?.allowPressureDegrade !== false,
+-      allowDefer: options?.allowPressureDefer === true,
+-      retryAfterMs: options?.pressureRetryAfterMs,
+-    });
++      ],
++    ));
+   },
+ 
+   buildReadRequestKey(tableName, sql, params = [], options = {}) {
+@@ -163,22 +168,18 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
+       params: Array.isArray(params) ? params : [],
+       workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+       preferLeader: options?.preferLeader === true,
+-      allowPressureDefer: options?.allowPressureDefer === true,
+-      allowPressureDegrade: options?.allowPressureDegrade === true,
+       routingReadinessDimension:
+         options?.routingReadinessDimension ||
+         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+     });
+   },
+ 
+-  evaluateExecuteQueryPressure(descriptor, options = {}) {
++  admitExecuteQueryPressure(descriptor, options = {}) {
+     if (descriptor?.isSystemTable !== true) {
+       return null;
+     }
+     const shouldEvaluate =
+       options?.enforcePressureAdmission === true ||
+-      options?.allowPressureDefer === true ||
+-      options?.allowPressureDegrade === true ||
+       typeof options?.workClass === 'string';
+     if (!shouldEvaluate) {
+       return null;
+@@ -200,17 +201,13 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
+       ...defaultResourceKeys,
+       ...(Array.isArray(options?.resourceKeys) ? options.resourceKeys : []),
+     ]);
+-    return this.getPressureGovernor().evaluate({
+-      workClass:
+-        options?.workClass ||
++    return this.getPressureGovernor().admit(buildPressureAdmissionRequest(
++      options?.workClass ||
+         (isWrite ?
+           PRESSURE_WORK_CLASS.CRITICAL :
+           PRESSURE_WORK_CLASS.INTERACTIVE),
+       resourceKeys,
+-      allowDegrade: isWrite ? false : options?.allowPressureDegrade === true,
+-      allowDefer: options?.allowPressureDefer === true,
+-      retryAfterMs: options?.pressureRetryAfterMs,
+-    });
++    ));
+   },
+ 
+   assertSqlQueryEngine() {
+@@ -349,15 +346,14 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
+   async executeQuery(sql, params = [], options = {}) {
+     const sqlQueryEngine = this.assertSqlQueryEngine();
+     const descriptor = this.resolveSystemTableQueryDescriptor(sql, options);
+-    const pressureDecision = this.evaluateExecuteQueryPressure(
++    const pressureDecision = await this.admitExecuteQueryPressure(
+       descriptor,
+       options,
+     );
+     if (
+       pressureDecision &&
+       (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+-        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT ||
+-        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEGRADE)
++        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT)
+     ) {
+       return buildPressureAdmissionFailure(pressureDecision, {
+         tableName: descriptor.tableName,
+diff --git a/src/control-plane/control-plane-system-table-gateway-read-contracts.js b/src/control-plane/control-plane-system-table-gateway-read-contracts.js
+index a3ca29bbb0742425c83918a8e3cccc1aea1563e1..88436968889213dc5fbde79aeae3d5b948e944cd 100644
+--- a/src/control-plane/control-plane-system-table-gateway-read-contracts.js
++++ b/src/control-plane/control-plane-system-table-gateway-read-contracts.js
+@@ -372,14 +372,6 @@ function applyReadWorkloadProfileDefaults(resolvedOptions = {}, options = {}) {
+       typeof options?.workClass === 'undefined' ?
+         workloadProfile.workClass :
+         resolvedOptions.workClass,
+-    allowPressureDegrade:
+-      typeof options?.allowPressureDegrade === 'undefined' ?
+-        workloadProfile.allowPressureDegrade :
+-        resolvedOptions.allowPressureDegrade,
+-    allowPressureDefer:
+-      typeof options?.allowPressureDefer === 'undefined' ?
+-        workloadProfile.allowPressureDefer :
+-        resolvedOptions.allowPressureDefer,
+     resourceKeys: mergedResourceKeys,
+   };
+ }
+@@ -448,11 +440,6 @@ function resolveReadProfileOptions(options = {}) {
+       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.AUTHORITATIVEREADMODE,
+       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
+     );
+-    resolvedOptions = applyProfileDefault(
+-      resolvedOptions,
+-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPRESSUREDEGRADE,
+-      false,
+-    );
+     resolvedOptions = applyProfileDefault(
+       resolvedOptions,
+       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
+diff --git a/src/control-plane/control-plane-system-table-gateway-read-dispatch.js b/src/control-plane/control-plane-system-table-gateway-read-dispatch.js
+index b23c3fc735996a53c6ee56e3aced02b49f68ed69..001c013dbb4f0e36bbb80626b3c30841766bbafc 100644
+--- a/src/control-plane/control-plane-system-table-gateway-read-dispatch.js
++++ b/src/control-plane/control-plane-system-table-gateway-read-dispatch.js
+@@ -79,14 +79,13 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
+         this.inFlightReadRequestsByKey,
+         requestKey,
+         async () => {
+-          const pressureDecision = this.evaluateReadPressure(
++          const pressureDecision = await this.admitReadPressure(
+             tableName,
+             mergedOptions,
+           );
+           if (
+             pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+-            pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT ||
+-            pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEGRADE
++            pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT
+           ) {
+             const failure = buildPressureAdmissionFailure(pressureDecision, {
+               tableName,
+diff --git a/src/control-plane/control-plane-system-table-gateway-request-coalescing.js b/src/control-plane/control-plane-system-table-gateway-request-coalescing.js
+index ddbb033a76be48ff91a50162c9b85e67051fe0cb..fa8dcca8d303f16bd9a8af901c328565e89a3971 100644
+--- a/src/control-plane/control-plane-system-table-gateway-request-coalescing.js
++++ b/src/control-plane/control-plane-system-table-gateway-request-coalescing.js
+@@ -124,7 +124,6 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
+           workClass: options?.workClass || null,
+           deliveryPriority: options?.deliveryPriority || null,
+           ignoreExisting: options?.ignoreExisting === true,
+-          allowPressureDefer: options?.allowPressureDefer === true,
+           routingReadinessDimension:
+             options?.routingReadinessDimension ||
+             CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+@@ -145,7 +144,6 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
+           workClass: options?.workClass || null,
+           deliveryPriority: options?.deliveryPriority || null,
+           ignoreExisting: options?.ignoreExisting === true,
+-          allowPressureDefer: options?.allowPressureDefer === true,
+           routingReadinessDimension:
+             options?.routingReadinessDimension ||
+             CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+diff --git a/src/control-plane/control-plane-workload-profile.js b/src/control-plane/control-plane-workload-profile.js
+index b9685bf07a33df2a0a6a3c004dcab4c3c6a71ebe..f085bcd35007b267a879e010f1356a3748c7a34f 100644
+--- a/src/control-plane/control-plane-workload-profile.js
++++ b/src/control-plane/control-plane-workload-profile.js
+@@ -39,8 +39,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.BOOTSTRAP_CONTROL_PLANE_READ,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: false,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze(['control-plane:bootstrap:read']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.BOOTSTRAP_CONTROL_PLANE_MUTATION]:
+@@ -48,15 +46,11 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.BOOTSTRAP_CONTROL_PLANE_MUTATION,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: false,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze(['control-plane:bootstrap:mutation']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ]: Object.freeze({
+     workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ,
+     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+-    allowPressureDegrade: true,
+-    allowPressureDefer: true,
+     resourceKeys: Object.freeze(['control-plane:readiness:read']),
+   }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.AUTHORITATIVE_OPERATION_VISIBILITY]:
+@@ -64,8 +58,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.AUTHORITATIVE_OPERATION_VISIBILITY,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: true,
+-      allowPressureDefer: false,
+       resourceKeys: Object.freeze(['control-plane:replica-operations:visibility']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.REPLICA_OPERATION_MUTATION]:
+@@ -73,8 +65,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.REPLICA_OPERATION_MUTATION,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: false,
+-      allowPressureDefer: false,
+       resourceKeys: Object.freeze(['control-plane:replica-operations:mutation']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION]:
+@@ -82,8 +72,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: false,
+-      allowPressureDefer: false,
+       resourceKeys: Object.freeze([
+         CONTROL_PLANE_TRANSACTION_CONTROL_RECOVERY_RESOURCE_KEY,
+       ]),
+@@ -91,23 +79,17 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+   [CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ]: Object.freeze({
+     workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,
+     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-    allowPressureDegrade: true,
+-    allowPressureDefer: true,
+     resourceKeys: Object.freeze(['control-plane:admin:diagnostics']),
+   }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.CONTROL_SNAPSHOT_REPAIR]: Object.freeze({
+     workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.CONTROL_SNAPSHOT_REPAIR,
+     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-    allowPressureDegrade: false,
+-    allowPressureDefer: true,
+     resourceKeys: Object.freeze(['control-plane:snapshot:repair']),
+   }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE]:
+     Object.freeze({
+       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
+       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-      allowPressureDegrade: true,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze([
+         CONTROL_PLANE_LOGS_TABLE_BACKGROUND_WRITE_RESOURCE_KEY,
+       ]),
+@@ -117,8 +99,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: true,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze([
+         'control-plane:message-group:forward-topology-repair',
+       ]),
+@@ -126,24 +106,18 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+   [CONTROL_PLANE_WORKLOAD_CLASS.JOIN_REPAIR]: Object.freeze({
+     workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.JOIN_REPAIR,
+     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-    allowPressureDegrade: true,
+-    allowPressureDefer: true,
+     resourceKeys: Object.freeze(['join:repair', 'control-plane:repair']),
+   }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION]:
+     Object.freeze({
+       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: false,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze(['control-plane:membership:publication']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION]:
+     Object.freeze({
+       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION,
+       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+-      allowPressureDegrade: false,
+-      allowPressureDefer: false,
+       resourceKeys: Object.freeze(['control-plane:nodes:metadata']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND]:
+@@ -151,8 +125,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND,
+       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-      allowPressureDegrade: true,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze(['control-plane:nodes:publication']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL]:
+@@ -160,8 +132,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: false,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze(['control-plane:nodes:publication']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_PRIORITY_VISIBILITY]:
+@@ -169,8 +139,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_PRIORITY_VISIBILITY,
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+-      allowPressureDegrade: true,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze(['control-plane:rebalancer:operations']),
+     }),
+   [CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_BACKGROUND_VISIBILITY]:
+@@ -178,8 +146,6 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
+       workloadClass:
+         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_BACKGROUND_VISIBILITY,
+       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-      allowPressureDegrade: true,
+-      allowPressureDefer: true,
+       resourceKeys: Object.freeze(['rebalancer:operations']),
+     }),
+ });
+@@ -214,15 +180,6 @@ function buildControlPlaneWorkloadProfile(workloadClass, overrides = {}) {
+   return Object.freeze({
+     workloadClass: baseProfile.workloadClass,
+     workClass: overrides.workClass || baseProfile.workClass,
+-    allowPressureDegrade:
+-      overrides.allowPressureDegrade !== undefined ?
+-        overrides.allowPressureDegrade :
+-        baseProfile.allowPressureDegrade,
+-    allowPressureDefer:
+-      overrides.allowPressureDefer !== undefined ?
+-        overrides.allowPressureDefer :
+-        baseProfile.allowPressureDefer,
+-    retryAfterMs: overrides.retryAfterMs ?? null,
+     resourceKeys: Object.freeze([
+       ...baseProfile.resourceKeys,
+       ...normalizeDistinctStringArray(overrides.additionalResourceKeys),
+diff --git a/src/control-plane/pressure-governor.js b/src/control-plane/pressure-governor.js
+index 914d5f75da658798d762f76661b2e147a4893f64..a08dfcc2fbefe49f01dbf03ffb6bc37da8faff8a 100644
+--- a/src/control-plane/pressure-governor.js
++++ b/src/control-plane/pressure-governor.js
+@@ -31,7 +31,6 @@ const PRESSURE_READINESS_WORK_CLASSES = Object.freeze(
+ );
+ const PRESSURE_GOVERNOR_ACTION = Object.freeze({
+   ALLOW: 'allow',
+-  DEGRADE: 'degrade',
+   DEFER: 'defer',
+   REJECT: 'reject',
+ });
+@@ -47,6 +46,40 @@ const PRESSURE_GOVERNOR_ERROR_CODE = Object.freeze({
+   CONTROL_PLANE_PRESSURE_DEGRADED: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+ });
+ const PRESSURE_GOVERNOR_DEFAULT = Object.freeze({RETRY_AFTER_MS: 250});
++// Pacing hints are derived from the measured pressure summary, never from the
++// request: a fixed hint was falsified live (cold-formation joins rely on tight
++// retry against flickering backpressure; 250ms pacing serialized them ~9x).
++// Shallow saturation yields a near-immediate retry; the hint grows with
++// overshoot depth and is capped at the legacy default.
++const PRESSURE_DEFER_PACING_BASE_MS = Object.freeze({
++  [PRESSURE_WORK_CLASS.CRITICAL]: 10,
++  [PRESSURE_WORK_CLASS.READINESS]: 10,
++  [PRESSURE_WORK_CLASS.INTERACTIVE]: 15,
++  [PRESSURE_WORK_CLASS.BACKGROUND]: 100,
++});
++const PRESSURE_DEFER_PACING_MAX_MS = PRESSURE_GOVERNOR_DEFAULT.RETRY_AFTER_MS;
++const PRESSURE_DEFER_PACING_OVERSHOOT_GAIN = 3;
++// Bounded per-work-class admission queues: waiters admitted on capacity in
++// priority order instead of sleeping a fixed hint (the "real queueing" shape).
++const PRESSURE_ADMISSION_QUEUE_LIMIT = Object.freeze({
++  [PRESSURE_WORK_CLASS.CRITICAL]: 64,
++  [PRESSURE_WORK_CLASS.READINESS]: 64,
++  [PRESSURE_WORK_CLASS.INTERACTIVE]: 128,
++  [PRESSURE_WORK_CLASS.BACKGROUND]: 256,
++});
++const PRESSURE_ADMISSION_MAX_WAIT_MS = Object.freeze({
++  [PRESSURE_WORK_CLASS.CRITICAL]: 500,
++  [PRESSURE_WORK_CLASS.READINESS]: 500,
++  [PRESSURE_WORK_CLASS.INTERACTIVE]: 1000,
++  [PRESSURE_WORK_CLASS.BACKGROUND]: 2000,
++});
++const PRESSURE_ADMISSION_POLL_INTERVAL_MS = 10;
++const PRESSURE_WORK_CLASS_PRIORITY_RANK = Object.freeze({
++  [PRESSURE_WORK_CLASS.CRITICAL]: 0,
++  [PRESSURE_WORK_CLASS.READINESS]: 1,
++  [PRESSURE_WORK_CLASS.INTERACTIVE]: 2,
++  [PRESSURE_WORK_CLASS.BACKGROUND]: 3,
++});
+ const SHARED_GOVERNORS = new Map();
+ const PRESSURE_CAPACITY_PARTITION = Object.freeze({
+   SHARED: 'shared',
+@@ -323,6 +356,9 @@ function buildDecision(action, reason, summary, retryAfterMs = 0) {
+     summary,
+   });
+ }
++// Admission evidence is derived only from the normalized work class and the
++// measured pressure summary. Per-request allow flags are deliberately absent:
++// policy attaches to the work class, never to the call site.
+ function normalizePressureAdmissionEvidence(request = {}, workClass, summary) {
+   const criticalWork = workClass === PRESSURE_WORK_CLASS.CRITICAL;
+   const readinessWork = workClass === PRESSURE_WORK_CLASS.READINESS;
+@@ -334,8 +370,6 @@ function normalizePressureAdmissionEvidence(request = {}, workClass, summary) {
+       criticalWork && hasBootstrapControlPlaneResource(request.resourceKeys),
+     criticalReserveExhausted: summary?.criticalReserveExhausted === true,
+     readinessReserveExhausted: summary?.readinessReserveExhausted === true,
+-    allowDegrade: request.allowDegrade !== false,
+-    allowDefer: request.allowDefer === true,
+   });
+ }
+ const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
+@@ -352,28 +386,16 @@ const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
+     reason: PRESSURE_GOVERNOR_REASON.READINESS_BYPASS,
+   }),
+   Object.freeze({
+-    matches: (evidence) =>
+-      evidence.readinessWork === true &&
+-      evidence.readinessReserveExhausted === true &&
+-      evidence.allowDefer === true,
++    matches: (evidence) => evidence.readinessWork === true,
+     action: PRESSURE_GOVERNOR_ACTION.DEFER,
+     reason: PRESSURE_GOVERNOR_REASON.READINESS_RESERVE_EXHAUSTED,
+   }),
+-  Object.freeze({
+-    matches: (evidence) =>
+-      evidence.criticalWork === true &&
+-      evidence.bootstrapCriticalWork !== true &&
+-      evidence.criticalReserveExhausted === true &&
+-      evidence.allowDefer === true,
+-    action: PRESSURE_GOVERNOR_ACTION.DEFER,
+-    reason: PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
+-  }),
+   Object.freeze({
+     matches: (evidence) =>
+       evidence.criticalWork === true &&
+       evidence.bootstrapCriticalWork !== true &&
+       evidence.criticalReserveExhausted === true,
+-    action: PRESSURE_GOVERNOR_ACTION.REJECT,
++    action: PRESSURE_GOVERNOR_ACTION.DEFER,
+     reason: PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
+   }),
+   Object.freeze({
+@@ -381,22 +403,25 @@ const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
+     action: PRESSURE_GOVERNOR_ACTION.ALLOW,
+     reason: PRESSURE_GOVERNOR_REASON.CRITICAL_BYPASS,
+   }),
+-  Object.freeze({
+-    matches: (evidence) => evidence.allowDegrade === true,
+-    action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
+-    reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+-  }),
+-  Object.freeze({
+-    matches: (evidence) => evidence.allowDefer === true,
+-    action: PRESSURE_GOVERNOR_ACTION.DEFER,
+-    reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+-  }),
+   Object.freeze({
+     matches: () => true,
+-    action: PRESSURE_GOVERNOR_ACTION.REJECT,
++    action: PRESSURE_GOVERNOR_ACTION.DEFER,
+     reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+   }),
+ ]);
++function derivePacingHintMs(workClass, summary) {
++  const base =
++    PRESSURE_DEFER_PACING_BASE_MS[workClass] ??
++    PRESSURE_DEFER_PACING_BASE_MS[PRESSURE_WORK_CLASS.INTERACTIVE];
++  const utilization = Number.isFinite(summary?.maxPendingUtilization) ?
++    summary.maxPendingUtilization :
++    0;
++  const overshoot = Math.max(0, utilization - 1);
++  return Math.min(
++    PRESSURE_DEFER_PACING_MAX_MS,
++    Math.floor(base * (1 + PRESSURE_DEFER_PACING_OVERSHOOT_GAIN * overshoot)),
++  );
++}
+ function decidePressureAdmission(evidence) {
+   return PRESSURE_ADMISSION_DECISION_TABLE.find((entry) =>
+     entry.matches(evidence),
+@@ -428,6 +453,9 @@ class PressureGovernor {
+     this.messageRouter = options.messageRouter || null;
+     this.logger = options.logger || null;
+     this.lastEmitTimes = new Map();
++    this.admissionWaiters = [];
++    this.admissionWaiterSeq = 0;
++    this.admissionPollTimer = null;
+   }
+   static getShared(options = {}) {
+     const nodeId = normalizeNodeId(options.nodeId);
+@@ -440,6 +468,9 @@ class PressureGovernor {
+     return shared;
+   }
+   static clearSharedForTests() {
++    for (const governor of SHARED_GOVERNORS.values()) {
++      governor.dispose();
++    }
+     SHARED_GOVERNORS.clear();
+     GLOBAL_LAST_EMIT_TIMES.clear();
+     globalLastEmitTime = 0;
+@@ -575,10 +606,110 @@ class PressureGovernor {
+         summary,
+         outcome.action === PRESSURE_GOVERNOR_ACTION.ALLOW ?
+           0 :
+-          request.retryAfterMs,
++          derivePacingHintMs(workClass, summary),
+       ),
+     );
+   }
++
++  // Admit-on-capacity admission: a DEFER decision parks the caller in a
++  // bounded, priority-ordered queue and resolves as soon as the measured
++  // pressure clears instead of sleeping a pacing hint. Queue overflow and
++  // deadline expiry fall back to the plain DEFER decision so callers keep
++  // their own retry loops as the backstop.
++  admit(request = {}) {
++    const decision = this.evaluate(request);
++    if (decision.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
++      return Promise.resolve(decision);
++    }
++    return this.enqueueAdmissionWaiter(request, decision);
++  }
++
++  enqueueAdmissionWaiter(request, deferDecision) {
++    const workClass = normalizeWorkClass(request.workClass);
++    const queuedForClass = this.admissionWaiters.reduce(
++      (count, waiter) => count + (waiter.workClass === workClass ? 1 : 0),
++      0,
++    );
++    if (queuedForClass >= PRESSURE_ADMISSION_QUEUE_LIMIT[workClass]) {
++      return Promise.resolve(deferDecision);
++    }
++    return new Promise((resolve) => {
++      this.admissionWaiters.push({
++        workClass,
++        rank: PRESSURE_WORK_CLASS_PRIORITY_RANK[workClass],
++        seq: this.admissionWaiterSeq++,
++        request,
++        deferDecision,
++        deadlineAtMs: this.now() + PRESSURE_ADMISSION_MAX_WAIT_MS[workClass],
++        resolve,
++      });
++      this.scheduleAdmissionPoll();
++    });
++  }
++
++  scheduleAdmissionPoll() {
++    if (this.admissionPollTimer || this.admissionWaiters.length === 0) {
++      return;
++    }
++    // The timer intentionally keeps the process alive: it exists only while
++    // waiters are parked, and every waiter resolves by its bounded deadline.
++    // The re-arm is unconditional: a throwing pressure sensor must never
++    // strand parked waiters or escape the timer callback as a crash.
++    this.admissionPollTimer = setTimeout(() => {
++      this.admissionPollTimer = null;
++      try {
++        this.drainAdmissionWaiters();
++      } finally {
++        this.scheduleAdmissionPoll();
++      }
++    }, PRESSURE_ADMISSION_POLL_INTERVAL_MS);
++  }
++
++  drainAdmissionWaiters() {
++    if (this.admissionWaiters.length === 0) {
++      return;
++    }
++    const nowMs = this.now();
++    const ordered = [...this.admissionWaiters].sort(
++      (a, b) => a.rank - b.rank || a.seq - b.seq,
++    );
++    const resolved = new Set();
++    for (const waiter of ordered) {
++      // A throwing sensor counts as "still deferred": the waiter keeps its
++      // deadline guarantee (resolving with the enqueue-time decision) instead
++      // of being stranded or crashing the poll loop.
++      let decision = null;
++      try {
++        decision = this.evaluate(waiter.request);
++      } catch (_error) {
++        decision = null;
++      }
++      if (decision && decision.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
++        waiter.resolve(decision);
++        resolved.add(waiter);
++      } else if (nowMs >= waiter.deadlineAtMs) {
++        waiter.resolve(decision || waiter.deferDecision);
++        resolved.add(waiter);
++      }
++    }
++    if (resolved.size > 0) {
++      this.admissionWaiters = this.admissionWaiters.filter(
++        (waiter) => !resolved.has(waiter),
++      );
++    }
++  }
++
++  dispose() {
++    if (this.admissionPollTimer) {
++      clearTimeout(this.admissionPollTimer);
++      this.admissionPollTimer = null;
++    }
++    const waiters = this.admissionWaiters;
++    this.admissionWaiters = [];
++    for (const waiter of waiters) {
++      waiter.resolve(waiter.deferDecision);
++    }
++  }
+ }
+ 
+ export {
+diff --git a/test/control-plane/authoritative-control-plane-view.test.js b/test/control-plane/authoritative-control-plane-view.test.js
+index 3698023578d980d879dbab0cb8a2d464726b1b97..b7684a85b7a8cb3c99eed872851288be74b3eae5 100644
+--- a/test/control-plane/authoritative-control-plane-view.test.js
++++ b/test/control-plane/authoritative-control-plane-view.test.js
+@@ -544,8 +544,8 @@ test('AuthoritativeControlPlaneView coalesces concurrent readNodeSnapshot calls'
+     );
+   });
+ 
+-test('AuthoritativeControlPlaneView readRows fails with typed degraded result ' +
+-  'when pressure disables SQL fallback', async (t) => {
++test('AuthoritativeControlPlaneView readRows fails with a typed deferred ' +
++  'result under sustained pressure', async (t) => {
+   const calls = [];
+   const view = new AuthoritativeControlPlaneView({
+     nodeId: FIXTURE_LOCAL_NODE_ID,
+@@ -585,17 +585,21 @@ test('AuthoritativeControlPlaneView readRows fails with typed degraded result '
+     },
+   );
+ 
+-  t.equal(calls.length, 1, 'authoritative owner path should still run once');
+   t.equal(
+-    calls[0].options.allowSqlFallback,
+-    false,
+-    'pressure degrade should disable routed SQL fallback',
++    calls.length,
++    0,
++    'deferred admission should stop the authoritative read entirely',
+   );
+-  t.equal(result.success, false, 'degraded read should fail closed');
++  t.equal(result.success, false, 'deferred read should fail closed');
+   t.equal(
+     result.errorCode,
+     'CONTROL_PLANE_PRESSURE_DEGRADED',
+-    'view should return a typed degraded result',
++    'view should return a typed pressure result',
++  );
++  t.equal(
++    result.pressureAction,
++    'defer',
++    'view should surface the defer action for paced retry',
+   );
+ });
+ 
+diff --git a/test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js b/test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js
+index fbb650f794b91b2c7811a51a9ea9862157251972..b20dea99d95577680d2321a22c39269173b8c9d2 100644
+--- a/test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js
++++ b/test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js
+@@ -230,11 +230,11 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
+     'stale local evidence should remain ineligible on the first sync read');
+   t.equal(repeated.dimensions.serveEligible, false,
+     'repeated sync reads should stay fail-closed until the owner refresh lands');
++  await new Promise((resolve) => setImmediate(resolve));
++
+   t.same(authoritativeReads, [TABLES.NODES, TABLES.SERVICES],
+     'sync reads should trigger one deduped authoritative node/service refresh');
+ 
+-  await new Promise((resolve) => setImmediate(resolve));
+-
+   const refreshed = readinessService.getNodeReadinessSync(nodeId, options);
+   t.equal(refreshed.dimensions.serveEligible, true,
+     'later sync reads should observe the repaired owner evidence');
+diff --git a/test/control-plane/control-plane-system-table-gateway-tail-test-cases.js b/test/control-plane/control-plane-system-table-gateway-tail-test-cases.js
+index 3f50b9d154be35a72e08acef63f11226fc013487..2d035d041242f5f0044552b83f57a5403393f410 100644
+--- a/test/control-plane/control-plane-system-table-gateway-tail-test-cases.js
++++ b/test/control-plane/control-plane-system-table-gateway-tail-test-cases.js
+@@ -205,11 +205,6 @@ export function registerControlPlaneSystemTableGatewayTailTests({
+       PRESSURE_WORK_CLASS.CRITICAL,
+       'gateway should derive the workload-owned critical work class when callers omit it',
+     );
+-    t.equal(
+-      updateCalls[0].options.allowPressureDefer,
+-      false,
+-      'gateway should derive the workload-owned no-defer contract when callers omit it',
+-    );
+     t.same(
+       updateCalls[0].options.resourceKeys,
+       ['control-plane:transaction-control:recovery'],
+@@ -796,21 +791,10 @@ export function registerControlPlaneSystemTableGatewayTailTests({
+         name: 'defer',
+         options: {
+           workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-          allowPressureDegrade: false,
+-          allowPressureDefer: true,
+         },
+         expectedOutcome: 'deferred',
+         expectedAction: 'defer',
+       },
+-      {
+-        name: 'reject',
+-        options: {
+-          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-          allowPressureDegrade: false,
+-        },
+-        expectedOutcome: 'rejected',
+-        expectedAction: 'reject',
+-      },
+     ];
+ 
+     for (const testCase of cases) {
+@@ -900,6 +884,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
+       nodeId: 'node-gateway',
+       pressureGovernor: {
+         configure() {},
++        admit(request) {
++          return Promise.resolve(this.evaluate(request));
++        },
+         evaluate() {
+           return {
+             action: 'allow',
+@@ -939,7 +926,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
+       ['node-a'],
+     );
+ 
+-    await Promise.resolve();
++    while (callCount === 0) {
++      await new Promise((resolve) => setImmediate(resolve));
++    }
+ 
+     t.equal(callCount, 1, 'identical authoritative reads should collapse in flight');
+ 
+@@ -965,6 +954,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
+       nodeId: 'node-gateway',
+       pressureGovernor: {
+         configure() {},
++        admit(request) {
++          return Promise.resolve(this.evaluate(request));
++        },
+         evaluate() {
+           return {
+             action: 'allow',
+@@ -1081,6 +1073,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
+       maxTrackedReadRequests: 1,
+       pressureGovernor: {
+         configure() {},
++        admit(request) {
++          return Promise.resolve(this.evaluate(request));
++        },
+         evaluate() {
+           return {
+             action: 'allow',
+@@ -1169,7 +1164,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
+       'SELECT * FROM nodes WHERE node_id = ?',
+       ['node-a'],
+     );
+-    await Promise.resolve();
++    while (releaseRead === null) {
++      await new Promise((resolve) => setImmediate(resolve));
++    }
+ 
+     const retentionMetrics = metricEvents.filter((entry) => {
+       return entry.tag === METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_RETENTION;
+diff --git a/test/control-plane/control-plane-system-table-gateway.test.js b/test/control-plane/control-plane-system-table-gateway.test.js
+index f71082a5dae34a71b968dc5041b2825a97393d2a..cf26493230074d08a0ac3b327761db7082b64389 100644
+--- a/test/control-plane/control-plane-system-table-gateway.test.js
++++ b/test/control-plane/control-plane-system-table-gateway.test.js
+@@ -312,6 +312,9 @@ async (t) => {
+     nodeId: 'node-gateway',
+     pressureGovernor: {
+       configure() {},
++      admit(request) {
++        return Promise.resolve(this.evaluate(request));
++      },
+       evaluate(args) {
+         evaluateArgs = args;
+         return {
+@@ -349,16 +352,6 @@ async (t) => {
+     PRESSURE_WORK_CLASS.BACKGROUND,
+     'gateway should derive read pressure work class from the shared workload contract',
+   );
+-  t.equal(
+-    evaluateArgs?.allowDegrade,
+-    true,
+-    'gateway should preserve workload-owned degrade semantics instead of forcing repair-profile defaults',
+-  );
+-  t.equal(
+-    evaluateArgs?.allowDefer,
+-    true,
+-    'gateway should preserve workload-owned defer semantics instead of forcing repair-profile defaults',
+-  );
+   t.ok(
+     evaluateArgs?.resourceKeys?.includes('control-plane:admin:diagnostics'),
+     'gateway should forward workload-owned fairness resource keys to the pressure governor',
+@@ -1443,9 +1436,6 @@ test('ControlPlaneSystemTableGateway logs typed defer reasons for harness ' +
+     strategy: 'cache',
+   }, {
+     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-    allowPressureDegrade: false,
+-    allowPressureDefer: true,
+-    pressureRetryAfterMs: 275,
+   });
+ 
+   t.equal(result.outcome, 'deferred', 'gateway should surface deferred outcome');
+@@ -1460,10 +1450,9 @@ test('ControlPlaneSystemTableGateway logs typed defer reasons for harness ' +
+     'transport_backpressure',
+     'warning should include the typed defer reason',
+   );
+-  t.equal(
+-    warnings[0].data.retryAfterMs,
+-    275,
+-    'warning should include retry hints for the harness',
++  t.ok(
++    warnings[0].data.retryAfterMs > 0,
++    'warning should include a derived retry hint for the harness',
+   );
+ });
+ 
+diff --git a/test/control-plane/pressure-governor.test.js b/test/control-plane/pressure-governor.test.js
+index 12a1e0e22c46e65ff90fb9bfff86ca2b3325464c..b2685a242b8b6074a84e175bd0d67d2c3e5a075c 100644
+--- a/test/control-plane/pressure-governor.test.js
++++ b/test/control-plane/pressure-governor.test.js
+@@ -51,8 +51,6 @@ test('PressureGovernor allows critical work during transport pressure',
+     const decision = governor.evaluate({
+       workClass: PRESSURE_WORK_CLASS.CRITICAL,
+       resourceKeys: ['control-plane:write'],
+-      allowDegrade: true,
+-      allowDefer: true,
+     });
+ 
+     t.equal(
+@@ -72,7 +70,7 @@ test('PressureGovernor allows critical work during transport pressure',
+     );
+   });
+ 
+-test('PressureGovernor degrades background work during transport pressure',
++test('PressureGovernor defers background work during transport pressure',
+   async (t) => {
+     const governor = new PressureGovernor({
+       nodeId: 'node-a',
+@@ -91,19 +89,17 @@ test('PressureGovernor degrades background work during transport pressure',
+     const decision = governor.evaluate({
+       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+       resourceKeys: ['join:repair'],
+-      allowDegrade: true,
+-      allowDefer: true,
+     });
+ 
+     t.equal(
+       decision.action,
+-      PRESSURE_GOVERNOR_ACTION.DEGRADE,
+-      'background work should degrade first under pressure',
++      PRESSURE_GOVERNOR_ACTION.DEFER,
++      'background work should defer under pressure',
+     );
+     t.equal(
+       decision.reason,
+       PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+-      'degrade should be attributed to transport pressure',
++      'defer should be attributed to transport pressure',
+     );
+   });
+ 
+@@ -168,20 +164,16 @@ test('PressureGovernor isolates query-plane pressure from control-plane ' +
+   const queryDecision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+     resourceKeys: ['query-plane:read'],
+-    allowDegrade: true,
+-    allowDefer: true,
+   });
+   const controlPlaneDecision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+     resourceKeys: ['control-plane:read'],
+-    allowDegrade: false,
+-    allowDefer: true,
+   });
+ 
+   t.equal(
+     queryDecision.action,
+-    PRESSURE_GOVERNOR_ACTION.DEGRADE,
+-    'query-plane work should degrade when the background partition is saturated',
++    PRESSURE_GOVERNOR_ACTION.DEFER,
++    'query-plane work should defer when the background partition is saturated',
+   );
+   t.equal(
+     queryDecision.summary?.capacityPartition,
+@@ -225,8 +217,6 @@ test('PressureGovernor backpressures control-plane work when critical reserve '
+   const decision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+     resourceKeys: ['control-plane:write'],
+-    allowDegrade: false,
+-    allowDefer: true,
+   });
+ 
+   t.equal(
+@@ -272,8 +262,6 @@ test('PressureGovernor ignores non-reserve critical fallback backlog for ' +
+   const decision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+     resourceKeys: ['control-plane:write'],
+-    allowDegrade: false,
+-    allowDefer: true,
+   });
+ 
+   t.equal(
+@@ -347,8 +335,6 @@ test('PressureGovernor consumes live router stats without treating target ' +
+   const decision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+     resourceKeys: ['control-plane:write'],
+-    allowDegrade: false,
+-    allowDefer: true,
+   });
+ 
+   t.equal(
+@@ -404,8 +390,6 @@ test('PressureGovernor defers deferrable critical work when the control-plane '
+   const decision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.CRITICAL,
+     resourceKeys: ['control-plane:write'],
+-    allowDegrade: false,
+-    allowDefer: true,
+   });
+ 
+   t.equal(
+@@ -453,8 +437,6 @@ test('Publication mutation workload defers when the control-plane critical ' +
+   const decision = governor.evaluate({
+     workClass: publicationProfile.workClass,
+     resourceKeys: publicationProfile.resourceKeys,
+-    allowDegrade: publicationProfile.allowPressureDegrade,
+-    allowDefer: publicationProfile.allowPressureDefer,
+   });
+ 
+   t.equal(
+@@ -467,11 +449,6 @@ test('Publication mutation workload defers when the control-plane critical ' +
+     ['control-plane:membership:publication'],
+     'publication mutation should use the membership publication resource key',
+   );
+-  t.equal(
+-    publicationProfile.allowPressureDefer,
+-    true,
+-    'publication mutation should use a deferrable pressure contract',
+-  );
+   t.equal(
+     decision.action,
+     PRESSURE_GOVERNOR_ACTION.DEFER,
+@@ -517,8 +494,6 @@ test('Logs table background workload stays off the control-plane critical ' +
+   const decision = governor.evaluate({
+     workClass: logsTableProfile.workClass,
+     resourceKeys: logsTableProfile.resourceKeys,
+-    allowDegrade: logsTableProfile.allowPressureDegrade,
+-    allowDefer: logsTableProfile.allowPressureDefer,
+   });
+ 
+   t.equal(
+@@ -573,8 +548,6 @@ test('PressureGovernor keeps bootstrap-critical work admissible when the ' +
+   const decision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.CRITICAL,
+     resourceKeys: ['control-plane:bootstrap:read'],
+-    allowDegrade: false,
+-    allowDefer: true,
+   });
+ 
+   t.equal(
+@@ -638,14 +611,10 @@ test('PressureGovernor defers background control-plane snapshot repair before cr
+     const snapshotRepairDecision = governor.evaluate({
+       workClass: snapshotRepairProfile.workClass,
+       resourceKeys: snapshotRepairProfile.resourceKeys,
+-      allowDegrade: snapshotRepairProfile.allowPressureDegrade,
+-      allowDefer: snapshotRepairProfile.allowPressureDefer,
+     });
+     const criticalRecoveryDecision = governor.evaluate({
+       workClass: criticalRecoveryProfile.workClass,
+       resourceKeys: criticalRecoveryProfile.resourceKeys,
+-      allowDegrade: criticalRecoveryProfile.allowPressureDegrade,
+-      allowDefer: criticalRecoveryProfile.allowPressureDefer,
+     });
+ 
+     t.equal(
+@@ -692,8 +661,6 @@ test('PressureGovernor rate-limits pressure metric logging',
+     const request = {
+       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+       resourceKeys: ['join:repair'],
+-      allowDegrade: true,
+-      allowDefer: true,
+     };
+ 
+     governor.messageRouter = {
+@@ -747,14 +714,10 @@ test('PressureGovernor admits readiness reads during control-plane ' +
+   const readinessDecision = governor.evaluate({
+     workClass: 'control-plane-readiness',
+     resourceKeys: ['control-plane:read'],
+-    allowDegrade: true,
+-    allowDefer: false,
+   });
+   const interactiveDecision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+     resourceKeys: ['control-plane:read'],
+-    allowDegrade: true,
+-    allowDefer: false,
+   });
+ 
+   t.equal(
+@@ -769,8 +732,8 @@ test('PressureGovernor admits readiness reads during control-plane ' +
+   );
+   t.equal(
+     interactiveDecision.action,
+-    PRESSURE_GOVERNOR_ACTION.DEGRADE,
+-    'plain interactive reads should still degrade under the same pressure',
++    PRESSURE_GOVERNOR_ACTION.DEFER,
++    'plain interactive reads should defer under the same pressure',
+   );
+   PressureGovernor.clearSharedForTests();
+ });
+@@ -802,8 +765,6 @@ test('PressureGovernor sheds readiness reads once the readiness reserve ' +
+   const deferDecision = governor.evaluate({
+     workClass: PRESSURE_WORK_CLASS.READINESS,
+     resourceKeys: ['control-plane:read'],
+-    allowDegrade: true,
+-    allowDefer: true,
+   });
+ 
+   t.equal(
+@@ -823,3 +784,215 @@ test('PressureGovernor sheds readiness reads once the readiness reserve ' +
+   );
+   PressureGovernor.clearSharedForTests();
+ });
++
++test('PressureGovernor derives the defer pacing hint from measured pressure',
++  async (t) => {
++    const summaryRef = {
++      backpressured: true,
++      saturatedNodeCount: 1,
++      totalPending: 64,
++      maxPendingUtilization: 1,
++    };
++    const governor = new PressureGovernor({
++      nodeId: 'node-a',
++      messageRouter: {
++        getOutboundPressureSummary() {
++          return summaryRef;
++        },
++      },
++    });
++
++    const shallow = governor.evaluate({
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      resourceKeys: ['transport:outbound'],
++    });
++    t.equal(
++      shallow.action,
++      PRESSURE_GOVERNOR_ACTION.DEFER,
++      'interactive work should defer under pressure',
++    );
++    t.ok(
++      shallow.retryAfterMs <= 25,
++      'shallow (flickering) saturation must pace near-immediate retry, ' +
++        `got ${shallow.retryAfterMs}ms`,
++    );
++
++    summaryRef.maxPendingUtilization = 4;
++    const deep = governor.evaluate({
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      resourceKeys: ['transport:outbound'],
++    });
++    t.ok(
++      deep.retryAfterMs > shallow.retryAfterMs,
++      'deeper saturation must pace slower than shallow saturation',
++    );
++    t.ok(
++      deep.retryAfterMs <= 250,
++      'derived pacing hint must stay bounded by the legacy ceiling',
++    );
++
++    const background = governor.evaluate({
++      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
++      resourceKeys: ['transport:outbound'],
++    });
++    t.ok(
++      background.retryAfterMs > shallow.retryAfterMs,
++      'background work must pace slower than interactive work',
++    );
++  });
++
++test('PressureGovernor admit resolves immediately without backpressure',
++  async (t) => {
++    const governor = new PressureGovernor({
++      nodeId: 'node-a',
++      messageRouter: {
++        getOutboundPressureSummary() {
++          return {backpressured: false};
++        },
++      },
++    });
++    const decision = await governor.admit({
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      resourceKeys: ['transport:outbound'],
++    });
++    t.equal(decision.action, PRESSURE_GOVERNOR_ACTION.ALLOW,
++      'admit should allow immediately when transport is clear');
++  });
++
++test('PressureGovernor admit parks deferred work and admits on capacity',
++  async (t) => {
++    const summaryRef = {backpressured: true, maxPendingUtilization: 1};
++    const governor = new PressureGovernor({
++      nodeId: 'node-a',
++      messageRouter: {
++        getOutboundPressureSummary() {
++          return summaryRef;
++        },
++      },
++    });
++    const admission = governor.admit({
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      resourceKeys: ['transport:outbound'],
++    });
++    t.equal(governor.admissionWaiters.length, 1,
++      'deferred admit should park one waiter');
++    summaryRef.backpressured = false;
++    governor.drainAdmissionWaiters();
++    const decision = await admission;
++    t.equal(decision.action, PRESSURE_GOVERNOR_ACTION.ALLOW,
++      'parked waiter should be admitted once backpressure clears');
++    t.equal(governor.admissionWaiters.length, 0,
++      'admission queue should drain after capacity returns');
++    governor.dispose();
++  });
++
++test('PressureGovernor admit falls back to the defer decision on overflow ' +
++  'and deadline', async (t) => {
++  const summaryRef = {backpressured: true, maxPendingUtilization: 1};
++  let nowMs = 0;
++  const governor = new PressureGovernor({
++    nodeId: 'node-a',
++    now: () => nowMs,
++    messageRouter: {
++      getOutboundPressureSummary() {
++        return summaryRef;
++      },
++    },
++  });
++
++  // Fill the interactive queue to its bound.
++  const parked = [];
++  for (let i = 0; i < 128; i += 1) {
++    parked.push(governor.admit({
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      resourceKeys: ['transport:outbound'],
++    }));
++  }
++  t.equal(governor.admissionWaiters.length, 128,
++    'interactive admission queue should hold its bound');
++
++  const overflow = await governor.admit({
++    workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++    resourceKeys: ['transport:outbound'],
++  });
++  t.equal(overflow.action, PRESSURE_GOVERNOR_ACTION.DEFER,
++    'overflow past the queue bound should resolve to the defer decision');
++  t.ok(overflow.retryAfterMs > 0,
++    'overflow defer should carry a pacing hint');
++
++  // Advance past the interactive deadline and drain: waiters resolve DEFER.
++  nowMs = 10000;
++  governor.drainAdmissionWaiters();
++  const decisions = await Promise.all(parked);
++  t.ok(decisions.every((d) => d.action === PRESSURE_GOVERNOR_ACTION.DEFER),
++    'deadline expiry should resolve parked waiters to defer');
++  t.equal(governor.admissionWaiters.length, 0,
++    'deadline expiry should clear the admission queue');
++  governor.dispose();
++});
++
++test('PressureGovernor admits parked waiters in work-class priority order',
++  async (t) => {
++    const summaryRef = {backpressured: true, maxPendingUtilization: 1};
++    const governor = new PressureGovernor({
++      nodeId: 'node-a',
++      messageRouter: {
++        getOutboundPressureSummary() {
++          return summaryRef;
++        },
++      },
++    });
++    const admitted = [];
++    const background = governor.admit({
++      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
++      resourceKeys: ['transport:outbound'],
++    }).then(() => admitted.push('background'));
++    const interactive = governor.admit({
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      resourceKeys: ['transport:outbound'],
++    }).then(() => admitted.push('interactive'));
++    summaryRef.backpressured = false;
++    governor.drainAdmissionWaiters();
++    await Promise.all([background, interactive]);
++    t.same(admitted, ['interactive', 'background'],
++      'interactive work should be admitted before background work');
++    governor.dispose();
++  });
++
++test('PressureGovernor admission poll survives a throwing pressure sensor',
++  async (t) => {
++    let shouldThrow = false;
++    let nowMs = 0;
++    const governor = new PressureGovernor({
++      nodeId: 'node-a',
++      now: () => nowMs,
++      messageRouter: {
++        getOutboundPressureSummary() {
++          if (shouldThrow) {
++            throw new Error('sensor exploded');
++          }
++          return {backpressured: true, maxPendingUtilization: 1};
++        },
++      },
++    });
++    const admission = governor.admit({
++      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
++      resourceKeys: ['transport:outbound'],
++    });
++    shouldThrow = true;
++    t.doesNotThrow(
++      () => governor.drainAdmissionWaiters(),
++      'a throwing sensor must not escape the drain loop',
++    );
++    t.equal(governor.admissionWaiters.length, 1,
++      'waiter should remain parked while the sensor is broken');
++    nowMs = 10000;
++    governor.drainAdmissionWaiters();
++    const decision = await admission;
++    t.equal(decision.action, PRESSURE_GOVERNOR_ACTION.DEFER,
++      'deadline expiry must resolve the waiter with the defer decision even ' +
++        'while the sensor throws');
++    t.equal(governor.admissionWaiters.length, 0,
++      'broken-sensor waiters must not be stranded past their deadline');
++    governor.dispose();
++  });
+diff --git a/test/raft/authoritative-row-mutation-helper.test.js b/test/raft/authoritative-row-mutation-helper.test.js
+index 481aaae8326c6edccac51cd3ce640643043d65c3..5078132599d3643e40bbb6390457158ae3a05760 100644
+--- a/test/raft/authoritative-row-mutation-helper.test.js
++++ b/test/raft/authoritative-row-mutation-helper.test.js
+@@ -41,7 +41,7 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
+         expectedCacheFields: {raft_role: 'leader'},
+         routingReadinessDimension: 'controlPlaneRecoveryEligible',
+         deliverySource: 'control-plane:write:services',
+-        recoveryCandidateSelectionKey: '{"allowPressureDefer":false,"data":{"raft_role":"leader","updated_at":123},"deliveryPriority":null,"ignoreExisting":false,"kind":"control-plane-mutation","operation":"update","routingReadinessDimension":"controlPlaneRecoveryEligible","row":null,"tableName":"services","whereClause":{"service_id":"replica-1"},"workClass":null}',
++        recoveryCandidateSelectionKey: '{"data":{"raft_role":"leader","updated_at":123},"deliveryPriority":null,"ignoreExisting":false,"kind":"control-plane-mutation","operation":"update","routingReadinessDimension":"controlPlaneRecoveryEligible","row":null,"tableName":"services","whereClause":{"service_id":"replica-1"},"workClass":null}',
+       },
+     }, 'should use the configured row key and cache-visibility fields');
+     t.same(result, {

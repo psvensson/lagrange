@@ -544,8 +544,8 @@ test('AuthoritativeControlPlaneView coalesces concurrent readNodeSnapshot calls'
     );
   });
 
-test('AuthoritativeControlPlaneView readRows fails with typed degraded result ' +
-  'when pressure disables SQL fallback', async (t) => {
+test('AuthoritativeControlPlaneView readRows fails with a typed deferred ' +
+  'result under sustained pressure', async (t) => {
   const calls = [];
   const view = new AuthoritativeControlPlaneView({
     nodeId: FIXTURE_LOCAL_NODE_ID,
@@ -585,17 +585,21 @@ test('AuthoritativeControlPlaneView readRows fails with typed degraded result ' 
     },
   );
 
-  t.equal(calls.length, 1, 'authoritative owner path should still run once');
   t.equal(
-    calls[0].options.allowSqlFallback,
-    false,
-    'pressure degrade should disable routed SQL fallback',
+    calls.length,
+    0,
+    'deferred admission should stop the authoritative read entirely',
   );
-  t.equal(result.success, false, 'degraded read should fail closed');
+  t.equal(result.success, false, 'deferred read should fail closed');
   t.equal(
     result.errorCode,
     'CONTROL_PLANE_PRESSURE_DEGRADED',
-    'view should return a typed degraded result',
+    'view should return a typed pressure result',
+  );
+  t.equal(
+    result.pressureAction,
+    'defer',
+    'view should surface the defer action for paced retry',
   );
 });
 

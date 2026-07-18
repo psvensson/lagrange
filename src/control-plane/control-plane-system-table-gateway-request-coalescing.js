@@ -124,7 +124,6 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
           workClass: options?.workClass || null,
           deliveryPriority: options?.deliveryPriority || null,
           ignoreExisting: options?.ignoreExisting === true,
-          allowPressureDefer: options?.allowPressureDefer === true,
           routingReadinessDimension:
             options?.routingReadinessDimension ||
             CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
@@ -145,7 +144,6 @@ const controlPlaneSystemTableGatewayRequestCoalescingMethods = {
           workClass: options?.workClass || null,
           deliveryPriority: options?.deliveryPriority || null,
           ignoreExisting: options?.ignoreExisting === true,
-          allowPressureDefer: options?.allowPressureDefer === true,
           routingReadinessDimension:
             options?.routingReadinessDimension ||
             CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,

@@ -31,7 +31,6 @@ const PRESSURE_READINESS_WORK_CLASSES = Object.freeze(
 );
 const PRESSURE_GOVERNOR_ACTION = Object.freeze({
   ALLOW: 'allow',
-  DEGRADE: 'degrade',
   DEFER: 'defer',
   REJECT: 'reject',
 });
@@ -47,6 +46,40 @@ const PRESSURE_GOVERNOR_ERROR_CODE = Object.freeze({
   CONTROL_PLANE_PRESSURE_DEGRADED: 'CONTROL_PLANE_PRESSURE_DEGRADED',
 });
 const PRESSURE_GOVERNOR_DEFAULT = Object.freeze({RETRY_AFTER_MS: 250});
+// Pacing hints are derived from the measured pressure summary, never from the
+// request: a fixed hint was falsified live (cold-formation joins rely on tight
+// retry against flickering backpressure; 250ms pacing serialized them ~9x).
+// Shallow saturation yields a near-immediate retry; the hint grows with
+// overshoot depth and is capped at the legacy default.
+const PRESSURE_DEFER_PACING_BASE_MS = Object.freeze({
+  [PRESSURE_WORK_CLASS.CRITICAL]: 10,
+  [PRESSURE_WORK_CLASS.READINESS]: 10,
+  [PRESSURE_WORK_CLASS.INTERACTIVE]: 15,
+  [PRESSURE_WORK_CLASS.BACKGROUND]: 100,
+});
+const PRESSURE_DEFER_PACING_MAX_MS = PRESSURE_GOVERNOR_DEFAULT.RETRY_AFTER_MS;
+const PRESSURE_DEFER_PACING_OVERSHOOT_GAIN = 3;
+// Bounded per-work-class admission queues: waiters admitted on capacity in
+// priority order instead of sleeping a fixed hint (the "real queueing" shape).
+const PRESSURE_ADMISSION_QUEUE_LIMIT = Object.freeze({
+  [PRESSURE_WORK_CLASS.CRITICAL]: 64,
+  [PRESSURE_WORK_CLASS.READINESS]: 64,
+  [PRESSURE_WORK_CLASS.INTERACTIVE]: 128,
+  [PRESSURE_WORK_CLASS.BACKGROUND]: 256,
+});
+const PRESSURE_ADMISSION_MAX_WAIT_MS = Object.freeze({
+  [PRESSURE_WORK_CLASS.CRITICAL]: 500,
+  [PRESSURE_WORK_CLASS.READINESS]: 500,
+  [PRESSURE_WORK_CLASS.INTERACTIVE]: 1000,
+  [PRESSURE_WORK_CLASS.BACKGROUND]: 2000,
+});
+const PRESSURE_ADMISSION_POLL_INTERVAL_MS = 10;
+const PRESSURE_WORK_CLASS_PRIORITY_RANK = Object.freeze({
+  [PRESSURE_WORK_CLASS.CRITICAL]: 0,
+  [PRESSURE_WORK_CLASS.READINESS]: 1,
+  [PRESSURE_WORK_CLASS.INTERACTIVE]: 2,
+  [PRESSURE_WORK_CLASS.BACKGROUND]: 3,
+});
 const SHARED_GOVERNORS = new Map();
 const PRESSURE_CAPACITY_PARTITION = Object.freeze({
   SHARED: 'shared',
@@ -323,6 +356,9 @@ function buildDecision(action, reason, summary, retryAfterMs = 0) {
     summary,
   });
 }
+// Admission evidence is derived only from the normalized work class and the
+// measured pressure summary. Per-request allow flags are deliberately absent:
+// policy attaches to the work class, never to the call site.
 function normalizePressureAdmissionEvidence(request = {}, workClass, summary) {
   const criticalWork = workClass === PRESSURE_WORK_CLASS.CRITICAL;
   const readinessWork = workClass === PRESSURE_WORK_CLASS.READINESS;
@@ -334,8 +370,6 @@ function normalizePressureAdmissionEvidence(request = {}, workClass, summary) {
       criticalWork && hasBootstrapControlPlaneResource(request.resourceKeys),
     criticalReserveExhausted: summary?.criticalReserveExhausted === true,
     readinessReserveExhausted: summary?.readinessReserveExhausted === true,
-    allowDegrade: request.allowDegrade !== false,
-    allowDefer: request.allowDefer === true,
   });
 }
 const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
@@ -352,10 +386,7 @@ const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
     reason: PRESSURE_GOVERNOR_REASON.READINESS_BYPASS,
   }),
   Object.freeze({
-    matches: (evidence) =>
-      evidence.readinessWork === true &&
-      evidence.readinessReserveExhausted === true &&
-      evidence.allowDefer === true,
+    matches: (evidence) => evidence.readinessWork === true,
     action: PRESSURE_GOVERNOR_ACTION.DEFER,
     reason: PRESSURE_GOVERNOR_REASON.READINESS_RESERVE_EXHAUSTED,
   }),
@@ -363,17 +394,8 @@ const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.criticalWork === true &&
       evidence.bootstrapCriticalWork !== true &&
-      evidence.criticalReserveExhausted === true &&
-      evidence.allowDefer === true,
-    action: PRESSURE_GOVERNOR_ACTION.DEFER,
-    reason: PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
-  }),
-  Object.freeze({
-    matches: (evidence) =>
-      evidence.criticalWork === true &&
-      evidence.bootstrapCriticalWork !== true &&
       evidence.criticalReserveExhausted === true,
-    action: PRESSURE_GOVERNOR_ACTION.REJECT,
+    action: PRESSURE_GOVERNOR_ACTION.DEFER,
     reason: PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
   }),
   Object.freeze({
@@ -382,21 +404,24 @@ const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
     reason: PRESSURE_GOVERNOR_REASON.CRITICAL_BYPASS,
   }),
   Object.freeze({
-    matches: (evidence) => evidence.allowDegrade === true,
-    action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
-    reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
-  }),
-  Object.freeze({
-    matches: (evidence) => evidence.allowDefer === true,
+    matches: () => true,
     action: PRESSURE_GOVERNOR_ACTION.DEFER,
     reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
   }),
-  Object.freeze({
-    matches: () => true,
-    action: PRESSURE_GOVERNOR_ACTION.REJECT,
-    reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
-  }),
 ]);
+function derivePacingHintMs(workClass, summary) {
+  const base =
+    PRESSURE_DEFER_PACING_BASE_MS[workClass] ??
+    PRESSURE_DEFER_PACING_BASE_MS[PRESSURE_WORK_CLASS.INTERACTIVE];
+  const utilization = Number.isFinite(summary?.maxPendingUtilization) ?
+    summary.maxPendingUtilization :
+    0;
+  const overshoot = Math.max(0, utilization - 1);
+  return Math.min(
+    PRESSURE_DEFER_PACING_MAX_MS,
+    Math.floor(base * (1 + PRESSURE_DEFER_PACING_OVERSHOOT_GAIN * overshoot)),
+  );
+}
 function decidePressureAdmission(evidence) {
   return PRESSURE_ADMISSION_DECISION_TABLE.find((entry) =>
     entry.matches(evidence),
@@ -428,6 +453,9 @@ class PressureGovernor {
     this.messageRouter = options.messageRouter || null;
     this.logger = options.logger || null;
     this.lastEmitTimes = new Map();
+    this.admissionWaiters = [];
+    this.admissionWaiterSeq = 0;
+    this.admissionPollTimer = null;
   }
   static getShared(options = {}) {
     const nodeId = normalizeNodeId(options.nodeId);
@@ -440,6 +468,9 @@ class PressureGovernor {
     return shared;
   }
   static clearSharedForTests() {
+    for (const governor of SHARED_GOVERNORS.values()) {
+      governor.dispose();
+    }
     SHARED_GOVERNORS.clear();
     GLOBAL_LAST_EMIT_TIMES.clear();
     globalLastEmitTime = 0;
@@ -575,9 +606,109 @@ class PressureGovernor {
         summary,
         outcome.action === PRESSURE_GOVERNOR_ACTION.ALLOW ?
           0 :
-          request.retryAfterMs,
+          derivePacingHintMs(workClass, summary),
       ),
     );
+  }
+
+  // Admit-on-capacity admission: a DEFER decision parks the caller in a
+  // bounded, priority-ordered queue and resolves as soon as the measured
+  // pressure clears instead of sleeping a pacing hint. Queue overflow and
+  // deadline expiry fall back to the plain DEFER decision so callers keep
+  // their own retry loops as the backstop.
+  admit(request = {}) {
+    const decision = this.evaluate(request);
+    if (decision.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
+      return Promise.resolve(decision);
+    }
+    return this.enqueueAdmissionWaiter(request, decision);
+  }
+
+  enqueueAdmissionWaiter(request, deferDecision) {
+    const workClass = normalizeWorkClass(request.workClass);
+    const queuedForClass = this.admissionWaiters.reduce(
+      (count, waiter) => count + (waiter.workClass === workClass ? 1 : 0),
+      0,
+    );
+    if (queuedForClass >= PRESSURE_ADMISSION_QUEUE_LIMIT[workClass]) {
+      return Promise.resolve(deferDecision);
+    }
+    return new Promise((resolve) => {
+      this.admissionWaiters.push({
+        workClass,
+        rank: PRESSURE_WORK_CLASS_PRIORITY_RANK[workClass],
+        seq: this.admissionWaiterSeq++,
+        request,
+        deferDecision,
+        deadlineAtMs: this.now() + PRESSURE_ADMISSION_MAX_WAIT_MS[workClass],
+        resolve,
+      });
+      this.scheduleAdmissionPoll();
+    });
+  }
+
+  scheduleAdmissionPoll() {
+    if (this.admissionPollTimer || this.admissionWaiters.length === 0) {
+      return;
+    }
+    // The timer intentionally keeps the process alive: it exists only while
+    // waiters are parked, and every waiter resolves by its bounded deadline.
+    // The re-arm is unconditional: a throwing pressure sensor must never
+    // strand parked waiters or escape the timer callback as a crash.
+    this.admissionPollTimer = setTimeout(() => {
+      this.admissionPollTimer = null;
+      try {
+        this.drainAdmissionWaiters();
+      } finally {
+        this.scheduleAdmissionPoll();
+      }
+    }, PRESSURE_ADMISSION_POLL_INTERVAL_MS);
+  }
+
+  drainAdmissionWaiters() {
+    if (this.admissionWaiters.length === 0) {
+      return;
+    }
+    const nowMs = this.now();
+    const ordered = [...this.admissionWaiters].sort(
+      (a, b) => a.rank - b.rank || a.seq - b.seq,
+    );
+    const resolved = new Set();
+    for (const waiter of ordered) {
+      // A throwing sensor counts as "still deferred": the waiter keeps its
+      // deadline guarantee (resolving with the enqueue-time decision) instead
+      // of being stranded or crashing the poll loop.
+      let decision = null;
+      try {
+        decision = this.evaluate(waiter.request);
+      } catch (_error) {
+        decision = null;
+      }
+      if (decision && decision.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
+        waiter.resolve(decision);
+        resolved.add(waiter);
+      } else if (nowMs >= waiter.deadlineAtMs) {
+        waiter.resolve(decision || waiter.deferDecision);
+        resolved.add(waiter);
+      }
+    }
+    if (resolved.size > 0) {
+      this.admissionWaiters = this.admissionWaiters.filter(
+        (waiter) => !resolved.has(waiter),
+      );
+    }
+  }
+
+  dispose() {
+    if (this.admissionPollTimer) {
+      clearTimeout(this.admissionPollTimer);
+      this.admissionPollTimer = null;
+    }
+    const waiters = this.admissionWaiters;
+    this.admissionWaiters = [];
+    for (const waiter of waiters) {
+      waiter.resolve(waiter.deferDecision);
+    }
   }
 }
 

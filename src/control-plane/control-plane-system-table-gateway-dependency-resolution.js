@@ -151,7 +151,6 @@ const controlPlaneSystemTableGatewayDependencyResolutionMethods = {
    */
   resolveLocalDeferredMutationReadinessFailure(tableName, writeOptions = {}) {
     if (
-      writeOptions?.allowPressureDefer !== true ||
       !requiresStableLocalControlPlaneMutationReadiness(writeOptions?.workClass)
     ) {
       return null;

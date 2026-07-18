@@ -51,8 +51,6 @@ test('PressureGovernor allows critical work during transport pressure',
     const decision = governor.evaluate({
       workClass: PRESSURE_WORK_CLASS.CRITICAL,
       resourceKeys: ['control-plane:write'],
-      allowDegrade: true,
-      allowDefer: true,
     });
 
     t.equal(
@@ -72,7 +70,7 @@ test('PressureGovernor allows critical work during transport pressure',
     );
   });
 
-test('PressureGovernor degrades background work during transport pressure',
+test('PressureGovernor defers background work during transport pressure',
   async (t) => {
     const governor = new PressureGovernor({
       nodeId: 'node-a',
@@ -91,19 +89,17 @@ test('PressureGovernor degrades background work during transport pressure',
     const decision = governor.evaluate({
       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
       resourceKeys: ['join:repair'],
-      allowDegrade: true,
-      allowDefer: true,
     });
 
     t.equal(
       decision.action,
-      PRESSURE_GOVERNOR_ACTION.DEGRADE,
-      'background work should degrade first under pressure',
+      PRESSURE_GOVERNOR_ACTION.DEFER,
+      'background work should defer under pressure',
     );
     t.equal(
       decision.reason,
       PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
-      'degrade should be attributed to transport pressure',
+      'defer should be attributed to transport pressure',
     );
   });
 
@@ -168,20 +164,16 @@ test('PressureGovernor isolates query-plane pressure from control-plane ' +
   const queryDecision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
     resourceKeys: ['query-plane:read'],
-    allowDegrade: true,
-    allowDefer: true,
   });
   const controlPlaneDecision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     resourceKeys: ['control-plane:read'],
-    allowDegrade: false,
-    allowDefer: true,
   });
 
   t.equal(
     queryDecision.action,
-    PRESSURE_GOVERNOR_ACTION.DEGRADE,
-    'query-plane work should degrade when the background partition is saturated',
+    PRESSURE_GOVERNOR_ACTION.DEFER,
+    'query-plane work should defer when the background partition is saturated',
   );
   t.equal(
     queryDecision.summary?.capacityPartition,
@@ -225,8 +217,6 @@ test('PressureGovernor backpressures control-plane work when critical reserve ' 
   const decision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     resourceKeys: ['control-plane:write'],
-    allowDegrade: false,
-    allowDefer: true,
   });
 
   t.equal(
@@ -272,8 +262,6 @@ test('PressureGovernor ignores non-reserve critical fallback backlog for ' +
   const decision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     resourceKeys: ['control-plane:write'],
-    allowDegrade: false,
-    allowDefer: true,
   });
 
   t.equal(
@@ -347,8 +335,6 @@ test('PressureGovernor consumes live router stats without treating target ' +
   const decision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     resourceKeys: ['control-plane:write'],
-    allowDegrade: false,
-    allowDefer: true,
   });
 
   t.equal(
@@ -404,8 +390,6 @@ test('PressureGovernor defers deferrable critical work when the control-plane ' 
   const decision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.CRITICAL,
     resourceKeys: ['control-plane:write'],
-    allowDegrade: false,
-    allowDefer: true,
   });
 
   t.equal(
@@ -453,8 +437,6 @@ test('Publication mutation workload defers when the control-plane critical ' +
   const decision = governor.evaluate({
     workClass: publicationProfile.workClass,
     resourceKeys: publicationProfile.resourceKeys,
-    allowDegrade: publicationProfile.allowPressureDegrade,
-    allowDefer: publicationProfile.allowPressureDefer,
   });
 
   t.equal(
@@ -466,11 +448,6 @@ test('Publication mutation workload defers when the control-plane critical ' +
     publicationProfile.resourceKeys,
     ['control-plane:membership:publication'],
     'publication mutation should use the membership publication resource key',
-  );
-  t.equal(
-    publicationProfile.allowPressureDefer,
-    true,
-    'publication mutation should use a deferrable pressure contract',
   );
   t.equal(
     decision.action,
@@ -517,8 +494,6 @@ test('Logs table background workload stays off the control-plane critical ' +
   const decision = governor.evaluate({
     workClass: logsTableProfile.workClass,
     resourceKeys: logsTableProfile.resourceKeys,
-    allowDegrade: logsTableProfile.allowPressureDegrade,
-    allowDefer: logsTableProfile.allowPressureDefer,
   });
 
   t.equal(
@@ -573,8 +548,6 @@ test('PressureGovernor keeps bootstrap-critical work admissible when the ' +
   const decision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.CRITICAL,
     resourceKeys: ['control-plane:bootstrap:read'],
-    allowDegrade: false,
-    allowDefer: true,
   });
 
   t.equal(
@@ -638,14 +611,10 @@ test('PressureGovernor defers background control-plane snapshot repair before cr
     const snapshotRepairDecision = governor.evaluate({
       workClass: snapshotRepairProfile.workClass,
       resourceKeys: snapshotRepairProfile.resourceKeys,
-      allowDegrade: snapshotRepairProfile.allowPressureDegrade,
-      allowDefer: snapshotRepairProfile.allowPressureDefer,
     });
     const criticalRecoveryDecision = governor.evaluate({
       workClass: criticalRecoveryProfile.workClass,
       resourceKeys: criticalRecoveryProfile.resourceKeys,
-      allowDegrade: criticalRecoveryProfile.allowPressureDegrade,
-      allowDefer: criticalRecoveryProfile.allowPressureDefer,
     });
 
     t.equal(
@@ -692,8 +661,6 @@ test('PressureGovernor rate-limits pressure metric logging',
     const request = {
       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
       resourceKeys: ['join:repair'],
-      allowDegrade: true,
-      allowDefer: true,
     };
 
     governor.messageRouter = {
@@ -747,14 +714,10 @@ test('PressureGovernor admits readiness reads during control-plane ' +
   const readinessDecision = governor.evaluate({
     workClass: 'control-plane-readiness',
     resourceKeys: ['control-plane:read'],
-    allowDegrade: true,
-    allowDefer: false,
   });
   const interactiveDecision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     resourceKeys: ['control-plane:read'],
-    allowDegrade: true,
-    allowDefer: false,
   });
 
   t.equal(
@@ -769,8 +732,8 @@ test('PressureGovernor admits readiness reads during control-plane ' +
   );
   t.equal(
     interactiveDecision.action,
-    PRESSURE_GOVERNOR_ACTION.DEGRADE,
-    'plain interactive reads should still degrade under the same pressure',
+    PRESSURE_GOVERNOR_ACTION.DEFER,
+    'plain interactive reads should defer under the same pressure',
   );
   PressureGovernor.clearSharedForTests();
 });
@@ -802,8 +765,6 @@ test('PressureGovernor sheds readiness reads once the readiness reserve ' +
   const deferDecision = governor.evaluate({
     workClass: PRESSURE_WORK_CLASS.READINESS,
     resourceKeys: ['control-plane:read'],
-    allowDegrade: true,
-    allowDefer: true,
   });
 
   t.equal(
@@ -823,3 +784,215 @@ test('PressureGovernor sheds readiness reads once the readiness reserve ' +
   );
   PressureGovernor.clearSharedForTests();
 });
+
+test('PressureGovernor derives the defer pacing hint from measured pressure',
+  async (t) => {
+    const summaryRef = {
+      backpressured: true,
+      saturatedNodeCount: 1,
+      totalPending: 64,
+      maxPendingUtilization: 1,
+    };
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return summaryRef;
+        },
+      },
+    });
+
+    const shallow = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['transport:outbound'],
+    });
+    t.equal(
+      shallow.action,
+      PRESSURE_GOVERNOR_ACTION.DEFER,
+      'interactive work should defer under pressure',
+    );
+    t.ok(
+      shallow.retryAfterMs <= 25,
+      'shallow (flickering) saturation must pace near-immediate retry, ' +
+        `got ${shallow.retryAfterMs}ms`,
+    );
+
+    summaryRef.maxPendingUtilization = 4;
+    const deep = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['transport:outbound'],
+    });
+    t.ok(
+      deep.retryAfterMs > shallow.retryAfterMs,
+      'deeper saturation must pace slower than shallow saturation',
+    );
+    t.ok(
+      deep.retryAfterMs <= 250,
+      'derived pacing hint must stay bounded by the legacy ceiling',
+    );
+
+    const background = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['transport:outbound'],
+    });
+    t.ok(
+      background.retryAfterMs > shallow.retryAfterMs,
+      'background work must pace slower than interactive work',
+    );
+  });
+
+test('PressureGovernor admit resolves immediately without backpressure',
+  async (t) => {
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return {backpressured: false};
+        },
+      },
+    });
+    const decision = await governor.admit({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['transport:outbound'],
+    });
+    t.equal(decision.action, PRESSURE_GOVERNOR_ACTION.ALLOW,
+      'admit should allow immediately when transport is clear');
+  });
+
+test('PressureGovernor admit parks deferred work and admits on capacity',
+  async (t) => {
+    const summaryRef = {backpressured: true, maxPendingUtilization: 1};
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return summaryRef;
+        },
+      },
+    });
+    const admission = governor.admit({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['transport:outbound'],
+    });
+    t.equal(governor.admissionWaiters.length, 1,
+      'deferred admit should park one waiter');
+    summaryRef.backpressured = false;
+    governor.drainAdmissionWaiters();
+    const decision = await admission;
+    t.equal(decision.action, PRESSURE_GOVERNOR_ACTION.ALLOW,
+      'parked waiter should be admitted once backpressure clears');
+    t.equal(governor.admissionWaiters.length, 0,
+      'admission queue should drain after capacity returns');
+    governor.dispose();
+  });
+
+test('PressureGovernor admit falls back to the defer decision on overflow ' +
+  'and deadline', async (t) => {
+  const summaryRef = {backpressured: true, maxPendingUtilization: 1};
+  let nowMs = 0;
+  const governor = new PressureGovernor({
+    nodeId: 'node-a',
+    now: () => nowMs,
+    messageRouter: {
+      getOutboundPressureSummary() {
+        return summaryRef;
+      },
+    },
+  });
+
+  // Fill the interactive queue to its bound.
+  const parked = [];
+  for (let i = 0; i < 128; i += 1) {
+    parked.push(governor.admit({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['transport:outbound'],
+    }));
+  }
+  t.equal(governor.admissionWaiters.length, 128,
+    'interactive admission queue should hold its bound');
+
+  const overflow = await governor.admit({
+    workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+    resourceKeys: ['transport:outbound'],
+  });
+  t.equal(overflow.action, PRESSURE_GOVERNOR_ACTION.DEFER,
+    'overflow past the queue bound should resolve to the defer decision');
+  t.ok(overflow.retryAfterMs > 0,
+    'overflow defer should carry a pacing hint');
+
+  // Advance past the interactive deadline and drain: waiters resolve DEFER.
+  nowMs = 10000;
+  governor.drainAdmissionWaiters();
+  const decisions = await Promise.all(parked);
+  t.ok(decisions.every((d) => d.action === PRESSURE_GOVERNOR_ACTION.DEFER),
+    'deadline expiry should resolve parked waiters to defer');
+  t.equal(governor.admissionWaiters.length, 0,
+    'deadline expiry should clear the admission queue');
+  governor.dispose();
+});
+
+test('PressureGovernor admits parked waiters in work-class priority order',
+  async (t) => {
+    const summaryRef = {backpressured: true, maxPendingUtilization: 1};
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return summaryRef;
+        },
+      },
+    });
+    const admitted = [];
+    const background = governor.admit({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['transport:outbound'],
+    }).then(() => admitted.push('background'));
+    const interactive = governor.admit({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['transport:outbound'],
+    }).then(() => admitted.push('interactive'));
+    summaryRef.backpressured = false;
+    governor.drainAdmissionWaiters();
+    await Promise.all([background, interactive]);
+    t.same(admitted, ['interactive', 'background'],
+      'interactive work should be admitted before background work');
+    governor.dispose();
+  });
+
+test('PressureGovernor admission poll survives a throwing pressure sensor',
+  async (t) => {
+    let shouldThrow = false;
+    let nowMs = 0;
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      now: () => nowMs,
+      messageRouter: {
+        getOutboundPressureSummary() {
+          if (shouldThrow) {
+            throw new Error('sensor exploded');
+          }
+          return {backpressured: true, maxPendingUtilization: 1};
+        },
+      },
+    });
+    const admission = governor.admit({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['transport:outbound'],
+    });
+    shouldThrow = true;
+    t.doesNotThrow(
+      () => governor.drainAdmissionWaiters(),
+      'a throwing sensor must not escape the drain loop',
+    );
+    t.equal(governor.admissionWaiters.length, 1,
+      'waiter should remain parked while the sensor is broken');
+    nowMs = 10000;
+    governor.drainAdmissionWaiters();
+    const decision = await admission;
+    t.equal(decision.action, PRESSURE_GOVERNOR_ACTION.DEFER,
+      'deadline expiry must resolve the waiter with the defer decision even ' +
+        'while the sensor throws');
+    t.equal(governor.admissionWaiters.length, 0,
+      'broken-sensor waiters must not be stranded past their deadline');
+    governor.dispose();
+  });

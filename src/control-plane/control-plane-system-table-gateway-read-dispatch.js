@@ -79,14 +79,13 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
         this.inFlightReadRequestsByKey,
         requestKey,
         async () => {
-          const pressureDecision = this.evaluateReadPressure(
+          const pressureDecision = await this.admitReadPressure(
             tableName,
             mergedOptions,
           );
           if (
             pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
-            pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT ||
-            pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEGRADE
+            pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT
           ) {
             const failure = buildPressureAdmissionFailure(pressureDecision, {
               tableName,

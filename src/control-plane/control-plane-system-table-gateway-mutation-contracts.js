@@ -454,10 +454,6 @@ function applyMutationWorkloadProfileDefaults(
       typeof options?.workClass === 'undefined' ?
         workloadProfile.workClass :
         resolvedOptions.workClass,
-    allowPressureDefer:
-      typeof options?.allowPressureDefer === 'undefined' ?
-        workloadProfile.allowPressureDefer :
-        resolvedOptions.allowPressureDefer,
     resourceKeys: mergedResourceKeys,
   };
 }

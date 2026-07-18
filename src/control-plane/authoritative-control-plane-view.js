@@ -158,9 +158,6 @@ function resolveAuthoritativeReadWorkloadProfile(
     }),
     {
       workClass: resolvedOptions?.workClass || null,
-      allowPressureDegrade: resolvedOptions?.allowPressureDegrade,
-      allowPressureDefer: resolvedOptions?.allowPressureDefer,
-      retryAfterMs: resolvedOptions?.pressureRetryAfterMs,
       additionalResourceKeys,
     },
   );
@@ -188,10 +185,6 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
       queryOptions.workClass ||
       workloadProfile.workClass ||
       PRESSURE_WORK_CLASS.INTERACTIVE,
-    allowPressureDegrade:
-      workloadProfile.allowPressureDegrade !== false,
-    allowPressureDefer:
-      workloadProfile.allowPressureDefer === true,
     authoritativeReadMode:
       authoritativeReadModeContract.authoritativeReadMode,
     preferOwnerRpcReadLeader:
@@ -410,13 +403,10 @@ class AuthoritativeControlPlaneView {
           `control-plane:table:${tableName || 'unknown'}`,
         ],
       );
-      const pressureDecision = this.getPressureGovernor().evaluate({
+      const pressureDecision = await this.getPressureGovernor().admit({
         workClass:
           workloadProfile.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
         resourceKeys: workloadProfile.resourceKeys,
-        allowDegrade: workloadProfile.allowPressureDegrade !== false,
-        allowDefer: workloadProfile.allowPressureDefer === true,
-        retryAfterMs: workloadProfile.retryAfterMs,
       });
       const queryOptions = {
         ...(resolvedOptions.queryOptions &&
@@ -503,8 +493,7 @@ class AuthoritativeControlPlaneView {
             authoritativeReadMode:
               authoritativeReadModeContract.authoritativeReadMode,
             allowOwnerRpcFallback:
-              authoritativeReadModeContract.allowOwnerRpcFallback &&
-              pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
+              authoritativeReadModeContract.allowOwnerRpcFallback,
             preferOwnerRpcRead:
               authoritativeReadModeContract.preferOwnerRpcRead,
             preferOwnerRpcReadLeader:
@@ -514,8 +503,7 @@ class AuthoritativeControlPlaneView {
             confirmEmptyLocalReadWithOwnerRpc:
               authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc,
             allowSqlFallback:
-              authoritativeReadModeContract.allowSqlFallback &&
-              pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
+              authoritativeReadModeContract.allowSqlFallback,
             cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
             queryOptions,
           },
@@ -549,23 +537,6 @@ class AuthoritativeControlPlaneView {
               },
             },
           );
-      }
-      if (result?.success !== true &&
-          pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEGRADE) {
-        const failure = buildPressureAdmissionFailure(pressureDecision, {
-          tableName,
-          error: result?.error || undefined,
-        });
-        return Object.freeze({
-          ...failure,
-          rows: freezeRows(failure.rows),
-          rowCount: 0,
-          source: AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE,
-          usedSqlFallback: false,
-          snapshotVersion: null,
-          observedAt,
-          observedAtMs,
-        });
       }
       const rows = freezeRows(result?.rows);
       const source = normalizeReadSource(result?.source);

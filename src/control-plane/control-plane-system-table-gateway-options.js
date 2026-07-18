@@ -167,11 +167,6 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
   writeOptions = copyOption(
     writeOptions,
     options,
-    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPRESSUREDEFER,
-  );
-  writeOptions = copyOption(
-    writeOptions,
-    options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PRESSURERETRYAFTERMS,
   );
   writeOptions = copyOption(

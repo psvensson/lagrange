@@ -205,11 +205,6 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       PRESSURE_WORK_CLASS.CRITICAL,
       'gateway should derive the workload-owned critical work class when callers omit it',
     );
-    t.equal(
-      updateCalls[0].options.allowPressureDefer,
-      false,
-      'gateway should derive the workload-owned no-defer contract when callers omit it',
-    );
     t.same(
       updateCalls[0].options.resourceKeys,
       ['control-plane:transaction-control:recovery'],
@@ -796,20 +791,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
         name: 'defer',
         options: {
           workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-          allowPressureDegrade: false,
-          allowPressureDefer: true,
         },
         expectedOutcome: 'deferred',
         expectedAction: 'defer',
-      },
-      {
-        name: 'reject',
-        options: {
-          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-          allowPressureDegrade: false,
-        },
-        expectedOutcome: 'rejected',
-        expectedAction: 'reject',
       },
     ];
 
@@ -900,6 +884,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       nodeId: 'node-gateway',
       pressureGovernor: {
         configure() {},
+        admit(request) {
+          return Promise.resolve(this.evaluate(request));
+        },
         evaluate() {
           return {
             action: 'allow',
@@ -939,7 +926,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       ['node-a'],
     );
 
-    await Promise.resolve();
+    while (callCount === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
 
     t.equal(callCount, 1, 'identical authoritative reads should collapse in flight');
 
@@ -965,6 +954,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       nodeId: 'node-gateway',
       pressureGovernor: {
         configure() {},
+        admit(request) {
+          return Promise.resolve(this.evaluate(request));
+        },
         evaluate() {
           return {
             action: 'allow',
@@ -1081,6 +1073,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       maxTrackedReadRequests: 1,
       pressureGovernor: {
         configure() {},
+        admit(request) {
+          return Promise.resolve(this.evaluate(request));
+        },
         evaluate() {
           return {
             action: 'allow',
@@ -1169,7 +1164,9 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       'SELECT * FROM nodes WHERE node_id = ?',
       ['node-a'],
     );
-    await Promise.resolve();
+    while (releaseRead === null) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
 
     const retentionMetrics = metricEvents.filter((entry) => {
       return entry.tag === METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_RETENTION;

@@ -372,14 +372,6 @@ function applyReadWorkloadProfileDefaults(resolvedOptions = {}, options = {}) {
       typeof options?.workClass === 'undefined' ?
         workloadProfile.workClass :
         resolvedOptions.workClass,
-    allowPressureDegrade:
-      typeof options?.allowPressureDegrade === 'undefined' ?
-        workloadProfile.allowPressureDegrade :
-        resolvedOptions.allowPressureDegrade,
-    allowPressureDefer:
-      typeof options?.allowPressureDefer === 'undefined' ?
-        workloadProfile.allowPressureDefer :
-        resolvedOptions.allowPressureDefer,
     resourceKeys: mergedResourceKeys,
   };
 }
@@ -447,11 +439,6 @@ function resolveReadProfileOptions(options = {}) {
       resolvedOptions,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.AUTHORITATIVEREADMODE,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
-    );
-    resolvedOptions = applyProfileDefault(
-      resolvedOptions,
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPRESSUREDEGRADE,
-      false,
     );
     resolvedOptions = applyProfileDefault(
       resolvedOptions,

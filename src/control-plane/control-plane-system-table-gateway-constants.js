@@ -5,8 +5,6 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
   ACTIVE: 'active',
   ALLOWCOALESCING: 'allowCoalescing',
   ALLOWPENDINGVISIBILITY: 'allowPendingVisibility',
-  ALLOWPRESSUREDEFER: 'allowPressureDefer',
-  ALLOWPRESSUREDEGRADE: 'allowPressureDegrade',
   ALLOWSQLFALLBACK: 'allowSqlFallback',
   AUTHORITATIVEREADMODE: 'authoritativeReadMode',
   CANCELLATIONTOKEN: 'cancellationToken',

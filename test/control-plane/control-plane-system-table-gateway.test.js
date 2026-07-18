@@ -312,6 +312,9 @@ async (t) => {
     nodeId: 'node-gateway',
     pressureGovernor: {
       configure() {},
+      admit(request) {
+        return Promise.resolve(this.evaluate(request));
+      },
       evaluate(args) {
         evaluateArgs = args;
         return {
@@ -348,16 +351,6 @@ async (t) => {
     evaluateArgs?.workClass,
     PRESSURE_WORK_CLASS.BACKGROUND,
     'gateway should derive read pressure work class from the shared workload contract',
-  );
-  t.equal(
-    evaluateArgs?.allowDegrade,
-    true,
-    'gateway should preserve workload-owned degrade semantics instead of forcing repair-profile defaults',
-  );
-  t.equal(
-    evaluateArgs?.allowDefer,
-    true,
-    'gateway should preserve workload-owned defer semantics instead of forcing repair-profile defaults',
   );
   t.ok(
     evaluateArgs?.resourceKeys?.includes('control-plane:admin:diagnostics'),
@@ -1443,9 +1436,6 @@ test('ControlPlaneSystemTableGateway logs typed defer reasons for harness ' +
     strategy: 'cache',
   }, {
     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-    allowPressureDegrade: false,
-    allowPressureDefer: true,
-    pressureRetryAfterMs: 275,
   });
 
   t.equal(result.outcome, 'deferred', 'gateway should surface deferred outcome');
@@ -1460,10 +1450,9 @@ test('ControlPlaneSystemTableGateway logs typed defer reasons for harness ' +
     'transport_backpressure',
     'warning should include the typed defer reason',
   );
-  t.equal(
-    warnings[0].data.retryAfterMs,
-    275,
-    'warning should include retry hints for the harness',
+  t.ok(
+    warnings[0].data.retryAfterMs > 0,
+    'warning should include a derived retry hint for the harness',
   );
 });
 

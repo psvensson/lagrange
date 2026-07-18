@@ -41,7 +41,7 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
         expectedCacheFields: {raft_role: 'leader'},
         routingReadinessDimension: 'controlPlaneRecoveryEligible',
         deliverySource: 'control-plane:write:services',
-        recoveryCandidateSelectionKey: '{"allowPressureDefer":false,"data":{"raft_role":"leader","updated_at":123},"deliveryPriority":null,"ignoreExisting":false,"kind":"control-plane-mutation","operation":"update","routingReadinessDimension":"controlPlaneRecoveryEligible","row":null,"tableName":"services","whereClause":{"service_id":"replica-1"},"workClass":null}',
+        recoveryCandidateSelectionKey: '{"data":{"raft_role":"leader","updated_at":123},"deliveryPriority":null,"ignoreExisting":false,"kind":"control-plane-mutation","operation":"update","routingReadinessDimension":"controlPlaneRecoveryEligible","row":null,"tableName":"services","whereClause":{"service_id":"replica-1"},"workClass":null}',
       },
     }, 'should use the configured row key and cache-visibility fields');
     t.same(result, {

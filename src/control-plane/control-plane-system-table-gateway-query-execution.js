@@ -57,11 +57,19 @@ function buildReadPressureContract(options = {}) {
   return {
     workloadClass: options.workloadClass || null,
     workClass: options.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
-    allowPressureDegrade: options.allowPressureDegrade !== false,
-    allowPressureDefer: options.allowPressureDefer === true,
     resourceKeys: Array.isArray(options.resourceKeys) ?
       normalizeDistinctStringArray(options.resourceKeys) :
       [],
+  };
+}
+
+// The single flagless pressure request builder for BOTH gateway entry points
+// (reads and system-table queries): admission derives only from the work
+// class and the structural resource identity of the request.
+function buildPressureAdmissionRequest(workClass, resourceKeys) {
+  return {
+    workClass: workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+    resourceKeys: normalizeDistinctStringArray(resourceKeys),
   };
 }
 
@@ -85,20 +93,17 @@ function buildImplicitReadRequestKey(tableName, sql, params, options) {
 }
 
 const controlPlaneSystemTableGatewayQueryExecutionMethods = {
-  evaluateReadPressure(tableName, options = {}) {
-    return this.getPressureGovernor().evaluate({
-      workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
-      resourceKeys: normalizeDistinctStringArray([
+  admitReadPressure(tableName, options = {}) {
+    return this.getPressureGovernor().admit(buildPressureAdmissionRequest(
+      options?.workClass,
+      [
         CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_COLON_READ,
         `control-plane:table:${
           tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
         }`,
         ...(Array.isArray(options?.resourceKeys) ? options.resourceKeys : []),
-      ]),
-      allowDegrade: options?.allowPressureDegrade !== false,
-      allowDefer: options?.allowPressureDefer === true,
-      retryAfterMs: options?.pressureRetryAfterMs,
-    });
+      ],
+    ));
   },
 
   buildReadRequestKey(tableName, sql, params = [], options = {}) {
@@ -163,22 +168,18 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       params: Array.isArray(params) ? params : [],
       workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
       preferLeader: options?.preferLeader === true,
-      allowPressureDefer: options?.allowPressureDefer === true,
-      allowPressureDegrade: options?.allowPressureDegrade === true,
       routingReadinessDimension:
         options?.routingReadinessDimension ||
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     });
   },
 
-  evaluateExecuteQueryPressure(descriptor, options = {}) {
+  admitExecuteQueryPressure(descriptor, options = {}) {
     if (descriptor?.isSystemTable !== true) {
       return null;
     }
     const shouldEvaluate =
       options?.enforcePressureAdmission === true ||
-      options?.allowPressureDefer === true ||
-      options?.allowPressureDegrade === true ||
       typeof options?.workClass === 'string';
     if (!shouldEvaluate) {
       return null;
@@ -200,17 +201,13 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       ...defaultResourceKeys,
       ...(Array.isArray(options?.resourceKeys) ? options.resourceKeys : []),
     ]);
-    return this.getPressureGovernor().evaluate({
-      workClass:
-        options?.workClass ||
+    return this.getPressureGovernor().admit(buildPressureAdmissionRequest(
+      options?.workClass ||
         (isWrite ?
           PRESSURE_WORK_CLASS.CRITICAL :
           PRESSURE_WORK_CLASS.INTERACTIVE),
       resourceKeys,
-      allowDegrade: isWrite ? false : options?.allowPressureDegrade === true,
-      allowDefer: options?.allowPressureDefer === true,
-      retryAfterMs: options?.pressureRetryAfterMs,
-    });
+    ));
   },
 
   assertSqlQueryEngine() {
@@ -349,15 +346,14 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   async executeQuery(sql, params = [], options = {}) {
     const sqlQueryEngine = this.assertSqlQueryEngine();
     const descriptor = this.resolveSystemTableQueryDescriptor(sql, options);
-    const pressureDecision = this.evaluateExecuteQueryPressure(
+    const pressureDecision = await this.admitExecuteQueryPressure(
       descriptor,
       options,
     );
     if (
       pressureDecision &&
       (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
-        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT ||
-        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEGRADE)
+        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT)
     ) {
       return buildPressureAdmissionFailure(pressureDecision, {
         tableName: descriptor.tableName,

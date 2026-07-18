@@ -230,10 +230,10 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
     'stale local evidence should remain ineligible on the first sync read');
   t.equal(repeated.dimensions.serveEligible, false,
     'repeated sync reads should stay fail-closed until the owner refresh lands');
+  await new Promise((resolve) => setImmediate(resolve));
+
   t.same(authoritativeReads, [TABLES.NODES, TABLES.SERVICES],
     'sync reads should trigger one deduped authoritative node/service refresh');
-
-  await new Promise((resolve) => setImmediate(resolve));
 
   const refreshed = readinessService.getNodeReadinessSync(nodeId, options);
   t.equal(refreshed.dimensions.serveEligible, true,
