@@ -21,15 +21,13 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json
-- Selected theory: theory-20260718-startup-authority-readiness-dimension-inversion (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for formation-priority-spread-authoritative-publication-closure-main
+- Selected theory: theory-20260718-priority-placement-ready-quiescence-handoff
+- Next move: continue supervised step for formation-priority-spread-authoritative-publication-closure-main
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record system theory before the next formation-priority-spread-authoritative-publication-closure-main attempt using npm run model:contracts as model discriminator
-- Blocker: system theory required for formation-priority-spread-authoritative-publication-closure-main
-- Blocker: frontier theory required for formation-priority-spread-authoritative-publication-closure-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Status: allowed
+- Next action: continue formation-priority-spread-authoritative-publication-closure-main with modelRef or modelNotApplicable evidence
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 9
@@ -71,13 +69,16 @@
 - **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
 - **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
 - **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
+- **formation-priority-spread-authoritative-publication-closure-main**: Fresh post-checkpoint run localizes the four final blockers to ordinary non-priority REPLACEs for module_dependency_locks-p1, service_definitions-p1, service_timers-p1, and config-p1. Priority topology was already ready with zero gap. The background release tracker started its 60000ms clock at 01:53:50.498 and created ordinary work at 01:54:51.919, leaving the equally long but stricter schema-admission candidate no guaranteed observation turn. This is a competing-clock ownership defect, not a priority spread or stale-watermark regression. [data/examples/service-data-affinity-demo/node-0.log]
 
 ## Theories
+- **theory-20260718-formation-quiescence-handoff-order** [active] system, mechanism public_active_and_background_release_are_independent_of_formation_quiescence_handoff, owner join readiness publication owner plus background priority-spread release owner, modelGate npm run model:contracts
 - **theory-20260718-complete-authoritative-cache-row-exact-replace** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer observation, mechanism complete_authoritative_cache_row_exact_replace, owner ControlPlaneSystemTableGateway_and_SystemTableCache, boundary complete_authoritative_observation_to_observed_cache, modelGate npm run model:contracts
 - **theory-20260718-startup-authority-readiness-dimension-inversion** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer ownership, mechanism startup_authority_readiness_dimension_inversion, owner UnifiedRebalancerReplicaState, boundary startup_authority_priority_placement_eligibility_to_public_ready_lease_policy, modelGate npm run model:contracts
+- **theory-20260718-priority-placement-ready-quiescence-handoff** [active] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer ownership, mechanism priority_placement_ready_quiescence_handoff, owner join readiness publication owner and background priority-spread release owner, boundary membership-written to public ACTIVE to ordinary placement release, modelGate npm run model:contracts
 
 ## Selected Theories
-- **formation-priority-spread-authoritative-publication-closure-main**: theory-20260718-startup-authority-readiness-dimension-inversion
+- **formation-priority-spread-authoritative-publication-closure-main**: theory-20260718-priority-placement-ready-quiescence-handoff
 
 ## Theory Results
 - **theory-20260718-complete-authoritative-cache-row-exact-replace**: supported (scenario=failed, theory=supported, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-17T23-34-41-192Z.report.json]
