@@ -430,6 +430,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         {
           authoritativeReadMode: options?.authoritativeReadMode,
           requireOwnerRpcRead: options?.requireOwnerRpcRead === true,
+          preferOwnerRpcReadLeader:
+          options?.preferOwnerRpcReadLeader === true,
           allowPriorityRecoveryDeferredVisibility:
           options?.allowPriorityRecoveryDeferredVisibility === true,
           allowOwnerPersistedTransitionDeferredVisibility:

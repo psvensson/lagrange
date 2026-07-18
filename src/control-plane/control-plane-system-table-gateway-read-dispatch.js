@@ -5,6 +5,7 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
+  buildControlPlaneReadAuthority,
   buildPressureAdmissionFailure,
   normalizeCoalescingToken,
   normalizeReadStrategy,
@@ -52,6 +53,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       ...profiledOptions,
       strategy,
     };
+    mergedOptions.readAuthority = buildControlPlaneReadAuthority(mergedOptions);
     const authoritativeReadModeContract =
       resolveAuthoritativeReadModeContract(mergedOptions);
     const requestKey = this.buildReadRequestKey(

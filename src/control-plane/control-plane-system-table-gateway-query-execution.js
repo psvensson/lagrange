@@ -20,8 +20,8 @@ import {
   normalizeMutationOperation,
   normalizePhaseScope,
   normalizeSqlOperationKind,
+  buildControlPlaneReadAuthority,
   normalizeSystemTableName,
-  resolveAuthoritativeReadMode,
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
 import {
@@ -45,29 +45,12 @@ function buildSchemaFilteredSqlMutationEntries(tableName, data) {
   );
 }
 
-function buildReadRoutingContract(options = {}) {
-  return {
-    authoritativeReadMode: resolveAuthoritativeReadMode(options),
-    localReadConsistency: options.localReadConsistency || null,
-    preferLeader:
-      typeof options.preferLeader === 'boolean' ?
-        options.preferLeader :
-        null,
-    preferOwnerRpcReadLeader: options.preferOwnerRpcReadLeader === true,
-    replicaFallbackConsistency: options.replicaFallbackConsistency || null,
-    routingReadinessDimension:
-      options.routingReadinessDimension ||
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-  };
-}
-
+// The full read-authority token IS the execution identity: every field that
+// can change a read's answer must be part of its coalescing key, or a read
+// with stronger authority can absorb a weaker in-flight read's result (the
+// 2026-07-18 leader-pin coalescing incident).
 function buildReadExecutionContract(options = {}) {
-  return {
-    phaseScope: normalizePhaseScope(options.phaseScope),
-    readProfile: options.readProfile || null,
-    strategy: options.strategy || null,
-    ...buildReadRoutingContract(options),
-  };
+  return {...buildControlPlaneReadAuthority(options)};
 }
 
 function buildReadPressureContract(options = {}) {
@@ -162,7 +145,8 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
           descriptor.tableName ||
           CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
         }:` +
-        `${descriptor.operationKind}:${explicitKey}`
+        `${descriptor.operationKind}:${explicitKey}:` +
+        `preferLeader=${options?.preferLeader === true}`
       );
     }
     if (options?.allowCoalescing === false) {
@@ -178,6 +162,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       sql: sql || null,
       params: Array.isArray(params) ? params : [],
       workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+      preferLeader: options?.preferLeader === true,
       allowPressureDefer: options?.allowPressureDefer === true,
       allowPressureDegrade: options?.allowPressureDegrade === true,
       routingReadinessDimension:

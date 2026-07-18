@@ -121,6 +121,7 @@ export {
   buildAuthoritativeControlPlaneReadIntent,
   buildAuthoritativeControlPlaneReadRequestOptions,
   buildControlPlaneCacheReconcileContract,
+  buildControlPlaneReadAuthority,
   buildProjectionControlPlaneReadIntent,
   normalizeAuthoritativeReadMode,
   normalizeReadProfile,

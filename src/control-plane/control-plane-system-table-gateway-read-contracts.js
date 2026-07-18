@@ -269,6 +269,45 @@ function resolveControlPlaneReadIntent(
   };
 }
 
+/**
+ * The single frozen read-authority contract. Built once at gateway read
+ * ingress and threaded structurally (requestOptions.readAuthority,
+ * executionOptions.readAuthority, coalescing identities) so no intermediate
+ * layer can drop an authority field by re-enumerating options — the failure
+ * mode behind the 2026-07-18 leader-pin incidents. Field-level booleans in
+ * requestOptions remain for legacy consumers; token consumers win.
+ */
+function buildControlPlaneReadAuthority(options = {}) {
+  if (
+    options?.readAuthority &&
+    typeof options.readAuthority === 'object'
+  ) {
+    return options.readAuthority;
+  }
+  return Object.freeze({
+    strategy: normalizeReadStrategy(
+      options?.strategy || options?.readStrategy,
+    ),
+    readProfile: normalizeReadProfile(
+      options?.readProfile || options?.profile,
+    ),
+    authoritativeReadMode: resolveAuthoritativeReadMode(options),
+    preferOwnerRpcReadLeader: options?.preferOwnerRpcReadLeader === true,
+    preferLeader:
+      typeof options?.preferLeader === 'boolean' ?
+        options.preferLeader :
+        null,
+    localReadConsistency: options?.localReadConsistency || null,
+    replicaFallbackConsistency: options?.replicaFallbackConsistency || null,
+    routingReadinessDimension:
+      options?.routingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    phaseScope: normalizePhaseScope(options?.phaseScope),
+    authoritativeObservationScope:
+      options?.authoritativeObservationScope || null,
+  });
+}
+
 function buildAuthoritativeControlPlaneReadRequestOptions(
   options = {},
   queryOptions = null,
@@ -278,6 +317,7 @@ function buildAuthoritativeControlPlaneReadRequestOptions(
   return Object.freeze({
     authoritativeReadModeContract,
     requestOptions: {
+      readAuthority: buildControlPlaneReadAuthority(options),
       localReadConsistency:
         options?.localReadConsistency || CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
       replicaFallbackConsistency:
@@ -475,6 +515,7 @@ export {
   buildAuthoritativeControlPlaneReadIntent,
   buildAuthoritativeControlPlaneReadRequestOptions,
   buildControlPlaneCacheReconcileContract,
+  buildControlPlaneReadAuthority,
   buildProjectionControlPlaneReadIntent,
   normalizeAuthoritativeReadMode,
   normalizeReadProfile,

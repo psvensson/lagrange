@@ -327,7 +327,15 @@ async function executeAuthoritativeOwnerRpcRead(
     return null;
   }
 
+  // Structural authority: the gateway-built read-authority token wins over
+  // the field-level legacy booleans, which survive only for callers that
+  // bypass the gateway ingress.
+  const readAuthority =
+    options?.readAuthority && typeof options.readAuthority === 'object' ?
+      options.readAuthority :
+      null;
   const routingReadinessDimension =
+    readAuthority?.routingReadinessDimension ||
     options?.queryOptions?.routingReadinessDimension ||
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 
@@ -351,6 +359,7 @@ async function executeAuthoritativeOwnerRpcRead(
     deliverySource,
     allowReadinessAuthoritativeRefresh:
       options?.queryOptions?.allowReadinessAuthoritativeRefresh !== false,
+    ...(readAuthority ? {readAuthority} : {}),
   };
 
   // Default owner-RPC reads route to "an owner" replica (preferLeader=false),
@@ -360,7 +369,9 @@ async function executeAuthoritativeOwnerRpcRead(
   // which holds the authoritative epoch. The routing readiness dimension is
   // CONTROL_PLANE_RECOVERY_ELIGIBLE, so a recovery-pending leader still serves.
   const preferLeader =
-    options?.preferOwnerRpcReadLeader === true ?
+    (readAuthority ?
+      readAuthority.preferOwnerRpcReadLeader === true :
+      options?.preferOwnerRpcReadLeader === true) ?
       true :
       AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER;
 
