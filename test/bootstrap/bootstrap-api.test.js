@@ -278,10 +278,6 @@ test('BootstrapAPI - bootstrap control-plane queries use the canonical gateway w
       'bootstrap gateway queries should still use critical transport delivery');
     t.equal(capturedOptions.enforcePressureAdmission, true,
       'bootstrap gateway queries should enforce shared pressure admission');
-    t.equal(capturedOptions.allowPressureDefer, true,
-      'bootstrap gateway queries should defer under pressure instead of failing deep in the stack');
-    t.equal(capturedOptions.allowPressureDegrade, false,
-      'bootstrap gateway writes should not silently degrade');
     t.equal(capturedOptions.pressureRetryAfterMs, 375,
       'bootstrap gateway queries should propagate retry hints');
     t.equal(capturedOptions.routingReadinessDimension, 'controlPlaneRecoveryEligible',
@@ -341,10 +337,6 @@ test('BootstrapAPI - bootstrap control-plane mutations use the canonical gateway
     );
     t.equal(capturedOptions.deliveryPriority, 'critical',
       'bootstrap gateway mutations should still use critical delivery');
-    t.equal(capturedOptions.allowPressureDefer, true,
-      'bootstrap gateway mutations should defer under pressure');
-    t.equal(capturedOptions.allowPressureDegrade, false,
-      'bootstrap gateway mutations should not silently degrade');
     t.equal(capturedOptions.pressureRetryAfterMs, 375,
       'bootstrap gateway mutations should propagate retry hints');
     t.equal(capturedOptions.routingReadinessDimension, 'controlPlaneRecoveryEligible',

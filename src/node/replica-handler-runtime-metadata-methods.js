@@ -562,7 +562,6 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       }
       const result = await gateway.readRows(tableName, sql, params, {
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        allowPressureDefer: true,
       });
       if (result.success === false) {
         throw new Error(

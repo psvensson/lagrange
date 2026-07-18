@@ -340,11 +340,6 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
     t.equal(readCalls.length > 0, true,
       'control snapshot repair should issue authoritative discovery reads');
     t.equal(
-      readCalls.every((call) => call.allowPressureDegrade === false),
-      true,
-      'control snapshot repair should fail closed instead of degrading on pressure',
-    );
-    t.equal(
       readCalls.every((call) => call.allowSqlFallback === true),
       true,
       'control snapshot repair should preserve the routed authoritative fallback path',

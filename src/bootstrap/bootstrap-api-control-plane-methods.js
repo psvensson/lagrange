@@ -147,10 +147,6 @@ const bootstrapApiControlPlaneMethods = {
       workClass: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.workClass,
       deliveryPriority: LOCAL_STR_CRITICAL,
       enforcePressureAdmission: true,
-      allowPressureDefer:
-        BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.allowPressureDefer,
-      allowPressureDegrade:
-        BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.allowPressureDegrade,
       resourceKeys: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.resourceKeys,
       pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
       timeoutBudget: options.timeoutBudget || null,
@@ -180,10 +176,6 @@ const bootstrapApiControlPlaneMethods = {
         BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.workloadClass,
       workClass: BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.workClass,
       deliveryPriority: LOCAL_STR_CRITICAL,
-      allowPressureDefer:
-        BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.allowPressureDefer,
-      allowPressureDegrade:
-        BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.allowPressureDegrade,
       resourceKeys: BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.resourceKeys,
       pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
       phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,

@@ -648,7 +648,6 @@ class AdminWebSocketAPIBase {
     }).evaluate({
       workClass: workloadProfile.workClass,
       resourceKeys: workloadProfile.resourceKeys,
-      allowDegrade: workloadProfile.allowPressureDegrade,
     });
   }
   resolveLocalObservationExecutionPolicy(_executionContext = {}, options = {}) {

@@ -493,8 +493,6 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
         queryTimeoutMs,
         sessionId: `${reason || LOCAL_STR_REPAIR}:${tableName}:${now}`,
         allowSqlFallback: allowRoutedAuthoritativeFallback,
-        allowPressureDegrade: transportProfile.allowPressureDegrade,
-        allowPressureDefer: transportProfile.allowPressureDefer,
         workloadClass: transportProfile.workloadClass,
         workClass: transportProfile.workClass,
         deliveryPriority: transportProfile.deliveryPriority,
@@ -513,14 +511,11 @@ function assignAdminServiceDiscoveryReadinessContextMethods(
       const workloadProfile = buildControlPlaneWorkloadProfile(
         workloadClass,
         {
-          allowPressureDegrade: controlSnapshotRepairRead ? false : undefined,
         },
       );
       return Object.freeze({
         workloadClass: workloadProfile.workloadClass,
         workClass: workloadProfile.workClass,
-        allowPressureDegrade: workloadProfile.allowPressureDegrade === true,
-        allowPressureDefer: workloadProfile.allowPressureDefer === true,
         deliveryPriority: controlSnapshotRepairRead ?
           CONTROL_PLANE_DELIVERY_PRIORITY.READINESS :
           CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,

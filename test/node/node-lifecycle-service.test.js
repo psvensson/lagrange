@@ -254,11 +254,6 @@ test('NodeLifecycleService - routes writes through control-plane mutation ingres
       SYSTEM_TABLE_NAME.NODES,
       'should target the nodes table through one ingress',
     );
-    t.equal(
-      mockGateway.operations[0].options.allowPressureDefer,
-      true,
-      'heartbeat writes should opt into gateway defer handling',
-    );
   });
 
 test('NodeLifecycleService - emits events for write operations', async (t) => {

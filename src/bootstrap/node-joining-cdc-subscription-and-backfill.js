@@ -578,9 +578,6 @@ class NodeJoiningCdcSubscriptionAndBackfill extends NodeJoiningMessageGroupRunti
     }).evaluate({
       workClass: workloadProfile.workClass || PRESSURE_WORK_CLASS.BACKGROUND,
       resourceKeys: workloadProfile.resourceKeys,
-      allowDegrade: workloadProfile.allowPressureDegrade,
-      allowDefer: workloadProfile.allowPressureDefer,
-      retryAfterMs: options?.pressureRetryAfterMs,
     });
   }
   /**

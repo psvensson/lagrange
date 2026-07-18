@@ -209,7 +209,6 @@ class NodeLifecycleService extends EventEmitter {
       }, {
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
         deliveryPriority: 'background',
-        allowPressureDefer: true,
         pressureRetryAfterMs: this.heartbeatIntervalMs,
         allowCoalescing: true,
         coalescingKey: `nodes:heartbeat:${nodeId}`,
