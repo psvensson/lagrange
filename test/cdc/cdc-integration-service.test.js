@@ -347,11 +347,6 @@ test('CDCIntegrationService - forwards pressure admission metadata to routed ' +
   t.equal(mockSqlEngine.executedQueries[0]?.options?.workClass, 'critical',
     'work class should survive the CDC SQL handoff');
   t.equal(
-    mockSqlEngine.executedQueries[0]?.options?.allowPressureDefer,
-    true,
-    'defer policy should survive the CDC SQL handoff',
-  );
-  t.equal(
     mockSqlEngine.executedQueries[0]?.options?.pressureRetryAfterMs,
     777,
     'retry-after hints should survive the CDC SQL handoff',
@@ -414,11 +409,6 @@ test('CDCIntegrationService - derives routed SQL admission defaults from one ' +
     PRESSURE_WORK_CLASS.CRITICAL,
     'pressure admission should derive the workload-owned critical work class',
   );
-  t.equal(
-    evaluateArgs?.allowDefer,
-    false,
-    'pressure admission should derive the workload-owned no-defer contract',
-  );
   t.ok(
     evaluateArgs?.resourceKeys?.includes(
       'control-plane:transaction-control:recovery',
@@ -440,11 +430,6 @@ test('CDCIntegrationService - derives routed SQL admission defaults from one ' +
     mockSqlEngine.executedQueries[0]?.options?.workClass,
     PRESSURE_WORK_CLASS.CRITICAL,
     'routed SQL writes should preserve the workload-owned critical work class',
-  );
-  t.equal(
-    mockSqlEngine.executedQueries[0]?.options?.allowPressureDefer,
-    false,
-    'routed SQL writes should preserve the workload-owned no-defer contract',
   );
   t.end();
 });
@@ -500,11 +485,6 @@ test('CDCIntegrationService - derives publication mutation pressure admission ' 
     PRESSURE_WORK_CLASS.CRITICAL,
     'publication pressure admission should derive the critical work class',
   );
-  t.equal(
-    evaluateArgs?.allowDefer,
-    true,
-    'publication pressure admission should derive the deferrable contract',
-  );
   t.ok(
     evaluateArgs?.resourceKeys?.includes(
       'control-plane:membership:publication',
@@ -521,11 +501,6 @@ test('CDCIntegrationService - derives publication mutation pressure admission ' 
     mockSqlEngine.executedQueries[0]?.options?.workloadClass,
     CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
     'publication routed SQL writes should preserve the workload class',
-  );
-  t.equal(
-    mockSqlEngine.executedQueries[0]?.options?.allowPressureDefer,
-    true,
-    'publication routed SQL writes should preserve the deferrable contract',
   );
   t.end();
 });
@@ -610,7 +585,6 @@ test('CDCIntegrationService - defers routed writes under pressure when allowed',
         {
           skipCacheWait: true,
           workClass: 'background',
-          allowPressureDefer: true,
           deliveryPriority: 'background',
         },
       ),
@@ -626,10 +600,9 @@ test('CDCIntegrationService - defers routed writes under pressure when allowed',
       true,
       'pressure admission should mark the error as deferable',
     );
-    t.equal(
-      error?.retryAfterMs,
-      250,
-      'pressure admission should preserve retry-after metadata',
+    t.ok(
+      error?.retryAfterMs > 0,
+      'pressure admission should preserve a derived retry-after hint',
     );
 
     t.equal(sqlCalls, 0, 'deferred routed writes should not hit routed SQL');

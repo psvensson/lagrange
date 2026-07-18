@@ -591,8 +591,6 @@ class CDCGroupPropagationDeliveryMethods {
     }).evaluate({
       workClass: deliveryProfile.workClass,
       resourceKeys: [CDC_GROUP_PROPAGATION_SERVICE_LITERAL.CDC_RETRY],
-      allowDegrade: false,
-      allowDefer: true,
     });
     return {
       deliveryProfile,

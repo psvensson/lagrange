@@ -327,7 +327,6 @@ class LatencyMeasurementService extends EventEmitter {
     }, {
       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
       deliveryPriority: 'background',
-      allowPressureDefer: true,
       coalescingKey: `latency-edge:${edgeId}`,
     });
 

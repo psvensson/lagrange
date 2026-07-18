@@ -132,8 +132,6 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
         'migration:recovery',
         'control-plane:write',
       ],
-      allowDegrade: false,
-      allowDefer: true,
     });
     const pressureDelayMs =
       pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?

@@ -370,11 +370,6 @@ class CDCRoutedMutationReadiness {
         CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY,
         tableResourceKey,
       ],
-      allowDegrade: false,
-      allowDefer: workloadProfile ?
-        workloadProfile.allowPressureDefer === true :
-        options?.allowPressureDefer === true,
-      retryAfterMs: options?.pressureRetryAfterMs,
     });
     const queryTimeoutMs = Number(options?.queryTimeoutMs);
     const queryExecutionBudgetMs =
@@ -461,9 +456,6 @@ class CDCRoutedMutationReadiness {
       workloadClass:
         workloadProfile?.workloadClass || options?.workloadClass || null,
       workClass: workloadProfile?.workClass || options?.workClass,
-      allowPressureDefer: workloadProfile ?
-        workloadProfile.allowPressureDefer :
-        options?.allowPressureDefer,
       pressureRetryAfterMs: options?.pressureRetryAfterMs,
       deliveryPriority: normalizeDeliveryPriority(
         options?.deliveryPriority,
@@ -713,7 +705,6 @@ class CDCRoutedMutationReadiness {
       (tableName || CDC_UNKNOWN_TABLE_RESOURCE_KEY);
     return buildControlPlaneWorkloadProfile(options.workloadClass, {
       workClass: options?.workClass,
-      allowPressureDefer: options?.allowPressureDefer,
       additionalResourceKeys: [tableResourceKey],
     });
   }
