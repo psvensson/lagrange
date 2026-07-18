@@ -59,6 +59,25 @@ function normalizeDataType(dataType) {
   return typeMap[typeName] || typeName;
 }
 
+// Stored defaults are SQL literals, exactly as the system-table schemas keep
+// them (e.g. `defaultValue: "'active'"`): every re-emitter interpolates the
+// stored value verbatim into CREATE TABLE, so a bare string default like {}
+// must round-trip as '{}' or replica creation fails with a SQLite parse
+// error (the 2026-07-18 live schema-admission wedge).
+function deriveDefaultSqlLiteral(defaultValue) {
+  const value = defaultValue?.value;
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? '1' : '0';
+  }
+  return `'${String(value).replaceAll('\'', '\'\'')}'`;
+}
+
 const SCHEMA_DERIVATION_METHODS = Object.freeze({
   derivePartitionKey,
 
@@ -76,7 +95,7 @@ const SCHEMA_DERIVATION_METHODS = Object.freeze({
         primaryKey: col.primaryKey || false,
         notNull: col.notNull || false,
         unique: col.unique || false,
-        defaultValue: col.defaultValue?.value,
+        defaultValue: deriveDefaultSqlLiteral(col.defaultValue),
       })),
     };
   },

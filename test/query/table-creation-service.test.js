@@ -953,3 +953,73 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
       'table creation should default to the quorum-sized routable contract when the provisioner does not report convergence detail',
     );
   });
+
+test('buildSchemaDefinition round-trips string defaults as SQL literals',
+  async (t) => {
+    const service = new TableCreationService({});
+    const schema = service.buildSchemaDefinition([
+      {
+        name: 'result_id',
+        dataType: {name: 'TEXT'},
+        primaryKey: true,
+      },
+      {
+        name: 'source_snapshot_json',
+        dataType: {name: 'TEXT'},
+        notNull: true,
+        defaultValue: {type: 'literal', value: '{}'},
+      },
+      {
+        name: 'computed_at',
+        dataType: {name: 'INTEGER'},
+        defaultValue: {type: 'literal', value: 0},
+      },
+      {
+        name: 'note',
+        dataType: {name: 'TEXT'},
+        defaultValue: {type: 'literal', value: 'it\'s'},
+      },
+    ]);
+    const byName = Object.fromEntries(
+      schema.columns.map((column) => [column.name, column]),
+    );
+    t.equal(
+      byName.source_snapshot_json.defaultValue,
+      '\'{}\'',
+      'string defaults must round-trip as quoted SQL literals — every ' +
+        'schema re-emitter interpolates the stored value verbatim into DDL',
+    );
+    t.equal(
+      byName.computed_at.defaultValue,
+      '0',
+      'numeric defaults stay bare literals',
+    );
+    t.equal(
+      byName.note.defaultValue,
+      '\'it\'\'s\'',
+      'embedded quotes must be escaped in the stored literal',
+    );
+    t.equal(
+      byName.result_id.defaultValue,
+      undefined,
+      'columns without defaults must stay undefined',
+    );
+    // The DDL every re-emitter builds from this schema must parse in SQLite.
+    const {default: Database} = await import('better-sqlite3');
+    const db = new Database(':memory:');
+    const columnsSql = schema.columns.map((column) => {
+      let def = `${column.name} ${column.type}`;
+      if (column.primaryKey) def += ' PRIMARY KEY';
+      if (column.notNull) def += ' NOT NULL';
+      if (column.defaultValue !== undefined) {
+        def += ` DEFAULT ${column.defaultValue}`;
+      }
+      return def;
+    }).join(', ');
+    db.exec(`CREATE TABLE round_trip (${columnsSql})`);
+    db.prepare('INSERT INTO round_trip (result_id) VALUES (?)').run('r1');
+    const row = db.prepare('SELECT * FROM round_trip').get();
+    t.equal(row.source_snapshot_json, '{}',
+      'inserted rows must materialize the unquoted default value');
+    db.close();
+  });
