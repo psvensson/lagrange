@@ -52,13 +52,24 @@ morning) the learned-affinity phase under the same machine conditions.
   driving the quest terminal: spread-gap rotation is still intermittent
   (denied schema admission at 17-40-24, ten minutes before the pass) — its
   sealed consecutive:1 gate is formally satisfied, but confirm with 2 more
-  fresh runs before terminal handoff. Mitigation directions from peer
-  systems recorded in the session: priority lane exempting critical-system
-  spread-closing moves from the shared move budget (CRDB replicate-queue
-  shape; logs show budget_exceeded skips), monotone-progress quiescence
-  (don't reset the stable window on gap-reducing events), narrowing the
-  admission predicate to the DDL's own metadata partitions, join-time
-  spread-correct placement, and a DST scenario for the convergence property.
+  fresh runs before terminal handoff. Peer-system transplants LANDED
+  (child quest spread-cure-union-escape-and-monotone-gate, commits 92fc622c +
+  6d673633, adversarially verified): the 17-40 terminal stall is fixed — the
+  topology guard's conservative-union escape now covers priority
+  control-plane spread cures (ledger excluded; REPLACE only from an
+  over-represented source; union-proven need; occupied/target-count rows
+  still enforced), the planner's cure-typing survives the coordinator
+  boundary (moveReason — an F4 drop at that seam was the enabling bug), the
+  demo admission gate holds accumulated stability through observer-side
+  poll failures (bounded blindness) while real churn still resets, and
+  spread-open denials name the gapped partitions inline. Live: admission
+  passed through the transplanted gate (run 19-03-43, stable 65s); no
+  escape churn (run 18-48-02 forensics). Remaining rotating residuals for
+  this lineage, each pre-existing with clean-HEAD signatures: initial
+  service placement (06:51, 19:03), in-flight drain race (18:48),
+  quiescence candidate (07:27), formation timeout (10:46/15:01/17:35).
+  Structural options still open: narrowing the admission predicate to the
+  DDL's own metadata partitions, join-time spread-correct placement.
   O3/O4 unlock at terminal.
 - Flag-surface tail (small, unqueued): delete the uncalled
   shouldMetadataPublicationAllowPressureDefer
