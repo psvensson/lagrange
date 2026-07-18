@@ -15,6 +15,7 @@ const LOCAL_STR_IN = 'in';
 const LOCAL_STR_LITERAL = 'literal';
 const LOCAL_STR_PARAMETER = 'parameter';
 const LOCAL_STR_COLUMN_REF = 'column_ref';
+const LOCAL_STR_STAR = 'star';
 
 const {
   AuthoritativeControlPlaneView,
@@ -319,6 +320,16 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     ) {
       return null;
     }
+    // The node-local read merges per-replica row sets keyed by the primary
+    // key, so a projection without the key would have every row silently
+    // dropped. Bounded pk lookups are exempt: their empty local reads are
+    // confirmed through the owner lane, which masks the drop.
+    if (
+      !this.systemTableSelectProjectsPrimaryKey(tableName, ast) &&
+      !this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast)
+    ) {
+      return null;
+    }
 
     const confirmEmptyLocalReadWithOwnerRpc =
       this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast);
@@ -355,6 +366,36 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         mergeDurationMs: 0,
       },
     };
+  }
+
+  /**
+   * Whether a system-table select's projection carries the table's primary
+   * key under its own name. The node-local authoritative read merges
+   * per-replica row sets KEYED BY THE PRIMARY KEY and silently drops rows
+   * whose key field is absent, so a statement that projects other columns
+   * (or aliases the key away, or aggregates) must take the routed execution
+   * path instead — the 2026-07-18 learned-affinity attribution stall was a
+   * pk-less projection returning a successful empty result forever.
+   * @param {string} tableName
+   * @param {Object} ast
+   * @return {boolean}
+   * @private
+   */
+  systemTableSelectProjectsPrimaryKey(tableName, ast) {
+    const columns = Array.isArray(ast?.columns) ? ast.columns : [];
+    if (columns.some((column) => column?.type === LOCAL_STR_STAR)) {
+      return true;
+    }
+    const primaryKeyColumns = this.getSystemTablePrimaryKeyColumns(tableName);
+    if (primaryKeyColumns.length === 0) {
+      return false;
+    }
+    return primaryKeyColumns.every((primaryKeyColumn) =>
+      columns.some((column) =>
+        column?.expression?.type === LOCAL_STR_COLUMN_REF &&
+        column.expression.column === primaryKeyColumn &&
+        (column.alias === null || column.alias === undefined ||
+          column.alias === primaryKeyColumn)));
   }
 
   /**

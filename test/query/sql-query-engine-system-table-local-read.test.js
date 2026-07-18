@@ -235,3 +235,73 @@ test('SQLQueryEngine - routed system-table queries default to critical delivery 
       'system-table routed queries should claim the critical delivery lane by default',
     );
   });
+
+test('SQLQueryEngine - system selects that do not project the primary key ' +
+  'bypass the local authoritative fast path', async (t) => {
+  const deliveries = [];
+  const cdcReads = [];
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache(),
+    messageRouter: {
+      async deliver(address, message) {
+        deliveries.push({address, message});
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [{service_type: 'partition'}],
+          changes: 0,
+        };
+      },
+    },
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(tableName, sql, params, options) {
+        cdcReads.push({tableName, sql, params, options});
+        // The local merge keys rows by the primary key and DROPS rows whose
+        // key column is absent — a pk-less projection reaching this path
+        // would return a successful empty result (the 2026-07-18
+        // learned-affinity attribution stall).
+        return {success: true, rows: [], count: 0, source: 'local_partition_replica'};
+      },
+    },
+  });
+
+  const result = await engine.executeQuery(
+    'SELECT service_type FROM services',
+  );
+
+  const servicesReads = () => cdcReads.filter(
+    (read) => read.tableName === SYSTEM_TABLE_NAME.SERVICES,
+  );
+  t.equal(
+    servicesReads().length,
+    0,
+    'pk-less projections must not take the key-merged local read path',
+  );
+  t.ok(
+    deliveries.length > 0,
+    'pk-less projections must route to partition execution instead',
+  );
+  t.equal(result.success, true, 'routed execution should succeed');
+  t.equal(
+    result.rows?.length ?? result.results?.length ?? 0,
+    1,
+    'routed execution should return the projected rows',
+  );
+
+  const aliased = await engine.executeQuery(
+    'SELECT service_id AS sid FROM services',
+  );
+  t.equal(
+    servicesReads().length,
+    0,
+    'aliasing the primary key away must also bypass the local read path',
+  );
+  t.equal(aliased.success, true, 'aliased projection should still succeed');
+
+  const starResult = await engine.executeQuery('SELECT * FROM services');
+  t.ok(
+    servicesReads().length > 0,
+    'star selects keep the local authoritative fast path',
+  );
+  t.equal(starResult.success, true, 'star select should succeed');
+});
