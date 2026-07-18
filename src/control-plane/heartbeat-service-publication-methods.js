@@ -2,6 +2,7 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {
   COLUMN,
   ENDPOINT_STATUS,
+  NODE_STATE,
   NUM,
   SERVICE_STATUS,
   STATE,
@@ -82,6 +83,13 @@ class HeartbeatServicePublicationMethods {
       undefined;
     const cache = this.systemTableCache;
     const existing = cache.get(SYSTEM_TABLE_NAME.NODES, this.nodeId) || null;
+    // A pre-activation JOINING node must never self-promote: only the
+    // formation-barrier-gated ready signal may flip status to active and grant
+    // the ready lease. While the own row is JOINING, heartbeats renew liveness
+    // only (CONNECTED, lease untouched), matching the join barrier's
+    // heartbeat-only publication.
+    const withholdReadyPromotion =
+      existing?.status === NODE_STATE.JOINING;
     const updateRow = {
       node_address: this.nodeAddress || existing?.node_address || STRING.UNKNOWN,
       cpu_cores: Number.isFinite(stats?.cpu?.count) ?
@@ -98,13 +106,19 @@ class HeartbeatServicePublicationMethods {
       disk_usage_percent: Number.isFinite(stats?.diskUsagePercent) ?
         stats.diskUsagePercent :
         existing?.disk_usage_percent || 0,
-      status: SERVICE_STATUS.ACTIVE,
-      connection_state: STATE.READY,
+      status: withholdReadyPromotion ?
+        NODE_STATE.JOINING :
+        SERVICE_STATUS.ACTIVE,
+      connection_state: withholdReadyPromotion ?
+        STATE.CONNECTED :
+        STATE.READY,
       capabilities: capabilities ?
         JSON.stringify(capabilities) :
         existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
       last_heartbeat: now,
-      ready_lease_expires_at: now + this.readyLeaseMs,
+      ready_lease_expires_at: withholdReadyPromotion ?
+        existing?.ready_lease_expires_at ?? null :
+        now + this.readyLeaseMs,
       ...resolveHeartbeatBudgetFields(existing),
     };
     this.recordMemoryTrendSample(updateRow.memory_usage_percent, now);
