@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 2
+**Attempts:** 5
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -19,31 +19,35 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-03-24-593Z.report.json
-- Selected theory: theory-20260718-complete-authoritative-cache-row-exact-replace (stale: selected theory status is falsified)
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json
+- Selected theory: theory-20260718-startup-authority-readiness-dimension-inversion (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for formation-priority-spread-authoritative-publication-closure-main
 
 ## Continuation
 - Status: blocked-theory
-- Next action: record or select a fresh frontier theory for formation-priority-spread-authoritative-publication-closure-main
+- Next action: record system theory before the next formation-priority-spread-authoritative-publication-closure-main attempt using npm run model:contracts as model discriminator
+- Blocker: system theory required for formation-priority-spread-authoritative-publication-closure-main
+- Blocker: frontier theory required for formation-priority-spread-authoritative-publication-closure-main
 - Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
-- Changed files: 4
-- Change bytes: 29373
-- Owner areas: src/control-plane, test/cache, test/cdc, test/convergence
+- Changed files: 9
+- Change bytes: 51897
+- Owner areas: src/control-plane, src/rebalancer, test/cache, test/cdc, test/convergence, test/rebalancer
 - Categories: runtime, test
-- Action: land or separate 4 owner areas: src/control-plane, test/cache, test/cdc, test/convergence
+- Action: land or separate 6 owner areas: src/control-plane, src/rebalancer, test/cache, test/cdc, test/convergence, test/rebalancer
 - Split plan:
-  - src/control-plane: 1 file(s)
+  - src/rebalancer: 3 file(s)
+  - src/control-plane: 2 file(s)
   - test/cache: 1 file(s)
   - test/cdc: 1 file(s)
   - test/convergence: 1 file(s)
+  - test/rebalancer: 1 file(s)
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **formation-priority-spread-authoritative-publication-closure-main** [open] rung 1, attempts 2, metric 1 -> 1
+- **formation-priority-spread-authoritative-publication-closure-main** [open] rung 3, attempts 5, metric 1 -> 1
 
 ## Findings
 - **formation-priority-spread-authoritative-publication-closure-main**: Independent verification rejected attempt 1: a caller equality override could bypass canonical full-row comparison for a valid complete-table receipt, leave durable cache divergence untouched, and still publish the authoritative observation watermark. [subagent:formation_barrier_verifier]
@@ -58,20 +62,37 @@
 - **formation-priority-spread-authoritative-publication-closure-main**: DT red-on-revert proven for test/rebalancer/startup-authority-available-node-contract.test.js [dt:solve/changes/dt-prove/startup-authority-available-node-contract.test.js-2026-07-18T01-20-55-393Z.json]
 - **formation-priority-spread-authoritative-publication-closure-main**: Independent verification rejected the first readiness-inversion patch because the rebalancer accepted retained canonical startup node ids even when authorityAvailable was explicitly false, allowing pre-ready placement from an unavailable authority. [subagent:formation_barrier_verifier]
 - **formation-priority-spread-authoritative-publication-closure-main**: Independent re-verification approves the corrected readiness-inversion scope: startup-authority placement remains available across the recovery-dimension handoff only while authorityAvailable is true; retained ids fail closed when authority is unavailable; priority, remote-only, ACTIVE/CONNECTED, transport, outbound, ping, ordinary-partition, and public-lease boundaries remain intact; 186 focused assertions pass and both source mechanisms are red-on-revert. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
+- **formation-priority-spread-authoritative-publication-closure-main**: Independent exact-attempt verification rejected sha256:cfeca4c614172d3090b80536b656907a3b73c438eaab3399b24370fc5634b3f5 because the artifact renames filterReplicasRetiredByTerminalReplaceOperations but omits the reachable caller migration in unified-rebalancer-follow-up-decision.js; the ambient workspace masks the undefined-method defect. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-publication-closure-main**: Fresh sealed run 01:35:47 proves the readiness-dimension fix removed the prior circular blocker: schema admission sees ready=true, zero total and priority spread gap, zero missing leaders, zero effective in-flight operations, no pressure signals, no canonical blocker, and no candidate reset; failure is now solely late entry into the unchanged stability window at 20,814ms of 60,000ms. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
+- **formation-priority-spread-authoritative-publication-closure-main**: The final priority operation work terminalizes before the clean placement observation, but the seed continues to report status_syncing for sql_transaction_participants and sql_transactions until 01:35:17.557Z and first enters stabilizing at 01:35:18.146Z. Projecting terminal operations into admission observation could recover only the post-terminal visibility lag and cannot supply the roughly 39,186ms still missing from the sealed 60,000ms window; the safe lever is to execute the unavoidable priority placement work before public all-ACTIVE visibility. (rules out: post-terminal observation projection as the sole budget-closing mechanism) [data/examples/service-data-affinity-demo/node-0.log]
+- **formation-priority-spread-authoritative-publication-closure-main**: Independent exact-attempt verification rejected sha256:8ea43e8d43e2319b56e83dd1cb49dd6371c6db44ef75d3c9897e4712ff3d6edc: the corrected caller is present, but the artifact imports the new startup-authority-placement-eligibility.js module without including that base-absent module, so base plus artifact fails module resolution while the ambient workspace masks the omission. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-publication-closure-main**: Independent exact verification approves Attempt 5: the five-file base-relative artifact includes the shared startup-authority module and every renamed caller, resolves without ambient source, preserves priority-only and fail-closed authority/readiness/transport boundaries, and passes 838 assertions across 261 suites. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
+- **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
+- **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
 
 ## Theories
 - **theory-20260718-complete-authoritative-cache-row-exact-replace** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer observation, mechanism complete_authoritative_cache_row_exact_replace, owner ControlPlaneSystemTableGateway_and_SystemTableCache, boundary complete_authoritative_observation_to_observed_cache, modelGate npm run model:contracts
+- **theory-20260718-startup-authority-readiness-dimension-inversion** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer ownership, mechanism startup_authority_readiness_dimension_inversion, owner UnifiedRebalancerReplicaState, boundary startup_authority_priority_placement_eligibility_to_public_ready_lease_policy, modelGate npm run model:contracts
 
 ## Selected Theories
-- **formation-priority-spread-authoritative-publication-closure-main**: theory-20260718-complete-authoritative-cache-row-exact-replace
+- **formation-priority-spread-authoritative-publication-closure-main**: theory-20260718-startup-authority-readiness-dimension-inversion
 
 ## Theory Results
 - **theory-20260718-complete-authoritative-cache-row-exact-replace**: supported (scenario=failed, theory=supported, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-17T23-34-41-192Z.report.json]
 - **theory-20260718-complete-authoritative-cache-row-exact-replace**: supported (scenario=failed, theory=supported, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-17T23-34-41-192Z.report.json]
 - **theory-20260718-complete-authoritative-cache-row-exact-replace**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-03-24-593Z.report.json]
+- **theory-20260718-startup-authority-readiness-dimension-inversion**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
+- **theory-20260718-startup-authority-readiness-dimension-inversion**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
+- **theory-20260718-startup-authority-readiness-dimension-inversion**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
+- **theory-20260718-startup-authority-readiness-dimension-inversion**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-18T00:48:36.827Z | formation-priority-spread-authoritative-publication-closure-main | observe | 1 -> 1 | flat | no_evidence | theory-20260718-complete-authoritative-cache-row-exact-replace | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-1.diff |
 | 2026-07-18T00:54:28.007Z | formation-priority-spread-authoritative-publication-closure-main | observe | 1 -> 1 | flat | no_evidence | theory-20260718-complete-authoritative-cache-row-exact-replace | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-2.diff |
+| 2026-07-18T01:36:11.487Z | formation-priority-spread-authoritative-publication-closure-main | local-fix | 1 -> 1 | flat | no_previous | theory-20260718-startup-authority-readiness-dimension-inversion | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-3.diff |
+| 2026-07-18T01:45:04.611Z | formation-priority-spread-authoritative-publication-closure-main | local-fix | 1 -> 1 | flat | no_previous | theory-20260718-startup-authority-readiness-dimension-inversion | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-4.diff |
+| 2026-07-18T01:48:29.688Z | formation-priority-spread-authoritative-publication-closure-main | widen-scope | 1 -> 1 | flat | no_previous | theory-20260718-startup-authority-readiness-dimension-inversion | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-5.diff |

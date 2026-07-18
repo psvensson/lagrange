@@ -4,14 +4,14 @@ import {
   applyUnifiedRebalancerCriticalTopologyMethods,
 } from './unified-rebalancer-critical-topology-methods.js';
 import {
-  hasLiveTransportEvidence,
-} from '../control-plane/live-transport-evidence.js';
+  isStartupAuthorityControlPlanePlacementEligibleNode as
+  isStartupAuthorityPlacementEligibleNode,
+  resolveStartupAuthorityNodeIdSet,
+} from '../control-plane/startup-authority-placement-eligibility.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  SERVICE_STATUS,
-  STATE,
   SYSTEM_TABLE_NAME,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
@@ -245,13 +245,8 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         this.nodeId,
         Date.now(),
       );
-      const nodeIds = Array.isArray(startupAuthority?.canonicalStartupNodeIds) ?
-        startupAuthority.canonicalStartupNodeIds.filter(
-          (nodeId) =>
-            typeof nodeId === 'string' && nodeId.length > 0,
-        ) :
-        [];
-      return nodeIds.length > 0 ? new Set(nodeIds) : null;
+      const nodeIds = resolveStartupAuthorityNodeIdSet(startupAuthority);
+      return nodeIds.size > 0 ? nodeIds : null;
     } catch (_error) {
       return null;
     }
@@ -293,27 +288,13 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       typeof nodeOrId === 'string' ?
         this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
         nodeOrId;
-    if (!node || node.status !== SERVICE_STATUS.ACTIVE) {
-      return false;
-    }
-    const connectionState = String(
-      node.connection_state || node.connectionState ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toLowerCase();
-    if (
-      connectionState !== STATE.CONNECTED &&
-      connectionState !== STATE.READY
-    ) {
-      return false;
-    }
-    if (
-      this.messageRouter &&
-      typeof this.messageRouter.getConnectionState === 'function' &&
-      !hasLiveTransportEvidence(nodeId, {messageRouter: this.messageRouter})
-    ) {
-      return false;
-    }
-    return true;
+    return isStartupAuthorityPlacementEligibleNode({
+      node,
+      startupAuthorityNodeIds,
+      messageRouter: this.messageRouter,
+      localNodeId: this.nodeId,
+      includeSelf: false,
+    });
   }
 
   /**

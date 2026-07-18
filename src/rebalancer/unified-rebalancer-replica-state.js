@@ -14,6 +14,7 @@ const {
   COLUMN,
   EntityType,
   OperationType,
+  RAFT_ROLE,
   READINESS_SKIP_DETAIL,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   ReplicaStatus,
@@ -24,6 +25,7 @@ const {
   UNIFIED_REBALANCER_LITERAL,
   WORKFLOW_STEP,
   buildReplicaOperationProgressSnapshot,
+  classifySystemPartition,
   isCoordinatorOwnedOperationType,
   isNodeReadyWithTransport,
   isReplaceRemoveDispatchPhase,
@@ -41,7 +43,22 @@ const REBALANCE_OPERATION_FIELD = Object.freeze({
   SOURCE_REPLICA_ID_SNAKE: 'source_replica_id',
   STEPS_HISTORY: 'stepsHistory',
   STEPS_HISTORY_SNAKE: 'steps_history',
+  TARGET_NODE_ID_CAMEL: 'targetNodeId',
 });
+
+const TERMINAL_CREATE_TARGET_BLOCKING_STATUSES = new Set([
+  ReplicaStatus.FAILED,
+  ReplicaStatus.REMOVED,
+  ReplicaStatus.REMOVING,
+  SERVICE_STATUS.STOPPED,
+]);
+
+const TERMINAL_CREATE_TARGET_PROJECTABLE_STATUSES = new Set([
+  UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+  ReplicaStatus.PENDING,
+  ReplicaStatus.CREATING,
+  ReplicaStatus.SYNCING,
+]);
 
 class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   /**
@@ -58,17 +75,20 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         decisionDimension: readinessDecisionDimension,
       },
     );
+    // Cold-formation priority placement has a narrower readiness authority
+    // than public ready-lease publication: an owner-authored startup-cohort
+    // peer may receive the ledger spread cure while its lease is deliberately
+    // withheld by that cure's join barrier. Evaluate that authority
+    // independently of the recovery-dimension bit. After a ledger leadership
+    // handoff the new owner can report recoveryEligible=true for the same
+    // pre-ready peer; treating that true bit as a reason to fall through to
+    // strict lease readiness creates a circular repair_ineligible veto.
     if (
-      !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
+      this.isStartupAuthorityControlPlanePlacementEligibleNode(
+        nodeId,
+        readinessDecisionDimension,
+      )
     ) {
-      if (
-        !this.isStartupAuthorityControlPlanePlacementEligibleNode(
-          nodeId,
-          readinessDecisionDimension,
-        )
-      ) {
-        return false;
-      }
       if (!this.isTransportReady(nodeId)) {
         return false;
       }
@@ -76,6 +96,11 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         return this.checkReadinessPing(nodeId);
       }
       return true;
+    }
+    if (
+      !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
+    ) {
+      return false;
     }
 
     // Delegate transport-level checks (connection, outbound queue, and
@@ -220,7 +245,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    */
   getCurrentReplicas() {
     if (this.entityType === EntityType.MESSAGE_GROUP) {
-      return this.filterReplicasRetiredByTerminalReplaceOperations(
+      return this.filterReplicasRetiredByTerminalOperations(
         this.systemTableCache.filter(
           SYSTEM_TABLE_NAME.SERVICES,
           (service) => {
@@ -237,7 +262,7 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     // For runtime services, match by service_type and service_id
     // that equals or is prefixed by the entity (definition) ID.
     if (this.entityType === EntityType.RUNTIME_SERVICE) {
-      return this.filterReplicasRetiredByTerminalReplaceOperations(
+      return this.filterReplicasRetiredByTerminalOperations(
         this.systemTableCache.filter(
           SYSTEM_TABLE_NAME.SERVICES,
           (service) => {
@@ -255,18 +280,138 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
     }
 
     // For partitions, get services with matching partition_id
-    return this.filterReplicasRetiredByTerminalReplaceOperations(
-      this.systemTableCache.filter(
-        SYSTEM_TABLE_NAME.SERVICES,
-        (service) => {
-          const normalizedService = normalizeServiceRow(service);
-          return (
-            normalizedService.partitionId === this.entityId &&
-            normalizedService.serviceType === EntityType.PARTITION
-          );
-        },
-      ),
+    const currentReplicas =
+      this.filterReplicasRetiredByTerminalOperations(
+        this.systemTableCache.filter(
+          SYSTEM_TABLE_NAME.SERVICES,
+          (service) => {
+            const normalizedService = normalizeServiceRow(service);
+            return (
+              normalizedService.partitionId === this.entityId &&
+              normalizedService.serviceType === EntityType.PARTITION
+            );
+          },
+        ),
+      );
+    return this.projectPriorityTerminalCreateTargets(currentReplicas);
+  }
+
+  /**
+   * @return {Array<Object>}
+   * @private
+   */
+  getTerminalSuccessfulCreateOperations() {
+    return this.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      (operation) => {
+        if (!this.isOperationForEntity(operation)) {
+          return false;
+        }
+        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+          nowMs: this.nowFn(),
+        });
+        const terminalAdd =
+          normalizedOperation.type === OperationType.ADD &&
+          (normalizedOperation.status === ReplicaStatus.ACTIVE ||
+            normalizedOperation.workflowStep === WORKFLOW_STEP.ACTIVE);
+        const terminalReplace =
+          normalizedOperation.type === OperationType.REPLACE &&
+          (normalizedOperation.status === ReplicaStatus.REMOVED ||
+            normalizedOperation.workflowStep === WORKFLOW_STEP.REMOVED);
+        return terminalAdd || terminalReplace;
+      },
     );
+  }
+
+  /**
+   * A successful terminal ADD or REPLACE proves that its target reached voter
+   * readiness. Priority recovery must not wait for a lagging service-cache
+   * lifecycle row to rediscover that already-committed fact. Explicit target
+   * failure/removal evidence and later terminal retirement remain
+   * authoritative.
+   *
+   * @param {Array<Object>} replicas
+   * @return {Array<Object>}
+   * @private
+   */
+  projectPriorityTerminalCreateTargets(replicas) {
+    const normalizedReplicas = Array.isArray(replicas) ? replicas : [];
+    if (
+      this.entityType !== EntityType.PARTITION ||
+      !classifySystemPartition({partitionId: this.entityId})
+        .priorityControlPlane
+    ) {
+      return normalizedReplicas;
+    }
+
+    const terminalCreateOperations =
+      this.getTerminalSuccessfulCreateOperations();
+    if (terminalCreateOperations.length === 0) {
+      return normalizedReplicas;
+    }
+
+    const retiredReplicaIds = this.getTerminalRetiredReplicaIds();
+    const projectedReplicas = [...normalizedReplicas];
+    const replicaIndexById = new Map(
+      projectedReplicas.map((replica, index) => [
+        this.getReplicaIdFromServiceRow(replica),
+        index,
+      ]),
+    );
+
+    for (const operation of terminalCreateOperations) {
+      const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
+      if (
+        targetReplicaId.length === 0 ||
+        retiredReplicaIds.has(targetReplicaId)
+      ) {
+        continue;
+      }
+      const targetNodeId = String(
+        operation?.[COLUMN.TARGET_NODE_ID] ||
+          operation?.[REBALANCE_OPERATION_FIELD.TARGET_NODE_ID_CAMEL] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      const existingIndex = replicaIndexById.get(targetReplicaId);
+      if (existingIndex === undefined) {
+        if (targetNodeId.length === 0) {
+          continue;
+        }
+        replicaIndexById.set(targetReplicaId, projectedReplicas.length);
+        projectedReplicas.push({
+          [COLUMN.SERVICE_ID]: targetReplicaId,
+          [COLUMN.REPLICA_ID]: targetReplicaId,
+          [COLUMN.SERVICE_TYPE]: EntityType.PARTITION,
+          [COLUMN.PARTITION_ID]: this.entityId,
+          [COLUMN.NODE_ID]: targetNodeId,
+          [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+        });
+        continue;
+      }
+
+      const existingReplica = projectedReplicas[existingIndex];
+      const normalizedTarget = normalizeServiceRow(existingReplica);
+      if (
+        TERMINAL_CREATE_TARGET_BLOCKING_STATUSES.has(
+          normalizedTarget.status,
+        ) ||
+        !TERMINAL_CREATE_TARGET_PROJECTABLE_STATUSES.has(
+          normalizedTarget.status,
+        )
+      ) {
+        continue;
+      }
+      projectedReplicas[existingIndex] = {
+        ...existingReplica,
+        [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+        status: ReplicaStatus.ACTIVE,
+        raftRole: RAFT_ROLE.FOLLOWER,
+      };
+    }
+
+    return projectedReplicas;
   }
 
   /**
@@ -414,15 +559,16 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * Completed REPLACE rows are authoritative retirement evidence for their
-   * source replica. This projects stale service cache rows out of planning
-   * before they can seed another replacement for the same retired source.
+   * Completed REMOVE rows retire their replica, while completed REPLACE rows
+   * retire their source replica. These operation-owner facts prevent both
+   * stale service rows and earlier create-operation history from resurrecting
+   * a retired replica in planning.
    *
    * @return {Set<string>}
    * @private
    */
-  getTerminalReplaceSourceReplicaIds() {
-    const retiredSourceReplicaIds = new Set();
+  getTerminalRetiredReplicaIds() {
+    const retiredReplicaIds = new Set();
     const operations = this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (operation) => {
@@ -433,20 +579,26 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
           nowMs: this.nowFn(),
         });
         return (
-          normalizedOperation.type === OperationType.REPLACE &&
+          (normalizedOperation.type === OperationType.REMOVE ||
+            normalizedOperation.type === OperationType.REPLACE) &&
           (normalizedOperation.status === ReplicaStatus.REMOVED ||
             normalizedOperation.workflowStep === WORKFLOW_STEP.REMOVED)
         );
       },
     );
     for (const operation of operations) {
-      const sourceReplicaId =
-        this.getReplaceSourceReplicaIdFromOperationRow(operation);
-      if (sourceReplicaId.length > 0) {
-        retiredSourceReplicaIds.add(sourceReplicaId);
+      const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+        nowMs: this.nowFn(),
+      });
+      const retiredReplicaId =
+        normalizedOperation.type === OperationType.REPLACE ?
+          this.getReplaceSourceReplicaIdFromOperationRow(operation) :
+          this.getReplicaIdFromOperationRow(operation);
+      if (retiredReplicaId.length > 0) {
+        retiredReplicaIds.add(retiredReplicaId);
       }
     }
-    return retiredSourceReplicaIds;
+    return retiredReplicaIds;
   }
 
   /**
@@ -489,17 +641,17 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * @return {Array<Object>}
    * @private
    */
-  filterReplicasRetiredByTerminalReplaceOperations(replicas) {
+  filterReplicasRetiredByTerminalOperations(replicas) {
     const normalizedReplicas = Array.isArray(replicas) ? replicas : [];
-    const retiredSourceReplicaIds = this.getTerminalReplaceSourceReplicaIds();
-    if (retiredSourceReplicaIds.size === 0) {
+    const retiredReplicaIds = this.getTerminalRetiredReplicaIds();
+    if (retiredReplicaIds.size === 0) {
       return normalizedReplicas;
     }
     return normalizedReplicas.filter((replica) => {
       const replicaId = this.getReplicaIdFromServiceRow(replica);
       return (
         replicaId.length === 0 ||
-        !retiredSourceReplicaIds.has(replicaId)
+        !retiredReplicaIds.has(replicaId)
       );
     });
   }

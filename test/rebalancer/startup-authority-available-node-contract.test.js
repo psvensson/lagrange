@@ -125,6 +125,8 @@ test('UnifiedRebalancer uses readiness-owned startup cohort for startup-sensitiv
 
 test('UnifiedRebalancer admits remote startup-authority targets for priority control-plane provisioning', async (t) => {
   initEnv();
+  const recoveryEligibleNodeIds = new Set(['seed-node']);
+  let startupAuthorityAvailable = true;
   const cache = createCache({
     nodes: [
       {
@@ -190,7 +192,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
           nodeId,
           dimensions: {
             [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
-              nodeId === 'seed-node',
+              recoveryEligibleNodeIds.has(nodeId),
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
               nodeId === 'seed-node',
           },
@@ -199,7 +201,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
       },
       getStartupAuthoritySnapshotSync() {
         return {
-          authorityAvailable: true,
+          authorityAvailable: startupAuthorityAvailable,
           canonicalStartupNodeIds: ['seed-node', 'node-2', 'node-3'],
         };
       },
@@ -215,6 +217,31 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
     await rebalancer.isNodeReady('node-2'),
     true,
     'pre-execution readiness should use the same bounded startup-authority grace',
+  );
+  recoveryEligibleNodeIds.add('node-2');
+  t.equal(
+    await rebalancer.isNodeReady('node-2'),
+    true,
+    'a remote ledger leader keeps the pre-ready startup-authority target ' +
+      'eligible when recovery readiness becomes explicitly satisfied',
+  );
+  t.equal(
+    await rebalancer.getNodeReadinessSkipReason('node-2'),
+    null,
+    'the leadership-handoff target is executable instead of ' +
+      'node_not_ready/repair_ineligible',
+  );
+  startupAuthorityAvailable = false;
+  t.equal(
+    await rebalancer.isNodeReady('node-2'),
+    false,
+    'retained cohort ids cannot grant pre-ready placement after startup ' +
+      'authority becomes explicitly unavailable',
+  );
+  t.equal(
+    await rebalancer.getNodeReadinessSkipReason('node-2'),
+    'repair_ineligible',
+    'an unavailable startup authority fails closed at pre-execution',
   );
   t.end();
 });

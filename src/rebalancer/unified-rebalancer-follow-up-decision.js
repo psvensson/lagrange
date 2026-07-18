@@ -728,7 +728,7 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     ) {
       return [];
     }
-    return this.filterReplicasRetiredByTerminalReplaceOperations(
+    return this.filterReplicasRetiredByTerminalOperations(
       this.systemTableCache.filter(
         SYSTEM_TABLE_NAME.SERVICES,
         (service) => {
