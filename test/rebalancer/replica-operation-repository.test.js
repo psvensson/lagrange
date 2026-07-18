@@ -759,6 +759,109 @@ test('persistOperationUpdate requests bounded local replica fallback for authori
   );
 });
 
+test('zero-change operation insert collision confirms through the ledger leader',
+  async (t) => {
+    const authoritativeReadCalls = [];
+    const row = makeRow({
+      created_at: 100,
+      updated_at: 100,
+    });
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      controlPlaneSystemTableGateway: {
+        executeQuery: async () => ({success: true, changes: 0}),
+        readRows: async (_tableName, _sql, _params, options = {}) => {
+          authoritativeReadCalls.push(options);
+          return {
+            success: true,
+            rows: options.preferOwnerRpcReadLeader === true ? [row] : [],
+          };
+        },
+      },
+    });
+    const operation = repo.rowToOperation(row);
+
+    const persisted = await repo.persistNewOperation(operation);
+
+    t.equal(
+      persisted,
+      true,
+      'a matching row on the canonical ledger leader proves the collision',
+    );
+    t.equal(
+      authoritativeReadCalls.length,
+      1,
+      'collision recovery should perform one strict authoritative read',
+    );
+    t.equal(
+      authoritativeReadCalls[0]?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      'collision recovery should require the owner-RPC authority lane',
+    );
+    t.equal(
+      authoritativeReadCalls[0]?.preferOwnerRpcReadLeader,
+      true,
+      'collision recovery should pin verification to the ledger leader',
+    );
+  });
+
+test('zero-change operation insert collision fails when the ledger leader has no row',
+  async (t) => {
+    const authoritativeReadCalls = [];
+    const row = makeRow({
+      created_at: 100,
+      updated_at: 100,
+    });
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      controlPlaneSystemTableGateway: {
+        executeQuery: async () => ({success: true, changes: 0}),
+        readRows: async (_tableName, _sql, _params, options = {}) => {
+          authoritativeReadCalls.push(options);
+          return {success: true, rows: []};
+        },
+      },
+    });
+
+    await t.rejects(
+      repo.persistNewOperation(repo.rowToOperation(row)),
+      /Authoritative replica operation not confirmed/u,
+      'an unconfirmed collision must remain fail-closed',
+    );
+    t.equal(
+      authoritativeReadCalls[0]?.preferOwnerRpcReadLeader,
+      true,
+      'the negative proof should still query the canonical ledger leader',
+    );
+  });
+
+test('zero-change operation insert collision rejects mismatched leader content',
+  async (t) => {
+    const expectedRow = makeRow({
+      created_at: 100,
+      updated_at: 100,
+    });
+    const mismatchedRow = makeRow({
+      created_at: 100,
+      updated_at: 101,
+      status: 'active',
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+    });
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      controlPlaneSystemTableGateway: {
+        executeQuery: async () => ({success: true, changes: 0}),
+        readRows: async () => ({success: true, rows: [mismatchedRow]}),
+      },
+    });
+
+    await t.rejects(
+      repo.persistNewOperation(repo.rowToOperation(expectedRow)),
+      /Authoritative replica operation not confirmed/u,
+      'leader visibility is insufficient when the durable content differs',
+    );
+  });
+
 
 test('CL-017(b): zero-row update with missing authoritative row re-inserts the owner copy', async (t) => {
   const executedSql = [];

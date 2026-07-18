@@ -39,11 +39,16 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     operation,
     resultOptions,
   ) {
+    // A zero-change OR-IGNORE proves that the mutation participant already
+    // holds this primary key. Verify that claim at the partition leader:
+    // routing to an arbitrary owner can hit a lagging co-located replica and
+    // turn a durable idempotent retry into a false missing-row failure.
     const existingOperation =
       await repository.queryAuthoritativeOperationById(operation.operationId, {
         authoritativeReadMode:
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
         requireOwnerRpcRead: true,
+        preferOwnerRpcReadLeader: true,
       });
     if (!existingOperation) {
       throw new Error(

@@ -286,6 +286,8 @@ function buildAuthoritativeControlPlaneReadRequestOptions(
       authoritativeReadMode:
         authoritativeReadModeContract.authoritativeReadMode,
       preferOwnerRpcRead: authoritativeReadModeContract.preferOwnerRpcRead,
+      preferOwnerRpcReadLeader:
+        options?.preferOwnerRpcReadLeader === true,
       requireOwnerRpcRead: authoritativeReadModeContract.requireOwnerRpcRead,
       allowOwnerRpcFallback:
         authoritativeReadModeContract.allowOwnerRpcFallback,

@@ -417,6 +417,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       const observation = await this.queryAuthoritativeOperationVisibilityObservation(operationId, {
         authoritativeReadMode: options?.authoritativeReadMode,
         requireOwnerRpcRead: options?.requireOwnerRpcRead === true,
+        preferOwnerRpcReadLeader:
+          options?.preferOwnerRpcReadLeader === true,
         allowPriorityRecoveryDeferredVisibility: false,
       });
       return observation.operation;

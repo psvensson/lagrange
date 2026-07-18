@@ -45,6 +45,62 @@ function buildSchemaFilteredSqlMutationEntries(tableName, data) {
   );
 }
 
+function buildReadRoutingContract(options = {}) {
+  return {
+    authoritativeReadMode: resolveAuthoritativeReadMode(options),
+    localReadConsistency: options.localReadConsistency || null,
+    preferLeader:
+      typeof options.preferLeader === 'boolean' ?
+        options.preferLeader :
+        null,
+    preferOwnerRpcReadLeader: options.preferOwnerRpcReadLeader === true,
+    replicaFallbackConsistency: options.replicaFallbackConsistency || null,
+    routingReadinessDimension:
+      options.routingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  };
+}
+
+function buildReadExecutionContract(options = {}) {
+  return {
+    phaseScope: normalizePhaseScope(options.phaseScope),
+    readProfile: options.readProfile || null,
+    strategy: options.strategy || null,
+    ...buildReadRoutingContract(options),
+  };
+}
+
+function buildReadPressureContract(options = {}) {
+  return {
+    workloadClass: options.workloadClass || null,
+    workClass: options.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+    allowPressureDegrade: options.allowPressureDegrade !== false,
+    allowPressureDefer: options.allowPressureDefer === true,
+    resourceKeys: Array.isArray(options.resourceKeys) ?
+      normalizeDistinctStringArray(options.resourceKeys) :
+      [],
+  };
+}
+
+function buildExplicitReadRequestKey(tableName, explicitKey, options) {
+  return `control-plane:read:${
+    tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+  }:${explicitKey}:${stableSerialize(buildReadExecutionContract(options))}`;
+}
+
+function buildImplicitReadRequestKey(tableName, sql, params, options) {
+  return stableSerialize({
+    kind:
+      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL
+        .CONTROL_DASH_PLANE_DASH_READ,
+    tableName: tableName || null,
+    sql: sql || null,
+    params: Array.isArray(params) ? params : [],
+    ...buildReadExecutionContract(options),
+    ...buildReadPressureContract(options),
+  });
+}
+
 const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   evaluateReadPressure(tableName, options = {}) {
     return this.getPressureGovernor().evaluate({
@@ -65,35 +121,17 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   buildReadRequestKey(tableName, sql, params = [], options = {}) {
     const explicitKey = normalizeCoalescingToken(options?.coalescingKey);
     if (explicitKey) {
-      return `control-plane:read:${
-        tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
-      }:${explicitKey}`;
+      return buildExplicitReadRequestKey(tableName, explicitKey, options);
     }
     if (options?.allowCoalescing === false) {
       return null;
     }
-    return stableSerialize({
-      kind: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_DASH_READ,
-      tableName: tableName || null,
-      readProfile: options?.readProfile || null,
-      strategy: options?.strategy || null,
-      sql: sql || null,
-      params: Array.isArray(params) ? params : [],
-      workloadClass: options?.workloadClass || null,
-      workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
-      allowPressureDegrade: options?.allowPressureDegrade !== false,
-      allowPressureDefer: options?.allowPressureDefer === true,
-      resourceKeys: Array.isArray(options?.resourceKeys) ?
-        normalizeDistinctStringArray(options.resourceKeys) :
-        [],
-      phaseScope: normalizePhaseScope(options?.phaseScope),
-      authoritativeReadMode: resolveAuthoritativeReadMode(options),
-      localReadConsistency: options?.localReadConsistency || null,
-      replicaFallbackConsistency: options?.replicaFallbackConsistency || null,
-      routingReadinessDimension:
-        options?.routingReadinessDimension ||
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    });
+    return buildImplicitReadRequestKey(
+      tableName,
+      sql,
+      params,
+      options,
+    );
   },
 
   resolveSystemTableQueryDescriptor(sql, options = {}) {

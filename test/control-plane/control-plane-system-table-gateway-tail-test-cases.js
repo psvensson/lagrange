@@ -1,6 +1,9 @@
 import {
   buildControlPlaneMutationOwnerOutcomeEnvelope,
 } from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
+import {
+  registerControlPlaneSystemTableGatewayReadCoalescingTests,
+} from './control-plane-system-table-gateway-read-coalescing-test-cases.js';
 
 export function registerControlPlaneSystemTableGatewayTailTests({
   test,
@@ -24,6 +27,7 @@ export function registerControlPlaneSystemTableGatewayTailTests({
   GATEWAY_EXPECTED_FAILURE_MESSAGE,
 }) {
   const GATEWAY_ASSIGNMENT_ID_FIELD = 'assignment_id';
+  registerControlPlaneSystemTableGatewayReadCoalescingTests();
 
   test('ControlPlaneSystemTableGateway submitMutation defers background writes ' +
     'while authority establishment is still pending', async (t) => {

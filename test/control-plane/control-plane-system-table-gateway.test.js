@@ -152,6 +152,7 @@ async (t) => {
       replicaFallbackConsistency: 'local_leader',
       authoritativeReadMode:
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      preferOwnerRpcReadLeader: true,
     },
   );
 
@@ -172,6 +173,8 @@ async (t) => {
     'local_leader',
     'gateway should preserve explicit replica-fallback consistency',
   );
+  t.equal(calls[0]?.options?.preferOwnerRpcReadLeader, true,
+    'gateway should preserve an explicit partition-leader pin');
   t.equal(
     calls[0]?.options?.queryOptions?.deliverySource,
     CONTROL_PLANE_PUBLICATION_READ_DELIVERY_SOURCE,
