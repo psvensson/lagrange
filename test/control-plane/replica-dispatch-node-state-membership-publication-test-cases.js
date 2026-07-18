@@ -22,7 +22,6 @@ const TEST_MEMBERSHIP_PUBLICATION_STATUS = Object.freeze({
   PUBLISHED: 'PUBLISHED',
 });
 const HEARTBEAT_PUBLICATION_GAP_NO_PUBLICATION_ROW = null;
-const HEARTBEAT_PUBLICATION_GAP_ALLOW_PRESSURE_DEFER = false;
 const PUBLICATION_UPDATE_ACK_LOCAL_NODE_ID = 'node-1';
 const PUBLICATION_UPDATE_ACK_REMOTE_NODE_ID = 'node-publication-remote';
 const PUBLICATION_UPDATE_ACK_PUBLICATION_ID =
@@ -578,11 +577,6 @@ export function registerReplicaDispatchNodeStateReadyMembershipPublicationTests(
       reconcileEnqueues[0]?.context?.publishedActiveNodeIds,
       publicationTargetNodeIds,
       'ready reconcile should carry an explicit published-active target',
-    );
-    t.equal(
-      reconcileEnqueues[0]?.context?.allowPressureDefer,
-      HEARTBEAT_PUBLICATION_GAP_ALLOW_PRESSURE_DEFER,
-      'ready reconcile should bypass pressure deferral for the explicit target',
     );
 
     service.stop();

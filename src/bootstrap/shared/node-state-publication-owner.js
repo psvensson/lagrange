@@ -160,7 +160,7 @@ class NodeStatePublicationOwner {
   }
 
   shouldDeferNodeStateUpdatePublication(error, publicationProfile = null) {
-    if (publicationProfile?.allowPressureDefer !== true) {
+    if (publicationProfile?.deferOnPressure !== true) {
       return false;
     }
     return this.resolveNodeStateUpdatePublicationRetryClass(error) ===
@@ -216,7 +216,7 @@ class NodeStatePublicationOwner {
     publicationMode,
     publicationProfile,
   ) {
-    if (publicationProfile?.allowPressureDefer !== true) {
+    if (publicationProfile?.deferOnPressure !== true) {
       return null;
     }
     const deferredPublication = this.nodeStateUpdateDeferredPublication;

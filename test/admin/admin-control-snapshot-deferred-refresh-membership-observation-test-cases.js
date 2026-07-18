@@ -1028,7 +1028,6 @@ test('AdminControlSnapshot no-attempt path still triggers publication owner comm
         requiredAckNodeIds: ['node-1', 'node-2'],
         acknowledgedNodeIds: ['node-1', 'node-2'],
         allowPendingVisibility: true,
-        allowPressureDefer: false,
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
         skipPublicationWriteReadback:
@@ -1154,8 +1153,6 @@ test(ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_OPEN_PROGRESS_TEST_NAME
         ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
       ],
       allowPendingVisibility: true,
-      allowPressureDefer:
-        ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_ORDINARY_REPAIR_NOT_DEFERRED,
       readProfile:
         ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
       skipPublicationWriteReadback:

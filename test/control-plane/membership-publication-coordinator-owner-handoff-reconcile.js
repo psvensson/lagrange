@@ -60,7 +60,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_AUTHORITATIVE_READ_ERROR =
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_BROAD_READ_ERROR =
   'active-gate owner reconcile should not read broad membership tables';
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER = false;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_SKIP_CACHE_WAIT = true;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE =
   'diagnostics';
@@ -389,8 +388,6 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_READ_PROFILE,
       allowPendingVisibility:
         PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
-      allowPressureDefer:
-        PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
     });
 
     t.same(
@@ -443,11 +440,6 @@ test('reconcileClusterMembership publishes explicit handoff target without autho
       persistOptions[0]?.allowPendingVisibility,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
       'explicit handoff target should preserve pending visibility on the publication write',
-    );
-    t.equal(
-      persistOptions[0]?.allowPressureDefer,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
-      'explicit handoff target should bypass pressure deferral on the publication write',
     );
     t.match(
       publicationReadOptions[publicationReadOptions.length - 1],

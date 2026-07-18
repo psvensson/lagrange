@@ -31,7 +31,6 @@ const {
 const READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS = Object.freeze({});
 const READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE = null;
 const READY_NODE_PUBLICATION_RECONCILE_ALLOW_PENDING_VISIBILITY = true;
-const READY_NODE_PUBLICATION_RECONCILE_ALLOW_PRESSURE_DEFER = false;
 const READY_NODE_PUBLICATION_RECONCILE_SKIP_WRITE_READBACK = true;
 const READY_NODE_PUBLICATION_RECONCILE_EMPTY_LIST = Object.freeze([]);
 const READY_NODE_PUBLICATION_ADVANCEMENT_OPTION = Object.freeze({
@@ -40,7 +39,6 @@ const READY_NODE_PUBLICATION_ADVANCEMENT_OPTION = Object.freeze({
 const READY_NODE_PUBLICATION_RECONCILE_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
-  ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
   PUBLISHED_ACTIVE_NODE_IDS_SNAKE: 'published_active_node_ids',
@@ -440,7 +438,6 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     });
     return {
       allowCoalescing: true,
-      allowPressureDefer: publicationProfile.allowPressureDefer,
       coalescingKey: `node-state:${nodeId}`,
       deliveryPriority: publicationProfile.deliveryPriority,
       pressureRetryAfterMs: this.nodeStateUpdateRetryAfterMs,
@@ -589,8 +586,6 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
         publishedActiveNodeIds,
       [READY_NODE_PUBLICATION_RECONCILE_FIELD.ALLOW_PENDING_VISIBILITY]:
         READY_NODE_PUBLICATION_RECONCILE_ALLOW_PENDING_VISIBILITY,
-      [READY_NODE_PUBLICATION_RECONCILE_FIELD.ALLOW_PRESSURE_DEFER]:
-        READY_NODE_PUBLICATION_RECONCILE_ALLOW_PRESSURE_DEFER,
       [READY_NODE_PUBLICATION_RECONCILE_FIELD.SKIP_PUBLICATION_WRITE_READBACK]:
         READY_NODE_PUBLICATION_RECONCILE_SKIP_WRITE_READBACK,
     };

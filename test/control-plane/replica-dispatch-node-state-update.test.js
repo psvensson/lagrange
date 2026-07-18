@@ -96,11 +96,6 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
       'node-state updates should not wait on cache convergence',
     );
     t.equal(
-      updates[0].options?.allowPressureDefer,
-      false,
-      'READY node-state updates should not opt into pressure deferral',
-    );
-    t.equal(
       updates[0].options?.allowCoalescing,
       true,
       'node-state updates should coalesce concurrent writes per node',
@@ -229,11 +224,6 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
     'heartbeat-only READY updates should use background delivery',
   );
   t.equal(
-    updates[0].options?.allowPressureDefer,
-    true,
-    'heartbeat-only READY updates should remain pressure-deferrable',
-  );
-  t.equal(
     updates[0].options?.workClass,
     'background',
     'heartbeat-only READY updates should use background work class',
@@ -344,11 +334,6 @@ async (t) => {
   t.equal(gatewayCalls.length, 1,
     'recovery heartbeat should attempt the canonical update once');
   t.equal(
-    gatewayCalls[0].options?.allowPressureDefer,
-    false,
-    'recovery heartbeat writes should stay on the non-deferrable pressure contract',
-  );
-  t.equal(
     gatewayCalls[0].options?.deliveryPriority,
     'critical',
     'recovery heartbeat writes must keep critical delivery priority',
@@ -431,11 +416,6 @@ test('ReplicaDispatchService surfaces heartbeat-maintenance ' +
 
   t.equal(gatewayCalls.length, 1,
     'maintenance heartbeat should attempt the canonical update once');
-  t.equal(
-    gatewayCalls[0].options?.allowPressureDefer,
-    false,
-    'maintenance heartbeat writes should use the non-deferrable pressure contract',
-  );
   t.equal(
     gatewayCalls[0].options?.deliveryPriority,
     'critical',

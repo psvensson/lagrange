@@ -89,7 +89,6 @@ const MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
   ALLOW_EMPTY_PRELOADED_ROWS: 'allowEmptyPreloadedRows',
   ALLOW_PENDING_VISIBILITY: 'allowPendingVisibility',
-  ALLOW_PRESSURE_DEFER: 'allowPressureDefer',
   DEFER_NESTED_PRIORITY_RECOVERY_PLANNING:
     'deferNestedPriorityRecoveryPlanning',
   EXCLUDED_NODE_IDS: 'excludedNodeIds',
@@ -542,15 +541,6 @@ function mergeMembershipPublicationReconcileContext(previousContext, nextContext
         nextContext[
           MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD
             .ALLOW_PENDING_VISIBILITY
-        ],
-      ),
-    [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ALLOW_PRESSURE_DEFER]:
-      resolveMembershipPublicationReconcileFlag(
-        previousContext[
-          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ALLOW_PRESSURE_DEFER
-        ],
-        nextContext[
-          MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD.ALLOW_PRESSURE_DEFER
         ],
       ),
     [MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD

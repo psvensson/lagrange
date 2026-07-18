@@ -15,6 +15,7 @@ import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from './control-plane-workload-profile.js';
+import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 
 const ControlPlaneMessageType = Object.freeze({
   NODE_STATE_UPDATE: MESSAGE_TYPE.NODE_STATE_UPDATE,
@@ -61,15 +62,6 @@ const CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE = Object.freeze({
   LIFECYCLE_BACKGROUND: 'lifecycle_background',
 });
 
-const CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER =
-  Object.freeze({
-    HEARTBEAT_STEADY: true,
-    HEARTBEAT_MAINTENANCE: false,
-    HEARTBEAT_RECOVERY: false,
-    READY_TRANSITION: false,
-    LIFECYCLE_BACKGROUND: true,
-  });
-
 const CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT = Object.freeze({
   FRESH: 'fresh',
   DEFERRED_PENDING: 'deferred_pending',
@@ -79,17 +71,17 @@ function buildNodeStatePublicationProfile(
   mode,
   workloadClass,
   deliveryPriority,
-  allowPressureDefer,
 ) {
-  const workloadProfile = buildControlPlaneWorkloadProfile(workloadClass, {
-    allowPressureDefer,
-  });
+  const workloadProfile = buildControlPlaneWorkloadProfile(workloadClass);
   return Object.freeze({
     mode,
     workloadClass: workloadProfile.workloadClass,
-    allowPressureDefer: workloadProfile.allowPressureDefer,
     deliveryPriority,
     workClass: workloadProfile.workClass,
+    // Publication parking policy derives from the work class: background
+    // publications park as deferred under pressure, critical ones escalate.
+    deferOnPressure:
+      workloadProfile.workClass === PRESSURE_WORK_CLASS.BACKGROUND,
   });
 }
 
@@ -99,40 +91,30 @@ const CONTROL_PLANE_NODE_STATE_PUBLICATION_PROFILE = Object.freeze({
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
       CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND,
       CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
-      CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER
-        .HEARTBEAT_STEADY,
     ),
   [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE]:
     buildNodeStatePublicationProfile(
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
       CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL,
       CONTROL_PLANE_DELIVERY_PRIORITY.CRITICAL,
-      CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER
-        .HEARTBEAT_MAINTENANCE,
     ),
   [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY]:
     buildNodeStatePublicationProfile(
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
       CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL,
       CONTROL_PLANE_DELIVERY_PRIORITY.CRITICAL,
-      CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER
-        .HEARTBEAT_RECOVERY,
     ),
   [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION]:
     buildNodeStatePublicationProfile(
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION,
       CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL,
       CONTROL_PLANE_DELIVERY_PRIORITY.CRITICAL,
-      CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER
-        .READY_TRANSITION,
     ),
   [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.LIFECYCLE_BACKGROUND]:
     buildNodeStatePublicationProfile(
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.LIFECYCLE_BACKGROUND,
       CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND,
       CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
-      CONTROL_PLANE_NODE_STATE_PUBLICATION_ALLOW_PRESSURE_DEFER
-        .LIFECYCLE_BACKGROUND,
     ),
 });
 

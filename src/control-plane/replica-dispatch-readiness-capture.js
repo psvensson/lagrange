@@ -82,7 +82,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       publicationMode,
     });
     if (
-      publicationProfile?.allowPressureDefer !== true &&
+      publicationProfile?.deferOnPressure !== true &&
       deferredRetry.retryClass ===
         NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE
     ) {

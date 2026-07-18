@@ -280,7 +280,7 @@ async (t) => {
       nodeWrites[0].options,
       {
         allowCoalescing: true,
-        allowPressureDefer: false,
+        deferOnPressure: false,
         coalescingKey: `heartbeat:nodes:${TEST_NODE_ID}`,
         deliveryPriority: 'critical',
         mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
@@ -303,7 +303,7 @@ async (t) => {
       endpointWrites[0].options,
       {
         allowCoalescing: true,
-        allowPressureDefer: true,
+        deferOnPressure: true,
         coalescingKey: `heartbeat:endpoint:ep-${TEST_NODE_ID}-ws`,
         deliveryPriority: 'background',
         mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
@@ -362,7 +362,7 @@ async (t) => {
       'endpoint heartbeat upsert is still attempted once',
     );
     t.equal(
-      endpointWrites[0].options?.allowPressureDefer,
+      endpointWrites[0].options?.deferOnPressure,
       true,
       'endpoint heartbeat upsert keeps the pressure-deferred contract',
     );

@@ -526,7 +526,7 @@ test('HeartbeatService routes confirmed stale refreshes through the ' +
   t.match(
     service.buildNodeHeartbeatWriteOptions(1000, decision.publicationMode),
     {
-      allowPressureDefer: false,
+      deferOnPressure: false,
       deliveryPriority: 'critical',
       workloadClass: 'node_state_publication_critical',
       workClass: 'critical',
@@ -539,7 +539,7 @@ test('HeartbeatService routes confirmed stale refreshes through the ' +
       CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
     ),
     {
-      allowPressureDefer: true,
+      deferOnPressure: true,
       deliveryPriority: 'background',
       workloadClass: 'node_state_publication_background',
       workClass: 'background',

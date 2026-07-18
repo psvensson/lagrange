@@ -28,7 +28,6 @@ const HEARTBEAT_PUBLICATION_GAP_CREATED_STALE_DELTA_MS = 10000;
 const HEARTBEAT_PUBLICATION_GAP_NO_PUBLICATION_ROW = null;
 const HEARTBEAT_PUBLICATION_GAP_NO_READY_LEASE = null;
 const HEARTBEAT_PUBLICATION_GAP_ALLOW_PENDING_VISIBILITY = true;
-const HEARTBEAT_PUBLICATION_GAP_ALLOW_PRESSURE_DEFER = false;
 const HEARTBEAT_PUBLICATION_GAP_SKIP_WRITE_READBACK = true;
 const HEARTBEAT_PUBLICATION_GAP_TARGET_NODE_IDS = Object.freeze(
   [
@@ -254,11 +253,6 @@ export function registerReplicaDispatchNodeStateHeartbeatPublicationTests({
       reconcileCalls[0]?.context?.allowPendingVisibility,
       HEARTBEAT_PUBLICATION_GAP_ALLOW_PENDING_VISIBILITY,
       'publication repair should accept pending visibility for the explicit target',
-    );
-    t.equal(
-      reconcileCalls[0]?.context?.allowPressureDefer,
-      HEARTBEAT_PUBLICATION_GAP_ALLOW_PRESSURE_DEFER,
-      'publication repair should bypass pressure deferral for the explicit target',
     );
     t.equal(
       reconcileCalls[0]?.context?.skipPublicationWriteReadback,

@@ -24,7 +24,6 @@ const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_PUBLICATION_ID =
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_EPOCH = 41;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NOW_MS = 3200;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY = true;
-const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER = false;
 const PUBLICATION_CONVERGENCE_HANDOFF_TARGET_NODE_IDS = Object.freeze([
   'node-handoff-seed',
   'node-handoff-a',
@@ -245,8 +244,6 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
         ],
         allowPendingVisibility:
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
-        allowPressureDefer:
-          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
       },
     );
     coordinator.enqueueClusterMembershipReconcile(
@@ -310,11 +307,6 @@ test('enqueueClusterMembershipReconcile merges pending explicit handoff targets'
       mergedContext?.allowPendingVisibility,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
       'pending context should retain pending visibility permission',
-    );
-    t.equal(
-      mergedContext?.allowPressureDefer,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
-      'pending context should retain the explicit non-deferred write option',
     );
   });
 
@@ -714,8 +706,6 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
         ],
         allowPendingVisibility:
           PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PENDING_VISIBILITY,
-        allowPressureDefer:
-          PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
       },
     });
 
@@ -778,11 +768,6 @@ test('enqueueClusterMembershipReconcile merges retrying explicit handoff targets
       mergedContext?.latestPublicationRow?.publication_epoch,
       PUBLICATION_CONVERGENCE_HANDOFF_TARGET_QUEUE_NEWER_EPOCH,
       'retrying context should retain the newest known publication row',
-    );
-    t.equal(
-      mergedContext?.allowPressureDefer,
-      PUBLICATION_CONVERGENCE_HANDOFF_TARGET_ALLOW_PRESSURE_DEFER,
-      'retrying context should retain the explicit non-deferred write option',
     );
   });
 

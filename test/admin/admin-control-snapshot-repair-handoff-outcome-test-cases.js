@@ -462,7 +462,6 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
         ],
         allowPendingVisibility: true,
-        allowPressureDefer: false,
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
         allowEmptyPreloadedRows:
@@ -1109,7 +1108,6 @@ test('AdminControlSnapshot queues handoff reconcile when awaited owner reconcile
           ...ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_NODE_IDS,
         ],
         allowPendingVisibility: true,
-        allowPressureDefer: false,
         readProfile:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
         allowEmptyPreloadedRows:

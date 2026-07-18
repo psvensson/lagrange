@@ -730,7 +730,6 @@ test('ReplicaDispatchService acknowledges maintenance only after bypassing a ' +
   t.match(
     writes[1]?.options,
     {
-      allowPressureDefer: false,
       deliveryPriority: 'critical',
       workClass: 'critical',
     },

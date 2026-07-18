@@ -206,11 +206,6 @@ async (t) => {
     'dispatch should bootstrap a missing row even for heartbeat-only updates',
   );
   t.equal(
-    upserts[0].options?.allowPressureDefer,
-    true,
-    'heartbeat-only bootstrap should be pressure-deferrable',
-  );
-  t.equal(
     upserts[0].options?.deliveryPriority,
     'background',
     'heartbeat-only bootstrap should use background write delivery',

@@ -55,7 +55,7 @@ import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 
 class HeartbeatServicePublicationMethods {
   shouldTreatEndpointHeartbeatWriteAsDeferred(resultOrError, writeOptions) {
-    if (writeOptions?.allowPressureDefer !== true || !resultOrError) {
+    if (writeOptions?.deferOnPressure !== true || !resultOrError) {
       return false;
     }
     if (isRetryableControlPlaneError(resultOrError)) {
@@ -433,7 +433,7 @@ class HeartbeatServicePublicationMethods {
     const publicationProfile = getControlPlaneNodeStatePublicationProfile({publicationMode});
     return {
       ...this.buildSharedHeartbeatWriteOptions(queryTimeoutMs),
-      allowPressureDefer: publicationProfile.allowPressureDefer,
+      deferOnPressure: publicationProfile.deferOnPressure,
       coalescingKey: `heartbeat:nodes:${this.nodeId}`,
       deliveryPriority: publicationProfile.deliveryPriority,
       mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
@@ -451,7 +451,7 @@ class HeartbeatServicePublicationMethods {
   buildSharedHeartbeatWriteOptions(queryTimeoutMs) {
     return {
       allowCoalescing: true,
-      allowPressureDefer: true,
+      deferOnPressure: true,
       deliveryPriority: HEARTBEAT_SERVICE_LITERAL.BACKGROUND,
       // Heartbeats are liveness signals and must not wait for local cache
       // convergence on the write path.

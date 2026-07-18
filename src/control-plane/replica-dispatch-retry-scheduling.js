@@ -524,7 +524,7 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     const retryClass = this.resolveNodeStateUpdateRetryClass(error);
     if (
       retryClass === NODE_STATE_UPDATE_RETRY_CLASS.PUBLICATION_PRESSURE &&
-      publicationProfile?.allowPressureDefer !== true
+      publicationProfile?.deferOnPressure !== true
     ) {
       return false;
     }

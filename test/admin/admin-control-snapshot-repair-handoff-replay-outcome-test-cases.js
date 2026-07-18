@@ -587,7 +587,6 @@ export function registerAdminControlSnapshotRepairHandoffReplayOutcomeTestCases(
           requiredAckNodeIds: ['node-1', 'node-2'],
           acknowledgedNodeIds: ['node-1', 'node-2'],
           allowPendingVisibility: true,
-          allowPressureDefer: false,
           readProfile:
             ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_READ_PROFILE,
           skipPublicationWriteReadback:

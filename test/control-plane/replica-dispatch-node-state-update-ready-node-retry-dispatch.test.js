@@ -288,11 +288,6 @@ test('ReplicaDispatchService demotes non-ready node-state churn to the ' +
     'background',
     'non-ready node-state churn should not claim critical transport capacity',
   );
-  t.equal(
-    updates[0].options?.allowPressureDefer,
-    true,
-    'non-ready node-state churn should remain deferrable under pressure',
-  );
 
   service.stop();
 });

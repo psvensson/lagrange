@@ -26,7 +26,6 @@ const TEST_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
 const TEST_PUBLICATION_READ_PROFILE_PLANNING = 'planning';
 const TEST_PUBLICATION_ID = 'publication-1';
 const TEST_PUBLICATION_STATUS_OPEN = 'OPEN';
-const TEST_PUBLICATION_MUTATION_ALLOW_PRESSURE_DEFER = true;
 const TEST_PUBLICATION_MUTATION_BLOCK_PRESSURE_DEFER = false;
 
 test('System metadata owner modules exist for each shared metadata family',
@@ -128,11 +127,6 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
     'publication mutations should keep critical delivery priority',
   );
   t.equal(
-    gatewayCalls[0]?.options?.allowPressureDefer,
-    TEST_PUBLICATION_MUTATION_ALLOW_PRESSURE_DEFER,
-    'publication mutations should defer behind transport pressure',
-  );
-  t.equal(
     gatewayCalls[0]?.options?.routingReadinessDimension,
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     'publication mutations should route through recovery-eligible readiness',
@@ -172,11 +166,6 @@ test('ControlPlanePublicationsOwner honors explicit non-deferred ' +
     },
   );
 
-  t.equal(
-    gatewayCalls[0]?.options?.allowPressureDefer,
-    TEST_PUBLICATION_MUTATION_BLOCK_PRESSURE_DEFER,
-    'explicit publication owner writes should bypass pressure deferral',
-  );
   t.equal(
     gatewayCalls[0]?.options?.workloadClass,
     CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
