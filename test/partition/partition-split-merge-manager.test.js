@@ -924,7 +924,6 @@ test('PartitionSplitMergeManager - executes reactive write-activity split ' +
   const REACTIVE_TRIGGER = 'reactive_request';
   const WRITE_ACTIVITY_REASON_CODE = 'write_activity';
   const EXPECTED_EXECUTION_OPTIONS = {
-    allowPressureDefer: false,
     workClass: PRESSURE_WORK_CLASS.CRITICAL,
   };
   let executeCalls = 0;

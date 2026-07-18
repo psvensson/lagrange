@@ -88,7 +88,6 @@ function buildMetadataMutationReadOptions(owner, deliveryOptions = {}) {
     // services/partitions system-table group. Owner-local-only confirmation
     // can therefore retry forever without ever reaching the CAS write.
     preferOwnerRpcRead: true,
-    allowPressureDegrade: false,
     routingReadinessDimension:
       owner.getMetadataPublicationReadinessDimension(),
   };
@@ -105,7 +104,6 @@ function buildRoleMutationDeliveryOptions(owner) {
     workClass: priorityPartition ?
       PRESSURE_WORK_CLASS.CRITICAL :
       PRESSURE_WORK_CLASS.BACKGROUND,
-    allowPressureDefer: !priorityPartition,
     routingReadinessDimension:
       owner.getMetadataPublicationReadinessDimension(),
   };
@@ -122,7 +120,6 @@ function buildLeaderNodeMutationReadOptions(owner) {
   return buildMetadataMutationReadOptions(owner, {
     deliveryPriority: owner.getMetadataPublicationDeliveryPriority(),
     workClass: owner.getMetadataPublicationWorkClass(),
-    allowPressureDefer: owner.shouldMetadataPublicationAllowPressureDefer(),
   });
 }
 
@@ -139,9 +136,6 @@ function buildLeaderNodeMutationDeliveryOptions(owner, context = {}) {
     workClass: initialLeaderPublication ?
       PRESSURE_WORK_CLASS.CRITICAL :
       owner.getMetadataPublicationWorkClass(),
-    allowPressureDefer: initialLeaderPublication ?
-      false :
-      owner.shouldMetadataPublicationAllowPressureDefer(),
     routingReadinessDimension:
       owner.getMetadataPublicationReadinessDimension(),
   };

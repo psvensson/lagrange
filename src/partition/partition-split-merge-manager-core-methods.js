@@ -71,9 +71,6 @@ class PartitionSplitMergeManagerCoreMethods {
         LOCAL_STR_PARTITION_SPLIT_EVALUATION,
         LOCAL_STR_CONTROL_PLANE_WRITE,
       ],
-      allowDegrade: false,
-      allowDefer: true,
-      retryAfterMs: options.retryAfterMs,
     });
   }
 

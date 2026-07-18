@@ -597,16 +597,6 @@ test(
         'forward-topology repair should use the critical control-plane work class',
       );
       t.equal(
-        readCalls[0]?.options?.allowPressureDegrade,
-        true,
-        'forward-topology repair should keep workload-owned degrade semantics explicit',
-      );
-      t.equal(
-        readCalls[0]?.options?.allowPressureDefer,
-        true,
-        'forward-topology repair should keep workload-owned defer semantics explicit',
-      );
-      t.equal(
         readCalls[0]?.options?.preferOwnerRpcRead,
         false,
         'forward-topology repair should not prefer routed owner-rpc reads',

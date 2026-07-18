@@ -84,7 +84,6 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
             {
               workClass: PRESSURE_WORK_CLASS.BACKGROUND,
               deliveryPriority: 'background',
-              allowPressureDefer: true,
               coalescingKey: `partitions:size:${this.partitionId}`,
             },
           ),

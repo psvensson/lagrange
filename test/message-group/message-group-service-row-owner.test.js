@@ -43,11 +43,6 @@ test('MessageGroupServiceRowOwner - activateReplica updates status without rewri
     );
     t.equal(updates[0].updateData.status, 'active');
     t.equal(
-      updates[0].options?.allowPressureDefer,
-      true,
-      'activation update should allow pressure deferral',
-    );
-    t.equal(
       updates[0].options?.deliveryPriority,
       'critical',
       'activation update should use critical control-plane delivery',

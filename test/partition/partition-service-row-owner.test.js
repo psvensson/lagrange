@@ -43,11 +43,6 @@ test('PartitionServiceRowOwner - activateReplica updates status without rewritin
     );
     t.equal(updates[0].updateData.status, 'active');
     t.equal(
-      updates[0].options?.allowPressureDefer,
-      true,
-      'activation update should allow pressure deferral',
-    );
-    t.equal(
       updates[0].options?.deliveryPriority,
       'background',
       'activation update should use background delivery',
@@ -98,11 +93,6 @@ test('PartitionServiceRowOwner - critical system partitions use critical service
 
     t.equal(updates.length, 2, 'critical leader activation should update service row and canonical partition leader');
     t.equal(
-      updates[0].options?.allowPressureDefer,
-      false,
-      'critical system partition activation should not allow pressure deferral',
-    );
-    t.equal(
       updates[0].options?.deliveryPriority,
       'critical',
       'critical system partition activation should use critical delivery',
@@ -121,11 +111,6 @@ test('PartitionServiceRowOwner - critical system partitions use critical service
       updates[1].tableName,
       'partitions',
       'critical activation should also publish canonical partition leader',
-    );
-    t.equal(
-      updates[1].options?.allowPressureDefer,
-      false,
-      'critical partition leader publication should not allow pressure deferral',
     );
     t.equal(
       updates[1].options?.deliveryPriority,

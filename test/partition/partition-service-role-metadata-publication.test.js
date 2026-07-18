@@ -208,11 +208,6 @@ test('PartitionService - publishes leader state as follower metadata in services
     'background',
     'partition raft-role publication should use background admission',
   );
-  t.equal(
-    roleUpdate?.options?.allowPressureDefer,
-    true,
-    'partition raft-role publication should defer under pressure',
-  );
   t.notOk(
     updates.some((update) => update.data?.raft_role === RaftRole.LEADER),
     'leader authority should not be republished through services.raft_role',
@@ -879,11 +874,6 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     PRESSURE_WORK_CLASS.BACKGROUND,
     'non-control-plane partition leader publication should stay in the background work class',
   );
-  t.equal(
-    leaderUpdate?.options?.allowPressureDefer,
-    true,
-    'non-control-plane partition leader publication should remain pressure deferable',
-  );
 
   await partition.shutdown();
 });
@@ -957,8 +947,6 @@ test('PartitionService - initial leader publication routes while partitions ' +
   t.equal(leaderUpdate?.options?.deliveryPriority, 'critical',
     'an initially empty canonical leader is bootstrap correctness work');
   t.equal(leaderUpdate?.options?.workClass, PRESSURE_WORK_CLASS.CRITICAL);
-  t.equal(leaderUpdate?.options?.allowPressureDefer, false,
-    'initial ownership publication must not defer behind recovery it unblocks');
 
   await partition.shutdown();
 });
@@ -1026,10 +1014,6 @@ test('PartitionService - post-handoff leader publication reads the remote ' +
     'a remote replacement must confirm the CAS row through its owner');
   t.equal(readCalls[0]?.options?.deliveryPriority, 'critical');
   t.equal(readCalls[0]?.options?.workClass, PRESSURE_WORK_CLASS.CRITICAL);
-  t.equal(readCalls[0]?.options?.allowPressureDegrade, false,
-    'leader publication confirmation must not degrade into a non-read');
-  t.equal(readCalls[0]?.options?.allowPressureDefer, false,
-    'priority leader publication confirmation must survive pressure');
   t.same(leaderUpdate?.whereClause, {
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.LEADER_NODE_ID]: 'seed-node',
@@ -1125,11 +1109,6 @@ test('PartitionService - keeps control-plane metadata publication critical', asy
     leaderUpdate?.options?.workClass,
     PRESSURE_WORK_CLASS.CRITICAL,
     'control-plane partition leader publication should stay in the critical work class',
-  );
-  t.equal(
-    leaderUpdate?.options?.allowPressureDefer,
-    false,
-    'control-plane partition leader publication should not be pressure deferable',
   );
 
   await partition.shutdown();

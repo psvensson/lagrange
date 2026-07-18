@@ -19,7 +19,6 @@ const LOCAL_STR_OBJECT = 'object';
 
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const MANAGED_SPLIT_MUTATION_OPTIONS = Object.freeze({
-  allowPressureDefer: false,
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
 });
 
@@ -56,9 +55,6 @@ class ManagedSplitWorkflowExecutionGateMethods {
         LOCAL_STR_PARTITION_SPLIT_WORKFLOW,
         LOCAL_STR_CONTROL_PLANE_WRITE,
       ],
-      allowDegrade: false,
-      allowDefer: executionContext.allowPressureDefer !== false,
-      retryAfterMs: executionContext.pressureRetryAfterMs,
     });
   }
 

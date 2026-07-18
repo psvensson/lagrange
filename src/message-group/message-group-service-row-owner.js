@@ -20,7 +20,6 @@ const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
 });
 const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
-  allowPressureDefer: true,
   deliveryPriority: 'critical',
   pressureRetryAfterMs: 250,
   skipCacheWait: true,

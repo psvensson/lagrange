@@ -128,11 +128,6 @@ test('MessageGroupService - publishes leader state as follower metadata in servi
       'background',
       'message-group raft-role publication should use background admission',
     );
-    t.equal(
-      roleUpdate?.options?.allowPressureDefer,
-      true,
-      'message-group raft-role publication should defer under pressure',
-    );
     t.notOk(
       updates.some((update) => update.data?.raft_role === RaftRole.LEADER),
       'leader authority should not be republished through services.raft_role',

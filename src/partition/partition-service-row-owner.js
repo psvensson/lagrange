@@ -23,7 +23,6 @@ const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
 });
 const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
-  allowPressureDefer: true,
   deliveryPriority: 'background',
   pressureRetryAfterMs: 250,
   skipCacheWait: true,
@@ -31,7 +30,6 @@ const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
 });
 const CRITICAL_SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
-  allowPressureDefer: false,
   deliveryPriority: 'critical',
   pressureRetryAfterMs: 250,
   skipCacheWait: true,

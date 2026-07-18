@@ -175,8 +175,6 @@ function buildForwardTopologyRepairReadOptions(service, workloadProfile) {
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     workloadClass: workloadProfile.workloadClass,
     workClass: workloadProfile.workClass,
-    allowPressureDegrade: workloadProfile.allowPressureDegrade,
-    allowPressureDefer: workloadProfile.allowPressureDefer,
     preferOwnerRpcRead: false,
     requireOwnerRpcRead: false,
     allowOwnerRpcFallback: false,

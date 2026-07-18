@@ -25,7 +25,6 @@ const LOCAL_STR_SPLIT_PLAN = 'split_plan';
 
 const OperationState = SPLIT_MERGE_STATE;
 const REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS = Object.freeze({
-  allowPressureDefer: false,
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
 });
 

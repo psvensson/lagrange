@@ -480,7 +480,7 @@ test('ManagedSplitWorkflow executes write-driven split work under local ' +
     pressureGovernor: {
       evaluate(request) {
         pressureRequest = request;
-        if (request?.allowDefer === false) {
+        if (request?.workClass === PRESSURE_WORK_CLASS.CRITICAL) {
           return {
             action: 'allow',
             retryAfterMs: 0,
@@ -497,7 +497,6 @@ test('ManagedSplitWorkflow executes write-driven split work under local ' +
   });
 
   const result = await workflow.execute('users-p1', {
-    allowPressureDefer: false,
     workClass: PRESSURE_WORK_CLASS.CRITICAL,
   });
 
@@ -510,16 +509,13 @@ test('ManagedSplitWorkflow executes write-driven split work under local ' +
         'partition:split:workflow',
         'control-plane:write',
       ],
-      allowDegrade: false,
-      allowDefer: false,
-      retryAfterMs: undefined,
     },
-    'write-driven split execution should evaluate pressure with one explicit non-deferable critical profile',
+    'write-driven split execution should evaluate pressure with the flagless critical profile',
   );
   t.equal(
     admissionCalls.length,
     1,
-    'workflow should continue into admission once the execution profile disables defer',
+    'workflow should continue into admission through the critical bypass',
   );
   t.equal(
     provisionCalls.length,
@@ -527,19 +523,9 @@ test('ManagedSplitWorkflow executes write-driven split work under local ' +
     'workflow should continue through child provisioning instead of stalling at the pressure gate',
   );
   t.equal(
-    updateCalls[0]?.options?.allowPressureDefer,
-    false,
-    'workflow transition writes should inherit the non-deferable execution profile',
-  );
-  t.equal(
     updateCalls[0]?.options?.workClass,
     PRESSURE_WORK_CLASS.CRITICAL,
     'workflow transition writes should inherit the critical execution class',
-  );
-  t.equal(
-    insertCalls[0]?.options?.allowPressureDefer,
-    false,
-    'child metadata writes should inherit the non-deferable execution profile',
   );
   t.equal(
     insertCalls[0]?.options?.workClass,

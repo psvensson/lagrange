@@ -134,7 +134,6 @@ function assignMetadataPublication(serviceClass) {
         buildUpdateOptions: () => ({
           deliveryPriority: MESSAGE_GROUP_SERVICE_LITERAL.BACKGROUND,
           workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-          allowPressureDefer: true,
           routingReadinessDimension:
             this.getMetadataPublicationReadinessDimension(),
         }),
