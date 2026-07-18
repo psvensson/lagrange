@@ -1,0 +1,942 @@
+diff --git a/src/bootstrap/shared/node-registration-owner-row-builder.js b/src/bootstrap/shared/node-registration-owner-row-builder.js
+index 874465e29bcc5bad0c18a8d5b39701a30f1354f7..6ee9d5c3750b7cecc7f1a045c1b631c2873b3bfb 100644
+--- a/src/bootstrap/shared/node-registration-owner-row-builder.js
++++ b/src/bootstrap/shared/node-registration-owner-row-builder.js
+@@ -1,8 +1,8 @@
+ import os from 'os';
+ import {
+   COLUMN,
++  NODE_STATE,
+   NUM,
+-  SERVICE_STATUS,
+   STATE,
+ } from '../../constants/index.js';
+ 
+@@ -27,7 +27,7 @@ function buildNodeRegistrationRow({
+     [COLUMN.CPU_USAGE_PERCENT]: 0,
+     [COLUMN.MEMORY_USAGE_PERCENT]: 0,
+     [COLUMN.DISK_USAGE_PERCENT]: 0,
+-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
++    [COLUMN.STATUS]: NODE_STATE.JOINING,
+     [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+     [COLUMN.CAPABILITIES]: JSON.stringify(nodeCapabilities || []),
+     [COLUMN.LAST_HEARTBEAT]: now,
+diff --git a/src/control-plane/active-node-projection.js b/src/control-plane/active-node-projection.js
+index 1f9b53af33497e1e817885a1b43bde9b88d9e4bc..2f41c278799c6537f742711db1bdfbc8632dcb18 100644
+--- a/src/control-plane/active-node-projection.js
++++ b/src/control-plane/active-node-projection.js
+@@ -1,6 +1,7 @@
+ import {
+   COLUMN,
+   ENDPOINT_STATUS,
++  NODE_STATE,
+   SERVICE_STATUS,
+   STATE,
+   TRANSPORT_TYPE,
+@@ -403,6 +404,11 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
+   if (!normalizedNode.nodeId) {
+     return false;
+   }
++  if (
++    normalizedNode.status === String(NODE_STATE.JOINING).toLowerCase()
++  ) {
++    return false;
++  }
+   const nowMs = Number.isFinite(options.nowMs) ?
+     options.nowMs :
+     Date.now();
+diff --git a/src/control-plane/membership-lifecycle-constants.js b/src/control-plane/membership-lifecycle-constants.js
+index 18d47a30cc6469f1f9c97834fc018f4d89420611..6ec26b8770e04c458c9ce20a9b1be29d86f3c71b 100644
+--- a/src/control-plane/membership-lifecycle-constants.js
++++ b/src/control-plane/membership-lifecycle-constants.js
+@@ -498,6 +498,9 @@ function buildMembershipLifecycleSummary(options = {}) {
+       options.locallyEligibleNodeIds :
+       projectedServingNodeIds,
+   );
++  const formationPlacementNodeIds = normalizeNodeIdList(
++    options.formationPlacementNodeIds,
++  );
+   const recoveryActiveNodeIds = normalizeNodeIdList(
+     options.recoveryActiveNodeIds?.length ?
+       options.recoveryActiveNodeIds :
+@@ -623,6 +626,7 @@ function buildMembershipLifecycleSummary(options = {}) {
+     publishedActiveNodeIds,
+     projectedServingNodeIds,
+     locallyEligibleNodeIds,
++    formationPlacementNodeIds,
+     recoveryActiveNodeIds,
+     recoveryActiveNodeSource,
+     missingPublishedRecoveryActiveNodeIds,
+diff --git a/src/control-plane/membership-publication-candidate-derivation.js b/src/control-plane/membership-publication-candidate-derivation.js
+index a533774cafe59ae0bec9ca61139a6dadf13cd5d4..a396e0c690424a93611a66e2dcadb76b5af29a75 100644
+--- a/src/control-plane/membership-publication-candidate-derivation.js
++++ b/src/control-plane/membership-publication-candidate-derivation.js
+@@ -1,5 +1,6 @@
+ import {
+   buildActiveMembershipSnapshot,
++  buildReadinessByNodeId,
+   resolveActiveNodeViews,
+   resolvePriorityRecoveryActiveNodeCohort,
+ } from './active-node-projection.js';
+@@ -11,6 +12,13 @@ import {
+   normalizeControlPlanePublicationRow,
+   normalizeNodeRow,
+ } from './system-row-normalizers.js';
++import {
++  NODE_STATE,
++  STATE,
++} from '../constants/index.js';
++import {
++  CONTROL_PLANE_READINESS_DIMENSION,
++} from './control-plane-readiness-constants.js';
+ import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
+ import {hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot.js';
+ import {buildPrioritySpreadDecision} from
+@@ -204,6 +212,36 @@ function resolveCandidatePublicationLifecycleState(publicationStatus) {
+     MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING;
+ }
+ 
++function deriveFormationPlacementNodeIds(
++  nodeRows = [],
++  readinessByNodeId = {},
++  helperFns = {},
++) {
++  const eligibleConnectionStates = new Set([
++    STATE.CONNECTED,
++    STATE.READY,
++  ]);
++  return helperFns.normalizeNodeIdList(
++    (Array.isArray(nodeRows) ? nodeRows : [])
++      .map((nodeRow) => normalizeNodeRow(nodeRow))
++      .filter((nodeRow) => {
++        const dimensions = readinessByNodeId[nodeRow.nodeId]?.dimensions;
++        return (
++          nodeRow.status === NODE_STATE.JOINING &&
++          eligibleConnectionStates.has(nodeRow.connectionState) &&
++          dimensions?.[
++            CONTROL_PLANE_READINESS_DIMENSION
++              .CONTROL_PLANE_RECOVERY_ELIGIBLE
++          ] === true &&
++          dimensions?.[
++            CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE
++          ] !== false
++        );
++      })
++      .map((nodeRow) => nodeRow.nodeId),
++  );
++}
++
+ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
+   const planningSnapshot =
+     options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
+@@ -227,10 +265,18 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
+       latestPublicationRow.publishedActiveNodeIds :
+       latestPublishedPublicationRow?.publishedActiveNodeIds,
+   );
+-  const readinessByNodeId = buildPublicationPlanningReadinessByNodeId({
++  const rawReadinessByNodeId = buildReadinessByNodeId({
+     readinessByNodeId: planningSnapshot.readinessByNodeId,
+     readinessEntries: planningSnapshot.readinessEntries,
+   });
++  const readinessByNodeId = buildPublicationPlanningReadinessByNodeId({
++    readinessByNodeId: rawReadinessByNodeId,
++  });
++  const formationPlacementNodeIds = deriveFormationPlacementNodeIds(
++    planningSnapshot.nodeRows,
++    rawReadinessByNodeId,
++    helperFns,
++  );
+   const observedRecoveryProjectionNodeIds = helperFns.normalizeNodeIdList(
+     helperFns.resolveObservedActiveNodeIds({
+       ...planningSnapshot,
+@@ -566,6 +612,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
+     publishedActiveNodeIds,
+     projectedServingNodeIds,
+     locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
++    formationPlacementNodeIds,
+     suspectedOrTransitioningNodeIds: activeNodeViews.suspectedOrTransitioningNodeIds,
+     memberStatesByNodeId: buildPublishedMemberStates(
+       {
+@@ -655,6 +702,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
+   const membershipLifecycleSummary = buildMembershipLifecycleSummary({
+     ...membershipLifecycleSummaryBase,
+     lifecycleState: candidateLifecycleState,
++    formationPlacementNodeIds,
+     participationByNodeId: recoveryProtocolSnapshot.participationByNodeId,
+     participationStateCounts: recoveryProtocolSnapshot.participationStateCounts,
+     recoveryProtocolState: recoveryProtocolSnapshot.recoveryProtocolState,
+diff --git a/src/control-plane/membership-publication-lifecycle-summary.js b/src/control-plane/membership-publication-lifecycle-summary.js
+index 3477f7e28214f895f48913eaf048b4ee3db38eac..c191019c2a0ff17343d6f17c830ddf5c051f1c1c 100644
+--- a/src/control-plane/membership-publication-lifecycle-summary.js
++++ b/src/control-plane/membership-publication-lifecycle-summary.js
+@@ -55,6 +55,11 @@ function hasMembershipLifecycleSummaryProjectionAdvance(
+       candidateSummary?.locallyEligibleNodeIds,
+       helperFns,
+     ),
++    listHasMembershipLifecycleNodeAdvance(
++      baselineSummary?.formationPlacementNodeIds,
++      candidateSummary?.formationPlacementNodeIds,
++      helperFns,
++    ),
+     listHasMembershipLifecycleNodeAdvance(
+       baselineSummary?.recoveryActiveNodeIds,
+       candidateSummary?.recoveryActiveNodeIds,
+@@ -87,6 +92,7 @@ function hasMembershipLifecycleSummaryProjectionEvidence(summary, helperFns = {}
+   return [
+     summary.projectedServingNodeIds,
+     summary.locallyEligibleNodeIds,
++    summary.formationPlacementNodeIds,
+     summary.recoveryActiveNodeIds,
+     summary.missingPublishedRecoveryActiveNodeIds,
+     projectionDiagnostics.recoveryEligibleIncludedNodeIds,
+diff --git a/src/control-plane/membership-publication-planning-evidence.js b/src/control-plane/membership-publication-planning-evidence.js
+index 4e27536ddbb66374d0a5c3d5d1deb360cc87b51a..f6a8352368f5d473b0ba9b027e5399a2899c6e89 100644
+--- a/src/control-plane/membership-publication-planning-evidence.js
++++ b/src/control-plane/membership-publication-planning-evidence.js
+@@ -439,6 +439,8 @@ function closeAcknowledgedMetadataRefreshRow(options = {}) {
+       normalizedPublication.membershipLifecycleSummary?.projectedServingNodeIds,
+     locallyEligibleNodeIds:
+       normalizedPublication.membershipLifecycleSummary?.locallyEligibleNodeIds,
++    formationPlacementNodeIds:
++      normalizedPublication.membershipLifecycleSummary?.formationPlacementNodeIds,
+     suspectedOrTransitioningNodeIds:
+       normalizedPublication.membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
+     memberStatesByNodeId: buildServingMemberStatesByNodeId(
+diff --git a/src/control-plane/startup-authority-placement-eligibility.js b/src/control-plane/startup-authority-placement-eligibility.js
+index a49511ce06b2cdd7f967d38f5e537997ee2c3a54..e9b76567da0e78c3b456a7d814a9d020d43bffeb 100644
+--- a/src/control-plane/startup-authority-placement-eligibility.js
++++ b/src/control-plane/startup-authority-placement-eligibility.js
+@@ -1,5 +1,5 @@
+ import {
+-  SERVICE_STATUS,
++  NODE_STATE,
+   STATE,
+   TABLES,
+ } from '../constants/index.js';
+@@ -7,6 +7,10 @@ import {hasLiveTransportEvidence} from './live-transport-evidence.js';
+ 
+ const EMPTY_STARTUP_AUTHORITY_NODE_ID_SET = new Set();
+ const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
++const STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES = new Set([
++  NODE_STATE.ACTIVE,
++  NODE_STATE.JOINING,
++]);
+ 
+ function resolveStartupAuthorityNodeIdSet(startupAuthority) {
+   if (startupAuthority?.authorityAvailable !== true) {
+@@ -25,8 +29,10 @@ function resolveStartupAuthorityNodeIdSet(startupAuthority) {
+ /**
+  * The shared formation-time placement predicate for a node whose public READY
+  * lease is still withheld. Startup authority supplies membership, the nodes
+- * row supplies ACTIVE + CONNECTED/READY registration, and the live router
+- * supplies reachability. Self-inclusion remains an explicit caller choice.
++ * row supplies JOINING/ACTIVE + CONNECTED/READY registration, and the live
++ * router supplies reachability. JOINING is admitted only through callers that
++ * have already selected the control-plane recovery dimension and priority
++ * partition classifier. Self-inclusion remains an explicit caller choice.
+  *
+  * @param {Object} options
+  * @param {Object} options.node
+@@ -44,7 +50,7 @@ function isStartupAuthorityControlPlanePlacementEligibleNode(options = {}) {
+     nodeId.length === 0 ||
+     !(options.startupAuthorityNodeIds instanceof Set) ||
+     !options.startupAuthorityNodeIds.has(nodeId) ||
+-    node?.status !== SERVICE_STATUS.ACTIVE
++    !STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES.has(node?.status)
+   ) {
+     return false;
+   }
+diff --git a/src/control-plane/startup-authority-snapshot-owner.js b/src/control-plane/startup-authority-snapshot-owner.js
+index 8acb6b53dd0ca7aa50ef081dc30446d74acfe2da..461cc8a673b1cc21b8010fd7187dab92f4de6b04 100644
+--- a/src/control-plane/startup-authority-snapshot-owner.js
++++ b/src/control-plane/startup-authority-snapshot-owner.js
+@@ -247,11 +247,25 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
+     publicationRecoveryGate.priorityPartitionSummary ||
+     planningSnapshot.priorityPartitionSummary ||
+     null;
+-  const canonicalStartupNodeIds = Array.isArray(
+-    resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
+-  ) ?
+-    resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds :
+-    [];
++  const recoveryActiveNodeIds =
++    resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
++  const formationPlacementNodeIds =
++    planningSnapshot.membershipLifecycleSummary?.formationPlacementNodeIds;
++  const canonicalStartupNodeIds = [
++    ...(Array.isArray(recoveryActiveNodeIds) ? recoveryActiveNodeIds : []),
++    ...(Array.isArray(formationPlacementNodeIds) ?
++      formationPlacementNodeIds :
++      []),
++  ]
++    .filter((nodeId) =>
++      typeof nodeId === 'string' && nodeId.length > 0,
++    )
++    .filter((nodeId, index, nodeIds) =>
++      nodeIds.indexOf(nodeId) === index,
++    )
++    .sort((leftNodeId, rightNodeId) =>
++      leftNodeId.localeCompare(rightNodeId),
++    );
+   const publicationObservationState =
+     publicationRecoveryGate.publicationObservationState;
+   const targetParticipation =
+diff --git a/test/bootstrap/node-registration-owner.test.js b/test/bootstrap/node-registration-owner.test.js
+index d33d91012325679fd898b14592bf281e37c5f644..59a824736095b4d6f2e4d61eff4ae8a2c12f933a 100644
+--- a/test/bootstrap/node-registration-owner.test.js
++++ b/test/bootstrap/node-registration-owner.test.js
+@@ -9,6 +9,7 @@ import {
+ import {
+   COLUMN,
+   ENDPOINT_STATUS,
++  NODE_STATE,
+   NUM,
+   SERVICE_STATUS,
+   STATE,
+@@ -122,6 +123,11 @@ test(
+       STATE.CONNECTED,
+       'should preserve CONNECTED admission state on the canonical nodes row',
+     );
++    t.equal(
++      nodeCalls[0].row[COLUMN.STATUS],
++      NODE_STATE.JOINING,
++      'join admission stays non-active until the ready-lease heartbeat',
++    );
+     const joinMutationOptions = publicationCalls.map((call) => call.options);
+     t.ok(
+       joinMutationOptions.every((options) => options?.skipCacheWait === true),
+diff --git a/test/control-plane/formation-placement-membership-handoff.test.js b/test/control-plane/formation-placement-membership-handoff.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6f3386f2f4b5af4ad4eafd533ff41ea1009b8c0c
+--- /dev/null
++++ b/test/control-plane/formation-placement-membership-handoff.test.js
+@@ -0,0 +1,206 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  deriveMembershipPublicationCandidate,
++} from '../../src/control-plane/membership-publication-coordinator.js';
++import {
++  buildStartupAuthoritySnapshotFromPlanningAnswer,
++} from '../../src/control-plane/startup-authority-snapshot-owner.js';
++import {
++  CONTROL_PLANE_READINESS_DIMENSION,
++} from '../../src/control-plane/control-plane-readiness-constants.js';
++import {
++  NODE_STATE,
++  STATE,
++} from '../../src/constants/index.js';
++import {
++  resolvePriorityRemoveSafetyMembershipSnapshot,
++} from '../../src/rebalancer/operation-workflow-remove-safety-membership.js';
++
++const NOW_MS = 1000;
++const READY_LEASE_EXPIRES_AT_MS = 5000;
++
++function buildReadinessEntry(nodeId, dimensions) {
++  return {
++    nodeId,
++    dimensions,
++  };
++}
++
++test('formation placement hands recovery-eligible JOINING nodes only to startup authority',
++  async (t) => {
++    const planningOptions = {
++      publisherNodeId: 'node-1',
++      latestPublicationRow: {
++        publication_epoch: 17,
++        status: 'ACK_PENDING',
++        published_active_node_ids: ['node-1'],
++        required_ack_node_ids: ['node-1'],
++        acknowledged_node_ids: ['node-1'],
++      },
++      latestPublishedPublicationRow: {
++        publication_epoch: 16,
++        status: 'PUBLISHED',
++        published_active_node_ids: ['node-1'],
++        required_ack_node_ids: ['node-1'],
++        acknowledged_node_ids: ['node-1'],
++      },
++      nodeRows: [
++        {
++          node_id: 'node-1',
++          status: NODE_STATE.ACTIVE,
++          connection_state: STATE.READY,
++          ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
++        },
++        {
++          node_id: 'node-2',
++          status: NODE_STATE.JOINING,
++          connection_state: STATE.READY,
++          ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
++          last_heartbeat: NOW_MS,
++        },
++        {
++          node_id: 'node-disconnected',
++          status: NODE_STATE.JOINING,
++          connection_state: STATE.DISCONNECTED,
++        },
++        {
++          node_id: 'node-not-recovery-eligible',
++          status: NODE_STATE.JOINING,
++          connection_state: STATE.CONNECTED,
++        },
++        {
++          node_id: 'node-process-dead',
++          status: NODE_STATE.JOINING,
++          connection_state: STATE.CONNECTED,
++        },
++      ],
++      readinessEntries: [
++        buildReadinessEntry('node-1', {
++          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
++          [CONTROL_PLANE_READINESS_DIMENSION
++            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
++          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++        }),
++        buildReadinessEntry('node-2', {
++          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
++          [CONTROL_PLANE_READINESS_DIMENSION
++            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
++          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++        }),
++        buildReadinessEntry('node-disconnected', {
++          [CONTROL_PLANE_READINESS_DIMENSION
++            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
++          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++        }),
++        buildReadinessEntry('node-not-recovery-eligible', {
++          [CONTROL_PLANE_READINESS_DIMENSION
++            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
++          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++        }),
++        buildReadinessEntry('node-process-dead', {
++          [CONTROL_PLANE_READINESS_DIMENSION
++            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
++          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
++        }),
++      ],
++      nodeEndpointRows: [
++        {
++          endpoint_id: 'node-1-ws',
++          node_id: 'node-1',
++          transport_type: 'ws',
++          status: 'active',
++          address: 'ws://node-1:8082',
++        },
++      ],
++      serviceRows: [
++        {
++          service_id: 'service-1',
++          node_id: 'node-1',
++          status: 'active',
++        },
++      ],
++      nowMs: NOW_MS,
++    };
++    const candidate = deriveMembershipPublicationCandidate(planningOptions);
++
++    t.same(
++      candidate.membershipLifecycleSummary.formationPlacementNodeIds,
++      ['node-2'],
++      'only connected, live, explicitly recovery-eligible JOINING rows enter formation placement',
++    );
++    t.same(
++      candidate.projectedServingNodeIds,
++      ['node-1'],
++      'formation placement does not widen the generic serving projection',
++    );
++    t.same(
++      candidate.locallyEligibleNodeIds,
++      ['node-1'],
++      'formation placement does not widen ordinary local placement eligibility',
++    );
++    t.same(
++      candidate.publishedActiveNodeIds,
++      ['node-1'],
++      'formation placement does not publish JOINING nodes as active',
++    );
++    t.same(
++      candidate.requiredAckNodeIds,
++      ['node-1'],
++      'formation placement does not widen publication acknowledgement targets',
++    );
++    t.same(
++      resolvePriorityRemoveSafetyMembershipSnapshot(
++        candidate,
++        {
++          priorityPartitionSummary: {
++            satisfied: false,
++          },
++        },
++        [],
++      ).membershipNodeIds,
++      ['node-1'],
++      'formation placement does not widen priority remove-safety membership',
++    );
++
++    const startupAuthority = buildStartupAuthoritySnapshotFromPlanningAnswer({
++      ...candidate,
++      priorityPartitionSummary: {
++        satisfied: false,
++      },
++    });
++    t.same(
++      startupAuthority.canonicalStartupNodeIds,
++      ['node-1', 'node-2'],
++      'startup authority alone unions the formation placement cohort',
++    );
++
++    const withdrawnCandidate = deriveMembershipPublicationCandidate({
++      ...planningOptions,
++      membershipLifecycleSummary: candidate.membershipLifecycleSummary,
++      readinessEntries: planningOptions.readinessEntries.map((entry) =>
++        entry.nodeId === 'node-2' ?
++          buildReadinessEntry('node-2', {
++            ...entry.dimensions,
++            [CONTROL_PLANE_READINESS_DIMENSION
++              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
++          }) :
++          entry,
++      ),
++    });
++    t.same(
++      withdrawnCandidate.membershipLifecycleSummary.formationPlacementNodeIds,
++      [],
++      'fresh readiness withdrawal removes a carried formation-only node',
++    );
++    t.same(
++      buildStartupAuthoritySnapshotFromPlanningAnswer({
++        ...withdrawnCandidate,
++        priorityPartitionSummary: {
++          satisfied: false,
++        },
++      }).canonicalStartupNodeIds,
++      ['node-1'],
++      'startup authority cannot retain stale formation-only membership',
++    );
++    t.end();
++  });
+diff --git a/test/rebalancer/startup-authority-available-node-contract.test.js b/test/rebalancer/startup-authority-available-node-contract.test.js
+index f3a35cecbff4f76a9a181e5c5dee60f9fa6ac0d2..0ef75bbe8da53e3d3451ac43371eabefd155ae94 100644
+--- a/test/rebalancer/startup-authority-available-node-contract.test.js
++++ b/test/rebalancer/startup-authority-available-node-contract.test.js
+@@ -6,8 +6,28 @@ import {
+ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ import {LoggingService} from '../../src/logging/logging-service.js';
+ import {
++  CONTROL_PLANE_PUBLICATION_MODE,
+   CONTROL_PLANE_READINESS_DIMENSION,
+ } from '../../src/control-plane/control-plane-readiness-constants.js';
++import {
++  ControlPlaneReadinessService,
++} from '../../src/control-plane/control-plane-readiness-service.js';
++import {
++  deriveMembershipPublicationCandidate,
++} from '../../src/control-plane/membership-publication-coordinator.js';
++import {
++  buildNodeRegistrationRow,
++} from '../../src/bootstrap/shared/node-registration-owner-row-builder.js';
++import {
++  NODE_STATE,
++  SERVICE_STATUS,
++  SERVICE_TYPE,
++  STATE,
++  TABLES,
++} from '../../src/constants/index.js';
++
++const NOW_MS = 1000;
++const READY_LEASE_EXPIRES_AT_MS = 5000;
+ 
+ function initEnv() {
+   ConfigurationManager.resetInstance();
+@@ -31,19 +51,24 @@ function createCache(overrides = {}) {
+       {node_id: 'node-2', status: 'active', ready_lease_expires_at: Date.now() + 60000},
+       {node_id: 'node-3', status: 'active', ready_lease_expires_at: Date.now() + 60000},
+     ],
+-    partitions: [
++    partitions: overrides.partitions || [
+       {partition_id: 'control_plane_publications-p1', table_id: 'control_plane_publications'},
+     ],
+-    services: [],
+-    tables: [],
+-    replica_operations: [],
+-    node_endpoints: [],
+-    service_endpoints: [],
++    services: overrides.services || [],
++    tables: overrides.tables || [],
++    replica_operations: overrides.replica_operations || [],
++    node_endpoints: overrides.node_endpoints || [],
++    service_endpoints: overrides.service_endpoints || [],
+   };
++  const listeners = new Set();
+   return {
+     get(tableName, key) {
+       const values = rows[tableName] || [];
+-      return values.find((row) => row.partition_id === key || row.node_id === key) || null;
++      return values.find((row) =>
++        row.partition_id === key ||
++        row.node_id === key ||
++        row.service_id === key,
++      ) || null;
+     },
+     getAll(tableName) {
+       return rows[tableName] || [];
+@@ -51,6 +76,14 @@ function createCache(overrides = {}) {
+     filter(tableName, predicate) {
+       return (rows[tableName] || []).filter(predicate);
+     },
++    onCacheChange(listener) {
++      listeners.add(listener);
++    },
++    notify(tableName, row) {
++      for (const listener of listeners) {
++        listener(tableName, 'UPDATE', row, null);
++      }
++    },
+   };
+ }
+ 
+@@ -125,30 +158,193 @@ test('UnifiedRebalancer uses readiness-owned startup cohort for startup-sensitiv
+ 
+ test('UnifiedRebalancer admits remote startup-authority targets for priority control-plane provisioning', async (t) => {
+   initEnv();
+-  const recoveryEligibleNodeIds = new Set(['seed-node']);
+-  let startupAuthorityAvailable = true;
++  const seedNode = {
++    node_id: 'seed-node',
++    status: NODE_STATE.ACTIVE,
++    connection_state: STATE.READY,
++    ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
++    last_heartbeat: NOW_MS,
++  };
++  const registrationRow = buildNodeRegistrationRow({
++    nodeId: 'node-2',
++    nodeAddress: 'node-2:8080',
++    nodeCapabilities: [],
++    now: NOW_MS,
++  });
++  const joiningReadyNode = {
++    ...registrationRow,
++    connection_state: STATE.READY,
++    ready_lease_expires_at: READY_LEASE_EXPIRES_AT_MS,
++  };
++  const disconnectedJoiner = {
++    ...buildNodeRegistrationRow({
++      nodeId: 'node-3',
++      nodeAddress: 'node-3:8080',
++      nodeCapabilities: [],
++      now: NOW_MS,
++    }),
++    connection_state: STATE.DISCONNECTED,
++  };
++  const nodeRows = [
++    seedNode,
++    joiningReadyNode,
++    disconnectedJoiner,
++  ];
++  const serviceRows = [
++    {
++      service_id: 'seed-partition-service',
++      node_id: 'seed-node',
++      service_type: SERVICE_TYPE.PARTITION,
++      status: SERVICE_STATUS.ACTIVE,
++      address: 'seed-node/partition/control-plane-publications-p1',
++    },
++    {
++      service_id: 'node-2-partition-service',
++      node_id: 'node-2',
++      service_type: SERVICE_TYPE.PARTITION,
++      status: SERVICE_STATUS.ACTIVE,
++      address: 'node-2/partition/control-plane-publications-p1',
++    },
++  ];
++  const nodeEndpointRows = [
++    {
++      endpoint_id: 'seed-node-ws',
++      node_id: 'seed-node',
++      transport_type: 'ws',
++      status: SERVICE_STATUS.ACTIVE,
++      address: 'ws://seed-node:8082',
++    },
++  ];
+   const cache = createCache({
+-    nodes: [
+-      {
+-        node_id: 'seed-node',
+-        status: 'active',
+-        connection_state: 'ready',
+-        ready_lease_expires_at: Date.now() + 60000,
+-      },
+-      {
+-        node_id: 'node-2',
+-        status: 'active',
+-        connection_state: 'connected',
+-        ready_lease_expires_at: null,
++    nodes: nodeRows,
++    services: serviceRows,
++    node_endpoints: nodeEndpointRows,
++  });
++  const routerStateByNodeId = new Map([
++    ['seed-node', STATE.CONNECTED],
++    ['node-2', STATE.CONNECTED],
++    ['node-3', STATE.DISCONNECTED],
++  ]);
++  const messageRouter = {
++    getConnectionState: (nodeId) =>
++      routerStateByNodeId.get(nodeId) || STATE.DISCONNECTED,
++    isOutboundQueueAvailable: () => true,
++    getConnectedNodes: () => [...routerStateByNodeId.entries()]
++      .filter(([, state]) => state === STATE.CONNECTED)
++      .map(([nodeId]) => nodeId),
++    getQueryDataPlaneTransportReadiness: () => ({ready: true}),
++  };
++  let readinessNowMs = NOW_MS;
++  let planningCandidate = {
++    publicationEpoch: 17,
++    publicationStatus: 'ACK_PENDING',
++    publicationObservationState: 'establishing',
++    publishedActiveNodeIds: ['seed-node'],
++    projectedServingNodeIds: ['seed-node'],
++    locallyEligibleNodeIds: ['seed-node'],
++    recoveryActiveNodeIds: ['seed-node'],
++    recoveryActiveNodeSource: 'locally_eligible_projection',
++    requiredAckNodeIds: ['seed-node'],
++    acknowledgedNodeIds: ['seed-node'],
++    pendingAckNodeIds: [],
++    pendingAckCount: 0,
++    recoveryProtocolState: 'priority_spread_pending',
++    priorityPartitionSummary: {
++      satisfied: false,
++    },
++    priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
++    membershipLifecycleSummary: {
++      formationPlacementNodeIds: [],
++    },
++  };
++  const readinessService = new ControlPlaneReadinessService({
++    nodeId: 'seed-node',
++    systemTableCache: cache,
++    messageRouter,
++    cdcGroupPropagationService: {
++      getPublicationModeDiagnostics() {
++        return {
++          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
++          reasonCode: null,
++          enteredAt: '2026-07-18T00:00:00.000Z',
++          recentTransitions: [],
++        };
+       },
+-      {
+-        node_id: 'node-3',
+-        status: 'active',
+-        connection_state: 'disconnected',
+-        ready_lease_expires_at: null,
++    },
++    membershipPublicationService: {
++      deriveClusterMembershipCandidateSync() {
++        return planningCandidate;
+       },
++    },
++    now: () => readinessNowMs,
++  });
++  const candidateOptions = {
++    publisherNodeId: 'seed-node',
++    latestPublicationRow: {
++      publication_epoch: 17,
++      status: 'ACK_PENDING',
++      published_active_node_ids: ['seed-node'],
++      required_ack_node_ids: ['seed-node'],
++      acknowledged_node_ids: ['seed-node'],
++    },
++    latestPublishedPublicationRow: {
++      publication_epoch: 16,
++      status: 'PUBLISHED',
++      published_active_node_ids: ['seed-node'],
++      required_ack_node_ids: ['seed-node'],
++      acknowledged_node_ids: ['seed-node'],
++    },
++    nodeRows,
++    nodeEndpointRows,
++    serviceRows,
++    connectedNodeIds: messageRouter.getConnectedNodes(),
++    priorityPartitionSummary: {
++      satisfied: false,
++    },
++    nowMs: NOW_MS,
++  };
++  const readinessEntries = nodeRows.map((nodeRow) =>
++    readinessService.getNodeReadinessSync(nodeRow.node_id),
++  );
++  const joiningReadiness = readinessEntries.find(
++    (entry) => entry.nodeId === 'node-2',
++  );
++  t.equal(
++    joiningReadiness.dimensions[
++      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
++    ],
++    false,
++    'the real readiness owner keeps the JOINING+READY row outside healthy membership',
++  );
++  t.equal(
++    joiningReadiness.dimensions[
++      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+     ],
++    true,
++    'the real readiness owner grants only recovery eligibility from live transport and service evidence',
++  );
++  planningCandidate = deriveMembershipPublicationCandidate({
++    ...candidateOptions,
++    readinessEntries,
+   });
++  cache.notify(TABLES.NODES, joiningReadyNode);
++  t.same(
++    planningCandidate.membershipLifecycleSummary.formationPlacementNodeIds,
++    ['node-2'],
++    'the publication candidate places the real recovery-eligible joiner in the formation lane',
++  );
++  const startupAuthority =
++    readinessService.getStartupAuthoritySnapshotSync('seed-node', NOW_MS);
++  t.equal(
++    startupAuthority.authorityAvailable,
++    true,
++    'the real readiness owner produces available startup authority',
++  );
++  t.same(
++    startupAuthority.canonicalStartupNodeIds,
++    ['node-2', 'seed-node'],
++    'startup authority alone adds the formation joiner to the canonical startup cohort',
++  );
+   const rebalancer = new UnifiedRebalancer({
+     entityId: 'control_plane_publications-p1',
+     entityType: EntityType.PARTITION,
+@@ -162,12 +358,7 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
+       getPolicyForPartition: () => ({targetReplicaCount: 3}),
+       getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
+     },
+-    messageRouter: {
+-      getConnectionState: (nodeId) =>
+-        nodeId === 'node-3' ? 'disconnected' : 'connected',
+-      isOutboundQueueAvailable: () => true,
+-      getConnectedNodes: () => [],
+-    },
++    messageRouter,
+     rebalanceCoordinator: {
+       getMoveSafetyError: () => null,
+       createOperation: async () => ({}),
+@@ -186,62 +377,64 @@ test('UnifiedRebalancer admits remote startup-authority targets for priority con
+         return {success: true, rows: []};
+       },
+     },
+-    controlPlaneReadinessService: {
+-      getNodeReadinessSync(nodeId) {
+-        return {
+-          nodeId,
+-          dimensions: {
+-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+-              recoveryEligibleNodeIds.has(nodeId),
+-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
+-              nodeId === 'seed-node',
+-          },
+-          reasons: [],
+-        };
+-      },
+-      getStartupAuthoritySnapshotSync() {
+-        return {
+-          authorityAvailable: startupAuthorityAvailable,
+-          canonicalStartupNodeIds: ['seed-node', 'node-2', 'node-3'],
+-        };
+-      },
+-    },
++    controlPlaneReadinessService: readinessService,
+   });
+ 
+   t.same(
+     rebalancer.getAvailableNodes().map((node) => node.node_id).sort(),
+     ['node-2', 'seed-node'],
+-    'connected remote startup-authority peers can receive first priority control-plane replicas',
++    'the real formation cohort can receive the first priority control-plane replica',
+   );
+   t.equal(
+     await rebalancer.isNodeReady('node-2'),
+     true,
+-    'pre-execution readiness should use the same bounded startup-authority grace',
+-  );
+-  recoveryEligibleNodeIds.add('node-2');
+-  t.equal(
+-    await rebalancer.isNodeReady('node-2'),
+-    true,
+-    'a remote ledger leader keeps the pre-ready startup-authority target ' +
+-      'eligible when recovery readiness becomes explicitly satisfied',
++    'pre-execution readiness consumes the same real startup-authority answer',
+   );
+   t.equal(
+     await rebalancer.getNodeReadinessSkipReason('node-2'),
+     null,
+-    'the leadership-handoff target is executable instead of ' +
+-      'node_not_ready/repair_ineligible',
++    'the formation target is executable instead of node_not_ready/repair_ineligible',
++  );
++  routerStateByNodeId.set('node-2', STATE.DISCONNECTED);
++  readinessNowMs += 1;
++  cache.notify(TABLES.NODES, joiningReadyNode);
++  const withdrawnReadinessEntries = nodeRows.map((nodeRow) =>
++    readinessService.getNodeReadinessSync(nodeRow.node_id),
++  );
++  const withdrawnJoiningReadiness = withdrawnReadinessEntries.find(
++    (entry) => entry.nodeId === 'node-2',
++  );
++  t.equal(
++    withdrawnJoiningReadiness.dimensions[
++      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
++    ],
++    false,
++    'the real readiness owner withdraws recovery eligibility with live transport',
++  );
++  planningCandidate = deriveMembershipPublicationCandidate({
++    ...candidateOptions,
++    connectedNodeIds: messageRouter.getConnectedNodes(),
++    readinessEntries: withdrawnReadinessEntries,
++  });
++  readinessNowMs += 1;
++  cache.notify(TABLES.NODES, joiningReadyNode);
++  t.same(
++    planningCandidate.membershipLifecycleSummary.formationPlacementNodeIds,
++    [],
++    'live-transport withdrawal removes the joiner from the real formation candidate',
+   );
+-  startupAuthorityAvailable = false;
+   t.equal(
+     await rebalancer.isNodeReady('node-2'),
+     false,
+-    'retained cohort ids cannot grant pre-ready placement after startup ' +
+-      'authority becomes explicitly unavailable',
++    'live-transport withdrawal fails closed at pre-execution',
+   );
++  routerStateByNodeId.set('node-2', STATE.CONNECTED);
++  readinessNowMs += 1;
++  cache.notify(TABLES.NODES, joiningReadyNode);
+   t.equal(
+-    await rebalancer.getNodeReadinessSkipReason('node-2'),
+-    'repair_ineligible',
+-    'an unavailable startup authority fails closed at pre-execution',
++    await rebalancer.isNodeReady('node-2'),
++    false,
++    'transport restoration cannot revive a JOINING target after formation authority withdrew it',
+   );
+   t.end();
+ });
+@@ -393,11 +586,11 @@ async (t) => {
+     },
+   });
+ 
+-  // node-2 is a startup-authority peer, active, cached-connected — the cached
++  // node-2 is a startup-authority peer, joining, cached-connected — the cached
+   // conjunct passes, so the live-transport veto is the sole remaining gate.
+   const node = {
+     node_id: 'node-2',
+-    status: 'active',
++    status: NODE_STATE.JOINING,
+     connection_state: 'connected',
+   };
+   t.equal(

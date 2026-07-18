@@ -9,6 +9,7 @@ import {
 import {
   COLUMN,
   ENDPOINT_STATUS,
+  NODE_STATE,
   NUM,
   SERVICE_STATUS,
   STATE,
@@ -121,6 +122,11 @@ test(
       nodeCalls[0].row[COLUMN.CONNECTION_STATE],
       STATE.CONNECTED,
       'should preserve CONNECTED admission state on the canonical nodes row',
+    );
+    t.equal(
+      nodeCalls[0].row[COLUMN.STATUS],
+      NODE_STATE.JOINING,
+      'join admission stays non-active until the ready-lease heartbeat',
     );
     const joinMutationOptions = publicationCalls.map((call) => call.options);
     t.ok(

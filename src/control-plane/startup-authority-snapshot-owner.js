@@ -247,11 +247,25 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     publicationRecoveryGate.priorityPartitionSummary ||
     planningSnapshot.priorityPartitionSummary ||
     null;
-  const canonicalStartupNodeIds = Array.isArray(
-    resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
-  ) ?
-    resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds :
-    [];
+  const recoveryActiveNodeIds =
+    resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
+  const formationPlacementNodeIds =
+    planningSnapshot.membershipLifecycleSummary?.formationPlacementNodeIds;
+  const canonicalStartupNodeIds = [
+    ...(Array.isArray(recoveryActiveNodeIds) ? recoveryActiveNodeIds : []),
+    ...(Array.isArray(formationPlacementNodeIds) ?
+      formationPlacementNodeIds :
+      []),
+  ]
+    .filter((nodeId) =>
+      typeof nodeId === 'string' && nodeId.length > 0,
+    )
+    .filter((nodeId, index, nodeIds) =>
+      nodeIds.indexOf(nodeId) === index,
+    )
+    .sort((leftNodeId, rightNodeId) =>
+      leftNodeId.localeCompare(rightNodeId),
+    );
   const publicationObservationState =
     publicationRecoveryGate.publicationObservationState;
   const targetParticipation =

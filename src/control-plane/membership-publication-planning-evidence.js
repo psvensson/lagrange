@@ -439,6 +439,8 @@ function closeAcknowledgedMetadataRefreshRow(options = {}) {
       normalizedPublication.membershipLifecycleSummary?.projectedServingNodeIds,
     locallyEligibleNodeIds:
       normalizedPublication.membershipLifecycleSummary?.locallyEligibleNodeIds,
+    formationPlacementNodeIds:
+      normalizedPublication.membershipLifecycleSummary?.formationPlacementNodeIds,
     suspectedOrTransitioningNodeIds:
       normalizedPublication.membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
     memberStatesByNodeId: buildServingMemberStatesByNodeId(

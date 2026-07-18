@@ -1,5 +1,6 @@
 import {
   buildActiveMembershipSnapshot,
+  buildReadinessByNodeId,
   resolveActiveNodeViews,
   resolvePriorityRecoveryActiveNodeCohort,
 } from './active-node-projection.js';
@@ -11,6 +12,13 @@ import {
   normalizeControlPlanePublicationRow,
   normalizeNodeRow,
 } from './system-row-normalizers.js';
+import {
+  NODE_STATE,
+  STATE,
+} from '../constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from './control-plane-readiness-constants.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot.js';
 import {buildPrioritySpreadDecision} from
@@ -204,6 +212,36 @@ function resolveCandidatePublicationLifecycleState(publicationStatus) {
     MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING;
 }
 
+function deriveFormationPlacementNodeIds(
+  nodeRows = [],
+  readinessByNodeId = {},
+  helperFns = {},
+) {
+  const eligibleConnectionStates = new Set([
+    STATE.CONNECTED,
+    STATE.READY,
+  ]);
+  return helperFns.normalizeNodeIdList(
+    (Array.isArray(nodeRows) ? nodeRows : [])
+      .map((nodeRow) => normalizeNodeRow(nodeRow))
+      .filter((nodeRow) => {
+        const dimensions = readinessByNodeId[nodeRow.nodeId]?.dimensions;
+        return (
+          nodeRow.status === NODE_STATE.JOINING &&
+          eligibleConnectionStates.has(nodeRow.connectionState) &&
+          dimensions?.[
+            CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE
+          ] === true &&
+          dimensions?.[
+            CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE
+          ] !== false
+        );
+      })
+      .map((nodeRow) => nodeRow.nodeId),
+  );
+}
+
 function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const planningSnapshot =
     options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
@@ -227,10 +265,18 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       latestPublicationRow.publishedActiveNodeIds :
       latestPublishedPublicationRow?.publishedActiveNodeIds,
   );
-  const readinessByNodeId = buildPublicationPlanningReadinessByNodeId({
+  const rawReadinessByNodeId = buildReadinessByNodeId({
     readinessByNodeId: planningSnapshot.readinessByNodeId,
     readinessEntries: planningSnapshot.readinessEntries,
   });
+  const readinessByNodeId = buildPublicationPlanningReadinessByNodeId({
+    readinessByNodeId: rawReadinessByNodeId,
+  });
+  const formationPlacementNodeIds = deriveFormationPlacementNodeIds(
+    planningSnapshot.nodeRows,
+    rawReadinessByNodeId,
+    helperFns,
+  );
   const observedRecoveryProjectionNodeIds = helperFns.normalizeNodeIdList(
     helperFns.resolveObservedActiveNodeIds({
       ...planningSnapshot,
@@ -566,6 +612,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     publishedActiveNodeIds,
     projectedServingNodeIds,
     locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
+    formationPlacementNodeIds,
     suspectedOrTransitioningNodeIds: activeNodeViews.suspectedOrTransitioningNodeIds,
     memberStatesByNodeId: buildPublishedMemberStates(
       {
@@ -655,6 +702,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const membershipLifecycleSummary = buildMembershipLifecycleSummary({
     ...membershipLifecycleSummaryBase,
     lifecycleState: candidateLifecycleState,
+    formationPlacementNodeIds,
     participationByNodeId: recoveryProtocolSnapshot.participationByNodeId,
     participationStateCounts: recoveryProtocolSnapshot.participationStateCounts,
     recoveryProtocolState: recoveryProtocolSnapshot.recoveryProtocolState,

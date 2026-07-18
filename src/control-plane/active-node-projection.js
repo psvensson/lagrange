@@ -1,6 +1,7 @@
 import {
   COLUMN,
   ENDPOINT_STATUS,
+  NODE_STATE,
   SERVICE_STATUS,
   STATE,
   TRANSPORT_TYPE,
@@ -401,6 +402,11 @@ function isSwimAliveProtected(nodeId, options = {}) {
 function isCanonicallyActiveNode(nodeRow, options = {}) {
   const normalizedNode = normalizeNodeRow(nodeRow);
   if (!normalizedNode.nodeId) {
+    return false;
+  }
+  if (
+    normalizedNode.status === String(NODE_STATE.JOINING).toLowerCase()
+  ) {
     return false;
   }
   const nowMs = Number.isFinite(options.nowMs) ?

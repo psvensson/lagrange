@@ -56,6 +56,11 @@ function hasMembershipLifecycleSummaryProjectionAdvance(
       helperFns,
     ),
     listHasMembershipLifecycleNodeAdvance(
+      baselineSummary?.formationPlacementNodeIds,
+      candidateSummary?.formationPlacementNodeIds,
+      helperFns,
+    ),
+    listHasMembershipLifecycleNodeAdvance(
       baselineSummary?.recoveryActiveNodeIds,
       candidateSummary?.recoveryActiveNodeIds,
       helperFns,
@@ -87,6 +92,7 @@ function hasMembershipLifecycleSummaryProjectionEvidence(summary, helperFns = {}
   return [
     summary.projectedServingNodeIds,
     summary.locallyEligibleNodeIds,
+    summary.formationPlacementNodeIds,
     summary.recoveryActiveNodeIds,
     summary.missingPublishedRecoveryActiveNodeIds,
     projectionDiagnostics.recoveryEligibleIncludedNodeIds,

@@ -1,5 +1,5 @@
 import {
-  SERVICE_STATUS,
+  NODE_STATE,
   STATE,
   TABLES,
 } from '../constants/index.js';
@@ -7,6 +7,10 @@ import {hasLiveTransportEvidence} from './live-transport-evidence.js';
 
 const EMPTY_STARTUP_AUTHORITY_NODE_ID_SET = new Set();
 const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
+const STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES = new Set([
+  NODE_STATE.ACTIVE,
+  NODE_STATE.JOINING,
+]);
 
 function resolveStartupAuthorityNodeIdSet(startupAuthority) {
   if (startupAuthority?.authorityAvailable !== true) {
@@ -25,8 +29,10 @@ function resolveStartupAuthorityNodeIdSet(startupAuthority) {
 /**
  * The shared formation-time placement predicate for a node whose public READY
  * lease is still withheld. Startup authority supplies membership, the nodes
- * row supplies ACTIVE + CONNECTED/READY registration, and the live router
- * supplies reachability. Self-inclusion remains an explicit caller choice.
+ * row supplies JOINING/ACTIVE + CONNECTED/READY registration, and the live
+ * router supplies reachability. JOINING is admitted only through callers that
+ * have already selected the control-plane recovery dimension and priority
+ * partition classifier. Self-inclusion remains an explicit caller choice.
  *
  * @param {Object} options
  * @param {Object} options.node
@@ -44,7 +50,7 @@ function isStartupAuthorityControlPlanePlacementEligibleNode(options = {}) {
     nodeId.length === 0 ||
     !(options.startupAuthorityNodeIds instanceof Set) ||
     !options.startupAuthorityNodeIds.has(nodeId) ||
-    node?.status !== SERVICE_STATUS.ACTIVE
+    !STARTUP_AUTHORITY_CONTROL_PLANE_PLACEMENT_NODE_STATES.has(node?.status)
   ) {
     return false;
   }

@@ -498,6 +498,9 @@ function buildMembershipLifecycleSummary(options = {}) {
       options.locallyEligibleNodeIds :
       projectedServingNodeIds,
   );
+  const formationPlacementNodeIds = normalizeNodeIdList(
+    options.formationPlacementNodeIds,
+  );
   const recoveryActiveNodeIds = normalizeNodeIdList(
     options.recoveryActiveNodeIds?.length ?
       options.recoveryActiveNodeIds :
@@ -623,6 +626,7 @@ function buildMembershipLifecycleSummary(options = {}) {
     publishedActiveNodeIds,
     projectedServingNodeIds,
     locallyEligibleNodeIds,
+    formationPlacementNodeIds,
     recoveryActiveNodeIds,
     recoveryActiveNodeSource,
     missingPublishedRecoveryActiveNodeIds,

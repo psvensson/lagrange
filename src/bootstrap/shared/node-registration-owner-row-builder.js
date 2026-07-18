@@ -1,8 +1,8 @@
 import os from 'os';
 import {
   COLUMN,
+  NODE_STATE,
   NUM,
-  SERVICE_STATUS,
   STATE,
 } from '../../constants/index.js';
 
@@ -27,7 +27,7 @@ function buildNodeRegistrationRow({
     [COLUMN.CPU_USAGE_PERCENT]: 0,
     [COLUMN.MEMORY_USAGE_PERCENT]: 0,
     [COLUMN.DISK_USAGE_PERCENT]: 0,
-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.STATUS]: NODE_STATE.JOINING,
     [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
     [COLUMN.CAPABILITIES]: JSON.stringify(nodeCapabilities || []),
     [COLUMN.LAST_HEARTBEAT]: now,
