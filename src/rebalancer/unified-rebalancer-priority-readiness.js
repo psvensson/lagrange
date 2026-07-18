@@ -10,7 +10,6 @@ const {
   LIFECYCLE_PHASE,
   NUM,
   TABLES,
-  TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryBlockedPartitions,
   buildPriorityRecoveryOperationContextFromRecord,
@@ -21,28 +20,36 @@ const {
   isBackgroundWorkLifecycleReadySnapshot,
   normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
-  resolveReplicaOperationSemanticPhase,
   shouldPriorityRecoveryOperationBlockPlanning,
 } = UNIFIED_REBALANCER_SHARED;
 
 const PRIORITY_READINESS_CONSTRUCTOR = 'constructor';
+const PRIORITY_PLACEMENT_STATE = Object.freeze({AVAILABLE: 'available'});
+const GATE_FIELD = Object.freeze({
+  PUBLICATION_EPOCH: 'publicationEpoch',
+  PUBLICATION_STATUS: 'publicationStatus',
+  PUBLICATION_OBSERVATION_STATE: 'publicationObservationState',
+  RECOVERY_PROTOCOL_STATE: 'recoveryProtocolState',
+  REASON_CODES: 'reasonCodes',
+  PRIORITY_PARTITION_SUMMARY: 'priorityPartitionSummary',
+  PRIORITY_RECOVERY_CLOSURE_WITNESS: 'priorityRecoveryClosureWitness',
+  PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
+  MISSING_PUBLISHED_NODE_IDS: 'missingPublishedNodeIds',
+});
 
 function finiteNumberOrNull(value) {
   return Number.isFinite(value) ? value : null;
 }
-
 function copyRecordOrNull(value) {
   if (!value || typeof value !== 'object') {
     return null;
   }
   return {...value};
 }
-
 function freezeRecordOrNull(value) {
   const copy = copyRecordOrNull(value);
   return copy ? Object.freeze(copy) : null;
 }
-
 function buildPriorityPartitionBlocker(partition = {}) {
   return {
     partitionId: String(partition.partitionId || ''),
@@ -54,22 +61,18 @@ function buildPriorityPartitionBlocker(partition = {}) {
       copyRecordOrNull(partition.exclusionReasonCounts),
   };
 }
-
 function isCurrentPriorityPlacementPending(observation) {
-  return observation?.state === 'available' &&
+  return observation?.state === PRIORITY_PLACEMENT_STATE.AVAILABLE &&
     observation.satisfied !== true;
 }
-
 function isPublishedPriorityPlacementPending(summary, gate) {
   return Boolean(summary) && gate.prioritySpreadPending === true;
 }
-
 function readMissingCurrentPriorityLeaderPartitionIds(observation) {
   const partitionIds =
     observation?.leaderCoverage?.missingLeaderPartitionIds;
   return Array.isArray(partitionIds) ? partitionIds : [];
 }
-
 function buildMissingLeaderBlocker({
   existing,
   partitionId,
@@ -86,13 +89,175 @@ function buildMissingLeaderBlocker({
     missingActiveLeader: true,
   };
 }
-
 function freezePriorityPartitionBlocker(partition) {
   return Object.freeze({
     ...partition,
     exclusionReasonCounts:
       freezeRecordOrNull(partition.exclusionReasonCounts),
   });
+}
+function selectMatchingValue(values, predicate, fallback = null) {
+  const selected = values.find(predicate);
+  return selected === undefined ? fallback : selected;
+}
+function selectPlanningArray(values, fallback = []) {
+  return selectMatchingValue(values, Array.isArray, fallback);
+}
+function selectPlanningObject(values, fallback = null) {
+  return selectMatchingValue(
+    values,
+    (value) => value && typeof value === 'object',
+    fallback,
+  );
+}
+function selectPlanningString(values, fallback = null) {
+  return selectMatchingValue(
+    values,
+    (value) => typeof value === 'string' && value.length > 0,
+    fallback,
+  );
+}
+function selectPlanningNumber(values, fallback = null) {
+  return selectMatchingValue(values, Number.isFinite, fallback);
+}
+function valueOrFallback(value, fallback) {
+  return value === null || value === undefined ? fallback : value;
+}
+function readRecordField(record, fieldName, fallback) {
+  return record ?
+    valueOrFallback(record[fieldName], fallback) :
+    fallback;
+}
+function buildPlanningPublicationRecoveryGate(planningSnapshot) {
+  const providedGate = selectPlanningObject([
+    planningSnapshot.publicationRecoveryGate,
+  ]);
+  return buildPublicationRecoveryGateSnapshot({
+    ...providedGate,
+    publicationEpoch: selectPlanningNumber(
+      [planningSnapshot.publicationEpoch],
+      readRecordField(providedGate, GATE_FIELD.PUBLICATION_EPOCH, null),
+    ),
+    publicationStatus: selectPlanningString(
+      [planningSnapshot.publicationStatus, planningSnapshot.status],
+      readRecordField(providedGate, GATE_FIELD.PUBLICATION_STATUS, null),
+    ),
+    publicationObservationState: selectPlanningString(
+      [planningSnapshot.publicationObservationState],
+      readRecordField(
+        providedGate,
+        GATE_FIELD.PUBLICATION_OBSERVATION_STATE,
+        null,
+      ),
+    ),
+    recoveryProtocolState: selectPlanningString(
+      [planningSnapshot.recoveryProtocolState],
+      readRecordField(providedGate, GATE_FIELD.RECOVERY_PROTOCOL_STATE, null),
+    ),
+    priorityRecoveryReasonCodes: selectPlanningArray(
+      [planningSnapshot.priorityRecoveryReasonCodes],
+      readRecordField(providedGate, GATE_FIELD.REASON_CODES, undefined),
+    ),
+    priorityPartitionSummary: selectPlanningObject(
+      [planningSnapshot.priorityPartitionSummary],
+      readRecordField(providedGate, GATE_FIELD.PRIORITY_PARTITION_SUMMARY, null),
+    ),
+    priorityRecoveryClosureWitness: selectPlanningObject(
+      [planningSnapshot.priorityRecoveryClosureWitness],
+      readRecordField(
+        providedGate,
+        GATE_FIELD.PRIORITY_RECOVERY_CLOSURE_WITNESS,
+        null,
+      ),
+    ),
+    pendingAckNodeIds: selectPlanningArray(
+      [planningSnapshot.pendingAckNodeIds],
+      readRecordField(providedGate, GATE_FIELD.PENDING_ACK_NODE_IDS, []),
+    ),
+    missingPublishedNodeIds: selectPlanningArray(
+      [
+        planningSnapshot.missingPublishedNodeIds,
+        planningSnapshot.missingPublishedRecoveryActiveNodeIds,
+      ],
+      readRecordField(providedGate, GATE_FIELD.MISSING_PUBLISHED_NODE_IDS, []),
+    ),
+  });
+}
+function readMembershipPlanningSnapshot(readinessService, nodeId, observedAt) {
+  const getterName = [
+    'getMembershipPublicationPlanningAnswerSync',
+    'getMembershipPublicationPlanningSnapshotSync',
+  ].find((name) => typeof readinessService?.[name] === 'function');
+  return getterName ? readinessService[getterName](nodeId, observedAt) : null;
+}
+function normalizeNodeIdSet(nodeIds) {
+  return new Set(
+    (Array.isArray(nodeIds) ? nodeIds : [])
+      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0),
+  );
+}
+function readPriorityOperationPartitionId(operation) {
+  return String(
+    operation?.partitionId || operation?.partition_id || '',
+  ).trim();
+}
+function readPriorityOperationId(operation) {
+  return String(
+    operation?.operationId || operation?.operation_id || '',
+  ).trim();
+}
+
+function groupPriorityOperations(operations) {
+  const byPartitionId = new Map();
+  for (const operation of Array.isArray(operations) ? operations : []) {
+    const partitionId = readPriorityOperationPartitionId(operation);
+    if (
+      partitionId.length === 0 ||
+      !classifySystemPartition({partitionId}).priorityControlPlane
+    ) {
+      continue;
+    }
+    const partitionOperations = byPartitionId.get(partitionId) || [];
+    partitionOperations.push(operation);
+    byPartitionId.set(partitionId, partitionOperations);
+  }
+  return byPartitionId;
+}
+
+function collectNonBlockingPriorityOperationIds(
+  operationIds,
+  partitionId,
+  partitionOperations,
+  planningSnapshot,
+) {
+  if (!planningSnapshot) {
+    return;
+  }
+  const effectiveEligibleNodeIds =
+    resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
+  const assessment = buildPriorityRecoveryPartitionAssessment({
+    partitionId,
+    priorityPartitionSummary:
+      planningSnapshot.priorityPartitionSummary || null,
+    admission: {
+      effectiveEligibleNodeIds,
+      effectiveEligibleNodeCount: effectiveEligibleNodeIds.length,
+      ineligibleNodes: [],
+    },
+    operationContexts: partitionOperations
+      .map((operation) =>
+        buildPriorityRecoveryOperationContextFromRecord(operation))
+      .filter(Boolean),
+  });
+  if (shouldPriorityRecoveryOperationBlockPlanning(assessment)) {
+    return;
+  }
+  for (const operation of partitionOperations) {
+    const operationId = readPriorityOperationId(operation);
+    if (operationId.length > 0) {
+      operationIds.add(operationId);
+    }
+  }
 }
 
 function resolvePriorityLearnerNodeIds(serviceRows) {
@@ -243,23 +408,7 @@ function buildCurrentPrioritySchedulingBlockers({
 }
 
 class UnifiedRebalancerPriorityReadinessMethods {
-  /**
-   * Build a current placement observation from this rebalancer's cache while
-   * reusing the publication owner's eligible cohort. Priority entities replace
-   * their own raw service rows with getCurrentReplicas(), which includes
-   * terminal create/retirement projections and therefore cannot re-mint work
-   * merely because the services cache trails a completed operation.
-   *
-   * The caller may supply the canonical available-node pass. Operation-
-   * creation decisions deliberately omit it: the publication recovery cohort
-   * is the formation authority, and constraining that decision to serve-ready
-   * nodes recreates the readiness -> placement -> readiness cycle.
-   *
-   * @param {Object|null} planningSnapshot
-   * @param {Object} options
-   * @return {Object}
-   * @private
-   */
+  // Combine current placement actuals with the publication-owned node cohort.
   buildCurrentPriorityPlacementPlanningObservation(
     planningSnapshot = null,
     options = {},
@@ -303,36 +452,28 @@ class UnifiedRebalancerPriorityReadinessMethods {
     });
   }
 
-  /**
-   * Overlay the monotonic publication snapshot with current placement actuals
-   * for rebalancer operation creation. Publication summaries intentionally
-   * preserve epoch progress; they are not allowed to erase a later physical
-   * spread regression at the actuator boundary.
-   *
-   * @param {Object|null} planningSnapshot
-   * @return {Object|null}
-   * @private
-   */
+  // Keep epoch progress while overlaying current placement actuals.
   buildCurrentPriorityRecoveryPlanningSnapshot(planningSnapshot = null) {
-    if (
-      !planningSnapshot ||
-      typeof planningSnapshot !== 'object' ||
-      !this.isControlPlanePriorityPartition()
-    ) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+      return planningSnapshot;
+    }
+    if (!this.isControlPlanePriorityPartition()) {
       return planningSnapshot;
     }
     const currentPlacementObservation =
       this.buildCurrentPriorityPlacementPlanningObservation(planningSnapshot);
     if (
-      currentPlacementObservation?.state !== 'available' ||
+      currentPlacementObservation?.state !==
+        PRIORITY_PLACEMENT_STATE.AVAILABLE ||
       !currentPlacementObservation.priorityPartitionSummary
     ) {
       return planningSnapshot;
     }
     const publishedPriorityPartitionSummary =
-      planningSnapshot.priorityPartitionSummary ||
-      planningSnapshot.publicationRecoveryGate?.priorityPartitionSummary ||
-      null;
+      selectPlanningObject([
+        planningSnapshot.priorityPartitionSummary,
+        planningSnapshot.publicationRecoveryGate?.priorityPartitionSummary,
+      ]);
     const publishedPlacementStillPending =
       publishedPriorityPartitionSummary &&
       publishedPriorityPartitionSummary.satisfied !== true;
@@ -348,251 +489,72 @@ class UnifiedRebalancerPriorityReadinessMethods {
   }
 
   async buildNonBlockingPriorityOperationIdSet(operations = []) {
-    const operationsByPartitionId = new Map();
-    for (const operation of Array.isArray(operations) ? operations : []) {
-      const partitionId = String(
-        operation?.partitionId || operation?.partition_id || '',
-      ).trim();
-      if (
-        partitionId.length === 0 ||
-        !classifySystemPartition({partitionId}).priorityControlPlane
-      ) {
-        continue;
-      }
-      if (!operationsByPartitionId.has(partitionId)) {
-        operationsByPartitionId.set(partitionId, []);
-      }
-      operationsByPartitionId.get(partitionId).push(operation);
-    }
     const nonBlockingOperationIds = new Set();
     for (const [
       partitionId,
       partitionOperations,
-    ] of operationsByPartitionId.entries()) {
+    ] of groupPriorityOperations(operations)) {
       const planningSnapshot = await this.getPriorityRecoveryPlanningSnapshot(
         partitionOperations[0],
       );
-      if (!planningSnapshot) {
-        continue;
-      }
-      const effectiveEligibleNodeIds =
-        resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
-      const assessment = buildPriorityRecoveryPartitionAssessment({
+      collectNonBlockingPriorityOperationIds(
+        nonBlockingOperationIds,
         partitionId,
-        priorityPartitionSummary:
-          planningSnapshot.priorityPartitionSummary || null,
-        admission: {
-          effectiveEligibleNodeIds,
-          effectiveEligibleNodeCount: effectiveEligibleNodeIds.length,
-          ineligibleNodes: [],
-        },
-        operationContexts: partitionOperations
-          .map((operation) =>
-            buildPriorityRecoveryOperationContextFromRecord(operation),
-          )
-          .filter(Boolean),
-      });
-      if (shouldPriorityRecoveryOperationBlockPlanning(assessment)) {
-        continue;
-      }
-      for (const operation of partitionOperations) {
-        const operationId = String(
-          operation?.operationId || operation?.operation_id || '',
-        ).trim();
-        if (operationId.length > 0) {
-          nonBlockingOperationIds.add(operationId);
-        }
-      }
+        partitionOperations,
+        planningSnapshot,
+      );
     }
     return nonBlockingOperationIds;
   }
 
-  /**
-   * Synchronous variant of `buildNonBlockingPriorityOperationIdSet`.
-   *
-   * @param {Array<Object>} operations
-   * @param {Object} options
-   * @param {number} [options.observedAt]
-   * @return {Set<string>}
-   * @private
-   */
+  // Synchronous variant used by cache-backed topology checks.
   buildNonBlockingPriorityOperationIdSetSync(operations = [], options = {}) {
-    const operationsByPartitionId = new Map();
-    for (const operation of Array.isArray(operations) ? operations : []) {
-      const partitionId = String(
-        operation?.partitionId || operation?.partition_id || '',
-      ).trim();
-      if (
-        partitionId.length === 0 ||
-        !classifySystemPartition({partitionId}).priorityControlPlane
-      ) {
-        continue;
-      }
-      if (!operationsByPartitionId.has(partitionId)) {
-        operationsByPartitionId.set(partitionId, []);
-      }
-      operationsByPartitionId.get(partitionId).push(operation);
-    }
     const nonBlockingOperationIds = new Set();
     for (const [
       partitionId,
       partitionOperations,
-    ] of operationsByPartitionId.entries()) {
+    ] of groupPriorityOperations(operations)) {
       const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
         partitionOperations[0],
         options,
       );
-      if (!planningSnapshot) {
-        continue;
-      }
-      const effectiveEligibleNodeIds =
-        resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
-      const assessment = buildPriorityRecoveryPartitionAssessment({
+      collectNonBlockingPriorityOperationIds(
+        nonBlockingOperationIds,
         partitionId,
-        priorityPartitionSummary:
-          planningSnapshot.priorityPartitionSummary || null,
-        admission: {
-          effectiveEligibleNodeIds,
-          effectiveEligibleNodeCount: effectiveEligibleNodeIds.length,
-          ineligibleNodes: [],
-        },
-        operationContexts: partitionOperations
-          .map((operation) =>
-            buildPriorityRecoveryOperationContextFromRecord(operation),
-          )
-          .filter(Boolean),
-      });
-      if (shouldPriorityRecoveryOperationBlockPlanning(assessment)) {
-        continue;
-      }
-      for (const operation of partitionOperations) {
-        const operationId = String(
-          operation?.operationId || operation?.operation_id || '',
-        ).trim();
-        if (operationId.length > 0) {
-          nonBlockingOperationIds.add(operationId);
-        }
-      }
+        partitionOperations,
+        planningSnapshot,
+      );
     }
     return nonBlockingOperationIds;
   }
 
-  /**
-   * Return a blocker summary when non-system entities should yield until the
-   * startup-critical control-plane partitions are spread across ready nodes.
-   *
-   * This keeps user/data-plane rebalancing from consuming the global
-   * rebalancer budget while the seed is still the only owner of the control
-   * plane write path.
-   *
-   * @return {Object|null}
-   * @private
-   */
+  // Yield non-priority work until startup-critical partitions are spread.
   getControlPlanePrioritySpreadBlocker() {
     if (this.isControlPlanePriorityPartition()) {
       return null;
     }
-
     const readinessService = this.controlPlaneReadinessService;
-    const observedAt = Date.now();
-    let planningSnapshot = null;
     if (!readinessService) {
       return null;
     }
-    if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerSync ===
-      'function'
-    ) {
-      planningSnapshot =
-        readinessService.getMembershipPublicationPlanningAnswerSync(
-          this.nodeId,
-          observedAt,
-        );
-    } else if (
-      readinessService &&
-      typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
-        'function'
-    ) {
-      planningSnapshot =
-        readinessService.getMembershipPublicationPlanningSnapshotSync(
-          this.nodeId,
-          observedAt,
-        );
-    } else {
+    const observedAt = Date.now();
+    const planningSnapshot = readMembershipPlanningSnapshot(
+      readinessService,
+      this.nodeId,
+      observedAt,
+    );
+    if (!planningSnapshot) {
       return null;
     }
-
-    const providedPublicationRecoveryGate =
-      planningSnapshot?.publicationRecoveryGate &&
-      typeof planningSnapshot.publicationRecoveryGate === 'object' ?
-        planningSnapshot.publicationRecoveryGate :
-        null;
-    const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
-      ...(providedPublicationRecoveryGate || {}),
-      publicationEpoch:
-        Number.isFinite(planningSnapshot?.publicationEpoch) ?
-          planningSnapshot.publicationEpoch :
-          providedPublicationRecoveryGate?.publicationEpoch ?? null,
-      publicationStatus:
-        typeof planningSnapshot?.publicationStatus === 'string' &&
-        planningSnapshot.publicationStatus.length > 0 ?
-          planningSnapshot.publicationStatus :
-          typeof planningSnapshot?.status === 'string' &&
-              planningSnapshot.status.length > 0 ?
-            planningSnapshot.status :
-            providedPublicationRecoveryGate?.publicationStatus ?? null,
-      publicationObservationState:
-        typeof planningSnapshot?.publicationObservationState === 'string' &&
-        planningSnapshot.publicationObservationState.length > 0 ?
-          planningSnapshot.publicationObservationState :
-          providedPublicationRecoveryGate?.publicationObservationState ??
-            null,
-      recoveryProtocolState:
-        typeof planningSnapshot?.recoveryProtocolState === 'string' &&
-        planningSnapshot.recoveryProtocolState.length > 0 ?
-          planningSnapshot.recoveryProtocolState :
-          providedPublicationRecoveryGate?.recoveryProtocolState ?? null,
-      priorityRecoveryReasonCodes:
-        Array.isArray(planningSnapshot?.priorityRecoveryReasonCodes) ?
-          planningSnapshot.priorityRecoveryReasonCodes :
-          providedPublicationRecoveryGate?.reasonCodes,
-      priorityPartitionSummary:
-        planningSnapshot?.priorityPartitionSummary &&
-        typeof planningSnapshot.priorityPartitionSummary === 'object' ?
-          planningSnapshot.priorityPartitionSummary :
-          providedPublicationRecoveryGate?.priorityPartitionSummary ?? null,
-      priorityRecoveryClosureWitness:
-        planningSnapshot?.priorityRecoveryClosureWitness &&
-        typeof planningSnapshot.priorityRecoveryClosureWitness ===
-          'object' ?
-          planningSnapshot.priorityRecoveryClosureWitness :
-          providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
-            null,
-      pendingAckNodeIds:
-        Array.isArray(planningSnapshot?.pendingAckNodeIds) ?
-          planningSnapshot.pendingAckNodeIds :
-          providedPublicationRecoveryGate?.pendingAckNodeIds ?? [],
-      missingPublishedNodeIds:
-        Array.isArray(planningSnapshot?.missingPublishedNodeIds) ?
-          planningSnapshot.missingPublishedNodeIds :
-          Array.isArray(
-            planningSnapshot?.missingPublishedRecoveryActiveNodeIds,
-          ) ?
-            planningSnapshot.missingPublishedRecoveryActiveNodeIds :
-            providedPublicationRecoveryGate?.missingPublishedNodeIds ?? [],
-    });
+    const publicationRecoveryGate =
+      buildPlanningPublicationRecoveryGate(planningSnapshot);
     const publishedPriorityPartitionSummary =
       publicationRecoveryGate.priorityPartitionSummary;
-
-    const planningPublishedActiveNodeIds = new Set(
-      (Array.isArray(planningSnapshot?.publishedActiveNodeIds) ?
-        planningSnapshot.publishedActiveNodeIds :
-        Array.isArray(planningSnapshot?.published_active_node_ids) ?
-          planningSnapshot.published_active_node_ids :
-          []
-      ).filter(
-        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
-      ),
+    const planningPublishedActiveNodeIds = normalizeNodeIdSet(
+      selectPlanningArray([
+        planningSnapshot?.publishedActiveNodeIds,
+        planningSnapshot?.published_active_node_ids,
+      ]),
     );
     const readyNodes =
       planningPublishedActiveNodeIds.size > 0 ?
@@ -600,10 +562,8 @@ class UnifiedRebalancerPriorityReadinessMethods {
           planningPublishedActiveNodeIds,
         ) :
         this.getAvailableNodes();
-    const readyNodeIds = new Set(
-      readyNodes
-        .map((node) => node?.node_id || node?.nodeId || '')
-        .filter(Boolean),
+    const readyNodeIds = normalizeNodeIdSet(
+      readyNodes.map((node) => node?.node_id || node?.nodeId || ''),
     );
     // The spread target must reflect the INTENDED cluster cohort (forming/joining
     // members included, admission-blocked/dead excluded), NOT only nodes already
@@ -616,12 +576,8 @@ class UnifiedRebalancerPriorityReadinessMethods {
     // intended-minus-admission-blocked set; max() with readyNodeIds keeps ACTIVE
     // nodes as a floor so behaviour is never worse than ready-only when the
     // cohort is unavailable, and never counts a dead node (cohort excludes them).
-    const cohortActiveNodeIds =
-      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
-    const cohortNodeIds = new Set(
-      (Array.isArray(cohortActiveNodeIds) ? cohortActiveNodeIds : []).filter(
-        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
-      ),
+    const cohortNodeIds = normalizeNodeIdSet(
+      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
     );
     const requiredDistinctNodeCount = Math.min(
       NUM.THREE,
@@ -663,14 +619,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     });
   }
 
-  /**
-   * Resolve live cluster peers from the message router plus the local node.
-   * When transport shows peers that the nodes table does not yet publish,
-   * system-topology background work should continue to treat the cluster as
-   * settling.
-   * @return {Set<string>}
-   * @private
-   */
+  // Resolve transport peers plus the local node.
   resolveConnectedClusterNodeIds() {
     const connectedNodeIds = new Set();
     if (
@@ -694,22 +643,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     return connectedNodeIds;
   }
 
-  /**
-   * Return one endpoint visibility summary for ACTIVE cluster members.
-   * @param {string[]} activeNodeIds
-   * @param {Object} [options={}]
-   * @param {boolean} [options.allowReadinessBackfill=true]
-   * @param {number} [options.requiredReadyNodeCount]
-   * @return {{
-   *   ready: boolean,
-   *   missingNodeEndpointNodeIds: string[],
-   *   missingPostgresWireNodeIds: string[],
-   *   endpointReadyNodeCount: number,
-   *   requiredReadyNodeCount: number,
-   *   endpointReadyNodeIds: string[],
-   * }}
-   * @private
-   */
+  // Summarize endpoint visibility for ACTIVE cluster members.
   evaluateCriticalSystemEndpointVisibility(activeNodeIds = [], options = {}) {
     const nodeEndpointRows =
       typeof this.systemTableCache?.getAll === 'function' ?
@@ -727,134 +661,14 @@ class UnifiedRebalancerPriorityReadinessMethods {
     );
   }
 
-  /**
-   * Normalize one in-flight replica operation for topology diagnostics.
-   * @param {Object} row
-   * @return {Object}
-   * @private
-   */
-  buildCriticalSystemInFlightReplicaOperationDetail(row) {
-    const operationId = row?.operation_id || row?.operationId || null;
-    const type = row?.type || null;
-    const partitionId =
-      row?.partition_group_id ||
-      row?.partitionGroupId ||
-      row?.partition_id ||
-      row?.partitionId ||
-      null;
-    const targetNodeId = String(row?.target_node_id || row?.targetNodeId || '');
-    const status =
-      row?.status || String(row?.status || '').toLowerCase() || null;
-    const workflowStep = row?.workflow_step || row?.workflowStep || null;
-    const semanticPhase = resolveReplicaOperationSemanticPhase(
-      type,
-      workflowStep,
-      status,
-    );
-
-    return Object.freeze({
-      operationId,
-      type,
-      partitionId,
-      targetNodeId,
-      status,
-      workflowStep,
-      semanticPhase,
-    });
-  }
-
-  /**
-   * Return non-terminal replica operations that still indicate topology churn
-   * for already-ACTIVE nodes.
-   * @param {string[]} activeNodeIds
-   * @return {{count:number,details:Object[]}}
-   * @private
-   */
-  collectCriticalSystemInFlightReplicaOperations(
-    activeNodeIds = [],
-    options = {},
-  ) {
-    const requiredNodeIds = new Set(
-      (Array.isArray(activeNodeIds) ? activeNodeIds : []).filter(
-        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
-      ),
-    );
-    const scopeToEntity = options.scopeToEntity === true;
-    if (
-      requiredNodeIds.size === 0 ||
-      typeof this.systemTableCache?.getAll !== 'function'
-    ) {
-      return Object.freeze({
-        count: 0,
-        details: Object.freeze([]),
-        source: null,
-      });
-    }
-
-    const rows = readAllSharedRows(
-      this.systemTableCache,
-      TABLES.REPLICA_OPERATIONS,
-    );
-    const nowMs = Date.now();
-    const details = [];
-    const nonBlockingPriorityOperationIds =
-      this.buildNonBlockingPriorityOperationIdSetSync(rows, {
-        observedAt: nowMs,
-      });
-    for (const row of rows) {
-      if (!this.isTopologySettlingInFlightOperation(row, {nowMs})) {
-        continue;
-      }
-      if (scopeToEntity && !this.isOperationForEntity(row)) {
-        continue;
-      }
-      const operationId = String(
-        row?.operationId || row?.operation_id || '',
-      ).trim();
-      if (
-        operationId.length > 0 &&
-        nonBlockingPriorityOperationIds.has(operationId)
-      ) {
-        continue;
-      }
-      const detail =
-        this.buildCriticalSystemInFlightReplicaOperationDetail(row);
-      const {targetNodeId} = detail;
-      if (!targetNodeId || !requiredNodeIds.has(targetNodeId)) {
-        continue;
-      }
-      details.push(detail);
-    }
-
-    return Object.freeze({
-      count: details.length,
-      details: Object.freeze(details),
-      source: TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.CACHE,
-    });
-  }
-
-  /**
-   * Non-priority system partitions should wait for published convergence
-   * before mutating topology. Non-system entities already have a dedicated
-   * priority-spread gate with a short retry cadence and must not be folded
-   * into the broader local mutation-readiness backoff.
-   *
-   * @return {boolean}
-   * @private
-   */
+  // Non-priority system work waits for published convergence.
   shouldRequirePublishedConvergenceBeforeBackgroundMutation() {
     return (
       this.isSystemPartitionEntity() && !this.isControlPlanePriorityPartition()
     );
   }
 
-  /**
-   * Return one local readiness snapshot when background topology mutation
-   * should wait for the local metadata publication contract to recover.
-   *
-   * @return {Object|null}
-   * @private
-   */
+  // Return the local mutation-readiness blocker, if any.
   getLocalControlPlaneMutationReadinessBlocker() {
     return getLocalControlPlaneMutationReadinessBlocker({
       nodeId: this.nodeId,
@@ -865,12 +679,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     });
   }
 
-  /**
-   * Return the latest bootstrap readiness snapshot when available.
-   *
-   * @return {Object|null}
-   * @private
-   */
+  // Return the latest bootstrap readiness snapshot.
   getBootstrapReadinessSnapshot() {
     if (
       this.startupRecoveryCoordinator &&
@@ -888,13 +697,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
         null;
   }
 
-  /**
-   * Check whether lifecycle has opened background work for this entity.
-   *
-   * @param {Object|null} snapshot - Bootstrap readiness snapshot.
-   * @return {boolean}
-   * @private
-   */
+  // Check whether lifecycle has opened this entity's background lane.
   isBootstrapReadinessOpenForBackgroundWork(snapshot) {
     const startupAuthority = this.getStartupAuthoritySnapshot();
     if (
@@ -914,14 +717,7 @@ class UnifiedRebalancerPriorityReadinessMethods {
     });
   }
 
-  /**
-   * Priority control-plane partitions may recover through the local seed's
-   * startup quarantine once lifecycle has opened metadata publication, even
-   * before the seed becomes serve-eligible again.
-   *
-   * @return {boolean}
-   * @private
-   */
+  // Let priority partitions recover through the seed startup quarantine.
   shouldBypassLocalPriorityControlPlaneStartupReadiness() {
     const startupAuthority = this.getStartupAuthoritySnapshot();
     if (
@@ -967,19 +763,8 @@ class UnifiedRebalancerPriorityReadinessMethods {
     }
   }
 
-  /**
-   * Return one bootstrap lifecycle snapshot when critical system-partition
-   * planning should wait for the lifecycle owner to open background work.
-   *
-   * `BootstrapReadinessState` is the canonical owner for startup/join/traffic
-   * lifecycle. Most system redistribution should wait for `TRAFFIC_READY`,
-   * but the priority control-plane partitions are allowed once metadata
-   * publication is open because they are required to complete restart/join
-   * convergence under load.
-   *
-   * @return {Object|null}
-   * @private
-   */
+  // Priority work opens at metadata publication; other system work waits for
+  // the lifecycle owner's traffic-ready phase.
   getCriticalSystemTrafficReadinessBlocker() {
     if (!this.isSystemPartitionEntity() || !this.bootstrapReadinessState) {
       return null;

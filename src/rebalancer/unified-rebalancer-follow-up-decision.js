@@ -34,6 +34,186 @@ const {buildPriorityRecoveryOperationContextFromRecord} =
 const {isReplicaOperationStale, normalizeReplicaOperationRecord} =
   UNIFIED_REBALANCER_SHARED;
 
+const FOLLOW_UP_REQUIREMENT_STATE_TABLE = Object.freeze([
+  Object.freeze([
+    'createRecoveryOperation',
+    PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT.CREATE_RECOVERY_OPERATION,
+  ]),
+  Object.freeze([
+    'scheduleFollowupRebalance',
+    PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT.SCHEDULE_FOLLOWUP_REBALANCE,
+  ]),
+  Object.freeze([
+    'terminalFailedOperation',
+    PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT.TERMINAL_FAILED_OPERATION,
+  ]),
+]);
+
+function readPlanningDecisionSnapshots(planningSnapshot) {
+  const snapshots =
+    planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots;
+  return Array.isArray(snapshots) ? snapshots : [];
+}
+function selectPriorityPartitionSummary(planningSnapshot) {
+  return planningSnapshot.priorityPartitionSummary ||
+    planningSnapshot.publicationRecoveryGate?.priorityPartitionSummary ||
+    null;
+}
+function recordFollowUpSpreadGap(
+  rebalancer,
+  spreadGapByPartitionId,
+  partitionId,
+  rawSpreadGap,
+  preserveExisting = false,
+) {
+  if (
+    partitionId.length === 0 ||
+    (preserveExisting && spreadGapByPartitionId.has(partitionId))
+  ) {
+    return;
+  }
+  const spreadGap =
+    rebalancer.normalizePriorityRecoveryClosureWitnessFollowUpSpreadGap(
+      rawSpreadGap,
+    );
+  if (
+    spreadGap >
+    PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY
+      .SPREAD_GAP_UNAVAILABLE
+  ) {
+    spreadGapByPartitionId.set(partitionId, spreadGap);
+  }
+}
+function isTerminalFailedFollowUpOperation(decisionSnapshot, semanticState) {
+  const decision = PRIORITY_RECOVERY_FOLLOW_UP_DECISION;
+  const field = PRIORITY_RECOVERY_FOLLOW_UP_FIELD;
+  const eligibleNodeIds =
+    decisionSnapshot?.[field.ELIGIBLE_NODE_IDS];
+  return semanticState === decision.BLOCKED_UNCLASSIFIED &&
+    decisionSnapshot?.[field.WORKFLOW_STATE] === decision.WORKFLOW_TERMINAL &&
+    decisionSnapshot?.[field.LATEST_OPERATION_STATUS] === ReplicaStatus.FAILED &&
+    Array.isArray(eligibleNodeIds) &&
+    eligibleNodeIds.length > 0;
+}
+function buildFollowUpRequirementSignals(decisionSnapshot) {
+  const decision = PRIORITY_RECOVERY_FOLLOW_UP_DECISION;
+  const field = PRIORITY_RECOVERY_FOLLOW_UP_FIELD;
+  const blockerReasons =
+    decisionSnapshot?.[field.BLOCKER_REASONS];
+  const semanticState =
+    decisionSnapshot?.semanticState ||
+    decisionSnapshot?.[field.SEMANTIC_STATE_ID];
+  const nextRequiredActions = [
+    decisionSnapshot?.[field.PROGRESS]?.[field.NEXT_REQUIRED_ACTION],
+    decisionSnapshot?.[field.ACTUATION]?.[field.NEXT_REQUIRED_ACTION],
+    decisionSnapshot?.[field.NEXT_REQUIRED_ACTION],
+  ];
+  return Object.freeze({
+    semanticState,
+    createRecoveryAction: nextRequiredActions.includes(
+      decision.CREATE_RECOVERY_OPERATION,
+    ),
+    scheduleFollowUpRebalance: nextRequiredActions.includes(
+      decision.SCHEDULE_FOLLOWUP_REBALANCE,
+    ),
+    eligibleButNoOperation:
+      Array.isArray(blockerReasons) &&
+      blockerReasons.includes(decision.ELIGIBLE_NO_OPERATION),
+    unresolvedSemanticState:
+      PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS.includes(semanticState),
+    terminalFailedOperation:
+      isTerminalFailedFollowUpOperation(decisionSnapshot, semanticState),
+  });
+}
+function buildFollowUpRequirementEvidence(decisionSnapshot) {
+  const signals = buildFollowUpRequirementSignals(decisionSnapshot);
+  return Object.freeze({
+    createRecoveryOperation:
+      signals.unresolvedSemanticState &&
+      (signals.createRecoveryAction || signals.eligibleButNoOperation) &&
+      PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES.includes(
+        signals.semanticState,
+      ),
+    scheduleFollowupRebalance:
+      signals.unresolvedSemanticState &&
+      signals.scheduleFollowUpRebalance,
+    terminalFailedOperation: signals.terminalFailedOperation,
+  });
+}
+function buildFollowUpPlanningDecisionSnapshot({
+  partitionId,
+  assessment,
+  activeNodeIds,
+  operationContexts,
+  closureWitnessNeedsOperation,
+}) {
+  const decision = PRIORITY_RECOVERY_FOLLOW_UP_DECISION;
+  const field = PRIORITY_RECOVERY_FOLLOW_UP_FIELD;
+  const eligibleButNoOperation = assessment.blockerReasons.includes(
+    decision.ELIGIBLE_NO_OPERATION,
+  );
+  const progress = eligibleButNoOperation ?
+    Object.freeze({
+      nextRequiredAction: decision.CREATE_RECOVERY_OPERATION,
+    }) :
+    Object.freeze({});
+  const coordinator = eligibleButNoOperation &&
+    operationContexts.length === 0 ?
+    {
+      [field.COORDINATOR]: Object.freeze({
+        serialWaitOperationCount: 0,
+        [field.SERIAL_WAIT_OPERATION_IDS]:
+          Object.freeze([]),
+        [field.SERIAL_WAIT_PARTITION_IDS]:
+          Object.freeze([]),
+      }),
+    } :
+    {};
+  return Object.freeze({
+    partitionId,
+    semanticState: assessment.semanticState,
+    [field.AUTHORITATIVE_VISIBILITY_STATE]:
+      closureWitnessNeedsOperation ?
+        REPLICA_INVENTORY_OBSERVATION_STATE.OWNER_ADJUDICATED_EMPTY :
+        null,
+    blockerReasons: Object.freeze([...assessment.blockerReasons]),
+    planner: assessment.planner,
+    admission: Object.freeze({
+      effectiveEligibleNodeIds: Object.freeze([...activeNodeIds]),
+      effectiveEligibleNodeCount: activeNodeIds.length,
+      ineligibleNodes: Object.freeze([]),
+      blockingReasons: Object.freeze([]),
+    }),
+    publication: Object.freeze({
+      recoveryActiveNodeIds: Object.freeze([...activeNodeIds]),
+      concreteEligibleNodeIds: Object.freeze([...activeNodeIds]),
+      publishedActiveNodeIds: Object.freeze([...activeNodeIds]),
+    }),
+    ...coordinator,
+    progress,
+  });
+}
+function closureWitnessAllowsPartition(evidence, partitionId) {
+  return evidence.followUpRequired !== true ||
+    evidence.candidatePartitionIds.length === 0 ||
+    evidence.candidatePartitionIds.includes(partitionId);
+}
+function readDecisionSnapshotEligibleNodeIdLists(snapshot) {
+  const publication = snapshot?.publication;
+  return [
+    snapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ELIGIBLE_NODE_IDS],
+    snapshot?.admission?.effectiveEligibleNodeIds,
+    publication?.recoveryActiveNodeIds,
+    publication?.concreteEligibleNodeIds,
+    publication?.publishedActiveNodeIds,
+  ];
+}
+function readPlanningSnapshotEligibleNodeIdLists(snapshot) {
+  return [
+    snapshot?.publishedActiveNodeIds,
+    snapshot?.publicationRecoveryGate?.publishedActiveNodeIds,
+  ];
+}
 class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning {
   buildPriorityRecoveryFollowUpOperationContextsFromCache(partitionId) {
     const normalizedPartitionId = String(
@@ -73,7 +253,6 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       );
     return Object.freeze(operationContexts);
   }
-
   resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
     planningSnapshot = null,
     options = {},
@@ -81,19 +260,12 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
-    const partitionId = String(
-      options?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
-        this.entityId ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
+    const partitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(options);
     if (partitionId.length === 0) {
       return null;
     }
-    const snapshots = Array.isArray(
-      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
-    ) ?
-      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
-      [];
+    const snapshots = readPlanningDecisionSnapshots(planningSnapshot);
     const planningDecisionSnapshot =
       snapshots.find((snapshot) => {
         const snapshotPartitionId =
@@ -170,33 +342,19 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     planningSnapshot = null,
   ) {
     const spreadGapByPartitionId = new Map();
-    const decisionSnapshots = Array.isArray(
-      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
-    ) ?
-      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
-      [];
+    const decisionSnapshots = readPlanningDecisionSnapshots(planningSnapshot);
     for (const snapshot of decisionSnapshots) {
       const partitionId =
         this.resolvePriorityRecoveryFollowUpPartitionId(snapshot);
-      if (partitionId.length === 0) {
-        continue;
-      }
-      const spreadGap =
-        this.normalizePriorityRecoveryClosureWitnessFollowUpSpreadGap(
-          snapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PLANNER]?.spreadGap,
-        );
-      if (
-        spreadGap >
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY
-          .SPREAD_GAP_UNAVAILABLE
-      ) {
-        spreadGapByPartitionId.set(partitionId, spreadGap);
-      }
+      recordFollowUpSpreadGap(
+        this,
+        spreadGapByPartitionId,
+        partitionId,
+        snapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PLANNER]?.spreadGap,
+      );
     }
-    const priorityPartitionSummary =
-      planningSnapshot?.priorityPartitionSummary ||
-      planningSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD
-        .PUBLICATION_RECOVERY_GATE]?.priorityPartitionSummary ||
+    const priorityPartitionSummary = planningSnapshot ?
+      selectPriorityPartitionSummary(planningSnapshot) :
       null;
     const blockedPartitions = Array.isArray(
       priorityPartitionSummary?.blockedPartitions,
@@ -208,23 +366,13 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
         partition?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      if (
-        partitionId.length === 0 ||
-        spreadGapByPartitionId.has(partitionId)
-      ) {
-        continue;
-      }
-      const spreadGap =
-        this.normalizePriorityRecoveryClosureWitnessFollowUpSpreadGap(
-          partition?.spreadGap,
-        );
-      if (
-        spreadGap >
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY
-          .SPREAD_GAP_UNAVAILABLE
-      ) {
-        spreadGapByPartitionId.set(partitionId, spreadGap);
-      }
+      recordFollowUpSpreadGap(
+        this,
+        spreadGapByPartitionId,
+        partitionId,
+        partition?.spreadGap,
+        true,
+      );
     }
     return spreadGapByPartitionId;
   }
@@ -288,7 +436,6 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       tableEntry.state :
       PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_STATE.BLOCKED_BY_TOPOLOGY;
   }
-
   selectNonLocalPriorityRecoveryFollowUpPartitionId(
     candidatePartitionIds = [],
   ) {
@@ -297,7 +444,6 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       UNIFIED_REBALANCER_LITERAL.EMPTY_STRING
     );
   }
-
   selectCurrentPriorityRecoveryFollowUpPartitionId(
     candidatePartitionIds = [],
   ) {
@@ -305,7 +451,6 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       this.entityId :
       UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
   }
-
   selectPreferredPriorityRecoveryFollowUpPartitionId(
     candidatePartitionIds = [],
     options = {},
@@ -475,34 +620,23 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
-    const partitionId = String(
-      options?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
-        this.entityId ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
+    const partitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(options);
     if (partitionId.length === 0) {
       return null;
     }
     const priorityPartitionSummary =
-      planningSnapshot.priorityPartitionSummary ||
-      planningSnapshot.publicationRecoveryGate?.priorityPartitionSummary ||
-      null;
+      selectPriorityPartitionSummary(planningSnapshot);
     if (!priorityPartitionSummary) {
       return null;
     }
     const closureWitnessEvidence =
       this.buildPriorityRecoveryClosureWitnessFollowUpEvidence(planningSnapshot);
-    const closureWitnessPreferred =
-      closureWitnessEvidence.followUpRequired === true &&
-      closureWitnessEvidence.candidatePartitionIds.length > 0;
     const closureWitnessNeedsOperation =
       closureWitnessEvidence.needsOperationCandidatePartitionIds.includes(
         partitionId,
       );
-    if (
-      closureWitnessPreferred &&
-      !closureWitnessEvidence.candidatePartitionIds.includes(partitionId)
-    ) {
+    if (!closureWitnessAllowsPartition(closureWitnessEvidence, partitionId)) {
       return null;
     }
     const activeNodeIds =
@@ -519,48 +653,12 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
       },
       operationContexts,
     });
-    const eligibleButNoOperation = assessment.blockerReasons.includes(
-      PRIORITY_RECOVERY_FOLLOW_UP_DECISION.ELIGIBLE_NO_OPERATION,
-    );
-    const progress = eligibleButNoOperation ?
-      Object.freeze({
-        nextRequiredAction:
-          PRIORITY_RECOVERY_FOLLOW_UP_DECISION.CREATE_RECOVERY_OPERATION,
-      }) :
-      Object.freeze({});
-    const decisionSnapshot = Object.freeze({
+    const decisionSnapshot = buildFollowUpPlanningDecisionSnapshot({
       partitionId,
-      semanticState: assessment.semanticState,
-      [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.AUTHORITATIVE_VISIBILITY_STATE]:
-        closureWitnessNeedsOperation ?
-          REPLICA_INVENTORY_OBSERVATION_STATE.OWNER_ADJUDICATED_EMPTY :
-          null,
-      blockerReasons: Object.freeze([...assessment.blockerReasons]),
-      planner: assessment.planner,
-      admission: Object.freeze({
-        effectiveEligibleNodeIds: Object.freeze([...activeNodeIds]),
-        effectiveEligibleNodeCount: activeNodeIds.length,
-        ineligibleNodes: Object.freeze([]),
-        blockingReasons: Object.freeze([]),
-      }),
-      publication: Object.freeze({
-        recoveryActiveNodeIds: Object.freeze([...activeNodeIds]),
-        concreteEligibleNodeIds: Object.freeze([...activeNodeIds]),
-        publishedActiveNodeIds: Object.freeze([...activeNodeIds]),
-      }),
-      ...(eligibleButNoOperation && operationContexts.length === 0 ?
-        {
-          [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.COORDINATOR]:
-            Object.freeze({
-              serialWaitOperationCount: 0,
-              [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS]:
-                Object.freeze([]),
-              [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS]:
-                Object.freeze([]),
-            }),
-        } :
-        {}),
-      progress,
+      assessment,
+      activeNodeIds,
+      operationContexts,
+      closureWitnessNeedsOperation,
     });
     return options?.includeNonRequiredSnapshot === true ||
       this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot) ?
@@ -569,93 +667,9 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
   }
 
   isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot = null) {
-    const blockerReasons = Array.isArray(
-      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.BLOCKER_REASONS],
-    ) ?
-      decisionSnapshot[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.BLOCKER_REASONS] :
-      [];
-    const semanticState =
-      decisionSnapshot?.semanticState ||
-      decisionSnapshot?.[
-        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SEMANTIC_STATE_ID
-      ];
-    const nextRequiredActions = [
-      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PROGRESS]?.[
-        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NEXT_REQUIRED_ACTION
-      ],
-      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ACTUATION]?.[
-        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NEXT_REQUIRED_ACTION
-      ],
-      decisionSnapshot?.[
-        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NEXT_REQUIRED_ACTION
-      ],
-    ];
-    const followUpEvidence = Object.freeze({
-      createRecoveryAction: nextRequiredActions.includes(
-        PRIORITY_RECOVERY_FOLLOW_UP_DECISION.CREATE_RECOVERY_OPERATION,
-      ),
-      scheduleFollowUpRebalance: nextRequiredActions.includes(
-        PRIORITY_RECOVERY_FOLLOW_UP_DECISION.SCHEDULE_FOLLOWUP_REBALANCE,
-      ),
-      eligibleButNoOperation: blockerReasons.includes(
-        PRIORITY_RECOVERY_FOLLOW_UP_DECISION.ELIGIBLE_NO_OPERATION,
-      ),
-      unresolvedSemanticState:
-        PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS.includes(
-          semanticState,
-        ),
-      terminalFailedOperation:
-        semanticState ===
-          PRIORITY_RECOVERY_FOLLOW_UP_DECISION.BLOCKED_UNCLASSIFIED &&
-        decisionSnapshot?.[
-          PRIORITY_RECOVERY_FOLLOW_UP_FIELD.WORKFLOW_STATE
-        ] === PRIORITY_RECOVERY_FOLLOW_UP_DECISION.WORKFLOW_TERMINAL &&
-        decisionSnapshot?.[
-          PRIORITY_RECOVERY_FOLLOW_UP_FIELD.LATEST_OPERATION_STATUS
-        ] === ReplicaStatus.FAILED &&
-        Array.isArray(
-          decisionSnapshot?.[
-            PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ELIGIBLE_NODE_IDS
-          ],
-        ) &&
-        decisionSnapshot[
-          PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ELIGIBLE_NODE_IDS
-        ].length > 0,
-    });
-    const followUpDecisionEvidence = Object.freeze({
-      createRecoveryOperation:
-        followUpEvidence.unresolvedSemanticState &&
-        (followUpEvidence.createRecoveryAction ||
-          followUpEvidence.eligibleButNoOperation) &&
-        PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES.includes(
-          semanticState,
-        ),
-      scheduleFollowupRebalance:
-        followUpEvidence.unresolvedSemanticState &&
-        followUpEvidence.scheduleFollowUpRebalance,
-      terminalFailedOperation: followUpEvidence.terminalFailedOperation,
-    });
-    const followUpDecisionState =
-      [
-        {
-          state: PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT
-            .CREATE_RECOVERY_OPERATION,
-          matches: (evidence) =>
-            evidence.createRecoveryOperation === true,
-        },
-        {
-          state: PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT
-            .SCHEDULE_FOLLOWUP_REBALANCE,
-          matches: (evidence) =>
-            evidence.scheduleFollowupRebalance === true,
-        },
-        {
-          state: PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT
-            .TERMINAL_FAILED_OPERATION,
-          matches: (evidence) =>
-            evidence.terminalFailedOperation === true,
-        },
-      ].find((decision) => decision.matches(followUpDecisionEvidence))?.state ||
+    const evidence = buildFollowUpRequirementEvidence(decisionSnapshot);
+    const followUpDecisionState = FOLLOW_UP_REQUIREMENT_STATE_TABLE
+      .find(([evidenceField]) => evidence[evidenceField] === true)?.[1] ||
       PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT.NONE;
     return followUpDecisionState !==
       PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT.NONE;
@@ -691,16 +705,9 @@ class UnifiedRebalancerFollowUpDecision extends UnifiedRebalancerBudgetPlanning 
   }
 
   resolvePriorityRecoveryFollowUpEligibleNodeIds(decision) {
-    const decisionSnapshot = decision?.decisionSnapshot || null;
-    const planningSnapshot = decision?.planningSnapshot || null;
     return this.normalizePriorityRecoveryFollowUpNodeIds([
-      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ELIGIBLE_NODE_IDS],
-      decisionSnapshot?.admission?.effectiveEligibleNodeIds,
-      decisionSnapshot?.publication?.recoveryActiveNodeIds,
-      decisionSnapshot?.publication?.concreteEligibleNodeIds,
-      decisionSnapshot?.publication?.publishedActiveNodeIds,
-      planningSnapshot?.publishedActiveNodeIds,
-      planningSnapshot?.publicationRecoveryGate?.publishedActiveNodeIds,
+      ...readDecisionSnapshotEligibleNodeIdLists(decision?.decisionSnapshot),
+      ...readPlanningSnapshotEligibleNodeIdLists(decision?.planningSnapshot),
     ]);
   }
 

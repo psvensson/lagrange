@@ -1,3 +1,5 @@
+import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import {test} from '../../src/test-helpers/tap.js';
 import {UnifiedRebalancerMoveExecution} from
   '../../src/rebalancer/unified-rebalancer-move-execution.js';
@@ -13,6 +15,35 @@ import {UnifiedRebalancerMoveExecution} from
 // attach the admission evidence when the thrown error carries it.
 
 const QUORUM_REASON_CODE = 'operation_ledger_quorum_concentrated';
+const OWNER_COMPLEXITY_BASELINE_LINES = 3814;
+const OWNER_COMPLEXITY_SOURCE_FILES = Object.freeze([
+  'src/rebalancer/unified-rebalancer-critical-topology-methods.js',
+  'src/rebalancer/unified-rebalancer-follow-up-decision.js',
+  'src/rebalancer/unified-rebalancer-follow-up-move.js',
+  'src/rebalancer/unified-rebalancer-move-execution.js',
+  'src/rebalancer/unified-rebalancer-priority-readiness.js',
+]);
+const OWNER_COMPLEXITY_METRIC_SCRIPTS = Object.freeze([
+  'scripts/check-complexity.js',
+  'scripts/check-cognitive-complexity.js',
+]);
+
+function sourceLineCount(filePath) {
+  return readFileSync(filePath, 'utf8').split('\n').length;
+}
+
+function runScopedMetricGuard(scriptPath) {
+  return spawnSync(
+    process.execPath,
+    [
+      scriptPath,
+      '--scoped',
+      '--strict',
+      ...OWNER_COMPLEXITY_SOURCE_FILES,
+    ],
+    {encoding: 'utf8'},
+  );
+}
 
 function buildInterlockShapedError() {
   // Shape contract of createOperationLedgerInterlockError: BOTH channels set.
@@ -93,4 +124,59 @@ test('interlock skip label fidelity - skipped move result carries the admission 
     QUORUM_REASON_CODE,
     'the skip result carries the interlock admission reason code',
   );
+});
+
+test('mixed readiness groups stay executable without a stale skip detail', async (t) => {
+  const nodeMoves = [
+    {type: 'add', nodeId: 'node-4'},
+    {
+      type: 'add',
+      nodeId: 'node-4',
+      targetReadinessMode: 'defer_to_workflow_owner',
+    },
+  ];
+  const self = {
+    isShuttingDown: false,
+    shouldRequireMoveTargetReadiness: (move) =>
+      move.targetReadinessMode !== 'defer_to_workflow_owner',
+    getNodeReadinessSkipReason: async () => 'repair_ineligible',
+    normalizePreExecutionSkipDetail: (skipDetail) => skipDetail || 'none',
+    groupMovesByTargetNode: () => new Map([['node-4', nodeMoves]]),
+    buildPreExecutionReadinessGroups: () => [],
+    buildPreExecutionHandoffSnapshot: ({executableGroups}) =>
+      ({executableGroups}),
+  };
+
+  const plan = await UnifiedRebalancerMoveExecution.prototype
+    .buildPreExecutionHandoffPlan.call(self, nodeMoves);
+  t.equal(plan.executableGroups.length, 1, 'the mixed group stays executable');
+  t.equal(
+    plan.executableGroups[0].skipDetail,
+    'none',
+    'an executable mixed group does not retain the strict move skip detail',
+  );
+  t.equal(plan.executableGroups[0].skipBeforeExecute, false);
+  t.equal(plan.results.length, 0, 'neither move is reported as skipped');
+});
+
+test('planning owner refactor stays below sealed size and complexity limits', (t) => {
+  const lineCounts = OWNER_COMPLEXITY_SOURCE_FILES.map(sourceLineCount);
+  t.ok(
+    lineCounts.every((lineCount) => lineCount <= 800),
+    `scoped source line counts: ${lineCounts.join(', ')}`,
+  );
+  t.ok(
+    lineCounts.reduce((total, lineCount) => total + lineCount, 0) <
+      OWNER_COMPLEXITY_BASELINE_LINES,
+    'aggregate scoped lines decrease from the sealed inventory baseline',
+  );
+  for (const scriptPath of OWNER_COMPLEXITY_METRIC_SCRIPTS) {
+    const result = runScopedMetricGuard(scriptPath);
+    t.equal(
+      result.status,
+      0,
+      `${scriptPath} passes:\n${result.stdout || result.stderr}`,
+    );
+  }
+  t.end();
 });

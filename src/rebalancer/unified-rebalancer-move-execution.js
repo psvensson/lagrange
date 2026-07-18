@@ -19,6 +19,170 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
+const PRE_EXECUTION_MOVE_COUNT_FIELD_BY_TYPE = Object.freeze({
+  [MoveType.ADD]: 'addLikeMoveCount',
+  [MoveType.REPLACE]: 'addLikeMoveCount',
+  [MoveType.REMOVE]: 'removeMoveCount',
+});
+
+function resolveCoordinatorMoveContext(rebalancer, move) {
+  const partitionId = move.partitionId || rebalancer.entityId;
+  return {
+    partitionId,
+    entityType: move.entityType || rebalancer.entityType,
+    entityId: move.entityId || partitionId,
+  };
+}
+
+function buildCoordinatorOperationRequest(move, context) {
+  return {
+    type: move.operationType,
+    partitionId: context.partitionId,
+    entityType: context.entityType,
+    entityId: context.entityId,
+    nodeId: move.nodeId,
+    replicaId: move.replicaId,
+    sourceNodeId: move.sourceNodeId,
+    moveReason: move.reason,
+    enforceConcurrentOperationBudget: true,
+  };
+}
+
+function buildCoordinatorCreationErrorResult(rebalancer, error, move) {
+  if (error?.rebalanceSkipReason) {
+    return rebalancer.buildSkippedMoveResult(
+      error.rebalanceSkipReason,
+      move,
+      error.admissionResult ? {admission: error.admissionResult} : {},
+    );
+  }
+  if (error?.admissionResult) {
+    return rebalancer.buildSkippedMoveResult(
+      error.admissionResult.decisionType ||
+        UNIFIED_REBALANCER_LITERAL.ADMISSION_DENIED,
+      move,
+      {admission: error.admissionResult},
+    );
+  }
+  throw error;
+}
+
+function incrementPreExecutionMoveGroup(current, move, nodeId) {
+  const countField =
+    PRE_EXECUTION_MOVE_COUNT_FIELD_BY_TYPE[move?.type] || 'otherMoveCount';
+  return {
+    ...current,
+    nodeId,
+    moveCount: current.moveCount + 1,
+    [countField]: current[countField] + 1,
+  };
+}
+
+function readPreExecutionSkipDetail(readinessByNodeId, nodeId) {
+  return readinessByNodeId.has(nodeId) ?
+    readinessByNodeId.get(nodeId) :
+    REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
+}
+
+function isReadinessCheckedAddLikeMove(rebalancer, move) {
+  return (
+    (move?.type === MoveType.ADD || move?.type === MoveType.REPLACE) &&
+    Boolean(move.nodeId) &&
+    rebalancer.shouldRequireMoveTargetReadiness(move)
+  );
+}
+
+function isDeferrableRemove(move) {
+  return (
+    move?.type === MoveType.REMOVE &&
+    move?.reason !== MOVE_REASON.REPLICA_FAILED &&
+    move?.standaloneSafe !== true
+  );
+}
+
+function buildAwaitingReadyCapacityResult(move) {
+  return {
+    success: false,
+    skipped: true,
+    reason: REBALANCER_SKIP_REASON.AWAITING_READY_ADD_CAPACITY,
+    operation: move.type,
+    nodeId: move.nodeId,
+    replicaId: move.replicaId,
+  };
+}
+
+function partitionMovesByReadyAddCapacity(moves, blockedAddNodeIds) {
+  const result = {movesToExecute: [], skippedResults: []};
+  for (const move of moves) {
+    if (blockedAddNodeIds.size > 0 && isDeferrableRemove(move)) {
+      result.skippedResults.push(buildAwaitingReadyCapacityResult(move));
+    } else {
+      result.movesToExecute.push(move);
+    }
+  }
+  return result;
+}
+
+function buildNodeNotReadyResult(move, skipDetail) {
+  return {
+    success: false,
+    skipped: true,
+    reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
+    skipDetail,
+    operation: move.type,
+    nodeId: move.nodeId,
+    replicaId: move.replicaId,
+  };
+}
+
+async function readCachedNodeReadinessSkip(
+  rebalancer,
+  readinessByNodeId,
+  nodeId,
+) {
+  if (!nodeId) {
+    return REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
+  }
+  if (!readinessByNodeId.has(nodeId)) {
+    const skipDetail = rebalancer.normalizePreExecutionSkipDetail(
+      await rebalancer.getNodeReadinessSkipReason(nodeId),
+    );
+    readinessByNodeId.set(nodeId, skipDetail);
+  }
+  return readinessByNodeId.get(nodeId);
+}
+
+async function buildExecutableMoveGroups(
+  rebalancer,
+  groupedMoves,
+  getSkipReason,
+) {
+  const executableGroups = [];
+  for (const [nodeId, nodeMoves] of groupedMoves) {
+    if (rebalancer.isShuttingDown) {
+      break;
+    }
+    const strictNodeMoves = nodeMoves.filter((move) =>
+      rebalancer.shouldRequireMoveTargetReadiness(move),
+    );
+    const skipDetail = nodeId && strictNodeMoves.length > 0 ?
+      await getSkipReason(nodeId) :
+      REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
+    const skipBeforeExecute =
+      skipDetail !== REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE &&
+      strictNodeMoves.length === nodeMoves.length;
+    executableGroups.push({
+      nodeId,
+      nodeMoves,
+      skipDetail: skipBeforeExecute ?
+        skipDetail :
+        REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE,
+      skipBeforeExecute,
+    });
+  }
+  return executableGroups;
+}
+
 class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
   async executeMoveViaCoordinator(move) {
     if (this.isShuttingDown) {
@@ -28,20 +192,16 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       );
     }
 
-    const operationPartitionId = move.partitionId || this.entityId;
-    const operationEntityType = move.entityType || this.entityType;
-    const operationEntityId = move.entityId || operationPartitionId;
+    const operationContext = resolveCoordinatorMoveContext(this, move);
     const safetyError = await this.rebalanceCoordinator.getMoveSafetyError({
       ...move,
-      partitionId: operationPartitionId,
-      entityType: operationEntityType,
-      entityId: operationEntityId,
+      ...operationContext,
     });
     if (safetyError) {
       this.logger.debug(REBALANCER_LOG_MSG.MOVE_BLOCKED_BY_SAFETY_POLICY, {
         entityId: this.entityId,
         entityType: this.entityType,
-        partitionId: operationPartitionId,
+        partitionId: operationContext.partitionId,
         moveType: move.type,
         moveTargetNodeId: move.nodeId || null,
         replicaId: move.replicaId,
@@ -56,23 +216,10 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       );
     }
 
-    const operationType = this.resolveCoordinatorOperationType(move.type);
-
-    const operationRequest = {
-      type: operationType,
-      partitionId: operationPartitionId,
-      entityType: operationEntityType,
-      entityId: operationEntityId,
-      nodeId: move.nodeId,
-      replicaId: move.replicaId,
-      sourceNodeId: move.sourceNodeId,
-      // The planner's cure-typing must survive the coordinator boundary:
-      // the topology guard's priority-spread-cure escape admits exactly
-      // spread-typed moves (dropping it re-created the 17:40 terminal
-      // stall shape at this seam).
-      moveReason: move.reason,
-      enforceConcurrentOperationBudget: true,
-    };
+    const operationRequest = buildCoordinatorOperationRequest({
+      ...move,
+      operationType: this.resolveCoordinatorOperationType(move.type),
+    }, operationContext);
     const membershipPublicationEpoch = Number.isInteger(
       move?.membershipPublicationEpoch,
     ) ?
@@ -98,29 +245,7 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       operation =
         await this.rebalanceCoordinator.createOperation(operationRequest);
     } catch (error) {
-      if (error?.rebalanceSkipReason) {
-        // Ledger-interlock rejections ride the budget skip channel with a
-        // hard-coded limit while the TRUE reason code sits in
-        // error.admissionResult — run-24 and run-27 forensics each chased
-        // the budget_exceeded mislabel. Attach the admission evidence so
-        // MOVE_SKIPPED diagnostics carry the real reason.
-        return this.buildSkippedMoveResult(
-          error.rebalanceSkipReason,
-          move,
-          error.admissionResult ? {admission: error.admissionResult} : {},
-        );
-      }
-      if (error?.admissionResult) {
-        return this.buildSkippedMoveResult(
-          error.admissionResult.decisionType ||
-            UNIFIED_REBALANCER_LITERAL.ADMISSION_DENIED,
-          move,
-          {
-            admission: error.admissionResult,
-          },
-        );
-      }
-      throw error;
+      return buildCoordinatorCreationErrorResult(this, error, move);
     }
 
     return {
@@ -232,32 +357,15 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
         removeMoveCount: 0,
         otherMoveCount: 0,
       };
-      const addLikeMoveCount =
-        move?.type === MoveType.ADD || move?.type === MoveType.REPLACE ?
-          current.addLikeMoveCount + 1 :
-          current.addLikeMoveCount;
-      const removeMoveCount = move?.type === MoveType.REMOVE ?
-        current.removeMoveCount + 1 :
-        current.removeMoveCount;
-      const otherMoveCount =
-        move?.type !== MoveType.ADD &&
-        move?.type !== MoveType.REPLACE &&
-        move?.type !== MoveType.REMOVE ?
-          current.otherMoveCount + 1 :
-          current.otherMoveCount;
-      groupsByNodeId.set(nodeId, {
+      groupsByNodeId.set(
         nodeId,
-        moveCount: current.moveCount + 1,
-        addLikeMoveCount,
-        removeMoveCount,
-        otherMoveCount,
-      });
+        incrementPreExecutionMoveGroup(current, move, nodeId),
+      );
     }
 
     return [...groupsByNodeId.values()].map((group) => {
-      const skipDetail = readinessByNodeId.has(group.nodeId) ?
-        readinessByNodeId.get(group.nodeId) :
-        REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
+      const skipDetail =
+        readPreExecutionSkipDetail(readinessByNodeId, group.nodeId);
       return {
         ...group,
         readinessState: this.resolvePreExecutionReadinessState(skipDetail),
@@ -354,19 +462,8 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
   async buildPreExecutionHandoffPlan(moves = [], context = {}) {
     const results = [];
     const readinessByNodeId = new Map();
-    const getSkipReasonCached = async (nodeId) => {
-      if (!nodeId) {
-        return REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
-      }
-      if (readinessByNodeId.has(nodeId)) {
-        return readinessByNodeId.get(nodeId);
-      }
-      const skipDetail = this.normalizePreExecutionSkipDetail(
-        await this.getNodeReadinessSkipReason(nodeId),
-      );
-      readinessByNodeId.set(nodeId, skipDetail);
-      return skipDetail;
-    };
+    const getSkipReasonCached = (nodeId) =>
+      readCachedNodeReadinessSkip(this, readinessByNodeId, nodeId);
     const blockedAddNodeIds = new Set();
     for (const move of moves) {
       if (this.isShuttingDown) {
@@ -386,11 +483,7 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
           }),
         };
       }
-      if (
-        (move?.type === MoveType.ADD || move?.type === MoveType.REPLACE) &&
-        move?.nodeId &&
-        this.shouldRequireMoveTargetReadiness(move)
-      ) {
+      if (isReadinessCheckedAddLikeMove(this, move)) {
         const skipDetail = await getSkipReasonCached(move.nodeId);
         if (skipDetail !== REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE) {
           blockedAddNodeIds.add(move.nodeId);
@@ -398,74 +491,22 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       }
     }
 
-    const movesToExecute = [];
-    for (const move of moves) {
-      const isDeferrableRemove =
-        move?.type === MoveType.REMOVE &&
-        move?.reason !== MOVE_REASON.REPLICA_FAILED &&
-        move?.standaloneSafe !== true;
-      if (
-        blockedAddNodeIds.size > UNIFIED_REBALANCER_LITERAL.ZERO &&
-        isDeferrableRemove
-      ) {
-        results.push({
-          success: false,
-          skipped: true,
-          reason: REBALANCER_SKIP_REASON.AWAITING_READY_ADD_CAPACITY,
-          operation: move.type,
-          nodeId: move.nodeId,
-          replicaId: move.replicaId,
-        });
-        continue;
-      }
-      movesToExecute.push(move);
-    }
-
+    const {movesToExecute, skippedResults} =
+      partitionMovesByReadyAddCapacity(moves, blockedAddNodeIds);
+    results.push(...skippedResults);
     const groupedMoves = this.groupMovesByTargetNode(movesToExecute);
-    const executableGroups = [];
-    for (const [nodeId, nodeMoves] of groupedMoves.entries()) {
-      if (this.isShuttingDown) {
-        break;
-      }
-      const strictNodeMoves = nodeMoves.filter((move) =>
-        this.shouldRequireMoveTargetReadiness(move),
-      );
-      const skipDetail = nodeId && strictNodeMoves.length > 0 ?
-        await getSkipReasonCached(nodeId) :
-        REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
-      if (
-        skipDetail !== REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE &&
-        strictNodeMoves.length === nodeMoves.length
-      ) {
-        executableGroups.push({
-          nodeId,
-          nodeMoves,
-          skipDetail,
-          skipBeforeExecute: true,
-        });
-        continue;
-      }
-      executableGroups.push({
-        nodeId,
-        nodeMoves,
-        skipDetail: REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE,
-        skipBeforeExecute: false,
-      });
-    }
+    const executableGroups = await buildExecutableMoveGroups(
+      this,
+      groupedMoves,
+      getSkipReasonCached,
+    );
 
     const preExecuteSkippedResults = [
       ...results,
       ...executableGroups
         .filter((group) => group.skipBeforeExecute === true)
-        .flatMap((group) => group.nodeMoves.map((move) => ({
-          success: false,
-          skipped: true,
-          reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
-          skipDetail: group.skipDetail,
-          operation: move.type,
-          nodeId: move.nodeId,
-          replicaId: move.replicaId,
-        }))),
+        .flatMap((group) => group.nodeMoves.map((move) =>
+          buildNodeNotReadyResult(move, group.skipDetail))),
     ];
     const readinessGroups = this.buildPreExecutionReadinessGroups(
       moves,

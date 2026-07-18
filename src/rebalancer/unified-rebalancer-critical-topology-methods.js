@@ -1,4 +1,5 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {readAllSharedRows} from '../cache/shared-row-read.js';
 
 const {
   COLUMN,
@@ -20,32 +21,494 @@ const {
   normalizeNodeEndpointRow,
   normalizeNodeRow,
   normalizeServiceEndpointRow,
+  resolveReplicaOperationSemanticPhase,
 } = UNIFIED_REBALANCER_SHARED;
 
 const CRITICAL_TOPOLOGY_CONSTRUCTOR = 'constructor';
+const CRITICAL_NODE_KIND = Object.freeze({
+  FAILED: 'failed',
+  TRANSITIONAL: 'transitional',
+  READY: 'ready',
+  UNREADY_ACTIVE: 'unready-active',
+});
+const REPLICA_OPERATION_ID_FIELDS =
+  Object.freeze(['operationId', 'operation_id']);
+function normalizeNodeIds(nodeIds) {
+  return [
+    ...new Set(
+      (Array.isArray(nodeIds) ? nodeIds : []).filter(
+        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
+      ),
+    ),
+  ];
+}
+function readCachedRows(rebalancer, tableName) {
+  return typeof rebalancer.systemTableCache?.getAll === 'function' ?
+    rebalancer.systemTableCache.getAll(tableName) :
+    [];
+}
+function buildCriticalNodeContext(rebalancer) {
+  const startupAuthorityNodeIds = rebalancer.getStartupAuthorityNodeIdSet();
+  return {
+    startupAuthorityNodeIds,
+    constrainToStartupAuthority:
+      startupAuthorityNodeIds instanceof Set &&
+      startupAuthorityNodeIds.size > 0,
+    bypassPriorityStartupReadiness:
+      rebalancer.shouldBypassLocalPriorityControlPlaneStartupReadiness(),
+    readinessDecisionDimension:
+      rebalancer.resolveNodeReadinessDecisionDimension(),
+  };
+}
+function isWithinStartupAuthority(context, nodeId) {
+  return !context.constrainToStartupAuthority ||
+    context.startupAuthorityNodeIds.has(nodeId);
+}
+function isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) {
+  const readiness =
+    typeof rebalancer.controlPlaneReadinessService?.getNodeReadinessSync ===
+      'function' ?
+      rebalancer.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
+        allowStaleOnCacheChange: false,
+      }) :
+      null;
+  const membershipReady = rebalancer.isReadinessDimensionSatisfied(
+    readiness,
+    context.readinessDecisionDimension,
+  );
+  const startupLeaseClear =
+    context.bypassPriorityStartupReadiness &&
+    nodeId === rebalancer.nodeId &&
+    isNodeReadyLeaseExplicitlyCleared(nodeRow, {requireActiveStatus: true});
+  return startupLeaseClear || membershipReady;
+}
+function classifyCriticalNode(rebalancer, nodeRow, context) {
+  const {status, nodeId} = normalizeNodeRow(nodeRow);
+  if (!isWithinStartupAuthority(context, nodeId) || !status) {
+    return null;
+  }
+  switch (status) {
+  case NodeStatus.FAILED:
+    return {kind: CRITICAL_NODE_KIND.FAILED, nodeId};
+  case NodeStatus.ACTIVE:
+    if (nodeId.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
+      return {kind: CRITICAL_NODE_KIND.TRANSITIONAL, nodeId};
+    }
+    return {
+      kind: isCriticalNodeReady(rebalancer, nodeRow, nodeId, context) ?
+        CRITICAL_NODE_KIND.READY :
+        CRITICAL_NODE_KIND.UNREADY_ACTIVE,
+      nodeId,
+    };
+  default:
+    return {kind: CRITICAL_NODE_KIND.TRANSITIONAL, nodeId};
+  }
+}
+function collectCriticalNodeEvidence(rebalancer, nodeRows) {
+  const context = buildCriticalNodeContext(rebalancer);
+  const evidence = {
+    ...context,
+    hasTransitionalNode: false,
+    hasFailedNode: false,
+    activeMembershipNodeIds: [],
+    activeNodeIds: [],
+    unreadyNodeIds: [],
+  };
+  for (const nodeRow of nodeRows) {
+    const node = classifyCriticalNode(rebalancer, nodeRow, context);
+    switch (node?.kind) {
+    case CRITICAL_NODE_KIND.FAILED:
+      evidence.hasFailedNode = true;
+      break;
+    case CRITICAL_NODE_KIND.TRANSITIONAL:
+      evidence.hasTransitionalNode = true;
+      if (node.nodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO) {
+        evidence.unreadyNodeIds.push(node.nodeId);
+      }
+      break;
+    case CRITICAL_NODE_KIND.UNREADY_ACTIVE:
+      evidence.hasTransitionalNode = true;
+      evidence.activeMembershipNodeIds.push(node.nodeId);
+      evidence.unreadyNodeIds.push(node.nodeId);
+      break;
+    case CRITICAL_NODE_KIND.READY:
+      evidence.activeMembershipNodeIds.push(node.nodeId);
+      evidence.activeNodeIds.push(node.nodeId);
+      break;
+    default:
+      break;
+    }
+  }
+  return evidence;
+}
+function buildTransitionalNodeBlocker(rebalancer, evidence) {
+  if (!evidence.hasTransitionalNode || evidence.hasFailedNode) {
+    return null;
+  }
+  const requiredHealthyNodeCount =
+    rebalancer.resolveCriticalSystemRequiredHealthyNodeCount(
+      evidence.activeMembershipNodeIds.length,
+    );
+  const hasRequiredHealthyNodes =
+    evidence.activeNodeIds.length >= requiredHealthyNodeCount;
+  const priorityRecoveryMayProceedOnQuorum =
+    rebalancer.isControlPlanePriorityPartition() &&
+    !rebalancer
+      .shouldRequireFullControlPlanePublicationEndpointVisibility() &&
+    hasRequiredHealthyNodes;
+  if (priorityRecoveryMayProceedOnQuorum) {
+    return null;
+  }
+  return Object.freeze({
+    reason:
+      evidence.unreadyNodeIds.length > UNIFIED_REBALANCER_LITERAL.ZERO ?
+        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.NODE_READY_LEASE_INCOMPLETE :
+        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TRANSITIONAL_NODE_MEMBERSHIP,
+    unreadyNodeIds: Object.freeze([...evidence.unreadyNodeIds]),
+    requiredHealthyNodeCount,
+    healthyNodeCount: evidence.activeNodeIds.length,
+    activeMembershipNodeCount: evidence.activeMembershipNodeIds.length,
+  });
+}
+function collectKnownNodeIds(nodeRows, evidence) {
+  const knownNodeIds = new Set();
+  for (const nodeRow of nodeRows) {
+    const {nodeId} = normalizeNodeRow(nodeRow);
+    if (nodeId.length > 0 && isWithinStartupAuthority(evidence, nodeId)) {
+      knownNodeIds.add(nodeId);
+    }
+  }
+  return knownNodeIds;
+}
+function findUnexpectedConnectedNodeId(
+  connectedNodeIds,
+  knownNodeIds,
+  evidence,
+  publishedActiveNodeIds,
+) {
+  if (publishedActiveNodeIds) {
+    return null;
+  }
+  for (const connectedNodeId of connectedNodeIds) {
+    if (
+      isWithinStartupAuthority(evidence, connectedNodeId) &&
+      !knownNodeIds.has(connectedNodeId)
+    ) {
+      return connectedNodeId;
+    }
+  }
+  return null;
+}
+function buildTransportMembershipBlocker(rebalancer, nodeRows, evidence) {
+  const connectedNodeIds = rebalancer.resolveConnectedClusterNodeIds();
+  if (connectedNodeIds.size === UNIFIED_REBALANCER_LITERAL.ZERO) {
+    return null;
+  }
+  const requiredHealthyNodeCount =
+    rebalancer.resolveCriticalSystemRequiredHealthyNodeCount(
+      evidence.activeMembershipNodeIds.length,
+    );
+  const hasRequiredHealthyNodes =
+    evidence.activeNodeIds.length >= requiredHealthyNodeCount;
+  const publishedActiveNodeIds =
+    rebalancer.isControlPlanePriorityPartition() && hasRequiredHealthyNodes ?
+      rebalancer.getPublishedActiveNodeIdSet() :
+      null;
+  const connectedNodeId = findUnexpectedConnectedNodeId(
+    connectedNodeIds,
+    collectKnownNodeIds(nodeRows, evidence),
+    evidence,
+    publishedActiveNodeIds,
+  );
+  return connectedNodeId === null ?
+    null :
+    Object.freeze({
+      reason:
+        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TRANSPORT_MEMBERSHIP_EXCEEDS_NODES_CACHE,
+      connectedNodeId,
+    });
+}
+function buildEndpointVisibilityBlocker(rebalancer, activeNodeIds) {
+  const policy =
+    rebalancer.getCriticalSystemEndpointVisibilityPolicy(activeNodeIds);
+  const visibility =
+    rebalancer.evaluateCriticalSystemEndpointVisibility(activeNodeIds, policy);
+  return visibility.ready === true ?
+    null :
+    Object.freeze({
+      reason:
+        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.ENDPOINT_VISIBILITY_INCOMPLETE,
+      ...visibility,
+    });
+}
+function buildInFlightTopologyBlocker(rebalancer, activeNodeIds) {
+  const operations =
+    rebalancer.collectCriticalSystemInFlightReplicaOperations(activeNodeIds, {
+      scopeToEntity: true,
+    });
+  return operations.count === 0 ?
+    null :
+    Object.freeze({
+      reason:
+        CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TOPOLOGY_OPERATIONS_IN_FLIGHT,
+      activeNodeIds: Object.freeze([...activeNodeIds]),
+      inFlightReplicaOperations: operations.count,
+      inFlightReplicaOperationDetails: operations.details,
+      inFlightReplicaOperationsSource: operations.source || null,
+    });
+}
+function resolveRequiredReadyNodeCount(requiredNodeIds, configuredCount) {
+  if (requiredNodeIds.length === 0) {
+    return 0;
+  }
+  const requestedCount =
+    Number.isInteger(configuredCount) && configuredCount > 0 ?
+      configuredCount :
+      requiredNodeIds.length;
+  return Math.max(1, Math.min(requiredNodeIds.length, requestedCount));
+}
+function collectVisibleNodeEndpointNodeIds(rows) {
+  const nodeIds = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const {nodeId, status, transportType} = normalizeNodeEndpointRow(row);
+    if (
+      nodeId &&
+      status === String(ENDPOINT_STATUS.ACTIVE).toLowerCase() &&
+      transportType === String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase()
+    ) {
+      nodeIds.add(nodeId);
+    }
+  }
+  return nodeIds;
+}
+
+function collectVisiblePostgresWireNodeIds(rows) {
+  const nodeIds = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const {nodeId, serviceId, healthStatus} =
+      normalizeServiceEndpointRow(row);
+    if (
+      nodeId &&
+      serviceId === META_SERVICE_ID.POSTGRES_WIRE &&
+      healthStatus === String(ENDPOINT_SYNC_HEALTH.HEALTHY).toLowerCase()
+    ) {
+      nodeIds.add(nodeId);
+    }
+  }
+  return nodeIds;
+}
+
+function collectReadinessEndpointNodeIds(rebalancer, requiredNodeIds) {
+  const visibleNodeIds = new Set();
+  const writableNodeIds = new Set();
+  const readinessService = rebalancer.controlPlaneReadinessService;
+  if (typeof readinessService?.getNodeReadinessSync !== 'function') {
+    return {visibleNodeIds, writableNodeIds};
+  }
+  for (const nodeId of requiredNodeIds) {
+    const readiness = readinessService.getNodeReadinessSync(nodeId, {
+      allowStaleOnCacheChange: false,
+    });
+    if (rebalancer.isReadinessDimensionSatisfied(
+      readiness,
+      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
+    )) {
+      visibleNodeIds.add(nodeId);
+    }
+    if (rebalancer.isReadinessDimensionSatisfied(
+      readiness,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
+    )) {
+      writableNodeIds.add(nodeId);
+    }
+  }
+  return {visibleNodeIds, writableNodeIds};
+}
+
+function intersectNodeIds(requiredNodeIds, first, second) {
+  return new Set(
+    requiredNodeIds.filter(
+      (nodeId) => first.has(nodeId) && second.has(nodeId),
+    ),
+  );
+}
+
+function buildEffectiveNodeIds(primary, readinessBacked, allowBackfill) {
+  return new Set([
+    ...primary,
+    ...(allowBackfill ? readinessBacked : []),
+  ]);
+}
+
+function readFirstTruthyField(record, fieldNames, fallback = null) {
+  const fieldName = fieldNames.find((name) => record?.[name]);
+  return fieldName ? record[fieldName] : fallback;
+}
+
+function readReplicaOperationId(operation) {
+  return String(
+    readFirstTruthyField(operation, REPLICA_OPERATION_ID_FIELDS, ''),
+  ).trim();
+}
+
+function criticalOperationMatchesScope(rebalancer, operation, options) {
+  if (!rebalancer.isTopologySettlingInFlightOperation(
+    operation,
+    {nowMs: options.nowMs},
+  )) {
+    return false;
+  }
+  if (options.scopeToEntity && !rebalancer.isOperationForEntity(operation)) {
+    return false;
+  }
+  const operationId = readReplicaOperationId(operation);
+  return operationId.length === 0 ||
+    !options.nonBlockingOperationIds.has(operationId);
+}
+
+function targetMatchesRequiredNodeIds(detail, requiredNodeIds) {
+  if (!detail.targetNodeId) {
+    return false;
+  }
+  return requiredNodeIds.size === 0 ||
+    requiredNodeIds.has(detail.targetNodeId);
+}
+
+function collectCriticalOperationDetails(
+  rebalancer,
+  operations,
+  requiredNodeIds,
+  options,
+) {
+  const details = [];
+  for (const operation of operations) {
+    if (!criticalOperationMatchesScope(rebalancer, operation, options)) {
+      continue;
+    }
+    const detail =
+      rebalancer.buildCriticalSystemInFlightReplicaOperationDetail(operation);
+    if (targetMatchesRequiredNodeIds(detail, requiredNodeIds)) {
+      details.push(detail);
+    }
+  }
+  return details;
+}
+
+function successfulAuthoritativeRows(read) {
+  return read?.success === true ? read.rows || [] : [];
+}
+
+function mergeEndpointRows(rebalancer, tableName, authoritativeRead) {
+  return [
+    ...readCachedRows(rebalancer, tableName),
+    ...successfulAuthoritativeRows(authoritativeRead),
+  ];
+}
+
+function warnTopologyRevalidationFailure(rebalancer, blocker, error) {
+  rebalancer.logger.warn(
+    REBALANCER_LOG_MSG.REVALIDATE_TOPOLOGY_BLOCKER_FAILED,
+    {
+      entityId: rebalancer.entityId,
+      entityType: rebalancer.entityType,
+      reason: blocker.reason || null,
+      error: error?.message || String(error),
+    },
+  );
+}
+
+async function revalidateEndpointVisibilityBlocker(rebalancer, blocker) {
+  const requiredNodeIds =
+    rebalancer.getCriticalSystemEndpointVisibilityRequiredNodeIds(blocker);
+  if (requiredNodeIds.length === 0) {
+    return blocker;
+  }
+  try {
+    const [nodeRead, serviceRead] = await Promise.all([
+      rebalancer.readCriticalSystemEndpointVisibilityAuthoritativeRows(
+        TABLES.NODE_ENDPOINTS,
+        requiredNodeIds,
+      ),
+      rebalancer.readCriticalSystemEndpointVisibilityAuthoritativeRows(
+        TABLES.SERVICE_ENDPOINTS,
+        requiredNodeIds,
+        {serviceId: META_SERVICE_ID.POSTGRES_WIRE},
+      ),
+    ]);
+    const visibility = rebalancer.summarizeCriticalSystemEndpointVisibility(
+      requiredNodeIds,
+      mergeEndpointRows(rebalancer, TABLES.NODE_ENDPOINTS, nodeRead),
+      mergeEndpointRows(rebalancer, TABLES.SERVICE_ENDPOINTS, serviceRead),
+      {
+        allowReadinessBackfill: blocker.allowReadinessBackfill !== false,
+        requiredReadyNodeCount: blocker.requiredReadyNodeCount,
+      },
+    );
+    return visibility.ready === true ?
+      null :
+      Object.freeze({...blocker, ...visibility});
+  } catch (error) {
+    warnTopologyRevalidationFailure(rebalancer, blocker, error);
+    return blocker;
+  }
+}
+
+async function revalidateInFlightTopologyBlocker(rebalancer, blocker) {
+  if (
+    typeof rebalancer.rebalanceCoordinator?.getOperationsByEntity !==
+      'function'
+  ) {
+    return blocker;
+  }
+  let entityOperations;
+  try {
+    entityOperations =
+      await rebalancer.rebalanceCoordinator.getOperationsByEntity(
+        rebalancer.entityType,
+        rebalancer.entityId,
+        {
+          visibilityReadMode:
+            REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+        },
+      );
+  } catch (error) {
+    warnTopologyRevalidationFailure(rebalancer, blocker, error);
+    return blocker;
+  }
+
+  const activeNodeIds = new Set(normalizeNodeIds(blocker.activeNodeIds));
+  const nowMs = Date.now();
+  const nonBlockingOperationIds =
+    await rebalancer.buildNonBlockingPriorityOperationIdSet(entityOperations);
+  const details = collectCriticalOperationDetails(
+    rebalancer,
+    entityOperations,
+    activeNodeIds,
+    {
+      nowMs,
+      scopeToEntity: true,
+      nonBlockingOperationIds,
+    },
+  );
+  if (details.length === 0) {
+    return null;
+  }
+  return Object.freeze({
+    ...blocker,
+    inFlightReplicaOperations: details.length,
+    inFlightReplicaOperationDetails: Object.freeze(details),
+    inFlightReplicaOperationsSource:
+      TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.AUTHORITATIVE,
+  });
+}
 
 class UnifiedRebalancerCriticalTopologyMethods {
-  /**
-   * Return one blocker summary when critical system-partition rebalancing
-   * should wait for cluster topology convergence.
-   *
-   * A joining or restarting cluster should not start background system-table
-   * redistribution while nodes are still progressing through non-terminal
-   * membership states, while endpoint publication is incomplete, or while
-   * control-plane topology operations are still in flight. Hard failures
-   * remain actionable and do not block.
-   *
-   * @return {Object|null}
-   * @private
-   */
+  // Block critical work on transitional membership, visibility, or topology.
   getCriticalSystemTopologySettlingBlocker() {
     if (!this.isSystemPartitionEntity()) {
       return null;
     }
-    const nodeRows =
-      typeof this.systemTableCache?.getAll === 'function' ?
-        this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES) :
-        [];
+    const nodeRows = readCachedRows(this, SYSTEM_TABLE_NAME.NODES);
     if (
       !Array.isArray(nodeRows) ||
       nodeRows.length === UNIFIED_REBALANCER_LITERAL.ZERO
@@ -53,222 +516,19 @@ class UnifiedRebalancerCriticalTopologyMethods {
       return null;
     }
 
-    let hasTransitionalNode = false;
-    let hasFailedNode = false;
-    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
-    const constrainToStartupAuthority =
-      startupAuthorityNodeIds instanceof Set &&
-      startupAuthorityNodeIds.size > 0;
-    const bypassPriorityStartupReadiness =
-      this.shouldBypassLocalPriorityControlPlaneStartupReadiness();
-    const readinessDecisionDimension =
-      this.resolveNodeReadinessDecisionDimension();
-    const activeMembershipNodeIds = [];
-    const activeNodeIds = [];
-    const unreadyNodeIds = [];
-    for (const nodeRow of nodeRows) {
-      const normalizedNode = normalizeNodeRow(nodeRow);
-      const {status, nodeId} = normalizedNode;
-      if (
-        constrainToStartupAuthority &&
-        !startupAuthorityNodeIds.has(nodeId)
-      ) {
-        continue;
-      }
-      if (!status) {
-        continue;
-      }
-      if (status === NodeStatus.FAILED) {
-        hasFailedNode = true;
-        continue;
-      }
-      if (
-        status !== NodeStatus.ACTIVE ||
-        nodeId.length === UNIFIED_REBALANCER_LITERAL.ZERO
-      ) {
-        hasTransitionalNode = true;
-        if (nodeId.length > UNIFIED_REBALANCER_LITERAL.ZERO) {
-          unreadyNodeIds.push(nodeId);
-        }
-        continue;
-      }
-      activeMembershipNodeIds.push(nodeId);
-      const readiness =
-        this.controlPlaneReadinessService &&
-        typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
-          'function' ?
-          this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
-            allowStaleOnCacheChange: false,
-          }) :
-          null;
-      const nodeMembershipReady = this.isReadinessDimensionSatisfied(
-        readiness,
-        readinessDecisionDimension,
-      );
-      const localPriorityStartupLeaseClear =
-        bypassPriorityStartupReadiness &&
-        nodeId === this.nodeId &&
-        isNodeReadyLeaseExplicitlyCleared(nodeRow, {
-          requireActiveStatus: true,
-        });
-      if (localPriorityStartupLeaseClear) {
-        activeNodeIds.push(nodeId);
-        continue;
-      }
-      if (!nodeMembershipReady) {
-        hasTransitionalNode = true;
-        unreadyNodeIds.push(nodeId);
-        continue;
-      }
-      activeNodeIds.push(nodeId);
-    }
-
-    if (hasTransitionalNode && !hasFailedNode) {
-      const requiredHealthyNodeCount =
-        this.resolveCriticalSystemRequiredHealthyNodeCount(
-          activeMembershipNodeIds.length,
-        );
-      const hasRequiredHealthyNodes =
-        activeNodeIds.length >= requiredHealthyNodeCount;
-      // CL-036: control_plane_publications was UNCONDITIONALLY excluded from the
-      // quorum escape, so its spread required EVERY active node ready — but a
-      // node's readiness dimension is itself gated on priority-control-plane
-      // recovery completing, which needs this spread (circular). Gate the
-      // exclusion on the SAME condition the endpoint-visibility relaxation
-      // already uses: keep the strict all-node requirement only while a
-      // publication is open OR priority recovery is active (membership authority
-      // genuinely in flux); once the latest publication is PUBLISHED and recovery
-      // is inactive, publications may spread on a healthy quorum like the other
-      // priority partitions. For non-publication partitions
-      // shouldRequireFullControlPlanePublicationEndpointVisibility() is false, so
-      // !... stays true and their behavior is unchanged.
-      const priorityRecoveryMayProceedOnQuorum =
-        this.isControlPlanePriorityPartition() &&
-        !this.shouldRequireFullControlPlanePublicationEndpointVisibility() &&
-        hasRequiredHealthyNodes;
-      if (priorityRecoveryMayProceedOnQuorum) {
-        // Priority spread may proceed once quorum is ready; additional ACTIVE
-        // nodes can still be converging without stalling every priority table.
-      } else {
-        return Object.freeze({
-          reason:
-            unreadyNodeIds.length > UNIFIED_REBALANCER_LITERAL.ZERO ?
-              CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.NODE_READY_LEASE_INCOMPLETE :
-              CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TRANSITIONAL_NODE_MEMBERSHIP,
-          unreadyNodeIds: Object.freeze([...unreadyNodeIds]),
-          requiredHealthyNodeCount,
-          healthyNodeCount: activeNodeIds.length,
-          activeMembershipNodeCount: activeMembershipNodeIds.length,
-        });
-      }
-    }
-
-    const connectedNodeIds = this.resolveConnectedClusterNodeIds();
-    if (connectedNodeIds.size > UNIFIED_REBALANCER_LITERAL.ZERO) {
-      const knownNodeIds = new Set(
-        nodeRows
-          .map((nodeRow) => {
-            return normalizeNodeRow(nodeRow).nodeId;
-          })
-          .filter(
-            (nodeId) =>
-              typeof nodeId === 'string' &&
-              nodeId.length > 0 &&
-              (
-                !constrainToStartupAuthority ||
-                startupAuthorityNodeIds.has(nodeId)
-              ),
-          ),
-      );
-      const requiredHealthyNodeCount =
-        this.resolveCriticalSystemRequiredHealthyNodeCount(
-          activeMembershipNodeIds.length,
-        );
-      const hasRequiredHealthyNodes =
-        activeNodeIds.length >= requiredHealthyNodeCount;
-      const publishedActiveNodeIds =
-        this.isControlPlanePriorityPartition() && hasRequiredHealthyNodes ?
-          this.getPublishedActiveNodeIdSet() :
-          null;
-      for (const connectedNodeId of connectedNodeIds) {
-        if (
-          constrainToStartupAuthority &&
-          !startupAuthorityNodeIds.has(connectedNodeId)
-        ) {
-          continue;
-        }
-        if (knownNodeIds.has(connectedNodeId)) {
-          continue;
-        }
-        // Once priority recovery has a healthy quorum, published membership is
-        // the canonical topology contract. Transport-vs-nodes cache lag should
-        // not reopen the settling gate for either published or unpublished
-        // peers in that lane.
-        if (publishedActiveNodeIds) {
-          continue;
-        }
-        return Object.freeze({
-          reason:
-            CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TRANSPORT_MEMBERSHIP_EXCEEDS_NODES_CACHE,
-          connectedNodeId,
-        });
-      }
-    }
-
-    const endpointVisibilityPolicy =
-      this.getCriticalSystemEndpointVisibilityPolicy(activeNodeIds);
-    const endpointVisibility = this.evaluateCriticalSystemEndpointVisibility(
-      activeNodeIds,
-      endpointVisibilityPolicy,
-    );
-    if (endpointVisibility.ready !== true) {
-      return Object.freeze({
-        reason:
-          CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.ENDPOINT_VISIBILITY_INCOMPLETE,
-        ...endpointVisibility,
-      });
-    }
-
-    const inFlightTopologyOperations =
-      this.collectCriticalSystemInFlightReplicaOperations(activeNodeIds, {
-        // Topology settling should only wait on in-flight operations that
-        // mutate this same entity. Unrelated critical-system operations must
-        // not serialize every other partition behind one active move.
-        scopeToEntity: true,
-      });
-    if (inFlightTopologyOperations.count > 0) {
-      return Object.freeze({
-        reason:
-          CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TOPOLOGY_OPERATIONS_IN_FLIGHT,
-        activeNodeIds: Object.freeze([...activeNodeIds]),
-        inFlightReplicaOperations: inFlightTopologyOperations.count,
-        inFlightReplicaOperationDetails: inFlightTopologyOperations.details,
-        inFlightReplicaOperationsSource:
-          inFlightTopologyOperations.source || null,
-      });
-    }
-
-    return null;
+    const evidence = collectCriticalNodeEvidence(this, nodeRows);
+    return buildTransitionalNodeBlocker(this, evidence) ||
+      buildTransportMembershipBlocker(this, nodeRows, evidence) ||
+      buildEndpointVisibilityBlocker(this, evidence.activeNodeIds) ||
+      buildInFlightTopologyBlocker(this, evidence.activeNodeIds);
   }
 
-  /**
-   * Return true when critical system-partition rebalancing should wait for
-   * topology convergence.
-   *
-   * @return {boolean}
-   * @private
-   */
+  // Report whether the critical topology still has a blocker.
   isCriticalSystemTopologySettling() {
     return this.getCriticalSystemTopologySettlingBlocker() !== null;
   }
 
-  /**
-   * Return the required node ids encoded in one endpoint-visibility blocker.
-   *
-   * @param {Object|null} blocker
-   * @return {string[]}
-   * @private
-   */
+  // Read the required node cohort encoded in a visibility blocker.
   getCriticalSystemEndpointVisibilityRequiredNodeIds(blocker) {
     return [
       ...new Set(
@@ -290,16 +550,7 @@ class UnifiedRebalancerCriticalTopologyMethods {
     ];
   }
 
-  /**
-   * Read authoritative endpoint rows for one set of required node ids.
-   *
-   * @param {string} tableName
-   * @param {string[]} requiredNodeIds
-   * @param {Object} [options={}]
-   * @param {string|null} [options.serviceId=null]
-   * @return {Promise<Object|null>}
-   * @private
-   */
+  // Read authoritative endpoint rows for a required node cohort.
   async readCriticalSystemEndpointVisibilityAuthoritativeRows(
     tableName,
     requiredNodeIds,
@@ -350,50 +601,19 @@ class UnifiedRebalancerCriticalTopologyMethods {
     );
   }
 
-  /**
-   * Build one endpoint-visibility summary from explicit row evidence.
-   *
-   * @param {string[]} requiredNodeIds
-   * @param {Object[]} nodeEndpointRows
-   * @param {Object[]} serviceEndpointRows
-   * @param {Object} [options={}]
-   * @param {boolean} [options.allowReadinessBackfill=true]
-   * @param {number} [options.requiredReadyNodeCount]
-   * @return {Object}
-   * @private
-   */
+  // Summarize endpoint visibility from explicit cached/authoritative rows.
   summarizeCriticalSystemEndpointVisibility(
     requiredNodeIds,
     nodeEndpointRows,
     serviceEndpointRows,
     options = {},
   ) {
-    const normalizedRequiredNodeIds = Array.isArray(requiredNodeIds) ?
-      [
-        ...new Set(
-          requiredNodeIds.filter(
-            (nodeId) =>
-              typeof nodeId === 'string' && nodeId.length > 0,
-          ),
-        ),
-      ] :
-      [];
+    const normalizedRequiredNodeIds = normalizeNodeIds(requiredNodeIds);
     const allowReadinessBackfill = options?.allowReadinessBackfill !== false;
-    const configuredRequiredReadyNodeCount =
-      Number.isInteger(options?.requiredReadyNodeCount) &&
-      options.requiredReadyNodeCount > 0 ?
-        options.requiredReadyNodeCount :
-        normalizedRequiredNodeIds.length;
-    const requiredReadyNodeCount =
-      normalizedRequiredNodeIds.length > 0 ?
-        Math.max(
-          1,
-          Math.min(
-            normalizedRequiredNodeIds.length,
-            configuredRequiredReadyNodeCount,
-          ),
-        ) :
-        0;
+    const requiredReadyNodeCount = resolveRequiredReadyNodeCount(
+      normalizedRequiredNodeIds,
+      options?.requiredReadyNodeCount,
+    );
     if (normalizedRequiredNodeIds.length === 0) {
       return Object.freeze({
         ready: false,
@@ -405,91 +625,34 @@ class UnifiedRebalancerCriticalTopologyMethods {
       });
     }
 
-    const visibleNodeEndpointNodeIds = new Set();
-    const visiblePostgresWireNodeIds = new Set();
-    const readinessVisibleNodeIds = new Set();
-    const readinessWritableNodeIds = new Set();
+    const visibleNodeEndpointNodeIds =
+      collectVisibleNodeEndpointNodeIds(nodeEndpointRows);
+    const visiblePostgresWireNodeIds =
+      collectVisiblePostgresWireNodeIds(serviceEndpointRows);
+    const {
+      visibleNodeIds: readinessVisibleNodeIds,
+      writableNodeIds: readinessWritableNodeIds,
+    } = collectReadinessEndpointNodeIds(this, normalizedRequiredNodeIds);
 
-    for (const row of Array.isArray(nodeEndpointRows) ? nodeEndpointRows : []) {
-      const normalizedRow = normalizeNodeEndpointRow(row);
-      const {nodeId, status, transportType} = normalizedRow;
-      if (
-        !nodeId ||
-        status !== String(ENDPOINT_STATUS.ACTIVE).toLowerCase() ||
-        transportType !== String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase()
-      ) {
-        continue;
-      }
-      visibleNodeEndpointNodeIds.add(nodeId);
-    }
-
-    for (const row of Array.isArray(serviceEndpointRows) ?
-      serviceEndpointRows :
-      []) {
-      const normalizedRow = normalizeServiceEndpointRow(row);
-      const {nodeId, serviceId, healthStatus} = normalizedRow;
-      if (
-        !nodeId ||
-        serviceId !== META_SERVICE_ID.POSTGRES_WIRE ||
-        healthStatus !== String(ENDPOINT_SYNC_HEALTH.HEALTHY).toLowerCase()
-      ) {
-        continue;
-      }
-      visiblePostgresWireNodeIds.add(nodeId);
-    }
-
-    if (
-      this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
-        'function'
-    ) {
-      for (const nodeId of normalizedRequiredNodeIds) {
-        const readiness =
-          this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
-            allowStaleOnCacheChange: false,
-          });
-        if (
-          this.isReadinessDimensionSatisfied(
-            readiness,
-            CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
-          )
-        ) {
-          readinessVisibleNodeIds.add(nodeId);
-        }
-        if (
-          this.isReadinessDimensionSatisfied(
-            readiness,
-            CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
-          )
-        ) {
-          readinessWritableNodeIds.add(nodeId);
-        }
-      }
-    }
-
-    const readinessBackedNodeEndpointNodeIds = new Set(
-      normalizedRequiredNodeIds.filter(
-        (nodeId) =>
-          readinessVisibleNodeIds.has(nodeId) &&
-          visiblePostgresWireNodeIds.has(nodeId),
-      ),
+    const readinessBackedNodeEndpointNodeIds = intersectNodeIds(
+      normalizedRequiredNodeIds,
+      readinessVisibleNodeIds,
+      visiblePostgresWireNodeIds,
     );
-    const readinessBackedPostgresWireNodeIds = new Set(
-      normalizedRequiredNodeIds.filter(
-        (nodeId) =>
-          readinessWritableNodeIds.has(nodeId) &&
-          visibleNodeEndpointNodeIds.has(nodeId),
-      ),
+    const readinessBackedPostgresWireNodeIds = intersectNodeIds(
+      normalizedRequiredNodeIds,
+      readinessWritableNodeIds,
+      visibleNodeEndpointNodeIds,
     );
-    const effectiveNodeEndpointNodeIds = new Set(
-      allowReadinessBackfill ?
-        [...visibleNodeEndpointNodeIds, ...readinessBackedNodeEndpointNodeIds] :
-        [...visibleNodeEndpointNodeIds],
+    const effectiveNodeEndpointNodeIds = buildEffectiveNodeIds(
+      visibleNodeEndpointNodeIds,
+      readinessBackedNodeEndpointNodeIds,
+      allowReadinessBackfill,
     );
-    const effectivePostgresWireNodeIds = new Set(
-      allowReadinessBackfill ?
-        [...visiblePostgresWireNodeIds, ...readinessBackedPostgresWireNodeIds] :
-        [...visiblePostgresWireNodeIds],
+    const effectivePostgresWireNodeIds = buildEffectiveNodeIds(
+      visiblePostgresWireNodeIds,
+      readinessBackedPostgresWireNodeIds,
+      allowReadinessBackfill,
     );
     const missingNodeEndpointNodeIds = normalizedRequiredNodeIds.filter(
       (nodeId) => !effectiveNodeEndpointNodeIds.has(nodeId),
@@ -519,14 +682,85 @@ class UnifiedRebalancerCriticalTopologyMethods {
     });
   }
 
-  /**
-   * Revalidate in-flight topology blockers with authoritative entity
-   * operations to avoid stale cache observations deadlocking planning.
-   *
-   * @param {Object|null} blocker
-   * @return {Promise<Object|null>}
-   * @private
-   */
+  // Normalize an in-flight operation for topology diagnostics.
+  buildCriticalSystemInFlightReplicaOperationDetail(row) {
+    const operationId =
+      readFirstTruthyField(row, ['operation_id', 'operationId']);
+    const type = readFirstTruthyField(row, ['type']);
+    const partitionId = readFirstTruthyField(row, [
+      'partition_group_id',
+      'partitionGroupId',
+      'partition_id',
+      'partitionId',
+    ]);
+    const targetNodeId = String(
+      readFirstTruthyField(row, ['target_node_id', 'targetNodeId'], ''),
+    );
+    const status = readFirstTruthyField(row, ['status']);
+    const workflowStep =
+      readFirstTruthyField(row, ['workflow_step', 'workflowStep']);
+    const semanticPhase = resolveReplicaOperationSemanticPhase(
+      type,
+      workflowStep,
+      status,
+    );
+
+    return Object.freeze({
+      operationId,
+      type,
+      partitionId,
+      targetNodeId,
+      status,
+      workflowStep,
+      semanticPhase,
+    });
+  }
+
+  // Return non-terminal operations that still indicate topology churn.
+  collectCriticalSystemInFlightReplicaOperations(
+    activeNodeIds = [],
+    options = {},
+  ) {
+    const requiredNodeIds = new Set(normalizeNodeIds(activeNodeIds));
+    if (
+      requiredNodeIds.size === 0 ||
+      typeof this.systemTableCache?.getAll !== 'function'
+    ) {
+      return Object.freeze({
+        count: 0,
+        details: Object.freeze([]),
+        source: null,
+      });
+    }
+
+    const rows = readAllSharedRows(
+      this.systemTableCache,
+      TABLES.REPLICA_OPERATIONS,
+    );
+    const nowMs = Date.now();
+    const nonBlockingPriorityOperationIds =
+      this.buildNonBlockingPriorityOperationIdSetSync(rows, {
+        observedAt: nowMs,
+      });
+    const details = collectCriticalOperationDetails(
+      this,
+      rows,
+      requiredNodeIds,
+      {
+        nowMs,
+        scopeToEntity: options.scopeToEntity === true,
+        nonBlockingOperationIds: nonBlockingPriorityOperationIds,
+      },
+    );
+
+    return Object.freeze({
+      count: details.length,
+      details: Object.freeze(details),
+      source: TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.CACHE,
+    });
+  }
+
+  // Revalidate cache blockers against authoritative endpoint/operation rows.
   async revalidateCriticalSystemTopologySettlingBlocker(blocker) {
     if (!blocker) {
       return blocker;
@@ -535,163 +769,15 @@ class UnifiedRebalancerCriticalTopologyMethods {
       blocker.reason ===
       CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.ENDPOINT_VISIBILITY_INCOMPLETE
     ) {
-      const requiredNodeIds =
-        this.getCriticalSystemEndpointVisibilityRequiredNodeIds(blocker);
-      if (requiredNodeIds.length === 0) {
-        return blocker;
-      }
-      try {
-        const [
-          authoritativeNodeEndpointRead,
-          authoritativeServiceEndpointRead,
-        ] = await Promise.all([
-          this.readCriticalSystemEndpointVisibilityAuthoritativeRows(
-            TABLES.NODE_ENDPOINTS,
-            requiredNodeIds,
-          ),
-          this.readCriticalSystemEndpointVisibilityAuthoritativeRows(
-            TABLES.SERVICE_ENDPOINTS,
-            requiredNodeIds,
-            {serviceId: META_SERVICE_ID.POSTGRES_WIRE},
-          ),
-        ]);
-        const nodeEndpointRows =
-          typeof this.systemTableCache?.getAll === 'function' ?
-            [
-              ...this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS),
-              ...(authoritativeNodeEndpointRead?.success === true ?
-                authoritativeNodeEndpointRead.rows || [] :
-                []),
-            ] :
-            authoritativeNodeEndpointRead?.success === true ?
-              authoritativeNodeEndpointRead.rows || [] :
-              [];
-        const serviceEndpointRows =
-          typeof this.systemTableCache?.getAll === 'function' ?
-            [
-              ...this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS),
-              ...(authoritativeServiceEndpointRead?.success === true ?
-                authoritativeServiceEndpointRead.rows || [] :
-                []),
-            ] :
-            authoritativeServiceEndpointRead?.success === true ?
-              authoritativeServiceEndpointRead.rows || [] :
-              [];
-        const endpointVisibility =
-          this.summarizeCriticalSystemEndpointVisibility(
-            requiredNodeIds,
-            nodeEndpointRows,
-            serviceEndpointRows,
-            {
-              allowReadinessBackfill: blocker.allowReadinessBackfill !== false,
-              requiredReadyNodeCount: blocker.requiredReadyNodeCount,
-            },
-          );
-        return endpointVisibility.ready === true ?
-          null :
-          Object.freeze({
-            ...blocker,
-            ...endpointVisibility,
-          });
-      } catch (error) {
-        this.logger.warn(
-          REBALANCER_LOG_MSG.REVALIDATE_TOPOLOGY_BLOCKER_FAILED,
-          {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            reason: blocker.reason || null,
-            error: error?.message || String(error),
-          },
-        );
-        return blocker;
-      }
+      return revalidateEndpointVisibilityBlocker(this, blocker);
     }
     if (
-      blocker.reason !==
+      blocker.reason ===
       CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TOPOLOGY_OPERATIONS_IN_FLIGHT
     ) {
-      return blocker;
+      return revalidateInFlightTopologyBlocker(this, blocker);
     }
-    if (
-      !this.rebalanceCoordinator ||
-      typeof this.rebalanceCoordinator.getOperationsByEntity !== 'function'
-    ) {
-      return blocker;
-    }
-
-    let entityOperations = [];
-    try {
-      entityOperations = await this.rebalanceCoordinator.getOperationsByEntity(
-        this.entityType,
-        this.entityId,
-        {
-          visibilityReadMode:
-            REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
-        },
-      );
-    } catch (error) {
-      this.logger.warn(REBALANCER_LOG_MSG.REVALIDATE_TOPOLOGY_BLOCKER_FAILED, {
-        entityId: this.entityId,
-        entityType: this.entityType,
-        reason: blocker.reason || null,
-        error: error?.message || String(error),
-      });
-      return blocker;
-    }
-
-    const activeNodeIds = new Set(
-      (Array.isArray(blocker.activeNodeIds) ?
-        blocker.activeNodeIds :
-        []
-      ).filter(
-        (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
-      ),
-    );
-    const inFlightDetails = [];
-    const nowMs = Date.now();
-    const nonBlockingPriorityOperationIds =
-      await this.buildNonBlockingPriorityOperationIdSet(entityOperations);
-    for (const operation of entityOperations) {
-      if (
-        !this.isTopologySettlingInFlightOperation(operation, {nowMs}) ||
-        !this.isOperationForEntity(operation)
-      ) {
-        continue;
-      }
-      const operationId = String(
-        operation?.operationId || operation?.operation_id || '',
-      ).trim();
-      if (
-        operationId.length > 0 &&
-        nonBlockingPriorityOperationIds.has(operationId)
-      ) {
-        continue;
-      }
-      const detail =
-        this.buildCriticalSystemInFlightReplicaOperationDetail(operation);
-      if (!detail.targetNodeId) {
-        continue;
-      }
-      if (
-        activeNodeIds.size > 0 &&
-        !activeNodeIds.has(detail.targetNodeId)
-      ) {
-        continue;
-      }
-      inFlightDetails.push(detail);
-    }
-
-    if (inFlightDetails.length === 0) {
-      return null;
-    }
-
-    return Object.freeze({
-      ...blocker,
-      inFlightReplicaOperations: inFlightDetails.length,
-      inFlightReplicaOperationDetails: Object.freeze(inFlightDetails),
-      inFlightReplicaOperationsSource:
-        TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.AUTHORITATIVE,
-    });
+    return blocker;
   }
 }
 
