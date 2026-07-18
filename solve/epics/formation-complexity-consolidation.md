@@ -7,6 +7,55 @@ graduatesTo: null
 
 # Epic: Formation complexity consolidation (verified 2026-07-18 deep review)
 
+## Handoff — start here (state as of 2026-07-18, commit 8e8aad72, tree clean)
+
+A fresh agent can continue directly from this section; the Decision log below
+holds the full evidence trail.
+
+**Shipped and live-validated:** lifecycle-gated heartbeat activation fence
+(F12, corrected after live falsification of the row-only form); structural
+ReadAuthority token through the gateway read path (O1 core); per-table cache
+mutation versions arbitrating readiness snapshot reuse (O2 core); dead-branch
+and quorum-formula cleanups (O5 first step). First-ever schema-admission
+passes in the quest lineage (2 of 3 fresh runs; the fail was a
+prioritySpreadGap=1 residual, evidence ingested into
+formation-joining-ready-phase-fence-live).
+
+**Open quests (run `node scripts/solve.js next --id <id>`):**
+- `pressure-admission-flagless-defer-policy` — direction agreed (NO
+  per-request flags; policy over work class) but the fixed-hint always-DEFER
+  shape is FALSIFIED live (9x slower cold-formation joins; finding recorded).
+  Next attempt must be real queueing (bounded per-work-class queues,
+  admit-on-capacity, priority-ordered) or formation-phase-aware policy.
+  HARD RULE: live-validate any admission-policy change with a full
+  run-affinity-demo before committing — 1074 unit tests passed while live
+  formation failed.
+- `read-authority-structural-threading` — core landed; tail: migrate
+  remaining legacy boolean consumers to the token, then delete
+  resolveAuthoritativeReadModeContract's re-expansion and the per-hop
+  booleans.
+- `per-table-cache-version-consolidation` — core landed; tail: publication/
+  cluster invalidation onto versions, reconciliation post-apply verify to
+  version CAS, then delete the marker zoo (that code is load-bearing for the
+  fence quest — sequence after it closes).
+- `formation-joining-ready-phase-fence-live` (pre-existing) — owns the
+  remaining formation residual (spread-gap rotation). O3/O4 (serial
+  goal-state priority planner + ledger episode state machine — the biggest
+  simplification, options in this epic) unlock when it records a terminal.
+
+**Exhausted (do not reopen without their recorded conditions):**
+`quiescence-observation-lane-decoupling` (symptom absent on HEAD ×2; reopen
+only on a fresh run showing snapshot_lane_unavailable denial while placement
+observation is satisfied). See also the older refutations bounded in
+"Companion history" below.
+
+**Standing user preferences:** no per-call configuration flags — one stable
+behavior derived from request class (see memory
+no-flags-stable-default-behavior); check `sensors` before live runs / heavy
+sweeps (machine overheats). Live runs: `node
+examples/service-data-affinity/run-affinity-demo.js` (~10-20 min; reports in
+test-output/reports/, node logs in data/examples/service-data-affinity-demo/).
+
 ## Intent (why now)
 
 A deep review of the 2026-07-17/18 formation quest chain (ledger self-move cost,
