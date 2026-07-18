@@ -71,6 +71,25 @@ class SystemTableCacheObservationMethods {
     return this.lastAppliedCauseIdByTableName.get(tableName) ?? null;
   }
 
+  /** @private */
+  bumpTableMutationVersion(tableName) {
+    this.mutationVersionByTableName.set(
+      tableName,
+      (this.mutationVersionByTableName.get(tableName) || 0) + 1,
+    );
+  }
+
+  /**
+   * Monotonic count of applied changes for one table. Version equality across
+   * two reads proves no apply landed between them; wall-clock apply
+   * timestamps cannot (same-millisecond applies collide).
+   * @return {number}
+   */
+  getTableMutationVersion(tableName) {
+    this.validateTableName(tableName);
+    return this.mutationVersionByTableName.get(tableName) || 0;
+  }
+
   /**
      * Record a successful complete authoritative observation without claiming
      * that a row mutation occurred.

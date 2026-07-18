@@ -138,6 +138,7 @@ class ControlPlaneReadinessParticipationBase {
     this.lastReadinessSnapshotAtMsByNodeId = new Map();
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId = new Map();
     this.lastReadinessSnapshotClusterInvalidatedAtMs = 0;
+    this.lastReadinessSnapshotServicesVersionByNodeId = new Map();
     // Priority summaries depend on cluster-wide topology, not one node's rows.
     this.membershipPublicationPlanningSourceRevision = 0;
     this.membershipPublicationDiagnosticsMemo = null;

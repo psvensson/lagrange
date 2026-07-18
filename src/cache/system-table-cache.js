@@ -94,6 +94,11 @@ class SystemTableCache {
     this.lastAppliedCauseIdByTableName = new Map();
     this.lastAuthoritativeObservedAtMsByTableName = new Map();
     this.lastAuthoritativeObservedCauseIdByTableName = new Map();
+    // Monotonic per-table apply counter. Unlike lastAppliedAtMs (wall-clock,
+    // same-millisecond applies collide) a version can arbitrate "did anything
+    // change since capture" exactly, so multi-table snapshot reuse never has
+    // to infer table freshness from another table's watermark.
+    this.mutationVersionByTableName = new Map();
     this.listeners = new Set();
     this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
     this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
@@ -289,6 +294,7 @@ class SystemTableCache {
           key,
         });
         this.lastAppliedAtMsByTableName.set(tableName, Date.now());
+        this.bumpTableMutationVersion(tableName);
         this.notifyListeners(
           tableName,
           CDC_OPERATIONS.DELETE,
@@ -509,6 +515,7 @@ class SystemTableCache {
     if (recordForNotification) {
       this.lastAppliedAtMsByTableName.set(tableName, Date.now());
       this.lastAppliedCauseIdByTableName.set(tableName, causeId);
+      this.bumpTableMutationVersion(tableName);
       this.notifyListeners(
         tableName,
         operation,
@@ -532,6 +539,7 @@ class SystemTableCache {
     this.lastAppliedCauseIdByTableName.clear();
     this.lastAuthoritativeObservedAtMsByTableName.clear();
     this.lastAuthoritativeObservedCauseIdByTableName.clear();
+    this.mutationVersionByTableName.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }
 

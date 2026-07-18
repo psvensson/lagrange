@@ -50,6 +50,22 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       return null;
     }
 
+    // A services-table apply after this snapshot was stored invalidates
+    // reuse outright: the per-table mutation version cannot be masked by
+    // node-heartbeat watermark arbitration, which is how a fresher service
+    // repair failed to rebuild repairEligible while node-row CDC lagged
+    // (2026-07-18 mixed-revision incident). Version unavailable (older cache,
+    // pre-feature snapshot) falls through to the marker machinery below.
+    const storedServicesVersion =
+      this.lastReadinessSnapshotServicesVersionByNodeId?.get(nodeId);
+    if (
+      Number.isFinite(storedServicesVersion) &&
+      storedServicesVersion !==
+        this.getServicesTableMutationVersionForSnapshotReuse()
+    ) {
+      return null;
+    }
+
     // Local query-transport readiness is LIVE router evidence: it flips
     // without any node-row heartbeat advance or cache-change marker, so the
     // watermark/marker checks below cannot see the change. Owner-read
@@ -107,6 +123,26 @@ const controlPlaneReadinessSnapshotStoreMethods = {
           storedSnapshot.membershipPublication ?? null,
       recentTransitions: this.getReadinessTransitionHistory(nodeId),
     });
+  },
+
+  /**
+   * Best-effort services-table mutation version for snapshot reuse
+   * arbitration. Null when the cache does not expose versions, which keeps
+   * version arbitration disabled rather than wrongly always-invalid.
+   * @return {number|null}
+   * @private
+   */
+  getServicesTableMutationVersionForSnapshotReuse() {
+    if (
+      typeof this.systemTableCache?.getTableMutationVersion !== 'function'
+    ) {
+      return null;
+    }
+    try {
+      return this.systemTableCache.getTableMutationVersion(TABLES.SERVICES);
+    } catch {
+      return null;
+    }
   },
 
   /**
@@ -325,6 +361,13 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         nowMs;
     this.lastReadinessSnapshotByNodeId.set(nodeId, snapshot);
     this.lastReadinessSnapshotAtMsByNodeId.set(nodeId, capturedAtMs);
+    if (!this.lastReadinessSnapshotServicesVersionByNodeId) {
+      this.lastReadinessSnapshotServicesVersionByNodeId = new Map();
+    }
+    this.lastReadinessSnapshotServicesVersionByNodeId.set(
+      nodeId,
+      this.getServicesTableMutationVersionForSnapshotReuse(),
+    );
     const invalidation =
       this.lastReadinessSnapshotInvalidatedAtMsByNodeId.get(nodeId);
     const invalidatedAtMs = Number(invalidation?.atMs ?? invalidation);
