@@ -10,6 +10,10 @@ import {
 import {
   applyUnifiedRebalancerPriorityRecoveryCoordination,
 } from './unified-rebalancer-priority-recovery-coordination.js';
+import {
+  isBackgroundPrioritySpreadReleaseOwner,
+  transferBackgroundPrioritySpreadReleaseOwnership,
+} from './background-priority-spread-release-tracker.js';
 
 const {
   CLUSTER_READINESS_TIMEOUT_MS,
@@ -449,7 +453,15 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
         readinessState: this.bootstrapReadinessState,
       });
     }
-    if (coordinator.controlPlaneReadinessService) {
+    if (
+      isBackgroundPrioritySpreadReleaseOwner(
+        coordinator.controlPlaneReadinessService,
+      )
+    ) {
+      transferBackgroundPrioritySpreadReleaseOwnership(
+        this.controlPlaneReadinessService,
+        coordinator.controlPlaneReadinessService,
+      );
       this.controlPlaneReadinessService =
         coordinator.controlPlaneReadinessService;
     }

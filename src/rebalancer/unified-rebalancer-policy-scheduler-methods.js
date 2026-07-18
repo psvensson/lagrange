@@ -151,6 +151,78 @@ class UnifiedRebalancerPolicySchedulerMethods {
   }
 
   /**
+   * Resolve the continuous-clear interval required before ordinary work can
+   * resume after any rebalancer sharing this node's readiness owner observed
+   * priority recovery. The ordinary cadence is followed by the scheduler's
+   * existing positive jitter window so a different background entity cannot
+   * release the shared fence at the exact formation-quiescence boundary. This
+   * preserves an observation handoff without changing the ordinary scheduled
+   * delay or the admission owner's stability window.
+   * @return {number}
+   */
+  getBackgroundPrioritySpreadStableWindowMs() {
+    const ordinaryIntervalMs = Math.max(
+      this.getPriorityRetryDelayMs(),
+      Number.isFinite(this.periodicCheckIntervalMs) &&
+      this.periodicCheckIntervalMs > 0 ?
+        Math.floor(this.periodicCheckIntervalMs) :
+        REBALANCER_DEFAULT.UNIFIED.PERIODIC_CHECK_INTERVAL_MS,
+    );
+    return ordinaryIntervalMs +
+      this.getBackgroundPrioritySpreadObservationHandoffMs();
+  }
+
+  /**
+   * Resolve the already-configured positive window separating formation
+   * quiescence maturity from ordinary background release.
+   * @return {number}
+   */
+  getBackgroundPrioritySpreadObservationHandoffMs() {
+    return Number.isFinite(this.periodicCheckJitterMs) &&
+      this.periodicCheckJitterMs > 0 ?
+      Math.floor(this.periodicCheckJitterMs) :
+      REBALANCER_DEFAULT.UNIFIED.PERIODIC_CHECK_JITTER_MS;
+  }
+
+  /**
+   * Resolve the release cadence for background work deferred behind priority
+   * spread. Those entities must not inherit the exact short priority retry:
+   * doing so synchronizes every deferred partition. The stable window already
+   * includes the positive observation handoff; per-entity jitter then keeps the
+   * background cohort staggered.
+   * @return {number}
+   */
+  getBackgroundPrioritySpreadReleaseDelayMs() {
+    const stableWindowMs =
+      this.getBackgroundPrioritySpreadStableWindowMs();
+    const jitterWindowMs =
+      this.getBackgroundPrioritySpreadObservationHandoffMs();
+    const jitterMs = Math.floor(
+      this.randomSource.random() * jitterWindowMs,
+    );
+    return stableWindowMs + jitterMs;
+  }
+
+  /**
+   * Preserve the shared fence's already-observed maturity deadline when an
+   * unrelated progress event rechecks a stabilizing background entity. The
+   * positive observation handoff is already part of stableRemainingMs; a new
+   * full ordinary delay here would cancel the earlier timer and move maturity
+   * another cadence into the future.
+   * @param {number} stableRemainingMs
+   * @return {number}
+   */
+  getBackgroundPrioritySpreadStableReleaseDelayMs(stableRemainingMs) {
+    if (!Number.isFinite(stableRemainingMs)) {
+      return this.getBackgroundPrioritySpreadStableWindowMs();
+    }
+    return Math.max(
+      UNIFIED_REBALANCER_LITERAL.THOUSAND,
+      Math.floor(stableRemainingMs),
+    );
+  }
+
+  /**
    * Resolve the first scheduler delay after leadership activation.
    * Priority control-plane partitions should begin checking quickly instead
    * of inheriting the ordinary 60s+ periodic cadence.

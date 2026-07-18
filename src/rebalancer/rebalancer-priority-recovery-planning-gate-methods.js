@@ -13,6 +13,10 @@ import {
   PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE_TABLE,
   REBALANCE_PLANNING_GATE,
 } from './rebalancer-planning-gate-constants.js';
+import {
+  observeBackgroundPrioritySpreadBlocked,
+  resolveBackgroundPrioritySpreadStableRelease,
+} from './background-priority-spread-release-tracker.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -22,6 +26,7 @@ const {
 } = UNIFIED_REBALANCER_SHARED;
 
 const REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE = 'none';
+const REBALANCE_PLANNING_GATE_NOT_APPLICABLE = null;
 
 const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   /**
@@ -64,8 +69,46 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     const controlPlanePriorityBlocker =
       this.getControlPlanePrioritySpreadBlocker();
     if (!controlPlanePriorityBlocker) {
-      return null;
+      if (this.isControlPlanePriorityPartition()) {
+        return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
+      }
+      const stableReleaseBlocker =
+        resolveBackgroundPrioritySpreadStableRelease({
+          readinessOwner: this.controlPlaneReadinessService,
+          observedAt: this.nowFn(),
+          requiredStableMs:
+            this.getBackgroundPrioritySpreadStableWindowMs(),
+        });
+      if (!stableReleaseBlocker) {
+        return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
+      }
+      const scheduleDelayMs =
+        this.getBackgroundPrioritySpreadStableReleaseDelayMs(
+          stableReleaseBlocker.stableRemainingMs,
+        );
+      return this.buildRebalancePlanningGateDecision({
+        gate: REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
+        blocker: stableReleaseBlocker,
+        logMessage:
+          REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY_STABILITY,
+        logContext: {
+          entityType: this.entityType,
+          delayMs: scheduleDelayMs,
+          releaseState: stableReleaseBlocker.state,
+          requiredStableMs: stableReleaseBlocker.requiredStableMs,
+          stableElapsedMs: stableReleaseBlocker.stableElapsedMs,
+          stableRemainingMs: stableReleaseBlocker.stableRemainingMs,
+          clearObservedAtMs: stableReleaseBlocker.clearObservedAtMs,
+          lastBlockedObservedAtMs:
+            stableReleaseBlocker.lastBlockedObservedAtMs,
+        },
+        scheduleDelayMs,
+      });
     }
+    observeBackgroundPrioritySpreadBlocked({
+      readinessOwner: this.controlPlaneReadinessService,
+      observedAt: this.nowFn(),
+    });
     const blockedPartitions =
       controlPlanePriorityBlocker.blockedPartitions || [];
     const currentPriorityPartitionStillBlocked =
@@ -88,7 +131,8 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         Math.max(largestGap, Number(partition?.spreadGap) || 0),
       0,
     );
-    const scheduleDelayMs = this.getPriorityRetryDelayMs();
+    const scheduleDelayMs =
+      this.getBackgroundPrioritySpreadReleaseDelayMs();
     return this.buildRebalancePlanningGateDecision({
       gate: REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
       blocker: controlPlanePriorityBlocker,
@@ -105,6 +149,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
           readyReplicaCount: partition.readyReplicaCount,
           readyDistinctNodeCount: partition.readyDistinctNodeCount,
           spreadGap: partition.spreadGap,
+          missingActiveLeader: partition.missingActiveLeader === true,
           // CL-021 witness: WHY rows were excluded from the ready count
           // (e.g. raft_role_missing) — the planner-blindness attribution.
           exclusionReasonCounts: partition.exclusionReasonCounts || null,
@@ -114,7 +159,10 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     });
   },
 
-  isPriorityRecoveryOperationCreationRequiredForPlanningGate(partitionId) {
+  isPriorityRecoveryOperationCreationRequiredForPlanningGate(
+    partitionId,
+    options = {},
+  ) {
     const normalizedPartitionId = String(
       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
@@ -136,9 +184,18 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     ) {
       return true;
     }
-    const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
-      {partitionId: normalizedPartitionId},
-    );
+    const publishedPlanningSnapshot =
+      options?.planningSnapshot ||
+      this.getPriorityRecoveryPlanningSnapshotSync(
+        {partitionId: normalizedPartitionId},
+      );
+    const planningSnapshot =
+      typeof this.buildCurrentPriorityRecoveryPlanningSnapshot ===
+        'function' ?
+        this.buildCurrentPriorityRecoveryPlanningSnapshot(
+          publishedPlanningSnapshot,
+        ) :
+        publishedPlanningSnapshot;
     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return false;
     }
@@ -251,9 +308,14 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     ) {
       return null;
     }
-    const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
-      {partitionId: normalizedPartitionId},
-    );
+    const publishedPlanningSnapshot =
+      this.getPriorityRecoveryPlanningSnapshotSync(
+        {partitionId: normalizedPartitionId},
+      );
+    const planningSnapshot =
+      this.buildCurrentPriorityRecoveryPlanningSnapshot(
+        publishedPlanningSnapshot,
+      );
     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
@@ -261,6 +323,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     const currentOperationCreationRequired =
       this.isPriorityRecoveryOperationCreationRequiredForPlanningGate(
         normalizedPartitionId,
+        {planningSnapshot},
       );
     if (currentOperationCreationRequired) {
       return Object.freeze({

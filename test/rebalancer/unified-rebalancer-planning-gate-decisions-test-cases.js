@@ -4,6 +4,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
     CONTROL_PLANE_WORKLOAD_CLASS,
     createBackpressuredMessageRouter,
     createMockCache,
+    createMockCoordinator,
     createMockMembershipPublicationService,
     createMockReadinessService,
     createTestRebalancer,
@@ -485,9 +486,14 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       rebalancer.setLeader(true);
       rebalancer.clusterReadinessConfirmed = true;
       rebalancer.isStabilized = () => true;
+      rebalancer.randomSource = {random: () => 0.25};
 
       try {
         const decision = rebalancer.resolvePrioritySpreadPlanningGateDecision();
+        const expectedReleaseDelayMs =
+          rebalancer.periodicCheckIntervalMs +
+          rebalancer.periodicCheckJitterMs +
+          Math.floor(rebalancer.periodicCheckJitterMs * 0.25);
 
         t.equal(
           decision?.decision,
@@ -506,8 +512,17 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         );
         t.equal(
           decision?.scheduleDelayMs,
+          expectedReleaseDelayMs,
+          'background work should wait one ordinary cadence plus deterministic jitter',
+        );
+        t.ok(
+          decision.scheduleDelayMs > rebalancer.periodicCheckIntervalMs,
+          'background release must leave a full ordinary quiet interval',
+        );
+        t.not(
+          decision.scheduleDelayMs,
           rebalancer.getPriorityRetryDelayMs(),
-          'priority spread waits should carry the bounded retry delay explicitly',
+          'background partitions must not synchronize on the priority retry',
         );
         t.equal(
           decision?.logMessage,
@@ -526,6 +541,207 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
         );
       } finally {
         rebalancer.shutdown();
+      }
+    });
+
+  test('UnifiedRebalancer shares priority-clear stabilization across background entities',
+    async (t) => {
+      initializeTestEnvironment();
+
+      let nowMs = 1000;
+      const sharedReadinessOwner = {};
+      const replacementReadinessOwner = {};
+      const independentReadinessOwner = {};
+      const observer = createTestRebalancer({
+        entityId: 'observer-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        controlPlaneReadinessService: sharedReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      const originalOwnerBackgroundEntity = createTestRebalancer({
+        entityId: 'original-owner-background-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        controlPlaneReadinessService: sharedReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      const independentObserver = createTestRebalancer({
+        entityId: 'independent-observer-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        controlPlaneReadinessService: independentReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      const lateBackgroundEntity = createTestRebalancer({
+        entityId: 'late-background-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        controlPlaneReadinessService: sharedReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      const priorityEntity = createTestRebalancer({
+        entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        controlPlaneReadinessService: sharedReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      observer.getControlPlanePrioritySpreadBlocker = () => ({
+        requiredDistinctNodeCount: 3,
+        requiredQuorumDistinctNodeCount: 2,
+        blockedPartitions: [{
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          readyReplicaCount: 2,
+          readyDistinctNodeCount: 1,
+          spreadGap: 1,
+        }],
+      });
+      lateBackgroundEntity.getControlPlanePrioritySpreadBlocker = () => null;
+      originalOwnerBackgroundEntity.getControlPlanePrioritySpreadBlocker =
+        () => null;
+      independentObserver.getControlPlanePrioritySpreadBlocker =
+        observer.getControlPlanePrioritySpreadBlocker;
+      priorityEntity.getControlPlanePrioritySpreadBlocker = () => null;
+      observer.randomSource = {random: () => 0};
+      lateBackgroundEntity.randomSource = {random: () => 0};
+      originalOwnerBackgroundEntity.randomSource = {random: () => 0};
+      independentObserver.randomSource = {random: () => 0};
+
+      try {
+        const blockedDecision =
+          observer.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          blockedDecision.gate,
+          TEST_REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
+          'one background observer should arm the shared priority fence',
+        );
+
+        const replacementCoordinator = createMockCoordinator();
+        replacementCoordinator.controlPlaneReadinessService =
+          replacementReadinessOwner;
+        lateBackgroundEntity.setRebalanceCoordinator(
+          replacementCoordinator,
+        );
+        t.equal(
+          lateBackgroundEntity.controlPlaneReadinessService,
+          replacementReadinessOwner,
+          'the test should traverse the production readiness-owner rebind',
+        );
+
+        t.equal(
+          priorityEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'the shared ordinary-work fence must never defer a priority partition',
+        );
+
+        const firstClearDecision =
+          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          firstClearDecision.decision,
+          TEST_REBALANCE_PLANNING_GATE_DECISION.DEFER_PLANNING,
+          'an owner-rebound entity must not release on its first clear sample',
+        );
+        t.equal(
+          firstClearDecision.blocker.state,
+          'stabilizing',
+          'the shared fence should expose its sampled-clear state',
+        );
+        t.equal(
+          firstClearDecision.logMessage,
+          REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY_STABILITY,
+          'the clear-window hold should be distinguishable from an active spread deficit',
+        );
+
+        independentObserver.resolvePrioritySpreadPlanningGateDecision();
+        const convergenceCoordinator = createMockCoordinator();
+        convergenceCoordinator.controlPlaneReadinessService =
+          replacementReadinessOwner;
+        independentObserver.setRebalanceCoordinator(convergenceCoordinator);
+        const convergedOwnerDecision =
+          originalOwnerBackgroundEntity
+            .resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          convergedOwnerDecision.blocker.stableElapsedMs,
+          0,
+          'A-to-B and C-to-B rebinds must converge on one rearmed fence',
+        );
+
+        const invalidCoordinator = createMockCoordinator();
+        invalidCoordinator.controlPlaneReadinessService =
+          'invalid-readiness-owner';
+        lateBackgroundEntity.setRebalanceCoordinator(invalidCoordinator);
+        t.equal(
+          lateBackgroundEntity.controlPlaneReadinessService,
+          replacementReadinessOwner,
+          'an invalid owner rebind must retain the valid fenced owner',
+        );
+        const invalidRebindDecision =
+          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          invalidRebindDecision.blocker.stableElapsedMs,
+          0,
+          'an invalid owner value cannot drop the active shared fence',
+        );
+
+        const admissionStableWindowMs =
+          lateBackgroundEntity.periodicCheckIntervalMs;
+        const observationHandoffMs =
+          lateBackgroundEntity
+            .getBackgroundPrioritySpreadObservationHandoffMs();
+        const stableWindowMs =
+          lateBackgroundEntity.getBackgroundPrioritySpreadStableWindowMs();
+        t.equal(
+          stableWindowMs,
+          admissionStableWindowMs + observationHandoffMs,
+          'the shared fence should include the configured observation handoff',
+        );
+        t.equal(
+          convergedOwnerDecision.scheduleDelayMs,
+          stableWindowMs,
+          'the first clear sample should schedule the exact shared maturity deadline',
+        );
+
+        nowMs += admissionStableWindowMs;
+        const admissionBoundaryDecision =
+          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          admissionBoundaryDecision.blocker.stableRemainingMs,
+          observationHandoffMs,
+          'an unchanged 60-second admission candidate must mature before ordinary release',
+        );
+        t.equal(
+          admissionBoundaryDecision.scheduleDelayMs,
+          observationHandoffMs,
+          'a boundary recheck must preserve the existing maturity deadline',
+        );
+
+        nowMs += observationHandoffMs - 1;
+        const lastHeldDecision =
+          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          lastHeldDecision.blocker.stableRemainingMs,
+          1,
+          'the shared fence should remain closed through the observation handoff',
+        );
+        t.equal(
+          lastHeldDecision.scheduleDelayMs,
+          1000,
+          'late progress should use the scheduler floor without restarting a full cadence',
+        );
+
+        nowMs += 1;
+        t.equal(
+          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'a clear sample after the observation handoff should release ordinary planning',
+        );
+      } finally {
+        observer.shutdown();
+        lateBackgroundEntity.shutdown();
+        originalOwnerBackgroundEntity.shutdown();
+        independentObserver.shutdown();
+        priorityEntity.shutdown();
       }
     });
 
