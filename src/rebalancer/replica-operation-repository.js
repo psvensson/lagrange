@@ -336,7 +336,6 @@ const REPLICA_OPERATION_READ_QUERY_OPTIONS = Object.freeze({
     REPLICA_OPERATION_VISIBILITY_WORKLOAD_PROFILE.workClass || PRESSURE_WORK_CLASS.CRITICAL,
   deliveryPriority: 'critical',
   preferLeader: REPLICA_OPERATION_READ_PREFER_LEADER,
-  allowPressureDefer: REPLICA_OPERATION_VISIBILITY_WORKLOAD_PROFILE.allowPressureDefer === true,
   preferOwnerRpcRead: false,
   requireOwnerRpcRead: false,
   allowOwnerRpcFallback: false,

@@ -70,7 +70,6 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_PRIORITY_VISIBILITY :
         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_BACKGROUND_VISIBILITY,
       {
-        allowPressureDefer: criticalQuery !== true,
       },
     );
     return {
@@ -81,7 +80,6 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
         (criticalQuery ?
           PRESSURE_WORK_CLASS.CRITICAL :
           PRESSURE_WORK_CLASS.BACKGROUND),
-      allowPressureDefer: workloadProfile.allowPressureDefer === true,
       deliveryPriority: criticalQuery ?
         UNIFIED_REBALANCER_LITERAL.CRITICAL :
         UNIFIED_REBALANCER_LITERAL.BACKGROUND,

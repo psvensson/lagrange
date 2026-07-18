@@ -1,0 +1,237 @@
+diff --git a/src/rebalancer/node-storage-budget-service.js b/src/rebalancer/node-storage-budget-service.js
+index 2227b6f0c2bbcd9ac5c994e610dcfdd9aae6c1af..35af85480a2c8db53c31afb56a08e1338904e554 100644
+--- a/src/rebalancer/node-storage-budget-service.js
++++ b/src/rebalancer/node-storage-budget-service.js
+@@ -247,8 +247,6 @@ class NodeStorageBudgetService {
+       ...upsertOptions,
+       workloadClass: workloadProfile.workloadClass,
+       workClass: workloadProfile.workClass,
+-      allowPressureDefer: workloadProfile.allowPressureDefer,
+-      allowPressureDegrade: workloadProfile.allowPressureDegrade,
+       deliveryPriority: 'critical',
+     });
+ 
+diff --git a/src/rebalancer/rebalance-coordinator-pressure-helper.js b/src/rebalancer/rebalance-coordinator-pressure-helper.js
+index 5597d8c435d3161f9d3ffb31758ce63b208c3ca5..7824db8ff631743002d50f269963260015a73471 100644
+--- a/src/rebalancer/rebalance-coordinator-pressure-helper.js
++++ b/src/rebalancer/rebalance-coordinator-pressure-helper.js
+@@ -16,9 +16,28 @@ import {
+ const {
+   INCOMPLETE_OPERATION_OBSERVATION_STATE,
+   PRESSURE_GOVERNOR_ACTION,
++  PRESSURE_GOVERNOR_REASON,
+   buildPriorityRecoveryPartitionAssessment,
+ } = REBALANCE_COORDINATOR_SHARED;
+ 
++// Transport-backpressure defers are paced retries, not denials: coordinator
++// visibility/reconciliation work keeps running through flickering transport
++// pressure (the pre-flagless DEGRADE behavior) and brakes only when a
++// protected reserve is exhausted or admission is rejected outright.
++const PRESSURE_BRAKE_REASONS = Object.freeze(new Set([
++  PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
++  PRESSURE_GOVERNOR_REASON.READINESS_RESERVE_EXHAUSTED,
++]));
++
++function isPressureDecisionBraking(decision) {
++  if (decision?.action === PRESSURE_GOVERNOR_ACTION.REJECT) {
++    return true;
++  }
++  return (
++    decision?.action === PRESSURE_GOVERNOR_ACTION.DEFER &&
++    PRESSURE_BRAKE_REASONS.has(decision?.reason)
++  );
++}
+ 
+ function isLocalRouterBackpressured(coordinator, options = {}) {
+   return (
+@@ -28,10 +47,8 @@ function isLocalRouterBackpressured(coordinator, options = {}) {
+ }
+ 
+ function shouldPauseAdmissionReadForLocalRouterPressure(coordinator, options = {}) {
+-  const action = coordinator.getLocalRouterPressureDecision(options).action;
+-  return (
+-    action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+-    action === PRESSURE_GOVERNOR_ACTION.REJECT
++  return isPressureDecisionBraking(
++    coordinator.getLocalRouterPressureDecision(options),
+   );
+ }
+ 
+@@ -160,9 +177,7 @@ function buildPriorityAddAdmissionPressureEvidence(coordinator, options = {}) {
+       blockedPriorityPartition === true ||
+       emergencyPriorityRecoveryPartition === true
+     );
+-  const pressureBlocked =
+-    pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+-    pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.REJECT;
++  const pressureBlocked = isPressureDecisionBraking(pressureDecision);
+   return Object.freeze({
+     partitionId,
+     pressureAction:
+diff --git a/src/rebalancer/rebalance-coordinator-shared.js b/src/rebalancer/rebalance-coordinator-shared.js
+index 10c50508560ec7f1450cbfac22a4ea296091552e..5b43af8bf1894fcd409d6953ebb9352f14d9785a 100644
+--- a/src/rebalancer/rebalance-coordinator-shared.js
++++ b/src/rebalancer/rebalance-coordinator-shared.js
+@@ -40,6 +40,7 @@ import {
+ import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
+ import {
+   PRESSURE_GOVERNOR_ACTION,
++  PRESSURE_GOVERNOR_REASON,
+   PRESSURE_WORK_CLASS,
+   PressureGovernor,
+ } from '../control-plane/pressure-governor.js';
+@@ -245,6 +246,7 @@ export const REBALANCE_COORDINATOR_SHARED = {
+   ReplicaStatus,
+   OperationWorkflowOwner,
+   PRESSURE_GOVERNOR_ACTION,
++  PRESSURE_GOVERNOR_REASON,
+   PRESSURE_WORK_CLASS,
+   PRIORITY_RECENT_INTENT_TTL_MS,
+   PressureGovernor,
+diff --git a/src/rebalancer/rebalance-coordinator.js b/src/rebalancer/rebalance-coordinator.js
+index f2d2c3084d534e56b3862d259b5a70a8513dc8ab..fde594414318712199c2ccb977092f7d542738f1 100644
+--- a/src/rebalancer/rebalance-coordinator.js
++++ b/src/rebalancer/rebalance-coordinator.js
+@@ -62,9 +62,6 @@ class RebalanceCoordinator extends EventEmitter {
+         PRESSURE_WORK_CLASS.CRITICAL :
+         PRESSURE_WORK_CLASS.BACKGROUND),
+       resourceKeys: workloadProfile.resourceKeys,
+-      allowDegrade: workloadProfile.allowPressureDegrade !== false,
+-      allowDefer: workloadProfile.allowPressureDefer === true,
+-      retryAfterMs: workloadProfile.retryAfterMs,
+     });
+   }
+ 
+diff --git a/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js b/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
+index e41a4fd050b33229efd5bec52fb6669b5ebb1a11..229fd9dcb63e47015f9e00362707a2d78b19af60 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js
+@@ -526,12 +526,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
+         workClass:
+           REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.workClass ||
+           PRESSURE_WORK_CLASS.CRITICAL,
+-        allowPressureDefer:
+-          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDefer ===
+-          true,
+-        allowPressureDegrade:
+-          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDegrade ===
+-          true,
+         mergePolicy:
+           options.mergePolicy ||
+           CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,
+diff --git a/src/rebalancer/replica-operation-repository.js b/src/rebalancer/replica-operation-repository.js
+index 21b978a583d8f3a2c39c6c0713c8bba59c74d430..404b8bcd0d5524a706151f9ff6e9bd60ff9f0f90 100644
+--- a/src/rebalancer/replica-operation-repository.js
++++ b/src/rebalancer/replica-operation-repository.js
+@@ -336,7 +336,6 @@ const REPLICA_OPERATION_READ_QUERY_OPTIONS = Object.freeze({
+     REPLICA_OPERATION_VISIBILITY_WORKLOAD_PROFILE.workClass || PRESSURE_WORK_CLASS.CRITICAL,
+   deliveryPriority: 'critical',
+   preferLeader: REPLICA_OPERATION_READ_PREFER_LEADER,
+-  allowPressureDefer: REPLICA_OPERATION_VISIBILITY_WORKLOAD_PROFILE.allowPressureDefer === true,
+   preferOwnerRpcRead: false,
+   requireOwnerRpcRead: false,
+   allowOwnerRpcFallback: false,
+diff --git a/src/rebalancer/unified-rebalancer-budget-planning.js b/src/rebalancer/unified-rebalancer-budget-planning.js
+index 55a31b1bfcd85e822b439feb69c27a154f8836f1..219e015a1fb7904be7575a2725a62e53ce498fe9 100644
+--- a/src/rebalancer/unified-rebalancer-budget-planning.js
++++ b/src/rebalancer/unified-rebalancer-budget-planning.js
+@@ -70,7 +70,6 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
+         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_PRIORITY_VISIBILITY :
+         CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_BACKGROUND_VISIBILITY,
+       {
+-        allowPressureDefer: criticalQuery !== true,
+       },
+     );
+     return {
+@@ -81,7 +80,6 @@ class UnifiedRebalancerBudgetPlanning extends UnifiedRebalancerReplicaState {
+         (criticalQuery ?
+           PRESSURE_WORK_CLASS.CRITICAL :
+           PRESSURE_WORK_CLASS.BACKGROUND),
+-      allowPressureDefer: workloadProfile.allowPressureDefer === true,
+       deliveryPriority: criticalQuery ?
+         UNIFIED_REBALANCER_LITERAL.CRITICAL :
+         UNIFIED_REBALANCER_LITERAL.BACKGROUND,
+diff --git a/test/rebalancer/node-storage-budget-service.test.js b/test/rebalancer/node-storage-budget-service.test.js
+index f18481cf3c01ea5919e07d7bcf04b4f6d4c8f980..628e299a9fc1a4d9ad683ecbbc44dbe52065d5d5 100644
+--- a/test/rebalancer/node-storage-budget-service.test.js
++++ b/test/rebalancer/node-storage-budget-service.test.js
+@@ -341,8 +341,6 @@ test('registerNodeBudget - forwards upsert options to CDC writes', async (t) =>
+     CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION,
+   );
+   assert.equal(mutationCalls[0].options.workClass, 'interactive');
+-  assert.equal(mutationCalls[0].options.allowPressureDefer, false);
+-  assert.equal(mutationCalls[0].options.allowPressureDegrade, false);
+   assert.equal(mutationCalls[0].options.deliveryPriority, 'critical');
+   teardown();
+   t.end();
+diff --git a/test/rebalancer/replica-operation-repository-deferred-visibility-test-cases.js b/test/rebalancer/replica-operation-repository-deferred-visibility-test-cases.js
+index 4fd2d154142e14675410049ebe75816388a37361..48fced9bf4c408fb512c87c33f13d364fdbd2079 100644
+--- a/test/rebalancer/replica-operation-repository-deferred-visibility-test-cases.js
++++ b/test/rebalancer/replica-operation-repository-deferred-visibility-test-cases.js
+@@ -634,11 +634,6 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
+         CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
+         'generic replica_operations owner reads should keep the shared control-plane timeout budget',
+       );
+-      t.equal(
+-        capturedReads[0]?.options?.allowPressureDefer,
+-        false,
+-        'replica_operations owner reads should not defer under transport pressure',
+-      );
+       t.equal(
+         capturedReads[0]?.options?.authoritativeReadMode,
+         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+diff --git a/test/rebalancer/replica-operation-repository-tail-test-cases.js b/test/rebalancer/replica-operation-repository-tail-test-cases.js
+index 944e2c9612363f05cafcc8de49d7f66f2c400d14..7ac08a7ce8a84474f26637727f2c072932d185e0 100644
+--- a/test/rebalancer/replica-operation-repository-tail-test-cases.js
++++ b/test/rebalancer/replica-operation-repository-tail-test-cases.js
+@@ -756,11 +756,6 @@ export function registerReplicaOperationRepositoryTailTests({
+         CONTROL_PLANE_WORKLOAD_CLASS.REPLICA_OPERATION_MUTATION,
+         'replica_operations mutations should emit the shared mutation workload class',
+       );
+-      t.equal(
+-        gatewayMutations[0]?.options?.allowPressureDefer,
+-        false,
+-        'replica_operations mutations should remain non-deferrable under pressure',
+-      );
+       t.equal(
+         gatewayMutations[0]?.options?.replacePendingKey,
+         TEST_REPLICA_OPERATION_WRITE_REPLACE_PENDING_KEY,
+diff --git a/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js b/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
+index 06c640a83991107b9e7179320e80593d70eda0bf..8a956c856c83af0eeb63ef82129a96a5770d1574 100644
+--- a/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
++++ b/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
+@@ -1246,11 +1246,6 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+       'background',
+       'ordinary rebalancers should continue using background delivery for budget reads',
+     );
+-    t.equal(
+-      gatewayCalls[0]?.queryOptions?.allowPressureDefer,
+-      true,
+-      'ordinary rebalancers should remain deferrable under pressure',
+-    );
+   });
+ 
+   test('UnifiedRebalancer budget queries stay critical for priority control-plane partitions', async (t) => {
+@@ -1292,11 +1287,6 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+       'critical',
+       'priority control-plane partitions should route budget reads at critical delivery priority',
+     );
+-    t.equal(
+-      gatewayCalls[0]?.queryOptions?.allowPressureDefer,
+-      false,
+-      'priority control-plane partitions should not defer budget reads under pressure',
+-    );
+     t.equal(
+       gatewayCalls[1]?.queryOptions?.workClass,
+       'critical',
+@@ -1312,10 +1302,5 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+       'critical',
+       'priority control-plane partitions should route in-flight reads at critical delivery priority',
+     );
+-    t.equal(
+-      gatewayCalls[1]?.queryOptions?.allowPressureDefer,
+-      false,
+-      'priority control-plane partitions should not defer in-flight reads under pressure',
+-    );
+   });
+ }

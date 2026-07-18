@@ -16,9 +16,28 @@ import {
 const {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_GOVERNOR_REASON,
   buildPriorityRecoveryPartitionAssessment,
 } = REBALANCE_COORDINATOR_SHARED;
 
+// Transport-backpressure defers are paced retries, not denials: coordinator
+// visibility/reconciliation work keeps running through flickering transport
+// pressure (the pre-flagless DEGRADE behavior) and brakes only when a
+// protected reserve is exhausted or admission is rejected outright.
+const PRESSURE_BRAKE_REASONS = Object.freeze(new Set([
+  PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
+  PRESSURE_GOVERNOR_REASON.READINESS_RESERVE_EXHAUSTED,
+]));
+
+function isPressureDecisionBraking(decision) {
+  if (decision?.action === PRESSURE_GOVERNOR_ACTION.REJECT) {
+    return true;
+  }
+  return (
+    decision?.action === PRESSURE_GOVERNOR_ACTION.DEFER &&
+    PRESSURE_BRAKE_REASONS.has(decision?.reason)
+  );
+}
 
 function isLocalRouterBackpressured(coordinator, options = {}) {
   return (
@@ -28,10 +47,8 @@ function isLocalRouterBackpressured(coordinator, options = {}) {
 }
 
 function shouldPauseAdmissionReadForLocalRouterPressure(coordinator, options = {}) {
-  const action = coordinator.getLocalRouterPressureDecision(options).action;
-  return (
-    action === PRESSURE_GOVERNOR_ACTION.DEFER ||
-    action === PRESSURE_GOVERNOR_ACTION.REJECT
+  return isPressureDecisionBraking(
+    coordinator.getLocalRouterPressureDecision(options),
   );
 }
 
@@ -160,9 +177,7 @@ function buildPriorityAddAdmissionPressureEvidence(coordinator, options = {}) {
       blockedPriorityPartition === true ||
       emergencyPriorityRecoveryPartition === true
     );
-  const pressureBlocked =
-    pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
-    pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.REJECT;
+  const pressureBlocked = isPressureDecisionBraking(pressureDecision);
   return Object.freeze({
     partitionId,
     pressureAction:

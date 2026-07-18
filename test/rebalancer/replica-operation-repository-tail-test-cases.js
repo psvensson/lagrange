@@ -757,11 +757,6 @@ export function registerReplicaOperationRepositoryTailTests({
         'replica_operations mutations should emit the shared mutation workload class',
       );
       t.equal(
-        gatewayMutations[0]?.options?.allowPressureDefer,
-        false,
-        'replica_operations mutations should remain non-deferrable under pressure',
-      );
-      t.equal(
         gatewayMutations[0]?.options?.replacePendingKey,
         TEST_REPLICA_OPERATION_WRITE_REPLACE_PENDING_KEY,
         'replica_operations mutations should replace stale queued router writes by operation id',

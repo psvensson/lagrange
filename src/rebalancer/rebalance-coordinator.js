@@ -62,9 +62,6 @@ class RebalanceCoordinator extends EventEmitter {
         PRESSURE_WORK_CLASS.CRITICAL :
         PRESSURE_WORK_CLASS.BACKGROUND),
       resourceKeys: workloadProfile.resourceKeys,
-      allowDegrade: workloadProfile.allowPressureDegrade !== false,
-      allowDefer: workloadProfile.allowPressureDefer === true,
-      retryAfterMs: workloadProfile.retryAfterMs,
     });
   }
 

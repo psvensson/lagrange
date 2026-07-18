@@ -247,8 +247,6 @@ class NodeStorageBudgetService {
       ...upsertOptions,
       workloadClass: workloadProfile.workloadClass,
       workClass: workloadProfile.workClass,
-      allowPressureDefer: workloadProfile.allowPressureDefer,
-      allowPressureDegrade: workloadProfile.allowPressureDegrade,
       deliveryPriority: 'critical',
     });
 

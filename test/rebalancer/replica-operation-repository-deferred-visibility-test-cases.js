@@ -635,11 +635,6 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         'generic replica_operations owner reads should keep the shared control-plane timeout budget',
       );
       t.equal(
-        capturedReads[0]?.options?.allowPressureDefer,
-        false,
-        'replica_operations owner reads should not defer under transport pressure',
-      );
-      t.equal(
         capturedReads[0]?.options?.authoritativeReadMode,
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
         'replica_operations owner reads should report the canonical local-only read mode',

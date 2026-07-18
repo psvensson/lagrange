@@ -341,8 +341,6 @@ test('registerNodeBudget - forwards upsert options to CDC writes', async (t) => 
     CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION,
   );
   assert.equal(mutationCalls[0].options.workClass, 'interactive');
-  assert.equal(mutationCalls[0].options.allowPressureDefer, false);
-  assert.equal(mutationCalls[0].options.allowPressureDegrade, false);
   assert.equal(mutationCalls[0].options.deliveryPriority, 'critical');
   teardown();
   t.end();

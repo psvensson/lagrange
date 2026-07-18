@@ -526,12 +526,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         workClass:
           REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.workClass ||
           PRESSURE_WORK_CLASS.CRITICAL,
-        allowPressureDefer:
-          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDefer ===
-          true,
-        allowPressureDegrade:
-          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDegrade ===
-          true,
         mergePolicy:
           options.mergePolicy ||
           CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,

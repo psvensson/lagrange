@@ -1246,11 +1246,6 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       'background',
       'ordinary rebalancers should continue using background delivery for budget reads',
     );
-    t.equal(
-      gatewayCalls[0]?.queryOptions?.allowPressureDefer,
-      true,
-      'ordinary rebalancers should remain deferrable under pressure',
-    );
   });
 
   test('UnifiedRebalancer budget queries stay critical for priority control-plane partitions', async (t) => {
@@ -1293,11 +1288,6 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       'priority control-plane partitions should route budget reads at critical delivery priority',
     );
     t.equal(
-      gatewayCalls[0]?.queryOptions?.allowPressureDefer,
-      false,
-      'priority control-plane partitions should not defer budget reads under pressure',
-    );
-    t.equal(
       gatewayCalls[1]?.queryOptions?.workClass,
       'critical',
       'priority control-plane partitions should keep in-flight reads on the critical path',
@@ -1311,11 +1301,6 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       gatewayCalls[1]?.queryOptions?.deliveryPriority,
       'critical',
       'priority control-plane partitions should route in-flight reads at critical delivery priority',
-    );
-    t.equal(
-      gatewayCalls[1]?.queryOptions?.allowPressureDefer,
-      false,
-      'priority control-plane partitions should not defer in-flight reads under pressure',
     );
   });
 }

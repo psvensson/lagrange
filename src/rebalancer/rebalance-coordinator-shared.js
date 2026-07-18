@@ -40,6 +40,7 @@ import {
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_GOVERNOR_REASON,
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
@@ -245,6 +246,7 @@ export const REBALANCE_COORDINATOR_SHARED = {
   ReplicaStatus,
   OperationWorkflowOwner,
   PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_GOVERNOR_REASON,
   PRESSURE_WORK_CLASS,
   PRIORITY_RECENT_INTENT_TTL_MS,
   PressureGovernor,
