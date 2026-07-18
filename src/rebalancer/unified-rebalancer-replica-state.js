@@ -718,6 +718,63 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
+   * Return the latest retained drain watermark for coordinator-owned
+   * topology-shaping work. A terminal row lets a scheduled planner recover an
+   * operation that started and drained entirely between planning evaluations.
+   *
+   * @param {Object} options
+   * @return {{drainedAtMs:number,operationId:string,operationType:string}|null}
+   */
+  getLatestGlobalTopologyShapingOperationDrain(options = {}) {
+    const observedAt = Number.isFinite(options.observedAt) ?
+      Math.floor(options.observedAt) :
+      this.nowFn();
+    let latestDrain = null;
+    const terminalOperations = this.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      (operation) => {
+        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+          nowMs: observedAt,
+        });
+        if (
+          !isCoordinatorOwnedOperationType(normalizedOperation.type) ||
+          buildReplicaOperationProgressSnapshot(normalizedOperation)
+            .terminal !== true ||
+          !this.isTopologyBlockingInFlightOperation(normalizedOperation)
+        ) {
+          return false;
+        }
+        const drainedAtMs =
+          Number.isFinite(normalizedOperation.completedAt) ?
+            normalizedOperation.completedAt :
+            normalizedOperation.updatedAt;
+        if (!Number.isFinite(drainedAtMs)) {
+          return false;
+        }
+        const boundedDrainedAtMs = Math.min(
+          observedAt,
+          Math.floor(drainedAtMs),
+        );
+        if (
+          !latestDrain ||
+          boundedDrainedAtMs > latestDrain.drainedAtMs
+        ) {
+          latestDrain = {
+            drainedAtMs: boundedDrainedAtMs,
+            operationId: normalizedOperation.operationId,
+            operationType: normalizedOperation.type,
+          };
+        }
+        return true;
+      },
+    );
+    if (terminalOperations.length === 0 || !latestDrain) {
+      return null;
+    }
+    return Object.freeze(latestDrain);
+  }
+
+  /**
    * @param {Object} operation
    * @return {string}
    * @private

@@ -1,0 +1,377 @@
+diff --git a/src/rebalancer/background-priority-spread-release-tracker.js b/src/rebalancer/background-priority-spread-release-tracker.js
+index eafea037232617c14d8650e6b8bde6797e06ef50..27cce2ca67ea956e50adf5cd0c909bb7eadbef59 100644
+--- a/src/rebalancer/background-priority-spread-release-tracker.js
++++ b/src/rebalancer/background-priority-spread-release-tracker.js
+@@ -102,6 +102,52 @@ function observeBackgroundPrioritySpreadBlocked(options = {}) {
+   scope.tracker = tracker;
+ }
+ 
++function isBackgroundPrioritySpreadReleaseActive(options = {}) {
++  const scope = getReleaseScope(options.readinessOwner);
++  return scope?.tracker?.active === true;
++}
++
++function observeActiveBackgroundPrioritySpreadReleaseBlocked(options = {}) {
++  const scope = getReleaseScope(options.readinessOwner);
++  const tracker = scope?.tracker;
++  if (!tracker || tracker.active !== true) {
++    return false;
++  }
++  tracker.lastBlockedObservedAtMs =
++    normalizeObservedAt(options.observedAt);
++  tracker.clearObservedAtMs = null;
++  return true;
++}
++
++function observeActiveBackgroundPrioritySpreadOperationDrain(options = {}) {
++  const scope = getReleaseScope(options.readinessOwner);
++  const tracker = scope?.tracker;
++  if (
++    !tracker ||
++    tracker.active !== true ||
++    !Number.isFinite(options.drainedAt)
++  ) {
++    return false;
++  }
++  const drainedAtMs = Math.floor(options.drainedAt);
++  const lastBlockedObservedAtMs =
++    Number.isFinite(tracker.lastBlockedObservedAtMs) ?
++      tracker.lastBlockedObservedAtMs :
++      Number.NEGATIVE_INFINITY;
++  const clearObservedAtMs = Number.isFinite(tracker.clearObservedAtMs) ?
++    tracker.clearObservedAtMs :
++    Number.NEGATIVE_INFINITY;
++  if (
++    drainedAtMs <= lastBlockedObservedAtMs ||
++    drainedAtMs <= clearObservedAtMs
++  ) {
++    return false;
++  }
++  tracker.lastBlockedObservedAtMs = drainedAtMs;
++  tracker.clearObservedAtMs = drainedAtMs;
++  return true;
++}
++
+ function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
+   const scope = getReleaseScope(options.readinessOwner);
+   const tracker = scope?.tracker;
+@@ -136,7 +182,10 @@ function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
+ 
+ export {
+   BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE,
++  isBackgroundPrioritySpreadReleaseActive,
+   isBackgroundPrioritySpreadReleaseOwner,
++  observeActiveBackgroundPrioritySpreadReleaseBlocked,
++  observeActiveBackgroundPrioritySpreadOperationDrain,
+   observeBackgroundPrioritySpreadBlocked,
+   resolveBackgroundPrioritySpreadStableRelease,
+   transferBackgroundPrioritySpreadReleaseOwnership,
+diff --git a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+index 7ee863c936657e2bf0657a3efe740169b9f18ca3..0b81a23e9b7563c5f8c438f10d58fd2155f6c684 100644
+--- a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
++++ b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+@@ -14,6 +14,9 @@ import {
+   REBALANCE_PLANNING_GATE,
+ } from './rebalancer-planning-gate-constants.js';
+ import {
++  isBackgroundPrioritySpreadReleaseActive,
++  observeActiveBackgroundPrioritySpreadReleaseBlocked,
++  observeActiveBackgroundPrioritySpreadOperationDrain,
+   observeBackgroundPrioritySpreadBlocked,
+   resolveBackgroundPrioritySpreadStableRelease,
+ } from './background-priority-spread-release-tracker.js';
+@@ -72,10 +75,39 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+       if (this.isControlPlanePriorityPartition()) {
+         return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
+       }
++      const observedAt = this.nowFn();
++      let globalTopologyBlockingOperationCount = 0;
++      let latestTopologyDrain = null;
++      if (isBackgroundPrioritySpreadReleaseActive({
++        readinessOwner: this.controlPlaneReadinessService,
++      })) {
++        const globalTopologyBlockingOperations =
++          this.getGlobalTopologyBlockingInFlightOperations().filter(
++            (operation) => this.isTopologySettlingInFlightOperation(
++              operation,
++              {nowMs: observedAt},
++            ),
++          );
++        globalTopologyBlockingOperationCount =
++          globalTopologyBlockingOperations.length;
++        if (globalTopologyBlockingOperationCount > 0) {
++          observeActiveBackgroundPrioritySpreadReleaseBlocked({
++            readinessOwner: this.controlPlaneReadinessService,
++            observedAt,
++          });
++        } else {
++          latestTopologyDrain =
++            this.getLatestGlobalTopologyShapingOperationDrain({observedAt});
++          observeActiveBackgroundPrioritySpreadOperationDrain({
++            readinessOwner: this.controlPlaneReadinessService,
++            drainedAt: latestTopologyDrain?.drainedAtMs,
++          });
++        }
++      }
+       const stableReleaseBlocker =
+         resolveBackgroundPrioritySpreadStableRelease({
+           readinessOwner: this.controlPlaneReadinessService,
+-          observedAt: this.nowFn(),
++          observedAt,
+           requiredStableMs:
+             this.getBackgroundPrioritySpreadStableWindowMs(),
+         });
+@@ -101,6 +133,11 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+           clearObservedAtMs: stableReleaseBlocker.clearObservedAtMs,
+           lastBlockedObservedAtMs:
+             stableReleaseBlocker.lastBlockedObservedAtMs,
++          globalTopologyBlockingOperationCount,
++          latestTopologyDrainAtMs:
++            latestTopologyDrain?.drainedAtMs || null,
++          latestTopologyDrainOperationId:
++            latestTopologyDrain?.operationId || null,
+         },
+         scheduleDelayMs,
+       });
+diff --git a/src/rebalancer/unified-rebalancer-replica-state.js b/src/rebalancer/unified-rebalancer-replica-state.js
+index 062bcc2426521ca1dfc494c81eb7d22363cc3ef4..e95a4dce1fe87cb61dc1239cfa15e4d0733b477d 100644
+--- a/src/rebalancer/unified-rebalancer-replica-state.js
++++ b/src/rebalancer/unified-rebalancer-replica-state.js
+@@ -717,6 +717,63 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
+     );
+   }
+ 
++  /**
++   * Return the latest retained drain watermark for coordinator-owned
++   * topology-shaping work. A terminal row lets a scheduled planner recover an
++   * operation that started and drained entirely between planning evaluations.
++   *
++   * @param {Object} options
++   * @return {{drainedAtMs:number,operationId:string,operationType:string}|null}
++   */
++  getLatestGlobalTopologyShapingOperationDrain(options = {}) {
++    const observedAt = Number.isFinite(options.observedAt) ?
++      Math.floor(options.observedAt) :
++      this.nowFn();
++    let latestDrain = null;
++    const terminalOperations = this.systemTableCache.filter(
++      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
++      (operation) => {
++        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
++          nowMs: observedAt,
++        });
++        if (
++          !isCoordinatorOwnedOperationType(normalizedOperation.type) ||
++          buildReplicaOperationProgressSnapshot(normalizedOperation)
++            .terminal !== true ||
++          !this.isTopologyBlockingInFlightOperation(normalizedOperation)
++        ) {
++          return false;
++        }
++        const drainedAtMs =
++          Number.isFinite(normalizedOperation.completedAt) ?
++            normalizedOperation.completedAt :
++            normalizedOperation.updatedAt;
++        if (!Number.isFinite(drainedAtMs)) {
++          return false;
++        }
++        const boundedDrainedAtMs = Math.min(
++          observedAt,
++          Math.floor(drainedAtMs),
++        );
++        if (
++          !latestDrain ||
++          boundedDrainedAtMs > latestDrain.drainedAtMs
++        ) {
++          latestDrain = {
++            drainedAtMs: boundedDrainedAtMs,
++            operationId: normalizedOperation.operationId,
++            operationType: normalizedOperation.type,
++          };
++        }
++        return true;
++      },
++    );
++    if (terminalOperations.length === 0 || !latestDrain) {
++      return null;
++    }
++    return Object.freeze(latestDrain);
++  }
++
+   /**
+    * @param {Object} operation
+    * @return {string}
+diff --git a/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js b/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
+index d5e4296a8f4aa043581a5cd6999a4b1db0f3a166..06c640a83991107b9e7179320e80593d70eda0bf 100644
+--- a/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
++++ b/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
+@@ -745,6 +745,169 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+       }
+     });
+ 
++  test('UnifiedRebalancer anchors active background release to global topology quiescence',
++    async (t) => {
++      initializeTestEnvironment();
++
++      let nowMs = 1000;
++      const sharedReadinessOwner = {};
++      const visibleReplicaOperations = [];
++      const systemTableCache = createMockCache();
++      const filterCachedRows = systemTableCache.filter;
++      systemTableCache.filter = (tableName, predicate) => {
++        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
++          return visibleReplicaOperations.filter(predicate);
++        }
++        return filterCachedRows(tableName, predicate);
++      };
++      const schemaOperation = {
++        operation_id: 'schema-provisioning-add-p1-r4',
++        type: 'ADD',
++        partition_id: 'schema-provisioning-p1',
++        replica_id: 'schema-provisioning-p1-r4',
++        source_node_id: REBALANCER_TEST_NODE_ID_A,
++        target_node_id: REBALANCER_TEST_NODE_ID_B,
++        status: 'syncing',
++        workflow_step: 'SYNCING',
++        created_at: nowMs,
++        updated_at: nowMs,
++        completed_at: null,
++        error_message: null,
++        steps_history: '[]',
++        entity_type: EntityType.PARTITION,
++        entity_id: 'schema-provisioning-p1',
++      };
++      visibleReplicaOperations.push({
++        ...schemaOperation,
++        operation_id: 'pre-clear-completed-add-p1-r3',
++        replica_id: 'pre-clear-completed-p1-r3',
++        status: 'active',
++        workflow_step: 'ACTIVE',
++        created_at: nowMs - 500,
++        updated_at: nowMs - 1,
++        completed_at: nowMs - 1,
++      });
++      const observer = createTestRebalancer({
++        entityId: 'priority-spread-observer-p1',
++        entityType: EntityType.PARTITION,
++        nodeId: REBALANCER_TEST_NODE_ID_A,
++        controlPlaneReadinessService: sharedReadinessOwner,
++        nowFn: () => nowMs,
++      });
++      const backgroundEntity = createTestRebalancer({
++        entityId: 'ordinary-background-p1',
++        entityType: EntityType.PARTITION,
++        nodeId: REBALANCER_TEST_NODE_ID_A,
++        systemTableCache,
++        controlPlaneReadinessService: sharedReadinessOwner,
++        nowFn: () => nowMs,
++      });
++      const priorityEntity = createTestRebalancer({
++        entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
++        entityType: EntityType.PARTITION,
++        nodeId: REBALANCER_TEST_NODE_ID_A,
++        systemTableCache,
++        controlPlaneReadinessService: sharedReadinessOwner,
++        nowFn: () => nowMs,
++      });
++      observer.getControlPlanePrioritySpreadBlocker = () => ({
++        requiredDistinctNodeCount: 3,
++        requiredQuorumDistinctNodeCount: 2,
++        blockedPartitions: [{
++          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
++          readyReplicaCount: 2,
++          readyDistinctNodeCount: 1,
++          spreadGap: 1,
++        }],
++      });
++      backgroundEntity.getControlPlanePrioritySpreadBlocker = () => null;
++      priorityEntity.getControlPlanePrioritySpreadBlocker = () => null;
++      observer.randomSource = {random: () => 0};
++      backgroundEntity.randomSource = {random: () => 0};
++
++      try {
++        observer.resolvePrioritySpreadPlanningGateDecision();
++        const firstClearDecision =
++          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
++        t.equal(
++          firstClearDecision.blocker.stableElapsedMs,
++          0,
++          'the first priority-clear sample should start the active release clock',
++        );
++
++        nowMs += 20_000;
++        schemaOperation.created_at = nowMs;
++        schemaOperation.updated_at = nowMs;
++        visibleReplicaOperations.push(schemaOperation);
++        t.equal(
++          priorityEntity.resolvePrioritySpreadPlanningGateDecision(),
++          null,
++          'global topology work must not defer a priority partition',
++        );
++
++        nowMs += 39_000;
++        schemaOperation.status = 'active';
++        schemaOperation.workflow_step = 'ACTIVE';
++        schemaOperation.updated_at = nowMs;
++        schemaOperation.completed_at = nowMs;
++
++        nowMs += 11_000;
++        const missedIntervalDecision =
++          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
++        t.equal(
++          missedIntervalDecision.blocker.stableElapsedMs,
++          11_000,
++          'a retained terminal row should recover work missed between evaluations',
++        );
++        t.equal(
++          missedIntervalDecision.blocker.stableRemainingMs,
++          59_000,
++          'the scheduled recheck should preserve the post-drain maturity deadline',
++        );
++
++        const admissionStableWindowMs =
++          backgroundEntity.periodicCheckIntervalMs;
++        const observationHandoffMs =
++          backgroundEntity
++            .getBackgroundPrioritySpreadObservationHandoffMs();
++        nowMs = schemaOperation.completed_at + admissionStableWindowMs;
++        const admissionBoundaryDecision =
++          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
++        t.equal(
++          admissionBoundaryDecision.blocker.stableRemainingMs,
++          observationHandoffMs,
++          'ordinary work should remain fenced through the observation handoff',
++        );
++
++        nowMs += observationHandoffMs;
++        t.equal(
++          backgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
++          null,
++          'ordinary work should release after full post-drain stability',
++        );
++
++        visibleReplicaOperations.push({
++          ...schemaOperation,
++          operation_id: 'post-release-ordinary-add-p1-r5',
++          replica_id: 'post-release-ordinary-p1-r5',
++          status: 'syncing',
++          workflow_step: 'SYNCING',
++          created_at: nowMs,
++          updated_at: nowMs,
++          completed_at: null,
++        });
++        t.equal(
++          backgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
++          null,
++          'later ordinary work must not re-arm a completed formation release',
++        );
++      } finally {
++        observer.shutdown();
++        backgroundEntity.shutdown();
++        priorityEntity.shutdown();
++      }
++    });
++
+   test('UnifiedRebalancer defers non-priority system planning while priority spread is pending',
+     async (t) => {
+       initializeTestEnvironment();

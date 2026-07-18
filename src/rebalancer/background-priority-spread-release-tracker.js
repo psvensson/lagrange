@@ -102,6 +102,52 @@ function observeBackgroundPrioritySpreadBlocked(options = {}) {
   scope.tracker = tracker;
 }
 
+function isBackgroundPrioritySpreadReleaseActive(options = {}) {
+  const scope = getReleaseScope(options.readinessOwner);
+  return scope?.tracker?.active === true;
+}
+
+function observeActiveBackgroundPrioritySpreadReleaseBlocked(options = {}) {
+  const scope = getReleaseScope(options.readinessOwner);
+  const tracker = scope?.tracker;
+  if (!tracker || tracker.active !== true) {
+    return false;
+  }
+  tracker.lastBlockedObservedAtMs =
+    normalizeObservedAt(options.observedAt);
+  tracker.clearObservedAtMs = null;
+  return true;
+}
+
+function observeActiveBackgroundPrioritySpreadOperationDrain(options = {}) {
+  const scope = getReleaseScope(options.readinessOwner);
+  const tracker = scope?.tracker;
+  if (
+    !tracker ||
+    tracker.active !== true ||
+    !Number.isFinite(options.drainedAt)
+  ) {
+    return false;
+  }
+  const drainedAtMs = Math.floor(options.drainedAt);
+  const lastBlockedObservedAtMs =
+    Number.isFinite(tracker.lastBlockedObservedAtMs) ?
+      tracker.lastBlockedObservedAtMs :
+      Number.NEGATIVE_INFINITY;
+  const clearObservedAtMs = Number.isFinite(tracker.clearObservedAtMs) ?
+    tracker.clearObservedAtMs :
+    Number.NEGATIVE_INFINITY;
+  if (
+    drainedAtMs <= lastBlockedObservedAtMs ||
+    drainedAtMs <= clearObservedAtMs
+  ) {
+    return false;
+  }
+  tracker.lastBlockedObservedAtMs = drainedAtMs;
+  tracker.clearObservedAtMs = drainedAtMs;
+  return true;
+}
+
 function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
   const scope = getReleaseScope(options.readinessOwner);
   const tracker = scope?.tracker;
@@ -136,7 +182,10 @@ function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
 
 export {
   BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE,
+  isBackgroundPrioritySpreadReleaseActive,
   isBackgroundPrioritySpreadReleaseOwner,
+  observeActiveBackgroundPrioritySpreadReleaseBlocked,
+  observeActiveBackgroundPrioritySpreadOperationDrain,
   observeBackgroundPrioritySpreadBlocked,
   resolveBackgroundPrioritySpreadStableRelease,
   transferBackgroundPrioritySpreadReleaseOwnership,

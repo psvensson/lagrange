@@ -14,6 +14,9 @@ import {
   REBALANCE_PLANNING_GATE,
 } from './rebalancer-planning-gate-constants.js';
 import {
+  isBackgroundPrioritySpreadReleaseActive,
+  observeActiveBackgroundPrioritySpreadReleaseBlocked,
+  observeActiveBackgroundPrioritySpreadOperationDrain,
   observeBackgroundPrioritySpreadBlocked,
   resolveBackgroundPrioritySpreadStableRelease,
 } from './background-priority-spread-release-tracker.js';
@@ -72,10 +75,39 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       if (this.isControlPlanePriorityPartition()) {
         return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
       }
+      const observedAt = this.nowFn();
+      let globalTopologyBlockingOperationCount = 0;
+      let latestTopologyDrain = null;
+      if (isBackgroundPrioritySpreadReleaseActive({
+        readinessOwner: this.controlPlaneReadinessService,
+      })) {
+        const globalTopologyBlockingOperations =
+          this.getGlobalTopologyBlockingInFlightOperations().filter(
+            (operation) => this.isTopologySettlingInFlightOperation(
+              operation,
+              {nowMs: observedAt},
+            ),
+          );
+        globalTopologyBlockingOperationCount =
+          globalTopologyBlockingOperations.length;
+        if (globalTopologyBlockingOperationCount > 0) {
+          observeActiveBackgroundPrioritySpreadReleaseBlocked({
+            readinessOwner: this.controlPlaneReadinessService,
+            observedAt,
+          });
+        } else {
+          latestTopologyDrain =
+            this.getLatestGlobalTopologyShapingOperationDrain({observedAt});
+          observeActiveBackgroundPrioritySpreadOperationDrain({
+            readinessOwner: this.controlPlaneReadinessService,
+            drainedAt: latestTopologyDrain?.drainedAtMs,
+          });
+        }
+      }
       const stableReleaseBlocker =
         resolveBackgroundPrioritySpreadStableRelease({
           readinessOwner: this.controlPlaneReadinessService,
-          observedAt: this.nowFn(),
+          observedAt,
           requiredStableMs:
             this.getBackgroundPrioritySpreadStableWindowMs(),
         });
@@ -101,6 +133,11 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
           clearObservedAtMs: stableReleaseBlocker.clearObservedAtMs,
           lastBlockedObservedAtMs:
             stableReleaseBlocker.lastBlockedObservedAtMs,
+          globalTopologyBlockingOperationCount,
+          latestTopologyDrainAtMs:
+            latestTopologyDrain?.drainedAtMs || null,
+          latestTopologyDrainOperationId:
+            latestTopologyDrain?.operationId || null,
         },
         scheduleDelayMs,
       });

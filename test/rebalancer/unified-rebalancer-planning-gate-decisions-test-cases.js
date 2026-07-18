@@ -745,6 +745,169 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       }
     });
 
+  test('UnifiedRebalancer anchors active background release to global topology quiescence',
+    async (t) => {
+      initializeTestEnvironment();
+
+      let nowMs = 1000;
+      const sharedReadinessOwner = {};
+      const visibleReplicaOperations = [];
+      const systemTableCache = createMockCache();
+      const filterCachedRows = systemTableCache.filter;
+      systemTableCache.filter = (tableName, predicate) => {
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+          return visibleReplicaOperations.filter(predicate);
+        }
+        return filterCachedRows(tableName, predicate);
+      };
+      const schemaOperation = {
+        operation_id: 'schema-provisioning-add-p1-r4',
+        type: 'ADD',
+        partition_id: 'schema-provisioning-p1',
+        replica_id: 'schema-provisioning-p1-r4',
+        source_node_id: REBALANCER_TEST_NODE_ID_A,
+        target_node_id: REBALANCER_TEST_NODE_ID_B,
+        status: 'syncing',
+        workflow_step: 'SYNCING',
+        created_at: nowMs,
+        updated_at: nowMs,
+        completed_at: null,
+        error_message: null,
+        steps_history: '[]',
+        entity_type: EntityType.PARTITION,
+        entity_id: 'schema-provisioning-p1',
+      };
+      visibleReplicaOperations.push({
+        ...schemaOperation,
+        operation_id: 'pre-clear-completed-add-p1-r3',
+        replica_id: 'pre-clear-completed-p1-r3',
+        status: 'active',
+        workflow_step: 'ACTIVE',
+        created_at: nowMs - 500,
+        updated_at: nowMs - 1,
+        completed_at: nowMs - 1,
+      });
+      const observer = createTestRebalancer({
+        entityId: 'priority-spread-observer-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        controlPlaneReadinessService: sharedReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      const backgroundEntity = createTestRebalancer({
+        entityId: 'ordinary-background-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        systemTableCache,
+        controlPlaneReadinessService: sharedReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      const priorityEntity = createTestRebalancer({
+        entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        systemTableCache,
+        controlPlaneReadinessService: sharedReadinessOwner,
+        nowFn: () => nowMs,
+      });
+      observer.getControlPlanePrioritySpreadBlocker = () => ({
+        requiredDistinctNodeCount: 3,
+        requiredQuorumDistinctNodeCount: 2,
+        blockedPartitions: [{
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          readyReplicaCount: 2,
+          readyDistinctNodeCount: 1,
+          spreadGap: 1,
+        }],
+      });
+      backgroundEntity.getControlPlanePrioritySpreadBlocker = () => null;
+      priorityEntity.getControlPlanePrioritySpreadBlocker = () => null;
+      observer.randomSource = {random: () => 0};
+      backgroundEntity.randomSource = {random: () => 0};
+
+      try {
+        observer.resolvePrioritySpreadPlanningGateDecision();
+        const firstClearDecision =
+          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          firstClearDecision.blocker.stableElapsedMs,
+          0,
+          'the first priority-clear sample should start the active release clock',
+        );
+
+        nowMs += 20_000;
+        schemaOperation.created_at = nowMs;
+        schemaOperation.updated_at = nowMs;
+        visibleReplicaOperations.push(schemaOperation);
+        t.equal(
+          priorityEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'global topology work must not defer a priority partition',
+        );
+
+        nowMs += 39_000;
+        schemaOperation.status = 'active';
+        schemaOperation.workflow_step = 'ACTIVE';
+        schemaOperation.updated_at = nowMs;
+        schemaOperation.completed_at = nowMs;
+
+        nowMs += 11_000;
+        const missedIntervalDecision =
+          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          missedIntervalDecision.blocker.stableElapsedMs,
+          11_000,
+          'a retained terminal row should recover work missed between evaluations',
+        );
+        t.equal(
+          missedIntervalDecision.blocker.stableRemainingMs,
+          59_000,
+          'the scheduled recheck should preserve the post-drain maturity deadline',
+        );
+
+        const admissionStableWindowMs =
+          backgroundEntity.periodicCheckIntervalMs;
+        const observationHandoffMs =
+          backgroundEntity
+            .getBackgroundPrioritySpreadObservationHandoffMs();
+        nowMs = schemaOperation.completed_at + admissionStableWindowMs;
+        const admissionBoundaryDecision =
+          backgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          admissionBoundaryDecision.blocker.stableRemainingMs,
+          observationHandoffMs,
+          'ordinary work should remain fenced through the observation handoff',
+        );
+
+        nowMs += observationHandoffMs;
+        t.equal(
+          backgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'ordinary work should release after full post-drain stability',
+        );
+
+        visibleReplicaOperations.push({
+          ...schemaOperation,
+          operation_id: 'post-release-ordinary-add-p1-r5',
+          replica_id: 'post-release-ordinary-p1-r5',
+          status: 'syncing',
+          workflow_step: 'SYNCING',
+          created_at: nowMs,
+          updated_at: nowMs,
+          completed_at: null,
+        });
+        t.equal(
+          backgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'later ordinary work must not re-arm a completed formation release',
+        );
+      } finally {
+        observer.shutdown();
+        backgroundEntity.shutdown();
+        priorityEntity.shutdown();
+      }
+    });
+
   test('UnifiedRebalancer defers non-priority system planning while priority spread is pending',
     async (t) => {
       initializeTestEnvironment();
