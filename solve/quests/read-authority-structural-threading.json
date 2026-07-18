@@ -1,0 +1,42 @@
+{
+  "id": "read-authority-structural-threading",
+  "authoringContractVersion": 1,
+  "statement": "Every control-plane system-table read carries one frozen read-authority contract (strategy, authoritative read mode, owner-RPC leader pin, local and replica-fallback consistency, routing readiness dimension, observation scope) built once at gateway ingress and threaded structurally: every coalescing identity embeds the serialized contract, executeOnPartition receives the contract instead of positional booleans, the authoritativeReadMode flags-to-enum-to-flags re-expansion and per-hop hand-enumerated option rebuilding are deleted, and no intermediate layer can drop an authority field without failing closed; all existing gateway, repository, and CDC read-path tests remain green.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/formation-complexity-consolidation.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "498824a329de69e0606dc03c4eabeccbbc9c5627"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "read-authority-structural-threading",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "read-authority-structural-threading-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "read-authority-structural-threading",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
