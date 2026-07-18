@@ -1,0 +1,20 @@
+{
+  "test": "test/control-plane/formation-placement-membership-handoff.test.js",
+  "src": [
+    "src/control-plane/membership-publication-candidate-derivation.js",
+    "src/control-plane/membership-lifecycle-constants.js",
+    "src/control-plane/membership-publication-lifecycle-summary.js",
+    "src/control-plane/membership-publication-planning-evidence.js",
+    "src/control-plane/startup-authority-snapshot-owner.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-18T08:13:33.355Z"
+}

@@ -2,9 +2,21 @@ const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assertAuthoritativeCacheReconcileResult(result, receipt, constants) {
   if (result?.success !== true) {
-    throw new Error(
-      result?.error || constants.error.CACHE_NOT_RECONCILED,
+    const errorCode =
+      result?.error || constants.error.CACHE_NOT_RECONCILED;
+    const reconciliationReason =
+      typeof result?.reconciliationReason === 'string' &&
+      result.reconciliationReason.length > 0 ?
+        result.reconciliationReason :
+        null;
+    const error = new Error(
+      reconciliationReason ?
+        `${errorCode}:${reconciliationReason}` :
+        errorCode,
     );
+    error.code = errorCode;
+    error.reconciliationReason = reconciliationReason;
+    throw error;
   }
   const completeObservationRequested = receipt?.scope ===
     constants.scope.COMPLETE_TABLE;

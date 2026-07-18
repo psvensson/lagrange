@@ -22,6 +22,7 @@ const {
   STRING,
   classifySystemPartition,
   getControlPlaneNodeStatePublicationProfile,
+  getOperationMetadataValue,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
@@ -35,6 +36,38 @@ const DISPATCH_RETRY_READY_NODE_DIMENSIONS = Object.freeze([
 ]);
 
 class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
+  /**
+   * Initial partition provisioning persists operation intents before it can
+   * derive the complete cohort. CDC and cache replay must leave those intents
+   * parked until the topology-stamped update clears this durable hold.
+   *
+   * @param {Object|null} operationOrRow
+   * @return {boolean}
+   * @private
+   */
+  isBootstrapTopologyDispatchDeferred(operationOrRow) {
+    if (!operationOrRow || typeof operationOrRow !== 'object') {
+      return false;
+    }
+
+    let stepsHistory = operationOrRow.stepsHistory;
+    if (!Array.isArray(stepsHistory)) {
+      stepsHistory = operationOrRow.steps_history;
+    }
+    if (typeof stepsHistory === 'string') {
+      try {
+        stepsHistory = JSON.parse(stepsHistory);
+      } catch {
+        return false;
+      }
+    }
+
+    return getOperationMetadataValue(
+      stepsHistory,
+      OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED,
+    ) === true;
+  }
+
   replaceDeferredNodeStateUpdatePayload(nodeId, payload) {
     const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
     if (!deferredRetry) {

@@ -18,12 +18,11 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for formation-background-release-owner-closure-main
-- No longer current: post-terminal observation projection as the sole budget-closing mechanism
 
 ## Continuation
 - Status: allowed
@@ -47,6 +46,10 @@
 - **formation-background-release-owner-closure-main**: inherited from formation-priority-spread-authoritative-publication-closure: The final priority operation work terminalizes before the clean placement observation, but the seed continues to report status_syncing for sql_transaction_participants and sql_transactions until 01:35:17.557Z and first enters stabilizing at 01:35:18.146Z. Projecting terminal operations into admission observation could recover only the post-terminal visibility lag and cannot supply the roughly 39,186ms still missing from the sealed 60,000ms window; the safe lever is to execute the unavoidable priority placement work before public all-ACTIVE visibility. (rules out: post-terminal observation projection as the sole budget-closing mechanism) [data/examples/service-data-affinity-demo/node-0.log]
 - **formation-background-release-owner-closure-main**: The parent symptom reproduces on the successor's HEAD baseline: after priority topology reached zero spread gap and no missing leaders, the ordinary 60000ms background release clock created four nonpriority REPLACEs before the stricter schema-admission candidate could be observed mature. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
 - **formation-background-release-owner-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
+- **formation-background-release-owner-closure-main**: The successor's aggregate four-source package is GREEN, RED on isolated revert, and GREEN after restore. Because the new tracker is absent at HEAD the tool warns that import existence contributes to the red; exact independent attacks remain the union, timer, invalid-owner, and priority-exemption semantic authority. [dt:solve/changes/dt-prove/unified-rebalancer.test.js-2026-07-18T02-44-33-258Z.json]
+- **formation-background-release-owner-closure-main**: Independent verification approves the exact successor artifact: transitive A-to-B/C-to-B aliasing, alias-wide release/rearm, valid object/function owner transfer, missing and primitive owner retention, priority exemption, and actual 70000/10000/1000ms timer application all pass; the five-path delta is exact and protected evidence is unchanged. [subagent:formation_barrier_verifier]
+- **formation-background-release-owner-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
+- **formation-background-release-owner-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
 
 ## Theories
 _(none recorded)_

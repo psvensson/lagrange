@@ -7,8 +7,8 @@ import {
 // stored-snapshot fast path misses every call, so the priority-recovery planning
 // projection (deep cluster read + parse/clone storm) was rebuilt per routing call
 // → seed event-loop freeze. The fix memoizes the projection per publisher node,
-// validated by the EXISTING isReadinessSnapshotInvalidated predicate. These tests
-// exercise the memo directly via the prototype method with a mock `this`.
+// validated by the cluster-wide planning-source revision. These tests exercise
+// the memo directly via the prototype method with a mock `this`.
 //
 // observedAt on the real hot path is an ISO STRING (getNodeReadinessSync:
 // normalizeIsoTimestamp(now)). These tests use REAL ISO timestamps so the
@@ -22,19 +22,17 @@ const resolveMemo =
 const T0 = Date.parse('2026-06-14T06:00:00.000Z');
 const iso = (offsetMs) => new Date(T0 + offsetMs).toISOString();
 
-// Build a mock readiness service `this`. `invalidated` is a mutable predicate the
-// test drives to simulate cache-change invalidation. `builds` records every heavy
-// projection build (per nodeId) so we can prove the memo collapses the storm.
-function memoCtx({nodeId = 'seed', invalidated = () => false} = {}) {
+// Build a mock readiness service `this`. `builds` records every heavy projection
+// build (per nodeId) so we can prove the memo collapses the storm.
+function memoCtx({nodeId = 'seed'} = {}) {
   let clock = T0;
   const builds = [];
   const ctx = {
     nodeId,
     now: () => (clock += 1),
     membershipPublicationPlanningActiveStaleGraceMs: 15000,
+    membershipPublicationPlanningSourceRevision: 0,
     priorityRecoveryPlanningProjectionMemoByNodeId: new Map(),
-    isReadinessSnapshotInvalidated: (key, capturedAtMs) =>
-      invalidated(key, capturedAtMs),
     // CL-033/CL-034 regression repair: the real wall-time grace gate. With an ISO
     // observedAt this must parse to ms (not collapse to a NaN comparison that
     // silently disables the memo — the 54db83b9 regression these tests catch).
@@ -67,15 +65,14 @@ t.test('memo: a stable cache-epoch builds the projection once and reuses it', as
 });
 
 t.test('memo: an invalidation (cache change) forces exactly one rebuild', async (t) => {
-  let invalid = false;
-  const {ctx, builds} = memoCtx({invalidated: () => invalid});
+  const {ctx, builds} = memoCtx();
   const before = resolveMemo.call(ctx, 'seed', iso(1));
   t.equal(builds.length, 1, 'built once');
-  invalid = true; // a publication/node cache change supersedes the memo
+  // Any planning-source cache change advances the cluster-wide revision.
+  ctx.membershipPublicationPlanningSourceRevision += 1;
   const after = resolveMemo.call(ctx, 'seed', iso(2));
   t.equal(builds.length, 2, 'rebuilt once after invalidation');
   t.not(after, before, 'returns the fresh projection, not the stale one');
-  invalid = false; // re-stabilized; the fresh entry is now reused
   const reused = resolveMemo.call(ctx, 'seed', iso(3));
   t.equal(builds.length, 2, 'no rebuild while stable again');
   t.equal(reused, after, 'reuses the post-invalidation entry');

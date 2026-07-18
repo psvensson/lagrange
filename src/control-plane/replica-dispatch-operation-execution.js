@@ -171,6 +171,9 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
     if (!isCoordinatorOwnedOperationType(row.type)) {
       return;
     }
+    if (this.isBootstrapTopologyDispatchDeferred(row)) {
+      return;
+    }
 
     if (!this.rebalanceCoordinator) {
       return;

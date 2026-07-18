@@ -1,0 +1,17 @@
+{
+  "test": "test/rebalancer/priority-recovery-follow-up-count-aware-add-gate.test.js",
+  "src": [
+    "src/rebalancer/unified-rebalancer-follow-up-move.js",
+    "src/rebalancer/unified-rebalancer-follow-up-shared.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-17T13:09:03.861Z"
+}

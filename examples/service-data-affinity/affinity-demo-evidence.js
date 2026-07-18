@@ -13,6 +13,7 @@ import {
   buildServiceDataAffinityWeights,
 } from '../../src/rebalancer/service-data-affinity-weights.js';
 import {
+  parseResultSnapshotWitness,
   resolveCompletePartialSnapshot,
 } from '../../src/runtime/sql-query-loop-parallel-reduce.js';
 
@@ -119,6 +120,48 @@ function resolvePartialSnapshotEvidence(
   }
 }
 
+function resultSnapshotIsFresh(options) {
+  const {
+    serviceTopN,
+    parallelReduceConfig,
+    partialLimit,
+    phaseStartedAt,
+    placedReplicaIds,
+    expectedMergeCandidateCount,
+  } = options;
+  if (serviceTopN.length === 0) {
+    return false;
+  }
+  const snapshotColumn = parallelReduceConfig?.resultSnapshotColumn;
+  const sourceSnapshotJson = serviceTopN[0]?.[snapshotColumn];
+  const sourceSnapshot = parseResultSnapshotWitness(
+    sourceSnapshotJson,
+    parallelReduceConfig,
+    partialLimit,
+  );
+  if (!sourceSnapshot.valid) {
+    return false;
+  }
+  const resultComputedAt = Number(serviceTopN[0]?.computed_at);
+  const sourceReplicaIds = new Set(
+    sourceSnapshot.slots.map((slot) => slot.replicaId),
+  );
+  const sourceCandidateCount = sourceSnapshot.slots.reduce(
+    (count, slot) => count + slot.candidateCount,
+    0,
+  );
+  return Number.isFinite(resultComputedAt) &&
+    resultComputedAt >= phaseStartedAt &&
+    sourceCandidateCount <= expectedMergeCandidateCount &&
+    sameIdentitySet(sourceReplicaIds, placedReplicaIds) &&
+    serviceTopN.every((row) =>
+      Number(row.computed_at) === resultComputedAt &&
+      row[snapshotColumn] === sourceSnapshotJson) &&
+    sourceSnapshot.slots.every((slot) =>
+      slot.computedAt >= phaseStartedAt &&
+      slot.computedAt <= resultComputedAt);
+}
+
 function assessAffinityDemoCompletion(options) {
   const {
     expectedReplicaCount,
@@ -146,12 +189,14 @@ function assessAffinityDemoCompletion(options) {
   const partialsFresh = reduceSlots.every((row) =>
     Number(row.computed_at) >= phaseStartedAt &&
     Number(row.lease_expires_at) > Date.now());
-  const latestPartialAt = Math.max(
-    ...reduceSlots.map((row) => Number(row.computed_at) || 0),
-  );
-  const resultFresh = serviceTopN.length > 0 && serviceTopN.every((row) =>
-    Number(row.computed_at) >= phaseStartedAt &&
-    Number(row.computed_at) >= latestPartialAt);
+  const resultFresh = resultSnapshotIsFresh({
+    serviceTopN,
+    parallelReduceConfig,
+    partialLimit,
+    phaseStartedAt,
+    placedReplicaIds,
+    expectedMergeCandidateCount,
+  });
   const partialsBounded = partialSnapshot.complete &&
     mergeCandidateCount <= expectedMergeCandidateCount;
   const identitiesCurrent = sameIdentitySet(

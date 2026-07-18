@@ -11,8 +11,8 @@
  *
  * Policy under test: while activeCount > target (a surplus that has not drained),
  * a priority partition must NOT mint new add-like moves — only drain. At/under
- * target the first concurrent spread-restoration batch and provisioning fan-out
- * are untouched (they transiently exceed target by design as sources drain).
+ * target a priority partition may mint one serial spread ADD; the next pass
+ * drains the resulting target-plus-one surplus without a REPLACE handoff.
  *
  * RED before the cap (emits an over-target ADD/REPLACE); GREEN after.
  */
@@ -213,11 +213,10 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
   );
 
   await t.test(
-    'AT target (no surplus) the first concurrent spread-restoration batch is ' +
-    'allowed',
+    'AT target (no surplus) spread restoration starts with one serial ADD',
     async (t) => {
-      // 3 active concentrated on node-1 (at target, mis-spread). This legitimately
-      // moves replicas to other nodes; the cap must NOT engage (no surplus yet).
+      // 3 active concentrated on node-1 (at target, mis-spread). This
+      // legitimately expands once; the next pass drains the redundant source.
       const currentReplicas = [
         active('r1', 'node-1'),
         active('r2', 'node-1'),
@@ -228,9 +227,13 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
       const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
 
       t.equal(
-        moves.some((m) => m.type === REBALANCER_MOVE_TYPE.REPLACE),
+        moves.some((m) => m.type === REBALANCER_MOVE_TYPE.ADD),
         true,
-        'at target with no surplus, spread restoration proceeds');
+        'at target with no surplus, serial spread expansion proceeds');
+      t.equal(
+        moves.some((m) => m.type === REBALANCER_MOVE_TYPE.REPLACE),
+        false,
+        'priority spread expansion avoids a replacement handoff');
     },
   );
 

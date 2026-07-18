@@ -1,0 +1,18 @@
+{
+  "test": "test/convergence/dt6-authoritative-observation-watermark.test.js",
+  "src": [
+    "src/cache/cache-constants.js",
+    "src/cache/system-table-cache.js",
+    "src/control-plane/control-plane-system-table-gateway-cache-reconciliation.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-17T23:44:17.903Z"
+}

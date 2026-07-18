@@ -81,6 +81,8 @@ class RebalanceCoordinatorOperationCreation {
    * @param {string} [move.replicaId] - Replica ID (for REMOVE operations).
    * @param {boolean} [move.emitOperationCreated] - Emit the local
    *   coordinator-created dispatch trigger after persistence.
+   * @param {boolean} [move.deferDispatchUntilBootstrapTopology] - Persist the
+   *   operation as non-dispatchable until its bootstrap cohort is complete.
    * @param {boolean} [move.skipProvisioningAdmissionRecheck] - Reuse an
    *   immediately preceding admitted provisioning probe for this target.
    * @return {Promise<Object>} Created or existing operation record.
@@ -594,6 +596,14 @@ class RebalanceCoordinatorOperationCreation {
     });
     operation.entityType = entityType;
     operation.entityId = entityId;
+    if (
+      move?.deferDispatchUntilBootstrapTopology === true &&
+      operation.stepsHistory.length > 0
+    ) {
+      operation.stepsHistory[0][
+        OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+      ] = true;
+    }
     const bootstrapTopology = this.buildOperationBootstrapTopology({
       normalizedMoveType,
       entityType,

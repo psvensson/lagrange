@@ -1,0 +1,17 @@
+{
+  "test": "test/rebalancer/unified-rebalancer.test.js",
+  "src": [
+    "src/rebalancer/background-priority-spread-release-tracker.js",
+    "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-18T09:30:47.152Z"
+}

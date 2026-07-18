@@ -240,7 +240,35 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
       return eligibleNodeIds;
     }
     const targetNodeIdSet = new Set(targetNodeIds);
-    return eligibleNodeIds.filter((nodeId) => targetNodeIdSet.has(nodeId));
+    return [
+      ...eligibleNodeIds.filter((nodeId) => targetNodeIdSet.has(nodeId)),
+      ...eligibleNodeIds.filter(
+        (nodeId) =>
+          !targetNodeIdSet.has(nodeId) &&
+          this.isPriorityRecoveryFollowUpTargetRecoveryOnly(nodeId),
+      ),
+    ];
+  }
+
+  isPriorityRecoveryFollowUpTargetRecoveryOnly(nodeId) {
+    if (
+      nodeId.length === 0 ||
+      typeof this.controlPlaneReadinessService?.getNodeReadinessSync !==
+        'function'
+    ) {
+      return false;
+    }
+    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+      nodeId,
+      {allowStaleOnCacheChange: false},
+    );
+    const dimensions = readiness?.dimensions || {};
+    return (
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ] === true &&
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === false
+    );
   }
 
   isPriorityRecoveryFollowUpTargetKnownLocallyNotReady(nodeId) {
@@ -498,6 +526,30 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
         partitionId,
         ownerOperationObservation,
       );
+    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
+    const targetReplicaCount =
+      this.resolvePriorityRecoveryFollowUpTargetReplicaCount(
+        decision,
+        context.targetState,
+      );
+    // The canonical move planner runs before follow-up augmentation and caps
+    // add-like work once a priority partition is already over target. Use the
+    // inventory's ACTIVE count, not ready-only healthyReplicas: a terminal
+    // ADD projection proves the fourth voter exists before its service row has
+    // every field (notably address/readiness) needed by getHealthyReplicas().
+    // ACTIVE is deliberate: a merely occupied SYNCING row may still need the
+    // replacement cure chosen below.
+    // Reintroducing a REPLACE in that visibility window defeated the planner's
+    // drain-only lane and removed the last schema_operations leader after
+    // spread had already reached three nodes. The existing standalone REMOVE
+    // restores target count through the unchanged remove, quorum, and voter
+    // safety authorities.
+    if (inventory.accounting.activeCount > targetReplicaCount) {
+      return this.buildPriorityRecoveryFollowUpMoveOutcome(
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.OVER_REPLICATION_SUPPRESSED,
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.OVER_REPLICATION_SUPPRESSED,
+      );
+    }
     const targetNodeId = this.selectPriorityRecoveryFollowUpTargetNodeId(
       decision,
       currentReplicas,
@@ -512,12 +564,6 @@ class UnifiedRebalancerFollowUpMove extends UnifiedRebalancerFollowUpDecision {
     }
     const serialWaitMoveFields =
       this.buildPriorityRecoveryFollowUpSerialWaitMoveFields(decision);
-    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
-    const targetReplicaCount =
-      this.resolvePriorityRecoveryFollowUpTargetReplicaCount(
-        decision,
-        context.targetState,
-      );
     const sourceReplica = this.selectPriorityRecoveryFollowUpSourceReplica(
       healthyReplicas,
       targetNodeId,

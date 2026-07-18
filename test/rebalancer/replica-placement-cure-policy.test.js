@@ -12,9 +12,12 @@ import {
   ORDINARY_SERIAL_LANE_CURE_MOVE_TYPES,
   PLACEMENT_CURE_BY_CONDITION,
   PLACEMENT_CURE_CONDITION,
+  classifyPriorityExpandForSpreadCureCondition,
   classifyPriorityRecoveryAdmissionPartitionClass,
   classifyPriorityRecoveryFollowUpCureCondition,
+  classifyPrioritySpreadSurplusDrainCureCondition,
   isOrdinarySerialLaneCureMove,
+  isPrioritySpreadSatisfiedAtTarget,
   resolvePlacementCure,
   resolvePlacementCureBudgetScope,
   resolvePlacementCureBudgetScopeFromAdmissionPlan,
@@ -82,9 +85,13 @@ test('the condition -> cure rows keep their sealed memberships', (t) => {
     .filter(([, cure]) => cure.moveType === REBALANCER_MOVE_TYPE.ADD)
     .map(([condition]) => condition);
   t.strictSame(
-    addConditions,
-    [PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION],
-    'under-representation is the ONLY ADD-cured condition');
+    addConditions.sort(),
+    [
+      PLACEMENT_CURE_CONDITION.LEDGER_EXPAND_FOR_SPREAD,
+      PLACEMENT_CURE_CONDITION.PRIORITY_EXPAND_FOR_SPREAD,
+      PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
+    ].sort(),
+    'only count recovery and declared serial spread expansion use ADD');
   t.end();
 });
 
@@ -127,6 +134,91 @@ test('the follow-up condition classifier owns the 2b5875b0 conjunct', (t) => {
     PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
     'no selectable source degrades to the ADD row (source-unavailable ' +
       'fallback), never an improvised REPLACE');
+  t.end();
+});
+
+test('non-ledger priority spread owns serial expand/drain classifications', (t) => {
+  const expandEvidence = {
+    partitionId: `${SYSTEM_TABLE_NAME.SQL_TRANSACTIONS}-p1`,
+    inFlightReplaceCount: 0,
+    naturalReplaceCount: 2,
+    addMoveCount: 2,
+    occupiedReplicaCount: 3,
+    deficitEffectiveCount: 3,
+    voterReplicaCount: 3,
+    activeReplicaCount: 3,
+    targetReplicaCount: 3,
+    targetDistinctNodeCount: 3,
+    activeDistinctNodeCount: 1,
+  };
+  t.equal(
+    classifyPriorityExpandForSpreadCureCondition(expandEvidence),
+    PLACEMENT_CURE_CONDITION.PRIORITY_EXPAND_FOR_SPREAD,
+    'at-target concentration expands by one non-disruptive voter');
+  t.equal(
+    classifyPriorityExpandForSpreadCureCondition({
+      ...expandEvidence,
+      partitionId: LEDGER_PARTITION_ID,
+    }),
+    null,
+    'the ledger keeps its separately guarded expansion row');
+  t.equal(
+    classifyPriorityExpandForSpreadCureCondition({
+      ...expandEvidence,
+      partitionId: USER_PARTITION_ID,
+    }),
+    null,
+    'ordinary data placement remains count-neutral');
+  t.equal(
+    classifyPriorityExpandForSpreadCureCondition({
+      ...expandEvidence,
+      activeDistinctNodeCount: 3,
+    }),
+    null,
+    'already-satisfied spread does not expand');
+
+  const drainEvidence = {
+    partitionId: expandEvidence.partitionId,
+    occupiedReplicaCount: 4,
+    voterReplicaCount: 4,
+    activeReplicaCount: 4,
+    targetReplicaCount: 3,
+    monotonicSafeRemoveCount: 1,
+  };
+  t.equal(
+    classifyPrioritySpreadSurplusDrainCureCondition(drainEvidence),
+    PLACEMENT_CURE_CONDITION.PRIORITY_DRAIN_SPREAD_SURPLUS,
+    'target-plus-one drains when distinct-node spread is preserved');
+  t.equal(
+    classifyPrioritySpreadSurplusDrainCureCondition({
+      ...drainEvidence,
+      monotonicSafeRemoveCount: 0,
+    }),
+    null,
+    'a regressive removal never receives the drain cure');
+
+  t.ok(
+    isPrioritySpreadSatisfiedAtTarget({
+      partitionId: expandEvidence.partitionId,
+      occupiedReplicaCount: 3,
+      voterReplicaCount: 3,
+      activeReplicaCount: 3,
+      activeDistinctNodeCount: 3,
+      targetReplicaCount: 3,
+      targetDistinctNodeCount: 3,
+    }),
+    'three healthy voters on three nodes satisfy priority recovery');
+  t.notOk(
+    isPrioritySpreadSatisfiedAtTarget({
+      partitionId: expandEvidence.partitionId,
+      occupiedReplicaCount: 3,
+      voterReplicaCount: 3,
+      activeReplicaCount: 3,
+      activeDistinctNodeCount: 2,
+      targetReplicaCount: 3,
+      targetDistinctNodeCount: 3,
+    }),
+    'a two-node placement remains actionable');
   t.end();
 });
 

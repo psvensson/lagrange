@@ -3,6 +3,7 @@ import {appendFile, mkdir} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
+import {STATE} from '../../src/constants/index.js';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {CREATE_RATINGS_SQL} from './movie-ranking.js';
 import {queryRows, startCluster} from './cluster-harness.js';
@@ -28,7 +29,7 @@ const DEFERRAL_COUNTER_STRINGS = Object.freeze({
   would_drop_voter_ready_below_minimum:
     'would drop voter-ready replicas below minimum',
 });
-const PARTITION_READY_STATE = 'NORMAL';
+const PARTITION_READY_STATE = STATE.NORMAL;
 const RATINGS_PARTITION_PREFIX = 'tbl-';
 const PARTITIONS_SQL =
   'SELECT partition_id, leader_node_id, state FROM partitions';

@@ -423,8 +423,12 @@ class AuthoritativeRowMutationHelper {
    * that out-versions the durable one).
    *
    * Outcomes:
-   * - capability absent at runtime (supported === false or the read throws):
-   *   fall back to the legacy cache dedup for this flush;
+   * - capability explicitly absent at runtime (supported === false): fall
+   *   back to the legacy cache dedup for this flush;
+   * - the authoritative read throws or returns no usable observation: defer
+   *   with a scheduled retry. A read failure is not evidence that the
+   *   capability is absent, and falling back to a locally seeded merged-cache
+   *   row can otherwise mistake visibility for durable persistence;
    * - authority unreadable or the durable row does not exist yet: defer with
    *   a scheduled retry (a cache row equal to pending is NOT durability
    *   evidence, and an UPDATE cannot apply to a missing row);
@@ -439,15 +443,22 @@ class AuthoritativeRowMutationHelper {
     try {
       probe = await this.readAuthoritativeRow(value);
     } catch (_readError) {
-      probe = null;
+      this.scheduleRetry();
+      return {
+        settled: true,
+        result: this.buildResult({
+          reason:
+            AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_CONFIRM_UNAVAILABLE,
+        }),
+      };
     }
-    if (!probe || probe.supported === false) {
+    if (probe?.supported === false) {
       const legacyResult = this.resolveLegacyCacheDedupResult();
       return legacyResult ?
         {settled: true, result: legacyResult} :
         {settled: false, row: null};
     }
-    if (probe.available === false || !probe.row) {
+    if (!probe || probe.available === false || !probe.row) {
       this.scheduleRetry();
       return {
         settled: true,

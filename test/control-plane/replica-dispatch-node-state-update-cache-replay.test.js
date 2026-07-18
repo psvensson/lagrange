@@ -14,7 +14,10 @@ import {
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {
+  OPERATION_METADATA_KEY,
+  OperationType,
+} from '../../src/rebalancer/replica-status.js';
 import {
   createService,
   initEnv,
@@ -163,6 +166,7 @@ async (t) => {
           dimensions: {
             [CONTROL_PLANE_READINESS_DIMENSION
               .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
           },
         };
       },
@@ -194,6 +198,121 @@ async (t) => {
       dispatchCalls[0]?.operationId,
       operationRow.operation_id,
       'replayed dispatch should preserve the operation id',
+    );
+  } finally {
+    service.stop();
+  }
+});
+
+test('ReplicaDispatchService parks bootstrap operations until their durable ' +
+  'topology hold is cleared', async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const targetNodeId = 'node-bootstrap-target';
+  const operationRow = {
+    operation_id: 'add-op-bootstrap-hold-1',
+    partition_id: 'ratings-p1',
+    replica_id: 'ratings-p1-r1',
+    target_node_id: targetNodeId,
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    type: OperationType.ADD,
+    steps_history: JSON.stringify([{
+      [OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED]: true,
+    }]),
+    created_at: now - 1000,
+    updated_at: now - 500,
+  };
+  const dispatchCalls = [];
+  const service = createService({
+    cacheNodes: [{
+      node_id: targetNodeId,
+      node_address: 'localhost:8091',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      capabilities: '[]',
+      last_heartbeat: now,
+      ready_lease_expires_at: now + 30000,
+      created_at: now - 5000,
+    }],
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        };
+      },
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation(operation) {
+        dispatchCalls.push(operation);
+        return {success: true};
+      },
+      isOperationLocallyOwned(operation) {
+        return operation?.target_node_id === targetNodeId ||
+          operation?.targetNodeId === targetNodeId;
+      },
+    },
+  });
+  service.captureDispatchReadiness = async () => ({
+    ready: true,
+    snapshot: null,
+    retryAfterMs: null,
+  });
+  const replayReasons = {
+    pendingReason: RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_PENDING,
+    replaceActiveReason:
+      RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_REPLACE_ACTIVE,
+  };
+
+  try {
+    t.equal(
+      service.replayReplicaOperationRow(operationRow, replayReasons),
+      false,
+      'CDC replay should leave an explicitly held bootstrap row parked',
+    );
+    await service.reconcileOperationDispatch(
+      operationRow.operation_id,
+      {row: operationRow},
+    );
+    t.equal(
+      dispatchCalls.length,
+      0,
+      'direct reconciliation should also respect the durable topology hold',
+    );
+
+    const releasedOperationRow = {
+      ...operationRow,
+      steps_history: JSON.stringify([{}]),
+      updated_at: now,
+    };
+    t.equal(
+      service.replayReplicaOperationRow(releasedOperationRow, replayReasons),
+      true,
+      'the topology-stamped update should make the same operation replayable',
+    );
+    while (
+      service.operationDispatchQueue.size > 0 ||
+      service.operationDispatchQueue.draining
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    t.equal(
+      dispatchCalls.length,
+      1,
+      'clearing the durable hold should release exactly one dispatch',
+    );
+    t.same(
+      dispatchCalls[0]?.operationId,
+      operationRow.operation_id,
+      'released dispatch should retain the original operation identity',
     );
   } finally {
     service.stop();

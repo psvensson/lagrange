@@ -188,24 +188,30 @@ async (t) => {
       'cdcIntegrationService.updateSystemTableRow',
     );
 
-    const leaderWrite = partitionWrites[0];
+    const leaderWrite = partitionWrites.find((write) =>
+      Object.hasOwn(write.data, COLUMN.LEADER_NODE_ID),
+    );
+    t.ok(
+      leaderWrite,
+      'partition writes should include the canonical leader projection',
+    );
     t.equal(
-      leaderWrite.tableName,
+      leaderWrite?.tableName,
       SYSTEM_TABLE_NAME.PARTITIONS,
       'write should target the partitions system table',
     );
     t.equal(
-      leaderWrite.whereClause[COLUMN.PARTITION_ID],
+      leaderWrite?.whereClause?.[COLUMN.PARTITION_ID],
       CHILD_PARTITION_ID,
       'write should address the child partition by partition_id',
     );
     t.equal(
-      leaderWrite.data[COLUMN.LEADER_NODE_ID],
+      leaderWrite?.data?.[COLUMN.LEADER_NODE_ID],
       CHILD_NODE_ID,
       'write should set leader_node_id to the elected leader node',
     );
     t.ok(
-      leaderWrite.data[COLUMN.UPDATED_AT],
+      leaderWrite?.data?.[COLUMN.UPDATED_AT],
       'write should include updated_at timestamp',
     );
   } finally {

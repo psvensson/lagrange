@@ -59,7 +59,10 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
       });
 
       for (const row of dispatchRows) {
-        if (!row?.operation_id) {
+        if (
+          !row?.operation_id ||
+          this.isBootstrapTopologyDispatchDeferred(row)
+        ) {
           continue;
         }
         if (!this.isReplicaOperationLocallyOwned(row)) {
@@ -196,6 +199,9 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    */
   shouldExecuteOperationFromDispatchReplay(operation) {
     if (!operation || typeof operation !== 'object') {
+      return false;
+    }
+    if (this.isBootstrapTopologyDispatchDeferred(operation)) {
       return false;
     }
     return (

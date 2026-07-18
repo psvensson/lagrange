@@ -3,6 +3,12 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {
+  OPERATION_METADATA_KEY,
+} from '../../src/rebalancer/replica-status.js';
+import {
+  ReplicaOperationField,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
@@ -83,16 +89,30 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
     status: TEST_CRITICAL_CREATED_PENDING_STATUS,
     workflowStep: WORKFLOW_STEP.PENDING,
     stepsHistory: [],
+    [ReplicaOperationField.REPLICA_IDS]: [
+      TEST_CRITICAL_CREATED_REPLICA_ID,
+      'sql_write_operations-p1-r5',
+      'sql_write_operations-p1-r6',
+    ],
+    [ReplicaOperationField.PEER_ADDRESSES]: [
+      'node-local/partition/sql_write_operations-p1-r4',
+      'node-5/partition/sql_write_operations-p1-r5',
+      'node-6/partition/sql_write_operations-p1-r6',
+    ],
   };
-  const claimedOperation = {
-    ...operation,
-    workflowStep: WORKFLOW_STEP.SENDING,
-  };
+  const {
+    [ReplicaOperationField.REPLICA_IDS]: _staleReplicaIds,
+    [ReplicaOperationField.PEER_ADDRESSES]: _stalePeerAddresses,
+    ...staleAuthoritativeOperation
+  } = operation;
   const dispatchedOperations = [];
   coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
-    async () => TEST_CRITICAL_CREATED_NO_ROW;
-  coordinator.workflowOwner.claimPendingDispatchOperation = async () =>
-    claimedOperation;
+    async () => staleAuthoritativeOperation;
+  coordinator.workflowOwner.claimPendingDispatchOperation =
+    async (candidateOperation) => ({
+      ...candidateOperation,
+      workflowStep: WORKFLOW_STEP.SENDING,
+    });
   coordinator.workflowOwner.dispatchOperationInternal = async (
     dispatchOperation,
   ) => {
@@ -119,6 +139,18 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
         ?.workflowStep,
       WORKFLOW_STEP.SENDING,
       'dispatch should use the claimed operation snapshot',
+    );
+    t.same(
+      dispatchedOperations[TEST_CRITICAL_CREATED_FIRST_DISPATCH_INDEX]
+        ?.[ReplicaOperationField.REPLICA_IDS],
+      operation[ReplicaOperationField.REPLICA_IDS],
+      'a stale authoritative re-read should retain the coordinator bootstrap cohort',
+    );
+    t.same(
+      dispatchedOperations[TEST_CRITICAL_CREATED_FIRST_DISPATCH_INDEX]
+        ?.[ReplicaOperationField.PEER_ADDRESSES],
+      operation[ReplicaOperationField.PEER_ADDRESSES],
+      'dispatch should retain the coordinator bootstrap peer addresses',
     );
   } finally {
     await coordinator.shutdown();
@@ -308,6 +340,26 @@ async (t) => {
         .getWorkflowById(operation.operationId)?.step,
       WORKFLOW_STEP.SENDING,
       'the workflow coordinator should record the primed owner step',
+    );
+
+    const heldOperation = await coordinator.createOperation({
+      type: 'REMOVE',
+      partitionId: 'partition-bootstrap-hold-test',
+      entityType: 'partition',
+      entityId: 'partition-bootstrap-hold-test',
+      nodeId: 'node-bootstrap-target',
+      replicaId: 'partition-bootstrap-hold-test-r1',
+      deferDispatchUntilBootstrapTopology: true,
+      emitOperationCreated: false,
+    });
+    const heldStoredRow = operationRows.get(heldOperation.operationId);
+    const heldStepsHistory = JSON.parse(heldStoredRow?.steps_history || '[]');
+    t.equal(
+      heldStepsHistory[0]?.[
+        OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+      ],
+      true,
+      'operation creation should make the pre-topology dispatch hold durable',
     );
   } finally {
     await coordinator.shutdown();

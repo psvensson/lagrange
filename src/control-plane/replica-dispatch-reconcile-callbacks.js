@@ -125,6 +125,10 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       this.clearDeferredOperationDispatchRetry(operationId);
       return;
     }
+    if (this.isBootstrapTopologyDispatchDeferred(row)) {
+      this.clearDeferredOperationDispatchRetry(operationId);
+      return;
+    }
 
     try {
       if (this.shouldExecuteOperationFromDispatchReplay(row)) {

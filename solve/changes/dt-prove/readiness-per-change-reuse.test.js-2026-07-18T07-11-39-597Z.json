@@ -1,0 +1,16 @@
+{
+  "test": "test/control-plane/readiness-per-change-reuse.test.js",
+  "src": [
+    "src/control-plane/control-plane-readiness-snapshot-store.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-18T07:11:39.543Z"
+}

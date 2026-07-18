@@ -412,6 +412,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           rejectedTargetNodePlans,
           maximumProvisionableReplicaCount:
             maximumPrecheckedProvisionableReplicaCount,
+          retryable: !hasExplicitMinimumRoutableReplicaCount,
         });
       }
     }
@@ -435,7 +436,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           controlPlaneMutationWorkClass:
             CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
           // Initial partition provisioning executes these operations inline
-          // below, so skip the redundant coordinator-created dispatch trigger.
+          // below. Keep durable CDC/replay dispatch held until the complete
+          // bootstrap cohort is stamped, then skip the redundant local trigger.
+          deferDispatchUntilBootstrapTopology: true,
           emitOperationCreated: false,
           operationIntentId: buildSchemaProvisioningChildIntentId(
             context?.schemaJobId,
@@ -545,6 +548,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
             ),
           rejectedTargetNodePlans,
           maximumProvisionableReplicaCount,
+          retryable: !hasExplicitMinimumRoutableReplicaCount,
         });
       }
     }
@@ -600,6 +604,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
             OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA
           ] = bootstrapPartitionMetadata;
         }
+        delete initialStepEntry[
+          OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+        ];
       }
       if (bootstrapTableMetadata) {
         operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =

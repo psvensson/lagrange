@@ -28,6 +28,9 @@ import {
 } from '../control-plane/control-plane-snapshot-owner.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/publication-recovery-evidence.js';
+import {
+  buildCurrentPriorityPlacementObservation,
+} from './admin-control-snapshot-current-priority-placement.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -72,6 +75,8 @@ const CONTROL_SNAPSHOT_ACTIVE_GATE_OWNER_COHORT_FIELD =
   'activeGateOwnerCohort';
 const CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
   'membershipPublicationHandoffOutcome';
+const CONTROL_SNAPSHOT_CURRENT_PRIORITY_PLACEMENT_OBSERVATION_FIELD =
+  'currentPriorityPlacementObservation';
 const CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_AVAILABLE = 'available';
 const CONTROL_SNAPSHOT_AUTHORITY_INTEGER_STATE_UNAVAILABLE = 'unavailable';
 const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_SCHEMA_VERSION = 1;
@@ -667,6 +672,20 @@ class AdminControlSnapshotLocalBuildBase {
       activePartitionServiceRows,
       leaderSummaryOptions,
     );
+    if (
+      controlPlaneDiagnostics &&
+      typeof controlPlaneDiagnostics === 'object'
+    ) {
+      controlPlaneDiagnostics[
+        CONTROL_SNAPSHOT_CURRENT_PRIORITY_PLACEMENT_OBSERVATION_FIELD
+      ] = buildCurrentPriorityPlacementObservation({
+        capturedAt,
+        partitionRows,
+        serviceRows,
+        readinessByNodeId: controlPlaneDiagnostics.readinessByNodeId,
+        activeNodeViews,
+      });
+    }
     const voterCounts = this.buildControlSnapshotVoterCounts(
       activePartitionServiceRows,
     );

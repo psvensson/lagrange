@@ -13,6 +13,7 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
@@ -93,15 +94,24 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
       this.hasPriorityRecoveryCoordinatorDecisionOperationVisibility(
         coordinatorDecisionSnapshot,
       );
+    const coordinatorSemanticState =
+      coordinatorDecisionSnapshot?.semanticState ||
+      coordinatorDecisionSnapshot?.semanticStateId ||
+      null;
+    const coordinatorOperationOwnsLiveWork =
+      coordinatorOperationVisible &&
+      coordinatorSemanticState !==
+        PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED;
     const evidence = Object.freeze({
       planningOperationRequired,
       coordinatorOperationRequired,
       coordinatorOperationVisible,
+      coordinatorOperationOwnsLiveWork,
     });
     const shouldUsePlanning =
       evidence.planningOperationRequired === true &&
       evidence.coordinatorOperationRequired !== true &&
-      evidence.coordinatorOperationVisible !== true;
+      evidence.coordinatorOperationOwnsLiveWork !== true;
     return shouldUsePlanning;
   }
 
@@ -131,9 +141,14 @@ class UnifiedRebalancerPriorityRecoveryFollowUpDecisionMethods {
     if (!this.isControlPlanePriorityPartition()) {
       return null;
     }
-    const planningSnapshot = await this.getPriorityRecoveryPlanningSnapshot({
-      partitionId: this.entityId,
-    });
+    const publishedPlanningSnapshot =
+      await this.getPriorityRecoveryPlanningSnapshot({
+        partitionId: this.entityId,
+      });
+    const planningSnapshot =
+      this.buildCurrentPriorityRecoveryPlanningSnapshot(
+        publishedPlanningSnapshot,
+      );
     const coordinatorDecisionSnapshot =
       await this.getCurrentPriorityRecoveryCoordinatorDecisionSnapshot();
     const planningDecisionSnapshot =

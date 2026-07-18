@@ -143,6 +143,99 @@ test('AuthoritativeRowMutationHelper - flush schedules retry when owner row is n
     t.equal(helper.persistedValue, 'leader', 'successful retry should persist the pending value');
   });
 
+test('AuthoritativeRowMutationHelper - authoritative read failure cannot dedup against a local seed',
+  async (t) => {
+    const scheduled = [];
+    const writes = [];
+    let authoritativeReadCount = 0;
+    const locallySeededRow = {
+      partition_id: 'p1',
+      leader_node_id: 'node-b',
+      updated_at: 7,
+    };
+    const durableRow = {
+      partition_id: 'p1',
+      leader_node_id: 'node-a',
+      updated_at: 7,
+    };
+    const helper = new AuthoritativeRowMutationHelper({
+      tableName: 'partitions',
+      buildWhereClause: (_value, context = {}) => ({
+        partition_id: 'p1',
+        leader_node_id: context.authoritativeRow?.leader_node_id,
+        updated_at: context.authoritativeRow?.updated_at,
+      }),
+      buildUpdateData: (value, now) => ({
+        leader_node_id: value,
+        updated_at: now,
+      }),
+      buildExpectedCacheFields: (value) => ({
+        leader_node_id: value,
+      }),
+      readValueFromCache: () => locallySeededRow.leader_node_id,
+      readAuthoritativeRow: async () => {
+        authoritativeReadCount += 1;
+        if (authoritativeReadCount === 1) {
+          throw new Error('authoritative owner timed out');
+        }
+        return {
+          supported: true,
+          available: true,
+          row: durableRow,
+        };
+      },
+      cdcIntegrationService: {},
+      controlPlaneSystemTableGateway: {
+        submitMutation: async (mutation) => {
+          writes.push(mutation);
+          return {
+            success: true,
+            partitionResult: {affectedRows: 1},
+          };
+        },
+      },
+      setTimeoutFn: (callback) => {
+        scheduled.push(callback);
+        return callback;
+      },
+      clearTimeoutFn: () => {},
+      now: () => 11,
+    });
+
+    helper.pendingValue = 'node-b';
+    helper.persistedValue = 'node-a';
+
+    const unavailableResult = await helper.flush();
+
+    t.equal(
+      unavailableResult.reason,
+      'authoritative-confirm-unavailable',
+      'a failed authoritative read should remain an unavailable confirmation',
+    );
+    t.equal(writes.length, 0,
+      'the locally seeded cache row must not suppress the durable write');
+    t.equal(helper.pendingValue, 'node-b',
+      'the pending publication should survive the read failure');
+    t.equal(helper.persistedValue, 'node-a',
+      'the local seed must not be promoted to persisted evidence');
+    t.equal(scheduled.length, 1,
+      'the unavailable authoritative confirmation should arm a retry');
+
+    await scheduled[0]();
+
+    t.equal(writes.length, 1,
+      'the retry should submit the durable owner publication');
+    t.same(writes[0].whereClause, {
+      partition_id: 'p1',
+      leader_node_id: 'node-a',
+      updated_at: 7,
+    }, 'the durable publication should CAS against the authoritative row');
+    t.equal(helper.pendingValue, null,
+      'the pending publication should clear only after the durable write');
+    t.equal(helper.persistedValue, 'node-b',
+      'the helper should record persistence only after the durable write');
+  });
+
 test('AuthoritativeRowMutationHelper - deferred gateway outcome preserves pending state and retries with bounded delay',
   async (t) => {
     const scheduled = [];

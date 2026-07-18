@@ -31,10 +31,13 @@ import {buildReplicaInventorySnapshot} from
 // decision snapshot (required / eligibleNodeIds / target). Φ is computed each
 // settled tick FROM the real accessors.
 //
-// Φ (potential) = deficit + overCount + inFlightOps, where
-//   deficit   = max(0, target − (occupied + inFlightAdds))   [real accessors]
+// Φ (potential) = uncoveredDeficit + overCount + inFlightOps, where
+//   uncoveredDeficit = max(0, servedDeficit − inFlightCureOps)
+//   servedDeficit = max(0, target − distinct ready voters)
 //   overCount = max(0, activeReplicas − target)               [over-replication]
 //   inFlightOps = modelled in-flight operation count
+// Dispatch therefore moves one debt unit from uncovered to in-flight without
+// increasing Φ; the previous raw sum double-counted that same unit for a tick.
 // Fixpoint (self-stabilized) ⇔ Φ = 0 AND the kernel emits no new work
 //   (NOT_REQUIRED / TARGET_UNAVAILABLE / IN_FLIGHT_ADD_SATISFIES_DEFICIT).
 // Limit cycle ⇔ a prior world-Φ signature re-enters with Φ > 0, or overCount
@@ -302,7 +305,11 @@ function runStabilizationTrace(world, maxTicks = 40) {
     const servedDeficit =
       Math.max(0, TARGET - healthyDistinctReadyVoterCount(world));
     const overCount = Math.max(0, activeReplicaCount(world) - TARGET);
-    const phi = servedDeficit + overCount + world.inFlight.length;
+    const uncoveredDeficit = Math.max(
+      0,
+      servedDeficit - world.inFlight.length,
+    );
+    const phi = uncoveredDeficit + overCount + world.inFlight.length;
     maxOverCount = Math.max(maxOverCount, overCount);
 
     const state = outcome.followUpMoveState;
@@ -313,7 +320,7 @@ function runStabilizationTrace(world, maxTicks = 40) {
 
     trace.push({
       tick: world.tick, state, moveType: outcome.type || null,
-      occupied, inFlightAdds, servedDeficit, overCount,
+      occupied, inFlightAdds, servedDeficit, uncoveredDeficit, overCount,
       inFlight: world.inFlight.length, phi, emittedWork,
     });
 

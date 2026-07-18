@@ -25,6 +25,7 @@ import {createControlPlaneRuntimeBundle} from './control-plane-runtime-bundle.js
 import {
   OperationType,
   OPERATION_METADATA_KEY,
+  getOperationMetadataValue,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
@@ -263,6 +264,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   getControlPlaneNodeStatePublicationProfile,
   getControlPlaneRetryAfterMs,
   getNodeHeartbeatWatermark,
+  getOperationMetadataValue,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,

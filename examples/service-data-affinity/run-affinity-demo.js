@@ -111,9 +111,11 @@ const SHARD_SQL_BY_SLOT = Object.freeze({
 const RESULT_TABLE = 'movielens_top10';
 const COORDINATION_TABLE = 'movielens_top10_reduce_slots';
 const RESULT_ID = 'global-top10';
+const RESULT_SNAPSHOT_COLUMN = 'source_snapshot_json';
 const CREATE_RESULT_TABLE_SQL =
   `CREATE TABLE IF NOT EXISTS ${RESULT_TABLE} (` +
-  'result_id TEXT PRIMARY KEY, result_json TEXT, computed_at INTEGER)';
+  'result_id TEXT PRIMARY KEY, result_json TEXT, computed_at INTEGER, ' +
+  `${RESULT_SNAPSHOT_COLUMN} TEXT NOT NULL DEFAULT '{}')`;
 const CREATE_COORDINATION_TABLE_SQL =
   `CREATE TABLE IF NOT EXISTS ${COORDINATION_TABLE} (` +
   'slot_id INTEGER PRIMARY KEY, replica_id TEXT, ' +
@@ -127,6 +129,7 @@ const PARALLEL_REDUCE_CONFIG = Object.freeze({
   leaseMs: REDUCE_SLOT_LEASE_MS,
   coordinatorSlot: 1,
   resultId: RESULT_ID,
+  resultSnapshotColumn: RESULT_SNAPSHOT_COLUMN,
 });
 
 async function startNode(index, dataRoot) {
@@ -341,7 +344,8 @@ async function describeReduceSlots() {
 async function describeTopN() {
   try {
     const rows = await queryRows(
-      `SELECT result_json, computed_at FROM ${RESULT_TABLE} ` +
+      `SELECT result_json, computed_at, ${RESULT_SNAPSHOT_COLUMN} ` +
+      `FROM ${RESULT_TABLE} ` +
       `WHERE result_id = ${sqlQuote(RESULT_ID)}`,
     );
     const parsed = JSON.parse(rows[0]?.result_json || '[]');
@@ -350,6 +354,7 @@ async function describeTopN() {
       group_key: row.groupKey,
       agg_value: row.aggValue,
       computed_at: rows[0]?.computed_at,
+      [RESULT_SNAPSHOT_COLUMN]: rows[0]?.[RESULT_SNAPSHOT_COLUMN],
     }));
   } catch {
     return [];
@@ -477,12 +482,21 @@ function summarizeReduceSlots(reduceSlots) {
 }
 
 function summarizePhase(state) {
+  let resultSnapshot = null;
+  try {
+    resultSnapshot = JSON.parse(
+      state.serviceTopN[0]?.[RESULT_SNAPSHOT_COLUMN] || 'null',
+    );
+  } catch {
+    resultSnapshot = null;
+  }
   return {
     phaseStartedAt: state.phaseStartedAt,
     weightedLocality: state.weightedLocality.localityRatio,
     placement: state.placements,
     slotOwners: summarizeReduceSlots(state.reduceSlots),
     resultComputedAt: Number(state.serviceTopN[0]?.computed_at) || 0,
+    resultSnapshot,
     assessment: state.assessment,
     elapsedMs: state.elapsedMs,
   };
@@ -656,8 +670,9 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     await queryRows(CREATE_RESULT_TABLE_SQL);
     await queryRows(CREATE_COORDINATION_TABLE_SQL);
     await queryRows(
-      `INSERT INTO ${RESULT_TABLE} (result_id, result_json, computed_at) ` +
-      `VALUES (${sqlQuote(RESULT_ID)}, '[]', 0)`,
+      `INSERT INTO ${RESULT_TABLE} (result_id, result_json, computed_at, ` +
+      `${RESULT_SNAPSHOT_COLUMN}) VALUES (` +
+      `${sqlQuote(RESULT_ID)}, '[]', 0, '{}')`,
     );
     await queryRows(
       `INSERT INTO ${COORDINATION_TABLE} ` +

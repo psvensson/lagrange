@@ -194,6 +194,8 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
       workloadProfile.allowPressureDefer === true,
     authoritativeReadMode:
       authoritativeReadModeContract.authoritativeReadMode,
+    preferOwnerRpcReadLeader:
+      resolvedOptions?.preferOwnerRpcReadLeader === true,
     localReadConsistency:
       resolvedOptions?.localReadConsistency ||
       AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
@@ -505,6 +507,8 @@ class AuthoritativeControlPlaneView {
               pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
             preferOwnerRpcRead:
               authoritativeReadModeContract.preferOwnerRpcRead,
+            preferOwnerRpcReadLeader:
+              resolvedOptions?.preferOwnerRpcReadLeader === true,
             requireOwnerRpcRead:
               authoritativeReadModeContract.requireOwnerRpcRead,
             confirmEmptyLocalReadWithOwnerRpc:

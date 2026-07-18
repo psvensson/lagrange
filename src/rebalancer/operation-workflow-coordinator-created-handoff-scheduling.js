@@ -103,13 +103,19 @@ function isInitialCoordinatorCreatedRemoteHandoffEligible(operation) {
   );
 }
 
-function isUserPartitionReplaceTargetOutcomeHandoffEligible(operation) {
+function isUserPartitionTargetOutcomeHandoffEligible(operation) {
   const partitionClassification = classifySystemPartition({
     partitionId: operation?.partitionId || null,
   });
+  const targetCreateOperation =
+    operation?.type === OperationType.ADD ||
+    operation?.type === OperationType.REPLACE;
+  const targetCreateInProgress =
+    operation?.workflowStep === WORKFLOW_STEP.CREATING ||
+    operation?.workflowStep === WORKFLOW_STEP.SYNCING;
   return (
-    operation?.type === OperationType.REPLACE &&
-    operation?.workflowStep === WORKFLOW_STEP.SYNCING &&
+    targetCreateOperation &&
+    targetCreateInProgress &&
     partitionClassification.systemTable !== true &&
     partitionClassification.priorityControlPlane !== true
   );
@@ -124,7 +130,7 @@ function shouldRetryCoordinatorCreatedRemoteHandoff(
     options.handoffMode ===
       COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
   ) {
-    return isUserPartitionReplaceTargetOutcomeHandoffEligible(operation);
+    return isUserPartitionTargetOutcomeHandoffEligible(operation);
   }
   return isInitialCoordinatorCreatedRemoteHandoffEligible(operation);
 }
@@ -139,7 +145,7 @@ function resolveExecutorOutcomeRemoteOwnerHandoffMode(
   if (
     outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE &&
     outcomeWorkflowStep === WORKFLOW_STEP.ACTIVE &&
-    isUserPartitionReplaceTargetOutcomeHandoffEligible(operation)
+    isUserPartitionTargetOutcomeHandoffEligible(operation)
   ) {
     return COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
   }

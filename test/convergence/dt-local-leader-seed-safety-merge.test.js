@@ -339,6 +339,62 @@ t.test(
 );
 
 t.test(
+  'strictly newer successor publication clears the superseded tenure claim ' +
+    'without overwriting the successor leader',
+  async (t) => {
+    const successorNode = 'node-successor';
+    const {replica, cache} = buildElectionReplica({term: 13});
+    applyReplicaLeadership(replica, 'leader');
+    const successorRow = {
+      partition_id: PARTITION_ID,
+      leader_node_id: successorNode,
+      created_at: 1_000,
+      updated_at: 3_000,
+    };
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      'UPDATE',
+      successorRow,
+      {causeId: 'cdc:newer-successor'},
+    );
+    t.equal(
+      cache.get(SYSTEM_TABLE_NAME.PARTITIONS, PARTITION_ID)
+        .leader_claim_node_id,
+      LOCAL_NODE,
+      'UPDATE-shaped successor delivery initially preserves the local claim',
+    );
+
+    replica.handleCanonicalLeaderRowCacheChange(successorRow);
+    const supersededRow = cache.get(
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      PARTITION_ID,
+    );
+    t.equal(
+      replica.localCanonicalLeaderObservation.superseded,
+      true,
+      'the newer successor supersedes the local tenure',
+    );
+    t.equal(
+      supersededRow.leader_node_id,
+      successorNode,
+      'claim cleanup leaves successor ownership intact',
+    );
+    t.equal(
+      supersededRow.leader_claim_node_id ?? null,
+      null,
+      'the superseded tenure claim is removed',
+    );
+    t.equal(
+      supersededRow.leader_claim_raft_term ?? null,
+      null,
+      'the superseded tenure term is removed',
+    );
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  },
+);
+
+t.test(
   'demotion during the in-flight authoritative read cannot resurrect the ' +
     'captured self-belief: the post-await cache state governs the preference',
   async (t) => {

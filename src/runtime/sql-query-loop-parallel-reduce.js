@@ -15,6 +15,12 @@ const SQL_SINGLE_QUOTE_ESCAPE = '\'\'';
 const COORDINATION_QUERY_FAILED =
   'parallel reduce coordination query failed';
 const UNASSIGNED_SLOT_ID = 0;
+const RESULT_SNAPSHOT_SCHEMA_VERSION = 1;
+const RESULT_SNAPSHOT_RESERVED_COLUMNS = new Set([
+  'result_id',
+  'result_json',
+  'computed_at',
+]);
 
 const PARALLEL_REDUCE_REASON = Object.freeze({
   SLOT_UNAVAILABLE: 'slot_unavailable',
@@ -46,10 +52,18 @@ function hasValidSlotSql(config, slotIds) {
     isNonEmptyString(config.shardSqlBySlot[String(slotId)]));
 }
 
+function hasValidResultSnapshotIdentifiers(config, resultTable) {
+  return [
+    config?.coordinationTable,
+    resultTable,
+    config?.resultSnapshotColumn,
+  ].every(isValidIdentifier) &&
+    !RESULT_SNAPSHOT_RESERVED_COLUMNS.has(config.resultSnapshotColumn);
+}
+
 function isValidParallelReduceConfig(config, resultTable) {
   const slotIds = configuredSlotIds(config);
-  return isValidIdentifier(config?.coordinationTable) &&
-    isValidIdentifier(resultTable) &&
+  return hasValidResultSnapshotIdentifiers(config, resultTable) &&
     isNonEmptyString(config?.resultId) &&
     Number.isFinite(config?.leaseMs) && config.leaseMs > 0 &&
     Number.isInteger(config?.coordinatorSlot) &&
@@ -198,6 +212,95 @@ function mergeDisjointPartialRows(rows, limit) {
     .slice(0, limit);
 }
 
+function buildResultSnapshotWitness(slotStates) {
+  return {
+    schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
+    slots: slotStates.map(({row, partial}) => ({
+      slotId: Number(row.slot_id),
+      replicaId: row.replica_id,
+      computedAt: Number(row.computed_at),
+      candidateCount: partial.rows.length,
+    })),
+  };
+}
+
+function parseResultSnapshotJson(value) {
+  try {
+    return typeof value === 'string' ? JSON.parse(value) : value;
+  } catch {
+    return null;
+  }
+}
+
+function resultSnapshotHeaderIsValid(parsed, slotIds) {
+  return parsed?.schemaVersion === RESULT_SNAPSHOT_SCHEMA_VERSION &&
+    Array.isArray(parsed.slots) &&
+    parsed.slots.length === slotIds.length;
+}
+
+function resultSnapshotIdentityIsValid(slot, replicaIds) {
+  return isNonEmptyString(slot?.replicaId) &&
+    !replicaIds.has(slot.replicaId);
+}
+
+function resultSnapshotComputedAtIsValid(computedAt) {
+  return Number.isFinite(computedAt) && computedAt > 0;
+}
+
+function resultSnapshotCandidateCountIsValid(candidateCount, limit) {
+  return Number.isInteger(candidateCount) &&
+    candidateCount >= 0 &&
+    candidateCount <= limit;
+}
+
+function normalizeResultSnapshotSlot(slot, expectedSlotId, limit, replicaIds) {
+  const candidateCount = Number(slot?.candidateCount);
+  const computedAt = Number(slot?.computedAt);
+  const valid = [
+    Number(slot?.slotId) === expectedSlotId,
+    resultSnapshotIdentityIsValid(slot, replicaIds),
+    resultSnapshotComputedAtIsValid(computedAt),
+    resultSnapshotCandidateCountIsValid(candidateCount, limit),
+  ].every(Boolean);
+  if (!valid) {
+    return null;
+  }
+  return {
+    slotId: expectedSlotId,
+    replicaId: slot.replicaId,
+    computedAt,
+    candidateCount,
+  };
+}
+
+function parseResultSnapshotWitness(value, config, limit) {
+  const parsed = parseResultSnapshotJson(value);
+  const slotIds = configuredSlotIds(config);
+  if (!resultSnapshotHeaderIsValid(parsed, slotIds)) {
+    return {valid: false};
+  }
+  const replicaIds = new Set();
+  const slots = [];
+  for (let index = 0; index < slotIds.length; index += 1) {
+    const slot = normalizeResultSnapshotSlot(
+      parsed.slots[index],
+      slotIds[index],
+      limit,
+      replicaIds,
+    );
+    if (!slot) {
+      return {valid: false};
+    }
+    replicaIds.add(slot.replicaId);
+    slots.push(slot);
+  }
+  return {
+    valid: true,
+    schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
+    slots,
+  };
+}
+
 function resolveCompletePartialSnapshot(slotRows, config, limit, nowMs) {
   const slotIds = configuredSlotIds(config);
   const slotStates = slotIds.map((slotId) => {
@@ -228,6 +331,7 @@ function resolveCompletePartialSnapshot(slotRows, config, limit, nowMs) {
       complete: true,
       candidates,
       merged: mergeDisjointPartialRows(candidates, limit),
+      witness: buildResultSnapshotWitness(slotStates),
     };
   } catch (error) {
     if (error?.message !== PARALLEL_REDUCE_REASON.SHARD_OVERLAP) {
@@ -255,12 +359,22 @@ async function publishPartialSnapshot(
   return computedAt;
 }
 
-async function publishResultSnapshot(queryExecutor, resultTable, resultId, rows) {
+async function publishResultSnapshot(
+  queryExecutor,
+  resultTable,
+  resultId,
+  rows,
+  resultSnapshotColumn,
+  resultSnapshotWitness,
+) {
   const resultJson = JSON.stringify(rows);
+  const sourceSnapshotJson = JSON.stringify(resultSnapshotWitness);
   const computedAt = Date.now();
   assertQuerySuccess(await queryExecutor(
     `UPDATE ${resultTable} SET result_json = ${sqlLiteral(resultJson)}, ` +
-    `computed_at = ${computedAt} WHERE result_id = ${sqlLiteral(resultId)}`,
+    `computed_at = ${computedAt}, ${resultSnapshotColumn} = ` +
+    `${sqlLiteral(sourceSnapshotJson)} ` +
+    `WHERE result_id = ${sqlLiteral(resultId)}`,
     [],
   ));
   return computedAt;
@@ -283,6 +397,7 @@ export {
   acquireReduceSlot,
   isValidParallelReduceConfig,
   mergeDisjointPartialRows,
+  parseResultSnapshotWitness,
   publishPartialSnapshot,
   publishResultSnapshot,
   readSlotRows,

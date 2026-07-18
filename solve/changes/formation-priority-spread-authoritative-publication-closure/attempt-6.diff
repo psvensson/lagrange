@@ -1,0 +1,587 @@
+diff --git a/src/rebalancer/background-priority-spread-release-tracker.js b/src/rebalancer/background-priority-spread-release-tracker.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e3cb84517dd9ab6251f42898be2b82251bfe68f9
+--- /dev/null
++++ b/src/rebalancer/background-priority-spread-release-tracker.js
+@@ -0,0 +1,124 @@
++const BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE = Object.freeze({
++  STABILIZING: 'stabilizing',
++});
++
++const releaseScopeByReadinessOwner = new WeakMap();
++
++function isWeakMapKey(value) {
++  return (
++    (typeof value === 'object' && value !== null) ||
++    typeof value === 'function'
++  );
++}
++
++function normalizeObservedAt(value) {
++  return Number.isFinite(value) ? Math.floor(value) : Date.now();
++}
++
++function getReleaseScope(readinessOwner, options = {}) {
++  if (!isWeakMapKey(readinessOwner)) {
++    return null;
++  }
++  const existingScope = releaseScopeByReadinessOwner.get(readinessOwner);
++  if (existingScope || options.create !== true) {
++    return existingScope || null;
++  }
++  const scope = {tracker: null};
++  releaseScopeByReadinessOwner.set(readinessOwner, scope);
++  return scope;
++}
++
++function mergeReleaseTrackers(left, right) {
++  if (!left || left.active !== true) {
++    return right || left || null;
++  }
++  if (!right || right.active !== true) {
++    return left;
++  }
++  left.lastBlockedObservedAtMs = Math.max(
++    left.lastBlockedObservedAtMs,
++    right.lastBlockedObservedAtMs,
++  );
++  left.clearObservedAtMs =
++    Number.isFinite(left.clearObservedAtMs) &&
++    Number.isFinite(right.clearObservedAtMs) ?
++      Math.max(left.clearObservedAtMs, right.clearObservedAtMs) :
++      null;
++  return left;
++}
++
++function transferBackgroundPrioritySpreadReleaseOwnership(
++  previousReadinessOwner,
++  nextReadinessOwner,
++) {
++  if (
++    previousReadinessOwner === nextReadinessOwner ||
++    !isWeakMapKey(previousReadinessOwner) ||
++    !isWeakMapKey(nextReadinessOwner)
++  ) {
++    return;
++  }
++  const previousScope = getReleaseScope(previousReadinessOwner);
++  if (!previousScope) {
++    return;
++  }
++  const nextScope = getReleaseScope(nextReadinessOwner, {create: true});
++  const sharedTracker = mergeReleaseTrackers(
++    previousScope.tracker,
++    nextScope.tracker,
++  );
++  previousScope.tracker = sharedTracker;
++  nextScope.tracker = sharedTracker;
++}
++
++function observeBackgroundPrioritySpreadBlocked(options = {}) {
++  const scope = getReleaseScope(options.readinessOwner, {create: true});
++  if (!scope) {
++    return;
++  }
++  const tracker = scope.tracker || {};
++  tracker.active = true;
++  tracker.lastBlockedObservedAtMs =
++    normalizeObservedAt(options.observedAt);
++  tracker.clearObservedAtMs = null;
++  scope.tracker = tracker;
++}
++
++function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
++  const scope = getReleaseScope(options.readinessOwner);
++  const tracker = scope?.tracker;
++  if (!tracker || tracker.active !== true) {
++    return null;
++  }
++  const requiredStableMs = Number.isFinite(options.requiredStableMs) ?
++    Math.max(0, Math.floor(options.requiredStableMs)) :
++    0;
++  const observedAt = normalizeObservedAt(options.observedAt);
++  if (!Number.isFinite(tracker.clearObservedAtMs)) {
++    tracker.clearObservedAtMs = observedAt;
++  }
++  const stableElapsedMs = Math.max(
++    0,
++    observedAt - tracker.clearObservedAtMs,
++  );
++  if (stableElapsedMs >= requiredStableMs) {
++    tracker.active = false;
++    return null;
++  }
++  return Object.freeze({
++    state: BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE.STABILIZING,
++    requiredStableMs,
++    stableElapsedMs,
++    stableRemainingMs: requiredStableMs - stableElapsedMs,
++    clearObservedAtMs: tracker.clearObservedAtMs,
++    lastBlockedObservedAtMs: tracker.lastBlockedObservedAtMs,
++    blockedPartitions: Object.freeze([]),
++  });
++}
++
++export {
++  BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE,
++  observeBackgroundPrioritySpreadBlocked,
++  resolveBackgroundPrioritySpreadStableRelease,
++  transferBackgroundPrioritySpreadReleaseOwnership,
++};
+diff --git a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+index f528024c4e44f0fb177a541b310c9b678dc1b187..7ee863c936657e2bf0657a3efe740169b9f18ca3 100644
+--- a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
++++ b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+@@ -13,6 +13,10 @@ import {
+   PRIORITY_RECOVERY_PUBLICATION_EVENT_SCHEDULING_STATE_TABLE,
+   REBALANCE_PLANNING_GATE,
+ } from './rebalancer-planning-gate-constants.js';
++import {
++  observeBackgroundPrioritySpreadBlocked,
++  resolveBackgroundPrioritySpreadStableRelease,
++} from './background-priority-spread-release-tracker.js';
+ 
+ const {
+   CONTROL_PLANE_PUBLICATION_STATUS,
+@@ -22,6 +26,7 @@ const {
+ } = UNIFIED_REBALANCER_SHARED;
+ 
+ const REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE = 'none';
++const REBALANCE_PLANNING_GATE_NOT_APPLICABLE = null;
+ 
+ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+   /**
+@@ -64,8 +69,46 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+     const controlPlanePriorityBlocker =
+       this.getControlPlanePrioritySpreadBlocker();
+     if (!controlPlanePriorityBlocker) {
+-      return null;
++      if (this.isControlPlanePriorityPartition()) {
++        return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
++      }
++      const stableReleaseBlocker =
++        resolveBackgroundPrioritySpreadStableRelease({
++          readinessOwner: this.controlPlaneReadinessService,
++          observedAt: this.nowFn(),
++          requiredStableMs:
++            this.getBackgroundPrioritySpreadStableWindowMs(),
++        });
++      if (!stableReleaseBlocker) {
++        return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
++      }
++      const scheduleDelayMs =
++        this.getBackgroundPrioritySpreadStableReleaseDelayMs(
++          stableReleaseBlocker.stableRemainingMs,
++        );
++      return this.buildRebalancePlanningGateDecision({
++        gate: REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
++        blocker: stableReleaseBlocker,
++        logMessage:
++          REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY_STABILITY,
++        logContext: {
++          entityType: this.entityType,
++          delayMs: scheduleDelayMs,
++          releaseState: stableReleaseBlocker.state,
++          requiredStableMs: stableReleaseBlocker.requiredStableMs,
++          stableElapsedMs: stableReleaseBlocker.stableElapsedMs,
++          stableRemainingMs: stableReleaseBlocker.stableRemainingMs,
++          clearObservedAtMs: stableReleaseBlocker.clearObservedAtMs,
++          lastBlockedObservedAtMs:
++            stableReleaseBlocker.lastBlockedObservedAtMs,
++        },
++        scheduleDelayMs,
++      });
+     }
++    observeBackgroundPrioritySpreadBlocked({
++      readinessOwner: this.controlPlaneReadinessService,
++      observedAt: this.nowFn(),
++    });
+     const blockedPartitions =
+       controlPlanePriorityBlocker.blockedPartitions || [];
+     const currentPriorityPartitionStillBlocked =
+@@ -88,7 +131,8 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+         Math.max(largestGap, Number(partition?.spreadGap) || 0),
+       0,
+     );
+-    const scheduleDelayMs = this.getPriorityRetryDelayMs();
++    const scheduleDelayMs =
++      this.getBackgroundPrioritySpreadReleaseDelayMs();
+     return this.buildRebalancePlanningGateDecision({
+       gate: REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
+       blocker: controlPlanePriorityBlocker,
+@@ -105,6 +149,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+           readyReplicaCount: partition.readyReplicaCount,
+           readyDistinctNodeCount: partition.readyDistinctNodeCount,
+           spreadGap: partition.spreadGap,
++          missingActiveLeader: partition.missingActiveLeader === true,
+           // CL-021 witness: WHY rows were excluded from the ready count
+           // (e.g. raft_role_missing) — the planner-blindness attribution.
+           exclusionReasonCounts: partition.exclusionReasonCounts || null,
+@@ -114,7 +159,10 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+     });
+   },
+ 
+-  isPriorityRecoveryOperationCreationRequiredForPlanningGate(partitionId) {
++  isPriorityRecoveryOperationCreationRequiredForPlanningGate(
++    partitionId,
++    options = {},
++  ) {
+     const normalizedPartitionId = String(
+       partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+     ).trim();
+@@ -136,9 +184,18 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+     ) {
+       return true;
+     }
+-    const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
+-      {partitionId: normalizedPartitionId},
+-    );
++    const publishedPlanningSnapshot =
++      options?.planningSnapshot ||
++      this.getPriorityRecoveryPlanningSnapshotSync(
++        {partitionId: normalizedPartitionId},
++      );
++    const planningSnapshot =
++      typeof this.buildCurrentPriorityRecoveryPlanningSnapshot ===
++        'function' ?
++        this.buildCurrentPriorityRecoveryPlanningSnapshot(
++          publishedPlanningSnapshot,
++        ) :
++        publishedPlanningSnapshot;
+     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+       return false;
+     }
+@@ -251,9 +308,14 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+     ) {
+       return null;
+     }
+-    const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
+-      {partitionId: normalizedPartitionId},
+-    );
++    const publishedPlanningSnapshot =
++      this.getPriorityRecoveryPlanningSnapshotSync(
++        {partitionId: normalizedPartitionId},
++      );
++    const planningSnapshot =
++      this.buildCurrentPriorityRecoveryPlanningSnapshot(
++        publishedPlanningSnapshot,
++      );
+     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+       return null;
+     }
+@@ -261,6 +323,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+     const currentOperationCreationRequired =
+       this.isPriorityRecoveryOperationCreationRequiredForPlanningGate(
+         normalizedPartitionId,
++        {planningSnapshot},
+       );
+     if (currentOperationCreationRequired) {
+       return Object.freeze({
+diff --git a/src/rebalancer/unified-rebalancer-lifecycle-base.js b/src/rebalancer/unified-rebalancer-lifecycle-base.js
+index f05ed02898140cdf2856d9fc5f7655e9af0b3e13..4a268ea81cf8e4010823b72b907f25322db02799 100644
+--- a/src/rebalancer/unified-rebalancer-lifecycle-base.js
++++ b/src/rebalancer/unified-rebalancer-lifecycle-base.js
+@@ -10,6 +10,9 @@ import {
+ import {
+   applyUnifiedRebalancerPriorityRecoveryCoordination,
+ } from './unified-rebalancer-priority-recovery-coordination.js';
++import {
++  transferBackgroundPrioritySpreadReleaseOwnership,
++} from './background-priority-spread-release-tracker.js';
+ 
+ const {
+   CLUSTER_READINESS_TIMEOUT_MS,
+@@ -450,6 +453,10 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
+       });
+     }
+     if (coordinator.controlPlaneReadinessService) {
++      transferBackgroundPrioritySpreadReleaseOwnership(
++        this.controlPlaneReadinessService,
++        coordinator.controlPlaneReadinessService,
++      );
+       this.controlPlaneReadinessService =
+         coordinator.controlPlaneReadinessService;
+     }
+diff --git a/src/rebalancer/unified-rebalancer-policy-scheduler-methods.js b/src/rebalancer/unified-rebalancer-policy-scheduler-methods.js
+index cf47a09f7755bc25671a7d2fe96cfc20347cd26d..ea822d8a304b86e1eaccd9183e0510969d125797 100644
+--- a/src/rebalancer/unified-rebalancer-policy-scheduler-methods.js
++++ b/src/rebalancer/unified-rebalancer-policy-scheduler-methods.js
+@@ -150,6 +150,78 @@ class UnifiedRebalancerPolicySchedulerMethods {
+     return Math.max(UNIFIED_REBALANCER_LITERAL.THOUSAND, configuredDelayMs);
+   }
+ 
++  /**
++   * Resolve the continuous-clear interval required before ordinary work can
++   * resume after any rebalancer sharing this node's readiness owner observed
++   * priority recovery. The ordinary cadence is followed by the scheduler's
++   * existing positive jitter window so a different background entity cannot
++   * release the shared fence at the exact formation-quiescence boundary. This
++   * preserves an observation handoff without changing the ordinary scheduled
++   * delay or the admission owner's stability window.
++   * @return {number}
++   */
++  getBackgroundPrioritySpreadStableWindowMs() {
++    const ordinaryIntervalMs = Math.max(
++      this.getPriorityRetryDelayMs(),
++      Number.isFinite(this.periodicCheckIntervalMs) &&
++      this.periodicCheckIntervalMs > 0 ?
++        Math.floor(this.periodicCheckIntervalMs) :
++        REBALANCER_DEFAULT.UNIFIED.PERIODIC_CHECK_INTERVAL_MS,
++    );
++    return ordinaryIntervalMs +
++      this.getBackgroundPrioritySpreadObservationHandoffMs();
++  }
++
++  /**
++   * Resolve the already-configured positive window separating formation
++   * quiescence maturity from ordinary background release.
++   * @return {number}
++   */
++  getBackgroundPrioritySpreadObservationHandoffMs() {
++    return Number.isFinite(this.periodicCheckJitterMs) &&
++      this.periodicCheckJitterMs > 0 ?
++      Math.floor(this.periodicCheckJitterMs) :
++      REBALANCER_DEFAULT.UNIFIED.PERIODIC_CHECK_JITTER_MS;
++  }
++
++  /**
++   * Resolve the release cadence for background work deferred behind priority
++   * spread. Those entities must not inherit the exact short priority retry:
++   * doing so synchronizes every deferred partition. The stable window already
++   * includes the positive observation handoff; per-entity jitter then keeps the
++   * background cohort staggered.
++   * @return {number}
++   */
++  getBackgroundPrioritySpreadReleaseDelayMs() {
++    const stableWindowMs =
++      this.getBackgroundPrioritySpreadStableWindowMs();
++    const jitterWindowMs =
++      this.getBackgroundPrioritySpreadObservationHandoffMs();
++    const jitterMs = Math.floor(
++      this.randomSource.random() * jitterWindowMs,
++    );
++    return stableWindowMs + jitterMs;
++  }
++
++  /**
++   * Preserve the shared fence's already-observed maturity deadline when an
++   * unrelated progress event rechecks a stabilizing background entity. The
++   * positive observation handoff is already part of stableRemainingMs; a new
++   * full ordinary delay here would cancel the earlier timer and move maturity
++   * another cadence into the future.
++   * @param {number} stableRemainingMs
++   * @return {number}
++   */
++  getBackgroundPrioritySpreadStableReleaseDelayMs(stableRemainingMs) {
++    if (!Number.isFinite(stableRemainingMs)) {
++      return this.getBackgroundPrioritySpreadStableWindowMs();
++    }
++    return Math.max(
++      UNIFIED_REBALANCER_LITERAL.ONE,
++      Math.floor(stableRemainingMs),
++    );
++  }
++
+   /**
+    * Resolve the first scheduler delay after leadership activation.
+    * Priority control-plane partitions should begin checking quickly instead
+diff --git a/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js b/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
+index 14c624fc383c21d8c3ca8e77073c4b1f02dc4666..92422687191b368f5a7d3dca5a1b3562387f70b2 100644
+--- a/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
++++ b/test/rebalancer/unified-rebalancer-planning-gate-decisions-test-cases.js
+@@ -4,6 +4,7 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+     CONTROL_PLANE_WORKLOAD_CLASS,
+     createBackpressuredMessageRouter,
+     createMockCache,
++    createMockCoordinator,
+     createMockMembershipPublicationService,
+     createMockReadinessService,
+     createTestRebalancer,
+@@ -485,9 +486,14 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+       rebalancer.setLeader(true);
+       rebalancer.clusterReadinessConfirmed = true;
+       rebalancer.isStabilized = () => true;
++      rebalancer.randomSource = {random: () => 0.25};
+ 
+       try {
+         const decision = rebalancer.resolvePrioritySpreadPlanningGateDecision();
++        const expectedReleaseDelayMs =
++          rebalancer.periodicCheckIntervalMs +
++          rebalancer.periodicCheckJitterMs +
++          Math.floor(rebalancer.periodicCheckJitterMs * 0.25);
+ 
+         t.equal(
+           decision?.decision,
+@@ -506,8 +512,17 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+         );
+         t.equal(
+           decision?.scheduleDelayMs,
++          expectedReleaseDelayMs,
++          'background work should wait one ordinary cadence plus deterministic jitter',
++        );
++        t.ok(
++          decision.scheduleDelayMs > rebalancer.periodicCheckIntervalMs,
++          'background release must leave a full ordinary quiet interval',
++        );
++        t.not(
++          decision.scheduleDelayMs,
+           rebalancer.getPriorityRetryDelayMs(),
+-          'priority spread waits should carry the bounded retry delay explicitly',
++          'background partitions must not synchronize on the priority retry',
+         );
+         t.equal(
+           decision?.logMessage,
+@@ -529,6 +544,153 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
+       }
+     });
+ 
++  test('UnifiedRebalancer shares priority-clear stabilization across background entities',
++    async (t) => {
++      initializeTestEnvironment();
++
++      let nowMs = 1000;
++      const sharedReadinessOwner = {};
++      const replacementReadinessOwner = {};
++      const observer = createTestRebalancer({
++        entityId: 'observer-p1',
++        entityType: EntityType.PARTITION,
++        nodeId: REBALANCER_TEST_NODE_ID_A,
++        controlPlaneReadinessService: sharedReadinessOwner,
++        nowFn: () => nowMs,
++      });
++      const lateBackgroundEntity = createTestRebalancer({
++        entityId: 'late-background-p1',
++        entityType: EntityType.PARTITION,
++        nodeId: REBALANCER_TEST_NODE_ID_A,
++        controlPlaneReadinessService: sharedReadinessOwner,
++        nowFn: () => nowMs,
++      });
++      const priorityEntity = createTestRebalancer({
++        entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
++        entityType: EntityType.PARTITION,
++        nodeId: REBALANCER_TEST_NODE_ID_A,
++        controlPlaneReadinessService: sharedReadinessOwner,
++        nowFn: () => nowMs,
++      });
++      observer.getControlPlanePrioritySpreadBlocker = () => ({
++        requiredDistinctNodeCount: 3,
++        requiredQuorumDistinctNodeCount: 2,
++        blockedPartitions: [{
++          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
++          readyReplicaCount: 2,
++          readyDistinctNodeCount: 1,
++          spreadGap: 1,
++        }],
++      });
++      lateBackgroundEntity.getControlPlanePrioritySpreadBlocker = () => null;
++      priorityEntity.getControlPlanePrioritySpreadBlocker = () => null;
++      observer.randomSource = {random: () => 0};
++      lateBackgroundEntity.randomSource = {random: () => 0};
++
++      try {
++        const blockedDecision =
++          observer.resolvePrioritySpreadPlanningGateDecision();
++        t.equal(
++          blockedDecision?.gate,
++          TEST_REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
++          'one background observer should arm the shared priority fence',
++        );
++
++        const replacementCoordinator = createMockCoordinator();
++        replacementCoordinator.controlPlaneReadinessService =
++          replacementReadinessOwner;
++        lateBackgroundEntity.setRebalanceCoordinator(
++          replacementCoordinator,
++        );
++        t.equal(
++          lateBackgroundEntity.controlPlaneReadinessService,
++          replacementReadinessOwner,
++          'the test should traverse the production readiness-owner rebind',
++        );
++
++        t.equal(
++          priorityEntity.resolvePrioritySpreadPlanningGateDecision(),
++          null,
++          'the shared ordinary-work fence must never defer a priority partition',
++        );
++
++        const firstClearDecision =
++          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
++        t.equal(
++          firstClearDecision?.decision,
++          TEST_REBALANCE_PLANNING_GATE_DECISION.DEFER_PLANNING,
++          'an owner-rebound entity must not release on its first clear sample',
++        );
++        t.equal(
++          firstClearDecision?.blocker?.state,
++          'stabilizing',
++          'the shared fence should expose its sampled-clear state',
++        );
++        t.equal(
++          firstClearDecision?.logMessage,
++          REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY_STABILITY,
++          'the clear-window hold should be distinguishable from an active spread deficit',
++        );
++
++        const admissionStableWindowMs =
++          lateBackgroundEntity.periodicCheckIntervalMs;
++        const observationHandoffMs =
++          lateBackgroundEntity
++            .getBackgroundPrioritySpreadObservationHandoffMs();
++        const stableWindowMs =
++          lateBackgroundEntity.getBackgroundPrioritySpreadStableWindowMs();
++        t.equal(
++          stableWindowMs,
++          admissionStableWindowMs + observationHandoffMs,
++          'the shared fence should include the configured observation handoff',
++        );
++        t.equal(
++          firstClearDecision.scheduleDelayMs,
++          stableWindowMs,
++          'the first clear sample should schedule the exact shared maturity deadline',
++        );
++
++        nowMs += admissionStableWindowMs;
++        const admissionBoundaryDecision =
++          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
++        t.equal(
++          admissionBoundaryDecision?.blocker?.stableRemainingMs,
++          observationHandoffMs,
++          'an unchanged 60-second admission candidate must mature before ordinary release',
++        );
++        t.equal(
++          admissionBoundaryDecision?.scheduleDelayMs,
++          observationHandoffMs,
++          'a boundary recheck must preserve the existing maturity deadline',
++        );
++
++        nowMs += observationHandoffMs - 1;
++        const lastHeldDecision =
++          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
++        t.equal(
++          lastHeldDecision?.blocker?.stableRemainingMs,
++          1,
++          'the shared fence should remain closed through the observation handoff',
++        );
++        t.equal(
++          lastHeldDecision?.scheduleDelayMs,
++          1,
++          'late progress must not restart a full ordinary release cadence',
++        );
++
++        nowMs += 1;
++        t.equal(
++          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
++          null,
++          'a clear sample after the observation handoff should release ordinary planning',
++        );
++      } finally {
++        observer.shutdown();
++        lateBackgroundEntity.shutdown();
++        priorityEntity.shutdown();
++      }
++    });
++
+   test('UnifiedRebalancer defers non-priority system planning while priority spread is pending',
+     async (t) => {
+       initializeTestEnvironment();

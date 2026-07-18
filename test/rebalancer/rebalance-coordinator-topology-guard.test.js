@@ -152,6 +152,17 @@ function createCoordinator(options = {}) {
   const sqlEngine = createSqlEngine({
     authoritativeServices: options.authoritativeServices || [],
   });
+  const baseReadinessService = createMockControlPlaneReadinessService({
+    systemTableCache: cache,
+  });
+  const controlPlaneReadinessService =
+    options.controlPlaneReadinessService ||
+    (options.startupAuthority ?
+      {
+        ...baseReadinessService,
+        getStartupAuthoritySnapshotSync: () => options.startupAuthority,
+      } :
+      baseReadinessService);
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     systemTableCache: cache,
@@ -159,7 +170,7 @@ function createCoordinator(options = {}) {
       insertSystemTableRow: async () => ({success: true}),
       upsertSystemTableRow: async () => ({success: true}),
     },
-    messageRouter: {
+    messageRouter: options.messageRouter || {
       deliver: async () => ({acknowledged: true, status: 'completed'}),
     },
     tablePolicyService: {
@@ -167,9 +178,7 @@ function createCoordinator(options = {}) {
     },
     sqlQueryEngine: sqlEngine,
     transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService({
-      systemTableCache: cache,
-    }),
+    controlPlaneReadinessService,
     controlPlaneSystemTableGateway: options.controlPlaneSystemTableGateway || {
       readAuthoritativeRows: async (_tableName, sql, params = []) =>
         sqlEngine.executeQuery(sql, params),
@@ -358,14 +367,18 @@ test(
 );
 
 test(
-  'RebalanceCoordinator admits only the concentrated-ledger recovery ' +
-    'REPLACE when the services owner is circularly unavailable',
+  'RebalanceCoordinator admits only declared concentrated-ledger recovery ' +
+    'moves when the services owner is circularly unavailable',
   async (t) => {
     initializeTestEnvironment();
     const ledgerId = 'replica_operations-p1';
     const seed = 'seed';
     const spreadNode = 'spread-node';
+    const firstReadyTarget = 'first-ready-target';
     const targetNode = 'target-node';
+    const staleTransportTarget = 'stale-transport-target';
+    const nonAuthorityTarget = 'non-authority-target';
+    const unreadyNode = 'unready-node';
     const services = [
       createServiceRow(`${ledgerId}-r1`, seed, {partitionId: ledgerId}),
       createServiceRow(`${ledgerId}-r2`, seed, {partitionId: ledgerId}),
@@ -381,12 +394,42 @@ test(
         unavailable() :
         {success: true, rows: []};
     const {coordinator} = createCoordinator({
-      cacheNodes: [seed, spreadNode, targetNode].map((nodeId) => ({
+      cacheNodes: [
+        seed,
+        spreadNode,
+        firstReadyTarget,
+        targetNode,
+        staleTransportTarget,
+        nonAuthorityTarget,
+      ].map((nodeId) => ({
         node_id: nodeId,
-        connection_state: 'ready',
+        status: 'active',
+        connection_state:
+          [
+            targetNode,
+            staleTransportTarget,
+            nonAuthorityTarget,
+          ].includes(nodeId) ?
+            'connected' :
+            'ready',
       })),
       cacheServices: services,
       cachePartitions: [{partition_id: ledgerId, replica_count: 3}],
+      startupAuthority: {
+        authorityAvailable: true,
+        canonicalStartupNodeIds: [
+          seed,
+          spreadNode,
+          firstReadyTarget,
+          targetNode,
+          staleTransportTarget,
+        ],
+      },
+      messageRouter: {
+        deliver: async () => ({acknowledged: true, status: 'completed'}),
+        getConnectionState: (nodeId) =>
+          nodeId === staleTransportTarget ? 'disconnected' : 'connected',
+      },
       controlPlaneSystemTableGateway: {
         readAuthoritativeRows: ownerRead,
         readRows: ownerRead,
@@ -435,8 +478,56 @@ test(
       normalizedMoveType: TEST_ADD_OPERATION_TYPE,
       move: {...context.move, replicaId: null},
     });
-    t.equal(genericAdd.state, 'inventory_unusable',
-      'an owner-unavailable ADD never receives the REPLACE exception');
+    t.equal(genericAdd.state, 'allowed',
+      'a canonical live pre-ready target breaks circularity without another REPLACE');
+
+    const firstFeasibleAdd = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
+      move: {
+        ...context.move,
+        nodeId: firstReadyTarget,
+        replicaId: null,
+      },
+    });
+    t.equal(firstFeasibleAdd.state, 'allowed',
+      'the first ready unoccupied target remains a valid cure');
+
+    const unreadyAdd = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
+      move: {
+        ...context.move,
+        nodeId: unreadyNode,
+        replicaId: null,
+      },
+    });
+    t.equal(unreadyAdd.state, 'inventory_unusable',
+      'the circularity exception must not admit an unready target');
+
+    const staleTransportAdd = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
+      move: {
+        ...context.move,
+        nodeId: staleTransportTarget,
+        replicaId: null,
+      },
+    });
+    t.equal(staleTransportAdd.state, 'inventory_unusable',
+      'startup authority cannot replace live transport evidence');
+
+    const nonAuthorityAdd = await coordinator.buildTopologyGuardSnapshot({
+      ...context,
+      normalizedMoveType: TEST_ADD_OPERATION_TYPE,
+      move: {
+        ...context.move,
+        nodeId: nonAuthorityTarget,
+        replicaId: null,
+      },
+    });
+    t.equal(nonAuthorityAdd.state, 'inventory_unusable',
+      'live CONNECTED evidence cannot replace startup authority membership');
     coordinator.shutdown();
   },
 );

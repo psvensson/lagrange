@@ -7,13 +7,16 @@ import {
   REPLICA_INVENTORY_CONSISTENCY,
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
-import {isEngagedLedgerQuorumSpreadCureReplace} from './operation-ledger-hold-policy.js';
+import {
+  isEngagedLedgerQuorumSpreadCureMove,
+} from './operation-ledger-hold-policy.js';
+import {
+  getStartupAuthorityControlPlanePlacementEligibleNodeIds,
+} from '../control-plane/startup-authority-placement-eligibility.js';
 
 const {
   OperationType,
   ReplicaStatus,
-  REPLICA_ID_SEPARATOR,
-  REPLICA_ID_START_INDEX,
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
   SYSTEM_TABLE_NAME,
@@ -21,12 +24,9 @@ const {
   TOPOLOGY_GUARD_REASON,
   TOPOLOGY_GUARD_STATE,
   UNIFIED_SERVICE_TYPE,
-  WORKFLOW_STEP,
 } = REBALANCE_COORDINATOR_SHARED;
 
-const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
-const CANONICAL_REPLICA_ID_DECIMAL_RADIX = 10;
 const TOPOLOGY_GUARD_ENTITY_TYPES = new Set([
   SERVICE_TYPE.PARTITION,
   SERVICE_TYPE.MESSAGE_GROUP,
@@ -39,26 +39,10 @@ const TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES = new Set([
 const TOPOLOGY_GUARD_TARGET_COUNT_OPERATION_TYPES = new Set([
   OperationType.ADD,
 ]);
-const RETIRED_REPLACE_SOURCE_OPERATION_STATUSES = new Set([
-  ReplicaStatus.REMOVED,
-]);
-const RETIRED_REPLACE_SOURCE_WORKFLOW_STEPS = new Set([
-  WORKFLOW_STEP.REMOVED,
-]);
-const REPLACE_SOURCE_RETIREMENT_SAFETY_STATE = Object.freeze({
-  NOT_REPLACE: 'not_replace',
-  SOURCE_UNAVAILABLE: 'source_unavailable',
-  ENTITY_UNAVAILABLE: 'entity_unavailable',
-  SOURCE_ACTIVE: 'source_active',
-  SOURCE_RETIRED: 'source_retired',
-});
-const REPLACE_SOURCE_RETIREMENT_SAFETY_ERROR_BY_STATE = Object.freeze({
-  [REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_RETIRED]:
-    'replace source replica already retired by completed operation',
-});
 const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
   state: TOPOLOGY_GUARD_STATE.ALLOWED,
 });
+const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
 
 function captureInventoryCacheTableState(cache, tableName) {
   return {
@@ -88,37 +72,34 @@ function captureInventoryCacheState(cache, capturedAtMs) {
   };
 }
 
-function extractCanonicalReplicaIndex(replicaId, canonicalPrefix) {
-  if (typeof replicaId !== LOCAL_STR_STRING || replicaId.length === 0) {
-    return null;
-  }
-  if (
-    typeof canonicalPrefix !== LOCAL_STR_STRING ||
-    canonicalPrefix.length === 0 ||
-    !replicaId.startsWith(canonicalPrefix)
-  ) {
-    return null;
-  }
-
-  const rawIndex = replicaId.slice(canonicalPrefix.length);
-  if (rawIndex.length === 0) {
-    return null;
-  }
-
-  const parsedIndex = Number.parseInt(
-    rawIndex,
-    CANONICAL_REPLICA_ID_DECIMAL_RADIX,
-  );
-  if (
-    !Number.isInteger(parsedIndex) ||
-    parsedIndex < REPLICA_ID_START_INDEX
-  ) {
-    return null;
-  }
-  return parsedIndex;
-}
-
 class RebalanceCoordinatorTopologyGuardMethods {
+  getTopologyGuardStartupAuthorityPlacementEligibleNodeIds() {
+    const readinessService = this.controlPlaneReadinessService;
+    if (
+      !readinessService ||
+      typeof readinessService.getStartupAuthoritySnapshotSync !==
+        LOCAL_STR_FUNCTION
+    ) {
+      return EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS;
+    }
+    let startupAuthority;
+    try {
+      startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
+        this.nodeId,
+        this.nowFn(),
+      );
+    } catch {
+      return EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS;
+    }
+    return getStartupAuthorityControlPlanePlacementEligibleNodeIds({
+      systemTableCache: this.systemTableCache,
+      startupAuthority,
+      messageRouter: this.messageRouter,
+      localNodeId: this.nodeId,
+      includeSelf: false,
+    });
+  }
+
   isTopologyGuardEntityType(entityType) {
     return TOPOLOGY_GUARD_ENTITY_TYPES.has(entityType);
   }
@@ -136,17 +117,18 @@ class RebalanceCoordinatorTopologyGuardMethods {
   /**
    * The operation ledger cannot make its own authoritative services owner
    * readable until its concentrated quorum spreads. Permit only that
-   * count-neutral cure to use the conservative cache/operation union when the
-   * services owner is unavailable. The source replica must exist in actual
-   * cache rows, operation visibility must remain usable, and the ordinary
-   * occupied-target decision still runs after this exception.
+   * declared spread cures to use the conservative cache/operation union when
+   * the services owner is unavailable. A REPLACE source must exist in actual
+   * cache rows, an ADD must target the feasible missing node, operation
+   * visibility must remain usable, and the ordinary occupied/target decisions
+   * still run after this exception.
    * @param {Object} context
    * @param {Object} inventory
    * @param {Object} authoritativeObservation
    * @return {boolean}
    * @private
    */
-  isConcentratedLedgerRecoveryReplace(
+  isConcentratedLedgerRecoveryMove(
     context,
     inventory,
     authoritativeObservation,
@@ -166,28 +148,35 @@ class RebalanceCoordinatorTopologyGuardMethods {
     ) {
       return false;
     }
-    const sourceReplicaId = String(context?.move?.replicaId || '').trim();
-    const sourceReplica = inventory.replicas.find(
-      (replica) => replica.replicaId === sourceReplicaId,
-    );
-    if (
-      !sourceReplica?.voter ||
-      ![
-        ReplicaStatus.ACTIVE,
-        ReplicaStatus.REMOVING,
-      ].includes(sourceReplica?.status) ||
-      !sourceReplica?.occupied
-    ) {
-      return false;
+    const isReplace = context?.normalizedMoveType === OperationType.REPLACE;
+    let sourceReplica = null;
+    if (isReplace) {
+      const sourceReplicaId = String(context?.move?.replicaId || '').trim();
+      sourceReplica = inventory.replicas.find(
+        (replica) => replica.replicaId === sourceReplicaId,
+      );
+      if (
+        !sourceReplica?.voter ||
+        ![
+          ReplicaStatus.ACTIVE,
+          ReplicaStatus.REMOVING,
+        ].includes(sourceReplica?.status) ||
+        !sourceReplica?.occupied
+      ) {
+        return false;
+      }
     }
     // Relation side (cure-typed move of a concentrated ledger partition whose
     // source sits on the hottest node) is an owner row; the provenance and
     // source-replica actuals above are this guard's own mechanism.
-    return isEngagedLedgerQuorumSpreadCureReplace({
+    return isEngagedLedgerQuorumSpreadCureMove({
       systemTableCache: this.systemTableCache,
       moveType: context?.normalizedMoveType,
       partitionId,
-      sourceReplicaNodeId: sourceReplica.nodeId,
+      placementEligibleNodeIds:
+        this.getTopologyGuardStartupAuthorityPlacementEligibleNodeIds(),
+      sourceReplicaNodeId: sourceReplica?.nodeId || null,
+      targetNodeId: String(context?.move?.nodeId || '').trim(),
     });
   }
 
@@ -331,8 +320,8 @@ class RebalanceCoordinatorTopologyGuardMethods {
         partitionId,
         entityType,
       });
-    const concentratedLedgerRecoveryReplace =
-      this.isConcentratedLedgerRecoveryReplace(
+    const concentratedLedgerRecoveryMove =
+      this.isConcentratedLedgerRecoveryMove(
         context,
         inventory,
         authoritativeObservation,
@@ -341,7 +330,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
       Object.freeze({
         matches:
           !inventory.provenance.topologyIncreaseUsable &&
-          !concentratedLedgerRecoveryReplace,
+          !concentratedLedgerRecoveryMove,
         state: TOPOLOGY_GUARD_STATE.INVENTORY_UNUSABLE,
         blockingReason: TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
       }),
@@ -530,330 +519,6 @@ class RebalanceCoordinatorTopologyGuardMethods {
       entityType,
       entityId,
     });
-  }
-
-  /**
-   * Resolve every replica ID already allocated by prior entity operations.
-   * Completed replacement targets can remain visible to runtime membership
-   * and publication convergence after they stop being in-flight, so replica ID
-   * allocation must be monotonic across operation history, not just current
-   * service rows and in-flight rows.
-   * @param {Object} params - Lookup parameters.
-   * @param {string} params.entityType - Entity type.
-   * @param {string} params.entityId - Entity ID.
-   * @return {Promise<Set<string>>} Operation-owned replica IDs.
-   * @private
-   */
-  async getEntityAllocatedOperationReplicaIds({entityType, entityId}) {
-    const replicaIds = new Set();
-    const authoritativeOperations =
-      typeof this.repository?.getOperationsByEntityAuthoritative ===
-      LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntityAuthoritative(
-          entityType,
-          entityId,
-        ) :
-        [];
-    const cacheVisibleOperations =
-      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntity(entityType, entityId) :
-        [];
-    const operationSets = [
-      authoritativeOperations,
-      cacheVisibleOperations,
-    ];
-    for (const operations of operationSets) {
-      if (!Array.isArray(operations)) {
-        continue;
-      }
-      for (const operation of operations) {
-        this.addAllocatedOperationReplicaIds(replicaIds, operation);
-      }
-    }
-    return replicaIds;
-  }
-
-  /**
-   * @param {Set<string>} replicaIds
-   * @param {Object|null} operation
-   * @return {void}
-   * @private
-   */
-  addAllocatedOperationReplicaIds(replicaIds, operation) {
-    if (!operation) {
-      return;
-    }
-    const operationReplicaId = operation.replicaId;
-    if (
-      typeof operationReplicaId === LOCAL_STR_STRING &&
-      operationReplicaId.length > 0
-    ) {
-      replicaIds.add(operationReplicaId);
-    }
-    const sourceReplicaId =
-      typeof this.getReplaceSourceReplicaId === LOCAL_STR_FUNCTION ?
-        this.getReplaceSourceReplicaId(operation) :
-        operation.sourceReplicaId;
-    if (
-      typeof sourceReplicaId === LOCAL_STR_STRING &&
-      sourceReplicaId.length > 0
-    ) {
-      replicaIds.add(sourceReplicaId);
-    }
-  }
-
-  /**
-   * Completed REPLACE source replicas are retired even if stale service rows
-   * remain cache-visible. This authoritative evidence prevents a later
-   * replacement from reusing an already-retired source and creating a surplus
-   * target replica.
-   * @param {Object} params - Lookup parameters.
-   * @param {string} params.entityType - Entity type.
-   * @param {string} params.entityId - Entity ID.
-   * @return {Promise<Set<string>>} Retired source replica IDs.
-   * @private
-   */
-  async getEntityRetiredReplaceSourceReplicaIds({entityType, entityId}) {
-    const retiredSourceReplicaIds = new Set();
-    const authoritativeOperations =
-      typeof this.repository?.getOperationsByEntityAuthoritative ===
-      LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntityAuthoritative(
-          entityType,
-          entityId,
-        ) :
-        [];
-    const cacheVisibleOperations =
-      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
-        await this.repository.getOperationsByEntity(entityType, entityId) :
-        [];
-    const operationSets = [
-      authoritativeOperations,
-      cacheVisibleOperations,
-    ];
-    for (const operations of operationSets) {
-      if (!Array.isArray(operations)) {
-        continue;
-      }
-      for (const operation of operations) {
-        this.addRetiredReplaceSourceReplicaId(
-          retiredSourceReplicaIds,
-          operation,
-        );
-      }
-    }
-    return retiredSourceReplicaIds;
-  }
-
-  /**
-   * @param {Set<string>} retiredSourceReplicaIds
-   * @param {Object|null} operation
-   * @return {void}
-   * @private
-   */
-  addRetiredReplaceSourceReplicaId(retiredSourceReplicaIds, operation) {
-    if (!this.isRetiredReplaceSourceOperation(operation)) {
-      return;
-    }
-    const sourceReplicaId =
-      typeof this.getReplaceSourceReplicaId === LOCAL_STR_FUNCTION ?
-        this.getReplaceSourceReplicaId(operation) :
-        operation.sourceReplicaId;
-    if (
-      typeof sourceReplicaId === LOCAL_STR_STRING &&
-      sourceReplicaId.length > 0
-    ) {
-      retiredSourceReplicaIds.add(sourceReplicaId);
-    }
-  }
-
-  /**
-   * @param {Object|null} operation
-   * @return {boolean}
-   * @private
-   */
-  isRetiredReplaceSourceOperation(operation) {
-    if (!operation) {
-      return false;
-    }
-    const operationType = this.normalizeMoveType(
-      operation.type || operation.operation_type || operation.operationType,
-    );
-    const workflowStep =
-      operation.workflowStep ?? operation.workflow_step ?? null;
-    return (
-      operationType === OperationType.REPLACE &&
-      (
-        RETIRED_REPLACE_SOURCE_OPERATION_STATUSES.has(operation.status) ||
-        RETIRED_REPLACE_SOURCE_WORKFLOW_STEPS.has(workflowStep)
-      )
-    );
-  }
-
-  /**
-   * @param {Object|null} move
-   * @param {Object} context
-   * @return {Object}
-   * @private
-   */
-  buildReplaceSourceRetirementEvidence(move, context = {}) {
-    return {
-      moveType: this.normalizeMoveType(move?.type),
-      sourceReplicaId:
-        typeof move?.replicaId === LOCAL_STR_STRING ?
-          move.replicaId.trim() :
-          '',
-      entityType:
-        context.entityType || move?.entityType || SERVICE_TYPE.PARTITION,
-      entityId:
-        context.entityId || move?.entityId || move?.partitionId ||
-        '',
-    };
-  }
-
-  /**
-   * @param {Object} evidence
-   * @param {Set<string>} retiredSourceReplicaIds
-   * @return {string}
-   * @private
-   */
-  resolveReplaceSourceRetirementSafetyState(
-    evidence,
-    retiredSourceReplicaIds,
-  ) {
-    if (evidence.moveType !== OperationType.REPLACE) {
-      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.NOT_REPLACE;
-    }
-    if (evidence.sourceReplicaId.length === 0) {
-      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_UNAVAILABLE;
-    }
-    if (
-      typeof evidence.entityId !== LOCAL_STR_STRING ||
-      evidence.entityId.length === 0
-    ) {
-      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.ENTITY_UNAVAILABLE;
-    }
-    if (retiredSourceReplicaIds.has(evidence.sourceReplicaId)) {
-      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_RETIRED;
-    }
-    return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_ACTIVE;
-  }
-
-  /**
-   * Return a safety error when a REPLACE move targets a source replica already
-   * retired by a completed replacement operation.
-   * @param {Object|null} move
-   * @param {Object} context
-   * @return {Promise<string|null>}
-   * @private
-   */
-  async getRetiredReplaceSourceMoveSafetyError(move, context = {}) {
-    const evidence = this.buildReplaceSourceRetirementEvidence(move, context);
-    const shouldReadRetirementEvidence =
-      evidence.moveType === OperationType.REPLACE &&
-      evidence.sourceReplicaId.length > 0 &&
-      typeof evidence.entityId === LOCAL_STR_STRING &&
-      evidence.entityId.length > 0;
-    const retiredSourceReplicaIds = shouldReadRetirementEvidence ?
-      await this.getEntityRetiredReplaceSourceReplicaIds({
-        entityType: evidence.entityType,
-        entityId: evidence.entityId,
-      }) :
-      new Set();
-    const safetyState = this.resolveReplaceSourceRetirementSafetyState(
-      evidence,
-      retiredSourceReplicaIds,
-    );
-    return REPLACE_SOURCE_RETIREMENT_SAFETY_ERROR_BY_STATE[safetyState] ||
-      null;
-  }
-
-  /**
-   * Allocate canonical replica ID for ADD/REPLACE create phase.
-   * Canonical format mirrors bootstrap replicas: `${entityId}-rN`.
-   * @param {Object} params - Allocation parameters.
-   * @param {string} params.partitionId - Partition ID.
-   * @param {string} params.entityType - Entity type.
-   * @param {string} params.entityId - Entity ID.
-   * @param {Array<string>} [params.excludeReplicaIds] - IDs that cannot be
-   *   selected (e.g., REPLACE source replica during create phase).
-   * @return {Promise<string>} Allocated canonical replica ID.
-   * @private
-   */
-  async allocateCanonicalReplicaId({
-    partitionId,
-    entityType,
-    entityId,
-    excludeReplicaIds = [],
-  }) {
-    const usedReplicaIds = new Set();
-    const serviceRows = this.getEntityServiceRows({
-      partitionId,
-      entityType,
-      entityId,
-    });
-    const authoritativeServiceRows =
-      await this.getAuthoritativeEntityServiceRows({
-        partitionId,
-        entityType,
-        entityId,
-      });
-    const inFlightReplicaIds = await this.getEntityInFlightReplicaIds({
-      partitionId,
-      entityType,
-      entityId,
-    });
-    const allocatedOperationReplicaIds =
-      await this.getEntityAllocatedOperationReplicaIds({
-        entityType,
-        entityId,
-      });
-
-    for (const row of serviceRows) {
-      const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
-        usedReplicaIds.add(replicaId);
-      }
-    }
-
-    for (const row of authoritativeServiceRows) {
-      const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
-        usedReplicaIds.add(replicaId);
-      }
-    }
-
-    for (const replicaId of inFlightReplicaIds) {
-      usedReplicaIds.add(replicaId);
-    }
-
-    for (const replicaId of allocatedOperationReplicaIds) {
-      usedReplicaIds.add(replicaId);
-    }
-
-    for (const replicaId of excludeReplicaIds) {
-      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > 0) {
-        usedReplicaIds.add(replicaId);
-      }
-    }
-
-    const canonicalPrefix = `${entityId}${REPLICA_ID_SEPARATOR}`;
-    let highestObservedReplicaIndex = REPLICA_ID_START_INDEX - 1;
-    for (const replicaId of usedReplicaIds) {
-      const replicaIndex = extractCanonicalReplicaIndex(
-        replicaId,
-        canonicalPrefix,
-      );
-      if (
-        Number.isInteger(replicaIndex) &&
-        replicaIndex > highestObservedReplicaIndex
-      ) {
-        highestObservedReplicaIndex = replicaIndex;
-      }
-    }
-
-    const candidateIndex = highestObservedReplicaIndex + 1;
-    return `${canonicalPrefix}${candidateIndex}`;
   }
 }
 

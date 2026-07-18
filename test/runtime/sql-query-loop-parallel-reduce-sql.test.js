@@ -17,6 +17,9 @@ import {
   PREPARE_STATUS,
   START_STATUS,
 } from '../../src/runtime/runtime-driver.js';
+import {
+  assessAffinityDemoCompletion,
+} from '../../examples/service-data-affinity/affinity-demo-evidence.js';
 
 const WAIT_TIMEOUT_MS = 1500;
 const WAIT_POLL_MS = 5;
@@ -48,9 +51,10 @@ function createLeaseDatabase() {
     CREATE TABLE final_topn (
       result_id TEXT PRIMARY KEY,
       result_json TEXT NOT NULL,
-      computed_at INTEGER NOT NULL
+      computed_at INTEGER NOT NULL,
+      source_snapshot_json TEXT NOT NULL
     );
-    INSERT INTO final_topn VALUES ('global', '[]', 0);
+    INSERT INTO final_topn VALUES ('global', '[]', 0, '{}');
   `);
   return db;
 }
@@ -117,6 +121,7 @@ test('parallel reduce lease SQL: concurrent generations claim unique slots ' +
       leaseMs: LEASE_MS,
       coordinatorSlot: 1,
       resultId: 'global',
+      resultSnapshotColumn: 'source_snapshot_json',
     },
   };
   const executor = sqliteExecutor(db, new Map([
@@ -157,6 +162,70 @@ test('parallel reduce lease SQL: concurrent generations claim unique slots ' +
     'SELECT result_json FROM final_topn WHERE result_id = \'global\'',
   ).get().result_json), [{groupKey: 1, aggValue: 5}],
   'the coordinator publishes the exact bounded snapshot through real SQL');
+  const publishedResult = db.prepare(
+    'SELECT result_json, computed_at, source_snapshot_json ' +
+    'FROM final_topn WHERE result_id = \'global\'',
+  ).get();
+  const sourceSnapshot = JSON.parse(publishedResult.source_snapshot_json);
+  const sourceSlots = Array.isArray(sourceSnapshot.slots) ?
+    sourceSnapshot.slots :
+    [];
+  t.equal(sourceSnapshot.schemaVersion, 1,
+    'the result row atomically identifies its partial-snapshot contract');
+  t.same(sourceSlots.map((slot) => slot.slotId), [1, 2],
+    'the witness covers every configured stable slot');
+  t.same(sourceSlots.map((slot) => slot.replicaId), [firstId, secondId],
+    'the witness binds the result to the replica generations it merged');
+  t.same(sourceSlots.map((slot) => slot.candidateCount), [1, 1],
+    'the witness retains the bounded candidate count per partial');
+  t.ok(sourceSlots.every((slot) =>
+    Number(slot.computedAt) > 0 &&
+    Number(slot.computedAt) <= Number(publishedResult.computed_at)),
+  'the result is chronologically downstream of every witnessed partial');
+
+  const laterPartialAt = Number(publishedResult.computed_at) + 1;
+  db.prepare(
+    'UPDATE reduce_slots SET computed_at = ?, lease_expires_at = ? ' +
+    'WHERE slot_id = 2',
+  ).run(laterPartialAt, Date.now() + LEASE_MS);
+  const currentSlots = db.prepare(
+    'SELECT slot_id, replica_id, lease_expires_at, partial_json, ' +
+    'computed_at FROM reduce_slots ORDER BY slot_id',
+  ).all();
+  const resultRows = JSON.parse(publishedResult.result_json);
+  const serviceTopN = resultRows.map((row, index) => ({
+    rank: index + 1,
+    group_key: row.groupKey,
+    agg_value: row.aggValue,
+    computed_at: publishedResult.computed_at,
+    source_snapshot_json: publishedResult.source_snapshot_json,
+  }));
+  const assessment = assessAffinityDemoCompletion({
+    expectedReplicaCount: 2,
+    placements: [
+      {replicaId: firstId, nodeId: 'node-a'},
+      {replicaId: secondId, nodeId: 'node-b'},
+    ],
+    weightedLocality: {
+      placementScore: 2,
+      bestScore: 2,
+      localityRatio: 1,
+    },
+    referenceTopN: serviceTopN,
+    serviceTopN,
+    reduceSlots: currentSlots,
+    expectedMergeCandidateCount: 2,
+    phaseStartedAt: Math.min(
+      Number(publishedResult.computed_at),
+      ...sourceSlots.map((slot) => Number(slot.computedAt)),
+    ) - 1,
+    parallelReduceConfig: config.parallelReduce,
+    partialLimit: 1,
+  });
+  t.equal(assessment.resultFresh, true,
+    'a later periodic partial cannot retroactively stale a sealed result');
+  t.equal(assessment.complete, true,
+    'the exact result remains acceptable through its owned snapshot witness');
 
   replacementId = 'svc-affinity-r5';
   replacement = new SqlQueryLoopRuntimeModule();

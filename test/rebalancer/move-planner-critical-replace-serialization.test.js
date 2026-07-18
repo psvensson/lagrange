@@ -31,6 +31,7 @@ import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {isReplaceRemoveDispatchPhase} from '../../src/rebalancer/replica-operation-progress.js';
 
 const PRIORITY_PARTITION_ID = 'sql_transactions-p1';
+const LEDGER_PARTITION_ID = 'replica_operations-p1';
 const NON_PRIORITY_PARTITION_ID = 'app_data-p1';
 
 function initEnv() {
@@ -136,25 +137,91 @@ test('MovePlanner critical-partition REPLACE serialization cap', async (t) => {
   );
 
   await t.test(
-    'with no REPLACE in flight, only ONE REPLACE is minted within a tick ' +
-    '(not the whole spread batch)',
+    'non-ledger priority spread expands and drains without a leadership REPLACE',
     async (t) => {
-      // 3 active concentrated on node-1 (at target, mis-spread). The natural
-      // batch is TWO REPLACEs (to node-2 and node-3); the cap serializes to one.
-      const currentReplicas = [
+      const concentratedReplicas = [
         active('r1', 'node-1'),
         active('r2', 'node-1'),
         active('r3', 'node-1'),
       ];
-      const provider = createMoveStateProvider({currentReplicas});
-      const planner = plannerFor(PRIORITY_PARTITION_ID, provider);
+      const expandOnePlanner = plannerFor(
+        PRIORITY_PARTITION_ID,
+        createMoveStateProvider({currentReplicas: concentratedReplicas}),
+      );
+      const expandOneMoves = expandOnePlanner.calculateMoves(
+        concentratedReplicas,
+        TARGET_STATE,
+      );
 
-      const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
+      t.matchOnly(expandOneMoves, [{
+        type: REBALANCER_MOVE_TYPE.ADD,
+        nodeId: 'node-2',
+        reason: 'spread_replicas',
+      }], 'the first spread step expands by one without a REPLACE');
 
-      t.equal(countByType(moves, REBALANCER_MOVE_TYPE.REPLACE), 1,
-        'exactly one REPLACE minted per tick on a critical partition');
-      t.equal(countByType(moves, REBALANCER_MOVE_TYPE.ADD), 0,
-        'the unpaired spread ADD is deferred, not leaked as a count-increasing ADD');
+      const expandedOnce = [
+        ...concentratedReplicas,
+        active('r4', 'node-2'),
+      ];
+      const drainOnePlanner = plannerFor(
+        PRIORITY_PARTITION_ID,
+        createMoveStateProvider({currentReplicas: expandedOnce}),
+      );
+      const drainOneMoves = drainOnePlanner.calculateMoves(
+        expandedOnce,
+        TARGET_STATE,
+      );
+
+      t.matchOnly(drainOneMoves, [{
+        type: REBALANCER_MOVE_TYPE.REMOVE,
+        replicaId: 'r1',
+        nodeId: 'node-1',
+        reason: 'spread_replicas',
+        standaloneSafe: true,
+      }], 'target-plus-one drains without reducing the two-node spread');
+
+      const drainedOnce = [
+        active('r2', 'node-1'),
+        active('r3', 'node-1'),
+        active('r4', 'node-2'),
+      ];
+      const expandTwoPlanner = plannerFor(
+        PRIORITY_PARTITION_ID,
+        createMoveStateProvider({currentReplicas: drainedOnce}),
+      );
+      const expandTwoMoves = expandTwoPlanner.calculateMoves(
+        drainedOnce,
+        TARGET_STATE,
+      );
+
+      t.matchOnly(expandTwoMoves, [{
+        type: REBALANCER_MOVE_TYPE.ADD,
+        nodeId: 'node-3',
+        reason: 'spread_replicas',
+      }], 'the second spread step reaches the third node without a REPLACE');
+
+      const spreadAtTarget = [
+        active('r3', 'node-1'),
+        active('r4', 'node-2'),
+        active('r5', 'node-3'),
+      ];
+      const settledPlanner = plannerFor(
+        PRIORITY_PARTITION_ID,
+        createMoveStateProvider({currentReplicas: spreadAtTarget}),
+      );
+      const settledMoves = settledPlanner.calculateMoves(
+        spreadAtTarget,
+        {
+          ...TARGET_STATE,
+          targetNodes: ['node-2', 'node-3', 'node-4'],
+        },
+      );
+
+      t.same(
+        settledMoves,
+        [],
+        'satisfied priority spread is preserved instead of exact-target relocation',
+      );
     },
   );
 
@@ -206,6 +273,64 @@ test('MovePlanner critical-partition REPLACE serialization cap', async (t) => {
 
       t.equal(countByType(moves, REBALANCER_MOVE_TYPE.REPLACE), 2,
         'non-critical partition mints the full spread batch (cap not applied)');
+    },
+  );
+
+  await t.test(
+    'ledger uses REPLACE once, then expand-drain when suitability excludes ' +
+    'the original source node',
+    async (t) => {
+      const twoNodeReplicas = [
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-2'),
+      ];
+      const planner = plannerFor(
+        LEDGER_PARTITION_ID,
+        createMoveStateProvider({currentReplicas: twoNodeReplicas}),
+      );
+
+      const expandMoves = planner.calculateMoves(
+        twoNodeReplicas,
+        {
+          ...TARGET_STATE,
+          targetNodes: ['node-2', 'node-3', 'node-4'],
+        },
+      );
+
+      t.equal(countByType(expandMoves, REBALANCER_MOVE_TYPE.REPLACE), 0,
+        'a 2-1 ledger does not pay a second exclusive REPLACE');
+      t.matchOnly(expandMoves, [{
+        type: REBALANCER_MOVE_TYPE.ADD,
+        nodeId: 'node-3',
+        reason: 'spread_replicas',
+      }], 'the missing third node is reached with one non-disruptive ADD');
+
+      const expandedReplicas = [
+        ...twoNodeReplicas,
+        active('r4', 'node-3'),
+      ];
+      const drainPlanner = plannerFor(
+        LEDGER_PARTITION_ID,
+        createMoveStateProvider({currentReplicas: expandedReplicas}),
+      );
+      const drainMoves = drainPlanner.calculateMoves(
+        expandedReplicas,
+        {
+          ...TARGET_STATE,
+          targetNodes: ['node-2', 'node-3', 'node-4'],
+        },
+      );
+
+      t.equal(countByType(drainMoves, REBALANCER_MOVE_TYPE.ADD), 0);
+      t.equal(countByType(drainMoves, REBALANCER_MOVE_TYPE.REPLACE), 0);
+      t.matchOnly(drainMoves, [{
+        type: REBALANCER_MOVE_TYPE.REMOVE,
+        replicaId: 'r1',
+        nodeId: 'node-1',
+        reason: 'spread_replicas',
+        standaloneSafe: true,
+      }], 'the canonical safe REMOVE drains the temporary fourth voter');
     },
   );
 });

@@ -193,6 +193,33 @@ class PartitionServiceMetadataDeliveryMethods {
    * @private
    */
   applyLocalLeaderClaimAnnotationClear(existingRow, transition) {
+    const claimClearProjection = {
+      [COLUMN.PARTITION_ID]: this.partitionId,
+      [COLUMN.LEADER_CLAIM_NODE_ID]: null,
+      [COLUMN.LEADER_CLAIM_RAFT_TERM]: null,
+      [COLUMN.LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT]: null,
+    };
+    return this.applyLocalCanonicalLeaderProjection(
+      existingRow,
+      claimClearProjection,
+      transition,
+    );
+  }
+  /**
+   * Apply one version-preserving owner-local leader projection. Keeping the
+   * direct cache write in one method lets election, demotion, teardown, and
+   * supersession share the same sanctioned owner boundary.
+   * @param {Object} existingRow
+   * @param {Object} localProjection
+   * @param {string} transition
+   * @return {boolean}
+   * @private
+   */
+  applyLocalCanonicalLeaderProjection(
+    existingRow,
+    localProjection,
+    transition,
+  ) {
     if (
       !existingRow ||
       typeof this.systemTableCache?.applySystemTableChange !==
@@ -200,23 +227,19 @@ class PartitionServiceMetadataDeliveryMethods {
     ) {
       return false;
     }
-    const claimClearProjection = {
-      [COLUMN.PARTITION_ID]: this.partitionId,
-      [COLUMN.LEADER_CLAIM_NODE_ID]: null,
-      [COLUMN.LEADER_CLAIM_RAFT_TERM]: null,
-      [COLUMN.LEADER_CLAIM_MINTED_AGAINST_UPDATED_AT]: null,
-    };
+    const versionedProjection = {...localProjection};
     if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
-      claimClearProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
+      versionedProjection[COLUMN.UPDATED_AT] =
+        existingRow[COLUMN.UPDATED_AT];
     }
     if (typeof existingRow[COLUMN.UPDATED_AT_HLC] !== 'undefined') {
-      claimClearProjection[COLUMN.UPDATED_AT_HLC] =
+      versionedProjection[COLUMN.UPDATED_AT_HLC] =
         existingRow[COLUMN.UPDATED_AT_HLC];
     }
     this.systemTableCache.applySystemTableChange(
       TABLES.PARTITIONS,
       PARTITION_SERVICE_LITERAL.UPDATE,
-      claimClearProjection,
+      versionedProjection,
       {
         causeId:
           `local-raft-leader:${transition}:${this.partitionId}:${this.nodeId}`,
@@ -275,6 +298,7 @@ class PartitionServiceMetadataDeliveryMethods {
       );
     if (successorIsStrictlyNewer) {
       observation.superseded = true;
+      this.applyLocalLeaderClaimAnnotationClear(record, 'superseded');
       return false;
     }
     return this.applyLocalCanonicalLeaderObservation(
@@ -299,13 +323,6 @@ class PartitionServiceMetadataDeliveryMethods {
     leaderNodeId,
     transition,
   ) {
-    if (
-      !existingRow ||
-      typeof this.systemTableCache?.applySystemTableChange !==
-        PARTITION_SERVICE_LITERAL.FUNCTION
-    ) {
-      return false;
-    }
     const localProjection = {
       [COLUMN.PARTITION_ID]: this.partitionId,
       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
@@ -328,22 +345,13 @@ class PartitionServiceMetadataDeliveryMethods {
         this.localCanonicalLeaderObservation?.baseRow?.[COLUMN.UPDATED_AT] ??
           null :
         null;
-    if (typeof existingRow[COLUMN.UPDATED_AT] !== 'undefined') {
-      localProjection[COLUMN.UPDATED_AT] = existingRow[COLUMN.UPDATED_AT];
-    }
-    if (typeof existingRow[COLUMN.UPDATED_AT_HLC] !== 'undefined') {
-      localProjection[COLUMN.UPDATED_AT_HLC] =
-        existingRow[COLUMN.UPDATED_AT_HLC];
-    }
-    this.systemTableCache.applySystemTableChange(
-      TABLES.PARTITIONS,
-      PARTITION_SERVICE_LITERAL.UPDATE,
+    if (!this.applyLocalCanonicalLeaderProjection(
+      existingRow,
       localProjection,
-      {
-        causeId:
-          `local-raft-leader:${transition}:${this.partitionId}:${this.nodeId}`,
-      },
-    );
+      transition,
+    )) {
+      return false;
+    }
     return this.systemTableCache.get(
       TABLES.PARTITIONS,
       this.partitionId,

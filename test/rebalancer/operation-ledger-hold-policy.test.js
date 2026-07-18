@@ -39,9 +39,9 @@ test('CL-013 lineage rows keep their sealed memberships', (t) => {
     'disruptive self-move covers exactly {REPLACE,REMOVE} — ADD is the ' +
       'CL-013 spread-recovery lane and must stay out');
   t.strictSame(
-    [...LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES],
-    [OperationType.REPLACE],
-    'the quorum-spread cure is exactly the count-neutral REPLACE');
+    [...LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES].sort(),
+    [OperationType.ADD, OperationType.REPLACE].sort(),
+    'the quorum-spread cure admits first REPLACE and final expand ADD');
   t.end();
 });
 
@@ -209,8 +209,8 @@ test('cure-first ordering owns the cure-move typing', (t) => {
       [add, otherPartitionReplace, cure, implicitCure],
       LEDGER_PARTITION_ID,
     ),
-    [cure, implicitCure, add, otherPartitionReplace],
-    'cure REPLACEs of the concentrated partition move first, order-stable');
+    [add, cure, implicitCure, otherPartitionReplace],
+    'declared ADD/REPLACE cures move first without changing their order');
   t.strictSame(
     orderLedgerQuorumCureMovesFirst(null, LEDGER_PARTITION_ID),
     [],

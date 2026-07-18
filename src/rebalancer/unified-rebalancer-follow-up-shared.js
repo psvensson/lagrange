@@ -70,6 +70,7 @@ const PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE = Object.freeze({
 const PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON = Object.freeze({
   ADD_FOLLOW_UP_CREATED: 'add_follow_up_created',
   NOT_REQUIRED: 'follow_up_not_required',
+  OVER_REPLICATION_SUPPRESSED: 'over_replication_suppressed',
   REPLACE_FOLLOW_UP_CREATED: 'replace_follow_up_created',
   SOURCE_UNAVAILABLE: 'source_unavailable',
   TARGET_UNAVAILABLE: 'target_unavailable',

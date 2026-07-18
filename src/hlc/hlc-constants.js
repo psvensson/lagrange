@@ -9,6 +9,7 @@ const HLC_CONFIG_KEY = Object.freeze({
 });
 
 const HLC_DEFAULT = Object.freeze({
+  DRIFT_WARNING_INTERVAL_MS: 30000,
   MAX_DRIFT_MS: 500,
   MAX_LOGICAL_COUNTER: 65535,
 });
@@ -27,6 +28,10 @@ const HLC_LOG_MSG = Object.freeze({
   EXCESSIVE_CLOCK_DRIFT: 'Excessive clock drift detected',
 });
 
+const HLC_LOG_LEVEL = Object.freeze({
+  WARN: 'warn',
+});
+
 const HLC_ERROR_MSG = Object.freeze({
   NOT_STRING_PREFIX: 'HLC timestamp must be a string, got ',
   INVALID_STRING_PREFIX: 'Invalid HLC timestamp string: ',
@@ -36,6 +41,7 @@ export {
   HLC_CONFIG_KEY,
   HLC_DEFAULT,
   HLC_ERROR_MSG,
+  HLC_LOG_LEVEL,
   HLC_LOG_MSG,
   HLC_PART,
   HLC_SEPARATOR,

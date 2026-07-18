@@ -66,8 +66,8 @@ function readTargetReplicaCount(systemTableCache, partitionId) {
     null;
 }
 
-function readReadyNodeIds(systemTableCache) {
-  const readyNodeIds = [];
+function readPlacementEligibleNodeIds(systemTableCache, options = {}) {
+  const placementEligibleNodeIds = new Set();
   for (const nodeRow of readCacheRows(
     systemTableCache,
     TABLES.NODES,
@@ -76,11 +76,23 @@ function readReadyNodeIds(systemTableCache) {
       NODE_CONNECTION_STATE_READY,
   )) {
     const nodeId = normalizedField(nodeRow, 'node_id');
-    if (nodeId.length > 0 && !readyNodeIds.includes(nodeId)) {
-      readyNodeIds.push(nodeId);
+    if (nodeId.length > 0) {
+      placementEligibleNodeIds.add(nodeId);
     }
   }
-  return readyNodeIds;
+  const additionalNodeIds = Array.isArray(options.placementEligibleNodeIds) ?
+    options.placementEligibleNodeIds :
+    [];
+  for (const nodeId of additionalNodeIds) {
+    if (
+      typeof nodeId === 'string' &&
+      nodeId.length > 0 &&
+      !placementEligibleNodeIds.has(nodeId)
+    ) {
+      placementEligibleNodeIds.add(nodeId);
+    }
+  }
+  return [...placementEligibleNodeIds];
 }
 
 function groupRowsByPartitionId(ledgerReplicaRows) {
@@ -156,8 +168,10 @@ function evaluateLedgerPartitionConcentration({
       .map((row) => normalizedField(row, 'node_id'))
       .filter((nodeId) => nodeId.length > 0),
   );
-  const feasibleTargetNodeId =
-    readyNodeIds.find((nodeId) => !occupiedNodeIds.has(nodeId)) || null;
+  const feasibleTargetNodeIds = readyNodeIds.filter(
+    (nodeId) => !occupiedNodeIds.has(nodeId),
+  );
+  const feasibleTargetNodeId = feasibleTargetNodeIds[0] || null;
   const targetReplicaCount = readTargetReplicaCount(
     systemTableCache,
     partitionId,
@@ -166,12 +180,14 @@ function evaluateLedgerPartitionConcentration({
     targetReplicaCount !== null && totalVoters > targetReplicaCount;
   return Object.freeze({
     partitionId,
+    targetReplicaCount,
     totalVoters,
     maxVotersOnOneNode,
     hottestNodeId,
     feasibleTargetNodeId,
+    feasibleTargetNodeIds: Object.freeze(feasibleTargetNodeIds),
     overTarget,
-    spreadActionable: feasibleTargetNodeId !== null || overTarget,
+    spreadActionable: feasibleTargetNodeIds.length > 0 || overTarget,
   });
 }
 
@@ -187,7 +203,10 @@ function evaluateLedgerPartitionConcentration({
  * @param {Object|null} systemTableCache
  * @return {{holdEngaged: boolean, concentratedPartitions: Array<Object>}}
  */
-function evaluateOperationLedgerQuorumConcentration(systemTableCache) {
+function evaluateOperationLedgerQuorumConcentration(
+  systemTableCache,
+  options = {},
+) {
   const ledgerReplicaRows = readCacheRows(
     systemTableCache,
     TABLES.SERVICES,
@@ -201,7 +220,10 @@ function evaluateOperationLedgerQuorumConcentration(systemTableCache) {
     return EMPTY_EVALUATION;
   }
 
-  const readyNodeIds = readReadyNodeIds(systemTableCache);
+  const readyNodeIds = readPlacementEligibleNodeIds(
+    systemTableCache,
+    options,
+  );
   const concentratedPartitions = [];
   for (const [partitionId, partitionRows] of groupRowsByPartitionId(
     ledgerReplicaRows,
@@ -229,6 +251,122 @@ function evaluateOperationLedgerQuorumConcentration(systemTableCache) {
 }
 
 /**
+ * Read completeness evidence for one operation-ledger partition from the same
+ * voter predicate used by concentration evaluation. Formation barriers must
+ * not interpret an empty or partially hydrated cache as "spread": they may
+ * release only after at least the partition's target voter count is observed.
+ *
+ * @param {Object|null} systemTableCache
+ * @param {string|null} partitionId
+ * @param {Object} [options]
+ * @param {number|null} [options.minimumTargetReplicaCount]
+ * @return {{
+ *   partitionId: string|null,
+ *   targetReplicaCount: number|null,
+ *   observedVoterCount: number,
+ *   complete: boolean,
+ * }}
+ */
+function getOperationLedgerQuorumObservation(
+  systemTableCache,
+  partitionId,
+  options = {},
+) {
+  const normalizedPartitionId = String(partitionId || '').trim();
+  const cachedTargetReplicaCount =
+    normalizedPartitionId.length > 0 ?
+      readTargetReplicaCount(systemTableCache, normalizedPartitionId) :
+      null;
+  const minimumTargetReplicaCount =
+    Number.isInteger(options?.minimumTargetReplicaCount) &&
+    options.minimumTargetReplicaCount > 0 ?
+      options.minimumTargetReplicaCount :
+      null;
+  const targetReplicaCount =
+    cachedTargetReplicaCount === null ?
+      minimumTargetReplicaCount :
+      minimumTargetReplicaCount === null ?
+        cachedTargetReplicaCount :
+        Math.max(cachedTargetReplicaCount, minimumTargetReplicaCount);
+  const observedVoterCount =
+    normalizedPartitionId.length > 0 ?
+      readCacheRows(
+        systemTableCache,
+        TABLES.SERVICES,
+        (row) =>
+          normalizedField(row, 'partition_id') === normalizedPartitionId &&
+          row?.service_type === SERVICE_TYPE.PARTITION &&
+          isQuorumVoterRow(row),
+      ).length :
+      0;
+  return Object.freeze({
+    partitionId:
+      normalizedPartitionId.length > 0 ? normalizedPartitionId : null,
+    targetReplicaCount,
+    observedVoterCount,
+    complete:
+      targetReplicaCount !== null &&
+      observedVoterCount >= targetReplicaCount,
+  });
+}
+
+/**
+ * Evaluate one identity-scoped placement row set returned by the authoritative
+ * services-table owner. Unlike the cache observation above, this accepts its
+ * target explicitly because the row set is deliberately scoped to services.
+ *
+ * @param {Array<Object>} rows
+ * @param {string|null} partitionId
+ * @param {number|null} targetReplicaCount
+ * @return {Object}
+ */
+function getOperationLedgerPlacementObservationFromRows(
+  rows,
+  partitionId,
+  targetReplicaCount,
+) {
+  const normalizedPartitionId = String(partitionId || '').trim();
+  const normalizedTargetReplicaCount =
+    Number.isInteger(targetReplicaCount) && targetReplicaCount > 0 ?
+      targetReplicaCount :
+      null;
+  const voterRows = Array.isArray(rows) ?
+    rows.filter((row) =>
+      normalizedField(row, 'partition_id') === normalizedPartitionId &&
+      row?.service_type === SERVICE_TYPE.PARTITION &&
+      isQuorumVoterRow(row),
+    ) :
+    [];
+  const observedVoterCount = voterRows.length;
+  const distinctNodeCount = new Set(
+    voterRows
+      .map((row) => normalizedField(row, 'node_id'))
+      .filter((nodeId) => nodeId.length > 0),
+  ).size;
+  const {maxVotersOnOneNode} = resolveHottestNode(voterRows);
+  const concentrated =
+    isQuorumConcentratedPlacement(observedVoterCount, maxVotersOnOneNode);
+  const complete =
+    normalizedPartitionId.length > 0 &&
+    normalizedTargetReplicaCount !== null &&
+    observedVoterCount >= normalizedTargetReplicaCount;
+  return Object.freeze({
+    partitionId:
+      normalizedPartitionId.length > 0 ? normalizedPartitionId : null,
+    targetReplicaCount: normalizedTargetReplicaCount,
+    observedVoterCount,
+    distinctNodeCount,
+    maxVotersOnOneNode,
+    complete,
+    concentrated,
+    spreadComplete:
+      complete &&
+      distinctNodeCount >= normalizedTargetReplicaCount &&
+      !concentrated,
+  });
+}
+
+/**
  * @param {Object|null} evaluation
  * @param {string|null} partitionId
  * @return {boolean}
@@ -247,5 +385,7 @@ function isConcentratedOperationLedgerPartition(evaluation, partitionId) {
 
 export {
   evaluateOperationLedgerQuorumConcentration,
+  getOperationLedgerPlacementObservationFromRows,
+  getOperationLedgerQuorumObservation,
   isConcentratedOperationLedgerPartition,
 };

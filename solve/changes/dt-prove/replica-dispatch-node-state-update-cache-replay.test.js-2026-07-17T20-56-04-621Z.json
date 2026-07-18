@@ -1,0 +1,22 @@
+{
+  "test": "test/control-plane/replica-dispatch-node-state-update-cache-replay.test.js",
+  "src": [
+    "src/rebalancer/replica-operation-progress.js",
+    "src/control-plane/replica-dispatch-service-shared.js",
+    "src/control-plane/replica-dispatch-readiness-capture.js",
+    "src/control-plane/replica-dispatch-operation-execution.js",
+    "src/control-plane/replica-dispatch-replay-health-readiness.js",
+    "src/control-plane/replica-dispatch-replay-readiness.js",
+    "src/control-plane/replica-dispatch-reconcile-callbacks.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-17T20:56:04.565Z"
+}

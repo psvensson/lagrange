@@ -154,21 +154,21 @@ test('counter harvest counts every counter per node via the cluster ' +
 });
 
 test('partition readiness summary: only tbl- partitions count, and ' +
-  'NORMAL-with-leader is READY', (t) => {
+  'canonical normal-with-leader is READY', (t) => {
   const rows = [
     {partition_id: 'replica_operations-p0', leader_node_id: 'n1',
-      state: 'NORMAL'},
-    {partition_id: 'tbl-ratings-p0', leader_node_id: 'n1', state: 'NORMAL'},
-    {partition_id: 'tbl-ratings-p1', leader_node_id: null, state: 'NORMAL'},
+      state: 'normal'},
+    {partition_id: 'tbl-ratings-p0', leader_node_id: 'n1', state: 'normal'},
+    {partition_id: 'tbl-ratings-p1', leader_node_id: null, state: 'normal'},
     {partition_id: 'tbl-ratings-p2', leader_node_id: 'n2',
-      state: 'SPLITTING'},
+      state: 'splitting'},
   ];
   const summary = summarizeRatingsPartitions(rows);
   t.equal(summary.total, 3, 'system partitions are excluded');
   t.equal(summary.ready, 1);
   t.same(summary.pending.map((p) => p.partitionId),
     ['tbl-ratings-p1', 'tbl-ratings-p2'],
-    'leaderless and non-NORMAL partitions are pending');
+    'leaderless and non-normal partitions are pending');
   t.type(pollRatingsPartitionsReady, 'function');
   t.type(runFormationProbe, 'function');
   t.same(Object.keys(PROBE_RESULT).sort(),

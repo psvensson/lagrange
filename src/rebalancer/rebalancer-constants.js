@@ -217,6 +217,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
     'Waiting for bootstrap traffic-readiness before planning critical system rebalancing',
   WAIT_CONTROL_PLANE_PRIORITY:
     'Deferring non-system rebalancing until priority control-plane partitions spread',
+  WAIT_CONTROL_PLANE_PRIORITY_STABILITY:
+    'Deferring non-system rebalancing until priority control-plane placement remains stable',
   WAIT_TRANSPORT_BACKPRESSURE:
     'Waiting for local transport backpressure to clear before planning',
   PRIORITY_RECOVERY_PLANNING_GATE_DIAGNOSTIC:

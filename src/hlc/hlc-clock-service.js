@@ -8,7 +8,13 @@ import {HLCTimestamp} from './hlc-timestamp.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {LoggingService} from '../logging/logging-service.js';
-import {HLC_CONFIG_KEY, HLC_DEFAULT, HLC_LOG_MSG, HLC_SUBSYSTEM} from './hlc-constants.js';
+import {
+  HLC_CONFIG_KEY,
+  HLC_DEFAULT,
+  HLC_LOG_LEVEL,
+  HLC_LOG_MSG,
+  HLC_SUBSYSTEM,
+} from './hlc-constants.js';
 
 
 /**
@@ -46,6 +52,8 @@ class HLCClockService {
 
     // Legacy callback for drift warnings (for backwards compatibility)
     this.onDriftWarning = options.onDriftWarning || null;
+    this.lastDriftWarningAtMs = null;
+    this.suppressedDriftWarningCount = 0;
   }
 
   /**
@@ -84,7 +92,11 @@ class HLCClockService {
     const remotePhy = remoteTimestamp.physical;
 
     // Check for excessive clock drift
-    const drift = Math.abs(remotePhy - physicalNow);
+    // A remote timestamp in the past is indistinguishable from transport or
+    // queue delay and cannot move this clock ahead unsafely. Only forward
+    // skew is actionable HLC drift; treating a replay/backlog as clock skew
+    // turns every delayed CDC row into a warning storm.
+    const drift = remotePhy - physicalNow;
     if (drift > this.maxDrift) {
       const driftInfo = {
         localTime: physicalNow,
@@ -94,10 +106,7 @@ class HLCClockService {
         remoteNodeId: remoteTimestamp.nodeId,
       };
 
-      // Log via subsystem logger if available
-      if (this.logger) {
-        this.logger.warn(HLC_LOG_MSG.EXCESSIVE_CLOCK_DRIFT, driftInfo);
-      }
+      this.emitDriftWarning(driftInfo, physicalNow);
 
       // Invoke drift warning callback if provided
       if (this.onDriftWarning) {
@@ -131,6 +140,44 @@ class HLCClockService {
     }
 
     return new HLCTimestamp(this.physical, this.logical, this.nodeId);
+  }
+
+  /**
+   * Emit a bounded node-local drift diagnostic.
+   *
+   * Persisting this warning into the distributed logs table stamps another
+   * HLC timestamp onto its CDC event, allowing skew warnings to recursively
+   * create more skew warnings. The console/file sink is captured by production
+   * harnesses and is rate-limited globally; the programmatic callback remains
+   * unthrottled in update().
+   * @param {Object} driftInfo
+   * @param {number} observedAtMs
+   * @private
+   */
+  emitDriftWarning(driftInfo, observedAtMs) {
+    const lastWarningAtMs = this.lastDriftWarningAtMs;
+    if (
+      Number.isFinite(lastWarningAtMs) &&
+      observedAtMs - lastWarningAtMs <
+        HLC_DEFAULT.DRIFT_WARNING_INTERVAL_MS
+    ) {
+      this.suppressedDriftWarningCount += 1;
+      return;
+    }
+    const suppressedSinceLastWarning = this.suppressedDriftWarningCount;
+    this.lastDriftWarningAtMs = observedAtMs;
+    this.suppressedDriftWarningCount = 0;
+    if (typeof this.logger?.logConsoleOnly !== 'function') {
+      return;
+    }
+    this.logger.logConsoleOnly(
+      HLC_LOG_LEVEL.WARN,
+      HLC_LOG_MSG.EXCESSIVE_CLOCK_DRIFT,
+      {
+        ...driftInfo,
+        suppressedSinceLastWarning,
+      },
+    );
   }
 
   /**

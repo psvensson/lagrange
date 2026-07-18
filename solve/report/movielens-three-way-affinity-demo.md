@@ -18,11 +18,11 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: narrowed: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json
-- Selected theory: theory-ratings-local-split-policy-exact-ratchet-clean
-- Next move: continue supervised step for movielens-three-way-affinity-demo-main
-- No longer current: FAIL
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json
+- Selected theory: theory-ratings-local-split-policy-exact-ratchet-clean (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for movielens-three-way-affinity-demo-main
+- No longer current: Rules out premature terminal-hold release as the blocker in this run; do not widen timeouts or alter the live scenario.
 
 ## Continuation
 - Status: allowed
@@ -82,6 +82,9 @@
 - **movielens-three-way-affinity-demo-main**: Latest-live binding correction: this local leader-row fix closes the independently proven 2026-07-13 case where a replacement actually logged Became leader but leader_node_id lagged. It is not sufficient for the 2026-07-16 run: neither replacement logged partition leadership. The exact first target-election ACK occurred at 09:58:17.858, then the next safety evaluation at 09:58:25.949 was beyond the 5s election-evidence retry-suppression window. At that point the candidate resolver's RETARGET_AFTER_COMPLETED_WITHOUT_OWNERSHIP policy can replace the exact ACKed candidate, while the remove-safety owner separately declares that exact completed ACK sufficient under voter proof. Same-turn continuation did not run because its separate gate requires priorityRecoveryCompletionSafe/no retarget. This adjacent-owner contradiction is the next Wave-4 rung; do not spend a live run on the row fix alone. [data/examples/service-data-affinity-demo-archive/wave4-live-incremental-replace-spread-nonregression-2026-07-16T10-00-24-317Z.tar.gz]
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Changed Wave4 engaged the terminal-hold repair twice: ledger self-move replace-op-691efb46c505c2053b80785456cab438 reached authoritative Operation completed at 12:20:58.605, the next ledger self-move replace-op-e1ef0ada4127812f28bfef5a314c48df reached authoritative Operation completed at 12:21:53.865, and the first dependent batch operation was created only at 12:21:54.081 (216ms later). The sealed run failed earlier than preload on a distinct cache_stale_watermark snapshot-observation blocker with totalSpreadGap=0, so the ledger lifecycle defect did not recur. Report sha256=2f3a3a7faff6afa97d1988b2961e3c4eea0e36383279cde3541bfd5ce95b51fd; immutable archive sha256=7f27943debfd6b59eaa919d35165d7c0ff37c32f4e113dbd8b577cbd1d11d74c. (rules out: Rules out premature terminal-hold release as the blocker in this run; do not widen timeouts or alter the live scenario.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
 
 ## Theories
 - **theory-20260715-cross-owner-policy-scope** [active] system, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, modelGate npm run model:contracts
@@ -90,7 +93,7 @@
 - **theory-load-after-full-formation-drain** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer scheduling, mechanism transition_gap, owner demo_bootstrap_owner, boundary formation_to_data_load, modelGate npm run model:contracts
 - **theory-ratings-local-split-policy-scope** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 - **theory-ratings-local-split-policy-verifier-replacement** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
-- **theory-ratings-local-split-policy-exact-ratchet-clean** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
+- **theory-ratings-local-split-policy-exact-ratchet-clean** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-three-way-affinity-demo-main**: theory-ratings-local-split-policy-exact-ratchet-clean
@@ -110,6 +113,7 @@
 - **theory-ratings-local-split-policy-exact-ratchet-clean**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T08-45-46-067Z.report.json]
 - **theory-ratings-local-split-policy-exact-ratchet-clean**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T10-00-24-317Z.report.json]
 - **theory-ratings-local-split-policy-exact-ratchet-clean**: supported (scenario=failed, theory=partial, movement=narrowed) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
+- **theory-ratings-local-split-policy-exact-ratchet-clean**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

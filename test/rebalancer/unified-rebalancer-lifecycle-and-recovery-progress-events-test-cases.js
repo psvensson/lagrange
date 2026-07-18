@@ -335,6 +335,63 @@ export function registerUnifiedRebalancerLifecycleAndRecoveryProgressEventsTests
     );
 
     await t.test(
+      'terminal progress queues a drain pass behind an in-flight planning pass',
+      async (t) => {
+        const coordinator = createEventedMockCoordinator();
+        const rebalancer = createTestRebalancer({
+          entityId: PRIORITY_PROGRESS_PARTITION_ID,
+          entityType: EntityType.PARTITION,
+          nodeId: PRIORITY_PROGRESS_NODE_ID,
+          rebalanceCoordinator: coordinator,
+        });
+        let releaseFirstPass;
+        let markFirstPassStarted;
+        let markSecondPassStarted;
+        const firstPassGate = new Promise((resolve) => {
+          releaseFirstPass = resolve;
+        });
+        const firstPassStarted = new Promise((resolve) => {
+          markFirstPassStarted = resolve;
+        });
+        const secondPassStarted = new Promise((resolve) => {
+          markSecondPassStarted = resolve;
+        });
+        let planningPasses = 0;
+        rebalancer.checkRebalance = async () => {
+          planningPasses++;
+          if (planningPasses === 1) {
+            markFirstPassStarted();
+            await firstPassGate;
+          } else if (planningPasses === 2) {
+            markSecondPassStarted();
+          }
+        };
+        rebalancer.isLeader = true;
+
+        rebalancer.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
+        await firstPassStarted;
+        coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+          operation: {
+            operationId: PRIORITY_PROGRESS_OPERATION_ID,
+            entityType: EntityType.PARTITION,
+            entityId: PRIORITY_PROGRESS_PARTITION_ID,
+            partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+          },
+        });
+        releaseFirstPass();
+        await secondPassStarted;
+
+        t.equal(
+          planningPasses,
+          2,
+          'completion observed during planning must survive as the next owner-key pass',
+        );
+
+        await rebalancer.shutdown();
+      },
+    );
+
+    await t.test(
       'priority recovery terminal progress re-enters membership publication planning',
       async (t) => {
         const coordinator = createEventedMockCoordinator();

@@ -450,24 +450,37 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       );
     });
 
-  await t.test('ignores legacy service-row priority reconstruction once publication is satisfied',
+  await t.test('keeps current priority spread ahead of a sticky satisfied publication',
     async (t) => {
+      const mockCache = createMockCache([
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ]);
+      const baseReadinessService = createMockReadinessService(mockCache);
+      const readinessCalls = [];
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
-          {node_id: 'node-1', status: NodeStatus.ACTIVE},
-          {node_id: 'node-2', status: NodeStatus.ACTIVE},
-          {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
-        membershipPublicationService: createMockMembershipPublicationService(
-          ['node-1', 'node-2', 'node-3'],
-          5,
-          {
+        ...baseReadinessService,
+        getNodeReadinessSync(nodeId, options) {
+          if (!options || typeof options !== 'object') {
+            throw new Error('readiness options object required');
+          }
+          readinessCalls.push(nodeId);
+          return baseReadinessService.getNodeReadinessSync(nodeId, options);
+        },
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
             priorityPartitionSummary: {
               satisfied: true,
               missingPartitionIds: [],
+              blockedPartitions: [],
             },
-          },
-        ),
+          };
+        },
       };
 
       const rebalancer = createTestRebalancer({
@@ -502,10 +515,182 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         controlPlaneReadinessService: readinessService,
       });
 
+      const blocker = rebalancer.getControlPlanePrioritySpreadBlocker();
+      const ledgerBlocker = blocker?.blockedPartitions.find(
+        (partition) => partition.partitionId === 'replica_operations-p1',
+      );
       t.equal(
-        rebalancer.getControlPlanePrioritySpreadBlocker(),
-        null,
-        'published priority spread satisfaction should short-circuit legacy service-row gating',
+        blocker?.requiredDistinctNodeCount,
+        3,
+        'same-cache current placement should override sticky publication satisfaction',
+      );
+      t.match(ledgerBlocker, {
+        partitionId: 'replica_operations-p1',
+        readyReplicaCount: 2,
+        readyDistinctNodeCount: 1,
+        spreadGap: 2,
+      });
+      t.same(
+        readinessCalls.sort(),
+        ['node-1', 'node-2', 'node-3'],
+        'current voter placement reuses the canonical available-node pass ' +
+          'instead of rebuilding readiness for every eligible node',
+      );
+    });
+
+  await t.test('current priority placement retains learner readiness filtering',
+    async (t) => {
+      const mockCache = createMockCache([
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ]);
+      const baseReadinessService = createMockReadinessService(mockCache);
+      const readinessCalls = [];
+      const readinessService = {
+        ...baseReadinessService,
+        getNodeReadinessSync(nodeId, options) {
+          readinessCalls.push(nodeId);
+          return baseReadinessService.getNodeReadinessSync(nodeId, options);
+        },
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+              blockedPartitions: [],
+            },
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'user-partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        services: [
+          {
+            service_id: 'priority-r1',
+            partition_id: 'replica_operations-p1',
+            service_type: EntityType.PARTITION,
+            node_id: 'node-1',
+            status: 'active',
+            raft_role: 'leader',
+            address: 'node-1/partition/replica_operations-p1-r1',
+          },
+          {
+            service_id: 'priority-r2',
+            partition_id: 'replica_operations-p1',
+            service_type: EntityType.PARTITION,
+            node_id: 'node-2',
+            status: 'active',
+            raft_role: 'learner',
+            address: 'node-2/partition/replica_operations-p1-r2',
+          },
+          {
+            service_id: 'priority-r3',
+            partition_id: 'replica_operations-p1',
+            service_type: EntityType.PARTITION,
+            node_id: 'node-3',
+            status: 'active',
+            raft_role: 'follower',
+            address: 'node-3/partition/replica_operations-p1-r3',
+          },
+        ],
+        partitions: [{
+          partition_id: 'replica_operations-p1',
+          leader_node_id: 'node-1',
+          state: 'NORMAL',
+        }],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      const blocker = rebalancer.getControlPlanePrioritySpreadBlocker();
+      const ledgerBlocker = blocker?.blockedPartitions.find(
+        (partition) => partition.partitionId === 'replica_operations-p1',
+      );
+
+      t.equal(
+        ledgerBlocker,
+        undefined,
+        'a promotable learner still counts toward current priority spread ' +
+          'when the canonical leader is present',
+      );
+      t.same(
+        readinessCalls.sort(),
+        ['node-1', 'node-2', 'node-2', 'node-3'],
+        'only the learner receives the additional promotability read',
+      );
+    });
+
+  await t.test('holds non-priority work while a spread priority partition has no active leader',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+              blockedPartitions: [],
+            },
+          };
+        },
+      };
+      const services = ['node-1', 'node-2', 'node-3'].map(
+        (nodeId, index) => ({
+          service_id: `priority-r${index + 1}`,
+          partition_id: 'replica_operations-p1',
+          service_type: EntityType.PARTITION,
+          node_id: nodeId,
+          status: 'active',
+          raft_role: 'follower',
+          address: `${nodeId}/partition/replica_operations-p1-r${index + 1}`,
+        }),
+      );
+      const rebalancer = createTestRebalancer({
+        entityId: 'user-partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        services,
+        controlPlaneReadinessService: readinessService,
+      });
+
+      const blocker = rebalancer.getControlPlanePrioritySpreadBlocker();
+      const ledgerBlocker = blocker?.blockedPartitions.find(
+        (partition) => partition.partitionId === 'replica_operations-p1',
+      );
+      t.match(
+        ledgerBlocker,
+        {
+          partitionId: 'replica_operations-p1',
+          readyReplicaCount: null,
+          readyDistinctNodeCount: null,
+          spreadGap: null,
+          missingActiveLeader: true,
+        },
+        'leaderless current placement should preserve the priority scheduling fence',
       );
     });
 

@@ -1,0 +1,18 @@
+{
+  "test": "test/runtime/sql-query-loop-parallel-reduce-sql.test.js",
+  "src": [
+    "src/runtime/sql-query-loop-parallel-reduce.js",
+    "src/runtime/sql-query-loop-runtime-module.js",
+    "examples/service-data-affinity/affinity-demo-evidence.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-18T14:28:33.855Z"
+}

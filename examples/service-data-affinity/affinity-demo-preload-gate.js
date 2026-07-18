@@ -53,8 +53,7 @@ const ADMIN_STREAM_LANE_QUERY_PARAMETER = 'lane';
 const PRELOAD_ADMISSION_QUERY_REQUIRED_ERROR =
   'MovieLens preload admission requires query';
 const PRIORITY_SPREAD_SUMMARY_SOURCE =
-  'controlPlaneDiagnostics.priorityRecoveryObservation.' +
-  'priorityPartitionSummary';
+  'controlPlaneDiagnostics.currentPriorityPlacementObservation';
 
 function buildAdminLaneTarget(target, lane) {
   const url = new URL(target);
@@ -143,38 +142,91 @@ function buildSnapshotProbe(snapshot, snapshotError) {
   };
 }
 
-function buildPrioritySpreadTopology(snapshot) {
-  const priorityPartitionSummary =
-    snapshot?.controlPlaneDiagnostics?.priorityRecoveryObservation
-      ?.priorityPartitionSummary;
-  const summaryAvailable =
+function isPriorityPartitionSummaryAvailable(priorityPartitionSummary) {
+  return (
     isPlainRecord(priorityPartitionSummary) &&
     typeof priorityPartitionSummary.satisfied === 'boolean' &&
     Number.isInteger(priorityPartitionSummary.totalSpreadGap) &&
-    priorityPartitionSummary.totalSpreadGap >= ZERO;
-  if (!summaryAvailable) {
-    return Object.freeze({
-      enabled: true,
-      ready: false,
-      totalSpreadGap: ZERO,
-      observationState:
-        CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
-          .SNAPSHOT_LANE_UNAVAILABLE,
-      snapshotLaneUnavailableTableCount: 1,
-      source: PRIORITY_SPREAD_SUMMARY_SOURCE,
-    });
-  }
-  const totalSpreadGap = priorityPartitionSummary.totalSpreadGap;
+    priorityPartitionSummary.totalSpreadGap >= ZERO
+  );
+}
+
+function isPriorityLeaderCoverageAvailable(leaderCoverage) {
+  return (
+    isPlainRecord(leaderCoverage) &&
+    typeof leaderCoverage.satisfied === 'boolean' &&
+    Number.isInteger(leaderCoverage.missingLeaderPartitionCount) &&
+    leaderCoverage.missingLeaderPartitionCount >= ZERO
+  );
+}
+
+function isCurrentPriorityPlacementObservationAvailable(
+  snapshot,
+  currentPlacementObservation,
+) {
+  return (
+    isPlainRecord(currentPlacementObservation) &&
+    currentPlacementObservation.state === 'available' &&
+    currentPlacementObservation.capturedAt === snapshot?.capturedAt &&
+    isPriorityPartitionSummaryAvailable(
+      currentPlacementObservation.priorityPartitionSummary,
+    ) &&
+    isPriorityLeaderCoverageAvailable(
+      currentPlacementObservation.leaderCoverage,
+    )
+  );
+}
+
+function buildUnavailablePrioritySpreadTopology() {
+  return Object.freeze({
+    enabled: true,
+    ready: false,
+    totalSpreadGap: ZERO,
+    observationState:
+      CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+        .SNAPSHOT_LANE_UNAVAILABLE,
+    snapshotLaneUnavailableTableCount: 1,
+    source: PRIORITY_SPREAD_SUMMARY_SOURCE,
+  });
+}
+
+function buildAvailablePrioritySpreadTopology(currentPlacementObservation) {
+  const priorityPartitionSummary =
+    currentPlacementObservation.priorityPartitionSummary;
+  const leaderCoverage = currentPlacementObservation.leaderCoverage;
+  const totalSpreadGap =
+    priorityPartitionSummary.totalSpreadGap +
+    leaderCoverage.missingLeaderPartitionCount;
   return Object.freeze({
     enabled: true,
     ready:
+      currentPlacementObservation.satisfied === true &&
       priorityPartitionSummary.satisfied === true &&
+      leaderCoverage.satisfied === true &&
       totalSpreadGap === ZERO,
     totalSpreadGap,
+    prioritySpreadGap: priorityPartitionSummary.totalSpreadGap,
+    missingLeaderPartitionCount:
+      leaderCoverage.missingLeaderPartitionCount,
+    missingLeaderPartitionIds:
+      Array.isArray(leaderCoverage.missingLeaderPartitionIds) ?
+        [...leaderCoverage.missingLeaderPartitionIds] :
+        [],
     observationState:
       CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE.AVAILABLE,
     source: PRIORITY_SPREAD_SUMMARY_SOURCE,
   });
+}
+
+function buildPrioritySpreadTopology(snapshot) {
+  const currentPlacementObservation =
+    snapshot?.controlPlaneDiagnostics?.currentPriorityPlacementObservation;
+  return isCurrentPriorityPlacementObservationAvailable(
+    snapshot,
+    currentPlacementObservation,
+  ) ?
+    buildAvailablePrioritySpreadTopology(currentPlacementObservation) :
+    buildUnavailablePrioritySpreadTopology();
 }
 
 function resolveSnapshotObservationError(snapshot) {

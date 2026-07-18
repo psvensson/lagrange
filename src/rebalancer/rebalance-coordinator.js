@@ -2,6 +2,7 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {applyRebalanceCoordinatorLifecycleMethods} from './rebalance-coordinator-lifecycle.js';
 import {applyRebalanceCoordinatorOperationReadMethods} from './rebalance-coordinator-operation-read-methods.js';
 import {applyRebalanceCoordinatorTopologyGuardMethods} from './rebalance-coordinator-topology-guard-methods.js';
+import {applyRebalanceCoordinatorReplicaIdentityMethods} from './rebalance-coordinator-replica-identity-methods.js';
 import {applyRebalanceCoordinatorOperationIntentMethods} from './rebalance-coordinator-operation-intent-methods.js';
 import {applyRebalanceCoordinatorOwnerDelegationMethods} from './rebalance-coordinator-owner-delegation-methods.js';
 import {applyRebalanceCoordinatorOperationCreationMethods} from './rebalance-coordinator-operation-creation.js';
@@ -222,6 +223,7 @@ class RebalanceCoordinator extends EventEmitter {
 applyRebalanceCoordinatorLifecycleMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOperationReadMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorTopologyGuardMethods(RebalanceCoordinator);
+applyRebalanceCoordinatorReplicaIdentityMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOperationIntentMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOwnerDelegationMethods(RebalanceCoordinator);
 applyRebalanceCoordinatorOperationCreationMethods(RebalanceCoordinator);

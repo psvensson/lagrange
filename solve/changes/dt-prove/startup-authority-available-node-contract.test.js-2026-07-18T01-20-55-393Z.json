@@ -1,0 +1,16 @@
+{
+  "test": "test/rebalancer/startup-authority-available-node-contract.test.js",
+  "src": [
+    "src/rebalancer/unified-rebalancer-available-nodes.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-18T01:20:55.338Z"
+}

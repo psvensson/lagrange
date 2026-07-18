@@ -37,6 +37,10 @@ import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
   classifyPriorityRecoveryAdmissionPartitionClass,
 } from '../control-plane/priority-recovery-admission-constants.js';
+import {
+  isOperationLedgerPartition,
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -56,6 +60,24 @@ const PLACEMENT_CURE_CONDITION = Object.freeze({
   // An under-represented target paired with an over-represented source:
   // relocation, cured count-neutrally.
   PAIRED_RELOCATION: 'paired_relocation',
+  // The self-hosted operation ledger has reached a 2-1 three-voter spread
+  // after its first exclusive REPLACE. Expand onto the missing third node so
+  // the existing safe surplus REMOVE can drain the fourth voter without
+  // paying a second serialized ledger self-move.
+  LEDGER_EXPAND_FOR_SPREAD: 'ledger_expand_for_spread',
+  // The expanded ledger is one voter over target and has already reached the
+  // three-node spread floor. Drain the duplicated voter before chasing an
+  // exact suitability target; otherwise the generic relocation pairing turns
+  // the surplus back into another exclusive REPLACE.
+  LEDGER_DRAIN_SPREAD_SURPLUS: 'ledger_drain_spread_surplus',
+  // A non-ledger priority partition at target count is still concentrated.
+  // Expand by one voter without a REPLACE leadership handoff, then let the
+  // serial drain row below restore the target count.
+  PRIORITY_EXPAND_FOR_SPREAD: 'priority_expand_for_spread',
+  // A non-ledger priority partition is one voter above target after its serial
+  // spread ADD. Drain one redundant source only when doing so preserves the
+  // current distinct-node count.
+  PRIORITY_DRAIN_SPREAD_SURPLUS: 'priority_drain_spread_surplus',
   // The partition is at target count but a source replica should be walked
   // off its node (priority-recovery follow-up).
   UNHEALTHY_SOURCE_AT_TARGET: 'unhealthy_source_at_target',
@@ -105,6 +127,34 @@ const PLACEMENT_CURE_BY_CONDITION = Object.freeze(
       }),
     ],
     [
+      PLACEMENT_CURE_CONDITION.LEDGER_EXPAND_FOR_SPREAD,
+      Object.freeze({
+        moveType: REBALANCER_MOVE_TYPE.ADD,
+        moveReason: MOVE_REASON.SPREAD_REPLICAS,
+      }),
+    ],
+    [
+      PLACEMENT_CURE_CONDITION.LEDGER_DRAIN_SPREAD_SURPLUS,
+      Object.freeze({
+        moveType: REBALANCER_MOVE_TYPE.REMOVE,
+        moveReason: MOVE_REASON.SPREAD_REPLICAS,
+      }),
+    ],
+    [
+      PLACEMENT_CURE_CONDITION.PRIORITY_EXPAND_FOR_SPREAD,
+      Object.freeze({
+        moveType: REBALANCER_MOVE_TYPE.ADD,
+        moveReason: MOVE_REASON.SPREAD_REPLICAS,
+      }),
+    ],
+    [
+      PLACEMENT_CURE_CONDITION.PRIORITY_DRAIN_SPREAD_SURPLUS,
+      Object.freeze({
+        moveType: REBALANCER_MOVE_TYPE.REMOVE,
+        moveReason: MOVE_REASON.SPREAD_REPLICAS,
+      }),
+    ],
+    [
       PLACEMENT_CURE_CONDITION.UNHEALTHY_SOURCE_AT_TARGET,
       Object.freeze({
         moveType: REBALANCER_MOVE_TYPE.REPLACE,
@@ -123,6 +173,159 @@ const PLACEMENT_CURE_BY_CONDITION = Object.freeze(
  */
 function resolvePlacementCure(condition) {
   return PLACEMENT_CURE_BY_CONDITION.get(condition) ?? null;
+}
+
+/**
+ * Classify the exact operation-ledger state where the final spread step should
+ * expand then drain instead of paying a second exclusive REPLACE.
+ * @param {Object} evidence
+ * @return {string|null} LEDGER_EXPAND_FOR_SPREAD or null.
+ */
+function classifyLedgerExpandForSpreadCureCondition(evidence = {}) {
+  const targetReplicaCount = Number(evidence.targetReplicaCount);
+  const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
+  if (!isOperationLedgerPartition({partitionId: evidence.partitionId})) {
+    return null;
+  }
+  const exactExpandState = [
+    evidence.inFlightReplaceCount === 0,
+    evidence.naturalReplaceCount >= 1,
+    evidence.replaceCount === 1,
+    evidence.addMoveCount >= 1,
+    evidence.occupiedReplicaCount === targetReplicaCount,
+    evidence.deficitEffectiveCount === targetReplicaCount,
+    evidence.voterReplicaCount === targetReplicaCount,
+    evidence.activeReplicaCount === targetReplicaCount,
+    targetDistinctNodeCount === targetReplicaCount,
+    evidence.activeDistinctNodeCount === targetDistinctNodeCount - 1,
+  ].every(Boolean);
+  return exactExpandState ?
+    PLACEMENT_CURE_CONDITION.LEDGER_EXPAND_FOR_SPREAD :
+    null;
+}
+
+/**
+ * Classify the post-expand ledger state where a safe surplus drain must take
+ * precedence over another exact-target relocation.
+ * @param {Object} evidence
+ * @return {string|null} LEDGER_DRAIN_SPREAD_SURPLUS or null.
+ */
+function classifyLedgerSpreadSurplusDrainCureCondition(evidence = {}) {
+  const targetReplicaCount = Number(evidence.targetReplicaCount);
+  const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
+  if (!isOperationLedgerPartition({partitionId: evidence.partitionId})) {
+    return null;
+  }
+  const requiredDistinctNodeCount = Math.min(
+    targetReplicaCount,
+    targetDistinctNodeCount,
+  );
+  const exactDrainState = [
+    targetReplicaCount > 0,
+    evidence.occupiedReplicaCount > targetReplicaCount,
+    evidence.voterReplicaCount > targetReplicaCount,
+    evidence.activeReplicaCount > targetReplicaCount,
+    evidence.activeDistinctNodeCount >= requiredDistinctNodeCount,
+    evidence.standaloneSafeRemoveCount >= 1,
+  ].every(Boolean);
+  return exactDrainState ?
+    PLACEMENT_CURE_CONDITION.LEDGER_DRAIN_SPREAD_SURPLUS :
+    null;
+}
+
+/**
+ * Classify an at-target non-ledger priority partition whose spread gap should
+ * be cured by one serial ADD without a disruptive REPLACE handoff.
+ * @param {Object} evidence
+ * @return {string|null} PRIORITY_EXPAND_FOR_SPREAD or null.
+ */
+function classifyPriorityExpandForSpreadCureCondition(evidence = {}) {
+  const targetReplicaCount = Number(evidence.targetReplicaCount);
+  const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
+  const partitionId = evidence.partitionId;
+  if (
+    !isPriorityControlPlanePartition({partitionId}) ||
+    isOperationLedgerPartition({partitionId})
+  ) {
+    return null;
+  }
+  const requiredDistinctNodeCount = Math.min(
+    targetReplicaCount,
+    targetDistinctNodeCount,
+  );
+  const exactExpandState = [
+    evidence.inFlightReplaceCount === 0,
+    evidence.naturalReplaceCount >= 1,
+    evidence.addMoveCount >= 1,
+    evidence.occupiedReplicaCount === targetReplicaCount,
+    evidence.deficitEffectiveCount === targetReplicaCount,
+    evidence.voterReplicaCount === targetReplicaCount,
+    evidence.activeReplicaCount === targetReplicaCount,
+    requiredDistinctNodeCount > 0,
+    evidence.activeDistinctNodeCount < requiredDistinctNodeCount,
+  ].every(Boolean);
+  return exactExpandState ?
+    PLACEMENT_CURE_CONDITION.PRIORITY_EXPAND_FOR_SPREAD :
+    null;
+}
+
+/**
+ * Classify the target-plus-one state after a non-ledger priority spread ADD.
+ * The selected REMOVE must preserve the current distinct-node count so serial
+ * expand/drain is monotonic before the final spread floor is reached.
+ * @param {Object} evidence
+ * @return {string|null} PRIORITY_DRAIN_SPREAD_SURPLUS or null.
+ */
+function classifyPrioritySpreadSurplusDrainCureCondition(evidence = {}) {
+  const targetReplicaCount = Number(evidence.targetReplicaCount);
+  const partitionId = evidence.partitionId;
+  if (
+    !isPriorityControlPlanePartition({partitionId}) ||
+    isOperationLedgerPartition({partitionId})
+  ) {
+    return null;
+  }
+  const exactDrainState = [
+    targetReplicaCount > 0,
+    evidence.occupiedReplicaCount > targetReplicaCount,
+    evidence.voterReplicaCount > targetReplicaCount,
+    evidence.activeReplicaCount > targetReplicaCount,
+    evidence.monotonicSafeRemoveCount >= 1,
+  ].every(Boolean);
+  return exactDrainState ?
+    PLACEMENT_CURE_CONDITION.PRIORITY_DRAIN_SPREAD_SURPLUS :
+    null;
+}
+
+/**
+ * Once a healthy priority partition is at target count and satisfies its
+ * distinct-node spread floor, exact suitability is not a recovery cure.
+ * Suppressing that relocation preserves the current leader and prevents
+ * formation from turning a satisfied safety topology back into handoff work.
+ * @param {Object} evidence
+ * @return {boolean}
+ */
+function isPrioritySpreadSatisfiedAtTarget(evidence = {}) {
+  const targetReplicaCount = Number(evidence.targetReplicaCount);
+  const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
+  if (
+    !isPriorityControlPlanePartition({
+      partitionId: evidence.partitionId,
+    })
+  ) {
+    return false;
+  }
+  const requiredDistinctNodeCount = Math.min(
+    targetReplicaCount,
+    targetDistinctNodeCount,
+  );
+  return [
+    targetReplicaCount > 0,
+    evidence.occupiedReplicaCount === targetReplicaCount,
+    evidence.voterReplicaCount === targetReplicaCount,
+    evidence.activeReplicaCount === targetReplicaCount,
+    evidence.activeDistinctNodeCount >= requiredDistinctNodeCount,
+  ].every(Boolean);
 }
 
 /**
@@ -279,9 +482,14 @@ export {
   // Re-exported lane vocabulary: consumers of the classifier read its result
   // against these values without re-importing the control-plane home.
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
+  classifyLedgerExpandForSpreadCureCondition,
+  classifyLedgerSpreadSurplusDrainCureCondition,
+  classifyPriorityExpandForSpreadCureCondition,
   classifyPriorityRecoveryAdmissionPartitionClass,
   classifyPriorityRecoveryFollowUpCureCondition,
+  classifyPrioritySpreadSurplusDrainCureCondition,
   isOrdinarySerialLaneCureMove,
+  isPrioritySpreadSatisfiedAtTarget,
   resolvePlacementCure,
   resolvePlacementCureBudgetScope,
   resolvePlacementCureBudgetScopeFromAdmissionPlan,

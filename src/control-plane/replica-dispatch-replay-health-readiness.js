@@ -69,7 +69,8 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     }
     if (
       !isCoordinatorOwnedOperationType(row.type) ||
-      !this.isReplicaOperationLocallyOwned(row)
+      !this.isReplicaOperationLocallyOwned(row) ||
+      this.isBootstrapTopologyDispatchDeferred(row)
     ) {
       return false;
     }
@@ -109,6 +110,9 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
       return false;
     }
     if (!isCoordinatorOwnedOperationType(row.type)) {
+      return false;
+    }
+    if (this.isBootstrapTopologyDispatchDeferred(row)) {
       return false;
     }
     if (this.enqueueReplicaOperationRow(row, reasons)) {

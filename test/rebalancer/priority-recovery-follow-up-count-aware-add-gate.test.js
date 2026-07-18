@@ -151,6 +151,66 @@ test('count-aware gate still creates an ADD for a genuine uncovered deficit',
     }
   });
 
+test('follow-up augmentation cannot reintroduce REPLACE above target after ' +
+  'the move planner selected drain-only cleanup', async (t) => {
+  const rebalancer = buildRebalancer([]);
+  const currentReplicas = [
+    activeVoterReplica(NODE_A, 'r-a-1'),
+    activeVoterReplica(NODE_A, 'r-a-2'),
+    activeVoterReplica(NODE_B, 'r-b'),
+    activeVoterReplica(NODE_C, 'r-c'),
+  ];
+  const safeCleanupRemove = {
+    type: MoveType.REMOVE,
+    nodeId: NODE_A,
+    replicaId: 'r-a-2',
+    reason: 'spread_replicas',
+    standaloneSafe: true,
+  };
+  try {
+    const followUp = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision: buildDecision(),
+      currentReplicas,
+      targetState: {
+        targetReplicaCount: TARGET_REPLICA_COUNT,
+        targetNodes: [NODE_A, NODE_B, NODE_C],
+      },
+    });
+
+    t.equal(
+      followUp.followUpMoveState,
+      'over_replication_suppressed',
+      'four healthy replicas for target three stay on the drain-only lane',
+    );
+    t.equal(
+      followUp.type,
+      undefined,
+      'follow-up does not recreate the over-target REPLACE',
+    );
+
+    const augmentedMoves =
+      await rebalancer.augmentMovesWithPriorityRecoveryFollowUp(
+        [safeCleanupRemove],
+        {
+          currentReplicas,
+          targetState: {
+            targetReplicaCount: TARGET_REPLICA_COUNT,
+            targetNodes: [NODE_A, NODE_B, NODE_C],
+          },
+          decision: buildDecision(),
+        },
+      );
+
+    t.same(
+      augmentedMoves,
+      [safeCleanupRemove],
+      'the planner-owned standalone-safe REMOVE survives augmentation unchanged',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('follow-up gate suppresses increases on unusable inventory', async (t) => {
   const rebalancer = buildRebalancer([]);
   rebalancer.replicaInventoryBuilder = (options) =>
@@ -326,6 +386,54 @@ function buildCriticalDecision() {
     },
   };
 }
+
+test('over-target follow-up suppression counts a terminal-projected voter ' +
+  'before it becomes ready-healthy', async (t) => {
+  const rebalancer = buildCriticalRebalancer();
+  rebalancer.getAvailableNodes = () =>
+    [NODE_A, NODE_B, NODE_C, NODE_D].map((nodeId) => ({
+      node_id: nodeId,
+    }));
+  const projectedReplica = {
+    ...critReplica(NODE_C, 'r-c-projected', 'follower'),
+    address: undefined,
+  };
+  const currentReplicas = [
+    critReplica(NODE_A, 'r-a-1', 'follower'),
+    critReplica(NODE_A, 'r-a-2', 'follower'),
+    critReplica(NODE_B, 'r-b', 'follower'),
+    projectedReplica,
+  ];
+  try {
+    t.equal(
+      rebalancer.getHealthyReplicas(currentReplicas).length,
+      TARGET_REPLICA_COUNT,
+      'fixture pins the terminal-projection window at three ready-healthy rows plus one occupied voter',
+    );
+
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision: buildCriticalDecision(),
+      currentReplicas,
+      targetState: {
+        targetReplicaCount: TARGET_REPLICA_COUNT,
+        targetNodes: [NODE_A, NODE_B, NODE_C],
+      },
+    });
+
+    t.equal(
+      move.followUpMoveState,
+      'over_replication_suppressed',
+      'the occupied fourth voter keeps follow-up augmentation on the planner-owned drain-only lane',
+    );
+    t.equal(
+      move.type,
+      undefined,
+      'no visibility-window REPLACE may remove the remaining priority leader',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
 
 test('occupied-slot gate defers an ADD when settled ALIVE learners already fill the target ' +
   '(red-on-revert: counting voter-ready healthy replicas alone re-mints the over-replication storm)',

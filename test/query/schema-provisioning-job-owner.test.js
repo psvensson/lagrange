@@ -288,6 +288,98 @@ test('client deadline returns a stable job and retry survives stale worker ' +
     'the stale process refreshes the authoritative terminal row');
 });
 
+test('pending durable schema work renews its lease and self-retries until ' +
+  'replicas converge', async (t) => {
+  const gateway = createGateway();
+  const now = {value: 100};
+  const retryTimers = [];
+  const provisionCalls = [];
+  const service = createService(gateway, provisionCalls, {
+    now: () => now.value,
+    schemaProvisioningLeaseMs: 30,
+    schemaProvisioningRetrySetTimeoutFn(callback, delayMs) {
+      const timer = {
+        callback,
+        cleared: false,
+        delayMs,
+        unref() {},
+      };
+      retryTimers.push(timer);
+      return timer;
+    },
+    schemaProvisioningRetryClearTimeoutFn(timer) {
+      timer.cleared = true;
+    },
+    async partitionProvisioner(context) {
+      provisionCalls.push(context);
+      now.value += 100;
+      if (provisionCalls.length === 1) {
+        return {
+          resolvedReplicaCount: 1,
+          routableReplicaCount: 1,
+          fullReplicaCountConverged: false,
+          contractState: OWNER_CONTRACT_STATE.PENDING,
+          nextAction: 'retry',
+        };
+      }
+      if (provisionCalls.length === 2) {
+        throw new Error(
+          'Timed out waiting for partition leader service for partition p1',
+        );
+      }
+      return {
+        resolvedReplicaCount: 3,
+        routableReplicaCount: 3,
+        fullReplicaCountConverged: true,
+        contractState: OWNER_CONTRACT_STATE.READY,
+        nextAction: 'proceed',
+      };
+    },
+  });
+
+  const pending = await service.createTable(createAst());
+  t.equal(pending.contractState, OWNER_CONTRACT_STATE.PENDING);
+  t.equal(provisionCalls.length, 1);
+  t.equal(retryTimers.length, 1);
+  t.equal(retryTimers[0].delayMs, 1000);
+
+  let jobRow = gateway.rows.get(`schema_operations:${pending.jobId}`);
+  t.equal(jobRow.status, 'PENDING');
+  t.equal(jobRow.current_step, 'RECONCILING_REPLICAS');
+  t.ok(jobRow.workflow_lease_expires_at > now.value,
+    'the owner renews a lease that expired inside provisioning before ' +
+    'persisting PENDING');
+
+  retryTimers[0].callback();
+  for (let turn = 0;
+    turn < 100 && retryTimers.length < 2;
+    turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  t.equal(provisionCalls.length, 2);
+  t.equal(retryTimers.length, 2,
+    'emitted timed-out leader wait schedules another durable attempt');
+
+  retryTimers[1].callback();
+  for (let turn = 0; turn < 100; turn += 1) {
+    jobRow = gateway.rows.get(`schema_operations:${pending.jobId}`);
+    if (jobRow?.status === 'SUCCEEDED') break;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  t.equal(provisionCalls.length, 3);
+  t.equal(jobRow.status, 'SUCCEEDED');
+  t.equal(jobRow.attempt_count, 3);
+  t.ok(jobRow.workflow_lease_expires_at > now.value,
+    'terminal transition also renews ownership after a long executor pass');
+
+  const replay = await service.createTable(createAst());
+  t.equal(replay.contractState, OWNER_CONTRACT_STATE.READY);
+  t.equal(replay.jobId, pending.jobId);
+  t.equal(provisionCalls.length, 3,
+    'terminal replay does not schedule a fourth attempt');
+});
+
 test('terminal provisioning failure is durable and replayed without new work',
   async (t) => {
     const gateway = createGateway();

@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 4
+**Attempts:** 6
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -21,30 +21,33 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json
-- Selected theory: theory-20260718-schema-admission-consumes-pre-ready-formation-time
-- Next move: continue supervised step for formation-schema-operation-collision-leader-read-closure-main
-- No longer current: planner-only reordering; timeout increases; treating nodes.status=active as placement-ready
+- Selected theory: theory-20260718-fresh-joining-rows-are-correctly-excluded (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for formation-schema-operation-collision-leader-read-closure-main
 
 ## Continuation
 - Status: allowed
-- Next action: continue formation-schema-operation-collision-leader-read-closure-main with modelRef or modelNotApplicable evidence
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 10
-- Change bytes: 23171
-- Owner areas: src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
+- Changed files: 20
+- Change bytes: 43933
+- Owner areas: src/bootstrap, src/control-plane, src/rebalancer, test/bootstrap, test/control-plane, test/rebalancer
 - Categories: runtime, test
-- Action: land or separate 4 owner areas: src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
+- Action: split by owner area before the next attempt (20 files)
+- Action: land or separate 6 owner areas: src/bootstrap, src/control-plane, src/rebalancer, test/bootstrap, test/control-plane, test/rebalancer
 - Split plan:
-  - test/control-plane: 4 file(s)
-  - src/control-plane: 3 file(s)
+  - src/control-plane: 9 file(s)
+  - test/control-plane: 5 file(s)
   - src/rebalancer: 2 file(s)
-  - test/rebalancer: 1 file(s)
+  - test/rebalancer: 2 file(s)
+  - src/bootstrap: 1 file(s)
+  - test/bootstrap: 1 file(s)
 - Signal: broad-source-scope severity=medium
+- Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **formation-schema-operation-collision-leader-read-closure-main** [open] rung 3, attempts 4, metric 1 -> 1
+- **formation-schema-operation-collision-leader-read-closure-main** [parked {exhausted}] rung 5, attempts 6, metric 1 -> 1 — ladder exhausted without metric movement
 
 ## Findings
 - **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/rebalancer/replica-operation-repository.test.js [dt:solve/changes/dt-prove/replica-operation-repository.test.js-2026-07-18T03-05-07-174Z.json]
@@ -69,16 +72,20 @@
 - **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
 - **formation-schema-operation-collision-leader-read-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
 - **formation-schema-operation-collision-leader-read-closure-main**: The cold-formation barrier withholds only the final ready lease: node registration publishes nodes.status=active earlier, and the unchanged MovieLens scenario starts schema admission after counting those active rows. In the failed run the ledger barrier and priority operations continued after that clock began, so eventual zero spread at T+164 left only about 16 seconds for an unchanged 60-second stability condition. Planner-only reordering and timeout increases are ruled out; the missing contract is a canonical placement-ready or available phase between recovery-eligible registration and schema admission. (rules out: planner-only reordering; timeout increases; treating nodes.status=active as placement-ready) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: Independent verification rejected exact Attempt 5: production derives canonicalStartupNodeIds through active projection, so a fresh JOINING/CONNECTED/no-lease row is excluded before the widened priority-recovery predicate; the test stubbed the missing upstream cohort and the formation barrier may bypass as insufficient cohort. [subagent:formation_barrier_verifier]
+- **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/control-plane/formation-placement-membership-handoff.test.js [dt:solve/changes/dt-prove/formation-placement-membership-handoff.test.js-2026-07-18T08-13-33-405Z.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/control-plane/formation-placement-membership-handoff.test.js [dt:solve/changes/dt-prove/formation-placement-membership-handoff.test.js-2026-07-18T08-15-24-551Z.json]
 
 ## Theories
 - **theory-20260718-the-read-model-snapshot-owner-collapses** [superseded] system, mechanism The read-model snapshot owner collapses node, service, partition, and publication evidence into one snapshot but uses only the node heartbeat watermark to arbitrate reuse; when that row regresses, a later service invalidation is ignored and stale repairEligible=false survives repeated authoritative repair., owner read_model_contract_owner, modelGate npm run model:contracts
 - **theory-20260718-registration-active-precedes-placement-ready-admission** [active] system, mechanism The lifecycle collapses recovery-eligible registration and client-admission visibility into nodes.status=active, while the operation-ledger formation barrier gates only the later ready lease. Variable persisted REPLACE transitions can therefore consume the fixed admission window before quiescence can start., owner startup_lifecycle_admission_owner, modelGate npm run model:contracts
 - **theory-20260718-the-approved-concurrency-behavior-is-correct** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer observation, mechanism The approved concurrency behavior is correct, but its regression was placed in a nearly full aggregate test file; registering the same test from a bounded sibling test-case module preserves execution while restoring the file-size contract., owner control_plane_gateway_test_registration, boundary source_attempt_checkpoint, modelGate npm run model:contracts
 - **theory-20260718-a-stored-multi-table-readiness-snapshot** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer observation, mechanism A stored multi-table readiness snapshot with repairEligible=false is retained when the visible node row regresses, because getFresherStoredReadinessSnapshot checks node/service invalidation only on equal node watermarks; authoritative service repair invalidates the target but the older node watermark suppresses that independent revision., modelGate npm run model:contracts
-- **theory-20260718-schema-admission-consumes-pre-ready-formation-time** [active] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer ownership, mechanism The active-node projection admits the scenario clock before the final ready-lease formation barrier owns a placement-ready outcome., owner startup_lifecycle_admission_owner, boundary active_membership_to_schema_admission, modelGate npm run model:contracts
+- **theory-20260718-schema-admission-consumes-pre-ready-formation-time** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer ownership, mechanism The active-node projection admits the scenario clock before the final ready-lease formation barrier owns a placement-ready outcome., owner startup_lifecycle_admission_owner, boundary active_membership_to_schema_admission, modelGate npm run model:contracts
+- **theory-20260718-fresh-joining-rows-are-correctly-excluded** [falsified] frontier, frontier formation-schema-operation-collision-leader-read-closure-main, layer ownership, mechanism Fresh JOINING rows are correctly excluded from generic active projection, but canonical startup authority is derived only from that projection; the pre-ready priority-recovery target is therefore removed before the narrow placement predicate can evaluate it, creating a formation circularity., owner membership_publication_planning_and_startup_authority_owner, boundary registered_recovery_eligible_to_startup_formation_placement, modelGate npm run model:contracts
 
 ## Selected Theories
-- **formation-schema-operation-collision-leader-read-closure-main**: theory-20260718-schema-admission-consumes-pre-ready-formation-time
+- **formation-schema-operation-collision-leader-read-closure-main**: theory-20260718-fresh-joining-rows-are-correctly-excluded
 
 ## Theory Results
 - **theory-20260718-the-read-model-snapshot-owner-collapses**: superseded [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
@@ -86,6 +93,8 @@
 - **theory-20260718-the-approved-concurrency-behavior-is-correct**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
 - **theory-20260718-a-stored-multi-table-readiness-snapshot**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T06-51-59-091Z.report.json]
 - **theory-20260718-a-stored-multi-table-readiness-snapshot**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
+- **theory-20260718-schema-admission-consumes-pre-ready-formation-time**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
+- **theory-20260718-fresh-joining-rows-are-correctly-excluded**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -94,3 +103,5 @@
 | 2026-07-18T03:26:11.676Z | formation-schema-operation-collision-leader-read-closure-main | local-fix | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-2.diff |
 | 2026-07-18T06:31:16.976Z | formation-schema-operation-collision-leader-read-closure-main | widen-scope | 1 -> 1 | flat | no_evidence | theory-20260718-the-approved-concurrency-behavior-is-correct | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-3.diff |
 | 2026-07-18T07:22:12.213Z | formation-schema-operation-collision-leader-read-closure-main | model | 1 -> 1 | flat | no_previous | theory-20260718-a-stored-multi-table-readiness-snapshot | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-4.diff |
+| 2026-07-18T07:51:20.365Z | formation-schema-operation-collision-leader-read-closure-main | model | 1 -> 1 | flat | same | theory-20260718-schema-admission-consumes-pre-ready-formation-time | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-5.diff |
+| 2026-07-18T08:21:30.057Z | formation-schema-operation-collision-leader-read-closure-main | change-approach | 1 -> 1 | flat | same | theory-20260718-fresh-joining-rows-are-correctly-excluded | diff:solve/changes/formation-schema-operation-collision-leader-read-closure/attempt-6.diff |

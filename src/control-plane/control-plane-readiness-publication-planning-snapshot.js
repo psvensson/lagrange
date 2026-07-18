@@ -200,8 +200,8 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   // silently disabling both memos in production (and turning their guard tests
   // red). Parse via normalizeDiagnosticTimestampMs (handles ISO strings, numeric
   // strings, and numbers); when either side is unparseable fall back to reuse and
-  // rely on the strong guards (isReadinessSnapshotInvalidated + the epoch/status
-  // freshness recheck) rather than a NaN comparison.
+  // rely on the strong guards (the cluster-wide planning-source revision plus
+  // the epoch/status freshness recheck) rather than a NaN comparison.
   isReadinessPlanningMemoWithinStaleGrace(observedAt, capturedAtMs) {
     const observedAtMs = normalizeDiagnosticTimestampMs(observedAt);
     const capturedMs = normalizeDiagnosticTimestampMs(capturedAtMs);

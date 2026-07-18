@@ -33,7 +33,8 @@
  *     coordinationTable: string, // slot lease + atomic partial snapshot
  *     leaseMs: number,
  *     coordinatorSlot: number,
- *     resultId: string
+ *     resultId: string,
+ *     resultSnapshotColumn: string // owner-published partial witness
  *   }
  * }
  *
@@ -118,13 +119,29 @@ const SQL_QUERY_LOOP_ERROR = Object.freeze({
     'requires runtime_config.reduce',
   PARALLEL_REDUCE_INVALID:
     'runtime_config.parallelReduce must contain non-empty ' +
-    'shardSqlBySlot, coordinationTable, resultId, leaseMs, and a valid ' +
-    'coordinatorSlot; it ' +
+    'shardSqlBySlot, coordinationTable, resultId, resultSnapshotColumn, ' +
+    'leaseMs, and a valid coordinatorSlot; it ' +
     'requires reduce and resultTable',
 });
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
+}
+
+function hasValidReduceValueColumn(reduce) {
+  return reduce.aggregate === SQL_QUERY_LOOP_AGGREGATE.COUNT ||
+    isNonEmptyString(reduce.valueColumn);
+}
+
+function hasValidConfidenceParameters(reduce) {
+  const priorWeightValid =
+    Number.isFinite(reduce.priorWeight) && reduce.priorWeight > 0;
+  const confidencePenaltyValid =
+    Number.isFinite(reduce.confidencePenalty) &&
+    reduce.confidencePenalty >= 0;
+  return Number.isFinite(reduce.priorMean) &&
+    priorWeightValid &&
+    confidencePenaltyValid;
 }
 
 function isValidReduceShape(reduce) {
@@ -138,17 +155,14 @@ function isValidReduceShape(reduce) {
   if (!Object.values(SQL_QUERY_LOOP_AGGREGATE).includes(reduce.aggregate)) {
     return false;
   }
-  const valueShapeValid =
-    reduce.aggregate === SQL_QUERY_LOOP_AGGREGATE.COUNT ||
-    isNonEmptyString(reduce.valueColumn);
-  if (!valueShapeValid ||
-      reduce.aggregate !== SQL_QUERY_LOOP_AGGREGATE.CONFIDENCE_ADJUSTED_AVG) {
-    return valueShapeValid;
+  if (!hasValidReduceValueColumn(reduce)) {
+    return false;
   }
-  return Number.isFinite(reduce.priorMean) &&
-    Number.isFinite(reduce.priorWeight) && reduce.priorWeight > 0 &&
-    Number.isFinite(reduce.confidencePenalty) &&
-    reduce.confidencePenalty >= 0;
+  if (reduce.aggregate !==
+      SQL_QUERY_LOOP_AGGREGATE.CONFIDENCE_ADJUSTED_AVG) {
+    return true;
+  }
+  return hasValidConfidenceParameters(reduce);
 }
 
 function validateReduceConfig(parsed) {
@@ -534,6 +548,8 @@ class SqlQueryLoopRuntimeModule {
       config.resultTable,
       parallel.resultId,
       snapshot.merged,
+      parallel.resultSnapshotColumn,
+      snapshot.witness,
     );
   }
 

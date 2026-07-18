@@ -1,0 +1,17 @@
+{
+  "test": "test/rebalancer/move-planner-critical-replace-serialization.test.js",
+  "src": [
+    "src/rebalancer/move-planner-move-calculation-methods.js",
+    "src/rebalancer/replica-placement-cure-policy.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-17T14:00:38.796Z"
+}

@@ -12,8 +12,9 @@ import {
 // per routing call -> the ~14s residual seed event-loop gap that still exceeds the
 // raft election timeout and loses control_plane_publications-p1 leadership (CL-001
 // variant B). The fix memoizes the (already Object.frozen) merge output per
-// publisher node under the SAME invalidation discipline as CL-033. These tests
-// exercise the memo directly via the prototype method with a mock `this`.
+// publisher node under the SAME planning-source revision discipline as CL-033.
+// These tests exercise the memo directly via the prototype method with a mock
+// `this`.
 const resolveMemo =
   ControlPlaneReadinessPublicationPlanningResolution.prototype
     .resolveMemoizedMembershipPublicationPlanningSnapshotSync;
@@ -21,12 +22,11 @@ const resolveMemo =
 const T0 = Date.parse('2026-06-14T06:00:00.000Z');
 const iso = (offsetMs) => new Date(T0 + offsetMs).toISOString();
 
-// `invalidated` simulates a cache-change marker advance; `_bumpEpoch` simulates a
-// publication-row epoch change for the freshness recheck. `builds` records every
-// heavy merge so we can prove the memo collapses the per-routing-call storm.
+// `_bumpEpoch` simulates a publication-row epoch change for the freshness
+// recheck. `builds` records every heavy merge so we can prove the memo collapses
+// the per-routing-call storm.
 function memoCtx({
   nodeId = 'seed',
-  invalidated = () => false,
   epoch = 20,
   status = 'PUBLISHED',
 } = {}) {
@@ -37,9 +37,8 @@ function memoCtx({
     nodeId,
     now: () => (clock += 1),
     membershipPublicationPlanningActiveStaleGraceMs: 15000,
+    membershipPublicationPlanningSourceRevision: 0,
     membershipPublicationPlanningSnapshotMemoByNodeId: new Map(),
-    isReadinessSnapshotInvalidated: (key, capturedAtMs) =>
-      invalidated(key, capturedAtMs),
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningResolution.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
@@ -79,15 +78,14 @@ t.test('merge memo: a stable cache-epoch builds the merge once and reuses it', a
 });
 
 t.test('merge memo: an invalidation (cache change) forces exactly one rebuild', async (t) => {
-  let invalid = false;
-  const {ctx, builds} = memoCtx({invalidated: () => invalid});
+  const {ctx, builds} = memoCtx();
   const before = resolveMemo.call(ctx, 'seed', iso(1), {}, null);
   t.equal(builds.length, 1, 'built once');
-  invalid = true; // a publication/node cache change supersedes the memo
+  // Any planning-source cache change advances the cluster-wide revision.
+  ctx.membershipPublicationPlanningSourceRevision += 1;
   const after = resolveMemo.call(ctx, 'seed', iso(2), {}, null);
   t.equal(builds.length, 2, 'rebuilt once after invalidation');
   t.not(after, before, 'returns the fresh merge, not the stale one');
-  invalid = false;
   const reused = resolveMemo.call(ctx, 'seed', iso(3), {}, null);
   t.equal(builds.length, 2, 'no rebuild while stable again');
   t.equal(reused, after, 'reuses the post-invalidation entry');

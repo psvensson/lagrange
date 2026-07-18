@@ -355,6 +355,8 @@ const OPERATION_METADATA_KEY = Object.freeze({
   PEER_ADDRESSES: 'peerAddresses',
   BOOTSTRAP_TABLE_METADATA: 'bootstrapTableMetadata',
   BOOTSTRAP_PARTITION_METADATA: 'bootstrapPartitionMetadata',
+  BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED:
+    'bootstrapTopologyDispatchDeferred',
 });
 
 function quoteSqlValue(value) {

@@ -10,9 +10,9 @@
  * re-created surplus that fought the pending count-reducing REMOVE,
  * keeping the partition permanently over its voter target (132s).
  *
- * Policy under test: a count-increasing ADD that is NOT consumed into a
- * count-neutral REPLACE must not fire when the partition is already
- * at/over its replica-count target. Spread is still served by REPLACEs;
+ * Policy under test: a priority partition at target can use one explicitly
+ * spread-typed ADD, followed by a serial safe REMOVE. An ordinary
+ * INCREASE_REPLICA_COUNT ADD must still not leak out while a drain is pending;
  * genuine under-target ADDs are unaffected.
  *
  * RED before the fix (emits an ADD); GREEN after (no ADD).
@@ -109,7 +109,7 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
   );
 
   await t.test(
-    'still emits a count-neutral REPLACE for spread when no drain is pending',
+    'emits one serial spread ADD when no drain is pending',
     async (t) => {
       const currentReplicas = [
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
@@ -129,13 +129,17 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
       });
 
       t.equal(
-        moves.some((move) => move.type === REBALANCER_MOVE_TYPE.REPLACE),
+        moves.some(
+          (move) =>
+            move.type === REBALANCER_MOVE_TYPE.ADD &&
+            move.reason === MOVE_REASON.SPREAD_REPLICAS,
+        ),
         true,
-        'spread is served by a count-neutral REPLACE');
+        'spread starts with the declared priority expansion ADD');
       t.equal(
-        moves.some((move) => move.type === REBALANCER_MOVE_TYPE.ADD),
+        moves.some((move) => move.type === REBALANCER_MOVE_TYPE.REPLACE),
         false,
-        'no pure count-increasing ADD');
+        'priority spread avoids a replacement handoff');
     },
   );
 
@@ -170,7 +174,7 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
   );
 
   await t.test(
-    'the replaceMoves>0 leak still emits the bare ADD',
+    'a pending source move does not leak an ordinary count-growth ADD',
     async (t) => {
       const currentReplicas = [
         {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
@@ -198,9 +202,8 @@ test('MovePlanner spread-vs-count reconciliation', async (t) => {
             move.type === REBALANCER_MOVE_TYPE.ADD &&
             move.reason === MOVE_REASON.INCREASE_REPLICA_COUNT,
         ),
-        true,
-        'the replaceMoves>0 leak still emits the bare ADD (count-neutral ' +
-        'reconciliation only defers when no REPLACE paired this round)');
+        false,
+        'pending source work cannot mint an unrelated count-growth ADD');
     },
   );
 });

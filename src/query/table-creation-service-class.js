@@ -61,6 +61,8 @@ class TableCreationService {
         leaseMs: options.schemaProvisioningLeaseMs,
         setTimeoutFn: options.setTimeoutFn,
         clearTimeoutFn: options.clearTimeoutFn,
+        retrySetTimeoutFn: options.schemaProvisioningRetrySetTimeoutFn,
+        retryClearTimeoutFn: options.schemaProvisioningRetryClearTimeoutFn,
       });
     this.partitionSplitMergeManager = null;
     this.tablePolicyByTableId = new Map();

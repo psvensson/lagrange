@@ -186,10 +186,8 @@ class ControlPlaneKernelIngress {
       routingReadinessDimension:
         CONTROL_PLANE_KERNEL_INGRESS_ROUTING_DIMENSION.NODE_STATE_UPDATE,
     };
-    const isReadyHeartbeatPublication =
-      options.state === STATE.READY &&
-      Number.isFinite(options.heartbeatAt);
-    if (!isReadyHeartbeatPublication) {
+    const isHeartbeatPublication = Number.isFinite(options.heartbeatAt);
+    if (!isHeartbeatPublication) {
       return this.resolveTargetCandidates({
         ...sharedOptions,
         allowSelfTarget: true,

@@ -1,0 +1,17 @@
+{
+  "test": "test/rebalancer/replica-operation-repository.test.js",
+  "src": [
+    "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
+    "src/rebalancer/replica-operation-repository-read-methods.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-18T03:05:07.116Z"
+}

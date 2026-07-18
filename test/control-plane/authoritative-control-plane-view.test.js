@@ -287,6 +287,9 @@ test('AuthoritativeControlPlaneView preserves the owner-lane priority hint ' +
     {
       workClass: PRESSURE_WORK_CLASS.CRITICAL,
       deliveryPriority: 'critical',
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      preferOwnerRpcReadLeader: true,
     },
   );
 
@@ -300,6 +303,16 @@ test('AuthoritativeControlPlaneView preserves the owner-lane priority hint ' +
     calls[0]?.options?.queryOptions?.workClass,
     PRESSURE_WORK_CLASS.CRITICAL,
     'authoritative reads should preserve the requested owner-lane work class',
+  );
+  t.equal(
+    calls[0]?.options?.preferOwnerRpcReadLeader,
+    true,
+    'leader-pinned owner reads must reach the CDC owner-RPC execution seam',
+  );
+  t.equal(
+    calls[0]?.options?.allowSqlFallback,
+    false,
+    'leader-pinned owner reads must not fall back to unpinned SQL execution',
   );
   t.equal(
     calls[0]?.options?.queryOptions?.workloadClass,
@@ -403,6 +416,69 @@ test('AuthoritativeControlPlaneView keeps in-flight reads distinct when ' +
     calls.map((call) => call.options?.replicaFallbackConsistency || null),
     ['any_replica', null],
     'the in-flight cache key should preserve the requested fallback policy',
+  );
+});
+
+test('AuthoritativeControlPlaneView keeps leader-pinned owner reads distinct ' +
+  'from ordinary in-flight owner reads', async (t) => {
+  const calls = [];
+  let releaseRead = null;
+  const readBlocked = new Promise((resolve) => {
+    releaseRead = resolve;
+  });
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        await readBlocked;
+        return {
+          success: true,
+          rows: [{node_id: FIXTURE_NODE_ID}],
+          source: 'owner_rpc_lane',
+        };
+      },
+    },
+  });
+  const readOptions = {
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+  };
+
+  const ordinaryRead = view.readRows(
+    TABLES.NODES,
+    `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
+    [FIXTURE_NODE_ID],
+    readOptions,
+  );
+  const leaderPinnedRead = view.readRows(
+    TABLES.NODES,
+    `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
+    [FIXTURE_NODE_ID],
+    {
+      ...readOptions,
+      preferOwnerRpcReadLeader: true,
+    },
+  );
+  await Promise.resolve();
+
+  t.equal(
+    calls.length,
+    2,
+    'a strict leader-pinned read must not coalesce with an unpinned owner read',
+  );
+
+  releaseRead();
+  await Promise.all([ordinaryRead, leaderPinnedRead]);
+  t.same(
+    calls.map((call) => call.options?.preferOwnerRpcReadLeader),
+    [false, true],
+    'each in-flight read preserves its owner-RPC leader contract',
   );
 });
 

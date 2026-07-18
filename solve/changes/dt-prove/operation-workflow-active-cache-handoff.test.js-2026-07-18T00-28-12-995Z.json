@@ -1,0 +1,20 @@
+{
+  "test": "test/rebalancer/operation-workflow-active-cache-handoff.test.js",
+  "src": [
+    "src/cache/system-table-cache-authoritative-reconciliation.js",
+    "src/cache/system-table-cache.js",
+    "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+    "src/rebalancer/replica-operation-repository-observation-methods.js",
+    "src/rebalancer/operation-workflow-recovery-status-reconcile.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-18T00:28:12.940Z"
+}

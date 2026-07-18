@@ -12,9 +12,13 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   EntityType,
+  MoveType,
   ReplicaStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
-import {SYSTEM_TABLE_NAME} from
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -55,6 +59,14 @@ const TEST_ANCIENT_STALE_OPERATION_UPDATED_AT_MS =
   TEST_NOW_MS - 90000000;
 const TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION =
   'current_partition';
+const TEST_PRIORITY_TABLE_IDS = Object.freeze([
+  SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+  SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+  SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS,
+]);
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -177,12 +189,109 @@ function buildStalePlanningSnapshot() {
   });
 }
 
+function buildStickySatisfiedPlanningSnapshot() {
+  return Object.freeze({
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publishedActiveNodeIds: Object.freeze([
+      TEST_SOURCE_NODE_ID,
+      TEST_TARGET_NODE_ID,
+      TEST_SUPPORTING_NODE_ID,
+    ]),
+    projectedServingNodeIds: Object.freeze([
+      TEST_SOURCE_NODE_ID,
+      TEST_TARGET_NODE_ID,
+      TEST_SUPPORTING_NODE_ID,
+    ]),
+    locallyEligibleNodeIds: Object.freeze([
+      TEST_SOURCE_NODE_ID,
+      TEST_TARGET_NODE_ID,
+      TEST_SUPPORTING_NODE_ID,
+    ]),
+    priorityPartitionSummary: Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      missingPartitionIds: Object.freeze([]),
+      blockedPartitions: Object.freeze([]),
+    }),
+    priorityRecoveryDecisionSnapshots: Object.freeze({
+      snapshots: Object.freeze([]),
+    }),
+  });
+}
+
+function buildPriorityPlacementCacheData({
+  currentPartitionNodeIds,
+}) {
+  const spreadNodeIds = [
+    TEST_SOURCE_NODE_ID,
+    TEST_TARGET_NODE_ID,
+    TEST_SUPPORTING_NODE_ID,
+  ];
+  const partitions = TEST_PRIORITY_TABLE_IDS.map((tableId) => ({
+    partition_id: INITIAL_PARTITION_IDS[tableId],
+    table_id: tableId,
+  }));
+  const services = TEST_PRIORITY_TABLE_IDS.flatMap((tableId) => {
+    const partitionId = INITIAL_PARTITION_IDS[tableId];
+    const nodeIds =
+      partitionId === TEST_PARTITION_ID ?
+        currentPartitionNodeIds :
+        spreadNodeIds;
+    return nodeIds.map((nodeId, index) => {
+      const replicaId = `${partitionId}-fixture-r${index + 1}`;
+      return {
+        service_id: replicaId,
+        service_type: TEST_SERVICE_TYPE_PARTITION,
+        node_id: nodeId,
+        partition_id: partitionId,
+        replica_id: replicaId,
+        address: `partition://${replicaId}`,
+        raft_role: TEST_RAFT_ROLE_FOLLOWER,
+        status: ReplicaStatus.ACTIVE,
+      };
+    });
+  });
+  return {
+    nodes: spreadNodeIds.map((nodeId) => ({
+      node_id: nodeId,
+      status: TEST_NODE_STATUS_ACTIVE,
+    })),
+    partitions,
+    services,
+  };
+}
+
 function createPlanningReadinessService(planningSnapshot) {
   const readinessService = createMockControlPlaneReadinessService();
   readinessService.getPriorityRecoveryPlanningSnapshotBestEffort = async () =>
     planningSnapshot;
   readinessService.getPriorityRecoveryPlanningAnswerSync = () =>
     planningSnapshot;
+  return readinessService;
+}
+
+function createRecoveryOnlyTargetPlanningReadinessService(
+  planningSnapshot,
+  recoveryOnlyNodeId,
+) {
+  const readinessService = createPlanningReadinessService(planningSnapshot);
+  const getDefaultNodeReadiness =
+    readinessService.getNodeReadinessSync.bind(readinessService);
+  readinessService.getNodeReadinessSync = (nodeId) => {
+    const readiness = getDefaultNodeReadiness(nodeId);
+    if (nodeId !== recoveryOnlyNodeId) {
+      return readiness;
+    }
+    return Object.freeze({
+      ...readiness,
+      dimensions: Object.freeze({
+        ...readiness.dimensions,
+        [CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+      }),
+    });
+  };
   return readinessService;
 }
 
@@ -242,6 +351,168 @@ function createPriorityRebalancer(options = {}) {
     nowFn: options.nowFn,
   });
 }
+
+test(
+  'UnifiedRebalancer planning gate reopens sticky published convergence from current priority placement debt',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const planningSnapshot = buildStickySatisfiedPlanningSnapshot();
+    const rebalancer = createPriorityRebalancer({
+      planningSnapshot,
+      cacheData: buildPriorityPlacementCacheData({
+        currentPartitionNodeIds: [
+          TEST_SOURCE_NODE_ID,
+          TEST_SOURCE_NODE_ID,
+          TEST_TARGET_NODE_ID,
+        ],
+      }),
+    });
+
+    const currentPlanningSnapshot =
+      rebalancer.buildCurrentPriorityRecoveryPlanningSnapshot(
+        planningSnapshot,
+      );
+    const currentPartition =
+      currentPlanningSnapshot.priorityPartitionSummary.blockedPartitions.find(
+        (partition) => partition.partitionId === TEST_PARTITION_ID,
+      );
+    const planningGateSnapshot =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_PARTITION_ID,
+      );
+
+    t.equal(
+      currentPartition?.spreadGap,
+      1,
+      'actuator planning should observe the current two-node placement instead of the monotonic satisfied publication',
+    );
+    t.same(
+      planningGateSnapshot,
+      Object.freeze({
+        operationCreationRequired: true,
+        operationCreationPartitionId: TEST_PARTITION_ID,
+        operationCreationScope:
+          TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION,
+      }),
+      'current physical spread debt should reopen operation creation for its priority owner',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer current placement debt supersedes terminal history and uses a recovery-cohort target outside the collapsed ready set',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const planningSnapshot = buildStickySatisfiedPlanningSnapshot();
+    const coordinator = createMockCoordinator();
+    coordinator.workflowOwner = {
+      async getPriorityRecoveryDecisionSnapshotForPartitionOperations() {
+        return Object.freeze({
+          partitionId: TEST_PARTITION_ID,
+          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED,
+          blockerReasons: Object.freeze([]),
+          observation: Object.freeze({
+            workflowState: 'terminal',
+            visibilityState: TEST_OPERATION_VISIBILITY_CACHE_VISIBLE,
+          }),
+          conditions: Object.freeze({
+            latestOperationStatus: ReplicaStatus.ACTIVE,
+          }),
+          progress: Object.freeze({
+            nextRequiredAction: TEST_WAIT_FOR_OPERATION_PROGRESS,
+          }),
+        });
+      },
+    };
+    const rebalancer = createPriorityRebalancer({
+      planningSnapshot,
+      rebalanceCoordinator: coordinator,
+      controlPlaneReadinessService:
+        createRecoveryOnlyTargetPlanningReadinessService(
+          planningSnapshot,
+          TEST_SUPPORTING_NODE_ID,
+        ),
+      cacheData: buildPriorityPlacementCacheData({
+        currentPartitionNodeIds: [
+          TEST_SOURCE_NODE_ID,
+          TEST_SOURCE_NODE_ID,
+          TEST_TARGET_NODE_ID,
+        ],
+      }),
+    });
+
+    const decision =
+      await rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot();
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision,
+      currentReplicas: rebalancer.getCurrentReplicas(),
+      targetState: {
+        targetReplicaCount: 3,
+        // The late formation trace had only the seed in the ordinary
+        // serve-ready set even though all three publication-cohort nodes were
+        // explicitly recovery eligible.
+        targetNodes: [TEST_SOURCE_NODE_ID],
+      },
+    });
+
+    t.equal(
+      decision?.decisionSnapshot?.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+      'a terminal historical operation must not hide newer current placement debt',
+    );
+    t.equal(
+      decision?.decisionSnapshot?.planner?.spreadGap,
+      1,
+      'the selected current decision should retain the physical spread gap',
+    );
+    t.equal(
+      move.type,
+      MoveType.REPLACE,
+      'the current at-count duplicate placement should create a replacement cure',
+    );
+    t.equal(
+      move.nodeId,
+      TEST_SUPPORTING_NODE_ID,
+      'the cure may use a recovery-cohort node outside the collapsed ordinary target set',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer current actuator overlay keeps genuinely spread priority placement converged',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const planningSnapshot = buildStickySatisfiedPlanningSnapshot();
+    const rebalancer = createPriorityRebalancer({
+      planningSnapshot,
+      cacheData: buildPriorityPlacementCacheData({
+        currentPartitionNodeIds: [
+          TEST_SOURCE_NODE_ID,
+          TEST_TARGET_NODE_ID,
+          TEST_SUPPORTING_NODE_ID,
+        ],
+      }),
+    });
+
+    const planningGateSnapshot =
+      rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        TEST_PARTITION_ID,
+      );
+
+    t.same(
+      planningGateSnapshot,
+      Object.freeze({
+        operationCreationRequired: false,
+        operationCreationPartitionId: null,
+        operationCreationScope: null,
+      }),
+      'current actuals should not re-mint recovery work once every priority partition is physically spread',
+    );
+  },
+);
 
 test(
   'UnifiedRebalancer current priority follow-up snapshot prefers the coordinator decision over stale planning reconstruction',

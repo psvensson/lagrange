@@ -1,0 +1,22 @@
+{
+  "test": "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js",
+  "src": [
+    "src/rebalancer/placement-owner-evidence.js",
+    "src/rebalancer/move-planner-placement-tail-methods.js",
+    "src/rebalancer/move-planner-state-methods.js",
+    "src/rebalancer/move-planner-move-calculation-methods.js",
+    "src/rebalancer/unified-rebalancer-lifecycle-base.js",
+    "src/partition/partition-service-rebalancer-methods.js",
+    "src/rebalancer/unified-rebalancer-shared.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-17T23:29:41.816Z"
+}

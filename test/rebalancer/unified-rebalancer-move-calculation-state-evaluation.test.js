@@ -1069,8 +1069,8 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
       );
       t.equal(
         createOperationCalls[0]?.type,
-        'REPLACE',
-        'repair should replace an overrepresented replica instead of growing count',
+        'ADD',
+        'repair should begin the serial spread expand/drain protocol',
       );
       t.equal(
         createOperationCalls[0]?.nodeId,
@@ -1079,8 +1079,8 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
       );
       t.equal(
         createOperationCalls[0]?.sourceNodeId,
-        'node-1',
-        'repair should remove from the overrepresented node',
+        undefined,
+        'the expansion phase should not retire a source before target settles',
       );
       t.equal(
         createOperationCalls[0]?.membershipPublicationEpoch,
@@ -1094,8 +1094,8 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
       );
       t.equal(
         result.moves[0]?.operation,
-        MoveType.REPLACE,
-        'scheduled result should reflect the replacement repair move',
+        MoveType.ADD,
+        'scheduled result should reflect the serial spread expansion',
       );
     },
   );

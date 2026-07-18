@@ -80,6 +80,57 @@ t.test('CL-035 seed: priority voter promotion writes raft_role into the local ro
   t.end();
 });
 
+t.test(
+  'CL-035 seed: local role visibility preserves the durable row version so ' +
+    'the final ACTIVE lifecycle row can supersede SYNCING',
+  (t) => {
+    const cache = makeCacheWithRow({
+      raftRole: 'learner',
+      status: 'syncing',
+    });
+    const ctx = makeSeedThis(cache, {trackedRole: 'follower'});
+
+    seedRaftRole.call(ctx, REPLICA_ID, PRIORITY_PARTITION);
+
+    const seededRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, REPLICA_ID);
+    t.equal(
+      seededRow.updated_at,
+      1000,
+      'owner-local role projection must not mint a durable row version',
+    );
+
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      'INSERT',
+      {
+        service_id: REPLICA_ID,
+        service_type: 'partition',
+        partition_id: PRIORITY_PARTITION,
+        node_id: 'node-a',
+        status: 'active',
+        address: ADDRESS,
+        raft_role: 'follower',
+        created_at: 1000,
+        updated_at: 2000,
+      },
+      {causeId: 'final-active-lifecycle-row'},
+    );
+
+    const activeRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, REPLICA_ID);
+    t.equal(
+      activeRow.status,
+      'active',
+      'newer authoritative lifecycle truth supersedes the local projection',
+    );
+    t.equal(
+      activeRow.raft_role,
+      'follower',
+      'the final lifecycle row retains the locally projected voter role',
+    );
+    t.end();
+  },
+);
+
 t.test('CL-035 seed: collapses a leader role to follower (matches durable value)', (t) => {
   const cache = makeCacheWithRow({raftRole: 'learner'});
   const ctx = makeSeedThis(cache, {trackedRole: 'leader'});

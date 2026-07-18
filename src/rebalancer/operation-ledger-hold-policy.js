@@ -110,12 +110,14 @@ const OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES = Object.freeze(
   new Set([OperationType.REPLACE, OperationType.REMOVE]),
 );
 
-// Named row: the quorum-spread CURE move type. Concentration is placement
-// skew, cured by a count-neutral REPLACE off the hottest node. REMOVE is
-// deliberately absent (the surplus-drain lever was measured non-binding —
-// the over-target drain lineage), and ADD cures under-replication, not skew.
+// Named row: the quorum-spread CURE move types. REPLACE performs the first
+// count-neutral move off a fully concentrated ledger. Once that leaves a 2-1
+// three-voter placement, ADD expands onto the missing third node without
+// paying a second exclusive ledger self-move; the canonical standalone-safe
+// REMOVE then drains the temporary surplus. REMOVE is deliberately absent:
+// it is the cleanup after the spread cure, never the concentration cure.
 const LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES = Object.freeze(
-  new Set([OperationType.REPLACE]),
+  new Set([OperationType.ADD, OperationType.REPLACE]),
 );
 
 // The declared relation: (hold x move class) -> engagement. Read column-wise
@@ -307,41 +309,82 @@ function isLedgerQuorumConcentratedPartition(systemTableCache, partitionId) {
 }
 
 /**
+ * The bounded post-completion extension of the ledger self-move hold. A
+ * recently completed REPLACE still represents a formation episode whose
+ * non-disruptive expand/drain work must settle before exact placement may
+ * start another exclusive REPLACE.
+ * @param {Object} params
+ * @param {string|null} params.partitionId
+ * @param {number} params.recentCompletedReplaceCount
+ * @return {boolean}
+ */
+function shouldLeaseRecentCompletedLedgerSelfMove({
+  partitionId,
+  recentCompletedReplaceCount,
+}) {
+  return (
+    isOperationLedgerPartition({partitionId}) &&
+    Number(recentCompletedReplaceCount) > 0
+  );
+}
+
+/**
  * The cure-move exemption of the QUORUM_SPREAD hold, fully resolved against
  * actuals: a cure-typed move of a concentrated ledger partition whose source
- * replica sits on the hottest node. Callers own their mechanism-side checks
- * (inventory provenance, replica actuals); this owns the relation side.
+ * REPLACE sources must sit on the hottest node. ADD targets must be the
+ * one of the feasible unoccupied nodes and may not expand a ledger already
+ * over target.
+ * Callers own their mechanism-side checks (inventory provenance, replica
+ * actuals); this owns the relation side.
  * @param {Object} params
  * @param {Object|null} params.systemTableCache
  * @param {*} params.moveType
  * @param {string|null} params.partitionId
  * @param {string|null} params.sourceReplicaNodeId
+ * @param {string|null} params.targetNodeId
+ * @param {Array<string>} params.placementEligibleNodeIds
  * @return {boolean}
  */
-function isEngagedLedgerQuorumSpreadCureReplace({
+function isEngagedLedgerQuorumSpreadCureMove({
   systemTableCache,
   moveType,
   partitionId,
+  placementEligibleNodeIds,
   sourceReplicaNodeId,
+  targetNodeId,
 }) {
+  const normalizedMoveType = normalizeOperationLedgerMoveType(moveType);
   if (
     !LEDGER_QUORUM_SPREAD_CURE_MOVE_TYPES.has(
-      normalizeOperationLedgerMoveType(moveType),
+      normalizedMoveType,
     ) ||
     !isOperationLedgerPartition({partitionId})
   ) {
     return false;
   }
   const evaluation =
-    evaluateOperationLedgerQuorumConcentration(systemTableCache);
+    evaluateOperationLedgerQuorumConcentration(systemTableCache, {
+      placementEligibleNodeIds,
+    });
   const concentratedPartition = evaluation.concentratedPartitions.find(
     (partition) => partition.partitionId === partitionId,
   );
-  return (
+  const engaged =
     evaluation.holdEngaged === true &&
     concentratedPartition?.spreadActionable === true &&
-    sourceReplicaNodeId === concentratedPartition.hottestNodeId &&
-    isConcentratedOperationLedgerPartition(evaluation, partitionId)
+    isConcentratedOperationLedgerPartition(evaluation, partitionId);
+  if (!engaged) {
+    return false;
+  }
+  if (normalizedMoveType === OperationType.REPLACE) {
+    return sourceReplicaNodeId === concentratedPartition.hottestNodeId;
+  }
+  return (
+    normalizedMoveType === OperationType.ADD &&
+    concentratedPartition.feasibleTargetNodeIds.includes(targetNodeId) &&
+    Number.isFinite(concentratedPartition.targetReplicaCount) &&
+    concentratedPartition.totalVoters <=
+      concentratedPartition.targetReplicaCount
   );
 }
 
@@ -381,10 +424,11 @@ export {
   classifyOperationLedgerHoldMove,
   classifyOperationLedgerSelfMoveLifecycleEvidence,
   isDisruptiveOperationLedgerSelfMove,
-  isEngagedLedgerQuorumSpreadCureReplace,
+  isEngagedLedgerQuorumSpreadCureMove,
   isLedgerQuorumConcentratedPartition,
   orderLedgerQuorumCureMovesFirst,
   resolveEngagedLedgerQuorumSpreadHold,
   resolveOperationLedgerHoldEngagement,
   resolveOperationLedgerSelfMoveHoldAction,
+  shouldLeaseRecentCompletedLedgerSelfMove,
 };

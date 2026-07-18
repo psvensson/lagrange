@@ -1,5 +1,7 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
-import {NodeJoiningOwnerConstruction} from './node-joining-owner-construction.js';
+import {
+  NodeJoiningOperationLedgerFormationReadiness,
+} from './node-joining-operation-ledger-formation-readiness.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
 } from './bootstrap-api-constants.js';
@@ -14,6 +16,11 @@ import {
   isMetadataPublicationReadySnapshot,
 } from './traffic-readiness-utils.js';
 import {PressureGovernor} from '../control-plane/pressure-governor.js';
+import {
+  getStartupAuthorityControlPlanePlacementEligibleNodeIds,
+} from '../control-plane/startup-authority-placement-eligibility.js';
+import {TABLES} from '../constants/index.js';
+import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 
 const {
   CDC_REESTABLISHMENT,
@@ -29,7 +36,8 @@ const {
   waitForMetadataPublicationReadiness,
 } = NODE_JOINING_SERVICE_SHARED;
 
-class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
+class NodeJoiningReadySignalReadiness
+  extends NodeJoiningOperationLedgerFormationReadiness {
   isLocalRouterBackpressured() {
     const messageRouter = this.messageRouter || null;
     if (!messageRouter || !this.nodeId) {
@@ -116,6 +124,77 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
     return this.resolveReadySignalMetadataPublicationReadinessSnapshot(
       snapshot,
     );
+  }
+  /**
+   * Return startup-authority nodes that are already safe targets for the
+   * priority placement lane, even though their public ready lease is still
+   * withheld. This mirrors the existing rebalancer eligibility conjuncts:
+   * owner-authored membership, ACTIVE registration row, connected/ready state,
+   * and live transport. It does not make ordinary placement eligible.
+   *
+   * @param {Object} systemTableCache
+   * @param {number} now
+   * @return {Array<string>}
+   * @private
+   */
+  getPriorityPlacementFormationCandidateNodeIds(systemTableCache, now) {
+    const startupAuthority =
+      this.getPriorityPlacementFormationStartupAuthority(now);
+    return this.getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
+      systemTableCache,
+      startupAuthority,
+    );
+  }
+  getPriorityPlacementFormationStartupAuthority(now) {
+    const readinessService =
+      this.rebalanceCoordinator?.controlPlaneReadinessService || null;
+    if (
+      !readinessService ||
+      typeof readinessService.getStartupAuthoritySnapshotSync !== 'function'
+    ) {
+      return null;
+    }
+    try {
+      return readinessService.getStartupAuthoritySnapshotSync(
+        this.nodeId,
+        now,
+      );
+    } catch {
+      return null;
+    }
+  }
+  getPriorityPlacementFormationCandidateNodeIdsFromAuthority(
+    systemTableCache,
+    startupAuthority,
+  ) {
+    return getStartupAuthorityControlPlanePlacementEligibleNodeIds({
+      systemTableCache,
+      startupAuthority,
+      messageRouter: this.messageRouter,
+      localNodeId: this.nodeId,
+      includeSelf: true,
+    });
+  }
+  getPriorityPlacementFormationPreReadyNodeIds(
+    systemTableCache,
+    candidateNodeIds,
+    now,
+  ) {
+    if (
+      !systemTableCache ||
+      typeof systemTableCache.filter !== 'function'
+    ) {
+      return [];
+    }
+    const candidateNodeIdSet = new Set(candidateNodeIds);
+    return systemTableCache
+      .filter(
+        TABLES.NODES,
+        (node) =>
+          candidateNodeIdSet.has(node?.node_id) &&
+          !isNodeRecordReady(node, {now}),
+      )
+      .map((node) => node.node_id);
   }
   resolveReadySignalMetadataPublicationReadinessSnapshot(snapshot) {
     if (snapshot && typeof snapshot === 'object') {
@@ -212,6 +291,7 @@ class NodeJoiningReadySignalReadiness extends NodeJoiningOwnerConstruction {
       });
       throw error;
     }
+    await this.awaitOperationLedgerFormationBarrier();
     const heartbeat = assertCritical(
       this.heartbeatService,
       JOINING_ERROR_MSG.CONTROL_PLANE_SERVICE_REQUIRED,

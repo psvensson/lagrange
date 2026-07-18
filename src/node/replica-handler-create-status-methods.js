@@ -206,9 +206,14 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      * already logged voter-ready — the CL-035 guard breach). Only seeds when
      * the in-memory role is a non-learner voter (the promotion is a
      * committed local decision in this single-phase raft model, so it cannot
-     * mark a still-catching-up learner as a voter). Superseded later by the
-     * durable write's CDC round-trip (newer updated_at wins in the cache
-     * merge).
+     * mark a still-catching-up learner as a voter).
+     *
+     * This owner-local projection deliberately preserves the existing row's
+     * durable causal version. Minting Date.now() here can out-version the
+     * concurrently emitted final ACTIVE lifecycle UPSERT: the cache then
+     * retains a locally projected SYNCING row even though storage and CDC
+     * both carry ACTIVE. The lifecycle UPSERT preserves raft_role from this
+     * cached projection and advances updated_at through its own owner.
      * @param {string} replicaId
      * @return {boolean} Whether the local raft_role seed was applied.
      * @private
@@ -244,7 +249,6 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         {
           service_id: replicaId,
           raft_role: normalizedRole,
-          updated_at: Date.now(),
         },
         {causeId: `local-voter-ready:${replicaId}`},
       );

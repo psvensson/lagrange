@@ -9,6 +9,9 @@ import {
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {
+  ReplicaOperationField,
+} from './replica-operation-constants.js';
+import {
   attachPriorityRecoveryOperationOwnerProgressContract,
 } from '../control-plane/priority-recovery-operation-owner-progress-contract.js';
 import {
@@ -554,6 +557,46 @@ function selectCoordinatorCreatedRemoteHandoffSnapshot(
     evidence.operation;
 }
 
+function mergeCoordinatorCreatedBootstrapMetadata(
+  authoritativeOperation,
+  fallbackOperation,
+) {
+  if (
+    !isOperationWorkflowOwnerPortRecord(authoritativeOperation) ||
+    !isOperationWorkflowOwnerPortRecord(fallbackOperation)
+  ) {
+    return authoritativeOperation;
+  }
+  const mergedOperation = {...authoritativeOperation};
+  for (const fieldName of [
+    ReplicaOperationField.REPLICA_IDS,
+    ReplicaOperationField.PEER_ADDRESSES,
+  ]) {
+    if (
+      (!Array.isArray(mergedOperation[fieldName]) ||
+        mergedOperation[fieldName].length === 0) &&
+      Array.isArray(fallbackOperation[fieldName]) &&
+      fallbackOperation[fieldName].length > 0
+    ) {
+      mergedOperation[fieldName] = [...fallbackOperation[fieldName]];
+    }
+  }
+  for (const fieldName of [
+    ReplicaOperationField.BOOTSTRAP_TABLE_METADATA,
+    ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA,
+  ]) {
+    if (
+      (!mergedOperation[fieldName] ||
+        typeof mergedOperation[fieldName] !== OPERATION_WORKFLOW_TYPE.OBJECT) &&
+      fallbackOperation[fieldName] &&
+      typeof fallbackOperation[fieldName] === OPERATION_WORKFLOW_TYPE.OBJECT
+    ) {
+      mergedOperation[fieldName] = {...fallbackOperation[fieldName]};
+    }
+  }
+  return mergedOperation;
+}
+
 async function readOperationWorkflowOwnerPortDurableOperation(
   owner,
   operationInput,
@@ -589,7 +632,10 @@ async function readOperationWorkflowOwnerPortDurableOperation(
       operationId,
       {requireOwnerRpcRead: false},
     );
-    return operation ||
+    return mergeCoordinatorCreatedBootstrapMetadata(
+      operation,
+      context.fallbackOperation,
+    ) ||
       owner.cloneOperationSnapshot?.(context.fallbackOperation) ||
       OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
   }

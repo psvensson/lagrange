@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 5
+**Attempts:** 7
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -21,31 +21,33 @@
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json
-- Selected theory: theory-20260718-priority-placement-ready-quiescence-handoff
-- Next move: continue supervised step for formation-priority-spread-authoritative-publication-closure-main
+- Selected theory: theory-20260718-a-pairwise-readiness-owner-tracker-transfer (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for formation-priority-spread-authoritative-publication-closure-main
 
 ## Continuation
 - Status: allowed
-- Next action: continue formation-priority-spread-authoritative-publication-closure-main with modelRef or modelNotApplicable evidence
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 9
-- Change bytes: 51897
+- Changed files: 14
+- Change bytes: 77234
 - Owner areas: src/control-plane, src/rebalancer, test/cache, test/cdc, test/convergence, test/rebalancer
 - Categories: runtime, test
+- Action: split by owner area before the next attempt (14 files)
 - Action: land or separate 6 owner areas: src/control-plane, src/rebalancer, test/cache, test/cdc, test/convergence, test/rebalancer
 - Split plan:
-  - src/rebalancer: 3 file(s)
+  - src/rebalancer: 7 file(s)
   - src/control-plane: 2 file(s)
+  - test/rebalancer: 2 file(s)
   - test/cache: 1 file(s)
   - test/cdc: 1 file(s)
   - test/convergence: 1 file(s)
-  - test/rebalancer: 1 file(s)
 - Signal: broad-source-scope severity=medium
+- Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **formation-priority-spread-authoritative-publication-closure-main** [open] rung 3, attempts 5, metric 1 -> 1
+- **formation-priority-spread-authoritative-publication-closure-main** [parked {exhausted}] rung 5, attempts 7, metric 1 -> 1 — ladder exhausted without metric movement
 
 ## Findings
 - **formation-priority-spread-authoritative-publication-closure-main**: Independent verification rejected attempt 1: a caller equality override could bypass canonical full-row comparison for a valid complete-table receipt, leave durable cache divergence untouched, and still publish the authoritative observation watermark. [subagent:formation_barrier_verifier]
@@ -70,15 +72,20 @@
 - **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
 - **formation-priority-spread-authoritative-publication-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
 - **formation-priority-spread-authoritative-publication-closure-main**: Fresh post-checkpoint run localizes the four final blockers to ordinary non-priority REPLACEs for module_dependency_locks-p1, service_definitions-p1, service_timers-p1, and config-p1. Priority topology was already ready with zero gap. The background release tracker started its 60000ms clock at 01:53:50.498 and created ordinary work at 01:54:51.919, leaving the equally long but stricter schema-admission candidate no guaranteed observation turn. This is a competing-clock ownership defect, not a priority spread or stale-watermark regression. [data/examples/service-data-affinity-demo/node-0.log]
+- **formation-priority-spread-authoritative-publication-closure-main**: DT red-on-revert proves the production scheduler's shared priority-clear fence remains closed at the unchanged 60000ms admission boundary and releases only after the existing 10000ms observation handoff; focused execution is green with the fix, red on scheduler-owner revert, and green after restore. [dt:solve/changes/dt-prove/unified-rebalancer.test.js-2026-07-18T02-07-47-214Z.json]
+- **formation-priority-spread-authoritative-publication-closure-main**: Existing formation-schedule feasibility evidence supports join-time priority spread without changing the 180000ms budget or 60000ms schema window; the new live competing-clock residual is outside that narrow arithmetic model and is addressed at the background-release owner. [model:models/formation-schedule-feasibility/abstract-protocol.md]
+- **formation-priority-spread-authoritative-publication-closure-main**: Independent verification rejected the first competing-clock patch because a production readiness-owner rebind abandoned the WeakMap-keyed fence and because stabilizing rechecks restarted a full 70000ms delay instead of preserving the already-observed maturity deadline. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-publication-closure-main**: Artifact sha256:52d362d7ddecc5719b382231f20b9c732087874157417da4879cc8ee9f9e7461 fails closedness under converging readiness-owner transfers: A-to-B followed by independently active C-to-B splits the prior alias group, allowing A to release while B remains fenced; its requested 1ms recheck is also clamped to the scheduler's actual 1000ms floor. [subagent:formation_barrier_verifier]
 
 ## Theories
 - **theory-20260718-formation-quiescence-handoff-order** [active] system, mechanism public_active_and_background_release_are_independent_of_formation_quiescence_handoff, owner join readiness publication owner plus background priority-spread release owner, modelGate npm run model:contracts
 - **theory-20260718-complete-authoritative-cache-row-exact-replace** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer observation, mechanism complete_authoritative_cache_row_exact_replace, owner ControlPlaneSystemTableGateway_and_SystemTableCache, boundary complete_authoritative_observation_to_observed_cache, modelGate npm run model:contracts
 - **theory-20260718-startup-authority-readiness-dimension-inversion** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer ownership, mechanism startup_authority_readiness_dimension_inversion, owner UnifiedRebalancerReplicaState, boundary startup_authority_priority_placement_eligibility_to_public_ready_lease_policy, modelGate npm run model:contracts
-- **theory-20260718-priority-placement-ready-quiescence-handoff** [active] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer ownership, mechanism priority_placement_ready_quiescence_handoff, owner join readiness publication owner and background priority-spread release owner, boundary membership-written to public ACTIVE to ordinary placement release, modelGate npm run model:contracts
+- **theory-20260718-priority-placement-ready-quiescence-handoff** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer ownership, mechanism priority_placement_ready_quiescence_handoff, owner join readiness publication owner and background priority-spread release owner, boundary membership-written to public ACTIVE to ordinary placement release, modelGate npm run model:contracts
+- **theory-20260718-a-pairwise-readiness-owner-tracker-transfer** [falsified] frontier, frontier formation-priority-spread-authoritative-publication-closure-main, layer ownership, mechanism A pairwise readiness-owner tracker transfer is not transitive when two independently active owner groups converge, and sub-second recheck decisions are later clamped by the scheduler; a canonical unioned release scope with conservative tracker merging and floor-aware timing should keep every alias fenced through the full ordinary-work handoff., modelGate npm run model:contracts
 
 ## Selected Theories
-- **formation-priority-spread-authoritative-publication-closure-main**: theory-20260718-priority-placement-ready-quiescence-handoff
+- **formation-priority-spread-authoritative-publication-closure-main**: theory-20260718-a-pairwise-readiness-owner-tracker-transfer
 
 ## Theory Results
 - **theory-20260718-complete-authoritative-cache-row-exact-replace**: supported (scenario=failed, theory=supported, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-17T23-34-41-192Z.report.json]
@@ -88,6 +95,8 @@
 - **theory-20260718-startup-authority-readiness-dimension-inversion**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
 - **theory-20260718-startup-authority-readiness-dimension-inversion**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-35-47-131Z.report.json]
 - **theory-20260718-startup-authority-readiness-dimension-inversion**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
+- **theory-20260718-priority-placement-ready-quiescence-handoff**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
+- **theory-20260718-a-pairwise-readiness-owner-tracker-transfer**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -97,3 +106,5 @@
 | 2026-07-18T01:36:11.487Z | formation-priority-spread-authoritative-publication-closure-main | local-fix | 1 -> 1 | flat | no_previous | theory-20260718-startup-authority-readiness-dimension-inversion | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-3.diff |
 | 2026-07-18T01:45:04.611Z | formation-priority-spread-authoritative-publication-closure-main | local-fix | 1 -> 1 | flat | no_previous | theory-20260718-startup-authority-readiness-dimension-inversion | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-4.diff |
 | 2026-07-18T01:48:29.688Z | formation-priority-spread-authoritative-publication-closure-main | widen-scope | 1 -> 1 | flat | no_previous | theory-20260718-startup-authority-readiness-dimension-inversion | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-5.diff |
+| 2026-07-18T02:22:57.058Z | formation-priority-spread-authoritative-publication-closure-main | model | 1 -> 1 | flat | same | theory-20260718-priority-placement-ready-quiescence-handoff | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-6.diff |
+| 2026-07-18T02:33:20.995Z | formation-priority-spread-authoritative-publication-closure-main | change-approach | 1 -> 1 | flat | same | theory-20260718-a-pairwise-readiness-owner-tracker-transfer | diff:solve/changes/formation-priority-spread-authoritative-publication-closure/attempt-7.diff |

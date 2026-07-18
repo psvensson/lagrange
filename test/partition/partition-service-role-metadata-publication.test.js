@@ -306,7 +306,13 @@ test('PartitionService - retries raft role persistence after cache visibility fa
         tableName === SYSTEM_TABLE_NAME.SERVICES,
       updateSystemTableRow: async (tableName, whereClause, data, options) => {
         updates.push({tableName, whereClause, data, options});
-        if (updates.length === 1) {
+        const roleUpdateCount = updates.filter(
+          (update) => update.tableName === SYSTEM_TABLE_NAME.SERVICES,
+        ).length;
+        if (
+          tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          roleUpdateCount === 1
+        ) {
           throw new Error('Cache update not observed for services:replica-1 within 1000ms');
         }
         return {success: true};
@@ -344,8 +350,11 @@ test('PartitionService - retries raft role persistence after cache visibility fa
     await partition.initialize();
     await new Promise((resolve) => setImmediate(resolve));
 
+    let roleUpdates = updates.filter(
+      (update) => update.tableName === SYSTEM_TABLE_NAME.SERVICES,
+    );
     t.same(
-      updates[0]?.options?.expectedCacheFields,
+      roleUpdates[0]?.options?.expectedCacheFields,
       {
         raft_role: RaftRole.FOLLOWER,
       },
@@ -354,13 +363,16 @@ test('PartitionService - retries raft role persistence after cache visibility fa
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
 
+    roleUpdates = updates.filter(
+      (update) => update.tableName === SYSTEM_TABLE_NAME.SERVICES,
+    );
     t.equal(
-      updates.length,
+      roleUpdates.length,
       2,
       'cache visibility false negatives should trigger a role persistence retry',
     );
     t.equal(
-      updates[1]?.data?.raft_role,
+      roleUpdates[1]?.data?.raft_role,
       RaftRole.FOLLOWER,
       'retry should target the same raft role',
     );
@@ -785,6 +797,15 @@ test(
 test('PartitionService - persists leader node updates to partitions table', async (t) => {
   const updates = [];
   const mockCdcIntegrationService = {
+    executeAuthoritativeSystemTableRead: async (tableName) => ({
+      success: true,
+      rows: tableName === SYSTEM_TABLE_NAME.PARTITIONS ?
+        [{
+          [COLUMN.PARTITION_ID]: 'test-partition-23',
+          [COLUMN.LEADER_NODE_ID]: 'previous-node',
+        }] :
+        [],
+    }),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({tableName, whereClause, data, options});
       return {success: true};
@@ -797,6 +818,11 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     [COLUMN.PARTITION_ID]: partitionsPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
     [COLUMN.LEADER_NODE_ID]: 'seed-node',
+  });
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+    [COLUMN.PARTITION_ID]: 'test-partition-23',
+    [COLUMN.TABLE_ID]: 'services',
+    [COLUMN.LEADER_NODE_ID]: 'previous-node',
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
     [COLUMN.SERVICE_ID]: 'partitions-leader',
@@ -816,11 +842,11 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     replicaIds: ['replica-1'],
     nodeId: 'seed-node',
     dbPath: ':memory:',
+    systemTableCache,
     cdcIntegrationService: mockCdcIntegrationService,
   });
 
   await partition.initialize();
-  partition.setSystemTableCache(systemTableCache);
   partition.setCdcIntegrationService(mockCdcIntegrationService);
 
   await new Promise((resolve) => setImmediate(resolve));
@@ -857,6 +883,161 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     leaderUpdate?.options?.allowPressureDefer,
     true,
     'non-control-plane partition leader publication should remain pressure deferable',
+  );
+
+  await partition.shutdown();
+});
+
+test('PartitionService - initial leader publication routes while partitions ' +
+  'cache ownership is not ready', async (t) => {
+  const updates = [];
+  const authoritativeReads = [];
+  const mockCdcIntegrationService = {
+    async executeAuthoritativeSystemTableRead(
+      tableName,
+      _sql,
+      params,
+    ) {
+      authoritativeReads.push({tableName, params});
+      return {
+        success: true,
+        rows: [{
+          [COLUMN.PARTITION_ID]: 'fresh-user-partition',
+          [COLUMN.LEADER_NODE_ID]: null,
+          [COLUMN.UPDATED_AT]: 77,
+        }],
+      };
+    },
+    async updateSystemTableRow(tableName, whereClause, data, options) {
+      updates.push({tableName, whereClause, data, options});
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS,
+    CDCOperation.INSERT,
+    {
+      [COLUMN.PARTITION_ID]: 'fresh-user-partition',
+      [COLUMN.TABLE_ID]: 'fresh-user-table',
+      [COLUMN.LEADER_NODE_ID]: null,
+      [COLUMN.UPDATED_AT]: 77,
+    },
+  );
+  const partition = new PartitionService({
+    partitionId: 'fresh-user-partition',
+    tableId: 'fresh-user-table',
+    tableName: 'fresh_user_table',
+    replicaId: 'fresh-user-partition-r1',
+    replicaIds: ['fresh-user-partition-r1'],
+    nodeId: 'fresh-node',
+    dbPath: ':memory:',
+    systemTableCache,
+    cdcIntegrationService: mockCdcIntegrationService,
+  });
+
+  partition.isLeader = true;
+  partition.isPartitionsLeaderAvailable = () => false;
+  partition.leaderNodeMutationHelper.pendingValue = 'fresh-node';
+
+  const result = await partition.flushLeaderNodeUpdate();
+  const leaderUpdate = updates.find(
+    (update) => update.tableName === SYSTEM_TABLE_NAME.PARTITIONS,
+  );
+
+  t.equal(authoritativeReads.length, 1,
+    'the owner should acquire the authoritative CAS row through the gateway');
+  t.equal(result.reason, 'applied',
+    'gateway-owned routing should apply the initial leader publication');
+  t.same(leaderUpdate?.whereClause, {
+    [COLUMN.PARTITION_ID]: 'fresh-user-partition',
+    [COLUMN.UPDATED_AT]: 77,
+  });
+  t.equal(leaderUpdate?.data?.[COLUMN.LEADER_NODE_ID], 'fresh-node');
+  t.equal(leaderUpdate?.options?.deliveryPriority, 'critical',
+    'an initially empty canonical leader is bootstrap correctness work');
+  t.equal(leaderUpdate?.options?.workClass, PRESSURE_WORK_CLASS.CRITICAL);
+  t.equal(leaderUpdate?.options?.allowPressureDefer, false,
+    'initial ownership publication must not defer behind recovery it unblocks');
+
+  await partition.shutdown();
+});
+
+test('PartitionService - post-handoff leader publication reads the remote ' +
+  'authoritative owner before replacing a stale canonical leader', async (t) => {
+  const partitionId =
+    INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
+  const readCalls = [];
+  const updates = [];
+  const mockCdcIntegrationService = {
+    async executeAuthoritativeSystemTableRead() {
+      throw new Error('gateway read seam should own this test');
+    },
+    async updateSystemTableRow(tableName, whereClause, data, options) {
+      updates.push({tableName, whereClause, data, options});
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  systemTableCache.applySystemTableChange(
+    TABLES.PARTITIONS,
+    CDCOperation.INSERT,
+    {
+      [COLUMN.PARTITION_ID]: partitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
+      [COLUMN.UPDATED_AT]: 91,
+    },
+  );
+  const partition = new PartitionService({
+    partitionId,
+    tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    replicaId: 'replacement-r1',
+    replicaIds: ['replacement-r1'],
+    nodeId: 'replacement-node',
+    dbPath: ':memory:',
+    systemTableCache,
+    cdcIntegrationService: mockCdcIntegrationService,
+  });
+  partition.controlPlaneSystemTableGateway.readAuthoritativeRows =
+    async (tableName, sql, params, options) => {
+      readCalls.push({tableName, sql, params, options});
+      return {
+        success: true,
+        rows: [{
+          [COLUMN.PARTITION_ID]: partitionId,
+          [COLUMN.LEADER_NODE_ID]: 'seed-node',
+          [COLUMN.UPDATED_AT]: 91,
+        }],
+      };
+    };
+  partition.isLeader = true;
+  partition.leaderNodeMutationHelper.pendingValue = 'replacement-node';
+
+  const result = await partition.flushLeaderNodeUpdate();
+  const leaderUpdate = updates.find(
+    (update) => update.tableName === SYSTEM_TABLE_NAME.PARTITIONS,
+  );
+
+  t.equal(result.reason, 'applied');
+  t.equal(readCalls.length, 1);
+  t.equal(readCalls[0]?.options?.preferOwnerRpcRead, true,
+    'a remote replacement must confirm the CAS row through its owner');
+  t.equal(readCalls[0]?.options?.deliveryPriority, 'critical');
+  t.equal(readCalls[0]?.options?.workClass, PRESSURE_WORK_CLASS.CRITICAL);
+  t.equal(readCalls[0]?.options?.allowPressureDegrade, false,
+    'leader publication confirmation must not degrade into a non-read');
+  t.equal(readCalls[0]?.options?.allowPressureDefer, false,
+    'priority leader publication confirmation must survive pressure');
+  t.same(leaderUpdate?.whereClause, {
+    [COLUMN.PARTITION_ID]: partitionId,
+    [COLUMN.LEADER_NODE_ID]: 'seed-node',
+    [COLUMN.UPDATED_AT]: 91,
+  });
+  t.equal(
+    leaderUpdate?.data?.[COLUMN.LEADER_NODE_ID],
+    'replacement-node',
   );
 
   await partition.shutdown();

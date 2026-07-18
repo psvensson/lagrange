@@ -483,6 +483,63 @@ test('ControlPlaneKernelIngress - READY heartbeats prefer remote ingress before 
     );
   });
 
+test('ControlPlaneKernelIngress - CONNECTED formation heartbeats prefer remote ' +
+  'ingress while lifecycle publication remains local-first', async (t) => {
+  const ingress = new ControlPlaneKernelIngress({
+    nodeId: 'joining-node-connected-heartbeat-1',
+    getBootstrapResponse: () => ({
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          'seed-node-1/message-group/mg-1-r1',
+        ],
+      },
+    }),
+    getMessageRouter: () => ({
+      getConnectionState() {
+        return 'connected';
+      },
+    }),
+    getMessageGroupServices: () => new Map([
+      ['mg-1-r2', {
+        groupId: 'mg-1',
+        unifiedAddress:
+          'joining-node-connected-heartbeat-1/message-group/mg-1-r2',
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => true,
+      }],
+    ]),
+  });
+
+  t.same(
+    ingress.resolveNodeStateUpdateTargetCandidates({
+      state: 'connected',
+      heartbeatAt: Date.now(),
+      allowBootstrapHints: true,
+      localTargetMode: 'any_replica',
+    }),
+    [
+      'seed-node-1/message-group/mg-1-r1',
+      'joining-node-connected-heartbeat-1/message-group/mg-1-r2',
+    ],
+    'pre-ready liveness should reach remote authoritative ingress before a local follower relay',
+  );
+  t.same(
+    ingress.resolveNodeStateUpdateTargetCandidates({
+      state: 'connected',
+      allowBootstrapHints: true,
+      localTargetMode: 'any_replica',
+    }),
+    [
+      'joining-node-connected-heartbeat-1/message-group/mg-1-r2',
+      'seed-node-1/message-group/mg-1-r1',
+    ],
+    'non-heartbeat lifecycle publication should retain local-first routing',
+  );
+});
+
 test('ControlPlaneKernelIngress - READY heartbeats can keep optimistic remote ingress ahead of local fallback',
   async (t) => {
     const ingress = new ControlPlaneKernelIngress({

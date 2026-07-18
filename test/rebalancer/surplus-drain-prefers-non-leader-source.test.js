@@ -212,32 +212,59 @@ test('surplus drain removed-replica SET is unchanged by the leader bias ' +
   t.end();
 });
 
-test('at-target spread preserves an explicit follower when replicas share ' +
-  'the partition leader node', (t) => {
+test('serial priority spread expands without selecting a leader source, then ' +
+  'drains an explicit follower', (t) => {
   setupConfig();
   const {currentReplicas: replicas, rebalancer} =
     buildColocatedPriorityRebalancer();
   rebalancer.initialize();
   rebalancer.setLeader(true);
 
-  const moves = rebalancer.calculateMoves(replicas, {
+  const targetState = {
     targetReplicaCount: 3,
     targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
     availableNodeCount: 3,
-  });
+  };
+  const expandMoves = rebalancer.calculateMoves(replicas, targetState);
+  const postExpandReplicas = [
+    ...replicas,
+    {
+      service_id: `${COLOCATED_PARTITION_ID}-r4`,
+      replica_id: `${COLOCATED_PARTITION_ID}-r4`,
+      partition_id: COLOCATED_PARTITION_ID,
+      node_id: 'node-joiner-a',
+      service_type: 'partition',
+      status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
+    },
+  ];
+  const drainMoves = rebalancer.calculateMoves(
+    postExpandReplicas,
+    targetState,
+  );
   rebalancer.shutdown();
   teardownConfig();
 
-  const replaceMoves = moves.filter((move) => move.type === MoveType.REPLACE);
-  t.equal(replaceMoves.length, 1,
-    'critical spread serializes the first count-neutral relocation');
+  const addMoves = expandMoves.filter((move) => move.type === MoveType.ADD);
+  t.equal(addMoves.length, 1,
+    'critical spread starts with one serial expansion');
   t.equal(
-    replaceMoves[0].replicaId,
+    expandMoves.some((move) => move.type === MoveType.REPLACE),
+    false,
+    'the expansion phase does not choose a leadership-bearing source',
+  );
+  const removeMoves = drainMoves.filter(
+    (move) => move.type === MoveType.REMOVE,
+  );
+  t.equal(removeMoves.length, 1,
+    'the target-plus-one shape drains one redundant voter');
+  t.equal(
+    removeMoves[0].replicaId,
     COLOCATED_FOLLOWER_REPLICA_ID,
-    'the explicit follower is relocated before the co-located leader',
+    'the explicit follower drains before the co-located leader',
   );
   t.not(
-    replaceMoves[0].replicaId,
+    removeMoves[0].replicaId,
     COLOCATED_LEADER_REPLICA_ID,
     'partition leader-node fallback cannot overwrite explicit follower role',
   );
@@ -257,7 +284,15 @@ test('at-target spread retains node-level leadership fallback when the ' +
   rebalancer.initialize();
   rebalancer.setLeader(true);
 
-  const moves = rebalancer.calculateMoves(replicas, {
+  const moves = rebalancer.calculateMoves([...replicas, {
+    service_id: `${COLOCATED_PARTITION_ID}-r4`,
+    replica_id: `${COLOCATED_PARTITION_ID}-r4`,
+    partition_id: COLOCATED_PARTITION_ID,
+    node_id: 'node-joiner-a',
+    service_type: 'partition',
+    status: ReplicaStatus.ACTIVE,
+    raft_role: 'follower',
+  }], {
     targetReplicaCount: 3,
     targetNodes: [COLOCATED_NODE_ID, 'node-joiner-a', 'node-joiner-b'],
     availableNodeCount: 3,
@@ -265,9 +300,9 @@ test('at-target spread retains node-level leadership fallback when the ' +
   rebalancer.shutdown();
   teardownConfig();
 
-  const replaceMove = moves.find((move) => move.type === MoveType.REPLACE);
+  const removeMove = moves.find((move) => move.type === MoveType.REMOVE);
   t.equal(
-    replaceMove.replicaId,
+    removeMove.replicaId,
     COLOCATED_FOLLOWER_REPLICA_ID,
     'a missing-role row on leader_node_id stays conservative while an ' +
       'explicit follower remains selectable',

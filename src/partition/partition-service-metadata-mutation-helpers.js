@@ -44,10 +44,7 @@ async function readAuthoritativeRoleRow(owner) {
     SYSTEM_TABLE_NAME.SERVICES,
     PARTITION_SERVICE_LITERAL.SERVICES_ROW_POINT_READ_SQL,
     [owner.replicaId],
-    {
-      routingReadinessDimension:
-        owner.getMetadataPublicationReadinessDimension(),
-    },
+    buildRoleMutationReadOptions(owner),
   );
   if (readResult?.success !== true) {
     return {supported: true, available: false, row: null};
@@ -73,10 +70,7 @@ async function readAuthoritativeLeaderRow(owner) {
     SYSTEM_TABLE_NAME.PARTITIONS,
     PARTITION_SERVICE_LITERAL.PARTITIONS_ROW_POINT_READ_SQL,
     [owner.partitionId],
-    {
-      routingReadinessDimension:
-        owner.getMetadataPublicationReadinessDimension(),
-    },
+    buildLeaderNodeMutationReadOptions(owner),
   );
   if (readResult?.success !== true) {
     return {supported: true, available: false, row: null};
@@ -85,6 +79,72 @@ async function readAuthoritativeLeaderRow(owner) {
     readResult.rows[0] || null :
     null;
   return {supported: true, available: true, row};
+}
+
+function buildMetadataMutationReadOptions(owner, deliveryOptions = {}) {
+  return {
+    ...deliveryOptions,
+    // A replacement leader commonly runs on a node that does not host the
+    // services/partitions system-table group. Owner-local-only confirmation
+    // can therefore retry forever without ever reaching the CAS write.
+    preferOwnerRpcRead: true,
+    allowPressureDegrade: false,
+    routingReadinessDimension:
+      owner.getMetadataPublicationReadinessDimension(),
+  };
+}
+
+function buildRoleMutationDeliveryOptions(owner) {
+  const priorityPartition = classifySystemPartition({
+    partitionId: owner.partitionId,
+  }).priorityControlPlane;
+  return {
+    deliveryPriority: priorityPartition ?
+      PARTITION_SERVICE_LITERAL.CRITICAL :
+      PARTITION_SERVICE_LITERAL.BACKGROUND,
+    workClass: priorityPartition ?
+      PRESSURE_WORK_CLASS.CRITICAL :
+      PRESSURE_WORK_CLASS.BACKGROUND,
+    allowPressureDefer: !priorityPartition,
+    routingReadinessDimension:
+      owner.getMetadataPublicationReadinessDimension(),
+  };
+}
+
+function buildRoleMutationReadOptions(owner) {
+  return buildMetadataMutationReadOptions(
+    owner,
+    buildRoleMutationDeliveryOptions(owner),
+  );
+}
+
+function buildLeaderNodeMutationReadOptions(owner) {
+  return buildMetadataMutationReadOptions(owner, {
+    deliveryPriority: owner.getMetadataPublicationDeliveryPriority(),
+    workClass: owner.getMetadataPublicationWorkClass(),
+    allowPressureDefer: owner.shouldMetadataPublicationAllowPressureDefer(),
+  });
+}
+
+function buildLeaderNodeMutationDeliveryOptions(owner, context = {}) {
+  const observedRow = context.authoritativeRow || context.cachedRow;
+  const observedLeaderNodeId = observedRow?.[COLUMN.LEADER_NODE_ID];
+  const initialLeaderPublication =
+    typeof observedLeaderNodeId !== 'string' ||
+    observedLeaderNodeId.length === 0;
+  return {
+    deliveryPriority: initialLeaderPublication ?
+      PARTITION_SERVICE_LITERAL.CRITICAL :
+      owner.getMetadataPublicationDeliveryPriority(),
+    workClass: initialLeaderPublication ?
+      PRESSURE_WORK_CLASS.CRITICAL :
+      owner.getMetadataPublicationWorkClass(),
+    allowPressureDefer: initialLeaderPublication ?
+      false :
+      owner.shouldMetadataPublicationAllowPressureDefer(),
+    routingReadinessDimension:
+      owner.getMetadataPublicationReadinessDimension(),
+  };
 }
 
 function createRoleMutationHelper(owner) {
@@ -110,22 +170,7 @@ function createRoleMutationHelper(owner) {
       raft_role: role,
       updated_at: updatedAt,
     }),
-    buildUpdateOptions: () => {
-      const priorityPartition = classifySystemPartition({
-        partitionId: owner.partitionId,
-      }).priorityControlPlane;
-      return {
-        deliveryPriority: priorityPartition ?
-          PARTITION_SERVICE_LITERAL.CRITICAL :
-          PARTITION_SERVICE_LITERAL.BACKGROUND,
-        workClass: priorityPartition ?
-          PRESSURE_WORK_CLASS.CRITICAL :
-          PRESSURE_WORK_CLASS.BACKGROUND,
-        allowPressureDefer: !priorityPartition,
-        routingReadinessDimension:
-          owner.getMetadataPublicationReadinessDimension(),
-      };
-    },
+    buildUpdateOptions: () => buildRoleMutationDeliveryOptions(owner),
     buildExpectedCacheFields: (role) => ({raft_role: role}),
     prepareFlush: () => ({
       skip: false,
@@ -200,13 +245,8 @@ function createLeaderNodeMutationHelper(owner) {
       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
       [COLUMN.UPDATED_AT]: updatedAt,
     }),
-    buildUpdateOptions: () => ({
-      deliveryPriority: owner.getMetadataPublicationDeliveryPriority(),
-      workClass: owner.getMetadataPublicationWorkClass(),
-      allowPressureDefer: owner.shouldMetadataPublicationAllowPressureDefer(),
-      routingReadinessDimension:
-        owner.getMetadataPublicationReadinessDimension(),
-    }),
+    buildUpdateOptions: (_leaderNodeId, _updateData, context) =>
+      buildLeaderNodeMutationDeliveryOptions(owner, context),
     buildExpectedCacheFields: (leaderNodeId) => ({
       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
     }),
@@ -226,9 +266,14 @@ function createLeaderNodeMutationHelper(owner) {
         PARTITION_SERVICE_LITERAL.NOT_OWNER :
         PARTITION_SERVICE_LITERAL.READY,
     }),
-    isWriteReady: () => owner.isPartitionsLeaderAvailable(),
+    // The canonical gateway owns route readiness and returns a typed retryable
+    // outcome. Pre-gating here on the same missing partitions leader prevents
+    // a newly elected user partition from publishing the ownership needed to
+    // finish its own bootstrap.
+    isWriteReady: () => true,
     systemTableCache: owner.systemTableCache,
     cdcIntegrationService: owner.cdcIntegrationService,
+    controlPlaneSystemTableGateway: owner.controlPlaneSystemTableGateway,
     refreshObservedRow: () =>
       owner.refreshMetadataPublicationGuardRow(
         SYSTEM_TABLE_NAME.PARTITIONS,

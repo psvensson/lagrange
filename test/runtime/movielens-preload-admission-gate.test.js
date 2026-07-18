@@ -27,6 +27,27 @@ function buildControlSnapshot(overrides = {}) {
     },
     leaders: {'ratings-p1': 'node-a'},
     controlPlaneDiagnostics: {
+      currentPriorityPlacementObservation: {
+        state: 'available',
+        source: 'control_snapshot_captured_rows',
+        capturedAt: NOW_MS,
+        satisfied: true,
+        priorityPartitionSummary: {
+          satisfied: true,
+          blockedPartitionCount: 0,
+          largestSpreadGap: 0,
+          totalSpreadGap: 0,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+        },
+        leaderCoverage: {
+          satisfied: true,
+          requiredPartitionCount: 6,
+          observedLeaderPartitionCount: 6,
+          missingLeaderPartitionCount: 0,
+          missingLeaderPartitionIds: [],
+        },
+      },
       priorityRecoveryObservation: {
         priorityPartitionSummary: {
           satisfied: true,
@@ -44,6 +65,30 @@ function buildControlSnapshot(overrides = {}) {
 
 function buildOpenPrioritySpreadDiagnostics(totalSpreadGap = 2) {
   return {
+    currentPriorityPlacementObservation: {
+      state: 'available',
+      source: 'control_snapshot_captured_rows',
+      capturedAt: NOW_MS,
+      satisfied: false,
+      priorityPartitionSummary: {
+        satisfied: false,
+        blockedPartitionCount: 1,
+        largestSpreadGap: totalSpreadGap,
+        totalSpreadGap,
+        missingPartitionIds: ['replica_operations-p1'],
+        blockedPartitions: [{
+          partitionId: 'replica_operations-p1',
+          spreadGap: totalSpreadGap,
+        }],
+      },
+      leaderCoverage: {
+        satisfied: true,
+        requiredPartitionCount: 6,
+        observedLeaderPartitionCount: 6,
+        missingLeaderPartitionCount: 0,
+        missingLeaderPartitionIds: [],
+      },
+    },
     priorityRecoveryObservation: {
       priorityPartitionSummary: {
         satisfied: false,
@@ -108,6 +153,54 @@ test('pre-schema admission requires two quiet snapshots without ratings SQL',
     ], 'schema admission only observes the authoritative snapshot lane');
     t.notMatch(JSON.stringify(calls), /ratings/,
       'schema admission cannot depend on the not-yet-created table');
+    t.end();
+  });
+
+test('pre-schema admission requires current priority leader coverage',
+  async (t) => {
+    const snapshot = buildControlSnapshot();
+    const currentObservation =
+      snapshot.controlPlaneDiagnostics.currentPriorityPlacementObservation;
+    currentObservation.satisfied = false;
+    currentObservation.leaderCoverage = {
+      satisfied: false,
+      requiredPartitionCount: 6,
+      observedLeaderPartitionCount: 5,
+      missingLeaderPartitionCount: 1,
+      missingLeaderPartitionIds: ['schema_operations-p1'],
+    };
+    const error = await t.rejects(
+      waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+        async () => ({rows: [snapshot]}),
+        1,
+      )),
+      /critical_system_spread_gap=1/,
+    );
+    t.equal(error.schemaAdmission.admitted, false);
+    t.same(
+      error.schemaAdmission.snapshot.criticalSystemTopology
+        .missingLeaderPartitionIds,
+      ['schema_operations-p1'],
+      'a sticky closed spread summary cannot hide missing current leadership',
+    );
+    t.end();
+  });
+
+test('sticky priority recovery closure cannot replace the current witness',
+  async (t) => {
+    const snapshot = buildControlSnapshot();
+    delete snapshot.controlPlaneDiagnostics.currentPriorityPlacementObservation;
+    const error = await t.rejects(
+      waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+        async () => ({rows: [snapshot]}),
+        1,
+      )),
+      /critical_system_snapshot_reachability_unavailable=1/,
+    );
+    t.equal(
+      error.schemaAdmission.snapshot.state,
+      'critical_spread_observation_unavailable',
+    );
     t.end();
   });
 

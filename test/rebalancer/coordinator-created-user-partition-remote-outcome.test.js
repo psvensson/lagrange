@@ -260,6 +260,83 @@ test(
 );
 
 test(
+  'user-partition ADD target ACTIVE outcome wakes the remote source owner',
+  async (t) => {
+    const operation = buildUserPartitionReplaceOperation({
+      type: OperationType.ADD,
+    });
+    const harness = createTargetOutcomeHarness(operation);
+    try {
+      harness.emitter.emitOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+        OPERATION_ID,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId: TARGET_REPLICA_ID, partitionId: PARTITION_ID},
+      );
+      await settleOutcomeReconcile();
+
+      t.equal(
+        remoteHandoffDeliveries(harness.deliveries).length,
+        1,
+        'target completion should wake the canonical source owner once',
+      );
+      t.equal(
+        harness.deliveries[0]?.target,
+        `${SOURCE_NODE_ID}/service/replica-dispatch`,
+        'the ADD wake should use the source owner replica-dispatch ingress',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.SYNCING,
+        'the target observer must not mutate source-owned ADD workflow state',
+      );
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'user-partition ADD target ACTIVE outcome wakes the owner before its ' +
+    'durable row advances from CREATING',
+  async (t) => {
+    const operation = buildUserPartitionReplaceOperation({
+      type: OperationType.ADD,
+      status: ReplicaStatus.CREATING,
+      workflowStep: WORKFLOW_STEP.CREATING,
+    });
+    const harness = createTargetOutcomeHarness(operation);
+    try {
+      harness.emitter.emitOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+        OPERATION_ID,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId: TARGET_REPLICA_ID, partitionId: PARTITION_ID},
+      );
+      await settleOutcomeReconcile();
+
+      t.equal(
+        remoteHandoffDeliveries(harness.deliveries).length,
+        1,
+        'early target completion should retain an owner wake',
+      );
+      t.equal(
+        harness.deliveries[0]?.target,
+        `${SOURCE_NODE_ID}/service/replica-dispatch`,
+        'the early wake should use the source owner ingress',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.CREATING,
+        'the target observer must not advance source-owned workflow state',
+      );
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  },
+);
+
+test(
   'retryable user-partition target outcome delivery retains and retries ' +
     'the canonical source-owner wake',
   async (t) => {

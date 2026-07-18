@@ -215,6 +215,9 @@ function executeParallelReduceFixtureSql(context, serviceId, sql) {
     context.result.finalRows = JSON.parse(
       /result_json = '(\[[^']*\])'/.exec(sql)[1],
     );
+    context.result.sourceSnapshot = JSON.parse(
+      /source_snapshot_json = '([^']+)'/.exec(sql)[1],
+    );
     context.result.finalUpdateCount += 1;
     return {success: true};
   }
@@ -535,6 +538,18 @@ test('reduce config validation rejects malformed shapes', async (t) => {
         resultId: 'result',
       },
     },
+    {
+      reduce: {groupBy: 'g', aggregate: 'count', limit: 3},
+      resultTable: 'finals',
+      parallelReduce: {
+        shardSqlBySlot: {1: 'SELECT 1', 2: 'SELECT 2'},
+        coordinationTable: 'partials',
+        leaseMs: 1000,
+        coordinatorSlot: 1,
+        resultId: 'result',
+        resultSnapshotColumn: 'computed_at',
+      },
+    },
   ];
   for (const extra of badConfigs) {
     const prepared = await module.prepare({
@@ -577,6 +592,7 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
       leaseMs: 1000,
       coordinatorSlot: 1,
       resultId: 'global',
+      resultSnapshotColumn: 'source_snapshot_json',
     },
   };
   const slots = [1, 2].map((slotId) => ({
@@ -587,7 +603,11 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
     computed_at: 0,
   }));
   const statements = new Map();
-  const result = {finalRows: [], finalUpdateCount: 0};
+  const result = {
+    finalRows: [],
+    finalUpdateCount: 0,
+    sourceSnapshot: null,
+  };
   const executorContext = {config, result, slots, statements};
   const executorFor = (serviceId) =>
     createParallelReduceFixtureExecutor(executorContext, serviceId);
@@ -616,6 +636,9 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
     {groupKey: 50, aggValue: 5},
     {groupKey: 258, aggValue: 4},
   ], 'the coordinator atomically publishes the exact global top-N');
+  t.same(result.sourceSnapshot.slots.map((slot) => slot.replicaId),
+    replacements,
+    'the atomic result carries the replica generations of its source partials');
   const health = await modules[0].health({serviceId: replacements[0]});
   t.equal(health.partialRowsPublished, 2,
     'the replica publishes only its configured top-N');
@@ -772,6 +795,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
     leaseMs: 10000,
     coordinatorSlot: 1,
     resultId: 'global',
+    resultSnapshotColumn: 'source_snapshot_json',
   };
   const placements = [
     {replicaId: 'svc-affinity-r3', nodeId: 'n1'},
@@ -793,14 +817,31 @@ test('single-zone learned-affinity evidence uses production node weights and req
       computed_at: freshComputedAt,
     },
   ];
+  const resultSnapshotJson = JSON.stringify({
+    schemaVersion: 1,
+    slots: reduceSlots.map((slot) => ({
+      slotId: slot.slot_id,
+      replicaId: slot.replica_id,
+      computedAt: slot.computed_at,
+      candidateCount: 1,
+    })),
+  });
+  const serviceTopNAt = (computedAt) => topN.map((row) => ({
+    ...row,
+    computed_at: computedAt,
+    source_snapshot_json: resultSnapshotJson,
+  }));
+  const serviceTopNWithSnapshot = (snapshot) => topN.map((row) => ({
+    ...row,
+    computed_at: freshComputedAt,
+    source_snapshot_json: JSON.stringify(snapshot),
+  }));
   const assessment = assessAffinityDemoCompletion({
     expectedReplicaCount: 2,
     placements,
     weightedLocality: affinityOn,
     referenceTopN: topN,
-    serviceTopN: topN.map((row) => ({
-      ...row, computed_at: freshComputedAt,
-    })),
+    serviceTopN: serviceTopNAt(freshComputedAt),
     reduceSlots,
     expectedMergeCandidateCount: 2,
     phaseStartedAt,
@@ -815,9 +856,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
     weightedLocality: affinityOn,
     placements,
     reduceSlots,
-    serviceTopN: topN.map((row) => ({
-      ...row, computed_at: freshComputedAt,
-    })),
+    serviceTopN: serviceTopNAt(freshComputedAt),
     assessment,
     elapsedMs: 25,
   });
@@ -832,6 +871,8 @@ test('single-zone learned-affinity evidence uses production node weights and req
     'the live report retains the bounded-candidate verdict');
   t.equal(reportPhase.assessment.resultFresh, true,
     'the live report retains result chronology evidence');
+  t.same(reportPhase.resultSnapshot, JSON.parse(resultSnapshotJson),
+    'the live report retains the owner-published source snapshot');
   t.equal(reportPhase.assessment.placementOptimal, true,
     'the live report retains the production-weighted optimum verdict');
   t.equal(assessAffinityDemoCompletion({
@@ -839,9 +880,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
     placements,
     weightedLocality: affinityOn,
     referenceTopN: topN,
-    serviceTopN: topN.map((row) => ({
-      ...row, computed_at: freshComputedAt,
-    })),
+    serviceTopN: serviceTopNAt(freshComputedAt),
     reduceSlots: reduceSlots.map((slot) => ({
       ...slot,
       replica_id: `${slot.replica_id}-stale`,
@@ -860,9 +899,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
       ...affinityOn, localityRatio: 1.2,
     },
     referenceTopN: topN,
-    serviceTopN: topN.map((row) => ({
-      ...row, computed_at: freshComputedAt,
-    })),
+    serviceTopN: serviceTopNAt(freshComputedAt),
     reduceSlots,
     expectedMergeCandidateCount: 2,
     phaseStartedAt,
@@ -874,9 +911,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
     placements,
     weightedLocality: affinityOn,
     referenceTopN: topN,
-    serviceTopN: topN.map((row) => ({
-      ...row, computed_at: freshComputedAt,
-    })),
+    serviceTopN: serviceTopNAt(freshComputedAt),
     reduceSlots: slots,
     expectedMergeCandidateCount: 2,
     phaseStartedAt,
@@ -898,9 +933,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
     placements,
     weightedLocality: affinityOn,
     referenceTopN: topN,
-    serviceTopN: topN.map((row) => ({
-      ...row, computed_at: freshComputedAt - 1,
-    })),
+    serviceTopN: serviceTopNAt(freshComputedAt - 1),
     reduceSlots,
     expectedMergeCandidateCount: 2,
     phaseStartedAt,
@@ -908,6 +941,74 @@ test('single-zone learned-affinity evidence uses production node weights and req
     partialLimit: 1,
   }).complete, false,
   'a result older than its accepted partial snapshots cannot close');
+  t.equal(assessAffinityDemoCompletion({
+    expectedReplicaCount: 2,
+    placements,
+    weightedLocality: affinityOn,
+    referenceTopN: topN,
+    serviceTopN: serviceTopNAt(freshComputedAt).map((row) => ({
+      ...row,
+      source_snapshot_json: '{}',
+    })),
+    reduceSlots,
+    expectedMergeCandidateCount: 2,
+    phaseStartedAt,
+    parallelReduceConfig: evidenceParallelConfig,
+    partialLimit: 1,
+  }).complete, false,
+  'an exact result without an owned source-snapshot witness cannot close');
+  const validResultSnapshot = JSON.parse(resultSnapshotJson);
+  const invalidResultSnapshots = [
+    {
+      ...validResultSnapshot,
+      slots: [...validResultSnapshot.slots].reverse(),
+    },
+    {
+      ...validResultSnapshot,
+      slots: validResultSnapshot.slots.map((slot, index) => ({
+        ...slot,
+        replicaId: index === 1 ?
+          validResultSnapshot.slots[0].replicaId :
+          slot.replicaId,
+      })),
+    },
+    {
+      ...validResultSnapshot,
+      slots: validResultSnapshot.slots.map((slot, index) => ({
+        ...slot,
+        candidateCount: index === 0 ? 2 : slot.candidateCount,
+      })),
+    },
+    {
+      ...validResultSnapshot,
+      slots: validResultSnapshot.slots.map((slot, index) => ({
+        ...slot,
+        computedAt: index === 0 ? freshComputedAt + 1 : slot.computedAt,
+      })),
+    },
+  ];
+  const invalidSnapshotLabels = [
+    'reordered stable slots',
+    'duplicate replica identities',
+    'over-limit candidate counts',
+    'source timestamps newer than the result',
+  ];
+  for (let index = 0; index < invalidResultSnapshots.length; index += 1) {
+    const invalidAssessment = assessAffinityDemoCompletion({
+      expectedReplicaCount: 2,
+      placements,
+      weightedLocality: affinityOn,
+      referenceTopN: topN,
+      serviceTopN: serviceTopNWithSnapshot(invalidResultSnapshots[index]),
+      reduceSlots,
+      expectedMergeCandidateCount: 2,
+      phaseStartedAt,
+      parallelReduceConfig: evidenceParallelConfig,
+      partialLimit: 1,
+    });
+    t.equal(invalidAssessment.resultFresh, false,
+      `${invalidSnapshotLabels[index]} cannot forge result freshness`);
+  }
   t.end();
 });
 

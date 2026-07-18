@@ -1,0 +1,18 @@
+{
+  "test": "test/query/sql-query-engine-provision-partition-quorum.test.js",
+  "src": [
+    "src/query/query-constants.js",
+    "src/query/sql-query-engine-provisioning-admission-methods.js",
+    "src/query/sql-query-engine-initial-partition-provisioning.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 0,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "not-bound",
+  "ok": false,
+  "detail": "test still PASSES with the fix reverted; it does not bind the mechanism",
+  "timestamp": "2026-07-17T20:29:09.994Z"
+}

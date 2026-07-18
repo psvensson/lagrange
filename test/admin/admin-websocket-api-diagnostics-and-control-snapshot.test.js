@@ -359,6 +359,18 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
     t.equal(typeof payload.replicaOperations, 'object',
       'should include replica operation summary');
     t.equal(
+      typeof payload.controlPlaneDiagnostics
+        .currentPriorityPlacementObservation,
+      'object',
+      'should include the current row-derived priority placement witness',
+    );
+    t.equal(
+      payload.controlPlaneDiagnostics.currentPriorityPlacementObservation
+        .capturedAt,
+      payload.capturedAt,
+      'priority placement and the enclosing control snapshot share one capture',
+    );
+    t.equal(
       Number.isInteger(payload.replicaOperations.inFlightCount),
       true,
       'should include in-flight operation count',

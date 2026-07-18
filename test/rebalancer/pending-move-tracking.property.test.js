@@ -342,6 +342,325 @@ test('Property 80: Pending Move Tracking', async (t) => {
     );
   });
 
+  t.test(
+    'getCurrentReplicas projects a terminal priority REPLACE target as voter-ready',
+    async (t) => {
+      const partitionId = 'replica_operations-p1';
+      const sourceReplicaId = 'replica_operations-p1-r1';
+      const survivorReplicaId = 'replica_operations-p1-r2';
+      const secondSurvivorReplicaId = 'replica_operations-p1-r3';
+      const targetReplicaId = 'replace-replica-target';
+      const targetNodeId = 'node-target';
+      const services = [
+        {
+          service_id: sourceReplicaId,
+          replica_id: sourceReplicaId,
+          service_type: EntityType.PARTITION,
+          partition_id: partitionId,
+          node_id: 'node-source',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'leader',
+        },
+        {
+          service_id: survivorReplicaId,
+          replica_id: survivorReplicaId,
+          service_type: EntityType.PARTITION,
+          partition_id: partitionId,
+          node_id: 'node-source',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+        },
+        {
+          service_id: secondSurvivorReplicaId,
+          replica_id: secondSurvivorReplicaId,
+          service_type: EntityType.PARTITION,
+          partition_id: partitionId,
+          node_id: 'node-source',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+        },
+        {
+          service_id: targetReplicaId,
+          replica_id: targetReplicaId,
+          service_type: EntityType.PARTITION,
+          partition_id: partitionId,
+          node_id: targetNodeId,
+          status: ReplicaStatus.SYNCING,
+          raft_role: 'learner',
+        },
+      ];
+      const operation = createOperation({
+        operationId: 'operation-priority-replace-removed',
+        type: OperationType.REPLACE,
+        partitionId,
+        replicaId: targetReplicaId,
+        sourceReplicaId,
+        targetNodeId,
+        status: ReplicaStatus.REMOVED,
+        workflowStep: WORKFLOW_STEP.REMOVED,
+        completedAt: Date.now(),
+        stepsHistory: [
+          {
+            step: WORKFLOW_STEP.PENDING,
+            sourceReplicaId,
+          },
+        ],
+      });
+      const rebalancer = createTestRebalancer({
+        entityId: partitionId,
+        entityType: EntityType.PARTITION,
+        systemTableCache: createMockCache({
+          services,
+          replicaOperations: [operation],
+        }),
+        nodeId: 'test-node',
+      });
+
+      rebalancer.initialize();
+      const currentReplicas = rebalancer.getCurrentReplicas();
+      const targetReplica = currentReplicas.find(
+        (replica) => replica.replica_id === targetReplicaId,
+      );
+      const moves = rebalancer.calculateMoves(currentReplicas, {
+        targetReplicaCount: 3,
+        targetNodes: ['node-source', targetNodeId, 'node-spread'],
+        degraded: false,
+      });
+      rebalancer.shutdown();
+
+      t.equal(
+        currentReplicas.some(
+          (replica) => replica.replica_id === sourceReplicaId,
+        ),
+        false,
+        'the terminal source is retired from planning',
+      );
+      t.match(
+        targetReplica,
+        {
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+        },
+        'the completed target is projected through stale syncing/learner cache state',
+      );
+      t.matchOnly(
+        moves,
+        [{
+          type: 'add',
+          nodeId: 'node-spread',
+          reason: 'spread_replicas',
+        }],
+        'the live-shaped 2-1 placement expands without another REPLACE',
+      );
+    },
+  );
+
+  t.test(
+    'terminal priority REPLACE projection preserves explicit target removal',
+    async (t) => {
+      const partitionId = 'replica_operations-p1';
+      const sourceReplicaId = 'replica_operations-p1-r1';
+      const targetReplicaId = 'replace-replica-removed-target';
+      const targetNodeId = 'node-target';
+      const operation = createOperation({
+        operationId: 'operation-priority-replace-explicit-target-removal',
+        type: OperationType.REPLACE,
+        partitionId,
+        replicaId: targetReplicaId,
+        sourceReplicaId,
+        targetNodeId,
+        status: ReplicaStatus.REMOVED,
+        workflowStep: WORKFLOW_STEP.REMOVED,
+        completedAt: Date.now(),
+      });
+      const rebalancer = createTestRebalancer({
+        entityId: partitionId,
+        entityType: EntityType.PARTITION,
+        systemTableCache: createMockCache({
+          services: [
+            {
+              service_id: sourceReplicaId,
+              replica_id: sourceReplicaId,
+              service_type: EntityType.PARTITION,
+              partition_id: partitionId,
+              node_id: 'node-source',
+              status: ReplicaStatus.ACTIVE,
+            },
+            {
+              service_id: targetReplicaId,
+              replica_id: targetReplicaId,
+              service_type: EntityType.PARTITION,
+              partition_id: partitionId,
+              node_id: targetNodeId,
+              status: ReplicaStatus.REMOVED,
+              raft_role: 'learner',
+            },
+          ],
+          replicaOperations: [operation],
+        }),
+        nodeId: 'test-node',
+      });
+
+      rebalancer.initialize();
+      const targetReplica = rebalancer.getCurrentReplicas().find(
+        (replica) => replica.replica_id === targetReplicaId,
+      );
+      rebalancer.shutdown();
+
+      t.match(
+        targetReplica,
+        {
+          status: ReplicaStatus.REMOVED,
+          raft_role: 'learner',
+        },
+        'explicit terminal target evidence is not promoted',
+      );
+    },
+  );
+
+  t.test(
+    'getCurrentReplicas projects a terminal priority ADD target before drain planning',
+    async (t) => {
+      const partitionId = 'schema_operations-p1';
+      const targetReplicaId = 'schema-operations-p1-r4';
+      const targetNodeId = 'node-target';
+      const services = [
+        {
+          service_id: 'schema-operations-p1-r1',
+          replica_id: 'schema-operations-p1-r1',
+          service_type: EntityType.PARTITION,
+          partition_id: partitionId,
+          node_id: 'node-source',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'leader',
+        },
+        {
+          service_id: 'schema-operations-p1-r2',
+          replica_id: 'schema-operations-p1-r2',
+          service_type: EntityType.PARTITION,
+          partition_id: partitionId,
+          node_id: 'node-source',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+        },
+        {
+          service_id: 'schema-operations-p1-r3',
+          replica_id: 'schema-operations-p1-r3',
+          service_type: EntityType.PARTITION,
+          partition_id: partitionId,
+          node_id: 'node-source',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+        },
+      ];
+      const operation = createOperation({
+        operationId: 'operation-priority-add-active',
+        type: OperationType.ADD,
+        partitionId,
+        replicaId: targetReplicaId,
+        targetNodeId,
+        status: ReplicaStatus.ACTIVE,
+        workflowStep: WORKFLOW_STEP.ACTIVE,
+        completedAt: Date.now(),
+      });
+      const rebalancer = createTestRebalancer({
+        entityId: partitionId,
+        entityType: EntityType.PARTITION,
+        systemTableCache: createMockCache({
+          services,
+          replicaOperations: [operation],
+        }),
+        nodeId: 'test-node',
+      });
+
+      rebalancer.initialize();
+      const currentReplicas = rebalancer.getCurrentReplicas();
+      const targetReplica = currentReplicas.find(
+        (replica) => replica.replica_id === targetReplicaId,
+      );
+      const moves = rebalancer.calculateMoves(currentReplicas, {
+        targetReplicaCount: 3,
+        targetNodes: ['node-source', targetNodeId, 'node-spread'],
+        degraded: false,
+      });
+      rebalancer.shutdown();
+
+      t.match(
+        targetReplica,
+        {
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+          node_id: targetNodeId,
+        },
+        'the completed ADD target is current even while its service row lags',
+      );
+      t.equal(
+        moves.length,
+        1,
+        'target-plus-one visibility should produce one drain move',
+      );
+      t.match(
+        moves[0],
+        {
+          type: 'remove',
+          nodeId: 'node-source',
+          reason: 'spread_replicas',
+        },
+        'the completion wake should plan the monotonic surplus drain',
+      );
+    },
+  );
+
+  t.test(
+    'terminal REMOVE prevents an older priority ADD from resurrecting its target',
+    async (t) => {
+      const partitionId = 'schema_operations-p1';
+      const targetReplicaId = 'schema-operations-p1-r4';
+      const targetNodeId = 'node-target';
+      const completedAdd = createOperation({
+        operationId: 'operation-priority-add-before-remove',
+        type: OperationType.ADD,
+        partitionId,
+        replicaId: targetReplicaId,
+        targetNodeId,
+        status: ReplicaStatus.ACTIVE,
+        workflowStep: WORKFLOW_STEP.ACTIVE,
+        completedAt: Date.now() - 1,
+      });
+      const completedRemove = createOperation({
+        operationId: 'operation-priority-remove-after-add',
+        type: OperationType.REMOVE,
+        partitionId,
+        replicaId: targetReplicaId,
+        targetNodeId,
+        status: ReplicaStatus.REMOVED,
+        workflowStep: WORKFLOW_STEP.REMOVED,
+        completedAt: Date.now(),
+      });
+      const rebalancer = createTestRebalancer({
+        entityId: partitionId,
+        entityType: EntityType.PARTITION,
+        systemTableCache: createMockCache({
+          services: [],
+          replicaOperations: [completedAdd, completedRemove],
+        }),
+        nodeId: 'test-node',
+      });
+
+      rebalancer.initialize();
+      const currentReplicas = rebalancer.getCurrentReplicas();
+      rebalancer.shutdown();
+
+      t.equal(
+        currentReplicas.some(
+          (replica) => replica.replica_id === targetReplicaId,
+        ),
+        false,
+        'later operation-owner retirement evidence wins over create history',
+      );
+    },
+  );
+
   t.test('hasPendingAddForNode identifies pending ADD operations', async (t) => {
     await fc.assert(
       fc.asyncProperty(

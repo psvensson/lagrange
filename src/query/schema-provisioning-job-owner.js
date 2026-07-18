@@ -20,6 +20,7 @@ import {
 } from './schema-provisioning-job-constants.js';
 import {canonicalizeSchemaProvisioningIntent} from
   './schema-provisioning-intent.js';
+import {QUERY_ERROR_CODE} from './query-constants.js';
 import {rowToWorkflow, serializeWorkflow} from
   './schema-provisioning-job-repository.js';
 
@@ -29,6 +30,7 @@ const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
   STALE_FENCE_MESSAGE: 'stale fence',
   TIMEOUT_CODE: 'TIMEOUT',
   TIMEOUT_MESSAGE: 'timeout',
+  TIMED_OUT_MESSAGE: 'timed out',
 });
 const SCHEMA_PROVISIONING_FAILED_MESSAGE = 'Schema provisioning failed';
 const SCHEMA_PROVISIONING_FAILED_CODE = 'SCHEMA_PROVISIONING_FAILED';
@@ -105,7 +107,9 @@ function isTransientProvisioningError(error) {
   const message = String(error?.message || '').toLowerCase();
   return code.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE) ||
     code.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_CODE) ||
+    code === QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE ||
     message.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_MESSAGE) ||
+    message.includes(TRANSIENT_ERROR_FRAGMENT.TIMED_OUT_MESSAGE) ||
     message.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_MESSAGE) ||
     message.includes(TRANSIENT_ERROR_FRAGMENT.STALE_FENCE_MESSAGE) ||
     code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER;
@@ -151,6 +155,9 @@ class SchemaProvisioningJobOwner {
       SCHEMA_PROVISIONING_DEFAULT.RETRY_AFTER_MS;
     this.setTimeoutFn = options.setTimeoutFn || setTimeout;
     this.clearTimeoutFn = options.clearTimeoutFn || clearTimeout;
+    this.retrySetTimeoutFn = options.retrySetTimeoutFn || setTimeout;
+    this.retryClearTimeoutFn = options.retryClearTimeoutFn || clearTimeout;
+    this.retryTimersByWorkflowId = new Map();
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         now: this.now,
@@ -169,6 +176,48 @@ class SchemaProvisioningJobOwner {
       workflows: this.repository.recoverWorkflowRows(),
       isTerminalWorkflow: () => false,
     });
+  }
+
+  clearScheduledRetry(workflowId) {
+    const scheduled = this.retryTimersByWorkflowId.get(workflowId);
+    if (!scheduled) return;
+    this.retryTimersByWorkflowId.delete(workflowId);
+    if (scheduled.timerId !== null && scheduled.timerId !== undefined) {
+      this.retryClearTimeoutFn(scheduled.timerId);
+    }
+  }
+
+  scheduleRetry(intent, executor) {
+    const workflow = this.workflowCoordinator.getWorkflowById(
+      intent.workflowId,
+    );
+    if (
+      !workflow ||
+      SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status) ||
+      this.retryTimersByWorkflowId.has(intent.workflowId)
+    ) {
+      return;
+    }
+    const scheduled = {timerId: null};
+    const retry = () => {
+      if (this.retryTimersByWorkflowId.get(intent.workflowId) !== scheduled) {
+        return;
+      }
+      this.retryTimersByWorkflowId.delete(intent.workflowId);
+      const execution = this.workflowCoordinator.runExclusive(
+        intent.ownerKey,
+        () => this.runJob(intent, executor),
+      );
+      void execution.catch(() => {
+        this.scheduleRetry(intent, executor);
+      });
+    };
+    this.retryTimersByWorkflowId.set(intent.workflowId, scheduled);
+    scheduled.timerId = this.retrySetTimeoutFn(
+      retry,
+      Math.max(1, workflow.retryAfterMs || this.retryAfterMs),
+    );
+    scheduled.timerId?.unref?.();
   }
 
   refreshWorkflowFromRow(row) {
@@ -267,9 +316,40 @@ class SchemaProvisioningJobOwner {
     return claim.workflow;
   }
 
+  async transitionPendingForRetry(intent, executor, workflow) {
+    const renewedWorkflow = await this.assertOwnership(workflow);
+    await this.workflowCoordinator.transitionStep(workflow.workflowId, {
+      nextStep: SCHEMA_PROVISIONING_JOB_STEP.RECONCILING_REPLICAS,
+      reason: SCHEMA_PROVISIONING_REASON.REPLICA_CONVERGENCE_PENDING,
+      fenceToken: renewedWorkflow.fenceToken,
+      ownerId: this.ownerId,
+    }, {
+      status: SCHEMA_PROVISIONING_JOB_STATUS.PENDING,
+      reasonCodes: [
+        SCHEMA_PROVISIONING_REASON.REPLICA_CONVERGENCE_PENDING,
+      ],
+      retryAfterMs: this.retryAfterMs,
+    });
+    this.scheduleRetry(intent, executor);
+    return this.buildOutcome(renewedWorkflow);
+  }
+
+  async transitionTerminal(intent, workflow, options = {}) {
+    const renewedWorkflow = await this.assertOwnership(workflow);
+    await this.workflowCoordinator.transitionStep(workflow.workflowId, {
+      nextStep: options.nextStep,
+      reason: options.reason,
+      fenceToken: renewedWorkflow.fenceToken,
+      ownerId: this.ownerId,
+    }, options.updates);
+    this.clearScheduledRetry(intent.workflowId);
+    return this.buildOutcome(renewedWorkflow);
+  }
+
   async runJob(intent, executor) {
     const workflow = this.workflowCoordinator.requireWorkflow(intent.workflowId);
     if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
+      this.clearScheduledRetry(intent.workflowId);
       return this.buildOutcome(workflow);
     }
     const claim = await this.workflowCoordinator.claimWorkflow(
@@ -302,51 +382,48 @@ class SchemaProvisioningJobOwner {
         assertOwnership: () => this.assertOwnership(ownedWorkflow),
       });
       if (result?.contractState !== OWNER_CONTRACT_STATE.READY) {
-        await this.workflowCoordinator.transitionStep(workflow.workflowId, {
-          nextStep: SCHEMA_PROVISIONING_JOB_STEP.RECONCILING_REPLICAS,
-          reason: SCHEMA_PROVISIONING_REASON.REPLICA_CONVERGENCE_PENDING,
-          fenceToken: ownedWorkflow.fenceToken,
-          ownerId: this.ownerId,
-        }, {
-          status: SCHEMA_PROVISIONING_JOB_STATUS.PENDING,
-          reasonCodes: [
-            SCHEMA_PROVISIONING_REASON.REPLICA_CONVERGENCE_PENDING,
-          ],
-          retryAfterMs: this.retryAfterMs,
-        });
-        return this.buildOutcome(ownedWorkflow);
+        return this.transitionPendingForRetry(
+          intent,
+          executor,
+          ownedWorkflow,
+        );
       }
-      await this.workflowCoordinator.transitionStep(workflow.workflowId, {
+      return this.transitionTerminal(intent, ownedWorkflow, {
         nextStep: SCHEMA_PROVISIONING_JOB_STEP.SUCCEEDED,
         reason: SCHEMA_PROVISIONING_REASON.PROVISIONING_COMPLETE,
-        fenceToken: ownedWorkflow.fenceToken,
-        ownerId: this.ownerId,
-      }, {
-        status: SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED,
-        reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_COMPLETE],
-        result,
-        retryAfterMs: 0,
-        completedAt: this.now(),
+        updates: {
+          status: SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED,
+          reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_COMPLETE],
+          result,
+          retryAfterMs: 0,
+          completedAt: this.now(),
+        },
       });
-      return this.buildOutcome(ownedWorkflow);
     } catch (error) {
       if (isTransientProvisioningError(error)) {
-        return this.buildOutcome(ownedWorkflow);
+        if (error.code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER) {
+          return this.buildOutcome(ownedWorkflow, {
+            reasonCodes: [SCHEMA_PROVISIONING_REASON.ACTIVE_OWNER],
+          });
+        }
+        return this.transitionPendingForRetry(
+          intent,
+          executor,
+          ownedWorkflow,
+        );
       }
-      await this.workflowCoordinator.transitionStep(workflow.workflowId, {
+      return this.transitionTerminal(intent, ownedWorkflow, {
         nextStep: SCHEMA_PROVISIONING_JOB_STEP.FAILED,
         reason: SCHEMA_PROVISIONING_REASON.PROVISIONING_FAILED,
-        fenceToken: ownedWorkflow.fenceToken,
-        ownerId: this.ownerId,
-      }, {
-        status: SCHEMA_PROVISIONING_JOB_STATUS.FAILED,
-        reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_FAILED],
-        errorCode:
-          error.code || error.errorCode || SCHEMA_PROVISIONING_FAILED_CODE,
-        errorMessage: error.message,
-        completedAt: this.now(),
+        updates: {
+          status: SCHEMA_PROVISIONING_JOB_STATUS.FAILED,
+          reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_FAILED],
+          errorCode:
+            error.code || error.errorCode || SCHEMA_PROVISIONING_FAILED_CODE,
+          errorMessage: error.message,
+          completedAt: this.now(),
+        },
       });
-      return this.buildOutcome(ownedWorkflow);
     }
   }
 
@@ -374,8 +451,10 @@ class SchemaProvisioningJobOwner {
     const {row} = await this.insertOrAttach(intent);
     const workflow = this.refreshWorkflowFromRow(row);
     if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
+      this.clearScheduledRetry(intent.workflowId);
       return this.buildOutcome(workflow);
     }
+    this.clearScheduledRetry(intent.workflowId);
     const execution = this.workflowCoordinator.runExclusive(
       intent.ownerKey,
       () => this.runJob(intent, executor),
@@ -390,6 +469,7 @@ class SchemaProvisioningJobOwner {
     this.workflowCoordinator.recover({workflows: rows.map(rowToWorkflow)});
     for (const row of rows) {
       const intent = recoverIntentFromRow(row);
+      this.clearScheduledRetry(intent.workflowId);
       executions.push(this.workflowCoordinator.runExclusive(
         intent.ownerKey,
         () => this.runJob(intent, (job) => executor({...job, ast: intent.ast})),

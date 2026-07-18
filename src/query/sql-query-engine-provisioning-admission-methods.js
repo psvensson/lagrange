@@ -31,6 +31,7 @@ const {
   PROVISIONING_REJECTION_DETAIL_LIMIT,
   PROVISIONING_REJECTION_REASON_UNKNOWN,
   PROVISIONING_REJECTION_SUMMARY_NONE,
+  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   SERVICE_TYPE,
@@ -303,7 +304,7 @@ class SQLQueryEngineProvisioningAdmissionMethods {
         rejectionSummary,
       },
     );
-    throw new Error(
+    const error = new Error(
       QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS_PREFIX +
         String(details?.partitionId || '') +
         `: required=${details?.minimumRoutableReplicaCount || 0}, ` +
@@ -311,6 +312,11 @@ class SQLQueryEngineProvisioningAdmissionMethods {
         `target=${details?.targetReplicaCount || 0}, ` +
         `rejected=${rejectionSummary}`,
     );
+    if (details?.retryable === true) {
+      error.code =
+        QUERY_ERROR_CODE.TABLE_PARTITION_PROVISIONING_RETRYABLE;
+    }
+    throw error;
   }
 
   /**

@@ -102,6 +102,92 @@ test('HLCClockService detects clock drift', async (t) => {
   t.ok(driftWarning.drift > 100, 'should report drift amount');
 });
 
+test('HLCClockService keeps drift diagnostics out of distributed logs',
+  async (t) => {
+    const localDiagnostics = [];
+    const distributedDiagnostics = [];
+    const callbacks = [];
+    const clock = new HLCClockService('local-node', {
+      maxDrift: 100,
+      onDriftWarning: (warning) => {
+        callbacks.push(warning);
+      },
+    });
+    clock.logger = {
+      logConsoleOnly: (level, message, context) => {
+        localDiagnostics.push({level, message, context});
+      },
+      warn: (message, context) => {
+        distributedDiagnostics.push({message, context});
+      },
+    };
+
+    const remoteTs = new HLCTimestamp(
+      Date.now() + 1000,
+      0,
+      'remote-node',
+    );
+    clock.update(remoteTs);
+    clock.update(new HLCTimestamp(
+      Date.now() + 1100,
+      0,
+      'other-remote-node',
+    ));
+
+    t.equal(localDiagnostics.length, 1,
+      'repeated forward drift is bounded in the node-local captured log');
+    t.equal(localDiagnostics[0].level, 'warn',
+      'the local diagnostic preserves warning severity');
+    t.equal(
+      localDiagnostics[0].message,
+      'Excessive clock drift detected',
+      'the local diagnostic preserves the established message',
+    );
+    t.equal(distributedDiagnostics.length, 0,
+      'drift cannot recursively create an HLC-stamped distributed log row');
+    t.equal(callbacks.length, 2,
+      'the programmatic drift signal still fires on every occurrence');
+    t.equal(
+      callbacks[0].remoteNodeId,
+      localDiagnostics[0].context.remoteNodeId,
+      'the callback and first local diagnostic observe the same drift source',
+    );
+    t.equal(localDiagnostics[0].context.suppressedSinceLastWarning, 0,
+      'the first bounded diagnostic reports no prior suppression');
+  });
+
+test('HLCClockService does not classify delayed remote events as clock drift',
+  async (t) => {
+    const localDiagnostics = [];
+    const callbacks = [];
+    const clock = new HLCClockService('local-node', {
+      maxDrift: 100,
+      onDriftWarning: (warning) => {
+        callbacks.push(warning);
+      },
+    });
+    clock.logger = {
+      logConsoleOnly: (...args) => {
+        localDiagnostics.push(args);
+      },
+    };
+
+    const before = clock.current();
+    const delayedRemoteTs = new HLCTimestamp(
+      Date.now() - 1000,
+      3,
+      'remote-node',
+    );
+    const updated = clock.update(delayedRemoteTs);
+
+    t.equal(localDiagnostics.length, 0,
+      'a delayed past timestamp emits no false forward-skew warning');
+    t.equal(callbacks.length, 0,
+      'a delayed past timestamp emits no programmatic drift signal');
+    t.ok(before.isBefore(updated),
+      'the ordinary HLC merge still advances monotonically');
+  });
+
 test('HLCClockService handles logical overflow', async (t) => {
   const clock = new HLCClockService('test-node', {
     maxLogicalCounter: 10,

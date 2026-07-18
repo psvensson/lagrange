@@ -32,6 +32,9 @@ const JOINING_DEFAULT = Object.freeze({
   readySignalRetryDelayMs: 1000,
   readySignalRetryMaxDelayMs: 5000,
   readySignalRetryBackoffMultiplier: 2,
+  priorityPlacementFormationDiscoveryMs: TIME_MS.SECOND * 5,
+  priorityPlacementFormationPollMs: 500,
+  priorityPlacementFormationTimeoutMs: TIME_MS.MINUTE * 2,
   replicaStaggerDelayMs: DEFAULT_REPLICA_STAGGER_DELAY_MS,
   heartbeatIntervalMs: DEFAULT_HEARTBEAT_INTERVAL_MS,
   wsPort: null,
@@ -135,6 +138,8 @@ const JOINING_LOG_MSG = Object.freeze({
   READY_SIGNAL_NOT_ACK: 'Seed node did not acknowledge readiness',
   READY_SIGNAL_RETRYING: 'Retrying readiness signal to seed node',
   READY_SIGNAL_FAILED: 'Failed to signal readiness to seed node',
+  PRIORITY_PLACEMENT_FORMATION_BARRIER:
+    'Join priority-placement formation barrier',
   CANONICAL_READINESS_BLOCKED: 'Join canonical readiness still blocked',
   CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE:
     'Control plane background writers activated for joining node',
@@ -283,6 +288,9 @@ const JOINING_ERROR_MSG = Object.freeze({
     `joining node ${joiningNodeId} is not authorized`,
   CONTROL_PLANE_TARGET_MISSING: 'No reachable control plane target address available',
   CONTROL_PLANE_SERVICE_REQUIRED: 'Control plane service must be initialized',
+  OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT:
+    'Timed out waiting for operation-ledger formation spread before ' +
+    'publishing the node ready lease',
   MESSAGE_GROUP_LEADER_REQUIRED: 'Message group leader is required for control plane routing',
   leadershipTimeout: (timeoutMs) =>
     `Message group failed to establish leadership within ${timeoutMs}ms`,

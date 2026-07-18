@@ -29,6 +29,9 @@ import {
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
 } from './routing-repair-test-helpers.js';
+import {
+  OPERATION_METADATA_KEY,
+} from '../../src/rebalancer/replica-status.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -64,7 +67,9 @@ async (t) => {
   }];
   const services = [];
   const createOperationFlags = [];
+  const createOperationTopologyHoldFlags = [];
   const executedInlineFlags = [];
+  const persistedTopologyHoldFlags = [];
   let dispatchOperationCalls = 0;
 
   const cache = {
@@ -122,13 +127,27 @@ async (t) => {
   const rebalanceCoordinator = {
     async createOperation(move) {
       createOperationFlags.push(move.emitOperationCreated === false);
+      createOperationTopologyHoldFlags.push(
+        move.deferDispatchUntilBootstrapTopology === true,
+      );
       return {
         operationId: `op-${move.nodeId}`,
         replicaId: `${partitionId}-r1`,
         targetNodeId: move.nodeId,
         emitOperationCreated: move.emitOperationCreated !== false,
+        stepsHistory: [{
+          [OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED]:
+            move.deferDispatchUntilBootstrapTopology === true,
+        }],
         ...move,
       };
+    },
+    async persistOperationUpdate(operation) {
+      persistedTopologyHoldFlags.push(
+        operation.stepsHistory?.[0]?.[
+          OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
+        ] === true,
+      );
     },
     async executeOperation(operation) {
       executedInlineFlags.push(operation.emitOperationCreated === false);
@@ -181,6 +200,16 @@ async (t) => {
     createOperationFlags,
     [true],
     'inline provisioning should suppress the coordinator-created dispatch event',
+  );
+  t.same(
+    createOperationTopologyHoldFlags,
+    [true],
+    'initial provisioning should persist operations with dispatch held',
+  );
+  t.same(
+    persistedTopologyHoldFlags,
+    [false],
+    'the topology-stamped update should clear the durable dispatch hold',
   );
   t.same(
     executedInlineFlags,
@@ -471,12 +500,17 @@ test('SQLQueryEngine - provisionInitialTablePartition fails fast when ' +
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
-  await t.rejects(
+  const error = await t.rejects(
     engine.provisionInitialTablePartition({
       partitionId,
       replicaCount: 2,
     }),
     /Unable to satisfy minimum routable provisioning cohort/,
+  );
+  t.equal(
+    error.code,
+    'TABLE_PARTITION_PROVISIONING_RETRYABLE',
+    'implicit CREATE shortfall is typed for durable schema retry',
   );
 
   t.same(
