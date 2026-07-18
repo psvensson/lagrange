@@ -42,15 +42,24 @@ morning) the learned-affinity phase under the same machine conditions.
   cluster invalidation onto versions, reconciliation post-apply verify to
   version CAS, then delete the marker zoo (that code is load-bearing for the
   fence quest — sequence after it closes).
-- `formation-joining-ready-phase-fence-live` (pre-existing) — owns the
-  remaining formation residuals: spread-gap rotation, and (surfaced 2026-07-18
-  on clean HEAD at 11:02/11:19 and again on the cutover run 16-43-20) the
-  learned-affinity attribution stall — attributionRows=0 for 300s while
-  attribution rows demonstrably land in service_partition_access (~4.7min
-  from service deploy to first access window; probe SELECT sees none). O3/O4
-  (serial goal-state priority planner + ledger episode state machine — the
-  biggest simplification, options in this epic) unlock when it records a
-  terminal.
+- `formation-joining-ready-phase-fence-live` (pre-existing) — metric went
+  FAIL -> PASS on 2026-07-18T17-49-37: the first fully-green live run of the
+  day (schema admitted, weightedLocality 0.000->1 in 31s, resultCorrect).
+  The attribution stall is RESOLVED: root cause was the node-local
+  authoritative system-table read merging per-replica rows KEYED BY PRIMARY
+  KEY and silently dropping pk-less projections (fix + guard tests committed
+  after 0e21d387; finding in the quest log). Remaining residual before
+  driving the quest terminal: spread-gap rotation is still intermittent
+  (denied schema admission at 17-40-24, ten minutes before the pass) — its
+  sealed consecutive:1 gate is formally satisfied, but confirm with 2 more
+  fresh runs before terminal handoff. Mitigation directions from peer
+  systems recorded in the session: priority lane exempting critical-system
+  spread-closing moves from the shared move budget (CRDB replicate-queue
+  shape; logs show budget_exceeded skips), monotone-progress quiescence
+  (don't reset the stable window on gap-reducing events), narrowing the
+  admission predicate to the DDL's own metadata partitions, join-time
+  spread-correct placement, and a DST scenario for the convergence property.
+  O3/O4 unlock at terminal.
 - Flag-surface tail (small, unqueued): delete the uncalled
   shouldMetadataPublicationAllowPressureDefer
   (partition-service-metadata-delivery-methods.js) and the stale
