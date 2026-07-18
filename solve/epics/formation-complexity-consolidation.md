@@ -212,6 +212,26 @@ Lifecycle / membership:
 
 ## Decision log
 
+- 2026-07-18 (live validation) — The row-only F12 fence was FALSIFIED by
+  live run 10:46 (seed never joins; its activation rides its own heartbeat;
+  0/5 nodes reached active) and corrected to a lifecycle-gated fence:
+  promotion withheld only while the row is JOINING AND the local node
+  lifecycle has not reached READY (seed reaches lifecycle ready at
+  bootstrap, joiners at barrier-gated join completion — both before their
+  heartbeats run, so the fence stays a no-op on correct orderings while
+  still closing both footguns). Commit 1d5d4ac1. The corrected run
+  (11:02) is the first in the quest lineage to PASS schema admission:
+  5 active nodes, QUIESCENT snapshot, 62.1s stability window HELD within
+  unchanged budgets, spread gap 0, preload admitted. The O6 sealed symptom
+  (admin snapshot-lane timeout denial) did NOT reproduce on HEAD
+  (repro-on-head finding recorded on the quest; single run, blocker mix
+  historically rotates — second confirmation run pending). The scenario's
+  new frontier is far past formation: learned-affinity attribution stall
+  (attributionRows=0 for 300s), which belongs to the
+  service-data-affinity-placement product epic, not this consolidation
+  epic. Epic-work commits: 3306b9f5, a201bd15, 4e2f95e2, ce8344b1,
+  e35e6eee, 1d5d4ac1.
+
 - 2026-07-18 (implementation session 2) — O1 core SHIPPED:
   `buildControlPlaneReadAuthority` (read-contracts) builds the frozen token
   once at `executeRead` ingress; both read coalescing key forms serialize the
