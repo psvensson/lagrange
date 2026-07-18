@@ -58,7 +58,7 @@ import {
 import {NodeService} from '../../node/node-service.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
-import {SUBSYSTEM, TABLES} from '../../constants/index.js';
+import {STATE, SUBSYSTEM, TABLES} from '../../constants/index.js';
 import {isControlPlanePublicationsWriteLeader} from '../../control-plane/control-plane-publications-leadership.js';
 import {MembershipSwimRuntime} from '../../control-plane/membership-swim-runtime.js';
 import {resolvePublishedActiveNodeIds} from '../../control-plane/active-node-publication-snapshots.js';
@@ -457,6 +457,14 @@ class ControlPlaneSetup {
       controlPlaneSystemTableGateway,
       verifyReporterVisibilityOnSuccess: true,
       membershipPublicationService: membershipPublicationService || null,
+      isNodeLifecycleReady: () => {
+        try {
+          return NodeService.getInstance()?.lifecycleStateMachine?.getState() ===
+            STATE.READY;
+        } catch {
+          return false;
+        }
+      },
     });
     heartbeatService.initialize();
     controlPlaneReadinessService.heartbeatService = heartbeatService;

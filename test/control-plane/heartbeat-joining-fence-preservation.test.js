@@ -74,7 +74,7 @@ function createHeartbeatService(options = {}) {
   });
 }
 
-async function captureHeartbeatReporterPayload(nodeRow) {
+async function captureHeartbeatReporterPayload(nodeRow, options = {}) {
   let reportedPayload = null;
   const service = createHeartbeatService({
     nodeId: TEST_NODE_ID,
@@ -94,6 +94,7 @@ async function captureHeartbeatReporterPayload(nodeRow) {
       };
     },
     now: () => TEST_NOW,
+    ...options,
   });
   await service.sendHeartbeat(null, null);
   return reportedPayload;
@@ -133,6 +134,40 @@ async (t) => {
       payload.nodeRow.last_heartbeat,
       TEST_NOW,
       'pre-activation heartbeat must still renew liveness',
+    );
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
+test('a READY local lifecycle authorizes promotion of a still-JOINING row: ' +
+  'the seed self-promotes at bootstrap completion, a joiner after its ' +
+  'barrier-gated join completes, even before the ACTIVE flip propagates',
+async (t) => {
+  initEnv();
+  try {
+    const payload = await captureHeartbeatReporterPayload(
+      {
+        node_id: TEST_NODE_ID,
+        node_address: TEST_NODE_ADDRESS,
+        created_at: TEST_CREATED_AT,
+        status: NODE_STATE.JOINING,
+        connection_state: STATE.CONNECTED,
+        ready_lease_expires_at: null,
+      },
+      {isNodeLifecycleReady: () => true},
+    );
+
+    t.equal(payload.state, STATE.READY, 'lifecycle-ready publishes READY');
+    t.equal(
+      payload.nodeRow.status,
+      SERVICE_STATUS.ACTIVE,
+      'lifecycle-ready promotes status to active',
+    );
+    t.ok(
+      payload.nodeRow.ready_lease_expires_at > TEST_NOW,
+      'lifecycle-ready grants the ready lease',
     );
   } finally {
     ConfigurationManager.resetInstance();

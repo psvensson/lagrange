@@ -45,6 +45,10 @@ class HeartbeatService extends EventEmitter {
     this.quietMode = options.quietMode || null;
     this.nodeStateReporter =
       typeof options.nodeStateReporter === 'function' ? options.nodeStateReporter : null;
+    this.isNodeLifecycleReady =
+      typeof options.isNodeLifecycleReady === 'function' ?
+        options.isNodeLifecycleReady :
+        null;
     this.verifyReporterVisibilityOnSuccess = options.verifyReporterVisibilityOnSuccess === true;
     this.now = typeof options.now === 'function' ? options.now : () => Date.now();
     this.setIntervalFn =
