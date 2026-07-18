@@ -643,9 +643,25 @@ function buildControlPlaneQuiescenceDecisionSnapshot(options = {}) {
       reasonCodes.push(
         CONTROL_PLANE_QUIESCENCE_REASON.CRITICAL_SYSTEM_SPREAD_OPEN,
       );
+      // Explain surface: name the gapped partitions inline so a spread-open
+      // denial is diagnosable from the reason string alone (the 2026-07-18
+      // 17:40 denial reported only gap=1 and cost an archive forensics pass
+      // to find sql_write_operations-p1).
+      const blockedPartitionDetail = (
+        Array.isArray(criticalSystemTopology.blockedPartitions) ?
+          criticalSystemTopology.blockedPartitions :
+          []
+      )
+        .map((partition) =>
+          `${partition?.partitionId}(${partition?.spreadGap})`)
+        .join(',');
       reasons.push(buildReason(
         CONTROL_PLANE_QUIESCENCE_REASON.CRITICAL_SYSTEM_SPREAD_OPEN,
-        normalizeNonNegativeInteger(criticalSystemTopology.totalSpreadGap),
+        String(
+          normalizeNonNegativeInteger(criticalSystemTopology.totalSpreadGap),
+        ) + (blockedPartitionDetail.length > ZERO ?
+          ` [${blockedPartitionDetail}]` :
+          ''),
       ));
     }
   }

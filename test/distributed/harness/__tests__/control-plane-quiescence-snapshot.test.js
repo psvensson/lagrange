@@ -481,3 +481,41 @@ test('control-plane quiescence candidate reset preserves critical spread observa
         .CRITICAL_SYSTEM_SNAPSHOT_REACHABILITY_UNAVAILABLE,
     );
   });
+
+test('control-plane quiescence snapshot names the gapped partitions in the ' +
+  'spread-open reason detail',
+() => {
+  const snapshot = buildControlPlaneQuiescenceSnapshot({
+    snapshotProbe: buildSnapshotProbe(),
+    criticalSystemTopology: Object.freeze({
+      enabled: true,
+      ready: false,
+      observationState:
+        CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE.AVAILABLE,
+      totalSpreadGap: 1,
+      blockedPartitions: Object.freeze([
+        Object.freeze({
+          partitionId: 'sql_write_operations-p1',
+          spreadGap: 1,
+        }),
+      ]),
+    }),
+    nowMs: NOW_MS,
+    stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+    stableWindowMs: STABLE_WINDOW_MS,
+    maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+    leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+  });
+
+  assert.equal(
+    snapshot.state,
+    CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OPEN,
+  );
+  // A spread-open denial must be diagnosable from the reason string alone:
+  // the 2026-07-18T17:40 live denial reported only gap=1 and cost an
+  // archive-forensics pass to identify the gapped partition.
+  assert.deepEqual(
+    snapshot.reasons,
+    ['critical_system_spread_gap=1 [sql_write_operations-p1(1)]'],
+  );
+});
