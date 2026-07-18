@@ -8,6 +8,8 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {
   applyCDCIntegrationServiceCacheVisibilityWait,
 } from '../../src/cdc/cdc-integration-service-cache-visibility-wait.js';
@@ -19,15 +21,18 @@ function createHost({readResult}) {
   const host = new VisibilityWaitHost();
   host.reads = [];
   host.applied = [];
+  host.cachedRecord = null;
   host.logger = {info: () => {}, warn: () => {}, debug: () => {}, error: () => {}};
   host.getPrimaryKeyField = () => 'partition_id';
   host.shouldWaitForCacheUpdate = () => true;
+  host.getCacheRecord = () => host.cachedRecord;
   host.executeAuthoritativeSystemTableRead = async (tableName, sql, params) => {
     host.reads.push({tableName, sql, params});
     return readResult;
   };
   host.applyAuthoritativeCacheRepair = (tableName, operation, row, key) => {
     host.applied.push({tableName, operation, row, key});
+    host.cachedRecord = row;
     return true;
   };
   return host;
@@ -55,6 +60,114 @@ test('refreshAuthoritativeCacheRow aligns a stale present cache row to the autho
     t.same(host.applied[0].row, authoritativeRow,
       'the cache must receive the authoritative row verbatim');
   });
+
+test(
+  'refreshAuthoritativeCacheRow aligns the production cache exactly while ' +
+    'retaining cache-local causal evidence',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const authoritativeRow = {
+      service_id: 'sql_write_operations-p1-r4',
+      service_type: 'partition',
+      partition_id: 'sql_write_operations-p1',
+      replica_id: 'sql_write_operations-p1-r4',
+      node_id: 'node-x',
+      address: 'node-x/partition/sql_write_operations-p1-r4',
+      status: 'active',
+      raft_role: 'follower',
+      state_entered_at: 9,
+      created_at: 3,
+      updated_at: 9,
+    };
+    cache.applySystemTableChange(
+      TABLES.SERVICES,
+      CDC_OPERATION.UPSERT,
+      {
+        ...authoritativeRow,
+        status: 'syncing',
+        updated_at_hlc: '9-0-node-x',
+      },
+    );
+    const host = new VisibilityWaitHost();
+    host.logger = {
+      info: () => {},
+      warn: () => {},
+      debug: () => {},
+      error: () => {},
+    };
+    host.systemTableCache = cache;
+    host.cacheMutationTarget = cache;
+    host.getPrimaryKeyField = () => 'service_id';
+    host.shouldWaitForCacheUpdate = () => true;
+    host.executeAuthoritativeSystemTableRead =
+      async () => ({success: true, rows: [authoritativeRow]});
+
+    const aligned = await host.refreshAuthoritativeCacheRow(
+      TABLES.SERVICES,
+      authoritativeRow.service_id,
+    );
+    const cachedRow = cache.get(
+      TABLES.SERVICES,
+      authoritativeRow.service_id,
+    );
+
+    t.equal(aligned, true, 'the production cache confirms exact alignment');
+    t.equal(
+      cachedRow.status,
+      authoritativeRow.status,
+      'the durable lifecycle field is repaired exactly',
+    );
+    t.equal(
+      cachedRow.updated_at_hlc,
+      '9-0-node-x',
+      'cache-local causal evidence survives authoritative replacement',
+    );
+  },
+);
+
+test(
+  'refreshAuthoritativeCacheRow rejects a silently dropped cache repair',
+  async (t) => {
+    const authoritativeRow = {
+      partition_id: 'p1',
+      leader_node_id: 'node-x',
+      updated_at: 9,
+    };
+    const host = createHost({
+      readResult: {success: true, rows: [authoritativeRow]},
+    });
+    host.cachedRecord = {
+      ...authoritativeRow,
+      leader_node_id: 'node-stale',
+    };
+    host.applyAuthoritativeCacheRepair = (
+      tableName,
+      operation,
+      row,
+      key,
+    ) => {
+      host.applied.push({tableName, operation, row, key});
+      return true;
+    };
+
+    const aligned = await host.refreshAuthoritativeCacheRow(
+      'partitions',
+      'p1',
+    );
+
+    t.equal(
+      aligned,
+      false,
+      'invoking the mutation target is not proof of cache alignment',
+    );
+    t.equal(host.applied.length, 1, 'the repair was attempted once');
+    t.equal(
+      host.cachedRecord.leader_node_id,
+      'node-stale',
+      'the unchanged cache remains observable as divergent',
+    );
+  },
+);
 
 test('refreshAuthoritativeCacheRow reports failure without touching the cache when the authority is unreadable',
   async (t) => {

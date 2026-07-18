@@ -5,7 +5,6 @@ import {
   CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  areCanonicalSystemTableRowsEqual,
   buildControlPlaneCacheReconcileContract,
   canonicalizeSystemTableRow,
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -14,6 +13,21 @@ import {
 import {
   isStaleForExistingRecord,
 } from '../cache/system-table-cache-row-merge.js';
+import {
+  SYSTEM_TABLE_CACHE_MUTATION_MODE,
+} from '../cache/cache-constants.js';
+import {
+  areAuthoritativeSystemTableCacheRowsEqual,
+  omitSystemTableCacheLocalFields,
+} from '../cache/system-table-cache-authoritative-reconciliation.js';
+
+const CACHE_RECONCILIATION_DIAGNOSTIC = Object.freeze({
+  MAX_DIVERGENT_FIELDS: 8,
+  FIELD_SEPARATOR: ',',
+  UNKNOWN_FIELDS: 'unknown_fields',
+  UNCLASSIFIED_POST_APPLY_DIVERGENCE:
+    'post_apply_cache_divergence=unclassified',
+});
 
 // The cache's own causal order (HLC / updated_at / nodes heartbeat watermark)
 // is the authority on row supersession. A cached row that this order proves
@@ -35,6 +49,7 @@ function buildAuthoritativeObservationFailure(
   reconcileIntent,
   mutationCount,
   error,
+  reconciliationReason = null,
 ) {
   return {
     success: false,
@@ -44,6 +59,7 @@ function buildAuthoritativeObservationFailure(
     authoritativeObservedAtMs: null,
     outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
     error,
+    reconciliationReason,
   };
 }
 
@@ -237,7 +253,7 @@ function applyAuthoritativeUpserts(options) {
       options.tableName,
       CDC_OPERATION.UPSERT,
       canonicalRow,
-      options.causeOptions,
+      options.upsertOptions,
     );
     mutationCount += 1;
   }
@@ -295,6 +311,66 @@ function cacheExactlyMatchesAuthoritativeRows(options) {
   });
 }
 
+function fieldValuesEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function buildPostApplyCacheDivergenceReason(context, indexes) {
+  const reconciledEntries =
+    context.readableCache.getAll(context.tableName) || [];
+  const reconciledIndex = buildCachedRowIndex(
+    reconciledEntries,
+    context.primaryKeyField,
+  );
+  const divergentRows = [];
+  for (const [key, authoritativeRow] of
+    indexes.authoritativeIndex.rowsByKey) {
+    const reconciledRow = reconciledIndex.rowsByKey.get(key) || null;
+    if (
+      context.rowComparator(reconciledRow, authoritativeRow) ||
+      cachedRowSupersedesAuthoritativeRow(
+        context.tableName,
+        reconciledRow,
+        authoritativeRow,
+      )
+    ) {
+      continue;
+    }
+    if (!reconciledRow) {
+      divergentRows.push(`${key}[missing_cached_row]`);
+      continue;
+    }
+    const comparableReconciledRow = omitSystemTableCacheLocalFields(
+      reconciledRow,
+      authoritativeRow,
+    );
+    const divergentFields = [
+      ...new Set([
+        ...Object.keys(comparableReconciledRow),
+        ...Object.keys(authoritativeRow),
+      ]),
+    ].filter((fieldName) => !fieldValuesEqual(
+      comparableReconciledRow[fieldName],
+      authoritativeRow[fieldName],
+    ));
+    divergentRows.push(
+      `${key}[${
+        divergentFields
+          .slice(
+            0,
+            CACHE_RECONCILIATION_DIAGNOSTIC.MAX_DIVERGENT_FIELDS,
+          )
+          .join(CACHE_RECONCILIATION_DIAGNOSTIC.FIELD_SEPARATOR) ||
+        CACHE_RECONCILIATION_DIAGNOSTIC.UNKNOWN_FIELDS
+      }]`,
+    );
+  }
+  const details = divergentRows.slice(0, 3).join(';');
+  return details.length > 0 ?
+    `post_apply_cache_divergence=${details}` :
+    CACHE_RECONCILIATION_DIAGNOSTIC.UNCLASSIFIED_POST_APPLY_DIVERGENCE;
+}
+
 function publishAuthoritativeObservation(options) {
   if (!options.observationRequested) {
     return {success: true, observedAtMs: null};
@@ -349,14 +425,17 @@ function buildReconciliationContext(options) {
     options.tableName,
     options.reconcileOptions,
   );
+  const authoritativeRowComparator = (left, right) =>
+    areAuthoritativeSystemTableCacheRowsEqual(
+      options.tableName,
+      left,
+      right,
+    );
   const rowComparator =
+    !options.observationRequested &&
     typeof options.reconcileOptions?.areRowsEqual === 'function' ?
       options.reconcileOptions.areRowsEqual :
-      (left, right) => areCanonicalSystemTableRowsEqual(
-        options.tableName,
-        left,
-        right,
-      );
+      authoritativeRowComparator;
   const causeOptions =
     typeof options.reconcileOptions?.causeId === 'string' &&
     options.reconcileOptions.causeId.length > 0 ?
@@ -390,6 +469,7 @@ function buildReconciliationIndexes(context) {
   return {
     cachedIndex,
     authoritativeIndex,
+    unreconciledCachedKeyCount,
     publishable: canPublishCompleteObservation({
       invalidAuthoritativeKeyCount: authoritativeIndex.invalidKeyCount,
       invalidCachedKeyCount: cachedIndex.invalidKeyCount,
@@ -400,6 +480,13 @@ function buildReconciliationIndexes(context) {
 }
 
 function applyCacheReconciliation(context, indexes) {
+  const upsertOptions = context.observationRequested ?
+    {
+      ...(context.causeOptions || {}),
+      mutationMode:
+        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION,
+    } :
+    context.causeOptions;
   const mutationOptions = {
     tableName: context.tableName,
     primaryKeyField: context.primaryKeyField,
@@ -410,6 +497,7 @@ function applyCacheReconciliation(context, indexes) {
     rowComparator: context.rowComparator,
     writableCache: context.writableCache,
     causeOptions: context.causeOptions,
+    upsertOptions,
     deleteMissingPolicy: context.deleteMissingPolicy,
   };
   return applyAuthoritativeUpserts(mutationOptions) +
@@ -504,11 +592,18 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
     });
     const indexes = buildReconciliationIndexes(context);
     if (observationRequested && !indexes.publishable) {
+      const reconciliationReason =
+        indexes.unreconciledCachedKeyCount > 0 ?
+          `pre_apply_unreconciled_cached_keys=${
+            indexes.unreconciledCachedKeyCount
+          }` :
+          'pre_apply_invalid_or_duplicate_keys';
       return buildAuthoritativeObservationFailure(
         tableName,
         reconcileIntent,
         0,
         CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
+        reconciliationReason,
       );
     }
 
@@ -519,6 +614,7 @@ const controlPlaneSystemTableGatewayCacheReconciliationMethods = {
         reconcileIntent,
         mutationCount,
         CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
+        buildPostApplyCacheDivergenceReason(context, indexes),
       );
     }
 

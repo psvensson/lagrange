@@ -296,6 +296,125 @@ t.test(
 );
 
 t.test(
+  'a complete observation ignores caller equality overrides before ' +
+    'publishing freshness',
+  async (t) => {
+    const authoritativeRow = {
+      endpoint_id: 'endpoint-comparator-bypass',
+      service_id: 'service-1',
+      node_id: 'node-seed',
+      protocol: 'http',
+      address: '127.0.0.1',
+      port: 8080,
+      health_status: 'healthy',
+      metadata: '{}',
+      created_at: OLD_MUTATION_AT_MS,
+      updated_at: OLD_MUTATION_AT_MS,
+    };
+    const fixture = createFixture({authoritativeRows: [authoritativeRow]});
+    fixture.writableCache.applySystemTableChange(
+      TABLES.SERVICE_ENDPOINTS,
+      CDC_OPERATION.UPSERT,
+      {
+        ...authoritativeRow,
+        address: '127.0.0.99',
+      },
+      {causeId: 'cdc:divergent-endpoint'},
+    );
+    const authoritativeRead =
+      await fixture.discovery.readAuthoritativeSystemTableRows(
+        TABLES.SERVICE_ENDPOINTS,
+        {
+          nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
+          reason: 'control_snapshot',
+        },
+      );
+
+    const result = await fixture.gateway.reconcileAuthoritativeCacheRows(
+      TABLES.SERVICE_ENDPOINTS,
+      authoritativeRead.rows,
+      {
+        areRowsEqual: () => true,
+        authoritativeObservation:
+          authoritativeRead.authoritativeObservation,
+        cacheMutationTarget: fixture.writableCache,
+        cachedRows: fixture.writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+        causeId: REPAIR_CAUSE_ID,
+        systemTableCache: fixture.writableCache,
+      },
+    );
+
+    t.equal(result.success, true, 'canonical full-row reconciliation succeeds');
+    t.equal(result.mutationCount, 1, 'the divergent row is repaired once');
+    t.equal(
+      fixture.readableCache.get(
+        TABLES.SERVICE_ENDPOINTS,
+        authoritativeRow.endpoint_id,
+      ).address,
+      authoritativeRow.address,
+      'a caller comparator cannot hide durable field divergence',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+      AUTHORITATIVE_OBSERVED_AT_MS,
+      'freshness publishes only after canonical equality is established',
+    );
+  },
+);
+
+t.test(
+  'non-observation reconciliation retains caller equality overrides',
+  async (t) => {
+    const authoritativeRow = {
+      endpoint_id: 'endpoint-scoped-comparator',
+      address: '127.0.0.1',
+      updated_at: OLD_MUTATION_AT_MS,
+    };
+    const fixture = createFixture();
+    fixture.writableCache.applySystemTableChange(
+      TABLES.SERVICE_ENDPOINTS,
+      CDC_OPERATION.UPSERT,
+      {
+        ...authoritativeRow,
+        address: '127.0.0.99',
+      },
+      {causeId: 'message-group-forwarding'},
+    );
+
+    const result = await fixture.gateway.reconcileAuthoritativeCacheRows(
+      TABLES.SERVICE_ENDPOINTS,
+      [authoritativeRow],
+      {
+        areRowsEqual: () => true,
+        cacheMutationTarget: fixture.writableCache,
+        cachedRows: fixture.writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+        systemTableCache: fixture.writableCache,
+      },
+    );
+
+    t.equal(result.success, true, 'the scoped reconcile remains valid');
+    t.equal(result.mutationCount, 0, 'the custom comparator retains ownership');
+    t.equal(
+      fixture.readableCache.get(
+        TABLES.SERVICE_ENDPOINTS,
+        authoritativeRow.endpoint_id,
+      ).address,
+      '127.0.0.99',
+      'non-observation callers keep their scoped equality semantics',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(
+        TABLES.SERVICE_ENDPOINTS,
+      ),
+      null,
+      'a scoped comparator cannot publish completeness evidence',
+    );
+  },
+);
+
+t.test(
   'post-mint mutation of the authoritative row array invalidates its receipt',
   async (t) => {
     const fixture = createFixture({
@@ -481,9 +600,10 @@ t.test(
     await t.rejects(
       reconcileFreshEvidence(fixture),
       new RegExp(
-        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED +
+          ':pre_apply_unreconciled_cached_keys=1',
       ),
-      'the admin repair owner propagates incomplete reconciliation failure',
+      'the admin repair owner identifies pre-apply key-set divergence',
     );
     t.equal(
       fixture.readableCache.getLastAuthoritativeObservedAtMs(
@@ -676,6 +796,234 @@ t.test(
 );
 
 t.test(
+  'complete publication repair replaces merge-preserved created_at exactly',
+  async (t) => {
+    const authoritativePublicationRow = {
+      publication_id: 'membership-publication:2:created-at-repair',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 2,
+      publisher_node_id: 'node-seed',
+      source_topology_epoch: null,
+      source_snapshot_version: null,
+      status: 'PUBLISHED',
+      published_active_node_ids: ['node-seed'],
+      required_ack_node_ids: ['node-seed'],
+      acknowledged_node_ids: ['node-seed'],
+      priority_partition_summary: null,
+      membership_lifecycle_summary: null,
+      reason_code: '',
+      created_at: OLD_MUTATION_AT_MS * 2,
+      updated_at: NEWER_MUTATION_AT_MS,
+      published_at: NEWER_MUTATION_AT_MS,
+      closed_at: NEWER_MUTATION_AT_MS,
+      transition_history: [],
+    };
+    const fixture = createFixture({
+      authoritativeRows: [authoritativePublicationRow],
+    });
+    fixture.writableCache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      CDC_OPERATION.UPSERT,
+      {
+        ...authoritativePublicationRow,
+        created_at: OLD_MUTATION_AT_MS,
+      },
+      {causeId: 'cdc:projected-publication'},
+    );
+    fixture.writableCache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      CDC_OPERATION.UPSERT,
+      authoritativePublicationRow,
+      {causeId: 'cdc:ordinary-publication-merge'},
+    );
+    t.equal(
+      fixture.readableCache.get(
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+        authoritativePublicationRow.publication_id,
+      ).created_at,
+      OLD_MUTATION_AT_MS,
+      'ordinary CDC retains the first observed creation time',
+    );
+
+    const authoritativeRead =
+      await fixture.discovery.readAuthoritativeSystemTableRows(
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+        {
+          nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
+          reason: 'control_snapshot',
+        },
+      );
+    const mutationCount =
+      await fixture.discovery.applyAuthoritativeSystemTableRows(
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+        authoritativeRead.rows,
+        REPAIR_CAUSE_ID,
+        {authoritativeObservation: authoritativeRead.authoritativeObservation},
+      );
+
+    t.equal(
+      mutationCount,
+      1,
+      'complete authority replaces one merge-divergent cache row',
+    );
+    t.same(
+      fixture.readableCache.get(
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+        authoritativePublicationRow.publication_id,
+      ),
+      authoritativePublicationRow,
+      'complete authority leaves the cache exactly equal to durable truth',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
+      ),
+      AUTHORITATIVE_OBSERVED_AT_MS,
+      'exact replacement publishes complete observation evidence',
+    );
+  },
+);
+
+t.test(
+  'cache-only origin HLC does not make a durable authoritative row divergent',
+  async (t) => {
+    const authoritativeNodeRow = {
+      node_id: 'node-cache-hlc',
+      node_address: 'localhost:8080',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: AUTHORITATIVE_OBSERVED_AT_MS - 100,
+      ready_lease_expires_at: AUTHORITATIVE_OBSERVED_AT_MS + 10_000,
+      created_at: OLD_MUTATION_AT_MS,
+    };
+    const fixture = createFixture({authoritativeRows: [authoritativeNodeRow]});
+    fixture.writableCache.applySystemTableChange(
+      TABLES.NODES,
+      CDC_OPERATION.UPSERT,
+      {
+        ...authoritativeNodeRow,
+        updated_at_hlc: '60900-0-node-cache-hlc',
+      },
+      {causeId: 'cdc:origin-hlc-envelope'},
+    );
+
+    const authoritativeRead =
+      await fixture.discovery.readAuthoritativeSystemTableRows(
+        TABLES.NODES,
+        {
+          nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
+          reason: 'control_snapshot',
+        },
+      );
+    const mutationCount =
+      await fixture.discovery.applyAuthoritativeSystemTableRows(
+        TABLES.NODES,
+        authoritativeRead.rows,
+        REPAIR_CAUSE_ID,
+        {authoritativeObservation: authoritativeRead.authoritativeObservation},
+      );
+
+    t.equal(
+      mutationCount,
+      0,
+      'cache-only HLC metadata does not fabricate a durable row mutation',
+    );
+    t.equal(
+      fixture.readableCache.get(
+        TABLES.NODES,
+        authoritativeNodeRow.node_id,
+      ).updated_at_hlc,
+      '60900-0-node-cache-hlc',
+      'the cache retains the origin HLC used by causal ordering',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(TABLES.NODES),
+      AUTHORITATIVE_OBSERVED_AT_MS,
+      'durable row equality can publish despite cache-only envelope metadata',
+    );
+  },
+);
+
+t.test(
+  'local partition tenure annotations survive durable authoritative repair',
+  async (t) => {
+    const authoritativePartitionRow = {
+      partition_id: 'replica_operations-p1',
+      table_id: 'replica_operations',
+      partition_number: 1,
+      leader_node_id: 'node-local-leader',
+      state: 'active',
+      created_at: OLD_MUTATION_AT_MS,
+      updated_at: OLD_MUTATION_AT_MS,
+    };
+    const fixture = createFixture({
+      authoritativeRows: [authoritativePartitionRow],
+    });
+    fixture.writableCache.applySystemTableChange(
+      TABLES.PARTITIONS,
+      CDC_OPERATION.UPSERT,
+      {
+        ...authoritativePartitionRow,
+        state: 'recovering',
+        updated_at_hlc: '60900-0-node-local-leader',
+        leader_claim_node_id: 'node-local-leader',
+        leader_claim_raft_term: 17,
+        leader_claim_minted_against_updated_at: OLD_MUTATION_AT_MS,
+      },
+      {causeId: 'local-raft-leader:elected:replica_operations-p1'},
+    );
+
+    const authoritativeRead =
+      await fixture.discovery.readAuthoritativeSystemTableRows(
+        TABLES.PARTITIONS,
+        {
+          nowMs: AUTHORITATIVE_OBSERVED_AT_MS,
+          reason: 'control_snapshot',
+        },
+      );
+    const mutationCount =
+      await fixture.discovery.applyAuthoritativeSystemTableRows(
+        TABLES.PARTITIONS,
+        authoritativeRead.rows,
+        REPAIR_CAUSE_ID,
+        {authoritativeObservation: authoritativeRead.authoritativeObservation},
+      );
+    const reconciledRow = fixture.readableCache.get(
+      TABLES.PARTITIONS,
+      authoritativePartitionRow.partition_id,
+    );
+
+    t.equal(
+      mutationCount,
+      1,
+      'the divergent durable state is repaired once',
+    );
+    t.equal(
+      reconciledRow.state,
+      authoritativePartitionRow.state,
+      'the authoritative durable state replaces the cached value',
+    );
+    t.equal(
+      reconciledRow.leader_claim_node_id,
+      'node-local-leader',
+      'reconciliation retains the active local tenure claim',
+    );
+    t.equal(
+      reconciledRow.leader_claim_raft_term,
+      17,
+      'reconciliation retains the term-bound replay fence',
+    );
+    t.equal(
+      fixture.readableCache.getLastAuthoritativeObservedAtMs(
+        TABLES.PARTITIONS,
+      ),
+      AUTHORITATIVE_OBSERVED_AT_MS,
+      'durable equality publishes despite local-only claim annotations',
+    );
+  },
+);
+
+t.test(
   'a causally newer cached nodes heartbeat cannot wedge complete-table ' +
     'observation',
   async (t) => {
@@ -806,9 +1154,10 @@ t.test(
         {authoritativeObservation: authoritativeRead.authoritativeObservation},
       ),
       new RegExp(
-        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED,
+        CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_ERROR.CACHE_NOT_RECONCILED +
+          ':post_apply_cache_divergence=.*address',
       ),
-      'unexplained divergence after apply stays fail-closed',
+      'post-apply divergence identifies the field a write failed to repair',
     );
     t.equal(
       fixture.readableCache.getLastAuthoritativeObservedAtMs(
