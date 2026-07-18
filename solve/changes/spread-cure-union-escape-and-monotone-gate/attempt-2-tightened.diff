@@ -1,0 +1,835 @@
+diff --git a/examples/service-data-affinity/affinity-demo-preload-gate.js b/examples/service-data-affinity/affinity-demo-preload-gate.js
+index d9ebc803..b9028c77 100644
+--- a/examples/service-data-affinity/affinity-demo-preload-gate.js
++++ b/examples/service-data-affinity/affinity-demo-preload-gate.js
+@@ -4,6 +4,7 @@ import {
+ } from '../../src/admin/load-lane-table-admission-probe.js';
+ import {
+   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
++  CONTROL_PLANE_QUIESCENCE_REASON,
+   CONTROL_PLANE_QUIESCENCE_STATE,
+   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
+   buildControlPlaneQuiescenceSnapshot,
+@@ -206,6 +207,17 @@ function buildAvailablePrioritySpreadTopology(currentPlacementObservation) {
+       totalSpreadGap === ZERO,
+     totalSpreadGap,
+     prioritySpreadGap: priorityPartitionSummary.totalSpreadGap,
++    // Explain surface: a spread-open denial must name the partitions
++    // holding the gap (the 2026-07-18T17-40 denial reported only gap=1,
++    // forcing archive forensics to find sql_write_operations-p1).
++    blockedPartitions: (
++      Array.isArray(priorityPartitionSummary.blockedPartitions) ?
++        priorityPartitionSummary.blockedPartitions :
++        []
++    ).map((partition) => Object.freeze({
++      partitionId: partition.partitionId,
++      spreadGap: partition.spreadGap,
++    })),
+     missingLeaderPartitionCount:
+       leaderCoverage.missingLeaderPartitionCount,
+     missingLeaderPartitionIds:
+@@ -324,24 +336,65 @@ function normalizeSchemaStableWindowMs(value) {
+     DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS;
+ }
+ 
++// Observer-side failure states: the poll could not SEE the control plane
++// (admin query timeout, snapshot lane hiccup). These are evidence about the
++// observer, not the system — monotone-progress rule (the HDFS safe-mode /
++// ES delayed-allocation lesson): they HOLD an accumulated stability window
++// instead of resetting it, bounded below by observation-blindness tolerance.
++const SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES = new Set([
++  CONTROL_PLANE_QUIESCENCE_STATE.OBSERVATION_UNAVAILABLE,
++  CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
++]);
++
++function isSchemaStabilityObservationFailure(snapshot) {
++  if (SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES.has(snapshot.state)) {
++    return true;
++  }
++  // CONTROL_PLANE_PRESSURE is observer-side only when it came from a
++  // pressure-shaped snapshot QUERY error, not from system pressure signals.
++  return (
++    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE &&
++    Array.isArray(snapshot.reasonCodes) &&
++    snapshot.reasonCodes.includes(
++      CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR,
++    )
++  );
++}
++
+ function advanceSchemaStabilityWindow(
+   snapshot,
+   stabilityWindow,
+   nowMs,
++  stableWindowMs,
+ ) {
+   if (
+-    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
+-    snapshot.ready !== true
++    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT &&
++    snapshot.ready === true
+   ) {
+-    return INACTIVE_SCHEMA_STABILITY_WINDOW;
++    if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
++      return Object.freeze({
++        ...stabilityWindow,
++        lastQuiescentObservationAtMs: nowMs,
++      });
++    }
++    return Object.freeze({
++      phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
++      startedAtMs: nowMs,
++      lastQuiescentObservationAtMs: nowMs,
++    });
+   }
+-  if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
++  // Hold through observer hiccups while the accumulated window is still
++  // backed by a recent real quiescent observation; a blind stretch longer
++  // than the stable window itself can no longer support a stability claim.
++  if (
++    stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING &&
++    isSchemaStabilityObservationFailure(snapshot) &&
++    nowMs - (stabilityWindow.lastQuiescentObservationAtMs ?? ZERO) <=
++      stableWindowMs
++  ) {
+     return stabilityWindow;
+   }
+-  return Object.freeze({
+-    phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
+-    startedAtMs: nowMs,
+-  });
++  return INACTIVE_SCHEMA_STABILITY_WINDOW;
+ }
+ 
+ function projectSchemaStabilityWindow(
+@@ -353,6 +406,20 @@ function projectSchemaStabilityWindow(
+   if (stabilityWindow.phase !== SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
+     return snapshot;
+   }
++  // A held window (observer hiccup) must not project QUIESCENT: stability
++  // may only be CONFIRMED by a poll that actually observed the control
++  // plane. The hold preserves accumulated elapsed time; confirmation waits
++  // for the next real observation.
++  if (
++    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
++    snapshot.ready !== true
++  ) {
++    return Object.freeze({
++      ...snapshot,
++      stableElapsedMs: Math.max(ZERO, nowMs - stabilityWindow.startedAtMs),
++      stabilityWindowHeld: true,
++    });
++  }
+   const stableElapsedMs = Math.max(
+     ZERO,
+     nowMs - stabilityWindow.startedAtMs,
+@@ -390,6 +457,7 @@ function buildSchemaStabilityObservation(
+     observedSnapshot,
+     stabilityWindow,
+     nowMs,
++    stableWindowMs,
+   );
+   const snapshot = projectSchemaStabilityWindow(
+     observedSnapshot,
+@@ -397,12 +465,16 @@ function buildSchemaStabilityObservation(
+     nowMs,
+     stableWindowMs,
+   );
++  // Held polls (observer hiccup with the window preserved) neither confirm
++  // nor forfeit accumulated confirmations.
++  const held = snapshot.stabilityWindowHeld === true;
+   return Object.freeze({
+     snapshot,
+     stabilityWindow: nextStabilityWindow,
+     stableConfirmationCount:
+       snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ?
+-        stableConfirmationCount + 1 : ZERO,
++        stableConfirmationCount + 1 :
++        (held ? stableConfirmationCount : ZERO),
+   });
+ }
+ 
+diff --git a/scripts/run-spread-cure-union-escape-scenarios.js b/scripts/run-spread-cure-union-escape-scenarios.js
+new file mode 100644
+index 00000000..e09bbd7e
+--- /dev/null
++++ b/scripts/run-spread-cure-union-escape-scenarios.js
+@@ -0,0 +1,67 @@
++#!/usr/bin/env node
++/**
++ * Runner for the `spread-cure-union-escape-and-monotone-gate` quest
++ * scenario.
++ *
++ * Executes the scenario's deterministic guard-test suite (the committed
++ * proof of the quest statement) and writes a scenario-harness report for
++ * the Solver's `scenario-harness` probe; see
++ * `scripts/checks/guard-test-scenario-runner.js` for the shared machinery.
++ *
++ * Scenario -> guard tests (root cause pinned from the 2026-07-18T17-40-24
++ * live denial forensics: schema admission denied on
++ * critical_system_spread_gap=1 while the topology guard blocked the only
++ * spread cure with replica_inventory_unusable for 3+ minutes):
++ *   spread-cure-union-escape-and-monotone-gate
++ *     - test/rebalancer/critical-spread-terminal-stall-repro.test.js
++ *     - test/rebalancer/rebalance-coordinator-topology-guard.test.js
++ *       (the guard's own suite, incl. the ledger-cure boundary the
++ *        generalized escape must not widen: lone-replica REPLACEs and the
++ *        ledger partition stay outside the priority spread-cure escape)
++ *       (the live terminal shape end-to-end: [A,A,B] priority partition,
++ *        free nodes, authoritative services read unavailable -> an admitted
++ *        spread-restoring operation within one evaluation cycle)
++ *     - test/rebalancer/move-planner-spread-vs-count-reconciliation.test.js
++ *     - test/rebalancer/move-planner-over-creation-cap.test.js
++ *     - test/rebalancer/move-planner-critical-replace-serialization.test.js
++ *     - test/rebalancer/priority-remove-safety-spread-nonregression.test.js
++ *       (the sealed planner invariants the union escape must not re-open:
++ *        run4 over-target loop, over-creation cap, REPLACE serialization,
++ *        remove-safety monotonicity)
++ *     - test/convergence/dt6-formation-ledger-quorum-spread-first.test.js
++ *     - test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js
++ *       (the ledger-cure escape this quest generalizes stays intact)
++ *     - test/runtime/movielens-preload-admission-gate.test.js
++ *       (monotone stability window: observer-side failures hold accumulated
++ *        confirmation bounded by one stable window; real churn still resets)
++ *     - test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js
++ *       (spread-open denials name the gapped partitions in reason detail)
++ *
++ * NOTE (live validation): admission/rebalancer-policy changes must ALSO be
++ * validated with a full run-affinity-demo run AND interpreted against a
++ * paired clean-HEAD control before committing (standing rule from the
++ * pressure-admission falsification and the 2026-07-18 flaky-baseline day).
++ *
++ * Usage: node scripts/run-spread-cure-union-escape-scenarios.js
++ */
++
++import {
++  runGuardTestScenarios,
++} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'spread-cure-union-escape-and-monotone-gate': [
++    'test/rebalancer/critical-spread-terminal-stall-repro.test.js',
++    'test/rebalancer/rebalance-coordinator-topology-guard.test.js',
++    'test/rebalancer/move-planner-spread-vs-count-reconciliation.test.js',
++    'test/rebalancer/move-planner-over-creation-cap.test.js',
++    'test/rebalancer/move-planner-critical-replace-serialization.test.js',
++    'test/rebalancer/priority-remove-safety-spread-nonregression.test.js',
++    'test/convergence/dt6-formation-ledger-quorum-spread-first.test.js',
++    'test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js',
++    'test/runtime/movielens-preload-admission-gate.test.js',
++    'test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/rebalancer/rebalance-coordinator-topology-guard-methods.js b/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
+index a44a3b13..d505d549 100644
+--- a/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
++++ b/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
+@@ -10,6 +10,10 @@ import {
+ import {
+   isEngagedLedgerQuorumSpreadCureMove,
+ } from './operation-ledger-hold-policy.js';
++import {MOVE_REASON} from './rebalancer-constants.js';
++import {
++  isOperationLedgerPartition,
++} from '../bootstrap/system-partition-classification.js';
+ import {
+   getStartupAuthorityControlPlanePlacementEligibleNodeIds,
+ } from '../control-plane/startup-authority-placement-eligibility.js';
+@@ -128,13 +132,13 @@ class RebalanceCoordinatorTopologyGuardMethods {
+    * @return {boolean}
+    * @private
+    */
+-  isConcentratedLedgerRecoveryMove(
+-    context,
+-    inventory,
+-    authoritativeObservation,
+-  ) {
+-    const partitionId = String(context?.partitionId || '').trim();
+-    if (
++  // Shared provenance precondition for BOTH conservative-union escapes:
++  // the authoritative services owner is unavailable, the merged
++  // cache/operation union is internally clean, and operation visibility is
++  // still usable — the exact situation where fail-closed would otherwise
++  // convert owner-unreachability into permanent denial of the cure.
++  hasConservativeUnionInventoryProvenance(inventory, authoritativeObservation) {
++    return !(
+       authoritativeObservation?.available !== false ||
+       inventory?.provenance?.consistency !==
+         REPLICA_INVENTORY_CONSISTENCY.SOURCE_UNAVAILABLE ||
+@@ -145,24 +149,51 @@ class RebalanceCoordinatorTopologyGuardMethods {
+         REPLICA_INVENTORY_OBSERVATION_STATE.DEFERRED,
+       ].includes(inventory?.provenance?.inFlightOperationsState) ||
+       inventory?.anomalies?.length > 0
++    );
++  }
++
++  // REPLACE escapes must prove their source against union ACTUALS: an
++  // occupied ACTIVE/REMOVING voter row, never an inferred placement.
++  resolveConservativeUnionReplaceSource(context, inventory) {
++    const sourceReplicaId = String(context?.move?.replicaId || '').trim();
++    const sourceReplica = inventory.replicas.find(
++      (replica) => replica.replicaId === sourceReplicaId,
++    );
++    if (
++      !sourceReplica?.voter ||
++      ![
++        ReplicaStatus.ACTIVE,
++        ReplicaStatus.REMOVING,
++      ].includes(sourceReplica?.status) ||
++      !sourceReplica?.occupied
++    ) {
++      return null;
++    }
++    return sourceReplica;
++  }
++
++  isConcentratedLedgerRecoveryMove(
++    context,
++    inventory,
++    authoritativeObservation,
++  ) {
++    const partitionId = String(context?.partitionId || '').trim();
++    if (
++      !this.hasConservativeUnionInventoryProvenance(
++        inventory,
++        authoritativeObservation,
++      )
+     ) {
+       return false;
+     }
+     const isReplace = context?.normalizedMoveType === OperationType.REPLACE;
+     let sourceReplica = null;
+     if (isReplace) {
+-      const sourceReplicaId = String(context?.move?.replicaId || '').trim();
+-      sourceReplica = inventory.replicas.find(
+-        (replica) => replica.replicaId === sourceReplicaId,
++      sourceReplica = this.resolveConservativeUnionReplaceSource(
++        context,
++        inventory,
+       );
+-      if (
+-        !sourceReplica?.voter ||
+-        ![
+-          ReplicaStatus.ACTIVE,
+-          ReplicaStatus.REMOVING,
+-        ].includes(sourceReplica?.status) ||
+-        !sourceReplica?.occupied
+-      ) {
++      if (!sourceReplica) {
+         return false;
+       }
+     }
+@@ -180,6 +211,93 @@ class RebalanceCoordinatorTopologyGuardMethods {
+     });
+   }
+ 
++  /**
++   * Conservative-union escape for PRIORITY control-plane spread cures — the
++   * generalization of the ledger escape to the partitions the schema
++   * admission gate waits on. Without it, an unavailable authoritative
++   * services read blocks the only cure for critical_system_spread_open
++   * while the gate keeps demanding it (the 2026-07-18T17:40 terminal
++   * stall: sql_write_operations-p1 at [A,A,B] with free nodes, every
++   * spread ADD denied replica_inventory_unusable for 3 minutes with a
++   * frozen observation watermark). The union view must itself PROVE the
++   * cure is needed and safe: distinct occupied nodes below the replica
++   * target, an unoccupied target node, and no topology-increasing
++   * operation already in flight. The occupied/target-count decision rows
++   * still run after this escape, and counted distinct node ids include
++   * in-flight targets, so the tick after one admitted cure re-blocks any
++   * repeat — the run4 over-target invariant stays closed coordinator-side
++   * while the planner-side guards (over-creation cap, spread-vs-count
++   * reconcile, REPLACE serialization) are untouched upstream.
++   * @param {Object} context
++   * @param {Object} inventory
++   * @param {Object} authoritativeObservation
++   * @param {number|null} targetReplicaCount
++   * @return {boolean}
++   * @private
++   */
++  isEngagedPrioritySpreadCureMove(
++    context,
++    inventory,
++    authoritativeObservation,
++    targetReplicaCount,
++  ) {
++    const partitionId = String(context?.partitionId || '').trim();
++    if (
++      partitionId.length === 0 ||
++      !Number.isFinite(targetReplicaCount) ||
++      !this.hasConservativeUnionInventoryProvenance(
++        inventory,
++        authoritativeObservation,
++      ) ||
++      // The operation ledger keeps its own, stricter cure relation
++      // (isConcentratedLedgerRecoveryMove); this escape covers the OTHER
++      // priority control-plane partitions only.
++      isOperationLedgerPartition({partitionId}) ||
++      !this.isPriorityControlPlanePartition(partitionId)
++    ) {
++      return false;
++    }
++    const moveType = context?.normalizedMoveType;
++    if (moveType === OperationType.ADD) {
++      // The cure-typing rides as moveReason on coordinator operation
++      // requests and as reason on planner move objects.
++      const moveReason =
++        context?.move?.moveReason ?? context?.move?.reason;
++      if (moveReason !== MOVE_REASON.SPREAD_REPLICAS) {
++        return false;
++      }
++    } else if (moveType === OperationType.REPLACE) {
++      const sourceReplica = this.resolveConservativeUnionReplaceSource(
++        context,
++        inventory,
++      );
++      if (!sourceReplica) {
++        return false;
++      }
++      // Only a REPLACE whose source sits on an over-represented node
++      // (hosting more than one occupied replica in the union) restores
++      // spread; relocating a lone replica keeps the distinct-node count
++      // unchanged and must not ride the spread-cure escape.
++      const sourceNodeOccupancy = inventory.replicas.filter(
++        (replica) =>
++          replica.occupied && replica.nodeId === sourceReplica.nodeId,
++      ).length;
++      if (sourceNodeOccupancy < 2) {
++        return false;
++      }
++    } else {
++      return false;
++    }
++    const targetNodeId = String(context?.move?.nodeId || '').trim();
++    return (
++      targetNodeId.length > 0 &&
++      !occupiesNode(inventory, targetNodeId) &&
++      inventory.occupiedNodeIds.length < targetReplicaCount &&
++      !inventory.operations.some((operation) =>
++        TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(operation.type))
++    );
++  }
++
+   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
+     if (entityType !== SERVICE_TYPE.PARTITION) {
+       return null;
+@@ -326,11 +444,19 @@ class RebalanceCoordinatorTopologyGuardMethods {
+         inventory,
+         authoritativeObservation,
+       );
++    const engagedPrioritySpreadCureMove =
++      this.isEngagedPrioritySpreadCureMove(
++        context,
++        inventory,
++        authoritativeObservation,
++        targetReplicaCount,
++      );
+     const topologyGuardDecisionTable = Object.freeze([
+       Object.freeze({
+         matches:
+           !inventory.provenance.topologyIncreaseUsable &&
+-          !concentratedLedgerRecoveryMove,
++          !concentratedLedgerRecoveryMove &&
++          !engagedPrioritySpreadCureMove,
+         state: TOPOLOGY_GUARD_STATE.INVENTORY_UNUSABLE,
+         blockingReason: TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
+       }),
+diff --git a/src/rebalancer/unified-rebalancer-move-execution.js b/src/rebalancer/unified-rebalancer-move-execution.js
+index a542c04b..07e58f94 100644
+--- a/src/rebalancer/unified-rebalancer-move-execution.js
++++ b/src/rebalancer/unified-rebalancer-move-execution.js
+@@ -66,6 +66,11 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
+       nodeId: move.nodeId,
+       replicaId: move.replicaId,
+       sourceNodeId: move.sourceNodeId,
++      // The planner's cure-typing must survive the coordinator boundary:
++      // the topology guard's priority-spread-cure escape admits exactly
++      // spread-typed moves (dropping it re-created the 17:40 terminal
++      // stall shape at this seam).
++      moveReason: move.reason,
+       enforceConcurrentOperationBudget: true,
+     };
+     const membershipPublicationEpoch = Number.isInteger(
+diff --git a/test/rebalancer/critical-spread-terminal-stall-repro.test.js b/test/rebalancer/critical-spread-terminal-stall-repro.test.js
+new file mode 100644
+index 00000000..10ed057e
+--- /dev/null
++++ b/test/rebalancer/critical-spread-terminal-stall-repro.test.js
+@@ -0,0 +1,300 @@
++/**
++ * Deterministic RED reproduction of the critical-spread terminal stall
++ * observed live in run-2026-07-18T17-41-00-777Z (service-data-affinity demo):
++ *
++ * A 5-node cluster with every node ACTIVE ends with the priority partition
++ * sql_write_operations-p1 holding 3 ACTIVE replicas on only 2 distinct nodes
++ * ([A, A, B]), zero in-flight operations, and 3 free active nodes. The
++ * planner correctly emits the spread-restoring ADD (spread_replicas) every
++ * evaluation tick, but the coordinator's create-time topology guard blocks
++ * it with `replica_inventory_unusable` whenever the AUTHORITATIVE services
++ * owner read is unavailable (`committedRowsState: "unavailable"` ->
++ * `provenance.topologyIncreaseUsable: false`), even though the cache-visible
++ * topology proves the same [A, A, B] facts the guard needs. The
++ * `isConcentratedLedgerRecoveryMove` escape covers only the operation-ledger
++ * partition (replica_operations), so an ordinary priority partition's spread
++ * cure is silently re-blocked tick after tick and the
++ * critical_system_spread_gap never closes (live: 17:37:26 -> 17:40:24
++ * deadline, schema admission denied throughout).
++ *
++ * Swallowing condition:
++ *   src/rebalancer/rebalance-coordinator-topology-guard-methods.js:330-336
++ *   (decision row `!inventory.provenance.topologyIncreaseUsable &&
++ *   !concentratedLedgerRecoveryMove` -> REPLICA_INVENTORY_UNUSABLE), fed by
++ *   the `available: false` authoritative observation at
++ *   rebalance-coordinator-operation-read-methods.js:455-495.
++ *
++ * This test drives the REAL UnifiedRebalancer + REAL RebalanceCoordinator
++ * in-process with the live topology and an unavailable authoritative
++ * services read, and asserts that ONE evaluation cycle produces an admitted
++ * spread-restoring operation (spread-typed ADD or count-neutral REPLACE)
++ * targeting a free node. It FAILS on current source because the topology
++ * guard blocks the cure with `replica_inventory_unusable`.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {
++  EntityType,
++  MoveType,
++  NodeStatus,
++  ReplicaStatus,
++  TriggerType,
++} from '../../src/rebalancer/unified-rebalancer.js';
++import {
++  SYSTEM_TABLE_NAME,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  createMockCache,
++  createMockControlPlaneReadinessService,
++  createTestCoordinator,
++  createTestRebalancer,
++} from './test-helpers.js';
++
++const TEST_PARTITION_ID = 'sql_write_operations-p1';
++const TEST_TABLE_ID = SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
++const TEST_NODE_ID_A = 'node-spread-a';
++const TEST_NODE_ID_B = 'node-spread-b';
++const TEST_NODE_ID_C = 'node-spread-c';
++const TEST_NODE_ID_D = 'node-spread-d';
++const TEST_NODE_ID_E = 'node-spread-e';
++const TEST_FREE_NODE_IDS = Object.freeze([
++  TEST_NODE_ID_C,
++  TEST_NODE_ID_D,
++  TEST_NODE_ID_E,
++]);
++const TEST_REPLICA_ID_1 = 'sql_write_operations-p1-r1';
++const TEST_REPLICA_ID_2 = 'sql_write_operations-p1-r2';
++const TEST_REPLICA_ID_3 = 'sql_write_operations-p1-r3';
++const TEST_PARTITION_SERVICE_TYPE = 'partition';
++const TEST_ADDRESS_PREFIX = 'local/partition/';
++const TEST_RAFT_ROLE_LEADER = 'leader';
++const TEST_RAFT_ROLE_FOLLOWER = 'follower';
++const TEST_TARGET_REPLICA_COUNT = 3;
++const TEST_REBALANCE_BUDGET = 5;
++const TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS = 0;
++// The live failure signature this repro re-creates: the authoritative
++// services owner read stays unavailable while the cache remains readable
++// (run archive: authoritativeAvailable:false, authoritativeReasonCode:null,
++// committedRowsState:"unavailable" on every skipped attempt).
++const TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE = Object.freeze({
++  success: false,
++  error: 'authoritative services owner unavailable',
++});
++const TEST_SERVICES_SQL_PATTERN = 'FROM services';
++
++function initializeTestEnvironment() {
++  ConfigurationManager.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  if (!config.isInitialized()) {
++    config.initialize({
++      node: {id: TEST_NODE_ID_A},
++      logging: {level: 'error'},
++    });
++  }
++
++  const logging = LoggingService.getInstance();
++  if (!logging.isInitialized()) {
++    logging.initialize({level: 'error'});
++  }
++}
++
++function createNodeRow(nodeId) {
++  return {
++    node_id: nodeId,
++    status: NodeStatus.ACTIVE,
++  };
++}
++
++function createReplicaRow(replicaId, nodeId, raftRole) {
++  return {
++    service_id: replicaId,
++    service_type: TEST_PARTITION_SERVICE_TYPE,
++    node_id: nodeId,
++    partition_id: TEST_PARTITION_ID,
++    replica_id: replicaId,
++    address: TEST_ADDRESS_PREFIX + replicaId,
++    raft_role: raftRole,
++    status: ReplicaStatus.ACTIVE,
++  };
++}
++
++// The planner checks `result.decision === 'allow'` while coordinator-side
++// callers check `allowed`/`decisionType`; provide both shapes so storage
++// capacity never interferes (the live run logged "Storage admission
++// allowed" throughout).
++function createAllowAllStorageAdmissionService() {
++  const allow = async () => ({
++    decision: 'allow',
++    allowed: true,
++    decisionType: 'admitted',
++  });
++  return {
++    checkAdd: allow,
++    checkReplace: allow,
++    checkSplit: allow,
++  };
++}
++
++function isAddLikeMoveResult(moveResult) {
++  return (
++    moveResult?.operation === MoveType.ADD ||
++    moveResult?.operation === MoveType.REPLACE
++  );
++}
++
++function isSpreadRestoringOperationRow(operationRow) {
++  const operationType = String(
++    operationRow?.type || '',
++  ).toLowerCase();
++  const targetNodeId =
++    operationRow?.target_node_id || operationRow?.targetNodeId || null;
++  return (
++    (operationType === MoveType.ADD || operationType === MoveType.REPLACE) &&
++    TEST_FREE_NODE_IDS.includes(targetNodeId)
++  );
++}
++
++test('critical priority partition [A,A,B] with free active nodes gets a ' +
++'spread-restoring operation within one evaluation cycle even while the ' +
++'authoritative services read is unavailable', async (t) => {
++  initializeTestEnvironment();
++
++  const cache = createMockCache({
++    nodes: [
++      createNodeRow(TEST_NODE_ID_A),
++      createNodeRow(TEST_NODE_ID_B),
++      createNodeRow(TEST_NODE_ID_C),
++      createNodeRow(TEST_NODE_ID_D),
++      createNodeRow(TEST_NODE_ID_E),
++    ],
++    services: [
++      // TWO replicas co-located on node A, one on node B — the live
++      // terminal topology (critical_system_spread_gap = 1 at target 3).
++      createReplicaRow(TEST_REPLICA_ID_1, TEST_NODE_ID_A,
++        TEST_RAFT_ROLE_LEADER),
++      createReplicaRow(TEST_REPLICA_ID_2, TEST_NODE_ID_A,
++        TEST_RAFT_ROLE_FOLLOWER),
++      createReplicaRow(TEST_REPLICA_ID_3, TEST_NODE_ID_B,
++        TEST_RAFT_ROLE_FOLLOWER),
++    ],
++    partitions: [
++      {
++        partition_id: TEST_PARTITION_ID,
++        table_id: TEST_TABLE_ID,
++      },
++    ],
++    // No in-flight operations: the live window had zero replica_operations
++    // rows in flight for this partition while the gate demanded creation.
++    replicaOperations: [],
++  });
++  const readinessService = createMockControlPlaneReadinessService({
++    systemTableCache: cache,
++    defaultRepairEligible: true,
++  });
++  const storageAdmissionService = createAllowAllStorageAdmissionService();
++  const coordinator = createTestCoordinator({
++    nodeId: TEST_NODE_ID_A,
++    systemTableCache: cache,
++    controlPlaneReadinessService: readinessService,
++    storageAdmissionService,
++    // The live suppressor precondition: every authoritative read of the
++    // services owner fails while cache reads keep working.
++    sqlQueryResults: {
++      [TEST_SERVICES_SQL_PATTERN]:
++        TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE,
++    },
++  });
++  const rebalancer = createTestRebalancer({
++    entityId: TEST_PARTITION_ID,
++    entityType: EntityType.PARTITION,
++    nodeId: TEST_NODE_ID_A,
++    systemTableCache: cache,
++    rebalanceCoordinator: coordinator,
++    controlPlaneReadinessService: readinessService,
++    storageAdmissionService,
++    storageAccountingService: {estimateReplicaBytes: () => 1},
++  });
++
++  rebalancer.setLeader(true);
++  rebalancer.clusterReadinessConfirmed = true;
++  rebalancer.isStabilized = () => true;
++  rebalancer.getConfiguredRebalanceBudget = async () =>
++    TEST_REBALANCE_BUDGET;
++  rebalancer.getGlobalInFlightOperationCount = async () =>
++    TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
++
++  try {
++    // Harness sanity: all 5 active nodes are visible, replicas read [A,A,B].
++    t.equal(
++      rebalancer.getAvailableNodes().length,
++      5,
++      'all five active nodes must be available to placement (harness sanity)',
++    );
++    t.equal(
++      rebalancer.getCurrentReplicas().length,
++      TEST_TARGET_REPLICA_COUNT,
++      'partition must observe its three ACTIVE replicas (harness sanity)',
++    );
++
++    const result = await rebalancer.rebalance(TriggerType.PERIODIC);
++
++    t.equal(result.success, true, 'rebalance cycle must complete');
++    const addLikeMoveResults = (result.moves || []).filter(
++      isAddLikeMoveResult,
++    );
++    // Planner-level sanity: this PASSES on current source — the bare planner
++    // correctly emits the spread cure for [A,A,B]. It isolates the red
++    // assertion below to the admission layer, not the planner.
++    t.ok(
++      addLikeMoveResults.length >= 1,
++      'planner must emit a spread-restoring add-like move for [A,A,B] ' +
++        'with free active nodes (planner sanity; failure here would be a ' +
++        'harness problem, not the live bug)',
++    );
++
++    const admittedAddLikeMoveResults = addLikeMoveResults.filter(
++      (moveResult) =>
++        moveResult.skipped !== true && moveResult.success !== false,
++    );
++    const skipDiagnostics = addLikeMoveResults
++      .filter((moveResult) => moveResult.skipped === true)
++      .map((moveResult) => ({
++        operation: moveResult.operation,
++        nodeId: moveResult.nodeId,
++        reason: moveResult.reason,
++        admissionReason: moveResult.admission?.reason || null,
++        admissionDecisionType: moveResult.admission?.decisionType || null,
++      }));
++
++    // RED on current source: the create-time topology guard blocks the cure
++    // with replica_inventory_unusable because the authoritative services
++    // read is unavailable — the exact live terminal stall.
++    t.ok(
++      admittedAddLikeMoveResults.length >= 1,
++      'the spread-restoring move must be ADMITTED (operation created) ' +
++        'within one evaluation cycle — a persistently-unavailable ' +
++        'authoritative services read must not permanently block the only ' +
++        'cure for a critical spread gap; skipped moves: ' +
++        JSON.stringify(skipDiagnostics),
++    );
++
++    const spreadRestoringOperations = cache
++      .getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)
++      .filter(isSpreadRestoringOperationRow);
++    t.ok(
++      spreadRestoringOperations.length >= 1,
++      'a spread-restoring operation row (ADD or count-neutral REPLACE ' +
++        'targeting a free node) must be persisted; found: ' +
++        JSON.stringify(
++          cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
++        ),
++    );
++  } finally {
++    rebalancer.shutdown();
++    if (typeof coordinator.shutdown === 'function') {
++      coordinator.shutdown();
++    }
++  }
++});
+diff --git a/test/runtime/movielens-preload-admission-gate.test.js b/test/runtime/movielens-preload-admission-gate.test.js
+index d307e299..7b308a24 100644
+--- a/test/runtime/movielens-preload-admission-gate.test.js
++++ b/test/runtime/movielens-preload-admission-gate.test.js
+@@ -675,3 +675,70 @@ test('MovieLens demo retires the raw global-operation gate and test imports',
+       'examples consume production owners and never test-only machinery');
+     t.end();
+   });
++
++test('pre-schema admission holds accumulated stability through a transient ' +
++  'observer failure', async (t) => {
++  // stableWindowMs 4 with 1ms polls: quiet polls at t=0..3 are candidates,
++  // t=4 confirms (count 1), t=5 would confirm again (count 2). An observer
++  // failure at t=5 must HOLD the window (blindness 1ms <= window 4ms) so the
++  // t=6 quiet poll completes the sequence; the reset-on-anything rule would
++  // instead restart the whole window and admit only around t=12.
++  let call = 0;
++  let currentNowMs = 1_000_000;
++  const result = await waitForAffinityDemoSchemaAdmission({
++    target: BASE_TARGET,
++    now: () => currentNowMs,
++    sleep: async () => {
++      currentNowMs += 1;
++    },
++    timeoutMs: 40,
++    pollIntervalMs: 0,
++    stableWindowMs: 4,
++    query: async () => {
++      call += 1;
++      if (call === 6) {
++        throw new Error('Admin API query timed out');
++      }
++      return {rows: [buildControlSnapshot()]};
++    },
++  });
++  t.equal(result.admitted, true,
++    'admission should complete without restarting the stable window');
++  t.equal(call, 7,
++    'one real quiet poll after the observer failure should confirm');
++  t.end();
++});
++
++test('pre-schema admission still resets accumulated stability on real churn',
++  async (t) => {
++  // Same shape, but the poll after the first confirmation reports a REAL
++  // spread gap: the regressing observation must forfeit the accumulated
++  // window and confirmation, so admission needs a full fresh window.
++    let call = 0;
++    let currentNowMs = 1_000_000;
++    const openSnapshot = buildControlSnapshot({
++      controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(1),
++    });
++    const result = await waitForAffinityDemoSchemaAdmission({
++      target: BASE_TARGET,
++      now: () => currentNowMs,
++      sleep: async () => {
++        currentNowMs += 1;
++      },
++      timeoutMs: 40,
++      pollIntervalMs: 0,
++      stableWindowMs: 4,
++      query: async () => {
++        call += 1;
++        if (call === 6) {
++          return {rows: [openSnapshot]};
++        }
++        return {rows: [buildControlSnapshot()]};
++      },
++    });
++    t.equal(result.admitted, true);
++    t.ok(call >= 11,
++      'a regressing poll must forfeit the window and restart the sequence, ' +
++      `got ${call} polls`);
++    t.end();
++  });

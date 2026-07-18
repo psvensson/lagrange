@@ -4,6 +4,7 @@ import {
 } from '../../src/admin/load-lane-table-admission-probe.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
+  CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
   buildControlPlaneQuiescenceSnapshot,
@@ -206,6 +207,17 @@ function buildAvailablePrioritySpreadTopology(currentPlacementObservation) {
       totalSpreadGap === ZERO,
     totalSpreadGap,
     prioritySpreadGap: priorityPartitionSummary.totalSpreadGap,
+    // Explain surface: a spread-open denial must name the partitions
+    // holding the gap (the 2026-07-18T17-40 denial reported only gap=1,
+    // forcing archive forensics to find sql_write_operations-p1).
+    blockedPartitions: (
+      Array.isArray(priorityPartitionSummary.blockedPartitions) ?
+        priorityPartitionSummary.blockedPartitions :
+        []
+    ).map((partition) => Object.freeze({
+      partitionId: partition.partitionId,
+      spreadGap: partition.spreadGap,
+    })),
     missingLeaderPartitionCount:
       leaderCoverage.missingLeaderPartitionCount,
     missingLeaderPartitionIds:
@@ -324,24 +336,65 @@ function normalizeSchemaStableWindowMs(value) {
     DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS;
 }
 
+// Observer-side failure states: the poll could not SEE the control plane
+// (admin query timeout, snapshot lane hiccup). These are evidence about the
+// observer, not the system — monotone-progress rule (the HDFS safe-mode /
+// ES delayed-allocation lesson): they HOLD an accumulated stability window
+// instead of resetting it, bounded below by observation-blindness tolerance.
+const SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES = new Set([
+  CONTROL_PLANE_QUIESCENCE_STATE.OBSERVATION_UNAVAILABLE,
+  CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
+]);
+
+function isSchemaStabilityObservationFailure(snapshot) {
+  if (SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES.has(snapshot.state)) {
+    return true;
+  }
+  // CONTROL_PLANE_PRESSURE is observer-side only when it came from a
+  // pressure-shaped snapshot QUERY error, not from system pressure signals.
+  return (
+    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE &&
+    Array.isArray(snapshot.reasonCodes) &&
+    snapshot.reasonCodes.includes(
+      CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR,
+    )
+  );
+}
+
 function advanceSchemaStabilityWindow(
   snapshot,
   stabilityWindow,
   nowMs,
+  stableWindowMs,
 ) {
   if (
-    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
-    snapshot.ready !== true
+    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT &&
+    snapshot.ready === true
   ) {
-    return INACTIVE_SCHEMA_STABILITY_WINDOW;
+    if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
+      return Object.freeze({
+        ...stabilityWindow,
+        lastQuiescentObservationAtMs: nowMs,
+      });
+    }
+    return Object.freeze({
+      phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
+      startedAtMs: nowMs,
+      lastQuiescentObservationAtMs: nowMs,
+    });
   }
-  if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
+  // Hold through observer hiccups while the accumulated window is still
+  // backed by a recent real quiescent observation; a blind stretch longer
+  // than the stable window itself can no longer support a stability claim.
+  if (
+    stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING &&
+    isSchemaStabilityObservationFailure(snapshot) &&
+    nowMs - (stabilityWindow.lastQuiescentObservationAtMs ?? ZERO) <=
+      stableWindowMs
+  ) {
     return stabilityWindow;
   }
-  return Object.freeze({
-    phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
-    startedAtMs: nowMs,
-  });
+  return INACTIVE_SCHEMA_STABILITY_WINDOW;
 }
 
 function projectSchemaStabilityWindow(
@@ -352,6 +405,20 @@ function projectSchemaStabilityWindow(
 ) {
   if (stabilityWindow.phase !== SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
     return snapshot;
+  }
+  // A held window (observer hiccup) must not project QUIESCENT: stability
+  // may only be CONFIRMED by a poll that actually observed the control
+  // plane. The hold preserves accumulated elapsed time; confirmation waits
+  // for the next real observation.
+  if (
+    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
+    snapshot.ready !== true
+  ) {
+    return Object.freeze({
+      ...snapshot,
+      stableElapsedMs: Math.max(ZERO, nowMs - stabilityWindow.startedAtMs),
+      stabilityWindowHeld: true,
+    });
   }
   const stableElapsedMs = Math.max(
     ZERO,
@@ -390,6 +457,7 @@ function buildSchemaStabilityObservation(
     observedSnapshot,
     stabilityWindow,
     nowMs,
+    stableWindowMs,
   );
   const snapshot = projectSchemaStabilityWindow(
     observedSnapshot,
@@ -397,12 +465,16 @@ function buildSchemaStabilityObservation(
     nowMs,
     stableWindowMs,
   );
+  // Held polls (observer hiccup with the window preserved) neither confirm
+  // nor forfeit accumulated confirmations.
+  const held = snapshot.stabilityWindowHeld === true;
   return Object.freeze({
     snapshot,
     stabilityWindow: nextStabilityWindow,
     stableConfirmationCount:
       snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ?
-        stableConfirmationCount + 1 : ZERO,
+        stableConfirmationCount + 1 :
+        (held ? stableConfirmationCount : ZERO),
   });
 }
 

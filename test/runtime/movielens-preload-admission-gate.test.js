@@ -675,3 +675,70 @@ test('MovieLens demo retires the raw global-operation gate and test imports',
       'examples consume production owners and never test-only machinery');
     t.end();
   });
+
+test('pre-schema admission holds accumulated stability through a transient ' +
+  'observer failure', async (t) => {
+  // stableWindowMs 4 with 1ms polls: quiet polls at t=0..3 are candidates,
+  // t=4 confirms (count 1), t=5 would confirm again (count 2). An observer
+  // failure at t=5 must HOLD the window (blindness 1ms <= window 4ms) so the
+  // t=6 quiet poll completes the sequence; the reset-on-anything rule would
+  // instead restart the whole window and admit only around t=12.
+  let call = 0;
+  let currentNowMs = 1_000_000;
+  const result = await waitForAffinityDemoSchemaAdmission({
+    target: BASE_TARGET,
+    now: () => currentNowMs,
+    sleep: async () => {
+      currentNowMs += 1;
+    },
+    timeoutMs: 40,
+    pollIntervalMs: 0,
+    stableWindowMs: 4,
+    query: async () => {
+      call += 1;
+      if (call === 6) {
+        throw new Error('Admin API query timed out');
+      }
+      return {rows: [buildControlSnapshot()]};
+    },
+  });
+  t.equal(result.admitted, true,
+    'admission should complete without restarting the stable window');
+  t.equal(call, 7,
+    'one real quiet poll after the observer failure should confirm');
+  t.end();
+});
+
+test('pre-schema admission still resets accumulated stability on real churn',
+  async (t) => {
+  // Same shape, but the poll after the first confirmation reports a REAL
+  // spread gap: the regressing observation must forfeit the accumulated
+  // window and confirmation, so admission needs a full fresh window.
+    let call = 0;
+    let currentNowMs = 1_000_000;
+    const openSnapshot = buildControlSnapshot({
+      controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(1),
+    });
+    const result = await waitForAffinityDemoSchemaAdmission({
+      target: BASE_TARGET,
+      now: () => currentNowMs,
+      sleep: async () => {
+        currentNowMs += 1;
+      },
+      timeoutMs: 40,
+      pollIntervalMs: 0,
+      stableWindowMs: 4,
+      query: async () => {
+        call += 1;
+        if (call === 6) {
+          return {rows: [openSnapshot]};
+        }
+        return {rows: [buildControlSnapshot()]};
+      },
+    });
+    t.equal(result.admitted, true);
+    t.ok(call >= 11,
+      'a regressing poll must forfeit the window and restart the sequence, ' +
+      `got ${call} polls`);
+    t.end();
+  });

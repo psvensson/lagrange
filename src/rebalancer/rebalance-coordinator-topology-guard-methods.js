@@ -10,6 +10,10 @@ import {
 import {
   isEngagedLedgerQuorumSpreadCureMove,
 } from './operation-ledger-hold-policy.js';
+import {MOVE_REASON} from './rebalancer-constants.js';
+import {
+  isOperationLedgerPartition,
+} from '../bootstrap/system-partition-classification.js';
 import {
   getStartupAuthorityControlPlanePlacementEligibleNodeIds,
 } from '../control-plane/startup-authority-placement-eligibility.js';
@@ -128,13 +132,13 @@ class RebalanceCoordinatorTopologyGuardMethods {
    * @return {boolean}
    * @private
    */
-  isConcentratedLedgerRecoveryMove(
-    context,
-    inventory,
-    authoritativeObservation,
-  ) {
-    const partitionId = String(context?.partitionId || '').trim();
-    if (
+  // Shared provenance precondition for BOTH conservative-union escapes:
+  // the authoritative services owner is unavailable, the merged
+  // cache/operation union is internally clean, and operation visibility is
+  // still usable — the exact situation where fail-closed would otherwise
+  // convert owner-unreachability into permanent denial of the cure.
+  hasConservativeUnionInventoryProvenance(inventory, authoritativeObservation) {
+    return !(
       authoritativeObservation?.available !== false ||
       inventory?.provenance?.consistency !==
         REPLICA_INVENTORY_CONSISTENCY.SOURCE_UNAVAILABLE ||
@@ -145,24 +149,51 @@ class RebalanceCoordinatorTopologyGuardMethods {
         REPLICA_INVENTORY_OBSERVATION_STATE.DEFERRED,
       ].includes(inventory?.provenance?.inFlightOperationsState) ||
       inventory?.anomalies?.length > 0
+    );
+  }
+
+  // REPLACE escapes must prove their source against union ACTUALS: an
+  // occupied ACTIVE/REMOVING voter row, never an inferred placement.
+  resolveConservativeUnionReplaceSource(context, inventory) {
+    const sourceReplicaId = String(context?.move?.replicaId || '').trim();
+    const sourceReplica = inventory.replicas.find(
+      (replica) => replica.replicaId === sourceReplicaId,
+    );
+    if (
+      !sourceReplica?.voter ||
+      ![
+        ReplicaStatus.ACTIVE,
+        ReplicaStatus.REMOVING,
+      ].includes(sourceReplica?.status) ||
+      !sourceReplica?.occupied
+    ) {
+      return null;
+    }
+    return sourceReplica;
+  }
+
+  isConcentratedLedgerRecoveryMove(
+    context,
+    inventory,
+    authoritativeObservation,
+  ) {
+    const partitionId = String(context?.partitionId || '').trim();
+    if (
+      !this.hasConservativeUnionInventoryProvenance(
+        inventory,
+        authoritativeObservation,
+      )
     ) {
       return false;
     }
     const isReplace = context?.normalizedMoveType === OperationType.REPLACE;
     let sourceReplica = null;
     if (isReplace) {
-      const sourceReplicaId = String(context?.move?.replicaId || '').trim();
-      sourceReplica = inventory.replicas.find(
-        (replica) => replica.replicaId === sourceReplicaId,
+      sourceReplica = this.resolveConservativeUnionReplaceSource(
+        context,
+        inventory,
       );
-      if (
-        !sourceReplica?.voter ||
-        ![
-          ReplicaStatus.ACTIVE,
-          ReplicaStatus.REMOVING,
-        ].includes(sourceReplica?.status) ||
-        !sourceReplica?.occupied
-      ) {
+      if (!sourceReplica) {
         return false;
       }
     }
@@ -178,6 +209,93 @@ class RebalanceCoordinatorTopologyGuardMethods {
       sourceReplicaNodeId: sourceReplica?.nodeId || null,
       targetNodeId: String(context?.move?.nodeId || '').trim(),
     });
+  }
+
+  /**
+   * Conservative-union escape for PRIORITY control-plane spread cures — the
+   * generalization of the ledger escape to the partitions the schema
+   * admission gate waits on. Without it, an unavailable authoritative
+   * services read blocks the only cure for critical_system_spread_open
+   * while the gate keeps demanding it (the 2026-07-18T17:40 terminal
+   * stall: sql_write_operations-p1 at [A,A,B] with free nodes, every
+   * spread ADD denied replica_inventory_unusable for 3 minutes with a
+   * frozen observation watermark). The union view must itself PROVE the
+   * cure is needed and safe: distinct occupied nodes below the replica
+   * target, an unoccupied target node, and no topology-increasing
+   * operation already in flight. The occupied/target-count decision rows
+   * still run after this escape, and counted distinct node ids include
+   * in-flight targets, so the tick after one admitted cure re-blocks any
+   * repeat — the run4 over-target invariant stays closed coordinator-side
+   * while the planner-side guards (over-creation cap, spread-vs-count
+   * reconcile, REPLACE serialization) are untouched upstream.
+   * @param {Object} context
+   * @param {Object} inventory
+   * @param {Object} authoritativeObservation
+   * @param {number|null} targetReplicaCount
+   * @return {boolean}
+   * @private
+   */
+  isEngagedPrioritySpreadCureMove(
+    context,
+    inventory,
+    authoritativeObservation,
+    targetReplicaCount,
+  ) {
+    const partitionId = String(context?.partitionId || '').trim();
+    if (
+      partitionId.length === 0 ||
+      !Number.isFinite(targetReplicaCount) ||
+      !this.hasConservativeUnionInventoryProvenance(
+        inventory,
+        authoritativeObservation,
+      ) ||
+      // The operation ledger keeps its own, stricter cure relation
+      // (isConcentratedLedgerRecoveryMove); this escape covers the OTHER
+      // priority control-plane partitions only.
+      isOperationLedgerPartition({partitionId}) ||
+      !this.isPriorityControlPlanePartition(partitionId)
+    ) {
+      return false;
+    }
+    const moveType = context?.normalizedMoveType;
+    if (moveType === OperationType.ADD) {
+      // The cure-typing rides as moveReason on coordinator operation
+      // requests and as reason on planner move objects.
+      const moveReason =
+        context?.move?.moveReason ?? context?.move?.reason;
+      if (moveReason !== MOVE_REASON.SPREAD_REPLICAS) {
+        return false;
+      }
+    } else if (moveType === OperationType.REPLACE) {
+      const sourceReplica = this.resolveConservativeUnionReplaceSource(
+        context,
+        inventory,
+      );
+      if (!sourceReplica) {
+        return false;
+      }
+      // Only a REPLACE whose source sits on an over-represented node
+      // (hosting more than one occupied replica in the union) restores
+      // spread; relocating a lone replica keeps the distinct-node count
+      // unchanged and must not ride the spread-cure escape.
+      const sourceNodeOccupancy = inventory.replicas.filter(
+        (replica) =>
+          replica.occupied && replica.nodeId === sourceReplica.nodeId,
+      ).length;
+      if (sourceNodeOccupancy < 2) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    const targetNodeId = String(context?.move?.nodeId || '').trim();
+    return (
+      targetNodeId.length > 0 &&
+      !occupiesNode(inventory, targetNodeId) &&
+      inventory.occupiedNodeIds.length < targetReplicaCount &&
+      !inventory.operations.some((operation) =>
+        TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(operation.type))
+    );
   }
 
   async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
@@ -326,11 +444,19 @@ class RebalanceCoordinatorTopologyGuardMethods {
         inventory,
         authoritativeObservation,
       );
+    const engagedPrioritySpreadCureMove =
+      this.isEngagedPrioritySpreadCureMove(
+        context,
+        inventory,
+        authoritativeObservation,
+        targetReplicaCount,
+      );
     const topologyGuardDecisionTable = Object.freeze([
       Object.freeze({
         matches:
           !inventory.provenance.topologyIncreaseUsable &&
-          !concentratedLedgerRecoveryMove,
+          !concentratedLedgerRecoveryMove &&
+          !engagedPrioritySpreadCureMove,
         state: TOPOLOGY_GUARD_STATE.INVENTORY_UNUSABLE,
         blockingReason: TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE,
       }),

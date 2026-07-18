@@ -66,6 +66,11 @@ class UnifiedRebalancerMoveExecution extends UnifiedRebalancerFollowUpMove {
       nodeId: move.nodeId,
       replicaId: move.replicaId,
       sourceNodeId: move.sourceNodeId,
+      // The planner's cure-typing must survive the coordinator boundary:
+      // the topology guard's priority-spread-cure escape admits exactly
+      // spread-typed moves (dropping it re-created the 17:40 terminal
+      // stall shape at this seam).
+      moveReason: move.reason,
       enforceConcurrentOperationBudget: true,
     };
     const membershipPublicationEpoch = Number.isInteger(
