@@ -1,15 +1,3 @@
-/**
- * Move Planner - Calculates replica placement and moves for rebalancing.
- *
- * This module provides move planning logic extracted from UnifiedRebalancer.
- * It calculates target replica state and the moves needed to reach that
- * state for partitions, message groups, and runtime services.
- *
- * Requirements: 1.3, 1.8, 5.1, 5.2, 5.3, 5.4, 5.5, 11.3
- *
- * @module rebalancer/move-planner
- */
-
 import {NUM} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {ReplicaStatus} from './replica-status.js';
@@ -26,6 +14,11 @@ import {
   PLACEMENT_CURE_CONDITION,
   resolvePlacementCure,
 } from './replica-placement-cure-policy.js';
+import {
+  applyPrioritySpreadDrainCure,
+  applyPrioritySpreadExpandCure,
+  evaluatePriorityStandaloneRemoveSafety,
+} from './move-planner-priority-spread-cure.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -89,34 +82,21 @@ class MovePlannerMoveCalculationMethods {
       );
     };
     const buildPriorityStandaloneRemoveSafety = (replicaId) => {
-      if (!this.isControlPlanePriorityPartition()) {
-        return {
-          priorityPartition: false,
-          safe: true,
-          spread: null,
-        };
-      }
-      const remainingActiveReplicas = activePlacementReplicas.filter(
-        (candidate) => {
-          const candidateReplicaId =
-            candidate?.replica_id || candidate?.service_id;
-          return candidateReplicaId !== replicaId;
-        },
-      );
-      const spread = this.analyzePrioritySpread(
-        remainingActiveReplicas,
+      return evaluatePriorityStandaloneRemoveSafety({
+        replicaId,
+        activePlacementReplicas,
+        targetReplicaCount,
+        priorityPartition: this.isControlPlanePriorityPartition(),
         prioritySpreadPolicy,
-        this.moveStateProvider.getAvailableNodes(),
-      );
-      return {
-        priorityPartition: true,
-        safe: !(spread.requiresSpread === true && spread.satisfied !== true),
-        spread,
-      };
+        availableNodes: this.moveStateProvider.getAvailableNodes(),
+        analyzePrioritySpread: (...args) =>
+          this.analyzePrioritySpread(...args),
+      });
     };
     const toExecutableRemove = (move) => {
       const {
         prioritySpreadStandaloneSafe: _prioritySpreadStandaloneSafe,
+        prioritySpreadMonotonicSafe: _prioritySpreadMonotonicSafe,
         sourceIsLeader: _sourceIsLeader,
         ...executableMove
       } = move;
@@ -228,10 +208,21 @@ class MovePlannerMoveCalculationMethods {
     // leadership move. This never changes WHICH replicas are removed (the
     // surplus set is fixed by targetNodes) — only whether the leader is drained
     // as a REPLACE source vs a plain REMOVE, and which same-node replica drops.
-    const partitionLeaderNodeId = this.resolveRemovalSourcePartitionLeaderNodeId();
+    const partitionLeaderNodeId =
+      this.resolveRemovalSourcePartitionLeaderNodeId();
+    const partitionLeaderReplicaId =
+      this.resolveRemovalSourcePartitionLeaderReplicaId();
     const isLeaderRemovalCandidate = (replica) => {
       if (!replica) {
         return false;
+      }
+      const candidateReplicaId =
+        replica.replica_id || replica.service_id || null;
+      if (
+        partitionLeaderReplicaId &&
+        candidateReplicaId === partitionLeaderReplicaId
+      ) {
+        return true;
       }
       const role =
         typeof replica.raft_role === 'string' ?
@@ -463,6 +454,7 @@ class MovePlannerMoveCalculationMethods {
         if (
           priorityRemoveSafety.priorityPartition &&
           priorityRemoveSafety.safe !== true &&
+          priorityRemoveSafety.monotonicSafe !== true &&
           addMoves.length === 0
         ) {
           const prioritySpreadAfterRemove = priorityRemoveSafety.spread;
@@ -503,6 +495,8 @@ class MovePlannerMoveCalculationMethods {
           reason,
           sourceIsLeader: isLeaderRemovalCandidate(replicaToRemove),
           prioritySpreadStandaloneSafe: priorityRemoveSafety.safe,
+          prioritySpreadMonotonicSafe:
+            priorityRemoveSafety.monotonicSafe === true,
           standaloneSafe:
             activePlacementReplicas.length - candidateRemoves.length >
             targetReplicaCount,
@@ -525,6 +519,16 @@ class MovePlannerMoveCalculationMethods {
       });
       addMoves.length = 0;
     }
+    applyPrioritySpreadDrainCure({
+      partitionId: this.entityId,
+      inventory,
+      surplusVoterCount,
+      activePlacementReplicas,
+      targetReplicaCount,
+      targetNodeIds,
+      addMoves,
+      candidateRemoves,
+    });
     if (
       addMoves.length > 0 &&
       candidateRemoves.length > 0 &&
@@ -577,12 +581,26 @@ class MovePlannerMoveCalculationMethods {
             ).toLowerCase() === MoveType.REPLACE,
         ).length :
         0;
-      const replaceCount = serializeCriticalReplace ?
+      let replaceCount = serializeCriticalReplace ?
         Math.min(
           naturalReplaceCount,
           Math.max(0, 1 - inFlightReplaceCount),
         ) :
         naturalReplaceCount;
+      replaceCount = applyPrioritySpreadExpandCure({
+        partitionId: this.entityId,
+        inventory,
+        surplusVoterCount,
+        activePlacementReplicas,
+        targetReplicaCount,
+        targetNodeIds,
+        deficitEffectiveCount,
+        inFlightReplaceCount,
+        naturalReplaceCount,
+        replaceCount,
+        addMoves,
+        candidateRemoves,
+      });
       const consumedRemoveReplicaIds = new Set();
       const relocationCure = resolvePlacementCure(
         PLACEMENT_CURE_CONDITION.PAIRED_RELOCATION,

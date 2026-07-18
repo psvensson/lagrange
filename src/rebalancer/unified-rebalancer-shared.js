@@ -148,6 +148,7 @@ const UNIFIED_REBALANCER_LITERAL = Object.freeze({
   NUMBER: 'number',
   ONE: 1,
   ONE_POINT_FIVE: 1.5,
+  STRING: 'string',
   READ: 'read',
   REBALANCECOORDINATOR: 'rebalanceCoordinator',
   REBALANCER_COLON_SCHEDULE: 'rebalancer:schedule',

@@ -214,6 +214,31 @@ function assignReplicaOperationRepositoryObservationMethods(
       );
     }
     /**
+   * Align one exact SERVICES row from authoritative storage into the local
+   * cache before its operation owner releases terminal workflow state.
+   *
+     * @param {string} replicaId
+     * @return {Promise<boolean>}
+     */
+    async refreshAuthoritativeReplicaCacheRow(replicaId) {
+      const refreshAuthoritativeCacheRow =
+        this.cdcIntegrationService?.refreshAuthoritativeCacheRow;
+      if (
+        typeof refreshAuthoritativeCacheRow !==
+          REPLICA_OPERATION_REPOSITORY_LITERAL.FUNCTION
+      ) {
+        return false;
+      }
+      return (
+        await refreshAuthoritativeCacheRow.call(
+          this.cdcIntegrationService,
+          SYSTEM_TABLE_NAME.SERVICES,
+          replicaId,
+          {expectedFields: {status: ReplicaStatus.ACTIVE}},
+        )
+      ) === true;
+    }
+    /**
    * Resolve the authoritative services read contract for one status probe.
    * @param {Object} [readOptions={}]
    * @return {Object}

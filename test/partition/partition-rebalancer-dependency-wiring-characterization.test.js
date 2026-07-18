@@ -306,6 +306,11 @@ test('initialization gate — rebalancer created when all ' +
     'rebalancer created when all gates satisfied');
   t.ok(ps.rebalancer instanceof UnifiedRebalancer,
     'rebalancer is a UnifiedRebalancer instance');
+  t.equal(
+    ps.rebalancer.replicaId,
+    REPLICA_ID,
+    'rebalancer receives the exact local Raft-owner replica identity',
+  );
   await shutdownPartitionService(ps);
 });
 

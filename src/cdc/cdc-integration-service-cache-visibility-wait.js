@@ -1,4 +1,14 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {
+  SYSTEM_TABLE_CACHE_MUTATION_MODE,
+} from '../cache/cache-constants.js';
+import {
+  areAuthoritativeSystemTableCacheRowsAligned,
+  hasCompleteAuthoritativeSystemTableCacheAlignmentRow,
+} from '../cache/system-table-cache-authoritative-reconciliation.js';
+import {
+  doesCacheRecordMatchExpectedFields,
+} from './cdc-integration-service-cache-divergence.js';
 
 const {
   AUTHORITATIVE_FALLBACK_OUTCOME,
@@ -7,6 +17,7 @@ const {
   CDC_OPERATION,
   PRESSURE_GOVERNOR_ACTION,
   READ_MODEL_DIVERGENCE_TYPE,
+  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_VISIBILITY_STATE,
   TIMEOUT_BUDGET_CLASSIFICATION,
   buildPendingVisibilityTimeoutResult,
@@ -393,10 +404,12 @@ class CDCIntegrationServiceCacheVisibilityWait {
    * able to converge through this direct read).
    * @param {string} tableName - System table name.
    * @param {string} key - Primary key value.
+   * @param {Object} [options] - Required post-repair cache fields.
+   * @param {Object} [options.expectedFields] - Exact expected field values.
    * @return {Promise<boolean>} True when the cache row was aligned to the
-   *   authoritative row.
+   *   authoritative row and still satisfies the caller's postcondition.
    */
-  async refreshAuthoritativeCacheRow(tableName, key) {
+  async refreshAuthoritativeCacheRow(tableName, key, options = {}) {
     if (!this.shouldWaitForCacheUpdate(tableName)) {
       return false;
     }
@@ -413,13 +426,38 @@ class CDCIntegrationServiceCacheVisibilityWait {
     if (rows.length === 0) {
       return false;
     }
-    return (
-      this.applyAuthoritativeCacheRepair(
-        tableName,
-        CDC_OPERATION.UPSERT,
-        rows[0],
-        key,
-      ) === true
+    const authoritativeRow = canonicalizeSystemTableRow(
+      tableName,
+      rows[0],
+    );
+    if (!hasCompleteAuthoritativeSystemTableCacheAlignmentRow(
+      tableName,
+      authoritativeRow,
+    )) {
+      return false;
+    }
+    const mutationMode = tableName === SYSTEM_TABLE_NAME.SERVICES ?
+      SYSTEM_TABLE_CACHE_MUTATION_MODE
+        .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION :
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION;
+    const repairApplied = this.applyAuthoritativeCacheRepair(
+      tableName,
+      CDC_OPERATION.UPSERT,
+      authoritativeRow,
+      key,
+      {mutationMode},
+    );
+    if (repairApplied !== true) {
+      return false;
+    }
+    const cachedRow = this.getCacheRecord(tableName, key);
+    return areAuthoritativeSystemTableCacheRowsAligned(
+      tableName,
+      cachedRow,
+      authoritativeRow,
+    ) && doesCacheRecordMatchExpectedFields(
+      cachedRow,
+      options?.expectedFields || null,
     );
   }
 
@@ -598,7 +636,13 @@ class CDCIntegrationServiceCacheVisibilityWait {
    * @return {boolean}
    * @private
    */
-  applyAuthoritativeCacheRepair(tableName, operation, row, key) {
+  applyAuthoritativeCacheRepair(
+    tableName,
+    operation,
+    row,
+    key,
+    options = {},
+  ) {
     if (
       !this.cacheMutationTarget ||
       typeof this.cacheMutationTarget.applySystemTableChange !==
@@ -610,13 +654,19 @@ class CDCIntegrationServiceCacheVisibilityWait {
     }
     const canonicalRow = canonicalizeSystemTableRow(tableName, row);
     const causeId = `authoritative-repair:${tableName}:${key}`;
+    const mutationMode = options?.mutationMode ||
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION;
+    const mutationOptions = operation === CDC_OPERATION.UPSERT ?
+      {
+        causeId,
+        mutationMode,
+      } :
+      {causeId};
     this.cacheMutationTarget.applySystemTableChange(
       tableName,
       operation,
       canonicalRow,
-      {
-        causeId,
-      },
+      mutationOptions,
     );
     return true;
   }

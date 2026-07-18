@@ -228,6 +228,7 @@ class PartitionServiceRebalancerMethods {
       tablePolicyService,
       sqlQueryEngine,
       nodeId: this.nodeId,
+      replicaId: this.replicaId,
       replicaStateMachine: this.replicaStateMachine,
       messageRouter,
       rebalanceCoordinator,

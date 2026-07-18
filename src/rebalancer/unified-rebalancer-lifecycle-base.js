@@ -62,6 +62,10 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       options.nodeId,
       REBALANCER_ERROR_MSG.NODE_ID_REQUIRED,
     );
+    this.replicaId =
+      typeof options.replicaId === UNIFIED_REBALANCER_LITERAL.STRING ?
+        options.replicaId :
+        null;
     this.messageRouter = assertCritical(
       options.messageRouter,
       REBALANCER_ERROR_MSG.ROUTER_REQUIRED,

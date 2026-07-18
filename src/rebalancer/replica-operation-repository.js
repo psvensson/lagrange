@@ -137,6 +137,7 @@ const REPLICA_OPERATION_REPOSITORY_LITERAL = Object.freeze({
   REPLICAOPERATIONREPOSITORY_REQUIRES_A_CONTROL_PLANE_MUTATION_INGRESS:
     'ReplicaOperationRepository requires a control-plane mutation ingress',
   OBJECT: 'object',
+  FUNCTION: 'function',
   CRITICAL: 'critical',
   WRITE: 'write',
   OBSERVED: 'observed',

@@ -20,6 +20,7 @@ const {
   ReplicaStatus,
   SQL_RECONCILIATION_REASON,
   STOPPING_REPLICA_OBSERVATION_STATE,
+  SYSTEM_TABLE_NAME,
   TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS,
   TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
@@ -35,6 +36,42 @@ const {
 } = SHARED;
 
 class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
+  async confirmActiveReplicaTerminalHandoff(operation) {
+    let cacheAligned = false;
+    if (
+      operation?.replicaId &&
+      this.repository &&
+      typeof this.repository.refreshAuthoritativeReplicaCacheRow ===
+        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
+    ) {
+      cacheAligned =
+        await this.repository.refreshAuthoritativeReplicaCacheRow(
+          operation.replicaId,
+        );
+    }
+    if (cacheAligned === true) {
+      return true;
+    }
+    this.scheduleObservedProgressRetry(
+      operation.operationId,
+      SYSTEM_TABLE_NAME.SERVICES,
+      OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+    );
+    return false;
+  }
+
+  async reconcileActiveReplicaStatus(operation) {
+    if (!await this.confirmActiveReplicaTerminalHandoff(operation)) {
+      return true;
+    }
+    if (operation.type === OperationType.REPLACE) {
+      await this.reconcileReplaceActualActive(operation);
+    } else {
+      await this.completeOperation(operation);
+    }
+    return true;
+  }
+
   isActiveReplaceSourceRetirementObserved(
     operation,
     sourceReplicaId,
@@ -153,12 +190,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     }
 
     if (reconciledStatus === ReplicaStatus.ACTIVE) {
-      if (operation.type === OperationType.REPLACE) {
-        await this.reconcileReplaceActualActive(operation);
-      } else {
-        await this.completeOperation(operation);
-      }
-      return true;
+      return this.reconcileActiveReplicaStatus(operation);
     }
 
     if (reconciledStatus === ReplicaStatus.FAILED) {

@@ -30,6 +30,9 @@ import {
 import {
   buildPlacementOwnerDecision as buildPlacementOwnerPolicyDecision,
 } from './placement-owner-decision.js';
+import {
+  getPartitionRowFromCache,
+} from '../bootstrap/system-partition-classification.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -72,6 +75,56 @@ const MoveType = REBALANCER_MOVE_TYPE;
  */
 
 class MovePlannerPlacementTailMethods {
+  /**
+   * Resolve this partition's live or recorded Raft leader node for placement
+   * retention and surplus-drain source ordering.
+   * @return {string|null}
+   * @private
+   */
+  resolveRemovalSourcePartitionLeaderNodeId() {
+    if (this.entityType !== EntityType.PARTITION) {
+      return null;
+    }
+    const liveOwnerNodeId =
+      this.moveStateProvider?.isLeader === true &&
+      typeof this.moveStateProvider?.nodeId === MOVE_PLANNER_LITERAL.STRING ?
+        this.moveStateProvider.nodeId.trim() :
+        MOVE_PLANNER_LITERAL.EMPTY_STRING;
+    if (liveOwnerNodeId.length > 0) {
+      return liveOwnerNodeId;
+    }
+    const partitionRow = getPartitionRowFromCache(
+      this.moveStateProvider?.systemTableCache || null,
+      this.entityId,
+    );
+    const leaderNodeId =
+      typeof partitionRow?.leader_node_id === MOVE_PLANNER_LITERAL.STRING ?
+        partitionRow.leader_node_id.trim() :
+        MOVE_PLANNER_LITERAL.EMPTY_STRING;
+    return leaderNodeId.length > 0 ? leaderNodeId : null;
+  }
+
+  /**
+   * Resolve the exact replica that owns this planner's live Raft leadership.
+   * Durable SERVICES roles intentionally collapse leader to follower, while
+   * formation can still have multiple local replicas.
+   * @return {string|null}
+   * @private
+   */
+  resolveRemovalSourcePartitionLeaderReplicaId() {
+    if (
+      this.entityType !== EntityType.PARTITION ||
+      this.moveStateProvider?.isLeader !== true
+    ) {
+      return null;
+    }
+    const replicaId =
+      typeof this.moveStateProvider?.replicaId === MOVE_PLANNER_LITERAL.STRING ?
+        this.moveStateProvider.replicaId.trim() :
+        MOVE_PLANNER_LITERAL.EMPTY_STRING;
+    return replicaId.length > 0 ? replicaId : null;
+  }
+
   buildPlacementOwnerPolicyDecision(options = {}) {
     const currentReplicas = Array.isArray(options.currentReplicas) ?
       options.currentReplicas :
@@ -84,6 +137,7 @@ class MovePlannerPlacementTailMethods {
       capacityDiagnostics: options.diagnostics,
       transitionSnapshot: options.transitionSnapshot,
       includeGlobalSystemDeferral: options.includeGlobalSystemDeferral === true,
+      leaderNodeId: this.resolveRemovalSourcePartitionLeaderNodeId(),
       placementPolicy: options.placementPolicy,
       scoreProfile: options.scoreProfile,
     });

@@ -59,8 +59,11 @@ function createReplica(replicaId, nodeId, raftRole = null) {
   return replica;
 }
 
-function createMoveStateProvider(nodes, currentReplicas) {
+function createMoveStateProvider(nodes, currentReplicas, extra = {}) {
   return {
+    isLeader: extra.isLeader === true,
+    nodeId: extra.leaderNodeId || null,
+    replicaId: extra.leaderReplicaId || null,
     getAvailableNodes: () => nodes,
     getCurrentReplicas: () => currentReplicas,
     getHealthyReplicas: (replicas) =>
@@ -77,7 +80,11 @@ function createPlanner(nodes, currentReplicas, extra = {}) {
   return new MovePlanner({
     entityId: PARTITION_ID,
     entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-    moveStateProvider: createMoveStateProvider(nodes, currentReplicas),
+    moveStateProvider: createMoveStateProvider(
+      nodes,
+      currentReplicas,
+      extra,
+    ),
     storageAdmissionService: extra.storageAdmissionService,
     accountingService: extra.accountingService,
   });
@@ -255,6 +262,53 @@ test('CL-038 surplus drain retains the leader node', async (t) => {
           PLACEMENT_OWNER_RESERVATION_REASON.LEADER_RETENTION,
         ),
         'leader retention does not consume budget owed to a transition',
+      );
+    },
+  );
+
+  await t.test(
+    'live owner identity retains a collapsed-role leader and drains its co-located follower',
+    async (t) => {
+      // Runtime SERVICES publication intentionally collapses leader to follower.
+      // Formation can also leave multiple replicas on the leader node. The
+      // active Raft owner identity must therefore preserve both the leader node
+      // in the target cohort and the exact leader replica within that node.
+      const node4 = 'node-4';
+      const nodes = [
+        createNode(NODE_1, CPU_HIGH),
+        createNode(NODE_2, CPU_LOW),
+        createNode(NODE_3, CPU_MID),
+        createNode(node4, 0),
+      ];
+      const currentReplicas = [
+        createReplica('leader-replica', NODE_1, 'follower'),
+        createReplica('co-located-follower', NODE_1, 'follower'),
+        createReplica('replica-2', NODE_2, 'follower'),
+        createReplica('replica-3', NODE_3, 'follower'),
+      ];
+      const planner = createPlanner(nodes, currentReplicas, {
+        isLeader: true,
+        leaderNodeId: NODE_1,
+        leaderReplicaId: 'leader-replica',
+      });
+      const targetState =
+        await planner.calculateTargetState(currentReplicas, {
+          ...PARTITION_POLICY,
+          targetReplicaCount: NUM.THREE,
+        });
+      const moves = planner.calculateMoves(currentReplicas, targetState);
+
+      t.ok(
+        targetState.targetNodes.includes(NODE_1),
+        'live leader node remains in the target cohort despite collapsed roles',
+      );
+      t.notOk(
+        moves.some((move) => move.replicaId === 'leader-replica'),
+        'the exact live leader replica is never selected as a drain source',
+      );
+      t.ok(
+        moves.some((move) => move.replicaId === 'co-located-follower'),
+        'the co-located follower is selected ahead of the leader',
       );
     },
   );

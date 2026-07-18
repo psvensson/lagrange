@@ -39,6 +39,8 @@ const CACHE_ERROR_MSG = Object.freeze({
     `Invalid system table name: ${tableName}. Valid tables are: ${tables.join(', ')}`,
   invalidCdcOperation: (operation, operations) =>
     `Invalid CDC operation: ${operation}. Valid operations are: ${operations.join(', ')}`,
+  invalidMutationMode: (mutationMode, operation) =>
+    `Invalid cache mutation mode "${mutationMode}" for ${operation}`,
   READ_ONLY_CACHE_REQUIRED: 'ReadOnlySystemTableCache requires an underlying cache',
   READ_ONLY_HINT: 'Use CDCIntegrationService for writes',
   readOnlyMethodBlocked: (prop) =>
@@ -58,6 +60,45 @@ const CACHE_DEFAULT = Object.freeze({
   CACHE_ID_START: 2,
   CACHE_ID_LENGTH: 9,
 });
+
+const SYSTEM_TABLE_CACHE_MUTATION_MODE = Object.freeze({
+  CDC_MERGE: 'cdc_merge',
+  AUTHORITATIVE_RECONCILIATION: 'authoritative_reconciliation',
+  AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION:
+    'authoritative_service_lifecycle_reconciliation',
+});
+
+const SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES = Object.freeze([
+  'updated_at_hlc',
+  'updatedAtHlc',
+  'leader_claim_node_id',
+  'leader_claim_raft_term',
+  'leader_claim_minted_against_updated_at',
+]);
+
+const SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES = Object.freeze([
+  'status',
+  'state_entered_at',
+  'previous_state',
+  'trigger_reason',
+  'error_message',
+]);
+
+const SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES = Object.freeze([
+  'service_id',
+  'service_type',
+  'partition_id',
+  'replica_id',
+  'node_id',
+  'address',
+]);
+
+const SYSTEM_TABLE_CACHE_SERVICE_TERMINAL_REQUIRED_FIELD_NAMES = Object.freeze([
+  ...SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
+  'status',
+  'state_entered_at',
+  'updated_at',
+]);
 
 // ---------------------------------------------------------------------------
 // CDC-Propagated vs Non-Propagated Table Classification
@@ -171,4 +212,9 @@ export {
   CACHE_SYSTEM_TABLES,
   CDC_NON_PROPAGATED_TABLES,
   CDC_PROPAGATED_TABLES,
+  SYSTEM_TABLE_CACHE_LOCAL_FIELD_NAMES,
+  SYSTEM_TABLE_CACHE_MUTATION_MODE,
+  SYSTEM_TABLE_CACHE_SERVICE_IDENTITY_FIELD_NAMES,
+  SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES,
+  SYSTEM_TABLE_CACHE_SERVICE_TERMINAL_REQUIRED_FIELD_NAMES,
 };

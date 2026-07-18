@@ -5,6 +5,11 @@ import {
   mergeControlPlanePublicationRows,
 } from '../control-plane/control-plane-publication-merge.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
+import {
+  SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES,
+} from './cache-constants.js';
+
+const NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS = Object.freeze([]);
 
 function deepClone(value) {
   return fastJsonClone(value);
@@ -87,7 +92,69 @@ function shouldBackfillMissingField(existingValue, incomingValue) {
   return existingMissing && incomingPresent;
 }
 
-function applyStaleRowBackfill(table, key, existing, incoming) {
+/**
+ * SERVICES is a composite multi-owner row. A raft-role write can advance the
+ * row-level updated_at while the replica lifecycle owner is still persisting
+ * its next state. When that later lifecycle delivery carries a strictly newer
+ * state_entered_at but an older updated_at, generic row LWW must retain the
+ * role-owned fields/version while still accepting the newer lifecycle fields.
+ * @param {string} tableName
+ * @param {Object} existing
+ * @param {Object} incoming
+ * @return {{applied: boolean, record: Object, advancedFields: string[]}}
+ */
+function buildStaleServiceLifecycleAdvance(tableName, existing, incoming) {
+  const record = deepClone(existing);
+  if (tableName !== TABLES.SERVICES) {
+    return {
+      applied: false,
+      record,
+      advancedFields: NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS,
+    };
+  }
+  const existingStateEnteredAt = Number(existing?.state_entered_at);
+  const incomingStateEnteredAt = Number(incoming?.state_entered_at);
+  if (
+    typeof incoming?.status !== 'string' ||
+    incoming.status.length === 0 ||
+    !Number.isFinite(incomingStateEnteredAt) ||
+    (
+      Number.isFinite(existingStateEnteredAt) &&
+      incomingStateEnteredAt <= existingStateEnteredAt
+    )
+  ) {
+    return {
+      applied: false,
+      record,
+      advancedFields: NO_ADVANCED_SERVICE_LIFECYCLE_FIELDS,
+    };
+  }
+  const advancedFields = [];
+  for (const fieldName of SYSTEM_TABLE_CACHE_SERVICE_LIFECYCLE_FIELD_NAMES) {
+    if (!Object.prototype.hasOwnProperty.call(incoming, fieldName)) {
+      continue;
+    }
+    const incomingValue = incoming[fieldName];
+    if (JSON.stringify(record[fieldName]) === JSON.stringify(incomingValue)) {
+      continue;
+    }
+    record[fieldName] = cloneFieldValue(incomingValue);
+    advancedFields.push(fieldName);
+  }
+  return {
+    applied: advancedFields.length > 0,
+    record,
+    advancedFields,
+  };
+}
+
+function applyStaleRowBackfill(
+  tableName,
+  table,
+  key,
+  existing,
+  incoming,
+) {
   if (shouldUsePublicationMerge(existing, incoming)) {
     const mergedRecord = mergeControlPlanePublicationRows(existing, incoming);
     if (JSON.stringify(mergedRecord) === JSON.stringify(existing)) {
@@ -105,8 +172,13 @@ function applyStaleRowBackfill(table, key, existing, incoming) {
     };
   }
 
-  const merged = deepClone(existing);
-  const backfilledFields = [];
+  const lifecycleAdvance = buildStaleServiceLifecycleAdvance(
+    tableName,
+    existing,
+    incoming,
+  );
+  const merged = lifecycleAdvance.record;
+  const backfilledFields = [...lifecycleAdvance.advancedFields];
 
   for (const [field, incomingValue] of Object.entries(incoming)) {
     if (shouldBackfillMissingField(merged[field], incomingValue)) {
@@ -172,6 +244,7 @@ function compareSchemaVersions(incomingVersion, currentVersion) {
 
 export {
   applyStaleRowBackfill,
+  buildStaleServiceLifecycleAdvance,
   cloneFieldValue,
   compareSchemaVersions,
   getRecordHlc,

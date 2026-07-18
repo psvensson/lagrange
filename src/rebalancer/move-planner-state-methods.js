@@ -1,4 +1,5 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const EMPTY_REPLICA_LIST = Object.freeze([]);
 const PLANNER_INVENTORY_OBSERVATION_STATE = Object.freeze({
   PRESENT: 'present',
   EMPTY: 'empty',
@@ -277,26 +278,6 @@ function createMovePlannerStateMethods(deps = {}) {
         partitionId: this.entityId,
         partitionRow,
       }).priorityControlPlane;
-    }
-
-    /**
-     * Resolve this partition's recorded raft leader node id, used to bias
-     * surplus-drain removal source selection away from the leader. Only
-     * meaningful for partitions; returns null otherwise or when unknown.
-     * @return {string|null}
-     * @private
-     */
-    resolveRemovalSourcePartitionLeaderNodeId() {
-      if (this.entityType !== EntityType.PARTITION) {
-        return null;
-      }
-      const systemTableCache = this.moveStateProvider?.systemTableCache || null;
-      const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
-      const leaderNodeId =
-        typeof partitionRow?.leader_node_id === 'string' ?
-          partitionRow.leader_node_id.trim() :
-          '';
-      return leaderNodeId.length > 0 ? leaderNodeId : null;
     }
 
     /**
@@ -803,7 +784,7 @@ function createMovePlannerStateMethods(deps = {}) {
         typeof this.moveStateProvider.getCurrentReplicas !==
         MOVE_PLANNER_LITERAL.FUNCTION
       ) {
-        return [];
+        return EMPTY_REPLICA_LIST;
       }
       return this.moveStateProvider.getCurrentReplicas();
     }
@@ -819,7 +800,7 @@ function createMovePlannerStateMethods(deps = {}) {
         typeof this.moveStateProvider.getHealthyReplicas !==
         MOVE_PLANNER_LITERAL.FUNCTION
       ) {
-        return Array.isArray(replicas) ? replicas : [];
+        return Array.isArray(replicas) ? replicas : EMPTY_REPLICA_LIST;
       }
       return this.moveStateProvider.getHealthyReplicas(replicas);
     }

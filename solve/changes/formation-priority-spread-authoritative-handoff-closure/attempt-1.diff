@@ -1,0 +1,754 @@
+diff --git a/src/partition/partition-service-rebalancer-methods.js b/src/partition/partition-service-rebalancer-methods.js
+index 8c78e5533798009786b57470fc687916264b0d86..8358fe6b6e8a1fc294e79d8789517d9f725d1d1e 100644
+--- a/src/partition/partition-service-rebalancer-methods.js
++++ b/src/partition/partition-service-rebalancer-methods.js
+@@ -228,6 +228,7 @@ class PartitionServiceRebalancerMethods {
+       tablePolicyService,
+       sqlQueryEngine,
+       nodeId: this.nodeId,
++      replicaId: this.replicaId,
+       replicaStateMachine: this.replicaStateMachine,
+       messageRouter,
+       rebalanceCoordinator,
+diff --git a/src/rebalancer/move-planner-move-calculation-methods.js b/src/rebalancer/move-planner-move-calculation-methods.js
+index 7a4aa4614916c28cecf7a6fb5d11ff21452ca474..57094e186cdad58cd443f87941b6311cdad7de1b 100644
+--- a/src/rebalancer/move-planner-move-calculation-methods.js
++++ b/src/rebalancer/move-planner-move-calculation-methods.js
+@@ -1,15 +1,3 @@
+-/**
+- * Move Planner - Calculates replica placement and moves for rebalancing.
+- *
+- * This module provides move planning logic extracted from UnifiedRebalancer.
+- * It calculates target replica state and the moves needed to reach that
+- * state for partitions, message groups, and runtime services.
+- *
+- * Requirements: 1.3, 1.8, 5.1, 5.2, 5.3, 5.4, 5.5, 11.3
+- *
+- * @module rebalancer/move-planner
+- */
+-
+ import {NUM} from '../constants/index.js';
+ import {RAFT_ROLE} from '../raft/constants.js';
+ import {ReplicaStatus} from './replica-status.js';
+@@ -26,6 +14,11 @@ import {
+   PLACEMENT_CURE_CONDITION,
+   resolvePlacementCure,
+ } from './replica-placement-cure-policy.js';
++import {
++  applyPrioritySpreadDrainCure,
++  applyPrioritySpreadExpandCure,
++  evaluatePriorityStandaloneRemoveSafety,
++} from './move-planner-priority-spread-cure.js';
+ const MOVE_PLANNER_LITERAL = Object.freeze({
+   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
+   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
+@@ -89,34 +82,21 @@ class MovePlannerMoveCalculationMethods {
+       );
+     };
+     const buildPriorityStandaloneRemoveSafety = (replicaId) => {
+-      if (!this.isControlPlanePriorityPartition()) {
+-        return {
+-          priorityPartition: false,
+-          safe: true,
+-          spread: null,
+-        };
+-      }
+-      const remainingActiveReplicas = activePlacementReplicas.filter(
+-        (candidate) => {
+-          const candidateReplicaId =
+-            candidate?.replica_id || candidate?.service_id;
+-          return candidateReplicaId !== replicaId;
+-        },
+-      );
+-      const spread = this.analyzePrioritySpread(
+-        remainingActiveReplicas,
++      return evaluatePriorityStandaloneRemoveSafety({
++        replicaId,
++        activePlacementReplicas,
++        targetReplicaCount,
++        priorityPartition: this.isControlPlanePriorityPartition(),
+         prioritySpreadPolicy,
+-        this.moveStateProvider.getAvailableNodes(),
+-      );
+-      return {
+-        priorityPartition: true,
+-        safe: !(spread.requiresSpread === true && spread.satisfied !== true),
+-        spread,
+-      };
++        availableNodes: this.moveStateProvider.getAvailableNodes(),
++        analyzePrioritySpread: (...args) =>
++          this.analyzePrioritySpread(...args),
++      });
+     };
+     const toExecutableRemove = (move) => {
+       const {
+         prioritySpreadStandaloneSafe: _prioritySpreadStandaloneSafe,
++        prioritySpreadMonotonicSafe: _prioritySpreadMonotonicSafe,
+         sourceIsLeader: _sourceIsLeader,
+         ...executableMove
+       } = move;
+@@ -228,11 +208,22 @@ class MovePlannerMoveCalculationMethods {
+     // leadership move. This never changes WHICH replicas are removed (the
+     // surplus set is fixed by targetNodes) — only whether the leader is drained
+     // as a REPLACE source vs a plain REMOVE, and which same-node replica drops.
+-    const partitionLeaderNodeId = this.resolveRemovalSourcePartitionLeaderNodeId();
++    const partitionLeaderNodeId =
++      this.resolveRemovalSourcePartitionLeaderNodeId();
++    const partitionLeaderReplicaId =
++      this.resolveRemovalSourcePartitionLeaderReplicaId();
+     const isLeaderRemovalCandidate = (replica) => {
+       if (!replica) {
+         return false;
+       }
++      const candidateReplicaId =
++        replica.replica_id || replica.service_id || null;
++      if (
++        partitionLeaderReplicaId &&
++        candidateReplicaId === partitionLeaderReplicaId
++      ) {
++        return true;
++      }
+       const role =
+         typeof replica.raft_role === 'string' ?
+           replica.raft_role.trim().toLowerCase() :
+@@ -463,6 +454,7 @@ class MovePlannerMoveCalculationMethods {
+         if (
+           priorityRemoveSafety.priorityPartition &&
+           priorityRemoveSafety.safe !== true &&
++          priorityRemoveSafety.monotonicSafe !== true &&
+           addMoves.length === 0
+         ) {
+           const prioritySpreadAfterRemove = priorityRemoveSafety.spread;
+@@ -503,6 +495,8 @@ class MovePlannerMoveCalculationMethods {
+           reason,
+           sourceIsLeader: isLeaderRemovalCandidate(replicaToRemove),
+           prioritySpreadStandaloneSafe: priorityRemoveSafety.safe,
++          prioritySpreadMonotonicSafe:
++            priorityRemoveSafety.monotonicSafe === true,
+           standaloneSafe:
+             activePlacementReplicas.length - candidateRemoves.length >
+             targetReplicaCount,
+@@ -525,6 +519,16 @@ class MovePlannerMoveCalculationMethods {
+       });
+       addMoves.length = 0;
+     }
++    applyPrioritySpreadDrainCure({
++      partitionId: this.entityId,
++      inventory,
++      surplusVoterCount,
++      activePlacementReplicas,
++      targetReplicaCount,
++      targetNodeIds,
++      addMoves,
++      candidateRemoves,
++    });
+     if (
+       addMoves.length > 0 &&
+       candidateRemoves.length > 0 &&
+@@ -577,12 +581,26 @@ class MovePlannerMoveCalculationMethods {
+             ).toLowerCase() === MoveType.REPLACE,
+         ).length :
+         0;
+-      const replaceCount = serializeCriticalReplace ?
++      let replaceCount = serializeCriticalReplace ?
+         Math.min(
+           naturalReplaceCount,
+           Math.max(0, 1 - inFlightReplaceCount),
+         ) :
+         naturalReplaceCount;
++      replaceCount = applyPrioritySpreadExpandCure({
++        partitionId: this.entityId,
++        inventory,
++        surplusVoterCount,
++        activePlacementReplicas,
++        targetReplicaCount,
++        targetNodeIds,
++        deficitEffectiveCount,
++        inFlightReplaceCount,
++        naturalReplaceCount,
++        replaceCount,
++        addMoves,
++        candidateRemoves,
++      });
+       const consumedRemoveReplicaIds = new Set();
+       const relocationCure = resolvePlacementCure(
+         PLACEMENT_CURE_CONDITION.PAIRED_RELOCATION,
+diff --git a/src/rebalancer/move-planner-placement-tail-methods.js b/src/rebalancer/move-planner-placement-tail-methods.js
+index 52f0f17efc97450b8bf2822b5c7b0f7e7deb84db..94915cffed917bfe2e346c5564ddd7d8f747b36f 100644
+--- a/src/rebalancer/move-planner-placement-tail-methods.js
++++ b/src/rebalancer/move-planner-placement-tail-methods.js
+@@ -30,6 +30,9 @@ import {
+ import {
+   buildPlacementOwnerDecision as buildPlacementOwnerPolicyDecision,
+ } from './placement-owner-decision.js';
++import {
++  getPartitionRowFromCache,
++} from '../bootstrap/system-partition-classification.js';
+ const MOVE_PLANNER_LITERAL = Object.freeze({
+   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
+   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
+@@ -72,6 +75,56 @@ const MoveType = REBALANCER_MOVE_TYPE;
+  */
+ 
+ class MovePlannerPlacementTailMethods {
++  /**
++   * Resolve this partition's live or recorded Raft leader node for placement
++   * retention and surplus-drain source ordering.
++   * @return {string|null}
++   * @private
++   */
++  resolveRemovalSourcePartitionLeaderNodeId() {
++    if (this.entityType !== EntityType.PARTITION) {
++      return null;
++    }
++    const liveOwnerNodeId =
++      this.moveStateProvider?.isLeader === true &&
++      typeof this.moveStateProvider?.nodeId === MOVE_PLANNER_LITERAL.STRING ?
++        this.moveStateProvider.nodeId.trim() :
++        MOVE_PLANNER_LITERAL.EMPTY_STRING;
++    if (liveOwnerNodeId.length > 0) {
++      return liveOwnerNodeId;
++    }
++    const partitionRow = getPartitionRowFromCache(
++      this.moveStateProvider?.systemTableCache || null,
++      this.entityId,
++    );
++    const leaderNodeId =
++      typeof partitionRow?.leader_node_id === MOVE_PLANNER_LITERAL.STRING ?
++        partitionRow.leader_node_id.trim() :
++        MOVE_PLANNER_LITERAL.EMPTY_STRING;
++    return leaderNodeId.length > 0 ? leaderNodeId : null;
++  }
++
++  /**
++   * Resolve the exact replica that owns this planner's live Raft leadership.
++   * Durable SERVICES roles intentionally collapse leader to follower, while
++   * formation can still have multiple local replicas.
++   * @return {string|null}
++   * @private
++   */
++  resolveRemovalSourcePartitionLeaderReplicaId() {
++    if (
++      this.entityType !== EntityType.PARTITION ||
++      this.moveStateProvider?.isLeader !== true
++    ) {
++      return null;
++    }
++    const replicaId =
++      typeof this.moveStateProvider?.replicaId === MOVE_PLANNER_LITERAL.STRING ?
++        this.moveStateProvider.replicaId.trim() :
++        MOVE_PLANNER_LITERAL.EMPTY_STRING;
++    return replicaId.length > 0 ? replicaId : null;
++  }
++
+   buildPlacementOwnerPolicyDecision(options = {}) {
+     const currentReplicas = Array.isArray(options.currentReplicas) ?
+       options.currentReplicas :
+@@ -84,6 +137,7 @@ class MovePlannerPlacementTailMethods {
+       capacityDiagnostics: options.diagnostics,
+       transitionSnapshot: options.transitionSnapshot,
+       includeGlobalSystemDeferral: options.includeGlobalSystemDeferral === true,
++      leaderNodeId: this.resolveRemovalSourcePartitionLeaderNodeId(),
+       placementPolicy: options.placementPolicy,
+       scoreProfile: options.scoreProfile,
+     });
+diff --git a/src/rebalancer/move-planner-state-methods.js b/src/rebalancer/move-planner-state-methods.js
+index bce6ae7fd09949fdfe5013c85057da40f123951f..70f5d3c2a26d9a54f8974d3917f84d4fac65831b 100644
+--- a/src/rebalancer/move-planner-state-methods.js
++++ b/src/rebalancer/move-planner-state-methods.js
+@@ -1,4 +1,5 @@
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
++const EMPTY_REPLICA_LIST = Object.freeze([]);
+ const PLANNER_INVENTORY_OBSERVATION_STATE = Object.freeze({
+   PRESENT: 'present',
+   EMPTY: 'empty',
+@@ -279,26 +280,6 @@ function createMovePlannerStateMethods(deps = {}) {
+       }).priorityControlPlane;
+     }
+ 
+-    /**
+-     * Resolve this partition's recorded raft leader node id, used to bias
+-     * surplus-drain removal source selection away from the leader. Only
+-     * meaningful for partitions; returns null otherwise or when unknown.
+-     * @return {string|null}
+-     * @private
+-     */
+-    resolveRemovalSourcePartitionLeaderNodeId() {
+-      if (this.entityType !== EntityType.PARTITION) {
+-        return null;
+-      }
+-      const systemTableCache = this.moveStateProvider?.systemTableCache || null;
+-      const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
+-      const leaderNodeId =
+-        typeof partitionRow?.leader_node_id === 'string' ?
+-          partitionRow.leader_node_id.trim() :
+-          '';
+-      return leaderNodeId.length > 0 ? leaderNodeId : null;
+-    }
+-
+     /**
+      * Resolve whether this entity is one system-table partition.
+      * @return {boolean}
+@@ -803,7 +784,7 @@ function createMovePlannerStateMethods(deps = {}) {
+         typeof this.moveStateProvider.getCurrentReplicas !==
+         MOVE_PLANNER_LITERAL.FUNCTION
+       ) {
+-        return [];
++        return EMPTY_REPLICA_LIST;
+       }
+       return this.moveStateProvider.getCurrentReplicas();
+     }
+@@ -819,7 +800,7 @@ function createMovePlannerStateMethods(deps = {}) {
+         typeof this.moveStateProvider.getHealthyReplicas !==
+         MOVE_PLANNER_LITERAL.FUNCTION
+       ) {
+-        return Array.isArray(replicas) ? replicas : [];
++        return Array.isArray(replicas) ? replicas : EMPTY_REPLICA_LIST;
+       }
+       return this.moveStateProvider.getHealthyReplicas(replicas);
+     }
+diff --git a/src/rebalancer/operation-workflow-recovery-status-reconcile.js b/src/rebalancer/operation-workflow-recovery-status-reconcile.js
+index 51e8b8fd0a235862e5452a0279dcdd38b2b0a485..d3fa6ea63b98e2db0b76b21e5aa367953eef3dd5 100644
+--- a/src/rebalancer/operation-workflow-recovery-status-reconcile.js
++++ b/src/rebalancer/operation-workflow-recovery-status-reconcile.js
+@@ -20,6 +20,7 @@ const {
+   ReplicaStatus,
+   SQL_RECONCILIATION_REASON,
+   STOPPING_REPLICA_OBSERVATION_STATE,
++  SYSTEM_TABLE_NAME,
+   TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS,
+   TIMEOUT_BUDGET_CLASSIFICATION,
+   TIMEOUT_BUDGET_DEFAULT,
+@@ -35,6 +36,42 @@ const {
+ } = SHARED;
+ 
+ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
++  async confirmActiveReplicaTerminalHandoff(operation) {
++    let cacheAligned = false;
++    if (
++      operation?.replicaId &&
++      this.repository &&
++      typeof this.repository.refreshAuthoritativeReplicaCacheRow ===
++        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
++    ) {
++      cacheAligned =
++        await this.repository.refreshAuthoritativeReplicaCacheRow(
++          operation.replicaId,
++        );
++    }
++    if (cacheAligned === true) {
++      return true;
++    }
++    this.scheduleObservedProgressRetry(
++      operation.operationId,
++      SYSTEM_TABLE_NAME.SERVICES,
++      OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
++    );
++    return false;
++  }
++
++  async reconcileActiveReplicaStatus(operation) {
++    if (!await this.confirmActiveReplicaTerminalHandoff(operation)) {
++      return true;
++    }
++    if (operation.type === OperationType.REPLACE) {
++      await this.reconcileReplaceActualActive(operation);
++    } else {
++      await this.completeOperation(operation);
++    }
++    return true;
++  }
++
+   isActiveReplaceSourceRetirementObserved(
+     operation,
+     sourceReplicaId,
+@@ -153,12 +190,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
+     }
+ 
+     if (reconciledStatus === ReplicaStatus.ACTIVE) {
+-      if (operation.type === OperationType.REPLACE) {
+-        await this.reconcileReplaceActualActive(operation);
+-      } else {
+-        await this.completeOperation(operation);
+-      }
+-      return true;
++      return this.reconcileActiveReplicaStatus(operation);
+     }
+ 
+     if (reconciledStatus === ReplicaStatus.FAILED) {
+diff --git a/src/rebalancer/placement-owner-evidence.js b/src/rebalancer/placement-owner-evidence.js
+index a169dbe0d3d4a3d3fe1f33c27a65d46d112291f8..046505d7559cb33b14fda3e248b8a9256cc10adc 100644
+--- a/src/rebalancer/placement-owner-evidence.js
++++ b/src/rebalancer/placement-owner-evidence.js
+@@ -138,11 +138,24 @@ function normalizeCurrentReplicas(currentReplicas) {
+ // (valid replica count > targetCount), so at/under-target placement is unchanged.
+ // Feasibility is enforced downstream: the reservation only retains a node that
+ // survived the capacity filter, so an unhealthy/over-capacity leader still drains.
+-function resolveLeaderRetentionNodeId(currentReplicas, targetCount) {
++function resolveLeaderRetentionNodeId(
++  currentReplicas,
++  targetCount,
++  leaderNodeId = null,
++) {
+   const validReplicas = currentReplicas.filter((replica) => replica.valid);
+   if (validReplicas.length <= targetCount) {
+     return PLACEMENT_OWNER_EMPTY_STRING;
+   }
++  const normalizedLeaderNodeId = normalizeNodeId(leaderNodeId);
++  if (
++    normalizedLeaderNodeId.length > 0 &&
++    validReplicas.some(
++      (replica) => replica.nodeId === normalizedLeaderNodeId,
++    )
++  ) {
++    return normalizedLeaderNodeId;
++  }
+   const leaderReplica = validReplicas.find(
+     (replica) => replica.raftRole === RAFT_ROLE.LEADER,
+   );
+@@ -354,6 +367,7 @@ function normalizePlacementOwnerEvidence(options = {}) {
+     leaderRetentionNodeId: resolveLeaderRetentionNodeId(
+       currentReplicas,
+       normalizePositiveInteger(options.targetCount),
++      options.leaderNodeId,
+     ),
+     incumbentRetentionNodeIds: Object.freeze(
+       resolveIncumbentRetentionNodeIds(
+diff --git a/src/rebalancer/replica-operation-repository-observation-methods.js b/src/rebalancer/replica-operation-repository-observation-methods.js
+index 8a364f5a3e1653d1c346fc56df337d8e3e0afd76..a15f2b2c14805883ff12c900be1898e326d90c44 100644
+--- a/src/rebalancer/replica-operation-repository-observation-methods.js
++++ b/src/rebalancer/replica-operation-repository-observation-methods.js
+@@ -214,6 +214,30 @@ function assignReplicaOperationRepositoryObservationMethods(
+       );
+     }
+     /**
++   * Align one exact SERVICES row from authoritative storage into the local
++   * cache before its operation owner releases terminal workflow state.
++   *
++     * @param {string} replicaId
++     * @return {Promise<boolean>}
++     */
++    async refreshAuthoritativeReplicaCacheRow(replicaId) {
++      const refreshAuthoritativeCacheRow =
++        this.cdcIntegrationService?.refreshAuthoritativeCacheRow;
++      if (
++        typeof refreshAuthoritativeCacheRow !==
++          REPLICA_OPERATION_REPOSITORY_LITERAL.FUNCTION
++      ) {
++        return false;
++      }
++      return (
++        await refreshAuthoritativeCacheRow.call(
++          this.cdcIntegrationService,
++          SYSTEM_TABLE_NAME.SERVICES,
++          replicaId,
++        )
++      ) === true;
++    }
++    /**
+    * Resolve the authoritative services read contract for one status probe.
+    * @param {Object} [readOptions={}]
+    * @return {Object}
+diff --git a/src/rebalancer/replica-operation-repository.js b/src/rebalancer/replica-operation-repository.js
+index 3c9afbe473b454a1b25115c69c38caa256120131..21b978a583d8f3a2c39c6c0713c8bba59c74d430 100644
+--- a/src/rebalancer/replica-operation-repository.js
++++ b/src/rebalancer/replica-operation-repository.js
+@@ -137,6 +137,7 @@ const REPLICA_OPERATION_REPOSITORY_LITERAL = Object.freeze({
+   REPLICAOPERATIONREPOSITORY_REQUIRES_A_CONTROL_PLANE_MUTATION_INGRESS:
+     'ReplicaOperationRepository requires a control-plane mutation ingress',
+   OBJECT: 'object',
++  FUNCTION: 'function',
+   CRITICAL: 'critical',
+   WRITE: 'write',
+   OBSERVED: 'observed',
+diff --git a/src/rebalancer/unified-rebalancer-lifecycle-base.js b/src/rebalancer/unified-rebalancer-lifecycle-base.js
+index 7d55c3de424df712b123884e5ad44e50f97a02fe..f05ed02898140cdf2856d9fc5f7655e9af0b3e13 100644
+--- a/src/rebalancer/unified-rebalancer-lifecycle-base.js
++++ b/src/rebalancer/unified-rebalancer-lifecycle-base.js
+@@ -62,6 +62,10 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
+       options.nodeId,
+       REBALANCER_ERROR_MSG.NODE_ID_REQUIRED,
+     );
++    this.replicaId =
++      typeof options.replicaId === UNIFIED_REBALANCER_LITERAL.STRING ?
++        options.replicaId :
++        null;
+     this.messageRouter = assertCritical(
+       options.messageRouter,
+       REBALANCER_ERROR_MSG.ROUTER_REQUIRED,
+diff --git a/src/rebalancer/unified-rebalancer-shared.js b/src/rebalancer/unified-rebalancer-shared.js
+index c0b38e90aaca6903c4585da8f23c00f4e2042e3c..a08d4d6ea5e7fa5371affb0618d0170778f2f1a9 100644
+--- a/src/rebalancer/unified-rebalancer-shared.js
++++ b/src/rebalancer/unified-rebalancer-shared.js
+@@ -148,6 +148,7 @@ const UNIFIED_REBALANCER_LITERAL = Object.freeze({
+   NUMBER: 'number',
+   ONE: 1,
+   ONE_POINT_FIVE: 1.5,
++  STRING: 'string',
+   READ: 'read',
+   REBALANCECOORDINATOR: 'rebalanceCoordinator',
+   REBALANCER_COLON_SCHEDULE: 'rebalancer:schedule',
+diff --git a/test/partition/partition-rebalancer-dependency-wiring-characterization.test.js b/test/partition/partition-rebalancer-dependency-wiring-characterization.test.js
+index 31fe0819b623afed530b33b5354468dba4f8c33a..6506e19f72c04b17f0e50739d96b3fafda77dfc5 100644
+--- a/test/partition/partition-rebalancer-dependency-wiring-characterization.test.js
++++ b/test/partition/partition-rebalancer-dependency-wiring-characterization.test.js
+@@ -306,6 +306,11 @@ test('initialization gate — rebalancer created when all ' +
+     'rebalancer created when all gates satisfied');
+   t.ok(ps.rebalancer instanceof UnifiedRebalancer,
+     'rebalancer is a UnifiedRebalancer instance');
++  t.equal(
++    ps.rebalancer.replicaId,
++    REPLICA_ID,
++    'rebalancer receives the exact local Raft-owner replica identity',
++  );
+   await shutdownPartitionService(ps);
+ });
+ 
+diff --git a/test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js b/test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js
+index 116de5f83e7e17672d4f4fc736e4c7411438ca1a..8c5e414b0ebbe7d3a495775279ea0944fa0a486f 100644
+--- a/test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js
++++ b/test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js
+@@ -59,8 +59,11 @@ function createReplica(replicaId, nodeId, raftRole = null) {
+   return replica;
+ }
+ 
+-function createMoveStateProvider(nodes, currentReplicas) {
++function createMoveStateProvider(nodes, currentReplicas, extra = {}) {
+   return {
++    isLeader: extra.isLeader === true,
++    nodeId: extra.leaderNodeId || null,
++    replicaId: extra.leaderReplicaId || null,
+     getAvailableNodes: () => nodes,
+     getCurrentReplicas: () => currentReplicas,
+     getHealthyReplicas: (replicas) =>
+@@ -77,7 +80,11 @@ function createPlanner(nodes, currentReplicas, extra = {}) {
+   return new MovePlanner({
+     entityId: PARTITION_ID,
+     entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+-    moveStateProvider: createMoveStateProvider(nodes, currentReplicas),
++    moveStateProvider: createMoveStateProvider(
++      nodes,
++      currentReplicas,
++      extra,
++    ),
+     storageAdmissionService: extra.storageAdmissionService,
+     accountingService: extra.accountingService,
+   });
+@@ -258,4 +265,51 @@ test('CL-038 surplus drain retains the leader node', async (t) => {
+       );
+     },
+   );
++
++  await t.test(
++    'live owner identity retains a collapsed-role leader and drains its co-located follower',
++    async (t) => {
++      // Runtime SERVICES publication intentionally collapses leader to follower.
++      // Formation can also leave multiple replicas on the leader node. The
++      // active Raft owner identity must therefore preserve both the leader node
++      // in the target cohort and the exact leader replica within that node.
++      const node4 = 'node-4';
++      const nodes = [
++        createNode(NODE_1, CPU_HIGH),
++        createNode(NODE_2, CPU_LOW),
++        createNode(NODE_3, CPU_MID),
++        createNode(node4, 0),
++      ];
++      const currentReplicas = [
++        createReplica('leader-replica', NODE_1, 'follower'),
++        createReplica('co-located-follower', NODE_1, 'follower'),
++        createReplica('replica-2', NODE_2, 'follower'),
++        createReplica('replica-3', NODE_3, 'follower'),
++      ];
++      const planner = createPlanner(nodes, currentReplicas, {
++        isLeader: true,
++        leaderNodeId: NODE_1,
++        leaderReplicaId: 'leader-replica',
++      });
++      const targetState =
++        await planner.calculateTargetState(currentReplicas, {
++          ...PARTITION_POLICY,
++          targetReplicaCount: NUM.THREE,
++        });
++      const moves = planner.calculateMoves(currentReplicas, targetState);
++
++      t.ok(
++        targetState.targetNodes.includes(NODE_1),
++        'live leader node remains in the target cohort despite collapsed roles',
++      );
++      t.notOk(
++        moves.some((move) => move.replicaId === 'leader-replica'),
++        'the exact live leader replica is never selected as a drain source',
++      );
++      t.ok(
++        moves.some((move) => move.replicaId === 'co-located-follower'),
++        'the co-located follower is selected ahead of the leader',
++      );
++    },
++  );
+ });
+diff --git a/test/rebalancer/operation-workflow-active-cache-handoff.test.js b/test/rebalancer/operation-workflow-active-cache-handoff.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1da657d528d2a60a46f8feb626131ef13c51d564
+--- /dev/null
++++ b/test/rebalancer/operation-workflow-active-cache-handoff.test.js
+@@ -0,0 +1,160 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {SYSTEM_TABLE_NAME} from
++  '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  createOperation,
++  OperationType,
++  ReplicaStatus,
++} from '../../src/rebalancer/replica-status.js';
++import {createTestCoordinator} from './test-helpers.js';
++
++const TEST_NODE_ID = 'active-cache-handoff-owner';
++const TEST_OPERATION_ID = 'active-cache-handoff-operation';
++const TEST_PARTITION_ID = 'sql_write_operations-p1';
++const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
++
++function buildSyncingAddOperation() {
++  const operation = createOperation({
++    operationId: TEST_OPERATION_ID,
++    type: OperationType.ADD,
++    partitionId: TEST_PARTITION_ID,
++    replicaId: TEST_REPLICA_ID,
++    sourceNodeId: TEST_NODE_ID,
++    targetNodeId: TEST_NODE_ID,
++  });
++  operation.status = ReplicaStatus.SYNCING;
++  operation.workflowStep = WORKFLOW_STEP.SYNCING;
++  operation.stepsHistory.push({
++    step: WORKFLOW_STEP.SYNCING,
++    timestamp: operation.updatedAt,
++    previousStep: WORKFLOW_STEP.PENDING,
++  });
++  return operation;
++}
++
++test(
++  'ACTIVE target reconciliation retains the operation until its exact ' +
++    'authoritative SERVICES row is aligned into cache',
++  async (t) => {
++    const refreshCalls = [];
++    let refreshAligned = false;
++    const coordinator = createTestCoordinator({
++      nodeId: TEST_NODE_ID,
++      cdcIntegrationService: {
++        async insertSystemTableRow() {
++          return {success: true};
++        },
++        async updateSystemTableRow() {
++          return {success: true};
++        },
++        async refreshAuthoritativeCacheRow(tableName, key) {
++          refreshCalls.push({tableName, key});
++          return refreshAligned;
++        },
++      },
++    });
++    const operation = buildSyncingAddOperation();
++    const completedOperationIds = [];
++    const scheduledOperationIds = [];
++    coordinator.workflowOwner.completeOperation =
++      async (completedOperation) => {
++        completedOperationIds.push(completedOperation.operationId);
++      };
++    coordinator.workflowOwner.scheduleObservedProgressRetry =
++      (operationId) => {
++        scheduledOperationIds.push(operationId);
++        return true;
++      };
++
++    try {
++      const deferred = await coordinator.workflowOwner
++        .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
++
++      t.equal(
++        deferred,
++        true,
++        'the unresolved cache handoff remains owned progress',
++      );
++      t.same(
++        refreshCalls,
++        [{
++          tableName: SYSTEM_TABLE_NAME.SERVICES,
++          key: TEST_REPLICA_ID,
++        }],
++        'the handoff refreshes only the exact target SERVICES row',
++      );
++      t.same(
++        completedOperationIds,
++        [],
++        'the operation remains live while cache alignment is unavailable',
++      );
++      t.same(
++        scheduledOperationIds,
++        [TEST_OPERATION_ID],
++        'the workflow owner retains a retry wake-up',
++      );
++
++      refreshAligned = true;
++      const completed = await coordinator.workflowOwner
++        .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
++
++      t.equal(completed, true, 'aligned ACTIVE evidence completes normally');
++      t.same(
++        completedOperationIds,
++        [TEST_OPERATION_ID],
++        'the operation completes after the target row is cache-visible',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'ACTIVE target reconciliation fails closed without the cache repair port',
++  async (t) => {
++    const coordinator = createTestCoordinator({
++      nodeId: TEST_NODE_ID,
++      cdcIntegrationService: {
++        async insertSystemTableRow() {
++          return {success: true};
++        },
++        async updateSystemTableRow() {
++          return {success: true};
++        },
++      },
++    });
++    const operation = buildSyncingAddOperation();
++    const completedOperationIds = [];
++    const scheduledOperationIds = [];
++    coordinator.workflowOwner.completeOperation =
++      async (completedOperation) => {
++        completedOperationIds.push(completedOperation.operationId);
++      };
++    coordinator.workflowOwner.scheduleObservedProgressRetry =
++      (operationId) => {
++        scheduledOperationIds.push(operationId);
++        return true;
++      };
++
++    try {
++      const deferred = await coordinator.workflowOwner
++        .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
++
++      t.equal(deferred, true, 'missing repair remains owned progress');
++      t.same(
++        completedOperationIds,
++        [],
++        'missing capability cannot release terminal workflow state',
++      );
++      t.same(
++        scheduledOperationIds,
++        [TEST_OPERATION_ID],
++        'the owner retains a retry instead of accepting ambiguous absence',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);

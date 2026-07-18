@@ -5,6 +5,7 @@
  * Requirements: 4.4, 4.5, 4.8
  */
 
+import {TABLES} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {fastJsonClone} from '../utils/fast-json-clone.js';
@@ -15,7 +16,12 @@ import {
   CACHE_LOG_MSG,
   CACHE_SUBSYSTEM,
   CACHE_SYSTEM_TABLES,
+  SYSTEM_TABLE_CACHE_MUTATION_MODE,
 } from './cache-constants.js';
+import {
+  buildAuthoritativeServiceLifecycleCacheReplacement,
+  buildAuthoritativeSystemTableCacheReplacement,
+} from './system-table-cache-authoritative-reconciliation.js';
 import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
   getSystemCachePrimaryKeyField,
@@ -295,11 +301,13 @@ class SystemTableCache {
   }
 
   /**
-   * Apply a CDC change to the cache.
-   * This method should ONLY be called by CDC event handlers or bootstrap hydration.
+   * Apply an owner-sanctioned system-table change to the cache.
+   * This method should ONLY be called by CDC event handlers, bootstrap hydration,
+   * or the canonical authoritative-reconciliation gateway.
    * @param {string} tableName - Name of the system table.
    * @param {string} operation - CDC operation (INSERT, UPDATE, DELETE).
    * @param {Object} data - Record data (must include primary key field).
+   * @param {Object} options - Cause and owner-owned mutation mode.
    * @throws {Error} If operation is invalid or data is missing required fields.
    */
   applySystemTableChange(tableName, operation, data, options = {}) {
@@ -307,6 +315,9 @@ class SystemTableCache {
     this.validateOperation(operation);
 
     const causeId = normalizeCauseId(options?.causeId);
+    const mutationMode = options?.mutationMode ||
+      SYSTEM_TABLE_CACHE_MUTATION_MODE.CDC_MERGE;
+    this.validateMutationMode(mutationMode, operation, tableName);
 
     // Get the primary key field for this table
     const pkField = getSystemCachePrimaryKeyField(tableName);
@@ -338,6 +349,7 @@ class SystemTableCache {
         const existing = table.get(key);
         if (this.isStaleForExistingRecord(tableName, existing, data)) {
           const staleMergeResult = this.applyStaleRowBackfill(
+            tableName,
             table,
             key,
             existing,
@@ -376,6 +388,7 @@ class SystemTableCache {
         const existing = table.get(key);
         if (this.isStaleForExistingRecord(tableName, existing, data)) {
           const staleMergeResult = this.applyStaleRowBackfill(
+            tableName,
             table,
             key,
             existing,
@@ -404,8 +417,25 @@ class SystemTableCache {
         table.set(key, this.deepClone(data));
       } else {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(tableName, existing, data)) {
+        if (
+          mutationMode ===
+          SYSTEM_TABLE_CACHE_MUTATION_MODE
+            .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION
+        ) {
+          table.set(
+            key,
+            buildAuthoritativeServiceLifecycleCacheReplacement(
+              existing,
+              data,
+            ),
+          );
+        } else if (this.isStaleForExistingRecord(
+          tableName,
+          existing,
+          data,
+        )) {
           const staleMergeResult = this.applyStaleRowBackfill(
+            tableName,
             table,
             key,
             existing,
@@ -423,8 +453,17 @@ class SystemTableCache {
             backfilledFields: staleMergeResult.backfilledFields,
           });
           break;
+        } else if (
+          mutationMode ===
+          SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION
+        ) {
+          table.set(
+            key,
+            buildAuthoritativeSystemTableCacheReplacement(existing, data),
+          );
+        } else {
+          table.set(key, this.mergeRecords(tableName, existing, data));
         }
-        table.set(key, this.mergeRecords(tableName, existing, data));
       }
       recordForNotification = table.get(key);
       break;
@@ -536,6 +575,38 @@ class SystemTableCache {
   }
 
   /**
+   * Restrict exact authoritative replacement to its owner-sanctioned UPSERT.
+   * @param {string} mutationMode - Named cache mutation mode.
+   * @param {string} operation - CDC operation.
+   * @throws {Error} If the mode is unknown or incompatible with the operation.
+   * @private
+   */
+  validateMutationMode(mutationMode, operation, tableName) {
+    const modeKnown = Object.values(
+      SYSTEM_TABLE_CACHE_MUTATION_MODE,
+    ).includes(mutationMode);
+    const authoritativeMode =
+      mutationMode ===
+        SYSTEM_TABLE_CACHE_MUTATION_MODE.AUTHORITATIVE_RECONCILIATION ||
+      mutationMode ===
+        SYSTEM_TABLE_CACHE_MUTATION_MODE
+          .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION;
+    const operationCompatible =
+      !authoritativeMode ||
+      operation === CDC_OPERATIONS.UPSERT;
+    const tableCompatible =
+      mutationMode !==
+        SYSTEM_TABLE_CACHE_MUTATION_MODE
+          .AUTHORITATIVE_SERVICE_LIFECYCLE_RECONCILIATION ||
+      tableName === TABLES.SERVICES;
+    if (!modeKnown || !operationCompatible || !tableCompatible) {
+      throw new Error(
+        CACHE_ERROR_MSG.invalidMutationMode(mutationMode, operation),
+      );
+    }
+  }
+
+  /**
    * Deep clone an object to prevent external mutation. Sits on every cache
    * read (get/find/filter/getAll), which the readiness/recovery projection
    * pipeline drives at table-scan frequency — must never JSON-roundtrip
@@ -580,8 +651,14 @@ class SystemTableCache {
    * @return {{applied: boolean, record: Object, backfilledFields: string[]}}
    * @private
    */
-  applyStaleRowBackfill(table, key, existing, incoming) {
-    return applyStaleRowBackfill(table, key, existing, incoming);
+  applyStaleRowBackfill(tableName, table, key, existing, incoming) {
+    return applyStaleRowBackfill(
+      tableName,
+      table,
+      key,
+      existing,
+      incoming,
+    );
   }
 
   /**

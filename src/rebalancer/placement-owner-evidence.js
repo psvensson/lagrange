@@ -138,10 +138,23 @@ function normalizeCurrentReplicas(currentReplicas) {
 // (valid replica count > targetCount), so at/under-target placement is unchanged.
 // Feasibility is enforced downstream: the reservation only retains a node that
 // survived the capacity filter, so an unhealthy/over-capacity leader still drains.
-function resolveLeaderRetentionNodeId(currentReplicas, targetCount) {
+function resolveLeaderRetentionNodeId(
+  currentReplicas,
+  targetCount,
+  leaderNodeId = null,
+) {
   const validReplicas = currentReplicas.filter((replica) => replica.valid);
   if (validReplicas.length <= targetCount) {
     return PLACEMENT_OWNER_EMPTY_STRING;
+  }
+  const normalizedLeaderNodeId = normalizeNodeId(leaderNodeId);
+  if (
+    normalizedLeaderNodeId.length > 0 &&
+    validReplicas.some(
+      (replica) => replica.nodeId === normalizedLeaderNodeId,
+    )
+  ) {
+    return normalizedLeaderNodeId;
   }
   const leaderReplica = validReplicas.find(
     (replica) => replica.raftRole === RAFT_ROLE.LEADER,
@@ -354,6 +367,7 @@ function normalizePlacementOwnerEvidence(options = {}) {
     leaderRetentionNodeId: resolveLeaderRetentionNodeId(
       currentReplicas,
       normalizePositiveInteger(options.targetCount),
+      options.leaderNodeId,
     ),
     incumbentRetentionNodeIds: Object.freeze(
       resolveIncumbentRetentionNodeIds(
