@@ -200,10 +200,17 @@ Lifecycle / membership:
 
 ## Open questions
 
-- **F12 follow-up: should the JOINING fence become an explicit phase guard in
-  heartbeat publication** (refuse READY/ACTIVE while lifecycle is pre-READY)
-  rather than the current implicit start-ordering? Candidate first quest for
-  this epic — small, provable, closes both named footguns.
+- **F3 resolution path (updated 2026-07-18):** the flagless direction is
+  agreed (no per-request pressure flags; policy over work class), but the
+  first attempt — always-DEFER with a fixed 250ms hint, the APF/CockroachDB
+  shape — was FALSIFIED live: cold-formation joins slowed ~9x and blew the
+  activation budget, because formation relies on tight retry loops pushing
+  through flickering backpressure that fixed-hint pacing serializes. The
+  quest `pressure-admission-flagless-defer-policy` stays open for a design
+  with real queueing (admit-when-capacity, priority-ordered) or a
+  formation-phase-aware policy; a fixed defer hint is ruled out by evidence.
+  All unit suites passed while live formation failed — admission-policy
+  changes MUST be validated with a live formation run before landing.
 - F3: which `allowPressureDegrade` default is intended? (Behavior decision.)
 - O3 sequencing: before or after the current live quest closes? The cure
   classifiers (F8) are load-bearing for the quest's measured outcome; O3

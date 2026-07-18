@@ -19,11 +19,10 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: narrowed: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T14-48-39-104Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for formation-joining-ready-phase-fence-live-main
-- No longer current: FAIL
 
 ## Continuation
 - Status: allowed
@@ -58,6 +57,7 @@
 - **formation-joining-ready-phase-fence-live-main**: Fresh unchanged live run confirms the JOINING formation repair engages and cluster formation completes, then fails downstream because the background release clock matures from priority-spread clear while four schema-provisioning operations remain in flight; ordinary work releases after only 11.481s of full operation drain, before the unchanged 60s schema-admission window. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T09-04-17-360Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T14-48-39-104Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T14-48-39-104Z.report.json]
 
 ## Theories
 _(none recorded)_

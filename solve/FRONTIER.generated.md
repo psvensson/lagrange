@@ -111,10 +111,10 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | per-table-cache-version-consolidation | product | 0 | 0 | — |
 | pgwire-authentication-cutover | product | 5 | 0 | — |
 | pgwire-tls-policy-cutover | product | 3 | 0 | — |
+| pressure-admission-flagless-defer-policy | product | 0 | 0 | — |
 | priority-recovery-followup-phi-monotonicity | product | 0 | 0 | — |
 | priority-recovery-owner-inventory-projection-refresh | process | 0 | 0 | — |
 | priority-recovery-replace-owner-inventory-unavailable | product | 5 | 0 | — |
-| quiescence-observation-lane-decoupling | product | 0 | 0 | — |
 | read-authority-structural-threading | product | 0 | 0 | — |
 | rolling-restart-core-stability | product | 74 | 13 | CL-001, CL-004, CL-030 |
 | rolling-restart-run4-critical-spread | product | 1 | 0 | — |
