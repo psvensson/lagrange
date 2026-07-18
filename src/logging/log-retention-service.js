@@ -271,7 +271,6 @@ class LogRetentionService extends EventEmitter {
       [cutoffTime, limit],
       {
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        allowPressureDefer: true,
       },
     );
     const selectedRows = Array.isArray(selectResult.results) ?
@@ -296,7 +295,6 @@ class LogRetentionService extends EventEmitter {
       logIds,
       {
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        allowPressureDefer: true,
       },
     );
 

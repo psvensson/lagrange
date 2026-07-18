@@ -61,12 +61,8 @@ function applySharedPressureDeferWindow() {
   const decision = this.getPressureGovernor().evaluate({
     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
     resourceKeys: [...LOGS_TABLE_SHARED_PRESSURE_RESOURCE_KEYS],
-    allowDegrade: true,
-    allowDefer: true,
-    retryAfterMs: this.retryDelayMs,
   });
-  if (decision?.action !== PRESSURE_GOVERNOR_ACTION.DEFER &&
-      decision?.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE) {
+  if (decision?.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
     return;
   }
   const retryAfterMs = Number.isFinite(decision?.retryAfterMs) &&

@@ -539,11 +539,6 @@ test('LogsTableService routes owner-backed log writes through background control
       'logs-table writes should stay off the critical transport lane',
     );
     t.equal(
-      writes[0].options.allowPressureDefer,
-      true,
-      'logs-table writes should be deferrable under pressure',
-    );
-    t.equal(
       writes[0].options.pressureRetryAfterMs,
       250,
       'logs-table writes should pass through retry defer hints',
@@ -584,11 +579,6 @@ test('LogsTableService uses injected logsOwner when the composition root supplie
       writes[0].options.workClass,
       PRESSURE_WORK_CLASS.BACKGROUND,
       'owner-backed log writes should preserve background pressure class',
-    );
-    t.equal(
-      writes[0].options.allowPressureDefer,
-      true,
-      'owner-backed log writes should remain deferrable under pressure',
     );
 
     await service.shutdown();
@@ -1053,7 +1043,7 @@ test('LogsTableService arms a shared-pressure defer window before the local ' +
         'logs persistence should evaluate as background work',
       );
       return {
-        action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
+        action: PRESSURE_GOVERNOR_ACTION.DEFER,
         retryAfterMs: 250,
         summary: {backpressured: true},
       };
@@ -1150,7 +1140,7 @@ test('LogsTableService collapses transient transport failures by family while ' 
   const pressureGovernor = {
     evaluate() {
       return {
-        action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
+        action: PRESSURE_GOVERNOR_ACTION.DEFER,
         retryAfterMs: 200,
         summary: {backpressured: true},
       };

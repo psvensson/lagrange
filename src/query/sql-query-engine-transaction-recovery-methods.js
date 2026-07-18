@@ -7,7 +7,6 @@ import {
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_BOOLEAN = 'boolean';
 
 const {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -191,7 +190,6 @@ class SQLQueryEngineTransactionRecoveryMethods
     const workloadProfile = workloadClass ?
       buildControlPlaneWorkloadProfile(workloadClass, {
         workClass: requestedWorkClass,
-        allowPressureDefer: options?.allowPressureDefer,
       }) :
       null;
     const workClass = workloadProfile?.workClass || requestedWorkClass;
@@ -206,10 +204,6 @@ class SQLQueryEngineTransactionRecoveryMethods
     };
     if (workloadProfile) {
       mutationOptions.workloadClass = workloadProfile.workloadClass;
-      mutationOptions.allowPressureDefer =
-        workloadProfile.allowPressureDefer;
-    } else if (typeof options?.allowPressureDefer === LOCAL_STR_BOOLEAN) {
-      mutationOptions.allowPressureDefer = options.allowPressureDefer;
     }
     const coalescingKey =
       typeof options?.coalescingKey === LOCAL_STR_STRING ?

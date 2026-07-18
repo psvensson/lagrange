@@ -205,7 +205,6 @@ class ServicePartitionAccessPublisher {
   buildPublishOptions(serviceId) {
     return {
       allowCoalescing: true,
-      allowPressureDefer: true,
       coalescingKey:
         `${COALESCING_KEY_PREFIX}${ACCESS_ID_SEPARATOR}` +
         `${this.nodeId}${ACCESS_ID_SEPARATOR}${serviceId}`,

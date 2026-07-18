@@ -1,0 +1,229 @@
+diff --git a/src/logging/log-query-service.js b/src/logging/log-query-service.js
+index 0c77d4ae4c10f375ef9374633688047e0b1a3789..e1d585cd3f760fd5e9ffbd7bdc84c4936274c0d8 100644
+--- a/src/logging/log-query-service.js
++++ b/src/logging/log-query-service.js
+@@ -470,7 +470,6 @@ class LogQueryService extends EventEmitter {
+     try {
+       const result = await gateway.executeQuery(sql, [], {
+         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+-        allowPressureDefer: true,
+       });
+       return result;
+     } catch (error) {
+diff --git a/src/logging/log-retention-service.js b/src/logging/log-retention-service.js
+index 78de402689287ddb8de8184b2723c28cb402b299..c6a0bddeb973355f04c58f4137fb3f6b66fd91ce 100644
+--- a/src/logging/log-retention-service.js
++++ b/src/logging/log-retention-service.js
+@@ -271,7 +271,6 @@ class LogRetentionService extends EventEmitter {
+       [cutoffTime, limit],
+       {
+         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-        allowPressureDefer: true,
+       },
+     );
+     const selectedRows = Array.isArray(selectResult.results) ?
+@@ -296,7 +295,6 @@ class LogRetentionService extends EventEmitter {
+       logIds,
+       {
+         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-        allowPressureDefer: true,
+       },
+     );
+ 
+diff --git a/src/logging/logs-table-service-pressure-helpers.js b/src/logging/logs-table-service-pressure-helpers.js
+index a3f36067ee2ee71786883bf96b33e9271cf48526..2ae2e0c720a2894727bcf6cc54c0a51f7674ea21 100644
+--- a/src/logging/logs-table-service-pressure-helpers.js
++++ b/src/logging/logs-table-service-pressure-helpers.js
+@@ -61,12 +61,8 @@ function applySharedPressureDeferWindow() {
+   const decision = this.getPressureGovernor().evaluate({
+     workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+     resourceKeys: [...LOGS_TABLE_SHARED_PRESSURE_RESOURCE_KEYS],
+-    allowDegrade: true,
+-    allowDefer: true,
+-    retryAfterMs: this.retryDelayMs,
+   });
+-  if (decision?.action !== PRESSURE_GOVERNOR_ACTION.DEFER &&
+-      decision?.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE) {
++  if (decision?.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
+     return;
+   }
+   const retryAfterMs = Number.isFinite(decision?.retryAfterMs) &&
+diff --git a/src/logging/logs-table-service.js b/src/logging/logs-table-service.js
+index 6bec0e578a9c7b5d237cf8108d55f4e44785946f..b080813357eb8d0b64cd86842530e6a6e6d30b54 100644
+--- a/src/logging/logs-table-service.js
++++ b/src/logging/logs-table-service.js
+@@ -530,7 +530,6 @@ class LogsTableService extends EventEmitter {
+         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+         workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
+         deliveryPriority: LOCAL_STR_BACKGROUND,
+-        allowPressureDefer: true,
+         pressureRetryAfterMs: this.retryDelayMs,
+       });
+       return;
+diff --git a/src/query/service-partition-access-publisher.js b/src/query/service-partition-access-publisher.js
+index 95cf9eb623ad18fc32d579010aeb41d5ed622011..e4078fc62422f54952a597a30afa07db9ef11df1 100644
+--- a/src/query/service-partition-access-publisher.js
++++ b/src/query/service-partition-access-publisher.js
+@@ -205,7 +205,6 @@ class ServicePartitionAccessPublisher {
+   buildPublishOptions(serviceId) {
+     return {
+       allowCoalescing: true,
+-      allowPressureDefer: true,
+       coalescingKey:
+         `${COALESCING_KEY_PREFIX}${ACCESS_ID_SEPARATOR}` +
+         `${this.nodeId}${ACCESS_ID_SEPARATOR}${serviceId}`,
+diff --git a/src/query/sql-query-engine-statement-execution.js b/src/query/sql-query-engine-statement-execution.js
+index fedef92e7f5288b7bf9ee510b6bb53a63b14354b..7652eb15aaa3db6d01f247150b815e459096327d 100644
+--- a/src/query/sql-query-engine-statement-execution.js
++++ b/src/query/sql-query-engine-statement-execution.js
+@@ -542,9 +542,6 @@ class SQLQueryEngineStatementExecution extends
+         writeStatement ? LOCAL_STR_QUERY_PLANE_WRITE : LOCAL_STR_QUERY_PLANE_READ,
+         `query-plane:statement:${String(astType || LOCAL_STR_UNKNOWN).toLowerCase()}`,
+       ],
+-      allowDegrade: false,
+-      allowDefer: options?.allowPressureDefer !== false,
+-      retryAfterMs: options?.pressureRetryAfterMs,
+     });
+   }
+ 
+diff --git a/src/query/sql-query-engine-transaction-recovery-methods.js b/src/query/sql-query-engine-transaction-recovery-methods.js
+index 61e15e2f90ca5cfeffd26d7d2093b437307b7176..0a67d9511cfef4c3cd7382671e7af4ae91b5a735 100644
+--- a/src/query/sql-query-engine-transaction-recovery-methods.js
++++ b/src/query/sql-query-engine-transaction-recovery-methods.js
+@@ -7,7 +7,6 @@ import {
+ 
+ const LOCAL_STR_STRING = 'string';
+ const LOCAL_STR_FUNCTION = 'function';
+-const LOCAL_STR_BOOLEAN = 'boolean';
+ 
+ const {
+   CONTROL_PLANE_MUTATION_MERGE_POLICY,
+@@ -191,7 +190,6 @@ class SQLQueryEngineTransactionRecoveryMethods
+     const workloadProfile = workloadClass ?
+       buildControlPlaneWorkloadProfile(workloadClass, {
+         workClass: requestedWorkClass,
+-        allowPressureDefer: options?.allowPressureDefer,
+       }) :
+       null;
+     const workClass = workloadProfile?.workClass || requestedWorkClass;
+@@ -206,10 +204,6 @@ class SQLQueryEngineTransactionRecoveryMethods
+     };
+     if (workloadProfile) {
+       mutationOptions.workloadClass = workloadProfile.workloadClass;
+-      mutationOptions.allowPressureDefer =
+-        workloadProfile.allowPressureDefer;
+-    } else if (typeof options?.allowPressureDefer === LOCAL_STR_BOOLEAN) {
+-      mutationOptions.allowPressureDefer = options.allowPressureDefer;
+     }
+     const coalescingKey =
+       typeof options?.coalescingKey === LOCAL_STR_STRING ?
+diff --git a/test/logging/logs-table-service.test.js b/test/logging/logs-table-service.test.js
+index efd20123503f8c6969e025709ed07ea67f72d6a9..c2605893af6a192d683f374b501cfa03c3acd85d 100644
+--- a/test/logging/logs-table-service.test.js
++++ b/test/logging/logs-table-service.test.js
+@@ -538,11 +538,6 @@ test('LogsTableService routes owner-backed log writes through background control
+       'background',
+       'logs-table writes should stay off the critical transport lane',
+     );
+-    t.equal(
+-      writes[0].options.allowPressureDefer,
+-      true,
+-      'logs-table writes should be deferrable under pressure',
+-    );
+     t.equal(
+       writes[0].options.pressureRetryAfterMs,
+       250,
+@@ -585,11 +580,6 @@ test('LogsTableService uses injected logsOwner when the composition root supplie
+       PRESSURE_WORK_CLASS.BACKGROUND,
+       'owner-backed log writes should preserve background pressure class',
+     );
+-    t.equal(
+-      writes[0].options.allowPressureDefer,
+-      true,
+-      'owner-backed log writes should remain deferrable under pressure',
+-    );
+ 
+     await service.shutdown();
+     LogsTableService.resetInstance();
+@@ -1053,7 +1043,7 @@ test('LogsTableService arms a shared-pressure defer window before the local ' +
+         'logs persistence should evaluate as background work',
+       );
+       return {
+-        action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
++        action: PRESSURE_GOVERNOR_ACTION.DEFER,
+         retryAfterMs: 250,
+         summary: {backpressured: true},
+       };
+@@ -1150,7 +1140,7 @@ test('LogsTableService collapses transient transport failures by family while '
+   const pressureGovernor = {
+     evaluate() {
+       return {
+-        action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
++        action: PRESSURE_GOVERNOR_ACTION.DEFER,
+         retryAfterMs: 200,
+         summary: {backpressured: true},
+       };
+diff --git a/test/query/sql-query-engine-execution-test-cases.js b/test/query/sql-query-engine-execution-test-cases.js
+index 9bebbf565e0c3f7e55242c6af953fce7358ccc68..70f1e38cbd98f4a0a38b77219e401bdf7af2e058 100644
+--- a/test/query/sql-query-engine-execution-test-cases.js
++++ b/test/query/sql-query-engine-execution-test-cases.js
+@@ -659,16 +659,6 @@ function registerSqlQueryEngineExecutionTestCases({
+       CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+       'participant rows should carry the shared transaction-control workload class',
+     );
+-    t.equal(
+-      submissions[0].options.allowPressureDefer,
+-      false,
+-      'transaction rows should preserve the workload-owned no-defer contract',
+-    );
+-    t.equal(
+-      submissions[1].options.allowPressureDefer,
+-      false,
+-      'participant rows should preserve the workload-owned no-defer contract',
+-    );
+     t.equal(submissions[0].options.skipCacheWait, true,
+       'transaction rows should not fail closed on cache visibility lag');
+     t.equal(submissions[1].options.skipCacheWait, true,
+@@ -775,22 +765,11 @@ function registerSqlQueryEngineExecutionTestCases({
+         name: 'defer',
+         options: {
+           workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-          pressureRetryAfterMs: 321,
+         },
+         expectedError: 'query_admission_deferred',
+         expectedAction: 'defer',
+-        expectedRetryAfterMs: 321,
+-      },
+-      {
+-        name: 'reject',
+-        options: {
+-          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+-          allowPressureDefer: false,
+-          pressureRetryAfterMs: 654,
+-        },
+-        expectedError: 'query_admission_rejected',
+-        expectedAction: 'reject',
+-        expectedRetryAfterMs: 654,
++        // Derived pacing hint: background base at shallow saturation.
++        expectedRetryAfterMs: 100,
+       },
+     ];
+ 
+diff --git a/test/query/sql-query-engine-execution.test.js b/test/query/sql-query-engine-execution.test.js
+index 79dd98393c77be1be98c8378d59f8700998e1b62..57ccde9f619031abbe793a8dd1ede04a29c348d7 100644
+--- a/test/query/sql-query-engine-execution.test.js
++++ b/test/query/sql-query-engine-execution.test.js
+@@ -142,10 +142,9 @@ test('SQLQueryEngine logs typed admission defer reasons for harness playback',
+       'transport_backpressure',
+       'warning should include the typed defer reason',
+     );
+-    t.equal(
+-      warnings[0].data.retryAfterMs,
+-      275,
+-      'warning should include retry hints for the harness',
++    t.ok(
++      warnings[0].data.retryAfterMs > 0,
++      'warning should include a derived retry hint for the harness',
+     );
+   });
+ 

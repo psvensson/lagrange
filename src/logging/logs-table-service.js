@@ -530,7 +530,6 @@ class LogsTableService extends EventEmitter {
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
         workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
         deliveryPriority: LOCAL_STR_BACKGROUND,
-        allowPressureDefer: true,
         pressureRetryAfterMs: this.retryDelayMs,
       });
       return;

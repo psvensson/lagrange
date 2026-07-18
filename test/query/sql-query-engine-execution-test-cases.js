@@ -659,16 +659,6 @@ function registerSqlQueryEngineExecutionTestCases({
       CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
       'participant rows should carry the shared transaction-control workload class',
     );
-    t.equal(
-      submissions[0].options.allowPressureDefer,
-      false,
-      'transaction rows should preserve the workload-owned no-defer contract',
-    );
-    t.equal(
-      submissions[1].options.allowPressureDefer,
-      false,
-      'participant rows should preserve the workload-owned no-defer contract',
-    );
     t.equal(submissions[0].options.skipCacheWait, true,
       'transaction rows should not fail closed on cache visibility lag');
     t.equal(submissions[1].options.skipCacheWait, true,
@@ -775,22 +765,11 @@ function registerSqlQueryEngineExecutionTestCases({
         name: 'defer',
         options: {
           workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-          pressureRetryAfterMs: 321,
         },
         expectedError: 'query_admission_deferred',
         expectedAction: 'defer',
-        expectedRetryAfterMs: 321,
-      },
-      {
-        name: 'reject',
-        options: {
-          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-          allowPressureDefer: false,
-          pressureRetryAfterMs: 654,
-        },
-        expectedError: 'query_admission_rejected',
-        expectedAction: 'reject',
-        expectedRetryAfterMs: 654,
+        // Derived pacing hint: background base at shallow saturation.
+        expectedRetryAfterMs: 100,
       },
     ];
 

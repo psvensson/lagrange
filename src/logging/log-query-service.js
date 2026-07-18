@@ -470,7 +470,6 @@ class LogQueryService extends EventEmitter {
     try {
       const result = await gateway.executeQuery(sql, [], {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        allowPressureDefer: true,
       });
       return result;
     } catch (error) {

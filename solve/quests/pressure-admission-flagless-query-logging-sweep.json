@@ -1,0 +1,42 @@
+{
+  "id": "pressure-admission-flagless-query-logging-sweep",
+  "authoringContractVersion": 1,
+  "statement": "Bounded child of pressure-admission-flagless-defer-policy (scope split, query/logging slice). SEALED RESULT: query-plane statement ingress and logs-table background writes evaluate the flagless governor request (work class + resource keys only), the logs defer-window arms on DEFER with the decision's derived hint, and the deleted per-request flag plumbing in statement execution, transaction recovery, and access publication carries no behavior.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/formation-complexity-consolidation.md",
+    "closesCL": [],
+    "parentQuest": "pressure-admission-flagless-defer-policy",
+    "planDoc": null,
+    "draftedAtCommit": "adab207df5b844e285ea5ccbf0999913745376a7"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "pressure-admission-flagless-defer-policy",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "pressure-admission-flagless-query-logging-sweep-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "pressure-admission-flagless-defer-policy",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

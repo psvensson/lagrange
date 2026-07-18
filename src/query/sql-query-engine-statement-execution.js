@@ -542,9 +542,6 @@ class SQLQueryEngineStatementExecution extends
         writeStatement ? LOCAL_STR_QUERY_PLANE_WRITE : LOCAL_STR_QUERY_PLANE_READ,
         `query-plane:statement:${String(astType || LOCAL_STR_UNKNOWN).toLowerCase()}`,
       ],
-      allowDegrade: false,
-      allowDefer: options?.allowPressureDefer !== false,
-      retryAfterMs: options?.pressureRetryAfterMs,
     });
   }
 
