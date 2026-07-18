@@ -19,10 +19,11 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T14-48-39-104Z.report.json
+- Movement: solved: FAIL -> PASS
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for formation-joining-ready-phase-fence-live-main
+- No longer current: FAIL
 
 ## Continuation
 - Status: allowed
@@ -46,7 +47,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **formation-joining-ready-phase-fence-live-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **formation-joining-ready-phase-fence-live-main** [open] rung 1, attempts 1, metric 1 -> 0
 
 ## Findings
 - **formation-joining-ready-phase-fence-live-main**: inherited from formation-joining-ready-phase-fence: inherited from formation-schema-operation-collision-leader-read-closure: The cold-formation barrier withholds only the final ready lease: node registration publishes nodes.status=active earlier, and the unchanged MovieLens scenario starts schema admission after counting those active rows. In the failed run the ledger barrier and priority operations continued after that clock began, so eventual zero spread at T+164 left only about 16 seconds for an unchanged 60-second stability condition. Planner-only reordering and timeout increases are ruled out; the missing contract is a canonical placement-ready or available phase between recovery-eligible registration and schema admission. (rules out: planner-only reordering; timeout increases; treating nodes.status=active as placement-ready) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
@@ -58,6 +59,10 @@
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T14-48-39-104Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T14-48-39-104Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Learned-affinity attribution stall ROOT-CAUSED and fixed: the node-local authoritative system-table read (cdc-integration-service-authoritative-read-flow.js mergeAuthoritativeSystemTableRowSets) merges per-replica row sets KEYED BY THE PRIMARY KEY and silently drops any row whose key field is absent - so every system-table SELECT that does not project the pk under its own name returns a successful EMPTY result. The demo probe (SELECT node_id, service_id, access_json, published_at FROM service_partition_access - no access_id) therefore read 0 rows forever while attribution rows demonstrably landed and replicated (verified in all replica DBs of run 16-43-20). Reproduced on a single seed node in 2 minutes: INSERT succeeds, pk-projecting SELECT returns the row, pk-less projection returns []. Same-shape latent wrongness for ANY pk-less system-table projection (including aggregates). Fix: the local authoritative fast path (tryExecuteAuthoritativeSystemTableSelect) now requires the projection to carry the pk unaliased, or a bounded pk-lookup (whose empty local reads are already owner-confirmed); everything else takes the routed execution path. Guard tests added (pk-less projection routes and returns rows; aliased pk bypasses; star keeps the fast path). Repro after fix: pk-less scan returns the row. This is another instance of the epic's F4 hand-re-enumeration drop class, on the read-merge side. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T16-43-20-162Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T17-40-24-737Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-40-24-737Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json. Metric: 1 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json. Metric: 1 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json]
 
 ## Theories
 _(none recorded)_
