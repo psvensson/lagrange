@@ -26,9 +26,9 @@
 - No longer current: Do not debug the established recovery-driven ACTIVE handoff first; the deterministic reproduction isolates the missing decision to the direct executor-outcome COMPLETE branch.; Do not treat attempt 1 as lacking red-on-revert, retry-retention, ADD/REPLACE, remote-owner, or non-partition verification; the verifier reproduced the intended seven-failure old-runtime mechanism and passed 497 focused, adjacent, and safety assertions.
 
 ## Continuation
-- Status: allowed
+- Status: blocked-unrecorded-evidence
 - Next action: continue supervised step for executor-active-services-cache-handoff-main
-- Blocker: none
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id executor-active-services-cache-handoff --frontier executor-active-services-cache-handoff-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T10-30-41-823Z.report.json
 
 ## Scope Pressure
 - Changed files: 5
