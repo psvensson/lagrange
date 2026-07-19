@@ -86,7 +86,16 @@ morning) the learned-affinity phase under the same machine conditions.
   cure minting to the over-target-belief case (REPLACE-from-co-located
   instead of ADD, which the guard's escape already admits from an
   over-represented source), or reconcile the planner's activeCount source
-  with the guard's union view.
+  with the guard's union view. Peer-system research (CRDB, PD/etcd, ES,
+  Ceph, FDB, Kafka; archived in
+  solve/artifacts/priority-spread-peer-research/) strongly supports the
+  composite-state cure REPLACE (it is PD issue #6559's exact fix shape and
+  the universal spread-repair primitive), elevates drain forensics first
+  (CRDB resolves transitional states before any count-based planning), and
+  names two cheap liveness adoptions: escalate repeated
+  DEFER_ADD_OVER_TARGET into a typed composite-state diagnostic, and
+  re-evaluate denied intents on inventory-recovery events instead of only
+  periodic passes.
 - Flag-surface tail (small, unqueued): delete the uncalled
   shouldMetadataPublicationAllowPressureDefer
   (partition-service-metadata-delivery-methods.js) and the stale
