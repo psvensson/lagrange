@@ -440,8 +440,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance keeps nodes-p1 load-shedding while full readiness is ' +
-    'incomplete despite a recovery-eligible quorum',
+    'checkRebalance opens only the nodes-p1 serial formation dependency on ' +
+    'a recovery-eligible quorum',
     async (t) => {
       const recoveryEligibleNodeIds = new Set([
         'node-1',
@@ -514,21 +514,110 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         scheduledDelayMs = overrideDelayMs;
       };
 
-      t.ok(
+      t.equal(
         rebalancer.getCriticalSystemTopologySettlingBlocker(),
-        'nodes-p1 should retain the full-readiness topology gate after the adverse live A/B',
+        null,
+        'the distinct formation dependency should release on explicit recovery quorum evidence',
       );
       await rebalancer.checkRebalance();
 
       t.equal(
         evaluateCalls,
-        0,
-        'nodes-p1 should not add recovery work while its readiness prerequisite is incomplete',
+        1,
+        'nodes-p1 should reach the serial planning owner once its recovery quorum is explicit',
       );
       t.equal(
-        typeof scheduledDelayMs,
-        'number',
-        'nodes-p1 should schedule the canonical delayed retry rather than advance now',
+        scheduledDelayMs,
+        null,
+        'the recovery quorum should not schedule a topology-settling retry',
+      );
+      t.equal(
+        rebalancer.isControlPlanePriorityPartition(),
+        false,
+        'the formation dependency must not reactivate broad priority behavior',
+      );
+      t.equal(
+        rebalancer.isFormationLivenessDependencyPartition(),
+        true,
+        'the exact nodes-p1 partition owns the narrow formation fact',
+      );
+    });
+
+  await t.test(
+    'checkRebalance keeps nodes-p1 fail-closed below its recovery quorum',
+    async (t) => {
+      const recoveryEligibleNodeIds = new Set(['node-1']);
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          const recoveryEligible = recoveryEligibleNodeIds.has(nodeId);
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
+                recoveryEligible,
+            },
+            reasons: recoveryEligible ? [] : [{code: 'ready_lease_expired'}],
+          };
+        },
+      };
+      const nodes = ['node-1', 'node-2', 'node-3', 'node-4', 'node-5']
+        .map((nodeId) => ({
+          node_id: nodeId,
+          status: NodeStatus.ACTIVE,
+        }));
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes,
+        partitions: [{
+          partition_id: 'nodes-p1',
+          table_id: 'nodes',
+          replica_count: 3,
+        }],
+        nodeEndpoints: [...recoveryEligibleNodeIds]
+          .map((nodeId) => createNodeEndpoint(nodeId)),
+        serviceEndpoints: [...recoveryEligibleNodeIds]
+          .map((nodeId) => createPostgresWireEndpoint(nodeId)),
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+      rebalancer.scheduleNextCheck = () => {};
+
+      t.ok(
+        rebalancer.getCriticalSystemTopologySettlingBlocker(),
+        'one recovery-eligible node is below the target-three quorum',
+      );
+      await rebalancer.checkRebalance();
+      t.equal(
+        evaluateCalls,
+        0,
+        'sub-quorum evidence must produce no planning pass',
       );
     });
 

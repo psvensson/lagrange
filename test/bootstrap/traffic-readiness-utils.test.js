@@ -165,8 +165,15 @@ test('traffic-readiness-utils - priority control-plane background work opens for
       isBackgroundWorkReady(readinessState, {
         partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
       }),
+      true,
+      'the exact liveness dependency opens only for serial formation work',
+    );
+    t.equal(
+      isBackgroundWorkReady(readinessState, {
+        partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+      }),
       false,
-      'non-priority system partitions should still wait for full traffic readiness',
+      'ordinary non-priority system work still waits for traffic readiness',
     );
   });
 

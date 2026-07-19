@@ -54,7 +54,7 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION_BY_STATE = Object.freeze(
 const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.ORDINARY_ENTITY,
-    matches: (evidence) => evidence.priorityPartition !== true,
+    matches: (evidence) => evidence.recoveryLaneParticipant !== true,
   }),
   Object.freeze({
     state: AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.PRIORITY_RECOVERY_CLOSED,
@@ -68,7 +68,7 @@ const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.PRIORITY_RECOVERY_OPEN,
     matches: (evidence) =>
-      evidence.priorityPartition === true &&
+      evidence.recoveryLaneParticipant === true &&
       evidence.recoveryActive === true,
   }),
 ]);
@@ -128,6 +128,11 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
     ).toUpperCase();
     return Object.freeze({
       priorityPartition: this.isControlPlanePriorityPartition(),
+      formationLivenessDependency:
+        this.isFormationLivenessDependencyPartition(),
+      recoveryLaneParticipant:
+        this.isControlPlanePriorityPartition() ||
+        this.isFormationLivenessDependencyPartition(),
       recoveryActive: this.isGlobalPriorityControlPlaneRecoveryActive(),
       publicationPublished:
         publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
@@ -210,11 +215,15 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       if (effectiveNodeIds instanceof Set && !effectiveNodeIds.has(nodeId)) {
         return false;
       }
+      const readinessOptions = {
+        decisionDimension: readinessDecisionDimension,
+      };
+      if (this.isFormationLivenessDependencyPartition()) {
+        readinessOptions.allowStaleOnCacheChange = false;
+      }
       const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
         nodeId,
-        {
-          decisionDimension: readinessDecisionDimension,
-        },
+        readinessOptions,
       );
       if (
         this.isStartupAuthorityControlPlanePlacementEligibleNode(

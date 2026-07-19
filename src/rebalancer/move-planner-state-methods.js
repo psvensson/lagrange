@@ -281,6 +281,33 @@ function createMovePlannerStateMethods(deps = {}) {
     }
 
     /**
+     * Check whether this is the exact non-priority partition whose durable
+     * liveness rows depend on formation-time spread.
+     * @return {boolean}
+     */
+    isFormationLivenessDependencyPartition() {
+      if (this.entityType !== EntityType.PARTITION) {
+        return false;
+      }
+      const systemTableCache = this.moveStateProvider?.systemTableCache || null;
+      const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
+      return classifySystemPartition({
+        partitionId: this.entityId,
+        partitionRow,
+      }).formationLivenessDependency;
+    }
+
+    /**
+     * Select the one immutable serial planning owner without granting the
+     * formation dependency the broader priority-control-plane identity.
+     * @return {boolean}
+     */
+    usesSerialGoalStatePlanner() {
+      return this.isControlPlanePriorityPartition() ||
+        this.isFormationLivenessDependencyPartition();
+    }
+
+    /**
      * Resolve whether this entity is one system-table partition.
      * @return {boolean}
      * @private

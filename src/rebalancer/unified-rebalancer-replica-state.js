@@ -15,6 +15,7 @@ import {
 
 const {
   COLUMN,
+  CONTROL_PLANE_READINESS_DIMENSION,
   EntityType,
   OperationType,
   RAFT_ROLE,
@@ -71,12 +72,32 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   async isNodeReady(nodeId) {
     const readinessDecisionDimension =
       this.resolveNodeReadinessDecisionDimension();
+    const readinessOptions = {
+      decisionDimension: readinessDecisionDimension,
+    };
+    if (this.isFormationLivenessDependencyPartition()) {
+      readinessOptions.allowStaleOnCacheChange = false;
+    }
     const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
       nodeId,
-      {
-        decisionDimension: readinessDecisionDimension,
-      },
+      readinessOptions,
     );
+    const explicitFormationRecoveryEligibility =
+      this.isFormationLivenessDependencyPartition() &&
+      readinessDecisionDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
+      readiness?.dimensions?.[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ] === true;
+    if (explicitFormationRecoveryEligibility) {
+      if (!this.isTransportReady(nodeId)) {
+        return false;
+      }
+      if (this.enableReadinessPing) {
+        return this.checkReadinessPing(nodeId);
+      }
+      return true;
+    }
     // Cold-formation priority placement has a narrower readiness authority
     // than public ready-lease publication: an owner-authored startup-cohort
     // peer may receive the ledger spread cure while its lease is deliberately

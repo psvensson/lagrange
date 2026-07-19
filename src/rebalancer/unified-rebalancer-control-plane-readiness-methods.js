@@ -94,6 +94,12 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       return true;
     }
     if (
+      this.isFormationLivenessDependencyPartition() &&
+      readinessEvidence.recoveryEligibilityRequested
+    ) {
+      return false;
+    }
+    if (
       !readinessEvidence.recoveryEligibilityRequested ||
       readinessEvidence.explicitDecisionDimensionPresent
     ) {
@@ -122,6 +128,25 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
   }
 
   /**
+   * Whether this is the exact non-priority liveness partition allowed to use
+   * the bounded serial formation lane.
+   * @return {boolean}
+   */
+  isFormationLivenessDependencyPartition() {
+    if (this.entityType !== EntityType.PARTITION) {
+      return false;
+    }
+    const partitionRow = getPartitionRowFromCache(
+      this.systemTableCache,
+      this.entityId,
+    );
+    return classifySystemPartition({
+      partitionId: this.entityId,
+      partitionRow,
+    }).formationLivenessDependency;
+  }
+
+  /**
    * Resolve the minimum number of ACTIVE nodes that must satisfy readiness
    * before this entity may continue critical topology spread.
    *
@@ -140,7 +165,10 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
     if (normalizedActiveNodeCount === 0) {
       return 0;
     }
-    if (!this.isControlPlanePriorityPartition()) {
+    if (
+      !this.isControlPlanePriorityPartition() &&
+      !this.isFormationLivenessDependencyPartition()
+    ) {
       return normalizedActiveNodeCount;
     }
     const targetReplicaCount = this.getPriorityControlPlaneTargetReplicaCount();
@@ -289,10 +317,12 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       ).length :
       0;
     const isPriorityPartition = this.isControlPlanePriorityPartition();
+    const isFormationLivenessDependency =
+      this.isFormationLivenessDependencyPartition();
     const requireEveryActiveNode =
       this.shouldRequireFullControlPlanePublicationEndpointVisibility();
     const requiredReadyNodeCount =
-      isPriorityPartition &&
+      (isPriorityPartition || isFormationLivenessDependency) &&
       !requireEveryActiveNode &&
       activeNodeCount > 0 ?
         Math.max(

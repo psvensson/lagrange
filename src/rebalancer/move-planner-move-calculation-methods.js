@@ -87,8 +87,8 @@ class MovePlannerMoveCalculationMethods {
       targetState.topologyTransitionSnapshot ||
       this.buildTopologyTransitionSnapshot(currentReplicas);
     const inventory = transitionSnapshot.inventory;
-    const priorityPartition = this.isControlPlanePriorityPartition();
-    const effectivePlacement = priorityPartition ?
+    const serialGoalStatePartition = this.usesSerialGoalStatePlanner();
+    const effectivePlacement = serialGoalStatePartition ?
       buildEffectivePlacement({
         inventory,
         targetState,

@@ -51,6 +51,7 @@ test('ordered class preserves all overlapping membership facts', (t) => {
       expected: {
         partitionClass: SYSTEM_PARTITION_CLASS.BOOTSTRAP_CRITICAL,
         bootstrapCritical: true,
+        formationLivenessDependency: false,
         priorityControlPlane: true,
         systemTable: true,
       },
@@ -61,6 +62,7 @@ test('ordered class preserves all overlapping membership facts', (t) => {
       expected: {
         partitionClass: SYSTEM_PARTITION_CLASS.PRIORITY_CONTROL_PLANE,
         bootstrapCritical: false,
+        formationLivenessDependency: false,
         priorityControlPlane: true,
         systemTable: true,
       },
@@ -71,6 +73,8 @@ test('ordered class preserves all overlapping membership facts', (t) => {
       expected: {
         partitionClass: SYSTEM_PARTITION_CLASS.BOOTSTRAP_CRITICAL,
         bootstrapCritical: true,
+        formationLivenessDependency:
+          NON_PRIORITY_SYSTEM_TABLE_ID === SYSTEM_TABLE_NAME.NODES,
         priorityControlPlane: false,
         systemTable: true,
       },
@@ -81,6 +85,7 @@ test('ordered class preserves all overlapping membership facts', (t) => {
       expected: {
         partitionClass: SYSTEM_PARTITION_CLASS.DEFAULT,
         bootstrapCritical: false,
+        formationLivenessDependency: false,
         priorityControlPlane: false,
         systemTable: true,
       },
@@ -91,6 +96,7 @@ test('ordered class preserves all overlapping membership facts', (t) => {
       expected: {
         partitionClass: SYSTEM_PARTITION_CLASS.DEFAULT,
         bootstrapCritical: false,
+        formationLivenessDependency: false,
         priorityControlPlane: false,
         systemTable: false,
       },
@@ -114,7 +120,12 @@ test('nodes table remains bootstrap-critical without entering priority ' +
   t.equal(
     outcome.priorityControlPlane,
     false,
-    'nodes-p1 must retain full-readiness load shedding after the adverse live A/B',
+    'nodes-p1 must not reactivate the rejected broad priority identity',
+  );
+  t.equal(
+    outcome.formationLivenessDependency,
+    true,
+    'nodes-p1 owns only the narrow serial formation dependency fact',
   );
   t.equal(
     outcome.bootstrapCritical,
@@ -148,6 +159,8 @@ test('partition row and snake-case fields have canonical precedence', (t) => {
   t.same(outcome, {
     partitionClass: SYSTEM_PARTITION_CLASS.BOOTSTRAP_CRITICAL,
     bootstrapCritical: true,
+    formationLivenessDependency:
+      NON_PRIORITY_SYSTEM_TABLE_ID === SYSTEM_TABLE_NAME.NODES,
     priorityControlPlane: false,
     systemTable: true,
   });

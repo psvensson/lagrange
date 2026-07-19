@@ -525,7 +525,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance defers critical system partitions while active-node replica operations are in flight',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'services-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -587,7 +587,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance defers critical system partitions while same-entity add-side replica operations are in flight',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'services-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -608,7 +608,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         replicaOperations: [{
           operation_id: 'op-1',
           type: 'add',
-          partition_group_id: 'nodes-p1',
+          partition_group_id: 'services-p1',
           target_node_id: 'node-2',
           status: ReplicaStatus.CREATING,
           workflow_step: WORKFLOW_STEP.CREATING,
@@ -648,7 +648,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance defers critical system partitions for same-entity REPLACE remove-dispatch rows',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'services-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -669,7 +669,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         replicaOperations: [{
           operation_id: 'op-1',
           type: 'replace',
-          partition_group_id: 'nodes-p1',
+          partition_group_id: 'services-p1',
           target_node_id: 'node-2',
           status: 'running',
           workflow_step: WORKFLOW_STEP.ACTIVE,

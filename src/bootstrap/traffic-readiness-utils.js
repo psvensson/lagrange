@@ -91,8 +91,13 @@ function isBackgroundWorkReadySnapshot(snapshot, options = {}) {
   const partitionId = typeof options?.partitionId === 'string' ?
     options.partitionId :
     null;
-  if (partitionId &&
-      classifySystemPartition({partitionId}).priorityControlPlane) {
+  const partitionClassification = partitionId ?
+    classifySystemPartition({partitionId}) :
+    null;
+  if (
+    partitionClassification?.priorityControlPlane === true ||
+    partitionClassification?.formationLivenessDependency === true
+  ) {
     return isMetadataPublicationReadySnapshot(snapshot);
   }
 

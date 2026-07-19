@@ -33,6 +33,14 @@ const PRIORITY_CONTROL_PLANE_TABLE_IDS = new Set([
   SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS,
 ]);
 
+// Exact formation dependency whose durable liveness rows are stored through
+// the partition it must spread. This is intentionally NOT a priority
+// control-plane table: the distinct fact is consumed only by the serial
+// formation planner and its matching evidence gates.
+const FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS = new Set([
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
+]);
+
 const CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS = new Set([
   SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
   SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
@@ -166,6 +174,8 @@ function classifySystemPartition(options = {}) {
   return Object.freeze({
     partitionClass: row.partitionClass,
     bootstrapCritical: CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId),
+    formationLivenessDependency:
+      FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS.has(partitionId),
     priorityControlPlane: PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId),
     systemTable: SYSTEM_TABLE_IDS.has(tableId),
   });
@@ -181,6 +191,10 @@ function isSystemTablePartition(options = {}) {
 
 function isPriorityControlPlanePartition(options = {}) {
   return classifySystemPartition(options).priorityControlPlane;
+}
+
+function isFormationLivenessDependencyPartition(options = {}) {
+  return classifySystemPartition(options).formationLivenessDependency;
 }
 
 // The replica_operations table is the operation LEDGER: every in-flight
@@ -445,6 +459,7 @@ export {
   CRITICAL_SYSTEM_PARTITION_IDS,
   CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS,
   CRITICAL_TRANSPORT_TARGET_REASON,
+  FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS,
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   SYSTEM_PARTITION_CLASS,
   SYSTEM_PARTITION_CLASS_ROWS,
@@ -454,6 +469,7 @@ export {
   isBootstrapCriticalSystemPartitionId,
   isCriticalTransportControlPlanePartition,
   isCriticalTransportTargetAddress,
+  isFormationLivenessDependencyPartition,
   isOperationLedgerPartition,
   isPriorityControlPlanePartition,
   isSystemTablePartition,

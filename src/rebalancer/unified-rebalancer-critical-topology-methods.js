@@ -152,7 +152,10 @@ function buildTransitionalNodeBlocker(rebalancer, evidence) {
   const hasRequiredHealthyNodes =
     evidence.activeNodeIds.length >= requiredHealthyNodeCount;
   const priorityRecoveryMayProceedOnQuorum =
-    rebalancer.isControlPlanePriorityPartition() &&
+    (
+      rebalancer.isControlPlanePriorityPartition() ||
+      rebalancer.isFormationLivenessDependencyPartition()
+    ) &&
     !rebalancer
       .shouldRequireFullControlPlanePublicationEndpointVisibility() &&
     hasRequiredHealthyNodes;
@@ -211,7 +214,10 @@ function buildTransportMembershipBlocker(rebalancer, nodeRows, evidence) {
   const hasRequiredHealthyNodes =
     evidence.activeNodeIds.length >= requiredHealthyNodeCount;
   const publishedActiveNodeIds =
-    rebalancer.isControlPlanePriorityPartition() && hasRequiredHealthyNodes ?
+    (
+      rebalancer.isControlPlanePriorityPartition() ||
+      rebalancer.isFormationLivenessDependencyPartition()
+    ) && hasRequiredHealthyNodes ?
       rebalancer.getPublishedActiveNodeIdSet() :
       null;
   const connectedNodeId = findUnexpectedConnectedNodeId(

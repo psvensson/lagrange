@@ -301,3 +301,96 @@ test('MovePlanner priority path emits only the serial owner decision', (t) => {
   }
   t.end();
 });
+
+test('MovePlanner routes only nodes-p1 through the non-priority serial owner',
+  (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+    const concentratedReplicas = [
+      active('r1', 'node-1'),
+      active('r2', 'node-1'),
+      active('r3', 'node-1'),
+    ];
+    const targetState = {
+      targetReplicaCount: 3,
+      targetNodes: ['node-2', 'node-3', 'node-4'],
+      degraded: false,
+    };
+    const moveStateProvider = {
+      getAvailableNodes: () => targetState.targetNodes.map(
+        (nodeId) => ({node_id: nodeId}),
+      ),
+      getCurrentReplicas: () => concentratedReplicas,
+      getHealthyReplicas: (replicas) =>
+        replicas.filter((replica) => replica.status === ReplicaStatus.ACTIVE),
+      getInFlightOperations: () => [],
+      getTopologyBlockingInFlightOperations: () => [],
+      getGlobalTopologyBlockingInFlightOperations: () => [],
+      getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
+      hasPendingMove: () => false,
+      hasPendingAddForNode: () => false,
+    };
+
+    try {
+      const nodesPlanner = new MovePlanner({
+        entityId: 'nodes-p1',
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider,
+      });
+      const ordinaryPlanner = new MovePlanner({
+        entityId: 'services-p1',
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider,
+      });
+      const userPlanner = new MovePlanner({
+        entityId: 'orders-p1',
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider,
+      });
+      const nodesMoves = nodesPlanner.calculateMoves(
+        concentratedReplicas,
+        targetState,
+      );
+      const ordinaryMoves = ordinaryPlanner.calculateMoves(
+        concentratedReplicas,
+        targetState,
+      );
+      const userMoves = userPlanner.calculateMoves(
+        concentratedReplicas,
+        targetState,
+      );
+
+      t.equal(nodesMoves.length, 1, 'nodes-p1 emits one serial move');
+      t.equal(
+        nodesMoves[0].type,
+        REBALANCER_MOVE_TYPE.REPLACE,
+        'at-target concentration uses one count-neutral move',
+      );
+      t.equal(
+        nodesPlanner.isControlPlanePriorityPartition(),
+        false,
+        'nodes-p1 remains outside the broad priority class',
+      );
+      t.equal(
+        nodesPlanner.isFormationLivenessDependencyPartition(),
+        true,
+        'nodes-p1 alone owns the narrow serial fact',
+      );
+      t.equal(
+        ordinaryMoves.length,
+        3,
+        'ordinary system planning retains its pre-existing parallel behavior',
+      );
+      t.equal(
+        userMoves.length,
+        3,
+        'ordinary non-system planning retains its pre-existing behavior',
+      );
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+    t.end();
+  });
