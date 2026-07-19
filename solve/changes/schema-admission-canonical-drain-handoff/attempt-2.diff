@@ -1,0 +1,866 @@
+diff --git a/examples/service-data-affinity/affinity-demo-preload-gate.js b/examples/service-data-affinity/affinity-demo-preload-gate.js
+index 2c3291e52b80d915c2f4c2cb67128a36b36105c8..e9beb347063ce9e56d138d5e880a358b6918f873 100644
+--- a/examples/service-data-affinity/affinity-demo-preload-gate.js
++++ b/examples/service-data-affinity/affinity-demo-preload-gate.js
+@@ -4,7 +4,6 @@ import {
+ } from '../../src/admin/load-lane-table-admission-probe.js';
+ import {
+   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
+-  CONTROL_PLANE_QUIESCENCE_REASON,
+   CONTROL_PLANE_QUIESCENCE_STATE,
+   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
+   buildControlPlaneQuiescenceSnapshot,
+@@ -16,6 +15,13 @@ import {
+   advanceSchemaAdmissionTransitionHistory,
+   buildEmptySchemaAdmissionTransitionHistory,
+ } from './affinity-demo-schema-admission-history.js';
++import {
++  resolveLatestTopologyShapingOperationDrain,
++} from '../../src/rebalancer/replica-operation-topology-drain.js';
++import {
++  INACTIVE_SCHEMA_STABILITY_WINDOW,
++  buildSchemaStabilityObservation,
++} from './affinity-demo-schema-stability-window.js';
+ 
+ const ADMIN_STREAM_LANE = Object.freeze({
+   LOAD: 'load',
+@@ -44,14 +50,6 @@ const DEFAULT_POLL_INTERVAL_MS = 2_000;
+ const DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS = 60_000;
+ const SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT = 2;
+ const ZERO = 0;
+-const SCHEMA_STABILITY_WINDOW_PHASE = Object.freeze({
+-  INACTIVE: 'inactive',
+-  OBSERVING: 'observing',
+-});
+-const INACTIVE_SCHEMA_STABILITY_WINDOW = Object.freeze({
+-  phase: SCHEMA_STABILITY_WINDOW_PHASE.INACTIVE,
+-  startedAtMs: ZERO,
+-});
+ const BUDGET_EXHAUSTED_ERROR = 'preload admission budget exhausted';
+ const SCHEMA_BUDGET_EXHAUSTED_ERROR = 'schema admission budget exhausted';
+ const ADMIN_STREAM_LANE_QUERY_PARAMETER = 'lane';
+@@ -59,6 +57,7 @@ const PRELOAD_ADMISSION_QUERY_REQUIRED_ERROR =
+   'MovieLens preload admission requires query';
+ const PRIORITY_SPREAD_SUMMARY_SOURCE =
+   'controlPlaneDiagnostics.currentPriorityPlacementObservation';
++const CURRENT_PRIORITY_PLACEMENT_OBSERVATION_AVAILABLE = 'available';
+ 
+ function buildAdminLaneTarget(target, lane) {
+   const url = new URL(target);
+@@ -109,7 +108,19 @@ function resolveSnapshotAdmissionFieldsError(snapshot) {
+   return '';
+ }
+ 
+-function buildSnapshotProbe(snapshot, snapshotError) {
++function buildLatestTopologyDrainProbe(replicaOperations, nowMs) {
++  const latestTopologyDrain = resolveLatestTopologyShapingOperationDrain(
++    replicaOperations.rows,
++    {observedAt: nowMs},
++  );
++  return Object.freeze({
++    latestTopologyDrainAtMs: latestTopologyDrain?.drainedAtMs ?? null,
++    latestTopologyDrainOperationId:
++      latestTopologyDrain?.operationId ?? null,
++  });
++}
++
++function buildSnapshotProbe(snapshot, snapshotError, nowMs) {
+   if (snapshotError) {
+     return {
+       inFlightCount: ZERO,
+@@ -143,6 +154,7 @@ function buildSnapshotProbe(snapshot, snapshotError) {
+       buildControlPlaneQuiescencePressureSignalsFromDiagnostics(
+         snapshot?.controlPlaneDiagnostics,
+       ),
++    ...buildLatestTopologyDrainProbe(replicaOperations, nowMs),
+     error: '',
+   };
+ }
+@@ -171,7 +183,8 @@ function isCurrentPriorityPlacementObservationAvailable(
+ ) {
+   return (
+     isPlainRecord(currentPlacementObservation) &&
+-    currentPlacementObservation.state === 'available' &&
++    currentPlacementObservation.state ===
++      CURRENT_PRIORITY_PLACEMENT_OBSERVATION_AVAILABLE &&
+     currentPlacementObservation.capturedAt === snapshot?.capturedAt &&
+     isPriorityPartitionSummaryAvailable(
+       currentPlacementObservation.priorityPartitionSummary,
+@@ -269,8 +282,9 @@ function resolveSnapshotObservationError(snapshot) {
+ }
+ 
+ function classifySnapshot(snapshot, snapshotError, nowMs) {
+-  return buildControlPlaneQuiescenceSnapshot({
+-    snapshotProbe: buildSnapshotProbe(snapshot, snapshotError),
++  const snapshotProbe = buildSnapshotProbe(snapshot, snapshotError, nowMs);
++  const quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
++    snapshotProbe,
+     criticalSystemTopology: buildPrioritySpreadTopology(snapshot),
+     nowMs,
+     stableWindowStartedAtMs: nowMs,
+@@ -279,6 +293,12 @@ function classifySnapshot(snapshot, snapshotError, nowMs) {
+     leaderQuietElapsedMs: ZERO,
+     ignoreStaleInFlightReplicaOperations: true,
+   });
++  return Object.freeze({
++    ...quiescenceSnapshot,
++    latestTopologyDrainAtMs: snapshotProbe.latestTopologyDrainAtMs ?? null,
++    latestTopologyDrainOperationId:
++      snapshotProbe.latestTopologyDrainOperationId ?? null,
++  });
+ }
+ 
+ async function observeControlSnapshot(options, target, timeoutMs) {
+@@ -340,104 +360,6 @@ function normalizeSchemaStableWindowMs(value) {
+     DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS;
+ }
+ 
+-// Observer-side failure states: the poll could not SEE the control plane
+-// (admin query timeout, snapshot lane hiccup). These are evidence about the
+-// observer, not the system — monotone-progress rule (the HDFS safe-mode /
+-// ES delayed-allocation lesson): they HOLD an accumulated stability window
+-// instead of resetting it, bounded below by observation-blindness tolerance.
+-const SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES = new Set([
+-  CONTROL_PLANE_QUIESCENCE_STATE.OBSERVATION_UNAVAILABLE,
+-  CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
+-]);
+-
+-function isSchemaStabilityObservationFailure(snapshot) {
+-  if (SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES.has(snapshot.state)) {
+-    return true;
+-  }
+-  // CONTROL_PLANE_PRESSURE is observer-side only when it came from a
+-  // pressure-shaped snapshot QUERY error, not from system pressure signals.
+-  return (
+-    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE &&
+-    Array.isArray(snapshot.reasonCodes) &&
+-    snapshot.reasonCodes.includes(
+-      CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR,
+-    )
+-  );
+-}
+-
+-function advanceSchemaStabilityWindow(
+-  snapshot,
+-  stabilityWindow,
+-  nowMs,
+-  stableWindowMs,
+-) {
+-  if (
+-    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT &&
+-    snapshot.ready === true
+-  ) {
+-    if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
+-      return Object.freeze({
+-        ...stabilityWindow,
+-        lastQuiescentObservationAtMs: nowMs,
+-      });
+-    }
+-    return Object.freeze({
+-      phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
+-      startedAtMs: nowMs,
+-      lastQuiescentObservationAtMs: nowMs,
+-    });
+-  }
+-  // Hold through observer hiccups while the accumulated window is still
+-  // backed by a recent real quiescent observation; a blind stretch longer
+-  // than the stable window itself can no longer support a stability claim.
+-  if (
+-    stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING &&
+-    isSchemaStabilityObservationFailure(snapshot) &&
+-    nowMs - (stabilityWindow.lastQuiescentObservationAtMs ?? ZERO) <=
+-      stableWindowMs
+-  ) {
+-    return stabilityWindow;
+-  }
+-  return INACTIVE_SCHEMA_STABILITY_WINDOW;
+-}
+-
+-function projectSchemaStabilityWindow(
+-  snapshot,
+-  stabilityWindow,
+-  nowMs,
+-  stableWindowMs,
+-) {
+-  if (stabilityWindow.phase !== SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
+-    return snapshot;
+-  }
+-  // A held window (observer hiccup) must not project QUIESCENT: stability
+-  // may only be CONFIRMED by a poll that actually observed the control
+-  // plane. The hold preserves accumulated elapsed time; confirmation waits
+-  // for the next real observation.
+-  if (
+-    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
+-    snapshot.ready !== true
+-  ) {
+-    return Object.freeze({
+-      ...snapshot,
+-      stableElapsedMs: Math.max(ZERO, nowMs - stabilityWindow.startedAtMs),
+-      stabilityWindowHeld: true,
+-    });
+-  }
+-  const stableElapsedMs = Math.max(
+-    ZERO,
+-    nowMs - stabilityWindow.startedAtMs,
+-  );
+-  return Object.freeze({
+-    ...snapshot,
+-    state: stableElapsedMs >= stableWindowMs ?
+-      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT :
+-      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
+-    stableElapsedMs,
+-    leaderQuietElapsedMs: stableElapsedMs,
+-  });
+-}
+-
+ async function observeSchemaAdmissionSnapshot(options, target, deadlineMs) {
+   const snapshotTimeoutMs = remainingBudgetMs(options.now, deadlineMs);
+   if (snapshotTimeoutMs <= ZERO) {
+@@ -450,38 +372,6 @@ async function observeSchemaAdmissionSnapshot(options, target, deadlineMs) {
+   return observeControlSnapshot(options, target, snapshotTimeoutMs);
+ }
+ 
+-function buildSchemaStabilityObservation(
+-  observedSnapshot,
+-  stabilityWindow,
+-  stableConfirmationCount,
+-  stableWindowMs,
+-  nowMs,
+-) {
+-  const nextStabilityWindow = advanceSchemaStabilityWindow(
+-    observedSnapshot,
+-    stabilityWindow,
+-    nowMs,
+-    stableWindowMs,
+-  );
+-  const snapshot = projectSchemaStabilityWindow(
+-    observedSnapshot,
+-    nextStabilityWindow,
+-    nowMs,
+-    stableWindowMs,
+-  );
+-  // Held polls (observer hiccup with the window preserved) neither confirm
+-  // nor forfeit accumulated confirmations.
+-  const held = snapshot.stabilityWindowHeld === true;
+-  return Object.freeze({
+-    snapshot,
+-    stabilityWindow: nextStabilityWindow,
+-    stableConfirmationCount:
+-      snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ?
+-        stableConfirmationCount + 1 :
+-        (held ? stableConfirmationCount : ZERO),
+-  });
+-}
+-
+ function buildLoadLaneAdmission(state, errorMessage = '') {
+   return Object.freeze({
+     admitted: state === PRELOAD_ADMISSION_STATE.ADMITTED,
+diff --git a/examples/service-data-affinity/affinity-demo-schema-stability-window.js b/examples/service-data-affinity/affinity-demo-schema-stability-window.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..740c51ba3bf43cc64672cbb1e7b4561d845fa04b
+--- /dev/null
++++ b/examples/service-data-affinity/affinity-demo-schema-stability-window.js
+@@ -0,0 +1,190 @@
++import {
++  CONTROL_PLANE_QUIESCENCE_REASON,
++  CONTROL_PLANE_QUIESCENCE_STATE,
++} from '../../src/diagnostics/control-plane-quiescence-snapshot.js';
++
++const ZERO = 0;
++const SCHEMA_STABILITY_WINDOW_PHASE = Object.freeze({
++  INACTIVE: 'inactive',
++  OBSERVING: 'observing',
++});
++const INACTIVE_SCHEMA_STABILITY_WINDOW = Object.freeze({
++  phase: SCHEMA_STABILITY_WINDOW_PHASE.INACTIVE,
++  startedAtMs: ZERO,
++});
++
++// Observer-side failure states: the poll could not SEE the control plane
++// (admin query timeout, snapshot lane hiccup). These are evidence about the
++// observer, not the system — monotone-progress rule (the HDFS safe-mode /
++// ES delayed-allocation lesson): they HOLD an accumulated stability window
++// instead of resetting it, bounded below by observation-blindness tolerance.
++const SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES = new Set([
++  CONTROL_PLANE_QUIESCENCE_STATE.OBSERVATION_UNAVAILABLE,
++  CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
++]);
++
++function isSchemaStabilityObservationFailure(snapshot) {
++  if (SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES.has(snapshot.state)) {
++    return true;
++  }
++  // CONTROL_PLANE_PRESSURE is observer-side only when it came from a
++  // pressure-shaped snapshot QUERY error, not from system pressure signals.
++  return (
++    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE &&
++    Array.isArray(snapshot.reasonCodes) &&
++    snapshot.reasonCodes.includes(
++      CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR,
++    )
++  );
++}
++
++function isOperationOnlySchemaBlocker(snapshot) {
++  return (
++    snapshot.state ===
++      CONTROL_PLANE_QUIESCENCE_STATE.OPERATION_DRAIN_PROGRESSING &&
++    snapshot.criticalSystemTopology?.ready === true &&
++    Array.isArray(snapshot.reasonCodes) &&
++    snapshot.reasonCodes.length === 1 &&
++    snapshot.reasonCodes[ZERO] ===
++      CONTROL_PLANE_QUIESCENCE_REASON.REPLICA_OPERATIONS_IN_FLIGHT
++  );
++}
++
++function buildInactiveSchemaStabilityWindow(snapshot, nowMs) {
++  if (!isOperationOnlySchemaBlocker(snapshot)) {
++    return INACTIVE_SCHEMA_STABILITY_WINDOW;
++  }
++  return Object.freeze({
++    ...INACTIVE_SCHEMA_STABILITY_WINDOW,
++    operationDrainAnchorEligible: true,
++    lastBlockedObservedAtMs: nowMs,
++  });
++}
++
++function resolveSchemaStabilityStartedAt(snapshot, stabilityWindow, nowMs) {
++  const latestTopologyDrainAtMs = snapshot.latestTopologyDrainAtMs;
++  if (
++    stabilityWindow.operationDrainAnchorEligible === true &&
++    Number.isFinite(stabilityWindow.lastBlockedObservedAtMs) &&
++    Number.isFinite(latestTopologyDrainAtMs) &&
++    latestTopologyDrainAtMs >= stabilityWindow.lastBlockedObservedAtMs &&
++    latestTopologyDrainAtMs <= nowMs
++  ) {
++    return latestTopologyDrainAtMs;
++  }
++  return nowMs;
++}
++
++function advanceSchemaStabilityWindow(
++  snapshot,
++  stabilityWindow,
++  nowMs,
++  stableWindowMs,
++) {
++  if (
++    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT &&
++    snapshot.ready === true
++  ) {
++    if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
++      return Object.freeze({
++        ...stabilityWindow,
++        lastQuiescentObservationAtMs: nowMs,
++      });
++    }
++    return Object.freeze({
++      phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
++      startedAtMs: resolveSchemaStabilityStartedAt(
++        snapshot,
++        stabilityWindow,
++        nowMs,
++      ),
++      lastQuiescentObservationAtMs: nowMs,
++    });
++  }
++  // Hold through observer hiccups while the accumulated window is still
++  // backed by a recent real quiescent observation; a blind stretch longer
++  // than the stable window itself can no longer support a stability claim.
++  if (
++    stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING &&
++    isSchemaStabilityObservationFailure(snapshot) &&
++    nowMs - (stabilityWindow.lastQuiescentObservationAtMs ?? ZERO) <=
++      stableWindowMs
++  ) {
++    return stabilityWindow;
++  }
++  return buildInactiveSchemaStabilityWindow(snapshot, nowMs);
++}
++
++function projectSchemaStabilityWindow(
++  snapshot,
++  stabilityWindow,
++  nowMs,
++  stableWindowMs,
++) {
++  if (stabilityWindow.phase !== SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
++    return snapshot;
++  }
++  // A held window (observer hiccup) must not project QUIESCENT: stability
++  // may only be CONFIRMED by a poll that actually observed the control
++  // plane. The hold preserves accumulated elapsed time; confirmation waits
++  // for the next real observation.
++  if (
++    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
++    snapshot.ready !== true
++  ) {
++    return Object.freeze({
++      ...snapshot,
++      stableElapsedMs: Math.max(ZERO, nowMs - stabilityWindow.startedAtMs),
++      stabilityWindowHeld: true,
++    });
++  }
++  const stableElapsedMs = Math.max(
++    ZERO,
++    nowMs - stabilityWindow.startedAtMs,
++  );
++  return Object.freeze({
++    ...snapshot,
++    state: stableElapsedMs >= stableWindowMs ?
++      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT :
++      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
++    stableElapsedMs,
++    leaderQuietElapsedMs: stableElapsedMs,
++  });
++}
++
++function buildSchemaStabilityObservation(
++  observedSnapshot,
++  stabilityWindow,
++  stableConfirmationCount,
++  stableWindowMs,
++  nowMs,
++) {
++  const nextStabilityWindow = advanceSchemaStabilityWindow(
++    observedSnapshot,
++    stabilityWindow,
++    nowMs,
++    stableWindowMs,
++  );
++  const snapshot = projectSchemaStabilityWindow(
++    observedSnapshot,
++    nextStabilityWindow,
++    nowMs,
++    stableWindowMs,
++  );
++  // Held polls (observer hiccup with the window preserved) neither confirm
++  // nor forfeit accumulated confirmations.
++  const held = snapshot.stabilityWindowHeld === true;
++  return Object.freeze({
++    snapshot,
++    stabilityWindow: nextStabilityWindow,
++    stableConfirmationCount:
++      snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ?
++        stableConfirmationCount + 1 :
++        (held ? stableConfirmationCount : ZERO),
++  });
++}
++
++export {
++  INACTIVE_SCHEMA_STABILITY_WINDOW,
++  buildSchemaStabilityObservation,
++};
+diff --git a/src/rebalancer/replica-operation-topology-drain.js b/src/rebalancer/replica-operation-topology-drain.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f937ae17a46b639a07545d7224eb7781cf7089a9
+--- /dev/null
++++ b/src/rebalancer/replica-operation-topology-drain.js
+@@ -0,0 +1,73 @@
++import {
++  buildReplicaOperationProgressSnapshot,
++  isCoordinatorOwnedOperationType,
++  isReplaceRemoveDispatchPhase,
++} from './replica-status.js';
++import {
++  normalizeReplicaOperationRecord,
++} from './replica-operation-liveness.js';
++
++function buildTopologyShapingDrainCandidate(operation, observedAt) {
++  const normalizedOperation = normalizeReplicaOperationRecord(operation, {
++    nowMs: observedAt,
++  });
++  if (
++    !isCoordinatorOwnedOperationType(normalizedOperation.type) ||
++    buildReplicaOperationProgressSnapshot(normalizedOperation)
++      .terminal !== true ||
++    isReplaceRemoveDispatchPhase(normalizedOperation)
++  ) {
++    return null;
++  }
++  const drainedAtMs =
++    Number.isFinite(normalizedOperation.completedAt) ?
++      normalizedOperation.completedAt :
++      normalizedOperation.updatedAt;
++  if (!Number.isFinite(drainedAtMs)) {
++    return null;
++  }
++  return Object.freeze({
++    drainedAtMs: Math.min(observedAt, Math.floor(drainedAtMs)),
++    operationId: normalizedOperation.operationId,
++    operationType: normalizedOperation.type,
++  });
++}
++
++/**
++ * Resolve the latest retained drain watermark for coordinator-owned
++ * topology-shaping work.
++ *
++ * @param {Array<Object>} operations
++ * @param {Object} [options]
++ * @param {number} [options.observedAt]
++ * @return {{drainedAtMs:number,operationId:string,operationType:string}|null}
++ */
++function resolveLatestTopologyShapingOperationDrain(
++  operations,
++  options = {},
++) {
++  if (!Array.isArray(operations)) {
++    return null;
++  }
++  const observedAt = Number.isFinite(options.observedAt) ?
++    Math.floor(options.observedAt) :
++    Date.now();
++  let latestDrain = null;
++
++  for (const operation of operations) {
++    const candidate = buildTopologyShapingDrainCandidate(
++      operation,
++      observedAt,
++    );
++    if (
++      candidate &&
++      (!latestDrain || candidate.drainedAtMs > latestDrain.drainedAtMs)
++    ) {
++      latestDrain = candidate;
++    }
++  }
++
++  return latestDrain;
++}
++
++export {resolveLatestTopologyShapingOperationDrain};
+diff --git a/src/rebalancer/unified-rebalancer-replica-state.js b/src/rebalancer/unified-rebalancer-replica-state.js
+index e95a4dce1fe87cb61dc1239cfa15e4d0733b477d..f71ed40f562fec5981455cc070630b7913f15c6c 100644
+--- a/src/rebalancer/unified-rebalancer-replica-state.js
++++ b/src/rebalancer/unified-rebalancer-replica-state.js
+@@ -9,6 +9,9 @@ import {UnifiedRebalancerAvailableNodes} from './unified-rebalancer-available-no
+ import {
+   runtimeServiceReplicaBelongsToEntity,
+ } from './runtime-service-replica-identity.js';
++import {
++  UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
++} from './unified-rebalancer-topology-drain-methods.js';
+ 
+ const {
+   COLUMN,
+@@ -28,7 +31,6 @@ const {
+   classifySystemPartition,
+   isCoordinatorOwnedOperationType,
+   isNodeReadyWithTransport,
+-  isReplaceRemoveDispatchPhase,
+   isReplicaOperationInFlight,
+   isReplicaOperationStale,
+   isValidWorkflowStep,
+@@ -717,63 +719,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
+     );
+   }
+ 
+-  /**
+-   * Return the latest retained drain watermark for coordinator-owned
+-   * topology-shaping work. A terminal row lets a scheduled planner recover an
+-   * operation that started and drained entirely between planning evaluations.
+-   *
+-   * @param {Object} options
+-   * @return {{drainedAtMs:number,operationId:string,operationType:string}|null}
+-   */
+-  getLatestGlobalTopologyShapingOperationDrain(options = {}) {
+-    const observedAt = Number.isFinite(options.observedAt) ?
+-      Math.floor(options.observedAt) :
+-      this.nowFn();
+-    let latestDrain = null;
+-    const terminalOperations = this.systemTableCache.filter(
+-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+-      (operation) => {
+-        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+-          nowMs: observedAt,
+-        });
+-        if (
+-          !isCoordinatorOwnedOperationType(normalizedOperation.type) ||
+-          buildReplicaOperationProgressSnapshot(normalizedOperation)
+-            .terminal !== true ||
+-          !this.isTopologyBlockingInFlightOperation(normalizedOperation)
+-        ) {
+-          return false;
+-        }
+-        const drainedAtMs =
+-          Number.isFinite(normalizedOperation.completedAt) ?
+-            normalizedOperation.completedAt :
+-            normalizedOperation.updatedAt;
+-        if (!Number.isFinite(drainedAtMs)) {
+-          return false;
+-        }
+-        const boundedDrainedAtMs = Math.min(
+-          observedAt,
+-          Math.floor(drainedAtMs),
+-        );
+-        if (
+-          !latestDrain ||
+-          boundedDrainedAtMs > latestDrain.drainedAtMs
+-        ) {
+-          latestDrain = {
+-            drainedAtMs: boundedDrainedAtMs,
+-            operationId: normalizedOperation.operationId,
+-            operationType: normalizedOperation.type,
+-          };
+-        }
+-        return true;
+-      },
+-    );
+-    if (terminalOperations.length === 0 || !latestDrain) {
+-      return null;
+-    }
+-    return Object.freeze(latestDrain);
+-  }
+-
+   /**
+    * @param {Object} operation
+    * @return {string}
+@@ -801,28 +746,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
+     ).toUpperCase();
+   }
+ 
+-  /**
+-   * REPLACE operations in ACTIVE/STOPPING are source-removal phase work:
+-   * add-side topology has already converged and these rows must not suppress
+-   * new add-like planning for other targets.
+-   *
+-   * @param {Object} operation
+-   * @return {boolean}
+-   * @private
+-   */
+-  isReplaceRemoveDispatchPhaseOperation(operation) {
+-    return isReplaceRemoveDispatchPhase(operation);
+-  }
+-
+-  /**
+-   * @param {Object} operation
+-   * @return {boolean}
+-   * @private
+-   */
+-  isTopologyBlockingInFlightOperation(operation) {
+-    return !this.isReplaceRemoveDispatchPhaseOperation(operation);
+-  }
+-
+   /**
+    * Return in-flight operations that still represent topology-shaping work.
+    * REPLACE source-removal phase rows are excluded to avoid planner deadlock.
+@@ -847,6 +770,7 @@ applyUnifiedRebalancerPriorityReadinessMethods(UnifiedRebalancerReplicaState);
+ Object.assign(
+   UnifiedRebalancerReplicaState.prototype,
+   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
++  UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
+ );
+ 
+ export {UnifiedRebalancerReplicaState};
+diff --git a/src/rebalancer/unified-rebalancer-topology-drain-methods.js b/src/rebalancer/unified-rebalancer-topology-drain-methods.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f65bb480bfafaaaf16156d33a244c031bb4b697f
+--- /dev/null
++++ b/src/rebalancer/unified-rebalancer-topology-drain-methods.js
+@@ -0,0 +1,57 @@
++import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
++import {
++  resolveLatestTopologyShapingOperationDrain,
++} from './replica-operation-topology-drain.js';
++
++const {
++  SYSTEM_TABLE_NAME,
++  isReplaceRemoveDispatchPhase,
++} = UNIFIED_REBALANCER_SHARED;
++
++const UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS = Object.freeze({
++  /**
++   * Return the latest retained drain watermark for coordinator-owned
++   * topology-shaping work. A terminal row lets a scheduled planner recover an
++   * operation that started and drained entirely between planning evaluations.
++   *
++   * @param {Object} options
++   * @return {{drainedAtMs:number,operationId:string,operationType:string}|null}
++   */
++  getLatestGlobalTopologyShapingOperationDrain(options = {}) {
++    const observedAt = Number.isFinite(options.observedAt) ?
++      Math.floor(options.observedAt) :
++      this.nowFn();
++    const operations = this.systemTableCache.filter(
++      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
++      () => true,
++    );
++    return resolveLatestTopologyShapingOperationDrain(
++      operations,
++      {observedAt},
++    );
++  },
++
++  /**
++   * REPLACE operations in ACTIVE/STOPPING are source-removal phase work:
++   * add-side topology has already converged and these rows must not suppress
++   * new add-like planning for other targets.
++   *
++   * @param {Object} operation
++   * @return {boolean}
++   * @private
++   */
++  isReplaceRemoveDispatchPhaseOperation(operation) {
++    return isReplaceRemoveDispatchPhase(operation);
++  },
++
++  /**
++   * @param {Object} operation
++   * @return {boolean}
++   * @private
++   */
++  isTopologyBlockingInFlightOperation(operation) {
++    return !this.isReplaceRemoveDispatchPhaseOperation(operation);
++  },
++});
++
++export {UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS};
+diff --git a/test/runtime/movielens-preload-admission-gate.test.js b/test/runtime/movielens-preload-admission-gate.test.js
+index 0241be524693b1667e1a3243fa8ea0498b7085c4..5f83c977c4e8add2d10a36d735c29a34e4bb1c2c 100644
+--- a/test/runtime/movielens-preload-admission-gate.test.js
++++ b/test/runtime/movielens-preload-admission-gate.test.js
+@@ -422,6 +422,143 @@ test('schema admission survives a full partition evaluation interval',
+     t.end();
+   });
+ 
++test('schema admission shares an operation-only drain anchor with background release',
++  async (t) => {
++    let nowMs = NOW_MS;
++    const drainAtMs = NOW_MS + 1_000;
++    const observationTimes = [
++      NOW_MS,
++      NOW_MS + 6_673,
++      NOW_MS + 61_928,
++      NOW_MS + 67_178,
++      NOW_MS + 71_030,
++      NOW_MS + 180_000,
++    ];
++    let observationIndex = 0;
++    const inFlightOperation = {
++      operation_id: 'formation-add',
++      type: 'ADD',
++      partition_id: 'schema_operations-p1',
++      replica_id: 'schema_operations-p1-r4',
++      status: 'syncing',
++      workflow_step: 'SYNCING',
++      created_at: NOW_MS - 1_000,
++      updated_at: NOW_MS,
++      completed_at: null,
++      steps_history: '[]',
++    };
++    const drainedOperation = {
++      ...inFlightOperation,
++      status: 'active',
++      workflow_step: 'ACTIVE',
++      updated_at: drainAtMs,
++      completed_at: drainAtMs,
++    };
++
++    const result = await waitForAffinityDemoSchemaAdmission({
++      target: BASE_TARGET,
++      now: () => nowMs,
++      sleep: async () => {},
++      timeoutMs: 180_000,
++      pollIntervalMs: 0,
++      stableWindowMs: 60_000,
++      query: async () => {
++        nowMs = observationTimes[observationIndex++];
++        if (observationIndex === 1 || observationIndex >= 5) {
++          return {rows: [buildControlSnapshot({
++            replicaOperations: {
++              inFlightCount: 1,
++              staleInFlightCount: 0,
++              rows: [inFlightOperation],
++            },
++          })]};
++        }
++        return {rows: [buildControlSnapshot({
++          replicaOperations: {
++            inFlightCount: 0,
++            staleInFlightCount: 0,
++            rows: [drainedOperation],
++          },
++        })]};
++      },
++    });
++
++    t.equal(observationIndex, 4,
++      'two mature observations complete before ordinary release at drain+70000ms');
++    t.equal(result.stableConfirmationCount, 2);
++    t.equal(result.snapshot.stableElapsedMs, 66_178,
++      'the schema clock starts at the retained coordinator-owned drain');
++    t.equal(result.snapshot.latestTopologyDrainAtMs, drainAtMs);
++    t.end();
++  });
++
++test('schema admission does not backdate across a priority-spread blocker',
++  async (t) => {
++    let nowMs = NOW_MS;
++    const drainAtMs = NOW_MS + 1_000;
++    const observationTimes = [
++      NOW_MS,
++      NOW_MS + 6_673,
++      NOW_MS + 60_928,
++      NOW_MS + 66_178,
++      NOW_MS + 70_000,
++      NOW_MS + 72_000,
++    ];
++    let observationIndex = 0;
++    const drainedOperation = {
++      operation_id: 'formation-add',
++      type: 'ADD',
++      partition_id: 'schema_operations-p1',
++      replica_id: 'schema_operations-p1-r4',
++      status: 'active',
++      workflow_step: 'ACTIVE',
++      created_at: NOW_MS - 1_000,
++      updated_at: drainAtMs,
++      completed_at: drainAtMs,
++      steps_history: '[]',
++    };
++
++    const result = await waitForAffinityDemoSchemaAdmission({
++      target: BASE_TARGET,
++      now: () => nowMs,
++      sleep: async () => {},
++      timeoutMs: 180_000,
++      pollIntervalMs: 0,
++      stableWindowMs: 60_000,
++      query: async () => {
++        nowMs = observationTimes[observationIndex++];
++        if (observationIndex === 1) {
++          return {rows: [buildControlSnapshot({
++            replicaOperations: {
++              inFlightCount: 1,
++              staleInFlightCount: 0,
++              rows: [{
++                ...drainedOperation,
++                status: 'syncing',
++                workflow_step: 'SYNCING',
++                completed_at: null,
++              }],
++            },
++            controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(),
++          })]};
++        }
++        return {rows: [buildControlSnapshot({
++          replicaOperations: {
++            inFlightCount: 0,
++            staleInFlightCount: 0,
++            rows: [drainedOperation],
++          },
++        })]};
++      },
++    });
++
++    t.equal(observationIndex, 6,
++      'the independent spread blocker keeps the clock on the fresh ready observation');
++    t.equal(result.stableConfirmationCount, 2);
++    t.equal(result.snapshot.stableElapsedMs, 65_327);
++    t.end();
++  });
++
+ test('fresh but incomplete snapshots cannot admit schema mutation',
+   async (t) => {
+     const incompleteSnapshots = [

@@ -1,0 +1,78 @@
+{
+  "id": "schema-admission-canonical-drain-handoff",
+  "authoringContractVersion": 1,
+  "statement": "When the immediately preceding authoritative schema-admission observation is blocked only by coordinator-owned topology work while priority topology is ready, the unchanged MovieLens scenario completes two fresh 60000ms schema confirmations before the existing 70000ms ordinary-release boundary, without backdating across any other blocker, and three consecutive fresh live runs report priority metric 0.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "formation-background-release-quiescence-anchor-live",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "573b747f08975cb1e760446524e73ef996a68d5c"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "schema-admission-canonical-drain-handoff-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change the MovieLens 180000ms schema budget, 60000ms stability window, two-fresh-confirmation rule, 70000ms ordinary-release boundary, polling interval, workload, joins, preload size, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, 300000ms stall window, 600000ms convergence budget, affinity scoring, or exact-result predicates."
+    },
+    {
+      "id": "single-drain-owner",
+      "statement": "Both consumers must reuse one pure projection of the existing coordinator-owned topology-shaping terminal-operation classifier. Do not create a second operation-liveness owner, snapshot authority, demo-specific admission flag, or alternate definition of operation drain."
+    },
+    {
+      "id": "bounded-anchor-eligibility",
+      "statement": "Schema stability may inherit the retained drain watermark only when the immediately preceding authoritative observation was blocked exclusively by in-flight replica operations, current priority topology was already ready, and the terminal drain is no older than that blocked observation and no newer than the current observation."
+    },
+    {
+      "id": "fail-closed-other-blockers",
+      "statement": "Leadership or priority-spread gaps, control-plane pressure, unavailable or stale observation, malformed evidence, and mixed blockers must continue to start stability at the next fresh ready observation. Real churn resets confirmations; transient observer failures retain only the existing bounded hold behavior."
+    },
+    {
+      "id": "background-release-preservation",
+      "statement": "Preserve the shared background release tracker's active-scope reset, priority-recovery exemption, 60000ms plus 10000ms release contract, scheduler jitter, and one-shot post-release behavior."
+    },
+    {
+      "id": "production-path-red-on-revert",
+      "statement": "Before another live run, prove through the production schema-admission loop that the exact 6673ms observer lag reaches fresh confirmations at drain+60928ms and drain+66178ms before ordinary release, prove the same timeline is red when the drain-anchor handoff is reverted, and prove an independent priority-spread blocker forbids backdating."
+    },
+    {
+      "id": "model-contract-gate",
+      "statement": "Run npm run model:contracts before the live gate and retain model:architecture/contracts/core-system-logic.md as the model-rung reference."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "Use the unchanged ordered live runner: five formation probes must pass before three measuring MovieLens repetitions; stop on the first red, preserve immutable stopped-state evidence, and do not make an unchanged rerun."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-19T16:44:58.388Z source-stable failure is the witness: canonical topology drain 1784479343800, schema candidate start 1784479350473, first confirmation 1784479412934, and first ordinary REPLACE creation at 16:43:33.830Z before a second confirmation."
+    }
+  ]
+}

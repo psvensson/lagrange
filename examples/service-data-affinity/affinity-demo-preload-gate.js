@@ -4,7 +4,6 @@ import {
 } from '../../src/admin/load-lane-table-admission-probe.js';
 import {
   CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
-  CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
   buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
   buildControlPlaneQuiescenceSnapshot,
@@ -16,6 +15,13 @@ import {
   advanceSchemaAdmissionTransitionHistory,
   buildEmptySchemaAdmissionTransitionHistory,
 } from './affinity-demo-schema-admission-history.js';
+import {
+  resolveLatestTopologyShapingOperationDrain,
+} from '../../src/rebalancer/replica-operation-topology-drain.js';
+import {
+  INACTIVE_SCHEMA_STABILITY_WINDOW,
+  buildSchemaStabilityObservation,
+} from './affinity-demo-schema-stability-window.js';
 
 const ADMIN_STREAM_LANE = Object.freeze({
   LOAD: 'load',
@@ -44,14 +50,6 @@ const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS = 60_000;
 const SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT = 2;
 const ZERO = 0;
-const SCHEMA_STABILITY_WINDOW_PHASE = Object.freeze({
-  INACTIVE: 'inactive',
-  OBSERVING: 'observing',
-});
-const INACTIVE_SCHEMA_STABILITY_WINDOW = Object.freeze({
-  phase: SCHEMA_STABILITY_WINDOW_PHASE.INACTIVE,
-  startedAtMs: ZERO,
-});
 const BUDGET_EXHAUSTED_ERROR = 'preload admission budget exhausted';
 const SCHEMA_BUDGET_EXHAUSTED_ERROR = 'schema admission budget exhausted';
 const ADMIN_STREAM_LANE_QUERY_PARAMETER = 'lane';
@@ -59,6 +57,7 @@ const PRELOAD_ADMISSION_QUERY_REQUIRED_ERROR =
   'MovieLens preload admission requires query';
 const PRIORITY_SPREAD_SUMMARY_SOURCE =
   'controlPlaneDiagnostics.currentPriorityPlacementObservation';
+const CURRENT_PRIORITY_PLACEMENT_OBSERVATION_AVAILABLE = 'available';
 
 function buildAdminLaneTarget(target, lane) {
   const url = new URL(target);
@@ -109,7 +108,19 @@ function resolveSnapshotAdmissionFieldsError(snapshot) {
   return '';
 }
 
-function buildSnapshotProbe(snapshot, snapshotError) {
+function buildLatestTopologyDrainProbe(replicaOperations, nowMs) {
+  const latestTopologyDrain = resolveLatestTopologyShapingOperationDrain(
+    replicaOperations.rows,
+    {observedAt: nowMs},
+  );
+  return Object.freeze({
+    latestTopologyDrainAtMs: latestTopologyDrain?.drainedAtMs ?? null,
+    latestTopologyDrainOperationId:
+      latestTopologyDrain?.operationId ?? null,
+  });
+}
+
+function buildSnapshotProbe(snapshot, snapshotError, nowMs) {
   if (snapshotError) {
     return {
       inFlightCount: ZERO,
@@ -143,6 +154,7 @@ function buildSnapshotProbe(snapshot, snapshotError) {
       buildControlPlaneQuiescencePressureSignalsFromDiagnostics(
         snapshot?.controlPlaneDiagnostics,
       ),
+    ...buildLatestTopologyDrainProbe(replicaOperations, nowMs),
     error: '',
   };
 }
@@ -171,7 +183,8 @@ function isCurrentPriorityPlacementObservationAvailable(
 ) {
   return (
     isPlainRecord(currentPlacementObservation) &&
-    currentPlacementObservation.state === 'available' &&
+    currentPlacementObservation.state ===
+      CURRENT_PRIORITY_PLACEMENT_OBSERVATION_AVAILABLE &&
     currentPlacementObservation.capturedAt === snapshot?.capturedAt &&
     isPriorityPartitionSummaryAvailable(
       currentPlacementObservation.priorityPartitionSummary,
@@ -269,8 +282,9 @@ function resolveSnapshotObservationError(snapshot) {
 }
 
 function classifySnapshot(snapshot, snapshotError, nowMs) {
-  return buildControlPlaneQuiescenceSnapshot({
-    snapshotProbe: buildSnapshotProbe(snapshot, snapshotError),
+  const snapshotProbe = buildSnapshotProbe(snapshot, snapshotError, nowMs);
+  const quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+    snapshotProbe,
     criticalSystemTopology: buildPrioritySpreadTopology(snapshot),
     nowMs,
     stableWindowStartedAtMs: nowMs,
@@ -278,6 +292,12 @@ function classifySnapshot(snapshot, snapshotError, nowMs) {
     maxInFlightCount: ZERO,
     leaderQuietElapsedMs: ZERO,
     ignoreStaleInFlightReplicaOperations: true,
+  });
+  return Object.freeze({
+    ...quiescenceSnapshot,
+    latestTopologyDrainAtMs: snapshotProbe.latestTopologyDrainAtMs ?? null,
+    latestTopologyDrainOperationId:
+      snapshotProbe.latestTopologyDrainOperationId ?? null,
   });
 }
 
@@ -340,104 +360,6 @@ function normalizeSchemaStableWindowMs(value) {
     DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS;
 }
 
-// Observer-side failure states: the poll could not SEE the control plane
-// (admin query timeout, snapshot lane hiccup). These are evidence about the
-// observer, not the system — monotone-progress rule (the HDFS safe-mode /
-// ES delayed-allocation lesson): they HOLD an accumulated stability window
-// instead of resetting it, bounded below by observation-blindness tolerance.
-const SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES = new Set([
-  CONTROL_PLANE_QUIESCENCE_STATE.OBSERVATION_UNAVAILABLE,
-  CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
-]);
-
-function isSchemaStabilityObservationFailure(snapshot) {
-  if (SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES.has(snapshot.state)) {
-    return true;
-  }
-  // CONTROL_PLANE_PRESSURE is observer-side only when it came from a
-  // pressure-shaped snapshot QUERY error, not from system pressure signals.
-  return (
-    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE &&
-    Array.isArray(snapshot.reasonCodes) &&
-    snapshot.reasonCodes.includes(
-      CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR,
-    )
-  );
-}
-
-function advanceSchemaStabilityWindow(
-  snapshot,
-  stabilityWindow,
-  nowMs,
-  stableWindowMs,
-) {
-  if (
-    snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT &&
-    snapshot.ready === true
-  ) {
-    if (stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
-      return Object.freeze({
-        ...stabilityWindow,
-        lastQuiescentObservationAtMs: nowMs,
-      });
-    }
-    return Object.freeze({
-      phase: SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING,
-      startedAtMs: nowMs,
-      lastQuiescentObservationAtMs: nowMs,
-    });
-  }
-  // Hold through observer hiccups while the accumulated window is still
-  // backed by a recent real quiescent observation; a blind stretch longer
-  // than the stable window itself can no longer support a stability claim.
-  if (
-    stabilityWindow.phase === SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING &&
-    isSchemaStabilityObservationFailure(snapshot) &&
-    nowMs - (stabilityWindow.lastQuiescentObservationAtMs ?? ZERO) <=
-      stableWindowMs
-  ) {
-    return stabilityWindow;
-  }
-  return INACTIVE_SCHEMA_STABILITY_WINDOW;
-}
-
-function projectSchemaStabilityWindow(
-  snapshot,
-  stabilityWindow,
-  nowMs,
-  stableWindowMs,
-) {
-  if (stabilityWindow.phase !== SCHEMA_STABILITY_WINDOW_PHASE.OBSERVING) {
-    return snapshot;
-  }
-  // A held window (observer hiccup) must not project QUIESCENT: stability
-  // may only be CONFIRMED by a poll that actually observed the control
-  // plane. The hold preserves accumulated elapsed time; confirmation waits
-  // for the next real observation.
-  if (
-    snapshot.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
-    snapshot.ready !== true
-  ) {
-    return Object.freeze({
-      ...snapshot,
-      stableElapsedMs: Math.max(ZERO, nowMs - stabilityWindow.startedAtMs),
-      stabilityWindowHeld: true,
-    });
-  }
-  const stableElapsedMs = Math.max(
-    ZERO,
-    nowMs - stabilityWindow.startedAtMs,
-  );
-  return Object.freeze({
-    ...snapshot,
-    state: stableElapsedMs >= stableWindowMs ?
-      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT :
-      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
-    stableElapsedMs,
-    leaderQuietElapsedMs: stableElapsedMs,
-  });
-}
-
 async function observeSchemaAdmissionSnapshot(options, target, deadlineMs) {
   const snapshotTimeoutMs = remainingBudgetMs(options.now, deadlineMs);
   if (snapshotTimeoutMs <= ZERO) {
@@ -448,38 +370,6 @@ async function observeSchemaAdmissionSnapshot(options, target, deadlineMs) {
     );
   }
   return observeControlSnapshot(options, target, snapshotTimeoutMs);
-}
-
-function buildSchemaStabilityObservation(
-  observedSnapshot,
-  stabilityWindow,
-  stableConfirmationCount,
-  stableWindowMs,
-  nowMs,
-) {
-  const nextStabilityWindow = advanceSchemaStabilityWindow(
-    observedSnapshot,
-    stabilityWindow,
-    nowMs,
-    stableWindowMs,
-  );
-  const snapshot = projectSchemaStabilityWindow(
-    observedSnapshot,
-    nextStabilityWindow,
-    nowMs,
-    stableWindowMs,
-  );
-  // Held polls (observer hiccup with the window preserved) neither confirm
-  // nor forfeit accumulated confirmations.
-  const held = snapshot.stabilityWindowHeld === true;
-  return Object.freeze({
-    snapshot,
-    stabilityWindow: nextStabilityWindow,
-    stableConfirmationCount:
-      snapshot.state === CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ?
-        stableConfirmationCount + 1 :
-        (held ? stableConfirmationCount : ZERO),
-  });
 }
 
 function buildLoadLaneAdmission(state, errorMessage = '') {

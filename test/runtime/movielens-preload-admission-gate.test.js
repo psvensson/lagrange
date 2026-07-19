@@ -422,6 +422,143 @@ test('schema admission survives a full partition evaluation interval',
     t.end();
   });
 
+test('schema admission shares an operation-only drain anchor with background release',
+  async (t) => {
+    let nowMs = NOW_MS;
+    const drainAtMs = NOW_MS + 1_000;
+    const observationTimes = [
+      NOW_MS,
+      NOW_MS + 6_673,
+      NOW_MS + 61_928,
+      NOW_MS + 67_178,
+      NOW_MS + 71_030,
+      NOW_MS + 180_000,
+    ];
+    let observationIndex = 0;
+    const inFlightOperation = {
+      operation_id: 'formation-add',
+      type: 'ADD',
+      partition_id: 'schema_operations-p1',
+      replica_id: 'schema_operations-p1-r4',
+      status: 'syncing',
+      workflow_step: 'SYNCING',
+      created_at: NOW_MS - 1_000,
+      updated_at: NOW_MS,
+      completed_at: null,
+      steps_history: '[]',
+    };
+    const drainedOperation = {
+      ...inFlightOperation,
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      updated_at: drainAtMs,
+      completed_at: drainAtMs,
+    };
+
+    const result = await waitForAffinityDemoSchemaAdmission({
+      target: BASE_TARGET,
+      now: () => nowMs,
+      sleep: async () => {},
+      timeoutMs: 180_000,
+      pollIntervalMs: 0,
+      stableWindowMs: 60_000,
+      query: async () => {
+        nowMs = observationTimes[observationIndex++];
+        if (observationIndex === 1 || observationIndex >= 5) {
+          return {rows: [buildControlSnapshot({
+            replicaOperations: {
+              inFlightCount: 1,
+              staleInFlightCount: 0,
+              rows: [inFlightOperation],
+            },
+          })]};
+        }
+        return {rows: [buildControlSnapshot({
+          replicaOperations: {
+            inFlightCount: 0,
+            staleInFlightCount: 0,
+            rows: [drainedOperation],
+          },
+        })]};
+      },
+    });
+
+    t.equal(observationIndex, 4,
+      'two mature observations complete before ordinary release at drain+70000ms');
+    t.equal(result.stableConfirmationCount, 2);
+    t.equal(result.snapshot.stableElapsedMs, 66_178,
+      'the schema clock starts at the retained coordinator-owned drain');
+    t.equal(result.snapshot.latestTopologyDrainAtMs, drainAtMs);
+    t.end();
+  });
+
+test('schema admission does not backdate across a priority-spread blocker',
+  async (t) => {
+    let nowMs = NOW_MS;
+    const drainAtMs = NOW_MS + 1_000;
+    const observationTimes = [
+      NOW_MS,
+      NOW_MS + 6_673,
+      NOW_MS + 60_928,
+      NOW_MS + 66_178,
+      NOW_MS + 70_000,
+      NOW_MS + 72_000,
+    ];
+    let observationIndex = 0;
+    const drainedOperation = {
+      operation_id: 'formation-add',
+      type: 'ADD',
+      partition_id: 'schema_operations-p1',
+      replica_id: 'schema_operations-p1-r4',
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      created_at: NOW_MS - 1_000,
+      updated_at: drainAtMs,
+      completed_at: drainAtMs,
+      steps_history: '[]',
+    };
+
+    const result = await waitForAffinityDemoSchemaAdmission({
+      target: BASE_TARGET,
+      now: () => nowMs,
+      sleep: async () => {},
+      timeoutMs: 180_000,
+      pollIntervalMs: 0,
+      stableWindowMs: 60_000,
+      query: async () => {
+        nowMs = observationTimes[observationIndex++];
+        if (observationIndex === 1) {
+          return {rows: [buildControlSnapshot({
+            replicaOperations: {
+              inFlightCount: 1,
+              staleInFlightCount: 0,
+              rows: [{
+                ...drainedOperation,
+                status: 'syncing',
+                workflow_step: 'SYNCING',
+                completed_at: null,
+              }],
+            },
+            controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(),
+          })]};
+        }
+        return {rows: [buildControlSnapshot({
+          replicaOperations: {
+            inFlightCount: 0,
+            staleInFlightCount: 0,
+            rows: [drainedOperation],
+          },
+        })]};
+      },
+    });
+
+    t.equal(observationIndex, 6,
+      'the independent spread blocker keeps the clock on the fresh ready observation');
+    t.equal(result.stableConfirmationCount, 2);
+    t.equal(result.snapshot.stableElapsedMs, 65_327);
+    t.end();
+  });
+
 test('fresh but incomplete snapshots cannot admit schema mutation',
   async (t) => {
     const incompleteSnapshots = [

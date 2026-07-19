@@ -9,6 +9,9 @@ import {UnifiedRebalancerAvailableNodes} from './unified-rebalancer-available-no
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
+import {
+  UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
+} from './unified-rebalancer-topology-drain-methods.js';
 
 const {
   COLUMN,
@@ -28,7 +31,6 @@ const {
   classifySystemPartition,
   isCoordinatorOwnedOperationType,
   isNodeReadyWithTransport,
-  isReplaceRemoveDispatchPhase,
   isReplicaOperationInFlight,
   isReplicaOperationStale,
   isValidWorkflowStep,
@@ -718,63 +720,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * Return the latest retained drain watermark for coordinator-owned
-   * topology-shaping work. A terminal row lets a scheduled planner recover an
-   * operation that started and drained entirely between planning evaluations.
-   *
-   * @param {Object} options
-   * @return {{drainedAtMs:number,operationId:string,operationType:string}|null}
-   */
-  getLatestGlobalTopologyShapingOperationDrain(options = {}) {
-    const observedAt = Number.isFinite(options.observedAt) ?
-      Math.floor(options.observedAt) :
-      this.nowFn();
-    let latestDrain = null;
-    const terminalOperations = this.systemTableCache.filter(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      (operation) => {
-        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
-          nowMs: observedAt,
-        });
-        if (
-          !isCoordinatorOwnedOperationType(normalizedOperation.type) ||
-          buildReplicaOperationProgressSnapshot(normalizedOperation)
-            .terminal !== true ||
-          !this.isTopologyBlockingInFlightOperation(normalizedOperation)
-        ) {
-          return false;
-        }
-        const drainedAtMs =
-          Number.isFinite(normalizedOperation.completedAt) ?
-            normalizedOperation.completedAt :
-            normalizedOperation.updatedAt;
-        if (!Number.isFinite(drainedAtMs)) {
-          return false;
-        }
-        const boundedDrainedAtMs = Math.min(
-          observedAt,
-          Math.floor(drainedAtMs),
-        );
-        if (
-          !latestDrain ||
-          boundedDrainedAtMs > latestDrain.drainedAtMs
-        ) {
-          latestDrain = {
-            drainedAtMs: boundedDrainedAtMs,
-            operationId: normalizedOperation.operationId,
-            operationType: normalizedOperation.type,
-          };
-        }
-        return true;
-      },
-    );
-    if (terminalOperations.length === 0 || !latestDrain) {
-      return null;
-    }
-    return Object.freeze(latestDrain);
-  }
-
-  /**
    * @param {Object} operation
    * @return {string}
    * @private
@@ -802,28 +747,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * REPLACE operations in ACTIVE/STOPPING are source-removal phase work:
-   * add-side topology has already converged and these rows must not suppress
-   * new add-like planning for other targets.
-   *
-   * @param {Object} operation
-   * @return {boolean}
-   * @private
-   */
-  isReplaceRemoveDispatchPhaseOperation(operation) {
-    return isReplaceRemoveDispatchPhase(operation);
-  }
-
-  /**
-   * @param {Object} operation
-   * @return {boolean}
-   * @private
-   */
-  isTopologyBlockingInFlightOperation(operation) {
-    return !this.isReplaceRemoveDispatchPhaseOperation(operation);
-  }
-
-  /**
    * Return in-flight operations that still represent topology-shaping work.
    * REPLACE source-removal phase rows are excluded to avoid planner deadlock.
    *
@@ -847,6 +770,7 @@ applyUnifiedRebalancerPriorityReadinessMethods(UnifiedRebalancerReplicaState);
 Object.assign(
   UnifiedRebalancerReplicaState.prototype,
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
+  UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 );
 
 export {UnifiedRebalancerReplicaState};
