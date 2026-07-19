@@ -33,6 +33,20 @@ function safeRead(file) {
   }
 }
 
+// A report can only cover `scenario` if its quoted name appears somewhere in the raw
+// text, so check that before JSON.parse. Without this, a scenario with no covering
+// reports yet forces a full parse of every report in the directory — gigabytes of
+// gate playback — before the scan can conclude "no evidence".
+function safeReadCovering(file, scenario) {
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    if (!raw.includes(`"${scenario}"`)) return null;
+    return JSON.parse(raw);
+  } catch (_error) {
+    return null;
+  }
+}
+
 function scenarioEntry(data, scenario) {
   const directScenarios = Array.isArray(data?.scenarios) ? data.scenarios : [];
   const standardScenarios = Array.isArray(data?.standardSummary?.scenarios) ?
@@ -136,7 +150,7 @@ function listRuns(dir, scenario, limit = DEFAULT_CONSECUTIVE) {
   const seen = new Set();
   for (const {file} of files) {
     if (runs.length >= limit) break;
-    const data = safeRead(file);
+    const data = safeReadCovering(file, scenario);
     if (!data || !reportCoversScenario(data, scenario)) continue;
     const key = data.timestamp || file;
     if (seen.has(key)) continue;
