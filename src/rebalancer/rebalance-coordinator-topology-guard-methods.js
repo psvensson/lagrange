@@ -293,8 +293,16 @@ class RebalanceCoordinatorTopologyGuardMethods {
       targetNodeId.length > 0 &&
       !occupiesNode(inventory, targetNodeId) &&
       inventory.occupiedNodeIds.length < targetReplicaCount &&
+      // Only a CREATION-PHASE add-like operation proves topology increase is
+      // already underway; the entity operation read carries no terminal
+      // filter, so a completed ADD/REPLACE row lingering after its drain
+      // (live 2026-07-19T07-22: ADD done 07:17:55, REMOVE done 07:18:57,
+      // denials through 07:21:46) must not re-block the only cure. The
+      // one-cure-per-tick re-block is preserved: an admitted cure's own
+      // PENDING row is add-transitional and closes this row next tick.
       !inventory.operations.some((operation) =>
-        TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(operation.type))
+        TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(operation.type) &&
+        operation.addTransitional)
     );
   }
 

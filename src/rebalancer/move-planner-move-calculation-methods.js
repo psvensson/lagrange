@@ -35,6 +35,14 @@ const MOVE_PLANNER_LITERAL = Object.freeze({
 });
 const MoveType = REBALANCER_MOVE_TYPE;
 
+function countDistinctActiveReplicaNodes(replicas) {
+  return new Set(
+    replicas
+      .map((replica) => replica?.node_id)
+      .filter(Boolean),
+  ).size;
+}
+
 /**
  * MovePlanner calculates replica placement and moves for partitions,
  * message groups, and runtime services.
@@ -376,6 +384,19 @@ class MovePlannerMoveCalculationMethods {
         inFlightAddCount: inFlightAccounting.inFlightAddCount,
         deferredAdds: addMoves.length,
         overCreationCap: true,
+        // Composite-state evidence: when this cap wipes the deferred ADDs
+        // WHILE the distinct-node spread floor is unmet, the wiped move was
+        // the partition's spread cure — the state that stalled live run
+        // 2026-07-19 (over-target belief on one node, gapped topology). The
+        // diagnostic names both preconditions so a repeated fire in this
+        // shape reads as a cure-starvation stall, not routine cap pressure.
+        activeDistinctNodeCount: countDistinctActiveReplicaNodes(
+          activePlacementReplicas,
+        ),
+        targetDistinctNodeCount: new Set(targetNodeIds).size,
+        prioritySpreadGapOpen:
+          countDistinctActiveReplicaNodes(activePlacementReplicas) <
+          Math.min(targetReplicaCount, new Set(targetNodeIds).size),
       });
       addMoves.length = 0;
     }
