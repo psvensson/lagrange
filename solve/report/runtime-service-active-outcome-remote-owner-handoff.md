@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-background-release-quiescence-anchor-live
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: runtime-service-active-outcome-remote-owner-handoff-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
-- Next move: continue supervised step for runtime-service-active-outcome-remote-owner-handoff-main
-- No longer current: runtime handler emitter identity, missing runtime replicas, and local coordinator terminalization
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for runtime-service-active-outcome-remote-owner-handoff-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 2
@@ -41,12 +24,15 @@
 - Signals: none
 
 ## Frontiers
-- **runtime-service-active-outcome-remote-owner-handoff-main** [open] rung 0, attempts 1, metric 1 -> 1
+- **runtime-service-active-outcome-remote-owner-handoff-main** [parked {exhausted}] rung 0, attempts 1, metric 1 -> 1 — The sealed remote-outcome classification is fixed and verified; fresh live failure moved before remote operation creation to expired-lease candidate selection, which is outside this Quest's bounded-active-create scope and requires a successor Quest.
 
 ## Findings
 - **runtime-service-active-outcome-remote-owner-handoff-main**: DT red-on-revert proven for test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js [dt:solve/changes/dt-prove/coordinator-created-user-partition-remote-outcome.test.js-2026-07-19T15-32-41-673Z.json]
 - **runtime-service-active-outcome-remote-owner-handoff-main**: Archived live operations were source-owned on node f7328137 while remote RuntimeServiceHandlers on ae945240 and 6c015c61 completed ACTIVE; the target-node coordinator's existing target-executor-outcome handoff forwards partition CREATE_ACTIVE but excludes runtime-service CREATE_ACTIVE, so the source owner receives no wake and both rows remain CREATING. (rules out: runtime handler emitter identity, missing runtime replicas, and local coordinator terminalization) [file:solve/changes/formation-background-release-quiescence-anchor-live/post-attempt-5-live-runtime-outcome-handoff-2026-07-19.md]
 - **runtime-service-active-outcome-remote-owner-handoff-main**: DT red-on-revert proven for test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js [dt:solve/changes/dt-prove/coordinator-created-user-partition-remote-outcome.test.js-2026-07-19T15-33-51-313Z.json]
+- **runtime-service-active-outcome-remote-owner-handoff-main**: Independent verification passed: exact patch fixes the archived remote-owner runtime ACTIVE outcome drop, preserves target non-writing and bounded transport/retry controls, and passes 220 focused assertions plus red-on-revert. [subagent:verify_runtime_remote_outcome]
+- **runtime-service-active-outcome-remote-owner-handoff-main**: Fresh ordered Demo 2 created and terminalized only local operation 6e1d8115-6b7f-4e79-8155-1041a7ecd93f; no remote second operation existed. Later cycles repeatedly selected expired-lease node 19eb1497-4db7-4fbc-a04f-455d57845d6f through repairEligible candidate discovery and rejected it at pre-execution while healthy alternatives existed. [file:solve/changes/runtime-service-active-outcome-remote-owner-handoff/post-attempt-1-live-candidate-readiness-boundary-2026-07-19.md]
+- **runtime-service-active-outcome-remote-owner-handoff-main**: Aggregate independent verification approved the narrow remote runtime ACTIVE classifier and EXHAUSTED disposition, not SOLVED: Demo 2 contained only local operation 6e1d8115, while Demo 1 remote operation 3ef199ca engaged bounded handoff but still ended CREATING. [subagent:verify_runtime_remote_outcome_aggregate]
 
 ## Theories
 _(none recorded)_
