@@ -7,7 +7,7 @@ graduatesTo: null
 
 # Epic: Formation complexity consolidation (verified 2026-07-18 deep review)
 
-## Handoff — start here (state as of 2026-07-18 evening, F3/O6-adjacent admission cutover landed)
+## Handoff — start here (state as of 2026-07-19 morning, confirmation runs NOT green)
 
 A fresh agent can continue directly from this section; the Decision log below
 holds the full evidence trail.
@@ -71,6 +71,22 @@ morning) the learned-affinity phase under the same machine conditions.
   Structural options still open: narrowing the admission predicate to the
   DDL's own metadata partitions, join-time spread-correct placement.
   O3/O4 unlock at terminal.
+  **2026-07-19 confirmation runs: 0 of 2 green — do NOT drive terminal.**
+  Run 07-14-01 failed on the known in-flight drain race
+  (replica_operations_in_flight=2, clean-HEAD signature). Run 07-22-01
+  reproduced the critical-spread terminal stall through a hole ADJACENT to
+  the landed cure (finding recorded in the quest log): the planner believed
+  sql_write_operations-p1 over target (activeCount=4 vs target 3) and
+  deferred every spread ADD waiting for a count-neutral REPLACE pairing, so
+  no cure-typed move was ever minted; plain non-cure ADDs from a second node
+  were denied replica_inventory_unusable, and the conservative-union escape
+  never engaged because it only admits cure-typed moves. Enabling condition:
+  planner-vs-guard inventory disagreement (planner over-target belief vs
+  guard union at-target, 3 rows on 2 nodes). Candidate next slice: extend
+  cure minting to the over-target-belief case (REPLACE-from-co-located
+  instead of ADD, which the guard's escape already admits from an
+  over-represented source), or reconcile the planner's activeCount source
+  with the guard's union view.
 - Flag-surface tail (small, unqueued): delete the uncalled
   shouldMetadataPublicationAllowPressureDefer
   (partition-service-metadata-delivery-methods.js) and the stale
