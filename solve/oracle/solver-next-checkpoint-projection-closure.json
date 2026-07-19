@@ -1,0 +1,10 @@
+{
+  "metric": 0,
+  "done": true,
+  "checks": {
+    "uncheckpointedAttemptRequiresCheckpoint": true,
+    "checkpointedAttemptAdvances": true,
+    "checkpointIntegrityTestsPass": true,
+    "focusedSolverTestsPass": true
+  }
+}

@@ -329,6 +329,27 @@ function dirtyPathsSinceHead(root, paths) {
   return String(result.stdout || '').split(LOCAL_STR_OWNED_014).filter(Boolean);
 }
 
+function findUncheckpointedApprovedAttempts(root, quest, log, state) {
+  const resolvedRejectedIndexes = new Set(
+    state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
+  );
+  const checkpointCommit = latestCheckpointCommit(root, quest.id);
+  const candidates = state.attempts.filter((attempt) =>
+    attempt.contracted &&
+    !resolvedRejectedIndexes.has(attempt.index) &&
+    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+  const supersededIndexes = new Set(
+    candidates
+      .filter((attempt) => approvedCheckpointReplacement(
+        log,
+        candidates,
+        attempt,
+      ))
+      .map((attempt) => attempt.index),
+  );
+  return candidates.filter((attempt) => !supersededIndexes.has(attempt.index));
+}
+
 export function verificationState(root, quest, log, options = {}) {
   const attempts = sourceChangingAttempts(root, quest, log, options);
   const attemptProblems = [];
@@ -406,7 +427,7 @@ export function verificationState(root, quest, log, options = {}) {
       `requires a later aggregate approval for ${aggregate.fingerprint}`,
     ));
   }
-  return {
+  const state = {
     attempts,
     pendingAttempts,
     attemptProblems,
@@ -416,32 +437,18 @@ export function verificationState(root, quest, log, options = {}) {
     resolvedRejectedAttempts,
     unresolvedRejectedAttempts,
   };
+  return {
+    ...state,
+    uncheckpointedApprovedAttempts:
+      findUncheckpointedApprovedAttempts(root, quest, log, state),
+  };
 }
 
 export function checkpointVerificationProblems(root, quest, log, options = {}) {
   const state = verificationState(root, quest, log, options);
   if (state.attemptProblems.length > 0) return state.attemptProblems;
-  const resolvedRejectedIndexes = new Set(
-    state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
-  );
-  const checkpointCommit = latestCheckpointCommit(root, quest.id);
   const problems = [];
-  const uncheckpointedCandidates = state.attempts.filter((attempt) =>
-    attempt.contracted &&
-    !resolvedRejectedIndexes.has(attempt.index) &&
-    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
-  const supersededCheckpointIndexes = new Set(
-    uncheckpointedCandidates
-      .filter((attempt) => approvedCheckpointReplacement(
-        log,
-        uncheckpointedCandidates,
-        attempt,
-      ))
-      .map((attempt) => attempt.index),
-  );
-  const uncheckpointed = uncheckpointedCandidates.filter(
-    (attempt) => !supersededCheckpointIndexes.has(attempt.index),
-  );
+  const uncheckpointed = state.uncheckpointedApprovedAttempts;
   const contracted = state.attempts.filter((attempt) => attempt.contracted);
   const coveredPaths = new Set(uncheckpointed.flatMap(
     (attempt) => attempt.inspection.changedPaths));

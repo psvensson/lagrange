@@ -103,7 +103,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
       `resolve terminal audit failures: node scripts/solve.js audit --id ${questId}`,
     );
   }
-  if (verification.attempts.length > 0 &&
+  if (verification.uncheckpointedApprovedAttempts.length > 0 &&
     verification.attemptProblems.length === 0) {
     return typedNextAction(`node scripts/solve.js checkpoint --id ${questId}`);
   }

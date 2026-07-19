@@ -1,0 +1,267 @@
+diff --git a/scripts/solve/next.js b/scripts/solve/next.js
+index c2b8dec6eebdb7cbe40caba54774d62d24138015..a4c92a1ce14e37d34814abf3a4191f9c51c2d14c 100644
+--- a/scripts/solve/next.js
++++ b/scripts/solve/next.js
+@@ -103,7 +103,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
+       `resolve terminal audit failures: node scripts/solve.js audit --id ${questId}`,
+     );
+   }
+-  if (verification.attempts.length > 0 &&
++  if (verification.uncheckpointedApprovedAttempts.length > 0 &&
+     verification.attemptProblems.length === 0) {
+     return typedNextAction(`node scripts/solve.js checkpoint --id ${questId}`);
+   }
+diff --git a/scripts/solve/verification.js b/scripts/solve/verification.js
+index c550f23a0d876e6a2d0c1f1791133123a02e682a..0f4cc5989870be62fe4392d1f687c0ab5bb22f10 100644
+--- a/scripts/solve/verification.js
++++ b/scripts/solve/verification.js
+@@ -329,6 +329,27 @@ function dirtyPathsSinceHead(root, paths) {
+   return String(result.stdout || '').split(LOCAL_STR_OWNED_014).filter(Boolean);
+ }
+ 
++function findUncheckpointedApprovedAttempts(root, quest, log, state) {
++  const resolvedRejectedIndexes = new Set(
++    state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
++  );
++  const checkpointCommit = latestCheckpointCommit(root, quest.id);
++  const candidates = state.attempts.filter((attempt) =>
++    attempt.contracted &&
++    !resolvedRejectedIndexes.has(attempt.index) &&
++    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
++  const supersededIndexes = new Set(
++    candidates
++      .filter((attempt) => approvedCheckpointReplacement(
++        log,
++        candidates,
++        attempt,
++      ))
++      .map((attempt) => attempt.index),
++  );
++  return candidates.filter((attempt) => !supersededIndexes.has(attempt.index));
++}
++
+ export function verificationState(root, quest, log, options = {}) {
+   const attempts = sourceChangingAttempts(root, quest, log, options);
+   const attemptProblems = [];
+@@ -406,7 +427,7 @@ export function verificationState(root, quest, log, options = {}) {
+       `requires a later aggregate approval for ${aggregate.fingerprint}`,
+     ));
+   }
+-  return {
++  const state = {
+     attempts,
+     pendingAttempts,
+     attemptProblems,
+@@ -416,32 +437,18 @@ export function verificationState(root, quest, log, options = {}) {
+     resolvedRejectedAttempts,
+     unresolvedRejectedAttempts,
+   };
++  return {
++    ...state,
++    uncheckpointedApprovedAttempts:
++      findUncheckpointedApprovedAttempts(root, quest, log, state),
++  };
+ }
+ 
+ export function checkpointVerificationProblems(root, quest, log, options = {}) {
+   const state = verificationState(root, quest, log, options);
+   if (state.attemptProblems.length > 0) return state.attemptProblems;
+-  const resolvedRejectedIndexes = new Set(
+-    state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
+-  );
+-  const checkpointCommit = latestCheckpointCommit(root, quest.id);
+   const problems = [];
+-  const uncheckpointedCandidates = state.attempts.filter((attempt) =>
+-    attempt.contracted &&
+-    !resolvedRejectedIndexes.has(attempt.index) &&
+-    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+-  const supersededCheckpointIndexes = new Set(
+-    uncheckpointedCandidates
+-      .filter((attempt) => approvedCheckpointReplacement(
+-        log,
+-        uncheckpointedCandidates,
+-        attempt,
+-      ))
+-      .map((attempt) => attempt.index),
+-  );
+-  const uncheckpointed = uncheckpointedCandidates.filter(
+-    (attempt) => !supersededCheckpointIndexes.has(attempt.index),
+-  );
++  const uncheckpointed = state.uncheckpointedApprovedAttempts;
+   const contracted = state.attempts.filter((attempt) => attempt.contracted);
+   const coveredPaths = new Set(uncheckpointed.flatMap(
+     (attempt) => attempt.inspection.changedPaths));
+diff --git a/solve/oracle/solver-next-checkpoint-projection-closure.json b/solve/oracle/solver-next-checkpoint-projection-closure.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..a529c35014dcbbbf09baf9dfb15cfd122b2b76cf
+--- /dev/null
++++ b/solve/oracle/solver-next-checkpoint-projection-closure.json
+@@ -0,0 +1,10 @@
++{
++  "metric": 0,
++  "done": true,
++  "checks": {
++    "uncheckpointedAttemptRequiresCheckpoint": true,
++    "checkpointedAttemptAdvances": true,
++    "checkpointIntegrityTestsPass": true,
++    "focusedSolverTestsPass": true
++  }
++}
+diff --git a/solve/quests/solver-next-checkpoint-projection-closure.json b/solve/quests/solver-next-checkpoint-projection-closure.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..294df8eac156f6c311050d0808e00839fc559ace
+--- /dev/null
++++ b/solve/quests/solver-next-checkpoint-projection-closure.json
+@@ -0,0 +1,47 @@
++{
++  "id": "solver-next-checkpoint-projection-closure",
++  "authoringContractVersion": 1,
++  "statement": "After an exact-approved source attempt has been committed by checkpoint, an open Quest's typed next action advances to its pending step, recorded gate, or current blocker instead of requesting an empty repeat checkpoint, while a new exact-approved uncheckpointed attempt still requires checkpoint.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
++    "closesCL": [],
++    "parentQuest": "solver-workflow-draft-receipt-signal-quality",
++    "planDoc": null,
++    "draftedAtCommit": "e356143cd936efd56fef9069e00cf67a1efa7384"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/solver-next-checkpoint-projection-closure.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-next-checkpoint-projection-closure-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/solver-next-checkpoint-projection-closure.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    },
++    {
++      "id": "checkpoint-integrity-preserved",
++      "statement": "Do not weaken exact attempt approval, dirty-path coverage, rejection supersession, or terminal aggregate verification; change only typed next-action selection after an explicit checkpoint."
++    },
++    {
++      "id": "executable-next-action",
++      "statement": "The action rendered after checkpoint must be executable against the same repository state and must preserve pending-step and recorded-gate precedence."
++    }
++  ]
++}
+diff --git a/test/solve/verification-handoff.test.js b/test/solve/verification-handoff.test.js
+index 1e3ab0d877980b6a3a1cf43fef4b78aa1c62cbfa..026b35655c0a0f35be930fa6ae24838ec5add255 100644
+--- a/test/solve/verification-handoff.test.js
++++ b/test/solve/verification-handoff.test.js
+@@ -13,6 +13,7 @@ import {runStep} from '../../scripts/solve/step.js';
+ import {writeReport} from '../../scripts/solve/report.js';
+ import {buildNextLines} from '../../scripts/solve/next.js';
+ import {
++  appendEvent,
+   appendFinding,
+   projectState,
+   readLog,
+@@ -25,6 +26,10 @@ import {
+   sourceChangingAttempts,
+   verificationState,
+ } from '../../scripts/solve/verification.js';
++import {
++  EVENT_GATE_DECISION,
++  OUTCOME_BLOCKED,
++} from '../../scripts/solve/constants.js';
+ 
+ function git(root, args, options = {}) {
+   return execFileSync('git', args, {
+@@ -582,11 +587,54 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+       `sha256:${attempt.changeRefIdentity.sha256}`);
+     t.equal(Number(git(fx.root, ['rev-list', '--count', 'HEAD']).trim()),
+       beforeApproval, 'recording a finding has no commit side effect');
++    t.match(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      /checkpoint --id runtime-verify/u,
++      'a new exact-approved attempt requires its explicit checkpoint',
++    );
+ 
+     const output = runCheckpointCommand(fx.root, {id: fx.quest.id, _: []});
+     t.match(output, /checkpointed/u);
+     t.equal(Number(git(fx.root, ['rev-list', '--count', 'HEAD']).trim()),
+       beforeApproval + 1, 'the explicit checkpoint makes one commit');
++    t.equal(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
++      'an explicit checkpoint advances the open Quest to its real next action',
++    );
++    runStep(fx.root, fx.quest);
++    t.match(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      /step --id runtime-verify --commit/u,
++      'a pending step still outranks checkpoint history',
++    );
++    fs.rmSync(fx.root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('a recorded gate stop after checkpoint remains the typed next action', (t) => {
++    const fx = fixture();
++    recordAttempt(fx, 'src/a.js', 1, 'a');
++    const attempt = latestAttempt(fx.root, fx.quest);
++    approve(fx.root, fx.quest, 'attempt',
++      `sha256:${attempt.changeRefIdentity.sha256}`);
++    runCheckpointCommand(fx.root, {id: fx.quest.id, _: []});
++    appendEvent(fx.root, fx.quest.id, {
++      type: EVENT_GATE_DECISION,
++      frontier: 'runtime-verify-main',
++      disposition: 'reroute',
++      code: 'blocked-scope',
++      outcome: OUTCOME_BLOCKED,
++      problems: ['scope pressure terminal'],
++      nextCommand:
++        'node scripts/solve.js override --id runtime-verify --frontier runtime-verify-main --guard scope --reason "<why>"',
++    });
++
++    t.match(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      /override --id runtime-verify/u,
++      'dirty Quest memory does not force an empty repeat checkpoint',
++    );
+     fs.rmSync(fx.root, {recursive: true, force: true});
+     t.end();
+   });
+@@ -602,7 +650,13 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+     t.equal(aggregate.fingerprint, attemptFingerprint,
+       'one canonical source attempt deduplicates attempt and aggregate approval');
+ 
+-    approve(fx.root, fx.quest, 'both', attemptFingerprint);
++    approve(fx.root, fx.quest, 'attempt', attemptFingerprint);
++    t.match(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      new RegExp(`verification-scope aggregate.*${aggregate.fingerprint}`, 'u'),
++      'terminal aggregate verification outranks checkpoint selection',
++    );
++    approve(fx.root, fx.quest, 'aggregate', aggregate.fingerprint);
+     let handoff = buildHandoff(fx.root, fx.quest);
+     t.notOk(handoff.ok, 'a stale report keeps the full audit closed');
+     t.match(handoff.gate.problems.map((item) => item.message).join('\n'),
+@@ -612,6 +666,11 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+     handoff = buildHandoff(fx.root, fx.quest);
+     t.equal(auditQuest(fx.root, fx.quest).status, 'pass');
+     t.ok(handoff.ok, 'full audit plus exact aggregate approval unlocks handoff');
++    t.equal(
++      buildNextLines(fx.root, fx.quest.id)[0],
++      'Next [executable-command]: node scripts/solve.js handoff --id runtime-verify --commit',
++      'terminal handoff remains the final typed action',
++    );
+     fs.rmSync(fx.root, {recursive: true, force: true});
+     t.end();
+   });

@@ -13,6 +13,7 @@ import {runStep} from '../../scripts/solve/step.js';
 import {writeReport} from '../../scripts/solve/report.js';
 import {buildNextLines} from '../../scripts/solve/next.js';
 import {
+  appendEvent,
   appendFinding,
   projectState,
   readLog,
@@ -25,6 +26,10 @@ import {
   sourceChangingAttempts,
   verificationState,
 } from '../../scripts/solve/verification.js';
+import {
+  EVENT_GATE_DECISION,
+  OUTCOME_BLOCKED,
+} from '../../scripts/solve/constants.js';
 
 function git(root, args, options = {}) {
   return execFileSync('git', args, {
@@ -582,11 +587,54 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       `sha256:${attempt.changeRefIdentity.sha256}`);
     t.equal(Number(git(fx.root, ['rev-list', '--count', 'HEAD']).trim()),
       beforeApproval, 'recording a finding has no commit side effect');
+    t.match(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      /checkpoint --id runtime-verify/u,
+      'a new exact-approved attempt requires its explicit checkpoint',
+    );
 
     const output = runCheckpointCommand(fx.root, {id: fx.quest.id, _: []});
     t.match(output, /checkpointed/u);
     t.equal(Number(git(fx.root, ['rev-list', '--count', 'HEAD']).trim()),
       beforeApproval + 1, 'the explicit checkpoint makes one commit');
+    t.equal(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+      'an explicit checkpoint advances the open Quest to its real next action',
+    );
+    runStep(fx.root, fx.quest);
+    t.match(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      /step --id runtime-verify --commit/u,
+      'a pending step still outranks checkpoint history',
+    );
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a recorded gate stop after checkpoint remains the typed next action', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'a');
+    const attempt = latestAttempt(fx.root, fx.quest);
+    approve(fx.root, fx.quest, 'attempt',
+      `sha256:${attempt.changeRefIdentity.sha256}`);
+    runCheckpointCommand(fx.root, {id: fx.quest.id, _: []});
+    appendEvent(fx.root, fx.quest.id, {
+      type: EVENT_GATE_DECISION,
+      frontier: 'runtime-verify-main',
+      disposition: 'reroute',
+      code: 'blocked-scope',
+      outcome: OUTCOME_BLOCKED,
+      problems: ['scope pressure terminal'],
+      nextCommand:
+        'node scripts/solve.js override --id runtime-verify --frontier runtime-verify-main --guard scope --reason "<why>"',
+    });
+
+    t.match(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      /override --id runtime-verify/u,
+      'dirty Quest memory does not force an empty repeat checkpoint',
+    );
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
@@ -602,7 +650,13 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.equal(aggregate.fingerprint, attemptFingerprint,
       'one canonical source attempt deduplicates attempt and aggregate approval');
 
-    approve(fx.root, fx.quest, 'both', attemptFingerprint);
+    approve(fx.root, fx.quest, 'attempt', attemptFingerprint);
+    t.match(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      new RegExp(`verification-scope aggregate.*${aggregate.fingerprint}`, 'u'),
+      'terminal aggregate verification outranks checkpoint selection',
+    );
+    approve(fx.root, fx.quest, 'aggregate', aggregate.fingerprint);
     let handoff = buildHandoff(fx.root, fx.quest);
     t.notOk(handoff.ok, 'a stale report keeps the full audit closed');
     t.match(handoff.gate.problems.map((item) => item.message).join('\n'),
@@ -612,6 +666,11 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     handoff = buildHandoff(fx.root, fx.quest);
     t.equal(auditQuest(fx.root, fx.quest).status, 'pass');
     t.ok(handoff.ok, 'full audit plus exact aggregate approval unlocks handoff');
+    t.equal(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      'Next [executable-command]: node scripts/solve.js handoff --id runtime-verify --commit',
+      'terminal handoff remains the final typed action',
+    );
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
