@@ -20,7 +20,7 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T07-22-01-510Z.report.json
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for formation-joining-ready-phase-fence-live-main
 
@@ -68,6 +68,8 @@
 - **formation-joining-ready-phase-fence-live-main**: Fresh run 2026-07-19T07-22-01 reproduced the critical-spread terminal stall (sql_write_operations-p1, spreadGap 1, 3 ready replicas on 2 distinct nodes) through a hole ADJACENT to the sealed spread-cure: the planner believed the partition over target (activeCount=4 vs target 3) and deferred every spread ADD waiting for a count-neutral REPLACE pairing, so no cure-typed move was ever minted; meanwhile plain non-cure ADDs from a second node were denied replica_inventory_unusable (authoritative read UNAVAILABLE, committedRows unavailable, union 3 rows on 2 nodes at target) and the conservative-union escape never engaged because it requires cure typing. Planner-vs-guard inventory disagreement (over-target belief vs at-target union) is the enabling condition. Companion run 07-14-01 failed differently (replica_operations_in_flight=2 drain race, known clean-HEAD residual). [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T07-22-01-510Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-19T07-22-01-510Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T07-22-01-510Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-19T07-22-01-510Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T07-22-01-510Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json]
 
 ## Theories
 _(none recorded)_
