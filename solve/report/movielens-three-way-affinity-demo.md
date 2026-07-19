@@ -22,12 +22,12 @@
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json
 - Selected theory: theory-ratings-local-split-policy-exact-ratchet-clean (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for movielens-three-way-affinity-demo-main
-- No longer current: Rules out premature terminal-hold release as the blocker in this run; do not widen timeouts or alter the live scenario.
+- No longer current: Treating the stale-watermark admission blocker as current, or authoring another residual instance Quest before the O3 structural pivot.
 
 ## Continuation
-- Status: allowed
+- Status: blocked-unrecorded-evidence
 - Next action: No open frontier remains; inspect solve report.
-- Blocker: none
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id movielens-three-way-affinity-demo --frontier movielens-three-way-affinity-demo-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T12-21-27-140Z.report.json
 
 ## Scope Pressure
 - Changed files: 13
@@ -85,6 +85,7 @@
 - **movielens-three-way-affinity-demo-main**: Changed Wave4 engaged the terminal-hold repair twice: ledger self-move replace-op-691efb46c505c2053b80785456cab438 reached authoritative Operation completed at 12:20:58.605, the next ledger self-move replace-op-e1ef0ada4127812f28bfef5a314c48df reached authoritative Operation completed at 12:21:53.865, and the first dependent batch operation was created only at 12:21:54.081 (216ms later). The sealed run failed earlier than preload on a distinct cache_stale_watermark snapshot-observation blocker with totalSpreadGap=0, so the ledger lifecycle defect did not recur. Report sha256=2f3a3a7faff6afa97d1988b2961e3c4eea0e36383279cde3541bfd5ce95b51fd; immutable archive sha256=7f27943debfd6b59eaa919d35165d7c0ff37c32f4e113dbd8b577cbd1d11d74c. (rules out: Rules out premature terminal-hold release as the blocker in this run; do not widen timeouts or alter the live scenario.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T11-19-30-426Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Fresh run 2026-07-19T12:21:27.140Z moved beyond formation and data execution: schema admission held quiescent for 65,337 ms, 100,000 rows loaded, ratings spread over three partitions/five nodes, and the 1,682-group distributed query completed. The remaining failure occurred during initial service placement after schema_operations-p1 reopened priority recovery via a REMOVE workflow; the formation epic stopping rule now requires the O3 goal-state-planner pivot rather than another residual instance Quest. (rules out: Treating the stale-watermark admission blocker as current, or authoring another residual instance Quest before the O3 structural pivot.) [solve/changes/movielens-stale-only-preflight-repair-scope/post-attempt-1-live-boundary-2026-07-19.md]
 
 ## Theories
 - **theory-20260715-cross-owner-policy-scope** [active] system, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, modelGate npm run model:contracts

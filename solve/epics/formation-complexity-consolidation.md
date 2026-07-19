@@ -364,13 +364,34 @@ Lifecycle / membership:
   rule kept: admission-policy changes MUST be validated with a live formation
   run AND a paired clean-HEAD control run before landing.
 - F3: which `allowPressureDegrade` default is intended? (Behavior decision.)
-- O3 sequencing: before or after the current live quest closes? The cure
-  classifiers (F8) are load-bearing for the quest's measured outcome; O3
-  replaces them wholesale.
+- **O3 sequencing RESOLVED (2026-07-19 afternoon):** the final residual-child
+  budget was consumed by `movielens-stale-only-preflight-repair-scope`.
+  Its fresh live run cleared the sealed stale-watermark boundary and reached
+  schema admission, load, repartition, and distributed SQL, then failed on a
+  later `schema_operations-p1` REMOVE workflow / priority-spread recovery
+  stall during service deployment. Per the binding stopping rule, O3 is now
+  the next product Quest. Port the load-bearing cure classifiers and valves
+  behind the planner until O3's live gate passes; do not delete them first.
 - Does O6 belong inside the current quest (its blocker is F16) or as a sibling?
 
 ## Decision log
 
+- 2026-07-19 (afternoon live boundary; stopping rule fired) —
+  `movielens-stale-only-preflight-repair-scope`, the one allowed child after
+  `executor-active-services-cache-handoff`, measured a fresh five-node run.
+  The former `cache_stale_watermark` blocker was absent: schema admission held
+  quiescent for 65,337 ms with total and priority spread gap zero, followed by
+  100,000-row load, three-partition/five-node ratings placement, and a
+  successful 1,682-group distributed query. Service deployment then exposed
+  the O3 design input: REMOVE operation
+  `8ee9d56b-1eba-4c31-95b8-364b252945e0` left
+  `schema_operations-p1` at two ready nodes (gap one,
+  `status_removing:2`); publication was current and fully acknowledged but
+  remained `priority_spread_pending`, service reads were denied with
+  `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`, and subsequent repair moves were
+  skipped `budget_exceeded`. Evidence and immutable-log hashes:
+  `solve/changes/movielens-stale-only-preflight-repair-scope/post-attempt-1-live-boundary-2026-07-19.md`.
+  The residual-instance chase is closed; author O3 next.
 - 2026-07-19 (owner decision, loop review) — Residual-chase stopping rule
   adopted (see the binding block at the top of the Handoff section): budget
   is `executor-active-services-cache-handoff` + at most one further authored

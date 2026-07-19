@@ -23,11 +23,12 @@
 - Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json
 - Selected theory: theory-20260718-fresh-joining-rows-are-correctly-excluded (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for formation-schema-operation-collision-leader-read-closure-main
+- No longer current: Another collision leader-read patch or unchanged rerun as the next move for this Quest.
 
 ## Continuation
-- Status: allowed
+- Status: blocked-unrecorded-evidence
 - Next action: No open frontier remains; inspect solve report.
-- Blocker: none
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id formation-schema-operation-collision-leader-read-closure --frontier formation-schema-operation-collision-leader-read-closure-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T12-21-27-140Z.report.json
 
 ## Scope Pressure
 - Changed files: 20
@@ -75,6 +76,8 @@
 - **formation-schema-operation-collision-leader-read-closure-main**: Independent verification rejected exact Attempt 5: production derives canonicalStartupNodeIds through active projection, so a fresh JOINING/CONNECTED/no-lease row is excluded before the widened priority-recovery predicate; the test stubbed the missing upstream cohort and the formation barrier may bypass as insufficient cohort. [subagent:formation_barrier_verifier]
 - **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/control-plane/formation-placement-membership-handoff.test.js [dt:solve/changes/dt-prove/formation-placement-membership-handoff.test.js-2026-07-18T08-13-33-405Z.json]
 - **formation-schema-operation-collision-leader-read-closure-main**: DT red-on-revert proven for test/control-plane/formation-placement-membership-handoff.test.js [dt:solve/changes/dt-prove/formation-placement-membership-handoff.test.js-2026-07-18T08-15-24-551Z.json]
+- **formation-schema-operation-collision-leader-read-closure-main**: Independent verification rejected Attempt 6: JOINING plus READY/fresh/recoveryEligible remains generically active and leaks into serving, publication, ACK, ordinary placement, and remove-safety membership; the test covered only JOINING plus CONNECTED. [subagent:formation_barrier_verifier]
+- **formation-schema-operation-collision-leader-read-closure-main**: The fresh 2026-07-19T12:21:27.140Z unchanged MovieLens run did not reproduce the sealed zero-change collision/leader-read boundary; it reached schema admission, load, repartition, and distributed SQL before a distinct schema_operations REMOVE/priority-spread stall during service deployment. The live metric remains 1 for a later owner boundary. (rules out: Another collision leader-read patch or unchanged rerun as the next move for this Quest.) [solve/changes/movielens-stale-only-preflight-repair-scope/post-attempt-1-live-boundary-2026-07-19.md]
 
 ## Theories
 - **theory-20260718-the-read-model-snapshot-owner-collapses** [superseded] system, mechanism The read-model snapshot owner collapses node, service, partition, and publication evidence into one snapshot but uses only the node heartbeat watermark to arbitrate reuse; when that row regresses, a later service invalidation is ignored and stale repairEligible=false survives repeated authoritative repair., owner read_model_contract_owner, modelGate npm run model:contracts
