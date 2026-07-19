@@ -930,6 +930,8 @@ export function runLoop(root, quest, options = {}) {
       const altitudeTrigger = altitudeReflectionDue(readLog(root, quest.id), {
         oscillating: (executionHealth.signals || []).some(
           (signal) => signal.type === 'coupled-invariant-oscillation'),
+        chain: (executionHealth.signals || []).some(
+          (signal) => signal.type === 'quest-chain-depth'),
       });
       if (altitudeTrigger &&
         maybeRunReflection(root, quest, ctx, executionHealth, altitudeTrigger, 'altitude')) {

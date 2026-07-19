@@ -58,8 +58,9 @@ const RATCHET_TARGETS = [
     // proof-integrity cutover. Ratchet DOWN only from here.
     name: 'test',
     directories: ['test'],
-    baselineCloneGroupCount: 845,
-    baselineDuplicatedLineCount: 32308,
+    // 2026-07-19: tightened 845/32308 -> 842/32209 (measured; one-way-baseline rule).
+    baselineCloneGroupCount: 842,
+    baselineDuplicatedLineCount: 32209,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

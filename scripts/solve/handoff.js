@@ -195,12 +195,17 @@ export function buildHandoff(root, quest, options = {}) {
 
 function commitMessage(handoff) {
   // Checkpoints are squashable, mid-quest saves of one verified attempt; the
-  // subject marks them so they are distinguishable from the durable terminal commit.
+  // subject marks them so they are distinguishable from the durable terminal
+  // commit. The quest statement lives in the body: subjects stay one short
+  // line (readable `git log --oneline`) while the checkpoint parser's
+  // `checkpoint(quest): <id>:` prefix match is preserved by the trailing
+  // colon on the checkpoint form.
   const subject = handoff.checkpoint ?
-    `checkpoint(quest): ${handoff.questId}: ${handoff.summary}` :
+    `checkpoint(quest): ${handoff.questId}:` :
     `${handoff.questId}: ${handoff.summary}`;
-  return handoff.coauthorTrailer ?
-    `${subject}\n\n${handoff.coauthorTrailer}` : subject;
+  const body = handoff.checkpoint ? [handoff.summary] : [];
+  if (handoff.coauthorTrailer) body.push(handoff.coauthorTrailer);
+  return body.length > 0 ? `${subject}\n\n${body.join('\n\n')}` : subject;
 }
 
 function gitCommands(handoff) {

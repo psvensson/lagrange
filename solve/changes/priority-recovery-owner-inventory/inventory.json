@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "d0da3e9a1826c62591fb1ba7af0d46cf0c70fc9f28a7458e33ad64720822c86d"
+    "sourceSha256": "960825a20861d9efa3b1dfa4cad7d77a1665acd2669fa51adaa9b0ae112400d9"
   },
   "layerDirection": [
     "raw_observation",
@@ -17,18 +17,18 @@
     "disposition": "proposal requiring independent architecture and proof approval"
   },
   "metrics": {
-    "moduleCount": 64,
-    "publicExportCount": 737,
-    "importEdgeCount": 291,
-    "crossLayerEdgeCount": 91,
-    "layerDirectionViolationCount": 43,
+    "moduleCount": 65,
+    "publicExportCount": 747,
+    "importEdgeCount": 298,
+    "crossLayerEdgeCount": 92,
+    "layerDirectionViolationCount": 44,
     "largestStronglyConnectedComponent": 1,
     "duplicateAuthoritySignalCount": 4,
     "confirmedDuplicateAuthorityCount": 0,
     "migrationCandidateCount": 0
   },
   "closure": {
-    "uniquelyClassifiedModules": 64,
+    "uniquelyClassifiedModules": 65,
     "uniqueClassificationRate": 1,
     "unparsedImportEdgeCount": 0,
     "proposedDirectionAcyclic": true,
@@ -568,6 +568,36 @@
         "buildPriorityRecoveryPlannerEntry",
         "buildUnknownPriorityRecoveryPlanner",
         "hasPriorityRecoverySpreadGap"
+      ]
+    },
+    {
+      "path": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
+      "owner": "control-plane",
+      "layer": "owner_decision",
+      "rationale": "owner policy or actuation surface",
+      "exports": [
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_EVIDENCE_SOURCE",
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_MODE",
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE",
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE_TABLE",
+        "buildPriorityRecoverySchedulingOwnerEvidence",
+        "buildPriorityRecoverySchedulingOwnersByPartitionId",
+        "inheritPriorityRecoverySchedulingOwner",
+        "isPriorityRecoverySchedulingOwner",
+        "resolveLivePriorityRecoverySchedulingOwnerPartitionIds",
+        "resolvePriorityRecoverySchedulingOwner"
+      ],
+      "localExports": [
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_EVIDENCE_SOURCE",
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_MODE",
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE",
+        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE_TABLE",
+        "buildPriorityRecoverySchedulingOwnerEvidence",
+        "buildPriorityRecoverySchedulingOwnersByPartitionId",
+        "inheritPriorityRecoverySchedulingOwner",
+        "isPriorityRecoverySchedulingOwner",
+        "resolveLivePriorityRecoverySchedulingOwnerPartitionIds",
+        "resolvePriorityRecoverySchedulingOwner"
       ]
     },
     {
@@ -2771,6 +2801,46 @@
       "conformsToLayerDirection": true
     },
     {
+      "from": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
+      "specifier": "../bootstrap/system-partition-classification.js",
+      "to": "src/bootstrap/system-partition-classification.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
+      "specifier": "../constants/service-status.js",
+      "to": "src/constants/service-status.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
+      "specifier": "../raft/constants.js",
+      "to": "src/raft/constants.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
+      "specifier": "./system-row-normalizers.js",
+      "to": "src/control-plane/system-row-normalizers.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
       "from": "src/control-plane/priority-recovery-serial-wait-operation-contexts.js",
       "specifier": "../rebalancer/replica-placement-cure-policy.js",
       "to": "src/rebalancer/replica-placement-cure-policy.js",
@@ -3154,6 +3224,16 @@
       "from": "src/control-plane/priority-recovery-snapshot-closure.js",
       "specifier": "./priority-recovery-partition-assessment.js",
       "to": "src/control-plane/priority-recovery-partition-assessment.js",
+      "targetModule": true,
+      "sourceLayer": "canonical_snapshot_reducer",
+      "targetLayer": "owner_decision",
+      "crossLayer": true,
+      "conformsToLayerDirection": false
+    },
+    {
+      "from": "src/control-plane/priority-recovery-snapshot-closure.js",
+      "specifier": "./priority-recovery-scheduling-owner-policy.js",
+      "to": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
       "targetModule": true,
       "sourceLayer": "canonical_snapshot_reducer",
       "targetLayer": "owner_decision",
@@ -4782,6 +4862,16 @@
     },
     {
       "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+      "specifier": "./background-priority-spread-release-tracker.js",
+      "to": "src/rebalancer/background-priority-spread-release-tracker.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
       "specifier": "./rebalancer-planning-gate-constants.js",
       "to": "src/rebalancer/rebalancer-planning-gate-constants.js",
       "targetModule": false,
@@ -4862,6 +4952,16 @@
     },
     {
       "from": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
+      "specifier": "../control-plane/priority-recovery-scheduling-owner-policy.js",
+      "to": "src/control-plane/priority-recovery-scheduling-owner-policy.js",
+      "targetModule": true,
+      "sourceLayer": "owner_decision",
+      "targetLayer": "owner_decision",
+      "crossLayer": false,
+      "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
       "specifier": "./replica-inventory-constants.js",
       "to": "src/rebalancer/replica-inventory-constants.js",
       "targetModule": false,
@@ -4938,6 +5038,9 @@
     ],
     [
       "src/control-plane/priority-recovery-planning-intent.js"
+    ],
+    [
+      "src/control-plane/priority-recovery-scheduling-owner-policy.js"
     ],
     [
       "src/control-plane/priority-recovery-serial-wait-operation-contexts.js"

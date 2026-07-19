@@ -21,7 +21,9 @@ const TARGET_THRESHOLD = 20;
 // with the gate silently red — never executed by any full gate run before).
 // Ratcheted down after the PG descriptor decision-table extraction. Ratchet
 // DOWN only from here.
-const BASELINE_COUNT = 183;
+// 2026-07-19: tightened 183 -> 179 (measured; owner-complexity rebalancer
+// planning refactors landed without taking the ratchet down).
+const BASELINE_COUNT = 179;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

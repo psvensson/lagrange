@@ -115,6 +115,9 @@ export function reflectionDue(log, triggers = {}) {
 export function altitudeReflectionDue(log, triggers = {}) {
   if (reflectionRecordedThisCycle(log)) return null;
   if (triggers.oscillating) return 'oscillation';
+  // rr-H: a parent-linked chain of quests stuck on one live-gate artifact class is the
+  // cross-quest whack-a-mole signature — like oscillation, it questions the frame itself.
+  if (triggers.chain) return 'chain-depth';
   if (ALTITUDE_REFLECTION_INTERVAL > 0 &&
     attemptsSinceAltitudeReflection(log) >= ALTITUDE_REFLECTION_INTERVAL) {
     return 'altitude-cadence';
@@ -155,7 +158,12 @@ export function altitudeReflectionPrompt(quest, health, trigger) {
   const reason = trigger === 'oscillation' ?
     'invariant families are oscillating — single-frontier patches are bouncing a coupling, ' +
     'the canonical signal that the FRAME, not the next fix, is what must change' :
-    `${ALTITUDE_REFLECTION_INTERVAL} attempts have passed without an altitude step-back`;
+    trigger === 'chain-depth' ?
+      'this quest sits on a parent-linked chain of quests all gated on the SAME live ' +
+      'scenario, each solved only for the next residual to spawn — the cross-quest ' +
+      'whack-a-mole signature; ask whether the declared stopping rule or a ' +
+      'higher-altitude structural quest (see the owning epic) should take over' :
+      `${ALTITUDE_REFLECTION_INTERVAL} attempts have passed without an altitude step-back`;
   return `Altitude (framing) reflection on quest ${quest.id} (${frontier}): ${reason}. ` +
     'Look UP and OUT, not at the next local move. Ask: (1) Is this Quest at the right ' +
     'ALTITUDE, or is the real lever an owner boundary / cutover this Quest cannot touch? ' +

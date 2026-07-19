@@ -17,6 +17,8 @@ import {
   SCOPE_PRESSURE_BYTE_LIMIT,
   HARNESS_NONMEASURING_PARK_THRESHOLD,
   NON_MEASURING_VERDICT_REASONS,
+  QUEST_CHAIN_DEPTH_BUDGET,
+  QUEST_CHAIN_WINDOW_DAYS,
 } from './constants.js';
 import {projectInvariantLedger} from './store.js';
 import {isFrontierProbeEvent} from './probe-spec.js';
@@ -340,5 +342,57 @@ export function harnessNotMeasuringStatus(log, frontierId = null) {
   return {
     consecutive,
     notMeasuring: consecutive >= HARNESS_NONMEASURING_PARK_THRESHOLD,
+  };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// rr-H: the artifact-class key that identifies "the same live gate" across quests. Two
+// quests belong to the same class when their sealed doneWhen drives the same probe against
+// the same named scenario; statement wording, oracle file paths, and consecutive targets
+// are deliberately excluded so the key survives per-quest re-phrasings. Quests whose
+// doneWhen has no scenario (oracle-file process quests etc.) have no chain key and never
+// participate in a chain.
+export function questChainArtifactKey(quest) {
+  const probe = quest?.doneWhen?.probe;
+  const scenario = quest?.doneWhen?.args?.scenario;
+  return probe && scenario ? `${probe}:${scenario}` : null;
+}
+
+// rr-H: depth of the parent-linked quest chain that is stuck on one live-gate artifact
+// class. `chainRows` is the ordered chain (the quest under evaluation first, then its
+// links.parentQuest ancestors), each row a pure projection:
+//   {id, artifactKey, open, solved, solvedAtMs}
+// A row extends the chain when it shares the head row's artifact class AND is either
+// still open or was SOLVED within the rolling window — the observed whack-a-mole
+// signature closes each quest as it spawns the next, so an open-only count would sit at
+// depth 1-2 while the real chain runs 5-6 deep. The count stops at the first row that
+// breaks class or recency, so healthy old history never accumulates. Like every guard
+// detector this is a pure signal; the policy (an altitude-reflection trigger, never a
+// gate or park) lives at the call sites behind CONVERGENCE_GUARDS.chainDepth.
+export function questChainDepthStatus(chainRows, options = {}) {
+  const budget = Number.isInteger(options.budget) ?
+    options.budget : QUEST_CHAIN_DEPTH_BUDGET;
+  const windowMs = Number.isFinite(options.windowMs) ?
+    options.windowMs : QUEST_CHAIN_WINDOW_DAYS * DAY_MS;
+  const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
+  const rows = Array.isArray(chainRows) ? chainRows : [];
+  const artifactKey = rows.length > 0 ? rows[0].artifactKey || null : null;
+  if (!artifactKey) {
+    return {depth: 0, exceeded: false, chainIds: [], artifactKey: null};
+  }
+  const chainIds = [];
+  for (const row of rows) {
+    if (!row || row.artifactKey !== artifactKey) break;
+    const solvedRecently = row.solved === true &&
+      Number.isFinite(row.solvedAtMs) && nowMs - row.solvedAtMs <= windowMs;
+    if (row.open !== true && !solvedRecently) break;
+    chainIds.push(row.id);
+  }
+  return {
+    depth: chainIds.length,
+    exceeded: chainIds.length >= budget,
+    chainIds,
+    artifactKey,
   };
 }

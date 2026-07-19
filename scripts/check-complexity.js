@@ -18,7 +18,9 @@ import {
 
 const TARGET_THRESHOLD = 12;
 // Measured after the proof-integrity cutover. Ratchet DOWN only from here.
-const BASELINE_COUNT = 1855;
+// 2026-07-19: tightened 1855 -> 1847 (measured; taking the ratchet down per
+// the release-gate one-way-baseline rule).
+const BASELINE_COUNT = 1847;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

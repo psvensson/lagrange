@@ -203,6 +203,13 @@ export const CONVERGENCE_GUARDS = Object.freeze({
   // frontier to a resumable measurement park ("fix the harness") instead of chasing the
   // noise those runs emit. Stands down when false (the detector still computes).
   harnessMeasurementGate: true,
+  // rr-H: a parent-linked run of quests all gated on the SAME live-scenario artifact
+  // (open or recently SOLVED — the whack-a-mole chain closes each quest as it spawns the
+  // next) reaching QUEST_CHAIN_DEPTH_BUDGET forces an altitude (framing) reflection. It
+  // never parks or gates an attempt; it only makes the loop ask whether the frame — not
+  // the next residual fix — is what must change (owner decision 2026-07-19, see
+  // solve/epics/convergence-loop-and-workflow-overhead.md work item 1b).
+  chainDepth: true,
 });
 
 // rr-D tuning: the minimum number of disjoint-cluster transitions in a frontier's
@@ -220,6 +227,18 @@ export const COUPLED_OSC_SWAP_THRESHOLD = 2;
 export const SCOPE_PRESSURE_FILE_LIMIT = 25;
 export const SCOPE_PRESSURE_OWNER_LIMIT = 6;
 export const SCOPE_PRESSURE_BYTE_LIMIT = 262144;
+
+// rr-H tuning: the parent-linked same-artifact chain depth that trips the altitude
+// reflection, and the rolling window inside which a SOLVED link still counts toward the
+// chain (the observed 2026-07-13..19 chain closed each link as the next spawned; an
+// open-only count would never fire on that signature). Budget 4 is calibrated to the
+// 2026-07-19 stopping rule in solve/epics/formation-complexity-consolidation.md: the
+// live chain's shared-scenario depth measured 3 at decision time (the 4th ancestor is a
+// different scenario and exhausted, which breaks the chain), so the reflection fires
+// exactly when the stopping rule's "at most one more authored child quest" budget is
+// spent — the next same-scenario child makes depth 4.
+export const QUEST_CHAIN_DEPTH_BUDGET = 4;
+export const QUEST_CHAIN_WINDOW_DAYS = 14;
 
 // rr-B: frontier gradient metric kinds that are interchangeable refinements of one
 // another for the SAME probe+scenario. Swapping among these sharpens the search gradient

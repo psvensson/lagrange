@@ -5,6 +5,8 @@ import {
   SYSTEM_THEORY_STALL_THRESHOLD,
   CONVERGENCE_GUARDS,
   STATUS_PARKED,
+  STATUS_SOLVED,
+  STATUS_EXHAUSTED,
   PARK_KIND_CANNOT_MEASURE,
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_SUPPORTED,
@@ -13,7 +15,7 @@ import {
 import {rungName as ladderRungName} from './ladder.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
-import {projectState, readLog} from './store.js';
+import {projectState, readLog, loadQuest} from './store.js';
 import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {modelGuidanceForQuest} from './model-guidance.js';
 import {
@@ -26,6 +28,8 @@ import {
   regressionRestoreStatus,
   scopeTerminalStatus,
   harnessNotMeasuringStatus,
+  questChainArtifactKey,
+  questChainDepthStatus,
 } from './convergence-guards.js';
 import {continuationFromHealth} from './continuation.js';
 import {
@@ -38,6 +42,45 @@ const DEFAULT_CONSECUTIVE_TARGET = 1;
 const NUM_TWO = 2;
 const NUM_THREE = 3;
 const NUM_FOUR = 4;
+// rr-H: hard cap on the links.parentQuest walk so a malformed ancestry (or an
+// unexpectedly long healthy one) bounds the per-health-call file reads.
+const QUEST_CHAIN_WALK_LIMIT = 12;
+
+// rr-H: project the quest and its links.parentQuest ancestry into the pure chain rows
+// questChainDepthStatus consumes. A missing/unreadable ancestor ends the walk (chains
+// never cross into deleted history), and a cycle cannot loop (seen-set). `solvedAtMs`
+// is the newest event timestamp in the ancestor's log — a recency proxy that keeps the
+// rolling window honest without depending on which event flipped the terminal status.
+function questChainRows(root, quest) {
+  const rows = [];
+  const seen = new Set();
+  let current = quest;
+  while (current && !seen.has(current.id) && rows.length < QUEST_CHAIN_WALK_LIMIT) {
+    seen.add(current.id);
+    const log = readLog(root, current.id);
+    const status = projectState(current, log).questStatus;
+    let lastTs = null;
+    for (const event of log) {
+      const ms = Date.parse(event?.ts || '');
+      if (Number.isFinite(ms) && (lastTs === null || ms > lastTs)) lastTs = ms;
+    }
+    rows.push({
+      id: current.id,
+      artifactKey: questChainArtifactKey(current),
+      open: status !== STATUS_SOLVED && status !== STATUS_EXHAUSTED,
+      solved: status === STATUS_SOLVED,
+      solvedAtMs: lastTs,
+    });
+    const parentId = current.links?.parentQuest;
+    if (!parentId) break;
+    try {
+      current = loadQuest(root, parentId);
+    } catch {
+      break;
+    }
+  }
+  return rows;
+}
 const SELECTABLE_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_ACTIVE,
   THEORY_RESULT_SUPPORTED,
@@ -453,6 +496,21 @@ export function analyzeQuestHealth(root, quest, options = {}) {
         type: 'cannot-measure',
         mechanism: `${frontier.id}: ${harnessNotMeasuring.consecutive} ` +
           'consecutive non-measuring runs (harness connectivity/system failure)',
+        severity: 'high',
+      });
+    }
+  }
+
+  // rr-H: a parent-linked run of quests all gated on the same live-scenario artifact,
+  // each open or recently SOLVED, means the loop is descending a residual chain instead
+  // of questioning the frame. Signal only — the altitude-reflection trigger consumes it;
+  // no gate, park, or credit decision keys off it.
+  if (CONVERGENCE_GUARDS.chainDepth) {
+    const chain = questChainDepthStatus(questChainRows(root, quest));
+    if (chain.exceeded) {
+      signals.push({
+        type: 'quest-chain-depth',
+        mechanism: `${chain.artifactKey}: ${chain.chainIds.join(' -> ')}`,
         severity: 'high',
       });
     }

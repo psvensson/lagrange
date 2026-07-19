@@ -520,6 +520,22 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.end();
   });
 
+  t.test('checkpoint subject stays one short line; the statement is the body', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'subject-form');
+    const attempt = latestAttempt(fx.root, fx.quest);
+    approve(fx.root, fx.quest, 'attempt', `sha256:${attempt.changeRefIdentity.sha256}`);
+    runCheckpointCommand(fx.root, {id: fx.quest.id, _: []});
+    const subject = git(fx.root, ['log', '-1', '--format=%s']).trim();
+    const body = git(fx.root, ['log', '-1', '--format=%b']);
+    t.equal(subject, `checkpoint(quest): ${fx.quest.id}:`,
+      'subject is exactly the parser prefix — no statement spill');
+    t.match(body, /The runtime verification fixture reaches zero\./u,
+      'the quest statement moves to the commit body');
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('post-checkpoint source dirt needs a new exact attempt receipt', (t) => {
     const fx = fixture();
     recordAttempt(fx, 'src/a.js', 1, 'a');

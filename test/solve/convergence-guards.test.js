@@ -10,6 +10,8 @@ import {
   regressionRestoreStatus,
   scopeTerminalStatus,
   harnessNotMeasuringStatus,
+  questChainArtifactKey,
+  questChainDepthStatus,
 } from '../../scripts/solve/convergence-guards.js';
 import {projectInvariantLedger} from '../../scripts/solve/store.js';
 import {
@@ -489,5 +491,65 @@ tap.test('gate rr-F: a reconciled coupling lifts the begin gate', (t) => {
     {...GATE_BASE, log, state: emptyState(), phase: 'begin'});
   t.notOk(begin.some((p) => p.includes('coupled-invariant oscillation unreconciled')),
     'once every coupled family is green the reconcile gate stands down');
+  t.end();
+});
+
+tap.test('rr-H: quest chain artifact key', (t) => {
+  t.equal(
+    questChainArtifactKey({doneWhen: {probe: 'scenario-harness',
+      args: {scenario: 'movielens-live', consecutive: 1, metric: 'priority'}}}),
+    'scenario-harness:movielens-live',
+    'probe + scenario form the class key; targets and metric kind are excluded');
+  t.equal(questChainArtifactKey({doneWhen: {probe: 'oracle', args: {file: 'x.json'}}}),
+    null, 'a scenario-less doneWhen has no chain key');
+  t.equal(questChainArtifactKey({}), null, 'a keyless quest never chains');
+  t.end();
+});
+
+tap.test('rr-H: quest chain depth counts open and recently-SOLVED same-class links', (t) => {
+  const NOW = Date.parse('2026-07-19T12:00:00.000Z');
+  const DAY = 24 * 60 * 60 * 1000;
+  const KEY = 'scenario-harness:movielens-live';
+  const row = (id, over) => ({id, artifactKey: KEY, open: false, solved: false,
+    solvedAtMs: null, ...over});
+
+  const openChain = [1, 2, 3, 4].map((n) => row(`q${n}`, {open: true}));
+  t.same(questChainDepthStatus(openChain, {nowMs: NOW}),
+    {depth: 4, exceeded: true, chainIds: ['q1', 'q2', 'q3', 'q4'], artifactKey: KEY},
+    'four same-class open links reach the default budget');
+
+  const solvedInclusive = [
+    row('head', {open: true}),
+    row('p1', {solved: true, solvedAtMs: NOW - 2 * DAY}),
+    row('p2', {solved: true, solvedAtMs: NOW - 5 * DAY}),
+    row('p3', {solved: true, solvedAtMs: NOW - 13 * DAY}),
+  ];
+  t.equal(questChainDepthStatus(solvedInclusive, {nowMs: NOW}).exceeded, true,
+    'SOLVED links inside the window extend the chain — the whack-a-mole signature');
+
+  const staleTail = [
+    row('head', {open: true}),
+    row('p1', {solved: true, solvedAtMs: NOW - 2 * DAY}),
+    row('p2', {solved: true, solvedAtMs: NOW - 30 * DAY}),
+    row('p3', {open: true}),
+  ];
+  t.same(questChainDepthStatus(staleTail, {nowMs: NOW}).chainIds, ['head', 'p1'],
+    'a SOLVED link outside the window ends the count even if deeper links qualify');
+
+  const classBreak = [
+    row('head', {open: true}),
+    {id: 'other', artifactKey: 'scenario-harness:another-scenario', open: true},
+    row('p2', {open: true}),
+  ];
+  t.equal(questChainDepthStatus(classBreak, {nowMs: NOW}).depth, 1,
+    'a different artifact class breaks the chain');
+
+  t.same(questChainDepthStatus([{id: 'solo', artifactKey: null, open: true}]),
+    {depth: 0, exceeded: false, chainIds: [], artifactKey: null},
+    'a keyless head never chains');
+  t.equal(questChainDepthStatus(openChain.slice(0, 3), {nowMs: NOW}).exceeded, false,
+    'below-budget chains stay quiet');
+  t.equal(questChainDepthStatus(openChain, {nowMs: NOW, budget: 5}).exceeded, false,
+    'an explicit budget override is honored');
   t.end();
 });

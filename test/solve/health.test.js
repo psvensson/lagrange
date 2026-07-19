@@ -410,3 +410,75 @@ tap.test('Quest health', async (t) => {
     t.end();
   });
 });
+
+tap.test('rr-H: quest chain depth signal', async (t) => {
+  function chainQuest(root, id, parentQuest) {
+    const quest = {
+      id,
+      statement: `Live residual ${id}.`,
+      priority: 1,
+      links: parentQuest ? {parentQuest} : {},
+      doneWhen: {probe: 'scenario-harness',
+        args: {scenario: 'movielens-live', consecutive: 1, metric: 'priority'}},
+      frontiers: [
+        {id: `${id}-main`, priority: 1,
+          metric: {probe: 'scenario-harness',
+            args: {scenario: 'movielens-live', consecutive: 1, metric: 'priority'}}},
+      ],
+    };
+    saveQuest(root, quest);
+    return quest;
+  }
+
+  t.test('a budget-deep same-scenario parent chain raises the signal', (t) => {
+    const root = tmp();
+    chainQuest(root, 'chain-a', null);
+    chainQuest(root, 'chain-b', 'chain-a');
+    chainQuest(root, 'chain-c', 'chain-b');
+    const head = chainQuest(root, 'chain-d', 'chain-c');
+    const health = analyzeQuestHealth(root, head);
+    const signal = health.signals.find((item) => item.type === 'quest-chain-depth');
+    t.ok(signal, 'the chain-depth signal fires at the budget');
+    t.match(signal.mechanism, /chain-d -> chain-c -> chain-b -> chain-a/u,
+      'the mechanism names the chain head-first');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a below-budget chain stays quiet', (t) => {
+    const root = tmp();
+    chainQuest(root, 'chain-a', null);
+    chainQuest(root, 'chain-b', 'chain-a');
+    const head = chainQuest(root, 'chain-c', 'chain-b');
+    const health = analyzeQuestHealth(root, head);
+    t.notOk(health.signals.some((item) => item.type === 'quest-chain-depth'),
+      'three links stay below the budget of four');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a parent on a different scenario breaks the chain', (t) => {
+    const root = tmp();
+    chainQuest(root, 'chain-a', null);
+    chainQuest(root, 'chain-b', 'chain-a');
+    chainQuest(root, 'chain-c', 'chain-b');
+    const other = {
+      id: 'chain-mid',
+      statement: 'Different gate.',
+      priority: 1,
+      links: {parentQuest: 'chain-c'},
+      doneWhen: {probe: 'scenario-harness',
+        args: {scenario: 'another-scenario', consecutive: 1, metric: 'priority'}},
+      frontiers: [{id: 'chain-mid-main', priority: 1,
+        metric: {probe: 'scenario-harness',
+          args: {scenario: 'another-scenario', consecutive: 1, metric: 'priority'}}}],
+    };
+    saveQuest(root, other);
+    const head = chainQuest(root, 'chain-e', 'chain-mid');
+    const health = analyzeQuestHealth(root, head);
+    t.notOk(health.signals.some((item) => item.type === 'quest-chain-depth'),
+      'a different artifact class in the ancestry resets the count');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+});

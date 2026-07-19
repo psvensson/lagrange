@@ -67,6 +67,16 @@ tap.test('altitude reflection triggers', async (t) => {
     t.end();
   });
 
+  t.test('rr-H: a same-artifact quest chain forces an altitude reflection', (t) => {
+    t.equal(altitudeReflectionDue([], {chain: true}), 'chain-depth',
+      'a residual chain on one live gate questions the frame, like oscillation');
+    t.equal(altitudeReflectionDue([], {oscillating: true, chain: true}), 'oscillation',
+      'oscillation outranks the chain trigger when both fire');
+    t.equal(reflectionDue([], {chain: true}), null,
+      'the chain signal is not a micro trigger — it routes to altitude only');
+    t.end();
+  });
+
   t.test('coarse cadence fires once ALTITUDE_REFLECTION_INTERVAL attempts have passed', (t) => {
     const log = [];
     for (let i = 0; i < ALTITUDE_REFLECTION_INTERVAL - 1; i += 1) log.push(attempt());
