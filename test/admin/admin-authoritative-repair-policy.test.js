@@ -133,6 +133,32 @@ test('authoritative repair policy narrows stale replica-operation repair to repl
     );
   });
 
+test('authoritative repair policy narrows stale-only preflight repair to its freshness table',
+  async (t) => {
+    const triggerCodes = [
+      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+    ];
+    const tables = deriveAuthoritativeRepairTables({
+      triggerCodes,
+      cacheStaleWatermarkTableName: TABLES.SERVICE_ENDPOINTS,
+    });
+    const forcedRepairTables = deriveAuthoritativeRepairTables({
+      triggerCodes,
+    });
+
+    t.same(
+      tables,
+      [TABLES.SERVICE_ENDPOINTS],
+      'stale-only preflight should refresh only its service_endpoints watermark',
+    );
+    t.equal(
+      forcedRepairTables.includes(TABLES.NODES) &&
+        forcedRepairTables.includes(TABLES.REPLICA_OPERATIONS),
+      true,
+      'an unnamed or forced stale repair retains the full authority scope',
+    );
+  });
+
 test('authoritative repair policy keeps full repair for combined stale cache ' +
   'and stale replica operations', async (t) => {
   const tables = deriveAuthoritativeRepairTables({

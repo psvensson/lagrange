@@ -212,6 +212,7 @@ class AdminPreflightSnapshot {
       this.ensureAuthoritativeDiscoveryCacheRepair({
         reason: PREFLIGHT_REPAIR_REASON,
         triggerCodes: repairEvaluation.triggerCodes,
+        cacheStaleWatermarkTableName: TABLES.SERVICE_ENDPOINTS,
       }),
     );
     if (repair.applied !== true) {

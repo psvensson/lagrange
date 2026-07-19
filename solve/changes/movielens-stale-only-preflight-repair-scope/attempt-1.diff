@@ -1,0 +1,162 @@
+diff --git a/src/admin/admin-authoritative-repair-policy.js b/src/admin/admin-authoritative-repair-policy.js
+index b659213eae4f9dc78bc871bfcaf541c04e112297..aa26dcb8507692b967e3aaba1c201794f3ca4ea9 100644
+--- a/src/admin/admin-authoritative-repair-policy.js
++++ b/src/admin/admin-authoritative-repair-policy.js
+@@ -119,6 +119,21 @@ function deriveAuthoritativeRepairTables(options = {}) {
+       .filter(Boolean) :
+     [];
+   const uniqueTriggerCodes = [...new Set(triggerCodes)];
++  const cacheStaleWatermarkTableName =
++    typeof options.cacheStaleWatermarkTableName === LOCAL_STR_STRING &&
++    DEFAULT_AUTHORITATIVE_REPAIR_TABLES.includes(
++      options.cacheStaleWatermarkTableName,
++    ) ?
++      options.cacheStaleWatermarkTableName :
++      null;
++  if (
++    uniqueTriggerCodes.length === 1 &&
++    uniqueTriggerCodes[0] ===
++      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK &&
++    cacheStaleWatermarkTableName
++  ) {
++    return [cacheStaleWatermarkTableName];
++  }
+   if (
+     uniqueTriggerCodes.includes(
+       AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+diff --git a/src/admin/admin-preflight-snapshot.js b/src/admin/admin-preflight-snapshot.js
+index 599642bbfa57c9e1933c9b50e36e717bee2fbc8c..b23dad174d53eb33c97fe5b97971d1adf7848909 100644
+--- a/src/admin/admin-preflight-snapshot.js
++++ b/src/admin/admin-preflight-snapshot.js
+@@ -212,6 +212,7 @@ class AdminPreflightSnapshot {
+       this.ensureAuthoritativeDiscoveryCacheRepair({
+         reason: PREFLIGHT_REPAIR_REASON,
+         triggerCodes: repairEvaluation.triggerCodes,
++        cacheStaleWatermarkTableName: TABLES.SERVICE_ENDPOINTS,
+       }),
+     );
+     if (repair.applied !== true) {
+diff --git a/src/admin/admin-service-discovery-repair-cache-methods.js b/src/admin/admin-service-discovery-repair-cache-methods.js
+index 1de359912f0c19723a24a8ad24c805f262249237..75d022807590d3c1701748bfaab3ebacab8df95e 100644
+--- a/src/admin/admin-service-discovery-repair-cache-methods.js
++++ b/src/admin/admin-service-discovery-repair-cache-methods.js
+@@ -261,6 +261,8 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
+       return deriveAuthoritativeRepairTables({
+         scopedQuery,
+         triggerCodes: options.triggerCodes,
++        cacheStaleWatermarkTableName:
++          options.cacheStaleWatermarkTableName,
+       });
+     }
+ 
+diff --git a/test/admin/admin-authoritative-repair-policy.test.js b/test/admin/admin-authoritative-repair-policy.test.js
+index c66fa86b1da20657553851d36facabe7e3a20d39..2673803e2303668da1ee1b4bfdf969cdea6b400c 100644
+--- a/test/admin/admin-authoritative-repair-policy.test.js
++++ b/test/admin/admin-authoritative-repair-policy.test.js
+@@ -133,6 +133,32 @@ test('authoritative repair policy narrows stale replica-operation repair to repl
+     );
+   });
+ 
++test('authoritative repair policy narrows stale-only preflight repair to its freshness table',
++  async (t) => {
++    const triggerCodes = [
++      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
++    ];
++    const tables = deriveAuthoritativeRepairTables({
++      triggerCodes,
++      cacheStaleWatermarkTableName: TABLES.SERVICE_ENDPOINTS,
++    });
++    const forcedRepairTables = deriveAuthoritativeRepairTables({
++      triggerCodes,
++    });
++
++    t.same(
++      tables,
++      [TABLES.SERVICE_ENDPOINTS],
++      'stale-only preflight should refresh only its service_endpoints watermark',
++    );
++    t.equal(
++      forcedRepairTables.includes(TABLES.NODES) &&
++        forcedRepairTables.includes(TABLES.REPLICA_OPERATIONS),
++      true,
++      'an unnamed or forced stale repair retains the full authority scope',
++    );
++  });
++
+ test('authoritative repair policy keeps full repair for combined stale cache ' +
+   'and stale replica operations', async (t) => {
+   const tables = deriveAuthoritativeRepairTables({
+diff --git a/test/admin/admin-websocket-api-http-and-debug-routes.test.js b/test/admin/admin-websocket-api-http-and-debug-routes.test.js
+index 507ac66a8211252cdd1069a7e6df0a11af92f36f..2a584641c88b381c4ef6f99b744cd3f8263fdaa0 100644
+--- a/test/admin/admin-websocket-api-http-and-debug-routes.test.js
++++ b/test/admin/admin-websocket-api-http-and-debug-routes.test.js
+@@ -353,6 +353,69 @@ test(
+   },
+ );
+ 
++test(
++  'AdminWebSocketAPI - stale-only preflight refresh fits its bounded wait',
++  async (t) => {
++    const writableCache = createPopulatedCache();
++    seedServiceDiscoveryRows(writableCache);
++    writableCache.lastAppliedAtMsByTableName.set(
++      TABLES.SERVICE_ENDPOINTS,
++      Date.now() - 10000,
++    );
++    const repairEngine = createSystemTableRepairQueryEngine({
++      [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
++      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
++      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
++      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
++      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
++      [TABLES.SERVICE_DEFINITIONS]:
++        writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
++      [TABLES.SERVICE_ENDPOINTS]:
++        writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
++      [TABLES.REPLICA_OPERATIONS]:
++        writableCache.getAll(TABLES.REPLICA_OPERATIONS),
++    });
++    const slowUnrelatedRepairEngine = {
++      executeRequestCalls: repairEngine.executeRequestCalls,
++      async executeRequest(request) {
++        const statement = String(request?.statement || '').trim();
++        if (statement !== `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`) {
++          await new Promise((resolve) => setTimeout(resolve, 30));
++        }
++        return repairEngine.executeRequest(request);
++      },
++    };
++    const api = new AdminWebSocketAPI({
++      nodeId: 'test-node',
++      systemTableCache: createReadOnlyCache(writableCache),
++      cacheMutationTarget: writableCache,
++      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(
++        writableCache,
++        {queryEngine: slowUnrelatedRepairEngine},
++      ),
++      sqlQueryEngine: slowUnrelatedRepairEngine,
++    });
++    api.preflightSnapshot.authoritativeRepairWaitBudgetMs = 20;
++
++    const result = await api.buildPreflightCriticalPathSnapshotQueryResult();
++    const snapshot = result?.rows?.[0] || null;
++    const stalenessMs = Number(snapshot?.cacheFreshness?.stalenessMs);
++
++    t.equal(
++      Number.isFinite(stalenessMs) && stalenessMs < 5000,
++      true,
++      'the exact freshness read should complete before the bounded wait expires',
++    );
++    t.same(
++      repairEngine.executeRequestCalls,
++      [`SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`],
++      'stale-only preflight should not wait behind unrelated system-table reads',
++    );
++
++    await api.serviceDiscovery.authoritativeDiscoveryRepairPromise;
++  },
++);
++
+ test(
+   'AdminWebSocketAPI - preflight snapshot does not block on slow authoritative repair',
+   async (t) => {

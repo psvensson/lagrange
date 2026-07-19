@@ -354,6 +354,69 @@ test(
 );
 
 test(
+  'AdminWebSocketAPI - stale-only preflight refresh fits its bounded wait',
+  async (t) => {
+    const writableCache = createPopulatedCache();
+    seedServiceDiscoveryRows(writableCache);
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_ENDPOINTS,
+      Date.now() - 10000,
+    );
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]:
+        writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]:
+        writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]:
+        writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+    });
+    const slowUnrelatedRepairEngine = {
+      executeRequestCalls: repairEngine.executeRequestCalls,
+      async executeRequest(request) {
+        const statement = String(request?.statement || '').trim();
+        if (statement !== `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`) {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+        }
+        return repairEngine.executeRequest(request);
+      },
+    };
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(
+        writableCache,
+        {queryEngine: slowUnrelatedRepairEngine},
+      ),
+      sqlQueryEngine: slowUnrelatedRepairEngine,
+    });
+    api.preflightSnapshot.authoritativeRepairWaitBudgetMs = 20;
+
+    const result = await api.buildPreflightCriticalPathSnapshotQueryResult();
+    const snapshot = result?.rows?.[0] || null;
+    const stalenessMs = Number(snapshot?.cacheFreshness?.stalenessMs);
+
+    t.equal(
+      Number.isFinite(stalenessMs) && stalenessMs < 5000,
+      true,
+      'the exact freshness read should complete before the bounded wait expires',
+    );
+    t.same(
+      repairEngine.executeRequestCalls,
+      [`SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`],
+      'stale-only preflight should not wait behind unrelated system-table reads',
+    );
+
+    await api.serviceDiscovery.authoritativeDiscoveryRepairPromise;
+  },
+);
+
+test(
   'AdminWebSocketAPI - preflight snapshot does not block on slow authoritative repair',
   async (t) => {
     const writableCache = createPopulatedCache();

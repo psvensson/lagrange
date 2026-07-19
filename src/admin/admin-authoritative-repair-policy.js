@@ -119,6 +119,21 @@ function deriveAuthoritativeRepairTables(options = {}) {
       .filter(Boolean) :
     [];
   const uniqueTriggerCodes = [...new Set(triggerCodes)];
+  const cacheStaleWatermarkTableName =
+    typeof options.cacheStaleWatermarkTableName === LOCAL_STR_STRING &&
+    DEFAULT_AUTHORITATIVE_REPAIR_TABLES.includes(
+      options.cacheStaleWatermarkTableName,
+    ) ?
+      options.cacheStaleWatermarkTableName :
+      null;
+  if (
+    uniqueTriggerCodes.length === 1 &&
+    uniqueTriggerCodes[0] ===
+      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK &&
+    cacheStaleWatermarkTableName
+  ) {
+    return [cacheStaleWatermarkTableName];
+  }
   if (
     uniqueTriggerCodes.includes(
       AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,

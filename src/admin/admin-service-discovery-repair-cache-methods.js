@@ -261,6 +261,8 @@ function assignAdminServiceDiscoveryRepairCacheMethods(
       return deriveAuthoritativeRepairTables({
         scopedQuery,
         triggerCodes: options.triggerCodes,
+        cacheStaleWatermarkTableName:
+          options.cacheStaleWatermarkTableName,
       });
     }
 
