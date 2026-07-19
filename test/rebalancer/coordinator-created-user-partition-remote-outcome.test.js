@@ -30,6 +30,8 @@ const OPERATION_ID = 'replace-user-partition-remote-outcome';
 const PARTITION_ID = 'ratings-p1';
 const SOURCE_REPLICA_ID = 'ratings-p1-r1';
 const TARGET_REPLICA_ID = 'ratings-p1-r2';
+const RUNTIME_SERVICE_ID = 'svc-movielens-topn';
+const RUNTIME_REPLICA_ID = `${RUNTIME_SERVICE_ID}-r1`;
 const REMOTE_HANDOFF_DELIVERY_SOURCE =
   'coordinator_created_remote_handoff';
 const RETRY_AFTER_MS = 25;
@@ -289,6 +291,54 @@ test(
         operation.workflowStep,
         WORKFLOW_STEP.SYNCING,
         'the target observer must not mutate source-owned ADD workflow state',
+      );
+    } finally {
+      await harness.coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'runtime-service ADD target ACTIVE outcome wakes the remote source owner',
+  async (t) => {
+    const operation = buildUserPartitionReplaceOperation({
+      type: OperationType.ADD,
+      partitionId: RUNTIME_SERVICE_ID,
+      entityType: 'runtime_service',
+      entityId: RUNTIME_SERVICE_ID,
+      replicaId: RUNTIME_REPLICA_ID,
+      status: ReplicaStatus.CREATING,
+      workflowStep: WORKFLOW_STEP.CREATING,
+    });
+    const harness = createTargetOutcomeHarness(operation);
+    try {
+      harness.emitter.emitOutcome(
+        EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+        OPERATION_ID,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId: RUNTIME_REPLICA_ID},
+      );
+      await settleOutcomeReconcile();
+
+      t.equal(
+        remoteHandoffDeliveries(harness.deliveries).length,
+        1,
+        'runtime completion should wake the canonical source owner once',
+      );
+      t.equal(
+        harness.deliveries[0]?.target,
+        `${SOURCE_NODE_ID}/service/replica-dispatch`,
+        'runtime completion should use the source owner ingress',
+      );
+      t.equal(
+        harness.deliveries[0]?.options?.deliverySource,
+        REMOTE_HANDOFF_DELIVERY_SOURCE,
+        'runtime completion should retain the remote-handoff boundary',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.CREATING,
+        'the target observer must not mutate source-owned runtime workflow',
       );
     } finally {
       await harness.coordinator.shutdown();

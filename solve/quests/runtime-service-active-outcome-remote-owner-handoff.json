@@ -1,0 +1,66 @@
+{
+  "id": "runtime-service-active-outcome-remote-owner-handoff",
+  "authoringContractVersion": 1,
+  "statement": "When a remote RuntimeServiceHandler completes a coordinator-created runtime-service ADD, its target-node RebalanceCoordinator routes RUNTIME_SERVICE_CREATE_ACTIVE through the existing bounded target-executor-outcome handoff to the canonical source owner, so the target observer never mutates remote-owned workflow state, the source operation re-enters canonical dispatch and terminalization instead of remaining CREATING, and the unchanged fresh MovieLens live gate reports priority metric 0.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "formation-background-release-quiescence-anchor-live",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "5c701ed8e869ab67412735d47957de358239918f"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "runtime-service-active-outcome-remote-owner-handoff-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change MovieLens schema, preload, workload, joins, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, 180000ms schema budget, 60000ms stability window, 300000ms stall window, 600000ms convergence budget, affinity scoring, freshness, identity, boundedness, placement, or exact-result predicates."
+    },
+    {
+      "id": "single-workflow-owner",
+      "statement": "The target observer must not write remote-owned replica_operations state, synthesize terminal completion, or create a second outcome owner. It may only wake the canonical source owner through the existing coordinator-created replica-dispatch handoff, after which normal dispatch response, services projection, and coordinator reconciliation remain authoritative."
+    },
+    {
+      "id": "bounded-active-create-scope",
+      "statement": "Add only RUNTIME_SERVICE_CREATE_ACTIVE at ACTIVE to the existing target-create remote-owner wake classification for non-system ADD/REPLACE operations in CREATING/SYNCING. Preserve partition, message-group, failed-outcome, remove, local-owner, terminal, system-partition, and source-removal behavior."
+    },
+    {
+      "id": "handoff-retry-semantics",
+      "statement": "Preserve the existing bounded TARGET_EXECUTOR_OUTCOME delivery, retry, retained-snapshot, timeout, late-honor, diagnostic destination, and follow-up semantics. A successful initial wake remains verified by the existing slower follow-up until the source-owned operation terminalizes."
+    },
+    {
+      "id": "production-path-proof",
+      "statement": "Before another live run, deterministically prove a target-node coordinator observing a remote-owned runtime-service ADD in CREATING routes RUNTIME_SERVICE_CREATE_ACTIVE to the source replica-dispatch ingress, remains non-writing, is red-on-revert, and retains existing local, terminal, wrong-type, retry, snapshot, timeout, and late-honor controls."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-19T14:57:13.589Z fresh ordered run is the pre-fix witness: operations 8b21fc11-251f-4ddb-8b59-53125b8b97e8 and 51948e8a-696e-46df-a6df-f54ea404af1f were created on f7328137-9447-43c2-8988-7fd9b080d0e3, completed runtime activation on remote nodes ae945240-66b3-4284-b153-b2ed90684827 and 6c015c61-2c59-4ddc-af00-5bc883128945, but remained CREATING because the target-owner outcome handoff excluded RUNTIME_SERVICE_CREATE_ACTIVE."
+    }
+  ]
+}

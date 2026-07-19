@@ -1,0 +1,116 @@
+diff --git a/src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js b/src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js
+index d3c293528a72c771516709e87e5a1efb7a05bc20..285cc746c7d1b62bceb8354cb55d80af368e647d 100644
+--- a/src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js
++++ b/src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js
+@@ -28,6 +28,13 @@ const EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
+   ]),
+ );
+ 
++const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
++  new Set([
++    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
++    EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
++  ]),
++);
++
+ function cloneOperationSnapshot(operation) {
+   if (!operation || typeof operation !== 'object') {
+     return null;
+@@ -103,7 +110,7 @@ function isInitialCoordinatorCreatedRemoteHandoffEligible(operation) {
+   );
+ }
+ 
+-function isUserPartitionTargetOutcomeHandoffEligible(operation) {
++function isTargetCreateOutcomeHandoffEligible(operation) {
+   const partitionClassification = classifySystemPartition({
+     partitionId: operation?.partitionId || null,
+   });
+@@ -130,7 +137,7 @@ function shouldRetryCoordinatorCreatedRemoteHandoff(
+     options.handoffMode ===
+       COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
+   ) {
+-    return isUserPartitionTargetOutcomeHandoffEligible(operation);
++    return isTargetCreateOutcomeHandoffEligible(operation);
+   }
+   return isInitialCoordinatorCreatedRemoteHandoffEligible(operation);
+ }
+@@ -143,9 +150,9 @@ function resolveExecutorOutcomeRemoteOwnerHandoffMode(
+   const outcomeType = outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
+   const outcomeWorkflowStep = outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP];
+   if (
+-    outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE &&
++    TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_TYPES.has(outcomeType) &&
+     outcomeWorkflowStep === WORKFLOW_STEP.ACTIVE &&
+-    isUserPartitionTargetOutcomeHandoffEligible(operation)
++    isTargetCreateOutcomeHandoffEligible(operation)
+   ) {
+     return COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
+   }
+diff --git a/test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js b/test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js
+index 9a378753764908524448c0eb5fb71f3e3054a825..10622662f4cc969dc5cd0e5c9837e5f1272d672a 100644
+--- a/test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js
++++ b/test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js
+@@ -30,6 +30,8 @@ const OPERATION_ID = 'replace-user-partition-remote-outcome';
+ const PARTITION_ID = 'ratings-p1';
+ const SOURCE_REPLICA_ID = 'ratings-p1-r1';
+ const TARGET_REPLICA_ID = 'ratings-p1-r2';
++const RUNTIME_SERVICE_ID = 'svc-movielens-topn';
++const RUNTIME_REPLICA_ID = `${RUNTIME_SERVICE_ID}-r1`;
+ const REMOTE_HANDOFF_DELIVERY_SOURCE =
+   'coordinator_created_remote_handoff';
+ const RETRY_AFTER_MS = 25;
+@@ -296,6 +298,54 @@ test(
+   },
+ );
+ 
++test(
++  'runtime-service ADD target ACTIVE outcome wakes the remote source owner',
++  async (t) => {
++    const operation = buildUserPartitionReplaceOperation({
++      type: OperationType.ADD,
++      partitionId: RUNTIME_SERVICE_ID,
++      entityType: 'runtime_service',
++      entityId: RUNTIME_SERVICE_ID,
++      replicaId: RUNTIME_REPLICA_ID,
++      status: ReplicaStatus.CREATING,
++      workflowStep: WORKFLOW_STEP.CREATING,
++    });
++    const harness = createTargetOutcomeHarness(operation);
++    try {
++      harness.emitter.emitOutcome(
++        EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
++        OPERATION_ID,
++        WORKFLOW_STEP.ACTIVE,
++        {replicaId: RUNTIME_REPLICA_ID},
++      );
++      await settleOutcomeReconcile();
++
++      t.equal(
++        remoteHandoffDeliveries(harness.deliveries).length,
++        1,
++        'runtime completion should wake the canonical source owner once',
++      );
++      t.equal(
++        harness.deliveries[0]?.target,
++        `${SOURCE_NODE_ID}/service/replica-dispatch`,
++        'runtime completion should use the source owner ingress',
++      );
++      t.equal(
++        harness.deliveries[0]?.options?.deliverySource,
++        REMOTE_HANDOFF_DELIVERY_SOURCE,
++        'runtime completion should retain the remote-handoff boundary',
++      );
++      t.equal(
++        operation.workflowStep,
++        WORKFLOW_STEP.CREATING,
++        'the target observer must not mutate source-owned runtime workflow',
++      );
++    } finally {
++      await harness.coordinator.shutdown();
++    }
++  },
++);
++
+ test(
+   'user-partition ADD target ACTIVE outcome wakes the owner before its ' +
+     'durable row advances from CREATING',

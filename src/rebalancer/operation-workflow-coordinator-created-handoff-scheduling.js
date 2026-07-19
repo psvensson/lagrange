@@ -28,6 +28,13 @@ const EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
   ]),
 );
 
+const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
+  new Set([
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+    EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+  ]),
+);
+
 function cloneOperationSnapshot(operation) {
   if (!operation || typeof operation !== 'object') {
     return null;
@@ -103,7 +110,7 @@ function isInitialCoordinatorCreatedRemoteHandoffEligible(operation) {
   );
 }
 
-function isUserPartitionTargetOutcomeHandoffEligible(operation) {
+function isTargetCreateOutcomeHandoffEligible(operation) {
   const partitionClassification = classifySystemPartition({
     partitionId: operation?.partitionId || null,
   });
@@ -130,7 +137,7 @@ function shouldRetryCoordinatorCreatedRemoteHandoff(
     options.handoffMode ===
       COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
   ) {
-    return isUserPartitionTargetOutcomeHandoffEligible(operation);
+    return isTargetCreateOutcomeHandoffEligible(operation);
   }
   return isInitialCoordinatorCreatedRemoteHandoffEligible(operation);
 }
@@ -143,9 +150,9 @@ function resolveExecutorOutcomeRemoteOwnerHandoffMode(
   const outcomeType = outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
   const outcomeWorkflowStep = outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP];
   if (
-    outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE &&
+    TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_TYPES.has(outcomeType) &&
     outcomeWorkflowStep === WORKFLOW_STEP.ACTIVE &&
-    isUserPartitionTargetOutcomeHandoffEligible(operation)
+    isTargetCreateOutcomeHandoffEligible(operation)
   ) {
     return COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
   }
