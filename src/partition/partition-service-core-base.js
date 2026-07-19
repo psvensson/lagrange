@@ -3,6 +3,9 @@ import {
   createLeaderNodeMutationHelper,
   createRoleMutationHelper,
 } from './partition-service-metadata-mutation-helpers.js';
+import {
+  resolveLiveRaftLeaderAddressForPeer,
+} from './partition-service-raft-peer-cache-reconciliation.js';
 
 const {
   AddressManager,
@@ -667,7 +670,18 @@ class PartitionServiceCoreBase extends EventEmitter {
     if (!leaderReplicaId) {
       return null;
     }
-    return this.buildPeerAddress(leaderReplicaId);
+    const cacheAddress = this.resolvePeerAddressFromCache(leaderReplicaId);
+    if (cacheAddress) {
+      return cacheAddress;
+    }
+    const liveRaftLeaderAddress =
+      resolveLiveRaftLeaderAddressForPeer(this, leaderReplicaId);
+    if (liveRaftLeaderAddress) {
+      return liveRaftLeaderAddress;
+    }
+    throw new Error(
+      `Unable to resolve unified peer address for ${leaderReplicaId}`,
+    );
   }
   /**
    * Normalize one raw leader identifier into the canonical replica ID.

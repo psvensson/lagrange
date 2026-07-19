@@ -526,6 +526,107 @@ test(
   },
 );
 
+test(
+  'PartitionService - routed writes bridge SERVICES lag through the matching live Raft leader',
+  async (t) => {
+    const partitionId = 'live-leader-routing-partition-1';
+    const localReplicaId = `${partitionId}-r1`;
+    const newLeaderReplicaId = `${partitionId}-r4`;
+    const liveLeaderAddress =
+      `node-4/partition/${newLeaderReplicaId}`;
+    const canonicalLeaderAddress =
+      `node-4-relocated/partition/${newLeaderReplicaId}`;
+    const systemTableCache = new SystemTableCache();
+    const partition = new PartitionService({
+      partitionId,
+      tableId: 'live_leader_routing_table',
+      tableName: 'live_leader_routing_table',
+      replicaId: localReplicaId,
+      replicaIds: [
+        localReplicaId,
+        `${partitionId}-r2`,
+        `${partitionId}-r3`,
+      ],
+      peerAddresses: [
+        `node-2/partition/${partitionId}-r2`,
+        `node-3/partition/${partitionId}-r3`,
+        `node-stale/partition/${newLeaderReplicaId}`,
+      ],
+      nodeId: 'node-1',
+      dbPath: ':memory:',
+      suppressLifecycleLogs: true,
+      deferElection: true,
+      systemTableCache,
+    });
+
+    await partition.initialize();
+
+    partition.raft.leader = liveLeaderAddress;
+    partition.raft.emit('leader change', liveLeaderAddress);
+    await Promise.resolve();
+
+    t.equal(
+      partition.leaderId,
+      newLeaderReplicaId,
+      'leader transition should retain the normalized replica identity',
+    );
+    t.match(
+      await partition.handleRemoteQuery({
+        sql: 'INSERT INTO live_leader_routing_table (id) VALUES (?)',
+        params: [1],
+      }),
+      {
+        acknowledged: true,
+        success: false,
+        redirect: 'LEADER_REDIRECT',
+        leaderAddress: liveLeaderAddress,
+        partitionId,
+      },
+      'a routed write should use the matching unified live Raft leader while SERVICES lags',
+    );
+
+    systemTableCache.applySystemTableChange(
+      TABLES.SERVICES,
+      CDCOperation.UPSERT,
+      {
+        service_id: newLeaderReplicaId,
+        service_type: SERVICE_TYPE.PARTITION,
+        node_id: 'node-4-relocated',
+        partition_id: partitionId,
+        replica_id: newLeaderReplicaId,
+        status: ReplicaStatus.ACTIVE,
+        address: canonicalLeaderAddress,
+        updated_at: Date.now(),
+      },
+    );
+
+    t.equal(
+      partition.resolveLeaderAddress(),
+      canonicalLeaderAddress,
+      'canonical SERVICES relocation should override the live Raft bridge',
+    );
+
+    systemTableCache.applySystemTableChange(
+      TABLES.SERVICES,
+      CDCOperation.DELETE,
+      {
+        service_id: newLeaderReplicaId,
+        updated_at: Date.now() + 1,
+      },
+    );
+    partition.raft.leader =
+      `node-5/partition/${partitionId}-r5`;
+
+    t.throws(
+      () => partition.resolveLeaderAddress(),
+      /Unable to resolve unified peer address/,
+      'a live Raft address for a different replica must fail closed',
+    );
+
+    await partition.shutdown();
+  },
+);
+
 test('PartitionService - leader mutation helper guards owner writes with observed row state',
   async (t) => {
     const systemTableCache = new SystemTableCache();

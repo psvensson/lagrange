@@ -1,0 +1,238 @@
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index 3235aaced716f2900924a09e560510f4b2473d49..5c8e854e5078529612c2cfde9ec9fef0b1204a6e 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -286,6 +286,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
+   PEER_ADDRESS_NOT_UNIFIED: 'Peer address must be in unified format',
+   PEER_ADDRESS_FROM_LIST: 'Built peer address from peerAddresses array',
+   PEER_ADDRESS_FROM_CACHE: 'Built peer address from cache',
++  PEER_ADDRESS_FROM_LIVE_RAFT_LEADER:
++    'Built peer address from the current live Raft leader',
+   PEER_ADDRESS_FROM_NODE: 'Built peer address using local nodeId',
+   SINGLE_REPLICA_LEADER: 'Single replica - becoming leader immediately',
+   INITIALIZED: 'Partition service initialized',
+diff --git a/src/partition/partition-service-core-base.js b/src/partition/partition-service-core-base.js
+index c56524128a1ac04b101fa55cf7f62a7cd7a93416..bb7308668814f705e18dd8a927356115de20a0ec 100644
+--- a/src/partition/partition-service-core-base.js
++++ b/src/partition/partition-service-core-base.js
+@@ -3,6 +3,9 @@ import {
+   createLeaderNodeMutationHelper,
+   createRoleMutationHelper,
+ } from './partition-service-metadata-mutation-helpers.js';
++import {
++  resolveLiveRaftLeaderAddressForPeer,
++} from './partition-service-raft-peer-cache-reconciliation.js';
+ 
+ const {
+   AddressManager,
+@@ -607,6 +610,8 @@ class PartitionServiceCoreBase extends EventEmitter {
+   buildPeerAddress(peerId) {
+     const addressManager = AddressManager.getInstance();
+     const cacheAddress = this.resolvePeerAddressFromCache(peerId);
++    const liveRaftLeaderAddress =
++      resolveLiveRaftLeaderAddressForPeer(this, peerId);
+     if (peerId.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
+       const validation = addressManager.validate(peerId);
+       if (validation.valid) {
+@@ -643,6 +648,9 @@ class PartitionServiceCoreBase extends EventEmitter {
+           if (cacheAddress) {
+             return cacheAddress;
+           }
++          if (liveRaftLeaderAddress) {
++            return liveRaftLeaderAddress;
++          }
+           this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIST, {
+             peerId,
+             address: addr,
+@@ -655,6 +663,9 @@ class PartitionServiceCoreBase extends EventEmitter {
+     if (cacheAddress) {
+       return cacheAddress;
+     }
++    if (liveRaftLeaderAddress) {
++      return liveRaftLeaderAddress;
++    }
+     throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+   }
+   /**
+diff --git a/src/partition/partition-service-raft-peer-cache-reconciliation.js b/src/partition/partition-service-raft-peer-cache-reconciliation.js
+index 2e7b908175d5d4a792c197c52cbdbef7857a3bd0..f812ba5fbba88c53838ed754e86254971be19a19 100644
+--- a/src/partition/partition-service-raft-peer-cache-reconciliation.js
++++ b/src/partition/partition-service-raft-peer-cache-reconciliation.js
+@@ -3,12 +3,57 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+ const {
+   AddressManager,
+   ENTITY_TYPE,
++  PARTITION_SERVICE_LOG_MSG,
+   PARTITION_SERVICE_TYPE,
+   ReplicaStatus,
+   SERVICE_TYPE,
+   TABLES,
++  TYPEOF,
+ } = PARTITION_SERVICE_SHARED;
+ 
++function resolveLiveRaftLeaderAddressForPeer(partitionService, peerId) {
++  const leaderAddress = partitionService.raft?.leader;
++  if (
++    typeof peerId !== TYPEOF.STRING ||
++    peerId.length === 0 ||
++    typeof leaderAddress !== TYPEOF.STRING ||
++    leaderAddress.length === 0
++  ) {
++    return null;
++  }
++  const observedLeaderId = partitionService.normalizeLeaderReplicaId(
++    partitionService.leaderId,
++  );
++  if (observedLeaderId && observedLeaderId !== peerId) {
++    return null;
++  }
++  const addressManager = AddressManager.getInstance();
++  const validation = addressManager.validate(leaderAddress);
++  if (!validation.valid) {
++    return null;
++  }
++  try {
++    const parsed = addressManager.parse(leaderAddress);
++    if (
++      parsed.serviceType !== ENTITY_TYPE.PARTITION ||
++      parsed.serviceId !== peerId
++    ) {
++      return null;
++    }
++  } catch (_error) {
++    return null;
++  }
++  partitionService.logger.debug(
++    PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIVE_RAFT_LEADER,
++    {
++      peerId,
++      address: leaderAddress,
++      partitionId: partitionService.partitionId,
++    },
++  );
++  return leaderAddress;
++}
++
+ function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
+   if (
+     typeof serviceRow.address === 'string' &&
+@@ -146,4 +191,7 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
+   }
+ }
+ 
+-export {reconcileRaftPeersFromCacheForService};
++export {
++  reconcileRaftPeersFromCacheForService,
++  resolveLiveRaftLeaderAddressForPeer,
++};
+diff --git a/test/partition/partition-service.test.js b/test/partition/partition-service.test.js
+index c75af0d6a05b8b2c59825480ce51b7b369107869..f1441d84b093943493d990d8c81a2e9153434cab 100644
+--- a/test/partition/partition-service.test.js
++++ b/test/partition/partition-service.test.js
+@@ -526,6 +526,106 @@ test(
+   },
+ );
+ 
++test(
++  'PartitionService - routed writes bridge SERVICES lag through the matching live Raft leader',
++  async (t) => {
++    const partitionId = 'live-leader-routing-partition-1';
++    const localReplicaId = `${partitionId}-r1`;
++    const newLeaderReplicaId = `${partitionId}-r4`;
++    const liveLeaderAddress =
++      `node-4/partition/${newLeaderReplicaId}`;
++    const canonicalLeaderAddress =
++      `node-4-relocated/partition/${newLeaderReplicaId}`;
++    const systemTableCache = new SystemTableCache();
++    const partition = new PartitionService({
++      partitionId,
++      tableId: 'live_leader_routing_table',
++      tableName: 'live_leader_routing_table',
++      replicaId: localReplicaId,
++      replicaIds: [
++        localReplicaId,
++        `${partitionId}-r2`,
++        `${partitionId}-r3`,
++      ],
++      peerAddresses: [
++        `node-2/partition/${partitionId}-r2`,
++        `node-3/partition/${partitionId}-r3`,
++      ],
++      nodeId: 'node-1',
++      dbPath: ':memory:',
++      suppressLifecycleLogs: true,
++      deferElection: true,
++      systemTableCache,
++    });
++
++    await partition.initialize();
++
++    partition.raft.leader = liveLeaderAddress;
++    partition.raft.emit('leader change', liveLeaderAddress);
++    await Promise.resolve();
++
++    t.equal(
++      partition.leaderId,
++      newLeaderReplicaId,
++      'leader transition should retain the normalized replica identity',
++    );
++    t.match(
++      await partition.handleRemoteQuery({
++        sql: 'INSERT INTO live_leader_routing_table (id) VALUES (?)',
++        params: [1],
++      }),
++      {
++        acknowledged: true,
++        success: false,
++        redirect: 'LEADER_REDIRECT',
++        leaderAddress: liveLeaderAddress,
++        partitionId,
++      },
++      'a routed write should use the matching unified live Raft leader while SERVICES lags',
++    );
++
++    systemTableCache.applySystemTableChange(
++      TABLES.SERVICES,
++      CDCOperation.UPSERT,
++      {
++        service_id: newLeaderReplicaId,
++        service_type: SERVICE_TYPE.PARTITION,
++        node_id: 'node-4-relocated',
++        partition_id: partitionId,
++        replica_id: newLeaderReplicaId,
++        status: ReplicaStatus.ACTIVE,
++        address: canonicalLeaderAddress,
++        updated_at: Date.now(),
++      },
++    );
++
++    t.equal(
++      partition.resolveLeaderAddress(),
++      canonicalLeaderAddress,
++      'canonical SERVICES relocation should override the live Raft bridge',
++    );
++
++    systemTableCache.applySystemTableChange(
++      TABLES.SERVICES,
++      CDCOperation.DELETE,
++      {
++        service_id: newLeaderReplicaId,
++        updated_at: Date.now() + 1,
++      },
++    );
++    partition.raft.leader =
++      `node-5/partition/${partitionId}-r5`;
++
++    t.throws(
++      () => partition.resolveLeaderAddress(),
++      /Unable to resolve unified peer address/,
++      'a live Raft address for a different replica must fail closed',
++    );
++
++    await partition.shutdown();
++  },
++);
++
+ test('PartitionService - leader mutation helper guards owner writes with observed row state',
+   async (t) => {
+     const systemTableCache = new SystemTableCache();

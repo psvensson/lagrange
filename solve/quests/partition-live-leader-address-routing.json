@@ -1,0 +1,62 @@
+{
+  "id": "partition-live-leader-address-routing",
+  "authoringContractVersion": 1,
+  "statement": "An established multi-replica partition follower forwards writes to a newly elected peer while its SERVICES cache is lagging; routing uses only a validated live Raft address for the matching partition replica, never a stale bootstrap hint or a second topology authority, and one unchanged fresh MovieLens live run completes ratings split provisioning without peer-address-resolution participant failures and reports priority metric 0.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "formation-joining-ready-phase-fence-live",
+    "planDoc": "solve/epics/formation-complexity-consolidation.md",
+    "draftedAtCommit": "eb8309de8d65bed01a400bbe264b7b77f61b5114"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "partition-live-leader-address-routing-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change the MovieLens 180000ms schema budget, 60000ms stability window, 600000ms ratings-provisioning wait, workload, joins, preload size, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, or live scenario semantics."
+    },
+    {
+      "id": "single-address-authority",
+      "statement": "The SERVICES cache remains canonical and wins when present. During cache lag, only the current Raft leader's already-unified address may bridge routing, and only after its parsed service type and replica identity match the requested partition peer; do not admit bootstrap hints, arbitrary inbound senders, a new cache, or a second topology owner."
+    },
+    {
+      "id": "stale-leader-fail-closed",
+      "statement": "A malformed, non-partition, mismatched-replica, or no-longer-current Raft leader address must not become a forwarding target; cache-backed relocation and existing peer reconciliation remain authoritative."
+    },
+    {
+      "id": "deterministic-before-live",
+      "statement": "Before changing runtime source, reproduce the exact established-follower path through a real PartitionService leader transition and routed write with the new leader absent from SERVICES and bootstrap peer hints, then prove red-on-revert and cover cache override plus mismatched-live-leader rejection."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-19T08:49:05.180Z unchanged live run is the pre-fix witness: schema admission passed, sql_transactions-p1-r5 became the term-3 leader and active, all three canonical SERVICES replicas retained its unified address, yet established r4 failed to resolve r5 for over nine minutes and the ratings split's sql_transactions UPSERT aborted with DISTRIBUTED_PARTICIPANT_FAILURE."
+    }
+  ]
+}

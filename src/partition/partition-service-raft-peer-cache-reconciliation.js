@@ -3,11 +3,55 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 const {
   AddressManager,
   ENTITY_TYPE,
+  PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
   ReplicaStatus,
   SERVICE_TYPE,
   TABLES,
 } = PARTITION_SERVICE_SHARED;
+
+function resolveLiveRaftLeaderAddressForPeer(partitionService, peerId) {
+  const leaderAddress = partitionService.raft?.leader;
+  if (
+    typeof peerId !== 'string' ||
+    peerId.length === 0 ||
+    typeof leaderAddress !== 'string' ||
+    leaderAddress.length === 0
+  ) {
+    return null;
+  }
+  const observedLeaderId = partitionService.normalizeLeaderReplicaId(
+    partitionService.leaderId,
+  );
+  if (observedLeaderId && observedLeaderId !== peerId) {
+    return null;
+  }
+  const addressManager = AddressManager.getInstance();
+  const validation = addressManager.validate(leaderAddress);
+  if (!validation.valid) {
+    return null;
+  }
+  try {
+    const parsed = addressManager.parse(leaderAddress);
+    if (
+      parsed.serviceType !== ENTITY_TYPE.PARTITION ||
+      parsed.serviceId !== peerId
+    ) {
+      return null;
+    }
+  } catch (_error) {
+    return null;
+  }
+  partitionService.logger.debug(
+    PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIVE_RAFT_LEADER,
+    {
+      peerId,
+      address: leaderAddress,
+      partitionId: partitionService.partitionId,
+    },
+  );
+  return leaderAddress;
+}
 
 function resolvePeerAddressFromService(addressManager, serviceRow, replicaId) {
   if (
@@ -146,4 +190,7 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
   }
 }
 
-export {reconcileRaftPeersFromCacheForService};
+export {
+  reconcileRaftPeersFromCacheForService,
+  resolveLiveRaftLeaderAddressForPeer,
+};
