@@ -37,6 +37,9 @@ import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consis
 import {
   shouldAttemptAuthoritativeRepair,
 } from './admin-authoritative-repair-evaluation.js';
+import {
+  buildCompletedPriorityPlacementHandoffObservation,
+} from '../control-plane/completed-priority-placement-handoff-observation.js';
 import {AdminControlSnapshotRepairOrchestration} from './admin-control-snapshot-repair-orchestration.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
@@ -732,6 +735,14 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
     );
     const replicaOperationSummary =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, options);
+    const completedPriorityPlacementHandoff =
+      buildCompletedPriorityPlacementHandoffObservation({
+        replicaOperationRows,
+        serviceRows,
+        currentPriorityPlacementObservation:
+          controlPlaneDiagnostics?.currentPriorityPlacementObservation,
+        nowMs: capturedAt,
+      });
     const evaluation = evaluateAuthoritativeRepairPolicy({
       cacheStaleWatermark: this.resolveControlSnapshotCacheStaleWatermark(
         nodeRows,
@@ -742,6 +753,8 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
         connectedNodeCoverage.hasCoverageGap ||
         activeProjectionCoverage.hasCoverageGap,
       topologyGap,
+      priorityPlacementCompletionHandoffGap:
+        completedPriorityPlacementHandoff.hasGap,
       staleReplicaOpsInFlightCount:
         Number.isInteger(replicaOperationSummary.effectiveStaleInFlightCount) ?
           replicaOperationSummary.effectiveStaleInFlightCount :
@@ -754,6 +767,7 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
         connectedNodes: connectedNodeCoverage,
         activeProjection: activeProjectionCoverage,
       }),
+      completedPriorityPlacementHandoff,
     });
   }
 }

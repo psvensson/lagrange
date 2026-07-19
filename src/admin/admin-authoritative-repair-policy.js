@@ -14,6 +14,8 @@ const AUTHORITATIVE_REPAIR_TRIGGER = Object.freeze({
   STALE_REPLICA_OPERATIONS_IN_FLIGHT:
     'stale_replica_operations_in_flight',
   PARTITION_TOPOLOGY_GAP: 'partition_topology_gap',
+  PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP:
+    'priority_placement_completion_handoff_gap',
 });
 
 const DEFAULT_AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
@@ -55,6 +57,30 @@ const AUTHORITATIVE_REPAIR_TABLE_GROUP = Object.freeze({
   REPLICA_OPERATIONS: Object.freeze([
     TABLES.REPLICA_OPERATIONS,
   ]),
+  COMPLETED_PLACEMENT_HANDOFF: Object.freeze([
+    TABLES.PARTITIONS,
+    TABLES.SERVICES,
+    TABLES.TABLES,
+    TABLES.REPLICA_OPERATIONS,
+  ]),
+});
+
+const DISCOVERY_REPAIR_TRIGGERS = new Set([
+  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
+  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_EMPTY_WITH_SERVICES_PRESENT,
+  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_ZERO_SCOPED_REPLICAS,
+  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NO_READY_REPLICAS,
+  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_CACHE_GAP_REASON,
+]);
+
+const AUTHORITATIVE_REPAIR_TABLE_GROUP_BY_TRIGGER = Object.freeze({
+  [AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT]:
+    AUTHORITATIVE_REPAIR_TABLE_GROUP.REPLICA_OPERATIONS,
+  [AUTHORITATIVE_REPAIR_TRIGGER.PARTITION_TOPOLOGY_GAP]:
+    AUTHORITATIVE_REPAIR_TABLE_GROUP.TOPOLOGY,
+  [AUTHORITATIVE_REPAIR_TRIGGER
+    .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP]:
+      AUTHORITATIVE_REPAIR_TABLE_GROUP.COMPLETED_PLACEMENT_HANDOFF,
 });
 
 function normalizeNonNegativeInteger(value) {
@@ -111,91 +137,92 @@ function addRepairTables(targetTableNames, tableNames) {
   return normalizedTargetTableNames;
 }
 
-function deriveAuthoritativeRepairTables(options = {}) {
-  const scopedQuery = options.scopedQuery === true;
-  const triggerCodes = Array.isArray(options.triggerCodes) ?
-    options.triggerCodes
-      .map((triggerCode) => String(triggerCode || ''))
-      .filter(Boolean) :
-    [];
-  const uniqueTriggerCodes = [...new Set(triggerCodes)];
-  const cacheStaleWatermarkTableName =
-    typeof options.cacheStaleWatermarkTableName === LOCAL_STR_STRING &&
+function resolveAuthoritativeRepairTableGroup(triggerCode, scopedQuery) {
+  if (DISCOVERY_REPAIR_TRIGGERS.has(triggerCode)) {
+    return scopedQuery ?
+      AUTHORITATIVE_REPAIR_TABLE_GROUP.SCOPED_DISCOVERY :
+      AUTHORITATIVE_REPAIR_TABLE_GROUP.DISCOVERY;
+  }
+  return AUTHORITATIVE_REPAIR_TABLE_GROUP_BY_TRIGGER[triggerCode] || null;
+}
+
+function normalizeAuthoritativeRepairTriggerCodes(triggerCodes) {
+  return [
+    ...new Set(
+      (Array.isArray(triggerCodes) ? triggerCodes : [])
+        .map((triggerCode) => String(triggerCode || ''))
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function resolveCacheStaleWatermarkTableName(options = {}) {
+  return typeof options.cacheStaleWatermarkTableName === LOCAL_STR_STRING &&
     DEFAULT_AUTHORITATIVE_REPAIR_TABLES.includes(
       options.cacheStaleWatermarkTableName,
     ) ?
-      options.cacheStaleWatermarkTableName :
-      null;
-  if (
-    uniqueTriggerCodes.length === 1 &&
-    uniqueTriggerCodes[0] ===
+    options.cacheStaleWatermarkTableName :
+    null;
+}
+
+function isSingleTableStaleWatermarkRepair(
+  triggerCodes,
+  cacheStaleWatermarkTableName,
+) {
+  return triggerCodes.length === 1 &&
+    triggerCodes[0] ===
       AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK &&
-    cacheStaleWatermarkTableName
-  ) {
+    Boolean(cacheStaleWatermarkTableName);
+}
+
+function hasCoupledStaleOperationRepair(triggerCodes) {
+  return triggerCodes.includes(
+    AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+  ) && triggerCodes.includes(
+    AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+  );
+}
+
+function selectEffectiveAuthoritativeRepairTriggerCodes(triggerCodes) {
+  const narrowedTriggerCodes = triggerCodes.filter((triggerCode) =>
+    triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
+  return narrowedTriggerCodes.length > 0 ?
+    narrowedTriggerCodes :
+    triggerCodes;
+}
+
+function deriveAuthoritativeRepairTables(options = {}) {
+  const scopedQuery = options.scopedQuery === true;
+  const triggerCodes = normalizeAuthoritativeRepairTriggerCodes(
+    options.triggerCodes,
+  );
+  const cacheStaleWatermarkTableName =
+    resolveCacheStaleWatermarkTableName(options);
+  if (isSingleTableStaleWatermarkRepair(
+    triggerCodes,
+    cacheStaleWatermarkTableName,
+  )) {
     return [cacheStaleWatermarkTableName];
   }
-  if (
-    uniqueTriggerCodes.includes(
-      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
-    ) &&
-    uniqueTriggerCodes.includes(
-      AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
-    )
-  ) {
+  if (hasCoupledStaleOperationRepair(triggerCodes)) {
     return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
   }
-  const narrowedTriggerCodes = uniqueTriggerCodes.filter((triggerCode) =>
-    triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
-  const effectiveTriggerCodes = narrowedTriggerCodes.length > 0 ?
-    narrowedTriggerCodes :
-    uniqueTriggerCodes;
+  const effectiveTriggerCodes =
+    selectEffectiveAuthoritativeRepairTriggerCodes(triggerCodes);
   if (effectiveTriggerCodes.length === 0) {
     return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
   }
 
   const repairTables = new Set();
   for (const triggerCode of effectiveTriggerCodes) {
-    if (triggerCode ===
-        AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT) {
-      addRepairTables(
-        repairTables,
-        AUTHORITATIVE_REPAIR_TABLE_GROUP.REPLICA_OPERATIONS,
-      );
-      continue;
+    const tableGroup = resolveAuthoritativeRepairTableGroup(
+      triggerCode,
+      scopedQuery,
+    );
+    if (!tableGroup) {
+      return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
     }
-    if (triggerCode ===
-        AUTHORITATIVE_REPAIR_TRIGGER.PARTITION_TOPOLOGY_GAP) {
-      addRepairTables(
-        repairTables,
-        AUTHORITATIVE_REPAIR_TABLE_GROUP.TOPOLOGY,
-      );
-      continue;
-    }
-    if (triggerCode ===
-        AUTHORITATIVE_REPAIR_TRIGGER
-          .DISCOVERY_NODE_COVERAGE_GAP ||
-        triggerCode ===
-        AUTHORITATIVE_REPAIR_TRIGGER
-          .DISCOVERY_EMPTY_WITH_SERVICES_PRESENT ||
-        triggerCode ===
-          AUTHORITATIVE_REPAIR_TRIGGER
-            .DISCOVERY_ZERO_SCOPED_REPLICAS ||
-        triggerCode ===
-          AUTHORITATIVE_REPAIR_TRIGGER
-            .DISCOVERY_NO_READY_REPLICAS ||
-        triggerCode ===
-          AUTHORITATIVE_REPAIR_TRIGGER
-            .DISCOVERY_CACHE_GAP_REASON) {
-      addRepairTables(
-        repairTables,
-        scopedQuery === true ?
-          AUTHORITATIVE_REPAIR_TABLE_GROUP.SCOPED_DISCOVERY :
-          AUTHORITATIVE_REPAIR_TABLE_GROUP.DISCOVERY,
-      );
-      continue;
-    }
-
-    return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+    addRepairTables(repairTables, tableGroup);
   }
 
   if (repairTables.size === 0) {
@@ -203,6 +230,16 @@ function deriveAuthoritativeRepairTables(options = {}) {
   }
   return DEFAULT_AUTHORITATIVE_REPAIR_TABLES
     .filter((tableName) => repairTables.has(tableName));
+}
+
+function appendAuthoritativeRepairTrigger(
+  triggerCodes,
+  shouldAppend,
+  triggerCode,
+) {
+  if (shouldAppend) {
+    triggerCodes.push(triggerCode);
+  }
 }
 
 function evaluateAuthoritativeRepairPolicy(options = {}) {
@@ -242,6 +279,13 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
       AUTHORITATIVE_REPAIR_TRIGGER.PARTITION_TOPOLOGY_GAP,
     );
   }
+
+  appendAuthoritativeRepairTrigger(
+    triggerCodes,
+    options.priorityPlacementCompletionHandoffGap === true,
+    AUTHORITATIVE_REPAIR_TRIGGER
+      .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
+  );
 
   if (normalizeNonNegativeInteger(
     options.staleReplicaOpsInFlightCount,

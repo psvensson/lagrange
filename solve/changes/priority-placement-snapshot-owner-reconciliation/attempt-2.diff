@@ -1,0 +1,1049 @@
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+index 74c32617d379164ccab5f3d48ab106703ad8bb85..e394799ec3860519995f1f770121c83d69ffaff5 100644
+--- a/scripts/run-placement-affinity-scenarios.js
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -68,6 +68,9 @@
+  *     - test/partition/partition-service-raft-noop-cdc-placement.test.js
+  *       (zero-change Raft applies cannot publish stale replica lifecycle state
+  *        into current placement or the unchanged MovieLens schema gate)
++ *     - test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js
++ *       (terminal priority placement with a transitional target is stale until
++ *        the existing snapshot owner performs authoritative reconciliation)
+  *
+  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
+  *   (default: run all scenarios)
+@@ -144,6 +147,7 @@ const SCENARIOS = {
+   ],
+   'priority-placement-completed-topology-observation': [
+     'test/partition/partition-service-raft-noop-cdc-placement.test.js',
++    'test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js',
+     'test/admin/admin-control-snapshot-current-priority-placement.test.js',
+     'test/runtime/movielens-preload-admission-gate.test.js',
+   ],
+diff --git a/src/admin/admin-authoritative-repair-policy.js b/src/admin/admin-authoritative-repair-policy.js
+index aa26dcb8507692b967e3aaba1c201794f3ca4ea9..8370de9f7e4690463815a1534099b01429b3bdd2 100644
+--- a/src/admin/admin-authoritative-repair-policy.js
++++ b/src/admin/admin-authoritative-repair-policy.js
+@@ -14,6 +14,8 @@ const AUTHORITATIVE_REPAIR_TRIGGER = Object.freeze({
+   STALE_REPLICA_OPERATIONS_IN_FLIGHT:
+     'stale_replica_operations_in_flight',
+   PARTITION_TOPOLOGY_GAP: 'partition_topology_gap',
++  PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP:
++    'priority_placement_completion_handoff_gap',
+ });
+ 
+ const DEFAULT_AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
+@@ -55,6 +57,30 @@ const AUTHORITATIVE_REPAIR_TABLE_GROUP = Object.freeze({
+   REPLICA_OPERATIONS: Object.freeze([
+     TABLES.REPLICA_OPERATIONS,
+   ]),
++  COMPLETED_PLACEMENT_HANDOFF: Object.freeze([
++    TABLES.PARTITIONS,
++    TABLES.SERVICES,
++    TABLES.TABLES,
++    TABLES.REPLICA_OPERATIONS,
++  ]),
++});
++
++const DISCOVERY_REPAIR_TRIGGERS = new Set([
++  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
++  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_EMPTY_WITH_SERVICES_PRESENT,
++  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_ZERO_SCOPED_REPLICAS,
++  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NO_READY_REPLICAS,
++  AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_CACHE_GAP_REASON,
++]);
++
++const AUTHORITATIVE_REPAIR_TABLE_GROUP_BY_TRIGGER = Object.freeze({
++  [AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT]:
++    AUTHORITATIVE_REPAIR_TABLE_GROUP.REPLICA_OPERATIONS,
++  [AUTHORITATIVE_REPAIR_TRIGGER.PARTITION_TOPOLOGY_GAP]:
++    AUTHORITATIVE_REPAIR_TABLE_GROUP.TOPOLOGY,
++  [AUTHORITATIVE_REPAIR_TRIGGER
++    .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP]:
++      AUTHORITATIVE_REPAIR_TABLE_GROUP.COMPLETED_PLACEMENT_HANDOFF,
+ });
+ 
+ function normalizeNonNegativeInteger(value) {
+@@ -111,91 +137,92 @@ function addRepairTables(targetTableNames, tableNames) {
+   return normalizedTargetTableNames;
+ }
+ 
+-function deriveAuthoritativeRepairTables(options = {}) {
+-  const scopedQuery = options.scopedQuery === true;
+-  const triggerCodes = Array.isArray(options.triggerCodes) ?
+-    options.triggerCodes
+-      .map((triggerCode) => String(triggerCode || ''))
+-      .filter(Boolean) :
+-    [];
+-  const uniqueTriggerCodes = [...new Set(triggerCodes)];
+-  const cacheStaleWatermarkTableName =
+-    typeof options.cacheStaleWatermarkTableName === LOCAL_STR_STRING &&
++function resolveAuthoritativeRepairTableGroup(triggerCode, scopedQuery) {
++  if (DISCOVERY_REPAIR_TRIGGERS.has(triggerCode)) {
++    return scopedQuery ?
++      AUTHORITATIVE_REPAIR_TABLE_GROUP.SCOPED_DISCOVERY :
++      AUTHORITATIVE_REPAIR_TABLE_GROUP.DISCOVERY;
++  }
++  return AUTHORITATIVE_REPAIR_TABLE_GROUP_BY_TRIGGER[triggerCode] || null;
++}
++
++function normalizeAuthoritativeRepairTriggerCodes(triggerCodes) {
++  return [
++    ...new Set(
++      (Array.isArray(triggerCodes) ? triggerCodes : [])
++        .map((triggerCode) => String(triggerCode || ''))
++        .filter(Boolean),
++    ),
++  ];
++}
++
++function resolveCacheStaleWatermarkTableName(options = {}) {
++  return typeof options.cacheStaleWatermarkTableName === LOCAL_STR_STRING &&
+     DEFAULT_AUTHORITATIVE_REPAIR_TABLES.includes(
+       options.cacheStaleWatermarkTableName,
+     ) ?
+-      options.cacheStaleWatermarkTableName :
+-      null;
+-  if (
+-    uniqueTriggerCodes.length === 1 &&
+-    uniqueTriggerCodes[0] ===
++    options.cacheStaleWatermarkTableName :
++    null;
++}
++
++function isSingleTableStaleWatermarkRepair(
++  triggerCodes,
++  cacheStaleWatermarkTableName,
++) {
++  return triggerCodes.length === 1 &&
++    triggerCodes[0] ===
+       AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK &&
+-    cacheStaleWatermarkTableName
+-  ) {
++    Boolean(cacheStaleWatermarkTableName);
++}
++
++function hasCoupledStaleOperationRepair(triggerCodes) {
++  return triggerCodes.includes(
++    AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
++  ) && triggerCodes.includes(
++    AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
++  );
++}
++
++function selectEffectiveAuthoritativeRepairTriggerCodes(triggerCodes) {
++  const narrowedTriggerCodes = triggerCodes.filter((triggerCode) =>
++    triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
++  return narrowedTriggerCodes.length > 0 ?
++    narrowedTriggerCodes :
++    triggerCodes;
++}
++
++function deriveAuthoritativeRepairTables(options = {}) {
++  const scopedQuery = options.scopedQuery === true;
++  const triggerCodes = normalizeAuthoritativeRepairTriggerCodes(
++    options.triggerCodes,
++  );
++  const cacheStaleWatermarkTableName =
++    resolveCacheStaleWatermarkTableName(options);
++  if (isSingleTableStaleWatermarkRepair(
++    triggerCodes,
++    cacheStaleWatermarkTableName,
++  )) {
+     return [cacheStaleWatermarkTableName];
+   }
+-  if (
+-    uniqueTriggerCodes.includes(
+-      AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+-    ) &&
+-    uniqueTriggerCodes.includes(
+-      AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+-    )
+-  ) {
++  if (hasCoupledStaleOperationRepair(triggerCodes)) {
+     return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+   }
+-  const narrowedTriggerCodes = uniqueTriggerCodes.filter((triggerCode) =>
+-    triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
+-  const effectiveTriggerCodes = narrowedTriggerCodes.length > 0 ?
+-    narrowedTriggerCodes :
+-    uniqueTriggerCodes;
++  const effectiveTriggerCodes =
++    selectEffectiveAuthoritativeRepairTriggerCodes(triggerCodes);
+   if (effectiveTriggerCodes.length === 0) {
+     return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+   }
+ 
+   const repairTables = new Set();
+   for (const triggerCode of effectiveTriggerCodes) {
+-    if (triggerCode ===
+-        AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT) {
+-      addRepairTables(
+-        repairTables,
+-        AUTHORITATIVE_REPAIR_TABLE_GROUP.REPLICA_OPERATIONS,
+-      );
+-      continue;
+-    }
+-    if (triggerCode ===
+-        AUTHORITATIVE_REPAIR_TRIGGER.PARTITION_TOPOLOGY_GAP) {
+-      addRepairTables(
+-        repairTables,
+-        AUTHORITATIVE_REPAIR_TABLE_GROUP.TOPOLOGY,
+-      );
+-      continue;
+-    }
+-    if (triggerCode ===
+-        AUTHORITATIVE_REPAIR_TRIGGER
+-          .DISCOVERY_NODE_COVERAGE_GAP ||
+-        triggerCode ===
+-        AUTHORITATIVE_REPAIR_TRIGGER
+-          .DISCOVERY_EMPTY_WITH_SERVICES_PRESENT ||
+-        triggerCode ===
+-          AUTHORITATIVE_REPAIR_TRIGGER
+-            .DISCOVERY_ZERO_SCOPED_REPLICAS ||
+-        triggerCode ===
+-          AUTHORITATIVE_REPAIR_TRIGGER
+-            .DISCOVERY_NO_READY_REPLICAS ||
+-        triggerCode ===
+-          AUTHORITATIVE_REPAIR_TRIGGER
+-            .DISCOVERY_CACHE_GAP_REASON) {
+-      addRepairTables(
+-        repairTables,
+-        scopedQuery === true ?
+-          AUTHORITATIVE_REPAIR_TABLE_GROUP.SCOPED_DISCOVERY :
+-          AUTHORITATIVE_REPAIR_TABLE_GROUP.DISCOVERY,
+-      );
+-      continue;
++    const tableGroup = resolveAuthoritativeRepairTableGroup(
++      triggerCode,
++      scopedQuery,
++    );
++    if (!tableGroup) {
++      return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+     }
+-
+-    return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
++    addRepairTables(repairTables, tableGroup);
+   }
+ 
+   if (repairTables.size === 0) {
+@@ -205,6 +232,16 @@ function deriveAuthoritativeRepairTables(options = {}) {
+     .filter((tableName) => repairTables.has(tableName));
+ }
+ 
++function appendAuthoritativeRepairTrigger(
++  triggerCodes,
++  shouldAppend,
++  triggerCode,
++) {
++  if (shouldAppend) {
++    triggerCodes.push(triggerCode);
++  }
++}
++
+ function evaluateAuthoritativeRepairPolicy(options = {}) {
+   const triggerCodes = [];
+   const scopedQuery = options.scopedQuery === true;
+@@ -243,6 +280,13 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
+     );
+   }
+ 
++  appendAuthoritativeRepairTrigger(
++    triggerCodes,
++    options.priorityPlacementCompletionHandoffGap === true,
++    AUTHORITATIVE_REPAIR_TRIGGER
++      .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
++  );
++
+   if (normalizeNonNegativeInteger(
+     options.staleReplicaOpsInFlightCount,
+   ) > 0) {
+diff --git a/src/admin/admin-control-snapshot-node-view-projection.js b/src/admin/admin-control-snapshot-node-view-projection.js
+index 5258374d2df6aea0ddc7f2d02a060dd07772cde2..7cc57e976b90b012c61c68cc0f39a6cb4a5c4a3d 100644
+--- a/src/admin/admin-control-snapshot-node-view-projection.js
++++ b/src/admin/admin-control-snapshot-node-view-projection.js
+@@ -37,6 +37,9 @@ import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consis
+ import {
+   shouldAttemptAuthoritativeRepair,
+ } from './admin-authoritative-repair-evaluation.js';
++import {
++  buildCompletedPriorityPlacementHandoffObservation,
++} from '../control-plane/completed-priority-placement-handoff-observation.js';
+ import {AdminControlSnapshotRepairOrchestration} from './admin-control-snapshot-repair-orchestration.js';
+ // ── file-local constants ────────────────────────────────────────────────────
+ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
+@@ -732,6 +735,14 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
+     );
+     const replicaOperationSummary =
+       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, options);
++    const completedPriorityPlacementHandoff =
++      buildCompletedPriorityPlacementHandoffObservation({
++        replicaOperationRows,
++        serviceRows,
++        currentPriorityPlacementObservation:
++          controlPlaneDiagnostics?.currentPriorityPlacementObservation,
++        nowMs: capturedAt,
++      });
+     const evaluation = evaluateAuthoritativeRepairPolicy({
+       cacheStaleWatermark: this.resolveControlSnapshotCacheStaleWatermark(
+         nodeRows,
+@@ -742,6 +753,8 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
+         connectedNodeCoverage.hasCoverageGap ||
+         activeProjectionCoverage.hasCoverageGap,
+       topologyGap,
++      priorityPlacementCompletionHandoffGap:
++        completedPriorityPlacementHandoff.hasGap,
+       staleReplicaOpsInFlightCount:
+         Number.isInteger(replicaOperationSummary.effectiveStaleInFlightCount) ?
+           replicaOperationSummary.effectiveStaleInFlightCount :
+@@ -754,6 +767,7 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
+         connectedNodes: connectedNodeCoverage,
+         activeProjection: activeProjectionCoverage,
+       }),
++      completedPriorityPlacementHandoff,
+     });
+   }
+ }
+diff --git a/src/control-plane/completed-priority-placement-handoff-observation.js b/src/control-plane/completed-priority-placement-handoff-observation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..34d7926a437606fbdce20a6ae0fde64153c197bd
+--- /dev/null
++++ b/src/control-plane/completed-priority-placement-handoff-observation.js
+@@ -0,0 +1,123 @@
++import {
++  classifySystemPartition,
++} from '../bootstrap/system-partition-classification.js';
++import {
++  findObservedTargetReplicaServiceRows,
++  hasObservedCompletedReplicaOperation,
++} from '../rebalancer/replica-operation-observed-completion.js';
++import {
++  isReplicaOperationTerminalSuccess,
++  normalizeReplicaOperationRecord,
++} from '../rebalancer/replica-operation-liveness.js';
++import {
++  OperationType,
++  ReplicaStatus,
++} from '../rebalancer/replica-status.js';
++
++const COMPLETED_PLACEMENT_TRANSITIONAL_TARGET_STATUSES = new Set([
++  ReplicaStatus.PENDING,
++  ReplicaStatus.CREATING,
++  ReplicaStatus.SYNCING,
++]);
++
++function normalizeString(value) {
++  return typeof value === 'string' ? value.trim() : '';
++}
++
++function normalizeServiceStatus(serviceRow) {
++  return normalizeString(serviceRow?.status).toLowerCase();
++}
++
++function arrayOrEmpty(value) {
++  return Array.isArray(value) ? value : [];
++}
++
++function addNormalizedPartitionIds(
++  partitionIds,
++  values,
++  resolvePartitionId,
++) {
++  for (const value of arrayOrEmpty(values)) {
++    const partitionId = normalizeString(resolvePartitionId(value));
++    if (partitionId) {
++      partitionIds.add(partitionId);
++    }
++  }
++}
++
++function collectBlockedPriorityPartitionIds(observation = null) {
++  const partitionIds = new Set();
++  addNormalizedPartitionIds(
++    partitionIds,
++    observation?.priorityPartitionSummary?.blockedPartitions,
++    (blockedPartition) =>
++      blockedPartition?.partitionId ?? blockedPartition?.partition_id,
++  );
++  addNormalizedPartitionIds(
++    partitionIds,
++    observation?.leaderCoverage?.missingLeaderPartitionIds,
++    (partitionId) => partitionId,
++  );
++  return partitionIds;
++}
++
++function buildCompletedPriorityPlacementHandoffObservation(options = {}) {
++  const operationRows = arrayOrEmpty(options.replicaOperationRows);
++  const serviceRows = arrayOrEmpty(options.serviceRows);
++  const blockedPartitionIds = collectBlockedPriorityPartitionIds(
++    options.currentPriorityPlacementObservation,
++  );
++  const operationIds = new Set();
++  const partitionIds = new Set();
++  const targetReplicaIds = new Set();
++
++  for (const operationRow of operationRows) {
++    const operation = normalizeReplicaOperationRecord(operationRow, {
++      nowMs: options.nowMs,
++    });
++    if (
++      !isReplicaOperationTerminalSuccess(operation) ||
++      (
++        operation.type !== OperationType.ADD &&
++        operation.type !== OperationType.REPLACE
++      ) ||
++      !blockedPartitionIds.has(operation.partitionId) ||
++      classifySystemPartition({
++        partitionId: operation.partitionId,
++      }).priorityControlPlane !== true ||
++      hasObservedCompletedReplicaOperation(operation, {serviceRows})
++    ) {
++      continue;
++    }
++    const targetServiceRows = findObservedTargetReplicaServiceRows(
++      operation,
++      {serviceRows},
++    );
++    if (!targetServiceRows.some((serviceRow) =>
++      COMPLETED_PLACEMENT_TRANSITIONAL_TARGET_STATUSES.has(
++        normalizeServiceStatus(serviceRow),
++      ),
++    )) {
++      continue;
++    }
++    operationIds.add(operation.operationId);
++    partitionIds.add(operation.partitionId);
++    targetReplicaIds.add(operation.replicaId);
++  }
++
++  const sortedOperationIds = [...operationIds].filter(Boolean).sort();
++  return Object.freeze({
++    hasGap: sortedOperationIds.length > 0,
++    operationIds: Object.freeze(sortedOperationIds),
++    partitionIds: Object.freeze(
++      [...partitionIds].filter(Boolean).sort(),
++    ),
++    targetReplicaIds: Object.freeze(
++      [...targetReplicaIds].filter(Boolean).sort(),
++    ),
++  });
++}
++
++export {
++  buildCompletedPriorityPlacementHandoffObservation,
++};
+diff --git a/src/rebalancer/replica-operation-observed-completion.js b/src/rebalancer/replica-operation-observed-completion.js
+index b466ece8dd9bce79f7294e8f90a4c7c1dbe28d61..2a8d22b5deb88def072b7ec2f03ed4b520a52f58 100644
+--- a/src/rebalancer/replica-operation-observed-completion.js
++++ b/src/rebalancer/replica-operation-observed-completion.js
+@@ -31,7 +31,7 @@ function firstStringField(record, ...keys) {
+   return null;
+ }
+ 
+-function doesObservedActiveTargetReplicaServiceRowMatch(
++function doesObservedTargetReplicaServiceRowMatch(
+   serviceRow,
+   entityType,
+   entityId,
+@@ -47,12 +47,6 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
+   if (serviceType && serviceType !== entityType) {
+     return false;
+   }
+-  if (String(firstStringField(
+-    serviceRow,
+-    LOCAL_STR_STATUS,
+-  ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+-    return false;
+-  }
+   if (String(firstStringField(
+     serviceRow,
+     LOCAL_STR_NODE_ID,
+@@ -90,6 +84,46 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
+   return true;
+ }
+ 
++function buildObservedTargetReplicaIdentity(record) {
++  const replicaId = firstStringField(record, 'replicaId') || '';
++  const entityType = String(
++    firstStringField(record, 'entityType') || SERVICE_TYPE_PARTITION,
++  ).toLowerCase();
++  const entityId =
++    firstStringField(record, 'entityId', 'partitionGroupId') || '';
++  const targetNodeId = firstStringField(record, 'targetNodeId') || '';
++  const hasMissingIdentity = [replicaId, entityId, targetNodeId]
++    .some((value) => value.length === 0);
++  if (hasMissingIdentity) {
++    return null;
++  }
++  return {replicaId, entityType, entityId, targetNodeId};
++}
++
++function findObservedTargetReplicaServiceRows(record, options = {}) {
++  const supportsExactTarget =
++    record?.type === OperationType.ADD ||
++    record?.type === OperationType.REPLACE;
++  const targetIdentity = supportsExactTarget ?
++    buildObservedTargetReplicaIdentity(record) :
++    null;
++  if (!targetIdentity) {
++    return [];
++  }
++  const serviceRows = Array.isArray(options.serviceRows) ?
++    options.serviceRows :
++    [];
++  return serviceRows.filter((serviceRow) =>
++    doesObservedTargetReplicaServiceRowMatch(
++      serviceRow,
++      targetIdentity.entityType,
++      targetIdentity.entityId,
++      targetIdentity.targetNodeId,
++      targetIdentity.replicaId,
++    ),
++  );
++}
++
+ function hasObservedActiveTargetServiceOwnership(record, options = {}) {
+   if (record?.type !== BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE) {
+     return false;
+@@ -142,30 +176,13 @@ function hasObservedActiveTargetReplica(record, options = {}) {
+     return hasObservedActiveTargetServiceOwnership(record, options);
+   }
+ 
+-  const replicaId = String(record?.replicaId || '');
+-  const entityType = String(
+-    record?.entityType || SERVICE_TYPE_PARTITION,
+-  ).toLowerCase();
+-  const entityId = String(
+-    record?.entityId || record?.partitionGroupId || '',
+-  );
+-  const targetNodeId = String(record?.targetNodeId || '');
+-  if (!replicaId || !entityId || !targetNodeId) {
+-    return false;
+-  }
+-
+-  const serviceRows = Array.isArray(options.serviceRows) ?
+-    options.serviceRows :
+-    [];
+-  return serviceRows.some((serviceRow) =>
+-    doesObservedActiveTargetReplicaServiceRowMatch(
+-      serviceRow,
+-      entityType,
+-      entityId,
+-      targetNodeId,
+-      replicaId,
+-    ),
+-  );
++  return findObservedTargetReplicaServiceRows(record, options)
++    .some((serviceRow) =>
++      String(firstStringField(
++        serviceRow,
++        LOCAL_STR_STATUS,
++      ) || '').toLowerCase() === REPLICA_OPERATION_STATUS_ACTIVE,
++    );
+ }
+ 
+ function doesObservedSourceReplicaServiceRowBlockRetirement(
+@@ -258,5 +275,6 @@ function hasObservedCompletedReplicaOperation(record, options = {}) {
+ }
+ 
+ export {
++  findObservedTargetReplicaServiceRows,
+   hasObservedCompletedReplicaOperation,
+ };
+diff --git a/test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js b/test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d4c1207d97cf67e2c310aaaae8738c6688fa744
+--- /dev/null
++++ b/test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js
+@@ -0,0 +1,490 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {AdminControlSnapshot} from
++  '../../src/admin/admin-control-snapshot.js';
++import {AdminServiceDiscovery} from
++  '../../src/admin/admin-service-discovery.js';
++import {
++  AUTHORITATIVE_REPAIR_TRIGGER,
++  deriveAuthoritativeRepairTables,
++} from '../../src/admin/admin-authoritative-repair-policy.js';
++import {
++  ControlPlaneSnapshotOwner,
++  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
++} from '../../src/control-plane/control-plane-snapshot-owner.js';
++import {
++  buildCompletedPriorityPlacementHandoffObservation,
++} from '../../src/control-plane/completed-priority-placement-handoff-observation.js';
++import {
++  CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE,
++} from '../../src/control-plane/control-plane-system-table-gateway.js';
++import {TABLES} from '../../src/constants/index.js';
++import {
++  createAuthoritativeRepairCache,
++} from './admin-websocket-api-test-support.js';
++
++const TEST_NOW_MS = 1784500000000;
++const TEST_PARTITION_ID = 'control_plane_publications-p1';
++const TEST_REPLICA_ID = `${TEST_PARTITION_ID}-r4`;
++const TEST_OPERATION_ID = 'op-completed-priority-add';
++const TEST_TARGET_NODE_ID = 'node-target';
++const TEST_SOURCE_REPLICA_ID = `${TEST_PARTITION_ID}-r2`;
++
++function buildTargetServiceRow(overrides = {}) {
++  return {
++    service_id: TEST_REPLICA_ID,
++    service_type: 'partition',
++    node_id: TEST_TARGET_NODE_ID,
++    partition_id: TEST_PARTITION_ID,
++    replica_id: TEST_REPLICA_ID,
++    raft_role: 'follower',
++    status: 'syncing',
++    address: `${TEST_TARGET_NODE_ID}/partition/${TEST_REPLICA_ID}`,
++    ...overrides,
++  };
++}
++
++function buildTerminalOperationRow(overrides = {}) {
++  const operationType = overrides.type || 'ADD';
++  const terminalStatus = operationType === 'ADD' ? 'active' : 'removed';
++  const terminalWorkflowStep =
++    operationType === 'ADD' ? 'ACTIVE' : 'REMOVED';
++  return {
++    operation_id: TEST_OPERATION_ID,
++    partition_id: TEST_PARTITION_ID,
++    entity_id: TEST_PARTITION_ID,
++    replica_id: TEST_REPLICA_ID,
++    source_replica_id: TEST_SOURCE_REPLICA_ID,
++    target_node_id: TEST_TARGET_NODE_ID,
++    type: operationType,
++    status: terminalStatus,
++    workflow_step: terminalWorkflowStep,
++    created_at: TEST_NOW_MS - 2000,
++    updated_at: TEST_NOW_MS - 1000,
++    completed_at: TEST_NOW_MS - 1000,
++    ...overrides,
++  };
++}
++
++function buildCurrentPriorityPlacementObservation(options = {}) {
++  const partitionId = options.partitionId || TEST_PARTITION_ID;
++  return {
++    state: 'available',
++    satisfied: options.blocked === false,
++    priorityPartitionSummary: {
++      satisfied: options.blocked === false,
++      blockedPartitions: options.blocked === false ? [] : [{
++        partitionId,
++        spreadGap: 1,
++        exclusionReasonCounts: {
++          status_syncing: 1,
++        },
++      }],
++    },
++    leaderCoverage: {
++      satisfied: true,
++      missingLeaderPartitionIds: [],
++    },
++  };
++}
++
++function createCompletedPlacementHandoffGap(options = {}) {
++  const targetStatus = options.targetStatus ?? 'syncing';
++  const cache = createAuthoritativeRepairCache('node-local');
++  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
++    id: 'node-local',
++    node_id: 'node-local',
++    address: 'localhost:8080',
++    status: 'active',
++    last_heartbeat: TEST_NOW_MS,
++    ready_lease_expires_at: TEST_NOW_MS + 60000,
++  });
++  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
++    id: TEST_TARGET_NODE_ID,
++    node_id: TEST_TARGET_NODE_ID,
++    address: 'localhost:8081',
++    status: 'active',
++    last_heartbeat: TEST_NOW_MS,
++    ready_lease_expires_at: TEST_NOW_MS + 60000,
++  });
++  if (options.includeTarget !== false) {
++    cache.applySystemTableChange(
++      TABLES.SERVICES,
++      'INSERT',
++      buildTargetServiceRow({
++        status: targetStatus,
++        ...options.targetOverrides,
++      }),
++    );
++  }
++  cache.applySystemTableChange(
++    TABLES.REPLICA_OPERATIONS,
++    'INSERT',
++    buildTerminalOperationRow({
++      type: options.operationType || 'ADD',
++      ...options.operationOverrides,
++    }),
++  );
++  const controlSnapshot = new AdminControlSnapshot({
++    systemTableCache: cache,
++    cacheMutationTarget: cache,
++    nodeId: 'node-local',
++    nowFn: () => TEST_NOW_MS,
++    ensureAuthoritativeDiscoveryCacheRepair: async () => ({applied: true}),
++  });
++  const localSnapshot = {
++    capturedAt: TEST_NOW_MS,
++    controlPlaneDiagnostics: {
++      currentPriorityPlacementObservation:
++        buildCurrentPriorityPlacementObservation(),
++    },
++  };
++  return {cache, controlSnapshot, localSnapshot};
++}
++
++function observeCompletedPlacementHandoff(options = {}) {
++  const partitionId =
++    options.operationOverrides?.partition_id || TEST_PARTITION_ID;
++  const operationRows = options.operationRows || [
++    buildTerminalOperationRow(options.operationOverrides),
++  ];
++  const serviceRows = options.serviceRows === undefined ?
++    [buildTargetServiceRow()] :
++    options.serviceRows;
++  return buildCompletedPriorityPlacementHandoffObservation({
++    replicaOperationRows: operationRows,
++    serviceRows,
++    currentPriorityPlacementObservation:
++      buildCurrentPriorityPlacementObservation({
++        blocked: options.blocked,
++        partitionId,
++      }),
++    nowMs: TEST_NOW_MS,
++  });
++}
++
++test(
++  'ControlPlaneSnapshotOwner rejects a completed priority placement whose ' +
++  'captured target service is still syncing',
++  async (t) => {
++    const {controlSnapshot, localSnapshot} =
++      createCompletedPlacementHandoffGap();
++    const evaluation =
++      controlSnapshot.evaluateAuthoritativeControlSnapshotRepair(
++        localSnapshot,
++      );
++
++    t.equal(
++      evaluation.shouldRepair,
++      true,
++      'terminal operation and transitional target rows require reconciliation',
++    );
++    t.equal(
++      evaluation.triggerCodes.includes(
++        AUTHORITATIVE_REPAIR_TRIGGER
++          .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
++      ),
++      true,
++      'evaluation should name the completed-placement handoff boundary',
++    );
++    t.same(
++      evaluation.completedPriorityPlacementHandoff,
++      {
++        hasGap: true,
++        operationIds: [TEST_OPERATION_ID],
++        partitionIds: [TEST_PARTITION_ID],
++        targetReplicaIds: [TEST_REPLICA_ID],
++      },
++      'evaluation should preserve the exact operation/topology contradiction',
++    );
++
++    const owner = new ControlPlaneSnapshotOwner({controlSnapshot});
++    const observed = await owner.resolveControlSnapshot(localSnapshot);
++
++    t.equal(
++      observed.snapshotObservation.state,
++      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
++      'the existing snapshot owner must not certify the mixed witness fresh',
++    );
++    t.same(
++      observed.snapshotObservation.reasonCodes,
++      [
++        AUTHORITATIVE_REPAIR_TRIGGER
++          .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
++      ],
++      'the owner should carry the handoff gap into its freshness contract',
++    );
++  },
++);
++
++test(
++  'completed priority placement repair uses the existing owner handoff and ' +
++  're-evaluates after canonical scope reconciliation',
++  async (t) => {
++    const {cache, controlSnapshot, localSnapshot} =
++      createCompletedPlacementHandoffGap({
++        operationType: 'REPLACE',
++        targetStatus: 'creating',
++      });
++    const repairedSnapshot = {
++      ...localSnapshot,
++      controlPlaneDiagnostics: {
++        currentPriorityPlacementObservation:
++          buildCurrentPriorityPlacementObservation({blocked: false}),
++      },
++    };
++    controlSnapshot.buildLocalControlSnapshot = async () => repairedSnapshot;
++    const authoritativeReads = [];
++    const reconciliations = [];
++    let repairRequest = null;
++    const serviceDiscovery = new AdminServiceDiscovery({
++      nodeId: 'node-local',
++      systemTableCache: cache,
++      cacheMutationTarget: cache,
++      nowFn: () => TEST_NOW_MS,
++      controlPlaneSystemTableGateway: {
++        async executeRead(readIntent) {
++          const tableName = readIntent.tableName;
++          authoritativeReads.push(tableName);
++          const rows = cache.getAll(tableName).map((row) =>
++            tableName === TABLES.SERVICES &&
++            row.replica_id === TEST_REPLICA_ID ?
++              {...row, status: 'active'} :
++              {...row},
++          );
++          return {
++            success: true,
++            tableName,
++            rows,
++            rowSetComplete: true,
++            authoritativeObservation: {
++              scope:
++                CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++              tableName,
++              observedAtMs: TEST_NOW_MS,
++              causeId: `completed-placement:${tableName}`,
++              rowSetComplete: true,
++            },
++          };
++        },
++        async reconcileAuthoritativeCacheRows(tableName, rows, options) {
++          reconciliations.push({tableName, rows, options});
++          if (tableName === TABLES.SERVICES) {
++            cache.applySystemTableChange(
++              TABLES.SERVICES,
++              'UPDATE',
++              buildTargetServiceRow({status: 'active'}),
++            );
++          }
++          return {
++            success: true,
++            mutationCount: 1,
++            authoritativeObservedAtMs:
++              options.authoritativeObservation.observedAtMs,
++          };
++        },
++      },
++    });
++    const ensureCanonicalRepair =
++      serviceDiscovery.ensureAuthoritativeDiscoveryCacheRepair
++        .bind(serviceDiscovery);
++    serviceDiscovery.ensureAuthoritativeDiscoveryCacheRepair =
++      async (options) => {
++        repairRequest = options;
++        return ensureCanonicalRepair(options);
++      };
++    const owner = new ControlPlaneSnapshotOwner({
++      controlSnapshot,
++      serviceDiscovery,
++    });
++    const observed = await owner.resolveControlSnapshot(
++      localSnapshot,
++      {forceAuthoritativeRepair: true},
++    );
++    const repairTables = deriveAuthoritativeRepairTables(repairRequest);
++
++    t.same(
++      authoritativeReads,
++      [
++        TABLES.PARTITIONS,
++        TABLES.SERVICES,
++        TABLES.TABLES,
++        TABLES.REPLICA_OPERATIONS,
++      ],
++      'repair should use complete-table receipts for topology and its ledger',
++    );
++    t.same(
++      reconciliations.map(({tableName}) => tableName),
++      repairTables,
++      'canonical gateway should reconcile every requested authority table',
++    );
++    t.equal(
++      reconciliations.every(({options}) =>
++        options.authoritativeObservation.scope ===
++          CONTROL_PLANE_AUTHORITATIVE_OBSERVATION_SCOPE.COMPLETE_TABLE,
++      ),
++      true,
++      'every reconciliation should carry its own complete-table receipt',
++    );
++    t.same(
++      repairRequest.triggerCodes,
++      [
++        AUTHORITATIVE_REPAIR_TRIGGER
++          .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
++      ],
++      'snapshot owner should hand the exact contradiction to canonical repair',
++    );
++    t.equal(
++      observed.snapshotObservation.state,
++      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FRESH,
++      'owner should certify freshness only after post-repair re-evaluation',
++    );
++    t.same(
++      observed.snapshotObservation.reasonCodes,
++      [
++        AUTHORITATIVE_REPAIR_TRIGGER
++          .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
++      ],
++      'fresh result should retain the repaired boundary as audit history',
++    );
++    t.equal(
++      controlSnapshot.evaluateAuthoritativeControlSnapshotRepair(
++        repairedSnapshot,
++      ).completedPriorityPlacementHandoff.hasGap,
++      false,
++      'authoritative ACTIVE topology should clear rather than mask the gap',
++    );
++  },
++);
++
++test(
++  'completed priority placement handoff does not trigger once the exact ' +
++  'target service is ACTIVE',
++  async (t) => {
++    const {controlSnapshot, localSnapshot} =
++      createCompletedPlacementHandoffGap({targetStatus: 'active'});
++    const evaluation =
++      controlSnapshot.evaluateAuthoritativeControlSnapshotRepair(
++        localSnapshot,
++      );
++
++    t.equal(
++      evaluation.completedPriorityPlacementHandoff.hasGap,
++      false,
++      'operation evidence should not become a second topology authority',
++    );
++    t.equal(
++      evaluation.triggerCodes.includes(
++        AUTHORITATIVE_REPAIR_TRIGGER
++          .PRIORITY_PLACEMENT_COMPLETION_HANDOFF_GAP,
++      ),
++      false,
++      'an observed ACTIVE target should not request a redundant repair',
++    );
++  },
++);
++
++test(
++  'completed placement handoff detects terminal transitional targets and ' +
++  'fails closed on ambiguous or contradictory rows',
++  async (t) => {
++    const cases = [
++      {
++        name: 'ADD pending',
++        operationOverrides: {type: 'ADD'},
++        serviceRows: [buildTargetServiceRow({status: 'pending'})],
++        expected: true,
++      },
++      {
++        name: 'ADD creating',
++        operationOverrides: {type: 'ADD'},
++        serviceRows: [buildTargetServiceRow({status: 'creating'})],
++        expected: true,
++      },
++      {
++        name: 'REPLACE syncing',
++        operationOverrides: {type: 'REPLACE'},
++        expected: true,
++      },
++      {
++        name: 'ACTIVE target',
++        serviceRows: [buildTargetServiceRow({status: 'active'})],
++        expected: false,
++      },
++      {
++        name: 'removed target',
++        serviceRows: [buildTargetServiceRow({status: 'removed'})],
++        expected: false,
++      },
++      {
++        name: 'absent target',
++        serviceRows: [],
++        expected: false,
++      },
++      {
++        name: 'wrong target node',
++        serviceRows: [buildTargetServiceRow({node_id: 'node-other'})],
++        expected: false,
++      },
++      {
++        name: 'wrong target replica',
++        serviceRows: [buildTargetServiceRow({
++          service_id: `${TEST_PARTITION_ID}-r9`,
++          replica_id: `${TEST_PARTITION_ID}-r9`,
++        })],
++        expected: false,
++      },
++      {
++        name: 'nonterminal operation',
++        operationOverrides: {
++          status: 'pending',
++          workflow_step: 'PENDING',
++          completed_at: null,
++        },
++        expected: false,
++      },
++      {
++        name: 'nonpriority partition',
++        operationOverrides: {
++          partition_id: 'user_movies-p1',
++          entity_id: 'user_movies-p1',
++        },
++        serviceRows: [buildTargetServiceRow({
++          partition_id: 'user_movies-p1',
++        })],
++        expected: false,
++      },
++      {
++        name: 'unblocked priority partition',
++        blocked: false,
++        expected: false,
++      },
++      {
++        name: 'duplicate ACTIVE and SYNCING target',
++        serviceRows: [
++          buildTargetServiceRow({status: 'syncing'}),
++          buildTargetServiceRow({status: 'active'}),
++        ],
++        expected: false,
++      },
++    ];
++
++    for (const testCase of cases) {
++      const observation = observeCompletedPlacementHandoff(testCase);
++      t.equal(
++        observation.hasGap,
++        testCase.expected,
++        testCase.name,
++      );
++    }
++
++    const duplicateOperation = buildTerminalOperationRow();
++    const replayObservation = observeCompletedPlacementHandoff({
++      operationRows: [duplicateOperation, {...duplicateOperation}],
++    });
++    t.same(
++      replayObservation.operationIds,
++      [TEST_OPERATION_ID],
++      'duplicate/replayed ledger rows should retain one repair witness',
++    );
++  },
++);

@@ -68,6 +68,9 @@
  *     - test/partition/partition-service-raft-noop-cdc-placement.test.js
  *       (zero-change Raft applies cannot publish stale replica lifecycle state
  *        into current placement or the unchanged MovieLens schema gate)
+ *     - test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js
+ *       (terminal priority placement with a transitional target is stale until
+ *        the existing snapshot owner performs authoritative reconciliation)
  *
  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
  *   (default: run all scenarios)
@@ -144,6 +147,7 @@ const SCENARIOS = {
   ],
   'priority-placement-completed-topology-observation': [
     'test/partition/partition-service-raft-noop-cdc-placement.test.js',
+    'test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js',
     'test/admin/admin-control-snapshot-current-priority-placement.test.js',
     'test/runtime/movielens-preload-admission-gate.test.js',
   ],

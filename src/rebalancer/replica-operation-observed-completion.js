@@ -31,7 +31,7 @@ function firstStringField(record, ...keys) {
   return null;
 }
 
-function doesObservedActiveTargetReplicaServiceRowMatch(
+function doesObservedTargetReplicaServiceRowMatch(
   serviceRow,
   entityType,
   entityId,
@@ -45,12 +45,6 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
     'type',
   ) || '').toLowerCase();
   if (serviceType && serviceType !== entityType) {
-    return false;
-  }
-  if (String(firstStringField(
-    serviceRow,
-    LOCAL_STR_STATUS,
-  ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
     return false;
   }
   if (String(firstStringField(
@@ -88,6 +82,46 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
     ) || '') === entityId;
   }
   return true;
+}
+
+function buildObservedTargetReplicaIdentity(record) {
+  const replicaId = firstStringField(record, 'replicaId') || '';
+  const entityType = String(
+    firstStringField(record, 'entityType') || SERVICE_TYPE_PARTITION,
+  ).toLowerCase();
+  const entityId =
+    firstStringField(record, 'entityId', 'partitionGroupId') || '';
+  const targetNodeId = firstStringField(record, 'targetNodeId') || '';
+  const hasMissingIdentity = [replicaId, entityId, targetNodeId]
+    .some((value) => value.length === 0);
+  if (hasMissingIdentity) {
+    return null;
+  }
+  return {replicaId, entityType, entityId, targetNodeId};
+}
+
+function findObservedTargetReplicaServiceRows(record, options = {}) {
+  const supportsExactTarget =
+    record?.type === OperationType.ADD ||
+    record?.type === OperationType.REPLACE;
+  const targetIdentity = supportsExactTarget ?
+    buildObservedTargetReplicaIdentity(record) :
+    null;
+  if (!targetIdentity) {
+    return [];
+  }
+  const serviceRows = Array.isArray(options.serviceRows) ?
+    options.serviceRows :
+    [];
+  return serviceRows.filter((serviceRow) =>
+    doesObservedTargetReplicaServiceRowMatch(
+      serviceRow,
+      targetIdentity.entityType,
+      targetIdentity.entityId,
+      targetIdentity.targetNodeId,
+      targetIdentity.replicaId,
+    ),
+  );
 }
 
 function hasObservedActiveTargetServiceOwnership(record, options = {}) {
@@ -142,30 +176,13 @@ function hasObservedActiveTargetReplica(record, options = {}) {
     return hasObservedActiveTargetServiceOwnership(record, options);
   }
 
-  const replicaId = String(record?.replicaId || '');
-  const entityType = String(
-    record?.entityType || SERVICE_TYPE_PARTITION,
-  ).toLowerCase();
-  const entityId = String(
-    record?.entityId || record?.partitionGroupId || '',
-  );
-  const targetNodeId = String(record?.targetNodeId || '');
-  if (!replicaId || !entityId || !targetNodeId) {
-    return false;
-  }
-
-  const serviceRows = Array.isArray(options.serviceRows) ?
-    options.serviceRows :
-    [];
-  return serviceRows.some((serviceRow) =>
-    doesObservedActiveTargetReplicaServiceRowMatch(
-      serviceRow,
-      entityType,
-      entityId,
-      targetNodeId,
-      replicaId,
-    ),
-  );
+  return findObservedTargetReplicaServiceRows(record, options)
+    .some((serviceRow) =>
+      String(firstStringField(
+        serviceRow,
+        LOCAL_STR_STATUS,
+      ) || '').toLowerCase() === REPLICA_OPERATION_STATUS_ACTIVE,
+    );
 }
 
 function doesObservedSourceReplicaServiceRowBlockRetirement(
@@ -258,5 +275,6 @@ function hasObservedCompletedReplicaOperation(record, options = {}) {
 }
 
 export {
+  findObservedTargetReplicaServiceRows,
   hasObservedCompletedReplicaOperation,
 };
