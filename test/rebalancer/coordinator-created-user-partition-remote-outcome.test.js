@@ -336,6 +336,11 @@ test(
         'runtime completion should retain the remote-handoff boundary',
       );
       t.equal(
+        harness.deliveries[0]?.payload?.[ControlPlaneField.HANDOFF_MODE],
+        COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+        'runtime completion should mark the wake as target progress',
+      );
+      t.equal(
         operation.workflowStep,
         WORKFLOW_STEP.CREATING,
         'the target observer must not mutate source-owned runtime workflow',

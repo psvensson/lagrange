@@ -3,6 +3,7 @@ import * as COORDINATOR_HANDOFF_RETRY
   from './operation-workflow-coordinator-handoff-retry.js';
 
 const {
+  CONTROL_PLANE_OPERATION_HANDOFF_MODE,
   COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
   ControlPlaneField,
   ControlPlaneMessageType,
@@ -281,6 +282,9 @@ function withOwnerHandoffState(Base) {
               [ControlPlaneField.OPERATION_ID]: operation.operationId,
               [ControlPlaneField.OPERATION_ROW]:
                 this.buildCoordinatorCreatedDispatchRow(operation),
+              [ControlPlaneField.HANDOFF_MODE]:
+                options.handoffMode ||
+                CONTROL_PLANE_OPERATION_HANDOFF_MODE.INITIAL_DISPATCH,
             },
             deliveryOptions,
           ),

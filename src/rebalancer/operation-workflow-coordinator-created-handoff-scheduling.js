@@ -6,6 +6,7 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from
   './operation-workflow-owner-shared.js';
 
 const {
+  CONTROL_PLANE_OPERATION_HANDOFF_MODE,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -14,11 +15,8 @@ const {
   classifySystemPartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
-const COORDINATOR_CREATED_REMOTE_HANDOFF_MODE = Object.freeze({
-  NONE: 'none',
-  INITIAL_DISPATCH: 'initial_dispatch',
-  TARGET_EXECUTOR_OUTCOME: 'target_executor_outcome',
-});
+const COORDINATOR_CREATED_REMOTE_HANDOFF_MODE =
+  CONTROL_PLANE_OPERATION_HANDOFF_MODE;
 
 const EXECUTOR_OUTCOME_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
   new Set([

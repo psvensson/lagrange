@@ -131,7 +131,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
     }
 
     try {
-      if (this.shouldExecuteOperationFromDispatchReplay(row)) {
+      if (this.shouldExecuteOperationFromDispatchReplay(row, context)) {
         this.clearDeferredOperationDispatchRetry(operationId);
         const operation = this.buildOperationFromRow(row);
         if (

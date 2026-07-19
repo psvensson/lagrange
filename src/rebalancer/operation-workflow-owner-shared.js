@@ -8,6 +8,7 @@
 
 import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
 import {
+  CONTROL_PLANE_OPERATION_HANDOFF_MODE,
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../control-plane/control-plane-constants.js';
@@ -527,6 +528,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
+  CONTROL_PLANE_OPERATION_HANDOFF_MODE,
   ControlPlaneField,
   ControlPlaneMessageType,
   ControlPlaneReadinessService,

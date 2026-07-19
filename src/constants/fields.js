@@ -12,6 +12,7 @@ const FIELD = Object.freeze({
   OPERATION_ID: 'operationId',
   OPERATION_TYPE: 'operationType',
   OPERATION_ROW: 'operationRow',
+  HANDOFF_MODE: 'handoffMode',
   PARTITION_ID: 'partitionId',
   REPLICA_ID: 'replicaId',
   REPLICA_IDS: 'replicaIds',

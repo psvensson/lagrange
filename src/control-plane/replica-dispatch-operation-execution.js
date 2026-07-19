@@ -74,6 +74,12 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
         {
           row: operationRow,
           [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
+          ...(payload?.[ControlPlaneField.HANDOFF_MODE] ?
+            {
+              [ControlPlaneField.HANDOFF_MODE]:
+                payload[ControlPlaneField.HANDOFF_MODE],
+            } :
+            {}),
         } :
         undefined,
     );

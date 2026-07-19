@@ -5,6 +5,10 @@ import {
   isActiveReplaceSourceRemovalPhase,
 } from '../rebalancer/replica-operation-step-policy.js';
 import {
+  CONTROL_PLANE_OPERATION_HANDOFF_MODE,
+} from './control-plane-constants.js';
+import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
+import {
   getDispatchRetryRowOperationIds,
   getDispatchRetryRowPartitionIds,
   getPriorityRecoveryDispatchRetryBlockedOperationIds,
@@ -13,6 +17,7 @@ import {
 } from './replica-dispatch-priority-recovery-retry-evidence.js';
 
 const {
+  ControlPlaneField,
   DISPATCH_LOG_MSG,
   OperationType,
   RECONCILE_REASON,
@@ -31,6 +36,12 @@ const DISPATCH_REPLAY_READY_NODE_PHASE = Object.freeze({
   ACTIVE_REPLACE_SOURCE_REMOVAL: 'active_replace_source_removal',
   NOT_REPLAYABLE: 'not_replayable',
 });
+const RUNTIME_TARGET_PROGRESS_WAKE_OPERATION_TYPES = Object.freeze(
+  new Set([
+    OperationType.ADD,
+    OperationType.REPLACE,
+  ]),
+);
 
 class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
   /**
@@ -193,11 +204,37 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
   }
 
   /**
+   * Target executor completion wakes are progress signals, not permission to
+   * make every non-system CREATING operation generally replayable. Admit only
+   * the runtime create-side shape whose source owner can reconcile the exact
+   * services row through its canonical workflow lane.
+   *
    * @param {Object} operation
+   * @param {Object} context
    * @return {boolean}
    * @private
    */
-  shouldExecuteOperationFromDispatchReplay(operation) {
+  isRuntimeTargetProgressWakeOperation(operation, context = {}) {
+    const partitionClassification = classifySystemPartition({
+      partitionId: operation?.partition_id,
+    });
+    return [
+      context?.[ControlPlaneField.HANDOFF_MODE] ===
+        CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+      operation?.entity_type === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+      RUNTIME_TARGET_PROGRESS_WAKE_OPERATION_TYPES.has(operation?.type),
+      operation?.workflow_step === WORKFLOW_STEP.CREATING,
+      partitionClassification.systemTable !== true,
+    ].every(Boolean);
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object} context
+   * @return {boolean}
+   * @private
+   */
+  shouldExecuteOperationFromDispatchReplay(operation, context = {}) {
     if (!operation || typeof operation !== 'object') {
       return false;
     }
@@ -206,6 +243,7 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     }
     return (
       this.isDispatchReplayCreateTargetRearmOperation(operation) ||
+      this.isRuntimeTargetProgressWakeOperation(operation, context) ||
       (
         operation.type === OperationType.REPLACE &&
         operation.workflow_step === WORKFLOW_STEP.ACTIVE
