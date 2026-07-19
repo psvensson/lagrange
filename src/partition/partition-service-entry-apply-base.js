@@ -709,7 +709,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           });
           if (this.isLeader) {
             this.trackPendingCDCEvent(
-              this.generateCDCEvent(command).catch((err) => {
+              this.generateCDCEvent({
+                ...command,
+                changes: info.changes,
+              }).catch((err) => {
                 if (this.isShutdown) {
                   return;
                 }

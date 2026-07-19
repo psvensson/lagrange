@@ -1,0 +1,74 @@
+{
+  "id": "priority-placement-completed-topology-observation",
+  "authoringContractVersion": 1,
+  "statement": "Completed ADD and REPLACE topology for priority control-plane partitions is reflected by the current priority-placement observation: every authoritative ACTIVE voter-ready replica counts exactly once, removed or superseded rows do not count, canonical leader coverage matches partition leader ownership, the unchanged MovieLens schema admission reaches admitted, a deterministic production-path guard is red on revert, and three consecutive fresh live MovieLens runs report priority metric 0.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "runtime-replica-state-projection-retained-reconcile-integrity-reseal",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "cc95da34b806db16a057b97ce9509cd7430d5b94"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-placement-completed-topology-observation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "priority-placement-completed-topology-observation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "priority-placement-completed-topology-observation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-authoritative-topology-source",
+      "statement": "Preserve existing owner boundaries: services-table rows, partition leader ownership, and local runtime lifecycle remain authoritative in their current owners. The observation may compose current authoritative inputs, but must not write observer/cache state, synthesize ACTIVE or leader state, create a second topology authority, or mutate placement to make admission pass."
+    },
+    {
+      "id": "completed-operation-projection",
+      "statement": "A terminal ADD or REPLACE must not leave its successfully activated target excluded as syncing, nor leave the removed source eligible. A previously failed superseded replica remains failed and excluded without masking a later successful replacement for the same partition."
+    },
+    {
+      "id": "leader-coverage-fidelity",
+      "statement": "Leader coverage must require a currently eligible voter service row on the authoritative partitions.leader_node_id. It must not accept a follower-only topology, backfill a missing leader from stale cache, or reject a valid completed leader handoff because a prior source row remains locally visible."
+    },
+    {
+      "id": "production-path-red-on-revert",
+      "statement": "Before live validation, add the scenario mapping and prove through the production current-priority-placement observation and schema-admission composition that completed replacement topology clears spread and leader gaps, while a stale syncing overlay or removed-source overlay reproduces the pre-fix denial when the change is reverted."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change replica-operation or voter-ready deadlines, schema-admission or stability budgets, rebalancer cadence or concurrency, MovieLens schema, preload, 500-row loader batch, ratings split policy, affinity scoring, exact-result predicates, or live runner ordering."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "After deterministic and model verification and a source checkpoint, use the unchanged ordered runner: five formation probes must pass before three measuring MovieLens repetitions; stop on the first thermally valid red, preserve immutable stopped-state evidence, and never rerun unchanged bytes."
+    },
+    {
+      "id": "model-contract-gate",
+      "statement": "Run npm run model:contracts before the live gate and use model:architecture/contracts/core-system-logic.md for any model-rung owner-boundary attempt."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The source-stable 2026-07-19T21:22:24.859Z measuring run is the witness: all replica operations drained, authoritative services rows showed completed replacement targets ACTIVE, yet schema admission remained denied for 24 observations with critical_system_spread_open, total spread gap 6, two missing leaders, and stale syncing/failed exclusions. The immutable archive sha256 is 45ee52fe4162931b71cbcf8cf19cacfbe3b7b49c7f25dd93f43ddf8ef0f2fc01."
+    }
+  ]
+}

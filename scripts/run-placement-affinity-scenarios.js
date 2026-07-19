@@ -64,6 +64,10 @@
  *        every participant attempt consumes the original absolute deadline)
  *     - test/partition/partition-service-write-commit.test.js
  *       (uncommitted proposals stay invisible and demotion releases the owner)
+ *   priority-placement-completed-topology-observation
+ *     - test/partition/partition-service-raft-noop-cdc-placement.test.js
+ *       (zero-change Raft applies cannot publish stale replica lifecycle state
+ *        into current placement or the unchanged MovieLens schema gate)
  *
  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
  *   (default: run all scenarios)
@@ -137,6 +141,11 @@ const SCENARIOS = {
   'write-path-internal-pacing': [
     'test/query/write-path-internal-pacing.test.js',
     'test/partition/partition-service-write-commit.test.js',
+  ],
+  'priority-placement-completed-topology-observation': [
+    'test/partition/partition-service-raft-noop-cdc-placement.test.js',
+    'test/admin/admin-control-snapshot-current-priority-placement.test.js',
+    'test/runtime/movielens-preload-admission-gate.test.js',
   ],
 };
 
