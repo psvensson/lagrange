@@ -17,6 +17,7 @@ const {
   buildPriorityRecoveryOperationAssessment,
   classifySystemPartition,
   getPartitionRowFromCache,
+  isNodeRecordReady,
   resolvePriorityRecoveryActiveNodeCohort,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -215,16 +216,25 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
           decisionDimension: readinessDecisionDimension,
         },
       );
-      return (
-        this.isReadinessDimensionSatisfied(
-          readiness,
-          readinessDecisionDimension,
-        ) ||
+      if (
         this.isStartupAuthorityControlPlanePlacementEligibleNode(
           node,
           readinessDecisionDimension,
         )
-      );
+      ) {
+        return true;
+      }
+      if (
+        !this.isReadinessDimensionSatisfied(
+          readiness,
+          readinessDecisionDimension,
+        )
+      ) {
+        return false;
+      }
+      return readinessDecisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
+        isNodeRecordReady(node);
     });
   }
 

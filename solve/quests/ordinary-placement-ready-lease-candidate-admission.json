@@ -1,0 +1,66 @@
+{
+  "id": "ordinary-placement-ready-lease-candidate-admission",
+  "authoringContractVersion": 1,
+  "statement": "For ordinary non-system placement, a published node whose ready lease has expired is absent from available candidates while a repair-eligible node with a current lease remains eligible, and the unchanged fresh MovieLens live gate reports priority metric 0.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "runtime-service-active-outcome-remote-owner-handoff",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "faf9a95d685db3ece2a1afb52d05b17ce4925b08"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "ordinary-placement-ready-lease-candidate-admission-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change MovieLens schema, preload, workload, joins, ratings-only split policy, report conversion, retry duration, operation deadlines, concurrency budgets, 180000ms schema budget, 60000ms stability window, 300000ms stall window, 600000ms convergence budget, affinity scoring, freshness, identity, boundedness, placement, or exact-result predicates."
+    },
+    {
+      "id": "ordinary-candidate-conjunction",
+      "statement": "For ordinary non-system entities, candidate discovery must require both the existing canonical repairEligible dimension and a currently ready node record. Do not redefine repairEligible, create a second readiness snapshot owner, or admit a node that canonical readiness rejects."
+    },
+    {
+      "id": "startup-authority-preservation",
+      "statement": "Preserve the existing startup-authority exception that permits owner-authored startup-cohort peers to receive critical control-plane placement before strict ready-lease publication. Do not apply the ordinary ready-record conjunct to that exception."
+    },
+    {
+      "id": "membership-and-execution-preservation",
+      "statement": "Preserve published-membership constraints, priority-recovery cohort selection, placement scoring and load ordering, capacity admission, pre-execution lease/transport/queue/ping checks, and granular skipped-move diagnostics."
+    },
+    {
+      "id": "production-path-proof",
+      "statement": "Before another live run, deterministically prove through the real UnifiedRebalancer ordinary runtime-service path that a published repairEligible target with an expired ready lease is excluded before planning, a published repairEligible alternative with a current lease receives the ADD, the expired target is not retried, and the test is red-on-revert."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-19T16:14:11.463Z fresh ordered failure is the witness: only local operation 6e1d8115-6b7f-4e79-8155-1041a7ecd93f completed; later cycles stayed at healthyReplicaCount=1 because published node 19eb1497-4db7-4fbc-a04f-455d57845d6f had an expired ready lease yet remained the repairEligible candidate selected and rejected before execution while other published nodes still had current leases."
+    }
+  ]
+}
