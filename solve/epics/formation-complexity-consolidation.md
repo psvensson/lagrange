@@ -108,6 +108,22 @@ morning) the learned-affinity phase under the same machine conditions.
   owns the fix: cure-typed move without a natural REPLACE pairing, plus a
   typed composite-state decline diagnostic. Event-driven re-evaluation on
   inventory recovery stays a named follow-up, not in this quest.
+  **SOLVED (commit 42527700 + proof-suite commit, 2026-07-19 morning).**
+  Deeper root cause than the forensics verdict above: the planner's spread
+  ADD was fine — the TERMINAL rows of the drained lineage (completed ADD +
+  REMOVE, visible because SELECT_OPERATIONS_BY_ENTITY has no terminal
+  filter) defeated the union escape's blanket topology-increasing check.
+  Fix: the escape re-blocks only on CREATION-PHASE (addTransitional) ops;
+  drain-phase REPLACE add-likes stay blocked by the (verified, ordered
+  BEFORE the guard) entity create lane; one-cure-per-tick re-block intact
+  via the admitted cure's own PENDING row. Adversarial verifier
+  CONFIRMED-SAFE (stash RED-check). Live fix-run 08-49-05 passed schema
+  admission where both same-day clean-HEAD controls failed; it then failed
+  DOWNSTREAM on a managed ratings split aborting with participant failures
+  leaving priority replicas stuck syncing (provisioning-liveness residual
+  class, next candidate slice). Verifier residual risks recorded in the
+  quest log: lane-before-guard ordering coupling, blank-workflow-field
+  schema drift, injected inventory builders omitting addTransitional.
 - Flag-surface tail (small, unqueued): delete the uncalled
   shouldMetadataPublicationAllowPressureDefer
   (partition-service-metadata-delivery-methods.js) and the stale
