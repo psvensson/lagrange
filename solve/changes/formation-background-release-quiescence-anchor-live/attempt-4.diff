@@ -1,0 +1,394 @@
+diff --git a/examples/service-data-affinity/affinity-demo-preload-gate.js b/examples/service-data-affinity/affinity-demo-preload-gate.js
+index b9028c77b943624c25b347900413fc8ecb6edaf5..2c3291e52b80d915c2f4c2cb67128a36b36105c8 100644
+--- a/examples/service-data-affinity/affinity-demo-preload-gate.js
++++ b/examples/service-data-affinity/affinity-demo-preload-gate.js
+@@ -12,6 +12,10 @@ import {
+ import {
+   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
+ } from '../../src/control-plane/control-plane-snapshot-owner.js';
++import {
++  advanceSchemaAdmissionTransitionHistory,
++  buildEmptySchemaAdmissionTransitionHistory,
++} from './affinity-demo-schema-admission-history.js';
+ 
+ const ADMIN_STREAM_LANE = Object.freeze({
+   LOAD: 'load',
+@@ -511,6 +515,7 @@ function buildSchemaAdmissionEvidence(
+   snapshot,
+   target,
+   stableConfirmationCount,
++  transitionHistory,
+ ) {
+   const admitted =
+     stableConfirmationCount >= SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
+@@ -521,6 +526,7 @@ function buildSchemaAdmissionEvidence(
+       PRELOAD_ADMISSION_STATE.DENIED,
+     snapshot,
+     stableConfirmationCount,
++    transitionHistory,
+     target,
+   });
+ }
+@@ -637,6 +643,7 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
+   );
+   let stableConfirmationCount = ZERO;
+   let stabilityWindow = INACTIVE_SCHEMA_STABILITY_WINDOW;
++  let transitionHistory = buildEmptySchemaAdmissionTransitionHistory();
+   let lastEvidence = null;
+ 
+   while (true) {
+@@ -648,19 +655,32 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
+       target,
+       deadlineMs,
+     );
++    const observedAtMs = now();
++    const previousStabilityWindow = stabilityWindow;
+     const stabilityObservation = buildSchemaStabilityObservation(
+       observedSnapshot,
+       stabilityWindow,
+       stableConfirmationCount,
+       stableWindowMs,
+-      now(),
++      observedAtMs,
+     );
+     stabilityWindow = stabilityObservation.stabilityWindow;
+     stableConfirmationCount = stabilityObservation.stableConfirmationCount;
++    transitionHistory = advanceSchemaAdmissionTransitionHistory(
++      transitionHistory,
++      {
++        snapshot: stabilityObservation.snapshot,
++        previousStabilityWindow,
++        nextStabilityWindow: stabilityWindow,
++        stableConfirmationCount,
++        observedAtMs,
++      },
++    );
+     const evidence = buildSchemaAdmissionEvidence(
+       stabilityObservation.snapshot,
+       target,
+       stableConfirmationCount,
++      transitionHistory,
+     );
+     lastEvidence = evidence;
+     if (evidence.admitted) {
+diff --git a/examples/service-data-affinity/affinity-demo-schema-admission-history.js b/examples/service-data-affinity/affinity-demo-schema-admission-history.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..fac0f92985f04b62e62ea2fd8f56d428ae1caec1
+--- /dev/null
++++ b/examples/service-data-affinity/affinity-demo-schema-admission-history.js
+@@ -0,0 +1,206 @@
++const SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT = 64;
++const SCHEMA_ADMISSION_TRANSITION_HISTORY_SCHEMA_VERSION = 1;
++const SCHEMA_STABILITY_WINDOW_PHASE_OBSERVING = 'observing';
++const SCHEMA_STABILITY_WINDOW_TRANSITION = Object.freeze({
++  HELD: 'held',
++  INACTIVE: 'inactive',
++  OBSERVING: 'observing',
++  RESET: 'reset',
++  STARTED: 'started',
++});
++const ZERO = 0;
++
++function freezeArray(values = []) {
++  return Object.freeze(Array.isArray(values) ? [...values] : []);
++}
++
++function normalizeOptionalNonNegativeInteger(value) {
++  return Number.isInteger(value) && value >= ZERO ? value : null;
++}
++
++function buildEmptySchemaAdmissionTransitionHistory() {
++  return Object.freeze({
++    schemaVersion: SCHEMA_ADMISSION_TRANSITION_HISTORY_SCHEMA_VERSION,
++    limit: SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT,
++    droppedTransitionCount: ZERO,
++    transitions: Object.freeze([]),
++  });
++}
++
++function resolveSchemaStabilityWindowTransition({
++  snapshot,
++  previousStabilityWindow,
++  nextStabilityWindow,
++}) {
++  if (snapshot?.stabilityWindowHeld === true) {
++    return SCHEMA_STABILITY_WINDOW_TRANSITION.HELD;
++  }
++  const previousObserving =
++    previousStabilityWindow?.phase ===
++      SCHEMA_STABILITY_WINDOW_PHASE_OBSERVING;
++  const nextObserving =
++    nextStabilityWindow?.phase === SCHEMA_STABILITY_WINDOW_PHASE_OBSERVING;
++  if (previousObserving && !nextObserving) {
++    return SCHEMA_STABILITY_WINDOW_TRANSITION.RESET;
++  }
++  if (!previousObserving && nextObserving) {
++    return SCHEMA_STABILITY_WINDOW_TRANSITION.STARTED;
++  }
++  return nextObserving ?
++    SCHEMA_STABILITY_WINDOW_TRANSITION.OBSERVING :
++    SCHEMA_STABILITY_WINDOW_TRANSITION.INACTIVE;
++}
++
++function buildCriticalSystemTransitionEvidence(criticalSystemTopology = {}) {
++  return Object.freeze({
++    ready: criticalSystemTopology.ready === true,
++    observationState:
++      typeof criticalSystemTopology.observationState === 'string' ?
++        criticalSystemTopology.observationState :
++        null,
++    totalSpreadGap: normalizeOptionalNonNegativeInteger(
++      criticalSystemTopology.totalSpreadGap,
++    ),
++    prioritySpreadGap: normalizeOptionalNonNegativeInteger(
++      criticalSystemTopology.prioritySpreadGap,
++    ),
++    missingLeaderPartitionCount: normalizeOptionalNonNegativeInteger(
++      criticalSystemTopology.missingLeaderPartitionCount,
++    ),
++  });
++}
++
++function buildSchemaAdmissionTransition({
++  snapshot,
++  previousStabilityWindow,
++  nextStabilityWindow,
++  stableConfirmationCount,
++  observedAtMs,
++}) {
++  const controlPlanePressureReasonCodes = freezeArray(
++    snapshot?.controlPlanePressureSignals?.map(
++      (signal) => signal?.reasonCode,
++    ).filter(Boolean),
++  );
++  return Object.freeze({
++    firstObservedAtMs: observedAtMs,
++    lastObservedAtMs: observedAtMs,
++    observationCount: 1,
++    state: typeof snapshot?.state === 'string' ? snapshot.state : null,
++    canonicalBlocker:
++      typeof snapshot?.canonicalBlocker === 'string' ?
++        snapshot.canonicalBlocker :
++        null,
++    reasonCodes: freezeArray(snapshot?.reasonCodes),
++    ready: snapshot?.ready === true,
++    stabilityWindowHeld: snapshot?.stabilityWindowHeld === true,
++    stableElapsedMs: normalizeOptionalNonNegativeInteger(
++      snapshot?.stableElapsedMs,
++    ),
++    effectiveInFlightCount: normalizeOptionalNonNegativeInteger(
++      snapshot?.effectiveInFlightCount,
++    ),
++    controlPlanePressureReasonCodes,
++    criticalSystemTopology: buildCriticalSystemTransitionEvidence(
++      snapshot?.criticalSystemTopology,
++    ),
++    windowTransition: resolveSchemaStabilityWindowTransition({
++      snapshot,
++      previousStabilityWindow,
++      nextStabilityWindow,
++    }),
++    windowPhase:
++      typeof nextStabilityWindow?.phase === 'string' ?
++        nextStabilityWindow.phase :
++        null,
++    windowStartedAtMs: normalizeOptionalNonNegativeInteger(
++      nextStabilityWindow?.startedAtMs,
++    ),
++    lastQuiescentObservationAtMs: normalizeOptionalNonNegativeInteger(
++      nextStabilityWindow?.lastQuiescentObservationAtMs,
++    ),
++    stableConfirmationCount: normalizeOptionalNonNegativeInteger(
++      stableConfirmationCount,
++    ),
++  });
++}
++
++function schemaAdmissionTransitionFingerprint(transition) {
++  return JSON.stringify([
++    transition.state,
++    transition.canonicalBlocker,
++    transition.reasonCodes,
++    transition.ready,
++    transition.stabilityWindowHeld,
++    transition.effectiveInFlightCount,
++    transition.controlPlanePressureReasonCodes,
++    transition.criticalSystemTopology,
++    transition.windowTransition,
++    transition.windowPhase,
++    transition.stableConfirmationCount,
++  ]);
++}
++
++function updateRepeatedSchemaAdmissionTransition(
++  transition,
++  nextTransition,
++) {
++  return Object.freeze({
++    ...transition,
++    lastObservedAtMs: nextTransition.lastObservedAtMs,
++    observationCount: transition.observationCount + 1,
++    stableElapsedMs: nextTransition.stableElapsedMs,
++    windowStartedAtMs: nextTransition.windowStartedAtMs,
++    lastQuiescentObservationAtMs:
++      nextTransition.lastQuiescentObservationAtMs,
++  });
++}
++
++function advanceSchemaAdmissionTransitionHistory(
++  history,
++  transitionOptions,
++) {
++  const currentHistory =
++    history?.schemaVersion ===
++      SCHEMA_ADMISSION_TRANSITION_HISTORY_SCHEMA_VERSION &&
++    Array.isArray(history.transitions) ?
++      history :
++      buildEmptySchemaAdmissionTransitionHistory();
++  const transition = buildSchemaAdmissionTransition(transitionOptions);
++  const transitions = [...currentHistory.transitions];
++  const previousTransition = transitions.at(-1);
++  if (
++    previousTransition &&
++    schemaAdmissionTransitionFingerprint(previousTransition) ===
++      schemaAdmissionTransitionFingerprint(transition)
++  ) {
++    transitions[transitions.length - 1] =
++      updateRepeatedSchemaAdmissionTransition(
++        previousTransition,
++        transition,
++      );
++    return Object.freeze({
++      ...currentHistory,
++      transitions: Object.freeze(transitions),
++    });
++  }
++  transitions.push(transition);
++  const droppedNow = Math.max(
++    ZERO,
++    transitions.length - SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT,
++  );
++  return Object.freeze({
++    ...currentHistory,
++    droppedTransitionCount:
++      currentHistory.droppedTransitionCount + droppedNow,
++    transitions: Object.freeze(
++      droppedNow > ZERO ? transitions.slice(droppedNow) : transitions,
++    ),
++  });
++}
++
++export {
++  SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT,
++  advanceSchemaAdmissionTransitionHistory,
++  buildEmptySchemaAdmissionTransitionHistory,
++};
+diff --git a/test/runtime/movielens-preload-admission-gate.test.js b/test/runtime/movielens-preload-admission-gate.test.js
+index 7b308a24ae86fb01a539a4a052013c6ed6ad6421..0241be524693b1667e1a3243fa8ea0498b7085c4 100644
+--- a/test/runtime/movielens-preload-admission-gate.test.js
++++ b/test/runtime/movielens-preload-admission-gate.test.js
+@@ -4,6 +4,9 @@ import {
+   waitForAffinityDemoSchemaAdmission,
+   waitForAffinityDemoPreloadAdmission,
+ } from '../../examples/service-data-affinity/affinity-demo-preload-gate.js';
++import {
++  SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT,
++} from '../../examples/service-data-affinity/affinity-demo-schema-admission-history.js';
+ 
+ const BASE_TARGET = 'ws://127.0.0.1:8081/api/admin/stream';
+ const SNAPSHOT_TARGET = `${BASE_TARGET}?lane=snapshot`;
+@@ -706,6 +709,19 @@ test('pre-schema admission holds accumulated stability through a transient ' +
+     'admission should complete without restarting the stable window');
+   t.equal(call, 7,
+     'one real quiet poll after the observer failure should confirm');
++  const heldTransition = result.transitionHistory.transitions.find(
++    (transition) => transition.windowTransition === 'held',
++  );
++  t.equal(heldTransition?.state, 'control_plane_pressure',
++    'transition evidence distinguishes observer blindness from real churn');
++  t.match(
++    heldTransition?.reasonCodes,
++    ['control_plane_pressure', 'snapshot_query_error'],
++    'the held transition retains its observer-error classification',
++  );
++  t.equal(heldTransition?.stabilityWindowHeld, true);
++  t.equal(heldTransition?.stableConfirmationCount, 1,
++    'the held transition retains accumulated confirmation evidence');
+   t.end();
+ });
+ 
+@@ -740,5 +756,74 @@ test('pre-schema admission still resets accumulated stability on real churn',
+     t.ok(call >= 11,
+       'a regressing poll must forfeit the window and restart the sequence, ' +
+       `got ${call} polls`);
++    const resetTransition = result.transitionHistory.transitions.find(
++      (transition) => transition.windowTransition === 'reset',
++    );
++    t.equal(resetTransition?.state, 'critical_spread_open');
++    t.equal(
++      resetTransition?.canonicalBlocker,
++      'critical_system_spread_open',
++      'transition evidence names the real blocker that reset the window',
++    );
++    t.equal(resetTransition?.criticalSystemTopology.totalSpreadGap, 1);
++    t.equal(resetTransition?.stableConfirmationCount, 0);
++    t.end();
++  });
++
++test('schema admission transition evidence is change-only and bounded',
++  async (t) => {
++    let call = 0;
++    let currentNowMs = 0;
++    const timeoutMs = SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT + 8;
++    const error = await t.rejects(
++      waitForAffinityDemoSchemaAdmission({
++        target: BASE_TARGET,
++        now: () => currentNowMs,
++        sleep: async () => {
++          currentNowMs += 1;
++        },
++        timeoutMs,
++        pollIntervalMs: 0,
++        stableWindowMs: timeoutMs * 2,
++        query: async () => {
++          call += 1;
++          if (call > 3 && call % 2 === 0) {
++            return {rows: [buildControlSnapshot({
++              controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(1),
++            })]};
++          }
++          return {rows: [buildControlSnapshot({
++            replicaOperations: {
++              inFlightCount: 1,
++              staleInFlightCount: 0,
++              rows: [{operation_id: `formation-operation-${call}`}],
++            },
++          })]};
++        },
++      }),
++      /MovieLens schema admission timed out/,
++    );
++    const history = error.schemaAdmission.transitionHistory;
++    t.equal(
++      history.transitions.length,
++      SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT,
++      'the live report cannot grow with an unbounded polling history',
++    );
++    t.ok(history.droppedTransitionCount > 0,
++      'truncation remains explicit evidence rather than silent loss');
++    t.ok(
++      call >
++        history.transitions.length + history.droppedTransitionCount,
++      'unchanged consecutive observations collapse into one counted entry',
++    );
++    t.equal(
++      history.transitions.at(-1).lastObservedAtMs,
++      timeoutMs - 1,
++      'the bounded tail retains the most recent transition',
++    );
++    t.equal(
++      history.transitions.at(-1).canonicalBlocker,
++      'critical_system_spread_open',
++    );
+     t.end();
+   });

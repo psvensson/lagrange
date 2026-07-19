@@ -12,6 +12,10 @@ import {
 import {
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
 } from '../../src/control-plane/control-plane-snapshot-owner.js';
+import {
+  advanceSchemaAdmissionTransitionHistory,
+  buildEmptySchemaAdmissionTransitionHistory,
+} from './affinity-demo-schema-admission-history.js';
 
 const ADMIN_STREAM_LANE = Object.freeze({
   LOAD: 'load',
@@ -511,6 +515,7 @@ function buildSchemaAdmissionEvidence(
   snapshot,
   target,
   stableConfirmationCount,
+  transitionHistory,
 ) {
   const admitted =
     stableConfirmationCount >= SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
@@ -521,6 +526,7 @@ function buildSchemaAdmissionEvidence(
       PRELOAD_ADMISSION_STATE.DENIED,
     snapshot,
     stableConfirmationCount,
+    transitionHistory,
     target,
   });
 }
@@ -637,6 +643,7 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
   );
   let stableConfirmationCount = ZERO;
   let stabilityWindow = INACTIVE_SCHEMA_STABILITY_WINDOW;
+  let transitionHistory = buildEmptySchemaAdmissionTransitionHistory();
   let lastEvidence = null;
 
   while (true) {
@@ -648,19 +655,32 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
       target,
       deadlineMs,
     );
+    const observedAtMs = now();
+    const previousStabilityWindow = stabilityWindow;
     const stabilityObservation = buildSchemaStabilityObservation(
       observedSnapshot,
       stabilityWindow,
       stableConfirmationCount,
       stableWindowMs,
-      now(),
+      observedAtMs,
     );
     stabilityWindow = stabilityObservation.stabilityWindow;
     stableConfirmationCount = stabilityObservation.stableConfirmationCount;
+    transitionHistory = advanceSchemaAdmissionTransitionHistory(
+      transitionHistory,
+      {
+        snapshot: stabilityObservation.snapshot,
+        previousStabilityWindow,
+        nextStabilityWindow: stabilityWindow,
+        stableConfirmationCount,
+        observedAtMs,
+      },
+    );
     const evidence = buildSchemaAdmissionEvidence(
       stabilityObservation.snapshot,
       target,
       stableConfirmationCount,
+      transitionHistory,
     );
     lastEvidence = evidence;
     if (evidence.admitted) {

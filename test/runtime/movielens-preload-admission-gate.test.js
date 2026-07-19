@@ -4,6 +4,9 @@ import {
   waitForAffinityDemoSchemaAdmission,
   waitForAffinityDemoPreloadAdmission,
 } from '../../examples/service-data-affinity/affinity-demo-preload-gate.js';
+import {
+  SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT,
+} from '../../examples/service-data-affinity/affinity-demo-schema-admission-history.js';
 
 const BASE_TARGET = 'ws://127.0.0.1:8081/api/admin/stream';
 const SNAPSHOT_TARGET = `${BASE_TARGET}?lane=snapshot`;
@@ -706,6 +709,19 @@ test('pre-schema admission holds accumulated stability through a transient ' +
     'admission should complete without restarting the stable window');
   t.equal(call, 7,
     'one real quiet poll after the observer failure should confirm');
+  const heldTransition = result.transitionHistory.transitions.find(
+    (transition) => transition.windowTransition === 'held',
+  );
+  t.equal(heldTransition?.state, 'control_plane_pressure',
+    'transition evidence distinguishes observer blindness from real churn');
+  t.match(
+    heldTransition?.reasonCodes,
+    ['control_plane_pressure', 'snapshot_query_error'],
+    'the held transition retains its observer-error classification',
+  );
+  t.equal(heldTransition?.stabilityWindowHeld, true);
+  t.equal(heldTransition?.stableConfirmationCount, 1,
+    'the held transition retains accumulated confirmation evidence');
   t.end();
 });
 
@@ -740,5 +756,74 @@ test('pre-schema admission still resets accumulated stability on real churn',
     t.ok(call >= 11,
       'a regressing poll must forfeit the window and restart the sequence, ' +
       `got ${call} polls`);
+    const resetTransition = result.transitionHistory.transitions.find(
+      (transition) => transition.windowTransition === 'reset',
+    );
+    t.equal(resetTransition?.state, 'critical_spread_open');
+    t.equal(
+      resetTransition?.canonicalBlocker,
+      'critical_system_spread_open',
+      'transition evidence names the real blocker that reset the window',
+    );
+    t.equal(resetTransition?.criticalSystemTopology.totalSpreadGap, 1);
+    t.equal(resetTransition?.stableConfirmationCount, 0);
+    t.end();
+  });
+
+test('schema admission transition evidence is change-only and bounded',
+  async (t) => {
+    let call = 0;
+    let currentNowMs = 0;
+    const timeoutMs = SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT + 8;
+    const error = await t.rejects(
+      waitForAffinityDemoSchemaAdmission({
+        target: BASE_TARGET,
+        now: () => currentNowMs,
+        sleep: async () => {
+          currentNowMs += 1;
+        },
+        timeoutMs,
+        pollIntervalMs: 0,
+        stableWindowMs: timeoutMs * 2,
+        query: async () => {
+          call += 1;
+          if (call > 3 && call % 2 === 0) {
+            return {rows: [buildControlSnapshot({
+              controlPlaneDiagnostics: buildOpenPrioritySpreadDiagnostics(1),
+            })]};
+          }
+          return {rows: [buildControlSnapshot({
+            replicaOperations: {
+              inFlightCount: 1,
+              staleInFlightCount: 0,
+              rows: [{operation_id: `formation-operation-${call}`}],
+            },
+          })]};
+        },
+      }),
+      /MovieLens schema admission timed out/,
+    );
+    const history = error.schemaAdmission.transitionHistory;
+    t.equal(
+      history.transitions.length,
+      SCHEMA_ADMISSION_TRANSITION_HISTORY_LIMIT,
+      'the live report cannot grow with an unbounded polling history',
+    );
+    t.ok(history.droppedTransitionCount > 0,
+      'truncation remains explicit evidence rather than silent loss');
+    t.ok(
+      call >
+        history.transitions.length + history.droppedTransitionCount,
+      'unchanged consecutive observations collapse into one counted entry',
+    );
+    t.equal(
+      history.transitions.at(-1).lastObservedAtMs,
+      timeoutMs - 1,
+      'the bounded tail retains the most recent transition',
+    );
+    t.equal(
+      history.transitions.at(-1).canonicalBlocker,
+      'critical_system_spread_open',
+    );
     t.end();
   });
