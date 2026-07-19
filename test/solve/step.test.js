@@ -54,6 +54,12 @@ function goalFor(oracleFile) {
   };
 }
 
+function refreshFlatEvidence(oracleFile, revision) {
+  const data = JSON.parse(fs.readFileSync(oracleFile, 'utf8'));
+  data.observationRevision = revision;
+  fs.writeFileSync(oracleFile, JSON.stringify(data));
+}
+
 tap.test('synchronous runStep (P3)', async (t) => {
   t.test('runStep records a successful step with progress', (t) => {
     const root = tmp();
@@ -93,7 +99,8 @@ tap.test('synchronous runStep (P3)', async (t) => {
 
     runStep(root, quest);
 
-    // No change to metric
+    // The metric stays flat, but the harness produced a fresh observation.
+    refreshFlatEvidence(oracle, 'flat-step');
     const r = runStep(root, quest, {
       changeRef: makeDiff(root, 'b'),
       summary: 'no progress',

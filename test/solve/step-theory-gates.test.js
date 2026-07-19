@@ -25,8 +25,16 @@ function makeDiff(root, name) {
   return `diff:${file}`;
 }
 
+function refreshFlatEvidence(quest, revision) {
+  const file = quest.frontiers[0].metric.args.file;
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  data.observationRevision = revision;
+  fs.writeFileSync(file, JSON.stringify(data));
+}
+
 function commitStep(root, quest, name, options = {}) {
   runStep(root, quest);
+  refreshFlatEvidence(quest, name);
   return runStep(root, quest, {
     changeRef: makeDiff(root, name),
     summary: name,
@@ -110,6 +118,7 @@ tap.test('step theory gates', async (t) => {
     recordFrontierTheory(root, quest);
     // next step with theory is allowed
     runStep(root, quest);
+    refreshFlatEvidence(quest, 'with-theory');
     const allowed = runStep(root, quest, {
       changeRef: makeDiff(root, 'with-theory'),
       summary: 'with theory',
@@ -144,6 +153,7 @@ tap.test('step theory gates', async (t) => {
 
     // Rung 3 with system theory but without model ref gates (explore), not crash
     runStep(root, quest);
+    refreshFlatEvidence(quest, 'model-without-ref');
     const needsModel = runStep(root, quest, {
       changeRef: makeDiff(root, 'c'),
       summary: 'model rung without model',
@@ -191,6 +201,7 @@ tap.test('step theory gates', async (t) => {
     recordFrontierTheory(root, quest, 'theory-change', 'ownership');
     // Rung 4 (change-approach) step succeeds without model evidence
     runStep(root, quest);
+    refreshFlatEvidence(quest, 'change-approach');
     const committed = runStep(root, quest, {
       changeRef: makeDiff(root, 'd'),
       summary: 'try a different owner path',
@@ -228,6 +239,7 @@ tap.test('step theory gates', async (t) => {
     recordFrontierTheory(root, quest, 'theory-model', 'model');
 
     // Running step without modelRef gates (explore) instead of crashing
+    refreshFlatEvidence(quest, 'liveness-without-model');
     const needsModelRef = runStep(root, quest, {
       changeRef: makeDiff(root, 'e'),
       summary: 'retry edits',

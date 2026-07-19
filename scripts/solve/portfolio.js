@@ -19,16 +19,24 @@ import {
   SOLVE_DATA_DIR,
   QUESTS_SUBDIR,
   EVENT_ATTEMPT,
+  EVENT_QUEST_DECLARED,
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
-  STATUS_OPEN,
   STATUS_PARKED,
   PARK_KIND_CANNOT_MEASURE,
   QUEST_CLASS_PRODUCT,
   QUEST_CLASS_PROCESS,
+  PORTFOLIO_STAGE_DRAFT,
+  PORTFOLIO_STAGE_ACTIVE,
+  PORTFOLIO_STAGE_TERMINAL,
 } from './constants.js';
 import {loadQuest, readLog, projectState} from './store.js';
 import {questClass, closureKind} from './closure-kind.js';
+
+const PORTFOLIO_TABLE_HEADER =
+  '| id | class | closure | stage | outcome | attempts | reopens | cannot-measure |';
+const PORTFOLIO_TABLE_SEPARATOR =
+  '| --- | --- | --- | --- | --- | --- | --- | --- |';
 
 export function listQuestIds(root) {
   const dir = path.join(root, SOLVE_DATA_DIR, QUESTS_SUBDIR);
@@ -49,6 +57,11 @@ export function loadAllQuests(root) {
 export function questPortfolioRow(quest, log) {
   const state = projectState(quest, log);
   const outcome = state.questStatus;
+  const declared = log.some((event) => event.type === EVENT_QUEST_DECLARED);
+  const terminal = outcome === STATUS_SOLVED || outcome === STATUS_EXHAUSTED;
+  const stage = terminal ?
+    PORTFOLIO_STAGE_TERMINAL :
+    declared ? PORTFOLIO_STAGE_ACTIVE : PORTFOLIO_STAGE_DRAFT;
   const reopens = state.frontiers.reduce((sum, f) => sum + (f.reopenCount || 0), 0);
   // Auto-reopens are the SOLVED->fresh-failure flap (distinct from deliberate `reopen`
   // CLI revivals): they climb toward OSCILLATION_REOPEN_BUDGET and then terminate the
@@ -60,9 +73,11 @@ export function questPortfolioRow(quest, log) {
     id: quest.id,
     class: questClass(quest),
     closure: closureKind(quest, log),
+    stage,
     outcome,
     solved: outcome === STATUS_SOLVED,
-    open: outcome === STATUS_OPEN,
+    draft: stage === PORTFOLIO_STAGE_DRAFT,
+    open: stage === PORTFOLIO_STAGE_ACTIVE,
     attempts: log.filter((e) => e.type === EVENT_ATTEMPT).length,
     reopens,
     autoReopens,
@@ -71,7 +86,7 @@ export function questPortfolioRow(quest, log) {
 }
 
 function emptyClassTally() {
-  return {total: 0, solved: 0, exhausted: 0, open: 0};
+  return {total: 0, solved: 0, exhausted: 0, draft: 0, open: 0};
 }
 
 export function summarizePortfolio(rows) {
@@ -84,7 +99,11 @@ export function summarizePortfolio(rows) {
     tally.total += 1;
     if (row.outcome === STATUS_SOLVED) tally.solved += 1;
     else if (row.outcome === STATUS_EXHAUSTED) tally.exhausted += 1;
-    else if (row.outcome === STATUS_OPEN) tally.open += 1;
+    else if (row.draft === true || row.stage === PORTFOLIO_STAGE_DRAFT) {
+      tally.draft += 1;
+    } else if (row.open === true) {
+      tally.open += 1;
+    }
   }
   const product = byClass[QUEST_CLASS_PRODUCT];
   const process = byClass[QUEST_CLASS_PROCESS];
@@ -116,11 +135,11 @@ export function renderPortfolio(portfolio) {
     lines.push('_(no quests found)_', '');
     return lines.join('\n');
   }
-  lines.push('| id | class | closure | outcome | attempts | reopens | cannot-measure |');
-  lines.push('| --- | --- | --- | --- | --- | --- | --- |');
+  lines.push(PORTFOLIO_TABLE_HEADER);
+  lines.push(PORTFOLIO_TABLE_SEPARATOR);
   for (const row of rows) {
     lines.push(
-      `| ${row.id} | ${row.class} | ${row.closure} | ${row.outcome} | ` +
+      `| ${row.id} | ${row.class} | ${row.closure} | ${row.stage} | ${row.outcome} | ` +
       `${row.attempts} | ${row.reopens} | ${row.cannotMeasure} |`,
     );
   }
@@ -129,11 +148,11 @@ export function renderPortfolio(portfolio) {
   lines.push('', '## Summary');
   lines.push(
     `- product: ${product.total} (solved ${product.solved}, ` +
-    `exhausted ${product.exhausted}, open ${product.open})`,
+    `exhausted ${product.exhausted}, draft ${product.draft}, open ${product.open})`,
   );
   lines.push(
     `- process: ${process.total} (solved ${process.solved}, ` +
-    `exhausted ${process.exhausted}, open ${process.open})`,
+    `exhausted ${process.exhausted}, draft ${process.draft}, open ${process.open})`,
   );
   lines.push(
     `- open process:product ratio: ${ratioText(summary.openRatioProcessPerProduct)}`,

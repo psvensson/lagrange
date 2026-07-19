@@ -10,6 +10,7 @@ import {
   EVENT_ATTEMPT,
   EVENT_EVIDENCE_INGESTED,
   EVENT_QUEST,
+  EVENT_QUEST_DECLARED,
   STATUS_SOLVED,
 } from '../../scripts/solve/constants.js';
 
@@ -30,6 +31,16 @@ function quest(id, links) {
   };
 }
 
+function declareQuest(root, value) {
+  appendEvent(root, value.id, {
+    type: EVENT_QUEST_DECLARED,
+    sealed: {
+      doneWhen: value.doneWhen,
+      frontierMetrics: value.frontiers.map((frontier) => frontier.metric),
+    },
+  });
+}
+
 tap.test('work overview projection', async (t) => {
   t.test('groups quests under specs/rows and splits open vs terminal', (t) => {
     const root = tmp();
@@ -43,7 +54,13 @@ tap.test('work overview projection', async (t) => {
     fs.mkdirSync(path.join(root, 'solve/specs/archived'), {recursive: true}); // skipped
 
     // Open quest linked to spec + row; cites a closure record.
-    saveQuest(root, quest('q-open', {specRef: 'widget-spec#T2', roadmapRow: 'row-7', closesCL: ['CL-009']}));
+    const openQuest = quest('q-open', {
+      specRef: 'widget-spec#T2',
+      roadmapRow: 'row-7',
+      closesCL: ['CL-009'],
+    });
+    saveQuest(root, openQuest);
+    declareQuest(root, openQuest);
     appendEvent(root, 'q-open', {type: EVENT_ATTEMPT, frontier: 'q-open-main',
       rung: 'local-fix', metricBefore: 5, metricAfter: 4});
     // Terminal quest, no links.
@@ -67,7 +84,8 @@ tap.test('work overview projection', async (t) => {
     t.notOk(o.specs.find((s) => s.name === 'archived'), 'archived spec dir is skipped');
 
     const md = renderOverview(o);
-    t.match(md, /## 4 · Quests — 1 open \/ 1 terminal/, 'open/terminal split rendered');
+    t.match(md, /## 4 · Quests — 0 draft \/ 1 open \/ 1 terminal/,
+      'draft/open/terminal split rendered');
     t.match(md, /CL-009/, 'open quest closes-CL surfaced');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
@@ -95,7 +113,9 @@ tap.test('work overview projection', async (t) => {
   t.test('overview and frontier include a terminal Quest reopened by fresh evidence', (t) => {
     const root = tmp();
     const id = 'q-reopened';
-    saveQuest(root, quest(id, {}));
+    const reopenedQuest = quest(id, {});
+    saveQuest(root, reopenedQuest);
+    declareQuest(root, reopenedQuest);
     appendEvent(root, id, {
       type: EVENT_QUEST,
       status: STATUS_SOLVED,
@@ -112,12 +132,23 @@ tap.test('work overview projection', async (t) => {
 
     const overview = renderOverview(buildOverview(root));
     const frontier = renderFrontier(buildFrontier(root));
-    t.match(overview, /## 4 · Quests — 1 open \/ 0 terminal/u,
+    t.match(overview, /## 4 · Quests — 0 draft \/ 1 open \/ 0 terminal/u,
       'overview derives the reopened state from the portfolio projection');
     t.match(overview, /q-reopened/u, 'overview lists the reopened Quest');
     t.match(frontier, /## Open quests — 1/u,
       'frontier derives the reopened state from the portfolio projection');
     t.match(frontier, /q-reopened/u, 'frontier lists the reopened Quest');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('overview surfaces undeclared quests as drafts instead of terminals', (t) => {
+    const root = tmp();
+    saveQuest(root, quest('q-draft', {}));
+    const overview = renderOverview(buildOverview(root));
+    t.match(overview, /## 4 · Quests — 1 draft \/ 0 open \/ 0 terminal/u,
+      'draft is not mislabeled as terminal');
+    t.match(overview, /### Draft[\s\S]*q-draft/u, 'draft remains visible');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

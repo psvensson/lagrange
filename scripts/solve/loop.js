@@ -23,6 +23,7 @@ const INTEGRITY_SCOPE_THEORY_GATE = 'theory-gate';
 import {
   EVENT_QUEST_DECLARED,
   EVENT_ATTEMPT,
+  ATTEMPT_CLASSIFICATION_RECEIPT_ONLY,
   EVENT_NON_MEASUREMENT,
   EVENT_SOLVED,
   EVENT_PARK,
@@ -669,6 +670,22 @@ function recordNonMeasurement(root, quest, pick, attempt) {
   return event;
 }
 
+function nonEmptyFingerprint(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function isReceiptOnlyAttempt(event, after, violations, forceStall) {
+  return !forceStall &&
+    violations.length === 0 &&
+    event.invalidSample !== true &&
+    Number.isFinite(event.metricBefore) &&
+    Number.isFinite(after.metric) &&
+    after.metric === event.metricBefore &&
+    nonEmptyFingerprint(event.beforeEvidenceFingerprint) &&
+    nonEmptyFingerprint(event.evidenceFingerprint) &&
+    event.beforeEvidenceFingerprint === event.evidenceFingerprint;
+}
+
 function decideAndRecord(root, quest, pick, event, after, violations,
   forceStall = false) {
   const progressed = !forceStall && violations.length === 0 &&
@@ -683,15 +700,21 @@ function decideAndRecord(root, quest, pick, event, after, violations,
   // theory, so once hypotheses or budget run out, non-progress climbs to park as usual.
   const log = readLog(root, quest.id);
   const creditedTheories = investigativeCreditsSpent(log, event.frontier);
-  const investigative = !progressed && !forceStall && violations.length === 0 &&
+  const receiptOnly = !progressed &&
+    isReceiptOnlyAttempt(event, after, violations, forceStall);
+  const investigative = !progressed && !receiptOnly &&
+    !forceStall && violations.length === 0 &&
     !event.invalidSample &&
     (event.discrimination === DISCRIMINATION_CONFIRMED ||
       event.discrimination === DISCRIMINATION_REFUTED) &&
     Boolean(event.theoryRef) &&
     !creditedTheories.has(event.theoryRef) &&
     creditedTheories.size < INVESTIGATION_BUDGET;
-  const nextRung = (progressed || investigative) ? event.rungIndex :
+  const nextRung = (progressed || investigative || receiptOnly) ? event.rungIndex :
     Math.min(event.rungIndex + 1, PARK_RUNG_INDEX);
+  if (receiptOnly) {
+    event.attemptClassification = ATTEMPT_CLASSIFICATION_RECEIPT_ONLY;
+  }
   appendEvent(root, quest.id, {
     ...event,
     rungIndex: nextRung,
@@ -1007,15 +1030,15 @@ export function runLoop(root, quest, options = {}) {
 }
 
 // Durable-progress cursor: the count of events that change quest state or add durable
-// KNOWLEDGE — a MEASURED attempt, a measuring ingested-evidence sample, a finding, a
-// reflection, a system-theory declaration, a park, or a solve. It deliberately EXCLUDES
-// gate-decision and violation records (a hard block appends those every cycle), AND the
-// per-frontier theory bookkeeping (option-declared / selected / theory-result) plus
-// frontier reopens: those are churn a stuck Solver emits on every cycle, so counting them
-// let pure whack-a-mole — "select theory N+1, re-run, repeat" — masquerade as progress at
-// a MAX_CYCLES boundary. Knowledge (findings/reflections) and real state
-// changes (measured attempts, parks, solves) still count, so a productive session is never
-// starved; a theory-churn-only session now correctly stalls.
+// KNOWLEDGE — a fresh MEASURED attempt, a measuring ingested-evidence sample, a finding,
+// a reflection, a system-theory declaration, a park, or a solve. It deliberately EXCLUDES
+// receipt-only attempts, gate-decision and violation records (a hard block appends those
+// every cycle), AND the per-frontier theory bookkeeping (option-declared / selected /
+// theory-result) plus frontier reopens: those are churn a stuck Solver emits on every
+// cycle, so counting them let pure whack-a-mole — "select theory N+1, re-run, repeat" —
+// masquerade as progress at a MAX_CYCLES boundary. Knowledge (findings/reflections) and
+// real state changes (fresh measured attempts, parks, solves) still count, so a productive
+// session is never starved; a receipt-only or theory-churn-only session correctly stalls.
 export function durableProgressCount(log) {
   const always = new Set([
     EVENT_FINDING,
@@ -1028,7 +1051,9 @@ export function durableProgressCount(log) {
   for (const event of log || []) {
     if (always.has(event.type)) {
       count += 1;
-    } else if (event.type === EVENT_ATTEMPT && event.invalidSample !== true) {
+    } else if (event.type === EVENT_ATTEMPT &&
+      event.invalidSample !== true &&
+      event.attemptClassification !== ATTEMPT_CLASSIFICATION_RECEIPT_ONLY) {
       count += 1;
     } else if (event.type === EVENT_EVIDENCE_INGESTED &&
       event.invalidSample !== true && event.metric !== null) {

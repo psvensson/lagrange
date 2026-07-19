@@ -80,9 +80,17 @@ function rungIndexOf(root, quest) {
   return state.frontiers.find((f) => f.id === 'demo-main').rungIndex;
 }
 
+function refreshFlatEvidence(quest, revision) {
+  const file = quest.frontiers[0].metric.args.file;
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  data.observationRevision = revision;
+  fs.writeFileSync(file, JSON.stringify(data));
+}
+
 function commitDiscrimination(root, quest, name, theory, discrimination) {
   selectFrontierTheory(root, quest, theory);
   runStep(root, quest);
+  refreshFlatEvidence(quest, name);
   return runStep(root, quest, {
     changeRef: makeDiff(root, name),
     summary: name,

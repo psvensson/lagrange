@@ -1,0 +1,13 @@
+{
+  "metric": 0,
+  "done": true,
+  "checks": {
+    "portfolioDraftStage": true,
+    "receiptOnlyRungHold": true,
+    "receiptOnlyExcludedFromDurableProgress": true,
+    "freshFlatStillClimbs": true,
+    "evidenceSingleEvent": true,
+    "focusedTestsPass": true,
+    "broadSolverTestsPass": true
+  }
+}

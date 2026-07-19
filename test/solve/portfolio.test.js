@@ -16,6 +16,7 @@ import {
   EVENT_EVIDENCE_INGESTED,
   EVENT_FINDING,
   EVENT_QUEST,
+  EVENT_QUEST_DECLARED,
   STATUS_OPEN,
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
@@ -49,6 +50,16 @@ function oracleProcessQuest(id) {
   };
 }
 
+function declareQuest(root, quest) {
+  appendEvent(root, quest.id, {
+    type: EVENT_QUEST_DECLARED,
+    sealed: {
+      doneWhen: quest.doneWhen,
+      frontierMetrics: quest.frontiers.map((frontier) => frontier.metric),
+    },
+  });
+}
+
 tap.test('portfolio projection (Concern 3)', async (t) => {
   t.test('aggregates class, closure and outcome across quests', (t) => {
     const root = tmp();
@@ -60,7 +71,9 @@ tap.test('portfolio projection (Concern 3)', async (t) => {
     });
     appendEvent(root, 'prod-solved', {type: EVENT_QUEST, status: STATUS_SOLVED, evidence: 'r.json'});
     // One still-open measured product quest.
-    saveQuest(root, measuredQuest('prod-open'));
+    const prodOpenQuest = measuredQuest('prod-open');
+    saveQuest(root, prodOpenQuest);
+    declareQuest(root, prodOpenQuest);
     appendEvent(root, 'prod-open', {
       type: EVENT_ATTEMPT, frontier: 'prod-open-main', rung: 'local-fix',
       metricBefore: 5, metricAfter: 4,
@@ -85,6 +98,7 @@ tap.test('portfolio projection (Concern 3)', async (t) => {
     t.equal(summary.byClass.product.total, 2, 'two product quests');
     t.equal(summary.byClass.product.solved, 1, 'one product solved');
     t.equal(summary.byClass.product.open, 1, 'one product open');
+    t.equal(summary.byClass.product.draft, 0, 'no product drafts');
     t.equal(summary.byClass.process.total, 1, 'one process quest');
     t.equal(summary.byClass.process.solved, 1, 'one process solved');
     t.equal(summary.byClass.process.open, 0, 'no process open');
@@ -101,6 +115,29 @@ tap.test('portfolio projection (Concern 3)', async (t) => {
     ];
     const summary = summarizePortfolio(rows);
     t.equal(summary.openRatioProcessPerProduct, 2, 'two open process per one open product');
+    t.end();
+  });
+
+  t.test('undeclared projected-open quests are drafts, not active open work', (t) => {
+    const root = tmp();
+    const draft = measuredQuest('prod-draft');
+    saveQuest(root, draft);
+
+    const row = questPortfolioRow(draft, readLog(root, draft.id));
+    t.equal(row.outcome, STATUS_OPEN, 'store-level outcome remains backward-compatible');
+    t.equal(row.stage, 'draft', 'portfolio assigns the local draft stage');
+    t.ok(row.draft, 'row is explicitly draft');
+    t.notOk(row.open, 'draft is excluded from active open-work consumers');
+
+    const summary = summarizePortfolio([row]);
+    t.equal(summary.byClass.product.draft, 1, 'draft is tallied separately');
+    t.equal(summary.byClass.product.open, 0, 'draft is excluded from the open tally');
+    t.equal(summary.openRatioProcessPerProduct, 0, 'draft does not distort the open ratio');
+    const md = renderPortfolio({rows: [row], summary});
+    t.match(md, /\| prod-draft \| product \| MEASURED \| draft \| open \|/u,
+      'render exposes stage separately from the store outcome');
+
+    fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
 
@@ -135,6 +172,7 @@ tap.test('portfolio projection (Concern 3)', async (t) => {
     const quest = measuredQuest('rejected-terminal');
     const sha256 = 'a'.repeat(64);
     saveQuest(root, quest);
+    declareQuest(root, quest);
     appendEvent(root, quest.id, {
       type: EVENT_ATTEMPT,
       frontier: 'rejected-terminal-main',
@@ -175,6 +213,7 @@ tap.test('portfolio projection (Concern 3)', async (t) => {
     const root = tmp();
     const quest = measuredQuest('fresh-failure');
     saveQuest(root, quest);
+    declareQuest(root, quest);
     appendEvent(root, quest.id, {
       type: EVENT_QUEST,
       status: STATUS_SOLVED,

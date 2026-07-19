@@ -38,6 +38,7 @@ import {
   EVENT_THEORY_RESULT,
   EVENT_FRONTIER_REOPENED,
   EVENT_EVIDENCE_INGESTED,
+  ATTEMPT_CLASSIFICATION_RECEIPT_ONLY,
   DISPOSITION_PARK_RESUMABLE,
   DISPOSITION_EXPLORE,
   OUTCOME_BLOCKED,
@@ -72,6 +73,22 @@ function setup({metric, target = 0, frontiers = ['f1']}) {
   });
   quest.doneWhen = {probe: 'oracle', args: {file: lastFile}};
   return {root, quest, changeDir: path.join(root, 'solve', 'changes', quest.id)};
+}
+
+function makeFreshFlatExecutor(changeDir) {
+  const base = makeDryExecutor({changeDir, stallFrontiers: ['f1']});
+  let revision = 0;
+  return {
+    name: 'fresh-flat',
+    run(task) {
+      const result = base.run(task);
+      const file = task.frontierDef.metric.args.file;
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      data.observationRevision = ++revision;
+      fs.writeFileSync(file, JSON.stringify(data));
+      return result;
+    },
+  };
 }
 
 function recordFrontierTheory(root, quest, frontier = 'f1', theory = 'theory-f1') {
@@ -130,17 +147,73 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
 
   t.test('climbs the ladder on consecutive stalls when theory is selected', (t) => {
     const {root, quest, changeDir} = setup({metric: 5, target: 0});
+    const executor = makeFreshFlatExecutor(changeDir);
     runLoop(root, quest, {
-      executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
+      executor,
       maxCycles: 1,
     });
     recordFrontierTheory(root, quest);
     runLoop(root, quest, {
+      executor,
+      maxCycles: 1,
+    });
+    const log = readLog(root, quest.id);
+    const state = projectState(quest, log);
+    t.equal(state.frontiers[0].rungIndex, 2, 'two stalls => rung climbed to 2 (widen-scope)');
+    const attempts = log.filter((event) => event.type === EVENT_ATTEMPT);
+    t.not(attempts[0].beforeEvidenceFingerprint, attempts[0].evidenceFingerprint,
+      'first flat sample has fresh evidence');
+    t.not(attempts[1].beforeEvidenceFingerprint, attempts[1].evidenceFingerprint,
+      'second flat sample has fresh evidence');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('same-evidence flat attempt is receipt-only and holds the rung', (t) => {
+    const {root, quest, changeDir} = setup({metric: 5, target: 0});
+    runLoop(root, quest, {
       executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
       maxCycles: 1,
     });
+
+    const log = readLog(root, quest.id);
+    const attempt = log.find((event) => event.type === EVENT_ATTEMPT);
+    const state = projectState(quest, log);
+    t.equal(attempt.beforeEvidenceFingerprint, attempt.evidenceFingerprint,
+      'the attempt reused the exact evidence fingerprint');
+    t.equal(attempt.attemptClassification, ATTEMPT_CLASSIFICATION_RECEIPT_ONLY,
+      'the attempt is recorded as receipt-only');
+    t.equal(state.frontiers[0].rungIndex, 0, 'receipt-only source revision holds the rung');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a missing before fingerprint remains a stall that climbs', (t) => {
+    const {root, quest, changeDir} = setup({metric: 5, target: 0});
+    saveQuest(root, quest);
     const state = projectState(quest, readLog(root, quest.id));
-    t.equal(state.frontiers[0].rungIndex, 2, 'two stalls => rung climbed to 2 (widen-scope)');
+    const pick = {def: quest.frontiers[0], state: state.frontiers[0]};
+    const executor = makeDryExecutor({changeDir, stallFrontiers: ['f1']});
+    const result = executor.run({
+      quest,
+      frontierDef: pick.def,
+      frontierState: pick.state,
+      rung: 'observe',
+      rungIndex: 0,
+    });
+    const ctx = makeRunContext({changeRefResolves: () => true});
+    ctx.probeCtx = {root};
+    finalizeAttempt(root, quest, ctx, pick, {
+      metric: 5,
+      evidence: quest.frontiers[0].metric.args.file,
+      evidenceFingerprint: null,
+    }, result);
+
+    const log = readLog(root, quest.id);
+    const attempt = log.find((event) => event.type === EVENT_ATTEMPT);
+    const projected = projectState(quest, log);
+    t.notOk(attempt.attemptClassification, 'missing fingerprint is not receipt-only');
+    t.equal(projected.frontiers[0].rungIndex, 1, 'ordinary flat stall climbs');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
@@ -196,7 +269,7 @@ tap.test('solver loop — P0 walking skeleton', async (t) => {
     // Two stalls climb observe(0) -> local-fix(1) -> widen-scope(2), where a frontier
     // theory becomes required but none is recorded — a soft-eligible theory gate.
     runLoop(root, quest, {
-      executor: makeDryExecutor({changeDir, stallFrontiers: ['f1']}),
+      executor: makeFreshFlatExecutor(changeDir),
       maxCycles: 2,
     });
 
@@ -597,6 +670,8 @@ tap.test('durableProgressCount counts durable knowledge, not gate noise', (t) =>
   t.equal(durableProgressCount(null), 0, 'null log is safe');
   const log = [
     {type: EVENT_ATTEMPT, invalidSample: false, metricAfter: 2},
+    {type: EVENT_ATTEMPT, invalidSample: false, metricAfter: 2,
+      attemptClassification: ATTEMPT_CLASSIFICATION_RECEIPT_ONLY},
     {type: EVENT_ATTEMPT, invalidSample: true},
     {type: EVENT_EVIDENCE_INGESTED, invalidSample: false, metric: 1},
     {type: EVENT_EVIDENCE_INGESTED, invalidSample: false, metric: null},
@@ -611,13 +686,13 @@ tap.test('durableProgressCount counts durable knowledge, not gate noise', (t) =>
     {type: EVENT_GATE_DECISION},
   ];
   // Knowledge + real state changes count: measured attempt + measuring evidence + finding
-  // + reflection + park = 5. EXCLUDED as churn a stuck Solver emits every cycle: invalid
-  // samples, null-metric evidence, gate-decisions, AND the per-frontier theory bookkeeping
-  // (theory-result/selected/option-declared) plus frontier reopens — so pure whack-a-mole
-  // theory churn can no longer masquerade as progress and defeat the stall guard.
+  // + reflection + park = 5. EXCLUDED as churn a stuck Solver emits every cycle:
+  // receipt-only attempts, invalid samples, null-metric evidence, gate-decisions, AND the
+  // per-frontier theory bookkeeping (theory-result/selected/option-declared) plus frontier
+  // reopens — so pure whack-a-mole theory churn cannot defeat the stall guard.
   t.equal(durableProgressCount(log), 5,
-    'measured attempt + measuring evidence + finding + reflection + park; invalid samples, ' +
-    'gate-decisions, theory bookkeeping, and reopens excluded');
+    'measured attempt + measuring evidence + finding + reflection + park; receipt-only ' +
+    'attempts, invalid samples, gate-decisions, theory bookkeeping, and reopens excluded');
   t.end();
 });
 

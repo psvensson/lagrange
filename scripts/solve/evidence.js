@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 
 import {
   EVENT_EVIDENCE_INGESTED,
@@ -26,7 +25,6 @@ import {
 } from './probes/scenario-harness.js';
 import {
   appendEvent,
-  appendFinding,
   loadQuest,
   projectState,
   readLog,
@@ -313,20 +311,6 @@ export function ingestEvidence(root, {
   // Oscillation is history-wide: re-read the log (now including this event) so a
   // return to a previously-abandoned blocker is visible, not just the last hop.
   const oscillation = detectOscillation(readLog(root, questId), frontierId);
-
-  // Determine finding and repeat status
-  const beforeMetric = frontierState?.current ?? 'unknown';
-  const beforeVerdict = frontierState?.findings?.slice(-1)[0]?.claim;
-  const isVerdictRepeat = beforeVerdict && beforeVerdict.includes(`verdict: ${verdict}`);
-  const repeatStatus = isVerdictRepeat ? 'repeated' : 'changed';
-
-  const claim = `Ingested evidence from ${path.basename(evidencePath)}. Metric: ${beforeMetric} -> ${metric}. Verdict: ${verdict}${verdictReason ? ` (${verdictReason})` : ''}. Root cause: ${rootCauseClass || 'none'}. Dominant reason: ${dominantReason || 'none'}. Owner: ${owner || 'none'}. Ingestion outcome: ${repeatStatus}.`;
-
-  appendFinding(root, questId, {
-    frontier: frontierId,
-    claim,
-    evidence: evidencePath,
-  });
 
   // Evaluate theory result if a selected theory exists
   if (selectedTheory && frontierMetricEvidence) {

@@ -91,7 +91,9 @@ function linkedQuests(root, portfolio) {
     return {
       id: quest.id,
       class: row.class,
+      stage: row.stage,
       outcome: row.outcome,
+      draft: Boolean(row.draft),
       open: Boolean(row.open),
       attempts: row.attempts,
       reopens: row.reopens,
@@ -177,8 +179,9 @@ function closureFrontierByArea(active) {
 
 export function renderOverview(overview) {
   const {roadmapRows, epics, specs, quests, records} = overview;
+  const drafts = quests.filter((q) => q.draft);
   const open = quests.filter((q) => q.open);
-  const terminal = quests.filter((q) => !q.open);
+  const terminal = quests.filter((q) => !q.draft && !q.open);
   const active = records.filter((r) => r.active);
   const specsWithOpen = specs.filter((s) => s.open > 0).length;
   const lines = [
@@ -211,9 +214,14 @@ export function renderOverview(overview) {
     ...table(['spec', 'quests (open/total)', 'quest ids'],
       specs.map((s) => [s.name, `${s.open}/${s.total}`, s.quests.map((q) => q.id).join(', ') || '—'])),
 
-    `## 4 · Quests — ${open.length} open / ${terminal.length} terminal`,
+    `## 4 · Quests — ${drafts.length} draft / ${open.length} open / ` +
+      `${terminal.length} terminal`,
     '_The only measured layer (solve/quests/). Sealed goal; attempts and findings live in the append-only log._',
     '',
+    '### Draft',
+    '',
+    ...table(['id', 'class', 'spec'],
+      drafts.map((q) => [q.id, q.class, q.specRef || '—'])),
     '### Open',
     '',
     ...table(['id', 'class', 'spec', 'attempts', 'reopens', 'osc', 'closes'],

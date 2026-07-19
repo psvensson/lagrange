@@ -14,6 +14,10 @@ export const REPRO_ON_HEAD_FINDING_KIND = 'repro-on-head';
 export const EVENT_QUEST_DECLARED = 'quest-declared';
 export const EVENT_QUEST_UPGRADED = 'quest-upgraded';
 export const EVENT_ATTEMPT = 'attempt';
+// A source revision measured against the exact same non-empty evidence fingerprint.
+// It is still an auditable attempt receipt, but it carries no fresh knowledge and
+// therefore cannot advance the supervisor durable-progress cursor.
+export const ATTEMPT_CLASSIFICATION_RECEIPT_ONLY = 'receipt-only';
 // Honest harness runs that cannot produce a trustworthy metric. Kept separate
 // from EVENT_ATTEMPT so they consume the bounded measurement retry budget but
 // cannot advance a rung, resolve a theory, or terminalize a Quest.
@@ -69,6 +73,12 @@ export const STATUS_OPEN = 'open';
 export const STATUS_SOLVED = 'solved';
 export const STATUS_PARKED = 'parked';
 export const STATUS_EXHAUSTED = 'exhausted';
+
+// Portfolio-local lifecycle projection. These are intentionally not store-level
+// Quest statuses: declaration and terminal events derive them at read time.
+export const PORTFOLIO_STAGE_DRAFT = 'draft';
+export const PORTFOLIO_STAGE_ACTIVE = 'active';
+export const PORTFOLIO_STAGE_TERMINAL = 'terminal';
 
 // The finite strategy ladder. Rung index === position in this list.
 // `observe` is the first rung: before changing code, instrument the frontier and run a

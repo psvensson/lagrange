@@ -12,6 +12,8 @@ import {
 import {distanceMetricFromReport}
   from '../../scripts/solve/probes/scenario-harness.js';
 import {
+  EVENT_EVIDENCE_INGESTED,
+  EVENT_FINDING,
   EVENT_SOLVED,
   EVENT_QUEST,
   STATUS_OPEN,
@@ -107,10 +109,16 @@ const sampleReport = {
 };
 
 tap.test('evidence ingestion (P2)', async (t) => {
-  t.test('correctly parses report, appends event, and adds finding', (t) => {
+  t.test('appends one structured evidence event without a synthetic finding', (t) => {
     const root = tmp();
     const goal = getGoal(root);
     saveQuest(root, goal);
+    appendEvent(root, goal.id, {
+      type: EVENT_FINDING,
+      frontier: 'evidence-quest-test-main',
+      claim: 'explicit operator finding remains durable',
+      evidence: 'operator-observation',
+    });
     const reportDir = path.join(root, 'test-output', 'reports');
     fs.mkdirSync(reportDir, {recursive: true});
     const reportPath = path.join(reportDir, 'r1.report.json');
@@ -134,10 +142,12 @@ tap.test('evidence ingestion (P2)', async (t) => {
     t.equal(event.waitMode, 'retry_scheduled');
 
     const log = readLog(root, goal.id);
-    const finding = log.find((e) => e.type === 'finding');
-    t.ok(finding, 'finding event written');
-    t.match(finding.claim, /BLOCK_EVIDENCE_INCOMPLETE/);
-    t.match(finding.claim, /operation_workflow_owner/);
+    const evidenceEvents = log.filter((e) => e.type === EVENT_EVIDENCE_INGESTED);
+    const findings = log.filter((e) => e.type === EVENT_FINDING);
+    t.equal(evidenceEvents.length, 1, 'ingestion records one structured event');
+    t.equal(findings.length, 1, 'ingestion does not mirror the event as a finding');
+    t.equal(findings[0].claim, 'explicit operator finding remains durable',
+      'explicit findings are preserved');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

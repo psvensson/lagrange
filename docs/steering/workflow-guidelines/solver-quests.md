@@ -130,6 +130,12 @@ identities, and frontier metrics. A lint failure leaves no declaration or
 pending state. `new --force` cannot overwrite any Quest with log history;
 author a successor instead. `solve lint --all` is the read-only legacy census
 and never rewrites historical Quest files, logs, declarations, or outcomes.
+The portfolio projects a saved, non-terminal Quest with no `quest-declared`
+event as `draft`, not active open work. Drafts remain visible and separately
+tallied, but do not enter the active open-work ratio or downstream frontier
+views. Declaration advances the portfolio-local stage to `active`; a solved or
+exhausted projection is `terminal`. These stages do not add or rewrite a
+store-level Quest status.
 
 ### Closure Fidelity (live-visible classes)
 
@@ -236,6 +242,12 @@ owner/boundary/reason/mechanism/nextAction, or select/record a frontier theory
 whose owner path names the current head. A binding head recorded only inside a
 prose finding claim leaves the card empty (`movement: no_evidence`) and forces
 the next session to reconstruct state from raw log archaeology.
+
+An ingestion records one structured `evidence-ingested` event. That event is the
+durable receipt for the artifact, metric, verdict, owner, boundary, and blocker
+movement; ingestion does not mirror it into a generated finding. Record a
+separate explicit finding only when an operator or agent learned a durable
+conclusion that should be replayed independently of the evidence fields.
 
 The movement classification is recorded on evidence, attempts, and theory
 results as `blockerMovement` / `diagnosticMovement`. It gives credit for useful
@@ -679,6 +691,15 @@ requirement, the same as `local-fix`. This rung exists so the Solver reaches the
 same instrument-first discipline a careful human applies: see the mechanism
 before patching it.
 
+A flat attempt whose non-empty before/after evidence fingerprints are exactly
+equal is recorded as `attemptClassification=receipt-only`. It proves that a
+source revision was attempted, but contains no fresh measurement, so it holds
+the rung and does not advance the supervised runner's durable-progress cursor.
+This exception applies only to valid, integrity-accepted flat samples. Fresh
+flat evidence still climbs, as do attempts with missing identities; honesty,
+regression, oscillation, coupled-owner, node-exit, and theory-gate failures keep
+their existing violation or force-stall behavior.
+
 ### Falsification As Progress
 
 An attempt that does not move the metric is normally a stall that climbs the
@@ -1077,8 +1098,10 @@ problems. Left unwatched, scaffolding work quietly dominates the open frontier.
 
 `node scripts/solve.js portfolio` is the cross-quest governance view. It scans
 `solve/quests/*.json`, reads each terminal outcome from the log, and prints a
-table of id, class, closure kind, outcome, and attempts, plus a summary with the
-open `process:product` ratio. This view takes no `--id`.
+table of id, class, closure kind, portfolio-local stage, outcome, and attempts,
+plus a summary with separate draft and active-open counts and the active open
+`process:product` ratio. The top-down overview likewise renders drafts separately
+instead of mislabeling them as terminal. This view takes no `--id`.
 
 Governance guidance: process Quests are scaffolding. A healthy portfolio keeps
 product Quests as the majority of *open* work. A rising open `process:product`
