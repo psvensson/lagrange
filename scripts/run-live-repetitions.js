@@ -28,11 +28,37 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
+import {
+  computeSourceFingerprint,
+} from '../src/diagnostics/source-fingerprint.js';
 
 const execFileAsync = promisify(execFile);
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SUMMARY_DIR = resolve(REPO_ROOT, 'test-output/reports');
+const ENTRYPOINT_FILE = 'run-live-repetitions.js';
+const SENSOR_COMMAND = 'sensors';
+const SENSOR_JSON_FLAG = '-j';
+const SENSOR_INPUT_SUFFIX = '_input';
+const LINE_BREAK = '\n';
+const CHILD_EVENT = Object.freeze({
+  CLOSE: 'close',
+  DATA: 'data',
+  ERROR: 'error',
+});
+const SLOT_OUTCOME = Object.freeze({
+  GREEN: 'green',
+  INCONCLUSIVE: 'inconclusive',
+  RED: 'red',
+});
+const POLICY_GATE = 'all measuring repetitions green';
+const LOG_MESSAGE = Object.freeze({
+  GATE_FAILED: 'RESULT: GATE FAILED',
+  INCONCLUSIVE:
+    'RESULT: INCONCLUSIVE (thermal validity could not be established)',
+  RERUN_EXHAUSTED: 'Thermal re-run budget exhausted; session inconclusive.',
+  THERMAL_RERUN: 'non-measuring (thermal); re-running once.',
+});
 
 /** Fixed per-class policy: script path and repetition count. No overrides. */
 const RUN_CLASSES = Object.freeze({
@@ -68,7 +94,7 @@ const EXIT_INCONCLUSIVE = 2;
  */
 export async function readMaxCoreTempC(exec = execFileAsync) {
   try {
-    const {stdout} = await exec('sensors', ['-j']);
+    const {stdout} = await exec(SENSOR_COMMAND, [SENSOR_JSON_FLAG]);
     return maxTempFromSensorsJson(JSON.parse(stdout));
   } catch {
     return null;
@@ -88,7 +114,7 @@ export function maxTempFromSensorsJson(parsed) {
         continue;
       }
       for (const [key, value] of Object.entries(readings)) {
-        if (key.endsWith('_input') && typeof value === 'number') {
+        if (key.endsWith(SENSOR_INPUT_SUFFIX) && typeof value === 'number') {
           max = max === null ? value : Math.max(max, value);
         }
       }
@@ -127,20 +153,20 @@ function execRepetition(script) {
     const child = spawn('node', [script], {cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'inherit']});
     const reportRefs = [];
     let buffered = '';
-    child.stdout.on('data', (chunk) => {
+    child.stdout.on(CHILD_EVENT.DATA, (chunk) => {
       buffered += chunk.toString();
-      const lines = buffered.split('\n');
+      const lines = buffered.split(LINE_BREAK);
       buffered = lines.pop();
       for (const line of lines) {
-        process.stdout.write(line + '\n');
+        process.stdout.write(line + LINE_BREAK);
         const ref = reportRefFromLine(line);
         if (ref) {
           reportRefs.push(ref);
         }
       }
     });
-    child.on('error', rejectPromise);
-    child.on('close', (code) => {
+    child.on(CHILD_EVENT.ERROR, rejectPromise);
+    child.on(CHILD_EVENT.CLOSE, (code) => {
       resolvePromise({exitCode: code === null ? EXIT_GATE_FAILED : code, reportRefs});
     });
   });
@@ -186,20 +212,56 @@ export async function runRepetitionSession(runClass, io = {}) {
     sleep: io.sleep || ((ms) => new Promise((r) => setTimeout(r, ms))),
     log: io.log || ((msg) => console.log(msg)),
     now: io.now || (() => new Date().toISOString()),
+    readSourceFingerprint: io.readSourceFingerprint ||
+      (() => computeSourceFingerprint(resolve(REPO_ROOT, 'src'))),
   };
+  const sessionStartedAt = resolvedIo.now();
+  const sourceFingerprint = await resolvedIo.readSourceFingerprint();
   const runs = [];
   let measuringGreens = 0;
   for (let slot = 0; slot < policy.repetitions; slot += 1) {
     const outcome = await runSlot(runClass, slot, policy, resolvedIo, runs);
-    if (outcome === 'inconclusive') {
-      return {gatePassed: false, inconclusive: true, runs};
+    if (outcome === SLOT_OUTCOME.INCONCLUSIVE) {
+      return finalizeSession({
+        gatePassed: false,
+        inconclusive: true,
+        runs,
+        sessionStartedAt,
+        sourceFingerprint,
+      }, resolvedIo);
     }
-    if (outcome === 'red') {
-      return {gatePassed: false, inconclusive: false, runs};
+    if (outcome === SLOT_OUTCOME.RED) {
+      return finalizeSession({
+        gatePassed: false,
+        inconclusive: false,
+        runs,
+        sessionStartedAt,
+        sourceFingerprint,
+      }, resolvedIo);
     }
     measuringGreens += 1;
   }
-  return {gatePassed: measuringGreens === policy.repetitions, inconclusive: false, runs};
+  return finalizeSession({
+    gatePassed: measuringGreens === policy.repetitions,
+    inconclusive: false,
+    runs,
+    sessionStartedAt,
+    sourceFingerprint,
+  }, resolvedIo);
+}
+
+async function finalizeSession(session, io) {
+  const completedSourceFingerprint = await io.readSourceFingerprint();
+  const sourceStable =
+    completedSourceFingerprint === session.sourceFingerprint;
+  return {
+    ...session,
+    gatePassed: session.gatePassed && sourceStable,
+    inconclusive: session.inconclusive || !sourceStable,
+    sessionCompletedAt: io.now(),
+    completedSourceFingerprint,
+    sourceStable,
+  };
 }
 
 /**
@@ -216,7 +278,7 @@ async function runSlot(runClass, slot, policy, io, runs) {
     const cool = await waitForCoolStart(io);
     if (!cool.ok) {
       io.log(`Cool-down wait exhausted at ${cool.tempC}C; session inconclusive.`);
-      return 'inconclusive';
+      return SLOT_OUTCOME.INCONCLUSIVE;
     }
     io.log(`[${runClass} ${slot + 1}/${policy.repetitions}] starting (max core ${cool.tempC}C)`);
     const startedAt = io.now();
@@ -235,16 +297,16 @@ async function runSlot(runClass, slot, policy, io, runs) {
       reportRefs,
     });
     if (verdict.green) {
-      return 'green';
+      return SLOT_OUTCOME.GREEN;
     }
     if (!verdict.nonMeasuring) {
-      return 'red';
+      return SLOT_OUTCOME.RED;
     }
     io.log(`Slot ${slot + 1} failed at ${postTempC}C >= ${THERMAL_INVALID_C}C: ` +
-      'non-measuring (thermal); re-running once.');
+      LOG_MESSAGE.THERMAL_RERUN);
   }
-  io.log('Thermal re-run budget exhausted; session inconclusive.');
-  return 'inconclusive';
+  io.log(LOG_MESSAGE.RERUN_EXHAUSTED);
+  return SLOT_OUTCOME.INCONCLUSIVE;
 }
 
 /**
@@ -260,27 +322,32 @@ async function writeSummary(runClass, session) {
   await mkdir(SUMMARY_DIR, {recursive: true});
   await writeFile(path, JSON.stringify({
     runClass,
-    policy: {repetitions: policy.repetitions, gate: 'all measuring repetitions green'},
+    policy: {repetitions: policy.repetitions, gate: POLICY_GATE},
     gatePassed: session.gatePassed,
     inconclusive: session.inconclusive,
+    sessionStartedAt: session.sessionStartedAt,
+    sessionCompletedAt: session.sessionCompletedAt,
+    sourceFingerprint: session.sourceFingerprint,
+    completedSourceFingerprint: session.completedSourceFingerprint,
+    sourceStable: session.sourceStable,
     runs: session.runs,
   }, null, 2));
   return path;
 }
 
-if (process.argv[1]?.includes('run-live-repetitions.js')) {
+if (process.argv[1]?.includes(ENTRYPOINT_FILE)) {
   const runClass = process.argv[2];
   runRepetitionSession(runClass)
     .then(async (session) => {
       const summaryPath = await writeSummary(runClass, session);
       console.log(`Session summary: ${summaryPath}`);
       if (session.inconclusive) {
-        console.log('RESULT: INCONCLUSIVE (thermal validity could not be established)');
+        console.log(LOG_MESSAGE.INCONCLUSIVE);
         process.exitCode = EXIT_INCONCLUSIVE;
       } else if (session.gatePassed) {
         console.log(`RESULT: GATE PASSED (${RUN_CLASSES[runClass].repetitions} green)`);
       } else {
-        console.log('RESULT: GATE FAILED');
+        console.log(LOG_MESSAGE.GATE_FAILED);
         process.exitCode = EXIT_GATE_FAILED;
       }
     })

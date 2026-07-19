@@ -11,6 +11,10 @@ import {
   REBALANCER_MOVE_TYPE,
 } from './rebalancer-constants.js';
 import {
+  buildEffectivePlacement,
+  selectSerialPriorityMove,
+} from './effective-placement-serial-priority-planner.js';
+import {
   PLACEMENT_CURE_CONDITION,
   resolvePlacementCure,
 } from './replica-placement-cure-policy.js';
@@ -83,6 +87,24 @@ class MovePlannerMoveCalculationMethods {
       targetState.topologyTransitionSnapshot ||
       this.buildTopologyTransitionSnapshot(currentReplicas);
     const inventory = transitionSnapshot.inventory;
+    const priorityPartition = this.isControlPlanePriorityPartition();
+    const effectivePlacement = priorityPartition ?
+      buildEffectivePlacement({
+        inventory,
+        targetState,
+        unresolvedOperations: this.getEntityInFlightOperations(),
+      }) :
+      null;
+    const finalizeMoves = (candidates) => {
+      if (!effectivePlacement) {
+        return candidates;
+      }
+      const decision = selectSerialPriorityMove({
+        placement: effectivePlacement,
+        candidates,
+      });
+      return decision.move ? [decision.move] : [];
+    };
     const isTopologyCleanupReason = (reason) => {
       return (
         reason === MOVE_REASON.NODE_NOT_IN_TARGET ||
@@ -759,7 +781,7 @@ class MovePlannerMoveCalculationMethods {
           deferredRemoveCount: deferredCount,
         });
       }
-      return filteredMoves;
+      return finalizeMoves(filteredMoves);
     }
 
     // Include computed REPLACE and ADD moves.
@@ -785,7 +807,7 @@ class MovePlannerMoveCalculationMethods {
       };
       return getPriority(a) - getPriority(b);
     });
-    return moves;
+    return finalizeMoves(moves);
   }
 
   /**

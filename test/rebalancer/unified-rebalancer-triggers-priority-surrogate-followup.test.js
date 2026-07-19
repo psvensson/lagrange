@@ -676,8 +676,8 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
       );
       t.equal(
         createdOperations.length,
-        2,
-        'blocked terminal recovery should create follow-up operations despite pressure',
+        1,
+        'blocked terminal recovery should create one serial follow-up despite pressure',
       );
       t.ok(
         createdOperations.every((operation) =>

@@ -16,9 +16,14 @@ import {
   runRepetitionSession,
 } from '../../scripts/run-live-repetitions.js';
 
-function fakeIo({execResults, temps}) {
+function fakeIo({
+  execResults,
+  temps,
+  sourceFingerprints = ['source-a', 'source-a'],
+}) {
   const execQueue = [...execResults];
   const tempQueue = [...temps];
+  const fingerprintQueue = [...sourceFingerprints];
   return {
     execRun: async () => {
       const next = execQueue.shift();
@@ -31,6 +36,7 @@ function fakeIo({execResults, temps}) {
     sleep: async () => {},
     log: () => {},
     now: () => '2026-07-19T12:00:00.000Z',
+    readSourceFingerprint: async () => fingerprintQueue.shift() || 'source-a',
   };
 }
 
@@ -44,6 +50,8 @@ test('probe class requires 5 greens and passes the gate', async (t) => {
   t.equal(session.gatePassed, true);
   t.equal(session.inconclusive, false);
   t.equal(session.runs.length, 5);
+  t.equal(session.sourceStable, true);
+  t.equal(session.sourceFingerprint, 'source-a');
   t.ok(session.runs.every((run) => run.green && !run.nonMeasuring));
 });
 
@@ -100,6 +108,18 @@ test('a green run counts even when the machine ends hot', async (t) => {
 
 test('a failed run with unavailable sensors counts red, not non-measuring', async (t) => {
   t.same(classifyRepetition(1, null), {green: false, nonMeasuring: false});
+});
+
+test('a source change makes an otherwise green session inconclusive', async (t) => {
+  const io = fakeIo({
+    execResults: greens(3),
+    temps: [],
+    sourceFingerprints: ['source-a', 'source-b'],
+  });
+  const session = await runRepetitionSession('demo', io);
+  t.equal(session.gatePassed, false);
+  t.equal(session.inconclusive, true);
+  t.equal(session.sourceStable, false);
 });
 
 test('unknown run class throws', async (t) => {
