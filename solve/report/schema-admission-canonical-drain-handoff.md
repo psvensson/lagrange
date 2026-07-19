@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 2
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-background-release-quiescence-anchor-live
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: schema-admission-canonical-drain-handoff-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T16-44-58-388Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for schema-admission-canonical-drain-handoff-main
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for schema-admission-canonical-drain-handoff-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 6
@@ -42,7 +26,7 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **schema-admission-canonical-drain-handoff-main** [open] rung 0, attempts 2, metric 1 -> 1
+- **schema-admission-canonical-drain-handoff-main** [parked {exhausted}] rung 0, attempts 2, metric 1 -> 1 — The sealed schema drain-anchor contract is fixed, independently verified, checkpointed, and live-green; fresh stopped-state evidence moved the blocker to lost runtime services projection after routed write failures, requiring a bounded successor Quest owned by runtime lifecycle projection.
 
 ## Findings
 - **schema-admission-canonical-drain-handoff-main**: inherited from formation-background-release-quiescence-anchor-live: The fresh source-stable run proves the active ordinary-release fence matured from the 14:11:29.378 topology-drain anchor and released at 14:12:39.905, while schema admission had not completed its independent quiet proof; the two maturity clocks can diverge. (rules out: a wedged package_registry_overrides repair ADD, the effective-placement serial priority planner, or split-snapshot pacing as the cause of this schema-admission miss) [solve/changes/formation-background-release-quiescence-anchor-live/post-attempt-3-live-boundary-2026-07-19.md]
@@ -52,6 +36,10 @@
 - **schema-admission-canonical-drain-handoff-main**: DT red-on-revert proven for test/runtime/movielens-preload-admission-gate.test.js [dt:solve/changes/dt-prove/movielens-preload-admission-gate.test.js-2026-07-19T17-02-38-196Z.json]
 - **schema-admission-canonical-drain-handoff-main**: DT red-on-revert proven for test/runtime/movielens-preload-admission-gate.test.js [dt:solve/changes/dt-prove/movielens-preload-admission-gate.test.js-2026-07-19T17-02-49-048Z.json]
 - **schema-admission-canonical-drain-handoff-main**: Independent verification rejected this exact attempt [subagent:verify_schema_drain_handoff]
+- **schema-admission-canonical-drain-handoff-main**: DT red-on-revert proven for test/runtime/movielens-preload-admission-gate.test.js [dt:solve/changes/dt-prove/movielens-preload-admission-gate.test.js-2026-07-19T17-12-57-996Z.json]
+- **schema-admission-canonical-drain-handoff-main**: Independent verification passed [subagent:verify_schema_drain_handoff]
+- **schema-admission-canonical-drain-handoff-main**: Fresh ordered source-stable Demo 1 passed the sealed schema drain-anchor boundary with two confirmations at retained drain+60770ms and +63628ms, then failed later because runtime replica r2 spent 30141ms and 35410ms on swallowed services-projection failures; its source operation timed out CREATING 3819ms before local ACTIVE completion and no r2 services row was retained. (rules out: schema drain-anchor recurrence, missing runtime ADD creation, missing local runtime activation, expired-lease ordinary candidate admission, and pre-terminal remote ACTIVE handoff classification) [file:solve/changes/schema-admission-canonical-drain-handoff/post-attempt-2-live-runtime-projection-loss-2026-07-19.md]
+- **schema-admission-canonical-drain-handoff-main**: Independent verification passed [subagent:verify_schema_drain_handoff]
 
 ## Theories
 _(none recorded)_
