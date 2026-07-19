@@ -48,6 +48,7 @@
 - **partition-live-leader-address-routing-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json]
 - **partition-live-leader-address-routing-main**: Independent verification rejected attempt 1: routed leader resolution can fall through to a stale matching bootstrap peer hint after a malformed, stale, or mismatched live Raft leader is rejected; the mismatch test omitted that hint and was vacuous for the sealed fail-closed contract. [subagent:verify_live_leader_routing]
 - **partition-live-leader-address-routing-main**: Independent verification rejected attempt 2 solely because the new live Raft resolver used the retired TYPEOF.STRING alias contrary to STYLE-0011; behavioral stale-hint, malformed, mismatched, cache-precedence, production-path, and bounded-failure attacks otherwise passed. [subagent:verify_live_leader_routing_attempt2]
+- **partition-live-leader-address-routing-main**: Independent verification passed attempt 3: exact artifact/source identity, STYLE-0011 compliance, real routed-write fidelity, canonical cache precedence, matching live Raft bridge, and stale-hint/malformed/non-partition/mismatched fail-closed attacks all passed with no blocking findings. [subagent:verify_live_leader_routing_attempt3]
 
 ## Theories
 _(none recorded)_
