@@ -447,6 +447,9 @@ function createHarness(store) {
     },
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
+      async refreshAuthoritativeCacheRow() {
+        return true;
+      },
     },
     tablePolicyService: {
       async getPolicyForPartition() {

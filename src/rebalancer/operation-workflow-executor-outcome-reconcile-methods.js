@@ -457,6 +457,50 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     return true;
   }
 
+  async reconcileExecutorCompletionOutcome(
+    operation,
+    outcome,
+    visibilityObservation,
+  ) {
+    const operationId = outcome[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
+    const outcomeType = outcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
+    const workflowStep = outcome[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP];
+    const activeReplicaHandoffRequired =
+      outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE &&
+      workflowStep === WORKFLOW_STEP.ACTIVE &&
+      (
+        operation.type === OperationType.ADD ||
+        operation.type === OperationType.REPLACE
+      );
+    if (
+      activeReplicaHandoffRequired &&
+      !await this.confirmActiveReplicaTerminalHandoff(operation)
+    ) {
+      // Executor completion is evidence to reconcile, not permission to
+      // bypass the recovery owner's authoritative SERVICES cache handoff.
+      // Retain the original outcome as well as the handoff's cache wake-up.
+      this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
+      return;
+    }
+    if (
+      workflowStep === WORKFLOW_STEP.ACTIVE &&
+      operation.type === OperationType.REPLACE
+    ) {
+      const applied = await this.reconcileReplaceActualActive(operation);
+      if (applied === false) {
+        // CL-029: completion evidence that could not be applied (stale-CAS
+        // updateStep + replay found nothing actionable) keeps its retry
+        // owner; a later attempt re-reads fresh visibility and applies.
+        this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
+        return;
+      }
+      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+      return;
+    }
+    await this.completeOperation(operation);
+    this.clearExecutorOutcomeRetry(operationId);
+  }
+
   async reconcileExecutorOutcome(outcome) {
     const operationId = outcome[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
     const outcomeType = outcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
@@ -568,11 +612,6 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       return false;
     }
 
-    const shouldResumeReplaceActivePhase =
-      mapping.action === EXECUTOR_OUTCOME_ACTION.COMPLETE &&
-      workflowStep === WORKFLOW_STEP.ACTIVE &&
-      operation.type === OperationType.REPLACE;
-
     if (mapping.action === EXECUTOR_OUTCOME_ACTION.UPDATE_STEP) {
       if (!this.isExecutorOutcomeStepBehindOperation(operation, workflowStep)) {
         await this.updateStep(
@@ -587,19 +626,12 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         workflowStep,
       );
       this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
-    } else if (shouldResumeReplaceActivePhase) {
-      const applied = await this.reconcileReplaceActualActive(operation);
-      if (applied === false) {
-        // CL-029: completion evidence that could not be applied (stale-CAS
-        // updateStep + replay found nothing actionable) keeps its retry
-        // owner; a later attempt re-reads fresh visibility and applies.
-        this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
-      } else {
-        this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
-      }
     } else if (mapping.action === EXECUTOR_OUTCOME_ACTION.COMPLETE) {
-      await this.completeOperation(operation);
-      this.clearExecutorOutcomeRetry(operationId);
+      await this.reconcileExecutorCompletionOutcome(
+        operation,
+        outcome,
+        visibilityObservation,
+      );
     } else if (mapping.action === EXECUTOR_OUTCOME_ACTION.FAIL) {
       const errorLike = this.buildExecutorFailureOutcomeErrorLike(
         outcome,

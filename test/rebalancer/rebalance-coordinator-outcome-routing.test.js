@@ -182,6 +182,9 @@ function createTestCoordinator(options = {}) {
     }},
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
+      async refreshAuthoritativeCacheRow() {
+        return true;
+      },
     },
     tablePolicyService: {
       async getPolicyForPartition() {

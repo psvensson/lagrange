@@ -14,12 +14,19 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {
+  EXECUTOR_OUTCOME_FIELD,
+  EXECUTOR_OUTCOME_TYPE,
+} from '../../src/rebalancer/executor-outcome-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const TEST_NODE_ID = 'active-cache-handoff-owner';
 const TEST_OPERATION_ID = 'active-cache-handoff-operation';
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
+const TEST_SOURCE_NODE_ID = 'active-cache-handoff-source';
+const TEST_REPLACE_OPERATION_ID =
+  'active-cache-handoff-replace-operation';
 
 class ActiveCacheRefreshHost {}
 applyCDCIntegrationServiceCacheVisibilityWait(ActiveCacheRefreshHost);
@@ -43,7 +50,26 @@ function buildSyncingAddOperation() {
   return operation;
 }
 
-function buildAuthoritativeServiceRow() {
+function buildSyncingReplaceOperation() {
+  const operation = createOperation({
+    operationId: TEST_REPLACE_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partitionId: TEST_PARTITION_ID,
+    replicaId: TEST_REPLICA_ID,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_NODE_ID,
+  });
+  operation.status = ReplicaStatus.SYNCING;
+  operation.workflowStep = WORKFLOW_STEP.SYNCING;
+  operation.stepsHistory.push({
+    step: WORKFLOW_STEP.SYNCING,
+    timestamp: operation.updatedAt,
+    previousStep: WORKFLOW_STEP.PENDING,
+  });
+  return operation;
+}
+
+function buildAuthoritativeServiceRow(overrides = {}) {
   return {
     service_id: TEST_REPLICA_ID,
     service_type: 'partition',
@@ -56,6 +82,7 @@ function buildAuthoritativeServiceRow() {
     state_entered_at: 9,
     created_at: 3,
     updated_at: 9,
+    ...overrides,
   };
 }
 
@@ -85,6 +112,131 @@ function buildProductionCacheRefreshHost({
   host.updateSystemTableRow = async () => ({success: true});
   return host;
 }
+
+test(
+  'direct priority REPLACE ACTIVE outcome retains source retirement until ' +
+    'the authoritative SERVICES row is aligned into cache',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const authoritativeRow = buildAuthoritativeServiceRow();
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CDC_OPERATION.UPSERT,
+      {...authoritativeRow, status: ReplicaStatus.SYNCING},
+    );
+    const cacheRefreshHost = buildProductionCacheRefreshHost({
+      cache,
+      authoritativeRow,
+      dropRepair: true,
+    });
+    const timerHandles = [];
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: cache,
+      cdcIntegrationService: cacheRefreshHost,
+      setTimeoutFn(callback, delayMs) {
+        const timerHandle = {callback, delayMs, cleared: false};
+        timerHandles.push(timerHandle);
+        return timerHandle;
+      },
+      clearTimeoutFn(timerHandle) {
+        timerHandle.cleared = true;
+      },
+    });
+    const operation = buildSyncingReplaceOperation();
+    const sourceRetirementOperationIds = [];
+    const observedRetryOperationIds = [];
+    const outcome = Object.freeze({
+      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: TEST_REPLACE_OPERATION_ID,
+      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.ACTIVE,
+      [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: TEST_REPLICA_ID,
+      [EXECUTOR_OUTCOME_FIELD.PARTITION_ID]: TEST_PARTITION_ID,
+      [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: Date.now(),
+    });
+    coordinator.repository.getOperationByIdVisibilityObservation =
+      async () => ({
+        state: 'present',
+        operation,
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    coordinator.workflowOwner.reconcileReplaceActualActive =
+      async (replaceOperation) => {
+        sourceRetirementOperationIds.push(replaceOperation.operationId);
+        return true;
+      };
+    coordinator.workflowOwner.scheduleObservedProgressRetry =
+      (operationId) => {
+        observedRetryOperationIds.push(operationId);
+        return true;
+      };
+
+    try {
+      const deferred = await coordinator.workflowOwner
+        .reconcileExecutorOutcome(outcome);
+
+      t.equal(deferred, true, 'the direct outcome remains owned progress');
+      t.same(
+        sourceRetirementOperationIds,
+        [],
+        'silently dropped cache repair cannot release source retirement',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID).status,
+        ReplicaStatus.SYNCING,
+        'the planning cache remains observably divergent',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+          .get(TEST_REPLACE_OPERATION_ID)?.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the direct ACTIVE evidence retains executor-outcome retry ownership',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryTimerByOperationId
+          .has(TEST_REPLACE_OPERATION_ID),
+        true,
+        'the retained outcome has a bounded retry wake-up',
+      );
+      t.same(
+        observedRetryOperationIds,
+        [TEST_REPLACE_OPERATION_ID],
+        'the shared terminal-handoff owner also retains its cache wake-up',
+      );
+
+      cacheRefreshHost.cacheMutationTarget = cache;
+      const completed = await coordinator.workflowOwner
+        .reconcileExecutorOutcome(outcome);
+
+      t.equal(completed, true, 'aligned ACTIVE evidence resumes normally');
+      t.same(
+        sourceRetirementOperationIds,
+        [TEST_REPLACE_OPERATION_ID],
+        'source retirement resumes only after exact cache alignment',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID).status,
+        ReplicaStatus.ACTIVE,
+        'the exact authoritative target row is ACTIVE in planning cache',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+          .has(TEST_REPLACE_OPERATION_ID),
+        false,
+        'successful alignment consumes the retained ACTIVE evidence',
+      );
+      t.equal(
+        timerHandles.some((timerHandle) => timerHandle.cleared),
+        true,
+        'successful alignment clears the bounded outcome retry timer',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
 
 test(
   'ACTIVE target reconciliation retains the operation until its exact ' +

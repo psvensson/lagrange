@@ -153,7 +153,11 @@ function createCoordinatorHarness() {
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     systemTableCache: createMockCache(),
-    cdcIntegrationService: {},
+    cdcIntegrationService: {
+      async refreshAuthoritativeCacheRow() {
+        return true;
+      },
+    },
     messageRouter: createMockMessageRouter(),
     tablePolicyService: createMockPolicyService(),
     sqlQueryEngine,
