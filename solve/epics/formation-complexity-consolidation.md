@@ -96,6 +96,18 @@ morning) the learned-affinity phase under the same machine conditions.
   DEFER_ADD_OVER_TARGET into a typed composite-state diagnostic, and
   re-evaluate denied intents on inventory-recovery events instead of only
   periodic passes.
+  **Forensics verdict (07-22-01, recorded on quest
+  spread-cure-at-target-minting-gap):** the drain was slow but COMPLETED
+  (REMOVE done 07:18:57; over-target window 36s). The 3-minute terminal
+  stall was post-drain: at-target + co-located + authoritative-unavailable
+  — the sealed cure scenario itself — where
+  classifyPriorityExpandForSpreadCureCondition declined silently
+  (naturalReplaceCount>=1 unmeetable post-drain; exact count equalities
+  fragile to lagging rows) and the planner emitted untyped spread ADDs the
+  escape rightly ignored. New quest `spread-cure-at-target-minting-gap`
+  owns the fix: cure-typed move without a natural REPLACE pairing, plus a
+  typed composite-state decline diagnostic. Event-driven re-evaluation on
+  inventory recovery stays a named follow-up, not in this quest.
 - Flag-surface tail (small, unqueued): delete the uncalled
   shouldMetadataPublicationAllowPressureDefer
   (partition-service-metadata-delivery-methods.js) and the stale
