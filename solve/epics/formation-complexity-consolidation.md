@@ -12,6 +12,23 @@ graduatesTo: null
 A fresh agent can continue directly from this section; the Decision log below
 holds the full evidence trail.
 
+**Stopping rule (owner decision 2026-07-19, binding).** If
+`executor-active-services-cache-handoff` plus AT MOST ONE further authored
+child quest do not produce a green confirmation gate on the unchanged
+MovieLens scenario (gate per owner decision: 5-of-5 formation-probe
+repetitions green AND 3-of-3 full-demo repetitions green, probes first;
+thermally/environmentally invalidated runs count as non-measuring, not red),
+stop authoring residual instance quests against this live gate. The next
+product quest is then O3 (EffectivePlacement / serial goal-state planner),
+scoped so the live chain's load-bearing classifiers and valves are ported,
+not deleted, until O3's own live gate passes. "One further child quest"
+means one more authored quest, not one more attempt; this clause is not
+re-litigable per residual ("this one is different" does not extend the
+budget). Every residual discovered while the budget lasts is recorded in
+this epic as an O3 design input, so the work is additive under either
+outcome. Rationale and alternatives: see
+`solve/epics/convergence-loop-and-workflow-overhead.md` work item 1.
+
 **Shipped and live-validated:** lifecycle-gated heartbeat activation fence
 (F12, corrected after live falsification of the row-only form); structural
 ReadAuthority token through the gateway read path (O1 core); per-table cache
@@ -354,6 +371,17 @@ Lifecycle / membership:
 
 ## Decision log
 
+- 2026-07-19 (owner decision, loop review) — Residual-chase stopping rule
+  adopted (see the binding block at the top of the Handoff section): budget
+  is `executor-active-services-cache-handoff` + at most one further authored
+  child quest; on a second failed confirmation gate the next product quest
+  is O3 with load-bearing valves ported, not deleted. Confirmation gate
+  strengthened from "2 consecutive green" to 5-of-5 formation-probe + 3-of-3
+  full-demo repetitions (all green, probes first, thermal invalids
+  non-measuring) via the new `scripts/run-live-repetitions.js`. Companion
+  loop-level decisions (evidence-bundle compression, checkpoint subject
+  shortening, chain-depth reflection guard, ratchet-baseline steering rule)
+  recorded in `solve/epics/convergence-loop-and-workflow-overhead.md`.
 - 2026-07-18 (live validation) — The row-only F12 fence was FALSIFIED by
   live run 10:46 (seed never joins; its activation rides its own heartbeat;
   0/5 nodes reached active) and corrected to a lifecycle-gated fence:
