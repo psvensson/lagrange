@@ -19,13 +19,76 @@ import {RUNTIME_REPLICA_STATUS} from '../constants/runtime.js';
 import {ADAPTER_ERROR_MSG} from './sql-adapter-constants.js';
 
 const PROJECTION_WRITE_OPTIONS = Object.freeze({skipCacheWait: true});
+const SERVICES_OWNER_METHODS = Object.freeze([
+  'insertService',
+  'removeService',
+  'updateService',
+]);
 
-async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
-  const updateResult = await gateway.updateSystemTableRow(
-    TABLES.SERVICES,
-    {service_id: serviceId},
+function isServicesOwner(target) {
+  return SERVICES_OWNER_METHODS.every(
+    (methodName) => typeof target?.[methodName] === 'function',
+  );
+}
+
+function assertProjectionMutationSucceeded(result) {
+  if (result?.success !== false) {
+    return result;
+  }
+  const error = new Error(
+    result?.error || 'Runtime replica services projection failed',
+  );
+  Object.assign(error, result);
+  throw error;
+}
+
+async function updateRuntimeReplicaServicesRow(
+  target,
+  serviceId,
+  updateData,
+) {
+  const result = isServicesOwner(target) ?
+    await target.updateService(
+      serviceId,
+      updateData,
+      PROJECTION_WRITE_OPTIONS,
+    ) :
+    await target.updateSystemTableRow(
+      TABLES.SERVICES,
+      {service_id: serviceId},
+      updateData,
+      PROJECTION_WRITE_OPTIONS,
+    );
+  return assertProjectionMutationSucceeded(result);
+}
+
+async function insertRuntimeReplicaServicesRow(target, row) {
+  const result = isServicesOwner(target) ?
+    await target.insertService(row, PROJECTION_WRITE_OPTIONS) :
+    await target.insertSystemTableRow(
+      TABLES.SERVICES,
+      row,
+      PROJECTION_WRITE_OPTIONS,
+    );
+  assertProjectionMutationSucceeded(result);
+}
+
+async function deleteRuntimeReplicaServicesRow(target, serviceId) {
+  const result = isServicesOwner(target) ?
+    await target.removeService(serviceId, PROJECTION_WRITE_OPTIONS) :
+    await target.deleteSystemTableRow(
+      TABLES.SERVICES,
+      {service_id: serviceId},
+      PROJECTION_WRITE_OPTIONS,
+    );
+  assertProjectionMutationSucceeded(result);
+}
+
+async function writeRuntimeReplicaServicesRow(target, serviceId, write) {
+  const updateResult = await updateRuntimeReplicaServicesRow(
+    target,
+    serviceId,
     write.updateData,
-    PROJECTION_WRITE_OPTIONS,
   );
   const affectedRows = Number(
     updateResult?.partitionResult?.affectedRows ??
@@ -34,16 +97,12 @@ async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
   if (affectedRows > 0) {
     return;
   }
-  await gateway.insertSystemTableRow(
-    TABLES.SERVICES,
-    {
-      service_id: serviceId,
-      ...write.updateData,
-      created_at: write.createdAt ??
-        write.updateData.updated_at ?? Date.now(),
-    },
-    PROJECTION_WRITE_OPTIONS,
-  );
+  await insertRuntimeReplicaServicesRow(target, {
+    service_id: serviceId,
+    ...write.updateData,
+    created_at: write.createdAt ??
+      write.updateData.updated_at ?? Date.now(),
+  });
 }
 
 /**
@@ -53,7 +112,8 @@ async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
  * the state row resolves to the hosting engine's own nodeId (the
  * column is NOT NULL).
  *
- * @param {?Object} gateway - Control-plane system-table gateway.
+ * @param {?Object} projectionTarget - ServicesOwner in production, or a
+ *   control-plane system-table gateway for compatibility callers.
  * @param {string} hostNodeId - The projecting engine's node id.
  * @param {string} serviceId - Replica service id (row primary key).
  * @param {Object} stateRow - Column values from the lifecycle
@@ -62,23 +122,19 @@ async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
  * @return {Promise<void>}
  */
 async function projectRuntimeReplicaServicesRow(
-  gateway, hostNodeId, serviceId, stateRow,
+  projectionTarget, hostNodeId, serviceId, stateRow,
 ) {
-  if (!gateway) {
+  if (!projectionTarget) {
     throw new Error(
       ADAPTER_ERROR_MSG.STATE_PROJECTION_GATEWAY_REQUIRED,
     );
   }
   const {created_at: createdAt, ...transitionColumns} = stateRow || {};
   if (transitionColumns.status === RUNTIME_REPLICA_STATUS.STOPPED) {
-    await gateway.deleteSystemTableRow(
-      TABLES.SERVICES,
-      {service_id: serviceId},
-      PROJECTION_WRITE_OPTIONS,
-    );
+    await deleteRuntimeReplicaServicesRow(projectionTarget, serviceId);
     return;
   }
-  await writeRuntimeReplicaServicesRow(gateway, serviceId, {
+  await writeRuntimeReplicaServicesRow(projectionTarget, serviceId, {
     createdAt,
     updateData: {
       ...transitionColumns,

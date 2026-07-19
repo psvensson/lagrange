@@ -7,10 +7,11 @@
  * the new reason is merged into the existing entry. A drain loop
  * processes pending items by calling the reconcile callback.
  *
- * At most one reconcile execution is active per owner key. If an
- * owner key is already in-flight when the drain loop reaches it,
- * the item is deferred back into the pending map and a typed
- * stale-claim diagnostic is recorded.
+ * At most one reconcile execution is active per owner key, and total
+ * in-flight work is bounded by the configured concurrency ceiling.
+ * If an owner key is already in-flight when the drain loop reaches it,
+ * the item is deferred back into the pending map and a typed stale-claim
+ * diagnostic is recorded.
  */
 
 import {EventEmitter} from 'events';
@@ -28,6 +29,7 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_THOUSAND = 1000;
+const DEFAULT_MAX_CONCURRENCY = 1;
 const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE =
   'retryable_drain_failure';
 const RECONCILE_QUEUE_RETRYABLE_DRAIN_DEFERRED =
@@ -74,6 +76,12 @@ function normalizeRetryAfterMs(value) {
     LOCAL_NUM_THOUSAND;
 }
 
+function normalizeMaxConcurrency(value) {
+  return Number.isSafeInteger(value) && value > 0 ?
+    value :
+    DEFAULT_MAX_CONCURRENCY;
+}
+
 function getRetryableDrainFailureMessage(error) {
   if (typeof error === LOCAL_STR_STRING) {
     return error;
@@ -115,6 +123,8 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @param {Function} options.reconcileFn - Async callback invoked
    *   for each dequeued item: (ownerKey, reasons, context) => Promise.
    * @param {string} [options.name] - Queue name for logging.
+   * @param {number} [options.maxConcurrency=1] - Maximum number of
+   *   different owner keys that may reconcile concurrently.
    */
   constructor(options = {}) {
     super();
@@ -125,6 +135,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
 
     this.reconcileFn = options.reconcileFn;
     this.name = options.name || RECONCILE_QUEUE_SUBSYSTEM;
+    this.maxConcurrency = normalizeMaxConcurrency(options.maxConcurrency);
 
     /** @type {Map<string, ReconcileWorkItem>} */
     this.pending = new Map();
@@ -295,103 +306,109 @@ class OwnerKeyReconcileQueue extends EventEmitter {
   }
 
   /**
-   * Drain pending items by calling reconcileFn for each.
+   * Claim pending items and start one reconcile per available owner key.
    *
    * Items whose owner key is already in-flight are deferred back
    * into the pending map and picked up once the active reconcile
    * for that key completes. This guarantees at most one reconcile
-   * execution per owner key.
+   * execution per owner key while allowing unrelated owner keys to
+   * make progress independently.
    * @private
    */
-  async drain() {
+  drain() {
     try {
-      while (this.pending.size > 0 && !this.stopped) {
-        const entries = Array.from(this.pending.entries());
-        this.pending.clear();
+      const entries = Array.from(this.pending.entries());
 
-        let processedAny = false;
-        for (const [ownerKey, item] of entries) {
-          if (this.stopped) {
-            break;
-          }
-
-          if (this.inFlight.has(ownerKey)) {
-            this._deferInFlightItem(ownerKey, item);
-            continue;
-          }
-
-          // Validate fence token before claiming.
-          const itemFence = item.fenceToken;
-          if (itemFence !== undefined && itemFence !== null) {
-            const currentFence = this.fenceTokens.get(ownerKey);
-            if (currentFence !== undefined &&
-                itemFence < currentFence) {
-              this._recordStaleFenceDiagnostic(
-                ownerKey, item, itemFence, currentFence,
-              );
-              continue;
-            }
-          }
-
-          processedAny = true;
-          this.inFlight.add(ownerKey);
-          this.logger.debug(
-            RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_CLAIMED, {
-              queue: this.name,
-              ownerKey,
-            });
-
-          const reasons = Array.from(item.reasons);
-          try {
-            await this.reconcileFn(
-              ownerKey, reasons, item.context,
-            );
-            this._clearRetryState(ownerKey);
-          } catch (error) {
-            const retryDeferred =
-              this._deferRetryableDrainFailure(ownerKey, item, reasons, error);
-            if (!retryDeferred) {
-              this.logger.warn(RECONCILE_QUEUE_LOG_MSG.DRAIN_ERROR, {
-                queue: this.name,
-                ownerKey,
-                reasons,
-                error: error.message,
-              });
-            }
-          } finally {
-            this.inFlight.delete(ownerKey);
-            this.logger.debug(
-              RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_RELEASED, {
-                queue: this.name,
-                ownerKey,
-              });
-            if (this.pending.size > 0 && !this.stopped) {
-              this.scheduleDrain();
-            }
-          }
-        }
-
-        // If every item in the batch was deferred (all in-flight),
-        // break to avoid a spin loop. Deferred items are picked up
-        // when the active reconcile completes and a subsequent
-        // enqueue triggers scheduleDrain.
-        if (!processedAny) {
+      for (const [ownerKey, item] of entries) {
+        this.pending.delete(ownerKey);
+        if (!this._claimPendingItem(ownerKey, item)) {
           break;
         }
       }
     } finally {
       this.draining = false;
-      if (this.pending.size > 0 && !this.stopped) {
-        let hasNonInFlight = false;
-        for (const key of this.pending.keys()) {
-          if (!this.inFlight.has(key)) {
-            hasNonInFlight = true;
-            break;
-          }
-        }
-        if (hasNonInFlight) {
-          this.scheduleDrain();
-        }
+      this._schedulePendingDrainIfAvailable();
+    }
+  }
+
+  _claimPendingItem(ownerKey, item) {
+    if (this.stopped) {
+      return false;
+    }
+    if (this.inFlight.has(ownerKey)) {
+      this._deferInFlightItem(ownerKey, item);
+      return true;
+    }
+    if (this.inFlight.size >= this.maxConcurrency) {
+      this.pending.set(ownerKey, item);
+      return false;
+    }
+
+    const itemFence = item.fenceToken;
+    if (itemFence !== undefined && itemFence !== null) {
+      const currentFence = this.fenceTokens.get(ownerKey);
+      if (currentFence !== undefined &&
+          itemFence < currentFence) {
+        this._recordStaleFenceDiagnostic(
+          ownerKey, item, itemFence, currentFence,
+        );
+        return true;
+      }
+    }
+
+    this._startReconcile(ownerKey, item);
+    return true;
+  }
+
+  async _startReconcile(ownerKey, item) {
+    this.inFlight.add(ownerKey);
+    this.logger.debug(
+      RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_CLAIMED, {
+        queue: this.name,
+        ownerKey,
+      });
+
+    const reasons = Array.from(item.reasons);
+    try {
+      await this.reconcileFn(
+        ownerKey, reasons, item.context,
+      );
+      this._clearRetryState(ownerKey);
+    } catch (error) {
+      const retryDeferred =
+        this._deferRetryableDrainFailure(ownerKey, item, reasons, error);
+      if (!retryDeferred) {
+        this._clearRetryState(ownerKey);
+        this.logger.warn(RECONCILE_QUEUE_LOG_MSG.DRAIN_ERROR, {
+          queue: this.name,
+          ownerKey,
+          reasons,
+          error: error.message,
+        });
+      }
+    } finally {
+      this.inFlight.delete(ownerKey);
+      this.logger.debug(
+        RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_RELEASED, {
+          queue: this.name,
+          ownerKey,
+        });
+      this._schedulePendingDrainIfAvailable();
+    }
+  }
+
+  _schedulePendingDrainIfAvailable() {
+    if (
+      this.stopped ||
+      this.pending.size === 0 ||
+      this.inFlight.size >= this.maxConcurrency
+    ) {
+      return;
+    }
+    for (const ownerKey of this.pending.keys()) {
+      if (!this.inFlight.has(ownerKey)) {
+        this.scheduleDrain();
+        return;
       }
     }
   }
@@ -484,7 +501,11 @@ class OwnerKeyReconcileQueue extends EventEmitter {
   }
 
   _deferRetryableDrainFailure(ownerKey, item, reasons, error) {
-    if (!this._shouldRetryDrainFailure(ownerKey, item, error)) {
+    if (
+      this.stopped ||
+      this.pending.has(ownerKey) ||
+      !this._shouldRetryDrainFailure(ownerKey, item, error)
+    ) {
       return false;
     }
     const baseRetryAfterMs = this._resolveRetryAfterMs(ownerKey, item, error);
@@ -699,6 +720,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     }
     return {
       queue: this.name,
+      maxConcurrency: this.maxConcurrency,
       pendingKeys: Array.from(this.pending.keys()),
       retryingKeys: Array.from(this.retryWorkItems.keys()),
       inFlightKeys: Array.from(this.inFlight),

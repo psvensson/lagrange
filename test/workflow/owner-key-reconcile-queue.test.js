@@ -257,6 +257,7 @@ test('OwnerKeyReconcileQueue - no parallel execution on same owner key',
     const concurrency = new Map();
     const maxConcurrency = new Map();
     const reconciled = [];
+    let keyBStarted = false;
 
     let resolveFirst;
     const firstGate = new Promise((resolve) => {
@@ -264,6 +265,7 @@ test('OwnerKeyReconcileQueue - no parallel execution on same owner key',
     });
 
     const queue = new OwnerKeyReconcileQueue({
+      maxConcurrency: 2,
       reconcileFn: async (ownerKey, reasons) => {
         const current = (concurrency.get(ownerKey) || 0) + 1;
         concurrency.set(ownerKey, current);
@@ -273,6 +275,9 @@ test('OwnerKeyReconcileQueue - no parallel execution on same owner key',
         }
 
         reconciled.push({ownerKey, reasons});
+        if (ownerKey === 'key-B') {
+          keyBStarted = true;
+        }
 
         // First call for key-A blocks until gate opens.
         if (ownerKey === 'key-A' && reconciled.length === 1) {
@@ -298,6 +303,13 @@ test('OwnerKeyReconcileQueue - no parallel execution on same owner key',
     // Also enqueue a different key to prove it can run concurrently
     // with key-A (different owner keys are independent).
     queue.enqueue('key-B', RECONCILE_REASON.NODE_BECAME_READY);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(
+      keyBStarted,
+      true,
+      'key-B starts while the unrelated key-A reconcile remains blocked',
+    );
 
     // Release the first reconcile for key-A.
     resolveFirst();
@@ -329,6 +341,51 @@ test('OwnerKeyReconcileQueue - no parallel execution on same owner key',
     t.equal(keyBCalls.length, 1, 'key-B reconciled once');
 
     queue.shutdown();
+  });
+
+test('OwnerKeyReconcileQueue - bounds independent owner-key concurrency',
+  async (t) => {
+    let activeCount = 0;
+    let maxActiveCount = 0;
+    let releaseWork;
+    const workGate = new Promise((resolve) => {
+      releaseWork = resolve;
+    });
+    const queue = new OwnerKeyReconcileQueue({
+      maxConcurrency: 2,
+      reconcileFn: async () => {
+        activeCount += 1;
+        maxActiveCount = Math.max(maxActiveCount, activeCount);
+        await workGate;
+        activeCount -= 1;
+      },
+    });
+
+    for (const ownerKey of ['key-1', 'key-2', 'key-3', 'key-4', 'key-5']) {
+      queue.enqueue(ownerKey, RECONCILE_REASON.PERIODIC_CHECK);
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diagnostics = queue.getDiagnostics();
+    t.equal(maxActiveCount, 2, 'configured ceiling bounds active work');
+    t.equal(
+      diagnostics.inFlightKeys.length,
+      2,
+      'only the bounded number of owner keys is in flight',
+    );
+    t.equal(
+      diagnostics.pendingKeys.length,
+      3,
+      'remaining owner keys stay retained behind the concurrency ceiling',
+    );
+    t.equal(
+      diagnostics.maxConcurrency,
+      2,
+      'the configured concurrency ceiling is inspectable',
+    );
+
+    queue.shutdown();
+    releaseWork();
   });
 
 test('OwnerKeyReconcileQueue - isInFlight tracks active execution',

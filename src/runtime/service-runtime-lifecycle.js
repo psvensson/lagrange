@@ -60,9 +60,6 @@ import {
   IdempotencyCheckError,
 } from './runtime-driver-errors.js';
 import {
-  UNIFIED_SERVICE_TYPE,
-} from '../constants/unified-service-lifecycle.js';
-import {
   createOperation,
   transitionOperation,
   buildIdempotencyCheckSQL,
@@ -70,8 +67,12 @@ import {
 import {
   validateRuntimeDescriptor,
 } from '../wasm-service/runtime-descriptor-validator.js';
-import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
+import {getOrCreateCauseId} from '../utils/cause-id.js';
 import {START_STATUS} from './runtime-driver.js';
+import {
+  buildReplicaStateProjectionRequest,
+  isRetainedStateProjection,
+} from './service-runtime-state-projection-handoff.js';
 
 const LOCAL_STR_UNKNOWN = 'unknown';
 const LOCAL_STR_REGISTRY_MUST_BE_AN_INSTANCE_OF_RUNTIMED = 'registry must be an instance of RuntimeDriverRegistry';
@@ -475,27 +476,21 @@ class ServiceRuntimeLifecycle extends EventEmitter {
     if (!this._stateProjectionWriter) {
       return;
     }
-    const now = Date.now();
-    const nodeId = definition?.nodeId ??
-      definition?.node_id ?? null;
-    const serviceType = definition?.serviceType ??
-      definition?.service_type ??
-      UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
-    const address = definition?.address ?? null;
-    const stateRow = {
-      service_type: serviceType,
-      node_id: nodeId,
-      status,
-      address,
-      updated_at: now,
-      ...extras,
-    };
-    const causeId = normalizeCauseId(context?.causeId);
+    const {causeId, nodeId, stateRow} =
+      buildReplicaStateProjectionRequest(
+        definition,
+        status,
+        extras,
+        context,
+      );
     try {
-      await this._stateProjectionWriter(serviceId, stateRow, {causeId});
-      this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTED, {
-        serviceId, status, nodeId, causeId,
-      });
+      const projectionResult =
+        await this._stateProjectionWriter(serviceId, stateRow, {causeId});
+      if (!isRetainedStateProjection(projectionResult)) {
+        this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTED, {
+          serviceId, status, nodeId, causeId,
+        });
+      }
     } catch (err) {
       this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTION_FAILED, {
         serviceId, status, nodeId, causeId, error: err,

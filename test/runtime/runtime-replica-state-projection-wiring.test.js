@@ -20,6 +20,9 @@ import {
   createRuntimeStartupWiring,
 } from '../../src/runtime/runtime-startup-wiring.js';
 import {
+  RUNTIME_REPLICA_STATE_PROJECTION_EVENT,
+} from '../../src/query/runtime-replica-state-projection-owner.js';
+import {
   SQL_QUERY_LOOP_RUNTIME_REF,
 } from '../../src/runtime/sql-query-loop-runtime-module.js';
 import {
@@ -68,18 +71,15 @@ function runtimeServiceIdentityRows() {
 
 function buildHarness() {
   const {serviceRuntimeLifecycle} = createRuntimeStartupWiring();
-  const engine = new SQLQueryEngine({
-    systemCache: createMockSystemCache([], [], null),
-    messageRouter: createMockMessageRouter(),
-    nodeId: HOST_NODE_ID,
-    serviceRuntimeLifecycle,
-  });
   const writes = [];
   let rowExists = false;
-  engine.controlPlaneSystemTableGateway = {
+  const controlPlaneSystemTableGateway = {
     updateSystemTableRow: async (tableName, whereClause, data) => {
       writes.push({kind: 'update', tableName, whereClause, data});
-      return {partitionResult: {affectedRows: rowExists ? 1 : 0}};
+      return {
+        success: true,
+        partitionResult: {affectedRows: rowExists ? 1 : 0},
+      };
     },
     insertSystemTableRow: async (tableName, row) => {
       writes.push({kind: 'insert', tableName, row});
@@ -96,7 +96,38 @@ function buildHarness() {
       return {success: true};
     },
   };
-  return {engine, lifecycle: serviceRuntimeLifecycle, writes};
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [], null),
+    messageRouter: createMockMessageRouter(),
+    nodeId: HOST_NODE_ID,
+    serviceRuntimeLifecycle,
+    controlPlaneSystemTableGateway,
+  });
+  return {
+    engine,
+    lifecycle: serviceRuntimeLifecycle,
+    projectionOwner: engine.runtimeReplicaStateProjectionOwner,
+    writes,
+  };
+}
+
+function waitForAppliedProjection(projectionOwner, status) {
+  return new Promise((resolve) => {
+    const listener = (event) => {
+      if (event?.status !== status) {
+        return;
+      }
+      projectionOwner.removeListener(
+        RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED,
+        listener,
+      );
+      resolve(event);
+    };
+    projectionOwner.on(
+      RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED,
+      listener,
+    );
+  });
 }
 
 function loopDefinition() {
@@ -114,10 +145,16 @@ function loopDefinition() {
 
 test('placed replica lifecycle projects create-once-then-update ' +
   'services rows through the production wiring', async (t) => {
-  const {lifecycle, writes} = buildHarness();
+  const {engine, lifecycle, projectionOwner, writes} = buildHarness();
+  t.teardown(() => engine.shutdown());
   const definition = loopDefinition();
 
+  const createdApplied = waitForAppliedProjection(
+    projectionOwner,
+    'created',
+  );
   const prepared = await lifecycle.prepare(definition, {nodeId: HOST_NODE_ID});
+  await createdApplied;
   t.equal(prepared.status, 'ready', 'replica prepares through the real path');
   const serviceWrites = () =>
     writes.filter((w) => w.tableName === TABLES.SERVICES);
@@ -131,7 +168,12 @@ test('placed replica lifecycle projects create-once-then-update ' +
     'NOT NULL node_id resolves to the hosting engine nodeId');
   t.ok(Number.isFinite(created.row.created_at), 'identity created_at set');
 
+  const activeApplied = waitForAppliedProjection(
+    projectionOwner,
+    'active',
+  );
   await lifecycle.start({...definition});
+  await activeApplied;
   const afterStart = serviceWrites();
   t.equal(afterStart.length, 3, 'start projects exactly one more write');
   t.equal(afterStart[2].kind, 'update',
@@ -144,7 +186,12 @@ test('placed replica lifecycle projects create-once-then-update ' +
   t.equal(afterStart[2].data.created_at, undefined,
     'transitions never rewrite the identity created_at');
 
+  const stoppedApplied = waitForAppliedProjection(
+    projectionOwner,
+    'stopped',
+  );
   await lifecycle.stop({...definition});
+  await stoppedApplied;
   const afterStop = serviceWrites();
   const last = afterStop[afterStop.length - 1];
   t.equal(last.kind, 'delete',
@@ -228,7 +275,8 @@ test('the replica-operation repository uses exact canonical runtime IDs',
 
 test('a start failure projects the failed state onto the existing row',
   async (t) => {
-    const {lifecycle, writes} = buildHarness();
+    const {engine, lifecycle, projectionOwner, writes} = buildHarness();
+    t.teardown(() => engine.shutdown());
     lifecycle.registerNativeJsHandler('throwing-runtime', {
       prepare: async () => ({status: 'ready'}),
       start: async () => {
@@ -244,13 +292,23 @@ test('a start failure projects the failed state onto the existing row',
       runtime_ref: 'throwing-runtime',
       runtime_config: null,
     };
+    const createdApplied = waitForAppliedProjection(
+      projectionOwner,
+      'created',
+    );
     await lifecycle.prepare(definition, {nodeId: HOST_NODE_ID});
+    await createdApplied;
 
+    const failedApplied = waitForAppliedProjection(
+      projectionOwner,
+      'failed',
+    );
     await t.rejects(
       lifecycle.start({...definition}),
       undefined,
       'a throwing module start propagates',
     );
+    await failedApplied;
     const serviceWrites = writes.filter(
       (w) => w.tableName === TABLES.SERVICES);
     const last = serviceWrites[serviceWrites.length - 1];

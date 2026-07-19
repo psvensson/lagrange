@@ -5,6 +5,10 @@ import {
 import {
   ServicePartitionAccessPublisher,
 } from './service-partition-access-publisher.js';
+import {ServicesOwner} from '../control-plane/owners/services-owner.js';
+import {
+  RuntimeReplicaStateProjectionOwner,
+} from './runtime-replica-state-projection-owner.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
@@ -34,6 +38,23 @@ const {
   createControlPlaneRuntimeBundle,
   createEmptyTransactionRecoveryReplaySummary,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function createRuntimeReplicaStateProjectionOwner(engine, options) {
+  if (options.runtimeReplicaStateProjectionOwner) {
+    return options.runtimeReplicaStateProjectionOwner;
+  }
+  const servicesOwner =
+    options.runtimeReplicaStateProjectionServicesOwner ||
+    new ServicesOwner({
+      controlPlaneSystemTableGateway:
+        engine.controlPlaneSystemTableGateway,
+      systemTableCache: engine.systemCache,
+    });
+  return new RuntimeReplicaStateProjectionOwner({
+    hostNodeId: engine.nodeId,
+    servicesOwner,
+  });
+}
 
 function initializeSqlQueryEngineInstance(engine, options = {}) {
   engine.systemCache = options.systemCache || null;
@@ -289,6 +310,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
 
   engine.runtimeDriverRegistry = options.runtimeDriverRegistry || null;
   engine.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
+  engine.runtimeReplicaStateProjectionOwner =
+    createRuntimeReplicaStateProjectionOwner(engine, options);
   engine.debugSessionResolver = options.debugSessionResolver || null;
   engine.traceCollector = options.traceCollector || null;
   engine.wasmExecutor = options.wasmExecutor || null;

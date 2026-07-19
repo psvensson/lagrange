@@ -256,6 +256,13 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     ) {
       await this.tableCreationService.shutdown();
     }
+    if (
+      this.runtimeReplicaStateProjectionOwner &&
+      typeof this.runtimeReplicaStateProjectionOwner.shutdown ===
+        LOCAL_STR_FUNCTION
+    ) {
+      this.runtimeReplicaStateProjectionOwner.shutdown();
+    }
   }
 
   /**
@@ -295,9 +302,15 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     ) {
       return;
     }
+    const retainedProjectionOwner =
+      this.runtimeReplicaStateProjectionOwner;
     lifecycle.setStateProjectionWriter(
-      async (serviceId, stateRow) =>
-        this.projectRuntimeReplicaServicesRow(serviceId, stateRow),
+      retainedProjectionOwner &&
+      typeof retainedProjectionOwner.submit === LOCAL_STR_FUNCTION ?
+        (serviceId, stateRow, context) =>
+          retainedProjectionOwner.submit(serviceId, stateRow, context) :
+        async (serviceId, stateRow) =>
+          this.projectRuntimeReplicaServicesRow(serviceId, stateRow),
     );
   }
 
