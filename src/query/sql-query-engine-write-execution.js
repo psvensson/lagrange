@@ -169,6 +169,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         sessionId,
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
+        timeoutBudget: queryOptions.timeoutBudget || null,
         cancellationToken: queryOptions.cancellationToken || null,
         routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
           tableName,
@@ -346,6 +347,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         sessionId,
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
+        timeoutBudget: queryOptions.timeoutBudget || null,
         cancellationToken: queryOptions.cancellationToken || null,
         routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
           tableName,
@@ -522,6 +524,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         sessionId,
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
+        timeoutBudget: queryOptions.timeoutBudget || null,
         cancellationToken: queryOptions.cancellationToken || null,
         routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
           tableName,

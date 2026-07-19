@@ -81,6 +81,9 @@ class ProposalQueue {
    * @throws {Error} Backpressure error when queue is at capacity.
    */
   enqueue(entryId, entry) {
+    if (this.pendingCommits.has(entryId)) {
+      throw new Error(PROPOSAL_QUEUE_ERROR_MSG.DUPLICATE_ENTRY);
+    }
     if (this.isFull) {
       throw new Error(PROPOSAL_QUEUE_ERROR_MSG.BACKPRESSURE);
     }

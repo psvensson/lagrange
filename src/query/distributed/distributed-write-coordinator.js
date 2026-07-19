@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto';
+import {createHash, randomUUID} from 'node:crypto';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
   QUERY_AST_NODE,
@@ -25,6 +25,7 @@ const HASH_ALGORITHM = 'sha1';
 const DIGEST_ENCODING = 'hex';
 const DIGEST_PREFIX_LENGTH = 16;
 const OPERATION_ID_PREFIX = 'dwrite-';
+const PARTICIPANT_ENTRY_ID_PREFIX = 'dwrite-participant-';
 const PROMISE_STATUS_FULFILLED = 'fulfilled';
 const UNARY_MINUS = '-';
 const UNARY_PLUS = '+';
@@ -77,11 +78,7 @@ class DistributedWriteCoordinator {
    * @return {Object} DistributedWritePlan.
    */
   createWritePlan(ast, params = [], options = {}) {
-    const operationId = options.operationId || this.createOperationId(
-      ast,
-      params,
-      options.sessionId || null,
-    );
+    const operationId = options.operationId || this.createOperationId();
     const idempotencyKey = options.idempotencyKey || operationId;
     const partitionStatements = new Map();
 
@@ -152,10 +149,12 @@ class DistributedWriteCoordinator {
         participant.ast,
         partitionId,
         params,
-        {
-          ...(executionOptions || {}),
-          ...(participant.executionOptions || {}),
-        },
+        this.createParticipantExecutionOptions(
+          plan,
+          partitionId,
+          executionOptions,
+          participant.executionOptions,
+        ),
       );
       participantResults.push({
         partitionId,
@@ -170,10 +169,12 @@ class DistributedWriteCoordinator {
           participant.ast,
           partitionId,
           params,
-          {
-            ...(executionOptions || {}),
-            ...(participant.executionOptions || {}),
-          },
+          this.createParticipantExecutionOptions(
+            plan,
+            partitionId,
+            executionOptions,
+            participant.executionOptions,
+          ),
         ).then((result) => ({
           partitionId,
           role: participant.role || PARTICIPANT_ROLE_PRIMARY,
@@ -561,24 +562,46 @@ class DistributedWriteCoordinator {
   }
 
   /**
-   * Create a deterministic operation identifier.
-   * @param {Object} ast - Write AST.
-   * @param {Array} params - Bound parameters.
-   * @param {string|null} sessionId - Session identifier.
+   * Mint one identifier for this client submission. Internal participant
+   * attempts reuse the plan instead of deriving identity from write content.
    * @return {string} Operation identifier.
    * @private
    */
-  createOperationId(ast, params, sessionId) {
-    const payload = JSON.stringify({
-      ast,
-      paramsCount: params.length,
-      sessionId: sessionId || null,
+  createOperationId() {
+    return `${OPERATION_ID_PREFIX}${randomUUID()}`;
+  }
+
+  /**
+   * Preserve one stable entry identity across all internal attempts for a
+   * partition participant.
+   * @param {Object} plan - Distributed write plan.
+   * @param {string} partitionId - Participant partition ID.
+   * @param {Object} executionOptions - Global execution options.
+   * @param {Object} participantOptions - Participant execution options.
+   * @return {Object} Participant-scoped execution options.
+   * @private
+   */
+  createParticipantExecutionOptions(
+    plan,
+    partitionId,
+    executionOptions = {},
+    participantOptions = {},
+  ) {
+    const entryIdentityPayload = JSON.stringify({
+      idempotencyKey: plan.idempotencyKey,
+      partitionId,
     });
-    const digest = createHash(HASH_ALGORITHM)
-      .update(payload)
+    const entryIdentityDigest = createHash(HASH_ALGORITHM)
+      .update(entryIdentityPayload)
       .digest(DIGEST_ENCODING)
       .slice(0, DIGEST_PREFIX_LENGTH);
-    return `${OPERATION_ID_PREFIX}${digest}`;
+    return {
+      ...(executionOptions || {}),
+      operationId: plan.operationId,
+      idempotencyKey: plan.idempotencyKey,
+      entryId: `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`,
+      ...(participantOptions || {}),
+    };
   }
 }
 

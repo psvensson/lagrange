@@ -30,8 +30,18 @@ function createPartitionAttemptBudget({
     executionOptions.timeoutMs > 0 ?
       Math.floor(executionOptions.timeoutMs) :
       null;
-  const executionDeadlineMs =
+  const parentDeadlineMs =
+    Number.isFinite(executionOptions?.timeoutBudget?.deadlineMs) ?
+      Math.floor(executionOptions.timeoutBudget.deadlineMs) :
+      null;
+  const localDeadlineMs =
     executionTimeoutMs === null ? null : Date.now() + executionTimeoutMs;
+  const executionDeadlineMs =
+    parentDeadlineMs === null ?
+      localDeadlineMs :
+      localDeadlineMs === null ?
+        parentDeadlineMs :
+        Math.min(parentDeadlineMs, localDeadlineMs);
   const getRemainingExecutionBudgetMs = () => {
     if (executionDeadlineMs === null) {
       return null;

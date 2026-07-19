@@ -41,6 +41,22 @@ test('ProposalQueue', async (t) => {
     t.equal(queue.isFull, false, 'should not be full');
   });
 
+  t.test('enqueue refuses to overwrite an existing entry ID', async (t) => {
+    const queue = new ProposalQueue({maxCapacity: 10});
+    const firstEntry = {resolve: () => {}, reject: () => {}};
+    queue.enqueue('entry-1', firstEntry);
+
+    t.throws(
+      () => queue.enqueue(
+        'entry-1',
+        {resolve: () => {}, reject: () => {}},
+      ),
+      {message: PROPOSAL_QUEUE_ERROR_MSG.DUPLICATE_ENTRY},
+      'duplicate ownership must be joined or rejected before queue insertion',
+    );
+    t.equal(queue.get('entry-1'), firstEntry, 'first owner must stay intact');
+  });
+
   t.test('enqueue throws backpressure error when at capacity',
     async (t) => {
       const queue = new ProposalQueue({maxCapacity: 2});

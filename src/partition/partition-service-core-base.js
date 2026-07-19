@@ -148,6 +148,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
     this.pendingCDCEventDeliveries = /* @__PURE__ */ new Set();
     this.proposalQueue = new ProposalQueue();
+    this.pendingWriteOutcomes = /* @__PURE__ */ new Map();
     this.cdcDelivery = new PartitionCDCDelivery(this);
     this.recentlyAppliedEntryKeys = /* @__PURE__ */ new Set();
     this.recentlyAppliedEntryOrder = [];

@@ -1,5 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceTransactionBase} from './partition-service-transaction-base.js';
+import {
+  startPartitionRaftWriteCommit,
+} from './partition-service-raft-write-commit.js';
 
 
 const {
@@ -77,23 +80,22 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         const transaction = this.resolveActiveTransactionState(
           options.sessionId || null,
         );
-        if (transaction) {
-          return this.executeTransactionWrite(
-            {
-              type: PARTITION_SERVICE_OPERATION.QUERY,
-              sql,
-              params,
-              splitMirrorOrigin: options.splitMirrorOrigin || null,
-            },
-            transaction.sessionId,
-          );
-        }
-        return this.proposeWrite({
+        const operation = {
           type: PARTITION_SERVICE_OPERATION.QUERY,
           sql,
           params,
+          entryId: options.entryId || null,
+          operationId: options.operationId || null,
+          idempotencyKey: options.idempotencyKey || null,
           splitMirrorOrigin: options.splitMirrorOrigin || null,
-        });
+        };
+        if (transaction) {
+          return this.executeTransactionWrite(
+            operation,
+            transaction.sessionId,
+          );
+        }
+        return this.proposeWrite(operation);
       }
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
@@ -611,6 +613,23 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       entryType: entry.type,
     });
     const entryKey = this.getCommittedEntryKey(entry);
+    const pendingOutcome = this.getPendingCommittedWriteOutcome(entry.entryId);
+    if (pendingOutcome) {
+      return pendingOutcome;
+    }
+    if (entryKey && this.recentlyAppliedEntryKeys.has(entryKey)) {
+      this.recordWritePhaseDuration(
+        phaseTimings,
+        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
+        applyStartMs,
+      );
+      return {
+        success: true,
+        changes: 0,
+        partitionId: this.partitionId,
+        idempotentReplay: true,
+      };
+    }
     const commitMode = resolvePartitionWriteCommitMode({
       replicaIds: this.replicaIds,
       raftState: this.raft?.state,
@@ -639,21 +658,14 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       WRITE_PHASE_FIELD_LOG_APPEND_MS,
       logAppendStartMs,
     );
-    let commitPromise = null;
     if (commitMode === PARTITION_WRITE_COMMIT_MODE.RAFT) {
-      try {
-        commitPromise = this.waitForCommittedWrite(entry.entryId, {
-          logIndex: logEntry.index,
-        });
-      } catch (error) {
-        this.recordWritePhaseDuration(
-          phaseTimings,
-          WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-          applyStartMs,
-        );
-        return buildPartitionWriteFailureResult(error, this.partitionId);
-      }
-      commitPromise.catch(() => {});
+      return startPartitionRaftWriteCommit(this, {
+        entry,
+        entryKey,
+        logEntry,
+        phaseTimings,
+        applyStartMs,
+      });
     }
     let result;
     const sqliteRunStartMs = Date.now();
@@ -678,7 +690,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         entryKey,
         result,
         sideEffectPlan,
-        commitPromise,
+        commitPromise: null,
       });
       if (entry.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
         this.logger.info(
@@ -697,9 +709,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         sqliteRunStartMs,
       );
       result = buildPartitionWriteFailureResult(error, this.partitionId);
-      if (commitPromise) {
-        this.rejectCommittedWrite(entry.entryId, error);
-      }
     }
     if (!result.success) {
       this.recordWritePhaseDuration(
@@ -708,59 +717,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         applyStartMs,
       );
       return result;
-    }
-    if (commitPromise) {
-      const raftCommandDispatchStartMs = Date.now();
-      try {
-        await this.raftProvider.propose(this.raft, entry);
-      } catch (error) {
-        this.rejectCommittedWrite(entry.entryId, error);
-        this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
-          partitionId: this.partitionId,
-          error: error.message,
-        });
-        this.recordWritePhaseDuration(
-          phaseTimings,
-          WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-          raftCommandDispatchStartMs,
-        );
-        this.recordWritePhaseDuration(
-          phaseTimings,
-          WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-          applyStartMs,
-        );
-        return {
-          success: false,
-          error: error.message,
-          partitionId: this.partitionId,
-        };
-      }
-      this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-        raftCommandDispatchStartMs,
-      );
-      try {
-        const committedResult = await commitPromise;
-        this.recordWritePhaseDuration(
-          phaseTimings,
-          WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-          applyStartMs,
-        );
-        return committedResult;
-      } catch (error) {
-        this.recordWritePhaseDuration(
-          phaseTimings,
-          WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-          applyStartMs,
-        );
-        return {
-          success: false,
-          error: error.message,
-          partitionId: this.partitionId,
-          logIndex: logEntry.index,
-        };
-      }
     }
     this.recordWritePhaseDuration(
       phaseTimings,

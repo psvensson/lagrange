@@ -58,6 +58,12 @@
  *        budget; physical copies emit no logical CDC; stuck children fail once)
  *     - test/partition/partition-split-routing.test.js
  *       (batched upserts retain child routing, row order, and descriptor fencing)
+ *   write-path-internal-pacing
+ *     - test/query/write-path-internal-pacing.test.js
+ *       (one client submission reroutes after a stale-leader demotion while
+ *        every participant attempt consumes the original absolute deadline)
+ *     - test/partition/partition-service-write-commit.test.js
+ *       (uncommitted proposals stay invisible and demotion releases the owner)
  *
  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
  *   (default: run all scenarios)
@@ -127,6 +133,10 @@ const SCENARIOS = {
   'split-snapshot-transfer-pacing': [
     'test/partition/split-backfill-internal-pacing.test.js',
     'test/partition/partition-split-routing.test.js',
+  ],
+  'write-path-internal-pacing': [
+    'test/query/write-path-internal-pacing.test.js',
+    'test/partition/partition-service-write-commit.test.js',
   ],
 };
 

@@ -290,6 +290,26 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       result && typeof result === 'object' ? {...result} : null;
     return true;
   }
+  getPendingCommittedWriteOutcome(entryId) {
+    return this.pendingWriteOutcomes.get(entryId) || null;
+  }
+  setPendingCommittedWriteOutcome(entryId, outcomePromise) {
+    if (
+      typeof entryId !== 'string' ||
+      entryId.length === 0 ||
+      !outcomePromise
+    ) {
+      return false;
+    }
+    this.pendingWriteOutcomes.set(entryId, outcomePromise);
+    const clearOwnedOutcome = () => {
+      if (this.pendingWriteOutcomes.get(entryId) === outcomePromise) {
+        this.pendingWriteOutcomes.delete(entryId);
+      }
+    };
+    outcomePromise.then(clearOwnedOutcome, clearOwnedOutcome);
+    return true;
+  }
   resolveCommittedWrite(entryId, result = null) {
     const pending = this.proposalQueue.get(entryId);
     if (!pending) {

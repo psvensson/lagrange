@@ -19,8 +19,11 @@ const {
   PARTITION_SERVICE_RESPONSE,
   PARTITION_SERVICE_VALUE,
   PARTITION_TRANSITION_STATE,
+  QUERY_PAYLOAD_FIELD_ENTRY_ID,
+  QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY,
   QUERY_PAYLOAD_FIELD_MIGRATION_ID,
   QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
+  QUERY_PAYLOAD_FIELD_OPERATION_ID,
   RaftRole,
   SYSTEM_TABLE_NAME,
   isRaftPacket,
@@ -359,6 +362,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       params,
       splitMirrorOrigin,
       sessionId,
+      [QUERY_PAYLOAD_FIELD_ENTRY_ID]: entryId,
+      [QUERY_PAYLOAD_FIELD_OPERATION_ID]: operationId,
+      [QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY]: idempotencyKey,
       [QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION]: migrationOperation,
       [QUERY_PAYLOAD_FIELD_MIGRATION_ID]: migrationId,
     } = payload;
@@ -414,6 +420,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         });
       } else {
         result = await this.executeQuery(sql, params || [], {
+          entryId: entryId || null,
+          operationId: operationId || null,
+          idempotencyKey: idempotencyKey || null,
           splitMirrorOrigin: splitMirrorOrigin || null,
           sessionId: sessionId || null,
         });

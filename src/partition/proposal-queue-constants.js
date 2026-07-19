@@ -19,6 +19,7 @@ const PROPOSAL_QUEUE_DEFAULT = Object.freeze({
  */
 const PROPOSAL_QUEUE_ERROR_MSG = Object.freeze({
   BACKPRESSURE: 'Proposal queue at capacity — backpressure applied',
+  DUPLICATE_ENTRY: 'Proposal queue already owns this entry ID',
 });
 
 /**

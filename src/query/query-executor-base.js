@@ -502,18 +502,14 @@ class QueryExecutorBase {
         partitionIds,
         params,
         {
+          ...executionOptions,
           forRead,
           preferLeader,
           preferSameLatencyGroup,
-          deliveryPriority: executionOptions.deliveryPriority,
-          deliverySource: executionOptions.deliverySource,
-          replacePendingKey: executionOptions.replacePendingKey,
           routingReadinessDimension:
             executionOptions.routingReadinessDimension ||
             this.defaultRoutingReadinessDimension,
-          splitMirrorOrigin: executionOptions.splitMirrorOrigin || null,
           timestamp: _timestamp,
-          timeoutMs: executionOptions.timeoutMs,
           cancellationToken: executionOptions.cancellationToken || null,
         },
       );

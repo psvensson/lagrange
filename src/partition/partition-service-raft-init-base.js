@@ -3,6 +3,9 @@ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   reconcileRaftPeersFromCacheForService,
 } from './partition-service-raft-peer-cache-reconciliation.js';
+import {
+  wirePartitionRaftLifecycleEvents,
+} from './partition-service-raft-lifecycle-wiring.js';
 import {PartitionServiceCoreBase} from './partition-service-core-base.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
@@ -27,7 +30,6 @@ const {
   PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_REASON,
   PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_TYPE,
@@ -46,7 +48,6 @@ const {
   path,
   resolveCanonicalPartitionLeaderObservation,
   resolveRaftTransportDeliveryOptions,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
@@ -456,47 +457,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY,
       );
     }
-    wireReplicaLifecycleEvents(this, {
-      events: {
-        LEADER: PARTITION_SERVICE_ROLE.LEADER,
-        FOLLOWER: PARTITION_SERVICE_ROLE.FOLLOWER,
-        CANDIDATE: PARTITION_SERVICE_ROLE.CANDIDATE,
-        COMMIT: PARTITION_SERVICE_REASON.COMMIT,
-        LEADER_CHANGE: PARTITION_SERVICE_REASON.LEADER_CHANGE,
-        TERM_CHANGE: PARTITION_SERVICE_REASON.TERM_CHANGE,
-      },
-      roles: RaftRole,
-      getCurrentTerm: () => this.raftProvider.getCurrentTerm(this.raft),
-      normalizeLeaderId: (candidate) =>
-        this.normalizeLeaderReplicaId(candidate),
-      shouldIgnoreDemotionEvent,
-      onLeader: ({term}) => {
-        this.storage.currentTerm = term;
-        this.scheduleLeaderOwnedActivation(term);
-      },
-      onFollower: ({term}) => {
-        this.storage.currentTerm = term;
-        this.cancelLeaderOwnedActivation();
-        this.updateRebalancerLeadership();
-      },
-      onCandidate: ({term}) => {
-        this.storage.currentTerm = term;
-        this.cancelLeaderOwnedActivation();
-        this.updateRebalancerLeadership();
-      },
-      onCommit: (command) => {
-        this.applyCommittedEntry(command);
-      },
-      onLeaderChange: ({leaderId}) => {
-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEADER_CHANGED, {
-          newLeader: leaderId,
-          partitionId: this.partitionId,
-        });
-      },
-      onTermChange: ({term}) => {
-        this.storage.currentTerm = term;
-      },
-    });
+    wirePartitionRaftLifecycleEvents(this, shouldIgnoreDemotionEvent);
     const totalPeerCount = Math.max(0, this.replicaIds.length - 1);
     let joinedPeerCount = 0;
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.JOINING_PEERS, {
