@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-07-19T10:18:54.919Z",
+  "generatedAt": "2026-07-19T11:14:22.016Z",
   "stats": {
-    "candidateCount": 407,
-    "dedupedRuleCount": 398,
-    "exportedRuleCount": 398,
+    "candidateCount": 411,
+    "dedupedRuleCount": 402,
+    "exportedRuleCount": 402,
     "aliasRuleCount": 4,
-    "masterRuleCount": 394,
-    "emittedMasterRuleCount": 394,
-    "estimatedAllRulesTokens": 16521
+    "masterRuleCount": 398,
+    "emittedMasterRuleCount": 398,
+    "estimatedAllRulesTokens": 16759
   },
   "sources": [
     {
@@ -105,10 +105,10 @@
       "file": "testing-guidelines/release-gate.md",
       "role": "packed",
       "domain": "testing",
-      "ruleCount": 9,
-      "masterRuleCount": 9,
+      "ruleCount": 13,
+      "masterRuleCount": 13,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 9
+      "emittedMasterRuleCount": 13
     },
     {
       "file": "testing-guidelines/proof-ladders.md",
@@ -335,16 +335,16 @@
       "name": "testing",
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
-      "ruleCount": 88,
-      "estimatedTokens": 4043,
+      "ruleCount": 92,
+      "estimatedTokens": 4287,
       "domains": [
         "testing"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 88,
+      "masterRuleCount": 92,
       "aliasRuleCount": 1,
-      "indexedRuleCount": 89,
+      "indexedRuleCount": 93,
       "sourceFiles": [
         "operational-ground-truth.md",
         "testing-guidelines/harness.md",

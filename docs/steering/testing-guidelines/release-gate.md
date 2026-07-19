@@ -93,7 +93,23 @@ mechanism the fix introduces. A unit test of your own new function cannot fail t
   proven; do NOT advance it to a gate. Reproduce the observable deterministically
   in-process first.
 
-## Delegated Review
+## Static Gate Baselines Are A One-Way Ratchet
+
+Committed static-gate baselines — the `BASELINE_COUNT` constants in
+`scripts/check-complexity.js` / `scripts/check-cognitive-complexity.js`, the
+file-size baselines in `scripts/check-file-size-thresholds.js`, and
+known-violations files such as `.dependency-cruiser-known-violations.json` —
+MUST NOT increase, with the single re-anchor exception below.
+
+- An upward re-anchor MUST satisfy all of: the gate was silently red (never
+  ran clean before), it happens at most once per gate, it anchors at
+  measured reality, and the same commit records BOTH a dated in-code comment
+  naming the measured value and the refactor target (the existing idiom) AND
+  a decision-log entry in the owning epic.
+- Do not treat a baseline increase lacking both same-commit artifacts as a
+  judgment call; it is a guideline violation.
+- Tighten a baseline in the same change that removes violations whenever the
+  measured count drops below the committed one.
 
 When a delegated worker reviews a scenario Quest, it must compare current probe
 evidence with the Quest's selected frontier and findings. The review should
