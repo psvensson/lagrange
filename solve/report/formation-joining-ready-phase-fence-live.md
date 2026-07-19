@@ -19,11 +19,11 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: solved: FAIL -> PASS
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json
+- Movement: unknown: PASS -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T19-03-43-610Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for formation-joining-ready-phase-fence-live-main
-- No longer current: FAIL
+- No longer current: PASS
 
 ## Continuation
 - Status: allowed
@@ -47,7 +47,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **formation-joining-ready-phase-fence-live-main** [open] rung 1, attempts 1, metric 1 -> 0
+- **formation-joining-ready-phase-fence-live-main** [open] rung 1, attempts 1, metric 1 -> 1
 
 ## Findings
 - **formation-joining-ready-phase-fence-live-main**: inherited from formation-joining-ready-phase-fence: inherited from formation-schema-operation-collision-leader-read-closure: The cold-formation barrier withholds only the final ready lease: node registration publishes nodes.status=active earlier, and the unchanged MovieLens scenario starts schema admission after counting those active rows. In the failed run the ledger barrier and priority operations continued after that clock began, so eventual zero spread at T+164 left only about 16 seconds for an unchanged 60-second stability condition. Planner-only reordering and timeout increases are ruled out; the missing contract is a canonical placement-ready or available phase between recovery-eligible registration and schema admission. (rules out: planner-only reordering; timeout increases; treating nodes.status=active as placement-ready) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]
@@ -63,6 +63,9 @@
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T17-40-24-737Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-40-24-737Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json. Metric: 1 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json]
 - **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json. Metric: 1 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: First fully-PASSING movielens-lagrange-service-affinity-live run of 2026-07-18 (report 17-49-37): schema admission admitted (stableElapsedMs 64820), 100k ratings loaded and spread, Lagrange distributed SQL 288ms, parallel reduce correct, and the learned-affinity phase - stalled at weightedLocality 0.000 with attributionRows=0 for 300s on every prior run - converged to weightedLocality=1 with resultCorrect=true in 31.4s. Confirms the pk-projection read fix live (commit after 0e21d387): the attribution probe can now see service_partition_access rows. Stack under test also included the flagless admission cutover and the DDL default-literal fix. The spread-gap rotation residual did NOT occur this run (it remains an intermittent formation-phase residual, evidence 17-40-24). [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T17-49-37-367Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T19-03-43-610Z.report.json. Metric: 0 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T19-03-43-610Z.report.json]
+- **formation-joining-ready-phase-fence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T19-03-43-610Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T19-03-43-610Z.report.json]
 
 ## Theories
 _(none recorded)_
