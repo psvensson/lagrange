@@ -17,7 +17,6 @@ const {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_TYPE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -27,14 +26,15 @@ const {
   SPLIT_ACK_CHECKPOINT_FIELD,
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
-  SQL,
   TABLES,
   assertCritical,
   cloneSplitRoutingEntry,
   extractPartitionSplitRoutingKey,
   replayPartitionSplitEntry,
+  resolvePartitionSplitSnapshotBatchRowLimit,
   resolvePartitionSplitTargetPartitionId,
   routePartitionSplitMirroredWrite,
+  routePartitionSplitSnapshotBatch,
   runRetryableControlPlaneWrite,
 } = PARTITION_SERVICE_SHARED;
 
@@ -328,44 +328,51 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       .all()
       .map((column) => column.name);
     const rows = this.createSplitSnapshotRowIterator(snapshotDb, metadata);
-    let processedRowCount = 0;
+    const batchSize = resolvePartitionSplitSnapshotBatchRowLimit(
+      columns,
+      this.splitSnapshotBackfillYieldEveryRows,
+    );
+    let batch = [];
     for (const row of rows) {
-      await this.applySplitSnapshotRow(row, columns, metadata);
-      processedRowCount += 1;
-      if (
-        this.splitSnapshotBackfillYieldEveryRows > 0 &&
-        processedRowCount % this.splitSnapshotBackfillYieldEveryRows ===
-          0
-      ) {
+      batch.push(row);
+      if (batch.length === batchSize) {
+        await this.applySplitSnapshotBatch(batch, columns, metadata);
+        batch = [];
+      }
+      if (batch.length === 0 && this.splitSnapshotBackfillYieldEveryRows > 0) {
         await this.yieldSplitBackfillTurn();
       }
     }
+    if (batch.length > 0) {
+      await this.applySplitSnapshotBatch(batch, columns, metadata);
+    }
   }
   /**
-   * Apply one snapshot row to the correct child partition.
-   * @param {Object} row - Source row.
+   * Apply one bounded snapshot batch to the child partitions.
+   * @param {Array<Object>} rows - Source rows.
    * @param {Array<string>} columns - Column list.
    * @param {Object} metadata - Split metadata.
    * @return {Promise<void>}
    * @private
    */
-  async applySplitSnapshotRow(row, columns, metadata) {
-    this.assertSplitRoutingDescriptorEpoch(metadata);
-    const targetPartitionId = this.resolveSplitTargetPartitionId(
-      row?.[metadata.primaryKeyColumn],
-      metadata,
-    );
-    const joinedColumns = columns.join(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE,
-    );
-    const placeholders = columns
-      .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
-      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql =
-      `${SQL.INSERT_OR_REPLACE_INTO} ${this.tableName} (${joinedColumns}) ` +
-      `${SQL.VALUES} (${placeholders})`;
-    const params = columns.map((column) => row[column]);
-    await this.routeSplitMirroredWrite(targetPartitionId, sql, params);
+  async applySplitSnapshotBatch(rows, columns, metadata) {
+    await this.routeSplitSnapshotBatch(rows, columns, metadata);
+  }
+  /**
+   * Route a bounded snapshot batch through the standard partition query path.
+   * @param {Array<Object>} rows - Source rows.
+   * @param {Array<string>} columns - Column list.
+   * @param {Object} metadata - Split metadata.
+   * @return {Promise<void>}
+   * @private
+   */
+  async routeSplitSnapshotBatch(rows, columns, metadata) {
+    return routePartitionSplitSnapshotBatch(rows, columns, metadata, {
+      queryExecutor: this.sqlQueryEngine?.queryExecutor || null,
+      tableName: this.tableName,
+      resolveDescriptorEpochEvidence: () =>
+        this.resolveSplitDescriptorEpochEvidence(metadata),
+    });
   }
   /**
    * Update table metadata so routing flips to the new partition version.

@@ -552,18 +552,20 @@ test('PartitionService - backfillSplitSnapshot streams rows and yields between b
       dbPath: ':memory:',
     });
 
-    const appliedRowIds = [];
+    const appliedBatches = [];
     const yieldedAfterCounts = [];
     partition.splitSnapshotBackfillYieldEveryRows = 2;
-    partition.applySplitSnapshotRow = async (row, columns, metadata) => {
-      appliedRowIds.push({
-        id: row.id,
+    partition.applySplitSnapshotBatch = async (rows, columns, metadata) => {
+      appliedBatches.push({
+        ids: rows.map((row) => row.id),
         columns,
         primaryKeyColumn: metadata.primaryKeyColumn,
       });
     };
     partition.yieldSplitBackfillTurn = async () => {
-      yieldedAfterCounts.push(appliedRowIds.length);
+      yieldedAfterCounts.push(
+        appliedBatches.flatMap((batch) => batch.ids).length,
+      );
     };
 
     const rows = [
@@ -599,8 +601,11 @@ test('PartitionService - backfillSplitSnapshot streams rows and yields between b
       primaryKeyColumn: 'id',
     });
 
-    t.same(appliedRowIds.map((row) => row.id), ['a', 'b', 'c', 'd', 'e']);
-    t.same(appliedRowIds[0].columns, ['id', 'name']);
+    t.same(
+      appliedBatches.map((batch) => batch.ids),
+      [['a', 'b'], ['c', 'd'], ['e']],
+    );
+    t.same(appliedBatches[0].columns, ['id', 'name']);
     t.same(
       yieldedAfterCounts,
       [2, 4],

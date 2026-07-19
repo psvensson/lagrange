@@ -24,6 +24,7 @@ import {
 const SPLIT_ROUTING_LITERAL = Object.freeze({
   OBJECT: 'object',
 });
+const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES = 32_766;
 
 function hasOwnedProperty(record, propertyName) {
   if (!record || typeof record !== SPLIT_ROUTING_LITERAL.OBJECT) {
@@ -155,13 +156,84 @@ export async function routeSplitMirroredWrite(
     false,
     true,
     false,
-    {splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.SOURCE},
+    {
+      splitMirrorOrigin:
+        options.splitMirrorOrigin || PARTITION_SPLIT_MIRROR_ORIGIN.SOURCE,
+    },
   );
   if (!result?.success) {
     throw new Error(
       result?.error || PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED,
     );
   }
+}
+
+export async function routeSplitSnapshotBatch(
+  rows,
+  columns,
+  metadata,
+  options = {},
+) {
+  const rowsByPartition = new Map();
+  for (const row of rows) {
+    const partitionId = resolveSplitTargetPartitionId(
+      row?.[metadata.primaryKeyColumn],
+      metadata,
+    );
+    const partitionRows = rowsByPartition.get(partitionId) || [];
+    partitionRows.push(row);
+    rowsByPartition.set(partitionId, partitionRows);
+  }
+
+  const columnList = columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+  const placeholders = columns
+    .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
+    .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+  for (const [partitionId, partitionRows] of rowsByPartition) {
+    const rowLimit = resolveSplitSnapshotBatchRowLimit(
+      columns,
+      partitionRows.length,
+    );
+    for (let offset = 0; offset < partitionRows.length; offset += rowLimit) {
+      const proposalRows = partitionRows.slice(offset, offset + rowLimit);
+      const descriptorEpochEvidence =
+        typeof options.resolveDescriptorEpochEvidence ===
+          PARTITION_SERVICE_TYPE.FUNCTION ?
+          options.resolveDescriptorEpochEvidence() :
+          options.descriptorEpochEvidence;
+      assertSplitRoutingDescriptorEpoch(metadata, {
+        ...options,
+        descriptorEpochEvidence,
+      });
+      const values = proposalRows
+        .map(() => `(${placeholders})`)
+        .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+      const sql =
+        `${SQL.INSERT_OR_REPLACE_INTO} ${options.tableName} (${columnList}) ` +
+        `${SQL.VALUES} ${values}`;
+      const params = proposalRows.flatMap(
+        (row) => columns.map((column) => row[column]),
+      );
+      await routeSplitMirroredWrite(partitionId, sql, params, {
+        ...options,
+        splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.SNAPSHOT,
+      });
+    }
+  }
+}
+
+export function resolveSplitSnapshotBatchRowLimit(columns, requestedRows) {
+  const columnCount = Array.isArray(columns) ? columns.length : 0;
+  const bindLimitedRows = columnCount > 0 ?
+    Math.max(1, Math.floor(
+      SPLIT_SNAPSHOT_MAX_BIND_VARIABLES / columnCount,
+    )) :
+    1;
+  const configuredRows =
+    Number.isInteger(requestedRows) && requestedRows > 0 ?
+      requestedRows :
+      1;
+  return Math.min(configuredRows, bindLimitedRows);
 }
 
 export function resolveSplitTargetPartitionId(value, metadata = {}) {

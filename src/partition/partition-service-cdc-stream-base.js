@@ -16,6 +16,7 @@ const {
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
+  PARTITION_SPLIT_MIRROR_ORIGIN,
   SQL,
   STRING,
   SYSTEM_TABLE_NAME,
@@ -31,6 +32,12 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    */
   async generateCDCEvent(entry) {
     if (this.isShutdown) {
+      return;
+    }
+    // Snapshot rows are physical state transfer, not new logical mutations.
+    // Source writes applied after the snapshot remain on the ordered split
+    // catch-up/live-mirror path and continue to emit their normal CDC events.
+    if (entry?.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.SNAPSHOT) {
       return;
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATE_CDC_EVENT_CALLED, {

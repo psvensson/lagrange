@@ -36,8 +36,11 @@ import {
   cloneSplitEntry as cloneSplitRoutingEntry,
   extractSplitRoutingKey as extractPartitionSplitRoutingKey,
   replaySplitEntry as replayPartitionSplitEntry,
+  resolveSplitSnapshotBatchRowLimit as
+  resolvePartitionSplitSnapshotBatchRowLimit,
   resolveSplitTargetPartitionId as resolvePartitionSplitTargetPartitionId,
   routeSplitMirroredWrite as routePartitionSplitMirroredWrite,
+  routeSplitSnapshotBatch as routePartitionSplitSnapshotBatch,
 } from './partition-split-routing.js';
 import {
   PARTITION_CDC_EVENT_BUILD_STATE,
@@ -358,11 +361,13 @@ export const PARTITION_SERVICE_SHARED = {
   path,
   replayPartitionSplitEntry,
   resolveCanonicalPartitionLeaderObservation,
+  resolvePartitionSplitSnapshotBatchRowLimit,
   resolvePartitionSplitTargetPartitionId,
   resolvePartitionWriteCommitMode,
   resolvePriorityRecoveryActiveNodeCohort,
   resolveRaftTransportDeliveryOptions,
   routePartitionSplitMirroredWrite,
+  routePartitionSplitSnapshotBatch,
   runRetryableControlPlaneWrite,
   wireReplicaLifecycleEvents,
 };

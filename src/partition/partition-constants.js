@@ -249,6 +249,7 @@ const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
 });
 
 const PARTITION_SPLIT_MIRROR_ORIGIN = Object.freeze({
+  SNAPSHOT: 'snapshot',
   SOURCE: 'source',
   TARGET: 'target',
 });

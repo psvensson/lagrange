@@ -52,6 +52,12 @@
  *       (permanent limited/elapsed-only config ingress, retryable leader-metadata
  *        behavior through both postures, elapsed exhaustion, and unchanged
  *        non-retryable failure handling)
+ *   split-snapshot-transfer-pacing
+ *     - test/partition/split-backfill-internal-pacing.test.js
+ *       (bounded split-snapshot proposals yield inside the original foreground
+ *        budget; physical copies emit no logical CDC; stuck children fail once)
+ *     - test/partition/partition-split-routing.test.js
+ *       (batched upserts retain child routing, row order, and descriptor fencing)
  *
  * Usage: node scripts/run-placement-affinity-scenarios.js [scenario]
  *   (default: run all scenarios)
@@ -117,6 +123,10 @@ const SCENARIOS = {
   ],
   'join-retry-patience-selectable': [
     'test/bootstrap/join-retry-patience-selectable.test.js',
+  ],
+  'split-snapshot-transfer-pacing': [
+    'test/partition/split-backfill-internal-pacing.test.js',
+    'test/partition/partition-split-routing.test.js',
   ],
 };
 
