@@ -1,0 +1,146 @@
+diff --git a/src/control-plane/replica-dispatch-replay-readiness.js b/src/control-plane/replica-dispatch-replay-readiness.js
+index a3334d47fbb0446a006e72a2236b32218c311ed5..425a696b6dd0c1520f508740cbae076ca819b761 100644
+--- a/src/control-plane/replica-dispatch-replay-readiness.js
++++ b/src/control-plane/replica-dispatch-replay-readiness.js
+@@ -2,6 +2,7 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
+ import {ReplicaDispatchServiceLifecycle} from './replica-dispatch-service-lifecycle.js';
+ import {
+   DISPATCH_PENDING_WORKFLOW_STEPS,
++  RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+   isActiveReplaceSourceRemovalPhase,
+ } from '../rebalancer/replica-operation-step-policy.js';
+ import {
+@@ -205,9 +206,11 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
+ 
+   /**
+    * Target executor completion wakes are progress signals, not permission to
+-   * make every non-system CREATING operation generally replayable. Admit only
+-   * the runtime create-side shape whose source owner can reconcile the exact
+-   * services row through its canonical workflow lane.
++   * make every non-system SENDING or CREATING operation generally replayable.
++   * Admit only the runtime create-side shape whose source owner can reconcile
++   * the exact services row through its canonical workflow lane. SENDING is
++   * included because the target can publish ACTIVE before the in-flight source
++   * dispatch owner has committed its subsequent CREATING transition.
+    *
+    * @param {Object} operation
+    * @param {Object} context
+@@ -223,7 +226,9 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
+         CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+       operation?.entity_type === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+       RUNTIME_TARGET_PROGRESS_WAKE_OPERATION_TYPES.has(operation?.type),
+-      operation?.workflow_step === WORKFLOW_STEP.CREATING,
++      RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS.has(
++        operation?.workflow_step,
++      ),
+       partitionClassification.systemTable !== true,
+     ].every(Boolean);
+   }
+diff --git a/src/rebalancer/replica-operation-step-policy.js b/src/rebalancer/replica-operation-step-policy.js
+index 592f2034503c0ad0673137a87eefba839a6ab2dd..e40b12c98d81d27849544af6e276d15df4f5710a 100644
+--- a/src/rebalancer/replica-operation-step-policy.js
++++ b/src/rebalancer/replica-operation-step-policy.js
+@@ -41,6 +41,16 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
+   ]),
+ );
+ 
++// Explicit runtime target outcomes can race ahead of the source owner's
++// post-send CREATING commit. These are the only two durable steps at which the
++// target wake may retain a serialized source-owner turn.
++const RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++  ]),
++);
++
+ // Owner-port reconcile of dispatch-pending rows.
+ const OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS =
+   Object.freeze(
+@@ -462,6 +472,7 @@ export {
+   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
+   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
+   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
++  RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+   resolveOperationTransitionReason,
+   EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
+   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS,
+diff --git a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+index a63cfe72cde8c22000942e14b4e82094d16d41f3..965fd18879ba221a55f1c8b91b45ad3f0ea8adf5 100644
+--- a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
++++ b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+@@ -189,12 +189,14 @@ test(
+ );
+ 
+ test(
+-  'target-progress wake owns a turn after an in-flight source dispatch',
++  'early target-progress wake owns a turn after source commits CREATING',
+   async (t) => {
+     initEnv();
+ 
+     const operationRow = buildRuntimeCreatingOperationRow({
+       operation_id: `${OPERATION_ID}-in-flight-owner`,
++      status: ReplicaStatus.PENDING,
++      workflow_step: WORKFLOW_STEP.SENDING,
+     });
+     const activeServiceRow = {
+       service_id: REPLICA_ID,
+@@ -252,6 +254,14 @@ test(
+           await new Promise((resolve) => {
+             releaseOwnerTurn = resolve;
+           });
++          const sendingOperation =
++            await sourceCoordinator.repository.queryOperationById(
++              operationRow.operation_id,
++            );
++          await sourceCoordinator.workflowOwner.updateStep(
++            sendingOperation,
++            WORKFLOW_STEP.CREATING,
++          );
+         },
+       );
+ 
+@@ -276,7 +286,7 @@ test(
+       t.equal(
+         completedOperation?.workflowStep,
+         WORKFLOW_STEP.ACTIVE,
+-        'the target-progress command must reconcile after the holder releases',
++        'the early target outcome must reconcile after CREATING commits',
+       );
+       t.equal(
+         completedOperation?.status,
+@@ -304,6 +314,14 @@ test(
+         entity_type: 'partition',
+         entity_id: 'nodes-p1',
+       }),
++      buildRuntimeCreatingOperationRow({
++        operation_id: `${OPERATION_ID}-system-sending`,
++        partition_id: 'nodes-p1',
++        entity_type: 'partition',
++        entity_id: 'nodes-p1',
++        status: ReplicaStatus.PENDING,
++        workflow_step: WORKFLOW_STEP.SENDING,
++      }),
+       buildRuntimeCreatingOperationRow({
+         operation_id: `${OPERATION_ID}-active-replace`,
+         type: OperationType.REPLACE,
+@@ -344,11 +362,18 @@ test(
+         2,
+         'the established broader replay shapes should still dispatch',
+       );
++      t.notOk(
++        dispatchCalls.some(
++          ({operation}) =>
++            operation?.operationId === `${OPERATION_ID}-system-sending`,
++        ),
++        'marked system SENDING must remain outside retained replay',
++      );
+       t.ok(
+         dispatchCalls.every(
+           ({options}) => options.ownerTurnPolicy === undefined,
+         ),
+-        'system create and ACTIVE replace replay must remain coalescing',
++        'system create/SENDING and ACTIVE replace must remain coalescing',
+       );
+     } finally {
+       service.stop();

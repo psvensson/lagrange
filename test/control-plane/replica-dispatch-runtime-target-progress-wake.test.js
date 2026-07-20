@@ -189,12 +189,14 @@ test(
 );
 
 test(
-  'target-progress wake owns a turn after an in-flight source dispatch',
+  'early target-progress wake owns a turn after source commits CREATING',
   async (t) => {
     initEnv();
 
     const operationRow = buildRuntimeCreatingOperationRow({
       operation_id: `${OPERATION_ID}-in-flight-owner`,
+      status: ReplicaStatus.PENDING,
+      workflow_step: WORKFLOW_STEP.SENDING,
     });
     const activeServiceRow = {
       service_id: REPLICA_ID,
@@ -252,6 +254,14 @@ test(
           await new Promise((resolve) => {
             releaseOwnerTurn = resolve;
           });
+          const sendingOperation =
+            await sourceCoordinator.repository.queryOperationById(
+              operationRow.operation_id,
+            );
+          await sourceCoordinator.workflowOwner.updateStep(
+            sendingOperation,
+            WORKFLOW_STEP.CREATING,
+          );
         },
       );
 
@@ -276,7 +286,7 @@ test(
       t.equal(
         completedOperation?.workflowStep,
         WORKFLOW_STEP.ACTIVE,
-        'the target-progress command must reconcile after the holder releases',
+        'the early target outcome must reconcile after CREATING commits',
       );
       t.equal(
         completedOperation?.status,
@@ -303,6 +313,14 @@ test(
         partition_id: 'nodes-p1',
         entity_type: 'partition',
         entity_id: 'nodes-p1',
+      }),
+      buildRuntimeCreatingOperationRow({
+        operation_id: `${OPERATION_ID}-system-sending`,
+        partition_id: 'nodes-p1',
+        entity_type: 'partition',
+        entity_id: 'nodes-p1',
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.SENDING,
       }),
       buildRuntimeCreatingOperationRow({
         operation_id: `${OPERATION_ID}-active-replace`,
@@ -344,11 +362,18 @@ test(
         2,
         'the established broader replay shapes should still dispatch',
       );
+      t.notOk(
+        dispatchCalls.some(
+          ({operation}) =>
+            operation?.operationId === `${OPERATION_ID}-system-sending`,
+        ),
+        'marked system SENDING must remain outside retained replay',
+      );
       t.ok(
         dispatchCalls.every(
           ({options}) => options.ownerTurnPolicy === undefined,
         ),
-        'system create and ACTIVE replace replay must remain coalescing',
+        'system create/SENDING and ACTIVE replace must remain coalescing',
       );
     } finally {
       service.stop();

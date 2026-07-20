@@ -41,6 +41,16 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
   ]),
 );
 
+// Explicit runtime target outcomes can race ahead of the source owner's
+// post-send CREATING commit. These are the only two durable steps at which the
+// target wake may retain a serialized source-owner turn.
+const RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.SENDING,
+    WORKFLOW_STEP.CREATING,
+  ]),
+);
+
 // Owner-port reconcile of dispatch-pending rows.
 const OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS =
   Object.freeze(
@@ -462,6 +472,7 @@ export {
   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
+  RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
   resolveOperationTransitionReason,
   EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS,

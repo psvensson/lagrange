@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 7
+**Attempts:** 9
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -20,7 +20,7 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-04-28-891Z.report.json
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-46-36-533Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for runtime-service-creating-owner-wake-progress-admission-main
 
@@ -30,14 +30,14 @@
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 16
-- Change bytes: 53812
+- Changed files: 17
+- Change bytes: 60159
 - Owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Categories: runtime, test
-- Action: split by owner area before the next attempt (16 files)
+- Action: split by owner area before the next attempt (17 files)
 - Action: land or separate 5 owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Split plan:
-  - src/rebalancer: 7 file(s)
+  - src/rebalancer: 8 file(s)
   - src/control-plane: 6 file(s)
   - src/constants: 1 file(s)
   - test/control-plane: 1 file(s)
@@ -46,7 +46,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 7, metric 1 -> 1
+- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 9, metric 1 -> 1
 
 ## Findings
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-19T19-39-35-247Z.json]
@@ -78,6 +78,12 @@
 - **runtime-service-creating-owner-wake-progress-admission-main**: Attempt 6 is rejected: RETAIN is selected from raw TARGET_EXECUTOR_OUTCOME inside a broader replay branch, so marked ACTIVE REPLACE and system-table CREATING replays also receive retained-turn semantics outside the sealed runtime ADD/REPLACE CREATING boundary. [subagent:verify_runtime_progress_retained_turn]
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T04-19-46-273Z.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved replacement attempt 7 and confirmed that retained owner turns are restricted to the canonical runtime target progress wake predicate while broader marked replay shapes retain ordinary owner-turn behavior. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Ordered live Demo 1 refuted checkpoint dea54532 at a narrower ordering boundary: runtime target replica svc-movielens-topn-r1 completed ACTIVE at 2026-07-20T04:38:01.349Z for ADD a9f824d7-6724-45d4-9f6c-8df3ebe2c9c5, 31ms before the canonical source committed SENDING to CREATING at 04:38:01.380Z. Because the retained target-progress turn requires the observed row already be CREATING, the early ACTIVE outcome was absorbed while the owner lane was held; all later source evidence stayed CREATING until the 600s initial-placement boundary. The run passed schema admission, 100000-row load, five-node data spread, and distributed SQL before engaging this seam; unchanged bytes were not rerun. [file:test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-46-36-533Z.report.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T04-51-30-737Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T04-53-41-059Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification rejected attempt 8 because RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS was declared in replica-dispatch-replay-readiness instead of the canonical replica-operation-step-policy owner, increasing the step-coverage owner drift census from two inherited sites to three. Functional behavior, live-ordering fidelity, artifact integrity, DT 0/1/0, and all other scoped gates passed; the replacement must export the set from the canonical owner. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T05-00-56-390Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved replacement attempt 9: early runtime target-progress wakes retain a canonical owner turn across SENDING-to-CREATING, the widened step set is owned only by replica-operation-step-policy, the step-coverage census is restored to its inherited baseline, and all functional, adversarial, DT, and scoped static checks pass. [subagent:verify_runtime_progress_attempt7]
 
 ## Theories
 - **theory-20260720-ownerkeyreconcilequeue-context-is-last-writer-wins** [active] system, mechanism OwnerKeyReconcileQueue context is last-writer-wins. ReplicaDispatchService must merge target_executor_outcome as monotone stronger evidence before enqueue while refreshing the row authoritatively, and runtime completion must use only exact replica_id plus target_node_id observation., owner source replica-dispatch operation owner queue and operation-workflow exact-target observation lane, modelGate npm run model:contracts
@@ -98,3 +104,5 @@ _(none recorded)_
 | 2026-07-20T01:35:49.878Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-5.diff |
 | 2026-07-20T04:14:37.350Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-6.diff |
 | 2026-07-20T04:20:37.000Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-7.diff |
+| 2026-07-20T04:54:37.629Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-8.diff |
+| 2026-07-20T05:02:21.621Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-9.diff |

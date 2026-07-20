@@ -2,6 +2,7 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 import {ReplicaDispatchServiceLifecycle} from './replica-dispatch-service-lifecycle.js';
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
+  RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
 } from '../rebalancer/replica-operation-step-policy.js';
 import {
@@ -205,9 +206,11 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
 
   /**
    * Target executor completion wakes are progress signals, not permission to
-   * make every non-system CREATING operation generally replayable. Admit only
-   * the runtime create-side shape whose source owner can reconcile the exact
-   * services row through its canonical workflow lane.
+   * make every non-system SENDING or CREATING operation generally replayable.
+   * Admit only the runtime create-side shape whose source owner can reconcile
+   * the exact services row through its canonical workflow lane. SENDING is
+   * included because the target can publish ACTIVE before the in-flight source
+   * dispatch owner has committed its subsequent CREATING transition.
    *
    * @param {Object} operation
    * @param {Object} context
@@ -223,7 +226,9 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
         CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
       operation?.entity_type === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
       RUNTIME_TARGET_PROGRESS_WAKE_OPERATION_TYPES.has(operation?.type),
-      operation?.workflow_step === WORKFLOW_STEP.CREATING,
+      RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS.has(
+        operation?.workflow_step,
+      ),
       partitionClassification.systemTable !== true,
     ].every(Boolean);
   }
