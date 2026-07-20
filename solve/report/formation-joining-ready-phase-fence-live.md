@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-41-10-348Z.report.json
 
 **Attempts:** 1
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-joining-ready-phase-fence
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: formation-joining-ready-phase-fence-live-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T08-49-05-180Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for formation-joining-ready-phase-fence-live-main
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for formation-joining-ready-phase-fence-live-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 11
@@ -46,7 +30,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **formation-joining-ready-phase-fence-live-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **formation-joining-ready-phase-fence-live-main** [open] rung 1, attempts 1, metric 1 -> 0
 
 ## Findings
 - **formation-joining-ready-phase-fence-live-main**: inherited from formation-joining-ready-phase-fence: inherited from formation-schema-operation-collision-leader-read-closure: The cold-formation barrier withholds only the final ready lease: node registration publishes nodes.status=active earlier, and the unchanged MovieLens scenario starts schema admission after counting those active rows. In the failed run the ledger barrier and priority operations continued after that clock began, so eventual zero spread at T+164 left only about 16 seconds for an unchanged 60-second stability condition. Planner-only reordering and timeout increases are ruled out; the missing contract is a canonical placement-ready or available phase between recovery-eligible registration and schema admission. (rules out: planner-only reordering; timeout increases; treating nodes.status=active as placement-ready) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json]

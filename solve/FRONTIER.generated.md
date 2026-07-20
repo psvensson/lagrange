@@ -61,16 +61,14 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 26
+## Open quests — 21
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | control-snapshot-heartbeat-lease-freshness | product | 2 | 0 | — |
-| formation-joining-ready-phase-fence-live | product | 1 | 0 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | — |
 | formation-liveness-dependency-serial-planner | product | 1 | 0 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
-| join-retry-resume-lifecycle-finalization | product | 1 | 0 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | — |
 | movielens-local-leader-row-visibility-model | product | 1 | 0 | — |
@@ -83,9 +81,6 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | movielens-three-way-affinity-demo | product | 7 | 0 | — |
 | oci-container-driver-live-activation | product | 8 | 0 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | — |
-| priority-placement-completed-topology-observation | product | 1 | 0 | — |
-| runtime-service-affinity-suboptimality-observer | product | 0 | 0 | — |
-| runtime-service-creating-owner-wake-progress-admission | product | 13 | 0 | — |
 | schema-provisioning-inline-execute-owner-redrive | product | 1 | 0 | — |
 | schema-provisioning-not-null-intent-recovery-roundtrip | product | 1 | 0 | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | — |

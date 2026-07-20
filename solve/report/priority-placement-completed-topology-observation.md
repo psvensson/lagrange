@@ -4,30 +4,13 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/priority-placement-completed-topology-observation-2026-07-19T22-45-59-502Z.report.json
 
 **Attempts:** 1
 
 ## Links
 - parent quest: runtime-replica-state-projection-retained-reconcile-integrity-reseal
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: priority-placement-completed-topology-observation-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: solved: unknown -> PASS
-- Latest evidence: test-output/reports/priority-placement-completed-topology-observation-2026-07-19T21-43-56-106Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for priority-placement-completed-topology-observation-main
-- No longer current: unknown; No model-level admission bypass, topology authority, or new recovery state transition was introduced.; The checkpointed zero-row CDC suppression alone closes completed priority placement observation; operation-ledger terminality or a constructed current placement summary is sufficient to certify snapshot freshness.
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for priority-placement-completed-topology-observation-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 3
@@ -52,6 +35,8 @@
 - **priority-placement-completed-topology-observation-main**: Model contract gate passed unchanged after the no-op CDC owner fix; all contract records, invariants, decision tables, statecharts, owner traces, Alloy, and TLC expected route/forbidden outcomes passed. (rules out: No model-level admission bypass, topology authority, or new recovery state transition was introduced.) [test-output/reports/priority-spread-schema-admission-bypass.model.report.json]
 - **priority-placement-completed-topology-observation-main**: Independent verification approved the exact canonical three-path delta; 383 assertions, scoped static checks, all five attack checklists, and mechanism-bound red-on-revert passed. [subagent:verify_priority_noop_cdc]
 - **priority-placement-completed-topology-observation-main**: Checkpoint 7d4aedbe reproduces the completed-placement freshness defect: a terminal priority ADD operation plus its captured target services row at status=syncing yields evaluateAuthoritativeControlSnapshotRepair.shouldRepair=false and ControlPlaneSnapshotOwner snapshotObservation.state=fresh. (rules out: The checkpointed zero-row CDC suppression alone closes completed priority placement observation; operation-ledger terminality or a constructed current placement summary is sufficient to certify snapshot freshness.) [test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js]
+- **priority-placement-completed-topology-observation-main**: DT red-on-revert proven for test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js [dt:solve/changes/dt-prove/admin-control-snapshot-completed-placement-handoff-repair.test.js-2026-07-19T22-28-14-338Z.json]
+- **priority-placement-completed-topology-observation-main**: Model contract gate passed after the completed-placement handoff reconciliation change: contract records, invariants, decision tables, statecharts, owner traces, Alloy, and all TLC expected route/forbidden outcomes remain valid. (rules out: The change introduces a new topology authority, an admission bypass, or an unsafe owner/lifecycle transition.) [test-output/reports/priority-spread-schema-admission-bypass.model.report.json]
 
 ## Theories
 _(none recorded)_
