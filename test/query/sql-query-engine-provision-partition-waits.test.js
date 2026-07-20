@@ -7,6 +7,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
+  OPERATION_OWNER_TURN_POLICY,
+} from '../../src/rebalancer/operation-owner-turn-policy.js';
+import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
 } from '../../src/query/query-constants.js';
@@ -53,6 +56,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
   const createdMoves = [];
+  const executionOwnerTurnPolicies = [];
   let ownershipChecks = 0;
   const mutationWorkClasses = [];
   const nodes = [
@@ -132,7 +136,8 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
         ...move,
       };
     },
-    async executeOperation(operation) {
+    async executeOperation(operation, options = {}) {
+      executionOwnerTurnPolicies.push(options.ownerTurnPolicy);
       const targetNodeId = operation.targetNodeId || operation.nodeId;
       services.push({
         partition_id: operation.partitionId,
@@ -189,6 +194,12 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
     move.parentWorkflowFenceToken === 7 &&
     move.replicaIntentId.startsWith('schema-job-users:replica:')),
   'child operations preserve the parent fence and deterministic replica intent');
+  t.ok(
+    executionOwnerTurnPolicies.every(
+      (policy) => policy === OPERATION_OWNER_TURN_POLICY.RETAIN,
+    ),
+    'every planned schema child retains its exact operation-owner turn',
+  );
   t.same(
     mutationWorkClasses,
     ['interactive', 'interactive', 'interactive'],

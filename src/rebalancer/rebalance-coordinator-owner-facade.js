@@ -177,8 +177,8 @@ class RebalanceCoordinatorOwnerFacade {
    * @param {Object} operation - Operation to execute.
    * @return {Promise<Object>} Execution result.
    */
-  async executeOperation(operation) {
-    return this.workflowOwner.executeOperation(operation);
+  async executeOperation(operation, options = {}) {
+    return this.workflowOwner.executeOperation(operation, options);
   }
 
   /**

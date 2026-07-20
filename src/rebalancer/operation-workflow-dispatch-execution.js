@@ -5,6 +5,9 @@ import * as DISPATCH_WAKE_PREEMPTION
   from './operation-workflow-dispatch-wake-preemption.js';
 import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
+import {
+  OPERATION_OWNER_TURN_POLICY,
+} from './operation-owner-turn-policy.js';
 
 const {
   OPERATION_OWNER_ACTION,
@@ -453,8 +456,25 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       .reconcileDispatchWakePendingTargetProgress(this, operation);
   }
 
-  async executeOperation(operation) {
-    return DISPATCH_RESPONSE_RECONCILE.executeOperation.call(this, operation);
+  async executeOperation(operation, options = {}) {
+    if (
+      options.ownerTurnPolicy !== OPERATION_OWNER_TURN_POLICY.RETAIN ||
+      this.isShuttingDown ||
+      !this.isInitialized
+    ) {
+      return DISPATCH_RESPONSE_RECONCILE.executeOperation.call(this, operation);
+    }
+    return this.runOperationOwnerAction(
+      OPERATION_OWNER_ACTION.EXECUTE,
+      operation,
+      {
+        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTE,
+        workflowStep: operation?.workflowStep || null,
+        partitionId: operation?.partitionId || null,
+        skipWhenOwnerLaneHeld: true,
+        ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
+      },
+    );
   }
 
   async executeOperationFromReconcilePath(operation) {

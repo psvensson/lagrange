@@ -10,6 +10,7 @@ import {
   resolveQueryCancellationToken,
   throwIfCancellationRequested,
 } from './query-cancellation.js';
+import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-policy.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -141,19 +142,15 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
 
     if (
       explicitTargetNodeIds.length === 0 &&
-      // Quorum-minimum creates (minimum < target, the CREATE TABLE default)
-      // must ALSO converge admission before planning: run-24 skipped this
-      // block entirely on that geometry and fail-fasted the client into a
-      // transient whole-cluster ledger hold in a single admission pass.
+      // Quorum-minimum creates also converge admission before planning; run-24
+      // otherwise fail-fasted into a transient whole-cluster ledger hold.
       (enforceEveryProvisioningOperation ||
         this.supportsProvisioningAdmissionPrecheck()) &&
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
     ) {
-      // A quorum-minimum create is satisfied as soon as the minimum admits —
-      // requiring the full target here would make routine partial-admission
-      // creates wait out the whole window for replicas the rebalancer can
-      // fill in afterwards.
+      // A quorum-minimum create proceeds when the minimum admits; requiring the
+      // full target would wait for replicas the rebalancer can fill afterwards.
       const convergenceRequiredReplicaCount = enforceEveryProvisioningOperation ?
         targetReplicaCount :
         Math.max(1, minimumRoutableReplicaCount);
@@ -624,7 +621,9 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       }
       const executionResult =
         typeof this.rebalanceCoordinator.executeOperation === 'function' ?
-          await this.rebalanceCoordinator.executeOperation(operation) :
+          await this.rebalanceCoordinator.executeOperation(operation, {
+            ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
+          }) :
           await this.rebalanceCoordinator.dispatchOperation(operation);
       throwIfCancellationRequested(cancellationToken);
 

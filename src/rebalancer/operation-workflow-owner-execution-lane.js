@@ -10,6 +10,9 @@ import {
   armTerminalTransitionRepair,
   clearTerminalTransitionRepair,
 } from './operation-workflow-terminal-transition-repair.js';
+import {
+  OPERATION_OWNER_TURN_POLICY,
+} from './operation-owner-turn-policy.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -19,6 +22,7 @@ const {
   OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
   OPERATION_SINGLE_FLIGHT_SCOPE,
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  OPERATION_WORKFLOW_OWNER_REASON,
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SKIP_REASON,
   UNIFIED_SERVICE_TYPE,
@@ -292,6 +296,43 @@ class OperationWorkflowOwnerExecutionLane
   }
 
   /**
+   * Run a command that must not inherit another operation-lane holder's
+   * result. Awaiting the shared promise waits for that holder; resubmission
+   * then gives this command its own serialized turn. A holder rejection also
+   * belongs to the holder and cannot fail this command.
+   * @param {string} operationId
+   * @param {Function} invokeAction
+   * @return {Promise<Object>}
+   * @private
+   */
+  async runRetainedOperationOwnerAction(operationId, invokeAction) {
+    const ownerKey = this.getOperationOwnerSingleFlightKey(operationId);
+    while (!this.isShuttingDown) {
+      let actionFactoryRan = false;
+      try {
+        const result = await this.operationWorkflowRunExclusive(
+          ownerKey,
+          () => {
+            actionFactoryRan = true;
+            return invokeAction();
+          },
+        );
+        if (actionFactoryRan) {
+          return result;
+        }
+      } catch (error) {
+        if (actionFactoryRan) {
+          throw error;
+        }
+      }
+    }
+    return this.buildSkippedOperationResult(
+      OPERATION_WORKFLOW_OWNER_REASON.SHUTDOWN_IN_PROGRESS,
+      operationId,
+    );
+  }
+
+  /**
    * Route one dispatch/execute request through the canonical owner lane.
    * Reconcile callers may execute inline when they already hold the owner key.
    *
@@ -304,13 +345,19 @@ class OperationWorkflowOwnerExecutionLane
   async runOperationOwnerAction(action, operationInput, options = {}) {
     const operationId = this.getOperationIdFromInput(operationInput);
     const ownerLaneHeld = this.isOperationOwnerLaneHeld(operationId);
+    const retainOwnerTurn =
+      options.ownerTurnPolicy === OPERATION_OWNER_TURN_POLICY.RETAIN;
     const operationSnapshot =
       operationInput &&
       typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ?
         operationInput :
         null;
 
-    if (ownerLaneHeld && options.skipWhenOwnerLaneHeld === true) {
+    if (
+      ownerLaneHeld &&
+      options.skipWhenOwnerLaneHeld === true &&
+      !retainOwnerTurn
+    ) {
       return this.buildSkippedOperationResult(
         REBALANCER_SKIP_REASON.OPERATION_ALREADY_EXECUTING,
         operationId,
@@ -325,6 +372,12 @@ class OperationWorkflowOwnerExecutionLane
       );
 
     try {
+      if (operationId && retainOwnerTurn) {
+        return await this.runRetainedOperationOwnerAction(
+          operationId,
+          invokeAction,
+        );
+      }
       if (
         !operationId ||
         (ownerLaneHeld && options.runInlineWhenOwnerLaneHeld === true)

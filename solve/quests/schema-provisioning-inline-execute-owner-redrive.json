@@ -1,0 +1,70 @@
+{
+  "id": "schema-provisioning-inline-execute-owner-redrive",
+  "authoringContractVersion": 1,
+  "statement": "Initial table provisioning retains each planned replica-operation execution command until that exact command either owns one serialized operation-lane turn or observes durable forward/terminal progress, so a concurrent CDC/bootstrap wake cannot coalesce the inline command away, no planned row times out in PENDING, and three consecutive fresh MovieLens runs report priority metric 0.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "runtime-service-creating-owner-wake-progress-admission",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "8309824fdd1fa396960a8486430be7406a33cc6d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "schema-provisioning-inline-execute-owner-redrive-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "canonical-operation-owner-lane",
+      "statement": "Reuse the existing per-operation DurableWorkflowCoordinator owner lane and its authoritative workflow transitions. Do not add a parallel queue, timer, watchdog, or target-side workflow writer."
+    },
+    {
+      "id": "exact-command-ownership",
+      "statement": "A lane holder result or rejection belongs to that holder. The initial-partition caller may accept only its own executed command or authoritative evidence that the exact operation has moved beyond PENDING or become terminal; unrelated holder success and operation_already_executing are not provisioning success."
+    },
+    {
+      "id": "preserve-idempotent-concurrent-execute",
+      "statement": "Keep ordinary concurrent executeOperation deduplication unchanged. The retained-turn contract is explicit to initial partition provisioning and must not make generic duplicate callers dispatch twice."
+    },
+    {
+      "id": "real-seam-red-on-revert",
+      "statement": "Before source acceptance, a deterministic production-seam test must hold the exact operation lane across the bootstrap-topology persistence handoff, prove the planned inline command is not discarded, and prove reverting the production change leaves the row PENDING with no dispatch."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change replica-operation deadlines, retry or transition budgets, gateway timeouts, concurrency limits, schema stability windows, MovieLens workload, preload size, affinity scoring, live runner ordering, or report predicates."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "After deterministic, focused, static, model, and verifier gates pass, use the unchanged ordered live runner: five formation probes must pass before three measuring MovieLens repetitions; stop on the first red, preserve immutable stopped-state evidence, and do not make an unchanged rerun."
+    },
+    {
+      "id": "evidence-lineage",
+      "statement": "The 2026-07-20T03:16:02.506Z stopped run is the witness: dc99...:operation:ade39472 was durably PENDING with its reservation, received no SENDING/dispatch transition while sibling planned operations ran, timed out after 30524ms, and the schema retry then collided with that retained FAILED row."
+    }
+  ]
+}

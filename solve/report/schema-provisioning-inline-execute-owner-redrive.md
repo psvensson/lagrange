@@ -1,0 +1,65 @@
+# Solve report: schema-provisioning-inline-execute-owner-redrive
+
+**Goal:** Initial table provisioning retains each planned replica-operation execution command until that exact command either owns one serialized operation-lane turn or observes durable forward/terminal progress, so a concurrent CDC/bootstrap wake cannot coalesce the inline command away, no planned row times out in PENDING, and three consecutive fresh MovieLens runs report priority metric 0.
+
+**Class:** product · **Closure:** MEASURED
+
+**Outcome:** IN PROGRESS (no terminal recorded)
+
+**Attempts:** 1
+
+## Links
+- spec: solve/epics/service-data-affinity-placement.md
+- parent quest: runtime-service-creating-owner-wake-progress-admission
+- plan: solve/epics/topology-convergence-hardening.md
+
+## Current Blocker
+- Frontier: schema-provisioning-inline-execute-owner-redrive-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: unknown
+- Movement: no evidence recorded
+- Latest evidence: none
+- Selected theory: none
+- Next move: continue supervised step for schema-provisioning-inline-execute-owner-redrive-main
+- No longer current: Do not treat the patch as broad executeOperation de-coalescing or as introducing an alternate workflow owner.
+
+## Continuation
+- Status: allowed
+- Next action: continue supervised step for schema-provisioning-inline-execute-owner-redrive-main
+- Blocker: none
+
+## Scope Pressure
+- Changed files: 7
+- Change bytes: 19205
+- Owner areas: src/query, src/rebalancer, test/query, test/rebalancer
+- Categories: runtime
+- Action: land or separate 4 owner areas: src/query, src/rebalancer, test/query, test/rebalancer
+- Split plan:
+  - src/rebalancer: 4 file(s)
+  - src/query: 1 file(s)
+  - test/query: 1 file(s)
+  - test/rebalancer: 1 file(s)
+- Signal: broad-source-scope severity=medium
+
+## Frontiers
+- **schema-provisioning-inline-execute-owner-redrive-main** [open] rung 0, attempts 1, metric 1 -> 1
+
+## Findings
+- **schema-provisioning-inline-execute-owner-redrive-main**: DT red-on-revert proven for test/rebalancer/replica-operation-retained-owner-turn.test.js [dt:solve/changes/dt-prove/replica-operation-retained-owner-turn.test.js-2026-07-20T03-34-20-898Z.json]
+- **schema-provisioning-inline-execute-owner-redrive-main**: Independent verifier APPROVE: the exact retained owner-turn patch limits RETAIN to initial provisioning, preserves generic operation_already_executing coalescing, attributes holder rejection separately, reuses the canonical DurableWorkflowCoordinator owner key without new timers or queues, passes focused/static/model gates, and honestly proves green/red/green at the production seam. (rules out: Do not treat the patch as broad executeOperation de-coalescing or as introducing an alternate workflow owner.) [subagent:verify_schema_owner_redrive]
+
+## Theories
+_(none recorded)_
+
+## Selected Theories
+_(none selected)_
+
+## Theory Results
+_(none recorded)_
+
+## Attempt log
+| ts | frontier | rung | metric | result | blocker movement | theory | change |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-07-20T03:41:22.505Z | schema-provisioning-inline-execute-owner-redrive-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/schema-provisioning-inline-execute-owner-redrive/attempt-1.diff |
