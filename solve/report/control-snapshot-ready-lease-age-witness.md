@@ -31,6 +31,7 @@
 ## Findings
 - **control-snapshot-ready-lease-age-witness-main**: With only the snapshot guard and scenario registration applied to base d583fca3, the child is 0/1 green; current source emits the bounded witness without changing decisions. (rules out: The existing snapshot already exposed the chronology witness or the guard could pass without the two admin source changes.) [worktree:d583fca3-snapshot-witness-red-on-revert]
 - **control-snapshot-ready-lease-age-witness-main**: independent attempt and aggregate verification passed [subagent:root/verify_snapshot_child]
+- **control-snapshot-ready-lease-age-witness-main**: independent final aggregate verification passed after additive shared-runner registrations [subagent:root/verify_snapshot_child]
 
 ## Theories
 _(none recorded)_
