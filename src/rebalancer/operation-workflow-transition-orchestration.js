@@ -479,13 +479,22 @@ class OperationWorkflowTransitionOrchestration
    * @private
    */
   buildPriorityDispatchTransitionMutationBudget(operation, startedAtMs) {
+    const configuredBudgetMs =
+      this.resolvePriorityDispatchTransitionMutationBudgetMs(operation);
+    const normalizedCreatedAtMs = Number(operation?.createdAt);
     const normalizedStartedAtMs = Number(startedAtMs);
+    // The operation-level lane must anchor at operation creation, or the
+    // budget re-arms on every claim and the budget-derived cutoff never
+    // fires; only the SQL-write per-attempt repair lane anchors at the
+    // attempt.
+    const anchorMs =
+      configuredBudgetMs !== REPLICA_OPERATION_DISPATCH_TIMEOUT_MS &&
+      Number.isFinite(normalizedCreatedAtMs) ?
+        normalizedCreatedAtMs :
+        normalizedStartedAtMs;
     return createTopLevelOperationBudget({
-      configuredBudgetMs:
-        this.resolvePriorityDispatchTransitionMutationBudgetMs(operation),
-      startedAtMs: Number.isFinite(normalizedStartedAtMs) ?
-        normalizedStartedAtMs :
-        Date.now(),
+      configuredBudgetMs,
+      startedAtMs: Number.isFinite(anchorMs) ? anchorMs : Date.now(),
     });
   }
 
