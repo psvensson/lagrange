@@ -14,7 +14,7 @@
 
 ## Scope Pressure
 - Changed files: 5
-- Change bytes: 49361
+- Change bytes: 27156
 - Owner areas: architecture, solve
 - Categories: docs, workflow
 - Split plan:
@@ -23,10 +23,12 @@
 - Signals: none
 
 ## Frontiers
-- **oci-runtime-host-contract-main** [solved] rung 2, attempts 2, metric 0 -> 0 — exact terminal source attempt was rejected
+- **oci-runtime-host-contract-main** [open] rung 2, attempts 2, metric 0 -> 0 — exact terminal source attempt was rejected
 
 ## Findings
 - **oci-runtime-host-contract-main**: Independent verification rejected attempt 1: the authenticated protocol lacks signed response framing and replay restart semantics, restart-safe idempotency lacks a durable agent receipt and label representation, and the Oracle conflates C2 agent operations with owner-level outcomes. [subagent:c0_proof_surface]
+- **oci-runtime-host-contract-main**: Independent verification rejected attempt 2: receipt mutation lacks synchronous resource serialization and post-await revalidation; create labels conflict with later operation receipts; missing or corrupt recovery evidence is not explicitly ambiguous; nested privileged payload fields are not closed; and the sealed C2 constraint conflates provider operations with owner outcomes. [subagent:c0_proof_surface]
+- **oci-runtime-host-contract-main**: Altitude reflection: the sealed C2 constraint conflates host-agent operation names with C2 owner outcomes. The decision goal remains valid, but editing the declared constraint would move sealed goalposts; a bounded successor must preserve the two rejected attempts and correct only that operation-versus-outcome wording. [subagent:c0_proof_surface]
 
 ## Theories
 _(none recorded)_
