@@ -110,7 +110,7 @@ test('ReplicaDispatchService defers not-ready dispatches back onto the ' +
       [{
         operationId: operationRow.operation_id,
         reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
-        context: {row: operationRow},
+        context: {row: operationRow, deferredRetryProvenance: true},
       }],
       'deferred target-not-ready retry should re-enter the canonical owner lane with the dispatch row',
     );

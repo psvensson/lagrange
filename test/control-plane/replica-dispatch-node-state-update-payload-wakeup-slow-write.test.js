@@ -222,7 +222,7 @@ async (t) => {
       [{
         operationId: operationRow.operation_id,
         reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
-        context: {row: operationRow},
+        context: {row: operationRow, deferredRetryProvenance: true},
       }],
       'deferred retry should preserve the payload row so cache lag cannot drop the handoff',
     );

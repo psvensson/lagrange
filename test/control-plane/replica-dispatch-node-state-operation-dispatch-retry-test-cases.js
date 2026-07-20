@@ -137,7 +137,7 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
         [{
           operationId: operationRow.operation_id,
           reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
-          context: {row: operationRow},
+          context: {row: operationRow, deferredRetryProvenance: true},
         }],
         'deferred retry should re-enter the canonical operation owner queue with the last dispatch row',
       );
@@ -256,6 +256,7 @@ export function registerReplicaDispatchNodeStateOperationDispatchRetryTests({
           reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
           context: {
             row: operationRow,
+            deferredRetryProvenance: true,
             [OPERATION_DISPATCH_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
           },
         }],

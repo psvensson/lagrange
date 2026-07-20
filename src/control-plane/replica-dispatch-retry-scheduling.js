@@ -296,6 +296,13 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
         deferredRetry?.context,
         row ? {row} : null,
       ) || {};
+      // Provenance marker: this reconcile pass consumed a retained deferred
+      // slot. The lost-wake admission in reconcileOperationDispatch is gated
+      // on it so unmarked enqueues never gain replay semantics (sealed by the
+      // ordinary-CREATING-rows-stay-outside-replay contract).
+      context[
+        REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PROVENANCE
+      ] = true;
       if (
         options?.[
           REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH

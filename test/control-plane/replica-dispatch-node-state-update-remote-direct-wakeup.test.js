@@ -328,6 +328,7 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
           row: deliveries[0]?.payload?.[
             ControlPlaneField.OPERATION_ROW
           ],
+          deferredRetryProvenance: true,
           [DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
         },
       }],
@@ -535,6 +536,7 @@ test(DIRECT_WAKEUP_COALESCE_RETRY_REFRESH_TEST_NAME, async (t) => {
         reason: RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
         context: {
           row: freshOperationRow,
+          deferredRetryProvenance: true,
           [DIRECT_WAKEUP_RETRY_REFRESH_ROW_BEFORE_DISPATCH]: true,
         },
       }],

@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-41-10-348Z.report.json
 
 **Attempts:** 13
 
@@ -13,41 +13,24 @@
 - parent quest: runtime-replica-state-projection-retained-reconcile-integrity-reseal
 - plan: solve/epics/topology-convergence-hardening.md
 
-## Current Blocker
-- Frontier: runtime-service-creating-owner-wake-progress-admission-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: budget_gap
-- Movement: invalid: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json
-- Selected theory: theory-20260720-creating-wake-no-owner-after-handoff-budget (stale: selected theory status is needs-rerun)
-- Next move: record or select a fresh frontier theory for runtime-service-creating-owner-wake-progress-admission-main
-- No longer current: FAIL
-
-## Continuation
-- Status: blocked-theory
-- Next action: record or select a fresh frontier theory for runtime-service-creating-owner-wake-progress-admission-main
-- Blocker: selected theory stale: selected theory status is needs-rerun
-
 ## Scope Pressure
-- Changed files: 25
-- Change bytes: 100080
+- Changed files: 19
+- Change bytes: 92682
 - Owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Categories: runtime, test
-- Action: split by owner area before the next attempt (25 files)
+- Action: split by owner area before the next attempt (19 files)
 - Action: land or separate 5 owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Split plan:
   - src/rebalancer: 9 file(s)
-  - src/control-plane: 8 file(s)
-  - test/control-plane: 6 file(s)
+  - src/control-plane: 7 file(s)
   - src/constants: 1 file(s)
+  - test/control-plane: 1 file(s)
   - test/rebalancer: 1 file(s)
 - Signal: broad-source-scope severity=medium
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 13, non-measurements 1, metric 1 -> 1 — measurement unavailable (retry 1)
+- **runtime-service-creating-owner-wake-progress-admission-main** [solved] rung 0, attempts 13, non-measurements 1, metric 1 -> 0 — measurement unavailable (retry 1)
 
 ## Findings
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-19T19-39-35-247Z.json]
@@ -106,6 +89,9 @@
 - **runtime-service-creating-owner-wake-progress-admission-main**: Live 2026-07-20T12:37 forensics: the sealed symptom recurred at checkpoint 8f01bf5d — runtime ADDs 6a47dded (r1) and 08392992 (r2) stayed status=creating/step=CREATING for 6 minutes while both target services rows were ACTIVE and serving. The wake chain died in three steps: node-0 dispatch deferred on cache-update-not-observed (12:31:20), both target coordinators stopped at the handoff budget (12:32:20/22), and neither fallback fired — ready-node replay's only trigger is a node-readiness transition (last fired 12:29:17, before the ops existed) and planner rearm is starved by a distinct affinity-trigger gap owned elsewhere. Host noise excluded: only ~10s of gaps inside the 300s window. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T13-29-11-934Z.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
+- **runtime-service-creating-owner-wake-progress-admission-main**: Artifact-path correction: the 13:41:55Z non-measurement's changeRef diff:attempt-13.diff transiently held this session's lost-wake source delta, colliding with the prior session's sealed attempt-13 artifact. The original attempt-13.diff bytes are restored from git; this session's identical source delta now lives at solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-14.diff (sha256 34c3bb5d0f29e397...) and is the artifact independent verification and the next measuring step-commit must reference. [solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-14.diff]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification passed: artifact byte-identical at sha256 34c3bb5d, red-on-revert reproduced in a clean worktree (test-hunks-only red on the two theory-discriminator assertions, full diff 47/47 green), both attack templates applied (no unbounded respin — owner-lane refusal ends the chain without re-arm; not-ACTIVE targets are refused with zero writes; provenance has exactly one writer and one reader and is never persisted; row-shape conjuncts exclude system-table, non-runtime, and REMOVE rows; REPLACE-at-ACTIVE semantics untouched; clear-before-await mirrors the delivered-wake branch with no new failure mode), control-plane 128/128 and rebalancer 188/188 green, static gates green, all six rulesOut compliant. [subagent:verify_lost_wake_attempt14]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Aggregate source approval: the terminal source delta over the quest's complete dirty source paths hashes (git diff --full-index) to sha256:34c3bb5d0f29e39752c6cf7b5f69a1b05207fa356efe29ce40a8cb9de6ce5864 — byte-identical to the independently verified attempt-14 artifact (verify_lost_wake_attempt14: red-on-revert, both attack templates, 316 suites green, all rulesOut compliant). No source byte outside that verified delta is in scope; live validation followed with three measuring priority-0 runs (doneWhen 3/3, quest SOLVED MEASURED). [subagent:verify_lost_wake_attempt14]
 
 ## Theories
 - **theory-20260720-ownerkeyreconcilequeue-context-is-last-writer-wins** [active] system, mechanism OwnerKeyReconcileQueue context is last-writer-wins. ReplicaDispatchService must merge target_executor_outcome as monotone stronger evidence before enqueue while refreshing the row authoritatively, and runtime completion must use only exact replica_id plus target_node_id observation., owner source replica-dispatch operation owner queue and operation-workflow exact-target observation lane, modelGate npm run model:contracts
@@ -113,7 +99,7 @@
 - **theory-20260720-stale-pending-masks-target-progress** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer observation, mechanism stale-cache-row-masks-advanced-target-progress-payload, owner replica-dispatch-service, boundary operation-dispatch-reconcile-row-selection, modelGate npm run model:contracts
 - **theory-20260720-known-step-monotone-stale-row-selection** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer observation, mechanism known-step-monotone-stale-row-selection, owner replica-dispatch-service, boundary operation-dispatch-reconcile-row-selection, modelGate npm run model:contracts
 - **theory-20260720-marked-target-progress-deferred-retry-context** [needs-rerun] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism marked-target-progress-deferred-retry-context-loss, owner replica-dispatch-service, boundary operation-dispatch-deferred-retry-context, modelGate npm run model:contracts
-- **theory-20260720-creating-wake-no-owner-after-handoff-budget** [needs-rerun] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism creating-wake-has-no-owner-after-coordinator-handoff-budget-stops, modelGate npm run model:contracts
+- **theory-20260720-creating-wake-no-owner-after-handoff-budget** [supported] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism creating-wake-has-no-owner-after-coordinator-handoff-budget-stops, modelGate npm run model:contracts
 
 ## Selected Theories
 - **runtime-service-creating-owner-wake-progress-admission-main**: theory-20260720-creating-wake-no-owner-after-handoff-budget
@@ -127,6 +113,9 @@
 - **theory-20260720-marked-target-progress-deferred-retry-context**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T07-34-10-257Z.report.json]
 - **theory-20260720-marked-target-progress-deferred-retry-context**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json]
 - **theory-20260720-creating-wake-no-owner-after-handoff-budget**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json]
+- **theory-20260720-creating-wake-no-owner-after-handoff-budget**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-10-32-079Z.report.json]
+- **theory-20260720-creating-wake-no-owner-after-handoff-budget**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-33-44-756Z.report.json]
+- **theory-20260720-creating-wake-no-owner-after-handoff-budget**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-41-10-348Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

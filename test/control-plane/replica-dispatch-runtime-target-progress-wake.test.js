@@ -27,7 +27,10 @@ import {
 import {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
 } from '../../src/rebalancer/replica-operation-repository.js';
-import {createTestCoordinator} from '../rebalancer/test-helpers.js';
+import {
+  createMockControlPlaneReadinessService,
+  createTestCoordinator,
+} from '../rebalancer/test-helpers.js';
 import {
   createService,
   initEnv,
@@ -41,6 +44,7 @@ const REPLICA_ID = `${SERVICE_ID}-r2`;
 const TARGET_PROGRESS_RETRY_AFTER_MS = 25;
 const {
   REPLICA_DISPATCH_SERVICE_LITERAL,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 function buildRuntimeCreatingOperationRow(overrides = {}) {
@@ -1198,6 +1202,206 @@ test(
         retainedOperation?.status,
         ReplicaStatus.CREATING,
         'a non-ACTIVE services row must not terminate the durable operation',
+      );
+    } finally {
+      sourceDispatch.stop();
+      await sourceCoordinator.shutdown();
+    }
+  },
+);
+
+// Quest runtime-service-creating-owner-wake-progress-admission, theory
+// theory-20260720-creating-wake-no-owner-after-handoff-budget (live forensics
+// run 2026-07-20T12:37). Live sequence reproduced deterministically:
+//   1. The source-owned coordinator-created runtime ADD dispatch defers once
+//      with the retryable 'Cache update not observed for replica operation
+//      <id>' failure and re-arms after ~250ms
+//      (replica-dispatch-retry-scheduling.js deferOperationDispatchRetry).
+//   2. The target creates the replica: the exact target services row is
+//      durably ACTIVE (live 12:31:20, seeded here as authoritative proof).
+//   3. The target's coordinator-created remote-handoff retry exhausts its
+//      operation budget without ever reaching the source ('Coordinator-created
+//      remote handoff retry stopped at its operation budget'); simulated by
+//      never delivering any TARGET_EXECUTOR_OUTCOME wake to the source.
+//   4. No node-readiness transition fires afterwards and no planner rearm
+//      runs, so the trigger-gated ready-node replay never re-enters the row.
+//   5. The virtual clock drains every armed timer through twice the
+//      REPLICA_OPERATION_DISPATCH_TIMEOUT_MS budget plus the dispatch queue.
+// The terminal assertions are the theory discriminator: once the exact target
+// services row is durably ACTIVE, the source-owned replica_operations ADD must
+// still reach its terminal ACTIVE progression. On current code the deferred
+// retry's second reconcile pass drops the wake (CREATING is outside
+// DISPATCH_PENDING_WORKFLOW_STEPS and the unmarked retry context fails the
+// runtime-target-progress admission), so the row stays CREATING forever and
+// the final assertions FAIL — that red is the recorded discriminator.
+test(
+  'lost target handoff still reaches terminal ACTIVE for a source-owned CREATING runtime ' +
+  'ADD from durable target ACTIVE proof within the dispatch timeout budget',
+  async (t) => {
+    initEnv();
+
+    const operationId = `${OPERATION_ID}-lost-handoff-budget`;
+    const cacheVisibilityRetryAfterMs = 250;
+    const preCommitPendingRow = buildRuntimeCreatingOperationRow({
+      operation_id: operationId,
+      status: ReplicaStatus.PENDING,
+      workflow_step: WORKFLOW_STEP.PENDING,
+      updated_at: 1700000000000,
+    });
+    const durableCreatingRow = buildRuntimeCreatingOperationRow({
+      operation_id: operationId,
+      updated_at: 1700000000500,
+    });
+    const activeServiceRow = {
+      service_id: REPLICA_ID,
+      service_type: 'runtime_service',
+      node_id: TARGET_NODE_ID,
+      status: ReplicaStatus.ACTIVE,
+      created_at: 1700000000510,
+      updated_at: 1700000000514,
+    };
+    const scheduledTimers = [];
+    const captureTimer = (callback, delayMs) => {
+      const timerHandle = {callback, delayMs};
+      scheduledTimers.push(timerHandle);
+      return timerHandle;
+    };
+    const releaseTimer = (timerHandle) => {
+      if (timerHandle) {
+        timerHandle.cleared = true;
+      }
+    };
+    const sourceCoordinator = createTestCoordinator({
+      nodeId: SOURCE_NODE_ID,
+      cacheData: {
+        services: [activeServiceRow],
+        replicaOperations: [durableCreatingRow],
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+        async updateSystemTableRow() {
+          return {success: true};
+        },
+        async refreshAuthoritativeCacheRow() {
+          return true;
+        },
+      },
+      sqlQueryResults: {
+        'FROM services WHERE service_id = ?': {
+          success: true,
+          rows: [activeServiceRow],
+        },
+      },
+      setTimeoutFn: captureTimer,
+      clearTimeoutFn: releaseTimer,
+    });
+    const dispatchOperation =
+      sourceCoordinator.dispatchOperation.bind(sourceCoordinator);
+    let dispatchCallCount = 0;
+    sourceCoordinator.dispatchOperation = async (...args) => {
+      dispatchCallCount += 1;
+      if (dispatchCallCount === 1) {
+        const retryableError = new Error(
+          `${REPLICA_DISPATCH_SERVICE_LITERAL.CACHE_UPDATE_NOT_OBSERVED_FOR_REPLICA_OPERATION} ${operationId}`,
+        );
+        retryableError.retryAfterMs = cacheVisibilityRetryAfterMs;
+        throw retryableError;
+      }
+      return dispatchOperation(...args);
+    };
+    const sourceDispatch = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: sourceCoordinator,
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        defaultRepairEligible: true,
+      }),
+      setTimeoutFn: captureTimer,
+      clearTimeoutFn: releaseTimer,
+    });
+    // Authoritative row visibility as the source dispatch owner observes it:
+    // the first reconcile pass still sees the pre-commit PENDING row (the
+    // unobserved cache update behind the live deferral); visibility converges
+    // to the durable CREATING commit before the deferred retry fires.
+    let visibleOperationRow = preCommitPendingRow;
+    sourceDispatch.replicaOperationsOwner = {
+      async getReplicaOperationFromCache(requestedOperationId) {
+        return requestedOperationId === operationId ?
+          {...visibleOperationRow} :
+          null;
+      },
+    };
+
+    try {
+      await sourceDispatch.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationId,
+        [ControlPlaneField.OPERATION_ROW]: preCommitPendingRow,
+      });
+      await drainOperationDispatchQueue(sourceDispatch);
+
+      t.equal(
+        dispatchCallCount,
+        1,
+        'the initial source dispatch pass should reach the owner once',
+      );
+      const deferredRetry =
+        sourceDispatch.operationDispatchDeferredRetries.get(operationId);
+      t.ok(
+        deferredRetry,
+        'the retryable cache-visibility failure should arm a deferred retry',
+      );
+      t.ok(
+        String(deferredRetry?.errorMessage || '').includes(
+          REPLICA_DISPATCH_SERVICE_LITERAL
+            .CACHE_UPDATE_NOT_OBSERVED_FOR_REPLICA_OPERATION,
+        ),
+        'the deferred retry should retain the live cache-visibility reason',
+      );
+
+      // Cache visibility converges to the durable CREATING commit; the target
+      // replica is durably ACTIVE; the target handoff wake is never delivered
+      // (its retry budget stopped without reaching the source); no readiness
+      // transition and no planner rearm occur.
+      visibleOperationRow = durableCreatingRow;
+
+      // Drain every armed timer through 2x the dispatch timeout budget.
+      let remainingVirtualBudgetMs = REPLICA_OPERATION_DISPATCH_TIMEOUT_MS * 2;
+      for (;;) {
+        const dueTimer = scheduledTimers
+          .filter(
+            (timer) =>
+              !timer.cleared &&
+              !timer.fired &&
+              timer.delayMs <= remainingVirtualBudgetMs,
+          )
+          .sort((left, right) => left.delayMs - right.delayMs)[0];
+        if (!dueTimer) {
+          break;
+        }
+        dueTimer.fired = true;
+        remainingVirtualBudgetMs -= dueTimer.delayMs;
+        await dueTimer.callback();
+        await drainOperationDispatchQueue(sourceDispatch);
+      }
+
+      const progressedOperation =
+        await sourceCoordinator.repository.queryOperationById(operationId);
+      t.equal(
+        progressedOperation?.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the source-owned ADD must progress to ACTIVE once the exact target ' +
+        'services row is durably ACTIVE, without a delivered handoff wake',
+      );
+      t.equal(
+        progressedOperation?.status,
+        ReplicaStatus.ACTIVE,
+        'the source-owned durable operation must reach its terminal state instead of ' +
+        'remaining CREATING forever after the lost handoff budget',
       );
     } finally {
       sourceDispatch.stop();

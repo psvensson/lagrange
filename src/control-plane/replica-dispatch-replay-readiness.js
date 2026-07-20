@@ -218,12 +218,30 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
    * @private
    */
   isRuntimeTargetProgressWakeOperation(operation, context = {}) {
+    return (
+      context?.[ControlPlaneField.HANDOFF_MODE] ===
+        CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME &&
+      this.isRuntimeTargetProgressWakeRow(operation)
+    );
+  }
+
+  /**
+   * The row shape of the canonical runtime target-progress wake, independent
+   * of HOW the wake evidence arrived. The delivered target-executor-outcome
+   * handoff is the primary evidence; the deferred-retry lane admits the same
+   * row shape when that handoff is lost (its budget stopped without reaching
+   * the source), because the owner lane it routes into terminates only from
+   * exact-target ACTIVE services proof either way.
+   *
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isRuntimeTargetProgressWakeRow(operation) {
     const partitionClassification = classifySystemPartition({
       partitionId: operation?.partition_id,
     });
     return [
-      context?.[ControlPlaneField.HANDOFF_MODE] ===
-        CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
       operation?.entity_type === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
       RUNTIME_TARGET_PROGRESS_WAKE_OPERATION_TYPES.has(operation?.type),
       RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS.has(

@@ -235,7 +235,32 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
       }
 
       if (!DISPATCH_PENDING_WORKFLOW_STEPS.has(row.workflow_step)) {
+        // Lost-wake admission: a non-pending runtime create-side row reaching
+        // this branch means the target-executor-outcome handoff never arrived
+        // (its retry budget can stop without reaching the source, and the
+        // ready-node replay only fires on readiness transitions). Clearing the
+        // last armed retry here would strand the row CREATING forever, so
+        // route it through the SAME canonical target-progress owner lane the
+        // delivered wake uses — it terminates only from exact-target ACTIVE
+        // services proof, so a target that is not durably ACTIVE yet is
+        // refused there, not here.
         this.clearDeferredOperationDispatchRetry(operationId);
+        if (
+          context?.[
+            REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PROVENANCE
+          ] === true &&
+          this.isRuntimeTargetProgressWakeRow(row) &&
+          typeof this.rebalanceCoordinator.dispatchOperation === 'function'
+        ) {
+          await this.rebalanceCoordinator.dispatchOperation(
+            this.buildOperationFromRow(row),
+            {
+              cause:
+                REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
+              ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN,
+            },
+          );
+        }
         return;
       }
 
