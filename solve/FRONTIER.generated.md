@@ -61,22 +61,19 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 19
+## Open quests — 16
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
-| control-snapshot-heartbeat-lease-freshness | product | 2 | 0 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | — |
 | movielens-local-leader-row-visibility-model | product | 1 | 0 | — |
 | movielens-nodes-priority-recovery-escape | product | 1 | 0 | — |
-| movielens-observation-watermark-churn-consolidation | product | 1 | 0 | — |
 | movielens-operation-ledger-terminal-hold | product | 1 | 0 | — |
 | movielens-parallel-reduce-result-chronology | product | 1 | 0 | — |
 | movielens-pre-schema-priority-spread-admission-authority | product | 0 | 0 | — |
-| movielens-ready-lease-maintenance-critical-owner-lane | product | 3 | 0 | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | — |
 | movielens-three-way-affinity-demo | product | 7 | 0 | — |
 | oci-container-driver-live-activation | product | 8 | 0 | — |

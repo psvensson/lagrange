@@ -51,8 +51,39 @@ escape hatch. Treat the resulting open projection as a workflow-visible
 recurrence, not authority for another bounded watermark patch. The product
 portfolio is now two above its 15-Quest advisory cap because the same fresh
 red also reopened parked local-row and ready-lease maintenance projections.
-Do not author a new Quest for the witness; keep it inside the already-open
-heartbeat/lease lineage.
+Keep the witness inside the heartbeat/lease lineage. While a lineage Quest is
+open, do not author a duplicate Quest for it. Once
+`control-snapshot-heartbeat-lease-freshness` is SOLVED and
+`movielens-ready-lease-maintenance-critical-owner-lane` is honestly EXHAUSTED,
+continue through the bounded successor
+`movielens-ready-lease-chronology-discriminator`; its diagnostic evidence may
+reopen the parked maintenance Quest only under that Quest's recorded condition.
+
+## Update — 2026-07-20 ready-lease chronology discriminator outcome
+
+The bounded successor is SOLVED without changing readiness or admission
+semantics. Its implementation landed as three owner-bounded child Quests:
+`movielens-ready-lease-cdc-provenance` (`d583fca3`),
+`control-snapshot-ready-lease-age-witness` (`6c6a782a`), and
+`movielens-ready-lease-witness-report-replay` (`e9f00907`). The integrated
+guard is red on the original source (1-of-5 files green) and green for three
+consecutive current-source runs (5-of-5 files, 240 assertions per run).
+Independent verifiers approved every exact attempt and terminal aggregate.
+
+The single live-last run on clean source fingerprint `821892b96366f4db`
+reached quiescent schema admission, preload admission, 100,000 loaded ratings,
+three ratings partitions across five nodes, and the 1,682-row distributed SQL
+result. Its admitted snapshot reported the explicit witness variant
+`unavailable:no_stale_active_node`; the prior `cache_stale_watermark`
+recurrence was therefore not the first violated invariant. The run later
+failed because runtime service replicas were not initially placed, while the
+seed accumulated 83,429 ms of scheduling gaps against the 60,000 ms total
+host budget. Treat that later result as non-attributable: do not reopen the
+heartbeat/cache lineage or change placement from this host-invalidated sample,
+and do not rerun under this Quest's one-run authorization. Evidence:
+`test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T19-26-43-793Z.report.json`;
+archived state:
+`data/examples/service-data-affinity-demo-archive/run-2026-07-20T19-26-43-793Z.tar.gz`.
 
 ## Handoff — start here (state as of 2026-07-19 morning, confirmation runs NOT green)
 
