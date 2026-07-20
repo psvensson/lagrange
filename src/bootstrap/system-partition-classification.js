@@ -193,10 +193,6 @@ function isPriorityControlPlanePartition(options = {}) {
   return classifySystemPartition(options).priorityControlPlane;
 }
 
-function isFormationLivenessDependencyPartition(options = {}) {
-  return classifySystemPartition(options).formationLivenessDependency;
-}
-
 // The replica_operations table is the operation LEDGER: every in-flight
 // operation persists its workflow progress into it, so a partition of this
 // table is the one partition whose own move disrupts every other move.
@@ -459,7 +455,6 @@ export {
   CRITICAL_SYSTEM_PARTITION_IDS,
   CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS,
   CRITICAL_TRANSPORT_TARGET_REASON,
-  FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS,
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   SYSTEM_PARTITION_CLASS,
   SYSTEM_PARTITION_CLASS_ROWS,
@@ -469,7 +464,6 @@ export {
   isBootstrapCriticalSystemPartitionId,
   isCriticalTransportControlPlanePartition,
   isCriticalTransportTargetAddress,
-  isFormationLivenessDependencyPartition,
   isOperationLedgerPartition,
   isPriorityControlPlanePartition,
   isSystemTablePartition,

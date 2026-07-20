@@ -97,7 +97,6 @@ export {
   resolveMutationCompletionState,
 } from './control-plane-system-table-gateway-mutation-contracts.js';
 export {
-  areCanonicalSystemTableRowsEqual,
   copyOption,
   createDeferredPromise,
   extractSqlOperationKind,
@@ -126,7 +125,6 @@ export {
   normalizeAuthoritativeReadMode,
   normalizeReadProfile,
   normalizeReadStrategy,
-  resolveAuthoritativeReadMode,
   resolveAuthoritativeReadModeContract,
   resolveControlPlaneCacheReconcileDeletePolicy,
   resolveControlPlaneCacheReconcileIntent,

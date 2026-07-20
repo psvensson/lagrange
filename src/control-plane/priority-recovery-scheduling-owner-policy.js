@@ -191,14 +191,7 @@ function inheritPriorityRecoverySchedulingOwner(
 }
 
 export {
-  PRIORITY_RECOVERY_SCHEDULING_OWNER_EVIDENCE_SOURCE,
-  PRIORITY_RECOVERY_SCHEDULING_OWNER_MODE,
-  PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE,
-  PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE_TABLE,
-  buildPriorityRecoverySchedulingOwnerEvidence,
   buildPriorityRecoverySchedulingOwnersByPartitionId,
   inheritPriorityRecoverySchedulingOwner,
   isPriorityRecoverySchedulingOwner,
-  resolveLivePriorityRecoverySchedulingOwnerPartitionIds,
-  resolvePriorityRecoverySchedulingOwner,
 };

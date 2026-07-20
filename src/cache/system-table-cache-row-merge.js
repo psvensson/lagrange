@@ -244,7 +244,6 @@ function compareSchemaVersions(incomingVersion, currentVersion) {
 
 export {
   applyStaleRowBackfill,
-  buildStaleServiceLifecycleAdvance,
   cloneFieldValue,
   compareSchemaVersions,
   getRecordHlc,

@@ -507,7 +507,6 @@ export {
   normalizeAuthoritativeReadMode,
   normalizeReadProfile,
   normalizeReadStrategy,
-  resolveAuthoritativeReadMode,
   resolveAuthoritativeReadModeContract,
   resolveControlPlaneCacheReconcileDeletePolicy,
   resolveControlPlaneCacheReconcileIntent,
