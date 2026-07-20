@@ -61,7 +61,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 25
+## Open quests — 26
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
@@ -84,6 +84,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | oci-container-driver-live-activation | product | 8 | 0 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | — |
 | priority-placement-completed-topology-observation | product | 1 | 0 | — |
+| runtime-service-affinity-suboptimality-observer | product | 0 | 0 | — |
 | runtime-service-creating-owner-wake-progress-admission | product | 13 | 0 | — |
 | schema-provisioning-inline-execute-owner-redrive | product | 1 | 0 | — |
 | schema-provisioning-not-null-intent-recovery-roundtrip | product | 1 | 0 | — |

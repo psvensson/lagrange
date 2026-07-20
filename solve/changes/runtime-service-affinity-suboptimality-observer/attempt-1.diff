@@ -1,0 +1,341 @@
+diff --git a/src/rebalancer/move-planner-state-methods.js b/src/rebalancer/move-planner-state-methods.js
+index 23e660177b449f0a48f0c8240ede6144afbce2b1..839bc9869172f360b8f78bc08648ca68f35a50d7 100644
+--- a/src/rebalancer/move-planner-state-methods.js
++++ b/src/rebalancer/move-planner-state-methods.js
+@@ -115,6 +115,7 @@ function createMovePlannerStateMethods(deps = {}) {
+     getNextOddCount,
+     getPartitionRowFromCache,
+     getPreviousOddCount,
++    isDataAffinityPlacementSuboptimal,
+     isOddReplicaCount,
+     isReplicaInventoryAddTransitionalOperation,
+   } = deps;
+@@ -708,6 +709,15 @@ function createMovePlannerStateMethods(deps = {}) {
+           return true;
+         }
+       }
++      // Data-affinity observer (placement-owner-decision owns the scoring):
++      // count and spread being satisfied must not blind the gate to a
++      // placement sitting off its data.
++      if (
++        typeof isDataAffinityPlacementSuboptimal === 'function' &&
++        isDataAffinityPlacementSuboptimal(policy, healthyReplicas, readyNodes)
++      ) {
++        return true;
++      }
+       return false;
+     }
+ 
+diff --git a/src/rebalancer/move-planner.js b/src/rebalancer/move-planner.js
+index 6647d4a9959f1d3178d4fec64274ea2dd1ba40ef..b0573cb4ca8ca51f5d0cd4dabc6b1ed0f349b0e8 100644
+--- a/src/rebalancer/move-planner.js
++++ b/src/rebalancer/move-planner.js
+@@ -24,6 +24,8 @@ import {
+   buildPartitionDescriptorEpochDecision,
+ } from '../partition/partition-descriptor-epoch-contract.js';
+ import {ADJUST_DIRECTION, ReplicaStatus} from './replica-status.js';
++import {isDataAffinityPlacementSuboptimal}
++  from './placement-owner-decision.js';
+ import {
+   adjustToOddCount,
+   getNextOddCount,
+@@ -175,6 +177,7 @@ const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
+   getNextOddCount,
+   getPartitionRowFromCache,
+   getPreviousOddCount,
++  isDataAffinityPlacementSuboptimal,
+   isOddReplicaCount,
+   isReplicaInventoryAddTransitionalOperation,
+ });
+diff --git a/src/rebalancer/placement-owner-decision.js b/src/rebalancer/placement-owner-decision.js
+index ec5cd25b8d75cfe8839813591ae40d3b26ab1e0c..87ccc9fe3c2785f9ae96ff613620e93e942c1209 100644
+--- a/src/rebalancer/placement-owner-decision.js
++++ b/src/rebalancer/placement-owner-decision.js
+@@ -17,7 +17,10 @@ import {
+   PLACEMENT_OWNER_TOPOLOGY_SCORE,
+   TOPOLOGY_CONTROL_PLANE_OWNER,
+ } from './placement-owner-constants.js';
+-import {normalizePlacementOwnerEvidence} from './placement-owner-evidence.js';
++import {
++  normalizePlacementOwnerEvidence,
++  PLACEMENT_OWNER_POLICY_FIELD,
++} from './placement-owner-evidence.js';
+ 
+ const PLACEMENT_OWNER_NO_DOMINANT_GROUP = '';
+ 
+@@ -461,6 +464,68 @@ function buildPlacementOwnerDecision(options = {}) {
+   });
+ }
+ 
++// Trigger-side twin of calculateDataAffinityScoreDimensions: the planning gate
++// must OBSERVE affinity suboptimality before any planning round runs, or a
++// count-correct, spread-correct placement can never converge onto its data
++// (the learned-affinity stall of 2026-07-20T12:37). Same gating (the
++// preferDataAffinity constraint plus supplied node weights) and the same
++// hysteresis semantics as the scorer: a challenger node must beat an incumbent
++// by more than the incumbent movement-cost margin, so gradients below the
++// retention margin never trigger a planning round, let alone churn. Reads the
++// raw policy field names because the planner evaluates before placement-owner
++// evidence normalization. Entities without preferDataAffinity return false
++// unconditionally — their evaluation is byte-identical to before.
++function isDataAffinityPlacementSuboptimal(policy, healthyReplicas, readyNodes) {
++  const constraints =
++    policy?.[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS];
++  if (
++    constraints?.[PLACEMENT_OWNER_POLICY_FIELD.PREFER_DATA_AFFINITY] !== true
++  ) {
++    return false;
++  }
++  const nodeWeights =
++    policy?.[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY]?.[
++      PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_NODE_WEIGHTS
++    ] || {};
++  const incumbentNodeIds = new Set(
++    (Array.isArray(healthyReplicas) ? healthyReplicas : [])
++      .map((replica) => replica?.node_id)
++      .filter(Boolean),
++  );
++  if (incumbentNodeIds.size === 0) {
++    return false;
++  }
++  const affinityScoreOf = (nodeId) => {
++    const weight = Number(nodeWeights[nodeId]);
++    return PLACEMENT_OWNER_DATA_AFFINITY_SCORE.NODE_AFFINITY_WEIGHT *
++      (Number.isFinite(weight) && weight > 0 ? weight : 0);
++  };
++  let bestChallengerScore = null;
++  for (const node of Array.isArray(readyNodes) ? readyNodes : []) {
++    const nodeId = node?.node_id;
++    if (!nodeId || incumbentNodeIds.has(nodeId)) {
++      continue;
++    }
++    const score = affinityScoreOf(nodeId);
++    if (bestChallengerScore === null || score > bestChallengerScore) {
++      bestChallengerScore = score;
++    }
++  }
++  if (bestChallengerScore === null || bestChallengerScore <= 0) {
++    return false;
++  }
++  let worstIncumbentScore = null;
++  for (const nodeId of incumbentNodeIds) {
++    const score = affinityScoreOf(nodeId) +
++      PLACEMENT_OWNER_DATA_AFFINITY_SCORE.INCUMBENT_MOVEMENT_COST;
++    if (worstIncumbentScore === null || score < worstIncumbentScore) {
++      worstIncumbentScore = score;
++    }
++  }
++  return bestChallengerScore > worstIncumbentScore;
++}
++
+ export {
+   buildPlacementOwnerDecision,
++  isDataAffinityPlacementSuboptimal,
+ };
+diff --git a/test/rebalancer/runtime-service-affinity-suboptimality-observer.test.js b/test/rebalancer/runtime-service-affinity-suboptimality-observer.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a5753c4e1892c0183a60c66d14e76f95c970c1f5
+--- /dev/null
++++ b/test/rebalancer/runtime-service-affinity-suboptimality-observer.test.js
+@@ -0,0 +1,201 @@
++/**
++ * Discriminator for quest runtime-service-affinity-suboptimality-observer
++ * (theory: placement-affinity-suboptimality-is-never-observed-by-the-planning-
++ * gate). Live forensics 2026-07-20T12:37: a runtime service at target count
++ * with spread satisfied sat on the two non-data nodes for 300s while fresh
++ * attribution taught that the data lives elsewhere — no planning round ever
++ * ran because isSuboptimalState tests only count and spread. The observer must
++ * flag that state as suboptimal using the canonical placement-owner affinity
++ * score constants (challenger must beat an incumbent by more than the
++ * incumbent movement-cost margin), and must change nothing for entities
++ * without preferDataAffinity.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {MovePlanner} from '../../src/rebalancer/move-planner.js';
++import {REBALANCER_ENTITY_TYPE}
++  from '../../src/rebalancer/rebalancer-constants.js';
++import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
++import {PLACEMENT_OWNER_DATA_AFFINITY_SCORE}
++  from '../../src/rebalancer/placement-owner-constants.js';
++import {isDataAffinityPlacementSuboptimal}
++  from '../../src/rebalancer/placement-owner-decision.js';
++
++const SERVICE_ID = 'svc-movielens-topn';
++
++function node(nodeId) {
++  return {node_id: nodeId, status: 'active'};
++}
++
++function replica(replicaId, nodeId) {
++  return {
++    service_id: replicaId,
++    replica_id: replicaId,
++    node_id: nodeId,
++    status: ReplicaStatus.ACTIVE,
++  };
++}
++
++function createMoveStateProvider(nodes, currentReplicas) {
++  return {
++    isLeader: true,
++    nodeId: 'node-0',
++    replicaId: `${SERVICE_ID}-r1`,
++    getAvailableNodes: () => nodes,
++    getCurrentReplicas: () => currentReplicas,
++    getHealthyReplicas: (replicas) =>
++      replicas.filter((row) => row.status === ReplicaStatus.ACTIVE),
++    getInFlightOperations: () => [],
++    getGlobalTopologyBlockingInFlightOperations: () => [],
++    getPartitionDescriptorEpochEvidence: () => null,
++    hasPendingMove: () => false,
++    hasPendingAddForNode: () => false,
++  };
++}
++
++function createRuntimeServicePlanner(nodes, currentReplicas) {
++  return new MovePlanner({
++    entityId: SERVICE_ID,
++    entityType: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
++    moveStateProvider: createMoveStateProvider(nodes, currentReplicas),
++  });
++}
++
++function affinityPolicy(nodeWeights, overrides = {}) {
++  return {
++    targetReplicaCount: 2,
++    placementConstraints: {
++      spreadAcrossNodes: true,
++      preferDataAffinity: true,
++      ...(overrides.placementConstraints || {}),
++    },
++    dataAffinity: {nodeWeights, groupWeights: {}},
++    ...overrides.policy,
++  };
++}
++
++// The exact live stall shape: replicas on node-1/node-2, data (and dominant
++// fresh attribution weight) on node-0/node-3/node-4.
++const STALL_NODES = ['node-0', 'node-1', 'node-2', 'node-3', 'node-4']
++  .map(node);
++const STALL_REPLICAS = [
++  replica(`${SERVICE_ID}-r1`, 'node-2'),
++  replica(`${SERVICE_ID}-r2`, 'node-1'),
++];
++const STALL_WEIGHTS = {'node-0': 3, 'node-3': 2, 'node-4': 2};
++
++test('the live stall shape is observed as suboptimal by the planner gate',
++  (t) => {
++    const planner = createRuntimeServicePlanner(STALL_NODES, STALL_REPLICAS);
++    const policy = affinityPolicy(STALL_WEIGHTS);
++    t.equal(
++      planner.isSuboptimalState(STALL_REPLICAS, policy, STALL_NODES),
++      true,
++      'count-correct, spread-correct placement off its data must trigger ' +
++      'a planning round',
++    );
++    const assessment = planner.assessState(
++      STALL_REPLICAS, policy, STALL_NODES,
++    );
++    t.equal(assessment.critical, false,
++      'the stall shape is suboptimal, not critical');
++    t.equal(assessment.suboptimal, true,
++      'assessState carries the affinity observation to evaluateState');
++    t.end();
++  });
++
++test('gradients below the incumbent movement-cost margin never trigger',
++  (t) => {
++    const planner = createRuntimeServicePlanner(STALL_NODES, STALL_REPLICAS);
++    // Challenger advantage of exactly the retention margin: incumbent
++    // node-1 has weight w, challenger has w + margin/NODE_AFFINITY_WEIGHT,
++    // so challengerScore == incumbentScore + retention - retention == tie.
++    const margin =
++      PLACEMENT_OWNER_DATA_AFFINITY_SCORE.INCUMBENT_MOVEMENT_COST /
++      PLACEMENT_OWNER_DATA_AFFINITY_SCORE.NODE_AFFINITY_WEIGHT;
++    const policy = affinityPolicy({
++      'node-1': 1,
++      'node-2': 1,
++      'node-0': 1 + margin,
++    });
++    t.equal(
++      planner.isSuboptimalState(STALL_REPLICAS, policy, STALL_NODES),
++      false,
++      'a challenger that does not strictly beat the retention margin is ' +
++      'hysteresis-retained, preventing churn',
++    );
++    t.end();
++  });
++
++test('entities without preferDataAffinity evaluate byte-identically', (t) => {
++  const planner = createRuntimeServicePlanner(STALL_NODES, STALL_REPLICAS);
++  const policy = affinityPolicy(STALL_WEIGHTS, {
++    placementConstraints: {preferDataAffinity: false},
++  });
++  t.equal(
++    planner.isSuboptimalState(STALL_REPLICAS, policy, STALL_NODES),
++    false,
++    'without the constraint the observer is inert',
++  );
++  t.equal(
++    planner.isSuboptimalState(
++      STALL_REPLICAS,
++      {targetReplicaCount: 2, placementConstraints: {spreadAcrossNodes: true}},
++      STALL_NODES,
++    ),
++    false,
++    'a policy with no affinity surface at all stays exactly as before',
++  );
++  t.end();
++});
++
++test('incumbents already on the dominant data nodes stay put', (t) => {
++  const placedReplicas = [
++    replica(`${SERVICE_ID}-r1`, 'node-0'),
++    replica(`${SERVICE_ID}-r2`, 'node-3'),
++  ];
++  const planner = createRuntimeServicePlanner(STALL_NODES, placedReplicas);
++  t.equal(
++    planner.isSuboptimalState(
++      placedReplicas, affinityPolicy(STALL_WEIGHTS), STALL_NODES,
++    ),
++    false,
++    'converged placement is not re-triggered',
++  );
++  t.end();
++});
++
++test('observer helper edge cases fail closed', (t) => {
++  t.equal(
++    isDataAffinityPlacementSuboptimal(
++      affinityPolicy({}), STALL_REPLICAS, STALL_NODES,
++    ),
++    false,
++    'empty weights never trigger',
++  );
++  t.equal(
++    isDataAffinityPlacementSuboptimal(
++      affinityPolicy(STALL_WEIGHTS), [], STALL_NODES,
++    ),
++    false,
++    'no incumbents means initial placement owns the decision, not the ' +
++    'observer',
++  );
++  t.equal(
++    isDataAffinityPlacementSuboptimal(
++      affinityPolicy(STALL_WEIGHTS), STALL_REPLICAS, [],
++    ),
++    false,
++    'no ready challengers never triggers',
++  );
++  t.equal(
++    isDataAffinityPlacementSuboptimal(
++      affinityPolicy(STALL_WEIGHTS),
++      STALL_REPLICAS,
++      STALL_REPLICAS.map((row) => node(row.node_id)),
++    ),
++    false,
++    'ready set covering only incumbent nodes never triggers',
++  );
++  t.end();
++});
