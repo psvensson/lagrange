@@ -1,0 +1,365 @@
+diff --git a/src/control-plane/replica-dispatch-operation-queue-context.js b/src/control-plane/replica-dispatch-operation-queue-context.js
+index ed42de04666d760359927bb480ead4e4fe972970..4c9d91e9a7c2af8ed37efa1806eb0edb47939cc3 100644
+--- a/src/control-plane/replica-dispatch-operation-queue-context.js
++++ b/src/control-plane/replica-dispatch-operation-queue-context.js
+@@ -27,6 +27,71 @@ function resolveQueuedOperationDispatchContext(queue, ownerKey) {
+   );
+ }
+ 
++/**
++ * Project only canonical progress evidence for a deferred dispatch retry.
++ * Ordinary dispatch metadata is reconstructed by its existing retry owner.
++ *
++ * @param {Object|null} context
++ * @return {Object|null}
++ */
++function extractOperationDispatchProgressContext(context) {
++  if (
++    context?.[ControlPlaneField.HANDOFF_MODE] !==
++      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
++  ) {
++    return null;
++  }
++  return {
++    [ControlPlaneField.HANDOFF_MODE]:
++      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++  };
++}
++
++/**
++ * Merge a repeated deferral into the operation's existing retry owner slot.
++ *
++ * @param {Object} input
++ * @return {boolean}
++ */
++function updateExistingOperationDispatchDeferredRetry(input) {
++  const {
++    deferredContext,
++    desiredAttemptAt,
++    errorMessage,
++    existing,
++    operationId,
++    refreshRowBeforeDispatch,
++    retryAfterMs,
++    row,
++    service,
++  } = input;
++  existing.errorMessage = errorMessage;
++  existing.context = deferredContext;
++  if (row) {
++    existing.row = service.cloneDeferredOperationDispatchRow(row);
++  }
++  if (refreshRowBeforeDispatch) {
++    existing[
++      REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
++    ] = true;
++  }
++  if (desiredAttemptAt < existing.nextAttemptAt) {
++    if (existing.timeoutHandle) {
++      service.clearTimeoutFn(existing.timeoutHandle);
++    }
++    existing.nextAttemptAt = desiredAttemptAt;
++    existing.timeoutHandle = service.armDeferredOperationDispatchRetry(
++      operationId,
++      retryAfterMs,
++    );
++  }
++  service.recordWorkflowOwnerOperationDispatchDeferredRetry(
++    operationId,
++    existing,
++  );
++  return true;
++}
++
+ /**
+  * Merge coalesced operation-dispatch context monotonically. A target
+  * executor-outcome wake is stronger than an ordinary dispatch request and
+@@ -124,4 +189,7 @@ function buildOperationDispatchQueueFacade(service) {
+ 
+ export {
+   buildOperationDispatchQueueFacade,
++  extractOperationDispatchProgressContext,
++  mergeOperationDispatchReconcileContext,
++  updateExistingOperationDispatchDeferredRetry,
+ };
+diff --git a/src/control-plane/replica-dispatch-retry-scheduling.js b/src/control-plane/replica-dispatch-retry-scheduling.js
+index c4dd70c6b4eb5e7cd5274e8e1c56282da024056d..e9f40adbaa3097a0c482c071624fe49813beb810 100644
+--- a/src/control-plane/replica-dispatch-retry-scheduling.js
++++ b/src/control-plane/replica-dispatch-retry-scheduling.js
+@@ -2,6 +2,11 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
+ import {
+   ReplicaDispatchReplayHealthReadiness,
+ } from './replica-dispatch-replay-health-readiness.js';
++import {
++  extractOperationDispatchProgressContext,
++  mergeOperationDispatchReconcileContext,
++  updateExistingOperationDispatchDeferredRetry,
++} from './replica-dispatch-operation-queue-context.js';
+ 
+ const {
+   ControlPlaneField,
+@@ -22,6 +27,10 @@ const {
+   isRetryableControlPlaneError,
+ } = REPLICA_DISPATCH_SERVICE_SHARED;
+ 
++function canDeferOperationDispatchRetry(operationId, errorLike) {
++  return Boolean(operationId) && isRetryableControlPlaneError(errorLike);
++}
++
+ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadiness {
+   /**
+    * Normalize operation-dispatch queue shard count to a safe positive integer.
+@@ -190,13 +199,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
+    * @return {boolean}
+    * @private
+    */
+-  deferOperationDispatchRetry(
+-    operationId,
+-    errorLike,
+-    row = null,
+-    options = {},
+-  ) {
+-    if (!operationId || !isRetryableControlPlaneError(errorLike)) {
++  deferOperationDispatchRetry(operationId, errorLike, row = null, options = {}) {
++    if (!canDeferOperationDispatchRetry(operationId, errorLike)) {
+       return false;
+     }
+     const retryAfterMs = this.resolveOperationDispatchRetryAfterMs(errorLike);
+@@ -207,34 +211,26 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
+         REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+       ] === true;
+     const existing = this.operationDispatchDeferredRetries.get(operationId);
++    const deferredContext = mergeOperationDispatchReconcileContext(
++      existing?.context,
++      extractOperationDispatchProgressContext(options),
++    );
+     if (existing) {
+-      existing.errorMessage = errorMessage;
+-      if (row) {
+-        existing.row = this.cloneDeferredOperationDispatchRow(row);
+-      }
+-      if (refreshRowBeforeDispatch) {
+-        existing[
+-          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+-        ] = true;
+-      }
+-      if (desiredAttemptAt < existing.nextAttemptAt) {
+-        if (existing.timeoutHandle) {
+-          this.clearTimeoutFn(existing.timeoutHandle);
+-        }
+-        existing.nextAttemptAt = desiredAttemptAt;
+-        existing.timeoutHandle = this.armDeferredOperationDispatchRetry(
+-          operationId,
+-          retryAfterMs,
+-        );
+-      }
+-      this.recordWorkflowOwnerOperationDispatchDeferredRetry(
+-        operationId,
++      return updateExistingOperationDispatchDeferredRetry({
++        deferredContext,
++        desiredAttemptAt,
++        errorMessage,
+         existing,
+-      );
+-      return true;
++        operationId,
++        refreshRowBeforeDispatch,
++        retryAfterMs,
++        row,
++        service: this,
++      });
+     }
+ 
+     const deferredRetry = {
++      context: deferredContext,
+       errorMessage,
+       nextAttemptAt: desiredAttemptAt,
+       row: row ? this.cloneDeferredOperationDispatchRow(row) : null,
+@@ -296,7 +292,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
+       const row = deferredRetry?.row ?
+         this.cloneDeferredOperationDispatchRow(deferredRetry.row) :
+         null;
+-      const context = row ? {row} : {};
++      const context = mergeOperationDispatchReconcileContext(
++        deferredRetry?.context,
++        row ? {row} : null,
++      ) || {};
+       if (
+         options?.[
+           REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+@@ -400,6 +399,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
+     if (row) {
+       deferredRetry.row = this.cloneDeferredOperationDispatchRow(row);
+     }
++    deferredRetry.context = mergeOperationDispatchReconcileContext(
++      deferredRetry.context,
++      extractOperationDispatchProgressContext(options),
++    );
+     if (
+       options?.[
+         REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+diff --git a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+index 974dd7304301d6b719748da4bd0444034231f9b8..7168b128f5450574abd798ce0773182ba01c319b 100644
+--- a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
++++ b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+@@ -38,6 +38,7 @@ const TARGET_NODE_ID = 'node-2';
+ const OPERATION_ID = 'runtime-service-target-progress-wake';
+ const SERVICE_ID = 'svc-movielens-topn';
+ const REPLICA_ID = `${SERVICE_ID}-r2`;
++const TARGET_PROGRESS_RETRY_AFTER_MS = 25;
+ const {
+   REPLICA_DISPATCH_SERVICE_LITERAL,
+ } = REPLICA_DISPATCH_SERVICE_SHARED;
+@@ -140,6 +141,152 @@ test(
+   },
+ );
+ 
++test(
++  'target-progress ingress retains its owner mode across a retryable reconcile',
++  async (t) => {
++    initEnv();
++
++    const operationRow = buildRuntimeCreatingOperationRow({
++      operation_id: `${OPERATION_ID}-retry`,
++    });
++    const activeServiceRow = {
++      service_id: REPLICA_ID,
++      service_type: 'runtime_service',
++      node_id: TARGET_NODE_ID,
++      status: ReplicaStatus.ACTIVE,
++      created_at: 1700000000510,
++      updated_at: 1700000000514,
++    };
++    const sourceCoordinator = createTestCoordinator({
++      nodeId: SOURCE_NODE_ID,
++      cacheData: {
++        services: [activeServiceRow],
++        replicaOperations: [operationRow],
++      },
++      cdcIntegrationService: {
++        async insertSystemTableRow() {
++          return {success: true};
++        },
++        async updateSystemTableRow() {
++          return {success: true};
++        },
++        async refreshAuthoritativeCacheRow() {
++          return true;
++        },
++      },
++      sqlQueryResults: {
++        'FROM services WHERE service_id = ?': {
++          success: true,
++          rows: [activeServiceRow],
++        },
++      },
++    });
++    const dispatchOperation =
++      sourceCoordinator.dispatchOperation.bind(sourceCoordinator);
++    let dispatchCallCount = 0;
++    sourceCoordinator.dispatchOperation = async (...args) => {
++      dispatchCallCount += 1;
++      if (dispatchCallCount === 1) {
++        const retryableError =
++          new Error('source owner visibility is temporarily unavailable');
++        retryableError.retryAfterMs = TARGET_PROGRESS_RETRY_AFTER_MS;
++        throw retryableError;
++      }
++      return dispatchOperation(...args);
++    };
++    const deferredTimers = [];
++    const registeredHandlers = new Map();
++    const sourceDispatch = createService({
++      messageRouter: {
++        register(address, handler) {
++          registeredHandlers.set(address, handler);
++        },
++        unregister(address) {
++          registeredHandlers.delete(address);
++        },
++      },
++      cdcIntegrationService: {
++        updateSystemTableRow: async () => ({success: true}),
++        upsertSystemTableRow: async () => ({success: true}),
++      },
++      rebalanceCoordinator: sourceCoordinator,
++      setTimeoutFn(callback, delayMs) {
++        const timerHandle = {callback, delayMs};
++        deferredTimers.push(timerHandle);
++        return timerHandle;
++      },
++      clearTimeoutFn(timerHandle) {
++        timerHandle.cleared = true;
++      },
++    });
++
++    try {
++      const ingressHandler = registeredHandlers.get(
++        `${SOURCE_NODE_ID}/service/replica-dispatch`,
++      );
++      const ingressResult = await ingressHandler({
++        payload: {
++          type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++          [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
++          [ControlPlaneField.OPERATION_ROW]: operationRow,
++          [ControlPlaneField.HANDOFF_MODE]:
++            COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++        },
++      });
++      await drainOperationDispatchQueue(sourceDispatch);
++
++      t.equal(
++        ingressResult?.acknowledged,
++        true,
++        'registered transport ingress should acknowledge the marked wake',
++      );
++      t.equal(
++        dispatchCallCount,
++        1,
++        'the first marked owner reconcile should reach the retryable failure',
++      );
++      t.equal(
++        deferredTimers.length,
++        1,
++        'the retryable reconcile should arm the existing deferred retry',
++      );
++      t.equal(
++        sourceDispatch.operationDispatchDeferredRetries.get(
++          operationRow.operation_id,
++        )?.context?.[ControlPlaneField.HANDOFF_MODE],
++        COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++        'the deferred owner slot should retain target-progress evidence',
++      );
++
++      await deferredTimers[0].callback();
++      await drainOperationDispatchQueue(sourceDispatch);
++
++      const completedOperation =
++        await sourceCoordinator.repository.queryOperationById(
++          operationRow.operation_id,
++        );
++      t.equal(
++        dispatchCallCount,
++        2,
++        'the deferred wake should re-enter the marked owner reconcile',
++      );
++      t.equal(
++        completedOperation?.workflowStep,
++        WORKFLOW_STEP.ACTIVE,
++        'the retried wake should complete from exact target ACTIVE proof',
++      );
++      t.equal(
++        completedOperation?.status,
++        ReplicaStatus.ACTIVE,
++        'the source-owned durable operation should become ACTIVE after retry',
++      );
++    } finally {
++      sourceDispatch.stop();
++      await sourceCoordinator.shutdown();
++    }
++  },
++);
++
+ test(
+   'target-progress wake survives an ordinary coalesced dispatch request',
+   async (t) => {

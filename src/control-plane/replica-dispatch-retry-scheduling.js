@@ -2,6 +2,11 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 import {
   ReplicaDispatchReplayHealthReadiness,
 } from './replica-dispatch-replay-health-readiness.js';
+import {
+  extractOperationDispatchProgressContext,
+  mergeOperationDispatchReconcileContext,
+  updateExistingOperationDispatchDeferredRetry,
+} from './replica-dispatch-operation-queue-context.js';
 
 const {
   ControlPlaneField,
@@ -21,6 +26,10 @@ const {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+function canDeferOperationDispatchRetry(operationId, errorLike) {
+  return Boolean(operationId) && isRetryableControlPlaneError(errorLike);
+}
 
 class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadiness {
   /**
@@ -190,13 +199,8 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    * @return {boolean}
    * @private
    */
-  deferOperationDispatchRetry(
-    operationId,
-    errorLike,
-    row = null,
-    options = {},
-  ) {
-    if (!operationId || !isRetryableControlPlaneError(errorLike)) {
+  deferOperationDispatchRetry(operationId, errorLike, row = null, options = {}) {
+    if (!canDeferOperationDispatchRetry(operationId, errorLike)) {
       return false;
     }
     const retryAfterMs = this.resolveOperationDispatchRetryAfterMs(errorLike);
@@ -207,34 +211,26 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
         REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
       ] === true;
     const existing = this.operationDispatchDeferredRetries.get(operationId);
+    const deferredContext = mergeOperationDispatchReconcileContext(
+      existing?.context,
+      extractOperationDispatchProgressContext(options),
+    );
     if (existing) {
-      existing.errorMessage = errorMessage;
-      if (row) {
-        existing.row = this.cloneDeferredOperationDispatchRow(row);
-      }
-      if (refreshRowBeforeDispatch) {
-        existing[
-          REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
-        ] = true;
-      }
-      if (desiredAttemptAt < existing.nextAttemptAt) {
-        if (existing.timeoutHandle) {
-          this.clearTimeoutFn(existing.timeoutHandle);
-        }
-        existing.nextAttemptAt = desiredAttemptAt;
-        existing.timeoutHandle = this.armDeferredOperationDispatchRetry(
-          operationId,
-          retryAfterMs,
-        );
-      }
-      this.recordWorkflowOwnerOperationDispatchDeferredRetry(
-        operationId,
+      return updateExistingOperationDispatchDeferredRetry({
+        deferredContext,
+        desiredAttemptAt,
+        errorMessage,
         existing,
-      );
-      return true;
+        operationId,
+        refreshRowBeforeDispatch,
+        retryAfterMs,
+        row,
+        service: this,
+      });
     }
 
     const deferredRetry = {
+      context: deferredContext,
       errorMessage,
       nextAttemptAt: desiredAttemptAt,
       row: row ? this.cloneDeferredOperationDispatchRow(row) : null,
@@ -296,7 +292,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
       const row = deferredRetry?.row ?
         this.cloneDeferredOperationDispatchRow(deferredRetry.row) :
         null;
-      const context = row ? {row} : {};
+      const context = mergeOperationDispatchReconcileContext(
+        deferredRetry?.context,
+        row ? {row} : null,
+      ) || {};
       if (
         options?.[
           REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
@@ -400,6 +399,10 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
     if (row) {
       deferredRetry.row = this.cloneDeferredOperationDispatchRow(row);
     }
+    deferredRetry.context = mergeOperationDispatchReconcileContext(
+      deferredRetry.context,
+      extractOperationDispatchProgressContext(options),
+    );
     if (
       options?.[
         REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH

@@ -28,6 +28,71 @@ function resolveQueuedOperationDispatchContext(queue, ownerKey) {
 }
 
 /**
+ * Project only canonical progress evidence for a deferred dispatch retry.
+ * Ordinary dispatch metadata is reconstructed by its existing retry owner.
+ *
+ * @param {Object|null} context
+ * @return {Object|null}
+ */
+function extractOperationDispatchProgressContext(context) {
+  if (
+    context?.[ControlPlaneField.HANDOFF_MODE] !==
+      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
+  ) {
+    return null;
+  }
+  return {
+    [ControlPlaneField.HANDOFF_MODE]:
+      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+  };
+}
+
+/**
+ * Merge a repeated deferral into the operation's existing retry owner slot.
+ *
+ * @param {Object} input
+ * @return {boolean}
+ */
+function updateExistingOperationDispatchDeferredRetry(input) {
+  const {
+    deferredContext,
+    desiredAttemptAt,
+    errorMessage,
+    existing,
+    operationId,
+    refreshRowBeforeDispatch,
+    retryAfterMs,
+    row,
+    service,
+  } = input;
+  existing.errorMessage = errorMessage;
+  existing.context = deferredContext;
+  if (row) {
+    existing.row = service.cloneDeferredOperationDispatchRow(row);
+  }
+  if (refreshRowBeforeDispatch) {
+    existing[
+      REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+    ] = true;
+  }
+  if (desiredAttemptAt < existing.nextAttemptAt) {
+    if (existing.timeoutHandle) {
+      service.clearTimeoutFn(existing.timeoutHandle);
+    }
+    existing.nextAttemptAt = desiredAttemptAt;
+    existing.timeoutHandle = service.armDeferredOperationDispatchRetry(
+      operationId,
+      retryAfterMs,
+    );
+  }
+  service.recordWorkflowOwnerOperationDispatchDeferredRetry(
+    operationId,
+    existing,
+  );
+  return true;
+}
+
+/**
  * Merge coalesced operation-dispatch context monotonically. A target
  * executor-outcome wake is stronger than an ordinary dispatch request and
  * must survive later CDC or retry enqueues for the same owner key. Row data
@@ -124,4 +189,7 @@ function buildOperationDispatchQueueFacade(service) {
 
 export {
   buildOperationDispatchQueueFacade,
+  extractOperationDispatchProgressContext,
+  mergeOperationDispatchReconcileContext,
+  updateExistingOperationDispatchDeferredRetry,
 };

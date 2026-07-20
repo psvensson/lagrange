@@ -38,6 +38,7 @@ const TARGET_NODE_ID = 'node-2';
 const OPERATION_ID = 'runtime-service-target-progress-wake';
 const SERVICE_ID = 'svc-movielens-topn';
 const REPLICA_ID = `${SERVICE_ID}-r2`;
+const TARGET_PROGRESS_RETRY_AFTER_MS = 25;
 const {
   REPLICA_DISPATCH_SERVICE_LITERAL,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -136,6 +137,152 @@ test(
       );
     } finally {
       service.stop();
+    }
+  },
+);
+
+test(
+  'target-progress ingress retains its owner mode across a retryable reconcile',
+  async (t) => {
+    initEnv();
+
+    const operationRow = buildRuntimeCreatingOperationRow({
+      operation_id: `${OPERATION_ID}-retry`,
+    });
+    const activeServiceRow = {
+      service_id: REPLICA_ID,
+      service_type: 'runtime_service',
+      node_id: TARGET_NODE_ID,
+      status: ReplicaStatus.ACTIVE,
+      created_at: 1700000000510,
+      updated_at: 1700000000514,
+    };
+    const sourceCoordinator = createTestCoordinator({
+      nodeId: SOURCE_NODE_ID,
+      cacheData: {
+        services: [activeServiceRow],
+        replicaOperations: [operationRow],
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+        async updateSystemTableRow() {
+          return {success: true};
+        },
+        async refreshAuthoritativeCacheRow() {
+          return true;
+        },
+      },
+      sqlQueryResults: {
+        'FROM services WHERE service_id = ?': {
+          success: true,
+          rows: [activeServiceRow],
+        },
+      },
+    });
+    const dispatchOperation =
+      sourceCoordinator.dispatchOperation.bind(sourceCoordinator);
+    let dispatchCallCount = 0;
+    sourceCoordinator.dispatchOperation = async (...args) => {
+      dispatchCallCount += 1;
+      if (dispatchCallCount === 1) {
+        const retryableError =
+          new Error('source owner visibility is temporarily unavailable');
+        retryableError.retryAfterMs = TARGET_PROGRESS_RETRY_AFTER_MS;
+        throw retryableError;
+      }
+      return dispatchOperation(...args);
+    };
+    const deferredTimers = [];
+    const registeredHandlers = new Map();
+    const sourceDispatch = createService({
+      messageRouter: {
+        register(address, handler) {
+          registeredHandlers.set(address, handler);
+        },
+        unregister(address) {
+          registeredHandlers.delete(address);
+        },
+      },
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: sourceCoordinator,
+      setTimeoutFn(callback, delayMs) {
+        const timerHandle = {callback, delayMs};
+        deferredTimers.push(timerHandle);
+        return timerHandle;
+      },
+      clearTimeoutFn(timerHandle) {
+        timerHandle.cleared = true;
+      },
+    });
+
+    try {
+      const ingressHandler = registeredHandlers.get(
+        `${SOURCE_NODE_ID}/service/replica-dispatch`,
+      );
+      const ingressResult = await ingressHandler({
+        payload: {
+          type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+          [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
+          [ControlPlaneField.OPERATION_ROW]: operationRow,
+          [ControlPlaneField.HANDOFF_MODE]:
+            COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+        },
+      });
+      await drainOperationDispatchQueue(sourceDispatch);
+
+      t.equal(
+        ingressResult?.acknowledged,
+        true,
+        'registered transport ingress should acknowledge the marked wake',
+      );
+      t.equal(
+        dispatchCallCount,
+        1,
+        'the first marked owner reconcile should reach the retryable failure',
+      );
+      t.equal(
+        deferredTimers.length,
+        1,
+        'the retryable reconcile should arm the existing deferred retry',
+      );
+      t.equal(
+        sourceDispatch.operationDispatchDeferredRetries.get(
+          operationRow.operation_id,
+        )?.context?.[ControlPlaneField.HANDOFF_MODE],
+        COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+        'the deferred owner slot should retain target-progress evidence',
+      );
+
+      await deferredTimers[0].callback();
+      await drainOperationDispatchQueue(sourceDispatch);
+
+      const completedOperation =
+        await sourceCoordinator.repository.queryOperationById(
+          operationRow.operation_id,
+        );
+      t.equal(
+        dispatchCallCount,
+        2,
+        'the deferred wake should re-enter the marked owner reconcile',
+      );
+      t.equal(
+        completedOperation?.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the retried wake should complete from exact target ACTIVE proof',
+      );
+      t.equal(
+        completedOperation?.status,
+        ReplicaStatus.ACTIVE,
+        'the source-owned durable operation should become ACTIVE after retry',
+      );
+    } finally {
+      sourceDispatch.stop();
+      await sourceCoordinator.shutdown();
     }
   },
 );
