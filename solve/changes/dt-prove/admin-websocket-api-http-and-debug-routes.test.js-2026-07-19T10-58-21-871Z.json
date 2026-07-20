@@ -1,0 +1,16 @@
+{
+  "test": "test/admin/admin-websocket-api-http-and-debug-routes.test.js",
+  "src": [
+    "src/admin/admin-authoritative-repair-policy.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-19T10:58:21.816Z"
+}

@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: partition-live-leader-address-routing
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: executor-active-services-cache-handoff-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T10-30-41-823Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for executor-active-services-cache-handoff-main
-- No longer current: Do not debug the established recovery-driven ACTIVE handoff first; the deterministic reproduction isolates the missing decision to the direct executor-outcome COMPLETE branch.; Do not treat attempt 1 as lacking red-on-revert, retry-retention, ADD/REPLACE, remote-owner, or non-partition verification; the verifier reproduced the intended seven-failure old-runtime mechanism and passed 497 focused, adjacent, and safety assertions.
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for executor-active-services-cache-handoff-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 5
@@ -41,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **executor-active-services-cache-handoff-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **executor-active-services-cache-handoff-main** [parked {exhausted}] rung 1, attempts 1, metric 1 -> 1 — Sealed handoff symptom absent on HEAD (fresh unchanged live run: spread gaps 0, stability held); residual cache_stale_watermark failure is owned by the delegated successor of movielens-observation-watermark-churn-consolidation per the recorded ownership decision — no honest remaining move within this seal
 
 ## Findings
 - **executor-active-services-cache-handoff-main**: inherited from partition-live-leader-address-routing: Current HEAD reproduces the live mechanism through the real PartitionService leader-change and routed-write path: the Raft transition normalizes a newly elected unified leader to a bare replica ID, then handleRemoteQuery fails in buildPeerAddress when that replica is absent from SERVICES and bootstrap peers; the focused test is red at the exact resolution error while 96 pre-existing assertions remain green. (rules out: replica creation failure; canonical SERVICES persistence failure; raising the live wait; adding a generic bootstrap-hint fallback) [test/partition/partition-service.test.js]
@@ -49,6 +32,7 @@
 - **executor-active-services-cache-handoff-main**: On current HEAD, a direct REPLICA_CREATE_ACTIVE outcome for a locally owned priority REPLACE bypasses confirmActiveReplicaTerminalHandoff: it invokes source-retirement continuation while the exact planning-cache SERVICES row remains SYNCING, and retains neither executor-outcome retry evidence nor a cache-handoff wake-up. (rules out: Do not debug the established recovery-driven ACTIVE handoff first; the deterministic reproduction isolates the missing decision to the direct executor-outcome COMPLETE branch.) [solve/changes/executor-active-services-cache-handoff/repro-on-head-2026-07-19.md]
 - **executor-active-services-cache-handoff-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-19T09-57-45-554Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T09-57-45-554Z.report.json]
 - **executor-active-services-cache-handoff-main**: Independent verification approved the exact attempt: direct partition ACTIVE ADD/REPLACE completion now shares recovery-owned authoritative SERVICES cache handoff; failed alignment retains both retry owners and cannot retire a REPLACE source, successful alignment consumes the outcome, and remote/non-partition behavior remains unchanged. (rules out: Do not treat attempt 1 as lacking red-on-revert, retry-retention, ADD/REPLACE, remote-owner, or non-partition verification; the verifier reproduced the intended seven-failure old-runtime mechanism and passed 497 focused, adjacent, and safety assertions.) [subagent:verify_active_services_handoff_attempt1]
+- **executor-active-services-cache-handoff-main**: Fresh unchanged live evidence confirms attempt 1 closed the executor-owned replica_operations spread gap: totalSpreadGap=0, prioritySpreadGap=0, no blocked priority partitions, and the topology stability window held. The residual FAIL moved to the pre-existing authoritative-observation owner: cache_stale_watermark recurs despite successful nine-table repairs because stale-only preflight consumes only service_endpoints freshness while scheduling the slower default full repair set. [solve/changes/executor-active-services-cache-handoff/post-attempt-1-live-blocker-attribution-2026-07-19.md]
 
 ## Theories
 _(none recorded)_

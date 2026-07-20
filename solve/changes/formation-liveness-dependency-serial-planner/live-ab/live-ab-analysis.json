@@ -1,0 +1,630 @@
+{
+  "schemaVersion": "formation-liveness-live-ab-analysis-v1",
+  "question": "Does the narrow nodes-p1 formation-liveness dependency advance the real MovieLens boundary without the broad-priority experiment’s matched-window error, nodes-warning, or in-flight amplification?",
+  "comparisonContract": {
+    "minimumMeasuringSamplesPerArm": 2,
+    "interleaving": [
+      "fixed-1",
+      "reverted-1",
+      "fixed-2",
+      "reverted-2"
+    ],
+    "matchedFormationWindowMsPerSample": 180000,
+    "nodesWarningDefinition": "structured level-40 event whose JSON contains exact nodes-p1",
+    "errorDefinition": "all structured level-50 events",
+    "caveat": "Raw totals are retained, but fixed runs execute 4.266x more wall-clock work because both reverted runs fail before load. Safety therefore uses the equal first-180-second window and full-run rates."
+  },
+  "samples": [
+    {
+      "id": "fixed-1",
+      "arm": "fixed",
+      "measuring": true,
+      "sourceStable": true,
+      "preTempC": 67.85,
+      "postTempC": 69,
+      "sourceIdentity": {
+        "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+        "sourceFingerprint": "8a64ad4bd3d98636",
+        "sourceDeltaSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "outcome": {
+        "passed": false,
+        "error": "service replicas were not initially placed",
+        "schemaAdmission": {
+          "admitted": true,
+          "state": "admitted",
+          "canonicalBlocker": null,
+          "finalObservedEffectiveInFlightCount": 0,
+          "maxObservedEffectiveInFlightCount": 4
+        },
+        "preloadAdmission": {
+          "admitted": true,
+          "loadLaneAdmitted": true
+        }
+      },
+      "logCensus": {
+        "structuredLogEvents": 37134,
+        "firstTime": "2026-07-19T23:38:39.103Z",
+        "lastTime": "2026-07-19T23:55:49.139Z",
+        "durationMs": 1030036,
+        "level30": 26071,
+        "level40": 5955,
+        "level50": 5108,
+        "nodesP1Level40": 457,
+        "ackTimeoutPeerAliveSkips": 1831,
+        "level50PerMinute": 297.543,
+        "nodesP1Level40PerMinute": 26.6204,
+        "matchedFormationWindow": {
+          "durationMs": 180000,
+          "level30": 6732,
+          "level40": 1390,
+          "level50": 29,
+          "nodesP1Level40": 61,
+          "ackTimeoutPeerAliveSkips": 806,
+          "topLevel50Messages": [
+            {
+              "message": "Parallel query execution failed",
+              "count": 25
+            },
+            {
+              "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+              "count": 3
+            },
+            {
+              "message": "Query execution failed",
+              "count": 1
+            }
+          ],
+          "topNodesP1Level40Messages": [
+            {
+              "message": "Skipping ACK-timeout quarantine: peer demonstrably alive (slow, not dead)",
+              "count": 58
+            },
+            {
+              "message": "Failed to update system table row",
+              "count": 3
+            }
+          ]
+        },
+        "topLevel50Messages": [
+          {
+            "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+            "count": 2127
+          },
+          {
+            "message": "WebSocket error",
+            "count": 1175
+          },
+          {
+            "message": "Reconnection failed",
+            "count": 1175
+          },
+          {
+            "message": "Failed to rollback transaction",
+            "count": 276
+          },
+          {
+            "message": "Parallel query execution failed",
+            "count": 137
+          },
+          {
+            "message": "Query execution failed",
+            "count": 88
+          },
+          {
+            "message": "Failed to deliver CDC event",
+            "count": 41
+          },
+          {
+            "message": "Replica local durability is unfit for leadership: writes are not reaching durable storage (stuck transaction or commit/durable divergence); shedding leadership if a viable successor exists",
+            "count": 20
+          },
+          {
+            "message": "Operation failed",
+            "count": 20
+          },
+          {
+            "message": "Durability-unfit leader demoted WITHOUT a provable successor: the bounded fallback expired with no follower ack inside the viability window. Holding the seat forever starves the very ack evidence the viability probe needs (self-sustaining unfit-leader deadlock); demotion opens the role-gated stuck-transaction heal",
+            "count": 15
+          },
+          {
+            "message": "Failed to persist state to CDC",
+            "count": 13
+          },
+          {
+            "message": "Failed to update replica status via CDC",
+            "count": 12
+          }
+        ],
+        "topNodesP1Level40Messages": [
+          {
+            "message": "Skipping ACK-timeout quarantine: peer demonstrably alive (slow, not dead)",
+            "count": 424
+          },
+          {
+            "message": "Partition routing candidates filtered by readiness",
+            "count": 7
+          },
+          {
+            "message": "Buffered CDC replay failed",
+            "count": 7
+          },
+          {
+            "message": "Failed to update system table row",
+            "count": 5
+          },
+          {
+            "message": "CDC event buffered for retry after delivery failure",
+            "count": 5
+          },
+          {
+            "message": "Canonical partition leader service missing",
+            "count": 5
+          },
+          {
+            "message": "Partition size persistence failed",
+            "count": 1
+          },
+          {
+            "message": "Canonical partition leader metadata missing",
+            "count": 1
+          },
+          {
+            "message": "Diagnosed cache visibility gap from authoritative system table read",
+            "count": 1
+          },
+          {
+            "message": "Managed split execution deferred",
+            "count": 1
+          }
+        ]
+      },
+      "evidence": {
+        "sample": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/fixed-1.sample.json",
+        "reportSha256": "1a0b434f8d23948672dd5d5f60b268f9ee5486eaa6b4ee5c1f7af298cdcb58e2",
+        "archiveSha256": "d50de640833baef63d0d6378659965f505c9a7bbfe237f18c2cb3f2855736d54"
+      }
+    },
+    {
+      "id": "fixed-2",
+      "arm": "fixed",
+      "measuring": true,
+      "sourceStable": true,
+      "preTempC": 67.85,
+      "postTempC": 67.85,
+      "sourceIdentity": {
+        "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+        "sourceFingerprint": "8a64ad4bd3d98636",
+        "sourceDeltaSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "outcome": {
+        "passed": false,
+        "error": "service replicas were not initially placed",
+        "schemaAdmission": {
+          "admitted": true,
+          "state": "admitted",
+          "canonicalBlocker": null,
+          "finalObservedEffectiveInFlightCount": 0,
+          "maxObservedEffectiveInFlightCount": 5
+        },
+        "preloadAdmission": {
+          "admitted": true,
+          "loadLaneAdmitted": true
+        }
+      },
+      "logCensus": {
+        "structuredLogEvents": 22932,
+        "firstTime": "2026-07-19T23:59:58.125Z",
+        "lastTime": "2026-07-20T00:13:54.525Z",
+        "durationMs": 836400,
+        "level30": 20242,
+        "level40": 2247,
+        "level50": 443,
+        "nodesP1Level40": 18,
+        "ackTimeoutPeerAliveSkips": 211,
+        "level50PerMinute": 31.7791,
+        "nodesP1Level40PerMinute": 1.2912,
+        "matchedFormationWindow": {
+          "durationMs": 180000,
+          "level30": 6986,
+          "level40": 658,
+          "level50": 18,
+          "nodesP1Level40": 10,
+          "ackTimeoutPeerAliveSkips": 174,
+          "topLevel50Messages": [
+            {
+              "message": "Parallel query execution failed",
+              "count": 9
+            },
+            {
+              "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+              "count": 9
+            }
+          ],
+          "topNodesP1Level40Messages": [
+            {
+              "message": "Skipping ACK-timeout quarantine: peer demonstrably alive (slow, not dead)",
+              "count": 10
+            }
+          ]
+        },
+        "topLevel50Messages": [
+          {
+            "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+            "count": 384
+          },
+          {
+            "message": "Parallel query execution failed",
+            "count": 18
+          },
+          {
+            "message": "WebSocket error",
+            "count": 12
+          },
+          {
+            "message": "Reconnection failed",
+            "count": 12
+          },
+          {
+            "message": "Failed to send message",
+            "count": 9
+          },
+          {
+            "message": "Query routing failed",
+            "count": 5
+          },
+          {
+            "message": "Failed to query operations from system table",
+            "count": 1
+          },
+          {
+            "message": "Observed replica progress transition failed",
+            "count": 1
+          },
+          {
+            "message": "Failed to persist operation",
+            "count": 1
+          }
+        ],
+        "topNodesP1Level40Messages": [
+          {
+            "message": "Skipping ACK-timeout quarantine: peer demonstrably alive (slow, not dead)",
+            "count": 13
+          },
+          {
+            "message": "Metadata publication CAS missed observed state; refreshing guard row from authority",
+            "count": 3
+          },
+          {
+            "message": "Deferred retryable replica operation transition failure",
+            "count": 1
+          },
+          {
+            "message": "Partition routing candidates filtered by readiness",
+            "count": 1
+          }
+        ]
+      },
+      "evidence": {
+        "sample": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/fixed-2.sample.json",
+        "reportSha256": "48839d000a83d7306bb337778d9970cab6c929fda825d1d4fee26bb3bf429959",
+        "archiveSha256": "ba879325c82c023f345232a29087f0de0f89b0c3b851f2b2414464b878254baa"
+      }
+    },
+    {
+      "id": "reverted-1",
+      "arm": "reverted",
+      "measuring": true,
+      "sourceStable": true,
+      "preTempC": 67.85,
+      "postTempC": 67.85,
+      "sourceIdentity": {
+        "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+        "sourceFingerprint": "c932781c41a19486",
+        "sourceDeltaSha256": "4d6cc1b0a05c18984c557259f54c0fe1f448ee0a32cbb5065c06e9c93c7662d9"
+      },
+      "outcome": {
+        "passed": false,
+        "error": "Timed out waiting for 5 active nodes after 180000ms",
+        "schemaAdmission": {
+          "admitted": false,
+          "state": "not_observed",
+          "canonicalBlocker": null,
+          "finalObservedEffectiveInFlightCount": null,
+          "maxObservedEffectiveInFlightCount": null
+        },
+        "preloadAdmission": {
+          "admitted": false,
+          "loadLaneAdmitted": false
+        }
+      },
+      "logCensus": {
+        "structuredLogEvents": 11041,
+        "firstTime": "2026-07-19T23:56:09.374Z",
+        "lastTime": "2026-07-19T23:59:38.643Z",
+        "durationMs": 209269,
+        "level30": 8069,
+        "level40": 927,
+        "level50": 2045,
+        "nodesP1Level40": 14,
+        "ackTimeoutPeerAliveSkips": 40,
+        "level50PerMinute": 586.3267,
+        "nodesP1Level40PerMinute": 4.014,
+        "matchedFormationWindow": {
+          "durationMs": 180000,
+          "level30": 7353,
+          "level40": 836,
+          "level50": 48,
+          "nodesP1Level40": 6,
+          "ackTimeoutPeerAliveSkips": 40,
+          "topLevel50Messages": [
+            {
+              "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+              "count": 26
+            },
+            {
+              "message": "Raft CDC command failed",
+              "count": 6
+            },
+            {
+              "message": "Failed to deliver CDC event",
+              "count": 6
+            },
+            {
+              "message": "Node joining failed",
+              "count": 4
+            },
+            {
+              "message": "Invalid state transition attempted",
+              "count": 4
+            },
+            {
+              "message": "Parallel query execution failed",
+              "count": 2
+            }
+          ],
+          "topNodesP1Level40Messages": [
+            {
+              "message": "Out-of-order CDC event detected",
+              "count": 6
+            }
+          ]
+        },
+        "topLevel50Messages": [
+          {
+            "message": "WebSocket error",
+            "count": 991
+          },
+          {
+            "message": "Reconnection failed",
+            "count": 991
+          },
+          {
+            "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+            "count": 30
+          },
+          {
+            "message": "Failed to deliver CDC event",
+            "count": 16
+          },
+          {
+            "message": "Raft CDC command failed",
+            "count": 6
+          },
+          {
+            "message": "Node joining failed",
+            "count": 4
+          },
+          {
+            "message": "Invalid state transition attempted",
+            "count": 4
+          },
+          {
+            "message": "Parallel query execution failed",
+            "count": 2
+          },
+          {
+            "message": "Failed to update system table row",
+            "count": 1
+          }
+        ],
+        "topNodesP1Level40Messages": [
+          {
+            "message": "Out-of-order CDC event detected",
+            "count": 6
+          },
+          {
+            "message": "CDC event buffered for retry after delivery failure",
+            "count": 4
+          },
+          {
+            "message": "Failed to update system table row",
+            "count": 4
+          }
+        ]
+      },
+      "evidence": {
+        "sample": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/reverted-1.sample.json",
+        "reportSha256": "12fe5ca62a903474f244826b2f1eb66a72175b9d9d89190346b5750532888144",
+        "archiveSha256": "148e121f1739001f9822f3f7d8970e9db449eaf643c08dcfbfb7259ca8903b43"
+      }
+    },
+    {
+      "id": "reverted-2",
+      "arm": "reverted",
+      "measuring": true,
+      "sourceStable": true,
+      "preTempC": 67.85,
+      "postTempC": 67.85,
+      "sourceIdentity": {
+        "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+        "sourceFingerprint": "c932781c41a19486",
+        "sourceDeltaSha256": "4d6cc1b0a05c18984c557259f54c0fe1f448ee0a32cbb5065c06e9c93c7662d9"
+      },
+      "outcome": {
+        "passed": false,
+        "error": "MovieLens schema admission timed out: replica_operations_in_flight=3",
+        "schemaAdmission": {
+          "admitted": false,
+          "state": "denied",
+          "canonicalBlocker": "replica_operations_in_flight",
+          "finalObservedEffectiveInFlightCount": 3,
+          "maxObservedEffectiveInFlightCount": 8
+        },
+        "preloadAdmission": {
+          "admitted": false,
+          "loadLaneAdmitted": false
+        }
+      },
+      "logCensus": {
+        "structuredLogEvents": 11476,
+        "firstTime": "2026-07-20T00:14:06.939Z",
+        "lastTime": "2026-07-20T00:17:55.157Z",
+        "durationMs": 228218,
+        "level30": 10302,
+        "level40": 719,
+        "level50": 455,
+        "nodesP1Level40": 7,
+        "ackTimeoutPeerAliveSkips": 18,
+        "level50PerMinute": 119.6225,
+        "nodesP1Level40PerMinute": 1.8403,
+        "matchedFormationWindow": {
+          "durationMs": 180000,
+          "level30": 8379,
+          "level40": 636,
+          "level50": 18,
+          "nodesP1Level40": 7,
+          "ackTimeoutPeerAliveSkips": 18,
+          "topLevel50Messages": [
+            {
+              "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+              "count": 10
+            },
+            {
+              "message": "Raft CDC command failed",
+              "count": 4
+            },
+            {
+              "message": "Failed to deliver CDC event",
+              "count": 4
+            }
+          ],
+          "topNodesP1Level40Messages": [
+            {
+              "message": "Out-of-order CDC event detected",
+              "count": 6
+            },
+            {
+              "message": "No row found for CDC update",
+              "count": 1
+            }
+          ]
+        },
+        "topLevel50Messages": [
+          {
+            "message": "WebSocket error",
+            "count": 217
+          },
+          {
+            "message": "Reconnection failed",
+            "count": 217
+          },
+          {
+            "message": "Refused raft log truncation into the committed prefix (committed-entry-loss prevented)",
+            "count": 13
+          },
+          {
+            "message": "Raft CDC command failed",
+            "count": 4
+          },
+          {
+            "message": "Failed to deliver CDC event",
+            "count": 4
+          }
+        ],
+        "topNodesP1Level40Messages": [
+          {
+            "message": "Out-of-order CDC event detected",
+            "count": 6
+          },
+          {
+            "message": "No row found for CDC update",
+            "count": 1
+          }
+        ]
+      },
+      "evidence": {
+        "sample": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/reverted-2.sample.json",
+        "reportSha256": "c0bb5e4baff38a867fcd4850993727dce4f112649607dc80e00ef478fd657420",
+        "archiveSha256": "e01f7c3f050ce4389c30f085a94ad9cdff69921cb668a145d426dd237bcf383b"
+      }
+    }
+  ],
+  "aggregate": {
+    "fixed": {
+      "samples": 2,
+      "measuringSamples": 2,
+      "stableSourceSamples": 2,
+      "passedSamples": 0,
+      "clusterOrSchemaAdmissionSamples": 2,
+      "schemaAdmittedSamples": 2,
+      "preloadAdmittedSamples": 2,
+      "durationMs": 1866436,
+      "level50": 5551,
+      "nodesP1Level40": 475,
+      "level50PerMinute": 178.4471,
+      "nodesP1Level40PerMinute": 15.2697,
+      "matchedFormationWindow": {
+        "durationMs": 360000,
+        "level50": 47,
+        "nodesP1Level40": 71
+      },
+      "finalObservedEffectiveInFlightCounts": [
+        0,
+        0
+      ],
+      "maxObservedEffectiveInFlightCounts": [
+        4,
+        5
+      ]
+    },
+    "reverted": {
+      "samples": 2,
+      "measuringSamples": 2,
+      "stableSourceSamples": 2,
+      "passedSamples": 0,
+      "clusterOrSchemaAdmissionSamples": 1,
+      "schemaAdmittedSamples": 0,
+      "preloadAdmittedSamples": 0,
+      "durationMs": 437487,
+      "level50": 2500,
+      "nodesP1Level40": 21,
+      "level50PerMinute": 342.8673,
+      "nodesP1Level40PerMinute": 2.8801,
+      "matchedFormationWindow": {
+        "durationMs": 360000,
+        "level50": 66,
+        "nodesP1Level40": 13
+      },
+      "finalObservedEffectiveInFlightCounts": [
+        3
+      ],
+      "maxObservedEffectiveInFlightCounts": [
+        8
+      ]
+    }
+  },
+  "ratios": {
+    "rawLevel50": 2.2204,
+    "level50PerMinute": 0.5205,
+    "matchedWindowLevel50": 0.7121,
+    "rawNodesP1Level40": 22.619,
+    "nodesP1Level40PerMinute": 5.3018,
+    "matchedWindowNodesP1Level40": 5.4615
+  },
+  "decision": {
+    "outcome": "IMPROVED_BOUNDARY_2_OF_2_VS_0_OF_2",
+    "fullDemo": "NOT_YET_PASSED",
+    "next": "Require independent A/B review. Proceed to the ordered unchanged 5-probe gate only if the matched-window and rate evidence rejects amplification; do not run demos unless all probes pass."
+  }
+}

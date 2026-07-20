@@ -1,0 +1,286 @@
+diff --git a/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js b/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js
+index d05c3ec422092e5be5d3d018eb4e269fa70ff066..6d2e77881b080648d244768deb26bab0690167f7 100644
+--- a/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js
++++ b/src/bootstrap/bootstrap-service-control-plane-runtime-methods.js
+@@ -20,6 +20,9 @@ import {
+ import {
+   MessageGroupServiceHandlerSetup,
+ } from './shared/message-group-service-handler-setup.js';
++import {
++  bindExecutorOutcomeEmitterToHandlers,
++} from './shared/executor-outcome-handler-binding.js';
+ import {
+   COLUMN,
+   NUM,
+@@ -80,20 +83,14 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
+       this.rebalanceCoordinator = controlPlane.rebalanceCoordinator;
+       const resolvedExecutorOutcomeEmitter =
+         this.rebalanceCoordinator?.executorOutcomeEmitter;
+-      if (
+-        this.replicaHandler &&
+-        resolvedExecutorOutcomeEmitter
+-      ) {
+-        this.replicaHandler.executorOutcomeEmitter =
+-          resolvedExecutorOutcomeEmitter;
+-      }
+-      if (
+-        this.messageGroupServiceHandler &&
+-        resolvedExecutorOutcomeEmitter
+-      ) {
+-        this.messageGroupServiceHandler.executorOutcomeEmitter =
+-          resolvedExecutorOutcomeEmitter;
+-      }
++      bindExecutorOutcomeEmitterToHandlers({
++        executorOutcomeEmitter: resolvedExecutorOutcomeEmitter,
++        handlers: [
++          this.replicaHandler,
++          this.messageGroupServiceHandler,
++          this.runtimeServiceHandler,
++        ],
++      });
+       this.runtimeSurfaceOwner.bindControlPlaneServices();
+ 
+       this.logger.info(BootstrapLog.CONTROL_PLANE_READY, {
+diff --git a/src/bootstrap/node-joining-publication-activation.js b/src/bootstrap/node-joining-publication-activation.js
+index cfadb95ffa9c6597763f898ec370ee75cd1cb998..ad8415b2238ad011b2ba80c9cd7e0c5eccbfc762 100644
+--- a/src/bootstrap/node-joining-publication-activation.js
++++ b/src/bootstrap/node-joining-publication-activation.js
+@@ -3,6 +3,9 @@ import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscrip
+ import {
+   attachRuntimeServiceRebalancerOwner,
+ } from './shared/runtime-service-rebalancer-setup.js';
++import {
++  bindExecutorOutcomeEmitterToHandlers,
++} from './shared/executor-outcome-handler-binding.js';
+ 
+ const {
+   CACHE_HYDRATION_TABLES,
+@@ -436,20 +439,14 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
+     this.rebalanceCoordinator = controlPlane.rebalanceCoordinator;
+     const resolvedExecutorOutcomeEmitter =
+       this.rebalanceCoordinator?.executorOutcomeEmitter;
+-    if (
+-      this.replicaHandler &&
+-      resolvedExecutorOutcomeEmitter
+-    ) {
+-      this.replicaHandler.executorOutcomeEmitter =
+-        resolvedExecutorOutcomeEmitter;
+-    }
+-    if (
+-      this.messageGroupServiceHandler &&
+-      resolvedExecutorOutcomeEmitter
+-    ) {
+-      this.messageGroupServiceHandler.executorOutcomeEmitter =
+-        resolvedExecutorOutcomeEmitter;
+-    }
++    bindExecutorOutcomeEmitterToHandlers({
++      executorOutcomeEmitter: resolvedExecutorOutcomeEmitter,
++      handlers: [
++        this.replicaHandler,
++        this.messageGroupServiceHandler,
++        this.runtimeServiceHandler,
++      ],
++    });
+     this.runtimeSurfaceOwner.bindControlPlaneServices();
+     this.logger.info(
+       NODE_JOINING_SERVICE_LITERAL.CONTROL_PLANE_INITIALIZED_BY_OWNER,
+diff --git a/src/bootstrap/shared/executor-outcome-handler-binding.js b/src/bootstrap/shared/executor-outcome-handler-binding.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..13a953f81d12ee6e7fd065d430cfdbb97df69497
+--- /dev/null
++++ b/src/bootstrap/shared/executor-outcome-handler-binding.js
+@@ -0,0 +1,22 @@
++/**
++ * Give startup-created service handlers the canonical executor-outcome owner
++ * after control-plane composition resolves it.
++ *
++ * @param {Object} options
++ * @param {Object|null} options.executorOutcomeEmitter
++ * @param {Array<Object|null>} options.handlers
++ * @return {void}
++ */
++function bindExecutorOutcomeEmitterToHandlers({
++  executorOutcomeEmitter,
++  handlers = [],
++}) {
++  if (!executorOutcomeEmitter) return;
++  for (const handler of handlers) {
++    if (handler) {
++      handler.executorOutcomeEmitter = executorOutcomeEmitter;
++    }
++  }
++}
++
++export {bindExecutorOutcomeEmitterToHandlers};
+diff --git a/test/bootstrap/bootstrap-sequence.test.js b/test/bootstrap/bootstrap-sequence.test.js
+index 6a3041a13824fd31cecccb65d7c1241d1e79b0e7..7fbf319fab91af163c7f750a18ff4fdfa09cdabb 100644
+--- a/test/bootstrap/bootstrap-sequence.test.js
++++ b/test/bootstrap/bootstrap-sequence.test.js
+@@ -139,18 +139,20 @@ function createSeedPlanPhases() {
+   }];
+ }
+ 
+-test('BootstrapService retains lifecycle catalog owners for SQL handoff',
++test('BootstrapService retains control-plane owners and late-binds executor outcomes',
+   async (t) => {
+     initializeTestEnvironment();
+     const originalCreate = ControlPlaneSetup.create;
+     const commandOwner = {ownerId: 'seed-command-owner'};
+     const systemMetadataOwners = {ownerId: 'seed-metadata-owners'};
++    const staleExecutorOutcomeEmitter = {ownerId: 'stale-seed-emitter'};
++    const executorOutcomeEmitter = {ownerId: 'canonical-seed-emitter'};
+     ControlPlaneSetup.create = async () => ({
+       dispatchService: null,
+       endpointService: null,
+       heartbeatService: {},
+       leaseService: null,
+-      rebalanceCoordinator: {},
++      rebalanceCoordinator: {executorOutcomeEmitter},
+       serviceLifecycleCommandOwner: commandOwner,
+       systemMetadataOwners,
+     });
+@@ -165,11 +167,35 @@ test('BootstrapService retains lifecycle catalog owners for SQL handoff',
+       bootstrap.systemTableCache = {};
+       bootstrap.tablePolicyService = {};
+       bootstrap.runtimeSurfaceOwner.bindControlPlaneServices = () => {};
++      bootstrap.replicaHandler = {
++        executorOutcomeEmitter: staleExecutorOutcomeEmitter,
++      };
++      bootstrap.messageGroupServiceHandler = {
++        executorOutcomeEmitter: staleExecutorOutcomeEmitter,
++      };
++      bootstrap.runtimeServiceHandler = {
++        executorOutcomeEmitter: staleExecutorOutcomeEmitter,
++      };
+ 
+       await bootstrap.initializeControlPlaneService();
+ 
+       t.equal(bootstrap.serviceLifecycleCommandOwner, commandOwner);
+       t.equal(bootstrap.systemMetadataOwners, systemMetadataOwners);
++      t.equal(
++        bootstrap.replicaHandler.executorOutcomeEmitter,
++        executorOutcomeEmitter,
++        'partition handler should use the canonical coordinator emitter',
++      );
++      t.equal(
++        bootstrap.messageGroupServiceHandler.executorOutcomeEmitter,
++        executorOutcomeEmitter,
++        'message-group handler should use the canonical coordinator emitter',
++      );
++      t.equal(
++        bootstrap.runtimeServiceHandler.executorOutcomeEmitter,
++        executorOutcomeEmitter,
++        'existing runtime handler should use the canonical coordinator emitter',
++      );
+     } finally {
+       ControlPlaneSetup.create = originalCreate;
+     }
+diff --git a/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js b/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
+index 4d8eb5568534e488db52c0120441d3b5b1b23f36..e8685eefb1f5ae81436baa5b86118529ae21912f 100644
+--- a/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
++++ b/test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
+@@ -372,6 +372,8 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
+     let capturedUpdateOptions = null;
+     const commandOwner = {ownerId: 'join-command-owner'};
+     const systemMetadataOwners = {ownerId: 'join-metadata-owners'};
++    const staleExecutorOutcomeEmitter = {ownerId: 'stale-join-emitter'};
++    const executorOutcomeEmitter = {ownerId: 'canonical-join-emitter'};
+ 
+     const service = new NodeJoiningService({
+       nodeId: REPORTER_FORWARD_NODE_ID,
+@@ -389,6 +391,15 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
+       systemTableCache: new SystemTableCache(),
+     });
+     service.createCdcIntegrationService = () => ({});
++    service.replicaHandler = {
++      executorOutcomeEmitter: staleExecutorOutcomeEmitter,
++    };
++    service.messageGroupServiceHandler = {
++      executorOutcomeEmitter: staleExecutorOutcomeEmitter,
++    };
++    service.runtimeServiceHandler = {
++      executorOutcomeEmitter: staleExecutorOutcomeEmitter,
++    };
+     service.sendControlPlaneNodeStateUpdate = async (options = {}) => {
+       capturedUpdateOptions = options;
+       return {
+@@ -406,7 +417,7 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
+       leaseService: null,
+       endpointService: null,
+       dispatchService: null,
+-      rebalanceCoordinator: {},
++      rebalanceCoordinator: {executorOutcomeEmitter},
+       serviceLifecycleCommandOwner: commandOwner,
+       systemMetadataOwners,
+     });
+@@ -420,6 +431,21 @@ test('NodeJoiningService forwards heartbeat reporter publication mode during con
+         'join should retain the exact lifecycle command owner');
+       t.equal(service.systemMetadataOwners, systemMetadataOwners,
+         'join should retain the exact lifecycle metadata owners');
++      t.equal(
++        service.replicaHandler.executorOutcomeEmitter,
++        executorOutcomeEmitter,
++        'partition handler should use the canonical coordinator emitter',
++      );
++      t.equal(
++        service.messageGroupServiceHandler.executorOutcomeEmitter,
++        executorOutcomeEmitter,
++        'message-group handler should use the canonical coordinator emitter',
++      );
++      t.equal(
++        service.runtimeServiceHandler.executorOutcomeEmitter,
++        executorOutcomeEmitter,
++        'existing runtime handler should use the canonical coordinator emitter',
++      );
+ 
+       await assignedReporter({
+         state: STATE.READY,
+diff --git a/test/bootstrap/shared/executor-outcome-handler-binding.test.js b/test/bootstrap/shared/executor-outcome-handler-binding.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0ee1383ca06b22fb1e43f39b7bf6419b1e2558ec
+--- /dev/null
++++ b/test/bootstrap/shared/executor-outcome-handler-binding.test.js
+@@ -0,0 +1,43 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert';
++import {
++  bindExecutorOutcomeEmitterToHandlers,
++} from '../../../src/bootstrap/shared/executor-outcome-handler-binding.js';
++
++describe('bindExecutorOutcomeEmitterToHandlers', () => {
++  it('binds the exact canonical emitter to every present handler', () => {
++    const staleEmitter = {ownerId: 'stale'};
++    const canonicalEmitter = {ownerId: 'canonical'};
++    const replicaHandler = {executorOutcomeEmitter: staleEmitter};
++    const runtimeServiceHandler = {executorOutcomeEmitter: staleEmitter};
++
++    bindExecutorOutcomeEmitterToHandlers({
++      executorOutcomeEmitter: canonicalEmitter,
++      handlers: [replicaHandler, null, runtimeServiceHandler],
++    });
++
++    assert.strictEqual(
++      replicaHandler.executorOutcomeEmitter,
++      canonicalEmitter,
++    );
++    assert.strictEqual(
++      runtimeServiceHandler.executorOutcomeEmitter,
++      canonicalEmitter,
++    );
++  });
++
++  it('leaves handlers unchanged when the canonical emitter is absent', () => {
++    const staleEmitter = {ownerId: 'stale'};
++    const runtimeServiceHandler = {executorOutcomeEmitter: staleEmitter};
++
++    bindExecutorOutcomeEmitterToHandlers({
++      executorOutcomeEmitter: null,
++      handlers: [runtimeServiceHandler],
++    });
++
++    assert.strictEqual(
++      runtimeServiceHandler.executorOutcomeEmitter,
++      staleEmitter,
++    );
++  });
++});

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "formation-liveness-live-ab-sample-v1",
+  "id": "fixed-2",
+  "root": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something",
+  "startedAt": "2026-07-19T23:59:51.946Z",
+  "completedAt": "2026-07-20T00:13:55.213Z",
+  "exitCode": 1,
+  "green": false,
+  "measuring": true,
+  "preTempC": 67.85,
+  "postTempC": 67.85,
+  "thermalPolicy": {
+    "coolStartMaxC": 70,
+    "failedRunInvalidAtOrAboveC": 85
+  },
+  "sourceStable": true,
+  "sourceIdentity": {
+    "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+    "sourceFingerprint": "8a64ad4bd3d98636",
+    "sourceDeltaSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "completedSourceIdentity": {
+    "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+    "sourceFingerprint": "8a64ad4bd3d98636",
+    "sourceDeltaSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "report": {
+    "sourcePath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T00-13-55-147Z.report.json",
+    "evidencePath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/fixed-2.report.json",
+    "sha256": "48839d000a83d7306bb337778d9970cab6c929fda825d1d4fee26bb3bf429959"
+  },
+  "archive": {
+    "evidencePath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/fixed-2.run-state.tar.gz",
+    "sha256": "ba879325c82c023f345232a29087f0de0f89b0c3b851f2b2414464b878254baa"
+  },
+  "stdoutTail": [
+    "      Archived previous run state to /media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo-archive/run-2026-07-19T23-59-52-411Z.tar.gz",
+    "[1/5] Bootstrapping the MovieLens schema on the seed...",
+    "[2/5] Expanding to 5 nodes (single zone) and spreading the existing data...",
+    "      Cluster formed.",
+    "      Waiting for production schema admission...",
+    "      Schema mutation admitted after stable control snapshots (state=quiescent).",
+    "      Ratings schema attempt 1 is not yet stable: awaiting durable replay; retrying...",
+    "      Waiting for production ratings-load admission...",
+    "      Ratings load admitted (snapshot=quiescent, loadLane=admitted).",
+    "      Loading 100,000 ratings into the routable source...",
+    "      Ratings schema attempt 1 is not yet stable: awaiting durable replay; retrying...",
+    "      Loaded 100000 ratings.",
+    "      Waiting for ratings partitions to split and spread...",
+    "      Ratings partitions: 3, data on nodes: [\"6ef68d36-ac2b-481e-9343-2963b3a70084\",\"2faca3fd-90c3-4dac-9bee-e503b7106b6c\",\"6e0f8bd9-4eb0-42df-bc97-39e24f353428\",\"b106adb3-6938-406e-bd14-f1205163cd98\",\"f0c35b11-3a99-4709-8da8-c3bc7eb897fc\"]",
+    "[3/5] Running Lagrange distributed grouped SQL...",
+    "      Lagrange SQL returned 1682 grouped rows in 346ms (rather than 100000 ratings).",
+    "[4/5] Deploying the svc-movielens-topn runtime service (2 replicas, intrinsic data affinity): disjoint movie-id shards compute a confidence-adjusted Bayesian ranking, publish 10 candidates each, and slot 1 merges them)...",
+    "Stopping cluster...",
+    "Live demo report: /media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T00-13-55-147Z.report.json",
+    ""
+  ],
+  "stderrTail": [
+    "Error: service replicas were not initially placed",
+    "    at observeInitialPlacement (file:///media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/examples/service-data-affinity/run-affinity-demo.js:471:9)",
+    "    at async runAffinityDemo (file:///media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/examples/service-data-affinity/run-affinity-demo.js:684:21)",
+    ""
+  ]
+}

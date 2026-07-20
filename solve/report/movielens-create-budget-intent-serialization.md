@@ -26,9 +26,9 @@
 - No longer current: Do not return to the cleared topology gap, weaken stale-watermark or lease evidence, tune the schema/stability budgets, or rerun unchanged; discriminate the upstream duplicate recovery work that starves the seed control plane.; The prior archive does not prove cross-intent holder-result leakage. Preserve the independently proved shared-budget serialization change, but move the live blocker to canonical surrogate arbitration before expensive planning/admission.
 
 ## Continuation
-- Status: blocked-theory
+- Status: blocked-unrecorded-evidence
 - Next action: record or select a fresh frontier theory for movielens-create-budget-intent-serialization-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id movielens-create-budget-intent-serialization --frontier movielens-create-budget-intent-serialization-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T03-16-02-506Z.report.json
 
 ## Scope Pressure
 - Changed files: 2

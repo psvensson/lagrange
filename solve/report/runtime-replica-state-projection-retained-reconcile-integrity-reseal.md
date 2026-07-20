@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -18,15 +18,15 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T21-22-24-859Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for runtime-replica-state-projection-retained-reconcile-integrity-reseal-main
 
 ## Continuation
 - Status: allowed
-- Next action: continue supervised step for runtime-replica-state-projection-retained-reconcile-integrity-reseal-main
+- Next action: No open frontier remains; inspect solve report.
 - Blocker: none
 
 ## Scope Pressure
@@ -44,10 +44,13 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main** [open] rung 0, attempts 1, metric 1 -> 1
+- **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main** [parked {exhausted}] rung 0, attempts 1, metric 1 -> 1 — Projection retention is proven engaged and the measured blocker moved to non-system CREATING remote-owner wake admission in ReplicaDispatchService, outside the sealed projection-owner scope; the ordered gate forbids an unchanged rerun.
 
 ## Findings
-_(none recorded)_
+- **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: Independent verification confirmed byte-identical approved source, equivalent sealed constraints, correct parent lineage, and a clean successor event log [subagent:verify_runtime_projection_reconcile]
+- **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: The sealed source-operation blocking and lost runtime projection symptom does not reproduce on checkpoint 84263aeb: production composition is green and the symptom returns when the retained queue change is reverted [dt:solve/changes/dt-prove/runtime-replica-state-projection-retained-reconcile.test.js-2026-07-19T18-22-34-232Z.json]
+- **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: The retained projection fix engaged: both runtime services rows are ACTIVE, but the remote ADD remains CREATING because replica-dispatch replay drops non-system CREATING rows before source-owner observed-progress reconciliation [file:solve/changes/runtime-replica-state-projection-retained-reconcile-integrity-reseal/post-live-ordered-gate-boundary-move-2026-07-19.md]
+- **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: independent aggregate verification passed: successor artifact is byte-identical to approved attempt 5, Quest contract is unchanged apart from the expected successor frontier, parent link and declaration match, and no goalpost violations remain [subagent:root/verify_runtime_projection_reconcile]
 
 ## Theories
 _(none recorded)_

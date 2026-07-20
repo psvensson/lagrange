@@ -1,0 +1,4044 @@
+{
+  "schemaVersion": "formation-probe-log-analysis-v3",
+  "gateSummary": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/test-output/reports/live-repetitions-probe-2026-07-20T00-40-34-842Z.summary.json",
+  "captureManifest": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/capture-manifest.json",
+  "liveAbAnalysis": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/live-ab-analysis.json",
+  "sourceFingerprint": "8a64ad4bd3d98636",
+  "sourceStable": true,
+  "gatePassed": true,
+  "ackSkipHighDefinition": "like-for-like pre-SIGTERM count exceeds the largest fixed A/B matched-window count: nodes-p1 > 58 or all targets > 806",
+  "escalationDefinition": "high pre-SIGTERM ACK-skip count with a pre-SIGTERM correlated level-50 transport, reconnect, or CDC event in at least two probes",
+  "highWithCorrelatedFailureCount": 0,
+  "escalationRequired": false,
+  "probes": [
+    {
+      "slot": 1,
+      "clusterId": "8ddee1ba-e2c7-49a5-bcc1-c629541149bb",
+      "firstSeenAt": "2026-07-20T00:33:50.725Z",
+      "completedAt": "2026-07-20T00:40:33.836Z",
+      "seedNodeId": "b878cf98-daf7-4e22-9d70-da51eae1918a",
+      "shutdownCutoffExclusive": "2026-07-20T00:34:49.967Z",
+      "ackReferenceExclusive": {
+        "nodesP1Exclusive": 58,
+        "allTargetsExclusive": 806,
+        "fixedSamples": [
+          {
+            "id": "fixed-1",
+            "nodesP1": 58,
+            "allTargets": 806
+          },
+          {
+            "id": "fixed-2",
+            "nodesP1": 10,
+            "allTargets": 174
+          }
+        ]
+      },
+      "comparisonWindow": "pre-SIGTERM",
+      "ackSkipHighNodesP1": false,
+      "ackSkipHighAllTargets": false,
+      "ackSkipHigh": false,
+      "highWithCorrelatedFailure": false,
+      "sourceFingerprints": [
+        "8a64ad4bd3d98636"
+      ],
+      "total": {
+        "structuredEvents": 6228,
+        "level50": 393,
+        "ackTimeoutPeerAliveSkips": 29,
+        "ackTimeoutPeerAliveSkipsNodesP1": 0,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "b878cf98-daf7-4e22-9d70-da51eae1918a": 29
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:replica_operations-p1-r1": 9,
+          "partition:replica_operations-p1-r2": 5,
+          "b878cf98-daf7-4e22-9d70-da51eae1918a/service/swim-ping": 2,
+          "partition:services-p1-r2": 4,
+          "partition:services-p1-r3": 1,
+          "partition:services-p1-r1": 5,
+          "partition:partitions-p1-r1": 1,
+          "partition:storage_reservations-p1-r1": 2
+        },
+        "correlatedLevel50": 42,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 15,
+          "Failed to deliver CDC event": 19,
+          "WebSocket error": 4,
+          "Reconnection failed": 4
+        },
+        "executedMoves": 87,
+        "executedMovesByEntity": {
+          "replica_operations-p1": 18,
+          "schema_operations-p1": 15,
+          "sql_transaction_participants-p1": 18,
+          "sql_transactions-p1": 17,
+          "sql_write_operations-p1": 18,
+          "control_plane_publications-p1": 1
+        },
+        "executedMovesByType": {
+          "replace": 6,
+          "add": 73,
+          "remove": 8
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:34:05.459Z": 5,
+          "2026-07-20T00:34:05.477Z": 1,
+          "2026-07-20T00:34:06.508Z": 4,
+          "2026-07-20T00:34:07.750Z": 2,
+          "2026-07-20T00:34:07.751Z": 2,
+          "2026-07-20T00:34:09.988Z": 4,
+          "2026-07-20T00:34:10.899Z": 4,
+          "2026-07-20T00:34:12.126Z": 4,
+          "2026-07-20T00:34:13.877Z": 1,
+          "2026-07-20T00:34:14.097Z": 1,
+          "2026-07-20T00:34:14.293Z": 1,
+          "2026-07-20T00:34:14.465Z": 1,
+          "2026-07-20T00:34:16.696Z": 4,
+          "2026-07-20T00:34:18.123Z": 1,
+          "2026-07-20T00:34:18.303Z": 1,
+          "2026-07-20T00:34:18.507Z": 1,
+          "2026-07-20T00:34:18.712Z": 1,
+          "2026-07-20T00:34:21.972Z": 4,
+          "2026-07-20T00:34:23.346Z": 1,
+          "2026-07-20T00:34:23.613Z": 1,
+          "2026-07-20T00:34:23.860Z": 1,
+          "2026-07-20T00:34:24.107Z": 1,
+          "2026-07-20T00:34:28.534Z": 1,
+          "2026-07-20T00:34:28.821Z": 1,
+          "2026-07-20T00:34:29.193Z": 1,
+          "2026-07-20T00:34:29.546Z": 1,
+          "2026-07-20T00:34:30.898Z": 1,
+          "2026-07-20T00:34:31.948Z": 1,
+          "2026-07-20T00:34:32.600Z": 1,
+          "2026-07-20T00:34:33.185Z": 1,
+          "2026-07-20T00:34:33.193Z": 1,
+          "2026-07-20T00:34:34.410Z": 1,
+          "2026-07-20T00:34:34.418Z": 1,
+          "2026-07-20T00:34:36.811Z": 1,
+          "2026-07-20T00:34:37.520Z": 1,
+          "2026-07-20T00:34:38.092Z": 1,
+          "2026-07-20T00:34:39.204Z": 1,
+          "2026-07-20T00:34:40.725Z": 1,
+          "2026-07-20T00:34:41.182Z": 1,
+          "2026-07-20T00:34:41.748Z": 1,
+          "2026-07-20T00:34:41.992Z": 1,
+          "2026-07-20T00:34:43.334Z": 1,
+          "2026-07-20T00:34:46.416Z": 1,
+          "2026-07-20T00:34:46.641Z": 1,
+          "2026-07-20T00:34:46.854Z": 1,
+          "2026-07-20T00:34:47.052Z": 1,
+          "2026-07-20T00:34:28.657Z": 1,
+          "2026-07-20T00:34:30.593Z": 1,
+          "2026-07-20T00:34:33.869Z": 1,
+          "2026-07-20T00:34:36.052Z": 1,
+          "2026-07-20T00:34:38.977Z": 1,
+          "2026-07-20T00:34:40.777Z": 1,
+          "2026-07-20T00:34:46.169Z": 1,
+          "2026-07-20T00:34:48.633Z": 1,
+          "2026-07-20T00:34:50.491Z": 1,
+          "2026-07-20T00:34:55.473Z": 1,
+          "2026-07-20T00:34:56.781Z": 1,
+          "2026-07-20T00:35:00.478Z": 1,
+          "2026-07-20T00:35:01.895Z": 1,
+          "2026-07-20T00:35:05.289Z": 1,
+          "2026-07-20T00:35:06.866Z": 1,
+          "2026-07-20T00:35:10.698Z": 1,
+          "2026-07-20T00:35:12.351Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 61,
+        "skippedMovesByReason": {
+          "budget_exceeded": 44,
+          "blocked": 17
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_in_flight": 44,
+          "replica_inventory_unusable": 17
+        },
+        "eventLoopGaps": 6,
+        "maxEventLoopGapMs": 2557,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 43.65,
+        "cdcFailuresByPartition": {
+          "partitions-p1": 5,
+          "replica_operations-p1": 8,
+          "service_endpoints-p1": 2,
+          "services-p1": 2,
+          "nodes-p1": 1,
+          "control_plane_publications-p1": 1
+        }
+      },
+      "preShutdown": {
+        "structuredEvents": 5340,
+        "level50": 340,
+        "ackTimeoutPeerAliveSkips": 29,
+        "ackTimeoutPeerAliveSkipsNodesP1": 0,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "b878cf98-daf7-4e22-9d70-da51eae1918a": 29
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:replica_operations-p1-r1": 9,
+          "partition:replica_operations-p1-r2": 5,
+          "b878cf98-daf7-4e22-9d70-da51eae1918a/service/swim-ping": 2,
+          "partition:services-p1-r2": 4,
+          "partition:services-p1-r3": 1,
+          "partition:services-p1-r1": 5,
+          "partition:partitions-p1-r1": 1,
+          "partition:storage_reservations-p1-r1": 2
+        },
+        "correlatedLevel50": 31,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 15,
+          "Failed to deliver CDC event": 16
+        },
+        "executedMoves": 78,
+        "executedMovesByEntity": {
+          "replica_operations-p1": 9,
+          "schema_operations-p1": 15,
+          "sql_transaction_participants-p1": 18,
+          "sql_transactions-p1": 17,
+          "sql_write_operations-p1": 18,
+          "control_plane_publications-p1": 1
+        },
+        "executedMovesByType": {
+          "replace": 6,
+          "add": 64,
+          "remove": 8
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:34:05.459Z": 5,
+          "2026-07-20T00:34:05.477Z": 1,
+          "2026-07-20T00:34:06.508Z": 4,
+          "2026-07-20T00:34:07.750Z": 2,
+          "2026-07-20T00:34:07.751Z": 2,
+          "2026-07-20T00:34:09.988Z": 4,
+          "2026-07-20T00:34:10.899Z": 4,
+          "2026-07-20T00:34:12.126Z": 4,
+          "2026-07-20T00:34:13.877Z": 1,
+          "2026-07-20T00:34:14.097Z": 1,
+          "2026-07-20T00:34:14.293Z": 1,
+          "2026-07-20T00:34:14.465Z": 1,
+          "2026-07-20T00:34:16.696Z": 4,
+          "2026-07-20T00:34:18.123Z": 1,
+          "2026-07-20T00:34:18.303Z": 1,
+          "2026-07-20T00:34:18.507Z": 1,
+          "2026-07-20T00:34:18.712Z": 1,
+          "2026-07-20T00:34:21.972Z": 4,
+          "2026-07-20T00:34:23.346Z": 1,
+          "2026-07-20T00:34:23.613Z": 1,
+          "2026-07-20T00:34:23.860Z": 1,
+          "2026-07-20T00:34:24.107Z": 1,
+          "2026-07-20T00:34:28.534Z": 1,
+          "2026-07-20T00:34:28.821Z": 1,
+          "2026-07-20T00:34:29.193Z": 1,
+          "2026-07-20T00:34:29.546Z": 1,
+          "2026-07-20T00:34:30.898Z": 1,
+          "2026-07-20T00:34:31.948Z": 1,
+          "2026-07-20T00:34:32.600Z": 1,
+          "2026-07-20T00:34:33.185Z": 1,
+          "2026-07-20T00:34:33.193Z": 1,
+          "2026-07-20T00:34:34.410Z": 1,
+          "2026-07-20T00:34:34.418Z": 1,
+          "2026-07-20T00:34:36.811Z": 1,
+          "2026-07-20T00:34:37.520Z": 1,
+          "2026-07-20T00:34:38.092Z": 1,
+          "2026-07-20T00:34:39.204Z": 1,
+          "2026-07-20T00:34:40.725Z": 1,
+          "2026-07-20T00:34:41.182Z": 1,
+          "2026-07-20T00:34:41.748Z": 1,
+          "2026-07-20T00:34:41.992Z": 1,
+          "2026-07-20T00:34:43.334Z": 1,
+          "2026-07-20T00:34:46.416Z": 1,
+          "2026-07-20T00:34:46.641Z": 1,
+          "2026-07-20T00:34:46.854Z": 1,
+          "2026-07-20T00:34:47.052Z": 1,
+          "2026-07-20T00:34:28.657Z": 1,
+          "2026-07-20T00:34:30.593Z": 1,
+          "2026-07-20T00:34:33.869Z": 1,
+          "2026-07-20T00:34:36.052Z": 1,
+          "2026-07-20T00:34:38.977Z": 1,
+          "2026-07-20T00:34:40.777Z": 1,
+          "2026-07-20T00:34:46.169Z": 1,
+          "2026-07-20T00:34:48.633Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 52,
+        "skippedMovesByReason": {
+          "budget_exceeded": 44,
+          "blocked": 8
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_in_flight": 44,
+          "replica_inventory_unusable": 8
+        },
+        "eventLoopGaps": 6,
+        "maxEventLoopGapMs": 2557,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 43.65,
+        "cdcFailuresByPartition": {
+          "partitions-p1": 4,
+          "replica_operations-p1": 8,
+          "service_endpoints-p1": 2,
+          "services-p1": 2
+        }
+      },
+      "nodes": [
+        {
+          "nodeId": "b878cf98-daf7-4e22-9d70-da51eae1918a",
+          "seed": true,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/8ddee1ba-e2c7-49a5-bcc1-c629541149bb/b878cf98-daf7-4e22-9d70-da51eae1918a.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 4302,
+            "level50": 331,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 22,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 9,
+              "Failed to deliver CDC event": 13
+            },
+            "executedMoves": 70,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 1,
+              "schema_operations-p1": 15,
+              "sql_transaction_participants-p1": 18,
+              "sql_transactions-p1": 17,
+              "sql_write_operations-p1": 18,
+              "control_plane_publications-p1": 1
+            },
+            "executedMovesByType": {
+              "replace": 6,
+              "add": 56,
+              "remove": 8
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:34:05.459Z": 5,
+              "2026-07-20T00:34:05.477Z": 1,
+              "2026-07-20T00:34:06.508Z": 4,
+              "2026-07-20T00:34:07.750Z": 2,
+              "2026-07-20T00:34:07.751Z": 2,
+              "2026-07-20T00:34:09.988Z": 4,
+              "2026-07-20T00:34:10.899Z": 4,
+              "2026-07-20T00:34:12.126Z": 4,
+              "2026-07-20T00:34:13.877Z": 1,
+              "2026-07-20T00:34:14.097Z": 1,
+              "2026-07-20T00:34:14.293Z": 1,
+              "2026-07-20T00:34:14.465Z": 1,
+              "2026-07-20T00:34:16.696Z": 4,
+              "2026-07-20T00:34:18.123Z": 1,
+              "2026-07-20T00:34:18.303Z": 1,
+              "2026-07-20T00:34:18.507Z": 1,
+              "2026-07-20T00:34:18.712Z": 1,
+              "2026-07-20T00:34:21.972Z": 4,
+              "2026-07-20T00:34:23.346Z": 1,
+              "2026-07-20T00:34:23.613Z": 1,
+              "2026-07-20T00:34:23.860Z": 1,
+              "2026-07-20T00:34:24.107Z": 1,
+              "2026-07-20T00:34:28.534Z": 1,
+              "2026-07-20T00:34:28.821Z": 1,
+              "2026-07-20T00:34:29.193Z": 1,
+              "2026-07-20T00:34:29.546Z": 1,
+              "2026-07-20T00:34:30.898Z": 1,
+              "2026-07-20T00:34:31.948Z": 1,
+              "2026-07-20T00:34:32.600Z": 1,
+              "2026-07-20T00:34:33.185Z": 1,
+              "2026-07-20T00:34:33.193Z": 1,
+              "2026-07-20T00:34:34.410Z": 1,
+              "2026-07-20T00:34:34.418Z": 1,
+              "2026-07-20T00:34:36.811Z": 1,
+              "2026-07-20T00:34:37.520Z": 1,
+              "2026-07-20T00:34:38.092Z": 1,
+              "2026-07-20T00:34:39.204Z": 1,
+              "2026-07-20T00:34:40.725Z": 1,
+              "2026-07-20T00:34:41.182Z": 1,
+              "2026-07-20T00:34:41.748Z": 1,
+              "2026-07-20T00:34:41.992Z": 1,
+              "2026-07-20T00:34:43.334Z": 1,
+              "2026-07-20T00:34:46.416Z": 1,
+              "2026-07-20T00:34:46.641Z": 1,
+              "2026-07-20T00:34:46.854Z": 1,
+              "2026-07-20T00:34:47.052Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 44,
+            "skippedMovesByReason": {
+              "budget_exceeded": 44
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_in_flight": 44
+            },
+            "eventLoopGaps": 5,
+            "maxEventLoopGapMs": 2557,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 43.65,
+            "cdcFailuresByPartition": {
+              "partitions-p1": 5,
+              "replica_operations-p1": 2,
+              "service_endpoints-p1": 2,
+              "services-p1": 2,
+              "nodes-p1": 1,
+              "control_plane_publications-p1": 1
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 3895,
+            "level50": 328,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 19,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 9,
+              "Failed to deliver CDC event": 10
+            },
+            "executedMoves": 70,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 1,
+              "schema_operations-p1": 15,
+              "sql_transaction_participants-p1": 18,
+              "sql_transactions-p1": 17,
+              "sql_write_operations-p1": 18,
+              "control_plane_publications-p1": 1
+            },
+            "executedMovesByType": {
+              "replace": 6,
+              "add": 56,
+              "remove": 8
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:34:05.459Z": 5,
+              "2026-07-20T00:34:05.477Z": 1,
+              "2026-07-20T00:34:06.508Z": 4,
+              "2026-07-20T00:34:07.750Z": 2,
+              "2026-07-20T00:34:07.751Z": 2,
+              "2026-07-20T00:34:09.988Z": 4,
+              "2026-07-20T00:34:10.899Z": 4,
+              "2026-07-20T00:34:12.126Z": 4,
+              "2026-07-20T00:34:13.877Z": 1,
+              "2026-07-20T00:34:14.097Z": 1,
+              "2026-07-20T00:34:14.293Z": 1,
+              "2026-07-20T00:34:14.465Z": 1,
+              "2026-07-20T00:34:16.696Z": 4,
+              "2026-07-20T00:34:18.123Z": 1,
+              "2026-07-20T00:34:18.303Z": 1,
+              "2026-07-20T00:34:18.507Z": 1,
+              "2026-07-20T00:34:18.712Z": 1,
+              "2026-07-20T00:34:21.972Z": 4,
+              "2026-07-20T00:34:23.346Z": 1,
+              "2026-07-20T00:34:23.613Z": 1,
+              "2026-07-20T00:34:23.860Z": 1,
+              "2026-07-20T00:34:24.107Z": 1,
+              "2026-07-20T00:34:28.534Z": 1,
+              "2026-07-20T00:34:28.821Z": 1,
+              "2026-07-20T00:34:29.193Z": 1,
+              "2026-07-20T00:34:29.546Z": 1,
+              "2026-07-20T00:34:30.898Z": 1,
+              "2026-07-20T00:34:31.948Z": 1,
+              "2026-07-20T00:34:32.600Z": 1,
+              "2026-07-20T00:34:33.185Z": 1,
+              "2026-07-20T00:34:33.193Z": 1,
+              "2026-07-20T00:34:34.410Z": 1,
+              "2026-07-20T00:34:34.418Z": 1,
+              "2026-07-20T00:34:36.811Z": 1,
+              "2026-07-20T00:34:37.520Z": 1,
+              "2026-07-20T00:34:38.092Z": 1,
+              "2026-07-20T00:34:39.204Z": 1,
+              "2026-07-20T00:34:40.725Z": 1,
+              "2026-07-20T00:34:41.182Z": 1,
+              "2026-07-20T00:34:41.748Z": 1,
+              "2026-07-20T00:34:41.992Z": 1,
+              "2026-07-20T00:34:43.334Z": 1,
+              "2026-07-20T00:34:46.416Z": 1,
+              "2026-07-20T00:34:46.641Z": 1,
+              "2026-07-20T00:34:46.854Z": 1,
+              "2026-07-20T00:34:47.052Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 44,
+            "skippedMovesByReason": {
+              "budget_exceeded": 44
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_in_flight": 44
+            },
+            "eventLoopGaps": 5,
+            "maxEventLoopGapMs": 2557,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 43.65,
+            "cdcFailuresByPartition": {
+              "partitions-p1": 4,
+              "replica_operations-p1": 2,
+              "service_endpoints-p1": 2,
+              "services-p1": 2
+            }
+          }
+        },
+        {
+          "nodeId": "2fb70d73-3d5d-4d67-adc2-88ed5e0d9cb4",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/8ddee1ba-e2c7-49a5-bcc1-c629541149bb/2fb70d73-3d5d-4d67-adc2-88ed5e0d9cb4.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 801,
+            "level50": 26,
+            "ackTimeoutPeerAliveSkips": 16,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 16
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 5,
+              "partition:replica_operations-p1-r2": 2,
+              "b878cf98-daf7-4e22-9d70-da51eae1918a/service/swim-ping": 1,
+              "partition:services-p1-r2": 3,
+              "partition:services-p1-r3": 1,
+              "partition:services-p1-r1": 3,
+              "partition:partitions-p1-r1": 1
+            },
+            "correlatedLevel50": 14,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 6,
+              "Failed to deliver CDC event": 6,
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 17,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 17
+            },
+            "executedMovesByType": {
+              "add": 17
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:34:28.657Z": 1,
+              "2026-07-20T00:34:30.593Z": 1,
+              "2026-07-20T00:34:33.869Z": 1,
+              "2026-07-20T00:34:36.052Z": 1,
+              "2026-07-20T00:34:38.977Z": 1,
+              "2026-07-20T00:34:40.777Z": 1,
+              "2026-07-20T00:34:46.169Z": 1,
+              "2026-07-20T00:34:48.633Z": 1,
+              "2026-07-20T00:34:50.491Z": 1,
+              "2026-07-20T00:34:55.473Z": 1,
+              "2026-07-20T00:34:56.781Z": 1,
+              "2026-07-20T00:35:00.478Z": 1,
+              "2026-07-20T00:35:01.895Z": 1,
+              "2026-07-20T00:35:05.289Z": 1,
+              "2026-07-20T00:35:06.866Z": 1,
+              "2026-07-20T00:35:10.698Z": 1,
+              "2026-07-20T00:35:12.351Z": 1
+            },
+            "maxMovesAtOneTimestamp": 1,
+            "skippedMoves": 17,
+            "skippedMovesByReason": {
+              "blocked": 17
+            },
+            "skippedMovesByAdmissionReason": {
+              "replica_inventory_unusable": 17
+            },
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1019,
+            "maxEventLoopUtilization": 0.1906,
+            "maxBlockedPercentOfWall": 11.59,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 6
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 539,
+            "level50": 12,
+            "ackTimeoutPeerAliveSkips": 16,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 16
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 5,
+              "partition:replica_operations-p1-r2": 2,
+              "b878cf98-daf7-4e22-9d70-da51eae1918a/service/swim-ping": 1,
+              "partition:services-p1-r2": 3,
+              "partition:services-p1-r3": 1,
+              "partition:services-p1-r1": 3,
+              "partition:partitions-p1-r1": 1
+            },
+            "correlatedLevel50": 12,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 6,
+              "Failed to deliver CDC event": 6
+            },
+            "executedMoves": 8,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 8
+            },
+            "executedMovesByType": {
+              "add": 8
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:34:28.657Z": 1,
+              "2026-07-20T00:34:30.593Z": 1,
+              "2026-07-20T00:34:33.869Z": 1,
+              "2026-07-20T00:34:36.052Z": 1,
+              "2026-07-20T00:34:38.977Z": 1,
+              "2026-07-20T00:34:40.777Z": 1,
+              "2026-07-20T00:34:46.169Z": 1,
+              "2026-07-20T00:34:48.633Z": 1
+            },
+            "maxMovesAtOneTimestamp": 1,
+            "skippedMoves": 8,
+            "skippedMovesByReason": {
+              "blocked": 8
+            },
+            "skippedMovesByAdmissionReason": {
+              "replica_inventory_unusable": 8
+            },
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1019,
+            "maxEventLoopUtilization": 0.1906,
+            "maxBlockedPercentOfWall": 11.59,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 6
+            }
+          }
+        },
+        {
+          "nodeId": "e066a565-2a70-46e3-af8a-973fe25d44f1",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/8ddee1ba-e2c7-49a5-bcc1-c629541149bb/e066a565-2a70-46e3-af8a-973fe25d44f1.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 374,
+            "level50": 14,
+            "ackTimeoutPeerAliveSkips": 6,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 6
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 2,
+              "partition:replica_operations-p1-r2": 1,
+              "b878cf98-daf7-4e22-9d70-da51eae1918a/service/swim-ping": 1,
+              "partition:storage_reservations-p1-r1": 2
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 296,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 6,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 6
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 2,
+              "partition:replica_operations-p1-r2": 1,
+              "b878cf98-daf7-4e22-9d70-da51eae1918a/service/swim-ping": 1,
+              "partition:storage_reservations-p1-r1": 2
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "82e38e5f-6e68-453f-a1df-29daaec0ea06",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/8ddee1ba-e2c7-49a5-bcc1-c629541149bb/82e38e5f-6e68-453f-a1df-29daaec0ea06.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 399,
+            "level50": 11,
+            "ackTimeoutPeerAliveSkips": 3,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 3
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 1,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r1": 1
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 319,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 3,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 3
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 1,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r1": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "630bd7fd-36bf-4dfc-bc2c-db30d5060eb5",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/8ddee1ba-e2c7-49a5-bcc1-c629541149bb/630bd7fd-36bf-4dfc-bc2c-db30d5060eb5.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 352,
+            "level50": 11,
+            "ackTimeoutPeerAliveSkips": 4,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 4
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 1,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 1,
+              "partition:services-p1-r1": 1
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 291,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 4,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "b878cf98-daf7-4e22-9d70-da51eae1918a": 4
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 1,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 1,
+              "partition:services-p1-r1": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          }
+        }
+      ]
+    },
+    {
+      "slot": 2,
+      "clusterId": "a0cb2222-7e4a-4642-af93-931d1e47fd81",
+      "firstSeenAt": "2026-07-20T00:35:17.330Z",
+      "completedAt": "2026-07-20T00:40:33.836Z",
+      "seedNodeId": "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36",
+      "shutdownCutoffExclusive": "2026-07-20T00:36:34.460Z",
+      "ackReferenceExclusive": {
+        "nodesP1Exclusive": 58,
+        "allTargetsExclusive": 806,
+        "fixedSamples": [
+          {
+            "id": "fixed-1",
+            "nodesP1": 58,
+            "allTargets": 806
+          },
+          {
+            "id": "fixed-2",
+            "nodesP1": 10,
+            "allTargets": 174
+          }
+        ]
+      },
+      "comparisonWindow": "pre-SIGTERM",
+      "ackSkipHighNodesP1": false,
+      "ackSkipHighAllTargets": false,
+      "ackSkipHigh": false,
+      "highWithCorrelatedFailure": false,
+      "sourceFingerprints": [
+        "8a64ad4bd3d98636"
+      ],
+      "total": {
+        "structuredEvents": 6921,
+        "level50": 176,
+        "ackTimeoutPeerAliveSkips": 244,
+        "ackTimeoutPeerAliveSkipsNodesP1": 7,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 244
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:services-p1-r1": 38,
+          "partition:replica_operations-p1-r1": 57,
+          "partition:services-p1-r2": 24,
+          "partition:replica_operations-p1-r2": 44,
+          "partition:services-p1-r3": 19,
+          "partition:replica_operations-p1-r3": 32,
+          "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 9,
+          "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/replica-dispatch": 4,
+          "partition:tables-p1-r1": 1,
+          "partition:control_plane_publications-p1-r1": 1,
+          "partition:tables-p1-r2": 1,
+          "partition:storage_reservations-p1-r1": 3,
+          "partition:storage_reservations-p1-r2": 2,
+          "partition:control_plane_publications-p1-r2": 1,
+          "partition:storage_reservations-p1-r3": 1,
+          "partition:nodes-p1-r1": 6,
+          "partition:nodes-p1-r2": 1
+        },
+        "correlatedLevel50": 162,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 14,
+          "Failed to deliver CDC event": 26,
+          "WebSocket error": 61,
+          "Reconnection failed": 61
+        },
+        "executedMoves": 68,
+        "executedMovesByEntity": {
+          "replica_operations-p1": 30,
+          "schema_operations-p1": 7,
+          "sql_transaction_participants-p1": 6,
+          "sql_transactions-p1": 10,
+          "sql_write_operations-p1": 10,
+          "control_plane_publications-p1": 5
+        },
+        "executedMovesByType": {
+          "replace": 29,
+          "add": 25,
+          "remove": 14
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:35:29.908Z": 5,
+          "2026-07-20T00:35:29.953Z": 1,
+          "2026-07-20T00:35:30.859Z": 4,
+          "2026-07-20T00:35:31.993Z": 1,
+          "2026-07-20T00:35:32.653Z": 4,
+          "2026-07-20T00:35:33.000Z": 1,
+          "2026-07-20T00:35:34.200Z": 1,
+          "2026-07-20T00:35:35.468Z": 1,
+          "2026-07-20T00:35:36.870Z": 1,
+          "2026-07-20T00:35:37.618Z": 1,
+          "2026-07-20T00:35:38.708Z": 1,
+          "2026-07-20T00:35:38.751Z": 1,
+          "2026-07-20T00:35:39.689Z": 1,
+          "2026-07-20T00:35:41.008Z": 1,
+          "2026-07-20T00:35:41.949Z": 1,
+          "2026-07-20T00:35:43.746Z": 2,
+          "2026-07-20T00:35:45.004Z": 2,
+          "2026-07-20T00:35:45.018Z": 2,
+          "2026-07-20T00:35:45.988Z": 1,
+          "2026-07-20T00:35:46.071Z": 1,
+          "2026-07-20T00:35:48.522Z": 2,
+          "2026-07-20T00:35:48.564Z": 1,
+          "2026-07-20T00:35:50.750Z": 1,
+          "2026-07-20T00:35:51.063Z": 1,
+          "2026-07-20T00:35:52.325Z": 1,
+          "2026-07-20T00:35:53.009Z": 1,
+          "2026-07-20T00:35:53.474Z": 1,
+          "2026-07-20T00:35:56.188Z": 1,
+          "2026-07-20T00:35:57.088Z": 1,
+          "2026-07-20T00:35:57.421Z": 1,
+          "2026-07-20T00:35:58.515Z": 1,
+          "2026-07-20T00:35:59.122Z": 1,
+          "2026-07-20T00:36:01.198Z": 1,
+          "2026-07-20T00:36:02.087Z": 1,
+          "2026-07-20T00:36:02.855Z": 1,
+          "2026-07-20T00:36:03.777Z": 1,
+          "2026-07-20T00:36:04.327Z": 1,
+          "2026-07-20T00:36:05.227Z": 1,
+          "2026-07-20T00:36:07.320Z": 1,
+          "2026-07-20T00:36:07.762Z": 1,
+          "2026-07-20T00:36:08.414Z": 1,
+          "2026-07-20T00:36:09.570Z": 1,
+          "2026-07-20T00:36:11.573Z": 1,
+          "2026-07-20T00:36:12.443Z": 1,
+          "2026-07-20T00:36:13.231Z": 1,
+          "2026-07-20T00:36:14.992Z": 1,
+          "2026-07-20T00:36:15.772Z": 1,
+          "2026-07-20T00:36:16.105Z": 1,
+          "2026-07-20T00:36:17.121Z": 1,
+          "2026-07-20T00:36:18.123Z": 1,
+          "2026-07-20T00:36:23.160Z": 1,
+          "2026-07-20T00:36:23.431Z": 1,
+          "2026-07-20T00:36:25.291Z": 1,
+          "2026-07-20T00:36:29.077Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 43,
+        "skippedMovesByReason": {
+          "budget_exceeded": 40,
+          "blocked": 3
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_in_flight": 14,
+          "cluster_member_unhealthy": 1,
+          "operation_ledger_self_move_waiting_for_idle_ledger": 26,
+          "replica_inventory_unusable": 2
+        },
+        "eventLoopGaps": 19,
+        "maxEventLoopGapMs": 6049,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 63.6,
+        "cdcFailuresByPartition": {
+          "partitions-p1": 2,
+          "services-p1": 2,
+          "replica_operations-p1": 8,
+          "storage_reservations-p1": 2,
+          "service_endpoints-p1": 1,
+          "control_plane_publications-p1": 2,
+          "nodes-p1": 9
+        }
+      },
+      "preShutdown": {
+        "structuredEvents": 6155,
+        "level50": 45,
+        "ackTimeoutPeerAliveSkips": 244,
+        "ackTimeoutPeerAliveSkipsNodesP1": 7,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 244
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:services-p1-r1": 38,
+          "partition:replica_operations-p1-r1": 57,
+          "partition:services-p1-r2": 24,
+          "partition:replica_operations-p1-r2": 44,
+          "partition:services-p1-r3": 19,
+          "partition:replica_operations-p1-r3": 32,
+          "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 9,
+          "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/replica-dispatch": 4,
+          "partition:tables-p1-r1": 1,
+          "partition:control_plane_publications-p1-r1": 1,
+          "partition:tables-p1-r2": 1,
+          "partition:storage_reservations-p1-r1": 3,
+          "partition:storage_reservations-p1-r2": 2,
+          "partition:control_plane_publications-p1-r2": 1,
+          "partition:storage_reservations-p1-r3": 1,
+          "partition:nodes-p1-r1": 6,
+          "partition:nodes-p1-r2": 1
+        },
+        "correlatedLevel50": 32,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 14,
+          "Failed to deliver CDC event": 16,
+          "WebSocket error": 1,
+          "Reconnection failed": 1
+        },
+        "executedMoves": 68,
+        "executedMovesByEntity": {
+          "replica_operations-p1": 30,
+          "schema_operations-p1": 7,
+          "sql_transaction_participants-p1": 6,
+          "sql_transactions-p1": 10,
+          "sql_write_operations-p1": 10,
+          "control_plane_publications-p1": 5
+        },
+        "executedMovesByType": {
+          "replace": 29,
+          "add": 25,
+          "remove": 14
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:35:29.908Z": 5,
+          "2026-07-20T00:35:29.953Z": 1,
+          "2026-07-20T00:35:30.859Z": 4,
+          "2026-07-20T00:35:31.993Z": 1,
+          "2026-07-20T00:35:32.653Z": 4,
+          "2026-07-20T00:35:33.000Z": 1,
+          "2026-07-20T00:35:34.200Z": 1,
+          "2026-07-20T00:35:35.468Z": 1,
+          "2026-07-20T00:35:36.870Z": 1,
+          "2026-07-20T00:35:37.618Z": 1,
+          "2026-07-20T00:35:38.708Z": 1,
+          "2026-07-20T00:35:38.751Z": 1,
+          "2026-07-20T00:35:39.689Z": 1,
+          "2026-07-20T00:35:41.008Z": 1,
+          "2026-07-20T00:35:41.949Z": 1,
+          "2026-07-20T00:35:43.746Z": 2,
+          "2026-07-20T00:35:45.004Z": 2,
+          "2026-07-20T00:35:45.018Z": 2,
+          "2026-07-20T00:35:45.988Z": 1,
+          "2026-07-20T00:35:46.071Z": 1,
+          "2026-07-20T00:35:48.522Z": 2,
+          "2026-07-20T00:35:48.564Z": 1,
+          "2026-07-20T00:35:50.750Z": 1,
+          "2026-07-20T00:35:51.063Z": 1,
+          "2026-07-20T00:35:52.325Z": 1,
+          "2026-07-20T00:35:53.009Z": 1,
+          "2026-07-20T00:35:53.474Z": 1,
+          "2026-07-20T00:35:56.188Z": 1,
+          "2026-07-20T00:35:57.088Z": 1,
+          "2026-07-20T00:35:57.421Z": 1,
+          "2026-07-20T00:35:58.515Z": 1,
+          "2026-07-20T00:35:59.122Z": 1,
+          "2026-07-20T00:36:01.198Z": 1,
+          "2026-07-20T00:36:02.087Z": 1,
+          "2026-07-20T00:36:02.855Z": 1,
+          "2026-07-20T00:36:03.777Z": 1,
+          "2026-07-20T00:36:04.327Z": 1,
+          "2026-07-20T00:36:05.227Z": 1,
+          "2026-07-20T00:36:07.320Z": 1,
+          "2026-07-20T00:36:07.762Z": 1,
+          "2026-07-20T00:36:08.414Z": 1,
+          "2026-07-20T00:36:09.570Z": 1,
+          "2026-07-20T00:36:11.573Z": 1,
+          "2026-07-20T00:36:12.443Z": 1,
+          "2026-07-20T00:36:13.231Z": 1,
+          "2026-07-20T00:36:14.992Z": 1,
+          "2026-07-20T00:36:15.772Z": 1,
+          "2026-07-20T00:36:16.105Z": 1,
+          "2026-07-20T00:36:17.121Z": 1,
+          "2026-07-20T00:36:18.123Z": 1,
+          "2026-07-20T00:36:23.160Z": 1,
+          "2026-07-20T00:36:23.431Z": 1,
+          "2026-07-20T00:36:25.291Z": 1,
+          "2026-07-20T00:36:29.077Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 43,
+        "skippedMovesByReason": {
+          "budget_exceeded": 40,
+          "blocked": 3
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_in_flight": 14,
+          "cluster_member_unhealthy": 1,
+          "operation_ledger_self_move_waiting_for_idle_ledger": 26,
+          "replica_inventory_unusable": 2
+        },
+        "eventLoopGaps": 19,
+        "maxEventLoopGapMs": 6049,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 63.6,
+        "cdcFailuresByPartition": {
+          "partitions-p1": 1,
+          "services-p1": 2,
+          "replica_operations-p1": 8,
+          "storage_reservations-p1": 2,
+          "service_endpoints-p1": 1,
+          "control_plane_publications-p1": 2
+        }
+      },
+      "nodes": [
+        {
+          "nodeId": "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36",
+          "seed": true,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/a0cb2222-7e4a-4642-af93-931d1e47fd81/4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 4872,
+            "level50": 45,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 42,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 14,
+              "Failed to deliver CDC event": 26,
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 67,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 30,
+              "schema_operations-p1": 6,
+              "sql_transaction_participants-p1": 6,
+              "sql_transactions-p1": 10,
+              "sql_write_operations-p1": 10,
+              "control_plane_publications-p1": 5
+            },
+            "executedMovesByType": {
+              "replace": 28,
+              "add": 25,
+              "remove": 14
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:35:29.908Z": 5,
+              "2026-07-20T00:35:29.953Z": 1,
+              "2026-07-20T00:35:30.859Z": 4,
+              "2026-07-20T00:35:31.993Z": 1,
+              "2026-07-20T00:35:32.653Z": 4,
+              "2026-07-20T00:35:33.000Z": 1,
+              "2026-07-20T00:35:34.200Z": 1,
+              "2026-07-20T00:35:35.468Z": 1,
+              "2026-07-20T00:35:36.870Z": 1,
+              "2026-07-20T00:35:37.618Z": 1,
+              "2026-07-20T00:35:38.708Z": 1,
+              "2026-07-20T00:35:38.751Z": 1,
+              "2026-07-20T00:35:39.689Z": 1,
+              "2026-07-20T00:35:41.008Z": 1,
+              "2026-07-20T00:35:41.949Z": 1,
+              "2026-07-20T00:35:43.746Z": 2,
+              "2026-07-20T00:35:45.004Z": 2,
+              "2026-07-20T00:35:45.018Z": 2,
+              "2026-07-20T00:35:45.988Z": 1,
+              "2026-07-20T00:35:46.071Z": 1,
+              "2026-07-20T00:35:48.522Z": 2,
+              "2026-07-20T00:35:48.564Z": 1,
+              "2026-07-20T00:35:50.750Z": 1,
+              "2026-07-20T00:35:51.063Z": 1,
+              "2026-07-20T00:35:52.325Z": 1,
+              "2026-07-20T00:35:53.009Z": 1,
+              "2026-07-20T00:35:53.474Z": 1,
+              "2026-07-20T00:35:56.188Z": 1,
+              "2026-07-20T00:35:57.088Z": 1,
+              "2026-07-20T00:35:57.421Z": 1,
+              "2026-07-20T00:35:58.515Z": 1,
+              "2026-07-20T00:35:59.122Z": 1,
+              "2026-07-20T00:36:01.198Z": 1,
+              "2026-07-20T00:36:02.087Z": 1,
+              "2026-07-20T00:36:02.855Z": 1,
+              "2026-07-20T00:36:03.777Z": 1,
+              "2026-07-20T00:36:04.327Z": 1,
+              "2026-07-20T00:36:05.227Z": 1,
+              "2026-07-20T00:36:07.320Z": 1,
+              "2026-07-20T00:36:07.762Z": 1,
+              "2026-07-20T00:36:08.414Z": 1,
+              "2026-07-20T00:36:09.570Z": 1,
+              "2026-07-20T00:36:11.573Z": 1,
+              "2026-07-20T00:36:12.443Z": 1,
+              "2026-07-20T00:36:13.231Z": 1,
+              "2026-07-20T00:36:14.992Z": 1,
+              "2026-07-20T00:36:15.772Z": 1,
+              "2026-07-20T00:36:16.105Z": 1,
+              "2026-07-20T00:36:17.121Z": 1,
+              "2026-07-20T00:36:18.123Z": 1,
+              "2026-07-20T00:36:23.160Z": 1,
+              "2026-07-20T00:36:23.431Z": 1,
+              "2026-07-20T00:36:25.291Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 42,
+            "skippedMovesByReason": {
+              "budget_exceeded": 40,
+              "blocked": 2
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_in_flight": 14,
+              "cluster_member_unhealthy": 1,
+              "operation_ledger_self_move_waiting_for_idle_ledger": 26,
+              "replica_inventory_unusable": 1
+            },
+            "eventLoopGaps": 15,
+            "maxEventLoopGapMs": 6049,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 63.6,
+            "cdcFailuresByPartition": {
+              "partitions-p1": 2,
+              "services-p1": 2,
+              "replica_operations-p1": 8,
+              "storage_reservations-p1": 2,
+              "service_endpoints-p1": 1,
+              "control_plane_publications-p1": 2,
+              "nodes-p1": 9
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 4454,
+            "level50": 35,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 32,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 14,
+              "Failed to deliver CDC event": 16,
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 67,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 30,
+              "schema_operations-p1": 6,
+              "sql_transaction_participants-p1": 6,
+              "sql_transactions-p1": 10,
+              "sql_write_operations-p1": 10,
+              "control_plane_publications-p1": 5
+            },
+            "executedMovesByType": {
+              "replace": 28,
+              "add": 25,
+              "remove": 14
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:35:29.908Z": 5,
+              "2026-07-20T00:35:29.953Z": 1,
+              "2026-07-20T00:35:30.859Z": 4,
+              "2026-07-20T00:35:31.993Z": 1,
+              "2026-07-20T00:35:32.653Z": 4,
+              "2026-07-20T00:35:33.000Z": 1,
+              "2026-07-20T00:35:34.200Z": 1,
+              "2026-07-20T00:35:35.468Z": 1,
+              "2026-07-20T00:35:36.870Z": 1,
+              "2026-07-20T00:35:37.618Z": 1,
+              "2026-07-20T00:35:38.708Z": 1,
+              "2026-07-20T00:35:38.751Z": 1,
+              "2026-07-20T00:35:39.689Z": 1,
+              "2026-07-20T00:35:41.008Z": 1,
+              "2026-07-20T00:35:41.949Z": 1,
+              "2026-07-20T00:35:43.746Z": 2,
+              "2026-07-20T00:35:45.004Z": 2,
+              "2026-07-20T00:35:45.018Z": 2,
+              "2026-07-20T00:35:45.988Z": 1,
+              "2026-07-20T00:35:46.071Z": 1,
+              "2026-07-20T00:35:48.522Z": 2,
+              "2026-07-20T00:35:48.564Z": 1,
+              "2026-07-20T00:35:50.750Z": 1,
+              "2026-07-20T00:35:51.063Z": 1,
+              "2026-07-20T00:35:52.325Z": 1,
+              "2026-07-20T00:35:53.009Z": 1,
+              "2026-07-20T00:35:53.474Z": 1,
+              "2026-07-20T00:35:56.188Z": 1,
+              "2026-07-20T00:35:57.088Z": 1,
+              "2026-07-20T00:35:57.421Z": 1,
+              "2026-07-20T00:35:58.515Z": 1,
+              "2026-07-20T00:35:59.122Z": 1,
+              "2026-07-20T00:36:01.198Z": 1,
+              "2026-07-20T00:36:02.087Z": 1,
+              "2026-07-20T00:36:02.855Z": 1,
+              "2026-07-20T00:36:03.777Z": 1,
+              "2026-07-20T00:36:04.327Z": 1,
+              "2026-07-20T00:36:05.227Z": 1,
+              "2026-07-20T00:36:07.320Z": 1,
+              "2026-07-20T00:36:07.762Z": 1,
+              "2026-07-20T00:36:08.414Z": 1,
+              "2026-07-20T00:36:09.570Z": 1,
+              "2026-07-20T00:36:11.573Z": 1,
+              "2026-07-20T00:36:12.443Z": 1,
+              "2026-07-20T00:36:13.231Z": 1,
+              "2026-07-20T00:36:14.992Z": 1,
+              "2026-07-20T00:36:15.772Z": 1,
+              "2026-07-20T00:36:16.105Z": 1,
+              "2026-07-20T00:36:17.121Z": 1,
+              "2026-07-20T00:36:18.123Z": 1,
+              "2026-07-20T00:36:23.160Z": 1,
+              "2026-07-20T00:36:23.431Z": 1,
+              "2026-07-20T00:36:25.291Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 42,
+            "skippedMovesByReason": {
+              "budget_exceeded": 40,
+              "blocked": 2
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_in_flight": 14,
+              "cluster_member_unhealthy": 1,
+              "operation_ledger_self_move_waiting_for_idle_ledger": 26,
+              "replica_inventory_unusable": 1
+            },
+            "eventLoopGaps": 15,
+            "maxEventLoopGapMs": 6049,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 63.6,
+            "cdcFailuresByPartition": {
+              "partitions-p1": 1,
+              "services-p1": 2,
+              "replica_operations-p1": 8,
+              "storage_reservations-p1": 2,
+              "service_endpoints-p1": 1,
+              "control_plane_publications-p1": 2
+            }
+          }
+        },
+        {
+          "nodeId": "568c8d9f-d56c-4c97-9e59-47b553d48de9",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/a0cb2222-7e4a-4642-af93-931d1e47fd81/568c8d9f-d56c-4c97-9e59-47b553d48de9.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 520,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 97,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 97
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:services-p1-r1": 14,
+              "partition:replica_operations-p1-r1": 22,
+              "partition:services-p1-r2": 9,
+              "partition:replica_operations-p1-r2": 16,
+              "partition:services-p1-r3": 7,
+              "partition:replica_operations-p1-r3": 16,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 2,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/replica-dispatch": 2,
+              "partition:tables-p1-r1": 1,
+              "partition:control_plane_publications-p1-r1": 1,
+              "partition:tables-p1-r2": 1,
+              "partition:storage_reservations-p1-r1": 2,
+              "partition:storage_reservations-p1-r2": 2,
+              "partition:control_plane_publications-p1-r2": 1,
+              "partition:storage_reservations-p1-r3": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1283,
+            "maxEventLoopUtilization": 0.1764,
+            "maxBlockedPercentOfWall": 9.92,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 470,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 97,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 97
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:services-p1-r1": 14,
+              "partition:replica_operations-p1-r1": 22,
+              "partition:services-p1-r2": 9,
+              "partition:replica_operations-p1-r2": 16,
+              "partition:services-p1-r3": 7,
+              "partition:replica_operations-p1-r3": 16,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 2,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/replica-dispatch": 2,
+              "partition:tables-p1-r1": 1,
+              "partition:control_plane_publications-p1-r1": 1,
+              "partition:tables-p1-r2": 1,
+              "partition:storage_reservations-p1-r1": 2,
+              "partition:storage_reservations-p1-r2": 2,
+              "partition:control_plane_publications-p1-r2": 1,
+              "partition:storage_reservations-p1-r3": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1283,
+            "maxEventLoopUtilization": 0.1764,
+            "maxBlockedPercentOfWall": 9.92,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "d2f81a84-e278-49f8-8837-0d15cc1f2199",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/a0cb2222-7e4a-4642-af93-931d1e47fd81/d2f81a84-e278-49f8-8837-0d15cc1f2199.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 505,
+            "level50": 9,
+            "ackTimeoutPeerAliveSkips": 64,
+            "ackTimeoutPeerAliveSkipsNodesP1": 6,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 64
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 13,
+              "partition:replica_operations-p1-r2": 10,
+              "partition:replica_operations-p1-r3": 4,
+              "partition:services-p1-r1": 12,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 4,
+              "partition:services-p1-r2": 8,
+              "partition:services-p1-r3": 6,
+              "partition:nodes-p1-r1": 5,
+              "partition:storage_reservations-p1-r1": 1,
+              "partition:nodes-p1-r2": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1150,
+            "maxEventLoopUtilization": 0.0873,
+            "maxBlockedPercentOfWall": 3.14,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 443,
+            "level50": 8,
+            "ackTimeoutPeerAliveSkips": 64,
+            "ackTimeoutPeerAliveSkipsNodesP1": 6,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 64
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 13,
+              "partition:replica_operations-p1-r2": 10,
+              "partition:replica_operations-p1-r3": 4,
+              "partition:services-p1-r1": 12,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 4,
+              "partition:services-p1-r2": 8,
+              "partition:services-p1-r3": 6,
+              "partition:nodes-p1-r1": 5,
+              "partition:storage_reservations-p1-r1": 1,
+              "partition:nodes-p1-r2": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1150,
+            "maxEventLoopUtilization": 0.0873,
+            "maxBlockedPercentOfWall": 3.14,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "d6247833-8495-4573-927d-eea6f2a3b2cb",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/a0cb2222-7e4a-4642-af93-931d1e47fd81/d6247833-8495-4573-927d-eea6f2a3b2cb.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 562,
+            "level50": 121,
+            "ackTimeoutPeerAliveSkips": 69,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 69
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 20,
+              "partition:services-p1-r1": 11,
+              "partition:replica_operations-p1-r2": 15,
+              "partition:services-p1-r2": 5,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 2,
+              "partition:replica_operations-p1-r3": 10,
+              "partition:services-p1-r3": 4,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/replica-dispatch": 2
+            },
+            "correlatedLevel50": 120,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 60,
+              "Reconnection failed": 60
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1095,
+            "maxEventLoopUtilization": 0.0691,
+            "maxBlockedPercentOfWall": 2.4,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 389,
+            "level50": 1,
+            "ackTimeoutPeerAliveSkips": 69,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 69
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 20,
+              "partition:services-p1-r1": 11,
+              "partition:replica_operations-p1-r2": 15,
+              "partition:services-p1-r2": 5,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 2,
+              "partition:replica_operations-p1-r3": 10,
+              "partition:services-p1-r3": 4,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/replica-dispatch": 2
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1095,
+            "maxEventLoopUtilization": 0.0691,
+            "maxBlockedPercentOfWall": 2.4,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "b7ccb0d9-a873-4ca7-82cc-83e4492d331c",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/a0cb2222-7e4a-4642-af93-931d1e47fd81/b7ccb0d9-a873-4ca7-82cc-83e4492d331c.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 462,
+            "level50": 1,
+            "ackTimeoutPeerAliveSkips": 14,
+            "ackTimeoutPeerAliveSkipsNodesP1": 1,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 14
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r2": 3,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 1,
+              "partition:replica_operations-p1-r3": 2,
+              "partition:replica_operations-p1-r1": 2,
+              "partition:services-p1-r2": 2,
+              "partition:services-p1-r3": 2,
+              "partition:services-p1-r1": 1,
+              "partition:nodes-p1-r1": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 1,
+            "executedMovesByEntity": {
+              "schema_operations-p1": 1
+            },
+            "executedMovesByType": {
+              "replace": 1
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:36:29.077Z": 1
+            },
+            "maxMovesAtOneTimestamp": 1,
+            "skippedMoves": 1,
+            "skippedMovesByReason": {
+              "blocked": 1
+            },
+            "skippedMovesByAdmissionReason": {
+              "replica_inventory_unusable": 1
+            },
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1046,
+            "maxEventLoopUtilization": 0.0856,
+            "maxBlockedPercentOfWall": 2.55,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 399,
+            "level50": 1,
+            "ackTimeoutPeerAliveSkips": 14,
+            "ackTimeoutPeerAliveSkipsNodesP1": 1,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36": 14
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r2": 3,
+              "4ff0ab4a-2759-4a0f-a1fb-cc414ee95f36/service/swim-ping": 1,
+              "partition:replica_operations-p1-r3": 2,
+              "partition:replica_operations-p1-r1": 2,
+              "partition:services-p1-r2": 2,
+              "partition:services-p1-r3": 2,
+              "partition:services-p1-r1": 1,
+              "partition:nodes-p1-r1": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 1,
+            "executedMovesByEntity": {
+              "schema_operations-p1": 1
+            },
+            "executedMovesByType": {
+              "replace": 1
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:36:29.077Z": 1
+            },
+            "maxMovesAtOneTimestamp": 1,
+            "skippedMoves": 1,
+            "skippedMovesByReason": {
+              "blocked": 1
+            },
+            "skippedMovesByAdmissionReason": {
+              "replica_inventory_unusable": 1
+            },
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1046,
+            "maxEventLoopUtilization": 0.0856,
+            "maxBlockedPercentOfWall": 2.55,
+            "cdcFailuresByPartition": {}
+          }
+        }
+      ]
+    },
+    {
+      "slot": 3,
+      "clusterId": "4370596a-0f36-48bb-af82-d450b067bb64",
+      "firstSeenAt": "2026-07-20T00:36:40.119Z",
+      "completedAt": "2026-07-20T00:40:33.836Z",
+      "seedNodeId": "5733e9d7-0a7c-4dab-8962-24d316823b5e",
+      "shutdownCutoffExclusive": "2026-07-20T00:37:35.214Z",
+      "ackReferenceExclusive": {
+        "nodesP1Exclusive": 58,
+        "allTargetsExclusive": 806,
+        "fixedSamples": [
+          {
+            "id": "fixed-1",
+            "nodesP1": 58,
+            "allTargets": 806
+          },
+          {
+            "id": "fixed-2",
+            "nodesP1": 10,
+            "allTargets": 174
+          }
+        ]
+      },
+      "comparisonWindow": "pre-SIGTERM",
+      "ackSkipHighNodesP1": false,
+      "ackSkipHighAllTargets": false,
+      "ackSkipHigh": false,
+      "highWithCorrelatedFailure": false,
+      "sourceFingerprints": [
+        "8a64ad4bd3d98636"
+      ],
+      "total": {
+        "structuredEvents": 5954,
+        "level50": 79,
+        "ackTimeoutPeerAliveSkips": 34,
+        "ackTimeoutPeerAliveSkipsNodesP1": 0,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "5733e9d7-0a7c-4dab-8962-24d316823b5e": 34
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:replica_operations-p1-r1": 12,
+          "partition:services-p1-r1": 4,
+          "partition:replica_operations-p1-r2": 3,
+          "partition:services-p1-r2": 11,
+          "5733e9d7-0a7c-4dab-8962-24d316823b5e/service/swim-ping": 1,
+          "partition:storage_reservations-p1-r1": 2,
+          "partition:services-p1-r3": 1
+        },
+        "correlatedLevel50": 25,
+        "correlatedLevel50ByMessage": {
+          "Failed to deliver CDC event": 11,
+          "Raft CDC command failed": 6,
+          "WebSocket error": 4,
+          "Reconnection failed": 4
+        },
+        "executedMoves": 103,
+        "executedMovesByEntity": {
+          "replica_operations-p1": 18,
+          "schema_operations-p1": 16,
+          "sql_transaction_participants-p1": 20,
+          "sql_transactions-p1": 18,
+          "sql_write_operations-p1": 21,
+          "control_plane_publications-p1": 10
+        },
+        "executedMovesByType": {
+          "replace": 9,
+          "add": 78,
+          "remove": 16
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:36:53.567Z": 5,
+          "2026-07-20T00:36:53.585Z": 1,
+          "2026-07-20T00:36:54.589Z": 4,
+          "2026-07-20T00:36:55.820Z": 4,
+          "2026-07-20T00:36:56.962Z": 4,
+          "2026-07-20T00:36:58.598Z": 4,
+          "2026-07-20T00:37:00.491Z": 4,
+          "2026-07-20T00:37:00.851Z": 1,
+          "2026-07-20T00:37:01.796Z": 4,
+          "2026-07-20T00:37:02.052Z": 1,
+          "2026-07-20T00:37:03.316Z": 4,
+          "2026-07-20T00:37:03.567Z": 1,
+          "2026-07-20T00:37:04.475Z": 4,
+          "2026-07-20T00:37:04.688Z": 1,
+          "2026-07-20T00:37:05.492Z": 4,
+          "2026-07-20T00:37:05.754Z": 1,
+          "2026-07-20T00:37:06.907Z": 1,
+          "2026-07-20T00:37:07.090Z": 1,
+          "2026-07-20T00:37:07.275Z": 1,
+          "2026-07-20T00:37:07.460Z": 1,
+          "2026-07-20T00:37:10.036Z": 1,
+          "2026-07-20T00:37:10.658Z": 4,
+          "2026-07-20T00:37:11.855Z": 1,
+          "2026-07-20T00:37:12.055Z": 1,
+          "2026-07-20T00:37:12.285Z": 1,
+          "2026-07-20T00:37:12.528Z": 1,
+          "2026-07-20T00:37:12.753Z": 1,
+          "2026-07-20T00:37:13.953Z": 1,
+          "2026-07-20T00:37:14.449Z": 1,
+          "2026-07-20T00:37:14.918Z": 1,
+          "2026-07-20T00:37:15.506Z": 1,
+          "2026-07-20T00:37:16.321Z": 1,
+          "2026-07-20T00:37:16.328Z": 1,
+          "2026-07-20T00:37:17.718Z": 1,
+          "2026-07-20T00:37:17.726Z": 1,
+          "2026-07-20T00:37:18.973Z": 1,
+          "2026-07-20T00:37:19.266Z": 1,
+          "2026-07-20T00:37:19.974Z": 1,
+          "2026-07-20T00:37:21.480Z": 1,
+          "2026-07-20T00:37:22.670Z": 1,
+          "2026-07-20T00:37:23.052Z": 1,
+          "2026-07-20T00:37:23.967Z": 1,
+          "2026-07-20T00:37:26.180Z": 1,
+          "2026-07-20T00:37:26.181Z": 1,
+          "2026-07-20T00:37:26.182Z": 1,
+          "2026-07-20T00:37:27.433Z": 1,
+          "2026-07-20T00:37:27.792Z": 1,
+          "2026-07-20T00:37:28.750Z": 1,
+          "2026-07-20T00:37:28.997Z": 1,
+          "2026-07-20T00:37:29.986Z": 1,
+          "2026-07-20T00:37:32.127Z": 1,
+          "2026-07-20T00:37:33.728Z": 1,
+          "2026-07-20T00:37:11.149Z": 1,
+          "2026-07-20T00:37:13.465Z": 1,
+          "2026-07-20T00:37:17.193Z": 1,
+          "2026-07-20T00:37:18.796Z": 1,
+          "2026-07-20T00:37:21.560Z": 1,
+          "2026-07-20T00:37:22.404Z": 1,
+          "2026-07-20T00:37:29.468Z": 1,
+          "2026-07-20T00:37:32.193Z": 1,
+          "2026-07-20T00:37:33.999Z": 1,
+          "2026-07-20T00:37:39.506Z": 1,
+          "2026-07-20T00:37:43.692Z": 1,
+          "2026-07-20T00:37:45.083Z": 1,
+          "2026-07-20T00:37:48.599Z": 1,
+          "2026-07-20T00:37:49.937Z": 1,
+          "2026-07-20T00:37:54.157Z": 1,
+          "2026-07-20T00:37:55.856Z": 1,
+          "2026-07-20T00:37:58.875Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 71,
+        "skippedMovesByReason": {
+          "budget_exceeded": 54,
+          "blocked": 17
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_in_flight": 54,
+          "replica_inventory_unusable": 17
+        },
+        "eventLoopGaps": 7,
+        "maxEventLoopGapMs": 2324,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 43.65,
+        "cdcFailuresByPartition": {
+          "nodes-p1": 1,
+          "control_plane_publications-p1": 2,
+          "partitions-p1": 2,
+          "replica_operations-p1": 6
+        }
+      },
+      "preShutdown": {
+        "structuredEvents": 5102,
+        "level50": 20,
+        "ackTimeoutPeerAliveSkips": 34,
+        "ackTimeoutPeerAliveSkipsNodesP1": 0,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "5733e9d7-0a7c-4dab-8962-24d316823b5e": 34
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:replica_operations-p1-r1": 12,
+          "partition:services-p1-r1": 4,
+          "partition:replica_operations-p1-r2": 3,
+          "partition:services-p1-r2": 11,
+          "5733e9d7-0a7c-4dab-8962-24d316823b5e/service/swim-ping": 1,
+          "partition:storage_reservations-p1-r1": 2,
+          "partition:services-p1-r3": 1
+        },
+        "correlatedLevel50": 12,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 6,
+          "Failed to deliver CDC event": 6
+        },
+        "executedMoves": 95,
+        "executedMovesByEntity": {
+          "replica_operations-p1": 10,
+          "schema_operations-p1": 16,
+          "sql_transaction_participants-p1": 20,
+          "sql_transactions-p1": 18,
+          "sql_write_operations-p1": 21,
+          "control_plane_publications-p1": 10
+        },
+        "executedMovesByType": {
+          "replace": 9,
+          "add": 70,
+          "remove": 16
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:36:53.567Z": 5,
+          "2026-07-20T00:36:53.585Z": 1,
+          "2026-07-20T00:36:54.589Z": 4,
+          "2026-07-20T00:36:55.820Z": 4,
+          "2026-07-20T00:36:56.962Z": 4,
+          "2026-07-20T00:36:58.598Z": 4,
+          "2026-07-20T00:37:00.491Z": 4,
+          "2026-07-20T00:37:00.851Z": 1,
+          "2026-07-20T00:37:01.796Z": 4,
+          "2026-07-20T00:37:02.052Z": 1,
+          "2026-07-20T00:37:03.316Z": 4,
+          "2026-07-20T00:37:03.567Z": 1,
+          "2026-07-20T00:37:04.475Z": 4,
+          "2026-07-20T00:37:04.688Z": 1,
+          "2026-07-20T00:37:05.492Z": 4,
+          "2026-07-20T00:37:05.754Z": 1,
+          "2026-07-20T00:37:06.907Z": 1,
+          "2026-07-20T00:37:07.090Z": 1,
+          "2026-07-20T00:37:07.275Z": 1,
+          "2026-07-20T00:37:07.460Z": 1,
+          "2026-07-20T00:37:10.036Z": 1,
+          "2026-07-20T00:37:10.658Z": 4,
+          "2026-07-20T00:37:11.855Z": 1,
+          "2026-07-20T00:37:12.055Z": 1,
+          "2026-07-20T00:37:12.285Z": 1,
+          "2026-07-20T00:37:12.528Z": 1,
+          "2026-07-20T00:37:12.753Z": 1,
+          "2026-07-20T00:37:13.953Z": 1,
+          "2026-07-20T00:37:14.449Z": 1,
+          "2026-07-20T00:37:14.918Z": 1,
+          "2026-07-20T00:37:15.506Z": 1,
+          "2026-07-20T00:37:16.321Z": 1,
+          "2026-07-20T00:37:16.328Z": 1,
+          "2026-07-20T00:37:17.718Z": 1,
+          "2026-07-20T00:37:17.726Z": 1,
+          "2026-07-20T00:37:18.973Z": 1,
+          "2026-07-20T00:37:19.266Z": 1,
+          "2026-07-20T00:37:19.974Z": 1,
+          "2026-07-20T00:37:21.480Z": 1,
+          "2026-07-20T00:37:22.670Z": 1,
+          "2026-07-20T00:37:23.052Z": 1,
+          "2026-07-20T00:37:23.967Z": 1,
+          "2026-07-20T00:37:26.180Z": 1,
+          "2026-07-20T00:37:26.181Z": 1,
+          "2026-07-20T00:37:26.182Z": 1,
+          "2026-07-20T00:37:27.433Z": 1,
+          "2026-07-20T00:37:27.792Z": 1,
+          "2026-07-20T00:37:28.750Z": 1,
+          "2026-07-20T00:37:28.997Z": 1,
+          "2026-07-20T00:37:29.986Z": 1,
+          "2026-07-20T00:37:32.127Z": 1,
+          "2026-07-20T00:37:33.728Z": 1,
+          "2026-07-20T00:37:11.149Z": 1,
+          "2026-07-20T00:37:13.465Z": 1,
+          "2026-07-20T00:37:17.193Z": 1,
+          "2026-07-20T00:37:18.796Z": 1,
+          "2026-07-20T00:37:21.560Z": 1,
+          "2026-07-20T00:37:22.404Z": 1,
+          "2026-07-20T00:37:29.468Z": 1,
+          "2026-07-20T00:37:32.193Z": 1,
+          "2026-07-20T00:37:33.999Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 63,
+        "skippedMovesByReason": {
+          "budget_exceeded": 54,
+          "blocked": 9
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_in_flight": 54,
+          "replica_inventory_unusable": 9
+        },
+        "eventLoopGaps": 7,
+        "maxEventLoopGapMs": 2324,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 43.65,
+        "cdcFailuresByPartition": {
+          "replica_operations-p1": 6
+        }
+      },
+      "nodes": [
+        {
+          "nodeId": "5733e9d7-0a7c-4dab-8962-24d316823b5e",
+          "seed": true,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/4370596a-0f36-48bb-af82-d450b067bb64/5733e9d7-0a7c-4dab-8962-24d316823b5e.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 4074,
+            "level50": 11,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 5,
+            "correlatedLevel50ByMessage": {
+              "Failed to deliver CDC event": 5
+            },
+            "executedMoves": 86,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 1,
+              "schema_operations-p1": 16,
+              "sql_transaction_participants-p1": 20,
+              "sql_transactions-p1": 18,
+              "sql_write_operations-p1": 21,
+              "control_plane_publications-p1": 10
+            },
+            "executedMovesByType": {
+              "replace": 9,
+              "add": 61,
+              "remove": 16
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:36:53.567Z": 5,
+              "2026-07-20T00:36:53.585Z": 1,
+              "2026-07-20T00:36:54.589Z": 4,
+              "2026-07-20T00:36:55.820Z": 4,
+              "2026-07-20T00:36:56.962Z": 4,
+              "2026-07-20T00:36:58.598Z": 4,
+              "2026-07-20T00:37:00.491Z": 4,
+              "2026-07-20T00:37:00.851Z": 1,
+              "2026-07-20T00:37:01.796Z": 4,
+              "2026-07-20T00:37:02.052Z": 1,
+              "2026-07-20T00:37:03.316Z": 4,
+              "2026-07-20T00:37:03.567Z": 1,
+              "2026-07-20T00:37:04.475Z": 4,
+              "2026-07-20T00:37:04.688Z": 1,
+              "2026-07-20T00:37:05.492Z": 4,
+              "2026-07-20T00:37:05.754Z": 1,
+              "2026-07-20T00:37:06.907Z": 1,
+              "2026-07-20T00:37:07.090Z": 1,
+              "2026-07-20T00:37:07.275Z": 1,
+              "2026-07-20T00:37:07.460Z": 1,
+              "2026-07-20T00:37:10.036Z": 1,
+              "2026-07-20T00:37:10.658Z": 4,
+              "2026-07-20T00:37:11.855Z": 1,
+              "2026-07-20T00:37:12.055Z": 1,
+              "2026-07-20T00:37:12.285Z": 1,
+              "2026-07-20T00:37:12.528Z": 1,
+              "2026-07-20T00:37:12.753Z": 1,
+              "2026-07-20T00:37:13.953Z": 1,
+              "2026-07-20T00:37:14.449Z": 1,
+              "2026-07-20T00:37:14.918Z": 1,
+              "2026-07-20T00:37:15.506Z": 1,
+              "2026-07-20T00:37:16.321Z": 1,
+              "2026-07-20T00:37:16.328Z": 1,
+              "2026-07-20T00:37:17.718Z": 1,
+              "2026-07-20T00:37:17.726Z": 1,
+              "2026-07-20T00:37:18.973Z": 1,
+              "2026-07-20T00:37:19.266Z": 1,
+              "2026-07-20T00:37:19.974Z": 1,
+              "2026-07-20T00:37:21.480Z": 1,
+              "2026-07-20T00:37:22.670Z": 1,
+              "2026-07-20T00:37:23.052Z": 1,
+              "2026-07-20T00:37:23.967Z": 1,
+              "2026-07-20T00:37:26.180Z": 1,
+              "2026-07-20T00:37:26.181Z": 1,
+              "2026-07-20T00:37:26.182Z": 1,
+              "2026-07-20T00:37:27.433Z": 1,
+              "2026-07-20T00:37:27.792Z": 1,
+              "2026-07-20T00:37:28.750Z": 1,
+              "2026-07-20T00:37:28.997Z": 1,
+              "2026-07-20T00:37:29.986Z": 1,
+              "2026-07-20T00:37:32.127Z": 1,
+              "2026-07-20T00:37:33.728Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 54,
+            "skippedMovesByReason": {
+              "budget_exceeded": 54
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_in_flight": 54
+            },
+            "eventLoopGaps": 6,
+            "maxEventLoopGapMs": 2324,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 43.65,
+            "cdcFailuresByPartition": {
+              "nodes-p1": 1,
+              "control_plane_publications-p1": 2,
+              "partitions-p1": 2
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 3673,
+            "level50": 6,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 86,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 1,
+              "schema_operations-p1": 16,
+              "sql_transaction_participants-p1": 20,
+              "sql_transactions-p1": 18,
+              "sql_write_operations-p1": 21,
+              "control_plane_publications-p1": 10
+            },
+            "executedMovesByType": {
+              "replace": 9,
+              "add": 61,
+              "remove": 16
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:36:53.567Z": 5,
+              "2026-07-20T00:36:53.585Z": 1,
+              "2026-07-20T00:36:54.589Z": 4,
+              "2026-07-20T00:36:55.820Z": 4,
+              "2026-07-20T00:36:56.962Z": 4,
+              "2026-07-20T00:36:58.598Z": 4,
+              "2026-07-20T00:37:00.491Z": 4,
+              "2026-07-20T00:37:00.851Z": 1,
+              "2026-07-20T00:37:01.796Z": 4,
+              "2026-07-20T00:37:02.052Z": 1,
+              "2026-07-20T00:37:03.316Z": 4,
+              "2026-07-20T00:37:03.567Z": 1,
+              "2026-07-20T00:37:04.475Z": 4,
+              "2026-07-20T00:37:04.688Z": 1,
+              "2026-07-20T00:37:05.492Z": 4,
+              "2026-07-20T00:37:05.754Z": 1,
+              "2026-07-20T00:37:06.907Z": 1,
+              "2026-07-20T00:37:07.090Z": 1,
+              "2026-07-20T00:37:07.275Z": 1,
+              "2026-07-20T00:37:07.460Z": 1,
+              "2026-07-20T00:37:10.036Z": 1,
+              "2026-07-20T00:37:10.658Z": 4,
+              "2026-07-20T00:37:11.855Z": 1,
+              "2026-07-20T00:37:12.055Z": 1,
+              "2026-07-20T00:37:12.285Z": 1,
+              "2026-07-20T00:37:12.528Z": 1,
+              "2026-07-20T00:37:12.753Z": 1,
+              "2026-07-20T00:37:13.953Z": 1,
+              "2026-07-20T00:37:14.449Z": 1,
+              "2026-07-20T00:37:14.918Z": 1,
+              "2026-07-20T00:37:15.506Z": 1,
+              "2026-07-20T00:37:16.321Z": 1,
+              "2026-07-20T00:37:16.328Z": 1,
+              "2026-07-20T00:37:17.718Z": 1,
+              "2026-07-20T00:37:17.726Z": 1,
+              "2026-07-20T00:37:18.973Z": 1,
+              "2026-07-20T00:37:19.266Z": 1,
+              "2026-07-20T00:37:19.974Z": 1,
+              "2026-07-20T00:37:21.480Z": 1,
+              "2026-07-20T00:37:22.670Z": 1,
+              "2026-07-20T00:37:23.052Z": 1,
+              "2026-07-20T00:37:23.967Z": 1,
+              "2026-07-20T00:37:26.180Z": 1,
+              "2026-07-20T00:37:26.181Z": 1,
+              "2026-07-20T00:37:26.182Z": 1,
+              "2026-07-20T00:37:27.433Z": 1,
+              "2026-07-20T00:37:27.792Z": 1,
+              "2026-07-20T00:37:28.750Z": 1,
+              "2026-07-20T00:37:28.997Z": 1,
+              "2026-07-20T00:37:29.986Z": 1,
+              "2026-07-20T00:37:32.127Z": 1,
+              "2026-07-20T00:37:33.728Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 54,
+            "skippedMovesByReason": {
+              "budget_exceeded": 54
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_in_flight": 54
+            },
+            "eventLoopGaps": 6,
+            "maxEventLoopGapMs": 2324,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 43.65,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "6c7017e8-b801-443e-8ac8-cd9f601f64c1",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/4370596a-0f36-48bb-af82-d450b067bb64/6c7017e8-b801-443e-8ac8-cd9f601f64c1.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 851,
+            "level50": 25,
+            "ackTimeoutPeerAliveSkips": 13,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 13
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 4,
+              "partition:services-p1-r1": 3,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 4,
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e/service/swim-ping": 1
+            },
+            "correlatedLevel50": 14,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 6,
+              "Failed to deliver CDC event": 6,
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 17,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 17
+            },
+            "executedMovesByType": {
+              "add": 17
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:37:11.149Z": 1,
+              "2026-07-20T00:37:13.465Z": 1,
+              "2026-07-20T00:37:17.193Z": 1,
+              "2026-07-20T00:37:18.796Z": 1,
+              "2026-07-20T00:37:21.560Z": 1,
+              "2026-07-20T00:37:22.404Z": 1,
+              "2026-07-20T00:37:29.468Z": 1,
+              "2026-07-20T00:37:32.193Z": 1,
+              "2026-07-20T00:37:33.999Z": 1,
+              "2026-07-20T00:37:39.506Z": 1,
+              "2026-07-20T00:37:43.692Z": 1,
+              "2026-07-20T00:37:45.083Z": 1,
+              "2026-07-20T00:37:48.599Z": 1,
+              "2026-07-20T00:37:49.937Z": 1,
+              "2026-07-20T00:37:54.157Z": 1,
+              "2026-07-20T00:37:55.856Z": 1,
+              "2026-07-20T00:37:58.875Z": 1
+            },
+            "maxMovesAtOneTimestamp": 1,
+            "skippedMoves": 17,
+            "skippedMovesByReason": {
+              "blocked": 17
+            },
+            "skippedMovesByAdmissionReason": {
+              "replica_inventory_unusable": 17
+            },
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 6
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 618,
+            "level50": 13,
+            "ackTimeoutPeerAliveSkips": 13,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 13
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 4,
+              "partition:services-p1-r1": 3,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 4,
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e/service/swim-ping": 1
+            },
+            "correlatedLevel50": 12,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 6,
+              "Failed to deliver CDC event": 6
+            },
+            "executedMoves": 9,
+            "executedMovesByEntity": {
+              "replica_operations-p1": 9
+            },
+            "executedMovesByType": {
+              "add": 9
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:37:11.149Z": 1,
+              "2026-07-20T00:37:13.465Z": 1,
+              "2026-07-20T00:37:17.193Z": 1,
+              "2026-07-20T00:37:18.796Z": 1,
+              "2026-07-20T00:37:21.560Z": 1,
+              "2026-07-20T00:37:22.404Z": 1,
+              "2026-07-20T00:37:29.468Z": 1,
+              "2026-07-20T00:37:32.193Z": 1,
+              "2026-07-20T00:37:33.999Z": 1
+            },
+            "maxMovesAtOneTimestamp": 1,
+            "skippedMoves": 9,
+            "skippedMovesByReason": {
+              "blocked": 9
+            },
+            "skippedMovesByAdmissionReason": {
+              "replica_inventory_unusable": 9
+            },
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 6
+            }
+          }
+        },
+        {
+          "nodeId": "694d8c02-d603-4fdc-9109-1f262ad4baa3",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/4370596a-0f36-48bb-af82-d450b067bb64/694d8c02-d603-4fdc-9109-1f262ad4baa3.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 366,
+            "level50": 19,
+            "ackTimeoutPeerAliveSkips": 8,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 8
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 2,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 3,
+              "partition:storage_reservations-p1-r1": 1,
+              "partition:services-p1-r1": 1
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 281,
+            "level50": 1,
+            "ackTimeoutPeerAliveSkips": 8,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 8
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 2,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 3,
+              "partition:storage_reservations-p1-r1": 1,
+              "partition:services-p1-r1": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "9e94fc4f-96cc-49b5-91eb-29c67a5b8102",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/4370596a-0f36-48bb-af82-d450b067bb64/9e94fc4f-96cc-49b5-91eb-29c67a5b8102.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 309,
+            "level50": 12,
+            "ackTimeoutPeerAliveSkips": 6,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 6
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 3,
+              "partition:services-p1-r2": 2,
+              "partition:services-p1-r3": 1
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 242,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 6,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 6
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 3,
+              "partition:services-p1-r2": 2,
+              "partition:services-p1-r3": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "d06e8cb4-28b1-4614-9992-bc1ed16cb282",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/4370596a-0f36-48bb-af82-d450b067bb64/d06e8cb4-28b1-4614-9992-bc1ed16cb282.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 354,
+            "level50": 12,
+            "ackTimeoutPeerAliveSkips": 7,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 7
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 3,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 2,
+              "partition:storage_reservations-p1-r1": 1
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1058,
+            "maxEventLoopUtilization": 0.1529,
+            "maxBlockedPercentOfWall": 9.34,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 288,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 7,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "5733e9d7-0a7c-4dab-8962-24d316823b5e": 7
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 3,
+              "partition:replica_operations-p1-r2": 1,
+              "partition:services-p1-r2": 2,
+              "partition:storage_reservations-p1-r1": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1058,
+            "maxEventLoopUtilization": 0.1529,
+            "maxBlockedPercentOfWall": 9.34,
+            "cdcFailuresByPartition": {}
+          }
+        }
+      ]
+    },
+    {
+      "slot": 4,
+      "clusterId": "5321d325-0665-4db4-ae7a-dad48051e340",
+      "firstSeenAt": "2026-07-20T00:38:02.355Z",
+      "completedAt": "2026-07-20T00:40:33.836Z",
+      "seedNodeId": "326290fd-442a-466b-9b41-edd122bd320d",
+      "shutdownCutoffExclusive": "2026-07-20T00:38:48.923Z",
+      "ackReferenceExclusive": {
+        "nodesP1Exclusive": 58,
+        "allTargetsExclusive": 806,
+        "fixedSamples": [
+          {
+            "id": "fixed-1",
+            "nodesP1": 58,
+            "allTargets": 806
+          },
+          {
+            "id": "fixed-2",
+            "nodesP1": 10,
+            "allTargets": 174
+          }
+        ]
+      },
+      "comparisonWindow": "pre-SIGTERM",
+      "ackSkipHighNodesP1": false,
+      "ackSkipHighAllTargets": false,
+      "ackSkipHigh": false,
+      "highWithCorrelatedFailure": false,
+      "sourceFingerprints": [
+        "8a64ad4bd3d98636"
+      ],
+      "total": {
+        "structuredEvents": 5419,
+        "level50": 87,
+        "ackTimeoutPeerAliveSkips": 162,
+        "ackTimeoutPeerAliveSkipsNodesP1": 3,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "326290fd-442a-466b-9b41-edd122bd320d": 162
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 11,
+          "partition:replica_operations-p1-r2": 32,
+          "partition:replica_operations-p1-r1": 54,
+          "partition:services-p1-r2": 11,
+          "partition:replica_operations-p1-r3": 16,
+          "326290fd-442a-466b-9b41-edd122bd320d/service/replica-dispatch": 8,
+          "partition:control_plane_publications-p1-r1": 1,
+          "partition:schema_migrations-p1-r1": 1,
+          "partition:services-p1-r1": 17,
+          "partition:services-p1-r3": 6,
+          "partition:nodes-p1-r1": 2,
+          "partition:nodes-p1-r2": 1,
+          "partition:partitions-p1-r2": 1,
+          "partition:storage_reservations-p1-r1": 1
+        },
+        "correlatedLevel50": 38,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 13,
+          "Failed to deliver CDC event": 17,
+          "WebSocket error": 4,
+          "Reconnection failed": 4
+        },
+        "executedMoves": 48,
+        "executedMovesByEntity": {
+          "control_plane_publications-p1": 4,
+          "replica_operations-p1": 19,
+          "schema_operations-p1": 7,
+          "sql_transaction_participants-p1": 7,
+          "sql_transactions-p1": 8,
+          "sql_write_operations-p1": 3
+        },
+        "executedMovesByType": {
+          "add": 17,
+          "replace": 19,
+          "remove": 12
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:38:15.586Z": 1,
+          "2026-07-20T00:38:16.407Z": 5,
+          "2026-07-20T00:38:17.594Z": 1,
+          "2026-07-20T00:38:18.755Z": 1,
+          "2026-07-20T00:38:20.123Z": 1,
+          "2026-07-20T00:38:21.999Z": 1,
+          "2026-07-20T00:38:22.461Z": 1,
+          "2026-07-20T00:38:22.930Z": 1,
+          "2026-07-20T00:38:24.464Z": 1,
+          "2026-07-20T00:38:25.076Z": 1,
+          "2026-07-20T00:38:26.621Z": 1,
+          "2026-07-20T00:38:26.977Z": 1,
+          "2026-07-20T00:38:27.701Z": 1,
+          "2026-07-20T00:38:28.026Z": 1,
+          "2026-07-20T00:38:29.417Z": 1,
+          "2026-07-20T00:38:30.460Z": 3,
+          "2026-07-20T00:38:31.472Z": 1,
+          "2026-07-20T00:38:33.520Z": 1,
+          "2026-07-20T00:38:34.331Z": 2,
+          "2026-07-20T00:38:35.375Z": 2,
+          "2026-07-20T00:38:37.258Z": 1,
+          "2026-07-20T00:38:37.272Z": 1,
+          "2026-07-20T00:38:38.875Z": 1,
+          "2026-07-20T00:38:39.896Z": 1,
+          "2026-07-20T00:38:40.874Z": 1,
+          "2026-07-20T00:38:40.914Z": 1,
+          "2026-07-20T00:38:41.235Z": 1,
+          "2026-07-20T00:38:43.546Z": 1,
+          "2026-07-20T00:38:43.656Z": 1,
+          "2026-07-20T00:38:43.671Z": 1,
+          "2026-07-20T00:38:43.741Z": 1,
+          "2026-07-20T00:38:43.969Z": 1,
+          "2026-07-20T00:38:44.335Z": 1,
+          "2026-07-20T00:38:44.797Z": 1,
+          "2026-07-20T00:38:44.956Z": 1,
+          "2026-07-20T00:38:45.253Z": 1,
+          "2026-07-20T00:38:45.989Z": 1,
+          "2026-07-20T00:38:46.037Z": 1,
+          "2026-07-20T00:38:47.566Z": 1,
+          "2026-07-20T00:38:48.814Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 21,
+        "skippedMovesByReason": {
+          "budget_exceeded": 19,
+          "blocked": 2
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_waiting_for_idle_ledger": 19,
+          "cluster_member_unhealthy": 2
+        },
+        "eventLoopGaps": 15,
+        "maxEventLoopGapMs": 6327,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 65.31,
+        "cdcFailuresByPartition": {
+          "replica_operations-p1": 4,
+          "storage_reservations-p1": 1,
+          "service_endpoints-p1": 2,
+          "control_plane_publications-p1": 6,
+          "partitions-p1": 1,
+          "nodes-p1": 3
+        }
+      },
+      "preShutdown": {
+        "structuredEvents": 4699,
+        "level50": 29,
+        "ackTimeoutPeerAliveSkips": 162,
+        "ackTimeoutPeerAliveSkipsNodesP1": 3,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "326290fd-442a-466b-9b41-edd122bd320d": 162
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 11,
+          "partition:replica_operations-p1-r2": 32,
+          "partition:replica_operations-p1-r1": 54,
+          "partition:services-p1-r2": 11,
+          "partition:replica_operations-p1-r3": 16,
+          "326290fd-442a-466b-9b41-edd122bd320d/service/replica-dispatch": 8,
+          "partition:control_plane_publications-p1-r1": 1,
+          "partition:schema_migrations-p1-r1": 1,
+          "partition:services-p1-r1": 17,
+          "partition:services-p1-r3": 6,
+          "partition:nodes-p1-r1": 2,
+          "partition:nodes-p1-r2": 1,
+          "partition:partitions-p1-r2": 1,
+          "partition:storage_reservations-p1-r1": 1
+        },
+        "correlatedLevel50": 27,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 13,
+          "Failed to deliver CDC event": 14
+        },
+        "executedMoves": 48,
+        "executedMovesByEntity": {
+          "control_plane_publications-p1": 4,
+          "replica_operations-p1": 19,
+          "schema_operations-p1": 7,
+          "sql_transaction_participants-p1": 7,
+          "sql_transactions-p1": 8,
+          "sql_write_operations-p1": 3
+        },
+        "executedMovesByType": {
+          "add": 17,
+          "replace": 19,
+          "remove": 12
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:38:15.586Z": 1,
+          "2026-07-20T00:38:16.407Z": 5,
+          "2026-07-20T00:38:17.594Z": 1,
+          "2026-07-20T00:38:18.755Z": 1,
+          "2026-07-20T00:38:20.123Z": 1,
+          "2026-07-20T00:38:21.999Z": 1,
+          "2026-07-20T00:38:22.461Z": 1,
+          "2026-07-20T00:38:22.930Z": 1,
+          "2026-07-20T00:38:24.464Z": 1,
+          "2026-07-20T00:38:25.076Z": 1,
+          "2026-07-20T00:38:26.621Z": 1,
+          "2026-07-20T00:38:26.977Z": 1,
+          "2026-07-20T00:38:27.701Z": 1,
+          "2026-07-20T00:38:28.026Z": 1,
+          "2026-07-20T00:38:29.417Z": 1,
+          "2026-07-20T00:38:30.460Z": 3,
+          "2026-07-20T00:38:31.472Z": 1,
+          "2026-07-20T00:38:33.520Z": 1,
+          "2026-07-20T00:38:34.331Z": 2,
+          "2026-07-20T00:38:35.375Z": 2,
+          "2026-07-20T00:38:37.258Z": 1,
+          "2026-07-20T00:38:37.272Z": 1,
+          "2026-07-20T00:38:38.875Z": 1,
+          "2026-07-20T00:38:39.896Z": 1,
+          "2026-07-20T00:38:40.874Z": 1,
+          "2026-07-20T00:38:40.914Z": 1,
+          "2026-07-20T00:38:41.235Z": 1,
+          "2026-07-20T00:38:43.546Z": 1,
+          "2026-07-20T00:38:43.656Z": 1,
+          "2026-07-20T00:38:43.671Z": 1,
+          "2026-07-20T00:38:43.741Z": 1,
+          "2026-07-20T00:38:43.969Z": 1,
+          "2026-07-20T00:38:44.335Z": 1,
+          "2026-07-20T00:38:44.797Z": 1,
+          "2026-07-20T00:38:44.956Z": 1,
+          "2026-07-20T00:38:45.253Z": 1,
+          "2026-07-20T00:38:45.989Z": 1,
+          "2026-07-20T00:38:46.037Z": 1,
+          "2026-07-20T00:38:47.566Z": 1,
+          "2026-07-20T00:38:48.814Z": 1
+        },
+        "maxMovesAtOneTimestamp": 5,
+        "skippedMoves": 21,
+        "skippedMovesByReason": {
+          "budget_exceeded": 19,
+          "blocked": 2
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_waiting_for_idle_ledger": 19,
+          "cluster_member_unhealthy": 2
+        },
+        "eventLoopGaps": 14,
+        "maxEventLoopGapMs": 6327,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 65.31,
+        "cdcFailuresByPartition": {
+          "replica_operations-p1": 4,
+          "storage_reservations-p1": 1,
+          "service_endpoints-p1": 2,
+          "control_plane_publications-p1": 6,
+          "partitions-p1": 1
+        }
+      },
+      "nodes": [
+        {
+          "nodeId": "326290fd-442a-466b-9b41-edd122bd320d",
+          "seed": true,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/5321d325-0665-4db4-ae7a-dad48051e340/326290fd-442a-466b-9b41-edd122bd320d.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 3902,
+            "level50": 28,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 26,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 11,
+              "Failed to deliver CDC event": 15
+            },
+            "executedMoves": 48,
+            "executedMovesByEntity": {
+              "control_plane_publications-p1": 4,
+              "replica_operations-p1": 19,
+              "schema_operations-p1": 7,
+              "sql_transaction_participants-p1": 7,
+              "sql_transactions-p1": 8,
+              "sql_write_operations-p1": 3
+            },
+            "executedMovesByType": {
+              "add": 17,
+              "replace": 19,
+              "remove": 12
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:38:15.586Z": 1,
+              "2026-07-20T00:38:16.407Z": 5,
+              "2026-07-20T00:38:17.594Z": 1,
+              "2026-07-20T00:38:18.755Z": 1,
+              "2026-07-20T00:38:20.123Z": 1,
+              "2026-07-20T00:38:21.999Z": 1,
+              "2026-07-20T00:38:22.461Z": 1,
+              "2026-07-20T00:38:22.930Z": 1,
+              "2026-07-20T00:38:24.464Z": 1,
+              "2026-07-20T00:38:25.076Z": 1,
+              "2026-07-20T00:38:26.621Z": 1,
+              "2026-07-20T00:38:26.977Z": 1,
+              "2026-07-20T00:38:27.701Z": 1,
+              "2026-07-20T00:38:28.026Z": 1,
+              "2026-07-20T00:38:29.417Z": 1,
+              "2026-07-20T00:38:30.460Z": 3,
+              "2026-07-20T00:38:31.472Z": 1,
+              "2026-07-20T00:38:33.520Z": 1,
+              "2026-07-20T00:38:34.331Z": 2,
+              "2026-07-20T00:38:35.375Z": 2,
+              "2026-07-20T00:38:37.258Z": 1,
+              "2026-07-20T00:38:37.272Z": 1,
+              "2026-07-20T00:38:38.875Z": 1,
+              "2026-07-20T00:38:39.896Z": 1,
+              "2026-07-20T00:38:40.874Z": 1,
+              "2026-07-20T00:38:40.914Z": 1,
+              "2026-07-20T00:38:41.235Z": 1,
+              "2026-07-20T00:38:43.546Z": 1,
+              "2026-07-20T00:38:43.656Z": 1,
+              "2026-07-20T00:38:43.671Z": 1,
+              "2026-07-20T00:38:43.741Z": 1,
+              "2026-07-20T00:38:43.969Z": 1,
+              "2026-07-20T00:38:44.335Z": 1,
+              "2026-07-20T00:38:44.797Z": 1,
+              "2026-07-20T00:38:44.956Z": 1,
+              "2026-07-20T00:38:45.253Z": 1,
+              "2026-07-20T00:38:45.989Z": 1,
+              "2026-07-20T00:38:46.037Z": 1,
+              "2026-07-20T00:38:47.566Z": 1,
+              "2026-07-20T00:38:48.814Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 21,
+            "skippedMovesByReason": {
+              "budget_exceeded": 19,
+              "blocked": 2
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_waiting_for_idle_ledger": 19,
+              "cluster_member_unhealthy": 2
+            },
+            "eventLoopGaps": 12,
+            "maxEventLoopGapMs": 6327,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 65.31,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 4,
+              "storage_reservations-p1": 1,
+              "service_endpoints-p1": 2,
+              "control_plane_publications-p1": 4,
+              "partitions-p1": 1,
+              "nodes-p1": 3
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 3495,
+            "level50": 23,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 23,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 11,
+              "Failed to deliver CDC event": 12
+            },
+            "executedMoves": 48,
+            "executedMovesByEntity": {
+              "control_plane_publications-p1": 4,
+              "replica_operations-p1": 19,
+              "schema_operations-p1": 7,
+              "sql_transaction_participants-p1": 7,
+              "sql_transactions-p1": 8,
+              "sql_write_operations-p1": 3
+            },
+            "executedMovesByType": {
+              "add": 17,
+              "replace": 19,
+              "remove": 12
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:38:15.586Z": 1,
+              "2026-07-20T00:38:16.407Z": 5,
+              "2026-07-20T00:38:17.594Z": 1,
+              "2026-07-20T00:38:18.755Z": 1,
+              "2026-07-20T00:38:20.123Z": 1,
+              "2026-07-20T00:38:21.999Z": 1,
+              "2026-07-20T00:38:22.461Z": 1,
+              "2026-07-20T00:38:22.930Z": 1,
+              "2026-07-20T00:38:24.464Z": 1,
+              "2026-07-20T00:38:25.076Z": 1,
+              "2026-07-20T00:38:26.621Z": 1,
+              "2026-07-20T00:38:26.977Z": 1,
+              "2026-07-20T00:38:27.701Z": 1,
+              "2026-07-20T00:38:28.026Z": 1,
+              "2026-07-20T00:38:29.417Z": 1,
+              "2026-07-20T00:38:30.460Z": 3,
+              "2026-07-20T00:38:31.472Z": 1,
+              "2026-07-20T00:38:33.520Z": 1,
+              "2026-07-20T00:38:34.331Z": 2,
+              "2026-07-20T00:38:35.375Z": 2,
+              "2026-07-20T00:38:37.258Z": 1,
+              "2026-07-20T00:38:37.272Z": 1,
+              "2026-07-20T00:38:38.875Z": 1,
+              "2026-07-20T00:38:39.896Z": 1,
+              "2026-07-20T00:38:40.874Z": 1,
+              "2026-07-20T00:38:40.914Z": 1,
+              "2026-07-20T00:38:41.235Z": 1,
+              "2026-07-20T00:38:43.546Z": 1,
+              "2026-07-20T00:38:43.656Z": 1,
+              "2026-07-20T00:38:43.671Z": 1,
+              "2026-07-20T00:38:43.741Z": 1,
+              "2026-07-20T00:38:43.969Z": 1,
+              "2026-07-20T00:38:44.335Z": 1,
+              "2026-07-20T00:38:44.797Z": 1,
+              "2026-07-20T00:38:44.956Z": 1,
+              "2026-07-20T00:38:45.253Z": 1,
+              "2026-07-20T00:38:45.989Z": 1,
+              "2026-07-20T00:38:46.037Z": 1,
+              "2026-07-20T00:38:47.566Z": 1,
+              "2026-07-20T00:38:48.814Z": 1
+            },
+            "maxMovesAtOneTimestamp": 5,
+            "skippedMoves": 21,
+            "skippedMovesByReason": {
+              "budget_exceeded": 19,
+              "blocked": 2
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_waiting_for_idle_ledger": 19,
+              "cluster_member_unhealthy": 2
+            },
+            "eventLoopGaps": 12,
+            "maxEventLoopGapMs": 6327,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 65.31,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 4,
+              "storage_reservations-p1": 1,
+              "service_endpoints-p1": 2,
+              "control_plane_publications-p1": 4,
+              "partitions-p1": 1
+            }
+          }
+        },
+        {
+          "nodeId": "5c9a3fea-c241-4e4f-acfa-c3c8b686ab16",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/5321d325-0665-4db4-ae7a-dad48051e340/5c9a3fea-c241-4e4f-acfa-c3c8b686ab16.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 462,
+            "level50": 15,
+            "ackTimeoutPeerAliveSkips": 69,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 69
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 4,
+              "partition:replica_operations-p1-r2": 14,
+              "partition:replica_operations-p1-r1": 19,
+              "partition:services-p1-r2": 6,
+              "partition:replica_operations-p1-r3": 10,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/replica-dispatch": 7,
+              "partition:control_plane_publications-p1-r1": 1,
+              "partition:schema_migrations-p1-r1": 1,
+              "partition:services-p1-r1": 5,
+              "partition:services-p1-r3": 2
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1244,
+            "maxEventLoopUtilization": 0.1658,
+            "maxBlockedPercentOfWall": 9.91,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 372,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 69,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 69
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 4,
+              "partition:replica_operations-p1-r2": 14,
+              "partition:replica_operations-p1-r1": 19,
+              "partition:services-p1-r2": 6,
+              "partition:replica_operations-p1-r3": 10,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/replica-dispatch": 7,
+              "partition:control_plane_publications-p1-r1": 1,
+              "partition:schema_migrations-p1-r1": 1,
+              "partition:services-p1-r1": 5,
+              "partition:services-p1-r3": 2
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1244,
+            "maxEventLoopUtilization": 0.1658,
+            "maxBlockedPercentOfWall": 9.91,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "67077743-4a3e-4f00-b08e-cc00b5a9ab4a",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/5321d325-0665-4db4-ae7a-dad48051e340/67077743-4a3e-4f00-b08e-cc00b5a9ab4a.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 309,
+            "level50": 16,
+            "ackTimeoutPeerAliveSkips": 16,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 16
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r2": 4,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 1,
+              "partition:replica_operations-p1-r1": 4,
+              "partition:replica_operations-p1-r3": 1,
+              "partition:services-p1-r1": 3,
+              "partition:services-p1-r2": 1,
+              "partition:services-p1-r3": 2
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1214,
+            "maxEventLoopUtilization": 0.0901,
+            "maxBlockedPercentOfWall": 3.93,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 247,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 16,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 16
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r2": 4,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 1,
+              "partition:replica_operations-p1-r1": 4,
+              "partition:replica_operations-p1-r3": 1,
+              "partition:services-p1-r1": 3,
+              "partition:services-p1-r2": 1,
+              "partition:services-p1-r3": 2
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1214,
+            "maxEventLoopUtilization": 0.0901,
+            "maxBlockedPercentOfWall": 3.93,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "34480269-efa9-4ce4-ad79-0d4f54dcce8e",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/5321d325-0665-4db4-ae7a-dad48051e340/34480269-efa9-4ce4-ad79-0d4f54dcce8e.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 355,
+            "level50": 13,
+            "ackTimeoutPeerAliveSkips": 36,
+            "ackTimeoutPeerAliveSkipsNodesP1": 1,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 36
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 12,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 3,
+              "partition:replica_operations-p1-r2": 6,
+              "partition:services-p1-r1": 6,
+              "partition:replica_operations-p1-r3": 2,
+              "partition:services-p1-r2": 3,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/replica-dispatch": 1,
+              "partition:services-p1-r3": 2,
+              "partition:nodes-p1-r1": 1
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 297,
+            "level50": 1,
+            "ackTimeoutPeerAliveSkips": 36,
+            "ackTimeoutPeerAliveSkipsNodesP1": 1,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 36
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 12,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 3,
+              "partition:replica_operations-p1-r2": 6,
+              "partition:services-p1-r1": 6,
+              "partition:replica_operations-p1-r3": 2,
+              "partition:services-p1-r2": 3,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/replica-dispatch": 1,
+              "partition:services-p1-r3": 2,
+              "partition:nodes-p1-r1": 1
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "dfa42608-be3e-4864-a1c7-35897d3cd4b3",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/5321d325-0665-4db4-ae7a-dad48051e340/dfa42608-be3e-4864-a1c7-35897d3cd4b3.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 391,
+            "level50": 15,
+            "ackTimeoutPeerAliveSkips": 41,
+            "ackTimeoutPeerAliveSkipsNodesP1": 2,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 41
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 19,
+              "partition:replica_operations-p1-r2": 8,
+              "partition:services-p1-r2": 1,
+              "partition:replica_operations-p1-r3": 3,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 3,
+              "partition:services-p1-r1": 3,
+              "partition:nodes-p1-r1": 1,
+              "partition:nodes-p1-r2": 1,
+              "partition:partitions-p1-r2": 1,
+              "partition:storage_reservations-p1-r1": 1
+            },
+            "correlatedLevel50": 6,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 2,
+              "Failed to deliver CDC event": 2,
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1471,
+            "maxEventLoopUtilization": 0.0972,
+            "maxBlockedPercentOfWall": 4.12,
+            "cdcFailuresByPartition": {
+              "control_plane_publications-p1": 2
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 288,
+            "level50": 5,
+            "ackTimeoutPeerAliveSkips": 41,
+            "ackTimeoutPeerAliveSkipsNodesP1": 2,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "326290fd-442a-466b-9b41-edd122bd320d": 41
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 19,
+              "partition:replica_operations-p1-r2": 8,
+              "partition:services-p1-r2": 1,
+              "partition:replica_operations-p1-r3": 3,
+              "326290fd-442a-466b-9b41-edd122bd320d/service/swim-ping": 3,
+              "partition:services-p1-r1": 3,
+              "partition:nodes-p1-r1": 1,
+              "partition:nodes-p1-r2": 1,
+              "partition:partitions-p1-r2": 1,
+              "partition:storage_reservations-p1-r1": 1
+            },
+            "correlatedLevel50": 4,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 2,
+              "Failed to deliver CDC event": 2
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {
+              "control_plane_publications-p1": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slot": 5,
+      "clusterId": "702a1e9a-15fc-4e9b-9497-100d3838c45b",
+      "firstSeenAt": "2026-07-20T00:39:16.328Z",
+      "completedAt": "2026-07-20T00:40:33.836Z",
+      "seedNodeId": "87de7135-e92f-4af8-8103-ae5ba7734c59",
+      "shutdownCutoffExclusive": "2026-07-20T00:40:09.895Z",
+      "ackReferenceExclusive": {
+        "nodesP1Exclusive": 58,
+        "allTargetsExclusive": 806,
+        "fixedSamples": [
+          {
+            "id": "fixed-1",
+            "nodesP1": 58,
+            "allTargets": 806
+          },
+          {
+            "id": "fixed-2",
+            "nodesP1": 10,
+            "allTargets": 174
+          }
+        ]
+      },
+      "comparisonWindow": "pre-SIGTERM",
+      "ackSkipHighNodesP1": false,
+      "ackSkipHighAllTargets": false,
+      "ackSkipHigh": false,
+      "highWithCorrelatedFailure": false,
+      "sourceFingerprints": [
+        "8a64ad4bd3d98636"
+      ],
+      "total": {
+        "structuredEvents": 6249,
+        "level50": 387,
+        "ackTimeoutPeerAliveSkips": 396,
+        "ackTimeoutPeerAliveSkipsNodesP1": 11,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "87de7135-e92f-4af8-8103-ae5ba7734c59": 396
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:services-p1-r1": 54,
+          "partition:replica_operations-p1-r1": 83,
+          "partition:services-p1-r2": 59,
+          "partition:services-p1-r3": 37,
+          "partition:replica_operations-p1-r2": 65,
+          "partition:replica_operations-p1-r3": 54,
+          "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 9,
+          "partition:storage_reservations-p1-r2": 9,
+          "partition:storage_reservations-p1-r3": 8,
+          "partition:partitions-p1-r1": 2,
+          "partition:nodes-p1-r2": 1,
+          "partition:nodes-p1-r1": 10,
+          "partition:storage_reservations-p1-r1": 5
+        },
+        "correlatedLevel50": 31,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 9,
+          "Failed to deliver CDC event": 14,
+          "WebSocket error": 4,
+          "Reconnection failed": 4
+        },
+        "executedMoves": 47,
+        "executedMovesByEntity": {
+          "schema_operations-p1": 7,
+          "sql_transaction_participants-p1": 5,
+          "sql_transactions-p1": 4,
+          "sql_write_operations-p1": 5,
+          "control_plane_publications-p1": 5,
+          "replica_operations-p1": 21
+        },
+        "executedMovesByType": {
+          "add": 14,
+          "replace": 21,
+          "remove": 12
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:39:31.922Z": 4,
+          "2026-07-20T00:39:31.941Z": 1,
+          "2026-07-20T00:39:32.570Z": 1,
+          "2026-07-20T00:39:33.682Z": 1,
+          "2026-07-20T00:39:33.982Z": 1,
+          "2026-07-20T00:39:34.211Z": 1,
+          "2026-07-20T00:39:34.362Z": 1,
+          "2026-07-20T00:39:34.888Z": 1,
+          "2026-07-20T00:39:36.950Z": 1,
+          "2026-07-20T00:39:39.295Z": 1,
+          "2026-07-20T00:39:41.455Z": 1,
+          "2026-07-20T00:39:43.392Z": 1,
+          "2026-07-20T00:39:43.393Z": 1,
+          "2026-07-20T00:39:43.405Z": 1,
+          "2026-07-20T00:39:44.346Z": 1,
+          "2026-07-20T00:39:45.327Z": 1,
+          "2026-07-20T00:39:45.337Z": 1,
+          "2026-07-20T00:39:46.406Z": 1,
+          "2026-07-20T00:39:48.292Z": 1,
+          "2026-07-20T00:39:48.539Z": 1,
+          "2026-07-20T00:39:49.129Z": 1,
+          "2026-07-20T00:39:49.292Z": 1,
+          "2026-07-20T00:39:50.057Z": 1,
+          "2026-07-20T00:39:50.381Z": 1,
+          "2026-07-20T00:39:50.843Z": 1,
+          "2026-07-20T00:39:54.789Z": 1,
+          "2026-07-20T00:39:56.628Z": 1,
+          "2026-07-20T00:39:58.212Z": 2,
+          "2026-07-20T00:39:58.247Z": 2,
+          "2026-07-20T00:39:58.280Z": 1,
+          "2026-07-20T00:39:59.483Z": 1,
+          "2026-07-20T00:40:00.093Z": 1,
+          "2026-07-20T00:40:01.629Z": 1,
+          "2026-07-20T00:40:01.956Z": 1,
+          "2026-07-20T00:40:03.866Z": 1,
+          "2026-07-20T00:40:03.889Z": 1,
+          "2026-07-20T00:40:04.965Z": 1,
+          "2026-07-20T00:40:06.174Z": 1,
+          "2026-07-20T00:40:07.562Z": 1,
+          "2026-07-20T00:40:09.350Z": 1,
+          "2026-07-20T00:40:09.380Z": 1,
+          "2026-07-20T00:40:09.795Z": 1
+        },
+        "maxMovesAtOneTimestamp": 4,
+        "skippedMoves": 25,
+        "skippedMovesByReason": {
+          "budget_exceeded": 21,
+          "blocked": 4
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_waiting_for_idle_ledger": 21,
+          "cluster_member_unhealthy": 4
+        },
+        "eventLoopGaps": 17,
+        "maxEventLoopGapMs": 6033,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 65.88,
+        "cdcFailuresByPartition": {
+          "replica_operations-p1": 5,
+          "services-p1": 4,
+          "nodes-p1": 4,
+          "control_plane_publications-p1": 1
+        }
+      },
+      "preShutdown": {
+        "structuredEvents": 5463,
+        "level50": 341,
+        "ackTimeoutPeerAliveSkips": 384,
+        "ackTimeoutPeerAliveSkipsNodesP1": 10,
+        "ackTimeoutPeerAliveSkipsByTargetNode": {
+          "87de7135-e92f-4af8-8103-ae5ba7734c59": 384
+        },
+        "ackTimeoutPeerAliveSkipsByTargetSurface": {
+          "partition:services-p1-r1": 51,
+          "partition:replica_operations-p1-r1": 78,
+          "partition:services-p1-r2": 58,
+          "partition:services-p1-r3": 36,
+          "partition:replica_operations-p1-r2": 65,
+          "partition:replica_operations-p1-r3": 54,
+          "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 9,
+          "partition:storage_reservations-p1-r2": 8,
+          "partition:storage_reservations-p1-r3": 8,
+          "partition:partitions-p1-r1": 2,
+          "partition:nodes-p1-r1": 10,
+          "partition:storage_reservations-p1-r1": 5
+        },
+        "correlatedLevel50": 18,
+        "correlatedLevel50ByMessage": {
+          "Raft CDC command failed": 9,
+          "Failed to deliver CDC event": 9
+        },
+        "executedMoves": 47,
+        "executedMovesByEntity": {
+          "schema_operations-p1": 7,
+          "sql_transaction_participants-p1": 5,
+          "sql_transactions-p1": 4,
+          "sql_write_operations-p1": 5,
+          "control_plane_publications-p1": 5,
+          "replica_operations-p1": 21
+        },
+        "executedMovesByType": {
+          "add": 14,
+          "replace": 21,
+          "remove": 12
+        },
+        "executedMovesByTimestamp": {
+          "2026-07-20T00:39:31.922Z": 4,
+          "2026-07-20T00:39:31.941Z": 1,
+          "2026-07-20T00:39:32.570Z": 1,
+          "2026-07-20T00:39:33.682Z": 1,
+          "2026-07-20T00:39:33.982Z": 1,
+          "2026-07-20T00:39:34.211Z": 1,
+          "2026-07-20T00:39:34.362Z": 1,
+          "2026-07-20T00:39:34.888Z": 1,
+          "2026-07-20T00:39:36.950Z": 1,
+          "2026-07-20T00:39:39.295Z": 1,
+          "2026-07-20T00:39:41.455Z": 1,
+          "2026-07-20T00:39:43.392Z": 1,
+          "2026-07-20T00:39:43.393Z": 1,
+          "2026-07-20T00:39:43.405Z": 1,
+          "2026-07-20T00:39:44.346Z": 1,
+          "2026-07-20T00:39:45.327Z": 1,
+          "2026-07-20T00:39:45.337Z": 1,
+          "2026-07-20T00:39:46.406Z": 1,
+          "2026-07-20T00:39:48.292Z": 1,
+          "2026-07-20T00:39:48.539Z": 1,
+          "2026-07-20T00:39:49.129Z": 1,
+          "2026-07-20T00:39:49.292Z": 1,
+          "2026-07-20T00:39:50.057Z": 1,
+          "2026-07-20T00:39:50.381Z": 1,
+          "2026-07-20T00:39:50.843Z": 1,
+          "2026-07-20T00:39:54.789Z": 1,
+          "2026-07-20T00:39:56.628Z": 1,
+          "2026-07-20T00:39:58.212Z": 2,
+          "2026-07-20T00:39:58.247Z": 2,
+          "2026-07-20T00:39:58.280Z": 1,
+          "2026-07-20T00:39:59.483Z": 1,
+          "2026-07-20T00:40:00.093Z": 1,
+          "2026-07-20T00:40:01.629Z": 1,
+          "2026-07-20T00:40:01.956Z": 1,
+          "2026-07-20T00:40:03.866Z": 1,
+          "2026-07-20T00:40:03.889Z": 1,
+          "2026-07-20T00:40:04.965Z": 1,
+          "2026-07-20T00:40:06.174Z": 1,
+          "2026-07-20T00:40:07.562Z": 1,
+          "2026-07-20T00:40:09.350Z": 1,
+          "2026-07-20T00:40:09.380Z": 1,
+          "2026-07-20T00:40:09.795Z": 1
+        },
+        "maxMovesAtOneTimestamp": 4,
+        "skippedMoves": 25,
+        "skippedMovesByReason": {
+          "budget_exceeded": 21,
+          "blocked": 4
+        },
+        "skippedMovesByAdmissionReason": {
+          "operation_ledger_self_move_waiting_for_idle_ledger": 21,
+          "cluster_member_unhealthy": 4
+        },
+        "eventLoopGaps": 16,
+        "maxEventLoopGapMs": 6033,
+        "maxEventLoopUtilization": 1,
+        "maxBlockedPercentOfWall": 65.88,
+        "cdcFailuresByPartition": {
+          "replica_operations-p1": 5,
+          "services-p1": 4
+        }
+      },
+      "nodes": [
+        {
+          "nodeId": "87de7135-e92f-4af8-8103-ae5ba7734c59",
+          "seed": true,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/702a1e9a-15fc-4e9b-9497-100d3838c45b/87de7135-e92f-4af8-8103-ae5ba7734c59.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 4505,
+            "level50": 336,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 23,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 9,
+              "Failed to deliver CDC event": 14
+            },
+            "executedMoves": 47,
+            "executedMovesByEntity": {
+              "schema_operations-p1": 7,
+              "sql_transaction_participants-p1": 5,
+              "sql_transactions-p1": 4,
+              "sql_write_operations-p1": 5,
+              "control_plane_publications-p1": 5,
+              "replica_operations-p1": 21
+            },
+            "executedMovesByType": {
+              "add": 14,
+              "replace": 21,
+              "remove": 12
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:39:31.922Z": 4,
+              "2026-07-20T00:39:31.941Z": 1,
+              "2026-07-20T00:39:32.570Z": 1,
+              "2026-07-20T00:39:33.682Z": 1,
+              "2026-07-20T00:39:33.982Z": 1,
+              "2026-07-20T00:39:34.211Z": 1,
+              "2026-07-20T00:39:34.362Z": 1,
+              "2026-07-20T00:39:34.888Z": 1,
+              "2026-07-20T00:39:36.950Z": 1,
+              "2026-07-20T00:39:39.295Z": 1,
+              "2026-07-20T00:39:41.455Z": 1,
+              "2026-07-20T00:39:43.392Z": 1,
+              "2026-07-20T00:39:43.393Z": 1,
+              "2026-07-20T00:39:43.405Z": 1,
+              "2026-07-20T00:39:44.346Z": 1,
+              "2026-07-20T00:39:45.327Z": 1,
+              "2026-07-20T00:39:45.337Z": 1,
+              "2026-07-20T00:39:46.406Z": 1,
+              "2026-07-20T00:39:48.292Z": 1,
+              "2026-07-20T00:39:48.539Z": 1,
+              "2026-07-20T00:39:49.129Z": 1,
+              "2026-07-20T00:39:49.292Z": 1,
+              "2026-07-20T00:39:50.057Z": 1,
+              "2026-07-20T00:39:50.381Z": 1,
+              "2026-07-20T00:39:50.843Z": 1,
+              "2026-07-20T00:39:54.789Z": 1,
+              "2026-07-20T00:39:56.628Z": 1,
+              "2026-07-20T00:39:58.212Z": 2,
+              "2026-07-20T00:39:58.247Z": 2,
+              "2026-07-20T00:39:58.280Z": 1,
+              "2026-07-20T00:39:59.483Z": 1,
+              "2026-07-20T00:40:00.093Z": 1,
+              "2026-07-20T00:40:01.629Z": 1,
+              "2026-07-20T00:40:01.956Z": 1,
+              "2026-07-20T00:40:03.866Z": 1,
+              "2026-07-20T00:40:03.889Z": 1,
+              "2026-07-20T00:40:04.965Z": 1,
+              "2026-07-20T00:40:06.174Z": 1,
+              "2026-07-20T00:40:07.562Z": 1,
+              "2026-07-20T00:40:09.350Z": 1,
+              "2026-07-20T00:40:09.380Z": 1,
+              "2026-07-20T00:40:09.795Z": 1
+            },
+            "maxMovesAtOneTimestamp": 4,
+            "skippedMoves": 25,
+            "skippedMovesByReason": {
+              "budget_exceeded": 21,
+              "blocked": 4
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_waiting_for_idle_ledger": 21,
+              "cluster_member_unhealthy": 4
+            },
+            "eventLoopGaps": 14,
+            "maxEventLoopGapMs": 6033,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 65.88,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 5,
+              "services-p1": 4,
+              "nodes-p1": 4,
+              "control_plane_publications-p1": 1
+            }
+          },
+          "preShutdown": {
+            "structuredEvents": 4027,
+            "level50": 331,
+            "ackTimeoutPeerAliveSkips": 0,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {},
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {},
+            "correlatedLevel50": 18,
+            "correlatedLevel50ByMessage": {
+              "Raft CDC command failed": 9,
+              "Failed to deliver CDC event": 9
+            },
+            "executedMoves": 47,
+            "executedMovesByEntity": {
+              "schema_operations-p1": 7,
+              "sql_transaction_participants-p1": 5,
+              "sql_transactions-p1": 4,
+              "sql_write_operations-p1": 5,
+              "control_plane_publications-p1": 5,
+              "replica_operations-p1": 21
+            },
+            "executedMovesByType": {
+              "add": 14,
+              "replace": 21,
+              "remove": 12
+            },
+            "executedMovesByTimestamp": {
+              "2026-07-20T00:39:31.922Z": 4,
+              "2026-07-20T00:39:31.941Z": 1,
+              "2026-07-20T00:39:32.570Z": 1,
+              "2026-07-20T00:39:33.682Z": 1,
+              "2026-07-20T00:39:33.982Z": 1,
+              "2026-07-20T00:39:34.211Z": 1,
+              "2026-07-20T00:39:34.362Z": 1,
+              "2026-07-20T00:39:34.888Z": 1,
+              "2026-07-20T00:39:36.950Z": 1,
+              "2026-07-20T00:39:39.295Z": 1,
+              "2026-07-20T00:39:41.455Z": 1,
+              "2026-07-20T00:39:43.392Z": 1,
+              "2026-07-20T00:39:43.393Z": 1,
+              "2026-07-20T00:39:43.405Z": 1,
+              "2026-07-20T00:39:44.346Z": 1,
+              "2026-07-20T00:39:45.327Z": 1,
+              "2026-07-20T00:39:45.337Z": 1,
+              "2026-07-20T00:39:46.406Z": 1,
+              "2026-07-20T00:39:48.292Z": 1,
+              "2026-07-20T00:39:48.539Z": 1,
+              "2026-07-20T00:39:49.129Z": 1,
+              "2026-07-20T00:39:49.292Z": 1,
+              "2026-07-20T00:39:50.057Z": 1,
+              "2026-07-20T00:39:50.381Z": 1,
+              "2026-07-20T00:39:50.843Z": 1,
+              "2026-07-20T00:39:54.789Z": 1,
+              "2026-07-20T00:39:56.628Z": 1,
+              "2026-07-20T00:39:58.212Z": 2,
+              "2026-07-20T00:39:58.247Z": 2,
+              "2026-07-20T00:39:58.280Z": 1,
+              "2026-07-20T00:39:59.483Z": 1,
+              "2026-07-20T00:40:00.093Z": 1,
+              "2026-07-20T00:40:01.629Z": 1,
+              "2026-07-20T00:40:01.956Z": 1,
+              "2026-07-20T00:40:03.866Z": 1,
+              "2026-07-20T00:40:03.889Z": 1,
+              "2026-07-20T00:40:04.965Z": 1,
+              "2026-07-20T00:40:06.174Z": 1,
+              "2026-07-20T00:40:07.562Z": 1,
+              "2026-07-20T00:40:09.350Z": 1,
+              "2026-07-20T00:40:09.380Z": 1,
+              "2026-07-20T00:40:09.795Z": 1
+            },
+            "maxMovesAtOneTimestamp": 4,
+            "skippedMoves": 25,
+            "skippedMovesByReason": {
+              "budget_exceeded": 21,
+              "blocked": 4
+            },
+            "skippedMovesByAdmissionReason": {
+              "operation_ledger_self_move_waiting_for_idle_ledger": 21,
+              "cluster_member_unhealthy": 4
+            },
+            "eventLoopGaps": 13,
+            "maxEventLoopGapMs": 6033,
+            "maxEventLoopUtilization": 1,
+            "maxBlockedPercentOfWall": 65.88,
+            "cdcFailuresByPartition": {
+              "replica_operations-p1": 5,
+              "services-p1": 4
+            }
+          }
+        },
+        {
+          "nodeId": "eb9345a6-d262-4a28-a950-0b6827dd7d26",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/702a1e9a-15fc-4e9b-9497-100d3838c45b/eb9345a6-d262-4a28-a950-0b6827dd7d26.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 445,
+            "level50": 10,
+            "ackTimeoutPeerAliveSkips": 83,
+            "ackTimeoutPeerAliveSkipsNodesP1": 1,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 83
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:services-p1-r1": 17,
+              "partition:replica_operations-p1-r1": 14,
+              "partition:services-p1-r2": 18,
+              "partition:services-p1-r3": 10,
+              "partition:replica_operations-p1-r2": 8,
+              "partition:replica_operations-p1-r3": 7,
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 2,
+              "partition:storage_reservations-p1-r2": 2,
+              "partition:storage_reservations-p1-r3": 2,
+              "partition:partitions-p1-r1": 2,
+              "partition:nodes-p1-r2": 1
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1049,
+            "maxEventLoopUtilization": 0.1366,
+            "maxBlockedPercentOfWall": 7.39,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 329,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 78,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 78
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:services-p1-r1": 15,
+              "partition:replica_operations-p1-r1": 13,
+              "partition:services-p1-r2": 17,
+              "partition:services-p1-r3": 10,
+              "partition:replica_operations-p1-r2": 8,
+              "partition:replica_operations-p1-r3": 7,
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 2,
+              "partition:storage_reservations-p1-r2": 2,
+              "partition:storage_reservations-p1-r3": 2,
+              "partition:partitions-p1-r1": 2
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1049,
+            "maxEventLoopUtilization": 0.1366,
+            "maxBlockedPercentOfWall": 7.39,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "821ca53d-b6cc-45d5-96f4-4fbf0b1c93d7",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/702a1e9a-15fc-4e9b-9497-100d3838c45b/821ca53d-b6cc-45d5-96f4-4fbf0b1c93d7.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 440,
+            "level50": 17,
+            "ackTimeoutPeerAliveSkips": 99,
+            "ackTimeoutPeerAliveSkipsNodesP1": 5,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 99
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 2,
+              "partition:replica_operations-p1-r2": 16,
+              "partition:replica_operations-p1-r1": 17,
+              "partition:services-p1-r1": 15,
+              "partition:nodes-p1-r1": 5,
+              "partition:services-p1-r2": 13,
+              "partition:services-p1-r3": 9,
+              "partition:replica_operations-p1-r3": 15,
+              "partition:storage_reservations-p1-r1": 2,
+              "partition:storage_reservations-p1-r2": 3,
+              "partition:storage_reservations-p1-r3": 2
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 379,
+            "level50": 6,
+            "ackTimeoutPeerAliveSkips": 97,
+            "ackTimeoutPeerAliveSkipsNodesP1": 5,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 97
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 2,
+              "partition:replica_operations-p1-r2": 16,
+              "partition:replica_operations-p1-r1": 17,
+              "partition:services-p1-r1": 15,
+              "partition:nodes-p1-r1": 5,
+              "partition:services-p1-r2": 13,
+              "partition:services-p1-r3": 8,
+              "partition:replica_operations-p1-r3": 15,
+              "partition:storage_reservations-p1-r1": 2,
+              "partition:storage_reservations-p1-r2": 2,
+              "partition:storage_reservations-p1-r3": 2
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 0,
+            "maxEventLoopGapMs": 0,
+            "maxEventLoopUtilization": 0,
+            "maxBlockedPercentOfWall": 0,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "7d895384-ce8b-4563-8e74-1e63538943e6",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/702a1e9a-15fc-4e9b-9497-100d3838c45b/7d895384-ce8b-4563-8e74-1e63538943e6.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 438,
+            "level50": 10,
+            "ackTimeoutPeerAliveSkips": 104,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 104
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 30,
+              "partition:services-p1-r1": 9,
+              "partition:replica_operations-p1-r2": 22,
+              "partition:services-p1-r2": 13,
+              "partition:replica_operations-p1-r3": 20,
+              "partition:services-p1-r3": 8,
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 2
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1061,
+            "maxEventLoopUtilization": 0.1333,
+            "maxBlockedPercentOfWall": 7.4,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 363,
+            "level50": 0,
+            "ackTimeoutPeerAliveSkips": 101,
+            "ackTimeoutPeerAliveSkipsNodesP1": 0,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 101
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r1": 28,
+              "partition:services-p1-r1": 8,
+              "partition:replica_operations-p1-r2": 22,
+              "partition:services-p1-r2": 13,
+              "partition:replica_operations-p1-r3": 20,
+              "partition:services-p1-r3": 8,
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 2
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1061,
+            "maxEventLoopUtilization": 0.1333,
+            "maxBlockedPercentOfWall": 7.4,
+            "cdcFailuresByPartition": {}
+          }
+        },
+        {
+          "nodeId": "ec95dde3-4150-4ed2-8b73-506a87efd867",
+          "seed": false,
+          "logPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-probe-gate-20260720/702a1e9a-15fc-4e9b-9497-100d3838c45b/ec95dde3-4150-4ed2-8b73-506a87efd867.log",
+          "sourceFingerprints": [
+            "8a64ad4bd3d98636"
+          ],
+          "total": {
+            "structuredEvents": 421,
+            "level50": 14,
+            "ackTimeoutPeerAliveSkips": 110,
+            "ackTimeoutPeerAliveSkipsNodesP1": 5,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 110
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r2": 19,
+              "partition:replica_operations-p1-r1": 22,
+              "partition:services-p1-r1": 13,
+              "partition:nodes-p1-r1": 5,
+              "partition:services-p1-r2": 15,
+              "partition:services-p1-r3": 10,
+              "partition:replica_operations-p1-r3": 12,
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 3,
+              "partition:storage_reservations-p1-r1": 3,
+              "partition:storage_reservations-p1-r2": 4,
+              "partition:storage_reservations-p1-r3": 4
+            },
+            "correlatedLevel50": 2,
+            "correlatedLevel50ByMessage": {
+              "WebSocket error": 1,
+              "Reconnection failed": 1
+            },
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1062,
+            "maxEventLoopUtilization": 0.135,
+            "maxBlockedPercentOfWall": 7.36,
+            "cdcFailuresByPartition": {}
+          },
+          "preShutdown": {
+            "structuredEvents": 365,
+            "level50": 4,
+            "ackTimeoutPeerAliveSkips": 108,
+            "ackTimeoutPeerAliveSkipsNodesP1": 5,
+            "ackTimeoutPeerAliveSkipsByTargetNode": {
+              "87de7135-e92f-4af8-8103-ae5ba7734c59": 108
+            },
+            "ackTimeoutPeerAliveSkipsByTargetSurface": {
+              "partition:replica_operations-p1-r2": 19,
+              "partition:replica_operations-p1-r1": 20,
+              "partition:services-p1-r1": 13,
+              "partition:nodes-p1-r1": 5,
+              "partition:services-p1-r2": 15,
+              "partition:services-p1-r3": 10,
+              "partition:replica_operations-p1-r3": 12,
+              "87de7135-e92f-4af8-8103-ae5ba7734c59/service/swim-ping": 3,
+              "partition:storage_reservations-p1-r1": 3,
+              "partition:storage_reservations-p1-r2": 4,
+              "partition:storage_reservations-p1-r3": 4
+            },
+            "correlatedLevel50": 0,
+            "correlatedLevel50ByMessage": {},
+            "executedMoves": 0,
+            "executedMovesByEntity": {},
+            "executedMovesByType": {},
+            "executedMovesByTimestamp": {},
+            "maxMovesAtOneTimestamp": 0,
+            "skippedMoves": 0,
+            "skippedMovesByReason": {},
+            "skippedMovesByAdmissionReason": {},
+            "eventLoopGaps": 1,
+            "maxEventLoopGapMs": 1062,
+            "maxEventLoopUtilization": 0.135,
+            "maxBlockedPercentOfWall": 7.36,
+            "cdcFailuresByPartition": {}
+          }
+        }
+      ]
+    }
+  ]
+}

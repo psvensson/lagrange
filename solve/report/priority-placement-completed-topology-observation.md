@@ -18,16 +18,16 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/priority-placement-completed-topology-observation-2026-07-19T21-41-35-454Z.report.json
+- Movement: solved: unknown -> PASS
+- Latest evidence: test-output/reports/priority-placement-completed-topology-observation-2026-07-19T21-43-56-106Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for priority-placement-completed-topology-observation-main
-- No longer current: PASS; No model-level admission bypass, topology authority, or new recovery state transition was introduced.
+- No longer current: unknown; No model-level admission bypass, topology authority, or new recovery state transition was introduced.; The checkpointed zero-row CDC suppression alone closes completed priority placement observation; operation-ledger terminality or a constructed current placement summary is sufficient to certify snapshot freshness.
 
 ## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id priority-placement-completed-topology-observation --frontier priority-placement-completed-topology-observation-main --evidence test-output/reports/priority-placement-completed-topology-observation-2026-07-19T21-43-56-106Z.report.json
+- Status: allowed
+- Next action: continue supervised step for priority-placement-completed-topology-observation-main
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 3
@@ -42,7 +42,7 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **priority-placement-completed-topology-observation-main** [solved] rung 1, attempts 1, metric 0 -> 0
+- **priority-placement-completed-topology-observation-main** [open] rung 1, attempts 1, metric 0 -> 0 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **priority-placement-completed-topology-observation-main**: inherited from runtime-replica-state-projection-retained-reconcile-integrity-reseal: The sealed retained-projection loss does not reproduce on checkpoint cc95da34: authoritative services rows for completed schema_operations, sql_transaction_participants, and sql_write_operations operations are present and ACTIVE (apart from the separately failed superseded r5), while the measuring failure is a stale current priority-placement readiness projection after completed replacements. (rules out: Do not modify the retained projection owner for this new blocker or rerun unchanged bytes; pivot to the current priority-placement projection/leader-coverage boundary.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T21-22-24-859Z.report.json]
@@ -50,6 +50,8 @@
 - **priority-placement-completed-topology-observation-main**: DT red-on-revert proven for test/partition/partition-service-raft-noop-cdc-placement.test.js [dt:solve/changes/dt-prove/partition-service-raft-noop-cdc-placement.test.js-2026-07-19T21-37-14-650Z.json]
 - **priority-placement-completed-topology-observation-main**: DT red-on-revert proven for test/partition/partition-service-raft-noop-cdc-placement.test.js [dt:solve/changes/dt-prove/partition-service-raft-noop-cdc-placement.test.js-2026-07-19T21-42-13-272Z.json]
 - **priority-placement-completed-topology-observation-main**: Model contract gate passed unchanged after the no-op CDC owner fix; all contract records, invariants, decision tables, statecharts, owner traces, Alloy, and TLC expected route/forbidden outcomes passed. (rules out: No model-level admission bypass, topology authority, or new recovery state transition was introduced.) [test-output/reports/priority-spread-schema-admission-bypass.model.report.json]
+- **priority-placement-completed-topology-observation-main**: Independent verification approved the exact canonical three-path delta; 383 assertions, scoped static checks, all five attack checklists, and mechanism-bound red-on-revert passed. [subagent:verify_priority_noop_cdc]
+- **priority-placement-completed-topology-observation-main**: Checkpoint 7d4aedbe reproduces the completed-placement freshness defect: a terminal priority ADD operation plus its captured target services row at status=syncing yields evaluateAuthoritativeControlSnapshotRepair.shouldRepair=false and ControlPlaneSnapshotOwner snapshotObservation.state=fresh. (rules out: The checkpointed zero-row CDC suppression alone closes completed priority placement observation; operation-ledger terminality or a constructed current placement summary is sufficient to certify snapshot freshness.) [test/admin/admin-control-snapshot-completed-placement-handoff-repair.test.js]
 
 ## Theories
 _(none recorded)_

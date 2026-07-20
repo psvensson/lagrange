@@ -1,0 +1,983 @@
+diff --git a/src/query/runtime-replica-state-projection-owner.js b/src/query/runtime-replica-state-projection-owner.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cecf2fad7307910a0b9dc23b6942e1044f7eb68a
+--- /dev/null
++++ b/src/query/runtime-replica-state-projection-owner.js
+@@ -0,0 +1,169 @@
++import {EventEmitter} from 'node:events';
++import {
++  getControlPlaneErrorCode,
++  getControlPlaneRetryAfterMs,
++  isRetryableControlPlaneError,
++} from '../control-plane/control-plane-error-classification.js';
++import {OwnerKeyReconcileQueue} from
++  '../workflow/owner-key-reconcile-queue.js';
++import {projectRuntimeReplicaServicesRow} from
++  './runtime-replica-state-projection.js';
++
++const RUNTIME_REPLICA_STATE_PROJECTION_EVENT = Object.freeze({
++  ACCEPTED: 'runtime_replica_state_projection_accepted',
++  APPLIED: 'runtime_replica_state_projection_applied',
++  RETRYING: 'runtime_replica_state_projection_retrying',
++  FAILED: 'runtime_replica_state_projection_failed',
++  SHUTDOWN: 'runtime_replica_state_projection_shutdown',
++});
++
++const RUNTIME_REPLICA_STATE_PROJECTION_STATE = Object.freeze({
++  RETAINED: 'retained',
++  STOPPED: 'stopped',
++});
++
++const PROJECTION_OWNER_NAME = 'runtime-replica-state-projection-owner';
++const PROJECTION_RECONCILE_REASON = 'runtime_replica_state_projection';
++const PROJECTION_FAILURE_REASON = 'runtime_replica_state_projection_failed';
++const PROJECTION_OWNER_REQUIRED_ERROR =
++  'RuntimeReplicaStateProjectionOwner requires ServicesOwner';
++const LOCAL_STR_FUNCTION = 'function';
++
++function cloneProjectionContext(serviceId, stateRow, context = {}) {
++  return Object.freeze({
++    serviceId,
++    stateRow: Object.freeze({...stateRow}),
++    causeId:
++      typeof context?.causeId === 'string' ? context.causeId : null,
++  });
++}
++
++function buildProjectionFailureEvent(serviceId, context, error) {
++  const retryable = isRetryableControlPlaneError(error);
++  return {
++    eventName: retryable ?
++      RUNTIME_REPLICA_STATE_PROJECTION_EVENT.RETRYING :
++      RUNTIME_REPLICA_STATE_PROJECTION_EVENT.FAILED,
++    payload: {
++      serviceId,
++      status: context?.stateRow?.status || null,
++      causeId: context?.causeId || null,
++      retryable,
++      retryAfterMs: retryable ?
++        getControlPlaneRetryAfterMs(error) :
++        null,
++      error,
++    },
++  };
++}
++
++class RuntimeReplicaStateProjectionOwner extends EventEmitter {
++  constructor(options = {}) {
++    super();
++    if (!options.servicesOwner) {
++      throw new Error(PROJECTION_OWNER_REQUIRED_ERROR);
++    }
++    this.hostNodeId = options.hostNodeId || null;
++    this.servicesOwner = options.servicesOwner;
++    this.stopped = false;
++    this.reconcileQueue =
++      options.reconcileQueue ||
++      new OwnerKeyReconcileQueue({
++        name: PROJECTION_OWNER_NAME,
++        reconcileFn: (serviceId, _reasons, context) =>
++          this.reconcile(serviceId, context),
++        retryPolicy: {
++          isRetryableError: isRetryableControlPlaneError,
++          getRetryAfterMs: getControlPlaneRetryAfterMs,
++          getFailureReason: (error) =>
++            getControlPlaneErrorCode(error) || PROJECTION_FAILURE_REASON,
++        },
++      });
++  }
++
++  submit(serviceId, stateRow, context = {}) {
++    const projectionContext = cloneProjectionContext(
++      serviceId,
++      stateRow,
++      context,
++    );
++    if (this.stopped) {
++      return Object.freeze({
++        retained: false,
++        state: RUNTIME_REPLICA_STATE_PROJECTION_STATE.STOPPED,
++        serviceId,
++        status: stateRow?.status || null,
++      });
++    }
++    this.reconcileQueue.enqueue(
++      serviceId,
++      PROJECTION_RECONCILE_REASON,
++      projectionContext,
++    );
++    const accepted = Object.freeze({
++      retained: true,
++      state: RUNTIME_REPLICA_STATE_PROJECTION_STATE.RETAINED,
++      serviceId,
++      status: stateRow?.status || null,
++      causeId: projectionContext.causeId,
++    });
++    this.emit(
++      RUNTIME_REPLICA_STATE_PROJECTION_EVENT.ACCEPTED,
++      accepted,
++    );
++    return accepted;
++  }
++
++  async reconcile(serviceId, context = {}) {
++    const stateRow = context?.stateRow || {};
++    try {
++      await projectRuntimeReplicaServicesRow(
++        this.servicesOwner,
++        this.hostNodeId,
++        serviceId,
++        stateRow,
++      );
++      this.emit(RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED, {
++        serviceId,
++        status: stateRow.status || null,
++        causeId: context?.causeId || null,
++      });
++    } catch (error) {
++      const failureEvent = buildProjectionFailureEvent(
++        serviceId,
++        context,
++        error,
++      );
++      this.emit(failureEvent.eventName, failureEvent.payload);
++      throw error;
++    }
++  }
++
++  getDiagnostics() {
++    return {
++      owner: PROJECTION_OWNER_NAME,
++      ...this.reconcileQueue.getDiagnostics(),
++    };
++  }
++
++  shutdown() {
++    if (this.stopped) {
++      return;
++    }
++    this.stopped = true;
++    if (
++      this.reconcileQueue &&
++      typeof this.reconcileQueue.shutdown === LOCAL_STR_FUNCTION
++    ) {
++      this.reconcileQueue.shutdown();
++    }
++    this.emit(RUNTIME_REPLICA_STATE_PROJECTION_EVENT.SHUTDOWN, {
++      owner: PROJECTION_OWNER_NAME,
++    });
++  }
++}
++
++export {
++  RUNTIME_REPLICA_STATE_PROJECTION_EVENT,
++  RuntimeReplicaStateProjectionOwner,
++};
+diff --git a/src/query/runtime-replica-state-projection.js b/src/query/runtime-replica-state-projection.js
+index 139df8c2ade5db2edbc8a7b8dc5d29858a660341..b311a485bab88279dade9aaf427937cfb049a214 100644
+--- a/src/query/runtime-replica-state-projection.js
++++ b/src/query/runtime-replica-state-projection.js
+@@ -19,13 +19,76 @@ import {RUNTIME_REPLICA_STATUS} from '../constants/runtime.js';
+ import {ADAPTER_ERROR_MSG} from './sql-adapter-constants.js';
+ 
+ const PROJECTION_WRITE_OPTIONS = Object.freeze({skipCacheWait: true});
++const SERVICES_OWNER_METHODS = Object.freeze([
++  'insertService',
++  'removeService',
++  'updateService',
++]);
+ 
+-async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
+-  const updateResult = await gateway.updateSystemTableRow(
+-    TABLES.SERVICES,
+-    {service_id: serviceId},
++function isServicesOwner(target) {
++  return SERVICES_OWNER_METHODS.every(
++    (methodName) => typeof target?.[methodName] === 'function',
++  );
++}
++
++function assertProjectionMutationSucceeded(result) {
++  if (result?.success !== false) {
++    return result;
++  }
++  const error = new Error(
++    result?.error || 'Runtime replica services projection failed',
++  );
++  Object.assign(error, result);
++  throw error;
++}
++
++async function updateRuntimeReplicaServicesRow(
++  target,
++  serviceId,
++  updateData,
++) {
++  const result = isServicesOwner(target) ?
++    await target.updateService(
++      serviceId,
++      updateData,
++      PROJECTION_WRITE_OPTIONS,
++    ) :
++    await target.updateSystemTableRow(
++      TABLES.SERVICES,
++      {service_id: serviceId},
++      updateData,
++      PROJECTION_WRITE_OPTIONS,
++    );
++  return assertProjectionMutationSucceeded(result);
++}
++
++async function insertRuntimeReplicaServicesRow(target, row) {
++  const result = isServicesOwner(target) ?
++    await target.insertService(row, PROJECTION_WRITE_OPTIONS) :
++    await target.insertSystemTableRow(
++      TABLES.SERVICES,
++      row,
++      PROJECTION_WRITE_OPTIONS,
++    );
++  assertProjectionMutationSucceeded(result);
++}
++
++async function deleteRuntimeReplicaServicesRow(target, serviceId) {
++  const result = isServicesOwner(target) ?
++    await target.removeService(serviceId, PROJECTION_WRITE_OPTIONS) :
++    await target.deleteSystemTableRow(
++      TABLES.SERVICES,
++      {service_id: serviceId},
++      PROJECTION_WRITE_OPTIONS,
++    );
++  assertProjectionMutationSucceeded(result);
++}
++
++async function writeRuntimeReplicaServicesRow(target, serviceId, write) {
++  const updateResult = await updateRuntimeReplicaServicesRow(
++    target,
++    serviceId,
+     write.updateData,
+-    PROJECTION_WRITE_OPTIONS,
+   );
+   const affectedRows = Number(
+     updateResult?.partitionResult?.affectedRows ??
+@@ -34,16 +97,12 @@ async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
+   if (affectedRows > 0) {
+     return;
+   }
+-  await gateway.insertSystemTableRow(
+-    TABLES.SERVICES,
+-    {
+-      service_id: serviceId,
+-      ...write.updateData,
+-      created_at: write.createdAt ??
+-        write.updateData.updated_at ?? Date.now(),
+-    },
+-    PROJECTION_WRITE_OPTIONS,
+-  );
++  await insertRuntimeReplicaServicesRow(target, {
++    service_id: serviceId,
++    ...write.updateData,
++    created_at: write.createdAt ??
++      write.updateData.updated_at ?? Date.now(),
++  });
+ }
+ 
+ /**
+@@ -53,7 +112,8 @@ async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
+  * the state row resolves to the hosting engine's own nodeId (the
+  * column is NOT NULL).
+  *
+- * @param {?Object} gateway - Control-plane system-table gateway.
++ * @param {?Object} projectionTarget - ServicesOwner in production, or a
++ *   control-plane system-table gateway for compatibility callers.
+  * @param {string} hostNodeId - The projecting engine's node id.
+  * @param {string} serviceId - Replica service id (row primary key).
+  * @param {Object} stateRow - Column values from the lifecycle
+@@ -62,23 +122,19 @@ async function writeRuntimeReplicaServicesRow(gateway, serviceId, write) {
+  * @return {Promise<void>}
+  */
+ async function projectRuntimeReplicaServicesRow(
+-  gateway, hostNodeId, serviceId, stateRow,
++  projectionTarget, hostNodeId, serviceId, stateRow,
+ ) {
+-  if (!gateway) {
++  if (!projectionTarget) {
+     throw new Error(
+       ADAPTER_ERROR_MSG.STATE_PROJECTION_GATEWAY_REQUIRED,
+     );
+   }
+   const {created_at: createdAt, ...transitionColumns} = stateRow || {};
+   if (transitionColumns.status === RUNTIME_REPLICA_STATUS.STOPPED) {
+-    await gateway.deleteSystemTableRow(
+-      TABLES.SERVICES,
+-      {service_id: serviceId},
+-      PROJECTION_WRITE_OPTIONS,
+-    );
++    await deleteRuntimeReplicaServicesRow(projectionTarget, serviceId);
+     return;
+   }
+-  await writeRuntimeReplicaServicesRow(gateway, serviceId, {
++  await writeRuntimeReplicaServicesRow(projectionTarget, serviceId, {
+     createdAt,
+     updateData: {
+       ...transitionColumns,
+diff --git a/src/query/sql-query-engine-instance-initializer.js b/src/query/sql-query-engine-instance-initializer.js
+index 789260a264aa2fcd07b2f7288c22b79ff4f9f714..3d4028f9ddd7aed4b8d80a22bd0affe11ebabbb5 100644
+--- a/src/query/sql-query-engine-instance-initializer.js
++++ b/src/query/sql-query-engine-instance-initializer.js
+@@ -5,6 +5,10 @@ import {
+ import {
+   ServicePartitionAccessPublisher,
+ } from './service-partition-access-publisher.js';
++import {ServicesOwner} from '../control-plane/owners/services-owner.js';
++import {
++  RuntimeReplicaStateProjectionOwner,
++} from './runtime-replica-state-projection-owner.js';
+ 
+ const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
+ const LOCAL_STR_FUNCTION = 'function';
+@@ -35,6 +39,23 @@ const {
+   createEmptyTransactionRecoveryReplaySummary,
+ } = SQL_QUERY_ENGINE_SHARED;
+ 
++function createRuntimeReplicaStateProjectionOwner(engine, options) {
++  if (options.runtimeReplicaStateProjectionOwner) {
++    return options.runtimeReplicaStateProjectionOwner;
++  }
++  const servicesOwner =
++    options.runtimeReplicaStateProjectionServicesOwner ||
++    new ServicesOwner({
++      controlPlaneSystemTableGateway:
++        engine.controlPlaneSystemTableGateway,
++      systemTableCache: engine.systemCache,
++    });
++  return new RuntimeReplicaStateProjectionOwner({
++    hostNodeId: engine.nodeId,
++    servicesOwner,
++  });
++}
++
+ function initializeSqlQueryEngineInstance(engine, options = {}) {
+   engine.systemCache = options.systemCache || null;
+   engine.messageRouter = options.messageRouter || null;
+@@ -289,6 +310,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
+ 
+   engine.runtimeDriverRegistry = options.runtimeDriverRegistry || null;
+   engine.serviceRuntimeLifecycle = options.serviceRuntimeLifecycle || null;
++  engine.runtimeReplicaStateProjectionOwner =
++    createRuntimeReplicaStateProjectionOwner(engine, options);
+   engine.debugSessionResolver = options.debugSessionResolver || null;
+   engine.traceCollector = options.traceCollector || null;
+   engine.wasmExecutor = options.wasmExecutor || null;
+diff --git a/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js b/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
+index 43472df39c49bdcd5fa5ef303b9fb828249989af..8a5ebf6594228b990545b5466ac63d027501fcf1 100644
+--- a/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
++++ b/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
+@@ -256,6 +256,13 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
+     ) {
+       await this.tableCreationService.shutdown();
+     }
++    if (
++      this.runtimeReplicaStateProjectionOwner &&
++      typeof this.runtimeReplicaStateProjectionOwner.shutdown ===
++        LOCAL_STR_FUNCTION
++    ) {
++      this.runtimeReplicaStateProjectionOwner.shutdown();
++    }
+   }
+ 
+   /**
+@@ -295,9 +302,15 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
+     ) {
+       return;
+     }
++    const retainedProjectionOwner =
++      this.runtimeReplicaStateProjectionOwner;
+     lifecycle.setStateProjectionWriter(
+-      async (serviceId, stateRow) =>
+-        this.projectRuntimeReplicaServicesRow(serviceId, stateRow),
++      retainedProjectionOwner &&
++      typeof retainedProjectionOwner.submit === LOCAL_STR_FUNCTION ?
++        (serviceId, stateRow, context) =>
++          retainedProjectionOwner.submit(serviceId, stateRow, context) :
++        async (serviceId, stateRow) =>
++          this.projectRuntimeReplicaServicesRow(serviceId, stateRow),
+     );
+   }
+ 
+diff --git a/src/runtime/service-runtime-lifecycle.js b/src/runtime/service-runtime-lifecycle.js
+index 1aa79e1f2845aef8b138096ec8a5c9fa6c011f9d..8d4d34fbb95bdfa280e66e87f3749a4d56ae4f4a 100644
+--- a/src/runtime/service-runtime-lifecycle.js
++++ b/src/runtime/service-runtime-lifecycle.js
+@@ -121,6 +121,35 @@ function resolveServiceId(definition) {
+     LOCAL_STR_UNKNOWN;
+ }
+ 
++function isRetainedStateProjection(projectionResult) {
++  return projectionResult?.retained === true;
++}
++
++function buildReplicaStateProjectionRequest(
++  definition,
++  status,
++  extras,
++  context,
++) {
++  const nodeId = definition?.nodeId ??
++    definition?.node_id ?? null;
++  const serviceType = definition?.serviceType ??
++    definition?.service_type ??
++    UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
++  return {
++    causeId: normalizeCauseId(context?.causeId),
++    nodeId,
++    stateRow: {
++      service_type: serviceType,
++      node_id: nodeId,
++      status,
++      address: definition?.address ?? null,
++      updated_at: Date.now(),
++      ...extras,
++    },
++  };
++}
++
+ /**
+  * Validate an endpoint intent returned by a driver's start().
+  *
+@@ -475,27 +504,21 @@ class ServiceRuntimeLifecycle extends EventEmitter {
+     if (!this._stateProjectionWriter) {
+       return;
+     }
+-    const now = Date.now();
+-    const nodeId = definition?.nodeId ??
+-      definition?.node_id ?? null;
+-    const serviceType = definition?.serviceType ??
+-      definition?.service_type ??
+-      UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
+-    const address = definition?.address ?? null;
+-    const stateRow = {
+-      service_type: serviceType,
+-      node_id: nodeId,
+-      status,
+-      address,
+-      updated_at: now,
+-      ...extras,
+-    };
+-    const causeId = normalizeCauseId(context?.causeId);
++    const {causeId, nodeId, stateRow} =
++      buildReplicaStateProjectionRequest(
++        definition,
++        status,
++        extras,
++        context,
++      );
+     try {
+-      await this._stateProjectionWriter(serviceId, stateRow, {causeId});
+-      this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTED, {
+-        serviceId, status, nodeId, causeId,
+-      });
++      const projectionResult =
++        await this._stateProjectionWriter(serviceId, stateRow, {causeId});
++      if (!isRetainedStateProjection(projectionResult)) {
++        this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTED, {
++          serviceId, status, nodeId, causeId,
++        });
++      }
+     } catch (err) {
+       this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTION_FAILED, {
+         serviceId, status, nodeId, causeId, error: err,
+diff --git a/test/runtime/runtime-replica-state-projection-retained-reconcile.test.js b/test/runtime/runtime-replica-state-projection-retained-reconcile.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..49267f6074697a408055021eb3b276943d7626f3
+--- /dev/null
++++ b/test/runtime/runtime-replica-state-projection-retained-reconcile.test.js
+@@ -0,0 +1,333 @@
++/**
++ * Production-composition regression for retained runtime replica projection.
++ *
++ * The runtime lifecycle must hand state to the projection owner without
++ * waiting behind a routed services-table write. The owner serializes one
++ * replica's transitions, keeps the latest pending context, and delegates
++ * authoritative mutations to ServicesOwner.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
++import {
++  RUNTIME_REPLICA_STATE_PROJECTION_EVENT,
++  RuntimeReplicaStateProjectionOwner,
++} from '../../src/query/runtime-replica-state-projection-owner.js';
++import {
++  RUNTIME_REPLICA_STATUS,
++} from '../../src/constants/runtime.js';
++import {
++  createRuntimeStartupWiring,
++} from '../../src/runtime/runtime-startup-wiring.js';
++import {
++  createMockMessageRouter,
++  createMockSystemCache,
++} from '../query/sql-query-engine-test-support.js';
++
++const HOST_NODE_ID = 'projection-retain-node';
++const SERVICE_ID = 'projection-retain-service-r2';
++const RUNTIME_REF = 'projection-retain-runtime';
++const RETRY_AFTER_MS = 60_000;
++
++function createDeferred() {
++  let resolve;
++  const promise = new Promise((resolvePromise) => {
++    resolve = resolvePromise;
++  });
++  return {promise, resolve};
++}
++
++function waitForProjectionEvent(owner, eventName, predicate) {
++  return new Promise((resolve) => {
++    const listener = (event) => {
++      if (!predicate(event)) {
++        return;
++      }
++      owner.removeListener(eventName, listener);
++      resolve(event);
++    };
++    owner.on(eventName, listener);
++  });
++}
++
++function createRuntimeHarness(servicesOwner) {
++  const {serviceRuntimeLifecycle} = createRuntimeStartupWiring();
++  serviceRuntimeLifecycle.registerNativeJsHandler(RUNTIME_REF, {
++    async prepare() {
++      return {status: 'ready'};
++    },
++    async start() {
++      return {status: 'running'};
++    },
++    async stop() {},
++    async health() {
++      return {status: 'healthy'};
++    },
++  });
++  const engine = new SQLQueryEngine({
++    systemCache: createMockSystemCache([], [], null),
++    messageRouter: createMockMessageRouter(),
++    nodeId: HOST_NODE_ID,
++    serviceRuntimeLifecycle,
++    runtimeReplicaStateProjectionServicesOwner: servicesOwner,
++  });
++  return {
++    engine,
++    lifecycle: serviceRuntimeLifecycle,
++    projectionOwner: engine.runtimeReplicaStateProjectionOwner,
++  };
++}
++
++function runtimeDefinition() {
++  return {
++    serviceId: SERVICE_ID,
++    serviceType: 'runtime_service',
++    runtime_kind: 'native_js',
++    runtime_ref: RUNTIME_REF,
++    runtime_config: null,
++  };
++}
++
++test('production lifecycle handoff does not await a blocked CREATED write ' +
++  'and applies the newer ACTIVE state after retryable failure', async (t) => {
++  const createdWriteStarted = createDeferred();
++  const releaseCreatedWrite = createDeferred();
++  const calls = [];
++  const servicesOwner = {
++    async updateService(serviceId, data) {
++      calls.push({kind: 'update', serviceId, data});
++      if (data.status === RUNTIME_REPLICA_STATUS.CREATED) {
++        createdWriteStarted.resolve();
++        await releaseCreatedWrite.promise;
++        const error = new Error('distributed participant failure');
++        error.deferRetry = true;
++        error.retryAfterMs = RETRY_AFTER_MS;
++        throw error;
++      }
++      return {
++        success: true,
++        partitionResult: {affectedRows: 0},
++      };
++    },
++    async insertService(row) {
++      calls.push({kind: 'insert', row});
++      return {success: true};
++    },
++    async removeService(serviceId) {
++      calls.push({kind: 'delete', serviceId});
++      return {success: true};
++    },
++  };
++  const {
++    engine,
++    lifecycle,
++    projectionOwner,
++  } = createRuntimeHarness(servicesOwner);
++  const activeApplied = waitForProjectionEvent(
++    projectionOwner,
++    RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED,
++    (event) => event.status === RUNTIME_REPLICA_STATUS.ACTIVE,
++  );
++
++  try {
++    let prepareSettled = false;
++    const preparePromise = lifecycle.prepare(
++      runtimeDefinition(),
++      {nodeId: HOST_NODE_ID},
++    ).then((result) => {
++      prepareSettled = true;
++      return result;
++    });
++
++    await createdWriteStarted.promise;
++    await new Promise((resolve) => setImmediate(resolve));
++    t.equal(
++      prepareSettled,
++      true,
++      'prepare completes after retained handoff while CREATED remains blocked',
++    );
++
++    let startSettled = false;
++    const startPromise = lifecycle.start(runtimeDefinition()).then((result) => {
++      startSettled = true;
++      return result;
++    });
++    await new Promise((resolve) => setImmediate(resolve));
++    t.equal(
++      startSettled,
++      true,
++      'start and its executor outcome are not held by the older projection',
++    );
++
++    releaseCreatedWrite.resolve();
++    await Promise.all([preparePromise, startPromise, activeApplied]);
++
++    t.same(
++      calls.map((call) => [
++        call.kind,
++        call.data?.status ?? call.row?.status ?? null,
++      ]),
++      [
++        ['update', RUNTIME_REPLICA_STATUS.CREATED],
++        ['update', RUNTIME_REPLICA_STATUS.ACTIVE],
++        ['insert', RUNTIME_REPLICA_STATUS.ACTIVE],
++      ],
++      'the retained CREATED retry is superseded and cannot overwrite ACTIVE',
++    );
++    t.same(
++      projectionOwner.getDiagnostics().retryingKeys,
++      [],
++      'successful latest-state projection clears the older retained retry',
++    );
++  } finally {
++    await engine.shutdown();
++  }
++});
++
++test('STOPPED queued behind an in-flight ACTIVE write deletes last and cannot ' +
++  'be resurrected by stale completion', async (t) => {
++  const activeWriteStarted = createDeferred();
++  const releaseActiveWrite = createDeferred();
++  const calls = [];
++  const servicesOwner = {
++    async updateService(serviceId, data) {
++      calls.push({kind: 'update', serviceId, data});
++      if (data.status === RUNTIME_REPLICA_STATUS.ACTIVE) {
++        activeWriteStarted.resolve();
++        await releaseActiveWrite.promise;
++      }
++      return {
++        success: true,
++        partitionResult: {affectedRows: 1},
++      };
++    },
++    async insertService(row) {
++      calls.push({kind: 'insert', row});
++      return {success: true};
++    },
++    async removeService(serviceId) {
++      calls.push({kind: 'delete', serviceId});
++      return {success: true};
++    },
++  };
++  const owner = new RuntimeReplicaStateProjectionOwner({
++    hostNodeId: HOST_NODE_ID,
++    servicesOwner,
++  });
++  const stoppedApplied = waitForProjectionEvent(
++    owner,
++    RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED,
++    (event) => event.status === RUNTIME_REPLICA_STATUS.STOPPED,
++  );
++
++  try {
++    owner.submit(SERVICE_ID, {
++      status: RUNTIME_REPLICA_STATUS.ACTIVE,
++      service_type: 'runtime_service',
++      node_id: HOST_NODE_ID,
++      updated_at: 1,
++    });
++    await activeWriteStarted.promise;
++    owner.submit(SERVICE_ID, {
++      status: RUNTIME_REPLICA_STATUS.STOPPED,
++      service_type: 'runtime_service',
++      node_id: HOST_NODE_ID,
++      updated_at: 2,
++    });
++    releaseActiveWrite.resolve();
++    await stoppedApplied;
++
++    t.same(
++      calls.map((call) => call.kind),
++      ['update', 'delete'],
++      'the serialized final mutation is DELETE with no stale ACTIVE replay',
++    );
++  } finally {
++    owner.shutdown();
++  }
++});
++
++test('non-retryable projection failure is surfaced once and not retained',
++  async (t) => {
++    let updateCount = 0;
++    const owner = new RuntimeReplicaStateProjectionOwner({
++      hostNodeId: HOST_NODE_ID,
++      servicesOwner: {
++        async updateService() {
++          updateCount += 1;
++          throw new Error('permanent projection contract failure');
++        },
++        async insertService() {
++          t.fail('permanent update failure must not fall through to insert');
++        },
++        async removeService() {},
++      },
++    });
++    const failed = waitForProjectionEvent(
++      owner,
++      RUNTIME_REPLICA_STATE_PROJECTION_EVENT.FAILED,
++      (event) => event.serviceId === SERVICE_ID,
++    );
++
++    try {
++      owner.submit(SERVICE_ID, {
++        status: RUNTIME_REPLICA_STATUS.ACTIVE,
++        service_type: 'runtime_service',
++        node_id: HOST_NODE_ID,
++        updated_at: 1,
++      });
++      const failure = await failed;
++      await Promise.resolve();
++
++      t.equal(failure.retryable, false, 'failure classification is inspectable');
++      t.equal(updateCount, 1, 'permanent failure is attempted exactly once');
++      t.same(
++        owner.getDiagnostics().retryingKeys,
++        [],
++        'permanent failure leaves no retry timer or retained work',
++      );
++    } finally {
++      owner.shutdown();
++    }
++  });
++
++test('shutdown clears retained retry work and its timer', async (t) => {
++  const owner = new RuntimeReplicaStateProjectionOwner({
++    hostNodeId: HOST_NODE_ID,
++    servicesOwner: {
++      async updateService() {
++        const error = new Error('retry after shutdown boundary');
++        error.deferRetry = true;
++        error.retryAfterMs = RETRY_AFTER_MS;
++        throw error;
++      },
++      async insertService() {},
++      async removeService() {},
++    },
++  });
++  const retrying = waitForProjectionEvent(
++    owner,
++    RUNTIME_REPLICA_STATE_PROJECTION_EVENT.RETRYING,
++    (event) => event.serviceId === SERVICE_ID,
++  );
++
++  owner.submit(SERVICE_ID, {
++    status: RUNTIME_REPLICA_STATUS.ACTIVE,
++    service_type: 'runtime_service',
++    node_id: HOST_NODE_ID,
++    updated_at: 1,
++  });
++  await retrying;
++  await new Promise((resolve) => setImmediate(resolve));
++
++  t.same(
++    owner.getDiagnostics().retryingKeys,
++    [SERVICE_ID],
++    'retryable failure is retained before shutdown',
++  );
++  owner.shutdown();
++  const diagnostics = owner.getDiagnostics();
++  t.equal(diagnostics.stopped, true, 'projection queue is stopped');
++  t.same(diagnostics.retryingKeys, [], 'retained retry context is cleared');
++  t.same(diagnostics.retryStates, {}, 'retry timer state is cleared');
++});
+diff --git a/test/runtime/runtime-replica-state-projection-wiring.test.js b/test/runtime/runtime-replica-state-projection-wiring.test.js
+index 6a1e4b422bdbffefd5a56314ab38719dc8462a7d..7ae61fecccf0337ec8647fc2cede9c2fe390d86c 100644
+--- a/test/runtime/runtime-replica-state-projection-wiring.test.js
++++ b/test/runtime/runtime-replica-state-projection-wiring.test.js
+@@ -19,6 +19,9 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+ import {
+   createRuntimeStartupWiring,
+ } from '../../src/runtime/runtime-startup-wiring.js';
++import {
++  RUNTIME_REPLICA_STATE_PROJECTION_EVENT,
++} from '../../src/query/runtime-replica-state-projection-owner.js';
+ import {
+   SQL_QUERY_LOOP_RUNTIME_REF,
+ } from '../../src/runtime/sql-query-loop-runtime-module.js';
+@@ -68,18 +71,15 @@ function runtimeServiceIdentityRows() {
+ 
+ function buildHarness() {
+   const {serviceRuntimeLifecycle} = createRuntimeStartupWiring();
+-  const engine = new SQLQueryEngine({
+-    systemCache: createMockSystemCache([], [], null),
+-    messageRouter: createMockMessageRouter(),
+-    nodeId: HOST_NODE_ID,
+-    serviceRuntimeLifecycle,
+-  });
+   const writes = [];
+   let rowExists = false;
+-  engine.controlPlaneSystemTableGateway = {
++  const controlPlaneSystemTableGateway = {
+     updateSystemTableRow: async (tableName, whereClause, data) => {
+       writes.push({kind: 'update', tableName, whereClause, data});
+-      return {partitionResult: {affectedRows: rowExists ? 1 : 0}};
++      return {
++        success: true,
++        partitionResult: {affectedRows: rowExists ? 1 : 0},
++      };
+     },
+     insertSystemTableRow: async (tableName, row) => {
+       writes.push({kind: 'insert', tableName, row});
+@@ -96,7 +96,38 @@ function buildHarness() {
+       return {success: true};
+     },
+   };
+-  return {engine, lifecycle: serviceRuntimeLifecycle, writes};
++  const engine = new SQLQueryEngine({
++    systemCache: createMockSystemCache([], [], null),
++    messageRouter: createMockMessageRouter(),
++    nodeId: HOST_NODE_ID,
++    serviceRuntimeLifecycle,
++    controlPlaneSystemTableGateway,
++  });
++  return {
++    engine,
++    lifecycle: serviceRuntimeLifecycle,
++    projectionOwner: engine.runtimeReplicaStateProjectionOwner,
++    writes,
++  };
++}
++
++function waitForAppliedProjection(projectionOwner, status) {
++  return new Promise((resolve) => {
++    const listener = (event) => {
++      if (event?.status !== status) {
++        return;
++      }
++      projectionOwner.removeListener(
++        RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED,
++        listener,
++      );
++      resolve(event);
++    };
++    projectionOwner.on(
++      RUNTIME_REPLICA_STATE_PROJECTION_EVENT.APPLIED,
++      listener,
++    );
++  });
+ }
+ 
+ function loopDefinition() {
+@@ -114,10 +145,16 @@ function loopDefinition() {
+ 
+ test('placed replica lifecycle projects create-once-then-update ' +
+   'services rows through the production wiring', async (t) => {
+-  const {lifecycle, writes} = buildHarness();
++  const {engine, lifecycle, projectionOwner, writes} = buildHarness();
++  t.teardown(() => engine.shutdown());
+   const definition = loopDefinition();
+ 
++  const createdApplied = waitForAppliedProjection(
++    projectionOwner,
++    'created',
++  );
+   const prepared = await lifecycle.prepare(definition, {nodeId: HOST_NODE_ID});
++  await createdApplied;
+   t.equal(prepared.status, 'ready', 'replica prepares through the real path');
+   const serviceWrites = () =>
+     writes.filter((w) => w.tableName === TABLES.SERVICES);
+@@ -131,7 +168,12 @@ test('placed replica lifecycle projects create-once-then-update ' +
+     'NOT NULL node_id resolves to the hosting engine nodeId');
+   t.ok(Number.isFinite(created.row.created_at), 'identity created_at set');
+ 
++  const activeApplied = waitForAppliedProjection(
++    projectionOwner,
++    'active',
++  );
+   await lifecycle.start({...definition});
++  await activeApplied;
+   const afterStart = serviceWrites();
+   t.equal(afterStart.length, 3, 'start projects exactly one more write');
+   t.equal(afterStart[2].kind, 'update',
+@@ -144,7 +186,12 @@ test('placed replica lifecycle projects create-once-then-update ' +
+   t.equal(afterStart[2].data.created_at, undefined,
+     'transitions never rewrite the identity created_at');
+ 
++  const stoppedApplied = waitForAppliedProjection(
++    projectionOwner,
++    'stopped',
++  );
+   await lifecycle.stop({...definition});
++  await stoppedApplied;
+   const afterStop = serviceWrites();
+   const last = afterStop[afterStop.length - 1];
+   t.equal(last.kind, 'delete',
+@@ -228,7 +275,8 @@ test('the replica-operation repository uses exact canonical runtime IDs',
+ 
+ test('a start failure projects the failed state onto the existing row',
+   async (t) => {
+-    const {lifecycle, writes} = buildHarness();
++    const {engine, lifecycle, projectionOwner, writes} = buildHarness();
++    t.teardown(() => engine.shutdown());
+     lifecycle.registerNativeJsHandler('throwing-runtime', {
+       prepare: async () => ({status: 'ready'}),
+       start: async () => {
+@@ -244,13 +292,23 @@ test('a start failure projects the failed state onto the existing row',
+       runtime_ref: 'throwing-runtime',
+       runtime_config: null,
+     };
++    const createdApplied = waitForAppliedProjection(
++      projectionOwner,
++      'created',
++    );
+     await lifecycle.prepare(definition, {nodeId: HOST_NODE_ID});
++    await createdApplied;
+ 
++    const failedApplied = waitForAppliedProjection(
++      projectionOwner,
++      'failed',
++    );
+     await t.rejects(
+       lifecycle.start({...definition}),
+       undefined,
+       'a throwing module start propagates',
+     );
++    await failedApplied;
+     const serviceWrites = writes.filter(
+       (w) => w.tableName === TABLES.SERVICES);
+     const last = serviceWrites[serviceWrites.length - 1];

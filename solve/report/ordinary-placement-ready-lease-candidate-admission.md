@@ -18,12 +18,11 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: transition_gap
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T16-44-58-388Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for ordinary-placement-ready-lease-candidate-admission-main
-- No longer current: runtime handler emitter identity, missing runtime replicas, and local coordinator terminalization
 
 ## Continuation
 - Status: allowed
@@ -47,6 +46,7 @@
 - **ordinary-placement-ready-lease-candidate-admission-main**: inherited from runtime-service-active-outcome-remote-owner-handoff: Archived live operations were source-owned on node f7328137 while remote RuntimeServiceHandlers on ae945240 and 6c015c61 completed ACTIVE; the target-node coordinator's existing target-executor-outcome handoff forwards partition CREATE_ACTIVE but excludes runtime-service CREATE_ACTIVE, so the source owner receives no wake and both rows remain CREATING. (rules out: runtime handler emitter identity, missing runtime replicas, and local coordinator terminalization) [file:solve/changes/formation-background-release-quiescence-anchor-live/post-attempt-5-live-runtime-outcome-handoff-2026-07-19.md]
 - **ordinary-placement-ready-lease-candidate-admission-main**: On committed source fingerprint ff15a6dbebbca7bd, fresh ordered Demo 2 completed only local runtime-service ADD 6e1d8115-6b7f-4e79-8155-1041a7ecd93f, then repeatedly planned published expired-lease target 19eb1497-4db7-4fbc-a04f-455d57845d6f and rejected it before execution while current-lease alternatives remained. [file:solve/changes/runtime-service-active-outcome-remote-owner-handoff/post-attempt-1-live-candidate-readiness-boundary-2026-07-19.md]
 - **ordinary-placement-ready-lease-candidate-admission-main**: DT red-on-revert proven for test/rebalancer/runtime-service-expired-lease-candidate-admission.test.js [dt:solve/changes/dt-prove/runtime-service-expired-lease-candidate-admission.test.js-2026-07-19T16-27-30-846Z.json]
+- **ordinary-placement-ready-lease-candidate-admission-main**: Independent verification approved the exact ordinary candidate-admission patch: canonical rejection remains fail-closed, current lease is required only for ordinary repairEligible candidates, startup/system recovery is preserved, and 10 focused files passed 685 assertions plus red-on-revert. [subagent:verify_ready_lease_candidate_admission]
 
 ## Theories
 _(none recorded)_

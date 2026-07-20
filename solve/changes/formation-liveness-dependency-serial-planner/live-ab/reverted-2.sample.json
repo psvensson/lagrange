@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "formation-liveness-live-ab-sample-v1",
+  "id": "reverted-2",
+  "root": "/tmp/session-worktree-ofcvdp/tree",
+  "startedAt": "2026-07-20T00:14:04.466Z",
+  "completedAt": "2026-07-20T00:17:55.343Z",
+  "exitCode": 1,
+  "green": false,
+  "measuring": true,
+  "preTempC": 67.85,
+  "postTempC": 67.85,
+  "thermalPolicy": {
+    "coolStartMaxC": 70,
+    "failedRunInvalidAtOrAboveC": 85
+  },
+  "sourceStable": true,
+  "sourceIdentity": {
+    "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+    "sourceFingerprint": "c932781c41a19486",
+    "sourceDeltaSha256": "4d6cc1b0a05c18984c557259f54c0fe1f448ee0a32cbb5065c06e9c93c7662d9"
+  },
+  "completedSourceIdentity": {
+    "gitHash": "0527723bde04267c6a845be4f1ef263849bfbf81",
+    "sourceFingerprint": "c932781c41a19486",
+    "sourceDeltaSha256": "4d6cc1b0a05c18984c557259f54c0fe1f448ee0a32cbb5065c06e9c93c7662d9"
+  },
+  "report": {
+    "sourcePath": "/tmp/session-worktree-ofcvdp/tree/test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T00-17-55-320Z.report.json",
+    "evidencePath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/reverted-2.report.json",
+    "sha256": "c0bb5e4baff38a867fcd4850993727dce4f112649607dc80e00ef478fd657420"
+  },
+  "archive": {
+    "evidencePath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/solve/changes/formation-liveness-dependency-serial-planner/live-ab/reverted-2.run-state.tar.gz",
+    "sha256": "e01f7c3f050ce4389c30f085a94ad9cdff69921cb668a145d426dd237bcf383b"
+  },
+  "stdoutTail": [
+    "      Archived previous run state to /tmp/session-worktree-ofcvdp/tree/data/examples/service-data-affinity-demo-archive/run-2026-07-20T00-14-04-912Z.tar.gz",
+    "[1/5] Bootstrapping the MovieLens schema on the seed...",
+    "[2/5] Expanding to 5 nodes (single zone) and spreading the existing data...",
+    "      Cluster formed.",
+    "      Waiting for production schema admission...",
+    "Stopping cluster...",
+    "Live demo report: /tmp/session-worktree-ofcvdp/tree/test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T00-17-55-320Z.report.json",
+    ""
+  ],
+  "stderrTail": [
+    "Error: MovieLens schema admission timed out: replica_operations_in_flight=3",
+    "    at buildSchemaAdmissionTimeoutError (file:///tmp/session-worktree-ofcvdp/tree/examples/service-data-affinity/affinity-demo-preload-gate.js:426:17)",
+    "    at waitForAffinityDemoSchemaAdmission (file:///tmp/session-worktree-ofcvdp/tree/examples/service-data-affinity/affinity-demo-preload-gate.js:541:13)",
+    "    at async runAffinityDemo (file:///tmp/session-worktree-ofcvdp/tree/examples/service-data-affinity/run-affinity-demo.js:598:29) {",
+    "  schemaAdmission: {",
+    "    admitted: false,",
+    "    state: 'denied',",
+    "    snapshot: {",
+    "      state: 'operation_drain_progressing',",
+    "      canonicalBlocker: 'replica_operations_in_flight',",
+    "      reasonCodes: [Array],",
+    "      reasons: [Array],",
+    "      ready: false,",
+    "      stableElapsedMs: 0,",
+    "      leaderQuietElapsedMs: 0,",
+    "      criticalSystemTopology: [Object],",
+    "      effectiveInFlightCount: 3,",
+    "      staleInFlightCount: 0,",
+    "      additionalInFlightDiscountCount: 0,",
+    "      appliedAdditionalInFlightDiscountCount: 0,",
+    "      staleInFlightDiscountCount: 0,",
+    "      ignoreStaleInFlightReplicaOperations: true,",
+    "      controlPlanePressureSignals: [],",
+    "      candidateWindowReset: [Object],",
+    "      cacheVisibleSatisfiedPriorityRecoveryOperationCount: 0,",
+    "      latestTopologyDrainAtMs: 1784506662955,",
+    "      latestTopologyDrainOperationId: 'replace-op-1cc8aac9aae9f908828fd1e14c6b808d'",
+    "    },",
+    "    stableConfirmationCount: 0,",
+    "    transitionHistory: {",
+    "      schemaVersion: 1,",
+    "      limit: 64,",
+    "      droppedTransitionCount: 0,",
+    "      transitions: [Array]",
+    "    },",
+    "    target: 'ws://127.0.0.1:8081/api/admin/stream?lane=snapshot'",
+    "  }",
+    "}",
+    ""
+  ]
+}

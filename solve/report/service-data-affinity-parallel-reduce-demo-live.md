@@ -25,9 +25,9 @@
 - No longer current: Repeating the unchanged live demo while the first admin write precondition fails
 
 ## Continuation
-- Status: allowed
+- Status: blocked-unrecorded-evidence
 - Next action: No open frontier remains; inspect solve report.
-- Blocker: none
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id service-data-affinity-parallel-reduce-demo-live --frontier service-data-affinity-parallel-reduce-demo-live-main --evidence test-output/reports/service-data-affinity-parallel-reduce-demo-live-2026-07-11T17-06-00-000Z.report.json
 
 ## Scope Pressure
 - Changed files: 3
