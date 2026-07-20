@@ -484,4 +484,63 @@ test('NodeService', async (t) => {
     );
     t.equal(lifecycleEvents.length, 1, 'should forward external lifecycle events');
   });
+
+  t.test('externally managed lifecycle replacement keeps one observer owner',
+    async (t) => {
+      const nodeService = NodeService.getInstance();
+      const lifecycleEvents = [];
+      const original = new NodeLifecycleStateMachine({
+        nodeId: 'replacement-lifecycle-node',
+        initialState: NodeState.CONNECTING,
+      });
+      const replacement = new NodeLifecycleStateMachine({
+        nodeId: 'replacement-lifecycle-node',
+        initialState: NodeState.STARTING,
+      });
+
+      nodeService.on('lifecycleStateChange', (event) => {
+        lifecycleEvents.push(event);
+      });
+      nodeService.initialize({
+        nodeId: 'replacement-lifecycle-node',
+        lifecycleStateMachine: original,
+        autoTransitionLifecycle: false,
+      });
+
+      t.equal(
+        nodeService.replaceExternallyManagedLifecycleStateMachine(
+          original,
+          replacement,
+        ),
+        true,
+        'the expected externally managed owner should be replaceable',
+      );
+      original.transition(NodeState.DISCOVERING);
+      t.equal(
+        lifecycleEvents.length,
+        0,
+        'the retired machine should no longer feed NodeService events',
+      );
+      replacement.transition(NodeState.CONNECTING);
+      t.equal(
+        nodeService.getLifecycleStateMachine(),
+        replacement,
+        'NodeService should expose the exact replacement machine',
+      );
+      t.equal(
+        lifecycleEvents.length,
+        1,
+        'the replacement machine should retain NodeService event forwarding',
+      );
+      t.equal(
+        nodeService.replaceExternallyManagedLifecycleStateMachine(
+          original,
+          new NodeLifecycleStateMachine({
+            nodeId: 'replacement-lifecycle-node',
+          }),
+        ),
+        false,
+        'a stale expected owner must not overwrite the current binding',
+      );
+    });
 });

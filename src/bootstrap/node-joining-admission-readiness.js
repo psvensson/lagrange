@@ -228,7 +228,11 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
    * @private
    */
   completeSuccessfulJoin() {
-    this.lifecycleStateMachine.transition(NodeState.READY);
+    assertCritical(
+      this.lifecycleStateMachine.transition(NodeState.READY) === true &&
+        this.lifecycleStateMachine.getState() === NodeState.READY,
+      JOINING_ERROR_MSG.LIFECYCLE_READY_TRANSITION_FAILED,
+    );
     for (const messageGroupService of this.messageGroupServices.values()) {
       if (
         typeof messageGroupService?.completeJoinConvergence === 'function'
@@ -325,6 +329,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         phase: JOIN_SESSION_PHASE.READY_LEASE_ASSIGNED,
         segment: JOIN_PLAN_SEGMENT.READINESS,
         run: async () => {
+          // A readiness failure skips completed membership on retry, so
+          // restore process-local lifecycle at this guaranteed rerun boundary.
+          this.advanceLifecycleAfterResumedInfrastructure();
           await startupPipelineRunner.run({
             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.READINESS],
           });
@@ -462,13 +469,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       }
     }
   }
-  /**
-   * Retryable join-resume attempts must re-enter lifecycle transitions from a
-   * valid bootstrap root state. Failed-attempt cleanup intentionally drives
-   * the previous lifecycle machine to STOPPED, which is terminal by contract.
-   * Reset only when resuming in-process so a retry does not fail closed on an
-   * invalid STOPPED -> CONNECTING transition.
-   *
+  /** Re-root a retry after cleanup drove its prior lifecycle to STOPPED.
    * @param {number} attempt
    * @return {void}
    */
@@ -476,8 +477,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
     if (attempt <= 1) {
       return;
     }
-    if (
-      !this.lifecycleStateMachine ||
+    if (!this.lifecycleStateMachine ||
       typeof this.lifecycleStateMachine.getState !== 'function'
     ) {
       return;
@@ -486,11 +486,29 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
     if (currentState !== NodeState.STOPPED) {
       return;
     }
-    this.lifecycleStateMachine = new NodeLifecycleStateMachine({
+    const previousLifecycleStateMachine = this.lifecycleStateMachine;
+    const replacementLifecycleStateMachine = new NodeLifecycleStateMachine({
       nodeId: this.nodeId,
       initialState: NodeState.STARTING,
       now: this.now,
     });
+    const nodeService = NodeService.getInstance();
+    if (nodeService.isInitialized()) {
+      assertCritical(
+        nodeService.getLifecycleStateMachine() === previousLifecycleStateMachine,
+        JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
+      );
+    }
+    this.lifecycleStateMachine = replacementLifecycleStateMachine;
+    if (nodeService.isInitialized()) {
+      assertCritical(
+        nodeService.replaceExternallyManagedLifecycleStateMachine(
+          previousLifecycleStateMachine,
+          replacementLifecycleStateMachine,
+        ),
+        JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
+      );
+    }
     this._completedJoinPhases = [];
     this.phase = JoiningPhase.NOT_STARTED;
     this.logger.info(JOINING_LOG_MSG.RETRYABLE_FAILURE_LIFECYCLE_RESET, {

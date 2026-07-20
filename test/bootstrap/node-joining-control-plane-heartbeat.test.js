@@ -210,6 +210,9 @@ test('NodeJoiningService clears join-time reporter at READY cutover when heartbe
       () => {};
     service.startTime = 0;
     service.now = () => 100;
+    service.lifecycleStateMachine.transition('connecting');
+    service.lifecycleStateMachine.transition('discovering');
+    service.lifecycleStateMachine.transition('joining');
 
     service.completeSuccessfulJoin();
 
@@ -223,6 +226,28 @@ test('NodeJoiningService clears join-time reporter at READY cutover when heartbe
       0,
       'READY cutover should not restart heartbeat writers that are already running',
     );
+  });
+
+test('NodeJoiningService fails closed before writers when READY transition is invalid',
+  (t) => {
+    initializeTestEnvironment();
+    const service = new NodeJoiningService({
+      nodeId: 'joiner-node',
+      nodeAddress: 'ddb-test-reuse-3-8:8080',
+      seedNodeAddress: 'http://ddb-test-reuse-3-1:3000',
+    });
+    let writerActivations = 0;
+    service.activateControlPlaneBackgroundWriters = () => {
+      writerActivations += 1;
+    };
+
+    t.throws(
+      () => service.completeSuccessfulJoin(),
+      /requires the canonical lifecycle to reach READY/,
+      'finalization should reject an invalid STARTING-to-READY transition',
+    );
+    t.equal(writerActivations, 0, 'failed finalization must not activate writers');
+    t.end();
   });
 
 test('NodeJoiningService treats unacknowledged control-plane heartbeats as failures',

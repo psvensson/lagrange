@@ -528,8 +528,16 @@ async (t) => {
     seedNodeAddress: 'http://localhost:8080',
   });
 
-  service.lifecycleStateMachine.transition = () => {
+  service.lifecycleStateMachine.transition('connecting');
+  service.lifecycleStateMachine.transition('discovering');
+  service.lifecycleStateMachine.transition('joining');
+  const transition =
+    service.lifecycleStateMachine.transition.bind(
+      service.lifecycleStateMachine,
+    );
+  service.lifecycleStateMachine.transition = (nextState) => {
     order.push('state-transition');
+    return transition(nextState);
   };
   service.cdcIntegrationService = {
     sqlQueryEngine: {
@@ -583,7 +591,6 @@ test('NodeJoiningService - activates message-group rows after membership write',
       seedNodeAddress: 'http://localhost:8080',
     });
 
-    service.lifecycleStateMachine.transition = () => {};
     service.getLeaderMessageGroupService = () => ({});
     service.phaseContactSeed = async () => {
       service.bootstrapResponse = {
@@ -690,7 +697,6 @@ test('NodeJoiningService - resumes same join session without replaying ' +
     success: false,
     error: error.message,
   });
-  service.lifecycleStateMachine.transition = () => {};
   service.getLeaderMessageGroupService = () => ({});
   service.phaseContactSeed = async () => {
     phaseCalls.push('contact');
@@ -843,7 +849,6 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
       },
     });
 
-    service.lifecycleStateMachine.transition = () => {};
     service.handleJoiningFailure = async (error) => ({
       success: false,
       nodeId: service.nodeId,
@@ -966,6 +971,149 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
       'auto-resume should rerun the failed membership checkpoint',
     );
   });
+
+test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
+  'one READY lifecycle owner', async (t) => {
+  initializeTestEnvironment();
+
+  const joinSessionStore = new JoinSessionStore({
+    storage: new Map(),
+    now: () => Date.now(),
+  });
+  const calls = {
+    infrastructure: 0,
+    membership: 0,
+    messageGroupRows: 0,
+    readiness: 0,
+    readySignal: 0,
+    writers: 0,
+    readinessStates: [],
+    sharedLifecycleOwners: [],
+  };
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-readiness-resume-1',
+    nodeAddress: 'ws://localhost:9198',
+    seedNodeAddress: 'http://localhost:8080',
+    joinSessionId: 'session-readiness-resume-1',
+    joinSessionStore,
+    sleep: async () => {},
+    config: {
+      autoResumeRetryableFailures: true,
+      retryableFailureResumeBaseDelayMs: 1,
+      retryableFailureResumeMaxDelayMs: 1,
+    },
+  });
+
+  service.phaseContactSeed = async () => {
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      seedNodeWsAddress: 'ws://localhost:8080',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+        groupId: 'mg-1',
+        replicaCount: 1,
+      },
+    };
+    service.seedNodeId = 'seed-node-1';
+    service.seedNodeWsAddress = 'ws://localhost:8080';
+  };
+  service.phaseConnectWebSocket = async () => {
+    service.messageRouter = {
+      deliver: async () => ({acknowledged: true}),
+      setExternalAdmissionEnabled() {},
+    };
+  };
+  service.phaseCreateSelfHostedMessageGroup = async () => {
+    service.messageGroupServices.set('mg-1-r0', {
+      isLeaderReplica: () => true,
+      getLeaderId: () => 'mg-1-r0',
+      completeJoinConvergence() {},
+    });
+  };
+  service.phaseJoinExistingMessageGroup = async () => {};
+  service.phaseWaitForLeadership = async () => {};
+  service.initializeJoinInfrastructure = async () => {
+    calls.infrastructure += 1;
+    service.rpcClient = {};
+    service.cdcIntegrationService = {};
+    service.heartbeatService = {
+      setNodeStateReporter() {},
+      start() {},
+      stop() {},
+    };
+    service.latencyTopology = {};
+  };
+  service.notifyLocalAdminRuntimeReady = async () => {};
+  service.phaseQuerySystemState = async () => {
+    calls.membership += 1;
+    const nodeService = NodeService.getInstance();
+    if (!nodeService.isInitialized()) {
+      nodeService.initialize({
+        nodeId: service.nodeId,
+        nodeAddress: service.nodeAddress,
+        lifecycleStateMachine: service.lifecycleStateMachine,
+        autoTransitionLifecycle: false,
+      });
+    }
+  };
+  service.activateMessageGroupServiceRows = async () => {
+    calls.messageGroupRows += 1;
+  };
+  service.joinReadinessEvaluator
+    .waitForCanonicalJoinReadinessConvergence = async () => {
+      calls.readiness += 1;
+      calls.readinessStates.push(service.lifecycleStateMachine.getState());
+      calls.sharedLifecycleOwners.push(
+        NodeService.getInstance().getLifecycleStateMachine() ===
+          service.lifecycleStateMachine,
+      );
+      if (calls.readiness === 1) {
+        const error = new Error('join readiness retry witness');
+        error.code = 'JOIN_READINESS_TIMEOUT';
+        error.deferRetry = true;
+        throw error;
+      }
+    };
+  service.signalReadyForReplicas = async () => {
+    calls.readySignal += 1;
+  };
+  service.hasActiveControlPlaneBackgroundWriters = () => calls.writers > 0;
+  service.activateControlPlaneBackgroundWriters = () => {
+    t.equal(
+      NodeService.getInstance().getLifecycleState(),
+      STATE.READY,
+      'steady-state writers must observe the canonical READY lifecycle',
+    );
+    calls.writers += 1;
+  };
+  service.startLatencyTopologyLifecycle = () => {};
+  service.createMessageGroupPhase.flushDeferredCreateSelfHostedMetadata =
+    async () => {};
+
+  const result = await service.join();
+  const session = await joinSessionStore.loadSession({
+    nodeId: service.nodeId,
+    sessionId: 'session-readiness-resume-1',
+  });
+
+  t.equal(result.success, true, 'readiness retry should complete');
+  t.same(calls.readinessStates, [STATE.READY, 'joining'],
+    'the resumed readiness step must reconstruct JOINING before publication');
+  t.same(calls.sharedLifecycleOwners, [true, true],
+    'NodeService and join must retain the same lifecycle owner on both attempts');
+  t.match(calls, {
+    infrastructure: 1,
+    membership: 1,
+    messageGroupRows: 1,
+    readiness: 2,
+    readySignal: 1,
+    writers: 1,
+  }, 'completed infrastructure and membership side effects must not replay');
+  t.equal(service.lifecycleStateMachine.getState(), STATE.READY,
+    'join lifecycle should finish READY');
+  t.equal(session?.checkpoint, JOIN_CHECKPOINT.FINALIZED,
+    'the same durable session should reach FINALIZED');
+});
 
 test('NodeJoiningService - resets STOPPED lifecycle before retryable resume attempts',
   async (t) => {

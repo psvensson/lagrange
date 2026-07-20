@@ -53,6 +53,9 @@ class NodeService extends EventEmitter {
     this.nodeAddress = null;
     this.status = NODE_STATUS.INITIALIZING;
     this.lifecycleStateMachine = null;
+    this.lifecycleStateChangeHandler = (event) => {
+      this._onLifecycleStateChange(event);
+    };
     this.services = new Map();
     this.messageGroupServices = new Map();
     this.heartbeatInterval = null;
@@ -131,16 +134,11 @@ class NodeService extends EventEmitter {
     const providedLifecycleStateMachine = options.lifecycleStateMachine;
     const autoTransitionLifecycle = options.autoTransitionLifecycle !== false;
     // Initialize lifecycle state machine (or use externally managed one)
-    this.lifecycleStateMachine = providedLifecycleStateMachine ||
+    this.bindLifecycleStateMachine(providedLifecycleStateMachine ||
       new NodeLifecycleStateMachine({
         nodeId: this.nodeId,
         initialState: NodeState.STARTING,
-      });
-
-    // Forward state change events from the state machine
-    this.lifecycleStateMachine.on(NODE_LIFECYCLE_EVENT.STATE_CHANGE, (event) => {
-      this._onLifecycleStateChange(event);
-    });
+      }));
 
     this.startTime = Date.now();
 
@@ -601,6 +599,48 @@ class NodeService extends EventEmitter {
   }
 
   /**
+   * Replace an externally managed lifecycle machine without splitting the
+   * NodeService observer from its bootstrap/join owner.
+   * @param {NodeLifecycleStateMachine} expectedCurrent
+   * @param {NodeLifecycleStateMachine} replacement
+   * @return {boolean} True when the expected owner was replaced.
+   */
+  replaceExternallyManagedLifecycleStateMachine(
+    expectedCurrent,
+    replacement,
+  ) {
+    if (
+      this.lifecycleStateMachine !== expectedCurrent ||
+      !(replacement instanceof NodeLifecycleStateMachine)
+    ) {
+      return false;
+    }
+    this.bindLifecycleStateMachine(replacement);
+    return true;
+  }
+
+  /**
+   * Bind the lifecycle machine and forward only NodeService-owned events.
+   * @param {NodeLifecycleStateMachine} lifecycleStateMachine
+   * @return {void}
+   * @private
+   */
+  bindLifecycleStateMachine(lifecycleStateMachine) {
+    if (this.lifecycleStateMachine === lifecycleStateMachine) {
+      return;
+    }
+    this.lifecycleStateMachine?.off(
+      NODE_LIFECYCLE_EVENT.STATE_CHANGE,
+      this.lifecycleStateChangeHandler,
+    );
+    this.lifecycleStateMachine = lifecycleStateMachine;
+    this.lifecycleStateMachine.on(
+      NODE_LIFECYCLE_EVENT.STATE_CHANGE,
+      this.lifecycleStateChangeHandler,
+    );
+  }
+
+  /**
    * Check if the node is in READY state (accepting traffic).
    * @return {boolean} True if node is ready.
    */
@@ -698,9 +738,13 @@ class NodeService extends EventEmitter {
       this.lifecycleStateMachine.transition(NodeState.STOPPED);
     }
 
-    // Clean up state machine event listeners
+    // Release only the NodeService observer. An externally managed lifecycle
+    // machine can have independent join/bootstrap listeners.
     if (this.lifecycleStateMachine) {
-      this.lifecycleStateMachine.removeAllListeners();
+      this.lifecycleStateMachine.off(
+        NODE_LIFECYCLE_EVENT.STATE_CHANGE,
+        this.lifecycleStateChangeHandler,
+      );
     }
 
     // Shutdown thread manager

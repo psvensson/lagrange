@@ -288,6 +288,10 @@ const JOINING_ERROR_MSG = Object.freeze({
     `joining node ${joiningNodeId} is not authorized`,
   CONTROL_PLANE_TARGET_MISSING: 'No reachable control plane target address available',
   CONTROL_PLANE_SERVICE_REQUIRED: 'Control plane service must be initialized',
+  LIFECYCLE_READY_TRANSITION_FAILED:
+    'Join finalization requires the canonical lifecycle to reach READY',
+  LIFECYCLE_STATE_MACHINE_REBIND_FAILED:
+    'Join retry could not restore the canonical lifecycle owner binding',
   OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT:
     'Timed out waiting for operation-ledger formation spread before ' +
     'publishing the node ready lease',
