@@ -117,6 +117,16 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * Get the accepted per-key CDC receipt bound to the cached row origin HLC.
+   * @param {string} tableName - Name of the system table.
+   * @param {string} key - Primary key of the cached row.
+   * @return {{observedAtMs: number, originHlc: string}|null}
+   */
+  getLastCdcObservation(tableName, key) {
+    return this._cache.getLastCdcObservation(tableName, key);
+  }
+
+  /**
    * Get the last successful authoritative observation time for one table.
    * @param {string} tableName - Name of the system table.
    * @return {number|null}

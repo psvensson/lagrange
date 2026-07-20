@@ -43,6 +43,9 @@ import {
   getSharedRowReadStats,
   resetSharedRowReadStats,
 } from './system-table-cache-observation-methods.js';
+import {
+  updateSystemTableCacheCdcObservation,
+} from './system-table-cache-cdc-observation.js';
 
 /**
  * System table names that are cached.
@@ -94,6 +97,7 @@ class SystemTableCache {
     this.lastAppliedCauseIdByTableName = new Map();
     this.lastAuthoritativeObservedAtMsByTableName = new Map();
     this.lastAuthoritativeObservedCauseIdByTableName = new Map();
+    this.lastCdcObservationByTableName = new Map();
     // Monotonic per-table apply counter. Unlike lastAppliedAtMs (wall-clock,
     // same-millisecond applies collide) a version can arbitrate "did anything
     // change since capture" exactly, so multi-table snapshot reuse never has
@@ -111,6 +115,7 @@ class SystemTableCache {
     for (const tableName of SYSTEM_TABLES) {
       this.tables.set(tableName, new Map());
       this.tombstones.set(tableName, new Map());
+      this.lastCdcObservationByTableName.set(tableName, new Map());
     }
   }
 
@@ -288,6 +293,7 @@ class SystemTableCache {
           }
         }
         table.delete(key);
+        this.lastCdcObservationByTableName.get(tableName).delete(key);
         removed.push({tableName, key});
         this.logger.debug(CACHE_LOG_MSG.ANTI_ENTROPY_SWEEP_DELETE, {
           tableName,
@@ -335,6 +341,7 @@ class SystemTableCache {
 
     const table = this.tables.get(tableName);
     let recordForNotification = null;
+    let incomingVersionAccepted = false;
 
     // A write (INSERT/UPDATE/UPSERT) for a key under an active DELETE tombstone is
     // a reordered, causally-older resurrection — reject it. A causally-newer write
@@ -381,6 +388,7 @@ class SystemTableCache {
       }
       table.set(key, this.deepClone(data));
       recordForNotification = data;
+      incomingVersionAccepted = true;
       break;
 
     case CDC_OPERATIONS.UPDATE:
@@ -416,6 +424,7 @@ class SystemTableCache {
         table.set(key, this.mergeRecords(tableName, existing, data));
       }
       recordForNotification = table.get(key);
+      incomingVersionAccepted = true;
       break;
 
     case CDC_OPERATIONS.UPSERT:
@@ -472,6 +481,7 @@ class SystemTableCache {
         }
       }
       recordForNotification = table.get(key);
+      incomingVersionAccepted = true;
       break;
 
     case CDC_OPERATIONS.DELETE:
@@ -500,6 +510,7 @@ class SystemTableCache {
         recordForNotification = existing;
         table.delete(key);
         this.recordTombstone(tableName, key, data);
+        incomingVersionAccepted = true;
       }
       break;
     }
@@ -513,6 +524,17 @@ class SystemTableCache {
 
     // Notify listeners after applying the change
     if (recordForNotification) {
+      updateSystemTableCacheCdcObservation({
+        tableName,
+        key,
+        operation,
+        data,
+        options,
+        incomingVersionAccepted,
+        observationTable:
+          this.lastCdcObservationByTableName.get(tableName),
+        resultingRow: table.get(key),
+      });
       this.lastAppliedAtMsByTableName.set(tableName, Date.now());
       this.lastAppliedCauseIdByTableName.set(tableName, causeId);
       this.bumpTableMutationVersion(tableName);
@@ -539,6 +561,9 @@ class SystemTableCache {
     this.lastAppliedCauseIdByTableName.clear();
     this.lastAuthoritativeObservedAtMsByTableName.clear();
     this.lastAuthoritativeObservedCauseIdByTableName.clear();
+    for (const tableName of SYSTEM_TABLES) {
+      this.lastCdcObservationByTableName.get(tableName).clear();
+    }
     this.mutationVersionByTableName.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }

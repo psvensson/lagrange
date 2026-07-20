@@ -439,7 +439,14 @@ class CDCHandler extends EventEmitter {
    * @private
    */
   applyEvent(event) {
-    const {tableName, operation, data, timestamp, causeId} = event;
+    const {
+      tableName,
+      operation,
+      data,
+      timestamp,
+      causeId,
+      receivedAt,
+    } = event;
     const key = event.getKey();
 
     // Check timestamp ordering
@@ -464,7 +471,10 @@ class CDCHandler extends EventEmitter {
     try {
       // Canonical CDC apply path: all steady-state cache mutations flow here.
       // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-      this.cache.applySystemTableChange(tableName, operation, data, {causeId});
+      this.cache.applySystemTableChange(tableName, operation, data, {
+        causeId,
+        cdcObservedAtMs: receivedAt,
+      });
 
       // Track successful delivery to cache
       if (this.cdcPipelineMetrics) {

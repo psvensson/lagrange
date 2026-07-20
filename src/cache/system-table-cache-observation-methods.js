@@ -71,6 +71,36 @@ class SystemTableCacheObservationMethods {
     return this.lastAppliedCauseIdByTableName.get(tableName) ?? null;
   }
 
+  /**
+   * Read the accepted CDC receipt bound to one cached row's origin HLC.
+   * A row replacement whose origin no longer matches cannot reuse older
+   * provenance.
+   * @param {string} tableName
+   * @param {string} key
+   * @return {{observedAtMs: number, originHlc: string}|null}
+   */
+  getLastCdcObservation(tableName, key) {
+    this.validateTableName(tableName);
+    const observation =
+      this.lastCdcObservationByTableName.get(tableName)?.get(key);
+    const row = this.tables.get(tableName)?.get(key);
+    const rowOriginHlc =
+      typeof row?.[COLUMN.UPDATED_AT_HLC] === 'string' ?
+        row[COLUMN.UPDATED_AT_HLC] :
+        row?.updatedAtHlc;
+    if (
+      !observation ||
+      typeof rowOriginHlc !== 'string' ||
+      rowOriginHlc !== observation.originHlc
+    ) {
+      return null;
+    }
+    return {
+      observedAtMs: observation.observedAtMs,
+      originHlc: observation.originHlc,
+    };
+  }
+
   /** @private */
   bumpTableMutationVersion(tableName) {
     this.mutationVersionByTableName.set(

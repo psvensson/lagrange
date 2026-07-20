@@ -126,6 +126,9 @@ const SCENARIOS = {
     'test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js',
     'test/runtime/movielens-preload-admission-gate.test.js',
   ],
+  'movielens-ready-lease-cdc-provenance': [
+    'test/cache/system-table-cache-cdc-provenance.test.js',
+  ],
   'configured-split-threshold-policy-precedence': [
     'test/partition/partition-split-policy-precedence.test.js',
     'test/policy/table-policy-service.test.js',
