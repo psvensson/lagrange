@@ -1,5 +1,8 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {DISPATCH_PENDING_WORKFLOW_STEPS} from '../rebalancer/replica-operation-step-policy.js';
+import {
+  OPERATION_OWNER_TURN_POLICY,
+} from '../rebalancer/operation-owner-turn-policy.js';
 
 const {
   COLUMN,
@@ -139,6 +142,9 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
         ) {
           await this.rebalanceCoordinator.dispatchOperation(operation, {
             cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
+            ...(this.isRuntimeTargetProgressWakeOperation(row, context) ?
+              {ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN} :
+              {}),
           });
         } else {
           await this.rebalanceCoordinator.executeOperation(operation);

@@ -15,6 +15,9 @@ import {
   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
 } from '../../src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js';
 import {
+  OPERATION_OWNER_TURN_POLICY,
+} from '../../src/rebalancer/operation-owner-turn-policy.js';
+import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
@@ -117,6 +120,11 @@ test(
         'replica_operation_dispatch',
         'progress re-entry should use the canonical dispatch cause',
       );
+      t.equal(
+        dispatchCalls[0]?.options?.ownerTurnPolicy,
+        OPERATION_OWNER_TURN_POLICY.RETAIN,
+        'target progress should retain its exact source-owner turn',
+      );
     } finally {
       service.stop();
     }
@@ -173,6 +181,174 @@ test(
         dispatchCalls[0]?.operation?.workflowStep,
         WORKFLOW_STEP.CREATING,
         'the retained progress wake should re-enter authoritative CREATING',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
+  'target-progress wake owns a turn after an in-flight source dispatch',
+  async (t) => {
+    initEnv();
+
+    const operationRow = buildRuntimeCreatingOperationRow({
+      operation_id: `${OPERATION_ID}-in-flight-owner`,
+    });
+    const activeServiceRow = {
+      service_id: REPLICA_ID,
+      service_type: 'runtime_service',
+      node_id: TARGET_NODE_ID,
+      status: ReplicaStatus.ACTIVE,
+      created_at: 1700000000510,
+      updated_at: 1700000000514,
+    };
+    const sourceCoordinator = createTestCoordinator({
+      nodeId: SOURCE_NODE_ID,
+      cacheData: {
+        services: [activeServiceRow],
+        replicaOperations: [operationRow],
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+        async updateSystemTableRow() {
+          return {success: true};
+        },
+        async refreshAuthoritativeCacheRow() {
+          return true;
+        },
+      },
+      sqlQueryResults: {
+        'FROM services WHERE service_id = ?': {
+          success: true,
+          rows: [activeServiceRow],
+        },
+      },
+    });
+    const sourceDispatch = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: sourceCoordinator,
+    });
+    const ownerKey =
+      sourceCoordinator.getOperationOwnerSingleFlightKey(
+        operationRow.operation_id,
+      );
+    let releaseOwnerTurn;
+    let markOwnerTurnStarted;
+    const ownerTurnStarted = new Promise((resolve) => {
+      markOwnerTurnStarted = resolve;
+    });
+    const initialDispatchTurn =
+      sourceCoordinator.operationWorkflowRunExclusive(
+        ownerKey,
+        async () => {
+          markOwnerTurnStarted();
+          await new Promise((resolve) => {
+            releaseOwnerTurn = resolve;
+          });
+        },
+      );
+
+    try {
+      await ownerTurnStarted;
+      await sourceDispatch.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
+        [ControlPlaneField.OPERATION_ROW]: operationRow,
+        [ControlPlaneField.HANDOFF_MODE]:
+          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      releaseOwnerTurn();
+      await initialDispatchTurn;
+      await drainOperationDispatchQueue(sourceDispatch);
+
+      const completedOperation =
+        await sourceCoordinator.repository.queryOperationById(
+          operationRow.operation_id,
+        );
+      t.equal(
+        completedOperation?.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the target-progress command must reconcile after the holder releases',
+      );
+      t.equal(
+        completedOperation?.status,
+        ReplicaStatus.ACTIVE,
+        'the retained progress turn should terminalize the durable operation',
+      );
+    } finally {
+      releaseOwnerTurn?.();
+      sourceDispatch.stop();
+      await sourceCoordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'retained progress turns exclude broader marked replay shapes',
+  async (t) => {
+    initEnv();
+
+    const dispatchCalls = [];
+    const operationRows = [
+      buildRuntimeCreatingOperationRow({
+        operation_id: `${OPERATION_ID}-system-create`,
+        partition_id: 'nodes-p1',
+        entity_type: 'partition',
+        entity_id: 'nodes-p1',
+      }),
+      buildRuntimeCreatingOperationRow({
+        operation_id: `${OPERATION_ID}-active-replace`,
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.ACTIVE,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
+      }),
+    ];
+    const service = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: {
+        async dispatchOperation(operation, options) {
+          dispatchCalls.push({operation, options});
+          return {success: true};
+        },
+        isOperationLocallyOwned() {
+          return true;
+        },
+      },
+    });
+
+    try {
+      for (const operationRow of operationRows) {
+        await service.handleReplicaOperationDispatch({
+          type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+          [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
+          [ControlPlaneField.OPERATION_ROW]: operationRow,
+          [ControlPlaneField.HANDOFF_MODE]:
+            COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+        });
+      }
+      await drainOperationDispatchQueue(service);
+
+      t.equal(
+        dispatchCalls.length,
+        2,
+        'the established broader replay shapes should still dispatch',
+      );
+      t.ok(
+        dispatchCalls.every(
+          ({options}) => options.ownerTurnPolicy === undefined,
+        ),
+        'system create and ACTIVE replace replay must remain coalescing',
       );
     } finally {
       service.stop();

@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 5
+**Attempts:** 7
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -20,7 +20,7 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T01-06-07-995Z.report.json
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-04-28-891Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for runtime-service-creating-owner-wake-progress-admission-main
 
@@ -31,7 +31,7 @@
 
 ## Scope Pressure
 - Changed files: 16
-- Change bytes: 46062
+- Change bytes: 53812
 - Owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Categories: runtime, test
 - Action: split by owner area before the next attempt (16 files)
@@ -46,7 +46,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 5, metric 1 -> 1
+- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 7, metric 1 -> 1
 
 ## Findings
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-19T19-39-35-247Z.json]
@@ -69,6 +69,15 @@
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T01-32-08-008Z.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T01-32-19-847Z.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: Replacement-specific gates are green; the broad timeout, REPLACE, and unused-export failures reproduce identically on detached HEAD 0527723b and are excluded as unchanged branch-baseline debt. [file:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-5-baseline-comparison.md]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved attempt 5 with no blockers: the byte-equal six-path artifact preserves target-progress context through same-owner coalescing, reaches durable source ACTIVE only from exact runtime target proof, retains non-runtime fallback, and passes focused/static contract gates. [subagent:verify_runtime_context_coalescing]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Ordered live gate passed five formation probes, schema admission, 100000-row load, five-node data spread, and 1682-row distributed SQL, then stopped before runtime deployment because recovered schema job d91532f0 falsely conflicted with its own deterministic movielens_top10 metadata: normalized_ddl recorded the SQL NOT NULL column as nullable=true while tables stored notNull=true. The repaired runtime target-wake seam was not reached and is neither refuted nor live-validated; no unchanged rerun was made. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T01-53-03-265Z.report.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: The source-stable ordered live run reached distributed SQL but stopped before runtime deployment at a distinct schema child owner-lane collision; the runtime target-wake attempt remains deterministically approved but was not engaged and is neither refuted nor live-validated. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T03-16-02-506Z.report.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: The sealed runtime CREATING-owner-wake symptom reproduces at checkpoint 97afef2e: target e467dd48 created svc-movielens-topn-r1 ACTIVE for operation ef2a3719, while all replica_operations projections retained status creating/workflow CREATING until the 600s demo timeout; target remote-handoff retry exhausted its operation budget. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-04-28-891Z.report.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T04-11-11-665Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Live operation ef2a3719 exposed the same coalescing invariant already solved for schema children: a TARGET_EXECUTOR_OUTCOME wake delivered while the source operation owner lane is held inherits the holder promise and never runs its own ACTIVE reconciliation. The production-seam in-flight-holder test reproduces CREATING before the narrow retained-turn correction and reaches exact-target ACTIVE afterward; DT fix/revert/restore is 0/1/0. [solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T04-11-11-665Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Attempt 6 is rejected: RETAIN is selected from raw TARGET_EXECUTOR_OUTCOME inside a broader replay branch, so marked ACTIVE REPLACE and system-table CREATING replays also receive retained-turn semantics outside the sealed runtime ADD/REPLACE CREATING boundary. [subagent:verify_runtime_progress_retained_turn]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T04-19-46-273Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved replacement attempt 7 and confirmed that retained owner turns are restricted to the canonical runtime target progress wake predicate while broader marked replay shapes retain ordinary owner-turn behavior. [subagent:verify_runtime_progress_attempt7]
 
 ## Theories
 - **theory-20260720-ownerkeyreconcilequeue-context-is-last-writer-wins** [active] system, mechanism OwnerKeyReconcileQueue context is last-writer-wins. ReplicaDispatchService must merge target_executor_outcome as monotone stronger evidence before enqueue while refreshing the row authoritatively, and runtime completion must use only exact replica_id plus target_node_id observation., owner source replica-dispatch operation owner queue and operation-workflow exact-target observation lane, modelGate npm run model:contracts
@@ -87,3 +96,5 @@ _(none recorded)_
 | 2026-07-20T01:13:36.811Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-3.diff |
 | 2026-07-20T01:25:44.205Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-4.diff |
 | 2026-07-20T01:35:49.878Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-5.diff |
+| 2026-07-20T04:14:37.350Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-6.diff |
+| 2026-07-20T04:20:37.000Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-7.diff |
