@@ -40,10 +40,21 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       raft_role: 'follower',
       address: 'node-2/partition/control_plane_publications-p1-r4',
     };
+    const sourceServiceRow = {
+      service_id: 'control_plane_publications-p1-r1',
+      replica_id: 'control_plane_publications-p1-r1',
+      partition_id: 'control_plane_publications-p1',
+      node_id: 'node-1',
+      service_type: 'partition',
+      status: 'active',
+      raft_role: 'leader',
+      address: 'node-1/partition/control_plane_publications-p1-r1',
+    };
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
 
     const cdcIntegrationService = {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
@@ -276,10 +287,21 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       raft_role: 'follower',
       address: 'node-2/partition/control_plane_publications-p1-r4',
     };
+    const sourceServiceRow = {
+      service_id: 'control_plane_publications-p1-r1',
+      replica_id: 'control_plane_publications-p1-r1',
+      partition_id: 'control_plane_publications-p1',
+      node_id: 'node-1',
+      service_type: 'partition',
+      status: 'active',
+      raft_role: 'leader',
+      address: 'node-1/partition/control_plane_publications-p1-r1',
+    };
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
 
     const cdcIntegrationService = {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
@@ -517,6 +539,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     const dispatchedMessages = [];
 
     const cdcIntegrationService = {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
@@ -764,6 +787,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     const dispatchedMessages = [];
 
     const cdcIntegrationService = {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
@@ -999,9 +1023,20 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       raft_role: 'follower',
       address: 'node-2/partition/control_plane_publications-p1-r4',
     };
+    const sourceServiceRow = {
+      service_id: 'control_plane_publications-p1-r1',
+      replica_id: 'control_plane_publications-p1-r1',
+      partition_id: 'control_plane_publications-p1',
+      node_id: 'node-1',
+      service_type: 'partition',
+      status: 'active',
+      raft_role: 'leader',
+      address: 'node-1/partition/control_plane_publications-p1-r1',
+    };
     const authoritativeReadCalls = [];
     const dispatchedMessages = [];
     const cdcIntegrationService = {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
@@ -1017,10 +1052,17 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         });
 
         if (tableName === 'services') {
+          const requested = Array.isArray(params) ? params[0] : null;
+          const rows = [{...serviceRow}, {...sourceServiceRow}].filter(
+            (row) =>
+              requested === null ||
+              row.service_id === requested ||
+              row.partition_id === requested,
+          );
           return {
             success: true,
             source: 'local_partition_replica',
-            rows: [{...serviceRow}],
+            rows,
           };
         }
 
@@ -1194,6 +1236,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           },
         },
         cdcIntegrationService: {
+      refreshAuthoritativeCacheRow: async () => true,
           async waitForCacheUpdate() {},
         },
         messageRouter: {
@@ -1318,6 +1361,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           },
         },
         cdcIntegrationService: {
+      refreshAuthoritativeCacheRow: async () => true,
           async waitForCacheUpdate() {},
         },
         messageRouter: {

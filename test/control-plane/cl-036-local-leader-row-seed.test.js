@@ -388,6 +388,14 @@ t.test(
             updated_at: 1000,
           }],
         }),
+        // The mutation helper writes through the owner-supplied gateway (not a
+        // lazily built cdcIntegrationService bundle) since af8b982a; without
+        // this, flush throws and the retry loop holds the event loop to the
+        // tap timeout.
+        submitMutation: async ({tableName, whereClause, data}, options) => {
+          mutations.push({tableName, whereClause, data, options});
+          return {success: true, partitionResult: {affectedRows: 1}};
+        },
       },
       getMetadataPublicationDeliveryPriority: () => 'critical',
       getMetadataPublicationWorkClass: () => 'critical',

@@ -219,6 +219,11 @@ function createRuntime(options) {
         return {success: true, affectedRows: 1};
       },
       async waitForCacheUpdate() {},
+      // Terminal ACTIVE completion requires the authoritative cache-row
+      // refresh to succeed (b52aa01d) before the operation may finish.
+      async refreshAuthoritativeCacheRow() {
+        return true;
+      },
     },
     messageRouter,
     tablePolicyService: {

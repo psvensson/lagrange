@@ -310,10 +310,15 @@ test('dispatch reads use cache-backed owner state only', async (t) => {
   );
   await service.retryPendingDispatchesForNode('node-a');
 
-  // Wait for the operationDispatchQueue microtask-scheduled drain
-  // to complete: scheduleDrain uses Promise.resolve().then(drain).
+  // Wait for the operationDispatchQueue drain to complete. drain() claims
+  // pending items synchronously and fire-and-forgets the bounded reconciles,
+  // so completion is only visible through the in-flight set — `size` and
+  // `draining` both clear while work is still running.
   while (service.operationDispatchQueue.size > 0 ||
-         service.operationDispatchQueue.draining) {
+         service.operationDispatchQueue.draining ||
+         service.operationDispatchQueues.some(
+           (queue) => queue.getDiagnostics().inFlightKeys.length > 0,
+         )) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 

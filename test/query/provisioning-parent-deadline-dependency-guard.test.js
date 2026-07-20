@@ -150,11 +150,40 @@ test('provisioning parent deadline dependency guard - nested progress waits ' +
     /timeoutBudget:\s*options\?\.timeoutBudget/,
     'SQL CREATE forwards the request budget to TableCreationService',
   );
+  // e1f687ea consolidated the inline budget forwards into shared option
+  // builders, so assert the builders forward the budget AND every
+  // provisioning/reconciliation call site routes through a builder — the
+  // contract, not a raw occurrence count.
   t.ok(
     (tableCreationSource.match(
       /timeoutBudget:\s*options\?\.timeoutBudget/g,
-    )?.length || 0) >= 4,
-    'new-table and reconciliation paths forward the same request budget',
+    )?.length || 0) >= 2,
+    'the shared option builders forward the request budget',
+  );
+  t.match(
+    tableCreationSource,
+    /buildDurableProvisioningInput[\s\S]{0,80}\.\.\.buildBaseProvisioningInput\(context, options\)/,
+    'the durable provisioning input inherits the base budget forwarding',
+  );
+  t.match(
+    tableCreationSource,
+    /reconcileExistingInitialPartition\([\s\S]{0,120}buildExistingReconciliationOptions\(options\)/,
+    'existing-table reconciliation routes through the budget-forwarding builder',
+  );
+  t.equal(
+    (tableCreationSource.match(
+      /service\.provisionInitialPartition\(\s*build(?:Durable|Base)ProvisioningInput\(/g,
+    ) || []).length,
+    (tableCreationSource.match(/service\.provisionInitialPartition\(/g) || [])
+      .length,
+    'every create-table provisioning call site routes through a ' +
+      'budget-forwarding builder',
+  );
+  t.match(
+    tableCreationSource,
+    /this\.provisionInitialPartition\(\{[\s\S]{0,320}timeoutBudget:\s*options\?\.timeoutBudget/,
+    'the existing-table reconciliation provisioning call forwards the ' +
+      'request budget inline',
   );
   t.end();
 });

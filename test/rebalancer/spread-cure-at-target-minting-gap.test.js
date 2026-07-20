@@ -28,12 +28,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   EntityType,
   MoveType,
-  NodeStatus,
   ReplicaStatus,
   TriggerType,
 } from '../../src/rebalancer/unified-rebalancer.js';
@@ -41,10 +38,14 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  buildSpreadScenarioHelpers,
+  createAllowAllStorageAdmissionService,
   createMockCache,
   createMockControlPlaneReadinessService,
   createTestCoordinator,
   createTestRebalancer,
+  initializeSpreadTestEnvironment,
+  isAddLikeMoveResult,
 } from './test-helpers.js';
 
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
@@ -93,40 +94,16 @@ const TEST_TERMINAL_REMOVE_ROW_STATE = Object.freeze({
 });
 
 function initializeTestEnvironment() {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  if (!config.isInitialized()) {
-    config.initialize({
-      node: {id: TEST_NODE_ID_A},
-      logging: {level: 'error'},
-    });
-  }
-
-  const logging = LoggingService.getInstance();
-  if (!logging.isInitialized()) {
-    logging.initialize({level: 'error'});
-  }
+  initializeSpreadTestEnvironment(TEST_NODE_ID_A);
 }
 
-function createNodeRow(nodeId) {
-  return {
-    node_id: nodeId,
-    status: NodeStatus.ACTIVE,
-  };
-}
-
-function createReplicaRow(replicaId, nodeId, raftRole) {
-  return {
-    service_id: replicaId,
-    service_type: TEST_PARTITION_SERVICE_TYPE,
-    node_id: nodeId,
-    partition_id: TEST_PARTITION_ID,
-    replica_id: replicaId,
-    address: TEST_ADDRESS_PREFIX + replicaId,
-    raft_role: raftRole,
-    status: ReplicaStatus.ACTIVE,
-  };
-}
+const {createNodeRow, createReplicaRow, isSpreadRestoringOperationRow} =
+  buildSpreadScenarioHelpers({
+    partitionId: TEST_PARTITION_ID,
+    serviceType: TEST_PARTITION_SERVICE_TYPE,
+    addressPrefix: TEST_ADDRESS_PREFIX,
+    freeNodeIds: TEST_FREE_NODE_IDS,
+  });
 
 function createOperationRow({
   operationId,
@@ -170,38 +147,6 @@ function createDrainResidueOperationRows() {
       rowState: TEST_TERMINAL_REMOVE_ROW_STATE,
     }),
   ];
-}
-
-function createAllowAllStorageAdmissionService() {
-  const allow = async () => ({
-    decision: 'allow',
-    allowed: true,
-    decisionType: 'admitted',
-  });
-  return {
-    checkAdd: allow,
-    checkReplace: allow,
-    checkSplit: allow,
-  };
-}
-
-function isAddLikeMoveResult(moveResult) {
-  return (
-    moveResult?.operation === MoveType.ADD ||
-    moveResult?.operation === MoveType.REPLACE
-  );
-}
-
-function isSpreadRestoringOperationRow(operationRow) {
-  const operationType = String(
-    operationRow?.type || '',
-  ).toLowerCase();
-  const targetNodeId =
-    operationRow?.target_node_id || operationRow?.targetNodeId || null;
-  return (
-    (operationType === MoveType.ADD || operationType === MoveType.REPLACE) &&
-    TEST_FREE_NODE_IDS.includes(targetNodeId)
-  );
 }
 
 function createAtTargetGapCache({partitions, replicaOperations}) {

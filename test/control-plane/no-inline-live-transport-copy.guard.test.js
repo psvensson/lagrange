@@ -82,7 +82,10 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCAN_SET = [
   'src/control-plane/control-plane-readiness-node-service-rows.js',
   'src/control-plane/lease-service.js',
-  'src/rebalancer/unified-rebalancer-available-nodes.js',
+  // The eligibility gate moved out of unified-rebalancer-available-nodes.js
+  // into this extracted owner module (commit 58054da8); the R2.6 atom routing
+  // lives there now.
+  'src/control-plane/startup-authority-placement-eligibility.js',
 ];
 
 /**
@@ -162,19 +165,19 @@ const ALLOWLIST = {
         'co-exists with the atom-routed live veto (~:529-532).',
     },
   ],
-  'src/rebalancer/unified-rebalancer-available-nodes.js': [
+  'src/control-plane/startup-authority-placement-eligibility.js': [
     {
       pattern: /node\.connection_state\b/,
       rationale:
-        'Cached-agreement conjunct read (~:296-305): a DISTINCT cached gate ' +
+        'Cached-agreement conjunct read (~:57-62): a DISTINCT cached gate ' +
         '(connection_state in {connected,ready}) that co-exists with the ' +
-        'atom-routed LIVE term at ~:306-312. Preserved unchanged per R2.3.',
+        'atom-routed LIVE term at ~:69. Preserved unchanged per R2.3.',
     },
     {
       pattern: /connectionState\s*!==\s*STATE\.(?:CONNECTED|READY)/,
       rationale:
-        'The cached-agreement conjunct comparison (~:296-305); a distinct ' +
-        'cached gate co-existing with the atom-routed LIVE term at ~:306-312 ' +
+        'The cached-agreement conjunct comparison (~:57-62); a distinct ' +
+        'cached gate co-existing with the atom-routed LIVE term at ~:69 ' +
         '(R2.3).',
     },
   ],
@@ -363,7 +366,7 @@ test('NEGATIVE CONTROL: a standalone cached-column veto (no atom in file) is ' +
   // Reuse the rebalancer allowlist patterns but WITHOUT an atom call in the
   // file → the co-exists-with-atom rule must reject the cached veto.
   const violations = findInlineTransportGateViolations(
-    'src/rebalancer/unified-rebalancer-available-nodes.js',
+    'src/control-plane/startup-authority-placement-eligibility.js',
     synthetic,
   );
   t.ok(
@@ -382,7 +385,7 @@ test('DISCRIMINATION: the same cached conjunct IS allowed once an atom-routed ' 
     '  return hasLiveTransportEvidence(nodeId, {messageRouter: router});\n' +
     '}\n';
   const violations = findInlineTransportGateViolations(
-    'src/rebalancer/unified-rebalancer-available-nodes.js',
+    'src/control-plane/startup-authority-placement-eligibility.js',
     synthetic,
   );
   t.same(

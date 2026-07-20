@@ -33,6 +33,7 @@ function buildCoordinator({operationRow, serviceRow}) {
   const cdcService = {
     insertSystemTableRow: async () => ({success: true}),
     updateSystemTableRow: async () => ({success: true}),
+    refreshAuthoritativeCacheRow: async () => true,
   };
   const sqlEngine = {
     executeQuery: async (sql, params) => {
@@ -57,14 +58,14 @@ function buildCoordinator({operationRow, serviceRow}) {
         const [serviceId] = params;
         const service = trackedServices.get(serviceId);
         return {success: true,
-          rows: service ? [{status: resolveStatus(service)}] : []};
+          rows: service ? [{...service, status: resolveStatus(service)}] : []};
       }
       if (sql.includes('services') && sql.includes('partition_id = ?')) {
         const [partitionId, nodeId] = params;
         const matching = Array.from(trackedServices.values()).filter((s) =>
           s.partition_id === partitionId && s.node_id === nodeId);
         return {success: true, rows: matching.length ?
-          [{status: resolveStatus(matching[0])}] : []};
+          [{...matching[0], status: resolveStatus(matching[0])}] : []};
       }
       if (sql.includes('replica_operations')) {
         const allOps = Array.from(trackedOperations.values());

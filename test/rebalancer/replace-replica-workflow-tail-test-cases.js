@@ -308,7 +308,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
-            rows: [{status: ReplicaStatus.ACTIVE}],
+            rows: [{node_id: 'node-2', status: ReplicaStatus.ACTIVE}],
             affectedRows: 1,
           },
         },
@@ -378,7 +378,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
-            rows: [{status: ReplicaStatus.ACTIVE}],
+            rows: [{node_id: 'node-2', status: ReplicaStatus.ACTIVE}],
             affectedRows: 1,
           },
         },
@@ -438,7 +438,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
-            rows: [{status: ReplicaStatus.ACTIVE}],
+            rows: [{node_id: 'node-2', status: ReplicaStatus.ACTIVE}],
             affectedRows: 1,
           },
         },
@@ -516,7 +516,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
-            rows: [{status: ReplicaStatus.ACTIVE}],
+            rows: [{node_id: 'node-2', status: ReplicaStatus.ACTIVE}],
             affectedRows: 1,
           },
         },
@@ -618,7 +618,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
-            rows: [{status: ReplicaStatus.FAILED}],
+            rows: [{node_id: 'node-2', status: ReplicaStatus.FAILED}],
             affectedRows: 1,
           },
         },
@@ -687,7 +687,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
         sqlQueryResults: {
           'FROM services WHERE service_id = ?': {
             success: true,
-            rows: [{status: ReplicaStatus.ACTIVE}],
+            rows: [{node_id: 'node-2', status: ReplicaStatus.ACTIVE}],
             affectedRows: 1,
           },
         },

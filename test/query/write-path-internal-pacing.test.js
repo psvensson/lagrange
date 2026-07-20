@@ -33,6 +33,32 @@ function createBudgetExecutor() {
   };
 }
 
+// The scenarios differ only in their partition/service rows; the cache lookup
+// shape is identical, so it lives here once.
+function buildMockSystemCache({partitions, services}) {
+  return {
+    partitions,
+    services,
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+}
+
 test(
   'write routing consumes the original absolute request budget',
   async (t) => {
@@ -137,7 +163,7 @@ test(
       [staleAddress, staleLeader],
       [currentAddress, currentLeader],
     ]);
-    const systemCache = {
+    const systemCache = buildMockSystemCache({
       partitions: [{
         partition_id: 'ratings-p1',
         table_name: 'ratings',
@@ -163,24 +189,7 @@ test(
           status: 'active',
         },
       ],
-      get(type, key) {
-        if (type === 'partitions') {
-          return this.partitions.find(
-            (partition) => partition.partition_id === key,
-          ) || null;
-        }
-        return null;
-      },
-      filter(type, predicate) {
-        if (type === 'services') {
-          return this.services.filter(predicate);
-        }
-        if (type === 'partitions') {
-          return this.partitions.filter(predicate);
-        }
-        return [];
-      },
-    };
+    });
     const messageRouter = {
       async deliver(address, message) {
         deliveries.push(address);
@@ -249,7 +258,7 @@ test(
   async (t) => {
     const timeoutMs = 20;
     let deliveries = 0;
-    const systemCache = {
+    const systemCache = buildMockSystemCache({
       partitions: [{
         partition_id: 'ratings-p1',
         table_name: 'ratings',
@@ -264,24 +273,7 @@ test(
         address: 'node-stuck/partition/ratings-r1',
         status: 'active',
       }],
-      get(type, key) {
-        if (type === 'partitions') {
-          return this.partitions.find(
-            (partition) => partition.partition_id === key,
-          ) || null;
-        }
-        return null;
-      },
-      filter(type, predicate) {
-        if (type === 'services') {
-          return this.services.filter(predicate);
-        }
-        if (type === 'partitions') {
-          return this.partitions.filter(predicate);
-        }
-        return [];
-      },
-    };
+    });
     const executor = new QueryExecutor({
       systemCache,
       messageRouter: {
@@ -349,7 +341,7 @@ test(
     const address = 'node-leader/partition/counters-r1';
     const deliveredEntryIds = [];
     let deliveries = 0;
-    const systemCache = {
+    const systemCache = buildMockSystemCache({
       partitions: [{
         partition_id: 'counters-p1',
         table_name: 'counters',
@@ -364,24 +356,7 @@ test(
         address,
         status: 'active',
       }],
-      get(type, key) {
-        if (type === 'partitions') {
-          return this.partitions.find(
-            (partition) => partition.partition_id === key,
-          ) || null;
-        }
-        return null;
-      },
-      filter(type, predicate) {
-        if (type === 'services') {
-          return this.services.filter(predicate);
-        }
-        if (type === 'partitions') {
-          return this.partitions.filter(predicate);
-        }
-        return [];
-      },
-    };
+    });
     const messageRouter = {
       async deliver(_address, message) {
         deliveries += 1;

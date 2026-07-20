@@ -86,6 +86,8 @@ function createMockReadinessService(systemTableCache) {
               .REPAIR_ELIGIBLE]: false,
             [CONTROL_PLANE_READINESS_DIMENSION
               .SERVE_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
           },
           reasons: [],
         };
@@ -114,6 +116,11 @@ function createMockReadinessService(systemTableCache) {
             .REPAIR_ELIGIBLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .SERVE_ELIGIBLE]: healthy,
+          // nodes-p1 is a formation-liveness dependency: readiness fails
+          // closed unless this dimension is explicitly true (only a real
+          // heartbeat-owned current lease makes a node recovery-eligible).
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
         },
         reasons: [],
       };

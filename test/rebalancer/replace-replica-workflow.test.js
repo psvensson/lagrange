@@ -91,8 +91,6 @@ const TEST_RECENT_REPLICA_ID_THIRD_REPLICA_ID =
   'sql_transaction_participants-p1-r3';
 const TEST_RECENT_REPLICA_ID_COMPLETED_TARGET_REPLICA_ID =
   'sql_transaction_participants-p1-r4';
-const TEST_RECENT_REPLICA_ID_NEXT_TARGET_REPLICA_ID =
-  'sql_transaction_participants-p1-r5';
 const TEST_RECENT_REPLICA_ID_COMPLETED_OPERATION_ID =
   'completed-replace-target-r4';
 const TEST_RECENT_REPLICA_ID_COMPLETED_AGE_MS = 1;
@@ -166,7 +164,32 @@ test('REPLACE replica workflow', async (t) => {
         availableNodeCount: 3,
       };
 
-      const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+      // nodes-p1 is the formation-liveness-dependency partition: its serial
+      // goal-state planner emits at most one executable move per tick, so the
+      // spread cure converges over two planning ticks.
+      const applyReplaceMove = (replicas, move) => replicas.map((replica) =>
+        replica.replica_id === move.replicaId ?
+          {
+            ...replica,
+            node_id: move.nodeId,
+            address: move.nodeId + '/partition/' + replica.replica_id,
+            raft_role: 'follower',
+          } :
+          replica,
+      );
+      const firstMoves = rebalancer.calculateMoves(currentReplicas, targetState);
+      const firstReplaceMoves =
+        firstMoves.filter((move) => move.type === MoveType.REPLACE);
+      t.equal(
+        firstReplaceMoves.length,
+        1,
+        'serial formation planner should emit one REPLACE per tick',
+      );
+      const secondTickReplicas =
+        applyReplaceMove(currentReplicas, firstReplaceMoves[0]);
+      const secondMoves =
+        rebalancer.calculateMoves(secondTickReplicas, targetState);
+      const moves = [...firstMoves, ...secondMoves];
       const replaceMoves = moves.filter((move) => move.type === MoveType.REPLACE);
       const addMoves = moves.filter((move) => move.type === MoveType.ADD);
       const nonFailedRemoves = moves.filter(
@@ -251,10 +274,15 @@ test('REPLACE replica workflow', async (t) => {
 
         await coordinator.executeOperation(operation);
 
-        t.equal(
-          operation.replicaId,
-          'nodes-p1-r4',
-          'REPLACE create phase should allocate canonical replica id on target',
+        // REPLACE creation is idempotent across creators: the target replica
+        // id is derived deterministically from the move intent identity
+        // (rebalance-replace-intent-identity.js), not the canonical -rN pool.
+        const replacementReplicaId = operation.replicaId;
+        t.match(
+          replacementReplicaId,
+          /^replace-replica-[0-9a-f]{32}$/,
+          'REPLACE create phase should allocate the deterministic ' +
+          'intent-derived replica id on target',
         );
         t.equal(
           deliveries[0]?.payload?.type,
@@ -268,7 +296,7 @@ test('REPLACE replica workflow', async (t) => {
         );
         t.same(
           deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS],
-          ['nodes-p1-r2', 'nodes-p1-r3', 'nodes-p1-r4'],
+          ['nodes-p1-r2', 'nodes-p1-r3', replacementReplicaId],
           'REPLACE create phase should exclude the retiring source replica from bootstrap replica ids',
         );
         t.same(
@@ -276,7 +304,7 @@ test('REPLACE replica workflow', async (t) => {
           [
             'seed-node/partition/nodes-p1-r2',
             'seed-node/partition/nodes-p1-r3',
-            'node-2/partition/nodes-p1-r4',
+            'node-2/partition/' + replacementReplicaId,
           ],
           'REPLACE create phase should exclude the retiring source replica from bootstrap peer addresses',
         );
@@ -385,9 +413,18 @@ test('REPLACE replica workflow', async (t) => {
         replicaId: TEST_RECENT_REPLICA_ID_SOURCE_REPLICA_ID,
       });
 
-      t.equal(
+      // Deterministic REPLACE intent identity (a66f909d): the target replica
+      // id is a digest of the move identity, not a canonical -rN allocation;
+      // the sealed contract is only that it never reuses the recently
+      // completed target id.
+      t.match(
         operation.replicaId,
-        TEST_RECENT_REPLICA_ID_NEXT_TARGET_REPLICA_ID,
+        /^replace-replica-[0-9a-f]{32}$/,
+        'replacement target uses the deterministic intent-identity digest',
+      );
+      t.not(
+        operation.replicaId,
+        TEST_RECENT_REPLICA_ID_COMPLETED_TARGET_REPLICA_ID,
         'allocator should not reuse a recently completed replacement target replica id',
       );
     } finally {

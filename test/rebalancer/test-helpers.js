@@ -17,7 +17,12 @@ import {
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
   EntityType,
+  MoveType,
+  NodeStatus,
+  ReplicaStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 
 const SYSTEM_TABLE_PRIMARY_KEY_FIELD = {
   [SYSTEM_TABLE_NAME.NODES]: 'node_id',
@@ -336,6 +341,7 @@ function createMockCdcService() {
   return {
     upsertSystemTableRow: async () => ({success: true}),
     updateSystemTableRow: async () => ({success: true}),
+    refreshAuthoritativeCacheRow: async () => true,
   };
 }
 
@@ -525,6 +531,7 @@ function createTestCoordinator(options = {}) {
   const mockCdcService = options.cdcIntegrationService || {
     insertSystemTableRow: async () => ({success: true}),
     updateSystemTableRow: async () => ({success: true}),
+    refreshAuthoritativeCacheRow: async () => true,
   };
 
   function syncReplicaOperationRow(row) {
@@ -864,7 +871,92 @@ function createTestRebalancer(options = {}) {
   });
 }
 
+// Shared spread-restoration scenario helpers: the critical-spread stall-repro
+// and cure-minting suites drive the same planner surface over different
+// partitions, so the row builders and admission stubs live here once,
+// parameterized by each suite's scenario constants.
+function initializeSpreadTestEnvironment(nodeId) {
+  ConfigurationManager.resetInstance();
+  const config = ConfigurationManager.getInstance();
+  if (!config.isInitialized()) {
+    config.initialize({
+      node: {id: nodeId},
+      logging: {level: 'error'},
+    });
+  }
+
+  const logging = LoggingService.getInstance();
+  if (!logging.isInitialized()) {
+    logging.initialize({level: 'error'});
+  }
+}
+
+function buildSpreadScenarioHelpers({
+  partitionId,
+  serviceType,
+  addressPrefix,
+  freeNodeIds,
+}) {
+  return {
+    createNodeRow(nodeId) {
+      return {
+        node_id: nodeId,
+        status: NodeStatus.ACTIVE,
+      };
+    },
+    createReplicaRow(replicaId, nodeId, raftRole) {
+      return {
+        service_id: replicaId,
+        service_type: serviceType,
+        node_id: nodeId,
+        partition_id: partitionId,
+        replica_id: replicaId,
+        address: addressPrefix + replicaId,
+        raft_role: raftRole,
+        status: ReplicaStatus.ACTIVE,
+      };
+    },
+    isSpreadRestoringOperationRow(operationRow) {
+      const operationType = String(
+        operationRow?.type || '',
+      ).toLowerCase();
+      const targetNodeId =
+        operationRow?.target_node_id || operationRow?.targetNodeId || null;
+      return (
+        (operationType === MoveType.ADD ||
+          operationType === MoveType.REPLACE) &&
+        freeNodeIds.includes(targetNodeId)
+      );
+    },
+  };
+}
+
+// The planner checks `result.decision === 'allow'` while coordinator-side
+// callers check `allowed`/`decisionType`; provide both shapes so storage
+// capacity never interferes.
+function createAllowAllStorageAdmissionService() {
+  const allow = async () => ({
+    decision: 'allow',
+    allowed: true,
+    decisionType: 'admitted',
+  });
+  return {
+    checkAdd: allow,
+    checkReplace: allow,
+    checkSplit: allow,
+  };
+}
+
+function isAddLikeMoveResult(moveResult) {
+  return (
+    moveResult?.operation === MoveType.ADD ||
+    moveResult?.operation === MoveType.REPLACE
+  );
+}
+
 export {
+  buildSpreadScenarioHelpers,
+  createAllowAllStorageAdmissionService,
   createMockCache,
   createMockCdcService,
   createMockControlPlaneSystemTableGateway,
@@ -878,4 +970,6 @@ export {
   createMockRpcClient,
   createTestCoordinator,
   createTestRebalancer,
+  initializeSpreadTestEnvironment,
+  isAddLikeMoveResult,
 };

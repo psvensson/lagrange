@@ -95,6 +95,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
         },
       },
       cdcIntegrationService: {
+        refreshAuthoritativeCacheRow: async () => true,
         async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
           waitForCacheUpdateCalls.push({
             tableName,
@@ -157,6 +158,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
     };
 
     const cdcIntegrationService = {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,
@@ -432,6 +434,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
       },
     },
     cdcIntegrationService: {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
     },
     messageRouter: {
@@ -532,6 +535,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
         },
       },
       cdcIntegrationService: {
+        refreshAuthoritativeCacheRow: async () => true,
         async waitForCacheUpdate() {},
       },
       messageRouter: {
@@ -602,6 +606,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
         },
       },
       cdcIntegrationService: {
+        refreshAuthoritativeCacheRow: async () => true,
         async waitForCacheUpdate() {},
       },
       messageRouter: {
@@ -775,6 +780,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
         },
       },
       cdcIntegrationService: {
+        refreshAuthoritativeCacheRow: async () => true,
         async waitForCacheUpdate() {},
       },
       tablePolicyService: {
@@ -913,6 +919,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     const dispatchedMessages = [];
 
     const cdcIntegrationService = {
+      refreshAuthoritativeCacheRow: async () => true,
       async waitForCacheUpdate() {},
       async executeAuthoritativeSystemTableRead(
         tableName,

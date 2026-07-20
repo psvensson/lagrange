@@ -75,6 +75,8 @@ function createMockReadinessService(mockCache) {
               .METADATA_PUBLICATION_HEALTHY]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
             [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
           },
           reasons: [],
         };
@@ -103,6 +105,11 @@ function createMockReadinessService(mockCache) {
             healthy,
           [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
             healthy,
+          // Formation-liveness dependency partitions (nodes-p1) fail closed
+          // unless this dimension is explicitly true: only a real
+          // heartbeat-owned current lease makes a node recovery-eligible.
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
         },
         reasons: [],
       };
@@ -210,8 +217,19 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
       nodes: [
-        {node_id: 'node-1', status: NodeStatus.ACTIVE},
-        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        // nodes-p1 is a formation-liveness dependency partition: admission is
+        // fail-closed on ready leases, so ready nodes must hold a CURRENT lease
+        // (an absent lease no longer counts as ready).
+        {
+          node_id: 'node-1',
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: Date.now() + 60000,
+        },
+        {
+          node_id: 'node-2',
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: Date.now() + 60000,
+        },
         {
           node_id: 'node-3',
           status: NodeStatus.ACTIVE,
@@ -941,12 +959,28 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
 
   await t.test('critical healthy replicas honor published membership boundary',
     async (t) => {
+      // All three nodes hold current ready leases (nodes-p1 lease admission is
+      // fail-closed), so the published-membership boundary stays the ONLY
+      // discriminating factor in this test.
+      const leasedNodes = () => ([
+        {
+          node_id: 'node-1',
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: Date.now() + 60000,
+        },
+        {
+          node_id: 'node-2',
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: Date.now() + 60000,
+        },
+        {
+          node_id: 'node-3',
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: Date.now() + 60000,
+        },
+      ]);
       const readinessService = {
-        ...createMockReadinessService(createMockCache([
-          {node_id: 'node-1', status: NodeStatus.ACTIVE},
-          {node_id: 'node-2', status: NodeStatus.ACTIVE},
-          {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ])),
+        ...createMockReadinessService(createMockCache(leasedNodes())),
         membershipPublicationService: createMockMembershipPublicationService([
           'node-1',
           'node-2',
@@ -957,11 +991,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         entityId: 'nodes-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
-        nodes: [
-          {node_id: 'node-1', status: NodeStatus.ACTIVE},
-          {node_id: 'node-2', status: NodeStatus.ACTIVE},
-          {node_id: 'node-3', status: NodeStatus.ACTIVE},
-        ],
+        nodes: leasedNodes(),
         controlPlaneReadinessService: readinessService,
       });
 

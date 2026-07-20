@@ -73,6 +73,7 @@ function createRecoveryTestCoordinator(options = {}) {
   const cdcService = {
     insertSystemTableRow: async () => ({success: true}),
     updateSystemTableRow: async () => ({success: true}),
+    refreshAuthoritativeCacheRow: async () => true,
   };
 
   // SQL engine that handles operations and services queries
@@ -132,7 +133,7 @@ function createRecoveryTestCoordinator(options = {}) {
         const [serviceId] = params;
         const service = trackedServices.get(serviceId);
         if (service) {
-          return {success: true, rows: [{status: service.status}]};
+          return {success: true, rows: [{...service}]};
         }
         return {success: true, rows: []};
       }
