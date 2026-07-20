@@ -26,10 +26,10 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **partition-class-ladder-owner-implementation-main** [solved] rung 1, attempts 1, metric 119 -> 119
+- **partition-class-ladder-owner-implementation-main** [open] rung 1, attempts 1, metric 119 -> 119 — exact terminal source attempt was rejected
 
 ## Findings
-_(none recorded)_
+- **partition-class-ladder-owner-implementation-main**: Independent verifier found that reconstructing resolver inputs from the row-preferred partitionId loses the legacy top-level fallback when a partition row carries a nonempty but unparsable ID; the self-referential legacy equivalence test did not detect it. [subagent:verify_rung5_census]
 
 ## Theories
 _(none recorded)_

@@ -4,7 +4,7 @@
 
 **Class:** process · **Closure:** MEASURED
 
-**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/service-portability-claims-surface/service-portability-claims-surface-2026-07-14T06-45-38-291Z.report.json
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/service-portability-claims-surface/service-portability-claims-surface-2026-07-14T07-07-29-830Z.report.json
 
 **Attempts:** 1
 
@@ -30,10 +30,10 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **service-portability-claims-surface-v2-main** [solved] rung 1, attempts 1, metric 0 -> 0
+- **service-portability-claims-surface-v2-main** [open] rung 1, attempts 1, metric 0 -> 0 — exact terminal source attempt was rejected
 
 ## Findings
-_(none recorded)_
+- **service-portability-claims-surface-v2-main**: Independent verification rejected the exact attempt because it broke the representative examples-catalog fixture and left public genuine-WASM claims and semantic paraphrases outside the checker; the final successor must atomically include fixture alignment and broader claims attacks. [subagent:verify_portability_plan]
 
 ## Theories
 _(none recorded)_

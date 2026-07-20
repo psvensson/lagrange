@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-02-36-588Z.report.json
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json
 
 **Attempts:** 3
 
@@ -12,26 +12,9 @@
 - spec: solve/specs/service-portability-ladder/requirements.md#r2--existing-application-portability
 - plan: solve/specs/service-portability-ladder/tasks.md
 
-## Current Blocker
-- Frontier: pgwire-tls-policy-cutover-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json
-- Selected theory: theory-20260714-inherited-oversized-protocol-owner
-- Next move: continue supervised step for pgwire-tls-policy-cutover-main
-- No longer current: PASS
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 16
-- Change bytes: 135666
+- Change bytes: 55528
 - Owner areas: architecture, scripts/checks, src/runtime, test/fixtures, test/runtime
 - Categories: docs, other, runtime, test
 - Action: split by owner area before the next attempt (16 files)
@@ -82,6 +65,7 @@
 - **theory-20260714-inherited-oversized-protocol-owner**: falsified (scenario=done, theory=falsified, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json]
 - **theory-20260714-inherited-oversized-protocol-owner**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-21-35-642Z.report.json]
 - **theory-20260714-inherited-oversized-protocol-owner**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-25-07-195Z.report.json]
+- **theory-20260714-inherited-oversized-protocol-owner**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json]
 - **theory-20260714-inherited-oversized-protocol-owner**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-tls-policy-cutover/pgwire-tls-policy-cutover-2026-07-14T08-26-26-663Z.report.json]
 
 ## Attempt log

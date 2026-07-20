@@ -18,10 +18,11 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: first blocker observed: PASS
+- Movement: solved: PASS -> PASS
 - Latest evidence: test-output/reports/movielens-replace-bootstrap-cohort-authority-2026-07-16T07-56-23-784Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for movielens-replace-bootstrap-cohort-authority-main
+- No longer current: PASS
 
 ## Continuation
 - Status: allowed

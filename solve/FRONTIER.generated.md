@@ -61,7 +61,7 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 30
+## Open quests — 25
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
@@ -82,17 +82,12 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | — |
 | movielens-three-way-affinity-demo | product | 7 | 0 | — |
 | oci-container-driver-live-activation | product | 8 | 0 | — |
-| oci-runtime-host-contract | process | 2 | 0 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | — |
-| partition-class-ladder-owner-implementation | process | 1 | 0 | — |
-| pgwire-authentication-cutover | product | 5 | 0 | — |
-| pgwire-tls-policy-cutover | product | 3 | 0 | — |
 | priority-placement-completed-topology-observation | product | 1 | 0 | — |
 | runtime-service-creating-owner-wake-progress-admission | product | 13 | 0 | — |
 | schema-provisioning-inline-execute-owner-redrive | product | 1 | 0 | — |
 | schema-provisioning-not-null-intent-recovery-roundtrip | product | 1 | 0 | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | — |
-| service-portability-claims-surface-v2 | process | 1 | 0 | — |
 | solver-verifier-rejection-supersession-core | process | 1 | 0 | — |
 | solver-verifier-rejection-supersession-steering | process | 1 | 0 | — |
 

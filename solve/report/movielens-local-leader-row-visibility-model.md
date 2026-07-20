@@ -20,7 +20,7 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json
+- Latest evidence: test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-18-24-002Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for movielens-local-leader-row-visibility-model-main
 - No longer current: PASS
@@ -31,17 +31,11 @@
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 10
-- Change bytes: 23782
-- Owner areas: models, scripts/model-tlc.js, scripts/run-movielens-local-leader-row-visibility-model-scenarios.js, test/scripts
-- Categories: other, test
-- Action: land or separate 4 owner areas: models, scripts/model-tlc.js, scripts/run-movielens-local-leader-row-visibility-model-scenarios.js, test/scripts
-- Split plan:
-  - models: 7 file(s)
-  - scripts/model-tlc.js: 1 file(s)
-  - scripts/run-movielens-local-leader-row-visibility-model-scenarios.js: 1 file(s)
-  - test/scripts: 1 file(s)
-- Signal: broad-source-scope severity=medium
+- Changed files: 0
+- Change bytes: 0
+- Owner areas: none
+- Categories: none
+- Signals: none
 
 ## Frontiers
 - **movielens-local-leader-row-visibility-model-main** [open] rung 1, attempts 1, metric 0 -> 0
@@ -53,6 +47,7 @@
 - **movielens-local-leader-row-visibility-model-main**: Ingested evidence from movielens-local-leader-row-visibility-model-2026-07-16T11-06-44-503Z.report.json. Metric: unknown -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-06-44-503Z.report.json]
 - **movielens-local-leader-row-visibility-model-main**: Ingested evidence from movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json]
 - **movielens-local-leader-row-visibility-model-main**: Ingested evidence from movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json]
+- **movielens-local-leader-row-visibility-model-main**: Independent exact-source verification passed: the focused TLA+ model faithfully composes local seeding, causal-version preservation, successor delivery, demotion clearing, delayed self replay, the pre-submit ownership fence, and the remove-safety consumer; fixed TLC and all four intended mutants were freshly re-executed. [subagent:verify_local_leader_model_attempt1]
 
 ## Theories
 _(none recorded)_

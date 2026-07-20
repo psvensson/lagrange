@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-33-23-125Z.report.json
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-52-15-638Z.report.json
 
 **Attempts:** 5
 
@@ -12,26 +12,9 @@
 - spec: solve/specs/service-portability-ladder/requirements.md#r2--existing-application-portability
 - plan: solve/specs/service-portability-ladder/tasks.md
 
-## Current Blocker
-- Frontier: pgwire-authentication-cutover-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-52-15-638Z.report.json
-- Selected theory: theory-20260714-canonical-receipt-mismatch
-- Next move: continue supervised step for pgwire-authentication-cutover-main
-- No longer current: PASS
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 14
-- Change bytes: 190196
+- Change bytes: 39994
 - Owner areas: architecture, scripts/checks, src/runtime, test/runtime
 - Categories: docs, other, runtime, test
 - Action: split by owner area before the next attempt (14 files)
@@ -90,6 +73,7 @@
 - **theory-20260714-canonical-receipt-mismatch**: falsified (scenario=done, theory=falsified, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json]
 - **theory-20260714-canonical-receipt-mismatch**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-47-45-343Z.report.json]
 - **theory-20260714-canonical-receipt-mismatch**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-49-59-273Z.report.json]
+- **theory-20260714-canonical-receipt-mismatch**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-52-15-638Z.report.json]
 - **theory-20260714-canonical-receipt-mismatch**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/pgwire-authentication-cutover/pgwire-authentication-cutover-2026-07-14T07-52-15-638Z.report.json]
 
 ## Attempt log
