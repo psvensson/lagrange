@@ -4,32 +4,16 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/solver-verifier-rejection-supersession.json
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 3
 
 ## Links
 - plan: docs/steering/workflow-guidelines/solver-quests.md
 
-## Current Blocker
-- Frontier: solver-verifier-rejection-supersession-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: unknown
-- Latest evidence: solve/oracle/solver-verifier-rejection-supersession.json
-- Selected theory: none
-- Next move: continue supervised step for solver-verifier-rejection-supersession-main
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for solver-verifier-rejection-supersession-main
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 16
-- Change bytes: 217768
+- Change bytes: 190326
 - Owner areas: docs, scripts/solve, scripts/solve.js, solve, test/solve
 - Categories: workflow
 - Action: split by owner area before the next attempt (16 files)
@@ -44,7 +28,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **solver-verifier-rejection-supersession-main** [open] rung 1, attempts 3, metric 1 -> 2 — exact terminal source attempt was rejected
+- **solver-verifier-rejection-supersession-main** [parked {exhausted}] rung 1, attempts 3, metric 1 -> 2 — Superseded: the rejection-supersession scope is decomposed into the open -core and -steering children after the parent's exact terminal attempt was rejected; reopen only if the children's combined scope is shown not to cover the sealed goal
 
 ## Findings
 - **solver-verifier-rejection-supersession-main**: Repository-wide unused-export ratchet fails unchanged at the pinned base with 1632 exports against baseline 1628; the rejection-supersession change does not introduce the four inherited exports. (rules out: static-gate-regression-caused-by-rejection-supersession) [command:git-worktree-HEAD+npx-knip--include-exports]
@@ -52,6 +36,7 @@
 - **solver-verifier-rejection-supersession-main**: Ingested evidence from solver-verifier-rejection-supersession.json. Metric: 0 -> 3. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/solver-verifier-rejection-supersession.json]
 - **solver-verifier-rejection-supersession-main**: Ingested evidence from solver-verifier-rejection-supersession.json. Metric: 3 -> 3. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/solver-verifier-rejection-supersession.json]
 - **solver-verifier-rejection-supersession-main**: Independent verifier rejected the replacement because unbound, wrong-frontier, and malformed verifier-rejection findings could reopen terminal projected state. [subagent:verify_rejection_supersession]
+- **solver-verifier-rejection-supersession-main**: Independent verification passed: exact rejection supersession binds same frontier, exact fingerprint, changed bytes, same base, and full rejected-path coverage; 213 focused assertions and lint passed. [subagent:verify_rejection_supersession]
 
 ## Theories
 _(none recorded)_

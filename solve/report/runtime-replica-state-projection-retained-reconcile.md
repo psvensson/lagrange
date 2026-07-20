@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 5
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: schema-admission-canonical-drain-handoff
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: runtime-replica-state-projection-retained-reconcile-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
-- Next move: continue supervised step for runtime-replica-state-projection-retained-reconcile-main
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: continue supervised step for runtime-replica-state-projection-retained-reconcile-main
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id runtime-replica-state-projection-retained-reconcile --frontier runtime-replica-state-projection-retained-reconcile-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T21-22-24-859Z.report.json
 
 ## Scope Pressure
 - Changed files: 10
@@ -44,7 +28,7 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **runtime-replica-state-projection-retained-reconcile-main** [open] rung 0, attempts 5, metric 1 -> 1
+- **runtime-replica-state-projection-retained-reconcile-main** [parked {exhausted}] rung 0, attempts 5, metric 1 -> 1 — Superseded: the integrity-reseal successor sealed the byte-identical approved artifact and the residual is owned by runtime-service-creating-owner-wake-progress-admission; reopen only if projection retention regresses independently of that lineage
 
 ## Findings
 - **runtime-replica-state-projection-retained-reconcile-main**: Fresh source-stable MovieLens evidence proves local runtime activation completed but services projection consumed the source operation deadline and lost the authoritative r2 row after routed distributed-participant failures. [file:solve/changes/schema-admission-canonical-drain-handoff/post-attempt-2-live-runtime-projection-loss-2026-07-19.md]

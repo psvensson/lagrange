@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 8
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-ratings-scoped-split-policy-live
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-pre-schema-quiescence-live-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json
-- Selected theory: theory-20260715-sampled-quiescence-window (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-pre-schema-quiescence-live-main
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id movielens-pre-schema-quiescence-live --frontier movielens-pre-schema-quiescence-live-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T08-05-44-726Z.report.json
 
 ## Scope Pressure
 - Changed files: 10
@@ -73,6 +57,9 @@
 - **movielens-pre-schema-quiescence-live-main**: The approved full-window gate failed closed because formation recovery never became quiescent, not because its retry trigger was lost: node 1 became replica_operations-p1 leader at 23:52:37.117Z, emitted one partitions-row CAS miss at 23:52:46.420Z, and the durable partitions.leader_node_id finally changed at 23:55:02.890Z without a second queue event or async-error log, showing the existing helper remained in-flight. During that interval the seed connection was terminated and recreated at 23:53:03.986Z, 23:54:10.434Z, and 23:55:17.163Z—about one pingMaxMissed cadence—despite hundreds of fresh inbound-liveness witnesses that caused ACK quarantine to say the peer was alive. recordMissedKeepalivePing does not consult nodeInboundActivityAt, unlike ACK quarantine, so the keepalive owner violates the same slow-is-not-dead invariant and repeatedly breaks the only formation path. [data/examples/service-data-affinity-demo-archive/wave4-live-schema-window-pressure-2026-07-15T23-55-31-481Z.tar.gz]
 - **movielens-pre-schema-quiescence-live-main**: The exhausted frontier has isolated a product owner-boundary successor: keepalive ping timeout and ACK-timeout quarantine currently use contradictory liveness evidence. The next Quest must deterministically prove recent parsed inbound traffic preserves the current connection across missed PONGs, while a truly silent half-open peer still severs and redials, then re-run the changed five-node MovieLens milestone. [src/transport/message-router-connection-close-reconnect.js]
 - **movielens-pre-schema-quiescence-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T08-05-44-726Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T08-05-44-726Z.report.json]
+- **movielens-pre-schema-quiescence-live-main**: The sealed symptom reproduces on current HEAD 719020ce: the five-node cluster forms, but the authoritative operation ledger never remains at zero for the required 60000ms interval inside the fixed 180000ms budget. The prior replica_operations blocker clears completely; later priority-partition replacement work is created after the canonical priority-spread publication already reports steady, leaving two rows in flight at timeout. (rules out: A stale source reproduction; a dormant replacement-cohort fix; changing the 180000ms budget or 60000ms stability interval.) [data/examples/service-data-affinity-demo-archive/wave4-live-replace-bootstrap-cohort-authority-2026-07-16T08-05-44-727Z.tar.gz]
+- **movielens-pre-schema-quiescence-live-main**: At 719020ce the 180000ms pre-schema gate failed with two legitimate priority operations still in flight because publication closure had earlier collapsed each partition's numeric spreadGap=2 to satisfied after one qualifying target. The durable publication summary therefore suppressed required second-unit follow-up until later planners rediscovered structural under-spread; the final services authority confirms five priority partitions remained at two distinct nodes. [data/examples/service-data-affinity-demo-archive/wave4-live-replace-bootstrap-cohort-authority-2026-07-16T08-05-44-727Z.tar.gz]
+- **movielens-pre-schema-quiescence-live-main**: Changed live run at 71428943 passed the sealed pre-schema quiescence observable: schema admission succeeded after 63053ms stable/leader-quiet state, with ready=true, totalSpreadGap=0, effectiveInFlightCount=0, and two stable confirmations under unchanged policy. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T08-45-46-067Z.report.json]
 
 ## Theories
 - **theory-20260715-the-local-control-snapshot-owner-correctly** [active] system, mechanism The local control-snapshot owner correctly marks stale cache evidence pending, but the demo consumer never traverses the owner's existing forced authoritative repair command, so polling cannot refresh the evidence it requires., owner control_plane_snapshot_owner, modelGate npm run model:contracts

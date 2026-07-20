@@ -255,3 +255,60 @@ tap.test('park (operator-decision frontier terminal)', async (t) => {
     t.end();
   });
 });
+
+// Completion path: the autonomous ladder parks each frontier exhausted without
+// appending the quest-level terminal, leaving the quest formally OPEN with no
+// open frontier for the operator park to act on. Under the same
+// altitude-reflection sanction, park must then append the missing quest-level
+// EXHAUSTED terminal instead of refusing.
+tap.test('park completes the quest terminal when all frontiers are already parked',
+  async (t) => {
+    t.test('with a reflection, the terminal is appended', (t) => {
+      const root = tmp();
+      const quest = makeQuest(root);
+      appendEvent(root, quest.id, {
+        type: 'park',
+        frontier: 'park-demo-main',
+        kind: 'exhausted',
+        provenance: 'ladder',
+        reason: 'ladder exhausted without metric movement',
+      });
+      recordAltitudeReflection(root, quest, 'frame refuted; pivot to successor');
+      const result = parkFrontier(root, {
+        id: quest.id,
+        reason: 'residual delegated to successor quest',
+      });
+      t.equal(result.questExhausted, true);
+      t.equal(result.frontierId, null,
+        'no frontier park is minted; only the quest terminal completes');
+      const state = projectState(quest, readLog(root, quest.id));
+      t.equal(state.questStatus, 'exhausted');
+      const terminal = readLog(root, quest.id)
+        .filter((e) => e.type === 'quest' && e.status === 'exhausted')
+        .pop();
+      t.equal(terminal.provenance, PARK_PROVENANCE_OPERATOR);
+      t.match(terminal.reason, /delegated to successor/);
+      fs.rmSync(root, {recursive: true, force: true});
+      t.end();
+    });
+
+    t.test('without a reflection, the completion is refused', (t) => {
+      const root = tmp();
+      const quest = makeQuest(root);
+      appendEvent(root, quest.id, {
+        type: 'park',
+        frontier: 'park-demo-main',
+        kind: 'exhausted',
+        provenance: 'ladder',
+        reason: 'ladder exhausted without metric movement',
+      });
+      t.throws(
+        () => parkFrontier(root, {id: quest.id, reason: 'no reflection yet'}),
+        /altitude reflection/,
+      );
+      fs.rmSync(root, {recursive: true, force: true});
+      t.end();
+    });
+
+    t.end();
+  });

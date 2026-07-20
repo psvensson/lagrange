@@ -4,7 +4,7 @@
 
 **Class:** process · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 0
 
@@ -12,22 +12,6 @@
 - spec: solve/specs/service-portability-ladder/requirements.md#r1--truthful-capability-contract
 - parent quest: service-portability-claims-contract
 - plan: solve/specs/service-portability-ladder/tasks.md
-
-## Current Blocker
-- Frontier: service-portability-claims-surface-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
-- Next move: continue supervised step for service-portability-claims-surface-main
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for service-portability-claims-surface-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 0
@@ -37,10 +21,10 @@
 - Signals: none
 
 ## Frontiers
-- **service-portability-claims-surface-main** [open] rung 0, attempts 0, metric ? -> ?
+- **service-portability-claims-surface-main** [parked {exhausted}] rung 0, attempts 0, metric ? -> ? — Superseded: service-portability-claims-surface-v2 delivered the sealed claims surface with a measured PASS; reopen only if the claims surface regresses outside v2's coverage
 
 ## Findings
-_(none recorded)_
+- **service-portability-claims-surface-main**: This declaration cannot close honestly: a post-declaration constraint wording edit triggered a sealed-goal integrity violation, and the null first baseline exposed an attempt-integrity violation. Preserve both events and author a clean successor using the already-generated finite service-portability-claims-surface report. [test-output/reports/service-portability-claims-surface/service-portability-claims-surface-2026-07-14T06-43-50-868Z.report.json]
 
 ## Theories
 _(none recorded)_

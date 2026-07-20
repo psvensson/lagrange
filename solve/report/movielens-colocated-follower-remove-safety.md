@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 2
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-colocated-follower-replacement-source
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-colocated-follower-remove-safety-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json
-- Selected theory: theory-20260716-colocated-follower-sibling-disambiguates-source-replica (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-colocated-follower-remove-safety-main
-
-## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for movielens-colocated-follower-remove-safety-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for movielens-colocated-follower-remove-safety-main
-- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 4
@@ -41,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-colocated-follower-remove-safety-main** [open] rung 2, attempts 2, metric 1 -> 1
+- **movielens-colocated-follower-remove-safety-main** [parked {exhausted}] rung 2, attempts 2, metric 1 -> 1 — The verified colocated-follower remove-safety fix moved the live blocker to admin snapshot deadline propagation, owned by child movielens-admin-snapshot-deadline-propagation
 
 ## Findings
 - **movielens-colocated-follower-remove-safety-main**: inherited from movielens-colocated-follower-replacement-source: inherited from movielens-ready-lease-maintenance-critical-owner-lane: The sealed production symptom reproduces on changed HEAD 7bd3691f: five nodes formed, but schema admission timed out on cache_stale_watermark after the unchanged 60-second stability/evaluation policy. The live report SHA-256 is 0f2a9e1d2ee3e460e3de02f45d1ae4eccd9acd876ab7e5b7e0c854b4c10332e1 and the immutable log archive SHA-256 is 9d781908c1c6d1c2dc997b9c041243ab2a2c7db0d45234215b32b2f11c70c9e8. The critical-lane change was engaged but did not close the lease gap; no unchanged rerun is authorized. (rules out: Do not rerun unchanged or continue by changing only dispatch priority; that intervention was live-engaged and insufficient.) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]
@@ -61,9 +44,11 @@
 - **movielens-colocated-follower-remove-safety-main**: Independent exact-attempt verification APPROVED. Artifact/base/current canonical diff matched; exact base reversal failed only the two claimed SAFE/no-handoff assertions with DEFER and replace_target_leader_election while all negative controls stayed green. Focused, supplemental production-shaped ACTIVE-path, safety/R3/CL-038/CL-043/DT6, adjacent remove-safety, formation/interlock/deadlock, state pressure, static checks, full contracts, and all 13 TLC cases passed. Cyclomatic and cognitive complexity remain exactly at base 88 and 40. The four broad REPLACE canonical-ID/UUID failures reproduce identically on base and patch and are upstream of remove safety. [subagent:verify_wave4_colocated_remove_safety_attempt1]
 - **movielens-colocated-follower-remove-safety-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
 - **movielens-colocated-follower-remove-safety-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
+- **movielens-colocated-follower-remove-safety-main**: The sealed production symptom still reproduces on changed HEAD cb051163, but the implemented mechanism engaged: the first replica_operations replacement removed explicit follower r3 without target election; the run then moved to distributed operation-ledger query pressure and a snapshot-lane admin response timeout before schema admission. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
+- **movielens-colocated-follower-remove-safety-main**: Changed-live evidence hashes: sealed Lagrange report sha256 72ee4bdf65399e51c78492982691ce36f108fe0b975ebb0f0749ec5325c29df4; three-way report sha256 bfbdcc513c7ff2910487daaae2368776dc61de80519e1fc24be212d996f0012d; immutable archive sha256 a34fcf7dccfa52484b34385972c769216199b164f16929f6d415b562510ee741. Node 0 accepted the snapshot client at 04:28:24.697, exactly when request examples-1784176104697-073bc91f-6771-4473-8c4e-a2fafca2b561 was created, but returned no response before the client deadline; distributed query timeouts had already been continuous across the cluster. [data/examples/service-data-affinity-demo-archive/wave4-live-colocated-follower-safety-2026-07-16T04-28-43-610Z.tar.gz]
 
 ## Theories
-- **theory-20260716-colocated-follower-sibling-disambiguates-source-replica** [falsified] frontier, frontier movielens-colocated-follower-remove-safety-main, layer ownership, mechanism colocated_follower_sibling_disambiguates_source_replica, owner operation_workflow_owner, boundary rebalancer_handoff_replica_identity, modelGate npm run model:contracts
+- **theory-20260716-colocated-follower-sibling-disambiguates-source-replica** [supported] frontier, frontier movielens-colocated-follower-remove-safety-main, layer ownership, mechanism colocated_follower_sibling_disambiguates_source_replica, owner operation_workflow_owner, boundary rebalancer_handoff_replica_identity, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-colocated-follower-remove-safety-main**: theory-20260716-colocated-follower-sibling-disambiguates-source-replica
@@ -72,6 +57,7 @@
 - **theory-20260716-colocated-follower-sibling-disambiguates-source-replica**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
 - **theory-20260716-colocated-follower-sibling-disambiguates-source-replica**: falsified (scenario=failed, theory=falsified, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
 - **theory-20260716-colocated-follower-sibling-disambiguates-source-replica**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
+- **theory-20260716-colocated-follower-sibling-disambiguates-source-replica**: supported (scenario=failed, theory=partial, movement=moved_boundary) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

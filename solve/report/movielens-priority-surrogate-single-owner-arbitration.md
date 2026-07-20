@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-create-budget-intent-serialization
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-priority-surrogate-single-owner-arbitration-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: theory-20260716-snapshot-declared-surrogate-owner (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-priority-surrogate-single-owner-arbitration-main
-- No longer current: Do not rerun unchanged, widen deadlines, relax the odd-voter/target-count promotion guard, or revisit surrogate arbitration. Split the explicit REPLACE bootstrap cohort consumer into a linked child Quest and prove that dispatched membership data is closed-world at the target.
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: record or select a fresh frontier theory for movielens-priority-surrogate-single-owner-arbitration-main
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id movielens-priority-surrogate-single-owner-arbitration --frontier movielens-priority-surrogate-single-owner-arbitration-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T08-05-44-726Z.report.json
 
 ## Scope Pressure
 - Changed files: 12
@@ -45,7 +28,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **movielens-priority-surrogate-single-owner-arbitration-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **movielens-priority-surrogate-single-owner-arbitration-main** [parked {exhausted}] rung 1, attempts 1, metric 1 -> 1 — Reopen only if a run yields two surrogate owners in one planning generation - the arbitration symptom, not the delegated bootstrap-cohort gap
 
 ## Findings
 - **movielens-priority-surrogate-single-owner-arbitration-main**: inherited from movielens-create-budget-intent-serialization: inherited from movielens-priority-surrogate-single-followup: inherited from movielens-admin-snapshot-retry-deadline-budget: inherited from movielens-admin-snapshot-deadline-propagation: inherited from movielens-colocated-follower-remove-safety: inherited from movielens-colocated-follower-replacement-source: inherited from movielens-ready-lease-maintenance-critical-owner-lane: The sealed production symptom reproduces on changed HEAD 7bd3691f: five nodes formed, but schema admission timed out on cache_stale_watermark after the unchanged 60-second stability/evaluation policy. The live report SHA-256 is 0f2a9e1d2ee3e460e3de02f45d1ae4eccd9acd876ab7e5b7e0c854b4c10332e1 and the immutable log archive SHA-256 is 9d781908c1c6d1c2dc997b9c041243ab2a2c7db0d45234215b32b2f11c70c9e8. The critical-lane change was engaged but did not close the lease gap; no unchanged rerun is authorized. (rules out: Do not rerun unchanged or continue by changing only dispatch priority; that intervention was live-engaged and insufficient.) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]
@@ -68,6 +51,7 @@
 - **movielens-priority-surrogate-single-owner-arbitration-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T07-24-56-082Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T07-24-56-082Z.report.json]
 - **movielens-priority-surrogate-single-owner-arbitration-main**: The changed live run at source checkpoint 59e6e031 proves snapshot-declared surrogate arbitration engaged: all 13 nonlocal priority-surrogate moves were emitted by the single declared replica_operations-p1 owner, eliminating the prior cross-rebalancer duplicate target scheduling. The sealed Lagrange report sha256 is 0062dce0e0965d34a9f9f56d895accbb1d708ec8d3e58468b62e1d8f8f96c96e, the three-way report sha256 is c92e4ba1ef8deb340539e1181d9b9744b999fa75d290474fab421624d7a61c3f, and immutable archive sha256 is dc3e670521c77d568040265520a325f643ecfddbd79ee51b03438b3920b2a61d. The remaining schema failure is a distinct bootstrap-topology consumer ownership violation: the second replica_operations-p1 REPLACE operation persisted a correct three-replica bootstrap cohort, but the target merged a stale fourth cached voter into that explicit cohort, then correctly deferred promotion for 60 seconds at activeVoterCount=4 and maxAllowedVotersAfterPromotion=3. (rules out: Do not rerun unchanged, widen deadlines, relax the odd-voter/target-count promotion guard, or revisit surrogate arbitration. Split the explicit REPLACE bootstrap cohort consumer into a linked child Quest and prove that dispatched membership data is closed-world at the target.) [data/examples/service-data-affinity-demo-archive/wave4-live-priority-surrogate-single-owner-arbitration-2026-07-16T07-24-56-083Z.tar.gz]
 - **movielens-priority-surrogate-single-owner-arbitration-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T08-05-44-726Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T08-05-44-726Z.report.json]
+- **movielens-priority-surrogate-single-owner-arbitration-main**: The single-owner surrogate arbitration is engaged in the changed live run: every nonlocal surrogate follows the one declared arbitration owner. That mechanism does not close the milestone because ordinary partition rebalancer owners resume creating priority-partition replacements after prioritySpreadPending becomes continuously false. The next deterministic boundary is the disagreement between canonical cluster-wide spread data and local move eligibility, not another surrogate-arbitration variant. (rules out: Multiple simultaneous surrogate schedulers as the remaining cause; an unchanged live rerun; adding another procedural arbitration path.) [data/examples/service-data-affinity-demo-archive/wave4-live-replace-bootstrap-cohort-authority-2026-07-16T08-05-44-727Z.tar.gz]
 
 ## Theories
 - **theory-20260716-snapshot-declared-surrogate-owner** [falsified] frontier, frontier movielens-priority-surrogate-single-owner-arbitration-main, layer ownership, mechanism snapshot_declared_priority_scheduling_owner, owner priority_recovery_snapshot_owner, boundary priority_recovery_surrogate_arbitration, modelGate npm run model:contracts

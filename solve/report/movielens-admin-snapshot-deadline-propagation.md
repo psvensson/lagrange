@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-colocated-follower-remove-safety
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-admin-snapshot-deadline-propagation-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json
-- Selected theory: theory-20260716-admin-client-propagates-query-deadline (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-admin-snapshot-deadline-propagation-main
-
-## Continuation
-- Status: blocked-theory
-- Next action: record or select a fresh frontier theory for movielens-admin-snapshot-deadline-propagation-main
-- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 2
@@ -40,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-admin-snapshot-deadline-propagation-main** [open] rung 0, attempts 1, metric 1 -> 1
+- **movielens-admin-snapshot-deadline-propagation-main** [parked {exhausted}] rung 0, attempts 1, metric 1 -> 1 — The verified deadline-propagation fix moved the live blocker to per-retry timeout-budget reuse, owned entirely by child movielens-admin-snapshot-retry-deadline-budget
 
 ## Findings
 - **movielens-admin-snapshot-deadline-propagation-main**: inherited from movielens-colocated-follower-remove-safety: inherited from movielens-colocated-follower-replacement-source: inherited from movielens-ready-lease-maintenance-critical-owner-lane: The sealed production symptom reproduces on changed HEAD 7bd3691f: five nodes formed, but schema admission timed out on cache_stale_watermark after the unchanged 60-second stability/evaluation policy. The live report SHA-256 is 0f2a9e1d2ee3e460e3de02f45d1ae4eccd9acd876ab7e5b7e0c854b4c10332e1 and the immutable log archive SHA-256 is 9d781908c1c6d1c2dc997b9c041243ab2a2c7db0d45234215b32b2f11c70c9e8. The critical-lane change was engaged but did not close the lease gap; no unchanged rerun is authorized. (rules out: Do not rerun unchanged or continue by changing only dispatch priority; that intervention was live-engaged and insufficient.) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]
@@ -61,6 +45,10 @@
 - **movielens-admin-snapshot-deadline-propagation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-28-43-609Z.report.json]
 - **movielens-admin-snapshot-deadline-propagation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
 - **movielens-admin-snapshot-deadline-propagation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T04-49-48-746Z.report.json]
+- **movielens-admin-snapshot-deadline-propagation-main**: The single changed live run at checkpoint 9a75c6b2 formed five nodes but the unchanged 180000ms schema gate failed closed on control_plane_pressure. The sealed Lagrange report SHA-256 is 93a6f179d7536694c0e6442c66cd7a059fe2652873ac5c8bfbe41f50b46b44c5, the three-way failure report SHA-256 is 29e2c14dd3825a3ae206737aad2268710e18dd3c31c7abbd71f662ee3c4554a8, and the immutable archive SHA-256 is 4a4dce9b21ac0db860dfca6d797f5a1fc9553c79fd3282982471f5d7f1b2a363. No unchanged rerun is authorized. [data/examples/service-data-affinity-demo-archive/wave4-live-admin-snapshot-deadline-2026-07-16T04-49-48-747Z.tar.gz]
+- **movielens-admin-snapshot-deadline-propagation-main**: The final timed-out client query examples-1784177372670-453c98ff-a6bd-4a5b-85fd-9bcacf7d6468 was created at 04:49:32.670, but node 0 accepted no matching websocket connection after its last snapshot connection at 04:47:47 and its log stopped at 04:47:50.116 while other nodes continued until shutdown. The deadline propagation therefore could not affect that final request; live moved the missing transition from client-to-server budget propagation to seed/admin listener or event-loop liveness. [data/examples/service-data-affinity-demo-archive/wave4-live-admin-snapshot-deadline-2026-07-16T04-49-48-747Z.tar.gz]
+- **movielens-admin-snapshot-deadline-propagation-main**: Correction to the prior no-server-boundary inference: node 0 did not stop at 04:47:50. Its LogsTableService shutdown line was emitted during the harness SIGTERM cleanup at about 04:49:48, while structured JSON behind that line carried older timestamps from a large logger backlog; the node-0 replica_operations authority records an update at 04:48:32. The missing tail therefore cannot prove that the final websocket request was unaccepted. [data/examples/service-data-affinity-demo-archive/wave4-live-admin-snapshot-deadline-2026-07-16T04-49-48-747Z.tar.gz]
+- **movielens-admin-snapshot-deadline-propagation-main**: The downstream deadline violation is explicit in the server route: AdminWebSocketAPI.buildControlSnapshotQueryResult can retry three pressure observations, and every retry passes the original queryTimeoutMs to ControlSnapshot.resolveBoundedLocalControlSnapshot. With the live 15000ms caller budget, each stalled attempt can consume a 7500ms probe deadline plus a 500ms retry delay, so two attempts alone exceed the caller deadline and leave their authoritative resolve promises running. The live archive contains a snapshot lane connection held roughly 24.5 seconds (04:46:47 to 04:47:11), consistent with budget reuse across retries. [src/admin/admin-websocket-diagnostics-route-methods.js]
 
 ## Theories
 - **theory-20260716-admin-client-propagates-query-deadline** [falsified] frontier, frontier movielens-admin-snapshot-deadline-propagation-main, layer ownership, mechanism admin_client_query_deadline_omission, owner examples_admin_ws_client, boundary admin_query_deadline_handoff, modelGate npm run model:contracts

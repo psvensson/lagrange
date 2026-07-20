@@ -11,23 +11,6 @@
 ## Links
 - plan: solve/epics/roadmap-integrity-wave-0.md
 
-## Current Blocker
-- Frontier: cli-static-guideline-ratchet-closure-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
-- Next move: continue supervised step for cli-static-guideline-ratchet-closure-main
-- No longer current: Do not bypass the literal audit or leave the focused test red; use a successor Quest whose scope admits the one focused static-contract test update.
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 0
 - Change bytes: 0

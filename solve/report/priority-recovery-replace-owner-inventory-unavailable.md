@@ -4,31 +4,13 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/priority-recovery-replace-owner-inventory-unavailable-2026-07-15T11-56-10-714Z.report.json
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 5
 
 ## Links
 - spec: solve/quests/managed-partition-merge-live-validation.json
 - parent quest: managed-partition-merge-live-validation
-
-## Current Blocker
-- Frontier: priority-recovery-replace-owner-inventory-unavailable-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/priority-recovery-replace-owner-inventory-unavailable-2026-07-15T11-55-40-703Z.report.json
-- Selected theory: theory-20260715-validation-generated-one-unrelated-timestamp-only (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for priority-recovery-replace-owner-inventory-unavailable-main
-- No longer current: PASS; Do not ship or re-derive the owner-inventory-unavailable exception from the deterministic predicate alone; require a fresh live blocker that remains at this exact owner/boundary under unchanged source before revisiting it.
-
-## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for priority-recovery-replace-owner-inventory-unavailable-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for priority-recovery-replace-owner-inventory-unavailable-main
-- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 11
@@ -46,7 +28,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **priority-recovery-replace-owner-inventory-unavailable-main** [open] rung 5, attempts 5, metric 0 -> 0 — exact terminal source attempt was rejected
+- **priority-recovery-replace-owner-inventory-unavailable-main** [parked {exhausted}] rung 5, attempts 5, metric 0 -> 0 — Sealed replica_inventory_unusable priority-REPLACE symptom does not reproduce on unchanged-source live A/B (priority-recovery-live-ab reverted controls); reopen only on a fresh live blocker at this exact owner/boundary under unchanged source
 
 ## Findings
 - **priority-recovery-replace-owner-inventory-unavailable-main**: DT red-on-revert proven for test/rebalancer/unified-rebalancer.test.js [dt:solve/changes/dt-prove/unified-rebalancer.test.js-2026-07-15T11-41-26-557Z.json]

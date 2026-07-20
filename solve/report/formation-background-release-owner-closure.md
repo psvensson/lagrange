@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-priority-spread-authoritative-publication-closure
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: formation-background-release-owner-closure-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for formation-background-release-owner-closure-main
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for formation-background-release-owner-closure-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 5
@@ -40,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **formation-background-release-owner-closure-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **formation-background-release-owner-closure-main** [parked {exhausted}] rung 1, attempts 1, metric 1 -> 1 — Verified release-owner fence cannot close the live priority-0 gate; the residual is a background-vs-schema competing-clock defect owned by the O3 serial planner, and further release-owner edits are residual-chasing barred by the formation-complexity-consolidation stopping rule
 
 ## Findings
 - **formation-background-release-owner-closure-main**: inherited from formation-priority-spread-authoritative-publication-closure: The final priority operation work terminalizes before the clean placement observation, but the seed continues to report status_syncing for sql_transaction_participants and sql_transactions until 01:35:17.557Z and first enters stabilizing at 01:35:18.146Z. Projecting terminal operations into admission observation could recover only the post-terminal visibility lag and cannot supply the roughly 39,186ms still missing from the sealed 60,000ms window; the safe lever is to execute the unavoidable priority placement work before public all-ACTIVE visibility. (rules out: post-terminal observation projection as the sole budget-closing mechanism) [data/examples/service-data-affinity-demo/node-0.log]
@@ -50,6 +34,7 @@
 - **formation-background-release-owner-closure-main**: Independent verification approves the exact successor artifact: transitive A-to-B/C-to-B aliasing, alias-wide release/rearm, valid object/function owner transfer, missing and primitive owner retention, priority exemption, and actual 70000/10000/1000ms timer application all pass; the five-path delta is exact and protected evidence is unchanged. [subagent:formation_barrier_verifier]
 - **formation-background-release-owner-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
 - **formation-background-release-owner-closure-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
+- **formation-background-release-owner-closure-main**: Fresh live evidence confirms the successor mechanism's target movement: schema admission reached quiescent with stableElapsedMs=63659, zero total/priority spread gap, zero missing leaders, zero in-flight operations, and all 100000 ratings loaded and spread. The remaining FAIL moved downstream to service schema provisioning: an already completed schema-job ADD was later recreated and rejected because authoritative operation confirmation was missing. (rules out: Do not reopen the formation competing-clock or weaken the now-green schema gate; diagnose duplicate schema-operation confirmation ownership downstream.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T02-52-56-530Z.report.json]
 
 ## Theories
 _(none recorded)_

@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,25 +12,9 @@
 - parent quest: rolling-restart-run4-operation-drain
 - plan: solve/epics/topology-convergence-hardening.md
 
-## Current Blocker
-- Frontier: rolling-restart-run4-critical-spread-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: leadership_unstable
-- Mechanism: transition_gap
-- Movement: narrowed: PASS -> leadership_unstable
-- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
-- Selected theory: none
-- Next move: continue supervised step for rolling-restart-run4-critical-spread-main
-- No longer current: PASS; Do not treat stat-gate-20260630T173805Z-run3 as a critical-spread residual after the leadership-quiescence child closure.
-
-## Continuation
-- Status: blocked-theory
-- Next action: run the 15-run consecutive proof for rolling-restart-run4-critical-spread-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
-- Blocker: theory result required when metric is 0 but done is false
-
 ## Scope Pressure
 - Changed files: 2
+- Change bytes: 2748
 - Owner areas: test/distributed/harness, test/distributed/scenarios
 - Categories: runtime
 - Split plan:
@@ -39,7 +23,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-run4-critical-spread-main** [open] rung 1, attempts 1, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-critical-spread-main** [parked {exhausted}] rung 1, attempts 1, metric 3 -> 0 — Sealed critical_system_spread_open residual is resolved and the remaining leadership_unstable shape is delegated to the SOLVED rolling-restart-run4-leadership-quiescence-signature; reopen only if a fresh gate shows critical_system_spread_open for the four critical tables
 
 ## Findings
 - **rolling-restart-run4-critical-spread-main**: Ingested evidence from stat-gate-20260629T232437Z-run1.report.json. Metric: unknown -> 1. Verdict: BLOCK_TOPOLOGY_CONVERGENCE (topology_progress_blocked). Root cause: topology. Dominant reason: critical_system_spread_open. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260629T232437Z-run1.report.json]

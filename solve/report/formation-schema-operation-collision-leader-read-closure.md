@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 6
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-background-release-owner-closure
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: formation-schema-operation-collision-leader-read-closure-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T07-27-39-737Z.report.json
-- Selected theory: theory-20260718-fresh-joining-rows-are-correctly-excluded (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for formation-schema-operation-collision-leader-read-closure-main
-- No longer current: Another collision leader-read patch or unchanged rerun as the next move for this Quest.
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id formation-schema-operation-collision-leader-read-closure --frontier formation-schema-operation-collision-leader-read-closure-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T12-21-27-140Z.report.json
 
 ## Scope Pressure
 - Changed files: 20

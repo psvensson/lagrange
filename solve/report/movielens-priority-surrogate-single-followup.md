@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-admin-snapshot-retry-deadline-budget
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-priority-surrogate-single-followup-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-56-21-774Z.report.json
-- Selected theory: theory-20260716-surrogate-settled-prefix-fanout (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-priority-surrogate-single-followup-main
-
-## Continuation
-- Status: blocked-theory
-- Next action: record or select a fresh frontier theory for movielens-priority-surrogate-single-followup-main
-- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 2
@@ -40,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-priority-surrogate-single-followup-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **movielens-priority-surrogate-single-followup-main** [parked {exhausted}] rung 1, attempts 1, metric 1 -> 1 — Reopen only if a priority-recovery planning pass synthesizes more than one eligible surrogate follow-up, or drops current-entity / lost-wakeup recovery
 
 ## Findings
 - **movielens-priority-surrogate-single-followup-main**: inherited from movielens-admin-snapshot-retry-deadline-budget: inherited from movielens-admin-snapshot-deadline-propagation: inherited from movielens-colocated-follower-remove-safety: inherited from movielens-colocated-follower-replacement-source: inherited from movielens-ready-lease-maintenance-critical-owner-lane: The sealed production symptom reproduces on changed HEAD 7bd3691f: five nodes formed, but schema admission timed out on cache_stale_watermark after the unchanged 60-second stability/evaluation policy. The live report SHA-256 is 0f2a9e1d2ee3e460e3de02f45d1ae4eccd9acd876ab7e5b7e0c854b4c10332e1 and the immutable log archive SHA-256 is 9d781908c1c6d1c2dc997b9c041243ab2a2c7db0d45234215b32b2f11c70c9e8. The critical-lane change was engaged but did not close the lease gap; no unchanged rerun is authorized. (rules out: Do not rerun unchanged or continue by changing only dispatch priority; that intervention was live-engaged and insufficient.) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]

@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 5
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-three-way-affinity-demo
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-ratings-scoped-split-policy-live-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json
-- Selected theory: theory-20260715-the-order-guard-observes-joiner-loop (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-ratings-scoped-split-policy-live-main
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 10
@@ -61,6 +45,8 @@
 - **movielens-ratings-scoped-split-policy-live-main**: Independent verification passed for exact attempt sha256:1856ec62cd52622a07f6861af288db3026666c1785705d30b631d3acf72d09bc: strict joiner expansion < awaited five-node formation < sole stable ratings CREATE < preload < load is proven, the CREATE-between-loop-and-formation mutant fails, deterministic scenario is 9/9, scoped audits are green, literal identities remain 48/48, and all prior typed-owner/atomic-ratings-only guarantees remain intact. [subagent:verify_movielens_attempt3]
 - **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json]
 - **movielens-ratings-scoped-split-policy-live-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T22-12-20-802Z.report.json]
+- **movielens-ratings-scoped-split-policy-live-main**: At checkpoint 4bd85509 the five-node membership-active barrier returned, but the seed log stopped at 22:11:29.475Z while priority-recovery replacement planning was still active. The sole ratings CREATE request began at 22:11:35.775Z, left no admin/schema/ratings record in any node log, and timed out after 45 seconds; peer logs concurrently recorded control-plane pressure and internal query timeouts. waitForActiveNodes therefore proves membership cardinality, not a safe DDL/load-admission boundary. The existing production preload admission owner must establish quiescence before policy-bearing ratings CREATE, whose typed stable confirmation then gates load; do not add a second retry owner or rerun unchanged. (rules out: Treating membership-active cardinality as control-plane quiescence; merely widening the admin timeout; adding a local CREATE retry loop.) [data/examples/service-data-affinity-demo-archive/wave4-live-create-admin-timeout-2026-07-15T22-12-20-802Z.tar.gz]
+- **movielens-ratings-scoped-split-policy-live-main**: The second milestone emitted an honest failed comparison: PostgreSQL completed and cleaned up, while Lagrange stopped before ratings CREATE/preload/load after the seed admin response timeout. [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-15T22-12-20-807Z.report.json]
 
 ## Theories
 - **theory-20260715-runner-ordering-invokes-policy-bearing-ratings** [active] system, mechanism Runner ordering invokes policy-bearing ratings CREATE before joiner expansion; the owner correctly reports requiredReplicaCount=2, resolvedReplicaCount=1, maximumProvisionableReplicaCount=1 forever on that topology., owner MovieLens runner ordering at the durable schema-owner boundary, modelGate npm run model:contracts

@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 3
 
@@ -12,24 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-joining-ready-phase-fence-live
 - plan: solve/epics/formation-complexity-consolidation.md
-
-## Current Blocker
-- Frontier: partition-live-leader-address-routing-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T09-57-45-554Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for partition-live-leader-address-routing-main
-- No longer current: routing fix regression; replacement creation failure; durable SERVICES ACTIVE failure; timeout increase; blind unchanged rerun
-
-## Continuation
-- Status: blocked-theory
-- Next action: record system theory before the next partition-live-leader-address-routing-main attempt using npm run model:contracts as model discriminator
-- Blocker: system theory required for partition-live-leader-address-routing-main
-- Blocker: frontier theory required for partition-live-leader-address-routing-main
 
 ## Scope Pressure
 - Changed files: 4
@@ -42,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **partition-live-leader-address-routing-main** [open] rung 3, attempts 3, metric 1 -> 1
+- **partition-live-leader-address-routing-main** [parked {exhausted}] rung 3, attempts 3, metric 1 -> 1 — Sealed live-leader routing fix landed and verified; the residual live failure is attributed to the executor-outcome ACTIVE terminal-handoff guard (separate owner) per movielens-lagrange-service-affinity-live-2026-07-19T09-57-45-554Z.report.json; reopen only on a fresh live peer-address-resolution participant failure
 
 ## Findings
 - **partition-live-leader-address-routing-main**: Current HEAD reproduces the live mechanism through the real PartitionService leader-change and routed-write path: the Raft transition normalizes a newly elected unified leader to a bare replica ID, then handleRemoteQuery fails in buildPeerAddress when that replica is absent from SERVICES and bootstrap peers; the focused test is red at the exact resolution error while 96 pre-existing assertions remain green. (rules out: replica creation failure; canonical SERVICES persistence failure; raising the live wait; adding a generic bootstrap-hint fallback) [test/partition/partition-service.test.js]

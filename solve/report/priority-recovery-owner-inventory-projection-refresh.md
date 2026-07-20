@@ -11,22 +11,6 @@
 ## Links
 - plan: solve/epics/roadmap-integrity-wave-0.md
 
-## Current Blocker
-- Frontier: priority-recovery-owner-inventory-projection-refresh-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: ownership_gap
-- Movement: first blocker observed: unknown
-- Latest evidence: solve/oracle/priority-recovery-owner-inventory-projection-refresh.json
-- Selected theory: none
-- Next move: continue supervised step for priority-recovery-owner-inventory-projection-refresh-main
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 0
 - Change bytes: 0

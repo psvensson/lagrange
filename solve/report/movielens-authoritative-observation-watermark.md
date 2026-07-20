@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 3
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-incremental-replace-spread-nonregression
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
-
-## Current Blocker
-- Frontier: movielens-authoritative-observation-watermark-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: topology_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T21-10-12-786Z.report.json
-- Selected theory: theory-20260716-nodes-observation-gate-churn-divergence
-- Next move: continue supervised step for movielens-authoritative-observation-watermark-main
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: continue movielens-authoritative-observation-watermark-main with modelRef or modelNotApplicable evidence
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id movielens-authoritative-observation-watermark --frontier movielens-authoritative-observation-watermark-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T21-56-33-815Z.report.json
 
 ## Scope Pressure
 - Changed files: 20
@@ -47,7 +31,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **movielens-authoritative-observation-watermark-main** [open] rung 3, attempts 3, metric 1 -> 1
+- **movielens-authoritative-observation-watermark-main** [parked {exhausted}] rung 3, attempts 3, metric 1 -> 1 — The proven observation-watermark selector is not consumed on the live freshness path; the binding live failure is the nodes-p1 ready-lease/placement circularity owned by formation-liveness-dependency-serial-planner
 
 ## Findings
 - **movielens-authoritative-observation-watermark-main**: DT red-on-revert proven for test/convergence/dt6-authoritative-observation-watermark.test.js [dt:solve/changes/dt-prove/dt6-authoritative-observation-watermark.test.js-2026-07-16T12-37-44-895Z.json]
@@ -76,6 +60,9 @@
 - **movielens-authoritative-observation-watermark-main**: The fresh post-rollback live run failed in the attempt's own fail-closed seam: the nine-table control-snapshot repair failed only on nodes with authoritative_observation_cache_not_reconciled (2 transient attempts in 4 minutes, then schema admission timed out at observation_unavailable). Root mechanism proven deterministically: nodes is continuously heartbeat-mutated, so the cache is causally newer than every authoritative read; the cache's stale guard silently ignores the older authoritative upsert and the exact-equality post-apply verify can then never pass — a permanent wedge unique to churning tables. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T21-10-12-786Z.report.json]
 - **movielens-authoritative-observation-watermark-main**: Causally-explained divergence tolerance implemented and proven: reconcileAuthoritativeCacheRows now skips upserting and excuses verify mismatch only for rows the cache's own causal order (isStaleForExistingRecord: HLC, updated_at, nodes heartbeat watermark) proves newer than the authoritative row; unexplained divergence (silently dropped writes, genuinely stale cache) stays fail-closed. dt6 red-on-revert proven; extended TLA model: fixed spec converges with churn interleaved between read and reconcile, while a new ExactEqualityReconcileGate mutant violates EventuallySchemaAdmitted (the live nodes wedge); mutation-only mutant unchanged. Four admin-websocket suites' mock gateways were updated to speak the receipt contract (missed by the solved admin-contract-fixtures sibling); admin+control-plane+cache+dt6 sweep green except cl-033/cl-034 and dt-priority-recovery-followup-stabilization-phi which fail identically on clean HEAD (verified in a pristine worktree at 0d46d934, 54b672c4, and ebf651ea) and are out of this quest's scope. [dt:solve/changes/dt-prove/dt6-authoritative-observation-watermark.test.js-2026-07-16T21-30-09-628Z.json]
 - **movielens-authoritative-observation-watermark-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T21-56-33-815Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T21-56-33-815Z.report.json]
+- **movielens-authoritative-observation-watermark-main**: Post-fix live witness: the authoritative-observation seam is clean. The unchanged five-node MovieLens live run no longer fails at nodes:authoritative_observation_cache_not_reconciled or cache_stale_watermark; the nine-table control-snapshot repair completed and schema admission progressed to operation_drain_progressing, now blocked by a single residual replica_operations_in_flight=1 — the exact sealed symptom of the movielens-ledger-completion-continuity-discriminator child quest. The scenario remains FAIL overall, but the blocker has left this quest's owner boundary. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T21-56-33-815Z.report.json]
+- **movielens-authoritative-observation-watermark-main**: Independent adversarial verification APPROVED the churn-tolerance attempt: the excusal predicate is exactly the cache's own silent-drop predicate so no new acceptance surface exists (7 adversarial probe cases all blocked, only the two intended causally-newer cases excused); gate-1 key checks and fail-closed paths unchanged; observation publishes read-time only and never touches mutation watermark/cause; dt6 51/51 with red-on-revert artifact confirmed; all three TLC gates met including the new ExactEqualityReconcileGate wedge mutant; seven adjacent suites green at HEAD totals with purely-additive mock contract updates; cl-033/cl-034/phi failures confirmed byte-identical on clean HEAD (out of scope); post-fix live report contains zero authoritative_observation or cache_stale_watermark codes with the blocker moved to replica_operations_in_flight; cache-safety-preserved and unchanged-live-contract constraints verified. [subagent:a2f9759a1b8c82eb6]
+- **movielens-authoritative-observation-watermark-main**: Scope-pressure admission is terminal for this quest by accumulation (cumulative attempt artifacts reach 354092 bytes across 7 owner areas against limits 262144/6), so the verified churn-tolerance source change cannot be recorded here. Per the scope-pressure terminal bound (consolidation routing), the complete watermark + churn-tolerance source change moves to successor quest movielens-observation-watermark-churn-consolidation with this quest's parentQuest lineage; the admin websocket mock receipt-contract updates split to a bounded fixtures follow-up. All measured evidence, the verifier approval (subagent:a2f9759a1b8c82eb6, fingerprint sha256:a513fc5fc8e6dc56b3c3f347ee4b9f0a17d8140191c06aa4591a1795bd350c21), and both live witnesses remain recorded on this quest's log. [solve/changes/movielens-authoritative-observation-watermark/attempt-6.diff]
 
 ## Theories
 - **theory-20260716-noop-authoritative-read-must-advance-freshness** [falsified] system, mechanism Freshness ownership conflated row mutation with authoritative observation across the gateway, cache, and admin preflight; a complete no-op read therefore supplied no admissible fresh evidence., owner control-plane-system-table-gateway, modelGate npm run model:contracts

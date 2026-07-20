@@ -4,7 +4,7 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 0
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/self-hosting-circularity-generic-treatment.md
 - parent quest: partition-class-ladder-census-proof-final
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
-
-## Current Blocker
-- Frontier: partition-class-ladder-owner-contract-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: ownership_gap
-- Movement: first blocker observed: unknown
-- Latest evidence: solve/oracle/partition-class-ladder-owner-contract.json
-- Selected theory: none
-- Next move: continue supervised step for partition-class-ladder-owner-contract-main
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for partition-class-ladder-owner-contract-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 0
@@ -37,11 +21,12 @@
 - Signals: none
 
 ## Frontiers
-- **partition-class-ladder-owner-contract-main** [open] rung 0, attempts 0, metric ? -> 119
+- **partition-class-ladder-owner-contract-main** [parked {exhausted}] rung 0, attempts 0, metric ? -> 119 — Superseded: partition-class-ladder-owner-implementation delivered the sealed owner contract with the shared oracle passing; reopen only if that oracle regresses without another owning quest
 
 ## Findings
 - **partition-class-ladder-owner-contract-main**: Ingested evidence from partition-class-ladder-owner-contract.json. Metric: unknown -> 119. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-owner-contract.json]
 - **partition-class-ladder-owner-contract-main**: Ingested evidence from partition-class-ladder-owner-contract.json. Metric: 119 -> 119. Verdict: unknown. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [solve/oracle/partition-class-ladder-owner-contract.json]
+- **partition-class-ladder-owner-contract-main**: Solver scope enforcement requires the runtime owner, spec, and runtime test to move to a product successor; audit command wiring and bounded oracle remain a separate process concern. [solver:invalid-changeRef-runtime-changes-require-runtime-quest]
 
 ## Theories
 _(none recorded)_

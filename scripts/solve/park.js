@@ -135,6 +135,41 @@ export function assessPark(root, quest, frontierId) {
   };
 }
 
+// Completion path: every frontier is already parked exhausted (typically by
+// the autonomous ladder, whose per-frontier park does not append the
+// quest-level terminal) but the quest still projects OPEN. The operator park
+// then has no open frontier to act on, yet the honest terminal is exactly the
+// quest-level EXHAUSTED event — appended under the same altitude-reflection
+// sanction and falsifiable reason as a frontier park.
+function completeExhaustedTerminal(root, quest, state, args) {
+  const log = readLog(root, quest.id);
+  const reflection = latestAltitudeReflection(log);
+  if (!reflection) {
+    throw new Error(`park refused: ${PARK_ERROR_ALTITUDE_REFLECTION_REQUIRED}`);
+  }
+  const terminalEvidence = parkTerminalEvidence(root, quest, args.evidence);
+  appendEvent(root, quest.id, {
+    type: EVENT_QUEST,
+    status: STATUS_EXHAUSTED,
+    ...terminalEvidence,
+    provenance: PARK_PROVENANCE_OPERATOR,
+    reason: args.reason,
+    sanctionedBy: {
+      type: EVENT_REFLECTION,
+      kind: REFLECTION_KIND_ALTITUDE,
+      ts: reflection.ts || null,
+    },
+  });
+  rebuildState(root, quest);
+  writeReport(root, quest.id);
+  return {
+    questId: quest.id,
+    frontierId: null,
+    event: {sanctionedBy: {ts: reflection.ts || null}, reason: args.reason},
+    questExhausted: true,
+  };
+}
+
 export function parkFrontier(root, args = {}) {
   const id = args.id || args._?.[0];
   if (!id) throw new Error(PARK_ERROR_QUEST_ID_REQUIRED);
@@ -145,6 +180,11 @@ export function parkFrontier(root, args = {}) {
   const state = projectState(quest, readLog(root, id));
   const frontierId = args.frontier || defaultOpenFrontier(state);
   if (!frontierId) {
+    if (state.questStatus === STATUS_OPEN &&
+        state.frontiers.length > 0 &&
+        allFrontiersParkedExhausted(state)) {
+      return completeExhaustedTerminal(root, quest, state, args);
+    }
     throw new Error(PARK_ERROR_FRONTIER_REQUIRED);
   }
   const assessment = assessPark(root, quest, frontierId);
@@ -181,9 +221,13 @@ export function parkFrontier(root, args = {}) {
 
 export function runParkCommand(root, args) {
   const result = parkFrontier(root, args);
-  return [
+  const headline = result.frontierId ?
     `parked ${result.frontierId} on ${result.questId} ` +
-    `(kind: ${PARK_KIND_EXHAUSTED}, provenance: ${PARK_PROVENANCE_OPERATOR})`,
+    `(kind: ${PARK_KIND_EXHAUSTED}, provenance: ${PARK_PROVENANCE_OPERATOR})` :
+    `completed quest-level terminal on ${result.questId} ` +
+    '(every frontier already parked exhausted)';
+  return [
+    headline,
     `sanctioned by altitude reflection at ${result.event.sanctionedBy.ts}`,
     result.questExhausted ?
       `quest ${result.questId} is now EXHAUSTED (every frontier parked exhausted)` :

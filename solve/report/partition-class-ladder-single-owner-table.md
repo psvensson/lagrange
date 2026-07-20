@@ -4,29 +4,12 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/partition-class-ladder-single-owner-table.json
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 7
 
 ## Links
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
-
-## Current Blocker
-- Frontier: partition-class-ladder-single-owner-table-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: ownership_gap
-- Movement: solved: unknown -> unknown
-- Latest evidence: solve/oracle/partition-class-ladder-single-owner-table.json
-- Selected theory: none
-- Next move: continue supervised step for partition-class-ladder-single-owner-table-main
-- No longer current: unknown; Do not terminalize this parent by approving the current aggregate alone, overriding scope pressure, rewriting historical events, or changing runtime source; none repairs legacy_integrity_unverifiable.
-
-## Continuation
-- Status: blocked-scope
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: scope pressure terminal: 10 changed files
 
 ## Scope Pressure
 - Changed files: 10

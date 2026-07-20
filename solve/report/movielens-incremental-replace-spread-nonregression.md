@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 2
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-three-way-affinity-demo
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
-
-## Current Blocker
-- Frontier: movielens-incremental-replace-spread-nonregression-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: narrowed: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for movielens-incremental-replace-spread-nonregression-main
-- No longer current: FAIL
-
-## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for movielens-incremental-replace-spread-nonregression-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for movielens-incremental-replace-spread-nonregression-main
 
 ## Scope Pressure
 - Changed files: 14
@@ -48,7 +31,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **movielens-incremental-replace-spread-nonregression-main** [open] rung 2, attempts 2, metric 1 -> 1
+- **movielens-incremental-replace-spread-nonregression-main** [parked {exhausted}] rung 2, attempts 2, metric 1 -> 1 — Reopen only if a live or deterministic run shows a serialized intermediate REPLACE regressing distinct-node spread below the published floor or losing the voter floor
 
 ## Findings
 - **movielens-incremental-replace-spread-nonregression-main**: DT red-on-revert proven for test/rebalancer/priority-remove-safety-spread-nonregression.test.js [dt:solve/changes/dt-prove/priority-remove-safety-spread-nonregression.test.js-2026-07-16T09-37-10-486Z.json]
@@ -74,6 +57,7 @@
 - **movielens-incremental-replace-spread-nonregression-main**: Correction after immutable full-log inspection: the five post-hold operations did dispatch between 11:44:48 and 11:44:57 and all created target replicas by 11:45:20. The earlier no-dispatch summary was based on creator-side lines only. The stronger root is premature self-move serialization release: dependent creation began 11:44:43 while replica_operations self-move b0b... remained nonterminal until 11:44:51, then every dependent workflow-step write failed against replica_operations. Treat the preceding no-dispatch wording as superseded.
 - **movielens-incremental-replace-spread-nonregression-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
 - **movielens-incremental-replace-spread-nonregression-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
+- **movielens-incremental-replace-spread-nonregression-main**: Changed Wave4 engaged the terminal-hold repair twice: ledger self-move replace-op-691efb46c505c2053b80785456cab438 reached authoritative Operation completed at 12:20:58.605, the next ledger self-move replace-op-e1ef0ada4127812f28bfef5a314c48df reached authoritative Operation completed at 12:21:53.865, and the first dependent batch operation was created only at 12:21:54.081 (216ms later). The sealed run failed earlier than preload on a distinct cache_stale_watermark snapshot-observation blocker with totalSpreadGap=0, so the ledger lifecycle defect did not recur. Report sha256=2f3a3a7faff6afa97d1988b2961e3c4eea0e36383279cde3541bfd5ce95b51fd; immutable archive sha256=7f27943debfd6b59eaa919d35165d7c0ff37c32f4e113dbd8b577cbd1d11d74c. (rules out: Rules out premature terminal-hold release as the blocker in this run; do not widen timeouts or alter the live scenario.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
 
 ## Theories
 _(none recorded)_

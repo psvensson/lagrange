@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 3
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-formation-alive-peer-keepalive-liveness
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-ready-lease-maintenance-critical-owner-lane-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: unknown: unknown -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json
-- Selected theory: theory-20260716-colocated-follower-overclassified-by-leader-node
-- Next move: continue supervised step for movielens-ready-lease-maintenance-critical-owner-lane-main
-- No longer current: unknown; This is not an irreducible elapsed tail: the leader-preservation contract has a deterministic explicit-role counterexample at the move-planner owner seam.; Do not baseline or bypass aggregate scope pressure, widen the current Quest, or retry live without recording the source change in the bounded child.
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: continue supervised step for movielens-ready-lease-maintenance-critical-owner-lane-main
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id movielens-ready-lease-maintenance-critical-owner-lane --frontier movielens-ready-lease-maintenance-critical-owner-lane-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json
 
 ## Scope Pressure
 - Changed files: 0
@@ -38,7 +21,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-ready-lease-maintenance-critical-owner-lane-main** [open] rung 1, attempts 3, metric 1 -> 1
+- **movielens-ready-lease-maintenance-critical-owner-lane-main** [parked {exhausted}] rung 1, attempts 3, metric 1 -> 1 — Reopen only if a live run shows ready-lease maintenance deferred behind steady-heartbeat publication pressure, or missing the critical write lane before acknowledgement
 
 ## Findings
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]

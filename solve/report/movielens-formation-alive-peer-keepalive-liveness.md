@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 6
 
@@ -12,24 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-pre-schema-quiescence-live
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-formation-alive-peer-keepalive-liveness-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: unknown
-- Latest evidence: test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json
-- Selected theory: theory-20260716-ready-lease-maintenance-uses-critical-owner-lane (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-formation-alive-peer-keepalive-liveness-main
-- No longer current: Do not widen the parent attempt stack or claim the parent solved before the linked child proves the production milestone.
-
-## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for movielens-formation-alive-peer-keepalive-liveness-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for movielens-formation-alive-peer-keepalive-liveness-main
-- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 0
@@ -39,7 +21,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-formation-alive-peer-keepalive-liveness-main** [open] rung 3, attempts 6, metric 1 -> 1
+- **movielens-formation-alive-peer-keepalive-liveness-main** [parked {exhausted}] rung 3, attempts 6, metric 1 -> 1 — Reopen only if a live run severs a MessageRouter connection that has fresh parsed inbound from the peer, or retains a genuinely silent half-open peer - the sealed keepalive symptom itself
 
 ## Findings
 - **movielens-formation-alive-peer-keepalive-liveness-main**: inherited from movielens-pre-schema-quiescence-live: inherited from movielens-ratings-scoped-split-policy-live: At checkpoint 4bd85509 the five-node membership-active barrier returned, but the seed log stopped at 22:11:29.475Z while priority-recovery replacement planning was still active. The sole ratings CREATE request began at 22:11:35.775Z, left no admin/schema/ratings record in any node log, and timed out after 45 seconds; peer logs concurrently recorded control-plane pressure and internal query timeouts. waitForActiveNodes therefore proves membership cardinality, not a safe DDL/load-admission boundary. The existing production preload admission owner must establish quiescence before policy-bearing ratings CREATE, whose typed stable confirmation then gates load; do not add a second retry owner or rerun unchanged. (rules out: Treating membership-active cardinality as control-plane quiescence; merely widening the admin timeout; adding a local CREATE retry loop.) [data/examples/service-data-affinity-demo-archive/wave4-live-create-admin-timeout-2026-07-15T22-12-20-802Z.tar.gz]

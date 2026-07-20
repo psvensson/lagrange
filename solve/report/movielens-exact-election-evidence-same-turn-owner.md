@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 2
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-incremental-replace-spread-nonregression
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
-
-## Current Blocker
-- Frontier: movielens-exact-election-evidence-same-turn-owner-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: narrowed: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for movielens-exact-election-evidence-same-turn-owner-main
-- No longer current: FAIL
-
-## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for movielens-exact-election-evidence-same-turn-owner-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for movielens-exact-election-evidence-same-turn-owner-main
 
 ## Scope Pressure
 - Changed files: 4
@@ -41,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-exact-election-evidence-same-turn-owner-main** [open] rung 2, attempts 2, metric 1 -> 1
+- **movielens-exact-election-evidence-same-turn-owner-main** [parked {exhausted}] rung 2, attempts 2, metric 1 -> 1 — The verified same-turn election-evidence fix engaged live; the surviving failure is premature ledger self-move serialization release owned by formation-ledger-self-move-blocks-cluster-ops
 
 ## Findings
 - **movielens-exact-election-evidence-same-turn-owner-main**: On current HEAD aead52ac the archived live failure still binds: exact replacement election COMPLETED evidence is recorded, but continuation waits when the target is routing-ready and another retarget voter exists; after the 5s suppression window candidate retargeting prevents the remove-safety owner from consuming the exact ACK in time. [data/examples/service-data-affinity-demo-archive/wave4-live-incremental-replace-spread-nonregression-2026-07-16T10-00-24-317Z.tar.gz]
@@ -56,6 +39,8 @@
 - **movielens-exact-election-evidence-same-turn-owner-main**: Correction after immutable full-log inspection: the five post-hold operations did dispatch between 11:44:48 and 11:44:57 and all created target replicas by 11:45:20. The earlier no-dispatch summary was based on creator-side lines only. The stronger root is premature self-move serialization release: dependent creation began 11:44:43 while replica_operations self-move b0b... remained nonterminal until 11:44:51, then every dependent workflow-step write failed against replica_operations. Treat the preceding no-dispatch wording as superseded.
 - **movielens-exact-election-evidence-same-turn-owner-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
 - **movielens-exact-election-evidence-same-turn-owner-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
+- **movielens-exact-election-evidence-same-turn-owner-main**: Changed Wave4 engaged the terminal-hold repair twice: ledger self-move replace-op-691efb46c505c2053b80785456cab438 reached authoritative Operation completed at 12:20:58.605, the next ledger self-move replace-op-e1ef0ada4127812f28bfef5a314c48df reached authoritative Operation completed at 12:21:53.865, and the first dependent batch operation was created only at 12:21:54.081 (216ms later). The sealed run failed earlier than preload on a distinct cache_stale_watermark snapshot-observation blocker with totalSpreadGap=0, so the ledger lifecycle defect did not recur. Report sha256=2f3a3a7faff6afa97d1988b2961e3c4eea0e36383279cde3541bfd5ce95b51fd; immutable archive sha256=7f27943debfd6b59eaa919d35165d7c0ff37c32f4e113dbd8b577cbd1d11d74c. (rules out: Rules out premature terminal-hold release as the blocker in this run; do not widen timeouts or alter the live scenario.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T12-23-19-124Z.report.json]
+- **movielens-exact-election-evidence-same-turn-owner-main**: Fresh post-change evidence constrains the exact-election continuation premise: the replacement reached target-side physical leadership while source safety remained replacement_leader_pending, and dispatch errors currently collapse to a null response, so the already-proven same-turn continuation covers observed COMPLETED responses but does not establish continuity when that response is lost or late. Treat response-loss, pre-hydration leader observation, and ledger self-persistence as competing deterministic theories before another runtime attempt. (rules out: Do not duplicate exact-ACK logic or infer completion from transport acknowledgement alone.) [data/examples/service-data-affinity-demo-archive/wave4-live-nodes-priority-recovery-escape-2026-07-16T16-08-27-003Z.tar.gz]
 
 ## Theories
 _(none recorded)_

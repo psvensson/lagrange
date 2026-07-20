@@ -13,22 +13,6 @@
 - parent quest: runtime-replica-state-projection-retained-reconcile
 - plan: solve/epics/topology-convergence-hardening.md
 
-## Current Blocker
-- Frontier: runtime-replica-state-projection-retained-reconcile-integrity-reseal-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T21-22-24-859Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for runtime-replica-state-projection-retained-reconcile-integrity-reseal-main
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 10
 - Change bytes: 52046
@@ -51,6 +35,7 @@
 - **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: The sealed source-operation blocking and lost runtime projection symptom does not reproduce on checkpoint 84263aeb: production composition is green and the symptom returns when the retained queue change is reverted [dt:solve/changes/dt-prove/runtime-replica-state-projection-retained-reconcile.test.js-2026-07-19T18-22-34-232Z.json]
 - **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: The retained projection fix engaged: both runtime services rows are ACTIVE, but the remote ADD remains CREATING because replica-dispatch replay drops non-system CREATING rows before source-owner observed-progress reconciliation [file:solve/changes/runtime-replica-state-projection-retained-reconcile-integrity-reseal/post-live-ordered-gate-boundary-move-2026-07-19.md]
 - **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: independent aggregate verification passed: successor artifact is byte-identical to approved attempt 5, Quest contract is unchanged apart from the expected successor frontier, parent link and declaration match, and no goalpost violations remain [subagent:root/verify_runtime_projection_reconcile]
+- **runtime-replica-state-projection-retained-reconcile-integrity-reseal-main**: The sealed retained-projection loss does not reproduce on checkpoint cc95da34: authoritative services rows for completed schema_operations, sql_transaction_participants, and sql_write_operations operations are present and ACTIVE (apart from the separately failed superseded r5), while the measuring failure is a stale current priority-placement readiness projection after completed replacements. (rules out: Do not modify the retained projection owner for this new blocker or rerun unchanged bytes; pivot to the current priority-placement projection/leader-coverage boundary.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-19T21-22-24-859Z.report.json]
 
 ## Theories
 _(none recorded)_

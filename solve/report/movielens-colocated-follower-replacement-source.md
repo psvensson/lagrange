@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-ready-lease-maintenance-critical-owner-lane
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-colocated-follower-replacement-source-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json
-- Selected theory: theory-20260716-partition-leader-node-id-overclassifies-explicit (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-colocated-follower-replacement-source-main
-- No longer current: Do not tune the schema/stability budgets or retry unchanged; discriminate whether follower selection engaged and why fresh operations were still minted after an earlier steady window.
-
-## Continuation
-- Status: blocked-theory
-- Next action: record or select a fresh frontier theory for movielens-colocated-follower-replacement-source-main
-- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 2
@@ -41,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-colocated-follower-replacement-source-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **movielens-colocated-follower-replacement-source-main** [parked {exhausted}] rung 1, attempts 1, metric 1 -> 1 — The verified follower-source-selection fix exposed a remove-safety node-equality residual owned entirely by child movielens-colocated-follower-remove-safety
 
 ## Findings
 - **movielens-colocated-follower-replacement-source-main**: inherited from movielens-ready-lease-maintenance-critical-owner-lane: The sealed production symptom reproduces on changed HEAD 7bd3691f: five nodes formed, but schema admission timed out on cache_stale_watermark after the unchanged 60-second stability/evaluation policy. The live report SHA-256 is 0f2a9e1d2ee3e460e3de02f45d1ae4eccd9acd876ab7e5b7e0c854b4c10332e1 and the immutable log archive SHA-256 is 9d781908c1c6d1c2dc997b9c041243ab2a2c7db0d45234215b32b2f11c70c9e8. The critical-lane change was engaged but did not close the lease gap; no unchanged rerun is authorized. (rules out: Do not rerun unchanged or continue by changing only dispatch priority; that intervention was live-engaged and insufficient.) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]

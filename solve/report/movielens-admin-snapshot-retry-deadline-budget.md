@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 4
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-admin-snapshot-deadline-propagation
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: movielens-admin-snapshot-retry-deadline-budget-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json
-- Selected theory: theory-20260716-admin-retry-deadline-typed-timeout (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for movielens-admin-snapshot-retry-deadline-budget-main
-
-## Continuation
-- Status: blocked-theory
-- Next action: record and select frontier theory for movielens-admin-snapshot-retry-deadline-budget-main with npm run model:contracts as discriminator
-- Blocker: frontier theory required for movielens-admin-snapshot-retry-deadline-budget-main
-- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
 - Changed files: 2
@@ -41,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **movielens-admin-snapshot-retry-deadline-budget-main** [open] rung 4, attempts 4, metric 1 -> 1
+- **movielens-admin-snapshot-retry-deadline-budget-main** [parked {exhausted}] rung 4, attempts 4, metric 1 -> 1 — The verified absolute retry-budget fix eliminated the admin-timeout signature; the surviving stale-watermark/in-flight residual is owned by the downstream surrogate-followup / create-budget-intent-serialization lineage
 
 ## Findings
 - **movielens-admin-snapshot-retry-deadline-budget-main**: inherited from movielens-admin-snapshot-deadline-propagation: inherited from movielens-colocated-follower-remove-safety: inherited from movielens-colocated-follower-replacement-source: inherited from movielens-ready-lease-maintenance-critical-owner-lane: The sealed production symptom reproduces on changed HEAD 7bd3691f: five nodes formed, but schema admission timed out on cache_stale_watermark after the unchanged 60-second stability/evaluation policy. The live report SHA-256 is 0f2a9e1d2ee3e460e3de02f45d1ae4eccd9acd876ab7e5b7e0c854b4c10332e1 and the immutable log archive SHA-256 is 9d781908c1c6d1c2dc997b9c041243ab2a2c7db0d45234215b32b2f11c70c9e8. The critical-lane change was engaged but did not close the lease gap; no unchanged rerun is authorized. (rules out: Do not rerun unchanged or continue by changing only dispatch priority; that intervention was live-engaged and insufficient.) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-16T02-43-50-868Z.report.json]
@@ -64,6 +47,7 @@
 - **movielens-admin-snapshot-retry-deadline-budget-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json]
 - **movielens-admin-snapshot-retry-deadline-budget-main**: The single changed production run at checkpoint 4d2411d2 formed five nodes and the absolute retry budget fix removed the prior 15000ms response-timeout signature, but the unchanged schema gate returned a fail-closed stale_usable observation until timeout: cache_stale_watermark and stale_replica_operations_in_flight, while critical topology was ready with zero spread gap. Lagrange report sha256 b38b3fbefe46834dc46184e47934f44490793a5b551b3a4f7e8626ced43ee4c5, three-way report sha256 35365d502f35e41b6a2d6b5e9f3a27b8483417ddcdecf330b8035614e2eb2688, immutable archive sha256 1e8ce95cd018af3c0faf443d6b37aa1b159b5d43b77fdffdbc634d8390c4e894. No unchanged live rerun is authorized. [data/examples/service-data-affinity-demo-archive/wave4-live-admin-snapshot-retry-deadline-2026-07-16T05-31-57-709Z.tar.gz]
 - **movielens-admin-snapshot-retry-deadline-budget-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T05-31-57-708Z.report.json]
+- **movielens-admin-snapshot-retry-deadline-budget-main**: The immutable changed-live archive pins the moved blocker upstream of stale snapshot reporting. Node 0 emitted 390 rebalancing executions; 358 targeted a partition different from the emitting rebalancer, all 80 rebalance passes carried 2-6 moves, and the six critical rebalancers each declared operationCreationScope=current_partition for their own entity. The same interval accumulated 19 event-loop gaps (92.253s total, 11.964s max, 79.35% of wall). A replica_operations self-REPLACE target became voter-ready/ACTIVE, but its workflow row stayed PENDING because repeated ledger UPDATEs timed out. Source trace shows buildPriorityRecoverySurrogateFollowUpDecisions returns every eligible decision whenever any earlier candidate is settled, instead of the first eligible surrogate promised by existing tests, amplifying one wake into cross-partition fan-out on every critical owner. [data/examples/service-data-affinity-demo-archive/wave4-live-admin-snapshot-retry-deadline-2026-07-16T05-31-57-709Z.tar.gz]
 
 ## Theories
 - **theory-20260716-the-websocket-retry-owner-created-one** [active] system, mechanism The websocket retry owner created one timeout budget but its terminal no-result branch threw an untyped Error instead of the canonical classified timeout-budget error., owner admin_control_snapshot_retry_owner, modelGate npm run model:contracts

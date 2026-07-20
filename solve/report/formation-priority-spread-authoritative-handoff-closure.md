@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 7
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-priority-spread-without-exclusive-self-move-cost
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: formation-priority-spread-authoritative-handoff-closure-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: theory-20260718-services-composite-owner-terminal-alignment
-- Next move: continue supervised step for formation-priority-spread-authoritative-handoff-closure-main
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 18
@@ -62,6 +46,8 @@
 - **formation-priority-spread-authoritative-handoff-closure-main**: DT red-on-revert proven for test/rebalancer/operation-workflow-active-cache-handoff.test.js [dt:solve/changes/dt-prove/operation-workflow-active-cache-handoff.test.js-2026-07-18T00-35-52-210Z.json]
 - **formation-priority-spread-authoritative-handoff-closure-main**: Independent verification passed attempt 6: exact ACTIVE postcondition, strict complete-row shape validation, lifecycle-owner monotonicity, leader retention, and full-row gateway mode isolation all held under adversarial replay. [subagent:formation_barrier_verifier]
 - **formation-priority-spread-authoritative-handoff-closure-main**: Independent verification rejected attempt 4: it is runtime-identical to rejected attempt 5 apart from indentation and retains both malformed numeric coercion and missing expected-ACTIVE postcondition witnesses. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-handoff-closure-main**: Independent verification passed the post-rejection replacement receipt: descriptor, compressed object, 61,992-byte payload, base preimages, exact current 18-path diff, diff-check, and reverse applicability are byte-identical to approved attempt 6. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-handoff-closure-main**: DT red-on-revert proven for test/convergence/dt6-authoritative-observation-watermark.test.js [dt:solve/changes/dt-prove/dt6-authoritative-observation-watermark.test.js-2026-07-18T00-45-57-878Z.json]
 
 ## Theories
 - **theory-20260718-the-repository-supplies-expected-active-state** [active] system, mechanism The repository supplies expected ACTIVE state to the direct authoritative refresh; CDC accepts only complete shape-valid SERVICES rows, applies monotonic lifecycle reconciliation, and returns true only when the refreshed cache is both owner-aligned and still matches expected ACTIVE., owner replica-operation repository terminal handoff through CDC authoritative cache reconciliation, modelGate npm run model:contracts
@@ -70,7 +56,7 @@
 - **theory-20260718-services-composite-owner-terminal-alignment** [supported] frontier, frontier formation-priority-spread-authoritative-handoff-closure-main, layer ownership, mechanism services_composite_owner_terminal_alignment, owner SystemTableCache_and_operation_workflow_owner, boundary authoritative_SERVICES_lifecycle_to_terminal_operation_release, modelGate npm run model:contracts
 
 ## Selected Theories
-- **formation-priority-spread-authoritative-handoff-closure-main**: theory-20260718-services-composite-owner-terminal-alignment
+- **formation-priority-spread-authoritative-handoff-closure-main**: theory-20260718-complete-authoritative-cache-row-exact-replace
 
 ## Theory Results
 - **theory-20260718-live-leader-identity-and-terminal-services**: supported (scenario=failed, theory=supported, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-17T23-34-41-192Z.report.json]

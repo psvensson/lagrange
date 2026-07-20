@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 7
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: formation-priority-spread-authoritative-handoff-closure
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: formation-priority-spread-authoritative-publication-closure-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-18T01-55-19-235Z.report.json
-- Selected theory: theory-20260718-a-pairwise-readiness-owner-tracker-transfer (stale: selected theory status is falsified)
-- Next move: record or select a fresh frontier theory for formation-priority-spread-authoritative-publication-closure-main
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 14
@@ -76,6 +60,8 @@
 - **formation-priority-spread-authoritative-publication-closure-main**: Existing formation-schedule feasibility evidence supports join-time priority spread without changing the 180000ms budget or 60000ms schema window; the new live competing-clock residual is outside that narrow arithmetic model and is addressed at the background-release owner. [model:models/formation-schedule-feasibility/abstract-protocol.md]
 - **formation-priority-spread-authoritative-publication-closure-main**: Independent verification rejected the first competing-clock patch because a production readiness-owner rebind abandoned the WeakMap-keyed fence and because stabilizing rechecks restarted a full 70000ms delay instead of preserving the already-observed maturity deadline. [subagent:formation_barrier_verifier]
 - **formation-priority-spread-authoritative-publication-closure-main**: Artifact sha256:52d362d7ddecc5719b382231f20b9c732087874157417da4879cc8ee9f9e7461 fails closedness under converging readiness-owner transfers: A-to-B followed by independently active C-to-B splits the prior alias group, allowing A to release while B remains fenced; its requested 1ms recheck is also clamped to the scheduler's actual 1000ms floor. [subagent:formation_barrier_verifier]
+- **formation-priority-spread-authoritative-publication-closure-main**: Attempt 7 focused proof is GREEN with the four source changes, RED when they are reverted in an isolated snapshot, and GREEN after restore. The proof tool warns that the new tracker is absent at HEAD, so this binds the aggregate source package and import/behavior surface; the independent exact-artifact probe remains the authoritative proof of transitive union semantics. [dt:solve/changes/dt-prove/unified-rebalancer.test.js-2026-07-18T02-34-41-331Z.json]
+- **formation-priority-spread-authoritative-publication-closure-main**: Attempt 7 preserves transitive aliases and floor-aware timers, but a truthy primitive controlPlaneReadinessService passes lifecycle truthiness, is assigned after tracker transfer rejects it, and drops the active background fence; production owner rebind must validate state ownership before assignment. [subagent:formation_barrier_verifier]
 
 ## Theories
 - **theory-20260718-formation-quiescence-handoff-order** [active] system, mechanism public_active_and_background_release_are_independent_of_formation_quiescence_handoff, owner join readiness publication owner plus background priority-spread release owner, modelGate npm run model:contracts

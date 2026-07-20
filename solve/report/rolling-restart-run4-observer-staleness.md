@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -14,25 +14,9 @@
 - parent quest: rolling-restart-run4-drain-residual
 - plan: solve/epics/topology-convergence-hardening.md
 
-## Current Blocker
-- Frontier: rolling-restart-run4-observer-staleness-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: leadership_unstable
-- Mechanism: transition_gap
-- Movement: narrowed: convergence_timeout -> leadership_unstable
-- Latest evidence: test-output/reports/stat-gate-20260630T173805Z-run3.report.json
-- Selected theory: theory-20260629-active-gate-observer-staleness-contract
-- Next move: continue supervised step for rolling-restart-run4-observer-staleness-main
-- No longer current: convergence_timeout; Do not treat stat-gate-20260630T173805Z-run3 as an observer-staleness residual after the leadership-quiescence child closure.
-
-## Continuation
-- Status: blocked-theory
-- Next action: run the 3-run consecutive proof for rolling-restart-run4-observer-staleness-main before selecting a new theory; the single-run metric is 0 but the streak is unproven
-- Blocker: theory result required when metric is 0 but done is false
-
 ## Scope Pressure
 - Changed files: 2
+- Change bytes: 13152
 - Owner areas: test/distributed/harness
 - Categories: runtime
 - Split plan:
@@ -40,7 +24,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-run4-observer-staleness-main** [open] rung 1, attempts 1, metric 3 -> 0 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-run4-observer-staleness-main** [parked {exhausted}] rung 1, attempts 1, metric 3 -> 0 — Sealed observer-staleness false-failure family is retired (stat-gate-20260629T222417Z clean) and the residual leadership_unstable is delegated to the SOLVED rolling-restart-run4-leadership-quiescence-signature; reopen only if a live sample re-attributes green readiness/publication to an observer-authority false failure
 
 ## Findings
 - **rolling-restart-run4-observer-staleness-main**: This child Quest splits from parent rolling-restart-run4-drain-residual because the parent frontier is honestly parked/exhausted and refused reopen, while N=15 stat-gate-20260629T200727Z exposed a new observation-layer residual: stale/regressed terminal active/readiness evidence can surface nodeSlotUnavailable, publication visibility, or observer-authority lag after monotonic best progress was already green. Work here must stay below-gate until deterministic retained-report and unit coverage falsifies or supports that observation contract. (rules out: Do not patch the exhausted parent frontier directly. Do not weaken SAFE bars or hide acknowledged-write readback failures; stale observer handling must preserve real missing publication and real ack/readback failures.) [solve/report/rolling-restart-run4-drain-residual.md; test-output/reports/stat-gate-20260629T200727Z.json; subagent:019f1565-448e-7250-9fad-15ab0cb148f2; subagent:019f1565-4550-7842-8899-f39038b26039]

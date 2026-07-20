@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 74
 
@@ -14,26 +14,9 @@
 - closes: CL-001, CL-004, CL-030
 - plan: solve/epics/topology-convergence-hardening.md
 
-## Current Blocker
-- Frontier: rolling-restart-core-stability-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: solved: leadership_unstable -> PASS
-- Latest evidence: test-output/reports/stat-gate-20260630T214238Z-run3.report.json
-- Selected theory: theory-20260618-op-workflow-publication-missing-node-from-join-admin-port-leak
-- Next move: continue supervised step for rolling-restart-core-stability-main
-- Oscillation: blocker "leadership_unstable" revisited 2x (whack-a-mole; change strategy)
-- No longer current: leadership_unstable; Do not claim statistical closure from latest PASS run3; do not collapse the run1 operation-workflow residual and run2 startup/leadership residual into one owner fix.
-
-## Continuation
-- Status: blocked-scope
-- Next action: reduce change scope for rolling-restart-core-stability-main (50 changed files exceed the limit) before the next attempt
-- Blocker: scope pressure terminal: 50 changed files
-
 ## Scope Pressure
 - Changed files: 50
+- Change bytes: 616148
 - Owner areas: src/admin, src/bootstrap, src/control-plane, src/rebalancer, src/transport, test/admin, test/bootstrap, test/control-plane, test/distributed/harness, test/rebalancer, test/transport
 - Categories: runtime, test
 - Action: split by owner area before the next attempt (50 files)
@@ -55,7 +38,7 @@
 - Signal: mixed-runtime-and-harness severity=medium
 
 ## Frontiers
-- **rolling-restart-core-stability-main** [open] rung 1, attempts 74, reopened 13, metric 1 -> 300 — fresh measured evidence no longer satisfies frontier
+- **rolling-restart-core-stability-main** [parked {exhausted}] rung 1, attempts 74, reopened 13, metric 1 -> 300 — Superseded: the rolling-restart live frontier is owned by the run4 child quest family; this parent is scope-blocked at 50 changed files with its last movement on 2026-07-03; reopen only if a rolling-restart failure class emerges that no run4 child owns
 
 ## Findings
 - **rolling-restart-core-stability-main**: Quest probe priority metric is now zero, but doneWhen remains false until three consecutive rolling-restart runs pass. (rules out: Do not claim SOLVED from metric zero without the consecutive doneWhen evidence.) [test-output/reports/rolling-restart-core-stability-after-local-mutation-gate.report.json]
@@ -440,6 +423,7 @@
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260630T214238Z-run3.report.json. Metric: 100 -> 300. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T214238Z-run3.report.json]
 - **rolling-restart-core-stability-main**: Fresh post-ADD-drain-fix N=3 gate stat-gate-20260630T214238Z did not close core stability: 1/3 CONVERGED, 2/3 TOPOLOGY_BLOCKED, staleSourceRuns=0, CORRUPT=0, ORACLE_BLIND=0, NODE_EXIT=0, missingPublishedCount=0 throughout. The latest run3 is PASS, so single-sample distance is green, but the consecutive proof remains done=false and the gate still shows mixed residuals: run1 operation_workflow_owner/workflow_progress, run2 leadership_unstable/startup_active_gate publication_visibility budget exhaustion. Do not spend the N>=15 promotion gate until these post-fix residuals are split or deterministically addressed. (rules out: Do not claim statistical closure from latest PASS run3; do not collapse the run1 operation-workflow residual and run2 startup/leadership residual into one owner fix.) [test-output/reports/stat-gate-20260630T214238Z.md; test-output/reports/stat-gate-20260630T214238Z-run1.report.json; test-output/reports/stat-gate-20260630T214238Z-run2.report.json; test-output/reports/stat-gate-20260630T214238Z-run3.report.json; node scripts/solve.js probe --probe scenario-harness --scenario rolling-restart --reportDir test-output/reports --consecutive 3 --metric priority; node scripts/solve.js probe --probe scenario-harness --scenario rolling-restart --reportDir test-output/reports --metric distance]
 - **rolling-restart-core-stability-main**: Ingested evidence from stat-gate-20260630T214238Z-run3.report.json. Metric: 300 -> 3. Verdict: PASS (scenario_passed). Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/stat-gate-20260630T214238Z-run3.report.json]
+- **rolling-restart-core-stability-main**: DEEP-DIVE 2026-07-03 (2 explore + 1 adversarial-vet subagents): (1) LIMIT-CYCLE FRAMING REFUTED for leadership flap — snapshots.ndjson time-series (untested by the census, which only featurized terminal snapshots) shows front-loaded changes with monotonically growing gaps in every run (decaying settling tail); FAIL runs freeze at a fixed point (2 nodes / max 35 leaderships), never oscillate; flap count/timing ~9-13 in BOTH PASS and FAIL (no separator, extends census verdict to dynamics). (2) NEW MECHANISM DATUM: the drained/restarting node RE-GAINED leadership 7/13 times in the freshest FAIL (stat-gate-20260702T075154Z-run1) — wasted handoff round-trips extending the settle tail. (3) RAFT LAYER HAS ZERO ANTI-DISRUPTION MACHINERY: base liferaft promote() is stock term++ candidacy — no pre-vote, no check-quorum, no lease, no minimum tenure; every anti-flap control lives in the rebalancer layer; requestElectionNow bypasses timeout() entirely (verified liferaft-provider.js:276-281 -> heartbeat(1ms)). (4) VETTED SURVIVING LEVERS: (a) candidacy-reluctance — inflate timeout() 3-5x on a node with an active drain/handoff (finite inflation not suppression, TTL on abort; provably non-interfering with R1/R3 which use the bypassing requestElectionNow path); (b) pre-vote in src/raft/liferaft.js subclass (patchIncomingDataListener seam supports new packet types; DT6 real-raft host + PCT ready). BOTH share one UNVERIFIED PREMISE: the 7/13 re-gains must be SPONTANEOUS timer elections, not deliberate R1/R3 successions — attribution unknown. (5) REFUTED BY VET: C-2-at-ranking-seam (freshest FAILs show ZERO healthy-incumbent eviction post-4700a47b; every REPLACE source is the not-serve-ready node itself) and rejoiner ramp-in (fights gate-validated R1/R3 design) and counter-cyclical adaptive timing (RaftAdaptiveTimingController persists timeouts CLUSTER-WIDE via replicated config — one loaded node would slow everyone). (6) LATENT DEFECTS recorded in passing: SUITABILITY score profile is degenerate (all load terms default-off; ranking = disk-usage tiebreaker + ordinal); leaderChanges is computed and persisted per-run (report-writer.js:823) but surfaced in NO summary/trend path. NEXT MOVE = read-only flap-ATTRIBUTION analyzer over existing snapshots+events corpus (which re-gains were spontaneous vs requestElectionNow-driven) — settles the shared premise for ~a day of work before any raft-layer change; then candidacy-reluctance if spontaneous confirmed (dt:prove red-on-revert on DT6), pre-vote as principled fallback (caveat: raft-logic ^0.3.14 spike adapter already has preVote:true — engine-swap direction would obsolete liferaft pre-vote work).
 
 ## Theories
 - **theory-20260601-rolling-restart-evidence-closure** [active] system, mechanism observation_gap, owner distributed_harness_scenario_owner / rolling_restart_evidence
