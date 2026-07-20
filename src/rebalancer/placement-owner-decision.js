@@ -17,7 +17,10 @@ import {
   PLACEMENT_OWNER_TOPOLOGY_SCORE,
   TOPOLOGY_CONTROL_PLANE_OWNER,
 } from './placement-owner-constants.js';
-import {normalizePlacementOwnerEvidence} from './placement-owner-evidence.js';
+import {
+  normalizePlacementOwnerEvidence,
+  PLACEMENT_OWNER_POLICY_FIELD,
+} from './placement-owner-evidence.js';
 
 const PLACEMENT_OWNER_NO_DOMINANT_GROUP = '';
 
@@ -461,6 +464,68 @@ function buildPlacementOwnerDecision(options = {}) {
   });
 }
 
+// Trigger-side twin of calculateDataAffinityScoreDimensions: the planning gate
+// must OBSERVE affinity suboptimality before any planning round runs, or a
+// count-correct, spread-correct placement can never converge onto its data
+// (the learned-affinity stall of 2026-07-20T12:37). Same gating (the
+// preferDataAffinity constraint plus supplied node weights) and the same
+// hysteresis semantics as the scorer: a challenger node must beat an incumbent
+// by more than the incumbent movement-cost margin, so gradients below the
+// retention margin never trigger a planning round, let alone churn. Reads the
+// raw policy field names because the planner evaluates before placement-owner
+// evidence normalization. Entities without preferDataAffinity return false
+// unconditionally — their evaluation is byte-identical to before.
+function isDataAffinityPlacementSuboptimal(policy, healthyReplicas, readyNodes) {
+  const constraints =
+    policy?.[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS];
+  if (
+    constraints?.[PLACEMENT_OWNER_POLICY_FIELD.PREFER_DATA_AFFINITY] !== true
+  ) {
+    return false;
+  }
+  const nodeWeights =
+    policy?.[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY]?.[
+      PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_NODE_WEIGHTS
+    ] || {};
+  const incumbentNodeIds = new Set(
+    (Array.isArray(healthyReplicas) ? healthyReplicas : [])
+      .map((replica) => replica?.node_id)
+      .filter(Boolean),
+  );
+  if (incumbentNodeIds.size === 0) {
+    return false;
+  }
+  const affinityScoreOf = (nodeId) => {
+    const weight = Number(nodeWeights[nodeId]);
+    return PLACEMENT_OWNER_DATA_AFFINITY_SCORE.NODE_AFFINITY_WEIGHT *
+      (Number.isFinite(weight) && weight > 0 ? weight : 0);
+  };
+  let bestChallengerScore = null;
+  for (const node of Array.isArray(readyNodes) ? readyNodes : []) {
+    const nodeId = node?.node_id;
+    if (!nodeId || incumbentNodeIds.has(nodeId)) {
+      continue;
+    }
+    const score = affinityScoreOf(nodeId);
+    if (bestChallengerScore === null || score > bestChallengerScore) {
+      bestChallengerScore = score;
+    }
+  }
+  if (bestChallengerScore === null || bestChallengerScore <= 0) {
+    return false;
+  }
+  let worstIncumbentScore = null;
+  for (const nodeId of incumbentNodeIds) {
+    const score = affinityScoreOf(nodeId) +
+      PLACEMENT_OWNER_DATA_AFFINITY_SCORE.INCUMBENT_MOVEMENT_COST;
+    if (worstIncumbentScore === null || score < worstIncumbentScore) {
+      worstIncumbentScore = score;
+    }
+  }
+  return bestChallengerScore > worstIncumbentScore;
+}
+
 export {
   buildPlacementOwnerDecision,
+  isDataAffinityPlacementSuboptimal,
 };

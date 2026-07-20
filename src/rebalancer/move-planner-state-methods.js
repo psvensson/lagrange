@@ -115,6 +115,7 @@ function createMovePlannerStateMethods(deps = {}) {
     getNextOddCount,
     getPartitionRowFromCache,
     getPreviousOddCount,
+    isDataAffinityPlacementSuboptimal,
     isOddReplicaCount,
     isReplicaInventoryAddTransitionalOperation,
   } = deps;
@@ -707,6 +708,15 @@ function createMovePlannerStateMethods(deps = {}) {
         if (unusedNodes.length > 0) {
           return true;
         }
+      }
+      // Data-affinity observer (placement-owner-decision owns the scoring):
+      // count and spread being satisfied must not blind the gate to a
+      // placement sitting off its data.
+      if (
+        typeof isDataAffinityPlacementSuboptimal === 'function' &&
+        isDataAffinityPlacementSuboptimal(policy, healthyReplicas, readyNodes)
+      ) {
+        return true;
       }
       return false;
     }

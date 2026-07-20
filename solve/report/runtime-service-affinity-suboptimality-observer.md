@@ -4,29 +4,13 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-41-10-348Z.report.json
 
 **Attempts:** 0
 
 ## Links
 - parent quest: movielens-three-way-affinity-demo
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: runtime-service-affinity-suboptimality-observer-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: theory-20260720-no-affinity-suboptimality-observer (stale: selected theory status is needs-rerun)
-- Next move: record or select a fresh frontier theory for runtime-service-affinity-suboptimality-observer-main
-
-## Continuation
-- Status: blocked-theory
-- Next action: record or select a fresh frontier theory for runtime-service-affinity-suboptimality-observer-main
-- Blocker: selected theory stale: selected theory status is needs-rerun
 
 ## Scope Pressure
 - Changed files: 0
@@ -36,7 +20,7 @@
 - Signals: none
 
 ## Frontiers
-- **runtime-service-affinity-suboptimality-observer-main** [open] rung 0, attempts 0, non-measurements 1, metric ? -> ? — measurement unavailable (retry 1)
+- **runtime-service-affinity-suboptimality-observer-main** [open] rung 0, attempts 0, non-measurements 1, metric ? -> 0 — measurement unavailable (retry 1)
 
 ## Findings
 - **runtime-service-affinity-suboptimality-observer-main**: DT red-on-revert proven for test/rebalancer/runtime-service-affinity-suboptimality-observer.test.js [dt:solve/changes/dt-prove/runtime-service-affinity-suboptimality-observer.test.js-2026-07-20T14-05-08-824Z.json]
@@ -45,13 +29,16 @@
 - **runtime-service-affinity-suboptimality-observer-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
 
 ## Theories
-- **theory-20260720-no-affinity-suboptimality-observer** [needs-rerun] frontier, frontier runtime-service-affinity-suboptimality-observer-main, layer observation, mechanism placement-affinity-suboptimality-is-never-observed-by-the-planning-gate, modelGate npm run model:contracts
+- **theory-20260720-no-affinity-suboptimality-observer** [supported] frontier, frontier runtime-service-affinity-suboptimality-observer-main, layer observation, mechanism placement-affinity-suboptimality-is-never-observed-by-the-planning-gate, modelGate npm run model:contracts
 
 ## Selected Theories
 - **runtime-service-affinity-suboptimality-observer-main**: theory-20260720-no-affinity-suboptimality-observer
 
 ## Theory Results
 - **theory-20260720-no-affinity-suboptimality-observer**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=no_evidence) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json]
+- **theory-20260720-no-affinity-suboptimality-observer**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-10-32-079Z.report.json]
+- **theory-20260720-no-affinity-suboptimality-observer**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-33-44-756Z.report.json]
+- **theory-20260720-no-affinity-suboptimality-observer**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-41-10-348Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

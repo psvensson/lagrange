@@ -24,6 +24,8 @@ import {
   buildPartitionDescriptorEpochDecision,
 } from '../partition/partition-descriptor-epoch-contract.js';
 import {ADJUST_DIRECTION, ReplicaStatus} from './replica-status.js';
+import {isDataAffinityPlacementSuboptimal}
+  from './placement-owner-decision.js';
 import {
   adjustToOddCount,
   getNextOddCount,
@@ -175,6 +177,7 @@ const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
   getNextOddCount,
   getPartitionRowFromCache,
   getPreviousOddCount,
+  isDataAffinityPlacementSuboptimal,
   isOddReplicaCount,
   isReplicaInventoryAddTransitionalOperation,
 });
