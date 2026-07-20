@@ -9,6 +9,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {
   classifyRepetition,
   maxTempFromSensorsJson,
@@ -103,11 +106,47 @@ test('two consecutive hot failures in one slot make the session inconclusive', a
 });
 
 test('a green run counts even when the machine ends hot', async (t) => {
-  t.same(classifyRepetition(0, 95), {green: true, nonMeasuring: false});
+  t.same(classifyRepetition(0, 95),
+    {green: true, nonMeasuring: false, nonMeasuringReason: null});
 });
 
 test('a failed run with unavailable sensors counts red, not non-measuring', async (t) => {
-  t.same(classifyRepetition(1, null), {green: false, nonMeasuring: false});
+  t.same(classifyRepetition(1, null),
+    {green: false, nonMeasuring: false, nonMeasuringReason: null});
+});
+
+// A failed run whose OWN report is stamped with a non-measuring verdict reason
+// (e.g. host_scheduling_gap_budget_exceeded from the event-loop-gap harvest)
+// must re-run like a thermally invalid one, never count as red.
+test('a failed run with a non-measuring report verdict re-runs, not red', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'live-reps-'));
+  const reportPath = join(dir, 'run.report.json');
+  writeFileSync(reportPath, JSON.stringify({
+    standardSummary: {scenarios: [{
+      scenario: 'movielens-lagrange-service-affinity-live',
+      passed: false,
+      current: {
+        passed: false,
+        verdict: 'FAIL',
+        verdictReason: 'host_scheduling_gap_budget_exceeded',
+      },
+    }]},
+  }));
+  const verdict = classifyRepetition(1, 70, [reportPath]);
+  t.equal(verdict.nonMeasuring, true);
+  t.equal(verdict.nonMeasuringReason, 'host_scheduling_gap_budget_exceeded');
+
+  writeFileSync(reportPath, JSON.stringify({
+    standardSummary: {scenarios: [{
+      scenario: 'movielens-lagrange-service-affinity-live',
+      passed: false,
+      current: {passed: false, verdict: 'FAIL'},
+    }]},
+  }));
+  t.same(classifyRepetition(1, 70, [reportPath]),
+    {green: false, nonMeasuring: false, nonMeasuringReason: null},
+    'a measuring FAIL report still counts red');
+  rmSync(dir, {recursive: true, force: true});
 });
 
 test('a source change makes an otherwise green session inconclusive', async (t) => {

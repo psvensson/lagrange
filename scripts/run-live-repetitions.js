@@ -24,8 +24,10 @@
  */
 
 import {execFile, spawn} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {dirname, resolve} from 'node:path';
+import {NON_MEASURING_VERDICT_REASONS} from './solve/constants.js';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 import {
@@ -57,7 +59,6 @@ const LOG_MESSAGE = Object.freeze({
   INCONCLUSIVE:
     'RESULT: INCONCLUSIVE (thermal validity could not be established)',
   RERUN_EXHAUSTED: 'Thermal re-run budget exhausted; session inconclusive.',
-  THERMAL_RERUN: 'non-measuring (thermal); re-running once.',
 });
 
 /** Fixed per-class policy: script path and repetition count. No overrides. */
@@ -183,16 +184,56 @@ export function reportRefFromLine(line) {
 }
 
 /**
+ * A failed run whose own report carries a NON_MEASURING verdict reason (e.g.
+ * host_scheduling_gap_budget_exceeded from the event-loop-gap harvest) did not
+ * measure the system under test; like a thermally invalid run it must re-run,
+ * never count as red.
+ * @param {string[]} reportRefs
+ * @return {string|null}
+ */
+export function reportNonMeasuringReason(reportRefs) {
+  for (const ref of reportRefs || []) {
+    if (!String(ref).endsWith('.report.json')) continue;
+    let data = null;
+    try {
+      data = JSON.parse(readFileSync(ref, 'utf8'));
+    } catch (_error) {
+      continue;
+    }
+    const scenarios = [
+      ...(Array.isArray(data?.standardSummary?.scenarios) ?
+        data.standardSummary.scenarios : []),
+      ...(Array.isArray(data?.scenarios) ? data.scenarios : []),
+    ];
+    for (const entry of scenarios) {
+      const reason = entry?.current?.verdictReason || entry?.verdictReason;
+      if (reason && NON_MEASURING_VERDICT_REASONS.includes(reason)) {
+        return reason;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Classify one finished repetition.
  * @param {number} exitCode
  * @param {number|null} postTempC
- * @return {{green: boolean, nonMeasuring: boolean}}
+ * @param {string[]} [reportRefs]
+ * @return {{green: boolean, nonMeasuring: boolean, nonMeasuringReason: string|null}}
  */
-export function classifyRepetition(exitCode, postTempC) {
+export function classifyRepetition(exitCode, postTempC, reportRefs = []) {
   const green = exitCode === 0;
-  const nonMeasuring =
+  const thermal =
     !green && postTempC !== null && postTempC >= THERMAL_INVALID_C;
-  return {green, nonMeasuring};
+  const reportReason = !green && !thermal ?
+    reportNonMeasuringReason(reportRefs) : null;
+  return {
+    green,
+    nonMeasuring: thermal || reportReason !== null,
+    nonMeasuringReason: thermal ?
+      `post-run ${postTempC}C >= ${THERMAL_INVALID_C}C` : reportReason,
+  };
 }
 
 /**
@@ -284,7 +325,7 @@ async function runSlot(runClass, slot, policy, io, runs) {
     const startedAt = io.now();
     const {exitCode, reportRefs} = await io.execRun();
     const postTempC = await io.readTemp();
-    const verdict = classifyRepetition(exitCode, postTempC);
+    const verdict = classifyRepetition(exitCode, postTempC, reportRefs);
     runs.push({
       slot: slot + 1,
       attempt: attempt + 1,
@@ -294,6 +335,7 @@ async function runSlot(runClass, slot, policy, io, runs) {
       postTempC,
       green: verdict.green,
       nonMeasuring: verdict.nonMeasuring,
+      nonMeasuringReason: verdict.nonMeasuringReason,
       reportRefs,
     });
     if (verdict.green) {
@@ -302,8 +344,8 @@ async function runSlot(runClass, slot, policy, io, runs) {
     if (!verdict.nonMeasuring) {
       return SLOT_OUTCOME.RED;
     }
-    io.log(`Slot ${slot + 1} failed at ${postTempC}C >= ${THERMAL_INVALID_C}C: ` +
-      LOG_MESSAGE.THERMAL_RERUN);
+    io.log(`Slot ${slot + 1} non-measuring ` +
+      `(${verdict.nonMeasuringReason}); re-running once.`);
   }
   io.log(LOG_MESSAGE.RERUN_EXHAUSTED);
   return SLOT_OUTCOME.INCONCLUSIVE;
