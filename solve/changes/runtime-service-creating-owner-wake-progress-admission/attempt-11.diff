@@ -1,0 +1,300 @@
+diff --git a/src/control-plane/replica-dispatch-reconcile-callbacks.js b/src/control-plane/replica-dispatch-reconcile-callbacks.js
+index 199cde7fd0a12e572092d407c3a4e8c1b547dc9b..bf999e90804e1964c72792837f1ce5576ec6ff1b 100644
+--- a/src/control-plane/replica-dispatch-reconcile-callbacks.js
++++ b/src/control-plane/replica-dispatch-reconcile-callbacks.js
+@@ -3,6 +3,10 @@ import {DISPATCH_PENDING_WORKFLOW_STEPS} from '../rebalancer/replica-operation-s
+ import {
+   OPERATION_OWNER_TURN_POLICY,
+ } from '../rebalancer/operation-owner-turn-policy.js';
++import {
++  getWorkflowSteps,
++  isTerminalReplicaOperationRecord,
++} from '../rebalancer/replica-status.js';
+ 
+ const {
+   COLUMN,
+@@ -20,6 +24,72 @@ const READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD = Object.freeze({
+   FORCE_READY_WATERMARK: 'forceReadyWatermark',
+ });
+ 
++const REPLICA_OPERATION_IDENTITY_FIELDS = Object.freeze([
++  'operation_id',
++  'type',
++  'partition_id',
++  'entity_type',
++  'entity_id',
++  'replica_id',
++  'source_node_id',
++  'target_node_id',
++]);
++
++function areCompatibleReplicaOperationRows(left, right) {
++  if (
++    !left?.operation_id ||
++    !right?.operation_id ||
++    left.operation_id !== right.operation_id
++  ) {
++    return false;
++  }
++  return REPLICA_OPERATION_IDENTITY_FIELDS.every((field) => {
++    const leftValue = left[field];
++    const rightValue = right[field];
++    return (
++      leftValue === undefined ||
++      leftValue === null ||
++      rightValue === undefined ||
++      rightValue === null ||
++      leftValue === rightValue
++    );
++  });
++}
++
++function isReplicaOperationRowAhead(candidate, current) {
++  const workflowSteps = getWorkflowSteps(candidate?.type);
++  const candidateRank = workflowSteps.indexOf(candidate?.workflow_step);
++  const currentRank = workflowSteps.indexOf(current?.workflow_step);
++  if (candidateRank !== currentRank) {
++    return candidateRank > currentRank;
++  }
++  const candidateUpdatedAt = Number(candidate?.updated_at);
++  const currentUpdatedAt = Number(current?.updated_at);
++  return (
++    Number.isFinite(candidateUpdatedAt) &&
++    (
++      !Number.isFinite(currentUpdatedAt) ||
++      candidateUpdatedAt > currentUpdatedAt
++    )
++  );
++}
++
++function shouldPreferRuntimeTargetProgressRow(
++  service,
++  refreshedRow,
++  contextRow,
++  context,
++) {
++  return Boolean(
++    refreshedRow &&
++    contextRow &&
++    !isTerminalReplicaOperationRecord(refreshedRow) &&
++    service.isRuntimeTargetProgressWakeOperation(contextRow, context) &&
++    areCompatibleReplicaOperationRows(refreshedRow, contextRow) &&
++    isReplicaOperationRowAhead(contextRow, refreshedRow),
++  );
++}
++
+ /**
+  * Reconcile-queue callbacks and cache-change handlers attached to the dispatch
+  * service prototype. These run with the service instance as `this`, sharing the
+@@ -100,7 +170,16 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
+     ) {
+       return contextRow || await this.getReplicaOperationRow(operationId);
+     }
+-    return (await this.getReplicaOperationRow(operationId)) || contextRow;
++    const refreshedRow = await this.getReplicaOperationRow(operationId);
++    if (shouldPreferRuntimeTargetProgressRow(
++      this,
++      refreshedRow,
++      contextRow,
++      context,
++    )) {
++      return contextRow;
++    }
++    return refreshedRow || contextRow;
+   },
+ 
+   /**
+diff --git a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+index 138bdaa68892e17fee3b6de1105c3f8268daa652..4ecebda946499559861253c4e310292c725e6d81 100644
+--- a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
++++ b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+@@ -14,6 +14,9 @@ import {
+ import {
+   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
+ } from '../../src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js';
++import {
++  REPLICA_DISPATCH_SERVICE_SHARED,
++} from '../../src/control-plane/replica-dispatch-service-shared.js';
+ import {
+   OPERATION_OWNER_TURN_POLICY,
+ } from '../../src/rebalancer/operation-owner-turn-policy.js';
+@@ -35,6 +38,9 @@ const TARGET_NODE_ID = 'node-2';
+ const OPERATION_ID = 'runtime-service-target-progress-wake';
+ const SERVICE_ID = 'svc-movielens-topn';
+ const REPLICA_ID = `${SERVICE_ID}-r2`;
++const {
++  REPLICA_DISPATCH_SERVICE_LITERAL,
++} = REPLICA_DISPATCH_SERVICE_SHARED;
+ 
+ function buildRuntimeCreatingOperationRow(overrides = {}) {
+   return {
+@@ -492,6 +498,169 @@ test(
+   },
+ );
+ 
++test(
++  'marked target progress outranks stale cached PENDING for the same ADD',
++  async (t) => {
++    initEnv();
++
++    const operationId = `${OPERATION_ID}-stale-cached-pending`;
++    const staleCachedRow = buildRuntimeCreatingOperationRow({
++      operation_id: operationId,
++      status: ReplicaStatus.PENDING,
++      workflow_step: WORKFLOW_STEP.PENDING,
++      updated_at: 1700000000000,
++    });
++    const targetProgressRow = buildRuntimeCreatingOperationRow({
++      operation_id: operationId,
++      updated_at: 1700000000500,
++    });
++    const activeServiceRow = {
++      service_id: REPLICA_ID,
++      service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
++      node_id: TARGET_NODE_ID,
++      status: ReplicaStatus.ACTIVE,
++      created_at: 1700000000510,
++      updated_at: 1700000000514,
++    };
++    const sourceCoordinator = createTestCoordinator({
++      nodeId: SOURCE_NODE_ID,
++      cacheData: {
++        services: [activeServiceRow],
++        replicaOperations: [targetProgressRow],
++      },
++      cdcIntegrationService: {
++        async insertSystemTableRow() {
++          return {success: true};
++        },
++        async updateSystemTableRow() {
++          return {success: true};
++        },
++        async refreshAuthoritativeCacheRow() {
++          return true;
++        },
++      },
++      sqlQueryResults: {
++        'FROM services WHERE service_id = ?': {
++          success: true,
++          rows: [activeServiceRow],
++        },
++      },
++    });
++    const sourceDispatch = createService({
++      cdcIntegrationService: {
++        updateSystemTableRow: async () => ({success: true}),
++        upsertSystemTableRow: async () => ({success: true}),
++      },
++      rebalanceCoordinator: sourceCoordinator,
++    });
++    let cachedOperationRow = staleCachedRow;
++    sourceDispatch.replicaOperationsOwner = {
++      async getReplicaOperationFromCache(requestedOperationId) {
++        return requestedOperationId === operationId ?
++          {...cachedOperationRow} :
++          null;
++      },
++    };
++    const markedProgressContext = {
++      row: targetProgressRow,
++      [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
++      [ControlPlaneField.HANDOFF_MODE]:
++        COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++    };
++
++    try {
++      cachedOperationRow = {
++        ...targetProgressRow,
++        status: ReplicaStatus.ACTIVE,
++        workflow_step: WORKFLOW_STEP.ACTIVE,
++        updated_at: 1700000000600,
++      };
++      const selectedTerminalRow =
++        await sourceDispatch.resolveOperationDispatchReconcileRow(
++          operationId,
++          markedProgressContext,
++        );
++      t.equal(
++        selectedTerminalRow?.workflow_step,
++        WORKFLOW_STEP.ACTIVE,
++        'terminal local progress must outrank an older target payload',
++      );
++
++      cachedOperationRow = staleCachedRow;
++      const selectedIncompatibleRow =
++        await sourceDispatch.resolveOperationDispatchReconcileRow(
++          operationId,
++          {
++            ...markedProgressContext,
++            row: {
++              ...targetProgressRow,
++              target_node_id: 'node-3',
++            },
++          },
++        );
++      t.equal(
++        selectedIncompatibleRow?.workflow_step,
++        WORKFLOW_STEP.PENDING,
++        'an incompatible target identity must not replace the local row',
++      );
++      const selectedUnmarkedRow =
++        await sourceDispatch.resolveOperationDispatchReconcileRow(
++          operationId,
++          {
++            ...markedProgressContext,
++            [ControlPlaneField.HANDOFF_MODE]: undefined,
++          },
++        );
++      t.equal(
++        selectedUnmarkedRow?.workflow_step,
++        WORKFLOW_STEP.PENDING,
++        'an ordinary refresh must retain cache-first row selection',
++      );
++      const selectedNonRuntimeRow =
++        await sourceDispatch.resolveOperationDispatchReconcileRow(
++          operationId,
++          {
++            ...markedProgressContext,
++            row: {
++              ...targetProgressRow,
++              entity_type: 'partition',
++            },
++          },
++        );
++      t.equal(
++        selectedNonRuntimeRow?.workflow_step,
++        WORKFLOW_STEP.PENDING,
++        'a marked non-runtime row must remain outside target-progress selection',
++      );
++
++      await sourceDispatch.handleReplicaOperationDispatch({
++        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++        [ControlPlaneField.OPERATION_ID]: operationId,
++        [ControlPlaneField.OPERATION_ROW]: targetProgressRow,
++        [ControlPlaneField.HANDOFF_MODE]:
++          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++      });
++      await drainOperationDispatchQueue(sourceDispatch);
++
++      const completedOperation =
++        await sourceCoordinator.repository.queryOperationById(operationId);
++      t.equal(
++        completedOperation?.workflowStep,
++        WORKFLOW_STEP.ACTIVE,
++        'the advanced target payload should reach exact ACTIVE progress',
++      );
++      t.equal(
++        completedOperation?.status,
++        ReplicaStatus.ACTIVE,
++        'stale cached PENDING must not mask the marked target payload',
++      );
++    } finally {
++      sourceDispatch.stop();
++      await sourceCoordinator.shutdown();
++    }
++  },
++);
++
+ test(
+   'fresh EMPTY runtime ACTIVE retries through SENDING target visibility ' +
+   'and source termination',

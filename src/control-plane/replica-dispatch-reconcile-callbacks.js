@@ -3,6 +3,10 @@ import {DISPATCH_PENDING_WORKFLOW_STEPS} from '../rebalancer/replica-operation-s
 import {
   OPERATION_OWNER_TURN_POLICY,
 } from '../rebalancer/operation-owner-turn-policy.js';
+import {
+  getWorkflowSteps,
+  isTerminalReplicaOperationRecord,
+} from '../rebalancer/replica-status.js';
 
 const {
   COLUMN,
@@ -19,6 +23,75 @@ const {
 const READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD = Object.freeze({
   FORCE_READY_WATERMARK: 'forceReadyWatermark',
 });
+
+const REPLICA_OPERATION_IDENTITY_FIELDS = Object.freeze([
+  'operation_id',
+  'type',
+  'partition_id',
+  'entity_type',
+  'entity_id',
+  'replica_id',
+  'source_node_id',
+  'target_node_id',
+]);
+
+function areCompatibleReplicaOperationRows(left, right) {
+  if (
+    !left?.operation_id ||
+    !right?.operation_id ||
+    left.operation_id !== right.operation_id
+  ) {
+    return false;
+  }
+  return REPLICA_OPERATION_IDENTITY_FIELDS.every((field) => {
+    const leftValue = left[field];
+    const rightValue = right[field];
+    return (
+      leftValue === undefined ||
+      leftValue === null ||
+      rightValue === undefined ||
+      rightValue === null ||
+      leftValue === rightValue
+    );
+  });
+}
+
+function isReplicaOperationRowAhead(candidate, current) {
+  const workflowSteps = getWorkflowSteps(candidate?.type);
+  const candidateRank = workflowSteps.indexOf(candidate?.workflow_step);
+  const currentRank = workflowSteps.indexOf(current?.workflow_step);
+  if (candidateRank < 0 || currentRank < 0) {
+    return false;
+  }
+  if (candidateRank !== currentRank) {
+    return candidateRank > currentRank;
+  }
+  const candidateUpdatedAt = Number(candidate?.updated_at);
+  const currentUpdatedAt = Number(current?.updated_at);
+  return (
+    Number.isFinite(candidateUpdatedAt) &&
+    (
+      !Number.isFinite(currentUpdatedAt) ||
+      candidateUpdatedAt > currentUpdatedAt
+    )
+  );
+}
+
+function shouldPreferRuntimeTargetProgressRow(
+  service,
+  refreshedRow,
+  contextRow,
+  context,
+) {
+  return Boolean(
+    refreshedRow &&
+    contextRow &&
+    !isTerminalReplicaOperationRecord(refreshedRow) &&
+    service.isRuntimeTargetProgressWakeOperation(contextRow, context) &&
+    areCompatibleReplicaOperationRows(refreshedRow, contextRow) &&
+    isReplicaOperationRowAhead(contextRow, refreshedRow),
+  );
+}
 
 /**
  * Reconcile-queue callbacks and cache-change handlers attached to the dispatch
@@ -100,7 +173,16 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
     ) {
       return contextRow || await this.getReplicaOperationRow(operationId);
     }
-    return (await this.getReplicaOperationRow(operationId)) || contextRow;
+    const refreshedRow = await this.getReplicaOperationRow(operationId);
+    if (shouldPreferRuntimeTargetProgressRow(
+      this,
+      refreshedRow,
+      contextRow,
+      context,
+    )) {
+      return contextRow;
+    }
+    return refreshedRow || contextRow;
   },
 
   /**

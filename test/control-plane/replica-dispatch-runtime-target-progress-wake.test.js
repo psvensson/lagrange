@@ -15,6 +15,9 @@ import {
   COORDINATOR_CREATED_REMOTE_HANDOFF_MODE,
 } from '../../src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js';
 import {
+  REPLICA_DISPATCH_SERVICE_SHARED,
+} from '../../src/control-plane/replica-dispatch-service-shared.js';
+import {
   OPERATION_OWNER_TURN_POLICY,
 } from '../../src/rebalancer/operation-owner-turn-policy.js';
 import {
@@ -35,6 +38,9 @@ const TARGET_NODE_ID = 'node-2';
 const OPERATION_ID = 'runtime-service-target-progress-wake';
 const SERVICE_ID = 'svc-movielens-topn';
 const REPLICA_ID = `${SERVICE_ID}-r2`;
+const {
+  REPLICA_DISPATCH_SERVICE_LITERAL,
+} = REPLICA_DISPATCH_SERVICE_SHARED;
 
 function buildRuntimeCreatingOperationRow(overrides = {}) {
   return {
@@ -488,6 +494,185 @@ test(
       );
     } finally {
       service.stop();
+    }
+  },
+);
+
+test(
+  'marked target progress outranks stale cached PENDING for the same ADD',
+  async (t) => {
+    initEnv();
+
+    const operationId = `${OPERATION_ID}-stale-cached-pending`;
+    const staleCachedRow = buildRuntimeCreatingOperationRow({
+      operation_id: operationId,
+      status: ReplicaStatus.PENDING,
+      workflow_step: WORKFLOW_STEP.PENDING,
+      updated_at: 1700000000000,
+    });
+    const targetProgressRow = buildRuntimeCreatingOperationRow({
+      operation_id: operationId,
+      updated_at: 1700000000500,
+    });
+    const activeServiceRow = {
+      service_id: REPLICA_ID,
+      service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+      node_id: TARGET_NODE_ID,
+      status: ReplicaStatus.ACTIVE,
+      created_at: 1700000000510,
+      updated_at: 1700000000514,
+    };
+    const sourceCoordinator = createTestCoordinator({
+      nodeId: SOURCE_NODE_ID,
+      cacheData: {
+        services: [activeServiceRow],
+        replicaOperations: [targetProgressRow],
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+        async updateSystemTableRow() {
+          return {success: true};
+        },
+        async refreshAuthoritativeCacheRow() {
+          return true;
+        },
+      },
+      sqlQueryResults: {
+        'FROM services WHERE service_id = ?': {
+          success: true,
+          rows: [activeServiceRow],
+        },
+      },
+    });
+    const sourceDispatch = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: sourceCoordinator,
+    });
+    let cachedOperationRow = staleCachedRow;
+    sourceDispatch.replicaOperationsOwner = {
+      async getReplicaOperationFromCache(requestedOperationId) {
+        return requestedOperationId === operationId ?
+          {...cachedOperationRow} :
+          null;
+      },
+    };
+    const markedProgressContext = {
+      row: targetProgressRow,
+      [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
+      [ControlPlaneField.HANDOFF_MODE]:
+        COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+    };
+
+    try {
+      cachedOperationRow = {
+        ...targetProgressRow,
+        status: ReplicaStatus.ACTIVE,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
+        updated_at: 1700000000600,
+      };
+      const selectedTerminalRow =
+        await sourceDispatch.resolveOperationDispatchReconcileRow(
+          operationId,
+          markedProgressContext,
+        );
+      t.equal(
+        selectedTerminalRow?.workflow_step,
+        WORKFLOW_STEP.ACTIVE,
+        'terminal local progress must outrank an older target payload',
+      );
+
+      cachedOperationRow = {
+        ...targetProgressRow,
+        workflow_step: 'FUTURE_STEP',
+        updated_at: 1700000000700,
+      };
+      const selectedUnknownStepRow =
+        await sourceDispatch.resolveOperationDispatchReconcileRow(
+          operationId,
+          markedProgressContext,
+        );
+      t.equal(
+        selectedUnknownStepRow?.workflow_step,
+        'FUTURE_STEP',
+        'an unknown refreshed step must fail closed under version skew',
+      );
+
+      cachedOperationRow = staleCachedRow;
+      const selectedIncompatibleRow =
+        await sourceDispatch.resolveOperationDispatchReconcileRow(
+          operationId,
+          {
+            ...markedProgressContext,
+            row: {
+              ...targetProgressRow,
+              target_node_id: 'node-3',
+            },
+          },
+        );
+      t.equal(
+        selectedIncompatibleRow?.workflow_step,
+        WORKFLOW_STEP.PENDING,
+        'an incompatible target identity must not replace the local row',
+      );
+      const selectedUnmarkedRow =
+        await sourceDispatch.resolveOperationDispatchReconcileRow(
+          operationId,
+          {
+            ...markedProgressContext,
+            [ControlPlaneField.HANDOFF_MODE]: undefined,
+          },
+        );
+      t.equal(
+        selectedUnmarkedRow?.workflow_step,
+        WORKFLOW_STEP.PENDING,
+        'an ordinary refresh must retain cache-first row selection',
+      );
+      const selectedNonRuntimeRow =
+        await sourceDispatch.resolveOperationDispatchReconcileRow(
+          operationId,
+          {
+            ...markedProgressContext,
+            row: {
+              ...targetProgressRow,
+              entity_type: 'partition',
+            },
+          },
+        );
+      t.equal(
+        selectedNonRuntimeRow?.workflow_step,
+        WORKFLOW_STEP.PENDING,
+        'a marked non-runtime row must remain outside target-progress selection',
+      );
+
+      await sourceDispatch.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationId,
+        [ControlPlaneField.OPERATION_ROW]: targetProgressRow,
+        [ControlPlaneField.HANDOFF_MODE]:
+          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+      });
+      await drainOperationDispatchQueue(sourceDispatch);
+
+      const completedOperation =
+        await sourceCoordinator.repository.queryOperationById(operationId);
+      t.equal(
+        completedOperation?.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the advanced target payload should reach exact ACTIVE progress',
+      );
+      t.equal(
+        completedOperation?.status,
+        ReplicaStatus.ACTIVE,
+        'stale cached PENDING must not mask the marked target payload',
+      );
+    } finally {
+      sourceDispatch.stop();
+      await sourceCoordinator.shutdown();
     }
   },
 );

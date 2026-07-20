@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 10
+**Attempts:** 12
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -20,8 +20,8 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T05-23-33-693Z.report.json
-- Selected theory: theory-20260720-runtime-active-empty-visibility-skip-before (stale: selected theory status is falsified)
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-23-14-443Z.report.json
+- Selected theory: theory-20260720-known-step-monotone-stale-row-selection (stale: selected theory status is falsified)
 - Next move: record or select a fresh frontier theory for runtime-service-creating-owner-wake-progress-admission-main
 
 ## Continuation
@@ -31,7 +31,7 @@
 
 ## Scope Pressure
 - Changed files: 18
-- Change bytes: 69389
+- Change bytes: 79970
 - Owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Categories: runtime, test
 - Action: split by owner area before the next attempt (18 files)
@@ -46,7 +46,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 10, metric 1 -> 1
+- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 12, metric 1 -> 1
 
 ## Findings
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-19T19-39-35-247Z.json]
@@ -90,16 +90,28 @@
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T05-42-41-153Z.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved attempt 10: fresh EMPTY runtime ACTIVE retains the existing bounded retry, the retry re-reads an independent SENDING target row and emits exactly one canonical source wake, exact-target ACTIVE proof remains mandatory, generic handoff behavior is preserved, and canonical owner/static gates pass with no new retry or workflow authority. [subagent:verify_runtime_progress_attempt7]
 - **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved the exact canonical full-index attempt 10 artifact; it is byte-identical in hunks to the previously approved four-path diff, canonical comparison is exact, and no semantic bytes changed. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Post-attempt independent verification approved exact canonical attempt 10 SHA-256 after Solver receipt; canonical artifact matches the verified four-path full-index Git delta with no semantic or path drift. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent pre-implementation verification rejected deferred-retry HANDOFF_MODE loss as the supported live root cause: it is a real latent defect, but the live run never proves a marked target-outcome reconcile entered that boundary, so preserving the marker alone is not causally sufficient. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: The supported live boundary is stale same-operation row selection: source fetched the PENDING insert but both SENDING and CREATING CDC update fetches missed; cache-first refresh then masks the marked target SENDING/CREATING payload, routes PENDING through ordinary dispatch without HANDOFF_MODE, and never admits the exact-ACTIVE source progress lane. Existing timeout reconciliation already requires the more advanced compatible fallback to outrank stale PENDING. (rules out: Do not change target handoff timeout, operation budget, concurrency, generic CREATING replay, or the deferred-retry registry in this attempt.) [file:solve/changes/runtime-service-creating-owner-wake-progress-admission/post-attempt-10-live-stale-pending-row-selection-2026-07-20.md]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T06-49-14-676Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification rejected attempt 11 because an unknown newer refreshed workflow step ranked below known CREATING, permitting rollback under version skew; both workflow ranks must be recognized and the unknown refreshed step must remain authoritative. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T07-06-38-602Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved replacement attempt 12: known-step monotone selection closes stale PENDING masking, unknown/future steps fail closed, terminal and identity precedence hold, and replay/transport/red-on-revert gates pass. [subagent:verify_runtime_progress_attempt7]
 
 ## Theories
 - **theory-20260720-ownerkeyreconcilequeue-context-is-last-writer-wins** [active] system, mechanism OwnerKeyReconcileQueue context is last-writer-wins. ReplicaDispatchService must merge target_executor_outcome as monotone stronger evidence before enqueue while refreshing the row authoritatively, and runtime completion must use only exact replica_id plus target_node_id observation., owner source replica-dispatch operation owner queue and operation-workflow exact-target observation lane, modelGate npm run model:contracts
 - **theory-20260720-runtime-active-empty-visibility-skip-before** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism runtime-active-empty-visibility-skip-before-remote-owner-handoff, owner operation_workflow_owner, boundary executor_outcome_visibility_to_remote_owner_handoff, modelGate npm run model:contracts
+- **theory-20260720-stale-pending-masks-target-progress** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer observation, mechanism stale-cache-row-masks-advanced-target-progress-payload, owner replica-dispatch-service, boundary operation-dispatch-reconcile-row-selection, modelGate npm run model:contracts
+- **theory-20260720-known-step-monotone-stale-row-selection** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer observation, mechanism known-step-monotone-stale-row-selection, owner replica-dispatch-service, boundary operation-dispatch-reconcile-row-selection, modelGate npm run model:contracts
 
 ## Selected Theories
-- **runtime-service-creating-owner-wake-progress-admission-main**: theory-20260720-runtime-active-empty-visibility-skip-before
+- **runtime-service-creating-owner-wake-progress-admission-main**: theory-20260720-known-step-monotone-stale-row-selection
 
 ## Theory Results
 - **theory-20260720-runtime-active-empty-visibility-skip-before**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T05-23-33-693Z.report.json]
+- **theory-20260720-runtime-active-empty-visibility-skip-before**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-23-14-443Z.report.json]
+- **theory-20260720-stale-pending-masks-target-progress**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-23-14-443Z.report.json]
+- **theory-20260720-known-step-monotone-stale-row-selection**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-23-14-443Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -114,3 +126,5 @@
 | 2026-07-20T04:54:37.629Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-8.diff |
 | 2026-07-20T05:02:21.621Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-9.diff |
 | 2026-07-20T05:52:27.400Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same | theory-20260720-runtime-active-empty-visibility-skip-before | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-10.diff |
+| 2026-07-20T06:54:40.436Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same | theory-20260720-stale-pending-masks-target-progress | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-11.diff |
+| 2026-07-20T07:07:45.304Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same | theory-20260720-known-step-monotone-stale-row-selection | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-12.diff |
