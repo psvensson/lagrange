@@ -13,23 +13,6 @@
 - parent quest: movielens-authoritative-observation-watermark
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
 
-## Current Blocker
-- Frontier: movielens-observation-watermark-churn-consolidation-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: unknown: PASS -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for movielens-observation-watermark-churn-consolidation-main
-- No longer current: PASS; Model coverage is not missing: companion counterexamples are test-output/reports/authoritative-observation-watermark-exact-equality.model.report.json and test-output/reports/authoritative-observation-watermark-mutation-only.model.report.json.
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 21
 - Change bytes: 125524
@@ -59,6 +42,7 @@
 - **movielens-observation-watermark-churn-consolidation-main**: Fresh July 20 TLC evidence binds the model surface: the fixed authoritative-observation composition converges with eventual schema admission over the complete state space, while the exact-equality and mutation-only configurations each observe their expected EventuallySchemaAdmitted counterexample. (rules out: Model coverage is not missing: companion counterexamples are test-output/reports/authoritative-observation-watermark-exact-equality.model.report.json and test-output/reports/authoritative-observation-watermark-mutation-only.model.report.json.) [test-output/reports/authoritative-observation-watermark-fixed.model.report.json]
 - **movielens-observation-watermark-churn-consolidation-main**: Independent aggregate verification passed: fail-closed cache reconciliation and receipt integrity, causal-supersession narrowness, admission-window binding, fixed and mutant TLC expectations, DT coverage, unchanged live evidence, and exact 21-path aggregate scope were all rechecked. [subagent:verify_observation_aggregate]
 - **movielens-observation-watermark-churn-consolidation-main**: The live cache_stale_watermark symptom recurs intermittently on current HEAD after formation and operation drain have converged, despite the bounded causal-order change and its deterministic/model proofs; the recurrence therefore survives this Quest's patch frame and requires the already-drafted structural per-table version/CAS discriminator. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json]
+- **movielens-observation-watermark-churn-consolidation-main**: Independent aggregate verification approved the exact current 21-path watermark/reconciliation delta: only cache-proven causally newer rows are excused, incomplete or silent-drop paths remain fail-closed, mutation and authoritative observation evidence remain distinct, DT6 passes 91 assertions with red-on-revert, and the fixed/mutant TLC expectations hold. The July 20 stale-watermark recurrence is a distinct expired ready-lease attribution gap. [subagent:watermark_aggregate_verify]
 
 ## Theories
 _(none recorded)_
