@@ -663,20 +663,9 @@ class UnifiedRebalancerPriorityReadinessMethods {
 
   // Non-priority system work waits for published convergence.
   shouldRequirePublishedConvergenceBeforeBackgroundMutation() {
-    const formationDependencyHasFailedMembership =
-      this.isFormationLivenessDependencyPartition() &&
-      readAllSharedRows(this.systemTableCache, TABLES.NODES).some(
-        (nodeRow) =>
-          String(nodeRow?.status || '').trim().toLowerCase() === 'failed',
-      );
-    const formationDependencyMayUseRecoveryEvidence =
-      this.isFormationLivenessDependencyPartition() &&
-      !formationDependencyHasFailedMembership;
-    return (
-      this.isSystemPartitionEntity() &&
+    return this.isSystemPartitionEntity() &&
       !this.isControlPlanePriorityPartition() &&
-      !formationDependencyMayUseRecoveryEvidence
-    );
+      !this.formationDependencyMayUseRecoveryEvidence();
   }
 
   // Return the local mutation-readiness blocker, if any.

@@ -1,5 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+import {readAllSharedRows} from '../cache/shared-row-read.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -144,6 +145,35 @@ class UnifiedRebalancerControlPlaneReadinessMethods {
       partitionId: this.entityId,
       partitionRow,
     }).formationLivenessDependency;
+  }
+
+  /**
+   * Priority control-plane partitions and the formation-liveness dependency
+   * share the recovery evidence lane.
+   * @return {boolean}
+   */
+  isRecoveryLanePartition() {
+    return (
+      this.isControlPlanePriorityPartition() ||
+      this.isFormationLivenessDependencyPartition()
+    );
+  }
+
+  /**
+   * The formation-liveness dependency may run on recovery evidence only while
+   * no member node is durably failed; a failed member forces the
+   * published-convergence wait like any ordinary system partition.
+   * @return {boolean}
+   */
+  formationDependencyMayUseRecoveryEvidence() {
+    if (!this.isFormationLivenessDependencyPartition()) {
+      return false;
+    }
+    return !readAllSharedRows(
+      this.systemTableCache,
+      SYSTEM_TABLE_NAME.NODES,
+    ).some((nodeRow) =>
+      String(nodeRow?.status || '').trim().toLowerCase() === 'failed');
   }
 
   /**
