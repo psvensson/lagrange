@@ -137,6 +137,11 @@ const SCENARIOS = {
   'join-retry-patience-selectable': [
     'test/bootstrap/join-retry-patience-selectable.test.js',
   ],
+  'join-retry-resume-lifecycle-finalization': [
+    'test/bootstrap/node-joining-service-join-lifecycle-resume.test.js',
+    'test/node/node-service.test.js',
+    'test/control-plane/heartbeat-joining-fence-preservation.test.js',
+  ],
   'split-snapshot-transfer-pacing': [
     'test/partition/split-backfill-internal-pacing.test.js',
     'test/partition/partition-split-routing.test.js',
