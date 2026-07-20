@@ -192,3 +192,35 @@ test('app-owned gap time does not invalidate; unexplained time does', async (t) 
   fs.rmSync(dir, {recursive: true, force: true});
   t.end();
 });
+
+// Mirror of the runner's thermal rule ('a green run counts even when the
+// machine ends hot'): a PASSED demo is never invalidated by the gap budget —
+// converging despite adverse scheduling is stronger evidence, not weaker.
+test('a passed run over the gap budget stays measuring', (t) => {
+  const report = buildAffinityDemoLiveReport({
+    timestamp: TIMESTAMP,
+    result: {converged: true},
+    phaseEvidence: {hostScheduling: {
+      perNode: [{nodeId: 'node-0', gapCount: 73, totalGapMs: 138665,
+        maxGapMs: 13167, unexplainedTotalMs: 116955,
+        unexplainedMaxGapMs: 13167, blockedPercentOfLogSpan: 24.9}],
+      exceeded: true,
+      budget: {maxSingleGapMs: 10000, maxTotalGapMs: 60000,
+        maxBlockedPercent: 20},
+    }},
+  });
+  const entry = report.standardSummary.scenarios[0];
+  t.equal(entry.passed, true);
+  t.equal(entry.current.verdictReason, undefined,
+    'no non-measuring stamp on a pass');
+  t.ok(entry.detail.hostScheduling.exceeded,
+    'the harvested evidence stays recorded for attribution');
+
+  const dir = tmpDir();
+  const file = path.join(dir, 'run.report.json');
+  fs.writeFileSync(file, JSON.stringify(report));
+  t.equal(reportSampleIsNonMeasuring(file, {scenario: LIVE_SCENARIO}), false,
+    'the Solver probe counts the pass');
+  fs.rmSync(dir, {recursive: true, force: true});
+  t.end();
+});
