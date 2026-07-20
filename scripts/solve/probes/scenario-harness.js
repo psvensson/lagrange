@@ -22,6 +22,10 @@ const METRIC_PRIORITY = 'priority';
 const METRIC_FAILED = 'failed';
 const METRIC_DISTANCE = 'distance';
 const DEFAULT_CONSECUTIVE = 1;
+// How many extra runs beyond `consecutive` the done-check may scan while
+// skipping non-measuring samples. Bounded so a long tail of invalid runs still
+// reads as "not done" instead of an unbounded directory walk.
+const NON_MEASURING_SKIP_BUFFER = 6;
 const DISTANCE_PRIORITY_WEIGHT = 100;
 const DISTANCE_SPREAD_WEIGHT = 5;
 const DISTANCE_STAGE_WEIGHT = 10;
@@ -278,8 +282,11 @@ export function distanceMetricFromReport(data, scenario, opts = {}) {
 function cleanStreak(runs, scenario, metricKind) {
   let streak = 0;
   for (const run of runs) {
-    if (!isInvalidMetricSample(run.data, scenario, metricKind) &&
-      scenarioPassed(run.data, scenario)) {
+    if (isInvalidMetricSample(run.data, scenario, metricKind)) {
+      // Non-measuring counts neither for nor against the streak.
+      continue;
+    }
+    if (scenarioPassed(run.data, scenario)) {
       streak += 1;
     } else {
       break;
@@ -319,7 +326,15 @@ export const scenarioHarnessProbe = {
     const consecutive = Number(args.consecutive) || DEFAULT_CONSECUTIVE;
     const metricKind = args.metric === METRIC_FAILED ? METRIC_FAILED :
       args.metric === METRIC_DISTANCE ? METRIC_DISTANCE : METRIC_PRIORITY;
-    const runs = listRuns(dir, scenario, consecutive);
+    // Fetch a bounded buffer beyond `consecutive` so non-measuring runs inside
+    // the window can be SKIPPED rather than break the streak: the gate
+    // semantics (epic: "thermally invalid runs count as non-measuring, not
+    // red") are `consecutive` MEASURING passes — an invalid sample counts
+    // neither for nor against, exactly as the live-repetitions runner treats
+    // its re-run slots.
+    const runs = listRuns(
+      dir, scenario, consecutive + NON_MEASURING_SKIP_BUFFER,
+    );
     if (runs.length === 0) {
       return {
         metric: null,
@@ -330,14 +345,12 @@ export const scenarioHarnessProbe = {
       };
     }
     const latest = runs[0];
-    const recent = runs.slice(0, consecutive);
-    // done requires each counted run to BOTH measure and pass: a blocked/incomplete
-    // run inside the window breaks the consecutive streak instead of masquerading as
-    // a pass-adjacent zero.
-    const done = recent.length >= consecutive &&
-      recent.every((r) =>
-        !isInvalidMetricSample(r.data, scenario, metricKind) &&
-          scenarioPassed(r.data, scenario));
+    const measuring = runs.filter(
+      (r) => !isInvalidMetricSample(r.data, scenario, metricKind),
+    );
+    const recentMeasuring = measuring.slice(0, consecutive);
+    const done = recentMeasuring.length >= consecutive &&
+      recentMeasuring.every((r) => scenarioPassed(r.data, scenario));
     let rawMetric;
     if (metricKind === METRIC_DISTANCE) {
       const streak = cleanStreak(runs, scenario, METRIC_PRIORITY);

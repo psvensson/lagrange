@@ -274,3 +274,47 @@ tap.test('scenario-harness surfaces an unexpected node exit as a distinct signal
   });
   t.end();
 });
+
+// Gate semantics: `consecutive` MEASURING passes — a non-measuring run inside
+// the window is skipped (counts neither way), exactly as the live-repetitions
+// runner treats its re-run slots and the epic defines thermally invalid runs.
+tap.test('non-measuring runs are skipped by the consecutive window', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-skip-'));
+  const SC = 'skip-window';
+  function writeRun(name, ts, passed, nonMeasuring) {
+    fs.writeFileSync(path.join(dir, `${name}.report.json`), JSON.stringify({
+      timestamp: ts,
+      summary: {total: 1, passed: passed ? 1 : 0, failed: passed ? 0 : 1},
+      optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
+      scenarios: [{
+        scenario: SC,
+        passed,
+        current: {
+          passed,
+          verdict: passed ? 'PASS' : 'FAIL',
+          ...(nonMeasuring ?
+            {verdictReason: 'host_scheduling_gap_budget_exceeded'} : {}),
+        },
+      }],
+    }));
+  }
+  // Newest-first ordering by timestamp: pass, pass, INVALID, pass.
+  writeRun('a', '2026-07-20T15:41:00Z', true, false);
+  writeRun('b', '2026-07-20T15:33:00Z', true, false);
+  writeRun('c', '2026-07-20T15:25:00Z', false, true);
+  writeRun('d', '2026-07-20T15:10:00Z', true, false);
+  const done3 = scenarioHarnessProbe.measure({
+    reportDir: dir, scenario: SC, consecutive: 3, metric: 'priority',
+  });
+  t.equal(done3.done, true,
+    'three measuring passes with one skipped invalid inside the window');
+
+  // A measuring FAIL inside the window still breaks the streak.
+  writeRun('c', '2026-07-20T15:25:00Z', false, false);
+  const withFail = scenarioHarnessProbe.measure({
+    reportDir: dir, scenario: SC, consecutive: 3, metric: 'priority',
+  });
+  t.equal(withFail.done, false, 'a measuring red is never skipped');
+  fs.rmSync(dir, {recursive: true, force: true});
+  t.end();
+});
