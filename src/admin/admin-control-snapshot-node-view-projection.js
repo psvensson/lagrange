@@ -87,6 +87,23 @@ const CONTROL_SNAPSHOT_ACTIVE_GATE_BUDGET_STATE = Object.freeze({
   AVAILABLE: 'available',
   UNAVAILABLE: 'unavailable',
 });
+function attachReadyLeaseAgeWitness(
+  snapshot,
+  controlPlaneDiagnostics,
+  readyLeaseAgeWitness,
+) {
+  if (
+    !snapshot ||
+    !controlPlaneDiagnostics ||
+    typeof controlPlaneDiagnostics !== 'object'
+  ) {
+    return;
+  }
+  snapshot.controlPlaneDiagnostics = {
+    ...controlPlaneDiagnostics,
+    readyLeaseAgeWitness,
+  };
+}
 function normalizeControlSnapshotNodeIdList(values = ADMIN_CACHE_DUMP.EMPTY) {
   return uniqueSorted(
     (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
@@ -743,11 +760,18 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
           controlPlaneDiagnostics?.currentPriorityPlacementObservation,
         nowMs: capturedAt,
       });
-    const evaluation = evaluateAuthoritativeRepairPolicy({
-      cacheStaleWatermark: this.resolveControlSnapshotCacheStaleWatermark(
+    const readyLeaseFreshness =
+      this.resolveControlSnapshotCacheStaleWatermark(
         nodeRows,
         capturedAt,
-      ),
+      );
+    attachReadyLeaseAgeWitness(
+      snapshot,
+      controlPlaneDiagnostics,
+      readyLeaseFreshness.readyLeaseAgeWitness,
+    );
+    const evaluation = evaluateAuthoritativeRepairPolicy({
+      cacheStaleWatermark: readyLeaseFreshness.cacheStaleWatermark,
       nodeCoverageGap:
         nodeCoverage.hasCoverageGap ||
         connectedNodeCoverage.hasCoverageGap ||

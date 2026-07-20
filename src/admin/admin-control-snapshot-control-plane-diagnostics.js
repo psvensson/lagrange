@@ -11,6 +11,7 @@
  * admin-helpers.js.
  */
 import {COLUMN, TABLES} from '../constants/index.js';
+import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {
   ADMIN_CACHE_DUMP,
@@ -46,6 +47,7 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   RAFTROLE: 'raftRole',
   STATUS: 'status',
   ADDRESS: 'address',
+  UNKNOWN: 'unknown',
 });
 const STATUS_ACTIVE = 'active';
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
@@ -58,6 +60,173 @@ const CONTROL_SNAPSHOT_PUBLICATION_READER_AVAILABLE_FIELD =
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS = Object.freeze({
   allowOwnerLaneRetry: true,
 });
+const READY_LEASE_AGE_WITNESS_SCHEMA_VERSION = 1;
+const READY_LEASE_AGE_WITNESS_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
+const READY_LEASE_AGE_WITNESS_FIELD = Object.freeze({
+  AT_MS: 'atMs',
+  EXPIRES_AT_MS: 'expiresAtMs',
+});
+const READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON = Object.freeze({
+  CDC_OBSERVED_AT: 'cdc_observed_at_unavailable',
+  CDC_ORIGIN_HLC_MISMATCH: 'cdc_origin_hlc_mismatch',
+  LAST_HEARTBEAT: 'last_heartbeat_unavailable',
+  NO_STALE_ACTIVE_NODE: 'no_stale_active_node',
+  PER_KEY_CDC_OBSERVATION: 'per_key_cdc_observation_unavailable',
+  READY_LEASE_EXPIRY: 'ready_lease_expiry_unavailable',
+  ROW_ORIGIN_HLC: 'row_origin_hlc_unavailable',
+});
+
+function parseControlSnapshotTimestampMs(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.floor(parsed) : null;
+}
+
+function buildReadyLeaseTimestampEvidence(
+  value,
+  observedAtMs,
+  fieldName,
+  unavailableReason,
+) {
+  const atMs = parseControlSnapshotTimestampMs(value);
+  if (!Number.isFinite(atMs)) {
+    return Object.freeze({
+      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
+      reason: unavailableReason,
+    });
+  }
+  return Object.freeze({
+    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
+    [fieldName]: atMs,
+    ageMs: observedAtMs - atMs,
+  });
+}
+
+function buildReadyLeaseOwnerWriteEvidence(nodeRow, observedAtMs) {
+  const originHlc = firstStringField(
+    nodeRow,
+    COLUMN.UPDATED_AT_HLC,
+    'updatedAtHlc',
+  );
+  const timestamp = HLCTimestamp.tryFromString(originHlc);
+  if (!timestamp) {
+    return Object.freeze({
+      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
+      reason: READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.ROW_ORIGIN_HLC,
+    });
+  }
+  return Object.freeze({
+    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
+    originHlc,
+    atMs: timestamp.physical,
+    ageMs: observedAtMs - timestamp.physical,
+  });
+}
+
+function buildReadyLeaseCdcObservationEvidence(
+  systemTableCache,
+  nodeId,
+  ownerWrite,
+  observedAtMs,
+) {
+  const observation =
+    typeof systemTableCache?.getLastCdcObservation === 'function' ?
+      systemTableCache.getLastCdcObservation(TABLES.NODES, nodeId) :
+      null;
+  if (!observation) {
+    return Object.freeze({
+      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
+      reason:
+        READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.PER_KEY_CDC_OBSERVATION,
+    });
+  }
+  if (
+    ownerWrite.state !== READY_LEASE_AGE_WITNESS_STATE.AVAILABLE ||
+    observation.originHlc !== ownerWrite.originHlc
+  ) {
+    return Object.freeze({
+      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
+      reason:
+        READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.CDC_ORIGIN_HLC_MISMATCH,
+    });
+  }
+  const cdcObservedAtMs = parseControlSnapshotTimestampMs(
+    observation.observedAtMs,
+  );
+  if (!Number.isFinite(cdcObservedAtMs)) {
+    return Object.freeze({
+      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
+      reason: READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.CDC_OBSERVED_AT,
+    });
+  }
+  return Object.freeze({
+    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
+    originHlc: observation.originHlc,
+    observedAtMs: cdcObservedAtMs,
+    ageMs: observedAtMs - cdcObservedAtMs,
+    ownerToCdcDelayMs: cdcObservedAtMs - ownerWrite.atMs,
+  });
+}
+
+function buildReadyLeaseAgeWitness(
+  systemTableCache,
+  nodeRow,
+  observedAtMs,
+  status,
+  connectionState,
+) {
+  const nodeId = firstStringField(
+    nodeRow,
+    COLUMN.NODE_ID,
+    'nodeId',
+    'id',
+  ) || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN;
+  const ownerWrite = buildReadyLeaseOwnerWriteEvidence(
+    nodeRow,
+    observedAtMs,
+  );
+  return Object.freeze({
+    schemaVersion: READY_LEASE_AGE_WITNESS_SCHEMA_VERSION,
+    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
+    nodeId,
+    status: status || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN,
+    connectionState: connectionState || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN,
+    snapshotObservedAtMs: observedAtMs,
+    heartbeat: buildReadyLeaseTimestampEvidence(
+      nodeRow?.[COLUMN.LAST_HEARTBEAT] ?? nodeRow?.lastHeartbeat,
+      observedAtMs,
+      READY_LEASE_AGE_WITNESS_FIELD.AT_MS,
+      READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.LAST_HEARTBEAT,
+    ),
+    readyLease: buildReadyLeaseTimestampEvidence(
+      nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
+        nodeRow?.readyLeaseExpiresAt,
+      observedAtMs,
+      READY_LEASE_AGE_WITNESS_FIELD.EXPIRES_AT_MS,
+      READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.READY_LEASE_EXPIRY,
+    ),
+    ownerWrite,
+    cdcObservation: buildReadyLeaseCdcObservationEvidence(
+      systemTableCache,
+      nodeId,
+      ownerWrite,
+      observedAtMs,
+    ),
+  });
+}
+
+function buildUnavailableReadyLeaseAgeWitness() {
+  return Object.freeze({
+    schemaVersion: READY_LEASE_AGE_WITNESS_SCHEMA_VERSION,
+    state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
+    reason: READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.NO_STALE_ACTIVE_NODE,
+  });
+}
 /**
  * Normalize one arbitrary value to a non-negative integer.
  * @param {*} value
@@ -253,7 +422,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
    * a snapshot stale while its owner-authored lease is still valid.
    * @param {Array<Object>} nodeRows
    * @param {number} capturedAtMs
-   * @return {boolean}
+   * @return {{cacheStaleWatermark: boolean, readyLeaseAgeWitness: Object}}
    * @private
    */
   resolveControlSnapshotCacheStaleWatermark(
@@ -286,10 +455,22 @@ class AdminControlSnapshotControlPlaneDiagnostics
         now: observedAtMs,
         requireActiveStatus: status === STATUS_ACTIVE,
       })) {
-        return true;
+        return Object.freeze({
+          cacheStaleWatermark: true,
+          readyLeaseAgeWitness: buildReadyLeaseAgeWitness(
+            this.systemTableCache,
+            nodeRow,
+            observedAtMs,
+            status,
+            connectionState,
+          ),
+        });
       }
     }
-    return false;
+    return Object.freeze({
+      cacheStaleWatermark: false,
+      readyLeaseAgeWitness: buildUnavailableReadyLeaseAgeWitness(),
+    });
   }
   /**
    * Build structured control-plane diagnostics for admin snapshots.

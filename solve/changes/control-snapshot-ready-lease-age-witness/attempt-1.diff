@@ -1,0 +1,544 @@
+diff --git a/scripts/run-placement-affinity-scenarios.js b/scripts/run-placement-affinity-scenarios.js
+index 81894e6eccd311d89cda387c6a79f997e24715cc..1dda035f84e220b5c9bf751d63a41a4a390554ca 100644
+--- a/scripts/run-placement-affinity-scenarios.js
++++ b/scripts/run-placement-affinity-scenarios.js
+@@ -129,6 +129,9 @@ const SCENARIOS = {
+   'movielens-ready-lease-cdc-provenance': [
+     'test/cache/system-table-cache-cdc-provenance.test.js',
+   ],
++  'control-snapshot-ready-lease-age-witness': [
++    'test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js',
++  ],
+   'configured-split-threshold-policy-precedence': [
+     'test/partition/partition-split-policy-precedence.test.js',
+     'test/policy/table-policy-service.test.js',
+diff --git a/src/admin/admin-control-snapshot-control-plane-diagnostics.js b/src/admin/admin-control-snapshot-control-plane-diagnostics.js
+index 610618cbfcb580627f5d7be214be687b993ef54d..59daafed3da226ac1e149aa2b1148be0bab113a2 100644
+--- a/src/admin/admin-control-snapshot-control-plane-diagnostics.js
++++ b/src/admin/admin-control-snapshot-control-plane-diagnostics.js
+@@ -11,6 +11,7 @@
+  * admin-helpers.js.
+  */
+ import {COLUMN, TABLES} from '../constants/index.js';
++import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+ import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+ import {
+   ADMIN_CACHE_DUMP,
+@@ -46,6 +47,7 @@ const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
+   RAFTROLE: 'raftRole',
+   STATUS: 'status',
+   ADDRESS: 'address',
++  UNKNOWN: 'unknown',
+ });
+ const STATUS_ACTIVE = 'active';
+ const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
+@@ -58,6 +60,173 @@ const CONTROL_SNAPSHOT_PUBLICATION_READER_AVAILABLE_FIELD =
+ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS = Object.freeze({
+   allowOwnerLaneRetry: true,
+ });
++const READY_LEASE_AGE_WITNESS_SCHEMA_VERSION = 1;
++const READY_LEASE_AGE_WITNESS_STATE = Object.freeze({
++  AVAILABLE: 'available',
++  UNAVAILABLE: 'unavailable',
++});
++const READY_LEASE_AGE_WITNESS_FIELD = Object.freeze({
++  AT_MS: 'atMs',
++  EXPIRES_AT_MS: 'expiresAtMs',
++});
++const READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON = Object.freeze({
++  CDC_OBSERVED_AT: 'cdc_observed_at_unavailable',
++  CDC_ORIGIN_HLC_MISMATCH: 'cdc_origin_hlc_mismatch',
++  LAST_HEARTBEAT: 'last_heartbeat_unavailable',
++  NO_STALE_ACTIVE_NODE: 'no_stale_active_node',
++  PER_KEY_CDC_OBSERVATION: 'per_key_cdc_observation_unavailable',
++  READY_LEASE_EXPIRY: 'ready_lease_expiry_unavailable',
++  ROW_ORIGIN_HLC: 'row_origin_hlc_unavailable',
++});
++
++function parseControlSnapshotTimestampMs(value) {
++  if (value === null || value === undefined || value === '') {
++    return null;
++  }
++  const parsed = Number(value);
++  return Number.isFinite(parsed) ? Math.floor(parsed) : null;
++}
++
++function buildReadyLeaseTimestampEvidence(
++  value,
++  observedAtMs,
++  fieldName,
++  unavailableReason,
++) {
++  const atMs = parseControlSnapshotTimestampMs(value);
++  if (!Number.isFinite(atMs)) {
++    return Object.freeze({
++      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
++      reason: unavailableReason,
++    });
++  }
++  return Object.freeze({
++    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
++    [fieldName]: atMs,
++    ageMs: observedAtMs - atMs,
++  });
++}
++
++function buildReadyLeaseOwnerWriteEvidence(nodeRow, observedAtMs) {
++  const originHlc = firstStringField(
++    nodeRow,
++    COLUMN.UPDATED_AT_HLC,
++    'updatedAtHlc',
++  );
++  const timestamp = HLCTimestamp.tryFromString(originHlc);
++  if (!timestamp) {
++    return Object.freeze({
++      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
++      reason: READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.ROW_ORIGIN_HLC,
++    });
++  }
++  return Object.freeze({
++    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
++    originHlc,
++    atMs: timestamp.physical,
++    ageMs: observedAtMs - timestamp.physical,
++  });
++}
++
++function buildReadyLeaseCdcObservationEvidence(
++  systemTableCache,
++  nodeId,
++  ownerWrite,
++  observedAtMs,
++) {
++  const observation =
++    typeof systemTableCache?.getLastCdcObservation === 'function' ?
++      systemTableCache.getLastCdcObservation(TABLES.NODES, nodeId) :
++      null;
++  if (!observation) {
++    return Object.freeze({
++      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
++      reason:
++        READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.PER_KEY_CDC_OBSERVATION,
++    });
++  }
++  if (
++    ownerWrite.state !== READY_LEASE_AGE_WITNESS_STATE.AVAILABLE ||
++    observation.originHlc !== ownerWrite.originHlc
++  ) {
++    return Object.freeze({
++      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
++      reason:
++        READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.CDC_ORIGIN_HLC_MISMATCH,
++    });
++  }
++  const cdcObservedAtMs = parseControlSnapshotTimestampMs(
++    observation.observedAtMs,
++  );
++  if (!Number.isFinite(cdcObservedAtMs)) {
++    return Object.freeze({
++      state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
++      reason: READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.CDC_OBSERVED_AT,
++    });
++  }
++  return Object.freeze({
++    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
++    originHlc: observation.originHlc,
++    observedAtMs: cdcObservedAtMs,
++    ageMs: observedAtMs - cdcObservedAtMs,
++    ownerToCdcDelayMs: cdcObservedAtMs - ownerWrite.atMs,
++  });
++}
++
++function buildReadyLeaseAgeWitness(
++  systemTableCache,
++  nodeRow,
++  observedAtMs,
++  status,
++  connectionState,
++) {
++  const nodeId = firstStringField(
++    nodeRow,
++    COLUMN.NODE_ID,
++    'nodeId',
++    'id',
++  ) || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN;
++  const ownerWrite = buildReadyLeaseOwnerWriteEvidence(
++    nodeRow,
++    observedAtMs,
++  );
++  return Object.freeze({
++    schemaVersion: READY_LEASE_AGE_WITNESS_SCHEMA_VERSION,
++    state: READY_LEASE_AGE_WITNESS_STATE.AVAILABLE,
++    nodeId,
++    status: status || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN,
++    connectionState: connectionState || ADMIN_CONTROL_SNAPSHOT_LITERAL.UNKNOWN,
++    snapshotObservedAtMs: observedAtMs,
++    heartbeat: buildReadyLeaseTimestampEvidence(
++      nodeRow?.[COLUMN.LAST_HEARTBEAT] ?? nodeRow?.lastHeartbeat,
++      observedAtMs,
++      READY_LEASE_AGE_WITNESS_FIELD.AT_MS,
++      READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.LAST_HEARTBEAT,
++    ),
++    readyLease: buildReadyLeaseTimestampEvidence(
++      nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
++        nodeRow?.readyLeaseExpiresAt,
++      observedAtMs,
++      READY_LEASE_AGE_WITNESS_FIELD.EXPIRES_AT_MS,
++      READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.READY_LEASE_EXPIRY,
++    ),
++    ownerWrite,
++    cdcObservation: buildReadyLeaseCdcObservationEvidence(
++      systemTableCache,
++      nodeId,
++      ownerWrite,
++      observedAtMs,
++    ),
++  });
++}
++
++function buildUnavailableReadyLeaseAgeWitness() {
++  return Object.freeze({
++    schemaVersion: READY_LEASE_AGE_WITNESS_SCHEMA_VERSION,
++    state: READY_LEASE_AGE_WITNESS_STATE.UNAVAILABLE,
++    reason: READY_LEASE_AGE_WITNESS_UNAVAILABLE_REASON.NO_STALE_ACTIVE_NODE,
++  });
++}
+ /**
+  * Normalize one arbitrary value to a non-negative integer.
+  * @param {*} value
+@@ -253,7 +422,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
+    * a snapshot stale while its owner-authored lease is still valid.
+    * @param {Array<Object>} nodeRows
+    * @param {number} capturedAtMs
+-   * @return {boolean}
++   * @return {{cacheStaleWatermark: boolean, readyLeaseAgeWitness: Object}}
+    * @private
+    */
+   resolveControlSnapshotCacheStaleWatermark(
+@@ -286,10 +455,22 @@ class AdminControlSnapshotControlPlaneDiagnostics
+         now: observedAtMs,
+         requireActiveStatus: status === STATUS_ACTIVE,
+       })) {
+-        return true;
++        return Object.freeze({
++          cacheStaleWatermark: true,
++          readyLeaseAgeWitness: buildReadyLeaseAgeWitness(
++            this.systemTableCache,
++            nodeRow,
++            observedAtMs,
++            status,
++            connectionState,
++          ),
++        });
+       }
+     }
+-    return false;
++    return Object.freeze({
++      cacheStaleWatermark: false,
++      readyLeaseAgeWitness: buildUnavailableReadyLeaseAgeWitness(),
++    });
+   }
+   /**
+    * Build structured control-plane diagnostics for admin snapshots.
+diff --git a/src/admin/admin-control-snapshot-node-view-projection.js b/src/admin/admin-control-snapshot-node-view-projection.js
+index 7cc57e976b90b012c61c68cc0f39a6cb4a5c4a3d..bfdf1fb7cdcdd9c2d0c211b2f27f8d78ef2bedab 100644
+--- a/src/admin/admin-control-snapshot-node-view-projection.js
++++ b/src/admin/admin-control-snapshot-node-view-projection.js
+@@ -87,6 +87,23 @@ const CONTROL_SNAPSHOT_ACTIVE_GATE_BUDGET_STATE = Object.freeze({
+   AVAILABLE: 'available',
+   UNAVAILABLE: 'unavailable',
+ });
++function attachReadyLeaseAgeWitness(
++  snapshot,
++  controlPlaneDiagnostics,
++  readyLeaseAgeWitness,
++) {
++  if (
++    !snapshot ||
++    !controlPlaneDiagnostics ||
++    typeof controlPlaneDiagnostics !== 'object'
++  ) {
++    return;
++  }
++  snapshot.controlPlaneDiagnostics = {
++    ...controlPlaneDiagnostics,
++    readyLeaseAgeWitness,
++  };
++}
+ function normalizeControlSnapshotNodeIdList(values = ADMIN_CACHE_DUMP.EMPTY) {
+   return uniqueSorted(
+     (Array.isArray(values) ? values : ADMIN_CACHE_DUMP.EMPTY)
+@@ -743,11 +760,18 @@ class AdminControlSnapshotNodeViewProjection extends AdminControlSnapshotRepairO
+           controlPlaneDiagnostics?.currentPriorityPlacementObservation,
+         nowMs: capturedAt,
+       });
+-    const evaluation = evaluateAuthoritativeRepairPolicy({
+-      cacheStaleWatermark: this.resolveControlSnapshotCacheStaleWatermark(
++    const readyLeaseFreshness =
++      this.resolveControlSnapshotCacheStaleWatermark(
+         nodeRows,
+         capturedAt,
+-      ),
++      );
++    attachReadyLeaseAgeWitness(
++      snapshot,
++      controlPlaneDiagnostics,
++      readyLeaseFreshness.readyLeaseAgeWitness,
++    );
++    const evaluation = evaluateAuthoritativeRepairPolicy({
++      cacheStaleWatermark: readyLeaseFreshness.cacheStaleWatermark,
+       nodeCoverageGap:
+         nodeCoverage.hasCoverageGap ||
+         connectedNodeCoverage.hasCoverageGap ||
+diff --git a/test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js b/test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js
+index 8c74bff257be52e73d89a08dc0d78802ce745ebf..81da64e8948b0517f772fc47d30795ba705b036b 100644
+--- a/test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js
++++ b/test/admin/admin-control-snapshot-heartbeat-lease-freshness.test.js
+@@ -27,18 +27,23 @@ function buildNodeRow(nodeId, overrides = {}) {
+   };
+ }
+ 
+-function buildSystemTableCache(nodeRows) {
++function buildSystemTableCache(nodeRows, cdcObservations = {}) {
+   return {
+     getAll(tableName) {
+       return tableName === TABLES.NODES ? nodeRows : [];
+     },
++    getLastCdcObservation(tableName, key) {
++      return tableName === TABLES.NODES ?
++        cdcObservations[key] || null :
++        null;
++    },
+   };
+ }
+ 
+-function buildControlSnapshot(nodeRows) {
++function buildControlSnapshot(nodeRows, cdcObservations = {}) {
+   return new AdminControlSnapshot({
+     nodeId: 'node-seed',
+-    systemTableCache: buildSystemTableCache(nodeRows),
++    systemTableCache: buildSystemTableCache(nodeRows, cdcObservations),
+     cacheMutationTarget: {applySystemTableChange() {}},
+     ensureAuthoritativeDiscoveryCacheRepair: async () => ({applied: true}),
+     nowFn: () => NOW_MS,
+@@ -84,6 +89,11 @@ test('snapshot owner treats staggered heartbeats as fresh within owner leases',
+       ),
+       'heartbeat cadence alone cannot create a stale watermark',
+     );
++    t.same(result.controlPlaneDiagnostics.readyLeaseAgeWitness, {
++      schemaVersion: 1,
++      state: 'unavailable',
++      reason: 'no_stale_active_node',
++    }, 'fresh active rows publish an explicit unavailable witness variant');
+     t.end();
+   });
+ 
+@@ -93,13 +103,21 @@ test('snapshot owner keeps expired or missing lease evidence stale',
+       buildNodeRow('expired', {
+         last_heartbeat: NOW_MS - 1_000,
+         ready_lease_expires_at: NOW_MS - 1,
++        updated_at_hlc: `${NOW_MS - 2_000}-4-write-owner`,
+       }),
+       buildNodeRow('missing', {
+         last_heartbeat: NOW_MS - 1_000,
+         ready_lease_expires_at: null,
+       }),
+     ]) {
+-      const controlSnapshot = buildControlSnapshot([nodeRow]);
++      const cdcObservation = nodeRow.node_id === 'expired' ? {
++        observedAtMs: NOW_MS - 1_500,
++        originHlc: nodeRow.updated_at_hlc,
++      } : null;
++      const controlSnapshot = buildControlSnapshot(
++        [nodeRow],
++        cdcObservation ? {[nodeRow.node_id]: cdcObservation} : {},
++      );
+       const owner = new ControlPlaneSnapshotOwner({controlSnapshot});
+       const result = await owner.resolveControlSnapshot(
+         buildLocalSnapshot(),
+@@ -117,6 +135,61 @@ test('snapshot owner keeps expired or missing lease evidence stale',
+         ),
+         `${nodeRow.node_id} lease evidence schedules freshness repair`,
+       );
++      t.equal(
++        result.controlPlaneDiagnostics.readyLeaseAgeWitness.nodeId,
++        nodeRow.node_id,
++        `${nodeRow.node_id} is the exact row selected by the stale scan`,
++      );
++      t.equal(
++        result.controlPlaneDiagnostics.readyLeaseAgeWitness.state,
++        'available',
++      );
++      if (nodeRow.node_id === 'expired') {
++        t.same(
++          result.controlPlaneDiagnostics.readyLeaseAgeWitness,
++          {
++            schemaVersion: 1,
++            state: 'available',
++            nodeId: 'expired',
++            status: NODE_STATUS_ACTIVE,
++            connectionState: CONNECTION_STATE_READY,
++            snapshotObservedAtMs: NOW_MS,
++            heartbeat: {
++              state: 'available',
++              atMs: NOW_MS - 1_000,
++              ageMs: 1_000,
++            },
++            readyLease: {
++              state: 'available',
++              expiresAtMs: NOW_MS - 1,
++              ageMs: 1,
++            },
++            ownerWrite: {
++              state: 'available',
++              originHlc: `${NOW_MS - 2_000}-4-write-owner`,
++              atMs: NOW_MS - 2_000,
++              ageMs: 2_000,
++            },
++            cdcObservation: {
++              state: 'available',
++              originHlc: `${NOW_MS - 2_000}-4-write-owner`,
++              observedAtMs: NOW_MS - 1_500,
++              ageMs: 1_500,
++              ownerToCdcDelayMs: 500,
++            },
++          },
++          'witness correlates lease, owner write, and matching key CDC receipt',
++        );
++      } else {
++        t.same(
++          result.controlPlaneDiagnostics.readyLeaseAgeWitness.readyLease,
++          {
++            state: 'unavailable',
++            reason: 'ready_lease_expiry_unavailable',
++          },
++          'missing lease is an explicit unavailable evidence variant',
++        );
++      }
+     }
+ 
+     const stoppedSnapshot = buildControlSnapshot([
+@@ -139,6 +212,123 @@ test('snapshot owner keeps expired or missing lease evidence stale',
+       CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FRESH,
+       'terminal disconnected rows do not poison active-node freshness',
+     );
++    t.same(stoppedResult.controlPlaneDiagnostics.readyLeaseAgeWitness, {
++      schemaVersion: 1,
++      state: 'unavailable',
++      reason: 'no_stale_active_node',
++    });
++    t.end();
++  });
++
++test('snapshot witness preserves signed ages and explicit missing evidence',
++  async (t) => {
++    const futureOriginHlc = `${NOW_MS + 20}-1-write-owner`;
++    const futureSnapshot = buildControlSnapshot(
++      [buildNodeRow('clock-skewed', {
++        last_heartbeat: NOW_MS + 50,
++        ready_lease_expires_at: NOW_MS - 1,
++        updated_at_hlc: futureOriginHlc,
++      })],
++      {
++        'clock-skewed': {
++          observedAtMs: NOW_MS + 30,
++          originHlc: futureOriginHlc,
++        },
++      },
++    );
++    const futureResult = await new ControlPlaneSnapshotOwner({
++      controlSnapshot: futureSnapshot,
++    }).resolveControlSnapshot(
++      buildLocalSnapshot(),
++      {allowAuthoritativeRepair: false},
++    );
++    const futureWitness =
++      futureResult.controlPlaneDiagnostics.readyLeaseAgeWitness;
++
++    t.equal(futureWitness.heartbeat.ageMs, -50,
++      'future heartbeat evidence keeps its signed age');
++    t.equal(futureWitness.ownerWrite.ageMs, -20,
++      'future owner HLC evidence keeps its signed age');
++    t.equal(futureWitness.cdcObservation.ageMs, -30,
++      'future CDC receipt evidence keeps its signed age');
++    t.equal(futureWitness.cdcObservation.ownerToCdcDelayMs, 10,
++      'owner-to-CDC chronology remains independently signed');
++
++    const missingResult = await new ControlPlaneSnapshotOwner({
++      controlSnapshot: buildControlSnapshot([
++        buildNodeRow('missing-origin', {
++          ready_lease_expires_at: NOW_MS - 1,
++        }),
++      ]),
++    }).resolveControlSnapshot(
++      buildLocalSnapshot(),
++      {allowAuthoritativeRepair: false},
++    );
++    const missingWitness =
++      missingResult.controlPlaneDiagnostics.readyLeaseAgeWitness;
++    t.same(missingWitness.ownerWrite, {
++      state: 'unavailable',
++      reason: 'row_origin_hlc_unavailable',
++    }, 'missing owner HLC is explicit');
++    t.same(missingWitness.cdcObservation, {
++      state: 'unavailable',
++      reason: 'per_key_cdc_observation_unavailable',
++    }, 'missing per-key CDC receipt is explicit');
++
++    const mismatchOriginHlc = `${NOW_MS - 2_000}-1-write-owner`;
++    const mismatchResult = await new ControlPlaneSnapshotOwner({
++      controlSnapshot: buildControlSnapshot(
++        [buildNodeRow('origin-mismatch', {
++          ready_lease_expires_at: NOW_MS - 1,
++          updated_at_hlc: mismatchOriginHlc,
++        })],
++        {
++          'origin-mismatch': {
++            observedAtMs: NOW_MS - 1_000,
++            originHlc: `${NOW_MS - 3_000}-1-other-owner`,
++          },
++        },
++      ),
++    }).resolveControlSnapshot(
++      buildLocalSnapshot(),
++      {allowAuthoritativeRepair: false},
++    );
++    t.same(
++      mismatchResult.controlPlaneDiagnostics.readyLeaseAgeWitness
++        .cdcObservation,
++      {
++        state: 'unavailable',
++        reason: 'cdc_origin_hlc_mismatch',
++      },
++      'CDC receipt with another origin cannot impersonate the selected row',
++    );
++    t.end();
++  });
++
++test('snapshot witness names the first row rejected by the existing scan',
++  async (t) => {
++    const controlSnapshot = buildControlSnapshot([
++      buildNodeRow('fresh'),
++      buildNodeRow('first-stale', {ready_lease_expires_at: NOW_MS - 1}),
++      buildNodeRow('later-stale', {ready_lease_expires_at: NOW_MS - 2}),
++    ]);
++    const owner = new ControlPlaneSnapshotOwner({controlSnapshot});
++
++    const result = await owner.resolveControlSnapshot(
++      buildLocalSnapshot(),
++      {allowAuthoritativeRepair: false},
++    );
++
++    t.equal(
++      result.controlPlaneDiagnostics.readyLeaseAgeWitness.nodeId,
++      'first-stale',
++      'diagnostics do not introduce a second freshness detector',
++    );
++    t.same(
++      result.snapshotObservation.reasonCodes,
++      [AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK],
++      'the existing repair reason remains unchanged',
++    );
+     t.end();
+   });
+ 
