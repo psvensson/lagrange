@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 1
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: runtime-service-creating-owner-wake-progress-admission
 - plan: solve/epics/service-data-affinity-placement.md
-
-## Current Blocker
-- Frontier: schema-provisioning-not-null-intent-recovery-roundtrip-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: unknown
-- Latest evidence: test-output/reports/schema-provisioning-not-null-intent-recovery-roundtrip-2026-07-20T02-08-16-436Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for schema-provisioning-not-null-intent-recovery-roundtrip-main
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 4
@@ -42,7 +26,7 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **schema-provisioning-not-null-intent-recovery-roundtrip-main** [solved] rung 1, attempts 1, metric 0 -> 0
+- **schema-provisioning-not-null-intent-recovery-roundtrip-main** [parked {exhausted}] rung 1, attempts 1, metric 0 -> 0 — The current source no longer reproduces the NOT NULL recovery mismatch and the only ordered-gate red belongs to the separately evidenced ready-lease observation boundary; no honest same-frame schema move remains.
 
 ## Findings
 - **schema-provisioning-not-null-intent-recovery-roundtrip-main**: DT red-on-revert proven for test/query/schema-provisioning-job-owner.test.js [dt:solve/changes/dt-prove/schema-provisioning-job-owner.test.js-2026-07-20T02-01-57-861Z.json]
@@ -51,6 +35,10 @@
 - **schema-provisioning-not-null-intent-recovery-roundtrip-main**: The legacy durable-provisioning directed assertion that every child operation is already ACTIVE fails identically at detached pre-change commit 0527723b and current source, while the other 10 legacy guard files are green; it is not caused by this schema patch. [test-output/reports/durable-provisioning-job-owner-2026-07-20T02-02-19-789Z.report.json]
 - **schema-provisioning-not-null-intent-recovery-roundtrip-main**: Primary-source comparison supports faithful desired-state persistence plus strict drift detection: Kubernetes controllers reconcile current state toward the stored desired spec, PostgreSQL warns IF NOT EXISTS does not validate existing schema identity, and Flyway validates applied migrations by stored checksums. The correction must repair semantic round-trip, not weaken identity comparison. [https://kubernetes.io/docs/concepts/architecture/controller/]
 - **schema-provisioning-not-null-intent-recovery-roundtrip-main**: Independent verification approved exact attempt 1: semantic round-trip, deterministic identities, conflict safety, real lease-expiry recovery, DT red-on-revert, and focused/static checks passed; legacy pre-fix intent_version=1 rows fail closed and require separate migration treatment. [subagent:verify_runtime_context_coalescing]
+- **schema-provisioning-not-null-intent-recovery-roundtrip-main**: Independent aggregate verification REJECTED terminal handoff for sha256:835b8d812822b94a0e76e156b28fbc0623b2a004751307fc5db6a24f97074620: aggregate bytes and 102 focused assertions are green, but the sealed ordered live gate is unsatisfied because the 5-of-5 probe summary uses source fingerprint 718e9a9167d85372 and the 3-of-3 demo summary uses e85b031c182c3041. (rules out: Do not approve from separate green source revisions or treat within-class source stability as cross-class ordering; replace with five probes followed by three demos under one unchanged source fingerprint.) [subagent:verify_schema_intent_aggregate]
+- **schema-provisioning-not-null-intent-recovery-roundtrip-main**: The required replacement ordered gate used one stable current source fingerprint e85b031c182c3041 and passed 5-of-5 formation probes, but demo slot 1 was a measuring FAIL at schema admission: snapshot_query_error from stale_usable cache_stale_watermark. Aggregate handoff remains rejected; no unchanged rerun is authorized. (rules out: Do not record aggregate approval or combine the new probes with the earlier green demos; the ordered current-fingerprint demo sequence is red.) [test-output/reports/live-repetitions-demo-2026-07-20T17-07-47-080Z.summary.json]
+- **schema-provisioning-not-null-intent-recovery-roundtrip-main**: The sealed NOT NULL intent round-trip symptom is absent on current HEAD: the ordered current-fingerprint gate passes 5-of-5 formation/rating-provisioning probes, and the subsequent demo drains operations and reaches zero spread before the separate ready-lease/cache_stale_watermark observation boundary. (rules out: Do not edit schema normalization, weaken drift detection, combine mismatched source revisions, or rerun unchanged for the adjacent snapshot failure.) [test-output/reports/live-repetitions-probe-2026-07-20T17-03-04-101Z.summary.json]
+- **schema-provisioning-not-null-intent-recovery-roundtrip-main**: Independent verification approved the exact aggregate for honest EXHAUSTED disposition: current source blobs and reverse-apply match; the fresh deterministic scenario passed 2/2 files and 102/102 assertions; static checks pass; the same-source ordered gate passed 5/5 probes before the first measuring demo failed at the adjacent snapshot/ready-lease owner boundary. [subagent:reverify_schema_intent_aggregate]
 
 ## Theories
 _(none recorded)_
