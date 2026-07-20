@@ -23,6 +23,15 @@ function createAst(extraColumn = null) {
   };
 }
 
+function createNotNullDefaultAst() {
+  return createAst({
+    name: 'source_snapshot_json',
+    dataType: {name: 'TEXT'},
+    notNull: true,
+    defaultValue: {type: 'literal', value: '{}'},
+  });
+}
+
 function applyGatewayInsert(rows, mutation) {
   const {row, tableName} = mutation;
   const existing = [...rows.values()].find((candidate) =>
@@ -197,6 +206,62 @@ test('durable schema job resumes after crash immediately after intent insert',
       1,
       'restart attaches to the one atomic intent row',
     );
+  });
+
+test('durable schema recovery preserves NOT NULL DEFAULT metadata identity',
+  async (t) => {
+    const gateway = createGateway();
+    const now = {value: 100};
+    const firstCalls = [];
+    const firstOwner = createService(gateway, firstCalls, {
+      now: () => now.value,
+      schemaProvisioningOwnerId: 'schema-worker-first',
+      schemaProvisioningLeaseMs: 30,
+      schemaProvisioningRetrySetTimeoutFn() {
+        return {unref() {}};
+      },
+      schemaProvisioningRetryClearTimeoutFn() {},
+      async partitionProvisioner(context) {
+        firstCalls.push(context);
+        return {
+          resolvedReplicaCount: 1,
+          routableReplicaCount: 1,
+          fullReplicaCountConverged: false,
+          contractState: OWNER_CONTRACT_STATE.PENDING,
+          nextAction: 'retry',
+        };
+      },
+    });
+
+    const pending = await firstOwner.createTable(createNotNullDefaultAst());
+    t.equal(pending.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.equal(firstCalls.length, 1);
+
+    const jobRow = gateway.rows.get(`schema_operations:${pending.jobId}`);
+    const tableRow = gateway.rows.get(`tables:${jobRow.table_id}`);
+    const projectedSchema = JSON.parse(tableRow.schema_definition);
+    t.equal(projectedSchema.columns[1].notNull, true);
+    t.equal(projectedSchema.columns[1].defaultValue, '\'{}\'');
+
+    const recordedIntent = JSON.parse(jobRow.normalized_ddl);
+    t.equal(recordedIntent.columns[1].nullable, false,
+      'canonical intent records parser-AST NOT NULL semantics');
+
+    now.value = 40000;
+    const resumedCalls = [];
+    const resumedOwner = createService(gateway, resumedCalls, {
+      now: () => now.value,
+      schemaProvisioningOwnerId: 'schema-worker-restart',
+    });
+    const [result] = await resumedOwner.resumeDurableProvisioningJobs();
+
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.READY,
+      'fresh owner accepts metadata projected from the same durable intent');
+    t.equal(result.jobId, pending.jobId);
+    t.equal(result.tableId, jobRow.table_id);
+    t.equal(resumedCalls.length, 1);
+    t.equal(gateway.rows.get(`tables:${jobRow.table_id}`).table_id,
+      jobRow.table_id, 'restart preserves the deterministic table identity');
   });
 
 test('client deadline returns a stable job and retry survives stale worker ' +

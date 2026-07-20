@@ -28,7 +28,7 @@ function normalizeColumn(column = {}) {
     name: String(column.name || '').trim(),
     dataType: column.dataType || null,
     primaryKey: column.primaryKey === true,
-    nullable: column.nullable !== false,
+    nullable: column.notNull !== true && column.nullable !== false,
     unique: column.unique === true,
     defaultValue: column.defaultValue ?? column.default ?? null,
     constraints: column.constraints || [],

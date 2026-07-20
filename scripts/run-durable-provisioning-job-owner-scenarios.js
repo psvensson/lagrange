@@ -3,6 +3,10 @@
 import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
 
 const SCENARIOS = {
+  'schema-provisioning-not-null-intent-recovery-roundtrip': [
+    'test/query/schema-provisioning-job-owner.test.js',
+    'test/query/durable-provisioning-job-owner-guard.test.js',
+  ],
   'durable-provisioning-job-owner': [
     'test/bootstrap/schema-operations-table-schema.test.js',
     'test/workflow/durable-workflow-storage-ownership.test.js',

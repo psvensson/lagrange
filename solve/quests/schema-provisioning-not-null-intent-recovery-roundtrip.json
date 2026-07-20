@@ -1,0 +1,62 @@
+{
+  "id": "schema-provisioning-not-null-intent-recovery-roundtrip",
+  "authoringContractVersion": 1,
+  "statement": "A durable CREATE TABLE job records NOT NULL and default semantics in its canonical intent, recovers after metadata projection and owner restart into a semantically identical schema against the same deterministic table identity, still fails closed on genuinely different metadata without overwrite or cleanup, and the unchanged movielens-lagrange-service-affinity-live scenario reports priority metric 0 on three consecutive fresh runs.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "runtime-service-creating-owner-wake-progress-admission",
+    "planDoc": "solve/epics/service-data-affinity-placement.md",
+    "draftedAtCommit": "52c9f9490ba5a264980ddbb3b78b7d1ef4a5e341"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "schema-provisioning-not-null-intent-recovery-roundtrip-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "schema-provisioning-not-null-intent-recovery-roundtrip",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "canonical-intent-schema-roundtrip",
+      "statement": "The persisted normalized_ddl and its recovered AST must project the same semantic schema for column nullability, defaults, primary keys, uniqueness, types, and constraints."
+    },
+    {
+      "id": "deterministic-identity-and-conflict-safety",
+      "statement": "Recovery must retain the original deterministic job, table, and partition identities; genuinely different durable metadata must remain SCHEMA_INTENT_CONFLICT and must never be overwritten, deleted, repaired, or reseeded."
+    },
+    {
+      "id": "real-restart-seam-and-red-on-revert",
+      "statement": "Deterministic evidence must project metadata from a NOT NULL DEFAULT schema, leave the durable job nonterminal, construct a fresh owner, recover that exact stored intent, and converge to READY; reverting the production correction must make this seam fail."
+    },
+    {
+      "id": "no-demo-workaround",
+      "statement": "Do not remove the repeated CREATE TABLE IF NOT EXISTS, weaken or remove NOT NULL/default clauses, bypass the durable schema job, change MovieLens workload or budgets, or clean persisted metadata to manufacture success."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "After source verification, run five fresh formation probes followed by three fresh MovieLens demos with one unchanged source fingerprint; stop on the first red result and diagnose the newly reached boundary before any rerun."
+    }
+  ]
+}

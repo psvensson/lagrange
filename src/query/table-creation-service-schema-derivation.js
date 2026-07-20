@@ -93,7 +93,7 @@ const SCHEMA_DERIVATION_METHODS = Object.freeze({
         name: col.name,
         type: this.normalizeDataType(col.dataType),
         primaryKey: col.primaryKey || false,
-        notNull: col.notNull || false,
+        notNull: col.notNull === true || col.nullable === false,
         unique: col.unique || false,
         defaultValue: deriveDefaultSqlLiteral(col.defaultValue),
       })),
