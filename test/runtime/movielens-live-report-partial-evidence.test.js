@@ -57,12 +57,26 @@ test('live report retains gate-owned evidence when preload itself fails', (t) =>
 test('live report retains gate-owned evidence when schema admission fails',
   (t) => {
     const error = new Error('schema admission denied');
+    const readyLeaseAgeWitness = {
+      schemaVersion: 1,
+      state: 'available',
+      nodeId: 'node-stale',
+    };
     error.schemaAdmission = {
       admitted: false,
-      snapshot: {ready: false, state: 'control_plane_pressure'},
+      snapshot: {
+        ready: false,
+        state: 'control_plane_pressure',
+        readyLeaseAgeWitness,
+      },
     };
     const report = buildAffinityDemoLiveReport({timestamp: TIMESTAMP, error});
     t.same(reportDetail(report).schemaAdmission, error.schemaAdmission);
+    t.same(
+      reportDetail(report).schemaAdmission.snapshot.readyLeaseAgeWitness,
+      readyLeaseAgeWitness,
+      'structured chronology survives the terminal live-report boundary',
+    );
     t.end();
   });
 

@@ -341,10 +341,68 @@ test('stale schema observations use canonical repair inside the outer budget',
     t.end();
   });
 
+test('stale schema denial retains the bounded ready-lease witness unchanged',
+  async (t) => {
+    const readyLeaseAgeWitness = {
+      schemaVersion: 1,
+      state: 'available',
+      nodeId: 'node-stale',
+      readyLease: {
+        state: 'available',
+        expiresAtMs: NOW_MS - 1,
+        ageMs: 1,
+      },
+    };
+    const staleSnapshot = buildControlSnapshot({
+      snapshotObservation: {
+        state: 'stale_usable',
+        reasonCodes: ['cache_stale_watermark'],
+      },
+      controlPlaneDiagnostics: {
+        ...buildControlSnapshot().controlPlaneDiagnostics,
+        readyLeaseAgeWitness,
+      },
+    });
+    const error = await t.rejects(
+      waitForAffinityDemoSchemaAdmission(boundedSchemaOptions(
+        async () => ({rows: [staleSnapshot]}),
+        1,
+      )),
+      /MovieLens schema admission timed out/,
+    );
+
+    t.same(
+      error.schemaAdmission.snapshot.readyLeaseAgeWitness,
+      readyLeaseAgeWitness,
+      'the lossy quiescence projection retains only the bounded witness',
+    );
+    t.same(
+      staleSnapshot.snapshotObservation,
+      {
+        state: 'stale_usable',
+        reasonCodes: ['cache_stale_watermark'],
+      },
+      'diagnostic retention does not rewrite the owner observation',
+    );
+    t.equal(
+      error.message,
+      'MovieLens schema admission timed out: ' +
+        'snapshot_query_error=control snapshot observation failed ' +
+        '(stale_usable): cache_stale_watermark',
+      'time-varying witness fields do not enter the stable error vocabulary',
+    );
+    t.end();
+  });
+
 test('authoritative snapshot repair cannot reset or outlive schema budget',
   async (t) => {
     let nowMs = 0;
     const calls = [];
+    const readyLeaseAgeWitness = {
+      schemaVersion: 1,
+      state: 'available',
+      nodeId: 'node-repair-timeout',
+    };
     const error = await t.rejects(
       waitForAffinityDemoSchemaAdmission({
         target: BASE_TARGET,
@@ -361,6 +419,10 @@ test('authoritative snapshot repair cannot reset or outlive schema budget',
               snapshotObservation: {
                 state: 'stale_usable',
                 reasonCodes: ['cache_stale_watermark'],
+              },
+              controlPlaneDiagnostics: {
+                ...buildControlSnapshot().controlPlaneDiagnostics,
+                readyLeaseAgeWitness,
               },
             })]};
           }
@@ -380,6 +442,11 @@ test('authoritative snapshot repair cannot reset or outlive schema budget',
     ]);
     t.equal(error.schemaAdmission.admitted, false,
       'a failed authoritative repair remains a typed denial');
+    t.same(
+      error.schemaAdmission.snapshot.readyLeaseAgeWitness,
+      readyLeaseAgeWitness,
+      'a thrown forced repair retains the last bounded chronology witness',
+    );
     t.end();
   });
 

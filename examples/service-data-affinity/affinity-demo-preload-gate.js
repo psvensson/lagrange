@@ -58,6 +58,11 @@ const PRELOAD_ADMISSION_QUERY_REQUIRED_ERROR =
 const PRIORITY_SPREAD_SUMMARY_SOURCE =
   'controlPlaneDiagnostics.currentPriorityPlacementObservation';
 const CURRENT_PRIORITY_PLACEMENT_OBSERVATION_AVAILABLE = 'available';
+const UNAVAILABLE_READY_LEASE_AGE_WITNESS = Object.freeze({
+  schemaVersion: 1,
+  state: 'unavailable',
+  reason: 'control_snapshot_witness_unavailable',
+});
 
 function buildAdminLaneTarget(target, lane) {
   const url = new URL(target);
@@ -157,6 +162,14 @@ function buildSnapshotProbe(snapshot, snapshotError, nowMs) {
     ...buildLatestTopologyDrainProbe(replicaOperations, nowMs),
     error: '',
   };
+}
+
+function resolveReadyLeaseAgeWitness(snapshot) {
+  const witness =
+    snapshot?.controlPlaneDiagnostics?.readyLeaseAgeWitness;
+  return isPlainRecord(witness) ?
+    witness :
+    UNAVAILABLE_READY_LEASE_AGE_WITNESS;
 }
 
 function isPriorityPartitionSummaryAvailable(priorityPartitionSummary) {
@@ -281,7 +294,12 @@ function resolveSnapshotObservationError(snapshot) {
     reasonSuffix;
 }
 
-function classifySnapshot(snapshot, snapshotError, nowMs) {
+function classifySnapshot(
+  snapshot,
+  snapshotError,
+  nowMs,
+  readyLeaseAgeWitness = resolveReadyLeaseAgeWitness(snapshot),
+) {
   const snapshotProbe = buildSnapshotProbe(snapshot, snapshotError, nowMs);
   const quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
     snapshotProbe,
@@ -295,6 +313,7 @@ function classifySnapshot(snapshot, snapshotError, nowMs) {
   });
   return Object.freeze({
     ...quiescenceSnapshot,
+    readyLeaseAgeWitness,
     latestTopologyDrainAtMs: snapshotProbe.latestTopologyDrainAtMs ?? null,
     latestTopologyDrainOperationId:
       snapshotProbe.latestTopologyDrainOperationId ?? null,
@@ -316,6 +335,7 @@ async function observeControlSnapshot(options, target, timeoutMs) {
     snapshotError = String(error?.message || error);
   }
   let snapshotRow = resolveRows(snapshotResult)[ZERO];
+  let readyLeaseAgeWitness = resolveReadyLeaseAgeWitness(snapshotRow);
   if (
     !snapshotError &&
     snapshotRow?.snapshotObservation?.state ===
@@ -330,6 +350,7 @@ async function observeControlSnapshot(options, target, timeoutMs) {
           timeoutMs: repairTimeoutMs,
         });
         snapshotRow = resolveRows(snapshotResult)[ZERO];
+        readyLeaseAgeWitness = resolveReadyLeaseAgeWitness(snapshotRow);
       } catch (error) {
         snapshotRow = null;
         snapshotError = String(error?.message || error);
@@ -339,7 +360,12 @@ async function observeControlSnapshot(options, target, timeoutMs) {
   snapshotError = snapshotError || resolveSnapshotObservationError(snapshotRow);
   snapshotError = snapshotError ||
     resolveSnapshotAdmissionFieldsError(snapshotRow);
-  return classifySnapshot(snapshotRow, snapshotError, options.now());
+  return classifySnapshot(
+    snapshotRow,
+    snapshotError,
+    options.now(),
+    readyLeaseAgeWitness,
+  );
 }
 
 function normalizeTimeoutMs(value) {
