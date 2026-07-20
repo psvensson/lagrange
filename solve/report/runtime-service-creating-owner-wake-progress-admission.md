@@ -18,16 +18,17 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T07-34-10-257Z.report.json
-- Selected theory: theory-20260720-marked-target-progress-deferred-retry-context (stale: selected theory status is falsified)
+- Mechanism: budget_gap
+- Movement: invalid: FAIL -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json
+- Selected theory: theory-20260720-marked-target-progress-deferred-retry-context (stale: selected theory status is needs-rerun)
 - Next move: record or select a fresh frontier theory for runtime-service-creating-owner-wake-progress-admission-main
+- No longer current: FAIL
 
 ## Continuation
 - Status: blocked-theory
 - Next action: record or select a fresh frontier theory for runtime-service-creating-owner-wake-progress-admission-main
-- Blocker: selected theory stale: selected theory status is falsified
+- Blocker: selected theory stale: selected theory status is needs-rerun
 
 ## Scope Pressure
 - Changed files: 19
@@ -100,13 +101,15 @@
 - **runtime-service-creating-owner-wake-progress-admission-main**: Verifier rejected stale-after-retained-wait as the Demo 1 root: terminal ACTIVE writes carry no expected-step CAS and a dynamic SENDING-behind-CREATING discriminator still completed ACTIVE [subagent:verify_runtime_progress_attempt7]
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T07-58-15-317Z.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T08-02-47-446Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved attempt 13: the registered source ingress preserves only canonical target-progress evidence through the existing deferred retry slot, the exact retry fires and reaches durable ACTIVE, ordinary/arbitrary retries remain unmarked, phase/identity/terminal guards hold, and retry/transport/replay/concurrency/static gates pass with exact red-on-revert proof. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Attempt 13 leaves only inherited unrelated static debt: shouldDeferNodeStateUpdateRetry complexity 25 is byte-identical to base, unused-export ratchet is identically 1644 versus baseline 1628 on attempt and base, and step-coverage is identically metric 1; the touched defer method, files, lint, runtime grammar, models, focused tests, and scoped metrics are green. [subagent:verify_runtime_progress_attempt7]
 
 ## Theories
 - **theory-20260720-ownerkeyreconcilequeue-context-is-last-writer-wins** [active] system, mechanism OwnerKeyReconcileQueue context is last-writer-wins. ReplicaDispatchService must merge target_executor_outcome as monotone stronger evidence before enqueue while refreshing the row authoritatively, and runtime completion must use only exact replica_id plus target_node_id observation., owner source replica-dispatch operation owner queue and operation-workflow exact-target observation lane, modelGate npm run model:contracts
 - **theory-20260720-runtime-active-empty-visibility-skip-before** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism runtime-active-empty-visibility-skip-before-remote-owner-handoff, owner operation_workflow_owner, boundary executor_outcome_visibility_to_remote_owner_handoff, modelGate npm run model:contracts
 - **theory-20260720-stale-pending-masks-target-progress** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer observation, mechanism stale-cache-row-masks-advanced-target-progress-payload, owner replica-dispatch-service, boundary operation-dispatch-reconcile-row-selection, modelGate npm run model:contracts
 - **theory-20260720-known-step-monotone-stale-row-selection** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer observation, mechanism known-step-monotone-stale-row-selection, owner replica-dispatch-service, boundary operation-dispatch-reconcile-row-selection, modelGate npm run model:contracts
-- **theory-20260720-marked-target-progress-deferred-retry-context** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism marked-target-progress-deferred-retry-context-loss, owner replica-dispatch-service, boundary operation-dispatch-deferred-retry-context, modelGate npm run model:contracts
+- **theory-20260720-marked-target-progress-deferred-retry-context** [needs-rerun] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism marked-target-progress-deferred-retry-context-loss, owner replica-dispatch-service, boundary operation-dispatch-deferred-retry-context, modelGate npm run model:contracts
 
 ## Selected Theories
 - **runtime-service-creating-owner-wake-progress-admission-main**: theory-20260720-marked-target-progress-deferred-retry-context
@@ -118,6 +121,7 @@
 - **theory-20260720-known-step-monotone-stale-row-selection**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-23-14-443Z.report.json]
 - **theory-20260720-known-step-monotone-stale-row-selection**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T07-34-10-257Z.report.json]
 - **theory-20260720-marked-target-progress-deferred-retry-context**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T07-34-10-257Z.report.json]
+- **theory-20260720-marked-target-progress-deferred-retry-context**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
