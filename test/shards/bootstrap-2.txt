@@ -25,7 +25,7 @@ test/bootstrap/create-self-hosted-registration.test.js
 test/bootstrap/duplicate-replica-assignment.test.js
 test/bootstrap/durable-rejoin-partition-restore-planner.test.js
 test/bootstrap/dynamic-partition-cdc-subscription.test.js
-test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
+test/bootstrap/fresh-join-multi-peer-contact.test.js
 test/bootstrap/join-checkpoint-progression-characterization.test.js
 test/bootstrap/join-coordinator.test.js
 test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js
@@ -33,6 +33,7 @@ test/bootstrap/join-readiness-evaluator.test.js
 test/bootstrap/join-readiness-non-self-targeted-preservation.property.test.js
 test/bootstrap/join-readiness-startup-authority.test.js
 test/bootstrap/join-readiness-warming-node-preservation.property.test.js
+test/bootstrap/join-retry-patience-selectable.test.js
 test/bootstrap/join-startup-owner-routing.test.js
 test/bootstrap/joining-cdc-gate.test.js
 test/bootstrap/lifecycle-controller.test.js

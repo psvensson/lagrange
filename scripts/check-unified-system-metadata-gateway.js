@@ -72,6 +72,9 @@ const DIRECT_CACHE_APPLY_ALLOWLIST = [
   'src/control-plane/control-plane-system-table-gateway.js',
   'src/control-plane/control-plane-system-table-gateway-',
   'src/cache/system-table-cache.js',
+  // Raft election/demotion owns this version-preserving, cache-only
+  // partitions-row projection until the durable CDC publication supersedes it.
+  'src/partition/partition-service-metadata-delivery-methods.js',
 ];
 const PRESSURE_FAILURE_HELPER_ALLOWLIST = [
   // Inherited debt, anchored 2026-07-02 (see note above).

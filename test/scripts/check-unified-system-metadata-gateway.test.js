@@ -114,6 +114,41 @@ test('metadata gateway audit keeps the extracted replica-create cache seed ' +
     'retired owner path should be reported as a direct cache mutation');
 });
 
+test('metadata gateway audit keeps the Raft-owned leader projection ' +
+  'narrowly sanctioned', async (t) => {
+  const rootDir = createTempRoot();
+  const directCacheMutation =
+    'export function project(cache, row) {' +
+    ' cache.applySystemTableChange("partitions", "UPDATE", row); }';
+  writeRuntimeFile(
+    rootDir,
+    'src/partition/partition-service-metadata-delivery-methods.js',
+    directCacheMutation,
+  );
+
+  const sanctionedResult = runAudit(rootDir);
+
+  t.equal(sanctionedResult.status, 0,
+    'the Raft metadata-delivery owner should retain its narrow sanction');
+
+  fs.rmSync(path.join(
+    rootDir,
+    'src/partition/partition-service-metadata-delivery-methods.js',
+  ));
+  writeRuntimeFile(
+    rootDir,
+    'src/partition/partition-service-metadata-methods.js',
+    directCacheMutation,
+  );
+
+  const retiredPathResult = runAudit(rootDir);
+
+  t.equal(retiredPathResult.status, 1,
+    'a broader partition metadata path should not inherit the sanction');
+  t.match(retiredPathResult.stderr, /direct-cache-mutation/,
+    'the broader partition metadata path should be reported');
+});
+
 test('metadata gateway audit allows sanctioned bootstrap direct writers',
   async (t) => {
     const rootDir = createTempRoot();

@@ -3,6 +3,7 @@ test/bootstrap/bootstrap-api-admission-snapshots.test.js
 test/bootstrap/bootstrap-api-readiness-gating.test.js
 test/bootstrap/bootstrap-api-ready-nodes.test.js
 test/bootstrap/bootstrap-api-rejoin.test.js
+test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js
 test/bootstrap/bootstrap-api.test.js
 test/bootstrap/bootstrap-cleanup.property.test.js
 test/bootstrap/bootstrap-endpoint-table.property.test.js
@@ -24,7 +25,7 @@ test/bootstrap/connect-websocket-phase.test.js
 test/bootstrap/control-plane-rollout-controls.test.js
 test/bootstrap/control-plane-write-health-owner.test.js
 test/bootstrap/debug-meta-table-schemas.test.js
-test/bootstrap/fresh-join-multi-peer-contact.test.js
+test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
 test/bootstrap/hydrate-system-cache-from-bootstrap.test.js
 test/bootstrap/join-cleanup.property.test.js
 test/bootstrap/join-delegate-bundles.test.js
