@@ -167,3 +167,28 @@ test('an in-budget run keeps its measuring verdict', (t) => {
   fs.rmSync(dir, {recursive: true, force: true});
   t.end();
 });
+
+// The budgets consume only the UNEXPLAINED (host-noise) share when the
+// watchdog reports the tagged/unexplained split: app-owned stall time is
+// system-under-test behavior and must stay measurable as red.
+test('app-owned gap time does not invalidate; unexplained time does', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-sched-split-'));
+  fs.writeFileSync(path.join(dir, 'node-0.log'), gapLine({
+    gapCount: 40, totalGapMs: 150000, maxGapMs: 12000,
+    totalUnexplainedMs: 8000, maxUnexplainedGapMs: 900,
+  }));
+  const appOwned = await collectHostSchedulingEvidence(dir, 1);
+  t.equal(appOwned.exceeded, false,
+    '150s of tagged app-owned stalls stays measuring (a perf bug is red, not invalid)');
+  t.equal(appOwned.perNode[0].unexplainedTotalMs, 8000);
+
+  fs.writeFileSync(path.join(dir, 'node-0.log'), gapLine({
+    gapCount: 40, totalGapMs: 150000, maxGapMs: 12000,
+    totalUnexplainedMs: 140000, maxUnexplainedGapMs: 11000,
+  }));
+  const hostNoise = await collectHostSchedulingEvidence(dir, 1);
+  t.equal(hostNoise.exceeded, true,
+    'the same totals dominated by unexplained host noise invalidate the run');
+  fs.rmSync(dir, {recursive: true, force: true});
+  t.end();
+});

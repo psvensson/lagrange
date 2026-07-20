@@ -67,9 +67,12 @@ function blockedPercentOverLogSpan(lines, totalGapMs) {
   return (totalGapMs / (lastMs - firstMs)) * 100;
 }
 
+// Budgets apply to the UNEXPLAINED (host-noise) share of gap time: gap time
+// covered by tagged app-owned sections is system-under-test behavior and must
+// stay measurable as red, never laundered into a non-measuring verdict.
 function nodeExceedsBudget(node) {
-  return node.maxGapMs > MAX_SINGLE_GAP_MS ||
-    node.totalGapMs > MAX_TOTAL_GAP_MS ||
+  return node.unexplainedMaxGapMs > MAX_SINGLE_GAP_MS ||
+    node.unexplainedTotalMs > MAX_TOTAL_GAP_MS ||
     (node.blockedPercentOfLogSpan !== null &&
       node.blockedPercentOfLogSpan > MAX_BLOCKED_PERCENT);
 }
@@ -101,13 +104,23 @@ async function collectHostSchedulingEvidence(dataRoot, nodeCount) {
     const cumulative = lastCumulativeGapRecord(text);
     if (cumulative) {
       const totalGapMs = cumulative.totalGapMs ?? 0;
+      // Older logs predate the tagged/unexplained split; fall back to totals
+      // there (the pre-split, conservative behavior).
+      const unexplainedTotalMs =
+        Number.isFinite(cumulative.totalUnexplainedMs) ?
+          cumulative.totalUnexplainedMs : totalGapMs;
+      const unexplainedMaxGapMs =
+        Number.isFinite(cumulative.maxUnexplainedGapMs) ?
+          cumulative.maxUnexplainedGapMs : (cumulative.maxGapMs ?? 0);
       perNode.push({
         nodeId,
         gapCount: cumulative.gapCount ?? null,
         totalGapMs,
         maxGapMs: cumulative.maxGapMs ?? 0,
+        unexplainedTotalMs,
+        unexplainedMaxGapMs,
         blockedPercentOfLogSpan:
-          blockedPercentOverLogSpan(text.split('\n'), totalGapMs),
+          blockedPercentOverLogSpan(text.split('\n'), unexplainedTotalMs),
       });
     }
   }

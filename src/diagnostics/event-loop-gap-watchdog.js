@@ -493,6 +493,11 @@ class EventLoopGapWatchdog {
     this.gapCount = 0;
     this.totalGapMs = 0;
     this.maxGapMs = 0;
+    // Unexplained = gap time not covered by tagged app-owned sections; the
+    // host-noise share consumed by run-validity budgets (app-owned stalls are
+    // system-under-test behavior and must stay measurable as red).
+    this.totalUnexplainedMs = 0;
+    this.maxUnexplainedGapMs = 0;
     this.startedAtMs = 0;
     this.lastMemorySampleAtMs = 0;
   }
@@ -592,6 +597,10 @@ class EventLoopGapWatchdog {
       0,
       Math.round(gapMs - taggedExclusiveDeltaMs),
     );
+    this.totalUnexplainedMs += unexplainedMs;
+    if (unexplainedMs > this.maxUnexplainedGapMs) {
+      this.maxUnexplainedGapMs = unexplainedMs;
+    }
     const wallMs = Math.max(1, nowMs - this.startedAtMs);
 
     this.logConsoleOnly(
@@ -609,6 +618,8 @@ class EventLoopGapWatchdog {
           gapCount: this.gapCount,
           totalGapMs: Math.round(this.totalGapMs),
           maxGapMs: Math.round(this.maxGapMs),
+          totalUnexplainedMs: Math.round(this.totalUnexplainedMs),
+          maxUnexplainedGapMs: Math.round(this.maxUnexplainedGapMs),
           blockedPercentOfWall: Number(
             ((this.totalGapMs / wallMs) * 100).toFixed(2),
           ),
