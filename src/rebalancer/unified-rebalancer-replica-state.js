@@ -34,6 +34,7 @@ const {
   isNodeReadyWithTransport,
   isReplicaOperationInFlight,
   isReplicaOperationStale,
+  isTerminalSuccessfulCreateOperation,
   isValidWorkflowStep,
   normalizeReplicaOperationRecord,
   normalizeServiceRow,
@@ -330,18 +331,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         if (!this.isOperationForEntity(operation)) {
           return false;
         }
-        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
-          nowMs: this.nowFn(),
-        });
-        const terminalAdd =
-          normalizedOperation.type === OperationType.ADD &&
-          (normalizedOperation.status === ReplicaStatus.ACTIVE ||
-            normalizedOperation.workflowStep === WORKFLOW_STEP.ACTIVE);
-        const terminalReplace =
-          normalizedOperation.type === OperationType.REPLACE &&
-          (normalizedOperation.status === ReplicaStatus.REMOVED ||
-            normalizedOperation.workflowStep === WORKFLOW_STEP.REMOVED);
-        return terminalAdd || terminalReplace;
+        return isTerminalSuccessfulCreateOperation(
+          normalizeReplicaOperationRecord(operation, {nowMs: this.nowFn()}),
+        );
       },
     );
   }

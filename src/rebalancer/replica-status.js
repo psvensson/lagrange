@@ -184,6 +184,7 @@ export {
   isReplaceRemoveDispatchPhase,
   isTerminalReplicaOperationRecord,
   isTerminalReplicaOperationStatusForType,
+  isTerminalSuccessfulCreateOperation,
   buildReplicaOperationProgressSnapshot,
   resolveReplicaOperationSemanticPhase,
   resolveReplicaOperationSemanticPhaseFromRecord,

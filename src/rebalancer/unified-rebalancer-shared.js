@@ -34,6 +34,7 @@ import {
   isTerminalReplicaOperationSemanticPhase,
   isTerminalReplicaOperationRecord,
   isTerminalStep,
+  isTerminalSuccessfulCreateOperation,
   isValidWorkflowStep,
   resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
@@ -342,6 +343,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   isTerminalReplicaOperationSemanticPhase,
   isTerminalReplicaOperationRecord,
   isTerminalStep,
+  isTerminalSuccessfulCreateOperation,
   isValidWorkflowStep,
   normalizeNodeEndpointRow,
   normalizeNodeRow,

@@ -587,6 +587,33 @@ function isTerminalReplicaOperationRecord(record) {
   );
 }
 
+/**
+ * Terminal-successful create evidence: an ADD that reached ACTIVE, or a REPLACE
+ * whose source retired to REMOVED, proven by durable status OR workflow step.
+ * Planning surfaces use this as proof the create target reached readiness
+ * without waiting for a lagging service-cache lifecycle row. Deliberately
+ * status-OR-step rather than semantic-phase SETTLED: a settled status with a
+ * lagging (even failed) step still counts, preserving the exact semantics of
+ * the former inline consumer in unified-rebalancer-replica-state.
+ * @param {Object} normalizedOperation
+ * @return {boolean}
+ */
+function isTerminalSuccessfulCreateOperation(normalizedOperation) {
+  if (!normalizedOperation ||
+      typeof normalizedOperation !== LOCAL_STR_OBJECT) {
+    return false;
+  }
+  const terminalAdd =
+    normalizedOperation.type === OperationType.ADD &&
+    (normalizedOperation.status === ReplicaStatus.ACTIVE ||
+      normalizedOperation.workflowStep === WORKFLOW_STEP.ACTIVE);
+  const terminalReplace =
+    normalizedOperation.type === OperationType.REPLACE &&
+    (normalizedOperation.status === ReplicaStatus.REMOVED ||
+      normalizedOperation.workflowStep === WORKFLOW_STEP.REMOVED);
+  return terminalAdd || terminalReplace;
+}
+
 function buildReplicaOperationProgressSnapshot(record = {}) {
   const operationType = readReplicaOperationRecordType(record);
   const workflowStep = readReplicaOperationRecordWorkflowStep(record);
@@ -725,6 +752,7 @@ export {
   isReplaceRemoveDispatchPhase,
   isTerminalReplicaOperationRecord,
   isTerminalReplicaOperationStatusForType,
+  isTerminalSuccessfulCreateOperation,
   buildReplicaOperationProgressSnapshot,
   resolveReplicaOperationSemanticPhase,
   resolveReplicaOperationSemanticPhaseFromRecord,
