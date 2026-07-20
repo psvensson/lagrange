@@ -5,7 +5,8 @@ import os from 'node:os';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
-import {runTheoryCommand} from '../../scripts/solve/theory.js';
+import {appendTheoryResultForAttempt, runTheoryCommand}
+  from '../../scripts/solve/theory.js';
 import {readLog, projectState, saveQuest} from '../../scripts/solve/store.js';
 
 const CLI = path.resolve(
@@ -187,4 +188,75 @@ tap.test('Quest theory events', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+});
+
+// The attempt-path fallback mirrors the ingest-path rule: a failed scenario
+// attempt whose blockerAfter carries a verdict but no locating attribution
+// records 'avoided' (theory untested); verdict-less pure-metric evidence and
+// attributed failures still falsify.
+tap.test('appendTheoryResultForAttempt unattributed-failure fallback', async (t) => {
+  function attemptEvent(blockerAfter) {
+    return {
+      theoryRef: 't1',
+      frontier: 'demo-main',
+      invalidSample: false,
+      metricAfter: 1,
+      done: false,
+      discrimination: null,
+      blockerMovement: 'same',
+      diagnosticMovement: 'same blocker remains',
+      evidence: 'report.json',
+      blockerAfter,
+    };
+  }
+
+  function lastResult(root, quest) {
+    return readLog(root, quest.id)
+      .filter((event) => event.type === 'theory-result')
+      .pop();
+  }
+
+  t.test('scenario FAIL with vacuous attribution records avoided', (t) => {
+    const root = tmp();
+    const quest = questFor(root);
+    saveQuest(root, quest);
+    appendTheoryResultForAttempt(root, quest, attemptEvent({
+      verdict: 'FAIL', owner: null, boundary: null,
+      dominantReason: null, rootCauseClass: null,
+    }), false, []);
+    const result = lastResult(root, quest);
+    t.equal(result.theoryOutcome, 'avoided');
+    t.equal(result.result, 'avoided');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('verdict-less pure-metric evidence still falsifies', (t) => {
+    const root = tmp();
+    const quest = questFor(root);
+    saveQuest(root, quest);
+    appendTheoryResultForAttempt(root, quest, attemptEvent({
+      verdict: null, owner: null, boundary: null,
+      dominantReason: null, rootCauseClass: null,
+    }), false, []);
+    t.equal(lastResult(root, quest).result, 'falsified',
+      'flat metric with no verdict is the declared negative result');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('attributed failure still falsifies', (t) => {
+    const root = tmp();
+    const quest = questFor(root);
+    saveQuest(root, quest);
+    appendTheoryResultForAttempt(root, quest, attemptEvent({
+      verdict: 'FAIL', owner: 'owner_a', boundary: 'startup',
+      dominantReason: 'reason_a', rootCauseClass: 'topology',
+    }), false, []);
+    t.equal(lastResult(root, quest).result, 'falsified');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.end();
 });

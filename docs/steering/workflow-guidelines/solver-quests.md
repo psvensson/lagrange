@@ -598,7 +598,14 @@ building-block DTs without a live-precondition theory are exempt.
 ## Source Change Verification
 
 Every newly accepted source-changing attempt records verification contract v1,
-its Git base, and the SHA-256 identity of its exact patch. Spawn an independent
+its Git base, and the SHA-256 identity of its exact patch. Before spawning the
+verifier, run `npm run audit:attempt-preflight` (file-size thresholds, STYLE-0012
+vocabulary, step-coverage owner census): these cheap machine checks catch the
+mechanical rejections that otherwise burn a full attempt-verify cycle. The first
+two are ratcheted and must be green. The census is absolute and may carry
+inherited drift: compare its listed sites against the same command on the
+attempt's Git base — any NEW site means the attempt is not ready for
+verification. Spawn an independent
 verifier after that diff is ready. The verifier must inspect the Quest intent,
 touched diff, system guidelines, and applicable doctrine. Record an exact
 attempt approval on the active frontier:

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {
   EVENT_EVIDENCE_INGESTED,
   EVENT_THEORY_RESULT,
+  THEORY_RESULT_AVOIDED,
   THEORY_RESULT_FALSIFIED,
   THEORY_RESULT_NEEDS_RERUN,
   THEORY_RESULT_SUPPORTED,
@@ -15,6 +16,7 @@ import {
   BLOCKER_MOVEMENT_MOVED_OWNER,
   BLOCKER_MOVEMENT_NARROWED,
   blockerFromEvidence,
+  blockerUnattributedScenarioFailure,
   classifyBlockerMovement,
   detectOscillation,
 } from './current-blocker.js';
@@ -350,6 +352,13 @@ export function ingestEvidence(root, {
           result = THEORY_RESULT_SUPPORTED;
           theoryOutcome = 'partial';
         }
+      } else if (blockerUnattributedScenarioFailure(currentBlocker)) {
+        // The scenario failed but never located a blocker (verdict present, no
+        // owner/boundary/reason): it cannot have engaged the theory's
+        // discriminating boundary, so the theory is untested by this evidence,
+        // not refuted.
+        result = THEORY_RESULT_AVOIDED;
+        theoryOutcome = THEORY_RESULT_AVOIDED;
       } else {
         result = THEORY_RESULT_FALSIFIED;
         theoryOutcome = THEORY_RESULT_FALSIFIED;

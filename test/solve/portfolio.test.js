@@ -6,6 +6,7 @@ import os from 'node:os';
 import {saveQuest, appendEvent} from '../../scripts/solve/store.js';
 import {
   buildPortfolio,
+  OPEN_PRODUCT_QUEST_WIP_CAP,
   summarizePortfolio,
   renderPortfolio,
   questPortfolioRow,
@@ -243,4 +244,37 @@ tap.test('portfolio projection (Concern 3)', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+});
+
+// The WIP advisory fires only when open PRODUCT quests exceed the cap: most
+// product quests close through one serialized live gate, so overrun is
+// attribution overhead, not parallelism. Advisory, never blocking.
+tap.test('open-product WIP cap advisory', async (t) => {
+  function openProductRows(count) {
+    return Array.from({length: count}, (_unused, index) => ({
+      id: `p-${index}`, class: 'product', closure: 'MEASURED',
+      outcome: 'open', open: true,
+    }));
+  }
+
+  t.test('under the cap stays quiet', (t) => {
+    const rows = openProductRows(3);
+    const summary = summarizePortfolio(rows);
+    t.equal(summary.openProductOverCap, 0);
+    t.notMatch(renderPortfolio({rows, summary}), /WIP advisory/u);
+    t.end();
+  });
+
+  t.test('over the cap surfaces the sweep advisory', (t) => {
+    const rows = openProductRows(OPEN_PRODUCT_QUEST_WIP_CAP + 4);
+    const summary = summarizePortfolio(rows);
+    t.equal(summary.openProductOverCap, 4);
+    const md = renderPortfolio({rows, summary});
+    t.match(md, /WIP advisory/u);
+    t.match(md, /operator-park any open quest whose\nresidual is already delegated|operator-park any open quest/u,
+      'the advisory names the sweep action');
+    t.end();
+  });
+
+  t.end();
 });

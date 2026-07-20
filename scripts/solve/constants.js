@@ -364,6 +364,14 @@ export const VERDICT_REASON_EXECUTION_INCOMPLETE =
 // the frontier is honestly routed to "fix the harness" instead of chasing the noise.
 export const VERDICT_REASON_HARNESS_CONNECTIVITY =
   'harness_connectivity_or_system_failure';
+// A run whose node processes the HOST froze past the scenario's own timing budgets
+// (event-loop gaps from thermal throttling, memory pressure, or scheduler contention)
+// measured the machine, not the system under test: no correct implementation can hold
+// a 5s staleness threshold while its process is stopped for 10s. The producer stamps
+// this reason from harvested watchdog gap totals; the solver treats the sample exactly
+// like a thermally invalid run — non-measuring, re-run — never as red.
+export const VERDICT_REASON_HOST_SCHEDULING =
+  'host_scheduling_gap_budget_exceeded';
 
 // The precise discriminator for an invalid metric sample is the reason code (the
 // metric itself is missing/untrustworthy), not the verdict alone: a completed-but-
@@ -372,6 +380,7 @@ export const VERDICT_REASON_HARNESS_CONNECTIVITY =
 export const NON_MEASURING_VERDICT_REASONS = Object.freeze([
   VERDICT_REASON_EXECUTION_INCOMPLETE,
   VERDICT_REASON_HARNESS_CONNECTIVITY,
+  VERDICT_REASON_HOST_SCHEDULING,
 ]);
 
 // rr-G: how many consecutive trailing non-measuring frontier samples mark the harness

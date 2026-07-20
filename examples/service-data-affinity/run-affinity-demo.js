@@ -60,6 +60,9 @@ import {
   writeAffinityDemoLiveReport,
 } from './affinity-demo-live-report.js';
 import {
+  collectHostSchedulingEvidence,
+} from './host-scheduling-evidence.js';
+import {
   assessAffinityDemoCompletion,
   buildWeightedLocalitySnapshot,
   topNRowsEqual,
@@ -750,6 +753,10 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
   } finally {
     console.log('Stopping cluster...');
     await stopNodes(nodes);
+    // Harvest after stop so each node's log is fully flushed. Over-budget host
+    // scheduling marks the report non-measuring rather than red.
+    phaseEvidence.hostScheduling =
+      await collectHostSchedulingEvidence(CLUSTER_DATA_ROOT, NODE_COUNT);
   }
 }
 

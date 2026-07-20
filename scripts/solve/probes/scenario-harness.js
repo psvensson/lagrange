@@ -24,6 +24,33 @@ const METRIC_DISTANCE = 'distance';
 const DEFAULT_CONSECUTIVE = 1;
 const DISTANCE_PRIORITY_WEIGHT = 100;
 const DISTANCE_SPREAD_WEIGHT = 5;
+const DISTANCE_STAGE_WEIGHT = 10;
+
+// Ordered stage receipts a live demo report exposes under the scenario entry's
+// `detail`: schema admission, preload admission, then a produced demo result. Ordered
+// shallowest-first so both the distance term and the ratchet labels read depth from
+// one place.
+const DEMO_STAGES = Object.freeze([
+  {label: 'demo_schema_admitted', reached: (d) => d.schemaAdmission?.admitted === true},
+  {label: 'demo_preload_admitted', reached: (d) => d.preloadAdmission?.admitted === true},
+  {label: 'demo_result_produced', reached: (d) => d.result !== null && d.result !== undefined},
+]);
+
+function demoDetail(entry) {
+  const detail = entry?.detail;
+  return detail && typeof detail === 'object' ? detail : null;
+}
+
+// Count of demo stages a run did NOT reach. Reports without a staged demo surface
+// contribute 0, keeping the term inert for pure convergence scenarios. With it, a run
+// that dies after preload scores strictly closer than one denied at schema admission
+// even while the binary priority count flaps at the same value — the "flat 1 -> 1
+// while the failure boundary demonstrably moved downstream" blindness.
+function demoStagesRemaining(entry) {
+  const detail = demoDetail(entry);
+  if (!detail) return 0;
+  return DEMO_STAGES.filter((stage) => !stage.reached(detail)).length;
+}
 
 function safeRead(file) {
   try {
@@ -210,6 +237,12 @@ export function extractSatisfiedInvariants(data, scenario) {
   if (ev.missingPublishedCount === 0) set.add('publication_converged');
   if (ev.prioritySpreadPending === false) set.add('priority_spread_settled');
   if (entry?.invariantBreaches?.totalCount === 0) set.add('no_invariant_breaches');
+  const detail = demoDetail(entry);
+  if (detail) {
+    for (const stage of DEMO_STAGES) {
+      if (stage.reached(detail)) set.add(stage.label);
+    }
+  }
   return [...set];
 }
 
@@ -226,14 +259,17 @@ function distinctFailingInvariants(data, scenario) {
 export function distanceMetricFromReport(data, scenario, opts = {}) {
   const priority = readMetric(data, METRIC_PRIORITY);
   if (priority === null) return null;
-  const ev = stabilityEvidence(scenarioEntry(data, scenario) || {});
+  const entry = scenarioEntry(data, scenario) || {};
+  const ev = stabilityEvidence(entry);
   const missing = Number.isInteger(ev.missingPublishedCount) ?
     ev.missingPublishedCount : 0;
   const spread = ev.prioritySpreadPending === true ? DISTANCE_SPREAD_WEIGHT : 0;
   const failing = distinctFailingInvariants(data, scenario);
+  const stages = demoStagesRemaining(entry) * DISTANCE_STAGE_WEIGHT;
   const streakTerm = Number.isInteger(opts.streakTerm) ?
     Math.max(0, opts.streakTerm) : 0;
-  return priority * DISTANCE_PRIORITY_WEIGHT + missing + spread + failing + streakTerm;
+  return priority * DISTANCE_PRIORITY_WEIGHT + missing + spread + failing + stages +
+    streakTerm;
 }
 
 // Count of the most-recent consecutive runs that both measure and pass (a clean

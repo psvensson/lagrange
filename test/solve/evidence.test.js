@@ -755,3 +755,102 @@ tap.test('R2 oscillation reclassifies a revisit as falsified', async (t) => {
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
+
+// A failed run whose report never locates a blocker (no owner, boundary, dominant
+// reason, or root-cause class) cannot have engaged the selected theory's
+// discriminating boundary: the honest outcome is 'avoided' (untested), never
+// 'falsified'. Attributed same-blocker failures still falsify.
+tap.test('unattributed failures record avoided, attributed failures falsify', async (t) => {
+  function report(ts, failure) {
+    return {
+      ...sampleReport,
+      timestamp: ts,
+      scenarios: [{
+        scenario: 'rolling-restart',
+        passed: false,
+        verdict: 'FAIL_CORE_INVARIANT',
+        verdictReason: 'core_invariant_or_safety_violation',
+        ...(failure ? {details: {diagnostics: {failure}}} : {}),
+      }],
+    };
+  }
+
+  function selectTheory(root, goal, theory) {
+    appendEvent(root, goal.id, {
+      type: 'theory-option-declared', theory,
+      frontier: 'evidence-quest-test-main', scope: 'frontier',
+      status: 'active', layer: 'ownership', mechanism: 'active_gate',
+    });
+    appendEvent(root, goal.id, {
+      type: 'theory-selected', frontier: 'evidence-quest-test-main', theory,
+    });
+  }
+
+  function latestResult(root, goal, theory) {
+    const results = readLog(root, goal.id)
+      .filter((event) => event.type === 'theory-result' && event.theory === theory);
+    return results[results.length - 1];
+  }
+
+  t.test('vacuous attribution yields avoided', (t) => {
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    selectTheory(root, goal, 't-vacuous');
+    const paths = ['a', 'b'].map((n) => path.join(reportDir, `${n}.report.json`));
+    fs.writeFileSync(paths[0], JSON.stringify(
+      report('2026-06-01T12:50:00.000Z', null)));
+    fs.writeFileSync(paths[1], JSON.stringify(
+      report('2026-06-01T12:55:00.000Z', null)));
+    for (const p of paths) {
+      ingestEvidence(root, {
+        questId: goal.id, frontierId: 'evidence-quest-test-main', evidencePath: p,
+      });
+    }
+    const latest = latestResult(root, goal, 't-vacuous');
+    t.equal(latest.theoryOutcome, 'avoided',
+      'a run that never located a blocker leaves the theory untested');
+    t.equal(latest.result, 'avoided');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('attributed same-blocker failure still falsifies', (t) => {
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    selectTheory(root, goal, 't-attributed');
+    const failure = {
+      rootCauseClass: 'topology',
+      dominantReason: 'reason_a',
+      ownerContract: {
+        frontierWitnesses: [{
+          owner: 'owner_a',
+          boundary: 'startup',
+          source: {nextRequiredActions: 'advance_existing_operation'},
+        }],
+      },
+    };
+    const paths = ['a', 'b'].map((n) => path.join(reportDir, `${n}.report.json`));
+    fs.writeFileSync(paths[0], JSON.stringify(
+      report('2026-06-01T12:50:00.000Z', failure)));
+    fs.writeFileSync(paths[1], JSON.stringify(
+      report('2026-06-01T12:55:00.000Z', failure)));
+    for (const p of paths) {
+      ingestEvidence(root, {
+        questId: goal.id, frontierId: 'evidence-quest-test-main', evidencePath: p,
+      });
+    }
+    const latest = latestResult(root, goal, 't-attributed');
+    t.equal(latest.theoryOutcome, 'falsified',
+      'a located, unchanged blocker still refutes the theory');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.end();
+});

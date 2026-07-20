@@ -55,6 +55,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## audit
 
 - `audit:architecture-slices` — `node scripts/check-architecture-slices.js`
+- `audit:attempt-preflight` — `npm run audit:file-size && npm run audit:style-terminal-vocabulary && npm run audit:step-coverage-owner`
 - `audit:closure-ledger` — Validate closure-ledger state.
 - `audit:cure-typing-owner` — `node scripts/check-cure-typing-owner.js`
 - `audit:file-size` — Report oversized production and test files.
@@ -65,7 +66,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:guideline:hot-path-diagnostics` — `node scripts/check-guideline-hot-path-diagnostics.js`
 - `audit:guideline:literals` — Check write-scope files for new unowned runtime literals.
 - `audit:guideline:silent-catch` — `node scripts/check-guideline-silent-catch.js`
-- `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch`
+- `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:style-terminal-vocabulary`
 - `audit:hold-engagement-owner` — `node scripts/check-hold-engagement-owner.js`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
 - `audit:no-legacy-naming` — `node scripts/check-no-legacy-naming.js`
@@ -79,6 +80,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:shards` — `node scripts/generate-test-shards.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
+- `audit:style-terminal-vocabulary` — `node scripts/check-style-terminal-vocabulary.js`
 - `audit:voter-readiness-owner` — `node scripts/check-voter-readiness-single-owner.js`
 
 ## build
@@ -280,4 +282,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-184 scripts indexed; 71 have a curated description, 113 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+186 scripts indexed; 71 have a curated description, 115 fall back to their raw command. Improve coverage in the two sources named in the header comment.

@@ -89,6 +89,14 @@ function emptyClassTally() {
   return {total: 0, solved: 0, exhausted: 0, draft: 0, open: 0};
 }
 
+// Advisory WIP cap on OPEN product quests. Most product quests close through the
+// same live scenario gate, so open work beyond what that serialized gate can
+// actually measure is not parallelism — it is attribution overhead and blocker
+// re-discovery spread across quests. Advisory, not blocking: the portfolio surfaces
+// the overrun and points at the sweep (operator-park quests whose residual is
+// already delegated to a successor) instead of refusing new work.
+export const OPEN_PRODUCT_QUEST_WIP_CAP = 15;
+
 export function summarizePortfolio(rows) {
   const byClass = {
     [QUEST_CLASS_PRODUCT]: emptyClassTally(),
@@ -112,7 +120,13 @@ export function summarizePortfolio(rows) {
   const ratio = product.open === 0 ?
     (process.open === 0 ? 0 : Infinity) :
     process.open / product.open;
-  return {byClass, total: rows.length, openRatioProcessPerProduct: ratio};
+  return {
+    byClass,
+    total: rows.length,
+    openRatioProcessPerProduct: ratio,
+    openProductWipCap: OPEN_PRODUCT_QUEST_WIP_CAP,
+    openProductOverCap: Math.max(0, product.open - OPEN_PRODUCT_QUEST_WIP_CAP),
+  };
 }
 
 export function buildPortfolio(root) {
@@ -157,6 +171,14 @@ export function renderPortfolio(portfolio) {
   lines.push(
     `- open process:product ratio: ${ratioText(summary.openRatioProcessPerProduct)}`,
   );
+  if (summary.openProductOverCap > 0) {
+    lines.push(
+      `- WIP advisory: ${product.open} open product quests exceed the ` +
+      `${summary.openProductWipCap}-quest cap by ${summary.openProductOverCap}. ` +
+      'Before authoring new quests, sweep: operator-park any open quest whose ' +
+      'residual is already delegated to a successor.',
+    );
+  }
   lines.push('');
   return lines.join('\n');
 }

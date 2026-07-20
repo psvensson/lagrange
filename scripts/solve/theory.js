@@ -31,6 +31,7 @@ import {
   BLOCKER_MOVEMENT_MOVED_BOUNDARY,
   BLOCKER_MOVEMENT_MOVED_OWNER,
   BLOCKER_MOVEMENT_NARROWED,
+  blockerUnattributedScenarioFailure,
   selectedTheoryStaleness,
 } from './current-blocker.js';
 import {modelGuidanceForQuest} from './model-guidance.js';
@@ -465,6 +466,13 @@ export function appendTheoryResultForAttempt(root, quest, event, progressed, vio
       progressed ? SCENARIO_OUTCOME_IMPROVED :
         SCENARIO_OUTCOME_FAILED;
   const movement = event.blockerMovement || null;
+  // Falsification requires evidence that engaged the theory's boundary: a failed
+  // scenario run whose blocker attribution is vacuous (verdict present, but
+  // owner/boundary/reason all unknown) says only that SOMETHING still fails, not
+  // that it fails at the theorized seam — record 'avoided' so the theory stays
+  // honestly untested instead of falsely refuted. Verdict-less pure-metric
+  // evidence keeps falsifying: there, flatness is the declared negative result.
+  const unattributed = blockerUnattributedScenarioFailure(event.blockerAfter);
   const theoryOutcome =
     invalid ? THEORY_RESULT_NEEDS_RERUN :
       discrimination === DISCRIMINATION_CONFIRMED ? THEORY_RESULT_SUPPORTED :
@@ -476,7 +484,7 @@ export function appendTheoryResultForAttempt(root, quest, event, progressed, vio
               BLOCKER_MOVEMENT_NARROWED,
             ].includes(movement) ?
               THEORY_OUTCOME_PARTIAL :
-              THEORY_RESULT_FALSIFIED;
+              unattributed ? THEORY_RESULT_AVOIDED : THEORY_RESULT_FALSIFIED;
   const result = theoryOutcome === THEORY_OUTCOME_PARTIAL ?
     THEORY_RESULT_SUPPORTED :
     theoryOutcome;

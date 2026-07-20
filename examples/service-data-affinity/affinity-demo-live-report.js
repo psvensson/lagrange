@@ -26,6 +26,14 @@ function buildAffinityDemoLiveReport({
   phaseEvidence = {},
 } = {}) {
   const passed = Boolean(result?.converged) && !error;
+  // A run the host froze past the gap budget is non-measuring, not red: stamp the
+  // shared verdict reason so the Solver invalidates the sample instead of scoring it.
+  const hostScheduling = phaseEvidence?.hostScheduling || null;
+  const hostInvalid = hostScheduling?.exceeded === true;
+  const current = {passed, verdict: passed ? 'PASS' : 'FAIL'};
+  if (hostInvalid) {
+    current.verdictReason = 'host_scheduling_gap_budget_exceeded';
+  }
   return {
     timestamp,
     scenario: LIVE_SCENARIO,
@@ -41,7 +49,7 @@ function buildAffinityDemoLiveReport({
       scenarios: [{
         scenario: LIVE_SCENARIO,
         passed,
-        current: {passed, verdict: passed ? 'PASS' : 'FAIL'},
+        current,
         detail: {
           result,
           schemaAdmission:
@@ -54,6 +62,7 @@ function buildAffinityDemoLiveReport({
             phaseEvidence?.preloadAdmission ||
             error?.preloadAdmission ||
             NOT_OBSERVED_ADMISSION,
+          hostScheduling,
           error: error?.message || null,
         },
       }],

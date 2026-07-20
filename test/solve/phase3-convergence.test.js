@@ -219,3 +219,71 @@ tap.test('R4 distance metric', async (t) => {
     t.end();
   });
 });
+
+// Demo-stage depth: a live demo that dies later in its staged pipeline (schema
+// admission -> preload -> produced result) must score strictly closer than one denied
+// earlier, even when both leave the binary priority count at the same value, and the
+// reached stages must feed the monotonic ratchet.
+tap.test('distance demo-stage depth term', async (t) => {
+  const SC = 'movielens-live';
+
+  function stagedReport(detail) {
+    return {
+      timestamp: '2026-06-01T01:00:00Z',
+      summary: {total: 1, passed: 0, failed: 1},
+      optimizationSummary: {totalPriorityItems: 1},
+      standardSummary: {
+        scenarios: [{
+          scenario: SC,
+          current: {passed: false, verdict: 'FAIL'},
+          detail,
+        }],
+      },
+    };
+  }
+
+  t.test('later stage failure scores closer than earlier stage failure', (t) => {
+    const schemaDenied = stagedReport({
+      result: null,
+      schemaAdmission: {admitted: false},
+      preloadAdmission: {admitted: false},
+      error: 'schema admission denied',
+    });
+    const postPreload = stagedReport({
+      result: null,
+      schemaAdmission: {admitted: true},
+      preloadAdmission: {admitted: true},
+      error: 'learned-affinity stalled',
+    });
+    t.ok(distanceMetricFromReport(postPreload, SC) <
+      distanceMetricFromReport(schemaDenied, SC),
+    'a post-preload failure is closer than a schema-admission denial');
+    // 1*100 + 3 unreached stages * 10 vs 1*100 + 1 unreached stage * 10
+    t.equal(distanceMetricFromReport(schemaDenied, SC), 130);
+    t.equal(distanceMetricFromReport(postPreload, SC), 110);
+    t.end();
+  });
+
+  t.test('reports without a staged demo surface are unaffected', (t) => {
+    const plain = stagedReport(undefined);
+    delete plain.standardSummary.scenarios[0].detail;
+    t.equal(distanceMetricFromReport(plain, SC), 100,
+      'no detail surface leaves the distance term inert');
+    t.end();
+  });
+
+  t.test('reached stages appear as satisfied-invariant ratchet labels', (t) => {
+    const postPreload = stagedReport({
+      result: null,
+      schemaAdmission: {admitted: true},
+      preloadAdmission: {admitted: true},
+    });
+    const labels = extractSatisfiedInvariants(postPreload, SC);
+    t.ok(labels.includes('demo_schema_admitted'));
+    t.ok(labels.includes('demo_preload_admitted'));
+    t.notOk(labels.includes('demo_result_produced'));
+    t.end();
+  });
+
+  t.end();
+});

@@ -78,6 +78,25 @@ export function blockerLabel(blocker) {
     blocker.rootCauseClass || blocker.verdict || 'unknown';
 }
 
+// A blocker whose evidence carried no owner, boundary, dominant reason, or root-cause
+// class never located WHERE the run failed: its label degrades to the bare verdict, so
+// "same blocker" comparisons against it are vacuous (FAIL === FAIL). Theory scoring must
+// not treat such evidence as engaging — let alone refuting — a theory's boundary.
+export function blockerAttributionVacuous(blocker) {
+  if (!blocker) return true;
+  return !blocker.owner && !blocker.boundary && !blocker.dominantReason &&
+    !blocker.rootCauseClass;
+}
+
+// The theory-refutation escape hatch is scoped to SCENARIO evidence: a run that
+// produced a verdict but no locating attribution failed somewhere unknown, which
+// cannot refute a theory about a specific boundary. Pure metric probes (no verdict
+// at all) have no boundary to locate — their flatness is the theory's own declared
+// negative result and still falsifies.
+export function blockerUnattributedScenarioFailure(blocker) {
+  return Boolean(blocker?.verdict) && blockerAttributionVacuous(blocker);
+}
+
 const UNRESOLVED_LABELS = Object.freeze(['none', 'unknown']);
 
 // Ordered, de-duplicated history of distinct blocker labels observed across all
