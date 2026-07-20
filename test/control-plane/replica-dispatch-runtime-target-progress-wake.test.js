@@ -21,6 +21,9 @@ import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
+import {
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
+} from '../../src/rebalancer/replica-operation-repository.js';
 import {createTestCoordinator} from '../rebalancer/test-helpers.js';
 import {
   createService,
@@ -490,12 +493,18 @@ test(
 );
 
 test(
-  'remote runtime ACTIVE crosses target wake and source termination',
+  'fresh EMPTY runtime ACTIVE retries through SENDING target visibility ' +
+  'and source termination',
   async (t) => {
     initEnv();
 
-    const operationRow = buildRuntimeCreatingOperationRow({
+    const sourceOperationRow = buildRuntimeCreatingOperationRow({
       updated_at: 1700000000514,
+    });
+    const targetOperationRow = buildRuntimeCreatingOperationRow({
+      status: ReplicaStatus.PENDING,
+      workflow_step: WORKFLOW_STEP.SENDING,
+      updated_at: 1700000000508,
     });
     const activeServiceRow = {
       service_id: REPLICA_ID,
@@ -520,7 +529,7 @@ test(
       nodeId: SOURCE_NODE_ID,
       cacheData: {
         services: [activeServiceRow],
-        replicaOperations: [operationRow],
+        replicaOperations: [{...sourceOperationRow}],
       },
       cdcIntegrationService,
       sqlQueryResults: {
@@ -538,11 +547,20 @@ test(
       rebalanceCoordinator: sourceCoordinator,
     });
     const targetDeliveries = [];
+    const targetVisibilityRetryTimers = [];
     const targetCoordinator = createTestCoordinator({
       nodeId: TARGET_NODE_ID,
       cacheData: {
         services: [activeServiceRow],
-        replicaOperations: [operationRow],
+        replicaOperations: [{...targetOperationRow}],
+      },
+      setTimeoutFn(callback, delayMs) {
+        const timerHandle = {callback, delayMs};
+        targetVisibilityRetryTimers.push(timerHandle);
+        return timerHandle;
+      },
+      clearTimeoutFn(timerHandle) {
+        timerHandle.cleared = true;
       },
       messageRouter: {
         async deliver(address, payload, options) {
@@ -553,13 +571,31 @@ test(
             sourceDispatch.handleReplicaOperationDispatch({
               type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
               [ControlPlaneField.OPERATION_ID]: OPERATION_ID,
-              [ControlPlaneField.OPERATION_ROW]: operationRow,
+              [ControlPlaneField.OPERATION_ROW]: {...sourceOperationRow},
             });
           await Promise.all([targetProgressWake, ordinaryDispatch]);
           return {acknowledged: true};
         },
       },
     });
+    const readTargetVisibility =
+      targetCoordinator.repository.getOperationByIdVisibilityObservation.bind(
+        targetCoordinator.repository,
+      );
+    let targetVisibilityReadCount = 0;
+    targetCoordinator.repository.getOperationByIdVisibilityObservation =
+      async (...args) => {
+        targetVisibilityReadCount++;
+        if (targetVisibilityReadCount === 1) {
+          return {
+            state: INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+            operation: null,
+            deferredOutcome: null,
+            retryAfterMs: null,
+          };
+        }
+        return readTargetVisibility(...args);
+      };
 
     try {
       await targetCoordinator.workflowOwner.reconcileExecutorOutcome({
@@ -568,7 +604,16 @@ test(
           EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
         [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.ACTIVE,
         [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: REPLICA_ID,
+        [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: Date.now(),
       });
+      t.equal(
+        targetVisibilityRetryTimers.length,
+        1,
+        'fresh EMPTY runtime outcome should retain one bounded retry',
+      );
+      if (targetVisibilityRetryTimers[0]) {
+        await targetVisibilityRetryTimers[0].callback();
+      }
       await drainOperationDispatchQueue(sourceDispatch);
 
       const completedOperation =
@@ -577,6 +622,11 @@ test(
         targetDeliveries.length,
         1,
         'target ACTIVE should send one immediate canonical owner wake',
+      );
+      t.equal(
+        targetVisibilityReadCount,
+        2,
+        'retry should re-read the independently cloned target operation',
       );
       t.equal(
         targetDeliveries[0]?.address,

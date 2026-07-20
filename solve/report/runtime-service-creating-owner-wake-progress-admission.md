@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 9
+**Attempts:** 10
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -20,24 +20,24 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-46-36-533Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for runtime-service-creating-owner-wake-progress-admission-main
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T05-23-33-693Z.report.json
+- Selected theory: theory-20260720-runtime-active-empty-visibility-skip-before (stale: selected theory status is falsified)
+- Next move: record or select a fresh frontier theory for runtime-service-creating-owner-wake-progress-admission-main
 
 ## Continuation
-- Status: allowed
-- Next action: continue supervised step for runtime-service-creating-owner-wake-progress-admission-main
-- Blocker: none
+- Status: blocked-theory
+- Next action: record or select a fresh frontier theory for runtime-service-creating-owner-wake-progress-admission-main
+- Blocker: selected theory stale: selected theory status is falsified
 
 ## Scope Pressure
-- Changed files: 17
-- Change bytes: 60159
+- Changed files: 18
+- Change bytes: 69389
 - Owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Categories: runtime, test
-- Action: split by owner area before the next attempt (17 files)
+- Action: split by owner area before the next attempt (18 files)
 - Action: land or separate 5 owner areas: src/constants, src/control-plane, src/rebalancer, test/control-plane, test/rebalancer
 - Split plan:
-  - src/rebalancer: 8 file(s)
+  - src/rebalancer: 9 file(s)
   - src/control-plane: 6 file(s)
   - src/constants: 1 file(s)
   - test/control-plane: 1 file(s)
@@ -46,7 +46,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 9, metric 1 -> 1
+- **runtime-service-creating-owner-wake-progress-admission-main** [open] rung 0, attempts 10, metric 1 -> 1
 
 ## Findings
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-19T19-39-35-247Z.json]
@@ -84,15 +84,22 @@
 - **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification rejected attempt 8 because RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS was declared in replica-dispatch-replay-readiness instead of the canonical replica-operation-step-policy owner, increasing the step-coverage owner drift census from two inherited sites to three. Functional behavior, live-ordering fidelity, artifact integrity, DT 0/1/0, and all other scoped gates passed; the replacement must export the set from the canonical owner. [subagent:verify_runtime_progress_attempt7]
 - **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T05-00-56-390Z.json]
 - **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved replacement attempt 9: early runtime target-progress wakes retain a canonical owner turn across SENDING-to-CREATING, the widened step set is owned only by replica-operation-step-policy, the step-coverage census is restored to its inherited baseline, and all functional, adversarial, DT, and scoped static checks pass. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Ordered live validation at c4d5d1fa passed the five-probe gate and Demo 1 crossed runtime initialization, active replica placement, two-row learned attribution, bounded two-partial reduce, and exact top-10 correctness; the remaining failure moved later to stable weightedLocality=0.5 with no placement change for 300s. This rules out recurrence of the prior runtime-initialization admission failure but does not yet prove runtime operations terminalized or a subsequent affinity evaluation ran. [file:test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T05-23-33-693Z.report.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent live/code verification locates the first post-attempt-9 divergence at target executor-outcome visibility: fresh EMPTY RUNTIME_SERVICE_CREATE_ACTIVE is skipped because the existing bounded empty-visibility retry set covers only generic replica-create outcomes; after retry, producer-side handoff must also consume the canonical SENDING|CREATING runtime target-progress step set. (rules out: Do not add a target-side workflow writer, new retry owner, new queue, broader create replay, timeout increase, or unchanged rerun; reuse the existing fresh-empty visibility redrive and canonical runtime target-progress step policy.) [file:solve/changes/runtime-service-creating-owner-wake-progress-admission/post-attempt-9-live-target-empty-visibility-2026-07-20.md]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T05-39-24-163Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-wake.test.js-2026-07-20T05-42-41-153Z.json]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved attempt 10: fresh EMPTY runtime ACTIVE retains the existing bounded retry, the retry re-reads an independent SENDING target row and emits exactly one canonical source wake, exact-target ACTIVE proof remains mandatory, generic handoff behavior is preserved, and canonical owner/static gates pass with no new retry or workflow authority. [subagent:verify_runtime_progress_attempt7]
+- **runtime-service-creating-owner-wake-progress-admission-main**: Independent verification approved the exact canonical full-index attempt 10 artifact; it is byte-identical in hunks to the previously approved four-path diff, canonical comparison is exact, and no semantic bytes changed. [subagent:verify_runtime_progress_attempt7]
 
 ## Theories
 - **theory-20260720-ownerkeyreconcilequeue-context-is-last-writer-wins** [active] system, mechanism OwnerKeyReconcileQueue context is last-writer-wins. ReplicaDispatchService must merge target_executor_outcome as monotone stronger evidence before enqueue while refreshing the row authoritatively, and runtime completion must use only exact replica_id plus target_node_id observation., owner source replica-dispatch operation owner queue and operation-workflow exact-target observation lane, modelGate npm run model:contracts
+- **theory-20260720-runtime-active-empty-visibility-skip-before** [falsified] frontier, frontier runtime-service-creating-owner-wake-progress-admission-main, layer ownership, mechanism runtime-active-empty-visibility-skip-before-remote-owner-handoff, owner operation_workflow_owner, boundary executor_outcome_visibility_to_remote_owner_handoff, modelGate npm run model:contracts
 
 ## Selected Theories
-_(none selected)_
+- **runtime-service-creating-owner-wake-progress-admission-main**: theory-20260720-runtime-active-empty-visibility-skip-before
 
 ## Theory Results
-_(none recorded)_
+- **theory-20260720-runtime-active-empty-visibility-skip-before**: falsified (scenario=failed, theory=falsified, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T05-23-33-693Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -106,3 +113,4 @@ _(none recorded)_
 | 2026-07-20T04:20:37.000Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-7.diff |
 | 2026-07-20T04:54:37.629Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-8.diff |
 | 2026-07-20T05:02:21.621Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same |  | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-9.diff |
+| 2026-07-20T05:52:27.400Z | runtime-service-creating-owner-wake-progress-admission-main | observe | 1 -> 1 | flat | same | theory-20260720-runtime-active-empty-visibility-skip-before | diff:solve/changes/runtime-service-creating-owner-wake-progress-admission/attempt-10.diff |

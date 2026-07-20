@@ -2,6 +2,10 @@ import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
 } from './executor-outcome-constants.js';
+import {
+  RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+  TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS,
+} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from
   './operation-workflow-owner-shared.js';
 
@@ -11,6 +15,7 @@ const {
   OperationType,
   REBALANCE_COORDINATOR_LOG_MSG,
   TIMEOUT_BUDGET_DEFAULT,
+  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   classifySystemPartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -32,6 +37,23 @@ const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_TYPES = Object.freeze(
     EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
   ]),
 );
+
+const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_OPERATION_TYPES = Object.freeze(
+  new Set([
+    OperationType.ADD,
+    OperationType.REPLACE,
+  ]),
+);
+
+const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_STEPS_BY_ENTITY_TYPE =
+  Object.freeze(
+    new Map([
+      [
+        UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+      ],
+    ]),
+  );
 
 function cloneOperationSnapshot(operation) {
   if (!operation || typeof operation !== 'object') {
@@ -113,11 +135,14 @@ function isTargetCreateOutcomeHandoffEligible(operation) {
     partitionId: operation?.partitionId || null,
   });
   const targetCreateOperation =
-    operation?.type === OperationType.ADD ||
-    operation?.type === OperationType.REPLACE;
-  const targetCreateInProgress =
-    operation?.workflowStep === WORKFLOW_STEP.CREATING ||
-    operation?.workflowStep === WORKFLOW_STEP.SYNCING;
+    TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_OPERATION_TYPES.has(
+      operation?.type,
+    );
+  const eligibleSteps =
+    TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_STEPS_BY_ENTITY_TYPE.get(
+      operation?.entityType,
+    ) || TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS;
+  const targetCreateInProgress = eligibleSteps.has(operation?.workflowStep);
   return (
     targetCreateOperation &&
     targetCreateInProgress &&

@@ -51,6 +51,15 @@ const RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS = Object.freeze(
   ]),
 );
 
+// Generic replica ACTIVE outcomes may be observed remotely while their
+// source-owned create workflow is still creating or syncing.
+const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.CREATING,
+    WORKFLOW_STEP.SYNCING,
+  ]),
+);
+
 // Owner-port reconcile of dispatch-pending rows.
 const OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS =
   Object.freeze(
@@ -473,6 +482,7 @@ export {
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
   RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+  TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS,
   resolveOperationTransitionReason,
   EXECUTOR_STEP_UPDATE_RECONCILE_WORKFLOW_STEPS,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_WORKFLOW_STEPS,
