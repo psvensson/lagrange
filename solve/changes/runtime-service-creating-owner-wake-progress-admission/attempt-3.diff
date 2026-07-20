@@ -1,0 +1,191 @@
+diff --git a/src/control-plane/replica-dispatch-readiness-capture.js b/src/control-plane/replica-dispatch-readiness-capture.js
+index 7aaf3df4500c72d49c6f8464923306aa31c5fffa..b755e60352ae5f704c1ca3a05f407acce5645255 100644
+--- a/src/control-plane/replica-dispatch-readiness-capture.js
++++ b/src/control-plane/replica-dispatch-readiness-capture.js
+@@ -4,6 +4,9 @@ import {createReplicaDispatchServiceDispatchObservationMethods} from './replica-
+ import {
+   shouldAllowPriorityRecoveryDispatchBootstrap,
+ } from './replica-dispatch-priority-recovery-bootstrap.js';
++import {
++  CONTROL_PLANE_OPERATION_HANDOFF_MODE,
++} from './control-plane-constants.js';
+ 
+ const {
+   COLUMN,
+@@ -122,6 +125,82 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
+     return `${DISPATCH_QUEUE_NAME.OPERATION}-${shardIndex}`;
+   }
+ 
++  /**
++   * Resolve context already retained for one operation owner key. The generic
++   * owner-key queue intentionally uses last-writer context, so this boundary
++   * merges operation-specific progress evidence before enqueue.
++   *
++   * @param {OwnerKeyReconcileQueue} queue
++   * @param {string} ownerKey
++   * @return {Object|null}
++   * @private
++   */
++  resolveQueuedOperationDispatchContext(queue, ownerKey) {
++    return (
++      queue?.pending?.get(ownerKey)?.context ||
++      queue?.retryWorkItems?.get(ownerKey)?.context ||
++      null
++    );
++  }
++
++  /**
++   * Merge coalesced operation-dispatch context monotonically. A target
++   * executor-outcome wake is stronger than an ordinary dispatch request and
++   * must survive later CDC or retry enqueues for the same owner key. Row data
++   * remains last-writer-wins because reconcile refreshes it authoritatively.
++   *
++   * @param {Object|null} retainedContext
++   * @param {Object|null} incomingContext
++   * @return {Object|null}
++   * @private
++   */
++  mergeOperationDispatchReconcileContext(
++    retainedContext,
++    incomingContext,
++  ) {
++    const retained =
++      retainedContext && typeof retainedContext === 'object' ?
++        retainedContext :
++        null;
++    const incoming =
++      incomingContext && typeof incomingContext === 'object' ?
++        incomingContext :
++        null;
++    if (!retained) {
++      return incomingContext;
++    }
++    if (!incoming) {
++      return retainedContext;
++    }
++
++    const mergedContext = {
++      ...retained,
++      ...incoming,
++    };
++    if (
++      retained[ControlPlaneField.HANDOFF_MODE] ===
++        CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME ||
++      incoming[ControlPlaneField.HANDOFF_MODE] ===
++        CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
++    ) {
++      mergedContext[ControlPlaneField.HANDOFF_MODE] =
++        CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
++    }
++    if (
++      retained[
++        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
++      ] === true ||
++      incoming[
++        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
++      ] === true
++    ) {
++      mergedContext[
++        REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
++      ] = true;
++    }
++    return mergedContext;
++  }
++
+   /**
+    * Resolve one reconcile shard for an operation-dispatch owner key.
+    * Distinct operation ids may progress concurrently, while each owner key
+@@ -167,13 +246,21 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
+    */
+   buildOperationDispatchQueueFacade() {
+     return {
+-      enqueue: (ownerKey, reason, context, options) =>
+-        this.resolveOperationDispatchQueue(ownerKey).enqueue(
++      enqueue: (ownerKey, reason, context, options) => {
++        const queue = this.resolveOperationDispatchQueue(ownerKey);
++        const retainedContext =
++          this.resolveQueuedOperationDispatchContext(queue, ownerKey);
++        const mergedContext = this.mergeOperationDispatchReconcileContext(
++          retainedContext,
++          context,
++        );
++        return queue.enqueue(
+           ownerKey,
+           reason,
+-          context,
++          mergedContext,
+           options,
+-        ),
++        );
++      },
+       shutdown: () => {
+         for (const queue of this.operationDispatchQueues) {
+           queue.shutdown();
+diff --git a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+index 4bc933c4f795e9a44646426b605cf7c8a85f67cf..70e06c98563decdac6e41a5785dfe530e1cabaf7 100644
+--- a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
++++ b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+@@ -120,6 +120,63 @@ test(
+   },
+ );
+ 
++test(
++  'target-progress wake survives an ordinary coalesced dispatch request',
++  async (t) => {
++    initEnv();
++
++    const dispatchCalls = [];
++    const operationRow = buildRuntimeCreatingOperationRow({
++      operation_id: `${OPERATION_ID}-coalesced`,
++    });
++    const service = createService({
++      cdcIntegrationService: {
++        updateSystemTableRow: async () => ({success: true}),
++        upsertSystemTableRow: async () => ({success: true}),
++      },
++      rebalanceCoordinator: {
++        async dispatchOperation(operation, options) {
++          dispatchCalls.push({operation, options});
++          return {success: true};
++        },
++        isOperationLocallyOwned() {
++          return true;
++        },
++      },
++    });
++
++    try {
++      const targetProgressWake = service.handleReplicaOperationDispatch({
++        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++        [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
++        [ControlPlaneField.OPERATION_ROW]: operationRow,
++        [ControlPlaneField.HANDOFF_MODE]:
++          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++      });
++      const ordinaryDispatch = service.handleReplicaOperationDispatch({
++        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++        [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
++        [ControlPlaneField.OPERATION_ROW]: operationRow,
++      });
++      await Promise.all([targetProgressWake, ordinaryDispatch]);
++      await drainOperationDispatchQueue(service);
++
++      t.equal(
++        dispatchCalls.length,
++        1,
++        'ordinary coalescing must not erase the stronger target-progress wake',
++      );
++      t.equal(
++        dispatchCalls[0]?.operation?.workflowStep,
++        WORKFLOW_STEP.CREATING,
++        'the retained progress wake should re-enter authoritative CREATING',
++      );
++    } finally {
++      service.stop();
++    }
++  },
++);
++
+ test(
+   'ordinary CREATING runtime rows remain outside dispatch replay',
+   async (t) => {

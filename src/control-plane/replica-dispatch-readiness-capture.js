@@ -4,6 +4,9 @@ import {createReplicaDispatchServiceDispatchObservationMethods} from './replica-
 import {
   shouldAllowPriorityRecoveryDispatchBootstrap,
 } from './replica-dispatch-priority-recovery-bootstrap.js';
+import {
+  buildOperationDispatchQueueFacade,
+} from './replica-dispatch-operation-queue-context.js';
 
 const {
   COLUMN,
@@ -166,32 +169,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
    * @private
    */
   buildOperationDispatchQueueFacade() {
-    return {
-      enqueue: (ownerKey, reason, context, options) =>
-        this.resolveOperationDispatchQueue(ownerKey).enqueue(
-          ownerKey,
-          reason,
-          context,
-          options,
-        ),
-      shutdown: () => {
-        for (const queue of this.operationDispatchQueues) {
-          queue.shutdown();
-        }
-      },
-      get size() {
-        return this.operationDispatchQueues.reduce(
-          (sum, queue) => sum + queue.size,
-          0,
-        );
-      },
-      get draining() {
-        return this.operationDispatchQueues.some(
-          (queue) => queue.draining === true,
-        );
-      },
-      operationDispatchQueues: this.operationDispatchQueues,
-    };
+    return buildOperationDispatchQueueFacade(this);
   }
 
   /**

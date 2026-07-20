@@ -21,6 +21,7 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SKIP_REASON,
+  UNIFIED_SERVICE_TYPE,
   buildTopologyOperatorWitnessFromWorkflowProgress,
   classifySystemPartition,
   getControlPlaneRetryAfterMs,
@@ -134,9 +135,18 @@ class OperationWorkflowOwnerExecutionLane
    * @param {string} replicaId
    * @param {string} partitionId
    * @param {string} targetNodeId
+   * @param {Object} [options={}]
+   * @param {string|null} [options.entityType]
    * @return {Promise<string|null>}
    */
-  async getReconciledReplicaStatus(replicaId, partitionId, targetNodeId) {
+  async getReconciledReplicaStatus(
+    replicaId,
+    partitionId,
+    targetNodeId,
+    options = {},
+  ) {
+    const requiresExactTarget =
+      options.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
     const shouldPreferLocalPriorityReplicaObservation =
       targetNodeId === this.nodeId &&
       classifySystemPartition({partitionId}).priorityControlPlane;
@@ -172,13 +182,15 @@ class OperationWorkflowOwnerExecutionLane
         return observation.lifecycleStatus;
       }
     }
-    const actualStatus = await this.getActualReplicaStatus(
-      replicaId,
-      partitionId,
-      targetNodeId,
-    );
-    if (actualStatus !== null) {
-      return actualStatus;
+    if (!requiresExactTarget) {
+      const actualStatus = await this.getActualReplicaStatus(
+        replicaId,
+        partitionId,
+        targetNodeId,
+      );
+      if (actualStatus !== null) {
+        return actualStatus;
+      }
     }
     return this.repository.getObservedReplicaStatusFromCache(
       replicaId,

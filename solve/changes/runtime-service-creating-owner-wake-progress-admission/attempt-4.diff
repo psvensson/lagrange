@@ -1,0 +1,365 @@
+diff --git a/src/control-plane/replica-dispatch-operation-queue-context.js b/src/control-plane/replica-dispatch-operation-queue-context.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d34ff13a9dd210e3bbd87787bafe99b221cc0fe9
+--- /dev/null
++++ b/src/control-plane/replica-dispatch-operation-queue-context.js
+@@ -0,0 +1,118 @@
++import {
++  CONTROL_PLANE_OPERATION_HANDOFF_MODE,
++  ControlPlaneField,
++} from './control-plane-constants.js';
++
++const REFRESH_ROW_BEFORE_DISPATCH = 'refreshRowBeforeDispatch';
++
++/**
++ * Resolve context already retained for one operation owner key. The generic
++ * owner-key queue intentionally uses last-writer context, so this boundary
++ * merges operation-specific progress evidence before enqueue.
++ *
++ * @param {Object|null} queue
++ * @param {string} ownerKey
++ * @return {Object|null}
++ */
++function resolveQueuedOperationDispatchContext(queue, ownerKey) {
++  return (
++    queue?.pending?.get(ownerKey)?.context ||
++    queue?.retryWorkItems?.get(ownerKey)?.context ||
++    null
++  );
++}
++
++/**
++ * Merge coalesced operation-dispatch context monotonically. A target
++ * executor-outcome wake is stronger than an ordinary dispatch request and
++ * must survive later CDC or retry enqueues for the same owner key. Row data
++ * remains last-writer-wins because reconcile refreshes it authoritatively.
++ *
++ * @param {Object|null} retainedContext
++ * @param {Object|null} incomingContext
++ * @return {Object|null}
++ */
++function mergeOperationDispatchReconcileContext(
++  retainedContext,
++  incomingContext,
++) {
++  const retained =
++    retainedContext && typeof retainedContext === 'object' ?
++      retainedContext :
++      null;
++  const incoming =
++    incomingContext && typeof incomingContext === 'object' ?
++      incomingContext :
++      null;
++  if (!retained) {
++    return incomingContext;
++  }
++  if (!incoming) {
++    return retainedContext;
++  }
++
++  const mergedContext = {
++    ...retained,
++    ...incoming,
++  };
++  if (
++    retained[ControlPlaneField.HANDOFF_MODE] ===
++      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME ||
++    incoming[ControlPlaneField.HANDOFF_MODE] ===
++      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
++  ) {
++    mergedContext[ControlPlaneField.HANDOFF_MODE] =
++      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
++  }
++  if (
++    retained[REFRESH_ROW_BEFORE_DISPATCH] === true ||
++    incoming[REFRESH_ROW_BEFORE_DISPATCH] === true
++  ) {
++    mergedContext[REFRESH_ROW_BEFORE_DISPATCH] = true;
++  }
++  return mergedContext;
++}
++
++/**
++ * Build the compatibility facade for sharded operation owner queues.
++ *
++ * @param {Object} service
++ * @return {Object}
++ */
++function buildOperationDispatchQueueFacade(service) {
++  return {
++    enqueue(ownerKey, reason, context, options) {
++      const queue = service.resolveOperationDispatchQueue(ownerKey);
++      const retainedContext =
++        resolveQueuedOperationDispatchContext(queue, ownerKey);
++      const mergedContext = mergeOperationDispatchReconcileContext(
++        retainedContext,
++        context,
++      );
++      return queue.enqueue(ownerKey, reason, mergedContext, options);
++    },
++    shutdown() {
++      for (const queue of service.operationDispatchQueues) {
++        queue.shutdown();
++      }
++    },
++    get size() {
++      return service.operationDispatchQueues.reduce(
++        (sum, queue) => sum + queue.size,
++        0,
++      );
++    },
++    get draining() {
++      return service.operationDispatchQueues.some(
++        (queue) => queue.draining === true,
++      );
++    },
++    operationDispatchQueues: service.operationDispatchQueues,
++  };
++}
++
++export {
++  buildOperationDispatchQueueFacade,
++  mergeOperationDispatchReconcileContext,
++  resolveQueuedOperationDispatchContext,
++};
+diff --git a/src/control-plane/replica-dispatch-readiness-capture.js b/src/control-plane/replica-dispatch-readiness-capture.js
+index 7aaf3df4500c72d49c6f8464923306aa31c5fffa..115f4eb102da92f059639dee317ca4b50fe386d2 100644
+--- a/src/control-plane/replica-dispatch-readiness-capture.js
++++ b/src/control-plane/replica-dispatch-readiness-capture.js
+@@ -4,6 +4,9 @@ import {createReplicaDispatchServiceDispatchObservationMethods} from './replica-
+ import {
+   shouldAllowPriorityRecoveryDispatchBootstrap,
+ } from './replica-dispatch-priority-recovery-bootstrap.js';
++import {
++  buildOperationDispatchQueueFacade,
++} from './replica-dispatch-operation-queue-context.js';
+ 
+ const {
+   COLUMN,
+@@ -166,32 +169,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
+    * @private
+    */
+   buildOperationDispatchQueueFacade() {
+-    return {
+-      enqueue: (ownerKey, reason, context, options) =>
+-        this.resolveOperationDispatchQueue(ownerKey).enqueue(
+-          ownerKey,
+-          reason,
+-          context,
+-          options,
+-        ),
+-      shutdown: () => {
+-        for (const queue of this.operationDispatchQueues) {
+-          queue.shutdown();
+-        }
+-      },
+-      get size() {
+-        return this.operationDispatchQueues.reduce(
+-          (sum, queue) => sum + queue.size,
+-          0,
+-        );
+-      },
+-      get draining() {
+-        return this.operationDispatchQueues.some(
+-          (queue) => queue.draining === true,
+-        );
+-      },
+-      operationDispatchQueues: this.operationDispatchQueues,
+-    };
++    return buildOperationDispatchQueueFacade(this);
+   }
+ 
+   /**
+diff --git a/src/rebalancer/operation-workflow-owner-execution-lane.js b/src/rebalancer/operation-workflow-owner-execution-lane.js
+index aae5c9e9d4a910d4ab4460eaf6aeeb166612ed90..551f0dd989f8352860720fe20af94c86ea129c10 100644
+--- a/src/rebalancer/operation-workflow-owner-execution-lane.js
++++ b/src/rebalancer/operation-workflow-owner-execution-lane.js
+@@ -172,14 +172,6 @@ class OperationWorkflowOwnerExecutionLane
+         return observation.lifecycleStatus;
+       }
+     }
+-    const actualStatus = await this.getActualReplicaStatus(
+-      replicaId,
+-      partitionId,
+-      targetNodeId,
+-    );
+-    if (actualStatus !== null) {
+-      return actualStatus;
+-    }
+     return this.repository.getObservedReplicaStatusFromCache(
+       replicaId,
+       partitionId,
+diff --git a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+index 4bc933c4f795e9a44646426b605cf7c8a85f67cf..68097b15d5a450d1cffe3a58809b0defdc46b80d 100644
+--- a/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
++++ b/test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js
+@@ -120,6 +120,63 @@ test(
+   },
+ );
+ 
++test(
++  'target-progress wake survives an ordinary coalesced dispatch request',
++  async (t) => {
++    initEnv();
++
++    const dispatchCalls = [];
++    const operationRow = buildRuntimeCreatingOperationRow({
++      operation_id: `${OPERATION_ID}-coalesced`,
++    });
++    const service = createService({
++      cdcIntegrationService: {
++        updateSystemTableRow: async () => ({success: true}),
++        upsertSystemTableRow: async () => ({success: true}),
++      },
++      rebalanceCoordinator: {
++        async dispatchOperation(operation, options) {
++          dispatchCalls.push({operation, options});
++          return {success: true};
++        },
++        isOperationLocallyOwned() {
++          return true;
++        },
++      },
++    });
++
++    try {
++      const targetProgressWake = service.handleReplicaOperationDispatch({
++        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++        [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
++        [ControlPlaneField.OPERATION_ROW]: operationRow,
++        [ControlPlaneField.HANDOFF_MODE]:
++          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++      });
++      const ordinaryDispatch = service.handleReplicaOperationDispatch({
++        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++        [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
++        [ControlPlaneField.OPERATION_ROW]: operationRow,
++      });
++      await Promise.all([targetProgressWake, ordinaryDispatch]);
++      await drainOperationDispatchQueue(service);
++
++      t.equal(
++        dispatchCalls.length,
++        1,
++        'ordinary coalescing must not erase the stronger target-progress wake',
++      );
++      t.equal(
++        dispatchCalls[0]?.operation?.workflowStep,
++        WORKFLOW_STEP.CREATING,
++        'the retained progress wake should re-enter authoritative CREATING',
++      );
++    } finally {
++      service.stop();
++    }
++  },
++);
++
+ test(
+   'ordinary CREATING runtime rows remain outside dispatch replay',
+   async (t) => {
+@@ -286,7 +343,15 @@ test(
+       messageRouter: {
+         async deliver(address, payload, options) {
+           targetDeliveries.push({address, payload, options});
+-          await sourceDispatch.handleReplicaOperationDispatch(payload);
++          const targetProgressWake =
++            sourceDispatch.handleReplicaOperationDispatch(payload);
++          const ordinaryDispatch =
++            sourceDispatch.handleReplicaOperationDispatch({
++              type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++              [ControlPlaneField.OPERATION_ID]: OPERATION_ID,
++              [ControlPlaneField.OPERATION_ROW]: operationRow,
++            });
++          await Promise.all([targetProgressWake, ordinaryDispatch]);
+           return {acknowledged: true};
+         },
+       },
+@@ -322,7 +387,7 @@ test(
+       t.equal(
+         completedOperation?.workflowStep,
+         WORKFLOW_STEP.ACTIVE,
+-        'the source owner should terminate from exact ACTIVE services proof',
++        'the coalesced source wake should terminate from exact ACTIVE proof',
+       );
+       t.equal(
+         completedOperation?.status,
+@@ -337,6 +402,79 @@ test(
+   },
+ );
+ 
++test(
++  'target-progress wake rejects an ACTIVE partition sibling on the target',
++  async (t) => {
++    initEnv();
++
++    const siblingOperationId = `${OPERATION_ID}-partition-sibling`;
++    const operationRow = buildRuntimeCreatingOperationRow({
++      operation_id: siblingOperationId,
++    });
++    const activeSiblingRow = {
++      service_id: `${SERVICE_ID}-unrelated`,
++      replica_id: `${SERVICE_ID}-unrelated`,
++      service_type: 'partition',
++      partition_id: SERVICE_ID,
++      node_id: TARGET_NODE_ID,
++      status: ReplicaStatus.ACTIVE,
++    };
++    const sourceCoordinator = createTestCoordinator({
++      nodeId: SOURCE_NODE_ID,
++      cacheData: {
++        services: [activeSiblingRow],
++        replicaOperations: [operationRow],
++      },
++      sqlQueryResults: {
++        'FROM services WHERE service_id = ?': {
++          success: true,
++          rows: [],
++        },
++        'WHERE partition_id = ? AND node_id = ?': {
++          success: true,
++          rows: [activeSiblingRow],
++        },
++      },
++    });
++    const sourceDispatch = createService({
++      cdcIntegrationService: {
++        updateSystemTableRow: async () => ({success: true}),
++        upsertSystemTableRow: async () => ({success: true}),
++      },
++      rebalanceCoordinator: sourceCoordinator,
++    });
++
++    try {
++      await sourceDispatch.handleReplicaOperationDispatch({
++        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++        [ControlPlaneField.OPERATION_ID]: siblingOperationId,
++        [ControlPlaneField.OPERATION_ROW]: operationRow,
++        [ControlPlaneField.HANDOFF_MODE]:
++          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
++      });
++      await drainOperationDispatchQueue(sourceDispatch);
++
++      const retainedOperation =
++        await sourceCoordinator.repository.queryOperationById(
++          siblingOperationId,
++        );
++      t.equal(
++        retainedOperation?.workflowStep,
++        WORKFLOW_STEP.CREATING,
++        'an unrelated ACTIVE partition sibling must not complete runtime ADD',
++      );
++      t.equal(
++        retainedOperation?.status,
++        ReplicaStatus.CREATING,
++        'partition-node fallback must not satisfy exact runtime target proof',
++      );
++    } finally {
++      sourceDispatch.stop();
++      await sourceCoordinator.shutdown();
++    }
++  },
++);
++
+ test(
+   'runtime progress observation rejects an ACTIVE row on the wrong target',
+   async (t) => {

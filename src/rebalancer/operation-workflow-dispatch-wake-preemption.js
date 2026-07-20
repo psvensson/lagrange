@@ -206,6 +206,9 @@ async function reconcileDispatchWakePendingTargetProgress(
       operation?.replicaId,
       operation?.partitionId,
       operation?.targetNodeId,
+      {
+        entityType: operation?.entityType || operation?.entity_type || null,
+      },
     ) :
     OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
   const reconciledTargetStatus =

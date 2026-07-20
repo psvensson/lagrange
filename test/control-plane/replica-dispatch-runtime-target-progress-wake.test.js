@@ -3,7 +3,10 @@ import {
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  UNIFIED_SERVICE_TYPE,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -113,6 +116,63 @@ test(
         dispatchCalls[0]?.options?.cause,
         'replica_operation_dispatch',
         'progress re-entry should use the canonical dispatch cause',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
+  'target-progress wake survives an ordinary coalesced dispatch request',
+  async (t) => {
+    initEnv();
+
+    const dispatchCalls = [];
+    const operationRow = buildRuntimeCreatingOperationRow({
+      operation_id: `${OPERATION_ID}-coalesced`,
+    });
+    const service = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: {
+        async dispatchOperation(operation, options) {
+          dispatchCalls.push({operation, options});
+          return {success: true};
+        },
+        isOperationLocallyOwned() {
+          return true;
+        },
+      },
+    });
+
+    try {
+      const targetProgressWake = service.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
+        [ControlPlaneField.OPERATION_ROW]: operationRow,
+        [ControlPlaneField.HANDOFF_MODE]:
+          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+      });
+      const ordinaryDispatch = service.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
+        [ControlPlaneField.OPERATION_ROW]: operationRow,
+      });
+      await Promise.all([targetProgressWake, ordinaryDispatch]);
+      await drainOperationDispatchQueue(service);
+
+      t.equal(
+        dispatchCalls.length,
+        1,
+        'ordinary coalescing must not erase the stronger target-progress wake',
+      );
+      t.equal(
+        dispatchCalls[0]?.operation?.workflowStep,
+        WORKFLOW_STEP.CREATING,
+        'the retained progress wake should re-enter authoritative CREATING',
       );
     } finally {
       service.stop();
@@ -286,7 +346,15 @@ test(
       messageRouter: {
         async deliver(address, payload, options) {
           targetDeliveries.push({address, payload, options});
-          await sourceDispatch.handleReplicaOperationDispatch(payload);
+          const targetProgressWake =
+            sourceDispatch.handleReplicaOperationDispatch(payload);
+          const ordinaryDispatch =
+            sourceDispatch.handleReplicaOperationDispatch({
+              type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+              [ControlPlaneField.OPERATION_ID]: OPERATION_ID,
+              [ControlPlaneField.OPERATION_ROW]: operationRow,
+            });
+          await Promise.all([targetProgressWake, ordinaryDispatch]);
           return {acknowledged: true};
         },
       },
@@ -322,7 +390,7 @@ test(
       t.equal(
         completedOperation?.workflowStep,
         WORKFLOW_STEP.ACTIVE,
-        'the source owner should terminate from exact ACTIVE services proof',
+        'the coalesced source wake should terminate from exact ACTIVE proof',
       );
       t.equal(
         completedOperation?.status,
@@ -332,6 +400,79 @@ test(
     } finally {
       sourceDispatch.stop();
       await targetCoordinator.shutdown();
+      await sourceCoordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'target-progress wake rejects an ACTIVE partition sibling on the target',
+  async (t) => {
+    initEnv();
+
+    const siblingOperationId = `${OPERATION_ID}-partition-sibling`;
+    const operationRow = buildRuntimeCreatingOperationRow({
+      operation_id: siblingOperationId,
+    });
+    const activeSiblingRow = {
+      service_id: `${SERVICE_ID}-unrelated`,
+      replica_id: `${SERVICE_ID}-unrelated`,
+      service_type: 'partition',
+      partition_id: SERVICE_ID,
+      node_id: TARGET_NODE_ID,
+      status: ReplicaStatus.ACTIVE,
+    };
+    const sourceCoordinator = createTestCoordinator({
+      nodeId: SOURCE_NODE_ID,
+      cacheData: {
+        services: [activeSiblingRow],
+        replicaOperations: [operationRow],
+      },
+      sqlQueryResults: {
+        'FROM services WHERE service_id = ?': {
+          success: true,
+          rows: [],
+        },
+        'WHERE partition_id = ? AND node_id = ?': {
+          success: true,
+          rows: [activeSiblingRow],
+        },
+      },
+    });
+    const sourceDispatch = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: sourceCoordinator,
+    });
+
+    try {
+      await sourceDispatch.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: siblingOperationId,
+        [ControlPlaneField.OPERATION_ROW]: operationRow,
+        [ControlPlaneField.HANDOFF_MODE]:
+          COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
+      });
+      await drainOperationDispatchQueue(sourceDispatch);
+
+      const retainedOperation =
+        await sourceCoordinator.repository.queryOperationById(
+          siblingOperationId,
+        );
+      t.equal(
+        retainedOperation?.workflowStep,
+        WORKFLOW_STEP.CREATING,
+        'an unrelated ACTIVE partition sibling must not complete runtime ADD',
+      );
+      t.equal(
+        retainedOperation?.status,
+        ReplicaStatus.CREATING,
+        'partition-node fallback must not satisfy exact runtime target proof',
+      );
+    } finally {
+      sourceDispatch.stop();
       await sourceCoordinator.shutdown();
     }
   },
@@ -364,6 +505,7 @@ test(
           REPLICA_ID,
           SERVICE_ID,
           TARGET_NODE_ID,
+          {entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE},
         );
       t.equal(
         observedStatus,
@@ -402,6 +544,7 @@ test(
           REPLICA_ID,
           SERVICE_ID,
           TARGET_NODE_ID,
+          {entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE},
         );
       t.equal(
         observedStatus,

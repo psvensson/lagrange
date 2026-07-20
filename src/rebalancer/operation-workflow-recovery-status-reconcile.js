@@ -363,6 +363,9 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       operation.replicaId,
       operation.partitionId,
       operation.targetNodeId,
+      {
+        entityType: operation.entityType || operation.entity_type || null,
+      },
     );
     if (cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY) {
       this.repository.emitReplicaStatusDivergence(
