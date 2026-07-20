@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (MEASURED) — evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-41-10-348Z.report.json
 
 **Attempts:** 1
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: runtime-service-creating-owner-wake-progress-admission
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: schema-provisioning-inline-execute-owner-redrive-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: first blocker observed: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-04-28-891Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for schema-provisioning-inline-execute-owner-redrive-main
-- No longer current: Do not treat the patch as broad executeOperation de-coalescing or as introducing an alternate workflow owner.; Do not checkpoint a later aggregate or infer approval for bytes outside attempt-1.diff.
-
-## Continuation
-- Status: allowed
-- Next action: continue supervised step for schema-provisioning-inline-execute-owner-redrive-main
-- Blocker: none
 
 ## Scope Pressure
 - Changed files: 7
@@ -44,12 +27,13 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **schema-provisioning-inline-execute-owner-redrive-main** [open] rung 0, attempts 1, metric 1 -> 1
+- **schema-provisioning-inline-execute-owner-redrive-main** [open] rung 0, attempts 1, metric 1 -> 0
 
 ## Findings
 - **schema-provisioning-inline-execute-owner-redrive-main**: DT red-on-revert proven for test/rebalancer/replica-operation-retained-owner-turn.test.js [dt:solve/changes/dt-prove/replica-operation-retained-owner-turn.test.js-2026-07-20T03-34-20-898Z.json]
 - **schema-provisioning-inline-execute-owner-redrive-main**: Independent verifier APPROVE: the exact retained owner-turn patch limits RETAIN to initial provisioning, preserves generic operation_already_executing coalescing, attributes holder rejection separately, reuses the canonical DurableWorkflowCoordinator owner key without new timers or queues, passes focused/static/model gates, and honestly proves green/red/green at the production seam. (rules out: Do not treat the patch as broad executeOperation de-coalescing or as introducing an alternate workflow owner.) [subagent:verify_schema_owner_redrive]
 - **schema-provisioning-inline-execute-owner-redrive-main**: Post-attempt binding of the independent APPROVE verdict to the unchanged exact retained owner-turn artifact; no source or test bytes changed after verification. (rules out: Do not checkpoint a later aggregate or infer approval for bytes outside attempt-1.diff.) [subagent:verify_schema_owner_redrive]
+- **schema-provisioning-inline-execute-owner-redrive-main**: The sealed lost-inline-schema-operation symptom does not reproduce at checkpoint 97afef2e: 5/5 ordered probes passed, MovieLens provisioned both child tables, loaded 100000 ratings, and executed distributed SQL; the live boundary advanced to runtime placement terminal handoff. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T04-04-28-891Z.report.json]
 
 ## Theories
 _(none recorded)_
