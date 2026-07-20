@@ -13,6 +13,23 @@
 - parent quest: movielens-authoritative-observation-watermark
 - plan: solve/epics/self-hosting-circularity-generic-treatment.md
 
+## Current Blocker
+- Frontier: movielens-observation-watermark-churn-consolidation-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: transition_gap
+- Movement: unknown: PASS -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json
+- Selected theory: none
+- Next move: continue supervised step for movielens-observation-watermark-churn-consolidation-main
+- No longer current: PASS; Model coverage is not missing: companion counterexamples are test-output/reports/authoritative-observation-watermark-exact-equality.model.report.json and test-output/reports/authoritative-observation-watermark-mutation-only.model.report.json.
+
+## Continuation
+- Status: allowed
+- Next action: No open frontier remains; inspect solve report.
+- Blocker: none
+
 ## Scope Pressure
 - Changed files: 21
 - Change bytes: 125524
@@ -31,7 +48,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **movielens-observation-watermark-churn-consolidation-main** [parked {exhausted}] rung 1, attempts 1, metric 1 -> 0 — Fresh current-HEAD production evidence passes and the sealed authoritative-observation failure is absent; no honest move remains within this stale seal, so a future recurrence must start from a new falsifiable observation rather than another attempt here.
+- **movielens-observation-watermark-churn-consolidation-main** [parked {exhausted}] rung 1, attempts 1, metric 1 -> 1 — Fresh current-HEAD production evidence passes and the sealed authoritative-observation failure is absent; no honest move remains within this stale seal, so a future recurrence must start from a new falsifiable observation rather than another attempt here.
 
 ## Findings
 - **movielens-observation-watermark-churn-consolidation-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T21-56-33-815Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T21-56-33-815Z.report.json]
@@ -41,6 +58,7 @@
 - **movielens-observation-watermark-churn-consolidation-main**: The sealed authoritative-observation schema-admission failure does not reproduce on current HEAD: the fresh unchanged July 20 production five-node Lagrange scenario passes its priority gate, with one scenario passed and none failed. (rules out: Do not spend another live rerun on the stale observation-watermark seal; use deterministic/model evidence for any remaining historical integrity requirement.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T15-41-10-348Z.report.json]
 - **movielens-observation-watermark-churn-consolidation-main**: Fresh July 20 TLC evidence binds the model surface: the fixed authoritative-observation composition converges with eventual schema admission over the complete state space, while the exact-equality and mutation-only configurations each observe their expected EventuallySchemaAdmitted counterexample. (rules out: Model coverage is not missing: companion counterexamples are test-output/reports/authoritative-observation-watermark-exact-equality.model.report.json and test-output/reports/authoritative-observation-watermark-mutation-only.model.report.json.) [test-output/reports/authoritative-observation-watermark-fixed.model.report.json]
 - **movielens-observation-watermark-churn-consolidation-main**: Independent aggregate verification passed: fail-closed cache reconciliation and receipt integrity, causal-supersession narrowness, admission-window binding, fixed and mutant TLC expectations, DT coverage, unchanged live evidence, and exact 21-path aggregate scope were all rechecked. [subagent:verify_observation_aggregate]
+- **movielens-observation-watermark-churn-consolidation-main**: The live cache_stale_watermark symptom recurs intermittently on current HEAD after formation and operation drain have converged, despite the bounded causal-order change and its deterministic/model proofs; the recurrence therefore survives this Quest's patch frame and requires the already-drafted structural per-table version/CAS discriminator. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json]
 
 ## Theories
 _(none recorded)_

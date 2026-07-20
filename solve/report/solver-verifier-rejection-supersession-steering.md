@@ -24,9 +24,9 @@
 - Next move: continue supervised step for solver-verifier-rejection-supersession-steering-main
 
 ## Continuation
-- Status: allowed
+- Status: blocked-unrecorded-evidence
 - Next action: continue supervised step for solver-verifier-rejection-supersession-steering-main
-- Blocker: none
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id solver-verifier-rejection-supersession-steering --frontier solver-verifier-rejection-supersession-steering-main --evidence solve/oracle/solver-verifier-rejection-supersession.json
 
 ## Scope Pressure
 - Changed files: 8

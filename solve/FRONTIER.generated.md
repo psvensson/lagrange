@@ -61,13 +61,12 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 21
+## Open quests — 19
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | control-snapshot-heartbeat-lease-freshness | product | 2 | 0 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | — |
-| formation-liveness-dependency-serial-planner | product | 1 | 0 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | — |
@@ -77,12 +76,11 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | movielens-operation-ledger-terminal-hold | product | 1 | 0 | — |
 | movielens-parallel-reduce-result-chronology | product | 1 | 0 | — |
 | movielens-pre-schema-priority-spread-admission-authority | product | 0 | 0 | — |
+| movielens-ready-lease-maintenance-critical-owner-lane | product | 3 | 0 | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | — |
 | movielens-three-way-affinity-demo | product | 7 | 0 | — |
 | oci-container-driver-live-activation | product | 8 | 0 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | — |
-| schema-provisioning-inline-execute-owner-redrive | product | 1 | 0 | — |
-| schema-provisioning-not-null-intent-recovery-roundtrip | product | 1 | 0 | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | — |
 | solver-verifier-rejection-supersession-core | process | 1 | 0 | — |
 | solver-verifier-rejection-supersession-steering | process | 1 | 0 | — |

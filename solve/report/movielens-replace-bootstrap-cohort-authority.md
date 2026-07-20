@@ -22,7 +22,7 @@
 - Latest evidence: test-output/reports/movielens-replace-bootstrap-cohort-authority-2026-07-16T07-56-23-784Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for movielens-replace-bootstrap-cohort-authority-main
-- No longer current: PASS
+- No longer current: PASS; Do not checkpoint through a failing audit, fabricate a failed evidence fingerprint, or treat later PASS evidence as permission to rewrite the append-only event.
 
 ## Continuation
 - Status: allowed
@@ -66,6 +66,7 @@
 - **movielens-replace-bootstrap-cohort-authority-main**: Independent verification passed: exact stale-cache retired-voter red/green owner seam, closed-world REPLACE-only topology consumption, adjacent ADD/missing-topology behavior, runtime contracts, lint, and size checks all passed. [subagent:verify_replace_cohort_attempt2]
 - **movielens-replace-bootstrap-cohort-authority-main**: Ingested evidence from movielens-replace-bootstrap-cohort-authority-2026-07-16T07-56-23-784Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-replace-bootstrap-cohort-authority-2026-07-16T07-56-23-784Z.report.json]
 - **movielens-replace-bootstrap-cohort-authority-main**: Ingested evidence from movielens-replace-bootstrap-cohort-authority-2026-07-16T07-56-23-784Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-replace-bootstrap-cohort-authority-2026-07-16T07-56-23-784Z.report.json]
+- **movielens-replace-bootstrap-cohort-authority-main**: The accepted replacement attempt is green and names both historical violations, but terminal audit still rejects the earlier malformed v2 record because its failed evidence identity is null. The typed checkpoint cannot be executed honestly until the Solver's integrity-migration/supersession path can close that malformed historical record. (rules out: Do not checkpoint through a failing audit, fabricate a failed evidence fingerprint, or treat later PASS evidence as permission to rewrite the append-only event.) [solve/log/movielens-replace-bootstrap-cohort-authority.ndjson]
 
 ## Theories
 _(none recorded)_

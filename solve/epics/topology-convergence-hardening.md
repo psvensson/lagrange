@@ -7,6 +7,30 @@ graduatesTo: membership-lifecycle-placement-hard-cutover
 
 # Epic: Topology convergence hardening
 
+## Release-truth correction — 2026-07-20
+
+`rolling-restart-core-stability` is no longer open: the WIP sweep recorded an
+operator-decision EXHAUSTED terminal after its residual mechanisms were
+superseded or delegated. That decision reduces stale WIP; it does **not** prove
+the Phase 0.1 rolling-restart exit criterion. The latest broad harness summary
+still has 0/4 representative scenarios green, including rolling restart, and
+the latest rolling-restart artifacts predate the July 20 MovieLens milestone.
+
+The current mixed-corpus latent-blocker census is useful for orientation but
+not sufficient to select a source fix: it flags late
+`published_active_nodes_disagree` / `publication_epochs_disagree` candidates
+and a dominant historical priority-recovery workflow class. CL-039 remains a
+rare non-binding record and is not promoted from that census. The freshest
+controlled evidence is instead the July 20 ordered MovieLens gate's
+`cache_stale_watermark` recurrence after formation and spread converged.
+Deterministic source tracing now identifies the trigger class as an
+absent/expired owner-authored ready lease, not per-table cache version drift;
+the missing owner-write/CDC timing witness and next slice are tracked in
+`formation-complexity-consolidation.md`.
+Rolling-restart release truth remains unproven and needs a newly sealed
+representative gate after the selected cache-observation work, not another
+attempt inside the exhausted omnibus Quest.
+
 ## Intent (why now)
 
 Phase 0.1 ("Internal Coherence") is gated on one thing the capability checklist
@@ -29,8 +53,9 @@ convergence Quests to the active closure-ledger records they must close, so
 > [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md) is `resolved`,
 > and the residual gate `TOPOLOGY_BLOCKED` is the bounded async LATENCY of a proven-convergent loop vs
 > the fixed window — **NOT a source bug; do not chase it as one on current HEAD.** The binding goal
-> `rolling-restart-core-stability` stays open only on the statistical Wilson-bar (an accept-or-invest
-> scenario decision), not on any remaining mechanism.
+> Historical note: this was the state before the 2026-07-20 WIP sweep.
+> `rolling-restart-core-stability` is now terminal EXHAUSTED by operator
+> decision; see the release-truth correction above.
 
 > **(historical 2026-06-23 sub-frontier — SUPERSEDED by the update above):**
 > [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md) — after the

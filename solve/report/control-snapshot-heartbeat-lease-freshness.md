@@ -18,16 +18,16 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: transition_gap
-- Movement: solved: FAIL -> PASS
-- Latest evidence: test-output/reports/control-snapshot-heartbeat-lease-freshness-2026-07-15T18-01-20-601Z.report.json
+- Movement: solved: PASS -> PASS
+- Latest evidence: test-output/reports/control-snapshot-heartbeat-lease-freshness-2026-07-15T23-49-07-041Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for control-snapshot-heartbeat-lease-freshness-main
-- No longer current: FAIL
+- No longer current: PASS; Do not weaken fail-closed snapshot admission or return to the already-fixed heartbeat-age freshness heuristic; attribute why the owner-authored 15-second lease was not current.
 
 ## Continuation
-- Status: blocked-unrecorded-evidence
+- Status: allowed
 - Next action: No open frontier remains; inspect solve report.
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id control-snapshot-heartbeat-lease-freshness --frontier control-snapshot-heartbeat-lease-freshness-main --evidence test-output/reports/control-snapshot-heartbeat-lease-freshness-2026-07-15T18-04-57-177Z.report.json
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 5
@@ -51,6 +51,8 @@
 - **control-snapshot-heartbeat-lease-freshness-main**: Ingested evidence from control-snapshot-heartbeat-lease-freshness-2026-07-15T18-01-20-601Z.report.json. Metric: 1 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/control-snapshot-heartbeat-lease-freshness-2026-07-15T18-01-20-601Z.report.json]
 - **control-snapshot-heartbeat-lease-freshness-main**: Exact attempt excludes the untracked regression test required by its scenario registration and red-on-revert evidence; the four-path fingerprint cannot bind the producer-owner-consumer proof. [subagent:wave4_preload_gate_verify]
 - **control-snapshot-heartbeat-lease-freshness-main**: Ingested evidence from control-snapshot-heartbeat-lease-freshness-2026-07-15T18-04-57-177Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/control-snapshot-heartbeat-lease-freshness-2026-07-15T18-04-57-177Z.report.json]
+- **control-snapshot-heartbeat-lease-freshness-main**: Independent exact verification passed: fingerprint binds all five source, scenario, and regression-test paths; 4/4 focused files and 119/119 assertions pass; red-on-revert moves only the owner boundary while strict stale/blind admission denial remains. [subagent:wave4_preload_gate_verify]
+- **control-snapshot-heartbeat-lease-freshness-main**: Current deterministic production-path evidence is green: unexpired owner-authored leases stay fresh, expired/missing leases stay stale, delayed sender evidence is rebased at the canonical write owner, and periodic/storage/join heartbeat guards pass (214 focused assertions across seven files). Therefore the 17:07 cache_stale_watermark is a genuine missing/expired ready-lease observation at the snapshot owner, not the retired 5-second heartbeat-age heuristic. (rules out: Do not weaken fail-closed snapshot admission or return to the already-fixed heartbeat-age freshness heuristic; attribute why the owner-authored 15-second lease was not current.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json]
 
 ## Theories
 _(none recorded)_

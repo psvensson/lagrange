@@ -13,6 +13,23 @@
 - parent quest: movielens-formation-alive-peer-keepalive-liveness
 - plan: solve/epics/service-data-affinity-placement.md
 
+## Current Blocker
+- Frontier: movielens-ready-lease-maintenance-critical-owner-lane-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: transition_gap
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json
+- Selected theory: theory-20260716-colocated-follower-overclassified-by-leader-node (stale: selected theory status is avoided)
+- Next move: record or select a fresh frontier theory for movielens-ready-lease-maintenance-critical-owner-lane-main
+- No longer current: Do not reopen this honestly measured exhaustion, retry unchanged, or blame per-table cache versions until the producer/write/CDC lease-age chain is observable.
+
+## Continuation
+- Status: allowed
+- Next action: No open frontier remains; inspect solve report.
+- Blocker: none
+
 ## Scope Pressure
 - Changed files: 0
 - Change bytes: 0
@@ -41,11 +58,13 @@
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: The immutable authority/log witness pins a placement source-selection violation. Priority spread became steady at 03:22:34, early enough for the sealed window, but the first replica_operations and control_plane_publications REPLACEs selected r1, while boot logs prove r1 was each partition's leader and r2/r3 were followers co-located on the same seed. move-planner isLeaderRemovalCandidate treats every replica on partitionRow.leader_node_id as leader even when that replica has explicit follower raft_role, so stable ordering cannot prefer the followers. Publication leadership later moved to d82d1da8; its convergence trace regressed to publishedActiveNodeCount=2/5 and priority_spread_pending, while fresh surplus ADD/drain work kept three operations live at timeout. (rules out: This is not an irreducible elapsed tail: the leader-preservation contract has a deterministic explicit-role counterexample at the move-planner owner seam.) [data/examples/service-data-affinity-demo-archive/wave4-live-owner-rebased-2026-07-16T03-24-21-216Z.tar.gz]
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: The exact two-file move-planner source-selection patch is deterministically proven, but recording it here was rejected at the precommit boundary because the existing Quest history spans 13 files, 8 owners, and 35999 bytes. Split the colocated replica-role authority change into a linked single-owner child Quest; no source or test change is discarded and no live rerun occurs before exact verification. (rules out: Do not baseline or bypass aggregate scope pressure, widen the current Quest, or retry live without recording the source change in the bounded child.) [solve/changes/movielens-ready-lease-maintenance-critical-owner-lane/attempt-4.diff]
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-53-10-842Z.report.json]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: The 17:07 current-source demo again reaches cache_stale_watermark after zero spread, but its report omits the offending node id, last_heartbeat, ready_lease_expires_at, owner-write time, and CDC-observation time. The artifact therefore cannot satisfy this Quest's recorded reopen condition (maintenance deferred behind publication pressure or missing the critical lane); first add a deterministic/replayable owner-to-snapshot lease-age witness rather than reopening or rerunning live. (rules out: Do not reopen this honestly measured exhaustion, retry unchanged, or blame per-table cache versions until the producer/write/CDC lease-age chain is observable.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json]
+- **movielens-ready-lease-maintenance-critical-owner-lane-main**: Independent aggregate verification passed for the exact historical source bytes: all three contracted attempts retain later exact approvals, 273 focused assertions plus the MessageRouter and static/model gates are green, and the July 20 recurrence remains explicitly non-SOLVED because it lacks the lease-age chain required by the recorded reopen condition. [subagent:verify_ready_lease_aggregate]
 
 ## Theories
 - **theory-20260716-publication-owner-rebases-ready-lease** [supported] frontier, frontier movielens-ready-lease-maintenance-critical-owner-lane-main, layer ownership, mechanism The canonical node-state publication owner advances last_heartbeat to owner receive time but preserves a still-future sender-stamped expiry, so delivery and queue latency shorten the durable ready lease before commit and CDC visibility., owner replica-dispatch-node-state-publication-owner, boundary heartbeat sender to canonical nodes-row write owner, modelGate npm run model:contracts
 - **theory-20260716-comparison-emits-sealed-live-report** [falsified] frontier, frontier movielens-ready-lease-maintenance-critical-owner-lane-main, layer observation, mechanism The production comparison entrypoint invokes the Lagrange demo as a library, bypassing its CLI-only live-report writer, so the single changed run cannot update the sealed movielens-lagrange-service-affinity-live probe even though it emits the three-way report., owner movielens-comparison-entrypoint, boundary Lagrange live phase result to sealed scenario report and final comparison report, modelGate npm run model:contracts
-- **theory-20260716-colocated-follower-overclassified-by-leader-node** [active] frontier, frontier movielens-ready-lease-maintenance-critical-owner-lane-main, layer ownership, mechanism colocated_follower_overclassified_by_leader_node, owner move_planner_removal_source_owner, boundary replica_raft_role_to_replace_source_selection, modelGate npm run model:contracts
+- **theory-20260716-colocated-follower-overclassified-by-leader-node** [avoided] frontier, frontier movielens-ready-lease-maintenance-critical-owner-lane-main, layer ownership, mechanism colocated_follower_overclassified_by_leader_node, owner move_planner_removal_source_owner, boundary replica_raft_role_to_replace_source_selection, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-ready-lease-maintenance-critical-owner-lane-main**: theory-20260716-colocated-follower-overclassified-by-leader-node
@@ -54,6 +73,7 @@
 - **theory-20260716-publication-owner-rebases-ready-lease**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 - **theory-20260716-comparison-emits-sealed-live-report**: supported (scenario=failed, theory=supported, movement=no_previous) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-15T23-55-31-481Z.report.json]
 - **theory-20260716-comparison-emits-sealed-live-report**: falsified (scenario=failed, theory=falsified, movement=unknown) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-16T03-24-21-212Z.report.json]
+- **theory-20260716-colocated-follower-overclassified-by-leader-node**: avoided (scenario=failed, theory=avoided, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |

@@ -7,6 +7,53 @@ graduatesTo: null
 
 # Epic: Formation complexity consolidation (verified 2026-07-18 deep review)
 
+## Update — 2026-07-20 ordered gate and next structural slice
+
+The O3 successor `formation-liveness-dependency-serial-planner` is no longer
+the live owner. On source fingerprint `e85b031c182c3041`, the ordered gate
+passed 5-of-5 formation probes. Its first subsequent measuring demo formed five
+nodes, drained replica operations, reached total and priority spread gap zero,
+and briefly accumulated 11 seconds of quiescence. The next 58 observations
+failed at `snapshot_query_error: cache_stale_watermark`; temperature stayed
+below the non-measuring threshold and the source fingerprint remained stable.
+The Quest is therefore EXHAUSTED by an operator decision: another formation
+planner change would cross the sealed owner boundary.
+
+The first deterministic discriminator rules out O2's existing draft
+`per-table-cache-version-consolidation` as the first owner for this exact
+17:07 trigger. In the production control-snapshot path,
+`cache_stale_watermark` is produced only when an active/ready `nodes` row
+fails the owner-authored readiness check; per-table version/CAS drift,
+incomplete observation, and extra cached keys cannot originate that trigger.
+The focused cache/gateway/snapshot/discovery suites pass 456 assertions. Keep
+O2 draft as valid structural tail work, but do not seal or implement it from
+this shared label.
+
+The selected next Phase 0.1 move is the owner-to-snapshot ready-lease age
+witness in the existing heartbeat/lease lineage. Current producer,
+publication-owner, snapshot, periodic, storage-budget, and join guards pass
+214 focused assertions, but the live report omits the offending node id,
+heartbeat, lease expiry, owner-write time, and CDC-observation time. Capture
+that chain deterministically so the next result distinguishes missed
+heartbeat production, critical-lane/write delay, CDC visibility delay, and a
+genuinely inactive node. `control-snapshot-heartbeat-lease-freshness` owns the
+consumer semantics; the parked
+`movielens-ready-lease-maintenance-critical-owner-lane` reopens only if the
+witness proves its recorded lane-deferral condition. CL-022 remains guarded
+for its different snapshot-coverage invariant. No unchanged live rerun is
+authorized.
+
+The later demo evidence was also ingested into
+`movielens-observation-watermark-churn-consolidation`. That honestly changed
+its latest metric PASS -> FAIL, while the Solver retained the old
+honestly-measured parked frontier and refused its invalid-sample-only `reopen`
+escape hatch. Treat the resulting open projection as a workflow-visible
+recurrence, not authority for another bounded watermark patch. The product
+portfolio is now two above its 15-Quest advisory cap because the same fresh
+red also reopened parked local-row and ready-lease maintenance projections.
+Do not author a new Quest for the witness; keep it inside the already-open
+heartbeat/lease lineage.
+
 ## Handoff — start here (state as of 2026-07-19 morning, confirmation runs NOT green)
 
 A fresh agent can continue directly from this section; the Decision log below

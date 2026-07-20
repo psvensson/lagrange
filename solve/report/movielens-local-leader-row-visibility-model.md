@@ -20,10 +20,10 @@
 - Dominant reason: unknown
 - Mechanism: transition_gap
 - Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-18-24-002Z.report.json
+- Latest evidence: test-output/reports/movielens-local-leader-row-visibility-model-2026-07-20T16-53-37-495Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for movielens-local-leader-row-visibility-model-main
-- No longer current: PASS
+- No longer current: PASS; Do not recreate or relabel the missing historical bytes, suppress the goalpost violation, or force a SOLVED terminal from metric evidence alone; repair provenance through an explicit integrity-migration workflow.
 
 ## Continuation
 - Status: allowed
@@ -48,6 +48,7 @@
 - **movielens-local-leader-row-visibility-model-main**: Ingested evidence from movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json]
 - **movielens-local-leader-row-visibility-model-main**: Ingested evidence from movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-local-leader-row-visibility-model-2026-07-16T11-11-03-991Z.report.json]
 - **movielens-local-leader-row-visibility-model-main**: Independent exact-source verification passed: the focused TLA+ model faithfully composes local seeding, causal-version preservation, successor delivery, demotion clearing, delayed self replay, the pre-submit ownership fence, and the remove-safety consumer; fixed TLC and all four intended mutants were freshly re-executed. [subagent:verify_local_leader_model_attempt1]
+- **movielens-local-leader-row-visibility-model-main**: Fresh model evidence remains PASS, but terminal handoff is blocked by historical ledger integrity: the declared Quest has an unresolved post-declaration goalpost violation, and accepted attempt-1 points to a diff artifact that is absent from both the worktree and repository object history. The source-change fingerprint therefore cannot be re-audited honestly. (rules out: Do not recreate or relabel the missing historical bytes, suppress the goalpost violation, or force a SOLVED terminal from metric evidence alone; repair provenance through an explicit integrity-migration workflow.) [solve/log/movielens-local-leader-row-visibility-model.ndjson]
 
 ## Theories
 _(none recorded)_
