@@ -13,23 +13,6 @@
 - parent quest: movielens-formation-alive-peer-keepalive-liveness
 - plan: solve/epics/service-data-affinity-placement.md
 
-## Current Blocker
-- Frontier: movielens-ready-lease-maintenance-critical-owner-lane-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: transition_gap
-- Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json
-- Selected theory: theory-20260716-colocated-follower-overclassified-by-leader-node (stale: selected theory status is avoided)
-- Next move: record or select a fresh frontier theory for movielens-ready-lease-maintenance-critical-owner-lane-main
-- No longer current: Do not reopen this honestly measured exhaustion, retry unchanged, or blame per-table cache versions until the producer/write/CDC lease-age chain is observable.
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 0
 - Change bytes: 0
