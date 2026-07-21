@@ -13,23 +13,6 @@
 - parent quest: formation-ledger-self-move-blocks-cluster-ops
 - plan: solve/epics/topology-convergence-hardening.md
 
-## Current Blocker
-- Frontier: operation-ledger-quorum-authoritative-release-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: topology_gap
-- Movement: narrowed: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T12-36-14-313Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for operation-ledger-quorum-authoritative-release-main
-- No longer current: FAIL; Do not reopen operation-ledger owner-release logic, widen admission timeouts, blame host CPU, or treat the final admin timeout as first cause. The next lever is generic destructive priority-REMOVE authority/fencing across leader handoff: cache unions that are conservative for ADD are unsafe for DELETE.
-
-## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
-
 ## Scope Pressure
 - Changed files: 8
 - Change bytes: 28465
@@ -57,6 +40,7 @@
 - **operation-ledger-quorum-authoritative-release-main**: Fresh full contract/model verification passed after the runtime fix: the active-gate TLC route converges with expectationMet=true, temporalViolated=false, exitCode=0, and the decision-table model includes the owner-RPC-only ledger placement observation contract. [contract:architecture/contracts/evidence/active-gate-tlc-route.model.report.json]
 - **operation-ledger-quorum-authoritative-release-main**: Independent verification passed for the complete superseding path union: all eight blobs match, the seven runtime/docs/test blobs are identical to approved attempt 2, and the sole additional model report is freshly green and correctly referenced. [subagent:verify_ledger_authoritative_release]
 - **operation-ledger-quorum-authoritative-release-main**: The one permitted post-fix full run is measuring red on a distinct owner boundary. control_plane_publications-p1 first reached the intended three-replica spread (ADD r4/r5; REMOVE r2/r3 complete by 12:31:20). After leadership moved to r5/node-1 at 12:31:22, that new leader planned a standalone REMOVE of r1 from a stale local superset (activeCount=4, distinct=2, spread gap open) even though canonical physical placement was already r1/r4/r5 at target and spread. The remove completed at 12:31:30, regressing actual placement to two ready replicas; meanwhile the leader's stale cache later claimed five replicas/distinct three and kept proposing removal of the already-removed r1, so no deficit ADD repaired the canonical gap. Schema admission observed priority gap 1 for 87 samples and finally lost the snapshot request. Host scheduling stayed within budget and no node exited. (rules out: Do not reopen operation-ledger owner-release logic, widen admission timeouts, blame host CPU, or treat the final admin timeout as first cause. The next lever is generic destructive priority-REMOVE authority/fencing across leader handoff: cache unions that are conservative for ADD are unsafe for DELETE.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T12-36-14-313Z.report.json]
+- **operation-ledger-quorum-authoritative-release-main**: Independent terminal aggregate verification passed: the complete eight-path source union is byte-clean at checkpoint 0215d3fc, the strict owner-RPC fail-closed release proof remains valid, the formation probe is green, and the single full-run residual is correctly classified as a distinct destructive priority-REMOVE authority boundary outside this Quest. [subagent:verify_ledger_authoritative_release]
 
 ## Theories
 _(none recorded)_
