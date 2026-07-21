@@ -1,0 +1,18 @@
+{
+  "test": "test/convergence/dt-movielens-raft-peer-cohort-pruning-election.test.js",
+  "src": [
+    "src/partition/partition-service-core-base.js",
+    "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+    "src/partition/partition-service-constants.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-21T10:52:39.723Z"
+}
