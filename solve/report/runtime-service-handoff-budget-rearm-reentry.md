@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 1
+**Attempts:** 2
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -31,20 +31,24 @@
 - Blocker: none
 
 ## Scope Pressure
-- Changed files: 3
-- Change bytes: 4455
-- Owner areas: src/control-plane
-- Categories: runtime
+- Changed files: 4
+- Change bytes: 22490
+- Owner areas: src/control-plane, test/control-plane
+- Categories: runtime, test
 - Split plan:
   - src/control-plane: 3 file(s)
+  - test/control-plane: 1 file(s)
 - Signals: none
 
 ## Frontiers
-- **runtime-service-handoff-budget-rearm-reentry-main** [open] rung 1, attempts 1, metric 1 -> 1
+- **runtime-service-handoff-budget-rearm-reentry-main** [open] rung 1, attempts 2, metric 1 -> 1
 
 ## Findings
 - **runtime-service-handoff-budget-rearm-reentry-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-retained-verification.test.js-2026-07-21T08-59-41-385Z.json]
 - **runtime-service-handoff-budget-rearm-reentry-main**: Two post-fix live samples fail before or beside the sealed seam, not at it: the 09:04 run timed out at schema admission on cache_stale_watermark (authoritative-observation watermark lineage, pre-dispatch), and the 09:17 run never planned any non-system move because the rebalancer logged 'Deferring non-system rebalancing until priority control-plane partitions spread' every ~72s for the whole window (priority-spread lineage) — zero runtime-service dispatches occurred, so the sealed handoff-strand ordering was never exercised live. The sealed seam itself is deterministically proven: the discriminator reproduces the 08:21 strand red on unfixed source and the retained-verification fix is red-on-revert-proven (dt-prove artifact solve/changes/dt-prove/replica-dispatch-runtime-target-progress-retained-verification.test.js-2026-07-21T08-59-41-385Z.json), with 531/531 replica-dispatch family assertions green. Live doneWhen closure waits on those adjacent owner lineages; do not spend further live runs for this quest until they move. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T09-17-47-855Z.report.json]
+- **runtime-service-handoff-budget-rearm-reentry-main**: independent verification passed: fingerprint exact, red-on-revert independently re-proven, discriminator fidelity strong (real coordinator lane, 2x-budget drain), boundedness and no-broad-replay confirmed, retry-loop and shutdown hazards enumerated clean, 531/531 family green, eslint clean [subagent:a50558d01219a66f7]
+- **runtime-service-handoff-budget-rearm-reentry-main**: The sealed strand does not reproduce on HEAD 151a6993 because this quest's own committed fix closes it: the discriminator modeling the exact live ordering is green with the retained-verification re-entry present and red when it is reverted (dt-prove red-on-revert-proven, independently re-proven by the attempt verifier). The src drift flagged by seal-freshness is exactly this quest's own attempt-1 source change, checkpoint-committed at 151a6993. [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-retained-verification.test.js-2026-07-21T08-59-41-385Z.json]
+- **runtime-service-handoff-budget-rearm-reentry-main**: independent verification passed: attempt-2 artifact is exactly the reviewed discriminator test as a canonical delta from checkpoint 151a6993, blob-hash-identical to the reviewed content, no riders [subagent:a50558d01219a66f7]
 
 ## Theories
 _(none recorded)_
@@ -59,3 +63,4 @@ _(none recorded)_
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-21T09:18:58.279Z | runtime-service-handoff-budget-rearm-reentry-main | observe | 1 -> 1 | flat | narrowed |  | diff:solve/changes/runtime-service-handoff-budget-rearm-reentry/attempt-1.diff |
+| 2026-07-21T09:27:40.240Z | runtime-service-handoff-budget-rearm-reentry-main | local-fix | 1 -> 1 | flat | narrowed |  | diff:solve/changes/runtime-service-handoff-budget-rearm-reentry/attempt-2.diff |
