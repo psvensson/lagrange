@@ -25,9 +25,9 @@
 - Next move: continue supervised step for priority-surplus-remove-authoritative-placement-fence-main
 
 ## Continuation
-- Status: allowed
+- Status: blocked-unrecorded-evidence
 - Next action: continue supervised step for priority-surplus-remove-authoritative-placement-fence-main
-- Blocker: none
+- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id priority-surplus-remove-authoritative-placement-fence --frontier priority-surplus-remove-authoritative-placement-fence-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T13-35-45-939Z.report.json
 
 ## Scope Pressure
 - Changed files: 7
@@ -58,6 +58,8 @@
 - **priority-surplus-remove-authoritative-placement-fence-main**: DT red-on-revert proven for test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js [dt:solve/changes/dt-prove/dt6-priority-surplus-remove-authoritative-placement-fence.test.js-2026-07-21T13-15-08-889Z.json]
 - **priority-surplus-remove-authoritative-placement-fence-main**: Independent exact-byte verification passed: a thrown owner read remains authority_unavailable with zero persistence, captured error text cannot authorize deletion, excluded paths retain zero new reads, and focused/static/preflight checks pass. [subagent:verify_priority_remove_fence]
 - **priority-surplus-remove-authoritative-placement-fence-main**: Independent re-verification rejected attempt-2: it violates named-scalar and silent-catch static contracts and lacks throwing-owner-read production coverage; later bytes contain required corrections. [subagent:verify_priority_remove_fence]
+- **priority-surplus-remove-authoritative-placement-fence-main**: Independent verification passed for the same-base replacement; artifact bytes exactly match the final approved strict owner fence and all destructive-safety and scoped-read criteria remain satisfied. [subagent:verify_priority_remove_fence]
+- **priority-surplus-remove-authoritative-placement-fence-main**: The one permitted final-byte MovieLens run did not reproduce the stale destructive priority REMOVE: schema admission reached quiescent with prioritySpreadGap=0, ratings loaded and spread across five nodes, distributed SQL completed, and no priority_surplus_remove_authority_unproven event appeared. It failed later on a distinct pre-existing runtime-service ADD liveness path: ADD bd00c558 created svc-movielens-topn-r1 remotely, remained CREATING after replica success and missing local operation-row visibility, exhausted its remote-handoff budget, blocked the second ADD by budget, and was never rearmed before initial-placement timeout. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T13-35-45-939Z.report.json]
 
 ## Theories
 - **theory-20260721-the-cache-union-is-conservative-for** [active] system, mechanism The cache union is conservative for additive planning but non-monotonic for deletion: ghost replicas inflate voter count and make diversity-reducing removal appear safe., owner RebalanceCoordinator createOperation destructive priority REMOVE admission boundary, modelGate npm run model:contracts
