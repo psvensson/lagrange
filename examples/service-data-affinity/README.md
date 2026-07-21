@@ -124,3 +124,8 @@ demo fails closed unless the ledger has at least three voters and no node is
 required for its majority. If that second spread is not planned before the
 no-progress cutoff, the run stops with a formation diagnosis instead of
 starting a schema request that cannot succeed.
+
+Live confirmation samples are only meaningful on a quiet host: runs on
+2026-07-20 were invalidated by host scheduling gaps (tens of seconds of
+stolen wall-clock across the run), so check temperatures and background CPU
+load before starting a measured demonstration.

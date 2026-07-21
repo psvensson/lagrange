@@ -6,7 +6,7 @@
 
 **Outcome:** IN PROGRESS (no terminal recorded)
 
-**Attempts:** 7
+**Attempts:** 9
 
 ## Links
 - parent quest: service-data-affinity-parallel-reduce-demo-live
@@ -18,11 +18,11 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: observation_gap
-- Movement: invalid: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T21-07-23-880Z.report.json
-- Selected theory: theory-20260720-no-affinity-suboptimality-observer (stale: selected theory status is needs-rerun)
-- Next move: record or select a fresh frontier theory for movielens-three-way-affinity-demo-main
-- No longer current: FAIL; Do not force SOLVED, approve rejected fingerprints, or operator-park around the verification-integrity requirement.; Changing affinity placement, scoring, heartbeat/cache, harness, timeout, or host budgets from this invalid sample; treating the sample as a measured regression; rerunning unchanged bytes again before the owner Quest deterministic discriminator or separately scoped measurement repair.
+- Movement: solved: PASS -> PASS
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json
+- Selected theory: theory-20260721-rejection-replacement-landed-split-policy
+- Next move: continue supervised step for movielens-three-way-affinity-demo-main
+- No longer current: PASS
 
 ## Continuation
 - Status: allowed
@@ -31,7 +31,7 @@
 
 ## Scope Pressure
 - Changed files: 13
-- Change bytes: 115277
+- Change bytes: 142312
 - Owner areas: examples, src/rebalancer, src/runtime, test/partition, test/rebalancer, test/runtime
 - Categories: other, runtime, test
 - Action: split by owner area before the next attempt (13 files)
@@ -47,7 +47,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **movielens-three-way-affinity-demo-main** [parked {exhausted}] rung 5, attempts 7, metric 1 -> 1 — ladder exhausted without metric movement
+- **movielens-three-way-affinity-demo-main** [solved] rung 5, attempts 9, non-measurements 1, metric 1 -> 0 — measurement unavailable (retry 1)
 
 ## Findings
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
@@ -89,6 +89,12 @@
 - **movielens-three-way-affinity-demo-main**: Live 2026-07-20T12:37 forensics locate the learned-affinity 300s stall in the runtime-service planning trigger, not the wake seam: MovePlanner.isSuboptimalState (move-planner-state-methods.js:679) tests only replica count and node spread — it has no data-affinity term — and no rebalancer path subscribes to service_partition_access CDC. Initial placement lands on non-data nodes (no access profile exists yet); once count=2/spread=2 is satisfied the svc-movielens-topn rebalancer never plans again (exactly one planning round at 12:31:19, zero evaluations during the stall) while fresh attribution taught data lives on nodes 0/3/4. The affinity weights, policy lift, and incumbent-retention scoring are all reachable only from a planning round that is never triggered. Deterministic discriminator: evaluateState() with count/spread satisfied plus dominant fresh affinity weights on other nodes returns false on current code; a forced rebalance() in the same state proposes the REPLACE. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T12-37-12-178Z.report.json]
 - **movielens-three-way-affinity-demo-main**: The July 20 three-pass MovieLens doneWhen now measures PASS, but terminal handoff remains fail-closed because rejected attempts 5-7 lack a later same-frontier, same-base, changed-fingerprint replacement covering every rejected source path with its own exact approval; metric closure cannot launder rejected source bytes. (rules out: Do not force SOLVED, approve rejected fingerprints, or operator-park around the verification-integrity requirement.) [solve/report/movielens-three-way-affinity-demo.md]
 - **movielens-three-way-affinity-demo-main**: The operator-directed unchanged attribution run on source fingerprint 821892b96366f4db is non-measuring because host scheduling gaps exceeded both budgets (42 gaps, 82,946 ms total, 10,637 ms maximum). It failed during initial runtime-service placement before learned-affinity observation; diagnostic exact-target ACTIVE/source-operation CREATING evidence is routed to runtime-service-creating-owner-wake-progress-admission. This sample neither regresses the prior three valid priority-0 closures nor supports any MovieLens placement or learned-affinity source change. Focused post-gate safeguards remain green at 8 suites and 363 assertions. (rules out: Changing affinity placement, scoring, heartbeat/cache, harness, timeout, or host budgets from this invalid sample; treating the sample as a measured regression; rerunning unchanged bytes again before the owner Quest deterministic discriminator or separately scoped measurement repair.) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T21-07-23-880Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-20T06-06-53-717Z.report.json. Metric: 1 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-06-53-717Z.report.json]
+- **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-20T06-06-53-717Z.report.json. Metric: 0 -> 0. Verdict: PASS. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-06-53-717Z.report.json]
+- **movielens-three-way-affinity-demo-main**: The regressed-invariant signal (demo_schema_admitted, demo_preload_admitted, demo_result_produced) is a replay-measurement artifact, not a product regression: attempt-8 was recorded in a detached worktree pinned at the rejected base 022f27a3 where copied report files lost their original mtimes, so the scenario probe read the early 2026-07-20T06-06-53 report as the current sample and compared it against the invariant high-water set by the later three consecutive priority-0 closures (12:37, 15:41 PASS window). No source change occurred; the invariants were satisfied by the latest valid measuring evidence. A fresh accepted-sample live run on a quiet host is being recorded to restore them with current evidence. [solve/changes/movielens-three-way-affinity-demo/post-attempt-8-fresh-sample-2026-07-21.md]
+- **movielens-three-way-affinity-demo-main**: Regression labels demo_schema_admitted, demo_preload_admitted, demo_result_produced are explained as a replay-measurement artifact, not a product regression: attempt-8 was recorded in a detached worktree pinned at the rejected base 022f27a3 where copied report files lost their original mtimes, so the probe read the early 2026-07-20T06-06-53 report as current and compared it against the invariant high-water from the later three consecutive priority-0 closures. No source change was involved; a fresh accepted-sample live run follows to restore the labels with current evidence. [solve/changes/movielens-three-way-affinity-demo/post-attempt-8-fresh-sample-2026-07-21.md]
+- **movielens-three-way-affinity-demo-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
+- **movielens-three-way-affinity-demo-main**: Independent verification passed for the attempt-8 rejection replacement: same base 022f27a3 as rejected attempts 5-7, changed fingerprint, covers all rejected source paths, artifact byte-identical to the canonical base-to-current delta, substance supersedes the rejected ratings-scoped split-policy work as landed via movielens-ratings-scoped-split-policy-live, 159/159 focused assertions green on HEAD, cognitive-complexity ratchet green, attempt-preflight clean for touched paths [subagent:a58e200ce95b503c7]
 
 ## Theories
 - **theory-20260715-cross-owner-policy-scope** [active] system, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, modelGate npm run model:contracts
@@ -99,9 +105,10 @@
 - **theory-ratings-local-split-policy-verifier-replacement** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 - **theory-ratings-local-split-policy-exact-ratchet-clean** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 - **theory-20260720-no-affinity-suboptimality-observer** [needs-rerun] frontier, frontier movielens-three-way-affinity-demo-main, layer observation, mechanism placement-affinity-suboptimality-is-never-observed-by-the-planning-gate, modelGate npm run model:contracts
+- **theory-20260721-rejection-replacement-landed-split-policy** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism verifier_rejection_supersession, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 
 ## Selected Theories
-- **movielens-three-way-affinity-demo-main**: theory-20260720-no-affinity-suboptimality-observer
+- **movielens-three-way-affinity-demo-main**: theory-20260721-rejection-replacement-landed-split-policy
 
 ## Theory Results
 - **theory-ledger-cure-move-limit-starvation**: falsified (scenario=failed, theory=falsified, movement=no_previous) [test-output/reports/movielens-three-way-affinity-demo-live-2026-07-11T19-58-38-986Z.report.json]
@@ -124,6 +131,14 @@
 - **theory-20260720-no-affinity-suboptimality-observer**: avoided (scenario=failed, theory=avoided, movement=unknown) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T17-07-46-984Z.report.json]
 - **theory-20260720-no-affinity-suboptimality-observer**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T19-26-43-793Z.report.json]
 - **theory-20260720-no-affinity-suboptimality-observer**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T21-07-23-880Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-06-53-717Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: needs-rerun (scenario=done, theory=needs-rerun, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-06-53-717Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-20T06-06-53-717Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: needs-rerun (scenario=done, theory=needs-rerun, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: avoided (scenario=done, theory=avoided, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
@@ -135,3 +150,5 @@
 | 2026-07-15T20:54:50.894Z | movielens-three-way-affinity-demo-main | widen-scope | 1 -> 1 | flat | unknown | theory-ratings-local-split-policy-scope | diff:solve/changes/movielens-three-way-affinity-demo/attempt-5.diff |
 | 2026-07-15T21:04:34.537Z | movielens-three-way-affinity-demo-main | model | 1 -> 1 | flat | unknown | theory-ratings-local-split-policy-verifier-replacement | diff:solve/changes/movielens-three-way-affinity-demo/attempt-6.diff |
 | 2026-07-15T21:06:58.526Z | movielens-three-way-affinity-demo-main | change-approach | 1 -> 1 | flat | unknown | theory-ratings-local-split-policy-exact-ratchet-clean | diff:solve/changes/movielens-three-way-affinity-demo/attempt-7.diff |
+| 2026-07-21T06:47:58.578Z | movielens-three-way-affinity-demo-main | park | 0 -> 0 | flat | solved | theory-20260721-rejection-replacement-landed-split-policy | diff:solve/changes/movielens-three-way-affinity-demo/attempt-8.diff |
+| 2026-07-21T07:07:05.954Z | movielens-three-way-affinity-demo-main | park | 0 -> 0 | flat | solved | theory-20260721-rejection-replacement-landed-split-policy | diff:solve/changes/movielens-three-way-affinity-demo/attempt-9.diff |
