@@ -260,7 +260,6 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     const rejectedAttempt = latestAttempt(fx.root, fx.quest);
     git(fx.root, ['add', '-A']);
     git(fx.root, ['commit', '-m', 'checkpoint rejected bytes']);
-
     reject(
       fx.root,
       fx.quest,
@@ -270,6 +269,31 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     const replacement = runStep(fx.root, fx.quest);
     const pending = JSON.parse(fs.readFileSync(replacement.pendingFile, 'utf8'));
     t.equal(pending.headCommit, rejectedBase);
+
+    fs.writeFileSync(path.join(fx.root, 'src', 'a.js'), 'export const a = 4;\n');
+    const changeRef = canonicalDiff(
+      fx.root,
+      fx.quest,
+      rejectedBase,
+      'src/a.js',
+      'post-checkpoint-replacement-a',
+    );
+    runStep(fx.root, fx.quest, {
+      changeRef,
+      summary: 'post-checkpoint same-base replacement',
+    });
+    const replacementAttempt = latestAttempt(fx.root, fx.quest);
+    approve(
+      fx.root,
+      fx.quest,
+      'attempt',
+      `sha256:${replacementAttempt.changeRefIdentity.sha256}`,
+    );
+    t.equal(
+      checkpointGate(fx.root, fx.quest).status,
+      'pass',
+      'the approved old-base replacement remains checkpoint-eligible',
+    );
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });

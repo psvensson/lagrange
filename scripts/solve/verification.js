@@ -333,11 +333,17 @@ function findUncheckpointedApprovedAttempts(root, quest, log, state) {
   const resolvedRejectedIndexes = new Set(
     state.resolvedRejectedAttempts.map((entry) => entry.attempt.index),
   );
+  const approvedReplacementIndexes = new Set(
+    state.resolvedRejectedAttempts.map((entry) => entry.replacement.index),
+  );
   const checkpointCommit = latestCheckpointCommit(root, quest.id);
   const candidates = state.attempts.filter((attempt) =>
     attempt.contracted &&
     !resolvedRejectedIndexes.has(attempt.index) &&
-    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+    (
+      approvedReplacementIndexes.has(attempt.index) ||
+      attemptIsAfterCheckpoint(root, attempt, checkpointCommit)
+    ));
   const supersededIndexes = new Set(
     candidates
       .filter((attempt) => approvedCheckpointReplacement(
