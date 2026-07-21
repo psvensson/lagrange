@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 0 frontier(s) parked; human decision needed
 
 **Attempts:** 9
 
@@ -18,16 +18,16 @@
 - Boundary: unknown
 - Dominant reason: unknown
 - Mechanism: observation_gap
-- Movement: solved: PASS -> PASS
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json
-- Selected theory: theory-20260721-rejection-replacement-landed-split-policy
-- Next move: continue supervised step for movielens-three-way-affinity-demo-main
-- No longer current: PASS
+- Movement: same blocker remains: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T08-21-57-807Z.report.json
+- Selected theory: theory-20260721-rejection-replacement-landed-split-policy (stale: selected theory status is avoided)
+- Next move: record or select a fresh frontier theory for movielens-three-way-affinity-demo-main
 
 ## Continuation
-- Status: allowed
-- Next action: No open frontier remains; inspect solve report.
-- Blocker: none
+- Status: blocked-theory
+- Next action: record and select frontier theory for movielens-three-way-affinity-demo-main with npm run model:contracts as discriminator
+- Blocker: frontier theory required for movielens-three-way-affinity-demo-main
+- Blocker: selected theory stale: selected theory status is avoided
 
 ## Scope Pressure
 - Changed files: 13
@@ -47,7 +47,7 @@
 - Signal: large-diff-stack severity=medium
 
 ## Frontiers
-- **movielens-three-way-affinity-demo-main** [solved] rung 5, attempts 9, non-measurements 1, metric 1 -> 0 — measurement unavailable (retry 1)
+- **movielens-three-way-affinity-demo-main** [open] rung 5, attempts 9, non-measurements 1, metric 1 -> 1 — fresh measured evidence no longer satisfies frontier
 
 ## Findings
 - **movielens-three-way-affinity-demo-main**: Ingested evidence from movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json. Metric: 1 -> 1. Verdict: FAIL. Root cause: none. Dominant reason: none. Owner: none. Ingestion outcome: changed. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-11T19-31-44-570Z.report.json]
@@ -95,6 +95,8 @@
 - **movielens-three-way-affinity-demo-main**: Regression labels demo_schema_admitted, demo_preload_admitted, demo_result_produced are explained as a replay-measurement artifact, not a product regression: attempt-8 was recorded in a detached worktree pinned at the rejected base 022f27a3 where copied report files lost their original mtimes, so the probe read the early 2026-07-20T06-06-53 report as current and compared it against the invariant high-water from the later three consecutive priority-0 closures. No source change was involved; a fresh accepted-sample live run follows to restore the labels with current evidence. [solve/changes/movielens-three-way-affinity-demo/post-attempt-8-fresh-sample-2026-07-21.md]
 - **movielens-three-way-affinity-demo-main**: non-measuring sample (1/3): harness produced no trustworthy metric; holding the rung for retry rather than climbing toward an unearned exhausted park
 - **movielens-three-way-affinity-demo-main**: Independent verification passed for the attempt-8 rejection replacement: same base 022f27a3 as rejected attempts 5-7, changed fingerprint, covers all rejected source paths, artifact byte-identical to the canonical base-to-current delta, substance supersedes the rejected ratings-scoped split-policy work as landed via movielens-ratings-scoped-split-policy-live, 159/159 focused assertions green on HEAD, cognitive-complexity ratchet green, attempt-preflight clean for touched paths [subagent:a58e200ce95b503c7]
+- **movielens-three-way-affinity-demo-main**: First measuring FAIL after the host-scheduling repair (data/examples relocated to NVMe; node-0 blocked 0.4 percent vs 55 percent, so the sample is valid) isolates a genuine intermittent initial-placement blocker previously masked by invalid host-gap samples. Timeline from archive data/examples/service-data-affinity-demo-archive/quest-three-way-affinity-outcome-handoff-budget-parked-2026-07-21T08-21-57.tar.gz (sha256 f1208003b08c569a3ba5161179bc8747f6946180755bba0dbb0c544781087385): rebalancer detects replica_count_below_minimum at 08:13:03 and dispatches ADD operation 8ea3ccdd to target 5b6375d7 (node-4); the source owner logs 'Deferred replica operation dispatch while control-plane path recovers' at 08:13:03.898; the target completes CREATE_REPLICA in 4 ms at 08:13:03.926; at 08:14:04.879 the target-side coordinator logs 'Coordinator-created remote handoff retry stopped at its operation budget; the operation remains for planner rearm / ready-node replay' with workflowStep=CREATING and handoffDestination=the source owner; no planner rearm or ready-node replay ever re-enters the operation, the source replica-dispatch-service logs nothing between the deferral and shutdown, the second rebalancing move is skipped budget_exceeded, and the demo times out at 08:21 with 'service replicas were not initially placed'. This is adjacent to but distinct from the SOLVED wake seam (92d9f00f): that fix re-enters the source owner on a target-observed ACTIVE outcome, but here the outcome delivery itself (target-to-source remote handoff) exhausted its budget and parked with no later rearm, so the source never observes the outcome. Owner: rebalance-coordinator remote-handoff/rearm boundary. Next per operational ground truth: a deterministic discriminator at the handoff-budget-exhausted-then-never-rearmed seam before any further live runs or source changes. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T08-21-57-807Z.report.json]
+- **movielens-three-way-affinity-demo-main**: independent verification passed [subagent:a730f84b7258f9501]
 
 ## Theories
 - **theory-20260715-cross-owner-policy-scope** [active] system, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, modelGate npm run model:contracts
@@ -105,7 +107,7 @@
 - **theory-ratings-local-split-policy-verifier-replacement** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 - **theory-ratings-local-split-policy-exact-ratchet-clean** [falsified] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism cross_owner_policy_scope, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 - **theory-20260720-no-affinity-suboptimality-observer** [needs-rerun] frontier, frontier movielens-three-way-affinity-demo-main, layer observation, mechanism placement-affinity-suboptimality-is-never-observed-by-the-planning-gate, modelGate npm run model:contracts
-- **theory-20260721-rejection-replacement-landed-split-policy** [supported] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism verifier_rejection_supersession, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
+- **theory-20260721-rejection-replacement-landed-split-policy** [avoided] frontier, frontier movielens-three-way-affinity-demo-main, layer ownership, mechanism verifier_rejection_supersession, owner movielens_demo_bootstrap_owner, boundary scenario_table_policy_scope, modelGate npm run model:contracts
 
 ## Selected Theories
 - **movielens-three-way-affinity-demo-main**: theory-20260721-rejection-replacement-landed-split-policy
@@ -139,6 +141,11 @@
 - **theory-20260721-rejection-replacement-landed-split-policy**: avoided (scenario=done, theory=avoided, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
 - **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
 - **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-06-06-142Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: needs-rerun (scenario=invalid, theory=needs-rerun, movement=invalid) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-25-35-873Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: supported (scenario=done, theory=supported, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-33-41-184Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: needs-rerun (scenario=done, theory=needs-rerun, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-51-29-177Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: needs-rerun (scenario=done, theory=needs-rerun, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T08-06-58-731Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: avoided (scenario=failed, theory=avoided, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T08-21-57-807Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
