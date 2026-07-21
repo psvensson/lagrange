@@ -228,8 +228,12 @@ function applyFinding(frontier, event, reopensTerminal = false) {
     scopePressureClassification: event.scopePressureClassification || null,
     ts: event.ts || null,
   });
-  if (reopensTerminal && frontier.status === STATUS_SOLVED) {
+  if (
+    reopensTerminal &&
+    (frontier.status === STATUS_SOLVED || frontier.status === STATUS_PARKED)
+  ) {
     frontier.status = STATUS_OPEN;
+    frontier.parkKind = null;
     frontier.reason = LOCAL_STR_OWNED_001;
   }
 }

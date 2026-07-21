@@ -48,6 +48,7 @@ import {
 import {unrecordedEvidenceContinuation} from './continuation.js';
 import {
   resolveWorkspaceBaseCommit,
+  verificationState,
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
 
@@ -82,6 +83,14 @@ const AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS = Object.freeze([
 // snapshot exactly what changed during the attempt (null outside a git work tree).
 function resolveHeadPin(root) {
   return resolveWorkspaceBaseCommit(root);
+}
+
+function resolveStepBaseCommit(root, quest, log, frontierId) {
+  const unresolvedRejection = verificationState(root, quest, log)
+    .unresolvedRejectedAttempts
+    .find(({attempt}) => attempt.event.frontier === frontierId);
+  return unresolvedRejection?.attempt.event.workspaceBaseCommit ||
+    resolveHeadPin(root);
 }
 
 function nextAutoDiffArtifactPath(root, questId) {
@@ -236,7 +245,7 @@ function stepBegin(root, quest, options = {}) {
   const pending = {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
-    headCommit: resolveHeadPin(root),
+    headCommit: resolveStepBaseCommit(root, quest, log, pick.def.id),
     before: {
       metric: before.metric,
       done: before.done,

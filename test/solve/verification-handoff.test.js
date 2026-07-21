@@ -28,6 +28,7 @@ import {
 } from '../../scripts/solve/verification.js';
 import {
   EVENT_GATE_DECISION,
+  EVENT_PARK,
   OUTCOME_BLOCKED,
 } from '../../scripts/solve/constants.js';
 
@@ -219,6 +220,56 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.equal(replacement.terminal, null,
       'the rendered replacement step is executable, not refused as solved');
     t.equal(replacement.before.metric, 0);
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('rejecting a parked attempt reopens it for a real replacement step', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'parked-rejected-a');
+    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
+    appendEvent(fx.root, fx.quest.id, {
+      type: EVENT_PARK,
+      frontier: 'runtime-verify-main',
+      kind: 'exhausted',
+      reason: 'no honest move remained before independent review',
+    });
+
+    reject(
+      fx.root,
+      fx.quest,
+      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`,
+    );
+
+    const state = projectState(fx.quest, readLog(fx.root, fx.quest.id));
+    t.equal(state.frontiers[0].status, 'open');
+    t.equal(state.frontiers[0].parkKind, null);
+    t.equal(
+      buildNextLines(fx.root, fx.quest.id)[0],
+      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+    );
+    t.equal(runStep(fx.root, fx.quest).terminal, null);
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a post-checkpoint replacement step retains the rejected attempt base', (t) => {
+    const fx = fixture();
+    const rejectedBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
+    recordAttempt(fx, 'src/a.js', 1, 'checkpointed-rejected-a');
+    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
+    git(fx.root, ['add', '-A']);
+    git(fx.root, ['commit', '-m', 'checkpoint rejected bytes']);
+
+    reject(
+      fx.root,
+      fx.quest,
+      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`,
+    );
+
+    const replacement = runStep(fx.root, fx.quest);
+    const pending = JSON.parse(fs.readFileSync(replacement.pendingFile, 'utf8'));
+    t.equal(pending.headCommit, rejectedBase);
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
