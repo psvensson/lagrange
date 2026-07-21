@@ -1,0 +1,54 @@
+{
+  "id": "movielens-raft-peer-cohort-pruning-election-liveness",
+  "authoringContractVersion": 1,
+  "statement": "After ADD, REMOVE, and REPLACE converge a partition from its bootstrap replicas through a transient voter to a final three-voter cohort, every live PartitionService reconciles Liferaft membership to exactly that authoritative final cohort so departed replicas cannot inflate quorum, and a leader demotion elects exactly one final-cohort successor within the existing election bound; the unchanged five-node MovieLens service-affinity scenario then completes initial runtime-service placement.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "runtime-service-handoff-budget-rearm-reentry",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "99c71e8136d3d4f76db792bb3e308ce7ad8cc1fb"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "movielens-raft-peer-cohort-pruning-election-liveness-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "authoritative-retirement-evidence",
+      "statement": "A peer may be pruned only from explicit authoritative terminal or deletion evidence for that exact replica and address; absence from a partial or not-yet-hydrated cache snapshot is not retirement evidence."
+    },
+    {
+      "id": "deterministic-election-proof-first",
+      "statement": "Before another live run, drive the production cache-change, Raft-peer reconciliation, and election seams deterministically with the observed r1/r2/r3 -> r1/r4/r5 -> r1/r5/replacement chronology, prove the inflated-quorum failure red on revert, and preserve a negative case where an unproven missing peer remains joined."
+    },
+    {
+      "id": "unchanged-raft-policy",
+      "statement": "Do not widen election timeouts, change quorum arithmetic, weaken voter-ready or remove safety, suppress missing-leader evidence, or alter the MovieLens workload and placement policy."
+    }
+  ]
+}

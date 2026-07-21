@@ -4,6 +4,7 @@ import {
   createRoleMutationHelper,
 } from './partition-service-metadata-mutation-helpers.js';
 import {
+  retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
 
@@ -748,11 +749,11 @@ class PartitionServiceCoreBase extends EventEmitter {
    * React to authoritative services cache changes for this partition.
    * Existing voters need this to discover newly added or moved peers.
    * @param {string} tableName
-   * @param {string} _operation
+   * @param {string} operation
    * @param {Object} record
    * @private
    */
-  handleSystemTableCacheChange(tableName, _operation, record) {
+  handleSystemTableCacheChange(tableName, operation, record) {
     if (tableName === TABLES.PARTITIONS && record) {
       this.handleCanonicalLeaderRowCacheChange(record);
       return;
@@ -766,6 +767,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     ) {
       return;
     }
+    retireRaftPeerFromAuthoritativeServiceChange(this, operation, record);
     this.scheduleRaftPeerReconciliation();
   }
   /**

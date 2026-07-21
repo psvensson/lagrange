@@ -4,6 +4,7 @@ const {
   AddressManager,
   ENTITY_TYPE,
   PARTITION_SERVICE_LOG_MSG,
+  PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_TYPE,
   ReplicaStatus,
   SERVICE_TYPE,
@@ -85,6 +86,21 @@ function shouldSkipPeerServiceRow(partitionService, serviceRow, replicaId) {
   );
 }
 
+function addressMatchesReplica(addressManager, address, replicaId) {
+  if (typeof address !== 'string' || address.length === 0) {
+    return false;
+  }
+  try {
+    const parsed = addressManager.parse(address);
+    return (
+      parsed.serviceType === ENTITY_TYPE.PARTITION &&
+      parsed.serviceId === replicaId
+    );
+  } catch (_error) {
+    return false;
+  }
+}
+
 function findStaleAddressesForReplica(
   addressManager,
   currentNodes,
@@ -94,23 +110,122 @@ function findStaleAddressesForReplica(
   return currentNodes
     .map((node) => node?.address)
     .filter((address) => {
-      if (
-        typeof address !== 'string' ||
-        address.length === 0 ||
-        address === expectedAddress
-      ) {
-        return false;
-      }
-      try {
-        const parsed = addressManager.parse(address);
-        return (
-          parsed.serviceType === ENTITY_TYPE.PARTITION &&
-          parsed.serviceId === replicaId
-        );
-      } catch (_error) {
-        return false;
-      }
+      return (
+        address !== expectedAddress &&
+        addressMatchesReplica(addressManager, address, replicaId)
+      );
     });
+}
+
+function removeExactReplicaId(replicaIds, replicaId) {
+  if (!Array.isArray(replicaIds)) {
+    return false;
+  }
+  let removed = false;
+  for (let index = replicaIds.length - 1; index >= 0; index -= 1) {
+    if (replicaIds[index] === replicaId) {
+      replicaIds.splice(index, 1);
+      removed = true;
+    }
+  }
+  return removed;
+}
+
+function isExplicitPeerRetirement(operation, serviceRow) {
+  return (
+    operation === PARTITION_SERVICE_LITERAL.DELETE ||
+    serviceRow?.status === ReplicaStatus.REMOVED
+  );
+}
+
+function resolveServiceReplicaId(serviceRow) {
+  return serviceRow?.service_id || serviceRow?.replica_id || null;
+}
+
+function retireMatchingRaftAddresses(
+  partitionService,
+  addressManager,
+  replicaId,
+  serviceAddress,
+) {
+  if (!addressMatchesReplica(addressManager, serviceAddress, replicaId)) {
+    return null;
+  }
+  const raftNodes = Array.isArray(partitionService.raft.nodes) ?
+    [...partitionService.raft.nodes] :
+    [];
+  const retiredAddresses = new Set(
+    raftNodes
+      .map((node) => node?.address)
+      .filter((address) => address === serviceAddress),
+  );
+  if (typeof partitionService.raft.leave === PARTITION_SERVICE_TYPE.FUNCTION) {
+    for (const address of retiredAddresses) {
+      partitionService.raft.leave(address);
+    }
+  }
+  return retiredAddresses;
+}
+
+function removeMatchingPeerAddresses(
+  peerAddresses,
+  serviceAddress,
+) {
+  if (!Array.isArray(peerAddresses)) {
+    return;
+  }
+  for (let index = peerAddresses.length - 1; index >= 0; index -= 1) {
+    if (peerAddresses[index] === serviceAddress) {
+      peerAddresses.splice(index, 1);
+    }
+  }
+}
+
+function retireRaftPeerFromAuthoritativeServiceChange(
+  partitionService,
+  operation,
+  serviceRow,
+) {
+  const replicaId = resolveServiceReplicaId(serviceRow);
+  if (
+    !isExplicitPeerRetirement(operation, serviceRow) ||
+    !partitionService.raft ||
+    !replicaId ||
+    replicaId === partitionService.replicaId
+  ) {
+    return false;
+  }
+
+  const addressManager = AddressManager.getInstance();
+  const serviceAddress = resolvePeerAddressFromService(
+    addressManager,
+    serviceRow,
+    replicaId,
+  );
+  const retiredAddresses = retireMatchingRaftAddresses(
+    partitionService,
+    addressManager,
+    replicaId,
+    serviceAddress,
+  );
+  if (!retiredAddresses) {
+    return false;
+  }
+  removeExactReplicaId(partitionService.replicaIds, replicaId);
+  removeMatchingPeerAddresses(
+    partitionService.peerAddresses,
+    serviceAddress,
+  );
+  partitionService.logger.debug(
+    PARTITION_SERVICE_LOG_MSG.PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE,
+    {
+      operation,
+      partitionId: partitionService.partitionId,
+      replicaId,
+      retiredAddresses: [...retiredAddresses],
+    },
+  );
+  return true;
 }
 
 function reconcileRaftPeersFromCacheForService(partitionService) {
@@ -192,5 +307,6 @@ function reconcileRaftPeersFromCacheForService(partitionService) {
 
 export {
   reconcileRaftPeersFromCacheForService,
+  retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 };

@@ -288,6 +288,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   PEER_ADDRESS_FROM_CACHE: 'Built peer address from cache',
   PEER_ADDRESS_FROM_LIVE_RAFT_LEADER:
     'Built peer address from the current live Raft leader',
+  PEER_RETIRED_FROM_AUTHORITATIVE_SERVICE_CHANGE:
+    'Retired Raft peer from authoritative service change',
   PEER_ADDRESS_FROM_NODE: 'Built peer address using local nodeId',
   SINGLE_REPLICA_LEADER: 'Single replica - becoming leader immediately',
   INITIALIZED: 'Partition service initialized',
