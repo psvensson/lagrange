@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 5
 
@@ -12,22 +12,6 @@
 - spec: solve/epics/formation-complexity-consolidation.md
 - parent quest: operation-ledger-quorum-authoritative-release
 - plan: solve/epics/convergence-loop-and-workflow-overhead.md
-
-## Current Blocker
-- Frontier: priority-surplus-remove-authoritative-placement-fence-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
-- Next move: continue supervised step for priority-surplus-remove-authoritative-placement-fence-main
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: continue supervised step for priority-surplus-remove-authoritative-placement-fence-main
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id priority-surplus-remove-authoritative-placement-fence --frontier priority-surplus-remove-authoritative-placement-fence-main --evidence test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T13-35-45-939Z.report.json
 
 ## Scope Pressure
 - Changed files: 7
@@ -43,7 +27,7 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **priority-surplus-remove-authoritative-placement-fence-main** [open] rung 0, attempts 5, metric 1 -> 1
+- **priority-surplus-remove-authoritative-placement-fence-main** [parked {exhausted}] rung 0, attempts 5, metric 1 -> 1 — No honest in-seal move remains: the priority REMOVE symptom is absent in final live evidence, while the preserved failure is a pre-existing runtime_service ADD completion/rearm residual outside the sealed destructive boundary; rerunning unchanged bytes is forbidden and widening this Quest would violate its constraints.
 
 ## Findings
 - **priority-surplus-remove-authoritative-placement-fence-main**: inherited from operation-ledger-quorum-authoritative-release: The real RebalanceCoordinator admission path deterministically reproduces the systemic stale-read-model lock: cache-local services rows engage operation_ledger_quorum_concentrated and current source never consults the services owner, so a complete owner observation proving three voters on three nodes cannot release the final dependent sql_write_operations ADD. The discriminator also pins the required consistency contract: owner-local or owner-RPC complete spread may release; concentrated, incomplete, unavailable, malformed, SQL-projection, or any second-ledger unspread evidence must hold; a local no-hold path performs no authority read. (rules out: quorum arithmetic, cure typing, self-move serialization, operation budgets, host scheduling, and a missing physical ledger spread) [test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js]
@@ -60,6 +44,7 @@
 - **priority-surplus-remove-authoritative-placement-fence-main**: Independent re-verification rejected attempt-2: it violates named-scalar and silent-catch static contracts and lacks throwing-owner-read production coverage; later bytes contain required corrections. [subagent:verify_priority_remove_fence]
 - **priority-surplus-remove-authoritative-placement-fence-main**: Independent verification passed for the same-base replacement; artifact bytes exactly match the final approved strict owner fence and all destructive-safety and scoped-read criteria remain satisfied. [subagent:verify_priority_remove_fence]
 - **priority-surplus-remove-authoritative-placement-fence-main**: The one permitted final-byte MovieLens run did not reproduce the stale destructive priority REMOVE: schema admission reached quiescent with prioritySpreadGap=0, ratings loaded and spread across five nodes, distributed SQL completed, and no priority_surplus_remove_authority_unproven event appeared. It failed later on a distinct pre-existing runtime-service ADD liveness path: ADD bd00c558 created svc-movielens-topn-r1 remotely, remained CREATING after replica success and missing local operation-row visibility, exhausted its remote-handoff budget, blocked the second ADD by budget, and was never rearmed before initial-placement timeout. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T13-35-45-939Z.report.json]
+- **priority-surplus-remove-authoritative-placement-fence-main**: Independent aggregate verification passed: final strict fence is unchanged, proof ladder remains credible, and EXHAUSTED honestly separates the absent priority REMOVE symptom from the distinct pre-existing runtime-service ADD completion/rearm residual. [subagent:verify_priority_remove_fence]
 
 ## Theories
 - **theory-20260721-the-cache-union-is-conservative-for** [active] system, mechanism The cache union is conservative for additive planning but non-monotonic for deletion: ghost replicas inflate voter count and make diversity-reducing removal appear safe., owner RebalanceCoordinator createOperation destructive priority REMOVE admission boundary, modelGate npm run model:contracts
