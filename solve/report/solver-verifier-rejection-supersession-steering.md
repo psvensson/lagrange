@@ -4,44 +4,29 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/solver-verifier-rejection-supersession.json
 
-**Attempts:** 1
+**Attempts:** 2
 
 ## Links
 - spec: docs/steering/workflow-guidelines/solver-quests.md
 - parent quest: solver-verifier-rejection-supersession
 
-## Current Blocker
-- Frontier: solver-verifier-rejection-supersession-steering-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
-- Next move: continue supervised step for solver-verifier-rejection-supersession-steering-main
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: continue supervised step for solver-verifier-rejection-supersession-steering-main
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id solver-verifier-rejection-supersession-steering --frontier solver-verifier-rejection-supersession-steering-main --evidence solve/oracle/solver-verifier-rejection-supersession.json
-
 ## Scope Pressure
-- Changed files: 8
-- Change bytes: 139880
-- Owner areas: docs
+- Changed files: 9
+- Change bytes: 142540
+- Owner areas: docs, solve
 - Categories: workflow
 - Split plan:
   - docs: 8 file(s)
+  - solve: 1 file(s)
 - Signals: none
 
 ## Frontiers
-- **solver-verifier-rejection-supersession-steering-main** [open] rung 1, attempts 1, metric 2 -> 2
+- **solver-verifier-rejection-supersession-steering-main** [solved] rung 1, attempts 2, metric 2 -> 0
 
 ## Findings
-_(none recorded)_
+- **solver-verifier-rejection-supersession-steering-main**: The sealed symptom does not reproduce on HEAD: docs/steering/workflow-guidelines/solver-quests.md documents the fail-closed verifier-rejection supersession contract (rejection cannot be reversed by approving the rejected attempt; only a later same-frontier, same-base, changed-fingerprint replacement covering every rejected source path with its own exact approval resolves it), and npm run steering:check regenerates every generated LLM/rule/command/tool surface cleanly with no drift; the shared oracle measures metric 0 with both prior static-ratchet blockers green on HEAD 883eef72 [solve/oracle/solver-verifier-rejection-supersession.json]
 
 ## Theories
 _(none recorded)_
@@ -56,3 +41,4 @@ _(none recorded)_
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-13T16:38:13.945Z | solver-verifier-rejection-supersession-steering-main | observe | 2 -> 2 | flat | no_evidence |  | diff:solve/changes/solver-verifier-rejection-supersession-steering/attempt-1.diff.json |
+| 2026-07-21T06:34:36.974Z | solver-verifier-rejection-supersession-steering-main | local-fix | 0 -> 0 | flat | solved |  | diff:solve/changes/solver-verifier-rejection-supersession-steering/attempt-2.diff |
