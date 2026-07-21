@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 3
 
@@ -18,16 +18,16 @@
 - Owner: unknown
 - Boundary: unknown
 - Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
+- Mechanism: observation_gap
+- Movement: first blocker observed: FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T15-27-06-999Z.report.json
 - Selected theory: none
 - Next move: continue supervised step for runtime-service-add-creating-owner-rearm-main
 
 ## Continuation
-- Status: blocked-theory
-- Next action: record system theory before the next runtime-service-add-creating-owner-rearm-main attempt using npm run model:contracts as model discriminator
-- Blocker: system theory required for runtime-service-add-creating-owner-rearm-main
+- Status: allowed
+- Next action: No open frontier remains; inspect solve report.
+- Blocker: none
 
 ## Scope Pressure
 - Changed files: 6
@@ -42,7 +42,7 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **runtime-service-add-creating-owner-rearm-main** [open] rung 0, attempts 3, metric 1 -> 1
+- **runtime-service-add-creating-owner-rearm-main** [parked {exhausted}] rung 0, attempts 3, metric 1 -> 1 — No honest in-seal move remains: the sealed rearm mechanism is deterministically proven (red-on-revert), independently verified at exact fingerprint, checkpointed, and live-engaged (run 1 completed initial service placement with both ADDs terminal — the sealed symptom is absent on HEAD); the unchanged live doneWhen is blocked before or after the sealed seam by two distinct rotating owners (learned-affinity zero-move planning stall; ratings partition spread timeout), both outside this quest's sealed boundary, and further unchanged live runs cannot honestly move this quest's metric.
 
 ## Findings
 - **runtime-service-add-creating-owner-rearm-main**: Exact live ordering from the 2026-07-21T13:35 report run (nodes: node-0=c3d43107 source/coordinator, node-1=6d8c4174 target, node-4=2ec69729): 13:28:16.370 planner plans 2 ADD moves for svc-movielens-topn (desired 2 replicas, targets node-1 and node-4); 13:28:17.798 ADD bd00c558 created for target node-1; 13:28:18.69x source CDC logs 'No row found for CDC update' for the replica_operations row bd00c558 (missing local operation-row visibility); 13:28:18.702 dispatch deferred once ('Cache update not observed'); 13:28:18.785 the second planned ADD (target node-4) is skipped with reason budget_exceeded; 13:28:18.699 node-4 releases the operation's storage reservation as an orphan during reconciliation 27ms after creation; 13:28:19.004-013 target node-1 handles CREATE_REPLICA and completes replica creation; 13:28:19.386 source row SENDING->CREATING; 13:29:19.417 target-side coordinator-created remote handoff retry stops at its operation budget with workflowStep CREATING ('the operation remains for planner rearm / ready-node replay'); thereafter the source planner logs 'Suboptimal rebalancing state detected' (healthyReplicaCount 1, desired 2) every ~70s until 13:35:31 teardown with zero further Executing-rebalancing-move lines for this entity — neither planner rearm nor ready-node replay ever engaged. Evidence slices copied to solve/changes/runtime-service-add-creating-owner-rearm/live-2026-07-21T13-35-evidence-slices.ndjson; immutable archive data/examples/service-data-affinity-demo-archive/quest-runtime-service-add-creating-owner-rearm-live-report-2026-07-21T13-35-45-939Z.tar.gz sha256 16abf708fe8dc87e76499a10e365d0a33110c7deb2f23d7bf0efd58c783f9db1. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T13-35-45-939Z.report.json]
@@ -52,6 +52,10 @@
 - **runtime-service-add-creating-owner-rearm-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js [dt:solve/changes/dt-prove/replica-dispatch-add-creating-owner-rearm.test.js-2026-07-21T14-24-37-875Z.json]
 - **runtime-service-add-creating-owner-rearm-main**: Independent verification REJECTED exact attempt (sha256:04466e17): fingerprint exact with no riders, one-shot provenance dynamically disproven unbounded rearm (single 60s window across three drained windows, zero residual timers), broad replay and admission drift disproven (wake sets and both admission call sites unchanged), red-on-revert independently reproduced (8/2 with the exact live strand assertions), eslint/file-size/system-row behavior clean — but the new discriminator test file alone adds 4 clone groups / 174 duplicated lines, regressing the enforced test-duplication ratchet from 842/32209 to 844/32303. Remedy: extract the shared scenario setup in the new test file, no src changes needed, resubmit as changed-fingerprint same-base replacement. [subagent:a3ec4ae04f452e74c]
 - **runtime-service-add-creating-owner-rearm-main**: Independent verification REJECTED exact attempt sha256:95fdc68d on a single mechanical defect: the sealed artifact omits the new untracked module test/control-plane/replica-dispatch-virtual-timer-test-support.js that both patched suites import, so the patch is not self-contained on clean HEAD. Every substantive check passed: src hunks byte-identical to the substantively-approved attempt-2, parent-suite refactor proven behavior-preserving field-for-field, 31/31 and 548/548 green, duplication ratchet now under baseline (841/842, 32172/32209), eslint clean, red-on-revert re-reproduced on the deduplicated suite. Remedy: re-emit the diff with the sixth file included (git add -N) and resubmit; verifier pre-committed to APPROVE a resubmission whose only delta is the added file. [subagent:a3ec4ae04f452e74c]
+- **runtime-service-add-creating-owner-rearm-main**: Independent verification passed for the artifact-completeness resubmission: fingerprint exact, artifact self-contained with six entries including the shared support module (hunk blob-hash-identical to the working tree, 50834392), all other hunks byte-identical to attempt-3 whose src hunks are byte-identical to the substantively-approved attempt-2; carried-over gates on the identical tree state: 31/31 discriminator+parent suites, 548/548 replica-dispatch family, duplication ratchet under baseline, eslint clean, red-on-revert reproduced on the PENDING-payload ordering, one-shot rearm dynamically disproven. [subagent:a3ec4ae04f452e74c]
+- **runtime-service-add-creating-owner-rearm-main**: First live run at the checkpointed fix (e3b71726) proves the sealed mechanism ENGAGED and the sealed symptom absent: both runtime_service ADDs for svc-movielens-topn (57f8c05b, 8ee7399c) were created 63ms apart at 15:04:47 with NO budget_exceeded skip, both advanced PENDING->SENDING->CREATING within ~130ms, the service reached healthyReplicaCount 2 of desired 2, and the demo observer reported replicas=2 with stable two-node placement throughout — the exact prior-run strand (one ADD stuck CREATING, second budget-blocked, placement never completed) did not occur despite 306 'No row found for CDC update' divergence hits on the source node, confirming the retention fix is robust to the CL-017-class visibility divergence. The run FAILED later in a distinct downstream phase: learned-affinity stalled 300s at weightedLocality 0.000 with working attribution (attributionRows=2, partialReplicas=2, top10Correct=true) and ZERO affinity moves planned (single suboptimality detection at 15:06:54, no Executing-rebalancing-move lines after placement), so the doneWhen probe scores metric 1 and the run does not count toward the 3-consecutive requirement. This stall is a different owner (rebalancer affinity-migration engagement; lineage: 07-18 attributionRows=0 fixed, 07-20 locality-0.5 stall) and cannot be caused by the retention fix, which acts only post-dispatch on the operation's own verification slot — no moves were planned at all, and planning is untouched by the patch. Evidence slices solve/changes/runtime-service-add-creating-owner-rearm/live-run1-after-fix-slices.ndjson. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T15-10-38-912Z.report.json]
+- **runtime-service-add-creating-owner-rearm-main**: Second live run at the same bytes failed EARLIER and DIFFERENTLY: 'Timed out waiting for ratings partitions on at least two nodes after 600000ms' — the ratings split/spread phase, before any runtime-service ADD exists, so the sealed rearm seam was never exercised and the run is uninformative for it. Combined with run 1 (placement SUCCEEDED, then a distinct learned-affinity zero-moves stall), the live scenario currently exhibits rotating dominant blockers in two different owners (rebalancer affinity-migration engagement; ratings partition spread), both outside this quest's sealed destructive boundary. Per operational ground truth, further unchanged live runs are a lottery over out-of-seal owners and are not an honest move for this quest's doneWhen. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T15-27-06-999Z.report.json]
+- **runtime-service-add-creating-owner-rearm-main**: Independent aggregate verification passed: the complete quest source delta from draftedAtCommit de5e546a to checkpoint e3b71726 over the six code paths is byte-identical to the approved attempt-4 artifact with zero post-checkpoint drift; the EXHAUSTED terminal is honest point-for-point (dt-prove red-on-revert artifact valid, run 1 error is the learned-affinity stall with the sealed placement symptom absent and zero budget_exceeded lines, run 2 failed pre-placement at ratings spread, park reason makes no live-success/timeout/budget claim); no guardrail weakened — wake admission byte-equivalent, only the retention step set added, no timeout/budget/scan change. [subagent:a3ec4ae04f452e74c]
 
 ## Theories
 _(none recorded)_
