@@ -278,6 +278,14 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
           context?.[
             REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
           ] === true,
+        [
+        REPLICA_DISPATCH_SERVICE_LITERAL
+          .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+        ]:
+          context?.[
+            REPLICA_DISPATCH_SERVICE_LITERAL
+              .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+          ] === true,
       });
     } catch (error) {
       if (

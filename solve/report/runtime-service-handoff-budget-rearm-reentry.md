@@ -4,9 +4,9 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** EXHAUSTED — 0 frontier(s) parked; human decision needed
 
-**Attempts:** 2
+**Attempts:** 4
 
 ## Links
 - spec: solve/epics/service-data-affinity-placement.md
@@ -26,22 +26,22 @@
 - No longer current: FAIL
 
 ## Continuation
-- Status: allowed
-- Next action: continue supervised step for runtime-service-handoff-budget-rearm-reentry-main
-- Blocker: none
+- Status: blocked-theory
+- Next action: record system theory before the next runtime-service-handoff-budget-rearm-reentry-main attempt using npm run model:contracts as model discriminator
+- Blocker: system theory required for runtime-service-handoff-budget-rearm-reentry-main
 
 ## Scope Pressure
-- Changed files: 4
-- Change bytes: 22490
+- Changed files: 7
+- Change bytes: 49595
 - Owner areas: src/control-plane, test/control-plane
 - Categories: runtime, test
 - Split plan:
-  - src/control-plane: 3 file(s)
+  - src/control-plane: 6 file(s)
   - test/control-plane: 1 file(s)
 - Signals: none
 
 ## Frontiers
-- **runtime-service-handoff-budget-rearm-reentry-main** [open] rung 1, attempts 2, metric 1 -> 1
+- **runtime-service-handoff-budget-rearm-reentry-main** [open] rung 1, attempts 4, metric 1 -> 1 — exact terminal source attempt was rejected
 
 ## Findings
 - **runtime-service-handoff-budget-rearm-reentry-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-retained-verification.test.js-2026-07-21T08-59-41-385Z.json]
@@ -52,6 +52,11 @@
 - **runtime-service-handoff-budget-rearm-reentry-main**: The ready-lease chronology witness resolves the 09:04 cache_stale_watermark schema-admission blocker end-to-end and exonerates the observation path: rejected node fb90afc1 (node-3) was active/ready but its last heartbeat was 109745 ms old with the 15 s ready-lease expired 94745 ms before snapshot observation, while owner-write delay was 86 ms and CDC delay 65 ms. Node-3's heartbeat-service failed at stage register ('Distributed operation failed due to participant failures') every 10 s from 09:02:43 because at 09:02:11 the node lost canonical partition-leader metadata for services-p1, logs-p1, and nodes-p1 simultaneously (235 unresolved-leader warnings until shutdown; all four other nodes heartbeated normally; nodes-p1 leadership had moved to node-0 at 09:00:15). The loss follows one second after a 'Metadata publication CAS missed observed state; refreshing guard row from authority' event at 09:02:10.127 coinciding with 'Bootstrap authoritative snapshot was empty; retaining cached system-table rows' and 'Bootstrap snapshot diverged from local authoritative partition state' — the CAS-miss-triggered guard refresh read an empty/diverged authoritative snapshot and left the node-local canonical leader view unpopulated with no recovery for 110 s. Owner: node-local partition metadata delivery/publication-guard refresh (src/partition/partition-service-metadata-delivery-methods.js family), adjacent to the movielens-local-leader-row-visibility lineage. This is not ready-lease-maintenance deferral, so the parked movielens-ready-lease-maintenance-critical-owner-lane reopen condition is NOT met. Evidence archive run-2026-07-21T09-04-49-134Z.tar.gz sha256 fed03102 prefix recorded alongside the witness in the 09:04 report. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T09-04-08-984Z.report.json]
 - **runtime-service-handoff-budget-rearm-reentry-main**: Correction to the previous witness-attribution finding: the evidence archive run-2026-07-21T09-04-49-134Z.tar.gz sha256 prefix is cb6fc86bbd5ae28b1d69cb2d, not 'fed03102' (that string was an authoring placeholder mistakenly left in; no other content of the finding changes). [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T09-04-08-984Z.report.json]
 - **runtime-service-handoff-budget-rearm-reentry-main**: The 09:17 run's non-system planning deferral is also a leader-visibility defect, not a spread-count gap: the deferral diagnostic shows largestSpreadGap 0 with blockedPartitions naming exactly sql_transaction_participants-p1 with missingActiveLeader true for the whole window, while node-0's raft log shows Became leader for that partition at 09:04:57.868 with no later leadership change — the raft leader existed for 12+ minutes but the active-leader view consumed by the priority planning gate never became visible. Together with the 09:04 witness finding (node-local canonical leader metadata wiped by a CAS-miss guard refresh reading an empty authoritative snapshot), both currently-gating live blockers converge on one owner neighborhood: partition leader metadata/row visibility after elections (the sealed movielens-local-leader-row-visibility lineage and the partition metadata delivery owner), NOT two independent lineages and NOT the formation O3 planner pivot for this specific deferral shape. Next highest-information move: a deterministic discriminator at the elected-leader-to-visible-active-leader publication seam covering both observed shapes. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T09-17-47-855Z.report.json]
+- **runtime-service-handoff-budget-rearm-reentry-main**: Correction to the 09:38 leader-visibility attribution: sql_transaction_participants-p1 r1 became leader at 09:04:57.868Z, but its scheduler alone logged Lost leadership at 09:08:47.833Z immediately after a 1547ms seed event-loop gap; no node logged a successor election, missingActiveLeader began at 09:08:52.272Z, and the final three ACTIVE service rows are all followers while the partition row still carries the stale pre-demotion node-0 leader claim. The highest-information owner is the CL-013 latent defect in Raft peer-cache reconciliation: it adds current peers but never prunes departed replica IDs/raft.nodes, so long-lived r1 can retain departed r2/r3/r4 plus join r5/replacement; Liferaft then requires four votes from five peer objects although only the final three-voter cohort is live. This is a source-derived hypothesis pending the named deterministic production-seam falsifier, not yet a fix claim. [solve/changes/runtime-service-handoff-budget-rearm-reentry/2026-07-21T09-17-peer-quorum-observation.md]
+- **runtime-service-handoff-budget-rearm-reentry-main**: Independent aggregate verification REJECTED: retained runtime SENDING verification can rearm forever when authoritative evidence remains or falls back to SENDING (production-seam probe after three fired timers: dispatchCalls=4, timersCreated=4, activeTimers=1, retainedSlots=1), and src/control-plane/replica-dispatch-retry-scheduling.js is 845 lines versus the STYLE-0008 800-line edited-source limit. Preserve verification provenance so a verification-triggered success cannot schedule another retained verification, add a deterministic frozen/unreadable-SENDING multi-window regression, and extract the oversized file before replacement verification. [subagent:verify_handoff_aggregate]
+- **runtime-service-handoff-budget-rearm-reentry-main**: Independent verification rejected exact attempt-1: its success hook and retained-verification scheduler can rearm indefinitely while the authoritative/fallback row remains SENDING, and it grows replica-dispatch-retry-scheduling.js from 797 to 845 lines in violation of STYLE-0008. [subagent:verify_handoff_aggregate]
+- **runtime-service-handoff-budget-rearm-reentry-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-retained-verification.test.js-2026-07-21T10-24-52-094Z.json]
+- **runtime-service-handoff-budget-rearm-reentry-main**: Independent verification rejected exact attempt 3: production behavior, canonical same-base supersession, 676 dispatch assertions, and STYLE-0008 all pass, but the expanded discriminator regresses the enforced test-duplication ratchet from 842/32209 to 844/32222. Extract the repeated service fixture and submit a changed-fingerprint same-base replacement. [subagent:verify_handoff_attempt3]
 
 ## Theories
 _(none recorded)_
@@ -67,3 +72,5 @@ _(none recorded)_
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-21T09:18:58.279Z | runtime-service-handoff-budget-rearm-reentry-main | observe | 1 -> 1 | flat | narrowed |  | diff:solve/changes/runtime-service-handoff-budget-rearm-reentry/attempt-1.diff |
 | 2026-07-21T09:27:40.240Z | runtime-service-handoff-budget-rearm-reentry-main | local-fix | 1 -> 1 | flat | narrowed |  | diff:solve/changes/runtime-service-handoff-budget-rearm-reentry/attempt-2.diff |
+| 2026-07-21T10:25:37.859Z | runtime-service-handoff-budget-rearm-reentry-main | local-fix | 1 -> 1 | flat | narrowed |  | diff:solve/changes/runtime-service-handoff-budget-rearm-reentry/attempt-3.diff |
+| 2026-07-21T10:34:23.190Z | runtime-service-handoff-budget-rearm-reentry-main | local-fix | 1 -> 1 | flat | narrowed |  | diff:solve/changes/runtime-service-handoff-budget-rearm-reentry/attempt-4.diff |

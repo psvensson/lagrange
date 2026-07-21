@@ -77,6 +77,29 @@ function createTimerCapture() {
   };
 }
 
+function createRetainedVerificationService(dispatchOperation, options = {}) {
+  const timerCapture = createTimerCapture();
+  const service = createService({
+    ...options,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      dispatchOperation,
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      defaultRepairEligible: true,
+    }),
+    setTimeoutFn: timerCapture.captureTimer,
+    clearTimeoutFn: timerCapture.releaseTimer,
+  });
+  return {...timerCapture, service};
+}
+
 async function drainScheduledTimers(scheduledTimers, service, budgetMs) {
   let remainingVirtualBudgetMs = budgetMs;
   for (;;) {
@@ -284,27 +307,12 @@ test(
       entity_type: 'partition',
       entity_id: 'nodes-p1',
     });
-    const {scheduledTimers, captureTimer, releaseTimer} = createTimerCapture();
-    const service = createService({
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => ({success: true}),
-        upsertSystemTableRow: async () => ({success: true}),
+    const {scheduledTimers, service} = createRetainedVerificationService(
+      async (operation, options) => {
+        dispatchCalls.push({operation, options});
+        return {success: true};
       },
-      rebalanceCoordinator: {
-        async dispatchOperation(operation, options) {
-          dispatchCalls.push({operation, options});
-          return {success: true};
-        },
-        isOperationLocallyOwned() {
-          return true;
-        },
-      },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService({
-        defaultRepairEligible: true,
-      }),
-      setTimeoutFn: captureTimer,
-      clearTimeoutFn: releaseTimer,
-    });
+    );
 
     try {
       await service.handleReplicaOperationDispatch({
@@ -336,6 +344,73 @@ test(
 );
 
 test(
+  'a retained verification dispatch is one-shot when the durable row remains ' +
+  'temporarily unreadable',
+  async (t) => {
+    initEnv();
+
+    const operationId = `${OPERATION_ID}-unreadable-sending-one-shot`;
+    const sendingRow = buildRuntimeSendingOperationRow({
+      operation_id: operationId,
+    });
+    const dispatchCalls = [];
+    const {scheduledTimers, service} = createRetainedVerificationService(
+      async (operation, options) => {
+        dispatchCalls.push({operation, options});
+        return {success: true};
+      },
+    );
+    service.replicaOperationsOwner = {
+      async getReplicaOperationFromCache() {
+        return null;
+      },
+    };
+    service.getAuthoritativeReplicaOperationRow = async () => null;
+
+    try {
+      await service.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationId,
+        [ControlPlaneField.OPERATION_ROW]: sendingRow,
+      });
+      await drainOperationDispatchQueue(service);
+
+      t.equal(
+        dispatchCalls.length,
+        1,
+        'the initial SENDING row should dispatch once',
+      );
+
+      await drainScheduledTimers(
+        scheduledTimers,
+        service,
+        CREATING_STEP_TIMEOUT_MS * 4,
+      );
+
+      t.equal(
+        dispatchCalls.length,
+        2,
+        'the retained verification may dispatch the fallback SENDING row ' +
+        'once but must not create a periodic replay loop',
+      );
+      t.equal(
+        scheduledTimers.filter((timer) => !timer.cleared && !timer.fired)
+          .length,
+        0,
+        'no later verification window remains armed',
+      );
+      t.equal(
+        service.operationDispatchDeferredRetries.size,
+        0,
+        'the one-shot verification leaves no retained retry slot',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
   'a row already ACTIVE when the retained verification fires is a no-op',
   async (t) => {
     initEnv();
@@ -351,27 +426,12 @@ test(
       workflow_step: WORKFLOW_STEP.ACTIVE,
       updated_at: 1700000000600,
     });
-    const {scheduledTimers, captureTimer, releaseTimer} = createTimerCapture();
-    const service = createService({
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => ({success: true}),
-        upsertSystemTableRow: async () => ({success: true}),
+    const {scheduledTimers, service} = createRetainedVerificationService(
+      async (operation, options) => {
+        dispatchCalls.push({operation, options});
+        return {success: true};
       },
-      rebalanceCoordinator: {
-        async dispatchOperation(operation, options) {
-          dispatchCalls.push({operation, options});
-          return {success: true};
-        },
-        isOperationLocallyOwned() {
-          return true;
-        },
-      },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService({
-        defaultRepairEligible: true,
-      }),
-      setTimeoutFn: captureTimer,
-      clearTimeoutFn: releaseTimer,
-    });
+    );
     let visibleOperationRow = sendingRow;
     service.replicaOperationsOwner = {
       async getReplicaOperationFromCache(requestedOperationId) {
@@ -419,6 +479,66 @@ test(
 );
 
 test(
+  'one-shot provenance survives a retryable verification dispatch failure',
+  async (t) => {
+    initEnv();
+
+    const operationId = `${OPERATION_ID}-verification-retry-one-shot`;
+    const sendingRow = buildRuntimeSendingOperationRow({
+      operation_id: operationId,
+    });
+    let dispatchCallCount = 0;
+    const {scheduledTimers, service} = createRetainedVerificationService(
+      async () => {
+        dispatchCallCount += 1;
+        if (dispatchCallCount === 2) {
+          const error = new Error('verification dispatch temporarily failed');
+          error.retryAfterMs = DISPATCH_DEFER_RETRY_AFTER_MS;
+          throw error;
+        }
+        return {success: true};
+      },
+    );
+    service.replicaOperationsOwner = {
+      async getReplicaOperationFromCache() {
+        return null;
+      },
+    };
+    service.getAuthoritativeReplicaOperationRow = async () => null;
+
+    try {
+      await service.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationId,
+        [ControlPlaneField.OPERATION_ROW]: sendingRow,
+      });
+      await drainOperationDispatchQueue(service);
+      await drainScheduledTimers(
+        scheduledTimers,
+        service,
+        CREATING_STEP_TIMEOUT_MS * 3,
+      );
+
+      t.equal(
+        dispatchCallCount,
+        3,
+        'initial dispatch, one verification failure, and its canonical retry ' +
+        'are the only owner calls',
+      );
+      t.equal(
+        scheduledTimers.filter((timer) => !timer.cleared && !timer.fired)
+          .length,
+        0,
+        'the successful retry cannot rearm the creation-window verification',
+      );
+      t.equal(service.operationDispatchDeferredRetries.size, 0);
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
   'the retained verification re-entry never replays unrelated pending rows',
   async (t) => {
     initEnv();
@@ -441,31 +561,16 @@ test(
       status: ReplicaStatus.PENDING,
       workflow_step: WORKFLOW_STEP.PENDING,
     });
-    const {scheduledTimers, captureTimer, releaseTimer} = createTimerCapture();
     // Seeded after startup so the initial cache replay cannot dispatch it;
     // only a broad replay from the retained re-entry could reach it.
     const cacheReplicaOperations = [];
-    const service = createService({
-      cacheReplicaOperations,
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => ({success: true}),
-        upsertSystemTableRow: async () => ({success: true}),
+    const {scheduledTimers, service} = createRetainedVerificationService(
+      async (operation, options) => {
+        dispatchCalls.push({operation, options});
+        return {success: true};
       },
-      rebalanceCoordinator: {
-        async dispatchOperation(operation, options) {
-          dispatchCalls.push({operation, options});
-          return {success: true};
-        },
-        isOperationLocallyOwned() {
-          return true;
-        },
-      },
-      controlPlaneReadinessService: createMockControlPlaneReadinessService({
-        defaultRepairEligible: true,
-      }),
-      setTimeoutFn: captureTimer,
-      clearTimeoutFn: releaseTimer,
-    });
+      {cacheReplicaOperations},
+    );
     let visibleOperationRow = sendingRow;
     service.replicaOperationsOwner = {
       async getReplicaOperationFromCache(requestedOperationId) {

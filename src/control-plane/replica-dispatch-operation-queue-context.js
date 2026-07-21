@@ -35,16 +35,26 @@ function resolveQueuedOperationDispatchContext(queue, ownerKey) {
  * @return {Object|null}
  */
 function extractOperationDispatchProgressContext(context) {
+  const progressContext = {};
   if (
-    context?.[ControlPlaneField.HANDOFF_MODE] !==
+    context?.[ControlPlaneField.HANDOFF_MODE] ===
       CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME
   ) {
-    return null;
+    progressContext[ControlPlaneField.HANDOFF_MODE] =
+      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
   }
-  return {
-    [ControlPlaneField.HANDOFF_MODE]:
-      CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
-  };
+  if (
+    context?.[
+      REPLICA_DISPATCH_SERVICE_LITERAL
+        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+    ] === true
+  ) {
+    progressContext[
+      REPLICA_DISPATCH_SERVICE_LITERAL
+        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+    ] = true;
+  }
+  return Object.keys(progressContext).length > 0 ? progressContext : null;
 }
 
 /**
@@ -92,6 +102,12 @@ function updateExistingOperationDispatchDeferredRetry(input) {
   return true;
 }
 
+function retainTrueContextField(mergedContext, retained, incoming, field) {
+  if (retained[field] === true || incoming[field] === true) {
+    mergedContext[field] = true;
+  }
+}
+
 /**
  * Merge coalesced operation-dispatch context monotonically. A target
  * executor-outcome wake is stronger than an ordinary dispatch request and
@@ -134,18 +150,19 @@ function mergeOperationDispatchReconcileContext(
     mergedContext[ControlPlaneField.HANDOFF_MODE] =
       CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
   }
-  if (
-    retained[
-      REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
-    ] === true ||
-    incoming[
-      REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
-    ] === true
-  ) {
-    mergedContext[
-      REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
-    ] = true;
-  }
+  retainTrueContextField(
+    mergedContext,
+    retained,
+    incoming,
+    REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH,
+  );
+  retainTrueContextField(
+    mergedContext,
+    retained,
+    incoming,
+    REPLICA_DISPATCH_SERVICE_LITERAL
+      .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE,
+  );
   return mergedContext;
 }
 
