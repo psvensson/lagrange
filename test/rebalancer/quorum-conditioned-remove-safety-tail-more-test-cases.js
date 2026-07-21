@@ -771,7 +771,10 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
           },
         },
         tablePolicyService: {
-          getPolicyForPartition: () => ({minReplicaCount: 2}),
+          getPolicyForPartition: () => ({
+            minReplicaCount: 2,
+            targetReplicaCount: 3,
+          }),
         },
         cacheData: {
           nodes: [
@@ -796,6 +799,12 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
               partitionId: testPartitionId,
               replicaId: 'sql_transactions-p1-r3',
               nodeId: 'node-c',
+              raftRole: 'follower',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: testPartitionId,
+              replicaId: 'sql_transactions-p1-r4',
+              nodeId: testNodeId,
               raftRole: 'follower',
             }),
           ],
@@ -823,6 +832,12 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
               partitionId: testPartitionId,
               replicaId: 'sql_transactions-p1-r3',
               nodeId: 'node-c',
+              raftRole: 'follower',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: testPartitionId,
+              replicaId: 'sql_transactions-p1-r4',
+              nodeId: testNodeId,
               raftRole: 'follower',
             }),
           ],

@@ -81,13 +81,14 @@ function installAuthoritativeServicesRead(coordinator, rowsProvider) {
   ) => {
     if (tableName === 'services' &&
         String(sql).includes(
-          'FROM services WHERE service_type = ? AND partition_id = ?',
+          'WHERE service_type = ? AND partition_id = ?',
         )) {
       const rows = typeof rowsProvider === 'function' ?
         rowsProvider(params[1]) :
         rowsProvider;
       return {
         success: true,
+        source: 'owner_rpc_lane',
         rows: Array.isArray(rows) ?
           rows.map((row) => ({...row})) :
           [],

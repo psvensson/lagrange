@@ -1,0 +1,143 @@
+{
+  "schema": "decision-table-v1",
+  "id": "priority-surplus-remove-placement-fence",
+  "owner": "src/rebalancer/priority-surplus-remove-placement-fence.js",
+  "boundary": "priority_remove_destructive_commit",
+  "inputs": [
+    {
+      "name": "authority",
+      "values": [
+        "owner_rpc",
+        "other"
+      ]
+    },
+    {
+      "name": "source",
+      "values": [
+        "exact_active_voter",
+        "missing_or_changed"
+      ]
+    },
+    {
+      "name": "count",
+      "values": [
+        "surplus",
+        "at_or_below_target"
+      ]
+    },
+    {
+      "name": "diversity",
+      "values": [
+        "preserved",
+        "reduced"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "action",
+      "values": [
+        "persist_remove",
+        "defer_replan"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "owner-authorizes-destruction",
+      "statement": "Only a complete OWNER_RPC_REQUIRED services-owner observation may authorize a non-failed priority standalone REMOVE; cache, follower, and SQL projections are proposal evidence only."
+    },
+    {
+      "id": "exact-source-precondition",
+      "statement": "The planned replica ID and node ID must still identify the same current active voter in owner placement."
+    },
+    {
+      "id": "monotonic-postcondition",
+      "statement": "The current active-voter count must be above policy target, projected count must remain at least target, and projected node diversity must not be lower than current diversity."
+    }
+  ],
+  "rules": [
+    {
+      "id": "non-owner-defer",
+      "when": {
+        "authority": "other",
+        "source": "*",
+        "count": "*",
+        "diversity": "*"
+      },
+      "outcome": {
+        "action": "defer_replan"
+      },
+      "reason": "A stale or fallback projection cannot authorize deletion.",
+      "invariantRefs": [
+        "owner-authorizes-destruction"
+      ]
+    },
+    {
+      "id": "changed-source-defer",
+      "when": {
+        "authority": "owner_rpc",
+        "source": "missing_or_changed",
+        "count": "*",
+        "diversity": "*"
+      },
+      "outcome": {
+        "action": "defer_replan"
+      },
+      "reason": "The intent no longer matches current owner placement.",
+      "invariantRefs": [
+        "exact-source-precondition"
+      ]
+    },
+    {
+      "id": "not-surplus-defer",
+      "when": {
+        "authority": "owner_rpc",
+        "source": "exact_active_voter",
+        "count": "at_or_below_target",
+        "diversity": "*"
+      },
+      "outcome": {
+        "action": "defer_replan"
+      },
+      "reason": "A stale superset cannot turn an at-target owner placement into a surplus removal.",
+      "invariantRefs": [
+        "monotonic-postcondition"
+      ]
+    },
+    {
+      "id": "diversity-regression-defer",
+      "when": {
+        "authority": "owner_rpc",
+        "source": "exact_active_voter",
+        "count": "surplus",
+        "diversity": "reduced"
+      },
+      "outcome": {
+        "action": "defer_replan"
+      },
+      "reason": "Surplus count alone does not justify reducing the current spread.",
+      "invariantRefs": [
+        "monotonic-postcondition"
+      ]
+    },
+    {
+      "id": "owner-proven-monotonic-remove",
+      "when": {
+        "authority": "owner_rpc",
+        "source": "exact_active_voter",
+        "count": "surplus",
+        "diversity": "preserved"
+      },
+      "outcome": {
+        "action": "persist_remove"
+      },
+      "reason": "The destructive intent still matches current owner placement and its postcondition is monotonic-safe.",
+      "invariantRefs": [
+        "owner-authorizes-destruction",
+        "exact-source-precondition",
+        "monotonic-postcondition"
+      ]
+    }
+  ]
+}

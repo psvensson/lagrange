@@ -17,9 +17,14 @@ import {
 import {
   getStartupAuthorityControlPlanePlacementEligibleNodeIds,
 } from '../control-plane/startup-authority-placement-eligibility.js';
+import {
+  evaluatePrioritySurplusRemovePlacementFence,
+} from './priority-surplus-remove-placement-fence.js';
 
 const {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   OperationType,
+  REBALANCER_SKIP_REASON,
   ReplicaStatus,
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
@@ -47,6 +52,8 @@ const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
   state: TOPOLOGY_GUARD_STATE.ALLOWED,
 });
 const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
+const PRIORITY_SURPLUS_REMOVE_FENCE_REASON =
+  'priority_surplus_remove_authority_unproven';
 
 function captureInventoryCacheTableState(cache, tableName) {
   return {
@@ -332,6 +339,119 @@ class RebalanceCoordinatorTopologyGuardMethods {
       return Math.floor(rawTargetReplicaCount);
     }
     return TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT;
+  }
+
+  async resolvePrioritySurplusRemoveFenceTargetReplicaCount({
+    partitionId,
+    entityType,
+  }) {
+    if (
+      entityType !== SERVICE_TYPE.PARTITION ||
+      typeof this.tablePolicyService?.getPolicyForPartition !==
+        LOCAL_STR_FUNCTION
+    ) {
+      return null;
+    }
+    try {
+      const policy =
+        await this.tablePolicyService.getPolicyForPartition(partitionId);
+      const targetReplicaCount = Number(
+        policy?.targetReplicaCount ?? policy?.replicaCount,
+      );
+      return Number.isInteger(targetReplicaCount) && targetReplicaCount > 0 ?
+        targetReplicaCount : null;
+    } catch {
+      return null;
+    }
+  }
+
+  isPrioritySurplusRemovePlacementFenceApplicable(context) {
+    const moveReason = context?.move?.moveReason ?? context?.move?.reason;
+    return (
+      context?.normalizedMoveType === OperationType.REMOVE &&
+      moveReason !== MOVE_REASON.REPLICA_FAILED &&
+      this.isPriorityControlPlanePartition(context?.partitionId)
+    );
+  }
+
+  buildPrioritySurplusRemovePlacementFenceError(context, decision) {
+    const reason = PRIORITY_SURPLUS_REMOVE_FENCE_REASON;
+    const error = new Error(
+      `Priority surplus REMOVE placement fence blocked ${String(
+        context?.move?.replicaId || 'unknown',
+      )} for ${String(context?.partitionId || 'unknown')}: ${decision.state}`,
+    );
+    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SAFETY_BLOCKED;
+    error.admissionResult = Object.freeze({
+      allowed: false,
+      decisionType: STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+      reason,
+      blockingReasons: Object.freeze([
+        Object.freeze({code: reason, state: decision.state}),
+      ]),
+      placementFenceDecision: decision,
+    });
+    return error;
+  }
+
+  /**
+   * Revalidate a priority standalone REMOVE at the destructive commit boundary.
+   * Cache-local placement may propose the move, but it cannot authorize it.
+   *
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensurePrioritySurplusRemovePlacementFenceAllowed(context) {
+    if (!this.isPrioritySurplusRemovePlacementFenceApplicable(context)) {
+      return;
+    }
+    const targetReplicaCount =
+      await this.resolvePrioritySurplusRemoveFenceTargetReplicaCount({
+        partitionId: context.partitionId,
+        entityType: context.entityType || SERVICE_TYPE.PARTITION,
+      });
+    let observation = Object.freeze({
+      available: false,
+      error: null,
+      rows: Object.freeze([]),
+      source: null,
+    });
+    if (targetReplicaCount !== null) {
+      try {
+        observation = await this.getAuthoritativeEntityServiceRowsObservation({
+          partitionId: context.partitionId,
+          entityType: context.entityType || SERVICE_TYPE.PARTITION,
+          entityId: context.entityId || context.partitionId,
+          readOptions: {
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+            allowSqlFallback: false,
+            preferOwnerRpcReadLeader: true,
+          },
+        });
+      } catch (error) {
+        observation = Object.freeze({
+          ...observation,
+          error: error?.message || String(error),
+        });
+      }
+    }
+    const decision = evaluatePrioritySurplusRemovePlacementFence({
+      observation,
+      partitionId: context.partitionId,
+      sourceReplicaId: context?.move?.replicaId,
+      sourceNodeId: context?.move?.nodeId,
+      targetReplicaCount,
+      capturedAtMs: this.nowFn(),
+    });
+    if (decision.allowed === true) {
+      return;
+    }
+    throw this.buildPrioritySurplusRemovePlacementFenceError(
+      context,
+      decision,
+    );
   }
 
   /**

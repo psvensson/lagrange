@@ -1,0 +1,955 @@
+diff --git a/docs/specs/decision-tables/priority-surplus-remove-placement-fence.json b/docs/specs/decision-tables/priority-surplus-remove-placement-fence.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..c730d15d04711c80827f960d32cf8dcbbf67a87c
+--- /dev/null
++++ b/docs/specs/decision-tables/priority-surplus-remove-placement-fence.json
+@@ -0,0 +1,143 @@
++{
++  "schema": "decision-table-v1",
++  "id": "priority-surplus-remove-placement-fence",
++  "owner": "src/rebalancer/priority-surplus-remove-placement-fence.js",
++  "boundary": "priority_remove_destructive_commit",
++  "inputs": [
++    {
++      "name": "authority",
++      "values": [
++        "owner_rpc",
++        "other"
++      ]
++    },
++    {
++      "name": "source",
++      "values": [
++        "exact_active_voter",
++        "missing_or_changed"
++      ]
++    },
++    {
++      "name": "count",
++      "values": [
++        "surplus",
++        "at_or_below_target"
++      ]
++    },
++    {
++      "name": "diversity",
++      "values": [
++        "preserved",
++        "reduced"
++      ]
++    }
++  ],
++  "outputs": [
++    {
++      "name": "action",
++      "values": [
++        "persist_remove",
++        "defer_replan"
++      ]
++    }
++  ],
++  "invariants": [
++    {
++      "id": "owner-authorizes-destruction",
++      "statement": "Only a complete OWNER_RPC_REQUIRED services-owner observation may authorize a non-failed priority standalone REMOVE; cache, follower, and SQL projections are proposal evidence only."
++    },
++    {
++      "id": "exact-source-precondition",
++      "statement": "The planned replica ID and node ID must still identify the same current active voter in owner placement."
++    },
++    {
++      "id": "monotonic-postcondition",
++      "statement": "The current active-voter count must be above policy target, projected count must remain at least target, and projected node diversity must not be lower than current diversity."
++    }
++  ],
++  "rules": [
++    {
++      "id": "non-owner-defer",
++      "when": {
++        "authority": "other",
++        "source": "*",
++        "count": "*",
++        "diversity": "*"
++      },
++      "outcome": {
++        "action": "defer_replan"
++      },
++      "reason": "A stale or fallback projection cannot authorize deletion.",
++      "invariantRefs": [
++        "owner-authorizes-destruction"
++      ]
++    },
++    {
++      "id": "changed-source-defer",
++      "when": {
++        "authority": "owner_rpc",
++        "source": "missing_or_changed",
++        "count": "*",
++        "diversity": "*"
++      },
++      "outcome": {
++        "action": "defer_replan"
++      },
++      "reason": "The intent no longer matches current owner placement.",
++      "invariantRefs": [
++        "exact-source-precondition"
++      ]
++    },
++    {
++      "id": "not-surplus-defer",
++      "when": {
++        "authority": "owner_rpc",
++        "source": "exact_active_voter",
++        "count": "at_or_below_target",
++        "diversity": "*"
++      },
++      "outcome": {
++        "action": "defer_replan"
++      },
++      "reason": "A stale superset cannot turn an at-target owner placement into a surplus removal.",
++      "invariantRefs": [
++        "monotonic-postcondition"
++      ]
++    },
++    {
++      "id": "diversity-regression-defer",
++      "when": {
++        "authority": "owner_rpc",
++        "source": "exact_active_voter",
++        "count": "surplus",
++        "diversity": "reduced"
++      },
++      "outcome": {
++        "action": "defer_replan"
++      },
++      "reason": "Surplus count alone does not justify reducing the current spread.",
++      "invariantRefs": [
++        "monotonic-postcondition"
++      ]
++    },
++    {
++      "id": "owner-proven-monotonic-remove",
++      "when": {
++        "authority": "owner_rpc",
++        "source": "exact_active_voter",
++        "count": "surplus",
++        "diversity": "preserved"
++      },
++      "outcome": {
++        "action": "persist_remove"
++      },
++      "reason": "The destructive intent still matches current owner placement and its postcondition is monotonic-safe.",
++      "invariantRefs": [
++        "owner-authorizes-destruction",
++        "exact-source-precondition",
++        "monotonic-postcondition"
++      ]
++    }
++  ]
++}
+diff --git a/src/rebalancer/priority-surplus-remove-placement-fence.js b/src/rebalancer/priority-surplus-remove-placement-fence.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c35f08faf88cc3ac0f318d924c46034ed6e7661a
+--- /dev/null
++++ b/src/rebalancer/priority-surplus-remove-placement-fence.js
+@@ -0,0 +1,204 @@
++import {buildReplicaInventorySnapshot} from './replica-inventory.js';
++
++const PRIORITY_SURPLUS_REMOVE_FENCE_SOURCE = 'owner_rpc_lane';
++
++const PRIORITY_SURPLUS_REMOVE_FENCE_STATE = Object.freeze({
++  ALLOWED: 'allowed',
++  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
++  IDENTITY_INCOMPLETE: 'identity_incomplete',
++  INVENTORY_CONFLICT: 'inventory_conflict',
++  NOT_SURPLUS: 'not_surplus',
++  SOURCE_MISMATCH: 'source_mismatch',
++  TARGET_UNAVAILABLE: 'target_unavailable',
++  UNSAFE_COUNT: 'unsafe_count',
++  UNSAFE_DIVERSITY: 'unsafe_diversity',
++});
++
++function text(value) {
++  return typeof value === 'string' ? value.trim() : '';
++}
++
++function rowReplicaId(row) {
++  return text(
++    row?.replica_id ?? row?.replicaId ?? row?.service_id ?? row?.serviceId,
++  );
++}
++
++function rowNodeId(row) {
++  return text(row?.node_id ?? row?.nodeId);
++}
++
++function rowPartitionId(row) {
++  return text(row?.partition_id ?? row?.partitionId);
++}
++
++function rowServiceType(row) {
++  return text(row?.service_type ?? row?.serviceType).toLowerCase();
++}
++
++function completePartitionReplicaRow(row, partitionId) {
++  return (
++    row &&
++    typeof row === 'object' &&
++    rowReplicaId(row).length > 0 &&
++    rowNodeId(row).length > 0 &&
++    rowPartitionId(row) === partitionId &&
++    rowServiceType(row) === 'partition' &&
++    text(row.status).length > 0 &&
++    text(row.raft_role ?? row.raftRole).length > 0
++  );
++}
++
++function distinctNodeCount(replicas) {
++  return new Set(replicas.map((replica) => replica.nodeId)).size;
++}
++
++function decision(state, details = {}) {
++  return Object.freeze({
++    allowed: state === PRIORITY_SURPLUS_REMOVE_FENCE_STATE.ALLOWED,
++    state,
++    sourceReplicaId: details.sourceReplicaId || null,
++    sourceNodeId: details.sourceNodeId || null,
++    targetReplicaCount:
++      Number.isFinite(details.targetReplicaCount) ?
++        details.targetReplicaCount :
++        null,
++    currentVoterCount: details.currentVoterCount || 0,
++    projectedVoterCount: details.projectedVoterCount || 0,
++    currentDistinctNodeCount: details.currentDistinctNodeCount || 0,
++    projectedDistinctNodeCount: details.projectedDistinctNodeCount || 0,
++    revision: details.revision ?? null,
++  });
++}
++
++/**
++ * Compare one destructive priority REMOVE intent with a strict services-owner
++ * snapshot. Planner/cache placement is intentionally absent: it may propose
++ * work, but only the owner snapshot can authorize a count-reducing commit.
++ *
++ * @param {Object} options
++ * @return {Object} frozen fence decision
++ */
++function evaluatePrioritySurplusRemovePlacementFence(options = {}) {
++  const observation = options.observation || {};
++  const partitionId = text(options.partitionId);
++  const sourceReplicaId = text(options.sourceReplicaId);
++  const sourceNodeId = text(options.sourceNodeId);
++  const targetReplicaCount = Number(options.targetReplicaCount);
++  const common = {
++    sourceReplicaId,
++    sourceNodeId,
++    targetReplicaCount,
++    revision: observation.snapshotVersion ?? null,
++  };
++  if (!Number.isInteger(targetReplicaCount) || targetReplicaCount <= 0) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.TARGET_UNAVAILABLE,
++      common,
++    );
++  }
++  if (
++    observation.available !== true ||
++    observation.source !== PRIORITY_SURPLUS_REMOVE_FENCE_SOURCE ||
++    !Array.isArray(observation.rows)
++  ) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.AUTHORITY_UNAVAILABLE,
++      common,
++    );
++  }
++  if (
++    partitionId.length === 0 ||
++    sourceReplicaId.length === 0 ||
++    sourceNodeId.length === 0 ||
++    observation.rows.length === 0 ||
++    observation.rows.some(
++      (row) => !completePartitionReplicaRow(row, partitionId),
++    )
++  ) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.IDENTITY_INCOMPLETE,
++      common,
++    );
++  }
++
++  const inventory = buildReplicaInventorySnapshot({
++    entityType: 'partition',
++    entityId: partitionId,
++    capturedAtMs: Number.isFinite(options.capturedAtMs) ?
++      options.capturedAtMs :
++      Date.now(),
++    committedRowsObservation: {
++      state: 'present',
++      rows: observation.rows,
++      revision: observation.snapshotVersion ?? null,
++      observedAtMs: observation.observedAtMs ?? null,
++    },
++    inFlightOperationObservation: {
++      state: 'empty',
++      operations: [],
++      observedAtMs: observation.observedAtMs ?? null,
++    },
++  });
++  if (inventory.anomalies.length > 0) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.INVENTORY_CONFLICT,
++      common,
++    );
++  }
++  const activeVoters = inventory.replicas.filter(
++    (replica) => replica.active && replica.voter,
++  );
++  const sourceReplica = activeVoters.find(
++    (replica) => replica.replicaId === sourceReplicaId,
++  );
++  const currentVoterCount = activeVoters.length;
++  const currentDistinctNodeCount = distinctNodeCount(activeVoters);
++  const sharedCounts = {
++    ...common,
++    currentVoterCount,
++    currentDistinctNodeCount,
++  };
++  if (!sourceReplica || sourceReplica.nodeId !== sourceNodeId) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.SOURCE_MISMATCH,
++      sharedCounts,
++    );
++  }
++  if (currentVoterCount <= targetReplicaCount) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.NOT_SURPLUS,
++      sharedCounts,
++    );
++  }
++
++  const projectedVoters = activeVoters.filter(
++    (replica) => replica.replicaId !== sourceReplicaId,
++  );
++  const projectedVoterCount = projectedVoters.length;
++  const projectedDistinctNodeCount = distinctNodeCount(projectedVoters);
++  const projection = {
++    ...sharedCounts,
++    projectedVoterCount,
++    projectedDistinctNodeCount,
++  };
++  if (projectedVoterCount < targetReplicaCount) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.UNSAFE_COUNT,
++      projection,
++    );
++  }
++  if (projectedDistinctNodeCount < currentDistinctNodeCount) {
++    return decision(
++      PRIORITY_SURPLUS_REMOVE_FENCE_STATE.UNSAFE_DIVERSITY,
++      projection,
++    );
++  }
++  return decision(PRIORITY_SURPLUS_REMOVE_FENCE_STATE.ALLOWED, projection);
++}
++
++export {
++  PRIORITY_SURPLUS_REMOVE_FENCE_SOURCE,
++  PRIORITY_SURPLUS_REMOVE_FENCE_STATE,
++  evaluatePrioritySurplusRemovePlacementFence,
++};
+diff --git a/src/rebalancer/rebalance-coordinator-operation-creation.js b/src/rebalancer/rebalance-coordinator-operation-creation.js
+index 1dd136d2b182b31385e8a3d560dabeda1a10377e..31834a9a3c1f5338c0f20d84b75b71c0c9fe2e68 100644
+--- a/src/rebalancer/rebalance-coordinator-operation-creation.js
++++ b/src/rebalancer/rebalance-coordinator-operation-creation.js
+@@ -331,6 +331,13 @@ class RebalanceCoordinatorOperationCreation {
+       entityId,
+       partitionId,
+     });
++    await this.ensurePrioritySurplusRemovePlacementFenceAllowed({
++      move,
++      normalizedMoveType,
++      entityType,
++      entityId,
++      partitionId,
++    });
+     await this.ensureEntityAddLikeCreateLaneAvailable({
+       move,
+       normalizedMoveType,
+diff --git a/src/rebalancer/rebalance-coordinator-topology-guard-methods.js b/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
+index 9e809e2bd2dc6a1a34861f658421ef2ea78eda13..8d84ca99b323b55c7652e85b15d527f096176e63 100644
+--- a/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
++++ b/src/rebalancer/rebalance-coordinator-topology-guard-methods.js
+@@ -17,9 +17,14 @@ import {
+ import {
+   getStartupAuthorityControlPlanePlacementEligibleNodeIds,
+ } from '../control-plane/startup-authority-placement-eligibility.js';
++import {
++  evaluatePrioritySurplusRemovePlacementFence,
++} from './priority-surplus-remove-placement-fence.js';
+ 
+ const {
++  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+   OperationType,
++  REBALANCER_SKIP_REASON,
+   ReplicaStatus,
+   SERVICE_TYPE,
+   STORAGE_ADMISSION_DECISION_TYPE,
+@@ -47,6 +52,8 @@ const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
+   state: TOPOLOGY_GUARD_STATE.ALLOWED,
+ });
+ const EMPTY_STARTUP_AUTHORITY_PLACEMENT_NODE_IDS = Object.freeze([]);
++const PRIORITY_SURPLUS_REMOVE_FENCE_REASON =
++  'priority_surplus_remove_authority_unproven';
+ 
+ function captureInventoryCacheTableState(cache, tableName) {
+   return {
+@@ -334,6 +341,116 @@ class RebalanceCoordinatorTopologyGuardMethods {
+     return TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT;
+   }
+ 
++  async resolvePrioritySurplusRemoveFenceTargetReplicaCount({
++    partitionId,
++    entityType,
++  }) {
++    if (
++      entityType !== SERVICE_TYPE.PARTITION ||
++      typeof this.tablePolicyService?.getPolicyForPartition !==
++        LOCAL_STR_FUNCTION
++    ) {
++      return null;
++    }
++    try {
++      const policy =
++        await this.tablePolicyService.getPolicyForPartition(partitionId);
++      const targetReplicaCount = Number(
++        policy?.targetReplicaCount ?? policy?.replicaCount,
++      );
++      return Number.isInteger(targetReplicaCount) && targetReplicaCount > 0 ?
++        targetReplicaCount : null;
++    } catch {
++      return null;
++    }
++  }
++
++  isPrioritySurplusRemovePlacementFenceApplicable(context) {
++    const moveReason = context?.move?.moveReason ?? context?.move?.reason;
++    return (
++      context?.normalizedMoveType === OperationType.REMOVE &&
++      moveReason !== MOVE_REASON.REPLICA_FAILED &&
++      this.isPriorityControlPlanePartition(context?.partitionId)
++    );
++  }
++
++  buildPrioritySurplusRemovePlacementFenceError(context, decision) {
++    const reason = PRIORITY_SURPLUS_REMOVE_FENCE_REASON;
++    const error = new Error(
++      `Priority surplus REMOVE placement fence blocked ${String(
++        context?.move?.replicaId || 'unknown',
++      )} for ${String(context?.partitionId || 'unknown')}: ${decision.state}`,
++    );
++    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SAFETY_BLOCKED;
++    error.admissionResult = Object.freeze({
++      allowed: false,
++      decisionType: STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
++      reason,
++      blockingReasons: Object.freeze([
++        Object.freeze({code: reason, state: decision.state}),
++      ]),
++      placementFenceDecision: decision,
++    });
++    return error;
++  }
++
++  /**
++   * Revalidate a priority standalone REMOVE at the destructive commit boundary.
++   * Cache-local placement may propose the move, but it cannot authorize it.
++   *
++   * @param {Object} context
++   * @return {Promise<void>}
++   * @private
++   */
++  async ensurePrioritySurplusRemovePlacementFenceAllowed(context) {
++    if (!this.isPrioritySurplusRemovePlacementFenceApplicable(context)) {
++      return;
++    }
++    const targetReplicaCount =
++      await this.resolvePrioritySurplusRemoveFenceTargetReplicaCount({
++        partitionId: context.partitionId,
++        entityType: context.entityType || SERVICE_TYPE.PARTITION,
++      });
++    let observation = Object.freeze({
++      available: false,
++      rows: Object.freeze([]),
++      source: null,
++    });
++    if (targetReplicaCount !== null) {
++      try {
++        observation = await this.getAuthoritativeEntityServiceRowsObservation({
++          partitionId: context.partitionId,
++          entityType: context.entityType || SERVICE_TYPE.PARTITION,
++          entityId: context.entityId || context.partitionId,
++          readOptions: {
++            authoritativeReadMode:
++              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
++            allowSqlFallback: false,
++            preferOwnerRpcReadLeader: true,
++          },
++        });
++      } catch {
++        // The typed evaluator below maps thrown owner reads to fail-closed
++        // authority_unavailable without inventing a fallback source.
++      }
++    }
++    const decision = evaluatePrioritySurplusRemovePlacementFence({
++      observation,
++      partitionId: context.partitionId,
++      sourceReplicaId: context?.move?.replicaId,
++      sourceNodeId: context?.move?.nodeId,
++      targetReplicaCount,
++      capturedAtMs: this.nowFn(),
++    });
++    if (decision.allowed === true) {
++      return;
++    }
++    throw this.buildPrioritySurplusRemovePlacementFenceError(
++      context,
++      decision,
++    );
++  }
++
+   /**
+    * Build one blocked create-result payload when the canonical topology
+    * snapshot proves an add-like move would violate one-node-per-replica or
+diff --git a/test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js b/test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..765a8530c700baf08eb60aa60fd4267ec9ac6385
+--- /dev/null
++++ b/test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js
+@@ -0,0 +1,365 @@
++import t from 'tap';
++import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
++} from '../../src/control-plane/control-plane-system-table-gateway.js';
++import {
++  MOVE_REASON,
++  REBALANCER_SKIP_REASON,
++} from '../../src/rebalancer/rebalancer-constants.js';
++import {createTestCoordinator} from '../rebalancer/test-helpers.js';
++
++const PARTITION_ID = `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`;
++const LEDGER_PARTITION_ID = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
++const TARGET_REPLICA_COUNT = 3;
++const NODE_IDS = Object.freeze([
++  'node-seed',
++  'node-1',
++  'node-2',
++  'node-3',
++  'node-4',
++]);
++
++function replicaRow(partitionId, replicaId, nodeId, options = {}) {
++  const row = {
++    service_id: replicaId,
++    replica_id: replicaId,
++    service_type: 'partition',
++    partition_id: partitionId,
++    node_id: nodeId,
++    status: options.status || 'active',
++    raft_role: options.raftRole || 'follower',
++  };
++  if (options.omitReplicaId === true) {
++    delete row.service_id;
++    delete row.replica_id;
++  }
++  return row;
++}
++
++function voterRows(partitionId, placements) {
++  return placements.map(({replicaId, nodeId}, index) =>
++    replicaRow(partitionId, replicaId, nodeId, {
++      raftRole: index === 0 ? 'leader' : 'follower',
++    }),
++  );
++}
++
++function staleHandoffRows() {
++  return voterRows(PARTITION_ID, [
++    {replicaId: `${PARTITION_ID}-r1`, nodeId: 'node-seed'},
++    {replicaId: `${PARTITION_ID}-r2`, nodeId: 'node-seed'},
++    {replicaId: `${PARTITION_ID}-r3`, nodeId: 'node-seed'},
++    {replicaId: `${PARTITION_ID}-r5`, nodeId: 'node-1'},
++  ]);
++}
++
++function canonicalSpreadRows() {
++  return voterRows(PARTITION_ID, [
++    {replicaId: `${PARTITION_ID}-r1`, nodeId: 'node-seed'},
++    {replicaId: `${PARTITION_ID}-r4`, nodeId: 'node-3'},
++    {replicaId: `${PARTITION_ID}-r5`, nodeId: 'node-1'},
++  ]);
++}
++
++function canonicalSurplusRows() {
++  return voterRows(PARTITION_ID, [
++    {replicaId: `${PARTITION_ID}-r1`, nodeId: 'node-seed'},
++    {replicaId: `${PARTITION_ID}-r4`, nodeId: 'node-3'},
++    {replicaId: `${PARTITION_ID}-r5`, nodeId: 'node-1'},
++    {replicaId: `${PARTITION_ID}-r6`, nodeId: 'node-seed'},
++  ]);
++}
++
++function ledgerSpreadRows() {
++  return voterRows(LEDGER_PARTITION_ID, [
++    {replicaId: `${LEDGER_PARTITION_ID}-r1`, nodeId: 'node-seed'},
++    {replicaId: `${LEDGER_PARTITION_ID}-r2`, nodeId: 'node-1'},
++    {replicaId: `${LEDGER_PARTITION_ID}-r3`, nodeId: 'node-3'},
++  ]);
++}
++
++function cacheData(localRows = staleHandoffRows()) {
++  return {
++    nodes: NODE_IDS.map((nodeId) => ({
++      node_id: nodeId,
++      connection_state: 'ready',
++      status: 'active',
++    })),
++    partitions: [PARTITION_ID, LEDGER_PARTITION_ID].map((partitionId) => ({
++      partition_id: partitionId,
++      replica_count: TARGET_REPLICA_COUNT,
++    })),
++    services: [...localRows, ...ledgerSpreadRows()],
++  };
++}
++
++async function runRemove({
++  authoritativeRows = canonicalSpreadRows(),
++  authoritativeSource = 'owner_rpc_lane',
++  authoritativeSuccess = true,
++  enforceConcurrentOperationBudget = true,
++  localRows = staleHandoffRows(),
++  moveReason = MOVE_REASON.SPREAD_REPLICAS,
++  moveNodeId = 'node-seed',
++  partitionId = PARTITION_ID,
++  replicaId = `${PARTITION_ID}-r1`,
++  targetPolicy = {
++    targetReplicaCount: TARGET_REPLICA_COUNT,
++    minReplicaCount: 2,
++  },
++} = {}) {
++  const servicesReads = [];
++  const mutations = [];
++  const operationRows = [];
++  const gateway = {
++    async readAuthoritativeRows(tableName, _sql, params = [], options = {}) {
++      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
++        servicesReads.push({params: [...params], options: {...options}});
++        return authoritativeSuccess ? {
++          success: true,
++          source: authoritativeSource,
++          rows: authoritativeRows,
++        } : {
++          success: false,
++          error: 'services owner unavailable',
++          rows: [],
++        };
++      }
++      if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
++        return {
++          success: true,
++          source: 'owner_rpc_lane',
++          rows: [...operationRows],
++        };
++      }
++      return {success: true, source: 'owner_rpc_lane', rows: []};
++    },
++    async readRows(tableName, sql, params = [], options = {}) {
++      return this.readAuthoritativeRows(tableName, sql, params, options);
++    },
++    async executeQuery() {
++      return {success: true, rows: []};
++    },
++    async submitMutation(mutation) {
++      mutations.push(mutation);
++      return {success: true, partitionResult: {affectedRows: 1}};
++    },
++  };
++  const coordinator = createTestCoordinator({
++    nodeId: 'node-1',
++    cacheData: cacheData(localRows),
++    controlPlaneSystemTableGateway: gateway,
++    cdcIntegrationService: {
++      async insertSystemTableRow(tableName, row) {
++        mutations.push({operation: 'insert', tableName, row});
++        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
++          operationRows.push({...row});
++        }
++        return {success: true, partitionResult: {affectedRows: 1}};
++      },
++      async updateSystemTableRow(tableName, whereClause, data) {
++        mutations.push({operation: 'update', tableName, whereClause, data});
++        return {success: true, partitionResult: {affectedRows: 1}};
++      },
++      async refreshAuthoritativeCacheRow() {
++        return true;
++      },
++    },
++    tablePolicyService: {
++      getPolicyForPartition: async () => targetPolicy,
++    },
++  });
++  coordinator.queryShutdownIncompleteOperations = async () => [];
++  coordinator.createOperationRecordInternal = async ({move}) => {
++    mutations.push({operation: 'persist-intent', move: {...move}});
++    return {
++      operationId: 'captured-remove-operation',
++      type: 'REMOVE',
++      partitionId: move.partitionId,
++      replicaId: move.replicaId,
++      targetNodeId: move.nodeId,
++      status: 'pending',
++      workflowStep: 'PENDING',
++    };
++  };
++  let operation = null;
++  let error = null;
++  try {
++    operation = await coordinator.createOperation({
++      type: 'REMOVE',
++      partitionId,
++      entityType: 'partition',
++      entityId: partitionId,
++      nodeId: moveNodeId,
++      replicaId,
++      moveReason,
++      enforceConcurrentOperationBudget,
++      emitOperationCreated: false,
++    });
++  } catch (caught) {
++    error = caught;
++  } finally {
++    await coordinator.shutdown();
++  }
++  return {error, mutations, operation, servicesReads};
++}
++
++t.test(
++  'leader handoff cannot persist REMOVE r1 from a stale four-row superset ' +
++    'after owner placement has settled at three spread voters',
++  async (t) => {
++    const result = await runRemove();
++
++    t.equal(result.operation, null, 'the stale destructive intent is discarded');
++    t.equal(result.error?.rebalanceSkipReason, REBALANCER_SKIP_REASON.SAFETY_BLOCKED);
++    t.equal(result.mutations.length, 0, 'no replica operation is persisted');
++    t.equal(result.servicesReads.length, 1, 'one bounded owner read fences commit');
++    t.equal(
++      result.servicesReads[0]?.options.authoritativeReadMode,
++      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
++    );
++    t.equal(result.servicesReads[0]?.options.allowSqlFallback, false);
++    t.equal(result.servicesReads[0]?.options.preferOwnerRpcReadLeader, true);
++  },
++);
++
++t.test('a genuine four-voter monotonic surplus REMOVE is persisted', async (t) => {
++  const result = await runRemove({
++    authoritativeRows: canonicalSurplusRows(),
++    replicaId: `${PARTITION_ID}-r6`,
++  });
++
++  t.equal(result.error, null);
++  t.equal(result.operation?.type, 'REMOVE');
++  t.equal(result.operation?.replicaId, `${PARTITION_ID}-r6`);
++  t.equal(result.servicesReads.length, 1);
++  t.ok(result.mutations.length > 0, 'the proven surplus operation is persisted');
++});
++
++t.test('an unavailable policy target fails closed before the owner read',
++  async (t) => {
++    const result = await runRemove({targetPolicy: null});
++
++    t.equal(result.operation, null);
++    t.equal(result.error?.rebalanceSkipReason, REBALANCER_SKIP_REASON.SAFETY_BLOCKED);
++    t.equal(result.error?.admissionResult?.placementFenceDecision?.state,
++      'target_unavailable');
++    t.equal(result.mutations.length, 0);
++    t.equal(result.servicesReads.length, 0);
++  });
++
++for (const testCase of [
++  {
++    name: 'owner unavailable',
++    options: {authoritativeSuccess: false},
++  },
++  {
++    name: 'non-owner fallback',
++    options: {authoritativeSource: 'local_partition_replica'},
++  },
++  {
++    name: 'source absent',
++    options: {
++      authoritativeRows: canonicalSurplusRows().filter(
++        (row) => row.replica_id !== `${PARTITION_ID}-r1`,
++      ),
++    },
++  },
++  {
++    name: 'source node changed',
++    options: {
++      authoritativeRows: canonicalSurplusRows(),
++      replicaId: `${PARTITION_ID}-r6`,
++      moveNodeId: 'node-1',
++    },
++  },
++  {
++    name: 'malformed replica identity',
++    options: {
++      authoritativeRows: [
++        ...canonicalSurplusRows(),
++        replicaRow(PARTITION_ID, 'malformed', 'node-4', {omitReplicaId: true}),
++      ],
++    },
++  },
++  {
++    name: 'duplicate conflicting replica identity',
++    options: {
++      authoritativeRows: [
++        ...canonicalSurplusRows(),
++        replicaRow(PARTITION_ID, `${PARTITION_ID}-r6`, 'node-4'),
++      ],
++    },
++  },
++  {
++    name: 'diversity-reducing surplus source',
++    options: {
++      authoritativeRows: canonicalSurplusRows(),
++      replicaId: `${PARTITION_ID}-r4`,
++    },
++  },
++]) {
++  t.test(`${testCase.name} evidence fails closed without persistence`, async (t) => {
++    const result = await runRemove(testCase.options);
++    t.equal(result.operation, null);
++    t.equal(result.error?.rebalanceSkipReason, REBALANCER_SKIP_REASON.SAFETY_BLOCKED);
++    t.equal(result.mutations.length, 0);
++    t.equal(result.servicesReads.length, 1);
++  });
++}
++
++t.test('ADD and REPLACE do not enter the destructive placement fence',
++  async (t) => {
++    let ownerReadCount = 0;
++    const coordinator = createTestCoordinator({
++      nodeId: 'node-1',
++      cacheData: cacheData(),
++    });
++    coordinator.queryShutdownIncompleteOperations = async () => [];
++    coordinator.getAuthoritativeEntityServiceRowsObservation = async () => {
++      ownerReadCount += 1;
++      throw new Error('destructive fence read was not expected');
++    };
++    try {
++      for (const normalizedMoveType of ['ADD', 'REPLACE']) {
++        await coordinator.ensurePrioritySurplusRemovePlacementFenceAllowed({
++          normalizedMoveType,
++          partitionId: PARTITION_ID,
++          entityType: 'partition',
++          entityId: PARTITION_ID,
++          move: {
++            type: normalizedMoveType,
++            nodeId: 'node-3',
++            replicaId: `${PARTITION_ID}-r1`,
++          },
++        });
++      }
++      t.equal(ownerReadCount, 0);
++    } finally {
++      await coordinator.shutdown();
++    }
++  });
++
++for (const testCase of [
++  {
++    name: 'failed priority cleanup',
++    options: {moveReason: MOVE_REASON.REPLICA_FAILED},
++  },
++  {
++    name: 'non-priority standalone remove',
++    options: {
++      partitionId: 'ratings-p1',
++      replicaId: 'ratings-p1-r1',
++      enforceConcurrentOperationBudget: false,
++    },
++  },
++]) {
++  t.test(`${testCase.name} preserves the no-new-authority-read path`, async (t) => {
++    const result = await runRemove(testCase.options);
++    t.equal(result.error, null);
++    t.equal(result.operation?.type, 'REMOVE');
++    t.equal(result.servicesReads.length, 0);
++    t.ok(result.mutations.length > 0);
++  });
++}
+diff --git a/test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js b/test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js
+index b847a0fb89c56ddfa2662e955d32e14c26b92dbb..2c3a7bf8f4e9495120107174245d97191d2a9448 100644
+--- a/test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js
++++ b/test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js
+@@ -771,7 +771,10 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
+           },
+         },
+         tablePolicyService: {
+-          getPolicyForPartition: () => ({minReplicaCount: 2}),
++          getPolicyForPartition: () => ({
++            minReplicaCount: 2,
++            targetReplicaCount: 3,
++          }),
+         },
+         cacheData: {
+           nodes: [
+@@ -798,6 +801,12 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
+               nodeId: 'node-c',
+               raftRole: 'follower',
+             }),
++            createCriticalPartitionServiceRow({
++              partitionId: testPartitionId,
++              replicaId: 'sql_transactions-p1-r4',
++              nodeId: testNodeId,
++              raftRole: 'follower',
++            }),
+           ],
+         },
+       });
+@@ -825,6 +834,12 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
+               nodeId: 'node-c',
+               raftRole: 'follower',
+             }),
++            createCriticalPartitionServiceRow({
++              partitionId: testPartitionId,
++              replicaId: 'sql_transactions-p1-r4',
++              nodeId: testNodeId,
++              raftRole: 'follower',
++            }),
+           ],
+         );
+ 
+diff --git a/test/rebalancer/quorum-conditioned-remove-safety.test.js b/test/rebalancer/quorum-conditioned-remove-safety.test.js
+index 8d9e26a8e19bb6975451499e012f06066edbe4bf..bb0c12a3c7fef9fd2b718b440706654d2b14d7db 100644
+--- a/test/rebalancer/quorum-conditioned-remove-safety.test.js
++++ b/test/rebalancer/quorum-conditioned-remove-safety.test.js
+@@ -81,13 +81,14 @@ function installAuthoritativeServicesRead(coordinator, rowsProvider) {
+   ) => {
+     if (tableName === 'services' &&
+         String(sql).includes(
+-          'FROM services WHERE service_type = ? AND partition_id = ?',
++          'WHERE service_type = ? AND partition_id = ?',
+         )) {
+       const rows = typeof rowsProvider === 'function' ?
+         rowsProvider(params[1]) :
+         rowsProvider;
+       return {
+         success: true,
++        source: 'owner_rpc_lane',
+         rows: Array.isArray(rows) ?
+           rows.map((row) => ({...row})) :
+           [],

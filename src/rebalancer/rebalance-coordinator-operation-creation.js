@@ -331,6 +331,13 @@ class RebalanceCoordinatorOperationCreation {
       entityId,
       partitionId,
     });
+    await this.ensurePrioritySurplusRemovePlacementFenceAllowed({
+      move,
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+    });
     await this.ensureEntityAddLikeCreateLaneAvailable({
       move,
       normalizedMoveType,
