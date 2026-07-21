@@ -1,0 +1,89 @@
+diff --git a/src/control-plane/replica-dispatch-operation-execution.js b/src/control-plane/replica-dispatch-operation-execution.js
+index 1dd1b8ec4b48ca626fdceb4b5bf8aee4f36df15c..6fa731035188f68798ffab7e3715c5cb5b7649ea 100644
+--- a/src/control-plane/replica-dispatch-operation-execution.js
++++ b/src/control-plane/replica-dispatch-operation-execution.js
+@@ -385,6 +385,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
+ 
+       this.clearDeferredOperationDispatchRetry(operationId);
+       this.dispatchFailureSignaturesByOperationId.delete(operationId);
++      this.scheduleRuntimeTargetProgressDispatchVerification(operationId, row);
+ 
+       this.emit(DISPATCH_EVENT.OPERATION_DISPATCHED, {
+         operationId,
+diff --git a/src/control-plane/replica-dispatch-retry-scheduling.js b/src/control-plane/replica-dispatch-retry-scheduling.js
+index 41ff7b7b5c87c2325355d89657cfc10683119ee2..0628a4a845008c99a18cfb110f18734c14e2eef1 100644
+--- a/src/control-plane/replica-dispatch-retry-scheduling.js
++++ b/src/control-plane/replica-dispatch-retry-scheduling.js
+@@ -1,4 +1,5 @@
+ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
++import {REBALANCER_DEFAULT} from '../rebalancer/rebalancer-constants.js';
+ import {
+   ReplicaDispatchReplayHealthReadiness,
+ } from './replica-dispatch-replay-health-readiness.js';
+@@ -369,6 +370,53 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
+     return true;
+   }
+ 
++  /**
++   * A successful dispatch clears the deferred slot, leaving a non-system
++   * runtime create-side row dependent on the target-executor-outcome handoff
++   * for its next owner wake. That handoff retry can stop at the CREATING step
++   * timeout without ever reaching the source, stranding the durable CREATING
++   * row with no re-entry edge (ready-node replay excludes non-system CREATING
++   * rows and planner rearm is blocked). Retain ONE bounded verification
++   * re-entry at the CREATING step timeout: the deferred-retry lane completes
++   * the row from exact-target ACTIVE services proof, and a row already
++   * terminal by then reconciles as a no-op.
++   *
++   * @param {string} operationId
++   * @param {Object|null} row
++   * @return {boolean}
++   * @private
++   */
++  scheduleRuntimeTargetProgressDispatchVerification(operationId, row = null) {
++    if (!operationId || !this.isRuntimeTargetProgressWakeRow(row)) {
++      return false;
++    }
++    const retryAfterMs =
++      this.rebalanceCoordinator?.config?.creatingTimeoutMs ||
++      REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
++    const deferredRetry = {
++      errorMessage:
++        REPLICA_DISPATCH_SERVICE_LITERAL.RETAINED_TARGET_PROGRESS_VERIFICATION,
++      nextAttemptAt: Date.now() + retryAfterMs,
++      row: this.cloneDeferredOperationDispatchRow(row),
++      [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
++      timeoutHandle: this.armDeferredOperationDispatchRetryWithOptions(
++        operationId,
++        retryAfterMs,
++        {
++          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
++            true,
++        },
++      ),
++    };
++    this.operationDispatchDeferredRetries.set(operationId, deferredRetry);
++    this.recordWorkflowOwnerOperationDispatchDeferredRetry(
++      operationId,
++      deferredRetry,
++      retryAfterMs,
++    );
++    return true;
++  }
++
+   /**
+    * Preserve one dispatchable replica_operations row across deferred retries so
+    * direct wake-up payloads can survive until cache visibility converges.
+diff --git a/src/control-plane/replica-dispatch-service-shared.js b/src/control-plane/replica-dispatch-service-shared.js
+index 5bb5c6f8f61a8321a9144039de8ec589ac279d63..db886f69ef8fde1b81806e6f3bbcc2c68c0f375d 100644
+--- a/src/control-plane/replica-dispatch-service-shared.js
++++ b/src/control-plane/replica-dispatch-service-shared.js
+@@ -133,6 +133,8 @@ const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
+   REPLICA_OPERATION_DISPATCH: 'replica_operation_dispatch',
+   REFRESH_ROW_BEFORE_DISPATCH: 'refreshRowBeforeDispatch',
+   DEFERRED_RETRY_PROVENANCE: 'deferredRetryProvenance',
++  RETAINED_TARGET_PROGRESS_VERIFICATION:
++    'retained_target_progress_verification',
+   SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK:
+     'SELECT * FROM nodes WHERE node_id = ?',
+   SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK:

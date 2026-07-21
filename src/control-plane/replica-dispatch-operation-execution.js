@@ -385,6 +385,7 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
 
       this.clearDeferredOperationDispatchRetry(operationId);
       this.dispatchFailureSignaturesByOperationId.delete(operationId);
+      this.scheduleRuntimeTargetProgressDispatchVerification(operationId, row);
 
       this.emit(DISPATCH_EVENT.OPERATION_DISPATCHED, {
         operationId,

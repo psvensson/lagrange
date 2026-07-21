@@ -1,4 +1,5 @@
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
+import {REBALANCER_DEFAULT} from '../rebalancer/rebalancer-constants.js';
 import {
   ReplicaDispatchReplayHealthReadiness,
 } from './replica-dispatch-replay-health-readiness.js';
@@ -350,6 +351,53 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
         REPLICA_DISPATCH_SERVICE_LITERAL.DIRECT_WAKEUP_VERIFICATION,
       nextAttemptAt: Date.now() + retryAfterMs,
       row: row ? this.cloneDeferredOperationDispatchRow(row) : null,
+      [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
+      timeoutHandle: this.armDeferredOperationDispatchRetryWithOptions(
+        operationId,
+        retryAfterMs,
+        {
+          [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
+            true,
+        },
+      ),
+    };
+    this.operationDispatchDeferredRetries.set(operationId, deferredRetry);
+    this.recordWorkflowOwnerOperationDispatchDeferredRetry(
+      operationId,
+      deferredRetry,
+      retryAfterMs,
+    );
+    return true;
+  }
+
+  /**
+   * A successful dispatch clears the deferred slot, leaving a non-system
+   * runtime create-side row dependent on the target-executor-outcome handoff
+   * for its next owner wake. That handoff retry can stop at the CREATING step
+   * timeout without ever reaching the source, stranding the durable CREATING
+   * row with no re-entry edge (ready-node replay excludes non-system CREATING
+   * rows and planner rearm is blocked). Retain ONE bounded verification
+   * re-entry at the CREATING step timeout: the deferred-retry lane completes
+   * the row from exact-target ACTIVE services proof, and a row already
+   * terminal by then reconciles as a no-op.
+   *
+   * @param {string} operationId
+   * @param {Object|null} row
+   * @return {boolean}
+   * @private
+   */
+  scheduleRuntimeTargetProgressDispatchVerification(operationId, row = null) {
+    if (!operationId || !this.isRuntimeTargetProgressWakeRow(row)) {
+      return false;
+    }
+    const retryAfterMs =
+      this.rebalanceCoordinator?.config?.creatingTimeoutMs ||
+      REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
+    const deferredRetry = {
+      errorMessage:
+        REPLICA_DISPATCH_SERVICE_LITERAL.RETAINED_TARGET_PROGRESS_VERIFICATION,
+      nextAttemptAt: Date.now() + retryAfterMs,
+      row: this.cloneDeferredOperationDispatchRow(row),
       [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]: true,
       timeoutHandle: this.armDeferredOperationDispatchRetryWithOptions(
         operationId,
