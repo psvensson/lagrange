@@ -4,7 +4,7 @@
 
 **Class:** product · **Closure:** MEASURED
 
-**Outcome:** EXHAUSTED — 0 frontier(s) parked; human decision needed
+**Outcome:** EXHAUSTED — 1 frontier(s) parked; human decision needed
 
 **Attempts:** 4
 
@@ -12,23 +12,6 @@
 - spec: solve/epics/service-data-affinity-placement.md
 - parent quest: movielens-three-way-affinity-demo
 - plan: solve/epics/topology-convergence-hardening.md
-
-## Current Blocker
-- Frontier: runtime-service-handoff-budget-rearm-reentry-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: observation_gap
-- Movement: narrowed: FAIL -> FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T09-17-47-855Z.report.json
-- Selected theory: none
-- Next move: continue supervised step for runtime-service-handoff-budget-rearm-reentry-main
-- No longer current: FAIL
-
-## Continuation
-- Status: blocked-theory
-- Next action: record system theory before the next runtime-service-handoff-budget-rearm-reentry-main attempt using npm run model:contracts as model discriminator
-- Blocker: system theory required for runtime-service-handoff-budget-rearm-reentry-main
 
 ## Scope Pressure
 - Changed files: 7
@@ -41,7 +24,7 @@
 - Signals: none
 
 ## Frontiers
-- **runtime-service-handoff-budget-rearm-reentry-main** [open] rung 1, attempts 4, metric 1 -> 1 — exact terminal source attempt was rejected
+- **runtime-service-handoff-budget-rearm-reentry-main** [parked {exhausted}] rung 1, attempts 4, metric 1 -> 1 — The sealed handoff mechanism is independently verified, red-on-revert, one-shot under frozen/unreadable SENDING and retryable deferral, and checkpointed. The unchanged live doneWhen is blocked before runtime-service dispatch by a distinct Raft peer-cohort/election owner already isolated in child Quest movielens-raft-peer-cohort-pruning-election-liveness; no honest same-frame handoff move remains.
 
 ## Findings
 - **runtime-service-handoff-budget-rearm-reentry-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-retained-verification.test.js-2026-07-21T08-59-41-385Z.json]
@@ -57,6 +40,8 @@
 - **runtime-service-handoff-budget-rearm-reentry-main**: Independent verification rejected exact attempt-1: its success hook and retained-verification scheduler can rearm indefinitely while the authoritative/fallback row remains SENDING, and it grows replica-dispatch-retry-scheduling.js from 797 to 845 lines in violation of STYLE-0008. [subagent:verify_handoff_aggregate]
 - **runtime-service-handoff-budget-rearm-reentry-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js [dt:solve/changes/dt-prove/replica-dispatch-runtime-target-progress-retained-verification.test.js-2026-07-21T10-24-52-094Z.json]
 - **runtime-service-handoff-budget-rearm-reentry-main**: Independent verification rejected exact attempt 3: production behavior, canonical same-base supersession, 676 dispatch assertions, and STYLE-0008 all pass, but the expanded discriminator regresses the enforced test-duplication ratchet from 842/32209 to 844/32222. Extract the repeated service fixture and submit a changed-fingerprint same-base replacement. [subagent:verify_handoff_attempt3]
+- **runtime-service-handoff-budget-rearm-reentry-main**: Independent verification passed exact attempt 4: canonical same-base replacement covers all rejected paths; one-shot provenance is right-reason red against attempt 1 and green across unreadable/frozen SENDING plus retryable failure; 676/676 dispatch assertions, 796-line source limit, scoped lint/literals/runtime grammar, and duplication ratchets all pass. [subagent:verify_handoff_attempt3]
+- **runtime-service-handoff-budget-rearm-reentry-main**: Independent aggregate verification passed: complete seven-path union from f5314d76 is byte-identical to approved attempt 4 with no post-checkpoint drift; EXHAUSTED honestly records metric 1->1 and routes the distinct pre-dispatch Raft election blocker without a live-success, timeout, budget, or quorum-policy claim. [subagent:verify_handoff_attempt3]
 
 ## Theories
 _(none recorded)_
