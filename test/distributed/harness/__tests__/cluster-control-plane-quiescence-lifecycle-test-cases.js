@@ -873,7 +873,7 @@ export function registerClusterControlPlaneQuiescenceLifecycleTests(context) {
       'transport ws host should bind on all interfaces in containers',
     );
     assert.strictEqual(
-      env.ADMIN_WEBSOCKET_HOST,
+      env.ADMIN_WS_HOST,
       '0.0.0.0',
       'isolated test containers should expose Admin to harness probes',
     );

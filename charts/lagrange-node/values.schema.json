@@ -50,11 +50,11 @@
               "properties": {
                 "name": {
                   "enum": [
-                    "ADMIN_WEBSOCKET_HOST",
+                    "ADMIN_WS_HOST",
                     "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND",
-                    "ADMIN_WEBSOCKET_PORT",
+                    "ADMIN_WS_PORT",
                     "REST_API_PORT",
-                    "NODE_WS_PORT"
+                    "TRANSPORT_WS_PORT"
                   ]
                 }
               }

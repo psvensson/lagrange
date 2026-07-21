@@ -23,7 +23,7 @@ describe('project hardening contracts', () => {
     assert.equal(DEFAULT_CONFIG.admin.websocketHost, '127.0.0.1');
     assert.equal(DEFAULT_CONFIG.admin.allowInsecureExternalBind, false);
     assert.equal(
-      ENV_MAPPINGS.ADMIN_WEBSOCKET_HOST,
+      ENV_MAPPINGS.ADMIN_WS_HOST,
       'admin.websocketHost',
     );
 

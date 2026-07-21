@@ -102,7 +102,7 @@ values nor extraEnv may make the pod-local admin listener externally reachable.
 {{- end -}}
 {{- range .Values.node.extraEnv -}}
 {{- $name := toString .name -}}
-{{- if or (eq $name "ADMIN_WEBSOCKET_HOST") (eq $name "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND") (eq $name "ADMIN_WEBSOCKET_PORT") (eq $name "REST_API_PORT") (eq $name "NODE_WS_PORT") -}}
+{{- if or (eq $name "ADMIN_WS_HOST") (eq $name "ADMIN_ALLOW_INSECURE_EXTERNAL_BIND") (eq $name "ADMIN_WS_PORT") (eq $name "REST_API_PORT") (eq $name "TRANSPORT_WS_PORT") -}}
 {{- fail (printf "node.extraEnv name %s is reserved by the listener port or admin safety policy" $name) -}}
 {{- end -}}
 {{- end -}}
@@ -171,13 +171,13 @@ volumeMounts:
 # (rejoin hints) on every restart — identity is durable via the PVC.
 - name: REST_API_PORT
   value: {{ include "lagrange-node.restPort" . | quote }}
-- name: ADMIN_WEBSOCKET_PORT
+- name: ADMIN_WS_PORT
   value: {{ include "lagrange-node.adminWebsocketPort" . | quote }}
-- name: NODE_WS_PORT
+- name: TRANSPORT_WS_PORT
   value: {{ include "lagrange-node.transportWebsocketPort" . | quote }}
 - name: LOG_LEVEL
   value: {{ .Values.node.logLevel | quote }}
-- name: ADMIN_WEBSOCKET_HOST
+- name: ADMIN_WS_HOST
   value: {{ .Values.admin.websocketHost | quote }}
 - name: ADMIN_ALLOW_INSECURE_EXTERNAL_BIND
   value: {{ .Values.admin.allowInsecureExternalBind | quote }}

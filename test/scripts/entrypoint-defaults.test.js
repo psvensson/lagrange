@@ -19,12 +19,12 @@ describe('entrypoint-defaults script', () => {
     const surfaceContracts = [
       {
         path: 'docs/admin-api-reference.md',
-        required: ['REST port + 1', 'ADMIN_WEBSOCKET_PORT'],
+        required: ['REST port + 1', 'ADMIN_WS_PORT'],
         forbidden: /Ingress is fixed/iu,
       },
       {
         path: 'docs/dockerhub-overview.md',
-        required: ['ADMIN_WEBSOCKET_PORT', 'NODE_WS_PORT'],
+        required: ['ADMIN_WS_PORT', 'TRANSPORT_WS_PORT'],
         forbidden: /fixed at `8081`|admin stays `8081`/iu,
       },
       {

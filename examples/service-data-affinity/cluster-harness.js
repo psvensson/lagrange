@@ -35,7 +35,7 @@ async function startLocalNode(index, dataRoot) {
     ...process.env,
     NODE_ADDRESS: `localhost:${restPort}`,
     REST_API_PORT: String(restPort),
-    ADMIN_WEBSOCKET_PORT: String(adminPort),
+    ADMIN_WS_PORT: String(adminPort),
     DATA_DIR: dataDir,
     LOG_LEVEL: 'info',
   };

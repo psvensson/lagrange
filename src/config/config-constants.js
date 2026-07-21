@@ -85,6 +85,8 @@ const CONFIG_ERROR_MSG = Object.freeze({
   LOG_LEVEL_INVALID_PREFIX: 'Invalid log level. Must be one of: ',
   VALIDATION_FAILED_PREFIX: 'Configuration validation failed: ',
   INVALID_NUMBER_PREFIX: 'Invalid number value for ',
+  DEPRECATED_ENV_PREFIX: 'Deprecated environment variable ',
+  DEPRECATED_ENV_INFIX: ' — use ',
 });
 
 const CONFIG_STATS_DEFAULT = Object.freeze({
@@ -136,7 +138,7 @@ const ENV_MAPPINGS = {
   SEED_NODE_ADDRESS: CONFIG_KEY.NODE_SEED_NODE_ADDRESS,
   LATENCY_GROUP_ID: CONFIG_KEY.LATENCY_PINNED_GROUP_ID,
   TRANSPORT_WS_HOST: 'transport.wsHost',
-  ADMIN_WEBSOCKET_HOST: CONFIG_KEY.ADMIN_WEBSOCKET_HOST,
+  ADMIN_WS_HOST: CONFIG_KEY.ADMIN_WEBSOCKET_HOST,
   ADMIN_ALLOW_INSECURE_EXTERNAL_BIND:
     CONFIG_KEY.ADMIN_ALLOW_INSECURE_EXTERNAL_BIND,
   RAFT_ELECTION_TIMEOUT_MIN_MS: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
@@ -161,6 +163,19 @@ const ENV_MAPPINGS = {
   WORKER_MAX_THREADS: CONFIG_KEY.WORKER_MAX_THREADS,
   DATA_DIR: CONFIG_KEY.STORAGE_DATA_DIR,
 };
+
+/**
+ * Deprecated environment variable names, mapped to their canonical
+ * replacements (renamed 2026-07 to give every listener one prefix and the
+ * short WS form: transport = TRANSPORT_WS_HOST/TRANSPORT_WS_PORT, admin =
+ * ADMIN_WS_HOST/ADMIN_WS_PORT). A legacy name is honored only when its
+ * canonical name is unset, and its use logs a startup deprecation warning.
+ */
+const LEGACY_ENV_ALIASES = Object.freeze({
+  ADMIN_WEBSOCKET_HOST: 'ADMIN_WS_HOST',
+  ADMIN_WEBSOCKET_PORT: 'ADMIN_WS_PORT',
+  NODE_WS_PORT: 'TRANSPORT_WS_PORT',
+});
 
 
 const CONFIG_SQL = Object.freeze({
@@ -192,5 +207,6 @@ export {
   CONFIG_VALUE_TYPE,
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
+  LEGACY_ENV_ALIASES,
   STRING,
 };

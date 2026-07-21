@@ -13,11 +13,11 @@ import {
   resolveRenderedEnvironment,
 } from '../../scripts/run-helm-admin-default-deny-live-scenario.js';
 
-const ADMIN_HOST_ENV = 'ADMIN_WEBSOCKET_HOST';
+const ADMIN_HOST_ENV = 'ADMIN_WS_HOST';
 const ADMIN_INSECURE_ENV = 'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND';
-const ADMIN_PORT_ENV = 'ADMIN_WEBSOCKET_PORT';
+const ADMIN_PORT_ENV = 'ADMIN_WS_PORT';
 const REST_PORT_ENV = 'REST_API_PORT';
-const TRANSPORT_PORT_ENV = 'NODE_WS_PORT';
+const TRANSPORT_PORT_ENV = 'TRANSPORT_WS_PORT';
 const REST_PORT = 8080;
 const ADMIN_PORT = 8081;
 const TRANSPORT_PORT = 8082;
@@ -129,7 +129,7 @@ describe('lagrange-node Helm admin default deny', () => {
       },
       {
         path: 'src/cli/USER_GUIDE.md',
-        required: ['REST port + 1', 'ADMIN_WEBSOCKET_PORT'],
+        required: ['REST port + 1', 'ADMIN_WS_PORT'],
         forbidden: /fixed port `8081`/u,
       },
       {

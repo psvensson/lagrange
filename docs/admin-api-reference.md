@@ -8,7 +8,7 @@ only, never a node-local mutation owner:
 - `sys-wasm-meta` — WASM module and service lifecycle
 
 Ingress defaults to `ws://<host>:8081/api/admin/stream` (REST port + 1) and can
-be overridden with `ADMIN_WEBSOCKET_PORT`. Dispatchable admin messages
+be overridden with `ADMIN_WS_PORT`. Dispatchable admin messages
 (`query`, `partition_callback`, `refresh`) are translated into
 canonical `Service_Message` envelopes (`messageId`, `serviceId`,
 `serviceType`, `operation`, `payload`, `traceId`) by

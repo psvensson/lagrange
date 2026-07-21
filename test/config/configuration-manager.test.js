@@ -12,13 +12,13 @@ import {
 } from '../../src/config/configuration-manager.js';
 
 const TEST_REST_API_PORT = 9090;
-const TEST_ADMIN_WEBSOCKET_PORT = 9191;
+const TEST_ADMIN_WS_PORT = 9191;
 const TEST_TRANSPORT_WEBSOCKET_PORT = 9292;
 
 function clearListenerPortEnvironment() {
   delete process.env.REST_API_PORT;
-  delete process.env.ADMIN_WEBSOCKET_PORT;
-  delete process.env.NODE_WS_PORT;
+  delete process.env.ADMIN_WS_PORT;
+  delete process.env.TRANSPORT_WS_PORT;
 }
 
 test('listener default delegates retain the canonical port authority',
@@ -183,18 +183,60 @@ test('ConfigurationManager environment variables', async (t) => {
   ConfigurationManager.resetInstance();
 });
 
+test('legacy environment aliases resolve with canonical precedence', async (t) => {
+  ConfigurationManager.resetInstance();
+  clearListenerPortEnvironment();
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  try {
+    process.env.ADMIN_WEBSOCKET_PORT = String(TEST_ADMIN_WS_PORT);
+    process.env.NODE_WS_PORT = String(TEST_TRANSPORT_WEBSOCKET_PORT);
+    process.env.ADMIN_WEBSOCKET_HOST = '10.0.0.9';
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize();
+
+    t.equal(config.get('admin.websocketPort'), TEST_ADMIN_WS_PORT,
+      'legacy ADMIN_WEBSOCKET_PORT is honored when ADMIN_WS_PORT is unset');
+    t.equal(config.get('node.wsPort'), TEST_TRANSPORT_WEBSOCKET_PORT,
+      'legacy NODE_WS_PORT is honored when TRANSPORT_WS_PORT is unset');
+    t.equal(config.get('admin.websocketHost'), '10.0.0.9',
+      'legacy ADMIN_WEBSOCKET_HOST is honored when ADMIN_WS_HOST is unset');
+    t.equal(warnings.filter((m) => String(m).includes('Deprecated')).length, 3,
+      'each legacy variable in use logs one deprecation warning');
+
+    ConfigurationManager.resetInstance();
+    warnings.length = 0;
+    process.env.ADMIN_WS_PORT = String(TEST_ADMIN_WS_PORT + 1);
+
+    const canonicalWins = ConfigurationManager.getInstance();
+    canonicalWins.initialize();
+
+    t.equal(canonicalWins.get('admin.websocketPort'), TEST_ADMIN_WS_PORT + 1,
+      'canonical ADMIN_WS_PORT wins over the legacy alias when both are set');
+  } finally {
+    console.warn = originalWarn;
+    delete process.env.ADMIN_WEBSOCKET_PORT;
+    delete process.env.NODE_WS_PORT;
+    delete process.env.ADMIN_WEBSOCKET_HOST;
+    clearListenerPortEnvironment();
+    ConfigurationManager.resetInstance();
+  }
+});
+
 test('ConfigurationManager accepts individual listener port overrides', async (t) => {
   ConfigurationManager.resetInstance();
   clearListenerPortEnvironment();
   process.env.REST_API_PORT = String(TEST_REST_API_PORT);
-  process.env.ADMIN_WEBSOCKET_PORT = String(TEST_ADMIN_WEBSOCKET_PORT);
-  process.env.NODE_WS_PORT = String(TEST_TRANSPORT_WEBSOCKET_PORT);
+  process.env.ADMIN_WS_PORT = String(TEST_ADMIN_WS_PORT);
+  process.env.TRANSPORT_WS_PORT = String(TEST_TRANSPORT_WEBSOCKET_PORT);
 
   const config = ConfigurationManager.getInstance();
   config.initialize();
 
   t.equal(config.get('node.restApiPort'), TEST_REST_API_PORT);
-  t.equal(config.get('admin.websocketPort'), TEST_ADMIN_WEBSOCKET_PORT);
+  t.equal(config.get('admin.websocketPort'), TEST_ADMIN_WS_PORT);
   t.equal(config.get('node.wsPort'), TEST_TRANSPORT_WEBSOCKET_PORT);
 
   clearListenerPortEnvironment();
@@ -205,8 +247,8 @@ test('explicit WebSocket overrides do not evaluate unused offset ports', async (
   ConfigurationManager.resetInstance();
   clearListenerPortEnvironment();
   process.env.REST_API_PORT = '65535';
-  process.env.ADMIN_WEBSOCKET_PORT = '10';
-  process.env.NODE_WS_PORT = '11';
+  process.env.ADMIN_WS_PORT = '10';
+  process.env.TRANSPORT_WS_PORT = '11';
 
   const config = ConfigurationManager.getInstance();
   config.initialize();
@@ -373,8 +415,8 @@ test('ENV_MAPPINGS coverage', async (t) => {
   t.ok(ENV_MAPPINGS.LOG_LEVEL, 'should have LOG_LEVEL mapping');
   t.ok(ENV_MAPPINGS.REST_API_PORT, 'should have REST_API_PORT mapping');
   t.ok(
-    ENV_MAPPINGS.ADMIN_WEBSOCKET_PORT,
-    'should have ADMIN_WEBSOCKET_PORT mapping',
+    ENV_MAPPINGS.ADMIN_WS_PORT,
+    'should have ADMIN_WS_PORT mapping',
   );
-  t.ok(ENV_MAPPINGS.NODE_WS_PORT, 'should have NODE_WS_PORT mapping');
+  t.ok(ENV_MAPPINGS.TRANSPORT_WS_PORT, 'should have TRANSPORT_WS_PORT mapping');
 });

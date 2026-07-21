@@ -53,7 +53,7 @@ Images are **linux/amd64 only** and built on
 ## Quick start — single node
 
 ```bash
-docker run --rm -e ADMIN_WEBSOCKET_HOST=0.0.0.0 \
+docker run --rm -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -p 8080:8080 -p 8081:8081 -p 8082:8082 psvensson/lagrange:latest
 ```
@@ -87,7 +87,7 @@ docker network create lagrange-net
 
 docker run -d --name seed --network lagrange-net \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
-  -e ADMIN_WEBSOCKET_HOST=0.0.0.0 \
+  -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -e NODE_ADDRESS=seed:8080 \
   -e NODE_ADVERTISED_WS_ADDRESS=seed:8082 \
@@ -95,7 +95,7 @@ docker run -d --name seed --network lagrange-net \
 
 docker run -d --name node2 --network lagrange-net \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
-  -e ADMIN_WEBSOCKET_HOST=0.0.0.0 \
+  -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -e NODE_ADDRESS=node2:8080 \
   -e NODE_ADVERTISED_WS_ADDRESS=node2:8082 \
@@ -116,14 +116,18 @@ Set via environment variables (`-e`):
 | `NODE_ADDRESS` | localhost | Registration address other nodes reach you at (`host:8080`); the localhost default is rejected at join admission |
 | `NODE_ADVERTISED_WS_ADDRESS` | localhost | Advertised transport address (`host:8082`) |
 | `TRANSPORT_WS_HOST` | localhost | Transport bind host; use `0.0.0.0` in containers |
-| `ADMIN_WEBSOCKET_HOST` | `127.0.0.1` | Admin bind host; external binds require the explicit opt-in below |
+| `ADMIN_WS_HOST` | `127.0.0.1` | Admin bind host; external binds require the explicit opt-in below |
 | `ADMIN_ALLOW_INSECURE_EXTERNAL_BIND` | `false` | Set `true` only with an external host and authenticated ingress |
 | `REST_API_PORT` | `8080` | REST base port (admin = +1; transport = +2) |
-| `ADMIN_WEBSOCKET_PORT` | `REST_API_PORT + 1` | Optional admin WebSocket override |
-| `NODE_WS_PORT` | `REST_API_PORT + 2` | Optional transport WebSocket override |
+| `ADMIN_WS_PORT` | `REST_API_PORT + 1` | Optional admin WebSocket override |
+| `TRANSPORT_WS_PORT` | `REST_API_PORT + 2` | Optional transport WebSocket override |
 | `DATA_DIR` | `./data` | Storage directory — `/app/data` inside the container |
 | `NODE_ID` | unset | Leave unset (UUID minted and persisted on first start) |
 | `LOG_LEVEL` / `LOG_PRETTY_PRINT` | `info` / `false` | Logging |
+
+Deprecated names `ADMIN_WEBSOCKET_HOST`, `ADMIN_WEBSOCKET_PORT`, and
+`NODE_WS_PORT` are still accepted (with a startup warning) when the canonical
+name is unset.
 
 ## Persistence
 
@@ -133,7 +137,7 @@ replacement:
 
 ```bash
 docker run -d -v lagrange-data:/app/data \
-  -e ADMIN_WEBSOCKET_HOST=0.0.0.0 \
+  -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -p 8080:8080 -p 8081:8081 -p 8082:8082 \
   psvensson/lagrange:latest

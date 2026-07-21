@@ -146,7 +146,7 @@ async function startNode(index, dataRoot) {
     ...process.env,
     NODE_ADDRESS: `localhost:${restPort}`,
     REST_API_PORT: String(restPort),
-    ADMIN_WEBSOCKET_PORT: String(adminPort),
+    ADMIN_WS_PORT: String(adminPort),
     DATA_DIR: dataDir,
     LOG_LEVEL: 'info',
     PARTITION_EVALUATION_INTERVAL_MS: String(PARTITION_EVAL_INTERVAL_MS),

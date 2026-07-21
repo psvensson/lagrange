@@ -458,7 +458,7 @@ docker pull psvensson/lagrange:latest
 
 docker run -d --name seed --network lagrange-net \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
-  -e ADMIN_WEBSOCKET_HOST=0.0.0.0 \
+  -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -e NODE_ADDRESS=seed:8080 \
   -e NODE_ADVERTISED_WS_ADDRESS=seed:8082 \
@@ -466,13 +466,17 @@ docker run -d --name seed --network lagrange-net \
 
 docker run -d --name node2 --network lagrange-net \
   -e TRANSPORT_WS_HOST=0.0.0.0 \
-  -e ADMIN_WEBSOCKET_HOST=0.0.0.0 \
+  -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -e NODE_ADDRESS=node2:8080 \
   -e NODE_ADVERTISED_WS_ADDRESS=node2:8082 \
   -e SEED_NODE_ADDRESS=http://seed:8080 \
   psvensson/lagrange:latest
 ```
+
+Older setups may use the deprecated names `ADMIN_WEBSOCKET_HOST`,
+`ADMIN_WEBSOCKET_PORT`, and `NODE_WS_PORT`; they still work (with a startup
+warning) until their canonical replacements above are set.
 
 For a real cluster, use the Helm chart below — it wires the same
 name-first addressing per pod automatically.
@@ -492,7 +496,7 @@ The repo also ships the Dockerfile and a Helm chart:
 
 ```bash
 # Single node in Docker
-docker run --rm -e ADMIN_WEBSOCKET_HOST=0.0.0.0 \
+docker run --rm -e ADMIN_WS_HOST=0.0.0.0 \
   -e ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true \
   -p 8080:8080 -p 8081:8081 -p 8082:8082 psvensson/lagrange:latest
 
