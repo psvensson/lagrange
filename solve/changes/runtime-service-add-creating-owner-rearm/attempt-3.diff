@@ -1,0 +1,522 @@
+diff --git a/src/control-plane/replica-dispatch-replay-readiness.js b/src/control-plane/replica-dispatch-replay-readiness.js
+index d9c359718924f490e34d3f9a4418d4032a0c95f7..47438d910d0cbd5bad14fbf601d62e5419aa3212 100644
+--- a/src/control-plane/replica-dispatch-replay-readiness.js
++++ b/src/control-plane/replica-dispatch-replay-readiness.js
+@@ -2,6 +2,7 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
+ import {ReplicaDispatchServiceLifecycle} from './replica-dispatch-service-lifecycle.js';
+ import {
+   DISPATCH_PENDING_WORKFLOW_STEPS,
++  RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
+   RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+   isActiveReplaceSourceRemovalPhase,
+ } from '../rebalancer/replica-operation-step-policy.js';
+@@ -238,15 +239,44 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
+    * @private
+    */
+   isRuntimeTargetProgressWakeRow(operation) {
++    return this.isRuntimeTargetProgressRowInSteps(
++      operation,
++      RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
++    );
++  }
++
++  /**
++   * Retention scope of the same row shape: whether a just-successful dispatch
++   * keeps its one-shot target-progress verification. The dispatch request row
++   * is built before the dispatch path claims SENDING, so the retained payload
++   * can still say PENDING while the durable row has advanced — the successful
++   * dispatch itself is the progress proof. Never used for wake admission.
++   *
++   * @param {Object} operation
++   * @return {boolean}
++   * @private
++   */
++  isRuntimeTargetProgressRetentionRow(operation) {
++    return this.isRuntimeTargetProgressRowInSteps(
++      operation,
++      RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
++    );
++  }
++
++  /**
++   * @param {Object} operation
++   * @param {Set<string>} workflowSteps
++   * @return {boolean}
++   * @private
++   */
++  isRuntimeTargetProgressRowInSteps(operation, workflowSteps) {
+     const partitionClassification = classifySystemPartition({
+       partitionId: operation?.partition_id,
+     });
+     return [
+       operation?.entity_type === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+       RUNTIME_TARGET_PROGRESS_WAKE_OPERATION_TYPES.has(operation?.type),
+-      RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS.has(
+-        operation?.workflow_step,
+-      ),
++      workflowSteps.has(operation?.workflow_step),
+       partitionClassification.systemTable !== true,
+     ].every(Boolean);
+   }
+diff --git a/src/control-plane/replica-dispatch-retained-verification.js b/src/control-plane/replica-dispatch-retained-verification.js
+index dad4e740105a5eb9d4d09dc319501bc11e8b84a0..5a9c3f35218ddaf809e990a448d9ec14ac0e136b 100644
+--- a/src/control-plane/replica-dispatch-retained-verification.js
++++ b/src/control-plane/replica-dispatch-retained-verification.js
+@@ -62,7 +62,7 @@ function scheduleRuntimeTargetProgressDispatchVerification(
+ ) {
+   if (
+     !operationId ||
+-    !service.isRuntimeTargetProgressWakeRow(row) ||
++    !service.isRuntimeTargetProgressRetentionRow(row) ||
+     options?.[
+       REPLICA_DISPATCH_SERVICE_LITERAL
+         .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+diff --git a/src/rebalancer/replica-operation-step-policy.js b/src/rebalancer/replica-operation-step-policy.js
+index bfaa0a1315fd68ccd997b79b456c1af7b84d1c68..4d057a59ac906a7a69cac6d564ed003e1008a65f 100644
+--- a/src/rebalancer/replica-operation-step-policy.js
++++ b/src/rebalancer/replica-operation-step-policy.js
+@@ -51,6 +51,21 @@ const RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS = Object.freeze(
+   ]),
+ );
+ 
++// Retention scope for the one-shot post-success dispatch verification only —
++// never wake admission. The dispatch request row is built from the in-memory
++// operation before the dispatch path claims SENDING, so a successful dispatch
++// can be observed while the retained payload still says PENDING; the durable
++// row has by then advanced, and dropping retention on the stale payload shape
++// strands a lost-handoff CREATING ADD forever (quest
++// runtime-service-add-creating-owner-rearm, live ADD bd00c558).
++const RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS = Object.freeze(
++  new Set([
++    WORKFLOW_STEP.PENDING,
++    WORKFLOW_STEP.SENDING,
++    WORKFLOW_STEP.CREATING,
++  ]),
++);
++
+ // Generic replica ACTIVE outcomes may be observed remotely while their
+ // source-owned create workflow is still creating or syncing.
+ const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS = Object.freeze(
+@@ -481,6 +496,7 @@ export {
+   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
+   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
+   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
++  RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
+   RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+   TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS,
+   resolveOperationTransitionReason,
+diff --git a/test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js b/test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c5a587dca4a6b10eeb8397f359534fcf7d68428a
+--- /dev/null
++++ b/test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+@@ -0,0 +1,294 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  ControlPlaneField,
++  ControlPlaneMessageType,
++} from '../../src/control-plane/control-plane-constants.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {
++  ReplicaStatus,
++} from '../../src/rebalancer/replica-status.js';
++import {
++  REBALANCER_DEFAULT,
++} from '../../src/rebalancer/rebalancer-constants.js';
++import {
++  createMockControlPlaneReadinessService,
++  createTestCoordinator,
++} from '../rebalancer/test-helpers.js';
++import {
++  createService,
++  initEnv,
++} from './replica-dispatch-node-state-update-test-support.js';
++import {
++  buildRuntimeReplicaOperationRow,
++  createTimerCapture,
++  drainOperationDispatchQueue,
++  drainScheduledTimers,
++} from './replica-dispatch-virtual-timer-test-support.js';
++
++const SOURCE_NODE_ID = 'node-1';
++const TARGET_NODE_ID = 'node-2';
++const OPERATION_ID = 'runtime-service-add-creating-owner-rearm';
++const SERVICE_ID = 'svc-movielens-topn';
++const REPLICA_ID = `${SERVICE_ID}-r1`;
++const DISPATCH_DEFER_RETRY_AFTER_MS = 250;
++const CREATING_STEP_TIMEOUT_MS =
++  REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
++const ROW_IDENTITY = Object.freeze({
++  operationId: OPERATION_ID,
++  serviceId: SERVICE_ID,
++  replicaId: REPLICA_ID,
++  sourceNodeId: SOURCE_NODE_ID,
++  targetNodeId: TARGET_NODE_ID,
++});
++
++function buildRuntimeOperationRow(overrides = {}) {
++  return buildRuntimeReplicaOperationRow(ROW_IDENTITY, overrides);
++}
++
++/**
++ * Build the stranded-ADD live scenario shared by every ordering in this
++ * suite: a real source coordinator whose repository owns the durable CREATING
++ * row and can prove the exact target services row ACTIVE, wired to a source
++ * dispatch service whose replica_operations reads never converge (the live
++ * CDC divergence), with the first owner dispatch deferring retryable on
++ * visibility lag and the second succeeding while the target outcome handoff
++ * is never delivered.
++ */
++function createStrandedAddScenario(operationId) {
++  const durableCreatingRow = buildRuntimeOperationRow({
++    operation_id: operationId,
++    status: ReplicaStatus.CREATING,
++    workflow_step: WORKFLOW_STEP.CREATING,
++    updated_at: 1700000000500,
++  });
++  const activeServiceRow = {
++    service_id: REPLICA_ID,
++    service_type: 'runtime_service',
++    node_id: TARGET_NODE_ID,
++    status: ReplicaStatus.ACTIVE,
++    created_at: 1700000000510,
++    updated_at: 1700000000514,
++  };
++  const {scheduledTimers, captureTimer, releaseTimer} = createTimerCapture();
++  const sourceCoordinator = createTestCoordinator({
++    nodeId: SOURCE_NODE_ID,
++    cacheData: {
++      services: [activeServiceRow],
++      replicaOperations: [durableCreatingRow],
++    },
++    cdcIntegrationService: {
++      async insertSystemTableRow() {
++        return {success: true};
++      },
++      async updateSystemTableRow() {
++        return {success: true};
++      },
++      async refreshAuthoritativeCacheRow() {
++        return true;
++      },
++    },
++    sqlQueryResults: {
++      'FROM services WHERE service_id = ?': {
++        success: true,
++        rows: [activeServiceRow],
++      },
++    },
++    setTimeoutFn: captureTimer,
++    clearTimeoutFn: releaseTimer,
++  });
++  const dispatchOperation =
++    sourceCoordinator.dispatchOperation.bind(sourceCoordinator);
++  const scenario = {
++    dispatchCallCount: 0,
++    scheduledTimers,
++    sourceCoordinator,
++  };
++  sourceCoordinator.dispatchOperation = async (...args) => {
++    scenario.dispatchCallCount += 1;
++    if (scenario.dispatchCallCount === 1) {
++      const retryableError =
++        new Error('Cache update not observed for replica operation');
++      retryableError.retryAfterMs = DISPATCH_DEFER_RETRY_AFTER_MS;
++      throw retryableError;
++    }
++    if (scenario.dispatchCallCount === 2) {
++      // The deferred-retry dispatch reaches the target and SUCCEEDS; the
++      // durable row commits CREATING while the target's outcome handoff back
++      // to the source is lost at its retry budget.
++      return {success: true};
++    }
++    return dispatchOperation(...args);
++  };
++  scenario.sourceDispatch = createService({
++    cdcIntegrationService: {
++      updateSystemTableRow: async () => ({success: true}),
++      upsertSystemTableRow: async () => ({success: true}),
++    },
++    rebalanceCoordinator: sourceCoordinator,
++    controlPlaneReadinessService: createMockControlPlaneReadinessService({
++      defaultRepairEligible: true,
++    }),
++    setTimeoutFn: captureTimer,
++    clearTimeoutFn: releaseTimer,
++  });
++  // The live divergence: the source's replica_operations CDC never emitted
++  // the row, so neither the cache nor the authoritative fallback ever
++  // observes it from the dispatch service. Only the coordinator's own
++  // repository (which created the operation) can see it.
++  scenario.sourceDispatch.replicaOperationsOwner = {
++    async getReplicaOperationFromCache() {
++      return null;
++    },
++  };
++  scenario.sourceDispatch.getAuthoritativeReplicaOperationRow = async () =>
++    null;
++  return scenario;
++}
++
++/**
++ * Drive one payload-row ordering through the shared strand scenario: ingress,
++ * visibility-lag defer, deferred-retry success, lost target handoff, then two
++ * full CREATING windows of armed source-side timers. Returns the durable
++ * operation as the source owner repository sees it at the end.
++ */
++async function runStrandedAddOrdering(t, scenario, operationId, payloadRow) {
++  const {scheduledTimers, sourceCoordinator, sourceDispatch} = scenario;
++  await sourceDispatch.handleReplicaOperationDispatch({
++    type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++    [ControlPlaneField.OPERATION_ID]: operationId,
++    [ControlPlaneField.OPERATION_ROW]: payloadRow,
++  });
++  await drainOperationDispatchQueue(sourceDispatch);
++
++  t.equal(
++    scenario.dispatchCallCount,
++    1,
++    'the initial source dispatch pass should reach the owner once',
++  );
++  const deferredRetry =
++    sourceDispatch.operationDispatchDeferredRetries.get(operationId);
++  t.ok(
++    deferredRetry,
++    'the visibility-lag failure should arm the existing deferred retry',
++  );
++
++  deferredRetry.timeoutHandle.fired = true;
++  await deferredRetry.timeoutHandle.callback();
++  await drainOperationDispatchQueue(sourceDispatch);
++
++  t.equal(
++    scenario.dispatchCallCount,
++    2,
++    'the deferred-retry dispatch should succeed and clear its slot',
++  );
++
++  // The target handoff wake is never delivered and no readiness transition
++  // occurs. Fire every armed source-side timer through two full CREATING
++  // windows.
++  await drainScheduledTimers(
++    scheduledTimers,
++    sourceDispatch,
++    CREATING_STEP_TIMEOUT_MS * 2,
++  );
++
++  return sourceCoordinator.repository.queryOperationById(operationId);
++}
++
++// Quest runtime-service-add-creating-owner-rearm. Live ordering from the
++// 2026-07-21T13:35 MovieLens run (report movielens-lagrange-service-affinity-
++// live-2026-07-21T13-35-45-939Z, ADD bd00c558): the source-owned non-system
++// runtime ADD dispatch deferred once on replica-operation visibility lag
++// ("Cache update not observed"), the deferred retry dispatched successfully,
++// the durable row committed CREATING, the target created the replica, and the
++// target's outcome handoff back to the source stopped at its operation budget
++// without ever landing. The source's replica_operations CDC never emitted the
++// row ("No row found for CDC update"), so the source cache/authoritative
++// reads never converged. Nothing rearmed the operation before the
++// initial-placement timeout, and the stranded non-terminal row held the
++// rebalancer in-flight budget (second ADD skipped budget_exceeded).
++//
++// The two orderings below discriminate the two silent source-side dead ends
++// consistent with that log evidence; they differ only in the workflow step
++// the retained OPERATION_ROW payload carries. The terminal assertion is the
++// sealed result: the canonical source owner re-enters the exact parked
++// operation and drives it to terminal ACTIVE from exact-target ACTIVE
++// services proof, releasing the budget slot.
++test(
++  'a stranded CREATING ADD whose row visibility never converges is still ' +
++  're-entered through the canonical source owner to terminal ACTIVE',
++  async (t) => {
++    initEnv();
++
++    const operationId = `${OPERATION_ID}-unreadable-row-owner-rearm`;
++    const scenario = createStrandedAddScenario(operationId);
++
++    try {
++      const progressedOperation = await runStrandedAddOrdering(
++        t,
++        scenario,
++        operationId,
++        buildRuntimeOperationRow({operation_id: operationId}),
++      );
++      t.equal(
++        progressedOperation?.workflowStep,
++        WORKFLOW_STEP.ACTIVE,
++        'the source-owned ADD must reach ACTIVE through the canonical owner ' +
++        'even though the dispatch-service row reads never converge, because ' +
++        'the owner repository and the exact-target ACTIVE services proof ' +
++        'are both available',
++      );
++      t.equal(
++        progressedOperation?.status,
++        ReplicaStatus.ACTIVE,
++        'the durable operation must reach its terminal state so the ' +
++        'stranded row stops consuming the rebalancer in-flight budget',
++      );
++    } finally {
++      scenario.sourceDispatch.stop();
++      await scenario.sourceCoordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'a dispatch success observed with a pre-transition PENDING payload row ' +
++  'still retains the target-progress verification re-entry',
++  async (t) => {
++    initEnv();
++
++    const operationId = `${OPERATION_ID}-pending-payload-retention`;
++    const scenario = createStrandedAddScenario(operationId);
++
++    try {
++      // The coordinator builds its dispatch request row from the in-memory
++      // operation before the dispatch path claims SENDING, so the payload
++      // the dispatch service retains across the deferred retry can still say
++      // PENDING while the durable row has already advanced.
++      const progressedOperation = await runStrandedAddOrdering(
++        t,
++        scenario,
++        operationId,
++        buildRuntimeOperationRow({
++          operation_id: operationId,
++          workflow_step: WORKFLOW_STEP.PENDING,
++        }),
++      );
++      t.equal(
++        progressedOperation?.workflowStep,
++        WORKFLOW_STEP.ACTIVE,
++        'a stale pre-transition PENDING payload must not silently drop the ' +
++        'retained verification re-entry: the owner must still drive the ' +
++        'durable CREATING row to ACTIVE from exact-target ACTIVE proof',
++      );
++      t.equal(
++        progressedOperation?.status,
++        ReplicaStatus.ACTIVE,
++        'the durable operation must reach its terminal state instead of ' +
++        'stranding CREATING with the budget slot held',
++      );
++    } finally {
++      scenario.sourceDispatch.stop();
++      await scenario.sourceCoordinator.shutdown();
++    }
++  },
++);
+diff --git a/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js b/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js
+index 6d44053556fa816098d8a2faf36425f16f0fecc3..4f48101526f40d2a419a3d13bc38312e9eeb84fa 100644
+--- a/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js
++++ b/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js
+@@ -5,7 +5,6 @@ import {
+ } from '../../src/control-plane/control-plane-constants.js';
+ import {WORKFLOW_STEP} from '../../src/constants/index.js';
+ import {
+-  OperationType,
+   ReplicaStatus,
+ } from '../../src/rebalancer/replica-status.js';
+ import {
+@@ -19,6 +18,12 @@ import {
+   createService,
+   initEnv,
+ } from './replica-dispatch-node-state-update-test-support.js';
++import {
++  buildRuntimeReplicaOperationRow,
++  createTimerCapture,
++  drainOperationDispatchQueue,
++  drainScheduledTimers,
++} from './replica-dispatch-virtual-timer-test-support.js';
+ 
+ const SOURCE_NODE_ID = 'node-1';
+ const TARGET_NODE_ID = 'node-2';
+@@ -28,53 +33,16 @@ const REPLICA_ID = `${SERVICE_ID}-r2`;
+ const DISPATCH_DEFER_RETRY_AFTER_MS = 250;
+ const CREATING_STEP_TIMEOUT_MS =
+   REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
++const ROW_IDENTITY = Object.freeze({
++  operationId: OPERATION_ID,
++  serviceId: SERVICE_ID,
++  replicaId: REPLICA_ID,
++  sourceNodeId: SOURCE_NODE_ID,
++  targetNodeId: TARGET_NODE_ID,
++});
+ 
+ function buildRuntimeSendingOperationRow(overrides = {}) {
+-  return {
+-    operation_id: OPERATION_ID,
+-    type: OperationType.ADD,
+-    partition_id: SERVICE_ID,
+-    entity_type: 'runtime_service',
+-    entity_id: SERVICE_ID,
+-    replica_id: REPLICA_ID,
+-    source_node_id: SOURCE_NODE_ID,
+-    target_node_id: TARGET_NODE_ID,
+-    status: ReplicaStatus.PENDING,
+-    workflow_step: WORKFLOW_STEP.SENDING,
+-    created_at: 1700000000000,
+-    updated_at: 1700000000000,
+-    completed_at: null,
+-    error_message: null,
+-    steps_history: '[]',
+-    ...overrides,
+-  };
+-}
+-
+-async function drainOperationDispatchQueue(service) {
+-  await new Promise((resolve) => setImmediate(resolve));
+-  while (
+-    service.operationDispatchQueue.size > 0 ||
+-    service.operationDispatchQueue.draining
+-  ) {
+-    await new Promise((resolve) => setImmediate(resolve));
+-  }
+-}
+-
+-function createTimerCapture() {
+-  const scheduledTimers = [];
+-  return {
+-    scheduledTimers,
+-    captureTimer(callback, delayMs) {
+-      const timerHandle = {callback, delayMs};
+-      scheduledTimers.push(timerHandle);
+-      return timerHandle;
+-    },
+-    releaseTimer(timerHandle) {
+-      if (timerHandle) {
+-        timerHandle.cleared = true;
+-      }
+-    },
+-  };
++  return buildRuntimeReplicaOperationRow(ROW_IDENTITY, overrides);
+ }
+ 
+ function createRetainedVerificationService(dispatchOperation, options = {}) {
+@@ -100,27 +68,6 @@ function createRetainedVerificationService(dispatchOperation, options = {}) {
+   return {...timerCapture, service};
+ }
+ 
+-async function drainScheduledTimers(scheduledTimers, service, budgetMs) {
+-  let remainingVirtualBudgetMs = budgetMs;
+-  for (;;) {
+-    const dueTimer = scheduledTimers
+-      .filter(
+-        (timer) =>
+-          !timer.cleared &&
+-          !timer.fired &&
+-          timer.delayMs <= remainingVirtualBudgetMs,
+-      )
+-      .sort((left, right) => left.delayMs - right.delayMs)[0];
+-    if (!dueTimer) {
+-      break;
+-    }
+-    dueTimer.fired = true;
+-    remainingVirtualBudgetMs -= dueTimer.delayMs;
+-    await dueTimer.callback();
+-    await drainOperationDispatchQueue(service);
+-  }
+-}
+-
+ // Quest runtime-service-creating-owner-wake-progress-admission, retained
+ // verification after a SUCCESSFUL source dispatch. Sealed production ordering:
+ //   1. The source-owned coordinator-created runtime ADD dispatch defers once

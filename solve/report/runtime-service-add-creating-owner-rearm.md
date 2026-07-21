@@ -1,0 +1,70 @@
+# Solve report: runtime-service-add-creating-owner-rearm
+
+**Goal:** A non-system runtime-service ADD whose coordinator-created remote handoff exhausts its operation budget while the target replica creation has already succeeded and the source durable operation row is still CREATING — including when the source node lacks local visibility of its own operation row — is not stranded: the canonical source owner rearms the exact parked operation before initial-placement timeout, terminalizes it to ACTIVE against the exact target services row, and releases the budget hold so the next queued ADD dispatches, proven by a deterministic production-seam discriminator modeling the exact 2026-07-21T13:35 live ordering (ADD bd00c558 created svc-movielens-topn-r1 remotely, row remained CREATING after replica success with missing local operation-row visibility, remote-handoff budget exhausted, second ADD blocked by budget, no rearm before initial-placement timeout) with red-on-revert for any fix, no timeout or budget widening, no broad non-system create replay, byte-identical behavior for system operations, and the unchanged five-node MovieLens live scenario completing initial service placement.
+
+**Class:** product · **Closure:** MEASURED
+
+**Outcome:** IN PROGRESS (no terminal recorded)
+
+**Attempts:** 3
+
+## Links
+- spec: solve/epics/service-data-affinity-placement.md
+- parent quest: runtime-service-handoff-budget-rearm-reentry
+- plan: solve/epics/topology-convergence-hardening.md
+
+## Current Blocker
+- Frontier: runtime-service-add-creating-owner-rearm-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: unknown
+- Movement: no evidence recorded
+- Latest evidence: none
+- Selected theory: none
+- Next move: continue supervised step for runtime-service-add-creating-owner-rearm-main
+
+## Continuation
+- Status: blocked-theory
+- Next action: record system theory before the next runtime-service-add-creating-owner-rearm-main attempt using npm run model:contracts as model discriminator
+- Blocker: system theory required for runtime-service-add-creating-owner-rearm-main
+
+## Scope Pressure
+- Changed files: 6
+- Change bytes: 23700
+- Owner areas: src/control-plane, src/rebalancer, test/control-plane
+- Categories: runtime, test
+- Action: land or separate 3 owner areas: src/control-plane, src/rebalancer, test/control-plane
+- Split plan:
+  - test/control-plane: 3 file(s)
+  - src/control-plane: 2 file(s)
+  - src/rebalancer: 1 file(s)
+- Signal: broad-source-scope severity=medium
+
+## Frontiers
+- **runtime-service-add-creating-owner-rearm-main** [open] rung 0, attempts 3, metric 1 -> 1
+
+## Findings
+- **runtime-service-add-creating-owner-rearm-main**: Exact live ordering from the 2026-07-21T13:35 report run (nodes: node-0=c3d43107 source/coordinator, node-1=6d8c4174 target, node-4=2ec69729): 13:28:16.370 planner plans 2 ADD moves for svc-movielens-topn (desired 2 replicas, targets node-1 and node-4); 13:28:17.798 ADD bd00c558 created for target node-1; 13:28:18.69x source CDC logs 'No row found for CDC update' for the replica_operations row bd00c558 (missing local operation-row visibility); 13:28:18.702 dispatch deferred once ('Cache update not observed'); 13:28:18.785 the second planned ADD (target node-4) is skipped with reason budget_exceeded; 13:28:18.699 node-4 releases the operation's storage reservation as an orphan during reconciliation 27ms after creation; 13:28:19.004-013 target node-1 handles CREATE_REPLICA and completes replica creation; 13:28:19.386 source row SENDING->CREATING; 13:29:19.417 target-side coordinator-created remote handoff retry stops at its operation budget with workflowStep CREATING ('the operation remains for planner rearm / ready-node replay'); thereafter the source planner logs 'Suboptimal rebalancing state detected' (healthyReplicaCount 1, desired 2) every ~70s until 13:35:31 teardown with zero further Executing-rebalancing-move lines for this entity — neither planner rearm nor ready-node replay ever engaged. Evidence slices copied to solve/changes/runtime-service-add-creating-owner-rearm/live-2026-07-21T13-35-evidence-slices.ndjson; immutable archive data/examples/service-data-affinity-demo-archive/quest-runtime-service-add-creating-owner-rearm-live-report-2026-07-21T13-35-45-939Z.tar.gz sha256 16abf708fe8dc87e76499a10e365d0a33110c7deb2f23d7bf0efd58c783f9db1. [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T13-35-45-939Z.report.json]
+- **runtime-service-add-creating-owner-rearm-main**: Wiring-trace verdict for the stranded non-system runtime_service ADD: the budget-stop sites (src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js:365-378 and :452-469) log 'remains for planner rearm / ready-node replay' then immediately clearCreatedOperationHandoffRetry and return, leaving the row CREATING with zero residual drive state. Planner rearm is MISSING for this class: the only re-dispatching rearm state (REARM_DISPATCH in src/rebalancer/operation-workflow-dispatch-rearm-evidence.js:65-108) is hard-gated to systemTable||priorityControlPlane (:176-190,:241-243), and the unified planner only plans new moves, which the stranded row itself blocks via SELECT_IN_FLIGHT_COUNT budget (unified-rebalancer-rebalance-loop.js:200-236) — counted but not drivable, self-blocking. Ready-node replay is HALF-WIRED: all three source-side entries require local anchors this ordering never creates — (i) TARGET_EXECUTOR_OUTCOME context requires the wake to land but the handoff stopped at budget before landing (replica-dispatch-replay-readiness.js:220-226); (ii) the lost-wake admission (replica-dispatch-reconcile-callbacks.js:236-268) is gated on DEFERRED_RETRY_PROVENANCE set only by a source control-plane deferred-retry timer (replica-dispatch-retry-scheduling.js:303-309) that never armed because the source outbound dispatch SUCCEEDED; (iii) the node-ready scan fires only on READY transitions/init and its row filter excludes non-system CREATING rows (replica-dispatch-replay-readiness.js:300-314). Cleanest discriminator seam: the wakeCoordinatorCreatedRemoteOwner call/return at operation-workflow-executor-outcome-reconcile-methods.js:584-596, paired with driving the budget-stop decision (operation-workflow-coordinator-created-handoff-scheduling.js:447-468) and asserting the lost-wake branch never fires while the in-flight count still consumes budget. [subagent:a2cbc7b4ed92b0f93]
+- **runtime-service-add-creating-owner-rearm-main**: Ledger prior-art for this class: recurrence root already recorded in runtime-service-creating-owner-wake-progress-admission.md:89 — ready-node replay's only trigger is a node-readiness transition and planner rearm is starved; planner reuse refuses non-PENDING rearm by design (CL-008 skip_not_pending, never-break dedup). CL-029 Required Guard names the sanctioned levers: re-arm the retained executor-outcome payload via the EXISTING scheduleExecutorOutcomeRetry/redriveExecutorOutcomeReconcile machinery on any non-committed application, and extend DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS so any wake reconciles observed target progress, keeping CL-008 dedup and step-rank monotonicity. Refuted/forbidden levers: any budget/timeout/concurrency widening, target-side workflow writers, new timers/queues/retry maps/side channels, blind or broad non-system create replay, treating the budget_exceeded skip as root cause, non-one-shot rearm (a retained SENDING-verification hook that could rearm forever was verifier-REJECTED in the parent quest), and converting dispatch hot-path defer into advance-now work without N>=2 fixed-vs-reverted live A/B (docs/steering/findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md). The 'No row found for CDC update' visibility failure is the recorded CL-017 seed-divergent-db class owned by the partition metadata delivery family — out of this quest's seal; the rearm must be robust despite it (the divergence blocks the owner's row advance, not the budget counter), and CL-017(b)'s OPERATION_ROW_DIVERGENCE_REINSERT only engages from an owner UPDATE, which is exactly what the missing rearm never issues. [subagent:a17e5fac751a51cc1]
+- **runtime-service-add-creating-owner-rearm-main**: Deterministic discriminator reproduces the strand on HEAD and pins the dead branch: in test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js, the ordering (visibility-lag defer, deferred-retry dispatch success, durable row CREATING, target outcome handoff never delivered, dispatch-service row reads never converge) strands the row CREATING forever ONLY when the retained OPERATION_ROW payload carries the pre-transition PENDING workflow_step: scheduleRuntimeTargetProgressDispatchVerification gates on isRuntimeTargetProgressWakeRow(row) whose step set is {SENDING,CREATING}, so the stale PENDING payload silently drops the one-shot retained verification at the success site (replica-dispatch-operation-execution.js:388) — no timer, no log, matching the live node-0 silence after 13:28:19.386. The control ordering with a SENDING payload and the same never-converging reads is GREEN on HEAD (the fired verification falls back to the retained row and the real coordinator lane terminalizes from exact-target ACTIVE services proof), refuting the unreadable-row-alone hypothesis and confirming stale-payload-shape gating as the reproducible dead end. [test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js]
+- **runtime-service-add-creating-owner-rearm-main**: DT red-on-revert proven for test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js [dt:solve/changes/dt-prove/replica-dispatch-add-creating-owner-rearm.test.js-2026-07-21T14-24-37-875Z.json]
+- **runtime-service-add-creating-owner-rearm-main**: Independent verification REJECTED exact attempt (sha256:04466e17): fingerprint exact with no riders, one-shot provenance dynamically disproven unbounded rearm (single 60s window across three drained windows, zero residual timers), broad replay and admission drift disproven (wake sets and both admission call sites unchanged), red-on-revert independently reproduced (8/2 with the exact live strand assertions), eslint/file-size/system-row behavior clean — but the new discriminator test file alone adds 4 clone groups / 174 duplicated lines, regressing the enforced test-duplication ratchet from 842/32209 to 844/32303. Remedy: extract the shared scenario setup in the new test file, no src changes needed, resubmit as changed-fingerprint same-base replacement. [subagent:a3ec4ae04f452e74c]
+- **runtime-service-add-creating-owner-rearm-main**: Independent verification REJECTED exact attempt sha256:95fdc68d on a single mechanical defect: the sealed artifact omits the new untracked module test/control-plane/replica-dispatch-virtual-timer-test-support.js that both patched suites import, so the patch is not self-contained on clean HEAD. Every substantive check passed: src hunks byte-identical to the substantively-approved attempt-2, parent-suite refactor proven behavior-preserving field-for-field, 31/31 and 548/548 green, duplication ratchet now under baseline (841/842, 32172/32209), eslint clean, red-on-revert re-reproduced on the deduplicated suite. Remedy: re-emit the diff with the sixth file included (git add -N) and resubmit; verifier pre-committed to APPROVE a resubmission whose only delta is the added file. [subagent:a3ec4ae04f452e74c]
+
+## Theories
+_(none recorded)_
+
+## Selected Theories
+_(none selected)_
+
+## Theory Results
+_(none recorded)_
+
+## Attempt log
+| ts | frontier | rung | metric | result | blocker movement | theory | change |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-07-21T14:36:40.497Z | runtime-service-add-creating-owner-rearm-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/runtime-service-add-creating-owner-rearm/attempt-2.diff |
+| 2026-07-21T14:54:57.382Z | runtime-service-add-creating-owner-rearm-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/runtime-service-add-creating-owner-rearm/attempt-3.diff |
+| 2026-07-21T14:59:20.883Z | runtime-service-add-creating-owner-rearm-main | observe | 1 -> 1 | flat | no_evidence |  | diff:solve/changes/runtime-service-add-creating-owner-rearm/attempt-4.diff |

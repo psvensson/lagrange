@@ -5,7 +5,6 @@ import {
 } from '../../src/control-plane/control-plane-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
-  OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
@@ -19,6 +18,12 @@ import {
   createService,
   initEnv,
 } from './replica-dispatch-node-state-update-test-support.js';
+import {
+  buildRuntimeReplicaOperationRow,
+  createTimerCapture,
+  drainOperationDispatchQueue,
+  drainScheduledTimers,
+} from './replica-dispatch-virtual-timer-test-support.js';
 
 const SOURCE_NODE_ID = 'node-1';
 const TARGET_NODE_ID = 'node-2';
@@ -28,53 +33,16 @@ const REPLICA_ID = `${SERVICE_ID}-r2`;
 const DISPATCH_DEFER_RETRY_AFTER_MS = 250;
 const CREATING_STEP_TIMEOUT_MS =
   REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
+const ROW_IDENTITY = Object.freeze({
+  operationId: OPERATION_ID,
+  serviceId: SERVICE_ID,
+  replicaId: REPLICA_ID,
+  sourceNodeId: SOURCE_NODE_ID,
+  targetNodeId: TARGET_NODE_ID,
+});
 
 function buildRuntimeSendingOperationRow(overrides = {}) {
-  return {
-    operation_id: OPERATION_ID,
-    type: OperationType.ADD,
-    partition_id: SERVICE_ID,
-    entity_type: 'runtime_service',
-    entity_id: SERVICE_ID,
-    replica_id: REPLICA_ID,
-    source_node_id: SOURCE_NODE_ID,
-    target_node_id: TARGET_NODE_ID,
-    status: ReplicaStatus.PENDING,
-    workflow_step: WORKFLOW_STEP.SENDING,
-    created_at: 1700000000000,
-    updated_at: 1700000000000,
-    completed_at: null,
-    error_message: null,
-    steps_history: '[]',
-    ...overrides,
-  };
-}
-
-async function drainOperationDispatchQueue(service) {
-  await new Promise((resolve) => setImmediate(resolve));
-  while (
-    service.operationDispatchQueue.size > 0 ||
-    service.operationDispatchQueue.draining
-  ) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-}
-
-function createTimerCapture() {
-  const scheduledTimers = [];
-  return {
-    scheduledTimers,
-    captureTimer(callback, delayMs) {
-      const timerHandle = {callback, delayMs};
-      scheduledTimers.push(timerHandle);
-      return timerHandle;
-    },
-    releaseTimer(timerHandle) {
-      if (timerHandle) {
-        timerHandle.cleared = true;
-      }
-    },
-  };
+  return buildRuntimeReplicaOperationRow(ROW_IDENTITY, overrides);
 }
 
 function createRetainedVerificationService(dispatchOperation, options = {}) {
@@ -98,27 +66,6 @@ function createRetainedVerificationService(dispatchOperation, options = {}) {
     clearTimeoutFn: timerCapture.releaseTimer,
   });
   return {...timerCapture, service};
-}
-
-async function drainScheduledTimers(scheduledTimers, service, budgetMs) {
-  let remainingVirtualBudgetMs = budgetMs;
-  for (;;) {
-    const dueTimer = scheduledTimers
-      .filter(
-        (timer) =>
-          !timer.cleared &&
-          !timer.fired &&
-          timer.delayMs <= remainingVirtualBudgetMs,
-      )
-      .sort((left, right) => left.delayMs - right.delayMs)[0];
-    if (!dueTimer) {
-      break;
-    }
-    dueTimer.fired = true;
-    remainingVirtualBudgetMs -= dueTimer.delayMs;
-    await dueTimer.callback();
-    await drainOperationDispatchQueue(service);
-  }
 }
 
 // Quest runtime-service-creating-owner-wake-progress-admission, retained

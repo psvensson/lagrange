@@ -62,7 +62,7 @@ function scheduleRuntimeTargetProgressDispatchVerification(
 ) {
   if (
     !operationId ||
-    !service.isRuntimeTargetProgressWakeRow(row) ||
+    !service.isRuntimeTargetProgressRetentionRow(row) ||
     options?.[
       REPLICA_DISPATCH_SERVICE_LITERAL
         .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE

@@ -51,6 +51,21 @@ const RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS = Object.freeze(
   ]),
 );
 
+// Retention scope for the one-shot post-success dispatch verification only —
+// never wake admission. The dispatch request row is built from the in-memory
+// operation before the dispatch path claims SENDING, so a successful dispatch
+// can be observed while the retained payload still says PENDING; the durable
+// row has by then advanced, and dropping retention on the stale payload shape
+// strands a lost-handoff CREATING ADD forever (quest
+// runtime-service-add-creating-owner-rearm, live ADD bd00c558).
+const RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.PENDING,
+    WORKFLOW_STEP.SENDING,
+    WORKFLOW_STEP.CREATING,
+  ]),
+);
+
 // Generic replica ACTIVE outcomes may be observed remotely while their
 // source-owned create workflow is still creating or syncing.
 const TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS = Object.freeze(
@@ -481,6 +496,7 @@ export {
   RECONCILE_REPLICA_STATUS_WORKFLOW_STEPS,
   REMOVE_INITIAL_DISPATCH_WORKFLOW_STEPS,
   REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS,
+  RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
   RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
   TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS,
   resolveOperationTransitionReason,
