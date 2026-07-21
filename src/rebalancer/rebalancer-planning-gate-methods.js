@@ -679,14 +679,19 @@ const REBALANCER_PLANNING_GATE_METHODS = {
   /**
    * Update rebalance cadence after one evaluation/execution pass.
    * @param {boolean} needsRebalance
+   * @param {Object|null} [evaluatedPolicy=null] - The policy the evaluation
+   *   judged; the cure must plan from the same evidence, not a re-fetch.
    * @return {Promise<boolean>} Whether to force a priority retry cadence.
    * @private
    */
-  async advanceCheckCadence(needsRebalance) {
+  async advanceCheckCadence(needsRebalance, evaluatedPolicy = null) {
     let forcePriorityRetry = false;
 
     if (needsRebalance) {
-      const rebalanceResult = await this.rebalance(TriggerType.PERIODIC);
+      const rebalanceResult = await this.rebalance(
+        TriggerType.PERIODIC,
+        evaluatedPolicy,
+      );
       const executedMoveCount = this.countExecutedMoves(rebalanceResult);
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
@@ -748,9 +753,15 @@ const REBALANCER_PLANNING_GATE_METHODS = {
         return;
       }
 
-      // Re-evaluate state after stabilization (Requirement 2.4)
-      const needsRebalance = await this.evaluateState();
-      forcePriorityRetry = await this.advanceCheckCadence(needsRebalance);
+      // Re-evaluate state after stabilization (Requirement 2.4). One policy
+      // fetch serves the whole cycle so the cure judges the evidence the
+      // evaluation observed.
+      const evaluatedPolicy = await this.getPolicy();
+      const needsRebalance = await this.evaluateState(evaluatedPolicy);
+      forcePriorityRetry = await this.advanceCheckCadence(
+        needsRebalance,
+        evaluatedPolicy,
+      );
     } catch (error) {
       this.logger.error(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
         entityId: this.entityId,

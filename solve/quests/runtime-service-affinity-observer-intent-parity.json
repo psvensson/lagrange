@@ -1,0 +1,62 @@
+{
+  "id": "runtime-service-affinity-observer-intent-parity",
+  "authoringContractVersion": 1,
+  "statement": "For a runtime service carrying fresh non-empty data-affinity weights, the suboptimality observer and the placement intent share one decision: whenever isDataAffinityPlacementSuboptimal reports true, the same evaluation evidence yields a minted REPLACE toward an affinity-preferred feasible node through the existing full-score placement intent — or the observer does not report true — so detection can never latch without a cure. Modeled on the exact 2026-07-21T15:06:54 live ordering (svc-movielens-topn healthy 2 of desired 2 across 5 nodes, observer fired once on the affinity term, rebalance() ran and minted zero moves, weightedLocality stayed 0.000 for 300s with attributionRows=2 and working top-10), proven by a deterministic discriminator at the observer-intent seam that is red on current HEAD, with no new scoring formula (only the existing kernel terms and margins), no churn below the incumbent-retention margin, no flag or disable switch, byte-identical behavior for entities without preferDataAffinity, and the unchanged five-node MovieLens live scenario converging weightedLocality above zero once planning is admitted.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "runtime-service-add-creating-owner-rearm",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "60db73fb093428e83d73e8b1b0c8923296aa859e"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "runtime-service-affinity-observer-intent-parity-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "no-flag-no-disable-switch",
+      "statement": "Data affinity remains intrinsic policy: no feature flag, disable switch, or per-call option may be introduced, and no flag may survive the session. Entities without preferDataAffinity retain byte-identical behavior."
+    },
+    {
+      "id": "no-new-scoring-formula",
+      "statement": "Reuse only the existing placement-kernel terms and margins (NODE_AFFINITY_WEIGHT, group weights, INCUMBENT_MOVEMENT_COST retention margin). The fix aligns the observer and the intent on the same inequality and candidate universe; it must not introduce a second scorer, new weights, or new constants beyond naming existing scalars."
+    },
+    {
+      "id": "no-sub-margin-churn",
+      "statement": "No REPLACE may be planned when the affinity gradient does not exceed the existing incumbent-retention movement margin. The parity fix must not increase move churn for states the full-score intent already ranks as keep-incumbent correctly."
+    },
+    {
+      "id": "single-decision-owner",
+      "statement": "The MovePlanner placement kernel remains the single owner of the move decision. The observer must not mint moves, mutate state, or re-derive placement outside the kernel; parity is achieved by sharing the kernel's own decision surface, not by duplicating it."
+    },
+    {
+      "id": "real-seam-red-on-revert",
+      "statement": "Before source change acceptance, a deterministic discriminator at the real observer-intent seam must reproduce the 2026-07-21T15:06:54 detect-without-cure state (fresh non-empty affinity weights favoring data nodes, incumbents holding none of the accessed data, observer true, zero minted moves), stay red on current HEAD, be red-on-revert for any fix, and include negative controls proving no move is minted below the retention margin and no behavior change for entities without preferDataAffinity."
+    }
+  ]
+}

@@ -8,15 +8,23 @@ const {
 const REBALANCER_EVALUATION_METHODS = {
   /**
    * Evaluate if rebalancing is needed.
+   *
+   * The periodic cycle passes its already-fetched policy so evaluation and
+   * the cure in rebalance() judge ONE policy evidence: a re-fetch between
+   * them can lose fresh data-affinity weights (diverged authoritative read)
+   * and silently turn an observed affinity suboptimality into a zero-move
+   * round.
+   *
+   * @param {Object|null} [policy=null] - Pre-fetched policy for this cycle.
    * @return {Promise<boolean>} True if rebalancing is needed.
    */
-  async evaluateState() {
+  async evaluateState(policy = null) {
     const currentReplicas = this.getCurrentReplicas();
-    const policy = await this.getPolicy();
+    const effectivePolicy = policy || (await this.getPolicy());
     const availableNodes = this.getAvailableNodes();
     const assessment = this.movePlanner.assessState(
       currentReplicas,
-      policy,
+      effectivePolicy,
       availableNodes,
     );
     const {
