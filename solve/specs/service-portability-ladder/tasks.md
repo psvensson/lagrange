@@ -1,5 +1,19 @@
 # Service Portability Ladder Tasks
 
+## Deployment ladder mapping
+
+The program serves the three-rung deployment goal (requirements "Program
+result"):
+
+| Rung | Developer story | Phases |
+| --- | --- | --- |
+| 1 | Unchanged pg-talking app in an OCI container, managed and placed near its data | 0, 1, 2 |
+| 2 | Lagrange-aware callbacks: one surface, shared service context | 5 |
+| 3 | Genuine WASM component through the same install surface | 3 |
+
+Phase 4 (evaluator proof) spans rungs 1 and 3; rung 2 receives its own live
+terminal when Phase 5 rows seal (see requirements R8).
+
 Every row below is one executable concern and therefore one Quest unless noted as
 an existing Quest. Product runners write versioned reports under
 `test-output/reports/` and must engage the production composition root. Every
@@ -75,6 +89,22 @@ Milestone M4 proves genuine component execution through the same install surface
 
 Milestone M5 is the complete evaluator journey.
 
+## Phase 5 — Rung 2: Lagrange-aware callbacks and shared service context
+
+Rows in this phase cannot seal quests until the K0 and K1 decisions graduate
+from [`solve/epics/lagrange-aware-callback-shared-context.md`](../../epics/lagrange-aware-callback-shared-context.md)
+(requirements R8 is draft until then).
+
+| Order | Quest | Result |
+| --- | --- | --- |
+| K0 | `callback-surface-unification-decision` | One callback-module surface owns ad-hoc (embedded `runtime.run`) and installed (uploaded module) execution: packaging, identity, invocation, and the fate of the manifest-driving `SELECT` are sealed; deprecations named. |
+| K1 | `shared-service-context-contract` | Sealed contract for the replica-shared service context: storage owner, one default consistency behavior, identity scoping, lifecycle across REPLACE/upgrade, bounds and eviction. Explicitly replaces closure capture as the state story. |
+| K2 | `shared-service-context-runtime-owner` | The `ctx` shared-context surface is backed by the K1 contract through existing replication machinery, with deterministic red-on-revert proof. |
+| K3 | `unified-callback-packaging-scaffold` | One packaging path and CLI scaffold produce the same callback module for ad-hoc and installed execution. |
+| K4 | `movielens-aware-callback-leg` | The MovieLens example gains a rung-2 leg on the unified surface with shared context, reported against its rung-1 leg. |
+
+Milestone M6 proves the rung-2 developer journey with its own live terminal.
+
 ## Quest authoring rules
 
 - A Quest statement names its externally observable result, not a suspected
@@ -86,4 +116,7 @@ Milestone M5 is the complete evaluator journey.
 - F4 cannot close before authentication and TLS are terminal.
 - W1 cannot close on core magic bytes alone; the chosen component classification
   and public invocation must be measured.
-- E3 is the only whole-program terminal. Earlier milestones make narrower claims.
+- E3 is the whole-program terminal for rungs 1 and 3. Earlier milestones make
+  narrower claims; rung 2 terminates at M6, never by widening E3 silently.
+- K2 and later K rows cannot begin before K1 is terminal; K0/K1 cannot be
+  authored before their epic decisions are recorded.

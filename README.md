@@ -241,6 +241,45 @@ See [roadmap.md](roadmap.md) for the canonical implementation roadmap.
 
 ---
 
+## How You Deploy Code To Lagrange
+
+There are three intended ways to get your code running on a Lagrange cluster —
+a ladder ordered by how aware your code is of Lagrange. Each rung trades a
+little more coupling for more efficiency.
+
+1. **Bring your container (no code changes).** Package your existing
+   PostgreSQL-talking application as an OCI container and let Lagrange run it
+   as a managed, replicated service — placing each replica near the data it
+   actually accesses, and re-placing it as the data layout changes. Your
+   application keeps speaking the PostgreSQL wire protocol and never learns it
+   moved. This is the expected most common early path.
+   *Status: the PostgreSQL wire surface and the affinity placement machinery
+   exist; external OCI service installation is not implemented yet (see the
+   capability matrix below). The MovieLens affinity demo shows the placement
+   behavior this rung buys, currently through an internal service rather than
+   an installed container.*
+2. **Callbacks (Lagrange-aware).** Write an async function against the `ctx`
+   surface and hand it to the cluster, which ships it to the nodes owning the
+   partitions it reads — compute moves to the data instead of the service
+   merely sitting near it. Today this has two forms, embedded and uploaded
+   (described in the mental model below); the design direction is one merged
+   callback surface. Cross-replica state is planned to live in a **shared
+   service context** — a redis-like store scoped to the service and shared
+   across its replicas — rather than in captured closures.
+   *Status: embedded and uploaded callbacks work today; the merged surface and
+   the shared service context are design-stage.*
+3. **WASM components (target).** The same callback shape as a portable,
+   sandboxed, digest-pinned artifact installed through the same service
+   surface. *Status: not yet — today's `wasm_component` path is a
+   JavaScript-envelope lifecycle rehearsal, not genuine component execution.*
+
+The plan of record for this ladder is the service-portability-ladder spec
+([`solve/specs/service-portability-ladder/`](solve/specs/service-portability-ladder/requirements.md));
+current runtime support is recorded in
+[`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
+
+---
+
 ## Small Mental Model
 
 **Your code is a callback.** You write an async function that takes a context
@@ -249,7 +288,9 @@ to emit results, and the distribution primitives below when a step genuinely has
 to cross partitions. That function is the unit Lagrange schedules — there is no
 separate worker service to stand up.
 
-**Two ways to hand that function to the cluster:**
+**Two ways to hand that function to the cluster** (the two current forms of
+ladder rung 2 above — the design direction is to merge them into one callback
+surface):
 
 Current runtime support is recorded in
 [`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
@@ -272,6 +313,11 @@ installation is not implemented yet, and `native_js` remains kernel-internal.
   [runnable examples](examples/distributed-sql/README.md) exercise the current
   callback lifecycle. They do not yet demonstrate an externally installable
   service artifact.
+
+**Where state goes.** Treat the callback as stateless: it may be serialized,
+shipped, and run on several nodes, so captured closure scope is not a place to
+keep state. Durable state belongs in tables; cross-replica working state is
+what the planned shared service context (ladder rung 2 above) is for.
 
 **Where it runs.** The `SELECT` in your callback names a table. The cluster
 resolves that table to the partitions that hold its rows, and the nodes that own

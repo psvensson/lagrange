@@ -2,16 +2,34 @@
 
 ## Program result
 
+The deployment story is a three-rung ladder, ordered by how aware the
+developer's code is of Lagrange (decided 2026-07-21):
+
+- **Rung 1 — bring your container (Lagrange-unaware).** An unchanged
+  PostgreSQL-talking application in an OCI container becomes a
+  Lagrange-managed service whose replicas are placed near the data they
+  access. Expected to be the most common early adoption path.
+- **Rung 2 — Lagrange-aware callbacks.** Compute is handed to the cluster
+  directly and ships to the partition owners; cross-replica state lives in a
+  shared service context, not in captured closure scope. More efficient than
+  rung 1; requires writing against the callback `ctx` surface.
+- **Rung 3 — WASM components.** The rung-2-shaped unit in a portable,
+  sandboxed, digest-pinned package installed through the same service surface.
+
 A developer evaluating Lagrange can follow one progressive, reproducible path:
 
 1. run an ordinary Dockerized PostgreSQL application against Lagrange by changing
-   connection and security configuration only;
+   connection and security configuration only (rung 1, first half);
 2. install the exact same digest-pinned OCI image as a Lagrange-managed,
    long-running service with real lifecycle, health, logs, recovery, and
-   authenticated service identity; and
+   authenticated service identity (rung 1, second half); and
 3. extract one bounded hot path into a genuine WebAssembly component, package it
    as an OCI artifact, install it through the same service surface, and observe
-   affinity-aware placement from authenticated data access.
+   affinity-aware placement from authenticated data access (rung 3).
+
+Rung 2 (the unified callback surface and shared service context) is at the
+epic stage — see R8 and
+[`solve/epics/lagrange-aware-callback-shared-context.md`](../../epics/lagrange-aware-callback-shared-context.md).
 
 The program reports exact artifacts and raw measurements. It does not promise
 that WASM is universally smaller or faster.
@@ -131,9 +149,35 @@ surfaces.
 - Teardown removes run-owned resources. A second run must pass without consuming
   the first run's runtime or access evidence.
 
+### R8 — Lagrange-aware callback surface and shared service context (rung 2 — draft)
+
+Requirements in this stage are **draft**: they harden through the epic
+`lagrange-aware-callback-shared-context` before any Phase 5 quest can seal a
+`doneWhen`. The direction they must preserve:
+
+- One callback-module surface owns both ad-hoc execution (today's embedded
+  `runtime.run`) and installed execution (today's uploaded module + manifest);
+  ad-hoc vs installed is a property of the artifact, not a second API.
+- Cross-replica and cross-invocation state must go through the shared service
+  context — a keyed store scoped to the service and shared across its
+  replicas. Callback code must not depend on captured closure scope surviving
+  serialization or replication; documentation must not suggest it does.
+- The shared context has one stable default consistency behavior; any
+  variation is a durable per-service policy, not a per-call option.
+- Shared-context access is scoped by the same server-derived service identity
+  sealed in R5; clients cannot read or write another service's context by
+  naming it.
+- Storage reuses existing replication machinery unless a recorded decision
+  justifies a second mechanism.
+
 ## Program completion
 
 The program is complete only when the production-path live acceptance proves all
 three adoption stages and their negative cases from a fresh clone. Unit-only,
 adapter-only, or hand-authored oracle evidence cannot close this product result.
+
+Rung 2 (R8) completion is not yet part of the E3 terminal: its acceptance rows
+are authored into Phase 5 once the epic's open questions are decided, and it
+then receives its own live-acceptance terminal rather than silently widening
+E3.
 

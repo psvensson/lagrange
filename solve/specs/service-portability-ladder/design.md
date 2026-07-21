@@ -1,5 +1,34 @@
 # Service Portability Ladder Design
 
+## Deployment ladder
+
+The program's shape follows the three-rung deployment goal (requirements
+"Program result"): rung 1 — an unchanged pg-talking OCI container becomes a
+managed, data-affinity-placed service (phases 0–2); rung 2 — Lagrange-aware
+callbacks on one unified surface with a shared service context (phase 5,
+epic-stage); rung 3 — genuine WASM components through the same install surface
+(phase 3). Each rung trades developer effort for efficiency: rung 1 moves the
+service near the data, rung 2 moves the compute into the partition owners,
+rung 3 makes that compute portable and sandboxed.
+
+## Rung 2 sketch (epic-stage)
+
+Today rung 2 is two surfaces sharing one `run(ctx)` contract: embedded
+`runtime.run(fn)` (the function is serialized and shipped) and the uploaded
+callback module driven by its manifest `SELECT`. The unification direction is
+one callback-module unit with ad-hoc and installed execution as artifact
+properties, not separate APIs.
+
+Cross-replica state is deliberately **not** closure capture: a **shared
+service context** — a redis-like keyed store scoped to the service, shared
+across its replicas, accessed through `ctx` — is the contract the
+Lagrange-aware developer writes against. Callback code stays stateless and
+serialization-safe; the store's consistency, lifecycle, bounds, and identity
+scoping are the K1 decision. Storage preference is existing replication
+machinery (a replicated, SQL-visible system table per service) over a second
+KV mechanism. Open questions and options live in
+[`solve/epics/lagrange-aware-callback-shared-context.md`](../../epics/lagrange-aware-callback-shared-context.md).
+
 ## Ownership map
 
 The program extends existing owners rather than introducing feature-local

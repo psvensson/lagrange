@@ -150,6 +150,20 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-21 — **Demo repositioned inside the three-rung deployment ladder
+  (user decision):** the canonical deployment story is rung 1 (unchanged
+  pg-talking app in an OCI container, managed and placed near its data),
+  rung 2 (Lagrange-aware callbacks with a shared service context), rung 3
+  (WASM components) — see
+  [[lagrange-aware-callback-shared-context]] and the service-portability-ladder
+  spec. The MovieLens demo is the **rung-1 showcase**: its point is an
+  application-shaped service whose replicas the cluster places near the data.
+  Today its service leg runs as kernel-internal `native_js`
+  (`sql-query-loop-runtime`), which demonstrates the placement behavior but
+  not the rung-1 deployment path; migrating that leg onto an installed OCI
+  service follows the ladder's C-phase (tracked there). A rung-2 leg on the
+  unified callback surface is ladder row K4, not this epic.
+
 - 2026-07-11 — **Affinity is intrinsic, not a demo toggle:** a runtime
   service with fresh access evidence always receives production
   data-affinity placement weights. `read_locality` remains an independent
