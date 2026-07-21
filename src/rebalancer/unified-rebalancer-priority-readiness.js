@@ -530,9 +530,6 @@ class UnifiedRebalancerPriorityReadinessMethods {
 
   // Yield non-priority work until startup-critical partitions are spread.
   getControlPlanePrioritySpreadBlocker() {
-    if (this.isControlPlanePriorityPartition()) {
-      return null;
-    }
     const readinessService = this.controlPlaneReadinessService;
     if (!readinessService) {
       return null;
@@ -543,7 +540,10 @@ class UnifiedRebalancerPriorityReadinessMethods {
       this.nodeId,
       observedAt,
     );
-    if (!planningSnapshot) {
+    if (
+      !Array.isArray(planningSnapshot?.publishedActiveNodeIds) &&
+      !Array.isArray(planningSnapshot?.published_active_node_ids)
+    ) {
       return null;
     }
     const publicationRecoveryGate =
@@ -556,12 +556,9 @@ class UnifiedRebalancerPriorityReadinessMethods {
         planningSnapshot?.published_active_node_ids,
       ]),
     );
-    const readyNodes =
-      planningPublishedActiveNodeIds.size > 0 ?
-        this.getAvailableNodesConstrainedToNodeIds(
-          planningPublishedActiveNodeIds,
-        ) :
-        this.getAvailableNodes();
+    const readyNodes = this.getAvailableNodesConstrainedToNodeIds(
+      planningPublishedActiveNodeIds,
+    );
     const readyNodeIds = normalizeNodeIdSet(
       readyNodes.map((node) => node?.node_id || node?.nodeId || ''),
     );

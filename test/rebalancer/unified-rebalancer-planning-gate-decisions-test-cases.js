@@ -745,6 +745,197 @@ export function registerUnifiedRebalancerPlanningGateDecisionsTests(context) {
       }
     });
 
+  test('UnifiedRebalancer priority leader arms release before a late background observer',
+    async (t) => {
+      initializeTestEnvironment();
+
+      let nowMs = 1000;
+      const readyLeaseExpiresAt = Date.now() + 100_000;
+      const nodes = [
+        {
+          node_id: REBALANCER_TEST_NODE_ID_A,
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: readyLeaseExpiresAt,
+        },
+        {
+          node_id: REBALANCER_TEST_NODE_ID_B,
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: readyLeaseExpiresAt,
+        },
+        {
+          node_id: REBALANCER_TEST_NODE_ID_C,
+          status: NodeStatus.ACTIVE,
+          ready_lease_expires_at: readyLeaseExpiresAt,
+        },
+      ];
+      const readinessService = {
+        ...createMockReadinessService(createMockCache(nodes)),
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publishedActiveNodeIds: nodes.map((node) => node.node_id),
+            publicationRecoveryGate: {
+              prioritySpreadPending: false,
+              priorityPartitionSummary: {
+                satisfied: true,
+                blockedPartitions: [],
+              },
+            },
+          };
+        },
+      };
+      const priorityTableIds = [
+        SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+        SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+        SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+        SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS,
+      ];
+      const clearPriorityPartitions = priorityTableIds.map((tableId) => ({
+        partition_id: `${tableId}-p1`,
+        table_id: tableId,
+        leader_node_id: REBALANCER_TEST_NODE_ID_A,
+        replica_count: 3,
+      }));
+      const clearPriorityServices = priorityTableIds.flatMap((tableId) => {
+        const partitionId = `${tableId}-p1`;
+        return nodes.map((node, index) => ({
+          service_id: `${partitionId}-r${index + 1}`,
+          partition_id: partitionId,
+          service_type: EntityType.PARTITION,
+          node_id: node.node_id,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: index === 0 ? 'leader' : 'follower',
+          address:
+            `${node.node_id}/partition/${partitionId}-r${index + 1}`,
+        }));
+      });
+      const priorityEntity = createTestRebalancer({
+        entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        nodes,
+        partitions: [{
+          partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        }],
+        services: [
+          {
+            service_id: REPLICA_OPERATION_PRIORITY_REPLICA_ID,
+            partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+            service_type: EntityType.PARTITION,
+            node_id: REBALANCER_TEST_NODE_ID_A,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'leader',
+            address:
+              `${REBALANCER_TEST_NODE_ID_A}/partition/` +
+              `${REPLICA_OPERATION_PRIORITY_PARTITION_ID}-r1`,
+          },
+          {
+            service_id: `${REPLICA_OPERATION_PRIORITY_PARTITION_ID}-r2`,
+            partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+            service_type: EntityType.PARTITION,
+            node_id: REBALANCER_TEST_NODE_ID_A,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+            address:
+              `${REBALANCER_TEST_NODE_ID_A}/partition/` +
+              `${REPLICA_OPERATION_PRIORITY_PARTITION_ID}-r2`,
+          },
+        ],
+        controlPlaneReadinessService: readinessService,
+        nowFn: () => nowMs,
+      });
+      const independentBackgroundEntity = createTestRebalancer({
+        entityId: NON_PRIORITY_SYSTEM_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        nodes,
+        partitions: clearPriorityPartitions,
+        services: clearPriorityServices,
+        controlPlaneReadinessService: {...readinessService},
+        nowFn: () => nowMs,
+      });
+      const lateBackgroundEntity = createTestRebalancer({
+        entityId: NON_PRIORITY_SYSTEM_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: REBALANCER_TEST_NODE_ID_A,
+        nodes,
+        partitions: clearPriorityPartitions,
+        services: clearPriorityServices,
+        controlPlaneReadinessService: readinessService,
+        nowFn: () => nowMs,
+      });
+
+      try {
+        const canonicalPlanningAnswer =
+          readinessService.getMembershipPublicationPlanningAnswerSync;
+        readinessService.getMembershipPublicationPlanningAnswerSync =
+          () => ({});
+        t.equal(
+          priorityEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'malformed publication evidence must not defer priority planning',
+        );
+        t.equal(
+          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'malformed publication evidence must not arm the shared release owner',
+        );
+        readinessService.getMembershipPublicationPlanningAnswerSync =
+          canonicalPlanningAnswer;
+        const priorityBlocker =
+          priorityEntity.getControlPlanePrioritySpreadBlocker();
+        t.match(
+          priorityBlocker?.blockedPartitions.find(
+            (partition) =>
+              partition.partitionId ===
+                REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          ),
+          {
+            readyReplicaCount: 2,
+            readyDistinctNodeCount: 1,
+            spreadGap: 2,
+          },
+          'the priority leader must derive the live gap despite a sticky clear publication',
+        );
+        t.equal(
+          priorityEntity.resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'priority planning must remain exempt while observing its own gap',
+        );
+
+        nowMs += 10_000;
+        t.equal(
+          independentBackgroundEntity
+            .resolvePrioritySpreadPlanningGateDecision(),
+          null,
+          'the priority observation must not leak into an independent owner scope',
+        );
+        t.equal(
+          lateBackgroundEntity.getControlPlanePrioritySpreadBlocker(),
+          null,
+          'the later cache snapshot must prove every priority partition clear',
+        );
+        const lateClearDecision =
+          lateBackgroundEntity.resolvePrioritySpreadPlanningGateDecision();
+        t.equal(
+          lateClearDecision?.blocker?.state,
+          'stabilizing',
+          'the first ordinary check after clear must inherit the priority owner observation',
+        );
+        t.equal(
+          lateClearDecision?.blocker?.stableElapsedMs,
+          0,
+          'a late ordinary observer must start the existing clear window, not release work',
+        );
+      } finally {
+        priorityEntity.shutdown();
+        lateBackgroundEntity.shutdown();
+        independentBackgroundEntity.shutdown();
+      }
+    });
+
   test('UnifiedRebalancer anchors active background release to global topology quiescence',
     async (t) => {
       initializeTestEnvironment();

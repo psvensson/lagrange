@@ -69,10 +69,11 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   },
 
   resolvePrioritySpreadPlanningGateDecision() {
+    const priorityPartition = this.isControlPlanePriorityPartition();
     const controlPlanePriorityBlocker =
       this.getControlPlanePrioritySpreadBlocker();
     if (!controlPlanePriorityBlocker) {
-      if (this.isControlPlanePriorityPartition()) {
+      if (priorityPartition) {
         return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
       }
       const observedAt = this.nowFn();
@@ -146,6 +147,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
       readinessOwner: this.controlPlaneReadinessService,
       observedAt: this.nowFn(),
     });
+    if (priorityPartition) {
+      return REBALANCE_PLANNING_GATE_NOT_APPLICABLE;
+    }
     const blockedPartitions =
       controlPlanePriorityBlocker.blockedPartitions || [];
     const currentPriorityPartitionStillBlocked =
