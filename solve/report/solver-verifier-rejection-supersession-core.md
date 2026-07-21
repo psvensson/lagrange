@@ -4,33 +4,17 @@
 
 **Class:** process · **Closure:** DECISION
 
-**Outcome:** IN PROGRESS (no terminal recorded)
+**Outcome:** SOLVED (DECISION) — evidence: solve/oracle/solver-verifier-rejection-supersession.json
 
-**Attempts:** 1
+**Attempts:** 2
 
 ## Links
 - spec: docs/steering/workflow-guidelines/solver-quests.md
 - parent quest: solver-verifier-rejection-supersession
 
-## Current Blocker
-- Frontier: solver-verifier-rejection-supersession-core-main
-- Owner: unknown
-- Boundary: unknown
-- Dominant reason: unknown
-- Mechanism: unknown
-- Movement: no evidence recorded
-- Latest evidence: none
-- Selected theory: none
-- Next move: continue supervised step for solver-verifier-rejection-supersession-core-main
-
-## Continuation
-- Status: blocked-unrecorded-evidence
-- Next action: continue supervised step for solver-verifier-rejection-supersession-core-main
-- Blocker: fresh frontier evidence is not recorded; run node scripts/solve.js ingest-evidence --id solver-verifier-rejection-supersession-core --frontier solver-verifier-rejection-supersession-core-main --evidence solve/oracle/solver-verifier-rejection-supersession.json
-
 ## Scope Pressure
 - Changed files: 7
-- Change bytes: 31084
+- Change bytes: 33744
 - Owner areas: scripts/solve, scripts/solve.js, solve, test/solve
 - Categories: workflow
 - Action: land or separate 4 owner areas: scripts/solve, scripts/solve.js, solve, test/solve
@@ -42,10 +26,12 @@
 - Signal: broad-source-scope severity=medium
 
 ## Frontiers
-- **solver-verifier-rejection-supersession-core-main** [open] rung 1, attempts 1, metric 2 -> 2
+- **solver-verifier-rejection-supersession-core-main** [solved] rung 1, attempts 2, metric 2 -> 0
 
 ## Findings
 - **solver-verifier-rejection-supersession-core-main**: Independent verification passed: successor payload is byte-identical to the reviewed seven-path fix; 213 focused assertions and ESLint are green. [subagent:verify_rejection_supersession]
+- **solver-verifier-rejection-supersession-core-main**: The sealed symptom does not reproduce on HEAD 883eef72: rejected source attempts remain fail-closed (movielens-three-way-affinity-demo audit still refuses attempts 5-7 pending a contracted replacement) and the seven-path supersession fix from checkpoint b559dfdb is present; focused solver verification-handoff and cli suites pass 123/123 tests, lint:scripts and steering:check pass, and the previously red unused-export (1628/1628) and duplication (65/73 groups, 2070/2239 lines) ratchets are green on HEAD [solve/oracle/solver-verifier-rejection-supersession.json]
+- **solver-verifier-rejection-supersession-core-main**: independent verification passed [subagent:acbd6e528cd3afe26]
 
 ## Theories
 _(none recorded)_
@@ -60,3 +46,4 @@ _(none recorded)_
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-13T16:37:12.248Z | solver-verifier-rejection-supersession-core-main | observe | 2 -> 2 | flat | no_evidence |  | diff:solve/changes/solver-verifier-rejection-supersession-core/attempt-1.diff |
+| 2026-07-21T06:25:36.100Z | solver-verifier-rejection-supersession-core-main | local-fix | 0 -> 0 | flat | solved |  | diff:solve/changes/solver-verifier-rejection-supersession-core/attempt-2.diff |

@@ -1,38 +1,41 @@
 {
-  "metric": 2,
+  "metric": 0,
   "target": 0,
-  "done": false,
+  "done": true,
   "classification": "solver-verifier-rejection-supersession",
   "detail": {
     "gates": {
       "focusedSolverTests": {
         "passed": true,
-        "assertions": 213
+        "tests": 123,
+        "suites": 41,
+        "files": [
+          "test/solve/verification-handoff.test.js",
+          "test/solve/cli.test.js"
+        ]
       },
       "lintScripts": {
         "passed": true
       },
       "steeringCheck": {
-        "passed": true
+        "passed": true,
+        "warnOnlyFreshness": 2
       },
       "staticTests": {
-        "passed": false,
-        "preExistingAtBase": true,
-        "exactPatchUnusedExports": 1632,
+        "passed": true,
+        "unusedExports": 1628,
         "unusedExportBaseline": 1628,
-        "exactPatchCognitiveComplexity": 182,
-        "cognitiveComplexityBaseline": 183,
-        "duplicateCloneGroups": 83,
+        "cognitiveComplexity": 179,
+        "cognitiveComplexityBaseline": 179,
+        "duplicateCloneGroups": 65,
         "duplicateCloneGroupBaseline": 73,
-        "duplicatedLines": 2585,
+        "duplicatedLines": 2070,
         "duplicatedLineBaseline": 2239,
-        "baseCommit": "3426245e9be54be1a969de8e52a4ca5619549228"
+        "measuredAtCommit": "883eef72ca26874f584f62419a76f96e1b1b7f35"
       }
     },
-    "verificationBlockers": [
-      "the inherited unused-export ratchet remains red on the exact isolated process patch",
-      "the inherited source-and-script duplication ratchet remains red on the exact isolated patch"
-    ],
-    "reason": "rejection supersession is corrected; inherited static ratchet debt keeps this process Quest non-terminal"
+    "verificationBlockers": [],
+    "unrelatedHeadDebt": "audit:guidelines reports 45 new literal-guideline violations on HEAD in files outside this process patch (formation/planner scripts, partition metadata delivery, query schema derivation); that audit is not part of this oracle's gate set and the debt is tracked by its owning quests",
+    "reason": "rejection supersession is corrected and the previously red unused-export and duplication ratchets are green on HEAD 883eef72; both prior verification blockers are cleared"
   }
 }
