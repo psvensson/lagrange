@@ -939,7 +939,7 @@ for (const authoritativePlacementCase of [
           placementReadOptions[0],
           {
             authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
             allowSqlFallback: false,
             preferOwnerRpcReadLeader: true,
           },

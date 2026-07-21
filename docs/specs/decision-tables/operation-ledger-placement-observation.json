@@ -1,0 +1,138 @@
+{
+  "schema": "decision-table-v1",
+  "id": "operation-ledger-placement-observation",
+  "owner": "src/rebalancer/operation-ledger-quorum-concentration.js",
+  "boundary": "ledger_placement_observation",
+  "inputs": [
+    {
+      "name": "authority",
+      "values": [
+        "owner_rpc",
+        "other"
+      ]
+    },
+    {
+      "name": "placement",
+      "values": [
+        "unavailable",
+        "malformed",
+        "incomplete",
+        "spread",
+        "unspread"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "state",
+      "values": [
+        "unavailable",
+        "incomplete",
+        "spread",
+        "unspread"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "owner-evidence-only",
+      "statement": "Only the required services-table owner-RPC lane can publish placement evidence; that lane may execute locally when the coordinator is the routed owner, while bare local-replica, cache, and SQL projections classify as unavailable."
+    },
+    {
+      "id": "complete-spread-only-release",
+      "statement": "Spread is published only when the owner row set is complete and the shared quorum predicate proves target node diversity without concentration."
+    },
+    {
+      "id": "unknown-fails-closed",
+      "statement": "Unavailable, malformed, incomplete, and unspread evidence never impersonates a spread observation."
+    }
+  ],
+  "rules": [
+    {
+      "id": "non-owner-source-unavailable",
+      "when": {
+        "authority": "other",
+        "placement": "*"
+      },
+      "outcome": {
+        "state": "unavailable"
+      },
+      "reason": "A successful cache or SQL projection is not authoritative release evidence.",
+      "invariantRefs": [
+        "owner-evidence-only",
+        "unknown-fails-closed"
+      ]
+    },
+    {
+      "id": "owner-read-unavailable",
+      "when": {
+        "authority": "owner_rpc",
+        "placement": "unavailable"
+      },
+      "outcome": {
+        "state": "unavailable"
+      },
+      "reason": "A failed owner read carries no placement evidence.",
+      "invariantRefs": [
+        "unknown-fails-closed"
+      ]
+    },
+    {
+      "id": "owner-read-malformed",
+      "when": {
+        "authority": "owner_rpc",
+        "placement": "malformed"
+      },
+      "outcome": {
+        "state": "unavailable"
+      },
+      "reason": "A non-array row answer cannot prove an identity-scoped placement.",
+      "invariantRefs": [
+        "unknown-fails-closed"
+      ]
+    },
+    {
+      "id": "owner-read-incomplete",
+      "when": {
+        "authority": "owner_rpc",
+        "placement": "incomplete"
+      },
+      "outcome": {
+        "state": "incomplete"
+      },
+      "reason": "Fewer voter rows than the target is an explicit partial observation, never successful spread.",
+      "invariantRefs": [
+        "complete-spread-only-release",
+        "unknown-fails-closed"
+      ]
+    },
+    {
+      "id": "owner-read-spread",
+      "when": {
+        "authority": "owner_rpc",
+        "placement": "spread"
+      },
+      "outcome": {
+        "state": "spread"
+      },
+      "reason": "A complete owner row set with target diversity and no quorum concentration proves spread.",
+      "invariantRefs": [
+        "complete-spread-only-release"
+      ]
+    },
+    {
+      "id": "owner-read-unspread",
+      "when": {
+        "authority": "owner_rpc",
+        "placement": "unspread"
+      },
+      "outcome": {
+        "state": "unspread"
+      },
+      "reason": "Complete owner evidence that still violates spread keeps the safety hold engaged.",
+      "invariantRefs": [
+        "unknown-fails-closed"
+      ]
+    }
+  ]
+}

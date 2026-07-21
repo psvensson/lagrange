@@ -1,0 +1,764 @@
+diff --git a/docs/specs/decision-tables/operation-ledger-placement-observation.json b/docs/specs/decision-tables/operation-ledger-placement-observation.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..11c2a8edba7108e94579806adeac050dd8d728d3
+--- /dev/null
++++ b/docs/specs/decision-tables/operation-ledger-placement-observation.json
+@@ -0,0 +1,138 @@
++{
++  "schema": "decision-table-v1",
++  "id": "operation-ledger-placement-observation",
++  "owner": "src/rebalancer/operation-ledger-quorum-concentration.js",
++  "boundary": "ledger_placement_observation",
++  "inputs": [
++    {
++      "name": "authority",
++      "values": [
++        "owner_rpc",
++        "other"
++      ]
++    },
++    {
++      "name": "placement",
++      "values": [
++        "unavailable",
++        "malformed",
++        "incomplete",
++        "spread",
++        "unspread"
++      ]
++    }
++  ],
++  "outputs": [
++    {
++      "name": "state",
++      "values": [
++        "unavailable",
++        "incomplete",
++        "spread",
++        "unspread"
++      ]
++    }
++  ],
++  "invariants": [
++    {
++      "id": "owner-evidence-only",
++      "statement": "Only the required services-table owner-RPC lane can publish placement evidence; that lane may execute locally when the coordinator is the routed owner, while bare local-replica, cache, and SQL projections classify as unavailable."
++    },
++    {
++      "id": "complete-spread-only-release",
++      "statement": "Spread is published only when the owner row set is complete and the shared quorum predicate proves target node diversity without concentration."
++    },
++    {
++      "id": "unknown-fails-closed",
++      "statement": "Unavailable, malformed, incomplete, and unspread evidence never impersonates a spread observation."
++    }
++  ],
++  "rules": [
++    {
++      "id": "non-owner-source-unavailable",
++      "when": {
++        "authority": "other",
++        "placement": "*"
++      },
++      "outcome": {
++        "state": "unavailable"
++      },
++      "reason": "A successful cache or SQL projection is not authoritative release evidence.",
++      "invariantRefs": [
++        "owner-evidence-only",
++        "unknown-fails-closed"
++      ]
++    },
++    {
++      "id": "owner-read-unavailable",
++      "when": {
++        "authority": "owner_rpc",
++        "placement": "unavailable"
++      },
++      "outcome": {
++        "state": "unavailable"
++      },
++      "reason": "A failed owner read carries no placement evidence.",
++      "invariantRefs": [
++        "unknown-fails-closed"
++      ]
++    },
++    {
++      "id": "owner-read-malformed",
++      "when": {
++        "authority": "owner_rpc",
++        "placement": "malformed"
++      },
++      "outcome": {
++        "state": "unavailable"
++      },
++      "reason": "A non-array row answer cannot prove an identity-scoped placement.",
++      "invariantRefs": [
++        "unknown-fails-closed"
++      ]
++    },
++    {
++      "id": "owner-read-incomplete",
++      "when": {
++        "authority": "owner_rpc",
++        "placement": "incomplete"
++      },
++      "outcome": {
++        "state": "incomplete"
++      },
++      "reason": "Fewer voter rows than the target is an explicit partial observation, never successful spread.",
++      "invariantRefs": [
++        "complete-spread-only-release",
++        "unknown-fails-closed"
++      ]
++    },
++    {
++      "id": "owner-read-spread",
++      "when": {
++        "authority": "owner_rpc",
++        "placement": "spread"
++      },
++      "outcome": {
++        "state": "spread"
++      },
++      "reason": "A complete owner row set with target diversity and no quorum concentration proves spread.",
++      "invariantRefs": [
++        "complete-spread-only-release"
++      ]
++    },
++    {
++      "id": "owner-read-unspread",
++      "when": {
++        "authority": "owner_rpc",
++        "placement": "unspread"
++      },
++      "outcome": {
++        "state": "unspread"
++      },
++      "reason": "Complete owner evidence that still violates spread keeps the safety hold engaged.",
++      "invariantRefs": [
++        "unknown-fails-closed"
++      ]
++    }
++  ]
++}
+diff --git a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+index de028a7a9b80b167665228209265f0f20256a700..f917c8e0d6f76c167bcc5cc962442fc29dfed2f8 100644
+--- a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
++++ b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+@@ -17,7 +17,7 @@ import {
+   getInitialReplicaIds,
+ } from './system-table-schemas-constants.js';
+ import {
+-  getOperationLedgerPlacementObservationFromRows,
++  getAuthoritativeOperationLedgerPlacementObservation,
+   getOperationLedgerQuorumObservation,
+ } from '../rebalancer/operation-ledger-quorum-concentration.js';
+ import {
+@@ -37,6 +37,7 @@ const {
+ const OPERATION_LEDGER_FORMATION_BARRIER_STATE = Object.freeze({
+   BYPASSED_INSUFFICIENT_COHORT: 'bypassed_insufficient_formation_cohort',
+   SATISFIED: 'ledger_spread_satisfied',
++  UNOBSERVED: 'unobserved',
+   WAITING_COHORT: 'waiting_for_formation_cohort',
+   WAITING_OPERATION_DRAIN: 'waiting_for_ledger_operation_drain',
+   WAITING_OPERATION_OBSERVATION:
+@@ -118,42 +119,26 @@ class NodeJoiningOperationLedgerFormationReadiness
+         [partitionId],
+         {
+           authoritativeReadMode:
+-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
++            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+           allowSqlFallback: false,
+           preferOwnerRpcReadLeader: true,
+         },
+       );
+-      const source = String(result?.source || '').toLowerCase();
+-      const authoritativeSource =
+-        source === 'local_partition_replica' ||
+-        source === 'owner_rpc_lane';
+-      if (result?.success !== true || !authoritativeSource) {
+-        return Object.freeze({
+-          complete: false,
+-          concentrated: null,
+-          distinctNodeCount: 0,
+-          observedVoterCount: 0,
+-          source: source || null,
+-          spreadComplete: false,
+-        });
+-      }
+-      const placement = getOperationLedgerPlacementObservationFromRows(
+-        result.rows,
++      return getAuthoritativeOperationLedgerPlacementObservation({
++        available: result?.success === true,
++        rows: result?.rows,
++        source: result?.source,
+         partitionId,
+         targetReplicaCount,
+-      );
+-      return Object.freeze({
+-        ...placement,
+-        source,
++        snapshotVersion: result?.snapshotVersion ?? null,
+       });
+     } catch {
+-      return Object.freeze({
+-        complete: false,
+-        concentrated: null,
+-        distinctNodeCount: 0,
+-        observedVoterCount: 0,
++      return getAuthoritativeOperationLedgerPlacementObservation({
++        available: false,
++        rows: [],
+         source: null,
+-        spreadComplete: false,
++        partitionId,
++        targetReplicaCount,
+       });
+     }
+   }
+@@ -452,7 +437,8 @@ class NodeJoiningOperationLedgerFormationReadiness
+       this.resolveOperationLedgerFormationLivenessRefreshMs();
+     let nextLivenessRefreshAt = startedAt;
+     let barrierEngaged = false;
+-    let lastState = null;
++    let lastState =
++      OPERATION_LEDGER_FORMATION_BARRIER_STATE.UNOBSERVED;
+ 
+     while (true) {
+       const snapshot =
+diff --git a/src/rebalancer/operation-ledger-quorum-concentration.js b/src/rebalancer/operation-ledger-quorum-concentration.js
+index fa85fdf72c6e13c28fd1a6c3c9cb0ff70d5ba874..fdc1d4d1eb06e847d0766dd8e01f4a26901f4c2e 100644
+--- a/src/rebalancer/operation-ledger-quorum-concentration.js
++++ b/src/rebalancer/operation-ledger-quorum-concentration.js
+@@ -29,6 +29,17 @@ const QUORUM_VOTER_STATUSES = Object.freeze(
+ // voter here, see QUORUM_VOTER_STATUSES.)
+ const QUORUM_VOTER_RAFT_ROLES = VOTER_RAFT_ROLES;
+ const NODE_CONNECTION_STATE_READY = 'ready';
++// The source token is an authority capability, not merely a transport label.
++// OWNER_RPC_REQUIRED may execute locally when this node owns the services
++// partition, but it still returns owner_rpc_lane. A bare local-replica result
++// can be an ANY_REPLICA fallback and therefore cannot release a stale hold.
++const AUTHORITATIVE_PLACEMENT_SOURCE = 'owner_rpc_lane';
++const OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE = Object.freeze({
++  INCOMPLETE: 'incomplete',
++  SPREAD: 'spread',
++  UNSPREAD: 'unspread',
++  UNAVAILABLE: 'unavailable',
++});
+ const EMPTY_EVALUATION = Object.freeze({
+   holdEngaged: false,
+   concentratedPartitions: Object.freeze([]),
+@@ -366,6 +377,57 @@ function getOperationLedgerPlacementObservationFromRows(
+   });
+ }
+ 
++/**
++ * Bind the shared placement predicate to one typed authoritative observation.
++ * Source and completeness are part of the contract so consumers cannot turn
++ * a successful cache/SQL projection or a partial owner answer into release
++ * evidence.
++ *
++ * @param {Object} params
++ * @return {Object}
++ */
++function getAuthoritativeOperationLedgerPlacementObservation({
++  available,
++  rows,
++  source,
++  partitionId,
++  targetReplicaCount,
++  snapshotVersion = null,
++}) {
++  const normalizedSource = String(source || '').trim().toLowerCase();
++  const placement = getOperationLedgerPlacementObservationFromRows(
++    rows,
++    partitionId,
++    targetReplicaCount,
++  );
++  const authoritative =
++    available === true &&
++    Array.isArray(rows) &&
++    normalizedSource === AUTHORITATIVE_PLACEMENT_SOURCE;
++  if (!authoritative) {
++    return Object.freeze({
++      ...placement,
++      complete: false,
++      concentrated: null,
++      spreadComplete: false,
++      source: normalizedSource || null,
++      snapshotVersion,
++      state: OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.UNAVAILABLE,
++    });
++  }
++  const state = !placement.complete ?
++    OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.INCOMPLETE :
++    placement.spreadComplete ?
++      OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.SPREAD :
++      OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.UNSPREAD;
++  return Object.freeze({
++    ...placement,
++    source: normalizedSource,
++    snapshotVersion,
++    state,
++  });
++}
++
+ /**
+  * @param {Object|null} evaluation
+  * @param {string|null} partitionId
+@@ -384,7 +446,9 @@ function isConcentratedOperationLedgerPartition(evaluation, partitionId) {
+ }
+ 
+ export {
++  OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
+   evaluateOperationLedgerQuorumConcentration,
++  getAuthoritativeOperationLedgerPlacementObservation,
+   getOperationLedgerPlacementObservationFromRows,
+   getOperationLedgerQuorumObservation,
+   isConcentratedOperationLedgerPartition,
+diff --git a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+index f901be2a248b107a1895517d1f09facf70f48e7b..8aa01b0eed380f8b449e493b34ea1c6c69bfe2df 100644
+--- a/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
++++ b/src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js
+@@ -1,5 +1,9 @@
+ import {TIME_MS} from '../constants/index.js';
+ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
++import {
++  OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
++  getAuthoritativeOperationLedgerPlacementObservation,
++} from './operation-ledger-quorum-concentration.js';
+ import {
+   OPERATION_LEDGER_HOLD,
+   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
+@@ -14,6 +18,7 @@ import {
+ } from './operation-ledger-hold-policy.js';
+ 
+ const {
++  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+   REBALANCE_COORDINATOR_LOG_MSG,
+   SERVICE_TYPE,
+   STORAGE_ADMISSION_DECISION_TYPE,
+@@ -227,7 +232,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+           moveClass,
+         ) !== OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT
+       ) {
+-        this.ensureOperationLedgerQuorumSpreadFirst(
++        await this.ensureOperationLedgerQuorumSpreadFirst(
+           normalizedMoveType,
+           partitionId,
+         );
+@@ -378,16 +383,26 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+    * clusters and cold caches keep admitting normally.
+    * @param {string|null} normalizedMoveType
+    * @param {string|null} partitionId
+-   * @return {void}
++   * @return {Promise<void>}
+    * @private
+    */
+-  ensureOperationLedgerQuorumSpreadFirst(normalizedMoveType, partitionId) {
++  async ensureOperationLedgerQuorumSpreadFirst(
++    normalizedMoveType,
++    partitionId,
++  ) {
+     const engagedHold = resolveEngagedLedgerQuorumSpreadHold(
+       this.systemTableCache,
+     );
+     if (engagedHold === null) {
+       return;
+     }
++    if (
++      await this.isOperationLedgerQuorumSpreadAuthoritativelyConfirmed(
++        engagedHold,
++      )
++    ) {
++      return;
++    }
+     this.maybeWarnOperationLedgerQuorumSpreadHold(
+       engagedHold.evaluation,
+       normalizedMoveType,
+@@ -403,6 +418,55 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
+     );
+   }
+ 
++  /**
++   * Re-verify a positive cache-local hold against the shared typed placement
++   * contract. Every actionable ledger partition must be authoritatively spread;
++   * unreadable, partial, SQL/cache-sourced, or still-unspread evidence holds.
++   * OWNER_RPC_REQUIRED is deliberate: OWNER_RPC_PREFERRED may fall back to an
++   * ANY_REPLICA local answer after RPC failure, recreating the stale-cache
++   * liveness lock this release path exists to escape.
++   * @param {Object} engagedHold
++   * @return {Promise<boolean>}
++   * @private
++   */
++  async isOperationLedgerQuorumSpreadAuthoritativelyConfirmed(engagedHold) {
++    const partitions = engagedHold?.evaluation?.concentratedPartitions
++      ?.filter((partition) => partition?.spreadActionable === true) || [];
++    if (partitions.length === 0) {
++      return false;
++    }
++    for (const partition of partitions) {
++      let observation;
++      try {
++        observation = await this.getAuthoritativeEntityServiceRowsObservation({
++          partitionId: partition.partitionId,
++          entityType: SERVICE_TYPE.PARTITION,
++          entityId: partition.partitionId,
++          readOptions: {
++            authoritativeReadMode:
++              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
++            allowSqlFallback: false,
++            preferOwnerRpcReadLeader: true,
++          },
++        });
++      } catch {
++        return false;
++      }
++      const placement = getAuthoritativeOperationLedgerPlacementObservation({
++        ...observation,
++        partitionId: partition.partitionId,
++        targetReplicaCount: partition.targetReplicaCount,
++      });
++      if (
++        placement.state !==
++          OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.SPREAD
++      ) {
++        return false;
++      }
++    }
++    return true;
++  }
++
+   /**
+    * Quorum-concentration evidence for the PLANNER's priority-recovery gate: a
+    * concentrated operation-ledger partition requires its cure move to be
+diff --git a/src/rebalancer/rebalance-coordinator-operation-read-methods.js b/src/rebalancer/rebalance-coordinator-operation-read-methods.js
+index 78d6cdba8c34e9c56297edca19408cb51a62ffde..7d5b9bc4e21d153ce87db672ea00ec523b33e037 100644
+--- a/src/rebalancer/rebalance-coordinator-operation-read-methods.js
++++ b/src/rebalancer/rebalance-coordinator-operation-read-methods.js
+@@ -456,6 +456,7 @@ class RebalanceCoordinatorOperationReadMethods {
+     partitionId,
+     entityType,
+     entityId,
++    readOptions = {},
+   }) {
+     let sql = SQL.SELECT_PARTITION_SERVICES_BY_ENTITY;
+     let params = [
+@@ -476,7 +477,12 @@ class RebalanceCoordinatorOperationReadMethods {
+       SYSTEM_TABLE_NAME.SERVICES,
+       sql,
+       params,
+-      CONTROL_PLANE_QUERY_OPTIONS,
++      {
++        ...CONTROL_PLANE_QUERY_OPTIONS,
++        ...(readOptions && typeof readOptions === LOCAL_STR_OBJECT ?
++          readOptions :
++          {}),
++      },
+     );
+     return Object.freeze({
+       available: result.success === true && Array.isArray(result.rows),
+@@ -486,6 +492,7 @@ class RebalanceCoordinatorOperationReadMethods {
+           [],
+       error: result?.error || null,
+       reasonCode: result?.reasonCode || null,
++      source: result?.source || null,
+       retryAfterMs: getControlPlaneRetryAfterMs(result),
+       snapshotVersion: result?.snapshotVersion ?? null,
+       observedAtMs:
+diff --git a/test/convergence/dt-formation-priority-placement-before-active.test.js b/test/convergence/dt-formation-priority-placement-before-active.test.js
+index 35b667cfb307eb0eddfe764c9d057ed90bb6c686..61bcbbe0dc7df482ff87a1c7eb4640c09dd1bf60 100644
+--- a/test/convergence/dt-formation-priority-placement-before-active.test.js
++++ b/test/convergence/dt-formation-priority-placement-before-active.test.js
+@@ -939,7 +939,7 @@ for (const authoritativePlacementCase of [
+           placementReadOptions[0],
+           {
+             authoritativeReadMode:
+-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
++              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+             allowSqlFallback: false,
+             preferOwnerRpcReadLeader: true,
+           },
+diff --git a/test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js b/test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..08f172058e519ef77f88edd16b110f9ec32527e7
+--- /dev/null
++++ b/test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js
+@@ -0,0 +1,276 @@
++import t from 'tap';
++import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
++} from '../../src/control-plane/control-plane-system-table-gateway.js';
++import {OperationType} from '../../src/rebalancer/replica-status.js';
++import {
++  createTestCoordinator,
++} from '../rebalancer/test-helpers.js';
++
++const LEDGER_PARTITION_ID = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
++const SECOND_LEDGER_PARTITION_ID =
++  `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p2`;
++const DEPENDENT_PARTITION_ID =
++  `${SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS}-p1`;
++const QUORUM_CONCENTRATED_REASON =
++  'operation_ledger_quorum_concentrated';
++const NODE_IDS = Object.freeze([
++  'node-0',
++  'node-1',
++  'node-2',
++  'node-3',
++  'node-4',
++]);
++
++function buildLedgerRows(partitionId, nodeIds) {
++  return nodeIds.map((nodeId, index) => ({
++    service_id: `${partitionId}-r${index + 1}`,
++    replica_id: `${partitionId}-r${index + 1}`,
++    service_type: 'partition',
++    partition_id: partitionId,
++    node_id: nodeId,
++    status: 'active',
++    raft_role: index === 0 ? 'leader' : 'follower',
++  }));
++}
++
++function buildCacheData(localPlacements) {
++  return {
++    nodes: NODE_IDS.map((nodeId) => ({
++      node_id: nodeId,
++      connection_state: 'ready',
++    })),
++    partitions: Object.keys(localPlacements).map((partitionId) => ({
++      partition_id: partitionId,
++      replica_count: 3,
++    })),
++    services: Object.entries(localPlacements).flatMap(
++      ([partitionId, nodeIds]) => buildLedgerRows(partitionId, nodeIds),
++    ),
++  };
++}
++
++async function runDependentAdmission({
++  localPlacements,
++  authoritativePlacements,
++  authoritativeSources = {},
++  malformedPartitionIds = [],
++  unavailablePartitionIds = [],
++}) {
++  const authoritativeReads = [];
++  const malformed = new Set(malformedPartitionIds);
++  const unavailable = new Set(unavailablePartitionIds);
++  const gateway = {
++    async readAuthoritativeRows(tableName, _sql, params = [], options = {}) {
++      if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
++        return {success: true, rows: []};
++      }
++      const partitionId = params[1];
++      authoritativeReads.push({
++        partitionId,
++        options: {...options},
++      });
++      if (unavailable.has(partitionId)) {
++        return {
++          success: false,
++          error: 'services owner unavailable',
++          rows: [],
++        };
++      }
++      return {
++        success: true,
++        source: authoritativeSources[partitionId] || 'owner_rpc_lane',
++        rows: malformed.has(partitionId) ?
++          {} :
++          buildLedgerRows(
++            partitionId,
++            authoritativePlacements[partitionId] || [],
++          ),
++      };
++    },
++    async readRows(tableName, sql, params = [], options = {}) {
++      return this.readAuthoritativeRows(tableName, sql, params, options);
++    },
++  };
++  const coordinator = createTestCoordinator({
++    nodeId: 'node-2',
++    cacheData: buildCacheData(localPlacements),
++    controlPlaneSystemTableGateway: gateway,
++  });
++  coordinator.queryIncompleteOperations = async () => [];
++  coordinator.queryShutdownIncompleteOperations = async () => [];
++  let verdict = 'ADMITTED';
++  try {
++    await coordinator.ensureOperationLedgerSelfMoveSerialized({
++      normalizedMoveType: OperationType.ADD,
++      partitionId: DEPENDENT_PARTITION_ID,
++      entityType: 'partition',
++      entityId: DEPENDENT_PARTITION_ID,
++      move: {},
++    });
++  } catch (error) {
++    verdict =
++      error?.admissionResult?.reason ||
++      error?.rebalanceSkipReason ||
++      'ERROR';
++  } finally {
++    await coordinator.shutdown();
++  }
++  return {authoritativeReads, verdict};
++}
++
++t.test(
++  'a cache-local concentration hold releases only after the services owner ' +
++    'proves the ledger is completely spread',
++  async (t) => {
++    const result = await runDependentAdmission({
++      localPlacements: {
++        [LEDGER_PARTITION_ID]: ['node-0', 'node-0', 'node-0'],
++      },
++      authoritativePlacements: {
++        [LEDGER_PARTITION_ID]: ['node-0', 'node-1', 'node-2'],
++      },
++    });
++
++    t.equal(
++      result.verdict,
++      'ADMITTED',
++      'the final dependent ADD is not pinned by stale coordinator-local rows',
++    );
++    t.equal(result.authoritativeReads.length, 1);
++    t.equal(
++      result.authoritativeReads[0].partitionId,
++      LEDGER_PARTITION_ID,
++    );
++    t.equal(
++      result.authoritativeReads[0].options.authoritativeReadMode,
++      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
++      'confirmation requires the services-table owner RPC lane',
++    );
++    t.equal(
++      result.authoritativeReads[0].options.allowSqlFallback,
++      false,
++      'a SQL projection cannot release the cache-local safety hold',
++    );
++    t.equal(
++      result.authoritativeReads[0].options.preferOwnerRpcReadLeader,
++      true,
++      'the owner read prefers its current leader',
++    );
++  },
++);
++
++for (const testCase of [
++  {
++    name: 'authoritatively concentrated',
++    authoritativePlacements: {
++      [LEDGER_PARTITION_ID]: ['node-0', 'node-0', 'node-0'],
++    },
++  },
++  {
++    name: 'authoritatively incomplete',
++    authoritativePlacements: {
++      [LEDGER_PARTITION_ID]: ['node-0', 'node-1'],
++    },
++  },
++  {
++    name: 'authoritative observation unavailable',
++    authoritativePlacements: {},
++    unavailablePartitionIds: [LEDGER_PARTITION_ID],
++  },
++  {
++    name: 'malformed owner observation',
++    authoritativePlacements: {
++      [LEDGER_PARTITION_ID]: ['node-0', 'node-1', 'node-2'],
++    },
++    malformedPartitionIds: [LEDGER_PARTITION_ID],
++  },
++  {
++    name: 'SQL projection labeled as authoritative',
++    authoritativePlacements: {
++      [LEDGER_PARTITION_ID]: ['node-0', 'node-1', 'node-2'],
++    },
++    authoritativeSources: {
++      [LEDGER_PARTITION_ID]: 'sql_query_engine',
++    },
++  },
++]) {
++  t.test(`${testCase.name} evidence keeps the dependent hold engaged`,
++    async (t) => {
++      const result = await runDependentAdmission({
++        localPlacements: {
++          [LEDGER_PARTITION_ID]: ['node-0', 'node-0', 'node-0'],
++        },
++        authoritativePlacements: testCase.authoritativePlacements,
++        authoritativeSources: testCase.authoritativeSources,
++        malformedPartitionIds: testCase.malformedPartitionIds,
++        unavailablePartitionIds: testCase.unavailablePartitionIds,
++      });
++      t.equal(result.verdict, QUORUM_CONCENTRATED_REASON);
++      t.equal(result.authoritativeReads.length, 1);
++    });
++}
++
++t.test(
++  'a spread-looking local follower fallback cannot release the stale hold',
++  async (t) => {
++    const result = await runDependentAdmission({
++      localPlacements: {
++        [LEDGER_PARTITION_ID]: ['node-0', 'node-0', 'node-0'],
++      },
++      authoritativePlacements: {
++        [LEDGER_PARTITION_ID]: ['node-0', 'node-1', 'node-2'],
++      },
++      authoritativeSources: {
++        [LEDGER_PARTITION_ID]: 'local_partition_replica',
++      },
++    });
++
++    t.equal(result.verdict, QUORUM_CONCENTRATED_REASON);
++    t.equal(result.authoritativeReads.length, 1);
++  },
++);
++
++t.test(
++  'every locally actionable ledger hold must have complete authoritative ' +
++    'spread proof before dependent admission releases',
++  async (t) => {
++    const result = await runDependentAdmission({
++      localPlacements: {
++        [LEDGER_PARTITION_ID]: ['node-0', 'node-0', 'node-0'],
++        [SECOND_LEDGER_PARTITION_ID]: ['node-0', 'node-0', 'node-0'],
++      },
++      authoritativePlacements: {
++        [LEDGER_PARTITION_ID]: ['node-0', 'node-1', 'node-2'],
++        [SECOND_LEDGER_PARTITION_ID]: ['node-0', 'node-0', 'node-0'],
++      },
++    });
++
++    t.equal(result.verdict, QUORUM_CONCENTRATED_REASON);
++    t.same(
++      result.authoritativeReads.map((read) => read.partitionId),
++      [LEDGER_PARTITION_ID, SECOND_LEDGER_PARTITION_ID],
++      'the first spread answer cannot hide another engaged ledger hold',
++    );
++  },
++);
++
++t.test(
++  'the no-local-hold path admits without adding an authoritative read',
++  async (t) => {
++    const result = await runDependentAdmission({
++      localPlacements: {
++        [LEDGER_PARTITION_ID]: ['node-0', 'node-1', 'node-2'],
++      },
++      authoritativePlacements: {},
++    });
++
++    t.equal(result.verdict, 'ADMITTED');
++    t.equal(
++      result.authoritativeReads.length,
++      0,
++      'owner verification remains bounded to a positive cache-local hold',
++    );
++  },
++);

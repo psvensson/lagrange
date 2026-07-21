@@ -1,6 +1,10 @@
 import {TIME_MS} from '../constants/index.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
+  getAuthoritativeOperationLedgerPlacementObservation,
+} from './operation-ledger-quorum-concentration.js';
+import {
   OPERATION_LEDGER_HOLD,
   OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME,
   OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION,
@@ -14,6 +18,7 @@ import {
 } from './operation-ledger-hold-policy.js';
 
 const {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   REBALANCE_COORDINATOR_LOG_MSG,
   SERVICE_TYPE,
   STORAGE_ADMISSION_DECISION_TYPE,
@@ -227,7 +232,7 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
           moveClass,
         ) !== OPERATION_LEDGER_HOLD_ENGAGEMENT_OUTCOME.EXEMPT
       ) {
-        this.ensureOperationLedgerQuorumSpreadFirst(
+        await this.ensureOperationLedgerQuorumSpreadFirst(
           normalizedMoveType,
           partitionId,
         );
@@ -378,14 +383,24 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
    * clusters and cold caches keep admitting normally.
    * @param {string|null} normalizedMoveType
    * @param {string|null} partitionId
-   * @return {void}
+   * @return {Promise<void>}
    * @private
    */
-  ensureOperationLedgerQuorumSpreadFirst(normalizedMoveType, partitionId) {
+  async ensureOperationLedgerQuorumSpreadFirst(
+    normalizedMoveType,
+    partitionId,
+  ) {
     const engagedHold = resolveEngagedLedgerQuorumSpreadHold(
       this.systemTableCache,
     );
     if (engagedHold === null) {
+      return;
+    }
+    if (
+      await this.isOperationLedgerQuorumSpreadAuthoritativelyConfirmed(
+        engagedHold,
+      )
+    ) {
       return;
     }
     this.maybeWarnOperationLedgerQuorumSpreadHold(
@@ -401,6 +416,55 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
       OPERATION_LEDGER_QUORUM_CONCENTRATED_REASON_CODE,
       null,
     );
+  }
+
+  /**
+   * Re-verify a positive cache-local hold against the shared typed placement
+   * contract. Every actionable ledger partition must be authoritatively spread;
+   * unreadable, partial, SQL/cache-sourced, or still-unspread evidence holds.
+   * OWNER_RPC_REQUIRED is deliberate: OWNER_RPC_PREFERRED may fall back to an
+   * ANY_REPLICA local answer after RPC failure, recreating the stale-cache
+   * liveness lock this release path exists to escape.
+   * @param {Object} engagedHold
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async isOperationLedgerQuorumSpreadAuthoritativelyConfirmed(engagedHold) {
+    const partitions = engagedHold?.evaluation?.concentratedPartitions
+      ?.filter((partition) => partition?.spreadActionable === true) || [];
+    if (partitions.length === 0) {
+      return false;
+    }
+    for (const partition of partitions) {
+      let observation;
+      try {
+        observation = await this.getAuthoritativeEntityServiceRowsObservation({
+          partitionId: partition.partitionId,
+          entityType: SERVICE_TYPE.PARTITION,
+          entityId: partition.partitionId,
+          readOptions: {
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+            allowSqlFallback: false,
+            preferOwnerRpcReadLeader: true,
+          },
+        });
+      } catch {
+        return false;
+      }
+      const placement = getAuthoritativeOperationLedgerPlacementObservation({
+        ...observation,
+        partitionId: partition.partitionId,
+        targetReplicaCount: partition.targetReplicaCount,
+      });
+      if (
+        placement.state !==
+          OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.SPREAD
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

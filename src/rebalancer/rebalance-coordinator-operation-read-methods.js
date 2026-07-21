@@ -456,6 +456,7 @@ class RebalanceCoordinatorOperationReadMethods {
     partitionId,
     entityType,
     entityId,
+    readOptions = {},
   }) {
     let sql = SQL.SELECT_PARTITION_SERVICES_BY_ENTITY;
     let params = [
@@ -476,7 +477,12 @@ class RebalanceCoordinatorOperationReadMethods {
       SYSTEM_TABLE_NAME.SERVICES,
       sql,
       params,
-      CONTROL_PLANE_QUERY_OPTIONS,
+      {
+        ...CONTROL_PLANE_QUERY_OPTIONS,
+        ...(readOptions && typeof readOptions === LOCAL_STR_OBJECT ?
+          readOptions :
+          {}),
+      },
     );
     return Object.freeze({
       available: result.success === true && Array.isArray(result.rows),
@@ -486,6 +492,7 @@ class RebalanceCoordinatorOperationReadMethods {
           [],
       error: result?.error || null,
       reasonCode: result?.reasonCode || null,
+      source: result?.source || null,
       retryAfterMs: getControlPlaneRetryAfterMs(result),
       snapshotVersion: result?.snapshotVersion ?? null,
       observedAtMs:

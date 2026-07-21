@@ -29,6 +29,17 @@ const QUORUM_VOTER_STATUSES = Object.freeze(
 // voter here, see QUORUM_VOTER_STATUSES.)
 const QUORUM_VOTER_RAFT_ROLES = VOTER_RAFT_ROLES;
 const NODE_CONNECTION_STATE_READY = 'ready';
+// The source token is an authority capability, not merely a transport label.
+// OWNER_RPC_REQUIRED may execute locally when this node owns the services
+// partition, but it still returns owner_rpc_lane. A bare local-replica result
+// can be an ANY_REPLICA fallback and therefore cannot release a stale hold.
+const AUTHORITATIVE_PLACEMENT_SOURCE = 'owner_rpc_lane';
+const OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE = Object.freeze({
+  INCOMPLETE: 'incomplete',
+  SPREAD: 'spread',
+  UNSPREAD: 'unspread',
+  UNAVAILABLE: 'unavailable',
+});
 const EMPTY_EVALUATION = Object.freeze({
   holdEngaged: false,
   concentratedPartitions: Object.freeze([]),
@@ -367,6 +378,57 @@ function getOperationLedgerPlacementObservationFromRows(
 }
 
 /**
+ * Bind the shared placement predicate to one typed authoritative observation.
+ * Source and completeness are part of the contract so consumers cannot turn
+ * a successful cache/SQL projection or a partial owner answer into release
+ * evidence.
+ *
+ * @param {Object} params
+ * @return {Object}
+ */
+function getAuthoritativeOperationLedgerPlacementObservation({
+  available,
+  rows,
+  source,
+  partitionId,
+  targetReplicaCount,
+  snapshotVersion = null,
+}) {
+  const normalizedSource = String(source || '').trim().toLowerCase();
+  const placement = getOperationLedgerPlacementObservationFromRows(
+    rows,
+    partitionId,
+    targetReplicaCount,
+  );
+  const authoritative =
+    available === true &&
+    Array.isArray(rows) &&
+    normalizedSource === AUTHORITATIVE_PLACEMENT_SOURCE;
+  if (!authoritative) {
+    return Object.freeze({
+      ...placement,
+      complete: false,
+      concentrated: null,
+      spreadComplete: false,
+      source: normalizedSource || null,
+      snapshotVersion,
+      state: OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.UNAVAILABLE,
+    });
+  }
+  const state = !placement.complete ?
+    OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.INCOMPLETE :
+    placement.spreadComplete ?
+      OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.SPREAD :
+      OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE.UNSPREAD;
+  return Object.freeze({
+    ...placement,
+    source: normalizedSource,
+    snapshotVersion,
+    state,
+  });
+}
+
+/**
  * @param {Object|null} evaluation
  * @param {string|null} partitionId
  * @return {boolean}
@@ -384,7 +446,9 @@ function isConcentratedOperationLedgerPartition(evaluation, partitionId) {
 }
 
 export {
+  OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
   evaluateOperationLedgerQuorumConcentration,
+  getAuthoritativeOperationLedgerPlacementObservation,
   getOperationLedgerPlacementObservationFromRows,
   getOperationLedgerQuorumObservation,
   isConcentratedOperationLedgerPartition,

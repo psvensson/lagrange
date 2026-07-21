@@ -17,7 +17,7 @@ import {
   getInitialReplicaIds,
 } from './system-table-schemas-constants.js';
 import {
-  getOperationLedgerPlacementObservationFromRows,
+  getAuthoritativeOperationLedgerPlacementObservation,
   getOperationLedgerQuorumObservation,
 } from '../rebalancer/operation-ledger-quorum-concentration.js';
 import {
@@ -37,6 +37,7 @@ const {
 const OPERATION_LEDGER_FORMATION_BARRIER_STATE = Object.freeze({
   BYPASSED_INSUFFICIENT_COHORT: 'bypassed_insufficient_formation_cohort',
   SATISFIED: 'ledger_spread_satisfied',
+  UNOBSERVED: 'unobserved',
   WAITING_COHORT: 'waiting_for_formation_cohort',
   WAITING_OPERATION_DRAIN: 'waiting_for_ledger_operation_drain',
   WAITING_OPERATION_OBSERVATION:
@@ -118,42 +119,26 @@ class NodeJoiningOperationLedgerFormationReadiness
         [partitionId],
         {
           authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
           allowSqlFallback: false,
           preferOwnerRpcReadLeader: true,
         },
       );
-      const source = String(result?.source || '').toLowerCase();
-      const authoritativeSource =
-        source === 'local_partition_replica' ||
-        source === 'owner_rpc_lane';
-      if (result?.success !== true || !authoritativeSource) {
-        return Object.freeze({
-          complete: false,
-          concentrated: null,
-          distinctNodeCount: 0,
-          observedVoterCount: 0,
-          source: source || null,
-          spreadComplete: false,
-        });
-      }
-      const placement = getOperationLedgerPlacementObservationFromRows(
-        result.rows,
+      return getAuthoritativeOperationLedgerPlacementObservation({
+        available: result?.success === true,
+        rows: result?.rows,
+        source: result?.source,
         partitionId,
         targetReplicaCount,
-      );
-      return Object.freeze({
-        ...placement,
-        source,
+        snapshotVersion: result?.snapshotVersion ?? null,
       });
     } catch {
-      return Object.freeze({
-        complete: false,
-        concentrated: null,
-        distinctNodeCount: 0,
-        observedVoterCount: 0,
+      return getAuthoritativeOperationLedgerPlacementObservation({
+        available: false,
+        rows: [],
         source: null,
-        spreadComplete: false,
+        partitionId,
+        targetReplicaCount,
       });
     }
   }
@@ -452,7 +437,8 @@ class NodeJoiningOperationLedgerFormationReadiness
       this.resolveOperationLedgerFormationLivenessRefreshMs();
     let nextLivenessRefreshAt = startedAt;
     let barrierEngaged = false;
-    let lastState = null;
+    let lastState =
+      OPERATION_LEDGER_FORMATION_BARRIER_STATE.UNOBSERVED;
 
     while (true) {
       const snapshot =
