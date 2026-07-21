@@ -19,7 +19,7 @@
 - Dominant reason: unknown
 - Mechanism: observation_gap
 - Movement: same blocker remains: FAIL
-- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T08-21-57-807Z.report.json
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T11-10-14-468Z.report.json
 - Selected theory: theory-20260721-rejection-replacement-landed-split-policy (stale: selected theory status is avoided)
 - Next move: record or select a fresh frontier theory for movielens-three-way-affinity-demo-main
 
@@ -146,6 +146,7 @@
 - **theory-20260721-rejection-replacement-landed-split-policy**: needs-rerun (scenario=done, theory=needs-rerun, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T07-51-29-177Z.report.json]
 - **theory-20260721-rejection-replacement-landed-split-policy**: needs-rerun (scenario=done, theory=needs-rerun, movement=solved) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T08-06-58-731Z.report.json]
 - **theory-20260721-rejection-replacement-landed-split-policy**: avoided (scenario=failed, theory=avoided, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T08-21-57-807Z.report.json]
+- **theory-20260721-rejection-replacement-landed-split-policy**: avoided (scenario=failed, theory=avoided, movement=same) [test-output/reports/movielens-lagrange-service-affinity-live-2026-07-21T11-10-14-468Z.report.json]
 
 ## Attempt log
 | ts | frontier | rung | metric | result | blocker movement | theory | change |
