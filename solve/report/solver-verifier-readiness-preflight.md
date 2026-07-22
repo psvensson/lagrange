@@ -30,6 +30,8 @@
 
 ## Findings
 - **solver-verifier-readiness-preflight-main**: Independent verification rejected preflight because hypothetical approval omitted checkpoint integrity and change-artifact checks [subagent:verify_readiness_preflight_attempt]
+- **solver-verifier-readiness-preflight-main**: Independent verification passed the replacement attempt, including shared integrity, change-artifact, and exact-verification checkpoint evaluation [subagent:verify_readiness_preflight_attempt]
+- **solver-verifier-readiness-preflight-main**: Independent terminal verification passed the canonical aggregate source delta and its full readiness, immutability, and replacement-obligation behavior [subagent:verify_solver_preflight_recommendations]
 
 ## Theories
 _(none recorded)_
