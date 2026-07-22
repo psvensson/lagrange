@@ -167,16 +167,27 @@ function receiptForVerdict(state, verdict, fingerprint) {
   throw new Error('land: --verdict must be approve|reject');
 }
 
-function assertApprovalCanCompleteAudit(root, quest, fingerprint) {
+function sameAuditProblem(left, right) {
+  return left?.message === right?.message &&
+    left?.ts === right?.ts &&
+    left?.frontier === right?.frontier;
+}
+
+function assertApprovalCanCompleteAudit(root, quest, state) {
   const audit = auditQuest(root, quest);
-  const expectedReceiptProblem =
-    `requires a later aggregate approval for ${fingerprint}`;
-  const residual = audit.problems.filter((item) =>
-    !String(item.message || '').includes(expectedReceiptProblem));
-  if (residual.length > 0) {
+  const expected = state.aggregateProblems.length === 1 ?
+    state.aggregateProblems[0] : null;
+  const onlyExpectedReceiptProblem = expected !== null &&
+    audit.problems.length === 1 &&
+    sameAuditProblem(audit.problems[0], expected);
+  if (!onlyExpectedReceiptProblem) {
+    const residual = audit.problems.filter((item) =>
+      !expected || !sameAuditProblem(item, expected));
+    const reported = residual.length > 0 ? residual : audit.problems;
     throw new Error(
       'land: terminal audit has non-verification problems: ' +
-      residual.map((item) => item.message).join('; '),
+      (reported.map((item) => item.message).join('; ') ||
+        'expected exactly one structured aggregate-approval problem'),
     );
   }
 }
@@ -218,7 +229,7 @@ export function landQuestWorkflow(root, args = {}) {
   const receiptRef = typeof args.receipt === 'string' ? args.receipt.trim() : '';
   if (!receiptRef) throw new Error('land: --receipt <verifier-receipt-ref> is required');
   if (verdict === VERDICT_APPROVE) {
-    assertApprovalCanCompleteAudit(root, quest, fingerprint);
+    assertApprovalCanCompleteAudit(root, quest, state);
   }
   const verification = buildVerificationFinding({
     kind,

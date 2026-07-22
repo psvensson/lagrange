@@ -18,7 +18,10 @@ import {
 } from '../../scripts/solve/store.js';
 import {
   EVENT_GATE_DECISION,
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_SELECTED,
   OUTCOME_BLOCKED,
+  THEORY_RESULT_FALSIFIED,
 } from '../../scripts/solve/constants.js';
 import {makeOracleQuest} from './solve-test-quest-fixture.js';
 
@@ -291,6 +294,36 @@ tap.test('land refuses residual audit failures before recording approval', (t) =
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
+
+tap.test('land does not confuse an audit-message substring with the expected receipt',
+  (t) => {
+    const {root, id} = landingFixture();
+    const fingerprint = buildNextProjection(root, id).verification.aggregateFingerprint;
+    const collision = `collision-requires a later aggregate approval for ${fingerprint}`;
+    appendEvent(root, id, {
+      type: EVENT_THEORY_OPTION_DECLARED,
+      frontier: `${id}-main`,
+      theory: collision,
+      scope: 'frontier',
+      status: THEORY_RESULT_FALSIFIED,
+    });
+    appendEvent(root, id, {
+      type: EVENT_THEORY_SELECTED,
+      frontier: `${id}-main`,
+      theory: collision,
+    });
+    t.throws(() => landQuestWorkflow(root, {
+      id,
+      verifier: 'facade-reviewer',
+      verdict: 'approve',
+      fingerprint,
+      receipt: 'review:must-not-record-substring-collision',
+    }), /terminal audit has non-verification problems.*selected theory/iu);
+    t.notOk(readLog(root, id).some((event) => event.kind === 'verifier-approval'),
+      'a substring collision cannot append an unusable approval');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 
 tap.test('land commits a non-source terminal without invented verification', (t) => {
   const {root, id} = nonSourceLandingFixture();
