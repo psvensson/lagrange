@@ -6,7 +6,7 @@ come from the authored `closure-ledger.md` index (the current rollup);
 The DRIFT list is the WS8.1 worklist: records whose own top `- Status:` line
 lags the index and need a normalized `### STATE` block.
 
-Records: 41 · active frontier: 15 · drifted: 0
+Records: 42 · active frontier: 15 · drifted: 0
 
 ## Active frontier (needs attention)
 
@@ -36,7 +36,7 @@ _(none — every record STATE agrees with the index)_
 
 - closed: 3
 - fix-landed: 2
-- guarded: 21
+- guarded: 22
 - narrowed: 11
 - open: 4
 
