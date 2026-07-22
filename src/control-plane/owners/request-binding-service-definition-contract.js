@@ -55,7 +55,7 @@ const REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE = Object.freeze({
   INVALID_RUNTIME_DESCRIPTOR:
     'Binding does not compile to a valid runtime descriptor',
   SOURCE_UNSUPPORTED:
-    'only request and change Bindings compile to desired services',
+    'only request, change, and time Bindings compile to desired services',
 });
 
 const HASH_ALGORITHM = 'sha256';
@@ -66,6 +66,7 @@ const SERVICE_ID_PREFIX = 'binding-service-';
 const COMPILED_SOURCE_KINDS = new Set([
   DEPLOYMENT_BINDING_SOURCE_KIND.CHANGE,
   DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+  DEPLOYMENT_BINDING_SOURCE_KIND.TIME,
 ]);
 const BINDING_LINEAGE_FIELDS = Object.freeze([
   SD_COL.BINDING_VERSION_ID,

@@ -242,16 +242,20 @@ describe('request Binding desired-service compilation owner', () => {
     LoggingService.getInstance().initialize({level: 'error'});
   });
 
-  test('the compiler source set preserves request and adds only change', () => {
-    assert.equal(supportsBindingServiceDefinitionSourceKind('request'), true);
-    assert.equal(supportsBindingServiceDefinitionSourceKind('change'), true);
-    for (const sourceKind of ['boot', 'call', 'once', 'pushdown', 'time']) {
+  test('the compiler source set preserves request/change and adds only time',
+    () => {
       assert.equal(
-        supportsBindingServiceDefinitionSourceKind(sourceKind),
-        false,
+        supportsBindingServiceDefinitionSourceKind('request'), true,
       );
-    }
-  });
+      assert.equal(supportsBindingServiceDefinitionSourceKind('change'), true);
+      assert.equal(supportsBindingServiceDefinitionSourceKind('time'), true);
+      for (const sourceKind of ['boot', 'call', 'once', 'pushdown']) {
+        assert.equal(
+          supportsBindingServiceDefinitionSourceKind(sourceKind),
+          false,
+        );
+      }
+    });
 
   test('the existing planning leader compiles the complete pinned projection ' +
     'without creating a runtime actual', async () => {
