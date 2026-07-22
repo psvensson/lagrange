@@ -450,6 +450,8 @@ export function verificationState(root, quest, log, options = {}) {
   };
 }
 
+// This is the verification slice of the narrow checkpoint gate. Keep it pure over
+// the supplied log so checkpoint preflight can evaluate a copied approval projection.
 export function checkpointVerificationProblems(root, quest, log, options = {}) {
   const state = verificationState(root, quest, log, options);
   if (state.attemptProblems.length > 0) return state.attemptProblems;

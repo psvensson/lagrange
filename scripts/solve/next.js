@@ -14,6 +14,10 @@ import {buildAdvisories, renderAdvisoryLines} from './advisories.js';
 import {buildSealFreshnessAdvisory} from './seal-freshness.js';
 import {typedNextAction} from './next-action.js';
 import {auditQuest} from './audit.js';
+import {
+  checkpointVerificationPreflight,
+  checkpointVerificationPreflightLines,
+} from './checkpoint-preflight.js';
 import {verificationState} from './verification.js';
 import {
   EVENT_GATE_DECISION,
@@ -30,6 +34,7 @@ const LOCAL_STR_OWNED_005 = 'sha256:<missing>';
 const LOCAL_STR_OWNED_006 = 'aggregate';
 const LOCAL_STR_OWNED_007 = 'sha256:<unavailable>';
 const LOCAL_STR_OWNED_008 = 'pass';
+const LOCAL_STR_OWNED_009 = 'both';
 
 const TERMINAL_STATUSES = Object.freeze([STATUS_SOLVED, STATUS_EXHAUSTED]);
 const FILE_NOT_FOUND_CODE = 'ENOENT';
@@ -64,16 +69,51 @@ function verifierAction(questId, frontier, scope, fingerprint) {
   );
 }
 
+function unresolvedReplacementAction(questId, pendingVerification, preflight) {
+  const groups = preflight.replacementGroups.filter(
+    (group) => !group.satisfiedAfterRequiredApprovals,
+  );
+  const bases = [...new Set(groups.map((group) => group.baseCommit).filter(Boolean))];
+  const paths = [...new Set((groups.length > 0 ?
+    groups.flatMap((group) => group.requiredPaths) :
+    pendingVerification.inspection.changedPaths))].sort();
+  if (bases.length > 1) {
+    return typedNextAction(
+      'record separate canonical same-frontier replacement attempts for each ' +
+      `unresolved base in the ${questId} verification dossier; then rerun ` +
+      `node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+    );
+  }
+  const base = bases.length === 1 ? bases[0] :
+    pendingVerification.event.workspaceBaseCommit || '<missing>';
+  return typedNextAction(
+    `record a canonical same-frontier replacement attempt for ${questId} ` +
+    `at base ${base} covering ${paths.join(', ') || '(no paths)'}; then rerun ` +
+    `node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+  );
+}
+
+function pendingVerifierAction(questId, state, pendingVerification, preflight) {
+  if (!preflight.readyAfterRequiredApprovals) {
+    return unresolvedReplacementAction(questId, pendingVerification, preflight);
+  }
+  const terminal = TERMINAL_STATUSES.includes(state.questStatus);
+  const scope = terminal && preflight.aggregate.bothEligible ?
+    LOCAL_STR_OWNED_009 : LOCAL_STR_OWNED_004;
+  return verifierAction(
+    questId,
+    pendingVerification.event.frontier,
+    scope,
+    pendingVerification.fingerprint || LOCAL_STR_OWNED_005,
+  );
+}
+
 function nextAction({questId, state, pending, gateStop, blocker,
-  verification, audit}) {
+  verification, verificationPreflight, audit}) {
   const pendingVerification = verification.pendingAttempts[0];
   if (pendingVerification) {
-    return verifierAction(
-      questId,
-      pendingVerification.event.frontier,
-      LOCAL_STR_OWNED_004,
-      pendingVerification.fingerprint || LOCAL_STR_OWNED_005,
-    );
+    return pendingVerifierAction(
+      questId, state, pendingVerification, verificationPreflight);
   }
   if (verification.unresolvedRejectedAttempts.length > 0) {
     return typedNextAction(pending ?
@@ -139,6 +179,8 @@ export function buildNextProjection(root, questId) {
   const sealFreshness = buildSealFreshnessAdvisory(quest, log, {root});
   if (sealFreshness) advisories.push(sealFreshness);
   const verification = verificationState(root, quest, log);
+  const verificationPreflight = checkpointVerificationPreflight(
+    root, quest, log, {state: verification});
   const audit = auditQuest(root, quest);
 
   const terminal = TERMINAL_STATUSES.includes(state.questStatus);
@@ -146,7 +188,8 @@ export function buildNextProjection(root, questId) {
     schemaVersion: NEXT_SCHEMA_VERSION,
     quest: {id: questId, status: state.questStatus},
     action: nextAction({
-      questId, state, pending, gateStop, blocker, verification, audit,
+      questId, state, pending, gateStop, blocker, verification,
+      verificationPreflight, audit,
     }),
     pendingStep: pending ? {
       frontier: pending.frontier,
@@ -165,6 +208,7 @@ export function buildNextProjection(root, questId) {
       pendingAttemptCount: verification.pendingAttempts.length,
       aggregateFingerprint: verification.aggregate.fingerprint,
       aggregateApproved: Boolean(verification.aggregateApproval),
+      checkpointPreflight: verificationPreflight,
     },
     advisories,
   };
@@ -172,7 +216,7 @@ export function buildNextProjection(root, questId) {
 
 export function buildNextLines(root, questId) {
   const projection = buildNextProjection(root, questId);
-  const {action, pendingStep, lastStop, blocker, advisories} = projection;
+  const {action, pendingStep, lastStop, blocker, advisories, verification} = projection;
   const lines = [
     `Next [${action.type}]: ${action.value || 'nothing to execute'}`,
     `quest: ${projection.quest.id} (${projection.quest.status})`,
@@ -190,6 +234,10 @@ export function buildNextLines(root, questId) {
   // (often "unknown") blocker card next to "quest is SOLVED" is contradictory.
   if (blocker) {
     lines.push(`blocker: ${blockerLabel(blocker)} — ${blocker.movementSummary}`);
+  }
+  if (verification.sourceAttemptCount > 0) {
+    lines.push(...checkpointVerificationPreflightLines(
+      verification.checkpointPreflight));
   }
   lines.push(...renderAdvisoryLines(advisories));
   return lines;

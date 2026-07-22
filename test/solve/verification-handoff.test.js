@@ -11,7 +11,10 @@ import {
 } from '../../scripts/solve/handoff.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {writeReport} from '../../scripts/solve/report.js';
-import {buildNextLines} from '../../scripts/solve/next.js';
+import {
+  buildNextLines,
+  buildNextProjection,
+} from '../../scripts/solve/next.js';
 import {
   appendEvent,
   appendFinding,
@@ -19,6 +22,9 @@ import {
   readLog,
   saveQuest,
 } from '../../scripts/solve/store.js';
+import {
+  checkpointVerificationPreflight,
+} from '../../scripts/solve/checkpoint-preflight.js';
 import {
   aggregateSourceFingerprint,
   buildVerificationFinding,
@@ -29,6 +35,9 @@ import {
 import {
   EVENT_GATE_DECISION,
   EVENT_PARK,
+  EVENT_VIOLATION,
+  INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+  INTEGRITY_SCOPE_ATTEMPT,
   OUTCOME_BLOCKED,
 } from '../../scripts/solve/constants.js';
 
@@ -47,8 +56,15 @@ function fixture() {
   git(root, ['config', 'user.name', 'Solver']);
   git(root, ['config', 'commit.gpgsign', 'false']);
   fs.mkdirSync(path.join(root, 'src'), {recursive: true});
-  fs.writeFileSync(path.join(root, 'src', 'a.js'), 'export const a = 1;\n');
+  fs.writeFileSync(path.join(root, 'src', 'a.js'), 'export const retry = 1;\n');
   fs.writeFileSync(path.join(root, 'src', 'b.js'), 'export const b = 1;\n');
+  const templateDir = path.join(
+    root, 'docs', 'steering', 'verification-templates');
+  fs.mkdirSync(templateDir, {recursive: true});
+  fs.writeFileSync(
+    path.join(templateDir, 'retry-loops.md'),
+    '---\ncategories: [retry-loops]\n---\n',
+  );
   git(root, ['add', '-A']);
   git(root, ['commit', '-m', 'base']);
 
@@ -409,6 +425,193 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       /explicitly rejected/u,
       'audit advances past the superseded rejection',
     );
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('preflight blocks a different-base rejection replacement before delegation', (t) => {
+    const fx = fixture();
+    const rejectedBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
+    recordAttempt(fx, 'src/a.js', 1, 'different-base-rejected');
+    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
+    git(fx.root, ['add', '-A']);
+    git(fx.root, ['commit', '-m', 'advance head after rejected attempt']);
+    const differentBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
+    reject(
+      fx.root,
+      fx.quest,
+      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`,
+    );
+
+    const pending = runStep(fx.root, fx.quest);
+    const pendingState = JSON.parse(fs.readFileSync(pending.pendingFile, 'utf8'));
+    pendingState.headCommit = differentBase;
+    fs.writeFileSync(pending.pendingFile, JSON.stringify(pendingState, null, 2));
+    fs.writeFileSync(path.join(fx.root, 'src', 'a.js'), 'export const a = 4;\n');
+    fs.writeFileSync(fx.oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(fx.root, fx.quest, {
+      changeRef: canonicalDiff(
+        fx.root,
+        fx.quest,
+        differentBase,
+        'src/a.js',
+        'different-base-candidate',
+      ),
+      summary: 'candidate captured from the wrong base',
+    });
+
+    const preflight = checkpointVerificationPreflight(
+      fx.root,
+      fx.quest,
+      readLog(fx.root, fx.quest.id),
+    );
+    t.notOk(preflight.readyAfterRequiredApprovals);
+    t.equal(preflight.replacementGroups[0].baseCommit, rejectedBase);
+    t.same(preflight.replacementGroups[0].requiredPaths, ['src/a.js']);
+    t.notOk(preflight.replacementGroups[0].satisfiedAfterRequiredApprovals);
+    t.notMatch(buildNextLines(fx.root, fx.quest.id)[0], /spawn an independent verifier/u,
+      'an unlandable candidate never consumes a verifier turn');
+    t.match(buildNextLines(fx.root, fx.quest.id)[0],
+      new RegExp(`same-frontier replacement attempt.*${rejectedBase}`, 'u'));
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('preflight delegates one same-base full-path rejection superset', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'preflight-rejected');
+    const rejectedAttempt = latestAttempt(fx.root, fx.quest);
+    reject(
+      fx.root,
+      fx.quest,
+      `sha256:${rejectedAttempt.changeRefIdentity.sha256}`,
+    );
+    recordAttempt(fx, 'src/a.js', 0, 'preflight-superset');
+    const candidate = latestAttempt(fx.root, fx.quest);
+    const candidateFingerprint = `sha256:${candidate.changeRefIdentity.sha256}`;
+
+    const preflight = checkpointVerificationPreflight(
+      fx.root,
+      fx.quest,
+      readLog(fx.root, fx.quest.id),
+    );
+    t.ok(preflight.readyAfterRequiredApprovals);
+    t.equal(preflight.pendingApprovals[0].fingerprint, candidateFingerprint);
+    t.ok(preflight.replacementGroups[0].satisfiedAfterRequiredApprovals);
+    t.same(preflight.pendingApprovals[0].changedPaths, ['src/a.js']);
+    t.same(preflight.applicableTemplates.map((entry) => entry.template),
+      ['docs/steering/verification-templates/retry-loops.md'],
+      'the first-pass dossier includes every template matching the exact diff');
+    t.match(buildNextLines(fx.root, fx.quest.id)[0],
+      new RegExp(`verification-scope both.*${candidateFingerprint}`, 'u'),
+      'a terminal exact-equals-aggregate candidate can receive one both approval');
+
+    const projection = buildNextProjection(fx.root, fx.quest.id);
+    t.same(
+      projection.verification.checkpointPreflight.pendingApprovals[0].changedPaths,
+      ['src/a.js'],
+      'next JSON carries the exact candidate dossier',
+    );
+    t.match(
+      buildNextLines(fx.root, fx.quest.id).join('\n'),
+      /replacement obligation:.*covered by pending approvals[\s\S]*aggregate context:/u,
+      'human next output carries replacement and aggregate context in the first pass',
+    );
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('preflight surfaces older approved receipt drift despite a pending approval', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'approved-before-drift');
+    const approvedAttempt = latestAttempt(fx.root, fx.quest);
+    approve(
+      fx.root,
+      fx.quest,
+      'attempt',
+      `sha256:${approvedAttempt.changeRefIdentity.sha256}`,
+    );
+    fs.appendFileSync(path.join(fx.root, 'src', 'a.js'), '// drifted after approval\n');
+    recordAttempt(fx, 'src/b.js', 0, 'pending-after-drift');
+
+    const preflight = checkpointVerificationPreflight(
+      fx.root,
+      fx.quest,
+      readLog(fx.root, fx.quest.id),
+    );
+    t.notOk(preflight.readyAfterRequiredApprovals);
+    t.equal(preflight.approvedUncheckpointedReceipts[0].changeRef,
+      'diff:solve/changes/runtime-verify/approved-before-drift.diff');
+    t.notOk(preflight.approvedUncheckpointedReceipts[0].currentMatches);
+    t.match(preflight.problems.map((item) => item.message).join('\n'),
+      /approved-before-drift\.diff.*changed after approval/u);
+    t.same(preflight.replacementGroups[0].requiredPaths, ['src/a.js']);
+    t.notOk(preflight.replacementGroups[0].satisfiedAfterRequiredApprovals);
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('preflight is read-only and dry-run renders the same dossier', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'read-only-candidate');
+    const before = {
+      log: fs.readFileSync(
+        path.join(fx.root, 'solve', 'log', `${fx.quest.id}.ndjson`),
+        'utf8',
+      ),
+      head: git(fx.root, ['rev-parse', 'HEAD']).trim(),
+      index: git(fx.root, ['diff', '--cached', '--binary']),
+      status: git(fx.root, ['status', '--porcelain', '-uall']),
+    };
+
+    checkpointVerificationPreflight(
+      fx.root,
+      fx.quest,
+      readLog(fx.root, fx.quest.id),
+    );
+    const dryRun = runCheckpointCommand(
+      fx.root,
+      {'id': fx.quest.id, '_': [], 'dry-run': true},
+    );
+    t.match(dryRun, /## Verification preflight/u);
+    t.match(dryRun, /pending exact approval:.*read-only-candidate\.diff/u);
+    t.match(dryRun, /dry run — omit --dry-run/u);
+    t.equal(fs.readFileSync(
+      path.join(fx.root, 'solve', 'log', `${fx.quest.id}.ndjson`), 'utf8'), before.log);
+    t.equal(git(fx.root, ['rev-parse', 'HEAD']).trim(), before.head);
+    t.equal(git(fx.root, ['diff', '--cached', '--binary']), before.index);
+    t.equal(git(fx.root, ['status', '--porcelain', '-uall']), before.status);
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('preflight applies the real checkpoint integrity gate to its copied log', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'integrity-gated-candidate');
+    const durableLog = readLog(fx.root, fx.quest.id);
+    const copiedLog = [...durableLog, {
+      type: EVENT_VIOLATION,
+      eventSchemaVersion: 2,
+      violationId: 'runtime-verify:test:attempt-integrity:main:preflight',
+      scope: INTEGRITY_SCOPE_ATTEMPT,
+      resolutionPolicy: INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+      violations: ['synthetic unresolved checkpoint integrity'],
+      frontier: 'runtime-verify-main',
+      replacementProbeKey: 'oracle:runtime-verify',
+      failedEvidenceFingerprint: 'sha256:synthetic-failed-evidence',
+    }];
+
+    const preflight = checkpointVerificationPreflight(
+      fx.root,
+      fx.quest,
+      copiedLog,
+    );
+    t.notOk(preflight.readyAfterRequiredApprovals,
+      'hypothetical exact approval cannot bypass checkpoint integrity');
+    t.match(preflight.problems.map((item) => item.message).join('\n'),
+      /unresolved integrity violation.*preflight/u);
+    t.same(readLog(fx.root, fx.quest.id), durableLog,
+      'the injected violation remains copy-only');
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
@@ -794,6 +997,31 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.equal(auditQuest(fx.root, fx.quest).status, 'pass');
     t.ok(buildHandoff(fx.root, fx.quest).ok,
       'aggregate approval covers the complete final source scope');
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('multi-attempt aggregate inequality forbids a both approval', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 1, 'both-first');
+    const first = latestAttempt(fx.root, fx.quest);
+    approve(fx.root, fx.quest, 'attempt',
+      `sha256:${first.changeRefIdentity.sha256}`);
+    runCheckpointCommand(fx.root, {id: fx.quest.id, _: []});
+
+    recordAttempt(fx, 'src/b.js', 0, 'both-second');
+    const second = latestAttempt(fx.root, fx.quest);
+    const secondFingerprint = `sha256:${second.changeRefIdentity.sha256}`;
+    const preflight = checkpointVerificationPreflight(
+      fx.root,
+      fx.quest,
+      readLog(fx.root, fx.quest.id),
+    );
+    t.not(preflight.aggregate.fingerprint, secondFingerprint);
+    t.notOk(preflight.aggregate.bothEligible);
+    t.match(buildNextLines(fx.root, fx.quest.id)[0],
+      new RegExp(`verification-scope attempt.*${secondFingerprint}`, 'u'));
+    t.notMatch(buildNextLines(fx.root, fx.quest.id)[0], /verification-scope both/u);
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });

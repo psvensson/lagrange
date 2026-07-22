@@ -1,0 +1,26 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "verifier-readiness-preflight-enforced",
+  "evidence": {
+    "focused": "npx tap test/solve/verification-handoff.test.js plus next: 26 verification subtests, 120 assertions passed after the rejected-attempt repair",
+    "adjacent": "npx tap test/solve/verification-handoff.test.js test/solve/next.test.js test/solve/steering-canon.test.js test/solve/verification-template-suggest.test.js: 139 assertions passed before the final template-dossier assertion; the focused suite was rerun afterward",
+    "attemptPreflight": "npm run audit:attempt-preflight: pass",
+    "scopedMetrics": "new scripts/solve/checkpoint-preflight.js passes strict cyclomatic and cognitive checks; touched-file ratchets remain green",
+    "guidelineGuards": "decision-boundary, runtime-grammar, constant-name, silent-catch, ESLint, and git diff checks passed",
+    "steeringPack": "npm run steering:llm:pack: generated 411 rules with complete source coverage"
+  },
+  "validations": {
+    "differentBaseBlocked": true,
+    "sameBaseSupersetReady": true,
+    "approvedReceiptDriftVisible": true,
+    "bothRequiresExactEquality": true,
+    "preflightReadOnly": true,
+    "sharedNarrowCheckpointGate": true,
+    "unresolvedIntegrityBlocksDelegation": true,
+    "nextAndDryRunRenderDossier": true,
+    "allApplicableTemplatesRendered": true,
+    "steeringSurfacesUpdated": true
+  }
+}

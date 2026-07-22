@@ -4,7 +4,7 @@ status: manual-pack
 always_load: true
 source_of_truth: self
 canonical_rules: docs/steering/workflow-guidelines/solver-quests.md
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-22
 ---
 
 > **Manual pack - edit here directly.** Load order is owned by
@@ -71,7 +71,8 @@ autonomous mode, `next` may return the real agent invocation. The no-op example
 adapter is never treated as a capability.
 
 After a source-changing attempt, `next` returns the exact attempt fingerprint
-to verify, then directs the operator to the explicit checkpoint:
+and its checkpoint-readiness dossier, then directs the operator to the explicit
+checkpoint:
 
 ```sh
 node scripts/solve.js checkpoint --id <id>
@@ -84,6 +85,32 @@ no Solver command pushes.
 ```sh
 node scripts/solve.js handoff --id <id> --commit
 ```
+
+## Before Verification Or Checkpoint
+
+Before asking an independent verifier to inspect source bytes, run the cheap
+mechanical checks and the read-only checkpoint simulation:
+
+```sh
+npm run audit:attempt-preflight
+node scripts/solve.js checkpoint --id <id> --dry-run
+node scripts/solve.js next --id <id> --json
+```
+
+The checkpoint command may still refuse because the exact approval is not yet
+recorded; its **verification preflight** must nevertheless say that the current
+candidate will be checkpoint-landable after the required approval. If it does
+not, record the canonical same-frontier/same-base replacement and complete path
+superset it names before spending a verifier turn.
+
+Give the verifier the complete first-pass manifest from `next`: attempt base,
+fingerprint, complete paths, unresolved replacement obligations, approved but
+uncheckpointed receipts, aggregate fingerprint/path union, and every applicable
+attack template. After approval, checkpoint before changing or committing any
+path in that frozen union. Isolate concurrent work in another worktree; do not
+let an intervening same-worktree commit change the reviewed base or covered
+paths. The canonical details live in solver-quests.md "Source Change
+Verification" and "Regular Commit (No Push)."
 
 ## Conflict Rule And Escape Hatch
 

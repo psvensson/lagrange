@@ -37,7 +37,7 @@
     "usage": "node scripts/solve.js handoff --id <id> [--commit]"
   },
   "checkpoint": {
-    "summary": "Explicitly commit one scope-clean mid-Quest attempt after its exact patch fingerprint is approved and the current path-limited delta is unchanged. Never pushes; --dry-run only renders the decision.",
+    "summary": "Explicitly commit one scope-clean mid-Quest attempt after its exact patch fingerprint is approved and the current path-limited delta is unchanged. Never pushes; --dry-run renders a read-only hypothetical-approval dossier so unlandable candidates are fixed before verifier delegation.",
     "usage": "node scripts/solve.js checkpoint --id <id> [--dry-run]"
   },
   "invariants": {
@@ -73,7 +73,7 @@
     "usage": "node scripts/solve.js step-pending --id <id>"
   },
   "next": {
-    "summary": "Typed \"what do I do next?\" projection: folds pending-step state, the last recorded stop, the current-blocker card, and advisories. It distinguishes executable-command, command-template, manual-action, and terminal actions so a template is never presented as directly executable. Use --json for the stable machine-readable projection.",
+    "summary": "Typed \"what do I do next?\" projection: folds pending-step state, the last recorded stop, the current-blocker card, advisories, and the exact checkpoint-readiness dossier. It delegates only structurally checkpoint-landable source candidates and distinguishes executable-command, command-template, manual-action, and terminal actions. Use --json for the stable machine-readable projection.",
     "usage": "node scripts/solve.js next --id <id> [--json]"
   },
   "doctor": {

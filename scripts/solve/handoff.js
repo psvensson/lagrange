@@ -38,6 +38,10 @@ import {
 } from './change-artifact.js';
 import {SOLVE_DATA_DIR} from './constants.js';
 import {resolveCoauthorTrailer} from './operator-config.js';
+import {
+  checkpointVerificationPreflight,
+  checkpointVerificationPreflightLines,
+} from './checkpoint-preflight.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
@@ -190,6 +194,11 @@ export function buildHandoff(root, quest, options = {}) {
     outOfScope,
     summary: quest.statement || quest.id,
     coauthorTrailer: resolveCoauthorTrailer(root),
+    verificationPreflight: checkpoint ? checkpointVerificationPreflight(
+      root,
+      quest,
+      readLog(root, quest.id),
+    ) : null,
   };
 }
 
@@ -233,6 +242,13 @@ function appendPathSection(lines, title, paths, emptyLine) {
 export function renderHandoff(handoff) {
   const lines = ['# Quest handoff', '', `- quest: ${handoff.questId}`,
     `- audit: ${handoff.audit.status}`];
+  if (handoff.checkpoint && handoff.verificationPreflight) {
+    lines.push(
+      '',
+      '## Verification preflight',
+      ...checkpointVerificationPreflightLines(handoff.verificationPreflight),
+    );
+  }
   if (!handoff.ok) {
     const requirement = handoff.checkpoint ?
       'the latest source attempt must be unchanged and exactly approved' :

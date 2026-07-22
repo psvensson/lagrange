@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/testing.md
 parent_index: ../testing-guidelines/INDEX.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-22
 ---
 
 > **Canonical source.** Quest-driven validation, static guardrail preflight, file-size ratchet. Index: [`INDEX.md`](INDEX.md).
@@ -93,8 +93,12 @@ Required workflow:
    boundary-scoped form that covers the touched files and record the inherited
    count before the change.
    Use `npm run test:metrics:scoped -- <files...>` when repo-wide complexity
-   output is too broad for focused work, and use the matching `:strict` command
-   only when the touched boundary is expected to have no local violations.
+   output is too broad for focused work. Existing touched files use that scoped
+   cyclomatic-and-cognitive before/after ratchet unless zero local violations is
+   an explicit boundary expectation. Every newly added JavaScript file under
+   `src/`, `test/`, or `scripts/` has no inherited-debt exception and must pass
+   both `npm run test:complexity:scoped:strict -- <files...>` and
+   `npm run test:complexity:cognitive:scoped:strict -- <files...>`.
 4. After implementation and focused tests, rerun the same guardrails and record
    the after state.
 5. A Quest cannot close when:

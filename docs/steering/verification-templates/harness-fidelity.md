@@ -11,7 +11,12 @@ binds to the live mechanism. Each item requires an evidence path.
    the claimed mechanism (not via a missing method / fixture gap). A
    compressed-geometry fixture can let the WRONG existing machinery absorb
    the scenario (run-25: fast stubbed polls let the short first wait absorb
-   a hold the live system fails on).
+   a hold the live system fails on). Red-on-revert is valid only when the
+   reverted run reaches the named behavioral assertion through the intended
+   precondition/mechanism and that assertion fails. Import, setup, fixture,
+   timeout-before-engagement, and missing-method failures are non-proofs.
+   Preserve output naming the assertion and failure mechanism; exit status
+   alone is insufficient.
 2. **Stub honesty at the binding seam.** The stub of the seam under test
    must reproduce the live behavior the bug depends on (rejection at
    CREATE time vs probe time; `{code}` objects vs strings; transport ACK

@@ -82,9 +82,24 @@ Use `step --abort` to discard a pending pin without recording an attempt.
 
 ## Verify And Checkpoint Source Work
 
-After a source attempt, `solve next` prints the exact attempt fingerprint and a
-finding template. Give the Quest, patch, relevant steering, and applicable
-attack checklist to an independent subagent, then record its exact approval:
+After a source attempt, run the cheap attempt checks and the read-only
+hypothetical checkpoint before delegating review:
+
+```sh
+npm run audit:attempt-preflight
+node scripts/solve.js checkpoint --id my-quest --dry-run
+node scripts/solve.js next --id my-quest --json
+```
+
+The checkpoint output may refuse on the intentionally missing approval, but its
+verification preflight must say the candidate will be checkpoint-landable after
+the required approval. That projection applies the same narrow integrity,
+change-artifact, and exact-verification checks as checkpoint. Otherwise record
+the same-frontier/same-base canonical
+replacement and complete path superset it names first. `solve next` supplies the
+exact attempt/base/path dossier, older uncheckpointed receipts, replacement
+obligations, aggregate context, and applicable templates. Give that whole first
+pass to an independent subagent, then record its exact approval:
 
 ```sh
 node scripts/solve.js finding --id my-quest --frontier my-quest-main \
@@ -97,9 +112,10 @@ node scripts/solve.js finding --id my-quest --frontier my-quest-main \
 node scripts/solve.js checkpoint --id my-quest
 ```
 
-The finding is append-only and has no commit side effect. `checkpoint` refuses
-if the patch or its current path-limited Git delta changed after approval. It
-commits only the Quest scope and never pushes.
+The finding is append-only and has no commit side effect. Checkpoint immediately
+after approval; until then, treat the complete covered path union as frozen.
+`checkpoint` refuses if the patch or its current path-limited Git delta changed
+after approval. It commits only the Quest scope and never pushes.
 
 ## Terminal Verification And Handoff
 

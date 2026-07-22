@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-22
 ---
 
 > **Canonical source.** The Solver is the repository work system. Its unit of
@@ -214,6 +214,18 @@ re-running an unchanged harness only reproduces the same non-measuring loop. Fix
 the harness (or change the attempt evidence) before reopening again, so reopen and
 park can never oscillate forever.
 
+A measuring product `FAIL` is not an invalid sample merely because it happened
+before the theory's target phase engaged. Preserve the outer verdict and metric,
+record the target as `not_reached` / `needs-rerun`, and route the newly dominant
+blocker; the run neither confirms nor refutes that target theory. When the target
+does engage before a later product failure, retain its immutable phase witness
+for comparison while preserving and routing the outer `FAIL`. Only a genuinely
+broken or disconnected harness is globally invalid/non-measuring. A later
+`regression-resolution` finding with resolution `explained` may discharge the
+restore sequencing obligation, but it never rewrites the report verdict, metric,
+or `doneWhen`; it must cite the immutable failure and route the actual defect.
+See operational-ground-truth.md "Target-not-reached is non-discriminating."
+
 ## Current Blocker And Diagnostic Movement
 
 `status`, `health`, and `report` project a **Current Blocker** from the latest
@@ -300,6 +312,13 @@ letting unrecorded edits hitchhike. It then commits only that Quest's in-scope
 pathspec. Terminal handoff separately requires the aggregate source fingerprint
 and the full audit. Both actions use configured attribution only; they never
 invent an agent identity.
+
+Treat an approved attempt's complete covered path union as frozen until
+checkpoint. Checkpoint immediately after exact approval. Do not interleave a
+same-worktree commit that touches that union; when concurrent work is necessary,
+isolate it in another worktree. If the reviewed bytes or base move first, record
+and approve a new canonical replacement receipt rather than trying to land the
+stale approval.
 
 The Solver NEVER pushes: no subcommand, loop, or handoff runs `git push`
 (`autoCommitQuest` and `handoff` are commit-only). Pushing is a separate,
@@ -599,16 +618,45 @@ building-block DTs without a live-precondition theory are exempt.
 
 Every newly accepted source-changing attempt records verification contract v1,
 its Git base, and the SHA-256 identity of its exact patch. Before spawning the
-verifier, run `npm run audit:attempt-preflight` (file-size thresholds, STYLE-0012
-vocabulary, step-coverage owner census): these cheap machine checks catch the
-mechanical rejections that otherwise burn a full attempt-verify cycle. The first
-two are ratcheted and must be green. The census is absolute and may carry
-inherited drift: compare its listed sites against the same command on the
-attempt's Git base — any NEW site means the attempt is not ready for
-verification. Spawn an independent
-verifier after that diff is ready. The verifier must inspect the Quest intent,
-touched diff, system guidelines, and applicable doctrine. Record an exact
-attempt approval on the active frontier:
+verifier, run both preflights:
+
+```sh
+npm run audit:attempt-preflight
+node scripts/solve.js checkpoint --id <quest> --dry-run
+```
+
+The attempt preflight covers file-size thresholds, STYLE-0012 vocabulary, and
+the step-coverage owner census. Its first two checks are ratcheted and must be
+green. The census is absolute and may carry inherited drift: compare its listed
+sites against the same command on the attempt's Git base — any NEW site means
+the attempt is not ready for verification.
+
+The checkpoint dry run performs a read-only hypothetical exact approval through
+the real narrow checkpoint gate: integrity violations, change-artifact validity,
+and exact verification all run against the copied log. The checkpoint dry run
+must report the candidate as checkpoint-landable after required approvals before
+delegation.
+The verification surface is the first verifier dossier: (a) attempt base,
+fingerprint, complete changed-path set, source-path set, and current-byte match;
+(b) every unresolved
+same-frontier/same-base rejection and required replacement path union; (c) all
+approved but uncheckpointed receipts, drift status, and complete path union; (d)
+the current aggregate fingerprint, base, and sorted source-path union; and (e)
+every applicable verification template. `next` exposes the same projection and
+must return replacement work instead of verifier delegation when hypothetical
+approval would still leave the candidate structurally uncheckpointable. This is
+a structural checkpoint-landability gate, not a substitute for product tests or
+the full audit.
+
+The verifier must inspect that complete manifest, the exact patch, Quest seal,
+relevant steering, proof receipts, and every applicable checklist in the first
+pass. Do not drip-feed another applicable checklist after a verdict. For a
+cross-category diff, use the union of matching templates without unrelated
+checklist theater. A red-on-revert receipt is behavioral evidence only when the
+reverted run reaches and fails the named assertion through the intended
+mechanism; apply
+[`harness-fidelity.md`](../verification-templates/harness-fidelity.md), not exit
+status alone. Record an exact attempt approval on the active frontier:
 
 ```sh
 node scripts/solve.js finding --id <quest> --frontier <frontier> \
@@ -625,7 +673,7 @@ matcher; legacy prose cannot approve a v1 attempt. `step --commit` prints
 `suggested verification template: <path>` when the change diff matches an
 attack checklist under
 [`docs/steering/verification-templates/`](../verification-templates/INDEX.md);
-include the suggested template in the verifier prompt.
+include every applicable suggested template in the verifier's initial prompt.
 
 When the independent verifier rejects an exact attempt, record that verdict
 instead of fabricating an approval:
@@ -654,8 +702,11 @@ At terminal, recompute the aggregate fingerprint from the earliest contracted
 base through the current Git content over the sorted union of all recorded
 source paths. A later aggregate approval is mandatory. `--verification-scope
 both` may deduplicate the two approvals only when a single attempt fingerprint
-equals that aggregate fingerprint. Any later attempt, artifact tamper, or edit
-to an in-scope path invalidates the prior approval.
+equals that aggregate fingerprint. Before terminal, the aggregate shown in the
+preflight is context rather than a separate approval request. At terminal,
+`both` is the sole deduplication shortcut and is valid only on that exact
+equality. Any later attempt, artifact tamper, or edit to an in-scope path
+invalidates the prior approval.
 
 ## Git Handoff
 
@@ -722,6 +773,11 @@ valid (it actually measured), it records a `discrimination` of `confirmed` or
 been credited on this frontier. Confirming or refuting a hypothesis is recorded
 as a `supported` / `falsified` theory result, so a refutation is durable
 knowledge that rules an approach out — not a wasted attempt.
+
+Confirmed or refuted discrimination additionally requires evidence that reached
+the target precondition/path/observable. A product failure before target
+engagement is `not_reached` / `needs-rerun`, not a theory verdict; apply
+operational-ground-truth.md "Target-not-reached is non-discriminating."
 
 Credit is finite. A per-frontier investigation budget (`INVESTIGATION_BUDGET`)
 caps how many distinct theories can hold a rung before the ladder resumes

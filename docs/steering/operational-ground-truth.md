@@ -60,6 +60,17 @@ any distributed-harness or convergence work:
     discover the next blocker, or to re-confirm a mechanism a DT already shows.
     Each run is non-deterministic and costs ~5–10 min of wall-clock you can't get
     back; a multi-headed run masks every reason but the dominant one.
+  - **Target-not-reached is non-discriminating.** A measuring product run that
+    fails before the target precondition/path/observable engages keeps its outer
+    `FAIL` and any valid scenario metric or regression, but neither confirms nor
+    refutes the target theory. Record the target `not_reached` / `needs-rerun`,
+    ingest and route the newly dominant blocker, and do not rerun unchanged just
+    to fish for engagement. If the target engages and a later phase fails, retain
+    the immutable target-phase witness while preserving and routing the outer
+    `FAIL`. Only a broken or disconnected harness is globally invalid and
+    non-measuring. An `explained` regression-resolution finding may discharge
+    restore ordering; it must cite the immutable failure and cannot rewrite the
+    report verdict, metric, or `doneWhen`.
   - **When a live statistical run is genuinely required, minimize it.** Start at the smallest
     informative N and escalate only when the result forces it (a borderline mixed
     rate, or a rate-promotion verdict where the statistic itself is the claim).

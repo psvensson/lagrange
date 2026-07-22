@@ -71,14 +71,14 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 ### Ownership & Authority Policies
 
 48. [TEST-0001] When the mutation is lifecycle-related, assert both: - the initial row exists with canonical identity fields; - later transitions preserve owner boundaries and do not recreate or replace the row _(see testing-guidelines/fixtures.md:23)_
-49. [TEST-0012] Static guardrail proof is required even when focused unit and integration tests pass. Green behavior tests do not override a failed owner-path guard. _(see testing-guidelines/proof-ladders.md:111)_
+49. [TEST-0012] Static guardrail proof is required even when focused unit and integration tests pass. Green behavior tests do not override a failed owner-path guard. _(see testing-guidelines/proof-ladders.md:115)_
 50. [TEST-0042] A scenario-driven Quest that changes runtime meaning, decision meaning, or shared reporting must prove the direct owner path and the consuming status, diagnostics, admin, harness, or report surface. _(see testing-guidelines/release-gate.md:36)_
 51. [TEST-0046] Identify the audit scope: the production files exercised by the new or modified test plus their direct owner collaborators — the same bounded set as the closure deep dive defined in proof-ladders.md ("Closure deep dive — scope"). Do not widen beyond that set. _(see testing-guidelines/fixtures.md:109)_
 52. [TEST-0057] When a bug involves component ownership, lifecycle persistence, or system-table row mutation, tests must prove that the canonical owner is actually used. _(see testing-guidelines/regression-policy.md:148)_
 53. [TEST-0059] When a change touches control-plane progression (dispatch, rebalance, split, admission progression, operation timeout handling), tests must prove deterministic owner-path behavior rather than only eventual convergence. _(see testing-guidelines/regression-policy.md:189)_
 54. [TEST-0062] If the fixture contract was correct, the next attempt must target the runtime owner boundary that now dominates. _(see testing-guidelines/release-gate.md:42)_
 55. [TEST-0065] When an owner path is intentionally unresolved under pressure, publication establishment, or recovery completion, tests must prove the caller receives a structured deferred outcome rather than ambiguous absence. _(see testing-guidelines/regression-policy.md:275)_
-56. [TEST-0083] Runtime Quests that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary. _(see testing-guidelines/proof-ladders.md:119)_
+56. [TEST-0083] Runtime Quests that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary. _(see testing-guidelines/proof-ladders.md:123)_
 
 ### Lifecycle & State Machine Rules
 
@@ -131,5 +131,5 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 ### Governance & Scope Controls
 
 90. [TEST-0035] Tests added during the change must match the Quest concern rather than an unrelated umbrella scope. _(see testing-guidelines/proof-ladders.md:23)_
-91. [TEST-0039] If a Quest touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure. _(see testing-guidelines/proof-ladders.md:129)_
-92. [TEST-0071] Existing violations in touched files must be fixed when they are part of the same semantic boundary (one owner / one concern, per system-guidelines §2 One Semantic Owner Per Concern). If they are genuinely outside scope, the Quest must name the excluded boundary and record a follow-on Quest/frontier before closure. _(see testing-guidelines/proof-ladders.md:106)_
+91. [TEST-0039] If a Quest touches an inherited oversized source-code file, it must extract or refactor the touched file until it is within its scope threshold before closure. _(see testing-guidelines/proof-ladders.md:133)_
+92. [TEST-0071] Existing violations in touched files must be fixed when they are part of the same semantic boundary (one owner / one concern, per system-guidelines §2 One Semantic Owner Per Concern). If they are genuinely outside scope, the Quest must name the excluded boundary and record a follow-on Quest/frontier before closure. _(see testing-guidelines/proof-ladders.md:110)_

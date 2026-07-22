@@ -26,4 +26,8 @@ checklist entry that catches nothing is noise.
 
 Usage in a verification prompt: paste the relevant checklist, replace each
 placeholder with the change's specifics, and require the verifier to return
-a verdict per item with an evidence path.
+a verdict per item with an evidence path. For a cross-category diff, include the
+union of every matching template in the verifier's initial prompt and deduplicate
+overlapping questions. Do not include unrelated templates merely to make the
+checklist longer, and do not defer an already-applicable template until after the
+first verdict.

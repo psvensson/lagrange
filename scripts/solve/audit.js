@@ -387,14 +387,21 @@ export function commitGate(root, quest) {
 // A checkpoint is intentionally narrower than terminal handoff: it proves exact
 // attempt artifact integrity and content-bound approval, but does not require
 // terminal state or aggregate approval.
-export function checkpointGate(root, quest) {
-  const log = readLog(root, quest.id);
+export function checkpointGateProblemsForLog(root, quest, log) {
   const startIndex = strictAuditStartIndex(log);
-  const problems = [
+  return [
     ...auditIntegrityViolations(root, quest, log),
     ...auditChangeRefs(root, quest, log, startIndex),
     ...checkpointVerificationProblems(root, quest, log, {startIndex}),
   ];
+}
+
+export function checkpointGate(root, quest) {
+  const problems = checkpointGateProblemsForLog(
+    root,
+    quest,
+    readLog(root, quest.id),
+  );
   return {
     questId: quest.id,
     ready: problems.length === 0,

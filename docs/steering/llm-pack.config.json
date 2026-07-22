@@ -282,7 +282,7 @@
       "aliases": [
         {
           "file": "testing-guidelines/proof-ladders.md",
-          "line": 128,
+          "line": 132,
           "match": "must finish within the per-scope thresholds owned by scripts/check-file-size-thresholds.js"
         }
       ]
