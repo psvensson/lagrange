@@ -45,9 +45,43 @@ function syntheticAttemptApproval(attempt) {
     claim: 'checkpoint preflight simulated exact approval',
     evidence: PREFLIGHT_VERIFIER_EVIDENCE,
     verification: {
-      schemaVersion: VERIFICATION_CONTRACT_VERSION,
+      schemaVersion: attempt.verificationVersion,
       scope: VERIFICATION_SCOPE.ATTEMPT,
       fingerprint: attempt.fingerprint,
+    },
+  };
+}
+
+function candidatePreflightDossier(candidate) {
+  if (!candidate?.fingerprint) return null;
+  return {
+    fingerprint: candidate.fingerprint,
+    baseCommit: candidate.baseCommit,
+    paths: [...candidate.paths],
+    sourcePaths: [...candidate.sourcePaths],
+    firstAttemptIndex: candidate.firstAttemptIndex,
+    lastAttemptIndex: candidate.lastAttemptIndex,
+    currentFingerprint: candidate.fingerprint,
+    currentMatches: candidate.ok,
+  };
+}
+
+function syntheticCandidateApproval(candidate) {
+  return {
+    type: EVENT_FINDING,
+    frontier: candidate.attempts.at(-1)?.event.frontier || null,
+    kind: VERIFIER_APPROVAL_FINDING_KIND,
+    claim: 'checkpoint preflight simulated landing-candidate approval',
+    evidence: PREFLIGHT_VERIFIER_EVIDENCE,
+    verification: {
+      schemaVersion: VERIFICATION_CONTRACT_VERSION,
+      scope: VERIFICATION_SCOPE.CANDIDATE,
+      fingerprint: candidate.fingerprint,
+      baseCommit: candidate.baseCommit,
+      paths: [...candidate.paths],
+      sourcePaths: [...candidate.sourcePaths],
+      firstAttemptIndex: candidate.firstAttemptIndex,
+      lastAttemptIndex: candidate.lastAttemptIndex,
     },
   };
 }
@@ -133,9 +167,12 @@ export function checkpointVerificationPreflight(root, quest, log, options = {}) 
   const pendingApprovals = pendingWithFingerprints.map(
     (attempt) => attemptPreflightDossier(root, attempt),
   );
+  const candidate = candidatePreflightDossier(state.candidate);
+  const needsCandidateApproval = candidate && !state.candidateApproval;
   const syntheticLog = [
     ...log,
     ...pendingWithFingerprints.map(syntheticAttemptApproval),
+    ...(needsCandidateApproval ? [syntheticCandidateApproval(state.candidate)] : []),
   ];
   const simulatedState = verificationState(root, quest, syntheticLog, options);
   const problems = checkpointGateProblemsForLog(root, quest, syntheticLog);
@@ -155,20 +192,30 @@ export function checkpointVerificationPreflight(root, quest, log, options = {}) 
       pendingApprovals.length === state.pendingAttempts.length &&
       problems.length === 0,
     pendingApprovals,
+    candidate: {
+      dossier: candidate,
+      approvalRequired: Boolean(needsCandidateApproval),
+      approved: Boolean(state.candidateApproval),
+    },
     approvedUncheckpointedReceipts:
       approvedUncheckpointedAttempts(state).map(
         (attempt) => attemptPreflightDossier(root, attempt),
       ),
     replacementGroups,
-    applicableTemplates: applicablePreflightTemplates(root, pendingWithFingerprints),
+    applicableTemplates: applicablePreflightTemplates(root, [
+      ...pendingWithFingerprints,
+      ...(state.candidate?.attempts || []),
+    ]),
     aggregate: {
       fingerprint: aggregate.fingerprint,
       baseCommit: aggregate.baseCommit,
       paths: aggregate.paths || [],
       bothEligible: Boolean(
-        singlePendingFingerprint &&
+        (singlePendingFingerprint || candidate?.fingerprint) &&
         aggregate.ok &&
-        singlePendingFingerprint === aggregate.fingerprint,
+        (singlePendingFingerprint || candidate?.fingerprint) === aggregate.fingerprint &&
+        (!candidate || JSON.stringify(candidate.paths) ===
+          JSON.stringify(aggregate.paths || [])),
       ),
     },
     problems,
@@ -223,6 +270,14 @@ export function checkpointVerificationPreflightLines(preflight) {
       'NOT checkpoint-landable after required approvals'}`,
   ];
   appendPreflightAttemptLines(lines, 'pending exact approval', preflight.pendingApprovals);
+  if (preflight.candidate?.dossier) {
+    const candidate = preflight.candidate.dossier;
+    lines.push(
+      `landing candidate: ${candidate.fingerprint} base ${candidate.baseCommit} ` +
+      `(${preflight.candidate.approved ? 'approved' : 'approval required'})`,
+      `  paths: ${candidate.paths.join(', ') || '(none)'}`,
+    );
+  }
   appendPreflightAttemptLines(
     lines,
     'approved uncheckpointed receipt',

@@ -208,6 +208,8 @@ export function buildNextProjection(root, questId) {
       pendingAttemptCount: verification.pendingAttempts.length,
       aggregateFingerprint: verification.aggregate.fingerprint,
       aggregateApproved: Boolean(verification.aggregateApproval),
+      candidateFingerprint: verification.candidate?.fingerprint || null,
+      candidateApproved: Boolean(verification.candidateApproval),
       checkpointPreflight: verificationPreflight,
     },
     advisories,

@@ -1,0 +1,22 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "candidate-verification-cut-over",
+  "evidence": {
+    "focusedCompatibility": "10 focused files, 335 assertions",
+    "candidateProof": "test/solve/candidate-verification.test.js (24 assertions)",
+    "steeringPack": "npm run steering:llm:pack",
+    "consistency": "npm run solve:consistency (0 errors, 0 warnings)"
+  },
+  "validations": {
+    "v2AttemptsNeedNoIndividualApproval": true,
+    "candidateUsesFullCurrentUnion": true,
+    "explicitCheckpointReasonRequired": true,
+    "rejectionReplacementFailsClosed": true,
+    "invalidMixedBaseFailsClosed": true,
+    "terminalAggregateStillRequired": true,
+    "legacyV1Compatible": true,
+    "nextSkipsRoutineCheckpoint": true
+  }
+}

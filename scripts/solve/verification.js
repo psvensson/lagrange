@@ -31,15 +31,16 @@ const LOCAL_STR_OWNED_016 = 'is missing a sealed verification fingerprint';
 const LOCAL_STR_OWNED_017 = 'same-frontier, same-base source attempt covering every rejected ';
 const LOCAL_STR_OWNED_018 = 'source path plus its own later exact approval';
 const LOCAL_STR_OWNED_019 = 'could not inspect dirty checkpoint paths';
-const LOCAL_STR_OWNED_020 = 'verifier-rejection requires --verification-scope attempt';
 const GIT_STATUS_UNAVAILABLE = Symbol('git_status_unavailable');
 
-export const VERIFICATION_CONTRACT_VERSION = 1;
+export const LEGACY_VERIFICATION_CONTRACT_VERSION = 1;
+export const VERIFICATION_CONTRACT_VERSION = 2;
 export const VERIFIER_APPROVAL_FINDING_KIND = LOCAL_STR_OWNED_001;
 const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
 const VERIFICATION_VERDICT_REJECTED = 'rejected';
 export const VERIFICATION_SCOPE = Object.freeze({
   ATTEMPT: LOCAL_STR_OWNED_002,
+  CANDIDATE: 'candidate',
   AGGREGATE: LOCAL_STR_OWNED_003,
   BOTH: LOCAL_STR_OWNED_004,
 });
@@ -91,7 +92,12 @@ export function sourceChangingAttempts(root, quest, log, options = {}) {
       inspection,
       sourcePaths,
       fingerprint: attemptFingerprint(event),
-      contracted: event.verificationContractVersion ===
+      verificationVersion: event.verificationContractVersion || null,
+      contracted: [
+        LEGACY_VERIFICATION_CONTRACT_VERSION,
+        VERIFICATION_CONTRACT_VERSION,
+      ].includes(event.verificationContractVersion),
+      candidateContract: event.verificationContractVersion ===
         VERIFICATION_CONTRACT_VERSION,
     });
   }
@@ -108,7 +114,10 @@ function structuredApprovalMatches(event, scope, fingerprint) {
     event.kind !== VERIFIER_APPROVAL_FINDING_KIND ||
     !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) return false;
   const verification = verificationOf(event);
-  if (!verification || verification.schemaVersion !== VERIFICATION_CONTRACT_VERSION ||
+  if (!verification || ![
+    LEGACY_VERIFICATION_CONTRACT_VERSION,
+    VERIFICATION_CONTRACT_VERSION,
+  ].includes(verification.schemaVersion) ||
     verification.fingerprint !== fingerprint) return false;
   return verification.scope === scope || verification.scope === VERIFICATION_SCOPE.BOTH;
 }
@@ -118,7 +127,7 @@ function structuredRejectionMatches(event, fingerprint) {
     event.kind !== VERIFIER_REJECTION_FINDING_KIND ||
     !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) return false;
   const verification = verificationOf(event);
-  return verification?.schemaVersion === VERIFICATION_CONTRACT_VERSION &&
+  return verification?.schemaVersion === LEGACY_VERIFICATION_CONTRACT_VERSION &&
     verification.scope === VERIFICATION_SCOPE.ATTEMPT &&
     verification.fingerprint === fingerprint &&
     verification.verdict === VERIFICATION_VERDICT_REJECTED;
@@ -275,7 +284,8 @@ export function aggregateSourceFingerprint(root, attempts) {
     return {ok: true, fingerprint: null, content: '', paths: [], baseCommit: null};
   }
   const baseCommit = contracted[0].event.workspaceBaseCommit;
-  const paths = contracted.flatMap((attempt) => attempt.sourcePaths);
+  const paths = contracted.flatMap((attempt) => attempt.candidateContract ?
+    attempt.inspection.changedPaths : attempt.sourcePaths);
   return {
     ...canonicalSourceDelta(root, baseCommit, paths),
     baseCommit,
@@ -338,7 +348,7 @@ function findUncheckpointedApprovedAttempts(root, quest, log, state) {
   );
   const checkpointCommit = latestCheckpointCommit(root, quest.id);
   const candidates = state.attempts.filter((attempt) =>
-    attempt.contracted &&
+    attempt.verificationVersion === LEGACY_VERIFICATION_CONTRACT_VERSION &&
     !resolvedRejectedIndexes.has(attempt.index) &&
     (
       approvedReplacementIndexes.has(attempt.index) ||
@@ -354,6 +364,125 @@ function findUncheckpointedApprovedAttempts(root, quest, log, state) {
       .map((attempt) => attempt.index),
   );
   return candidates.filter((attempt) => !supersededIndexes.has(attempt.index));
+}
+
+function candidateReceiptOf(event) {
+  const verification = verificationOf(event);
+  if (event.type !== EVENT_FINDING ||
+    verification?.schemaVersion !== VERIFICATION_CONTRACT_VERSION ||
+    ![VERIFICATION_SCOPE.CANDIDATE, VERIFICATION_SCOPE.BOTH]
+      .includes(verification.scope) ||
+    !validVerificationFingerprint(verification.fingerprint) ||
+    !/^[0-9a-f]{40}$/u.test(String(verification.baseCommit || '')) ||
+    !Array.isArray(verification.paths) ||
+    !Number.isInteger(verification.firstAttemptIndex) ||
+    !Number.isInteger(verification.lastAttemptIndex)) return null;
+  return verification;
+}
+
+function buildLandingCandidate(root, quest, attempts) {
+  const checkpointCommit = latestCheckpointCommit(root, quest.id);
+  const selected = attempts.filter((attempt) =>
+    attempt.candidateContract &&
+    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+  if (selected.length === 0) {
+    return {ok: true, fingerprint: null, content: '', paths: [],
+      sourcePaths: [], baseCommit: null, attempts: [],
+      firstAttemptIndex: null, lastAttemptIndex: null};
+  }
+  const bases = [...new Set(selected.map((attempt) =>
+    attempt.event.workspaceBaseCommit))];
+  if (bases.length !== 1 || !/^[0-9a-f]{40}$/u.test(String(bases[0] || ''))) {
+    return {ok: false, fingerprint: null, content: null, paths: [],
+      sourcePaths: [], baseCommit: bases[0] || null, attempts: selected,
+      firstAttemptIndex: selected[0].index,
+      lastAttemptIndex: selected[selected.length - 1].index,
+      problem: 'landing candidate requires one recorded common Git base'};
+  }
+  const paths = [...new Set(selected.flatMap((attempt) =>
+    attempt.inspection.changedPaths))].sort();
+  const sourcePaths = [...new Set(selected.flatMap((attempt) =>
+    attempt.sourcePaths))].sort();
+  return {
+    ...canonicalSourceDelta(root, bases[0], paths),
+    baseCommit: bases[0],
+    sourcePaths,
+    attempts: selected,
+    firstAttemptIndex: selected[0].index,
+    lastAttemptIndex: selected[selected.length - 1].index,
+  };
+}
+
+function receiptMatchesProjection(receipt, projection) {
+  return receipt && projection?.ok &&
+    receipt.fingerprint === projection.fingerprint &&
+    receipt.baseCommit === projection.baseCommit &&
+    receipt.firstAttemptIndex === projection.firstAttemptIndex &&
+    receipt.lastAttemptIndex === projection.lastAttemptIndex &&
+    JSON.stringify([...receipt.paths].sort()) ===
+      JSON.stringify([...(projection.paths || [])].sort());
+}
+
+function validCandidateReceipt(receipt, fingerprint) {
+  return receipt && receipt.fingerprint === fingerprint &&
+    /^[0-9a-f]{40}$/u.test(String(receipt.baseCommit || '')) &&
+    Array.isArray(receipt.paths) && receipt.paths.length > 0 &&
+    Array.isArray(receipt.sourcePaths) &&
+    Number.isInteger(receipt.firstAttemptIndex) &&
+    Number.isInteger(receipt.lastAttemptIndex) &&
+    receipt.firstAttemptIndex <= receipt.lastAttemptIndex;
+}
+
+function candidateVerificationState(log, candidate) {
+  if (!candidate.ok) {
+    const anchor = candidate.attempts.at(-1);
+    return {
+      approval: null,
+      rejection: null,
+      unresolvedRejection: null,
+      problems: anchor ? [attemptProblem(
+        anchor,
+        candidate.problem || 'could not construct a valid landing candidate',
+      )] : [{
+        message: candidate.problem || 'could not construct a valid landing candidate',
+        ts: null,
+        frontier: null,
+      }],
+    };
+  }
+  if (!candidate.fingerprint) {
+    return {approval: null, rejection: null, unresolvedRejection: null, problems: []};
+  }
+  let approval = null;
+  let rejection = null;
+  for (const event of log.slice(candidate.firstAttemptIndex + 1)) {
+    const receipt = candidateReceiptOf(event);
+    if (!receipt || !VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''))) continue;
+    if (event.kind === VERIFIER_REJECTION_FINDING_KIND &&
+      receipt.verdict === VERIFICATION_VERDICT_REJECTED) rejection = {event, receipt};
+    if (event.kind === VERIFIER_APPROVAL_FINDING_KIND &&
+      receiptMatchesProjection(receipt, candidate)) approval = {event, receipt};
+  }
+  let unresolvedRejection = null;
+  const problems = [];
+  if (rejection) {
+    const rejectedPaths = new Set(rejection.receipt.paths);
+    const replacementPaths = new Set(candidate.paths || []);
+    const replaced = candidate.baseCommit === rejection.receipt.baseCommit &&
+      candidate.fingerprint !== rejection.receipt.fingerprint &&
+      candidate.lastAttemptIndex > rejection.receipt.lastAttemptIndex &&
+      [...rejectedPaths].every((filePath) => replacementPaths.has(filePath));
+    if (!replaced) {
+      unresolvedRejection = rejection;
+      problems.push({
+        message: 'landing candidate rejection requires a later same-base, ' +
+          'changed-fingerprint path-superset candidate',
+        ts: rejection.event.ts || null,
+        frontier: rejection.event.frontier || null,
+      });
+    }
+  }
+  return {approval, rejection, unresolvedRejection, problems};
 }
 
 export function verificationState(root, quest, log, options = {}) {
@@ -382,6 +511,7 @@ export function verificationState(root, quest, log, options = {}) {
       pendingAttempts.push(attempt);
       continue;
     }
+    if (attempt.candidateContract) continue;
     const rejection = rejectionDisposition(log, attempts, attempt);
     if (rejection?.replacement) {
       resolvedRejectedAttempts.push({
@@ -416,6 +546,10 @@ export function verificationState(root, quest, log, options = {}) {
     }
   }
 
+  const candidate = buildLandingCandidate(root, quest, attempts);
+  const candidateState = candidateVerificationState(log, candidate);
+  attemptProblems.push(...candidateState.problems);
+
   const aggregate = aggregateSourceFingerprint(root, attempts);
   const latestContracted = [...attempts].reverse().find((attempt) => attempt.contracted);
   let aggregateApproval = null;
@@ -442,6 +576,10 @@ export function verificationState(root, quest, log, options = {}) {
     aggregateProblems,
     resolvedRejectedAttempts,
     unresolvedRejectedAttempts,
+    candidate,
+    candidateApproval: candidateState.approval,
+    candidateRejection: candidateState.rejection,
+    unresolvedCandidateRejection: candidateState.unresolvedRejection,
   };
   return {
     ...state,
@@ -456,10 +594,23 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
   const state = verificationState(root, quest, log, options);
   if (state.attemptProblems.length > 0) return state.attemptProblems;
   const problems = [];
+  if (state.candidate?.fingerprint) {
+    if (!state.candidate.ok) {
+      problems.push(attemptProblem(
+        state.candidate.attempts.at(-1), state.candidate.problem));
+    } else if (!state.candidateApproval) {
+      problems.push(attemptProblem(
+        state.candidate.attempts.at(-1),
+        `landing candidate requires exact approval for ${state.candidate.fingerprint}`));
+    }
+  }
   const uncheckpointed = state.uncheckpointedApprovedAttempts;
   const contracted = state.attempts.filter((attempt) => attempt.contracted);
   const coveredPaths = new Set(uncheckpointed.flatMap(
     (attempt) => attempt.inspection.changedPaths));
+  if (state.candidateApproval) {
+    for (const filePath of state.candidate.paths) coveredPaths.add(filePath);
+  }
   const allAttemptPaths = contracted.flatMap(
     (attempt) => attempt.inspection.changedPaths);
   const dirtyPaths = dirtyPathsSinceHead(root, allAttemptPaths);
@@ -515,18 +666,38 @@ export function buildVerificationFinding(args) {
       `${label} requires --verification-scope attempt|aggregate|both`,
     );
   }
-  if (isRejection && scope !== VERIFICATION_SCOPE.ATTEMPT) {
-    throw new Error(LOCAL_STR_OWNED_020);
+  if (isRejection && ![
+    VERIFICATION_SCOPE.ATTEMPT,
+    VERIFICATION_SCOPE.CANDIDATE,
+  ].includes(scope)) {
+    throw new Error(
+      'verifier-rejection requires --verification-scope attempt|candidate');
   }
   if (!validVerificationFingerprint(args.verificationFingerprint)) {
     throw new Error(
       `${label} requires --verification-fingerprint sha256:<64 hex>`,
     );
   }
+  const schemaVersion = args.verificationSchemaVersion ||
+    (scope === VERIFICATION_SCOPE.CANDIDATE ?
+      VERIFICATION_CONTRACT_VERSION : LEGACY_VERIFICATION_CONTRACT_VERSION);
+  const receipt = args.verificationReceipt || null;
+  if (schemaVersion === VERIFICATION_CONTRACT_VERSION &&
+    scope === VERIFICATION_SCOPE.CANDIDATE && !validCandidateReceipt(
+    receipt, args.verificationFingerprint)) {
+    throw new Error('candidate verification requires a complete current receipt');
+  }
   return {
-    schemaVersion: VERIFICATION_CONTRACT_VERSION,
+    schemaVersion,
     scope,
     fingerprint: args.verificationFingerprint,
+    ...(schemaVersion === VERIFICATION_CONTRACT_VERSION && receipt ? {
+      baseCommit: receipt.baseCommit,
+      paths: [...receipt.paths].sort(),
+      sourcePaths: [...(receipt.sourcePaths || [])].sort(),
+      firstAttemptIndex: receipt.firstAttemptIndex,
+      lastAttemptIndex: receipt.lastAttemptIndex,
+    } : {}),
     ...(isRejection ? {verdict: VERIFICATION_VERDICT_REJECTED} : {}),
   };
 }

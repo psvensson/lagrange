@@ -41,8 +41,9 @@ A Quest must:
 2. define one or more independent `frontiers[]`;
 3. measure progress with lower-is-better probe metrics;
 4. record every attempt through the Solver event log;
-5. for every Quest-scoped source attempt, record exact subagent approval before
-   checkpoint, then approve the aggregate source scope before terminal handoff;
+5. accumulate version 2 source attempts into one exact landing candidate; review
+   it only at an explicit durability boundary, then approve the complete aggregate
+   scope before terminal handoff (legacy version 1 attempts keep their old rules);
 6. close only through a Solver terminal state;
 7. after audit passes, commit every Quest-scoped change (the Solver never
    pushes; see "Regular Commit (No Push)" below).
@@ -308,28 +309,22 @@ more code is changed.
 ## Regular Commit (No Push)
 
 A Quest must not accumulate an unrecoverable dirty tree, but recording an
-attempt or finding MUST NOT commit as a side effect. After an independent
-verifier approves the exact attempt fingerprint, persist it explicitly:
+attempt or finding MUST NOT commit as a side effect. Routine accepted attempts
+stay uncheckpointed. At a real durability boundary, review the one current
+landing candidate and persist it explicitly with a named reason:
 
 ```sh
-node scripts/solve.js checkpoint --id <quest>
+node scripts/solve.js checkpoint --id <quest> \
+  --reason <handoff|risky-tree|long-running|milestone>
 ```
 
-Checkpoint recomputes the attempt's path-limited Git delta from its recorded
-base. It checks every exact receipt since the latest checkpoint, refuses changed
-content, and refuses any dirty in-scope path that is not covered by a new receipt.
-This permits a later checkpoint to revise a previously checkpointed file without
-letting unrecorded edits hitchhike. It then commits only that Quest's in-scope
-pathspec. Terminal handoff separately requires the aggregate source fingerprint
-and the full audit. Both actions use configured attribution only; they never
-invent an agent identity.
-
-Treat an approved attempt's complete covered path union as frozen until
-checkpoint. Checkpoint immediately after exact approval. Do not interleave a
-same-worktree commit that touches that union; when concurrent work is necessary,
-isolate it in another worktree. If the reviewed bytes or base move first, record
-and approve a new canonical replacement receipt rather than trying to land the
-stale approval.
+The candidate is the current Git delta from one common recorded base across the
+sorted union of every uncheckpointed version 2 attempt path. Checkpoint refuses
+partial coverage, byte/base drift, unreceipted hitchhikers, or a missing exact
+candidate approval, then records the durability reason in the commit body and
+commits only Quest scope. Terminal handoff separately requires full aggregate
+composition approval and audit. Version 1 receipts retain their historical
+per-attempt checkpoint behavior.
 
 The Solver NEVER pushes: no subcommand, loop, or handoff runs `git push`
 (`autoCommitQuest` and `handoff` are commit-only). Pushing is a separate,
@@ -627,13 +622,18 @@ building-block DTs without a live-precondition theory are exempt.
 
 ## Source Change Verification
 
-Every newly accepted source-changing attempt records verification contract v1,
-its Git base, and the SHA-256 identity of its exact patch. Before spawning the
-verifier, run both preflights:
+New Quests use verification contract v2. Every source-changing attempt still
+records its Git base and exact patch identity, but exploratory attempts require
+no individual approval. Their current bytes accumulate into one landing
+candidate. Existing version 1 Quests and receipts preserve their original
+per-attempt behavior.
+
+Before review at an explicit durability boundary, run:
 
 ```sh
 npm run audit:attempt-preflight
-node scripts/solve.js checkpoint --id <quest> --dry-run
+node scripts/solve.js checkpoint --id <quest> --dry-run \
+  --reason <handoff|risky-tree|long-running|milestone>
 ```
 
 The attempt preflight covers file-size thresholds, STYLE-0012 vocabulary, and
@@ -642,22 +642,12 @@ green. The census is absolute and may carry inherited drift: compare its listed
 sites against the same command on the attempt's Git base — any NEW site means
 the attempt is not ready for verification.
 
-The checkpoint dry run performs a read-only hypothetical exact approval through
-the real narrow checkpoint gate: integrity violations, change-artifact validity,
-and exact verification all run against the copied log. The checkpoint dry run
-must report the candidate as checkpoint-landable after required approvals before
-delegation.
-The verification surface is the first verifier dossier: (a) attempt base,
-fingerprint, complete changed-path set, source-path set, and current-byte match;
-(b) every unresolved
-same-frontier/same-base rejection and required replacement path union; (c) all
-approved but uncheckpointed receipts, drift status, and complete path union; (d)
-the current aggregate fingerprint, base, and sorted source-path union; and (e)
-every applicable verification template. `next` exposes the same projection and
-must return replacement work instead of verifier delegation when hypothetical
-approval would still leave the candidate structurally uncheckpointable. This is
-a structural checkpoint-landability gate, not a substitute for product tests or
-the full audit.
+The dry run applies the real narrow checkpoint gate to a copied exact-candidate
+approval. Its dossier contains the common base, current fingerprint, complete
+path/source-path unions, attempt range, unresolved rejection obligations,
+aggregate context, and every applicable template. `next` does not prescribe
+checkpoint or verification for routine version 2 attempts; it keeps advancing
+work until terminal or an operator explicitly requests a durability boundary.
 
 The verifier must inspect that complete manifest, the exact patch, Quest seal,
 relevant steering, proof receipts, and every applicable checklist in the first
@@ -667,41 +657,42 @@ checklist theater. A red-on-revert receipt is behavioral evidence only when the
 reverted run reaches and fails the named assertion through the intended
 mechanism; apply
 [`harness-fidelity.md`](../verification-templates/harness-fidelity.md), not exit
-status alone. Record an exact attempt approval on the active frontier:
+status alone. Record an exact candidate approval on the active frontier:
 
 ```sh
 node scripts/solve.js finding --id <quest> --frontier <frontier> \
   --kind verifier-approval \
   --claim "Independent verification passed" \
   --evidence subagent:<id> \
-  --verification-scope attempt \
-  --verification-fingerprint sha256:<attempt-fingerprint>
+  --verification-scope candidate \
+  --verification-fingerprint sha256:<candidate-fingerprint>
 ```
 
-Every contracted source attempt needs its own later, same-frontier exact
-approval. Historical attempts without the contract retain the legacy prose
-matcher; legacy prose cannot approve a v1 attempt. `step --commit` prints
+One version 2 approval covers the exact current union; later byte, base, path, or
+attempt drift invalidates it. Historical attempts without the contract retain
+the legacy prose matcher, and version 1 attempts retain exact per-attempt
+approval. `step --commit` prints
 `suggested verification template: <path>` when the change diff matches an
 attack checklist under
 [`docs/steering/verification-templates/`](../verification-templates/INDEX.md);
 include every applicable suggested template in the verifier's initial prompt.
 
-When the independent verifier rejects an exact attempt, record that verdict
+When the independent verifier rejects a version 2 candidate, record that verdict
 instead of fabricating an approval:
 
 ```sh
 node scripts/solve.js finding --id <quest> --frontier <frontier> \
   --kind verifier-rejection \
-  --claim "Independent verification rejected this exact attempt" \
+  --claim "Independent verification rejected this exact candidate" \
   --evidence subagent:<id> \
-  --verification-scope attempt \
-  --verification-fingerprint sha256:<attempt-fingerprint>
+  --verification-scope candidate \
+  --verification-fingerprint sha256:<candidate-fingerprint>
 ```
 
 A rejection is fail-closed and cannot be reversed by approving the rejected
-bytes later. It is resolved only when a later contracted source attempt on the
-same frontier and Git base has a different exact fingerprint, covers every
-rejected source path, and receives its own later exact approval. Recording a
+bytes later. It is resolved only when a later source attempt produces a
+same-base, different-fingerprint candidate whose paths are a superset of the
+rejected union. Recording a
 structured rejection reopens a terminal Quest and its solved frontier so the
 replacement step rendered by `next` is executable. Until replacement,
 checkpoint and terminal handoff remain blocked; `next` asks for the replacement
@@ -710,14 +701,11 @@ Aggregate verification still covers the final source delta across the complete
 attempt path union.
 
 At terminal, recompute the aggregate fingerprint from the earliest contracted
-base through the current Git content over the sorted union of all recorded
-source paths. A later aggregate approval is mandatory. `--verification-scope
-both` may deduplicate the two approvals only when a single attempt fingerprint
-equals that aggregate fingerprint. Before terminal, the aggregate shown in the
-preflight is context rather than a separate approval request. At terminal,
-`both` is the sole deduplication shortcut and is valid only on that exact
-equality. Any later attempt, artifact tamper, or edit to an in-scope path
-invalidates the prior approval.
+base through current Git content over every version 2 changed path (version 1
+keeps its historical source-path rule). Aggregate approval is always mandatory.
+`both` deduplicates candidate and aggregate review only when base, path union,
+attempt range, and fingerprint are exactly identical. Any later attempt,
+artifact tamper, or in-scope edit invalidates the approval.
 
 ## Git Handoff
 

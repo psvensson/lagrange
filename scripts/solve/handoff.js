@@ -42,6 +42,7 @@ import {
   checkpointVerificationPreflight,
   checkpointVerificationPreflightLines,
 } from './checkpoint-preflight.js';
+import {verificationState} from './verification.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
@@ -50,6 +51,9 @@ const STDIO_IGNORE = 'ignore';
 const CHECKPOINT_ID_REQUIRED_PROBLEM =
   'checkpoint: --id <questId> is required';
 const DRY_RUN_ARGUMENT = 'dry-run';
+const CHECKPOINT_REASONS = new Set([
+  'handoff', 'risky-tree', 'long-running', 'milestone',
+]);
 const GIT_ARGUMENT = Object.freeze({
   ADD: 'add',
   ALL: '--all',
@@ -187,6 +191,7 @@ export function buildHandoff(root, quest, options = {}) {
   return {
     ok,
     checkpoint,
+    checkpointReason: options.checkpointReason || null,
     questId: quest.id,
     audit,
     gate,
@@ -212,7 +217,11 @@ function commitMessage(handoff) {
   const subject = handoff.checkpoint ?
     `checkpoint(quest): ${handoff.questId}:` :
     `${handoff.questId}: ${handoff.summary}`;
-  const body = handoff.checkpoint ? [handoff.summary] : [];
+  const body = handoff.checkpoint ? [
+    handoff.summary,
+    ...(handoff.checkpointReason ?
+      [`durability-boundary: ${handoff.checkpointReason}`] : []),
+  ] : [];
   if (handoff.coauthorTrailer) body.push(handoff.coauthorTrailer);
   return body.length > 0 ? `${subject}\n\n${body.join('\n\n')}` : subject;
 }
@@ -323,7 +332,10 @@ export function autoCommitQuest(root, questId, options = {}) {
   }
   const checkpoint = options.checkpoint === true;
   const quest = loadQuest(root, questId);
-  const handoff = buildHandoff(root, quest, {checkpoint});
+  const handoff = buildHandoff(root, quest, {
+    checkpoint,
+    checkpointReason: options.checkpointReason,
+  });
   if (!handoff.ok) {
     return {
       committed: false,
@@ -385,7 +397,18 @@ export function runHandoffCommand(root, args) {
 export function runCheckpointCommand(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error(CHECKPOINT_ID_REQUIRED_PROBLEM);
-  const handoff = buildHandoff(root, loadQuest(root, id), {checkpoint: true});
+  const quest = loadQuest(root, id);
+  const state = verificationState(root, quest, readLog(root, id));
+  const candidateCheckpoint = Boolean(state.candidate?.fingerprint);
+  const reason = typeof args.reason === 'string' ? args.reason : null;
+  if (candidateCheckpoint && !CHECKPOINT_REASONS.has(reason)) {
+    throw new Error('checkpoint: version 2 requires --reason ' +
+      '<handoff|risky-tree|long-running|milestone>');
+  }
+  const handoff = buildHandoff(root, quest, {
+    checkpoint: true,
+    checkpointReason: reason,
+  });
   const rendered = renderHandoff(handoff);
   if (args[DRY_RUN_ARGUMENT]) {
     return `${rendered}\n(dry run — omit --dry-run to execute checkpoint)\n`;

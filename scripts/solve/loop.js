@@ -75,8 +75,8 @@ import {appendEvent, readLog, projectState, rebuildState, invariantHighWater} fr
 import {frontierHasValidSample} from './sample-validity.js';
 import {autoCommitQuest} from './handoff.js';
 import {
+  LEGACY_VERIFICATION_CONTRACT_VERSION,
   resolveWorkspaceBaseCommit,
-  VERIFICATION_CONTRACT_VERSION,
 } from './verification.js';
 import {assertQuestReadyToSeal} from './quest-lint.js';
 import {writeReportForQuest} from './report.js';
@@ -428,7 +428,8 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     quest.id,
     event.changeRef,
   );
-  event.verificationContractVersion = VERIFICATION_CONTRACT_VERSION;
+  event.verificationContractVersion = quest.verificationContractVersion ||
+    LEGACY_VERIFICATION_CONTRACT_VERSION;
   event.workspaceBaseCommit = result.workspaceBaseCommit || null;
   if (!event.invalidSample &&
     !changeArtifactIdentityIsSealed(event.changeRefIdentity)) {

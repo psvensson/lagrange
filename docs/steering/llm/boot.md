@@ -75,12 +75,13 @@ executable. When it recommends supervised mode, use `step`. When it recommends
 autonomous mode, `next` may return the real agent invocation. The no-op example
 adapter is never treated as a capability.
 
-After a source-changing attempt, `next` returns the exact attempt fingerprint
-and its checkpoint-readiness dossier, then directs the operator to the explicit
-checkpoint:
+Version 2 source attempts accumulate into one landing candidate. `next` keeps
+routine work moving; it does not prescribe per-attempt review or checkpoint.
+Only at a real durability boundary request the candidate dossier explicitly:
 
 ```sh
-node scripts/solve.js checkpoint --id <id>
+node scripts/solve.js checkpoint --id <id> --dry-run \
+  --reason <handoff|risky-tree|long-running|milestone>
 ```
 
 At a terminal, `next` requests aggregate verification when needed and returns
@@ -98,7 +99,7 @@ mechanical checks and the read-only checkpoint simulation:
 
 ```sh
 npm run audit:attempt-preflight
-node scripts/solve.js checkpoint --id <id> --dry-run
+node scripts/solve.js checkpoint --id <id> --dry-run --reason <reason>
 node scripts/solve.js next --id <id> --json
 ```
 
@@ -108,13 +109,12 @@ candidate will be checkpoint-landable after the required approval. If it does
 not, record the canonical same-frontier/same-base replacement and complete path
 superset it names before spending a verifier turn.
 
-Give the verifier the complete first-pass manifest from `next`: attempt base,
-fingerprint, complete paths, unresolved replacement obligations, approved but
-uncheckpointed receipts, aggregate fingerprint/path union, and every applicable
-attack template. After approval, checkpoint before changing or committing any
-path in that frozen union. Isolate concurrent work in another worktree; do not
-let an intervening same-worktree commit change the reviewed base or covered
-paths. The canonical details live in solver-quests.md "Source Change
+Give the verifier the complete first-pass candidate manifest: common base,
+fingerprint, complete current path union, attempt range, unresolved replacement
+obligations, aggregate context, and every applicable attack template. After
+approval, either perform the named checkpoint immediately or proceed directly
+to terminal aggregate review; any intervening change invalidates the receipt.
+The canonical details live in solver-quests.md "Source Change
 Verification" and "Regular Commit (No Push)."
 
 ## Conflict Rule And Escape Hatch

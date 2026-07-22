@@ -1,0 +1,52 @@
+{
+  "id": "solver-workflow-candidate-verification-cutover",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Source-changing exploratory attempts accumulate into one exact landing candidate; independent review is required once per explicit durability boundary, routine accepted attempts do not prescribe checkpoints, rejections remain fail-closed, legacy receipts remain valid, and terminal handoff still requires exact full-composition approval.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "solver-workflow-epic-routing-cutover",
+    "planDoc": "solve/epics/convergence-loop-and-workflow-overhead.md",
+    "draftedAtCommit": "66b62affdb46bccde5ffcfa97379ee3011c9efab"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-workflow-candidate-verification-cutover.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-workflow-candidate-verification-cutover-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-workflow-candidate-verification-cutover.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "candidate-union",
+      "statement": "A version 2 candidate covers the current bytes for the exact sorted union of every uncheckpointed version 2 attempt path at one common base; dirty unreceipted paths cannot hitchhike."
+    },
+    {
+      "id": "rejection-fail-closed",
+      "statement": "A rejected candidate is resolved only by a later same-base, changed-fingerprint path superset candidate; terminal aggregate review never disappears."
+    },
+    {
+      "id": "legacy-compatibility",
+      "statement": "Version 1 attempt receipts and historical logs preserve their existing verification and checkpoint behavior."
+    }
+  ]
+}

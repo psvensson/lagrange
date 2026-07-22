@@ -59,7 +59,12 @@ import {
   lintQuestCorpus,
   renderQuestLint,
 } from './solve/quest-lint.js';
-import {buildVerificationFinding} from './solve/verification.js';
+import {
+  buildVerificationFinding,
+  verificationState,
+  VERIFICATION_CONTRACT_VERSION,
+  VERIFICATION_SCOPE,
+} from './solve/verification.js';
 
 const LOCAL_STR_OWNED_001 = 'new: Quest ID has append-only history but no Quest file; restore it or author a successor';
 const LOCAL_STR_OWNED_002 = 'new: --force cannot overwrite a Quest with append-only history; author a successor';
@@ -121,6 +126,7 @@ function questTemplate(id, statement, questClass) {
   return {
     id,
     authoringContractVersion: QUEST_AUTHORING_CONTRACT_VERSION,
+    verificationContractVersion: VERIFICATION_CONTRACT_VERSION,
     statement: statement || 'Describe the terminal success condition in one line.',
     priority: 1,
     // class: "product" (default) goals must be MEASURED against a real artifact;
@@ -436,7 +442,7 @@ function cmdFinding(root, args) {
   if (typeof args.claim !== 'string') {
     throw new Error('finding: --claim "<what was learned>" is required');
   }
-  loadQuest(root, id);
+  const quest = loadQuest(root, id);
   const regressionLabels = Array.isArray(args['regression-label']) ?
     args['regression-label'] :
     (typeof args['regression-label'] === 'string' ?
@@ -465,12 +471,46 @@ function cmdFinding(root, args) {
       null;
   const kind = optionalStringArgument(args, 'kind');
   const evidence = optionalStringArgument(args, 'evidence');
+  const verificationScope = optionalStringArgument(args, 'verification-scope');
+  const verificationFingerprint =
+    optionalStringArgument(args, 'verification-fingerprint');
+  let verificationReceipt = null;
+  let verificationSchemaVersion = null;
+  if (kind && verificationScope) {
+    const verificationProjection = verificationState(
+      root, quest, readLog(root, id));
+    if (verificationScope === VERIFICATION_SCOPE.CANDIDATE) {
+      verificationReceipt = verificationProjection.candidate;
+      verificationSchemaVersion = VERIFICATION_CONTRACT_VERSION;
+      if (!verificationReceipt?.ok ||
+        verificationReceipt.fingerprint !== verificationFingerprint) {
+        throw new Error('candidate verification fingerprint does not match current bytes');
+      }
+    } else if ([VERIFICATION_SCOPE.AGGREGATE, VERIFICATION_SCOPE.BOTH]
+      .includes(verificationScope) &&
+      verificationProjection.attempts.some((attempt) => attempt.candidateContract)) {
+      const candidateAttempts = verificationProjection.attempts.filter(
+        (attempt) => attempt.candidateContract);
+      verificationReceipt = {
+        ...verificationProjection.aggregate,
+        sourcePaths: verificationProjection.aggregate.paths,
+        firstAttemptIndex: candidateAttempts[0].index,
+        lastAttemptIndex: candidateAttempts[candidateAttempts.length - 1].index,
+      };
+      verificationSchemaVersion = VERIFICATION_CONTRACT_VERSION;
+      if (!verificationReceipt.ok ||
+        verificationReceipt.fingerprint !== verificationFingerprint) {
+        throw new Error('aggregate verification fingerprint does not match current bytes');
+      }
+    }
+  }
   const verification = buildVerificationFinding({
     kind,
     evidence,
-    verificationScope: optionalStringArgument(args, 'verification-scope'),
-    verificationFingerprint:
-      optionalStringArgument(args, 'verification-fingerprint'),
+    verificationScope,
+    verificationFingerprint,
+    verificationReceipt,
+    verificationSchemaVersion,
   });
   const stamped = appendFinding(root, id, {
     frontier: args.frontier,

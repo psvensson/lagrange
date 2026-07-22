@@ -37,8 +37,8 @@
     "usage": "node scripts/solve.js handoff --id <id> [--commit]"
   },
   "checkpoint": {
-    "summary": "Explicitly commit one scope-clean mid-Quest attempt after its exact patch fingerprint is approved and the current path-limited delta is unchanged. Never pushes; --dry-run renders a read-only hypothetical-approval dossier so unlandable candidates are fixed before verifier delegation.",
-    "usage": "node scripts/solve.js checkpoint --id <id> [--dry-run]"
+    "summary": "At an explicit durability boundary, commit the one exact scope-clean landing candidate after approval. Version 2 requires a named boundary reason; routine attempts do not checkpoint. Never pushes.",
+    "usage": "node scripts/solve.js checkpoint --id <id> --reason <handoff|risky-tree|long-running|milestone> [--dry-run]"
   },
   "invariants": {
     "summary": "Tier-2 live-evidence verification of architecture invariants (the standing dual of doneWhen): derive HELD/BREACHED/UNGUARDED for entries in architecture/contracts/invariants.json that carry a liveEvidence block, as a fold over the Solver event log. Always active (unconditional).",

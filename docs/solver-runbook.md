@@ -80,49 +80,42 @@ node scripts/solve.js step --id my-quest --commit \
 `step --commit` records the measured attempt; it does not make a Git commit.
 Use `step --abort` to discard a pending pin without recording an attempt.
 
-## Verify And Checkpoint Source Work
+## Continue Source Work; Verify Only At A Durability Boundary
 
-After a source attempt, run the cheap attempt checks and the read-only
-hypothetical checkpoint before delegating review:
+Version 2 attempts accumulate without individual review. Keep following
+`solve next` until terminal unless a real durability boundary requires a commit.
+At that boundary, run the cheap checks and project the one current candidate:
 
 ```sh
 npm run audit:attempt-preflight
-node scripts/solve.js checkpoint --id my-quest --dry-run
+node scripts/solve.js checkpoint --id my-quest --dry-run --reason milestone
 node scripts/solve.js next --id my-quest --json
 ```
 
-The checkpoint output may refuse on the intentionally missing approval, but its
-verification preflight must say the candidate will be checkpoint-landable after
-the required approval. That projection applies the same narrow integrity,
-change-artifact, and exact-verification checks as checkpoint. Otherwise record
-the same-frontier/same-base canonical
-replacement and complete path superset it names first. `solve next` supplies the
-exact attempt/base/path dossier, older uncheckpointed receipts, replacement
-obligations, aggregate context, and applicable templates. Give that whole first
-pass to an independent subagent, then record its exact approval:
+The dry run must say the candidate will be checkpoint-landable after one exact
+approval. Give its common-base/current-union dossier and applicable templates to
+an independent verifier, then record the exact candidate verdict:
 
 ```sh
 node scripts/solve.js finding --id my-quest --frontier my-quest-main \
   --kind verifier-approval \
   --claim "Independent verification passed" \
   --evidence subagent:<id> \
-  --verification-scope attempt \
-  --verification-fingerprint sha256:<attempt-fingerprint>
+  --verification-scope candidate \
+  --verification-fingerprint sha256:<candidate-fingerprint>
 
-node scripts/solve.js checkpoint --id my-quest
+node scripts/solve.js checkpoint --id my-quest --reason milestone
 ```
 
-The finding is append-only and has no commit side effect. Checkpoint immediately
-after approval; until then, treat the complete covered path union as frozen.
-`checkpoint` refuses if the patch or its current path-limited Git delta changed
-after approval. It commits only the Quest scope and never pushes.
+The finding has no commit side effect. The checkpoint records the durability
+reason, refuses any candidate drift, commits only Quest scope, and never pushes.
+Routine work skips this section entirely and goes straight to terminal review.
 
 ## Terminal Verification And Handoff
 
 At SOLVED or EXHAUSTED, source-changing work needs a fresh approval of the
-aggregate fingerprint that `solve next` prints. A single canonical attempt may
-use `--verification-scope both` only when the attempt and aggregate fingerprints
-are identical.
+aggregate fingerprint that `solve next` prints. `both` is valid only when the
+candidate and aggregate base, paths, range, and fingerprint are identical.
 
 ```sh
 node scripts/solve.js report --id my-quest

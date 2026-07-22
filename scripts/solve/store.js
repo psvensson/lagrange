@@ -48,16 +48,23 @@ const LOCAL_STR_OWNED_001 = 'exact terminal source attempt was rejected';
 const UNKNOWN_METRIC = '?';
 const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
 const VERIFICATION_SCOPE_ATTEMPT = 'attempt';
+const VERIFICATION_SCOPE_CANDIDATE = 'candidate';
 const VERIFICATION_VERDICT_REJECTED = 'rejected';
 const VERIFICATION_FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const VERIFIER_EVIDENCE_PATTERN =
   /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
 
 function isStructuredVerifierRejection(event) {
+  const versionOneAttempt = event.verification?.schemaVersion === 1 &&
+    event.verification?.scope === VERIFICATION_SCOPE_ATTEMPT;
+  const versionTwoCandidate = event.verification?.schemaVersion === 2 &&
+    event.verification?.scope === VERIFICATION_SCOPE_CANDIDATE &&
+    /^[0-9a-f]{40}$/u.test(String(event.verification?.baseCommit || '')) &&
+    Array.isArray(event.verification?.paths) &&
+    Number.isInteger(event.verification?.lastAttemptIndex);
   return event?.type === EVENT_FINDING &&
     event.kind === VERIFIER_REJECTION_FINDING_KIND &&
-    event.verification?.schemaVersion === 1 &&
-    event.verification?.scope === VERIFICATION_SCOPE_ATTEMPT &&
+    (versionOneAttempt || versionTwoCandidate) &&
     event.verification?.verdict === VERIFICATION_VERDICT_REJECTED &&
     VERIFICATION_FINGERPRINT_PATTERN.test(
       String(event.verification?.fingerprint || ''),
@@ -68,7 +75,7 @@ function isStructuredVerifierRejection(event) {
 function boundVerifierRejectionEvents(log) {
   const contractedAttemptKeys = new Set();
   const boundRejections = new Set();
-  for (const event of log) {
+  for (const [index, event] of log.entries()) {
     const fingerprint = `sha256:${event.changeRefIdentity?.sha256 || ''}`;
     const key = `${event.frontier || ''}\n${fingerprint}`;
     if (event.type === EVENT_ATTEMPT &&
@@ -78,6 +85,11 @@ function boundVerifierRejectionEvents(log) {
       continue;
     }
     if (isStructuredVerifierRejection(event)) {
+      if (event.verification.schemaVersion === 2 &&
+        event.verification.lastAttemptIndex < index) {
+        boundRejections.add(event);
+        continue;
+      }
       const rejectionKey = `${event.frontier || ''}\n` +
         event.verification.fingerprint;
       if (contractedAttemptKeys.has(rejectionKey)) {
