@@ -1116,15 +1116,22 @@ so stale execution state cannot masquerade as an active steering rule.
 Track authored Quest files under `solve/quests/`.
 
 Track the append-only event log under `solve/log/` because it is the durable
-source of truth for findings, attempts, and terminal state. Track generated
-reports under `solve/report/` and attempt change artifacts under
-`solve/changes/` when they explain committed work.
+source of truth for findings, attempts, and terminal state. Track exact attempt
+change artifacts under `solve/changes/` and non-regenerable evidence under
+`solve/report/`.
 
 Projected state under `solve/state/` is local cache and may be rebuilt from the
-Quest plus append-only log. Do not rely on `solve/state/` as durable memory.
-`solve/OVERVIEW.generated.md` is likewise an ignored local projection: recording
-the attempt that generated it changes the Quest state it displays. Run
-`solve overview --write` on demand; never gate handoff on its checked-in bytes.
+Quest plus append-only log. Ordinary `solve/report/<quest-id>.md` files with a
+matching declaration and log, plus `solve/OVERVIEW.generated.md`, are likewise
+ignored local projections. Generate either on demand. Their presence, mtime,
+or bytes MUST NOT gate `next`, audit, checkpoint, or terminal handoff.
+
+Files under `solve/report/` that cannot be reconstructed from one Quest
+declaration and event log remain durable evidence. A projection-retention
+migration MUST classify exact paths before removal, record base commit, byte
+count, and SHA-256 for removed and retained files, and preserve every unmatched
+or nested report artifact. Historical root digests ignore ordinary regenerated
+reports but continue to bind retained evidence.
 
 ## Ledger Consistency
 

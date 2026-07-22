@@ -310,7 +310,6 @@ function buildRunOptions(root, id, args) {
 }
 
 function writeRunOutcome(root, id, result) {
-  const {file} = writeReport(root, id);
   const problems = result.problems?.length ?
     `problems:\n${result.problems.map((problem) => `- ${problem}`).join('\n')}\n` :
     '';
@@ -332,7 +331,7 @@ function writeRunOutcome(root, id, result) {
     next +
     nextAction +
     commitLine(result.commit) +
-    `report: ${file}\n`);
+    `report: on demand via node scripts/solve.js report --id ${id}\n`);
   refreshFrontierBoard(root);
 }
 

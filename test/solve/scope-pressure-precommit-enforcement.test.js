@@ -21,7 +21,12 @@ import {scopeTerminalStatus} from '../../scripts/solve/convergence-guards.js';
 import {analyzeScopePressureCandidate} from
   '../../scripts/solve/scope-pressure.js';
 import {runStep, stepPending} from '../../scripts/solve/step.js';
-import {appendEvent, readLog, saveQuest} from '../../scripts/solve/store.js';
+import {
+  appendEvent,
+  appendGuardOverride,
+  readLog,
+  saveQuest,
+} from '../../scripts/solve/store.js';
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'scope-precommit-'));
@@ -89,6 +94,35 @@ tap.test('real step rejects one-above path bound before attempt recording', (t) 
     /scope-pressure precommit blocked.*files=26/iu);
   t.equal(readLog(root, quest.id).some((event) => event.type === EVENT_ATTEMPT), false);
   t.ok(stepPending(root, quest.id), 'pending step survives split-required refusal');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('one recorded scope override authorizes one over-bound step', (t) => {
+  const {root, quest} = setup();
+  const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
+    `scripts/solve/case-${index}.js`);
+  appendGuardOverride(root, quest.id, {
+    frontier: quest.frontiers[0].id,
+    code: 'blocked-scope',
+    reason: 'the atomic migration has an independently bounded generated-path manifest',
+  });
+  const result = commit(root, quest, makeDiff(root, paths));
+  t.same(result.violations, []);
+  const log = readLog(root, quest.id);
+  t.equal(log.filter((event) => event.type === EVENT_ATTEMPT).length, 1);
+  t.ok(log.some((event) => event.type === 'gate-decision' && event.override),
+    'the exception is consumed and durable rather than silently bypassed');
+  const handoff = buildHandoff(root, quest, {dirtyFiles: []});
+  t.notMatch(handoff.gate.problems.map((item) => item.message).join(' '),
+    /scope-pressure precommit blocked/iu,
+    'terminal handoff honors the exact consumed attempt admission');
+  const second = runStep(root, quest);
+  t.equal(second.terminal, null,
+    'begin does not duplicate exact candidate admission');
+  t.throws(() => commit(root, quest, makeDiff(root, paths, 0, 'second')),
+    /scope-pressure precommit blocked.*files=26/iu,
+    'the consumed override cannot authorize a second candidate');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

@@ -291,7 +291,7 @@
     "aliasRuleCount": 4,
     "masterRuleCount": 408,
     "emittedMasterRuleCount": 408,
-    "estimatedAllRulesTokens": 17230
+    "estimatedAllRulesTokens": 17273
   },
   "rules": [
     {
@@ -5087,23 +5087,7 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Do not rely on solve/state/ as durable memory.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 1124,
-          "section": "Quest Workflow > Tracked Versus Regenerable",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0060",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Run solve overview --write on demand; never gate handoff on its checked-in bytes.",
+      "rule": "Their presence, mtime, or bytes MUST NOT gate next, audit, checkpoint, or terminal handoff.",
       "score": 202,
       "sources": [
         {
@@ -5115,7 +5099,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5124,7 +5108,23 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1138,
+          "line": 1145,
+          "section": "Quest Workflow > Ledger Consistency",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0061",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Derived epic stage keys ONLY on explicit planning references and projected Quest state — never on status or decision-log prose.",
+      "score": 202,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 1160,
           "section": "Quest Workflow > Ledger Consistency",
           "role": "packed"
         }
@@ -5135,28 +5135,12 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Derived epic stage keys ONLY on explicit planning references and projected Quest state — never on status or decision-log prose.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 1153,
-          "section": "Quest Workflow > Ledger Consistency",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0063",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
       "rule": "The consistency gate separately checks structural contract fields and the presence of the exact decision-log heading; it never interprets the entry text.",
       "score": 202,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1154,
+          "line": 1161,
           "section": "Quest Workflow > Ledger Consistency",
           "role": "packed"
         }
@@ -5197,7 +5181,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5409,7 +5393,7 @@
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5425,7 +5409,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5443,7 +5427,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5459,7 +5443,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5515,7 +5499,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5581,7 +5565,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5599,7 +5583,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5615,7 +5599,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5647,7 +5631,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5663,7 +5647,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5679,7 +5663,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5695,7 +5679,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5711,7 +5695,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -5805,7 +5789,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5821,7 +5805,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5837,7 +5821,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5869,7 +5853,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5885,7 +5869,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5904,7 +5888,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5920,7 +5904,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5936,7 +5920,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5952,7 +5936,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5968,7 +5952,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6086,7 +6070,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6120,7 +6104,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6131,6 +6115,22 @@
           "file": "workflow-guidelines/solver-quests.md",
           "line": 1021,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0089",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "A projection-retention migration MUST classify exact paths before removal, record base commit, byte count, and SHA-256 for removed and retained files, and preserve every unmatched or nested report artifact.",
+      "score": 184,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 1129,
+          "section": "Quest Workflow > Tracked Versus Regenerable",
           "role": "packed"
         }
       ]
@@ -7339,5 +7339,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-22T12:41:52.294Z"
+  "generatedAt": "2026-07-22T13:03:21.024Z"
 }

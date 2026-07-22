@@ -13,7 +13,7 @@
     "usage": "node scripts/solve.js status --id <id>"
   },
   "report": {
-    "summary": "Project the event log into the terminal report / closure projection.",
+    "summary": "Write an ignored on-demand Quest report projected from the declaration and event log. Report presence and freshness never gate audit or handoff.",
     "usage": "node scripts/solve.js report --id <id>"
   },
   "portfolio": {
@@ -25,7 +25,7 @@
     "usage": "node scripts/solve.js frontier [--write]"
   },
   "overview": {
-    "summary": "Live roadmap -> epic -> spec -> quest -> ledger overview; `--write` persists it.",
+    "summary": "Live roadmap -> epic -> spec -> quest -> ledger overview; `--write` persists the ignored local projection.",
     "usage": "node scripts/solve.js overview [--write]"
   },
   "trace": {
@@ -33,7 +33,7 @@
     "usage": "node scripts/solve.js trace --row <id> | --cl <CL-#> | --spec <ref> | --quest <id>"
   },
   "handoff": {
-    "summary": "Compute the scope-safe git pathspec for committing exactly one terminal Quest; dry-run by default, `--commit` executes only after the full audit and aggregate source approval pass.",
+    "summary": "Compute the scope-safe git pathspec for committing exactly one terminal Quest; dry-run by default, `--commit` executes only after the full audit and aggregate source approval pass. Generated reports are never handoff scope.",
     "usage": "node scripts/solve.js handoff --id <id> [--commit]"
   },
   "checkpoint": {
@@ -105,7 +105,7 @@
     "usage": "node scripts/solve.js audit --id <id>"
   },
   "upgrade": {
-    "summary": "Idempotently append a `quest-upgraded` strict-audit baseline event to the Quest log, ingest any unrecorded evidence, and regenerate the report.",
+    "summary": "Idempotently append a `quest-upgraded` strict-audit baseline event to the Quest log and ingest any unrecorded evidence. Reports remain on-demand projections.",
     "usage": "node scripts/solve.js upgrade --id <id> [--reason \"<text>\"]"
   },
   "reopen": {

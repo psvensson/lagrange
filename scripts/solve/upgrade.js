@@ -3,7 +3,6 @@ import {
 } from './constants.js';
 import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {ingestEvidence} from './evidence.js';
-import {writeReport} from './report.js';
 import {appendEvent, loadQuest, readLog} from './store.js';
 
 export function upgradeQuest(root, args = {}) {
@@ -28,8 +27,6 @@ export function upgradeQuest(root, args = {}) {
       evidencePath: unrecorded.evidence,
     }) :
     null;
-  if (!ingested) writeReport(root, id);
-
   return {
     questId: quest.id,
     baseline,

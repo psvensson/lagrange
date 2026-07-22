@@ -95,19 +95,25 @@ node scripts/solve.js handoff --id <id> --commit
 ## Before Verification Or Checkpoint
 
 Before asking an independent verifier to inspect source bytes, run the cheap
-mechanical checks and the read-only checkpoint simulation:
+mechanical checks and inspect the current typed dossier:
 
 ```sh
 npm run audit:attempt-preflight
-node scripts/solve.js checkpoint --id <id> --dry-run --reason <reason>
 node scripts/solve.js next --id <id> --json
 ```
 
-The checkpoint command may still refuse because the exact approval is not yet
-recorded; its **verification preflight** must nevertheless say that the current
-candidate will be checkpoint-landable after the required approval. If it does
-not, record the canonical same-frontier/same-base replacement and complete path
-superset it names before spending a verifier turn.
+Only for an actual mid-Quest durability boundary, also run the explicit
+checkpoint simulation with its reason. Routine and terminal work does not add a
+checkpoint step.
+
+```sh
+node scripts/solve.js checkpoint --id <id> --dry-run \
+  --reason <handoff|risky-tree|long-running|milestone>
+```
+
+The dossier must say that the candidate is structurally landable after the
+required approval. If it does not, record the canonical same-frontier/same-base
+replacement and complete path superset it names before spending a verifier turn.
 
 Give the verifier the complete first-pass candidate manifest: common base,
 fingerprint, complete current path union, attempt range, unresolved replacement
@@ -116,6 +122,9 @@ approval, either perform the named checkpoint immediately or proceed directly
 to terminal aggregate review; any intervening change invalidates the receipt.
 The canonical details live in solver-quests.md "Source Change
 Verification" and "Regular Commit (No Push)."
+
+`report --id <id>` and `overview --write` are optional human views. They write
+ignored projections and are never prerequisites for verification or handoff.
 
 ## Conflict Rule And Escape Hatch
 

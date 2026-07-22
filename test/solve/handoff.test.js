@@ -140,8 +140,14 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
     t.notOk(handoff.inScope.includes('solve/quests/other-quest.json'),
       'excludes another quest file');
     t.same(handoff.outOfScope,
-      ['solve/quests/other-quest.json', 'src/unrelated-other-quest.js'].sort(),
+      [
+        'solve/quests/other-quest.json',
+        'solve/report/demo.md',
+        'src/unrelated-other-quest.js',
+      ].sort(),
       'reports the excluded files explicitly');
+    t.notOk(handoff.inScope.includes('solve/report/demo.md'),
+      'generated reports are not durable handoff scope');
 
     const md = renderHandoff(handoff);
     t.match(md, /In scope/, 'renders an in-scope section');

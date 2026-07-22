@@ -6,6 +6,7 @@ import {
   changedPathsFromDiffContent,
   inspectChangeArtifact,
 } from './change-artifact.js';
+import {isRegenerableQuestReport} from './report-retention.js';
 
 const BROAD_OWNER_AREA_LIMIT = 2;
 const LARGE_DIFF_FILE_LIMIT = 10;
@@ -110,28 +111,30 @@ function effectiveChangeBytes(inspections) {
   return Math.max(bytes, largestSnapshotBytes);
 }
 
-function isGeneratedProjection(filePath) {
-  return GENERATED_PROJECTION_PATHS.has(filePath);
+function isGeneratedProjection(root, filePath) {
+  return GENERATED_PROJECTION_PATHS.has(filePath) ||
+    isRegenerableQuestReport(root, filePath);
 }
 
-function authoredPayloadBytes(inspection) {
+function authoredPayloadBytes(root, inspection) {
   const content = String(inspection.content || '');
   if (!content.startsWith('diff --git ')) return inspection.payloadBytes || 0;
   return content.split(/(?=^diff --git )/mu).reduce((total, section) => {
     const paths = changedPathsFromDiffContent(section);
-    return paths.length > 0 && paths.every(isGeneratedProjection) ? total :
+    return paths.length > 0 && paths.every((filePath) =>
+      isGeneratedProjection(root, filePath)) ? total :
       total + Buffer.byteLength(section);
   }, 0);
 }
 
-function admissionInspection(entry) {
+function admissionInspection(root, entry) {
   return {
     ...entry,
     inspection: {
       ...entry.inspection,
       changedPaths: (entry.inspection.changedPaths || [])
-        .filter((filePath) => !isGeneratedProjection(filePath)),
-      payloadBytes: authoredPayloadBytes(entry.inspection),
+        .filter((filePath) => !isGeneratedProjection(root, filePath)),
+      payloadBytes: authoredPayloadBytes(root, entry.inspection),
     },
   };
 }
@@ -187,7 +190,7 @@ function recommendedActions(changedPaths, ownerAreas, categories) {
   return actions;
 }
 
-function summarizeScopePressure(inspections) {
+function summarizeScopePressure(root, inspections) {
   const changedPaths = [...new Set(inspections.flatMap((entry) =>
     entry.inspection.changedPaths || []))].sort();
   const ownerAreas = [...new Set(changedPaths.map(ownerAreaForPath))].sort();
@@ -195,7 +198,8 @@ function summarizeScopePressure(inspections) {
     entry.inspection.categories || []))].sort();
   const signals = [];
   const changedBytes = effectiveChangeBytes(inspections);
-  const admissionInspections = inspections.map(admissionInspection);
+  const admissionInspections = inspections.map((entry) =>
+    admissionInspection(root, entry));
   const admissionChangedPaths = [...new Set(admissionInspections.flatMap((entry) =>
     entry.inspection.changedPaths || []))].sort();
   const admissionOwnerAreas = [...new Set(
@@ -246,7 +250,7 @@ function summarizeScopePressure(inspections) {
 }
 
 export function analyzeScopePressure(root, quest, log, options = {}) {
-  return summarizeScopePressure(attemptInspections(root, quest, log, options));
+  return summarizeScopePressure(root, attemptInspections(root, quest, log, options));
 }
 
 export function analyzeScopePressureCandidate(
@@ -266,7 +270,7 @@ export function analyzeScopePressureCandidate(
     event: {workspaceBaseCommit: options.workspaceBaseCommit || null},
     inspection,
   });
-  return summarizeScopePressure(inspections);
+  return summarizeScopePressure(root, inspections);
 }
 
 export function renderScopePressure(scopePressure) {

@@ -2,6 +2,8 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {isRegenerableQuestReport} from './report-retention.js';
+
 const WATCHED_ROOTS = Object.freeze([
   'solve/changes',
   'solve/log',
@@ -27,6 +29,7 @@ export function historicalArtifactRootDigest(root = process.cwd()) {
   const digest = createHash(HASH_ALGORITHM);
   for (const relativeRoot of WATCHED_ROOTS) {
     for (const file of walk(path.join(root, relativeRoot))) {
+      if (isRegenerableQuestReport(root, file)) continue;
       digest.update(path.relative(root, file));
       digest.update(NUL_SEPARATOR);
       digest.update(fs.readFileSync(file));

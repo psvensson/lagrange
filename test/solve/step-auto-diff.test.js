@@ -11,6 +11,7 @@ import {runStep, stepPending} from '../../scripts/solve/step.js';
 import {contentObjectRoot, readChangeArtifact} from
   '../../scripts/solve/content-addressed-change-artifact.js';
 import {buildHandoff} from '../../scripts/solve/handoff.js';
+import {inspectChangeArtifact} from '../../scripts/solve/change-artifact.js';
 import {makeOracleQuest} from './solve-test-quest-fixture.js';
 
 const CLI = path.resolve(
@@ -186,6 +187,34 @@ tap.test('step --commit --auto-diff', async (t) => {
     t.notMatch(content, /FRONTIER\.generated\.md/u, 'board refresh excluded');
     t.notMatch(content, /solve\/log\//u, 'event-log appends excluded');
     t.notMatch(content, /solve\/report\//u, 'report regeneration excluded');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('captures tracked report deletions but not report regeneration', (t) => {
+    const root = gitRoot();
+    const {quest, oracle} = makeOracleQuest(root);
+    quest.class = 'process';
+    quest.statement = 'Migrate Solver workflow report projections.';
+    saveQuest(root, quest);
+    const reportDir = path.join(root, 'solve', 'report');
+    fs.mkdirSync(reportDir, {recursive: true});
+    fs.writeFileSync(path.join(reportDir, 'old.md'), 'old projection\n');
+    fs.writeFileSync(path.join(reportDir, 'demo.md'), 'current projection\n');
+    git(root, ['add', 'solve/report']);
+    git(root, ['commit', '--quiet', '-m', 'track historical projections']);
+
+    runStep(root, quest);
+    fs.rmSync(path.join(reportDir, 'old.md'));
+    fs.writeFileSync(path.join(reportDir, 'demo.md'), 'regenerated projection\n');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    const result = runStep(root, quest, {autoDiff: true, summary: 'projection migration'});
+    const inspection = inspectChangeArtifact(root, quest, result.changeRef);
+
+    t.ok(inspection.changedPaths.includes('solve/report/old.md'),
+      'tracked projection deletion is durable migration scope');
+    t.notOk(inspection.changedPaths.includes('solve/report/demo.md'),
+      'ordinary regenerated report stays out of the attempt');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

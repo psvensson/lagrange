@@ -36,7 +36,6 @@ import {
 import {appendEvent, loadQuest, readLog, projectState, rebuildState} from './store.js';
 import {REFLECTION_KIND_ALTITUDE} from './reflection.js';
 import {pendingFilePath} from './step.js';
-import {writeReport} from './report.js';
 import {buildEvidenceIdentity} from './evidence-identity.js';
 
 export {PARK_PROVENANCE_OPERATOR};
@@ -161,7 +160,6 @@ function completeExhaustedTerminal(root, quest, state, args) {
     },
   });
   rebuildState(root, quest);
-  writeReport(root, quest.id);
   return {
     questId: quest.id,
     frontierId: null,
@@ -215,7 +213,6 @@ export function parkFrontier(root, args = {}) {
     });
   }
   rebuildState(root, quest);
-  writeReport(root, id);
   return {questId: id, frontierId, event, questExhausted};
 }
 

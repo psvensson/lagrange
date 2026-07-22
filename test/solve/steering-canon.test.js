@@ -48,6 +48,10 @@ tap.test('LLM steering canon has one owner per concern', (t) => {
     'the executable first-read repeats the promotion stop signal');
   t.match(ignore, /^\/solve\/OVERVIEW\.generated\.md$/mu,
     'the self-referential overview is a local projection, not durable state');
+  t.match(ignore, /^\/solve\/report\/\*\.md$/mu,
+    'ordinary Quest reports are ignored projections');
+  t.match(ignore, /^!\/solve\/report\/rolling-restart\.md$/mu,
+    'unmatched report evidence remains retainable');
   t.match(toolDescriptions, /ignored local work-overview projection/u,
     'the operator catalog does not promise a durable overview');
   t.end();

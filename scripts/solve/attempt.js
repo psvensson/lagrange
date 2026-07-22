@@ -13,7 +13,10 @@ import {
 } from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
-import {continuationIsAllowed} from './continuation.js';
+import {
+  CONTINUATION_BLOCKED_SCOPE,
+  continuationIsAllowed,
+} from './continuation.js';
 import {
   resolveGateDecision,
   gateDecisionToStepResult,
@@ -82,7 +85,10 @@ export function runAttemptCommand(root, args) {
       requireModelEvidence: !args.modelRef && !args.modelNotApplicable,
     },
   });
-  if (!continuationIsAllowed(health.continuation)) {
+  // Exact scope is measurable only after the command produces its artifact.
+  // Do not duplicate that admission against historical aggregate pressure.
+  if (!continuationIsAllowed(health.continuation) &&
+    health.continuation.code !== CONTINUATION_BLOCKED_SCOPE) {
     const decision = resolveGateDecision(root, quest, health.continuation, {
       log,
       frontier: frontierId,
@@ -130,11 +136,19 @@ export function runAttemptCommand(root, args) {
     {workspaceBaseCommit},
   ));
   if (scopeAdmission.terminal) {
-    throw new Error(
-      SCOPE_PRESSURE_BLOCKED_PREFIX +
+    const scopeProblem = SCOPE_PRESSURE_BLOCKED_PREFIX +
       `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
-      `bytes=${scopeAdmission.changeBytes})`,
-    );
+      `bytes=${scopeAdmission.changeBytes})`;
+    const decision = resolveGateDecision(root, quest, {
+      status: CONTINUATION_BLOCKED_SCOPE,
+      code: CONTINUATION_BLOCKED_SCOPE,
+      problems: [scopeProblem],
+    }, {
+      log,
+      frontier: frontierId,
+      rungIndex: fState.rungIndex,
+    });
+    if (!decisionContinues(decision)) throw new Error(scopeProblem);
   }
 
   // 1. Measure before

@@ -161,8 +161,11 @@ decide progress and closure.
 ## Stored And Generated Artifacts
 
 - Track authored `solve/quests/`, append-only `solve/log/`, explanatory
-  `solve/changes/`, and terminal/in-progress `solve/report/` artifacts.
-- Treat `solve/state/` as regenerable local cache.
+  `solve/changes/`, and non-regenerable report evidence.
+- Treat `solve/state/`, ordinary `solve/report/<quest-id>.md`, and
+  `solve/OVERVIEW.generated.md` as regenerable local projections. Use `report`
+  or `overview --write` only when a human wants that view; audit and handoff do
+  not require either file.
 - Keep `solve/config.json` local.
 - Regenerate the full CLI and steering indexes with
   `npm run steering:llm:pack` after command or steering-source changes.

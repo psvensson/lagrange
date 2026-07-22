@@ -132,9 +132,6 @@ function nextAction({questId, state, pending, gateStop, blocker,
         verification.aggregate.fingerprint || LOCAL_STR_OWNED_007,
       );
     }
-    if (audit.problems.some((item) => /report is older/u.test(item.message))) {
-      return typedNextAction(`node scripts/solve.js report --id ${questId}`);
-    }
     if (audit.status === LOCAL_STR_OWNED_008) {
       return typedNextAction(
         `node scripts/solve.js handoff --id ${questId} --commit`);

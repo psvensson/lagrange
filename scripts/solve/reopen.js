@@ -23,7 +23,6 @@ import {
 import {appendEvent, loadQuest, readLog, projectState, rebuildState} from './store.js';
 import {attemptIsNonMeasuring} from './sample-validity.js';
 import {inspectChangeArtifact} from './change-artifact.js';
-import {writeReport} from './report.js';
 
 // Has anything changed since the most recent reopen of this frontier that could make it
 // measurable again? "Change" means a fresh attempt landed after the reopen carrying a
@@ -150,7 +149,6 @@ export function reopenFrontier(root, args = {}) {
     contributingEvidence: assessment.contributingEvidence,
   });
   rebuildState(root, quest);
-  writeReport(root, id);
   return {questId: id, frontierId, event, assessment};
 }
 

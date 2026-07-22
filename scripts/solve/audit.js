@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 
 import {
   EVENT_ATTEMPT,
@@ -175,17 +174,6 @@ function auditMetricZeroNeedsTheoryResult(log, startIndex) {
     (item.type === EVENT_QUEST && item.status === STATUS_SOLVED));
   if (hasLaterSolvedEvent) return [];
   return [problem('metric is zero but done is false without a later theory result', event)];
-}
-
-function auditReportOrdering(root, quest, log) {
-  const reportPath = path.join(root, 'solve', 'report', `${quest.id}.md`);
-  if (!fs.existsSync(reportPath) || log.length === 0) return [];
-  const reportMtime = fs.statSync(reportPath).mtimeMs;
-  const latestLogTs = new Date(log[log.length - 1].ts).getTime();
-  if (Number.isFinite(latestLogTs) && reportMtime + 1 < latestLogTs) {
-    return [problem('Quest report is older than the append-only log')];
-  }
-  return [];
 }
 
 function auditSourceChangeVerification(root, quest, log, startIndex) {
@@ -428,7 +416,6 @@ export function auditQuest(root, quest) {
     ...auditModelEvidence(root, quest, log, startIndex),
     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
     ...auditUnmeasuredTheoryPromotion(log, startIndex),
-    ...auditReportOrdering(root, quest, log),
     ...auditContinuation(root, quest),
   ];
   const unrecorded = detectUnrecordedEvidence(root, quest.id);

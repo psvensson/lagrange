@@ -951,15 +951,10 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       'terminal aggregate verification outranks checkpoint selection',
     );
     approve(fx.root, fx.quest, 'aggregate', aggregate.fingerprint);
-    let handoff = buildHandoff(fx.root, fx.quest);
-    t.notOk(handoff.ok, 'a stale report keeps the full audit closed');
-    t.match(handoff.gate.problems.map((item) => item.message).join('\n'),
-      /report is older/u);
-
-    writeReport(fx.root, fx.quest.id);
-    handoff = buildHandoff(fx.root, fx.quest);
+    const handoff = buildHandoff(fx.root, fx.quest);
     t.equal(auditQuest(fx.root, fx.quest).status, 'pass');
-    t.ok(handoff.ok, 'full audit plus exact aggregate approval unlocks handoff');
+    t.ok(handoff.ok,
+      'full audit plus exact aggregate approval unlocks handoff without report refresh');
     t.equal(
       buildNextLines(fx.root, fx.quest.id)[0],
       'Next [executable-command]: node scripts/solve.js handoff --id runtime-verify --commit',

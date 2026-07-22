@@ -2,7 +2,7 @@
 //
 // The repository convention is that a Quest's commit must contain only that
 // Quest's work: its sealed quest file, append-only log, exact id-owned oracle,
-// regenerated report/state, recorded change artifacts, and the source/test files
+// local state, recorded change artifacts, and the source/test files
 // those artifacts actually touched. A mixed working tree (several Quests' edits,
 // plus unrelated dirty files) must never be swept into one commit — `audit.js`
 // already rejects mis-scoped change artifacts, but nothing computed the safe
@@ -28,7 +28,6 @@ import {
   logFilePath,
   stateFilePath,
 } from './store.js';
-import {reportFilePath} from './report.js';
 import {auditQuest, commitGate, checkpointGate} from './audit.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
@@ -43,6 +42,8 @@ import {
   checkpointVerificationPreflightLines,
 } from './checkpoint-preflight.js';
 import {verificationState} from './verification.js';
+import {CONTINUATION_BLOCKED_SCOPE} from './continuation.js';
+import {latestAttemptAdmissionWasOverridden} from './gate.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
@@ -84,7 +85,6 @@ function questArtifactPaths(root, questId) {
       questFilePath(root, questId),
       logFilePath(root, questId),
       stateFilePath(root, questId),
-      reportFilePath(root, questId),
       questOracleFilePath(root, questId),
     ].map((absolute) => toRootRelative(root, absolute)),
     changeDirPrefix: `${toRootRelative(root, expectedChangeDir(root, questId))}/`,
@@ -160,18 +160,27 @@ export function buildHandoff(root, quest, options = {}) {
   const checkpoint = options.checkpoint === true;
   const audit = auditQuest(root, quest);
   const baseGate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
+  const log = readLog(root, quest.id);
   const scopeStatus = scopeTerminalStatus(
     analyzeScopePressure(
       root,
       quest,
-      readLog(root, quest.id),
+      log,
       {ignoreBaselines: true},
     ),
   );
-  const scopeProblem = scopeStatus.terminal ? [{
-    message: 'scope-pressure precommit blocked: split into bounded Quest declarations ' +
-      `(files=${scopeStatus.fileCount}, owners=${scopeStatus.ownerCount}, ` +
-      `bytes=${scopeStatus.changeBytes})`,
+  const scopeProblemMessage =
+    'scope-pressure precommit blocked: split into bounded Quest declarations ' +
+    `(files=${scopeStatus.fileCount}, owners=${scopeStatus.ownerCount}, ` +
+    `bytes=${scopeStatus.changeBytes})`;
+  const scopeWasAuthorized = scopeStatus.terminal &&
+    latestAttemptAdmissionWasOverridden(
+      log,
+      CONTINUATION_BLOCKED_SCOPE,
+      scopeProblemMessage,
+    );
+  const scopeProblem = scopeStatus.terminal && !scopeWasAuthorized ? [{
+    message: scopeProblemMessage,
   }] : [];
   const gate = {
     ...baseGate,
@@ -202,7 +211,7 @@ export function buildHandoff(root, quest, options = {}) {
     verificationPreflight: checkpoint ? checkpointVerificationPreflight(
       root,
       quest,
-      readLog(root, quest.id),
+      log,
     ) : null,
   };
 }

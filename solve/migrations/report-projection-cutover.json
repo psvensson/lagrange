@@ -1,0 +1,2331 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "634306aa410b83a0d47e6b8703a2e40cd5d294f7",
+  "classification": "Immediate solve/report/<quest-id>.md with matching solve/quests/<quest-id>.json and solve/log/<quest-id>.ndjson is regenerable; all other report-tree files are retained.",
+  "removed": [
+    {
+      "path": "solve/OVERVIEW.generated.md",
+      "kind": "work-overview-projection",
+      "bytes": 42302,
+      "sha256": "a16a87d39e64f80ec99fd9eb27924a6a9545234fe9d482e5e6f8e84a27350966"
+    },
+    {
+      "path": "solve/report/aggregate-duplication-analyzer-runtime-consolidation.md",
+      "kind": "quest-report-projection",
+      "bytes": 4652,
+      "sha256": "29ac5d3946e7f8354a0e01187698db24197c198ec3a4ecfd8ae92e9c3e7d04c2"
+    },
+    {
+      "path": "solve/report/alloy-execution-guardrails-verifier-fix.md",
+      "kind": "quest-report-projection",
+      "bytes": 1549,
+      "sha256": "180bca130547b7aa12097d5633ee6a36a44e7c50939a911387201b5cd53df013"
+    },
+    {
+      "path": "solve/report/altitude-reflection-mechanism.md",
+      "kind": "quest-report-projection",
+      "bytes": 3406,
+      "sha256": "a985304818a0016137be4f2a09a07f84d111741120ff58a9941d2e540a98bb05"
+    },
+    {
+      "path": "solve/report/autonomy-and-parallel-defaults.md",
+      "kind": "quest-report-projection",
+      "bytes": 2456,
+      "sha256": "797cb4cf8bf3fde02cb6027f68f4141613a6bb3065d1f79823a40cbd63e58d4f"
+    },
+    {
+      "path": "solve/report/canonical-replica-inventory-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 2911,
+      "sha256": "296121c6ddbfd381b7e7be5d60cba92a9122d2945900fdf4f148fde360cbf191"
+    },
+    {
+      "path": "solve/report/cdc-cache-delete-resurrection.md",
+      "kind": "quest-report-projection",
+      "bytes": 10103,
+      "sha256": "17c198e0bbd72080da677dabfdd6dbb25c76a8ca8387af5cc048d4544663fa77"
+    },
+    {
+      "path": "solve/report/cl-planning-memo-invalidation-regression.md",
+      "kind": "quest-report-projection",
+      "bytes": 2610,
+      "sha256": "7a233cf68e6350a209de8722474647ee0ed04e3b213ec9e4593d8e1bdcc8880b"
+    },
+    {
+      "path": "solve/report/cli-static-guideline-ratchet-closure-v2.md",
+      "kind": "quest-report-projection",
+      "bytes": 4605,
+      "sha256": "b1a6f4641f407bfd9c42adb871da3324c57fe3e841084c503c17a21881e3b81a"
+    },
+    {
+      "path": "solve/report/cli-static-guideline-ratchet-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 2101,
+      "sha256": "0fd24fdb4ab80eeeee24b5beeeeb432a6b0fc7c2359d59277db9417f05d61a34"
+    },
+    {
+      "path": "solve/report/cognitive-complexity-ratchet-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 2153,
+      "sha256": "6144d40c1a8b33eb76b8d02b154539cc7e515e79409ef2d17c482d5f7a25b6b5"
+    },
+    {
+      "path": "solve/report/configured-split-threshold-policy-precedence.md",
+      "kind": "quest-report-projection",
+      "bytes": 6579,
+      "sha256": "570b26a93775caf293e912a7fd67095de3bc3cd9494ac23aa05b26e6aac61a89"
+    },
+    {
+      "path": "solve/report/control-plane-readiness-trust-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 2495,
+      "sha256": "c8ee2c58b1565e14162e2c48744401cea37be5d2d6454bbd0dc32f0987a5d44e"
+    },
+    {
+      "path": "solve/report/control-snapshot-heartbeat-lease-freshness.md",
+      "kind": "quest-report-projection",
+      "bytes": 6844,
+      "sha256": "2bab10c1fb5e0fc925ea732b1b3b286f22146bc094e27c4f9ac30f14005955b9"
+    },
+    {
+      "path": "solve/report/control-snapshot-ready-lease-age-witness.md",
+      "kind": "quest-report-projection",
+      "bytes": 2533,
+      "sha256": "3dd2ee45cc39ff2d4ee87017b716590b6a62e12d66ddceface8f8cd8368c6935"
+    },
+    {
+      "path": "solve/report/coordinator-reconcile-lane-ledger-write-head-of-line.md",
+      "kind": "quest-report-projection",
+      "bytes": 6580,
+      "sha256": "c9b91eefcf9f8c653626be802b2b56a90a5d75fc440c87713d903e8bc0a9b081"
+    },
+    {
+      "path": "solve/report/core-system-logic-alloy-adjacency.md",
+      "kind": "quest-report-projection",
+      "bytes": 1144,
+      "sha256": "264e67052a910cb37275896b2497d1a7781a613b3ad5530cee3b6fee63a0e456"
+    },
+    {
+      "path": "solve/report/core-system-logic-model-adjacency.md",
+      "kind": "quest-report-projection",
+      "bytes": 1117,
+      "sha256": "2ff37f309ac4c02630bbf6b31d4ed9b7aa5370bc49ce4cab870e89e23048c352"
+    },
+    {
+      "path": "solve/report/cross-partition-join-pushdown.md",
+      "kind": "quest-report-projection",
+      "bytes": 2924,
+      "sha256": "c3854327b66cc30eacba214ad3fe53cc2449e94c51208fe42640a29741668e8b"
+    },
+    {
+      "path": "solve/report/cure-typing-owner-migration-admission-lanes.md",
+      "kind": "quest-report-projection",
+      "bytes": 4602,
+      "sha256": "6087def3c6f9452fd6ca4cbd8af5a2eb5268465da33b4ef15f476eb00948c131"
+    },
+    {
+      "path": "solve/report/cure-typing-owner-migration-move-minters.md",
+      "kind": "quest-report-projection",
+      "bytes": 3558,
+      "sha256": "97d3d244fa2e0764a9202556b76a16a009a7dec44d4fe13ae955967759a01149"
+    },
+    {
+      "path": "solve/report/cure-typing-single-owner-table.md",
+      "kind": "quest-report-projection",
+      "bytes": 5899,
+      "sha256": "4dde697d5e618cbb9529c27cd108e930b6738d0ccb72eb769bc51b030745be1f"
+    },
+    {
+      "path": "solve/report/developer-smoke-command-surface.md",
+      "kind": "quest-report-projection",
+      "bytes": 2394,
+      "sha256": "fc94e40770e602c3402a494ed128219d5f657557a6299e2d50da054214030fdb"
+    },
+    {
+      "path": "solve/report/developer-smoke-proof.md",
+      "kind": "quest-report-projection",
+      "bytes": 2432,
+      "sha256": "917c4eee045b5cab1a5bf94ab8a3b62fd6c6f8c0ccf2ee48231f1acda101a760"
+    },
+    {
+      "path": "solve/report/distributed-query-straggler-hedging.md",
+      "kind": "quest-report-projection",
+      "bytes": 2878,
+      "sha256": "04d0470593e312bdf4b9a63357f9aed1543996a3b0cd8908503838c8ddefb4f5"
+    },
+    {
+      "path": "solve/report/distributed-select-global-merge-correctness.md",
+      "kind": "quest-report-projection",
+      "bytes": 3321,
+      "sha256": "d737a7deca08eb513a404020394f97578b6cb44d033db8a2bdefe2d1070e480b"
+    },
+    {
+      "path": "solve/report/distroless-fast-local-harness-shell-free.md",
+      "kind": "quest-report-projection",
+      "bytes": 1753,
+      "sha256": "c2e7a77ff59f9ff6752ab6433efc572e59b2d13b2b78cbc984eb151addba34f1"
+    },
+    {
+      "path": "solve/report/dockerized-pg-client-compatibility-example.md",
+      "kind": "quest-report-projection",
+      "bytes": 8013,
+      "sha256": "2ddf9c5a51f803ec8b8812fbf1702576cf32752a606aba3e3ed6f6c016ee210c"
+    },
+    {
+      "path": "solve/report/dt-drain-safety-overremoval-hunt.md",
+      "kind": "quest-report-projection",
+      "bytes": 8291,
+      "sha256": "8154852988b20e46911b4566c95d70fe47dc533a9140f113ed7c14229b230df0"
+    },
+    {
+      "path": "solve/report/durable-provisioning-job-owner.md",
+      "kind": "quest-report-projection",
+      "bytes": 5297,
+      "sha256": "341c1cc77be9ec14d9f19f4515c5155b7bfcf6f290e6f12e5b84114ce9212561"
+    },
+    {
+      "path": "solve/report/effective-placement-serial-priority-planner.md",
+      "kind": "quest-report-projection",
+      "bytes": 5866,
+      "sha256": "37297245d1c879c9c30acf9ce3ac4847ca405e00fe1d87ef097cb46be3e4f6c5"
+    },
+    {
+      "path": "solve/report/executor-active-services-cache-handoff.md",
+      "kind": "quest-report-projection",
+      "bytes": 6033,
+      "sha256": "efa67badebf0b7efd771cdc4e6518fa9de255f6e98ca85b0d610fb7f71079119"
+    },
+    {
+      "path": "solve/report/external-service-manifest-contract.md",
+      "kind": "quest-report-projection",
+      "bytes": 5683,
+      "sha256": "4229879c4de06fc114e1563edce7d59ce56bd5d51949af412043f03c0698ff66"
+    },
+    {
+      "path": "solve/report/flag-debt-retirement.md",
+      "kind": "quest-report-projection",
+      "bytes": 5578,
+      "sha256": "92fe0b3dce82397e51dae6f9ed643940a94cfb950dfcef8680ae2f45c943d84b"
+    },
+    {
+      "path": "solve/report/formation-background-release-owner-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 5906,
+      "sha256": "d846d038e4b9d1fd32e5a7bd3db2aba1ff120d66608c2d546d235caa7c8572b0"
+    },
+    {
+      "path": "solve/report/formation-background-release-quiescence-anchor-live.md",
+      "kind": "quest-report-projection",
+      "bytes": 13560,
+      "sha256": "233f8f7e85f78ecdbe3c60ad76065382177cad9c9e3fa25978df6789d158c315"
+    },
+    {
+      "path": "solve/report/formation-control-plane-move-interlock.md",
+      "kind": "quest-report-projection",
+      "bytes": 13253,
+      "sha256": "cfbde6d570206f1cd7db107fe8c114cec639c261df4c4f9f074666f8c958f132"
+    },
+    {
+      "path": "solve/report/formation-joining-ready-phase-fence-live.md",
+      "kind": "quest-report-projection",
+      "bytes": 12645,
+      "sha256": "c694405c906791e99d5f5369b767992dfe29bbf17f6a01a9a57ebfe43427b209"
+    },
+    {
+      "path": "solve/report/formation-joining-ready-phase-fence.md",
+      "kind": "quest-report-projection",
+      "bytes": 2440,
+      "sha256": "353286294100551034017d893e31110b837ab1d1feb53456d659a16a47241c63"
+    },
+    {
+      "path": "solve/report/formation-ledger-leader-local-persistence-wedge.md",
+      "kind": "quest-report-projection",
+      "bytes": 15337,
+      "sha256": "d44c2e522e01a3a4a73afec431c1966f65150b245b46597ce8c70742cd048dad"
+    },
+    {
+      "path": "solve/report/formation-ledger-over-target-accounting-drain-phase-replace-blind-spot.md",
+      "kind": "quest-report-projection",
+      "bytes": 8051,
+      "sha256": "2e5ad4125d1c39da76c173ca63f0577f71baf3e5b59feb99d14487382872ed7b"
+    },
+    {
+      "path": "solve/report/formation-ledger-over-target-surplus-drain-coupled-removal.md",
+      "kind": "quest-report-projection",
+      "bytes": 7818,
+      "sha256": "8c82bc9577088e1d3bbd072b27aa3e73b6dae46814796dae7d084c0cfda424c7"
+    },
+    {
+      "path": "solve/report/formation-ledger-post-spread-voter-visibility-latency.md",
+      "kind": "quest-report-projection",
+      "bytes": 21510,
+      "sha256": "78309c0b4f74dccf34f322d0f84615b5d590e0d23b04fb51b361c3d49fd6626c"
+    },
+    {
+      "path": "solve/report/formation-ledger-quorum-concentrated-replace-churn-60s.md",
+      "kind": "quest-report-projection",
+      "bytes": 3439,
+      "sha256": "47960740c0f3368ab74f4ed2a9d347dcf756638a3883b7042d82d8ea2818656b"
+    },
+    {
+      "path": "solve/report/formation-ledger-quorum-spread-first.md",
+      "kind": "quest-report-projection",
+      "bytes": 11186,
+      "sha256": "79a6b066f6f65d87f5f887ead71bbaf63c055db52afb4ac4f6cd2bafac2bb41d"
+    },
+    {
+      "path": "solve/report/formation-ledger-recovery-replace-source-specificity-proof.md",
+      "kind": "quest-report-projection",
+      "bytes": 5573,
+      "sha256": "de7dcdb029b6b8f2d3e27f9475eb9293ccd693b6e1335e314794957d3e5fe573"
+    },
+    {
+      "path": "solve/report/formation-ledger-recovery-replace-source-specificity.md",
+      "kind": "quest-report-projection",
+      "bytes": 2006,
+      "sha256": "e5fb0c1c9eff6d3326def1c6507874e9e0651791376cd35ea042474336362c55"
+    },
+    {
+      "path": "solve/report/formation-ledger-self-move-blocks-cluster-ops.md",
+      "kind": "quest-report-projection",
+      "bytes": 83089,
+      "sha256": "1a8551602612f2d90dae004d13a582daff7a6fd818e18f65a9f98157387656fa"
+    },
+    {
+      "path": "solve/report/formation-ledger-self-spread-services-owner-unavailable.md",
+      "kind": "quest-report-projection",
+      "bytes": 4482,
+      "sha256": "d21e42d8411157d2c229c37c9b580707aa6fe07520b409d0de14b09c3db48e59"
+    },
+    {
+      "path": "solve/report/formation-ledger-spread-completion-self-move-interlock-deadlock.md",
+      "kind": "quest-report-projection",
+      "bytes": 6815,
+      "sha256": "58d3ac7d8e791d969a378773d0bb7defd4e76d0db54dbb3b3a5aa4b5e4da64ad"
+    },
+    {
+      "path": "solve/report/formation-ledger-spread-window-follow-up-latency.md",
+      "kind": "quest-report-projection",
+      "bytes": 10363,
+      "sha256": "9d9d237e58767eadb865a6670411265f9f4418055cc0714f23fa92f864da3ba1"
+    },
+    {
+      "path": "solve/report/formation-liveness-dependency-serial-planner.md",
+      "kind": "quest-report-projection",
+      "bytes": 10317,
+      "sha256": "174168b20d05979b169f512ec1cf56f3649d3b3541f751692b3a13689de07951"
+    },
+    {
+      "path": "solve/report/formation-priority-spread-authoritative-handoff-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 12298,
+      "sha256": "a8f83fc0ac52ff1dbb9a4e799f5608012437f5b105e37f0a1d909eab89112c68"
+    },
+    {
+      "path": "solve/report/formation-priority-spread-authoritative-publication-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 20910,
+      "sha256": "f8cc6347328a67f8decd01f1b3eb22290252a18ee176c8fe85b0dc8e68fa09b0"
+    },
+    {
+      "path": "solve/report/formation-priority-spread-without-exclusive-self-move-cost.md",
+      "kind": "quest-report-projection",
+      "bytes": 117423,
+      "sha256": "2793374ca85adaebd37d40a6dd53d0571339d5e450ad38658bc2b3d97068129f"
+    },
+    {
+      "path": "solve/report/formation-promoted-voter-not-voter-ready-routable-60s.md",
+      "kind": "quest-report-projection",
+      "bytes": 8584,
+      "sha256": "28239c89a4b088232aa0e3c5f702d455b8d287cf5906bbad2d1411e646a80ea3"
+    },
+    {
+      "path": "solve/report/formation-release-priority-observation-owner.md",
+      "kind": "quest-report-projection",
+      "bytes": 7031,
+      "sha256": "ee16db1ff30f42b07257f62c3ca01abba5597477cf0d788d46be45927eaf13cc"
+    },
+    {
+      "path": "solve/report/formation-replace-dispatch-deferred-retry-hold.md",
+      "kind": "quest-report-projection",
+      "bytes": 10050,
+      "sha256": "82d228b51cd82fed95295b172b4576855d729a8373c65dee3d0cc4fc64733da4"
+    },
+    {
+      "path": "solve/report/formation-runtime-service-create-lane-budget-starvation.md",
+      "kind": "quest-report-projection",
+      "bytes": 8325,
+      "sha256": "0eec1edb905fc4f0401a1f4284f096cadcf96381027784a07f112135e1782311"
+    },
+    {
+      "path": "solve/report/formation-schema-operation-collision-leader-read-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 18988,
+      "sha256": "095944ef8b66cd3a267d027dffc27330a2b56ca78610afd80694a13e4c039538"
+    },
+    {
+      "path": "solve/report/formation-voter-surplus-promotion-deferral-livelock.md",
+      "kind": "quest-report-projection",
+      "bytes": 20181,
+      "sha256": "5879183b77f594512eac553ce6d4e082f1ecb53f390afd10c9ba7ff10d0c7789"
+    },
+    {
+      "path": "solve/report/fresh-join-multi-peer-contact.md",
+      "kind": "quest-report-projection",
+      "bytes": 3229,
+      "sha256": "2dd22f3b1433be5d797195620c6b2635603f5553e5980361c3c52ba8f8864c50"
+    },
+    {
+      "path": "solve/report/global-owner-debt-inventory-command-index-projection-refresh.md",
+      "kind": "quest-report-projection",
+      "bytes": 2170,
+      "sha256": "1ae5eead2f3524b488085c0b6958c02e063b9af0ef0c6b528c14d101262d6fb9"
+    },
+    {
+      "path": "solve/report/global-owner-debt-inventory-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 3442,
+      "sha256": "762fa97b3b6b0a3a41ed7a1f1ad78c2b16ab26aaf60737d96eab941324c49b86"
+    },
+    {
+      "path": "solve/report/global-owner-debt-inventory-tooling-projection-refresh-wave0.md",
+      "kind": "quest-report-projection",
+      "bytes": 2200,
+      "sha256": "0b3ce254ba2184a217fd4798da7f2bb72a088f65a4118c8a12e8a73bee951458"
+    },
+    {
+      "path": "solve/report/global-owner-debt-inventory.md",
+      "kind": "quest-report-projection",
+      "bytes": 9953,
+      "sha256": "b10fb32a3cf0fd1060991611ee6e4af20e349a6e2e36eec8de7694d6d3eb061e"
+    },
+    {
+      "path": "solve/report/helm-admin-default-deny-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 2963,
+      "sha256": "f621ac3dea3421171d627cda974a110ff61af3ec5e42ed08db43febdb6fd1202"
+    },
+    {
+      "path": "solve/report/helm-contract-ci-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1276,
+      "sha256": "64a0e8521eaa29d84163a232467696de6ecfd87eb162ba1f60a190bde7e02eb0"
+    },
+    {
+      "path": "solve/report/helm-render-parser-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1882,
+      "sha256": "8cc98300c80fe46b9b41342e18eaacf9abde83f76ac41793ff3955588e5aeaf3"
+    },
+    {
+      "path": "solve/report/hlc-cross-leader-monotonicity.md",
+      "kind": "quest-report-projection",
+      "bytes": 3106,
+      "sha256": "ecda1e7bcb4bed4b4c6c4772a6ed25b35258c11776f2fca54e92f7238f176d8c"
+    },
+    {
+      "path": "solve/report/hold-engagement-single-owner-table.md",
+      "kind": "quest-report-projection",
+      "bytes": 4806,
+      "sha256": "fde28be402bb844b888b1ac55b1bc12c9718a6ae65f0c9c7d8371ad05e6867d3"
+    },
+    {
+      "path": "solve/report/installable-service-artifact-owner.md",
+      "kind": "quest-report-projection",
+      "bytes": 6122,
+      "sha256": "c3c5054c7ec08e71046c5d461520b41f67875753d7ffd53dfbfa0aebe4d51eba"
+    },
+    {
+      "path": "solve/report/join-retry-patience-selectable.md",
+      "kind": "quest-report-projection",
+      "bytes": 4038,
+      "sha256": "81be061684bdf80c1eb90720a5c88bc1bc633e5e4a71aa2c1ecff76cf1e6ffd9"
+    },
+    {
+      "path": "solve/report/join-retry-resume-lifecycle-finalization.md",
+      "kind": "quest-report-projection",
+      "bytes": 4159,
+      "sha256": "6c157e5b7afa0ac8650457d42ba4a6a44a48744c6d33ba8be7c2dceeddf98da6"
+    },
+    {
+      "path": "solve/report/join-retry-resume-lifecycle-scenario-registration.md",
+      "kind": "quest-report-projection",
+      "bytes": 1979,
+      "sha256": "dffbe9d9c91086ebabe6b592148ac8be1642784ad6d15cfa65f1f24cd68fcf09"
+    },
+    {
+      "path": "solve/report/latency-group-zone-affinity-demo.md",
+      "kind": "quest-report-projection",
+      "bytes": 2165,
+      "sha256": "053e07974f07d992db3e0278d4c6ef0282089f19d24384e406718c159a2eff20"
+    },
+    {
+      "path": "solve/report/leadership-flap-attribution-census.md",
+      "kind": "quest-report-projection",
+      "bytes": 4427,
+      "sha256": "dd40679a483352dcbf6b32093d32eec9984bd7e33ac5ea7efcb7eacf69b8c129"
+    },
+    {
+      "path": "solve/report/ledger-participant-transaction-zombie-lifecycle.md",
+      "kind": "quest-report-projection",
+      "bytes": 8005,
+      "sha256": "0281390a40db76e441b9ac2fa1049d1ebacc710774210efc16653d118aa2174b"
+    },
+    {
+      "path": "solve/report/legacy-work-tracker-removal.md",
+      "kind": "quest-report-projection",
+      "bytes": 10637,
+      "sha256": "1c0272b3a3d1b9d7ca262df437332ce4b4e8ab1b256270f651c8bbddcfce7a7a"
+    },
+    {
+      "path": "solve/report/listener-port-model-cli-guidance-gap.md",
+      "kind": "quest-report-projection",
+      "bytes": 5342,
+      "sha256": "e702f0047ce9bd3676207b1f529039580927fd96788fc4df8e88d82ec656bf19"
+    },
+    {
+      "path": "solve/report/listener-port-model-config-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 4680,
+      "sha256": "3cb24aa0d8a2fdbbc92684b5ca6339afa2b23f40ad0ec805ca2b395e3fb6177f"
+    },
+    {
+      "path": "solve/report/listener-port-model-doc-helper-alignment.md",
+      "kind": "quest-report-projection",
+      "bytes": 5014,
+      "sha256": "4acf411e2e868ab130b48405b8de32766088ec05de72bf5e0085979c4c6fd825"
+    },
+    {
+      "path": "solve/report/listener-port-model-runtime-consumers.md",
+      "kind": "quest-report-projection",
+      "bytes": 3855,
+      "sha256": "933b19048e46503dcf5b49466900bb1177054e513ada812e841d4ec8f9d4f24b"
+    },
+    {
+      "path": "solve/report/listener-port-model-single-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 8699,
+      "sha256": "470bdb2f6bae8219ef4e5f18c3f187ad8622dac51d1ddfa0354fd4451bf497dc"
+    },
+    {
+      "path": "solve/report/listener-port-model-surface-alignment.md",
+      "kind": "quest-report-projection",
+      "bytes": 8200,
+      "sha256": "7481fce3491566bd14ffc6cdb52087d9f8e3317e8ac3fe34d9e4f076bad97ffe"
+    },
+    {
+      "path": "solve/report/llm-steering-authoring-contract-isolated-evidence.md",
+      "kind": "quest-report-projection",
+      "bytes": 1650,
+      "sha256": "45c07346b23272ce4403703642b7bb1df08d604c70eb2785b25d62577307b0ec"
+    },
+    {
+      "path": "solve/report/llm-steering-authoring-contract.md",
+      "kind": "quest-report-projection",
+      "bytes": 1109,
+      "sha256": "b3e98b320bb43b2d32be364115d4b35b3eb8fc745e49b10f89221a11a2d76995"
+    },
+    {
+      "path": "solve/report/llm-steering-canon-legacy-report.md",
+      "kind": "quest-report-projection",
+      "bytes": 2159,
+      "sha256": "b1b6842c1985456b27860033deef49d3bd5501c1e7842ed40227bb0af6deab27"
+    },
+    {
+      "path": "solve/report/llm-steering-complete-rule-surface.md",
+      "kind": "quest-report-projection",
+      "bytes": 1973,
+      "sha256": "b74952a9e74a54b7decfc761624c2509d5f20ab4235746ceafa30aa8d29d7707"
+    },
+    {
+      "path": "solve/report/llm-steering-operator-orientation-isolated-evidence.md",
+      "kind": "quest-report-projection",
+      "bytes": 2025,
+      "sha256": "75e234e859635b6f12c742e53a363210d5738da5710a682205ba51746daac1df"
+    },
+    {
+      "path": "solve/report/llm-steering-operator-orientation.md",
+      "kind": "quest-report-projection",
+      "bytes": 1147,
+      "sha256": "c5e2a96cad4dc974326c579aff45887c8dcc69089670d36be43d17a3bcb89156"
+    },
+    {
+      "path": "solve/report/llm-steering-supervisor-actions-isolated-evidence.md",
+      "kind": "quest-report-projection",
+      "bytes": 1672,
+      "sha256": "a6d3c7fbcce3d23865177dca6246f47e318ab528dfe637786d6b63a363312f89"
+    },
+    {
+      "path": "solve/report/llm-steering-supervisor-actions.md",
+      "kind": "quest-report-projection",
+      "bytes": 1140,
+      "sha256": "2a7351aa968341b225afd7d4ae588e7377c039b068a7bd97333380a62c671163"
+    },
+    {
+      "path": "solve/report/llm-steering-verification-handoff.md",
+      "kind": "quest-report-projection",
+      "bytes": 2325,
+      "sha256": "dca1c75002f594caee61f50519db65939cd2f9acebe092f6429cd1826f1ea9e1"
+    },
+    {
+      "path": "solve/report/local-leadership-tenure-bound-safety-evidence.md",
+      "kind": "quest-report-projection",
+      "bytes": 12197,
+      "sha256": "de9c4169d0e0d5de8c941defe6cb39ddd87f88b0b34cda1f3ac19560ff20bb79"
+    },
+    {
+      "path": "solve/report/managed-partition-merge.md",
+      "kind": "quest-report-projection",
+      "bytes": 3854,
+      "sha256": "aa938afc8e3cef9a30bdea55c0399b6ce6e14adf0acf6ea6ac35c2189e247d36"
+    },
+    {
+      "path": "solve/report/membership-publication-drain-determinism.md",
+      "kind": "quest-report-projection",
+      "bytes": 2502,
+      "sha256": "2ded129757a0e39afc7184ab475589f0d709e03388c9908e3dd8a65cc7a6389e"
+    },
+    {
+      "path": "solve/report/model-bounded-retry-exit-routing.md",
+      "kind": "quest-report-projection",
+      "bytes": 1371,
+      "sha256": "df0130792903b7f899bf26231da5f08c9033a76526339730f4d9b615cb285769"
+    },
+    {
+      "path": "solve/report/model-owner-trace-validation.md",
+      "kind": "quest-report-projection",
+      "bytes": 1289,
+      "sha256": "19a3bcc02e7332956242401fc7a5d4235b587a1155f2fc1dcd3b26a2aa5c2346"
+    },
+    {
+      "path": "solve/report/model-owner-transition-recoverable-wake.md",
+      "kind": "quest-report-projection",
+      "bytes": 1388,
+      "sha256": "d17ca090c84222b0690c9e80bcc851dd515d01d689d245d36f4680ea0515d7da"
+    },
+    {
+      "path": "solve/report/model-projection-freshness-epoch-fencing.md",
+      "kind": "quest-report-projection",
+      "bytes": 1357,
+      "sha256": "f35d05abfc8ec5bcfab0a25a7a8e12c2f7359338c3b36c7da7c853155a68757a"
+    },
+    {
+      "path": "solve/report/model-readiness-handoff-liveness.md",
+      "kind": "quest-report-projection",
+      "bytes": 1388,
+      "sha256": "d77e4bdf498a818e301e5848414a0de9041d2862d7a0767de9bb0977ff5465b7"
+    },
+    {
+      "path": "solve/report/movielens-admin-event-loop-isolation-discriminator.md",
+      "kind": "quest-report-projection",
+      "bytes": 7851,
+      "sha256": "185a1bd8f42cedd8b15f86c20e057a7bd6a73e3e45f1dea20279d3eaa99a3712"
+    },
+    {
+      "path": "solve/report/movielens-admin-snapshot-deadline-propagation.md",
+      "kind": "quest-report-projection",
+      "bytes": 20729,
+      "sha256": "d0c5f12fa13a1ec64e4bbbfbf263385f50c3ec41f030454a2a1268eaea6bd0a8"
+    },
+    {
+      "path": "solve/report/movielens-admin-snapshot-retry-deadline-budget.md",
+      "kind": "quest-report-projection",
+      "bytes": 22921,
+      "sha256": "0bb962ae14cd30133bc6dfb7e65c13a776ccaadb35468585ed2af304f532c84e"
+    },
+    {
+      "path": "solve/report/movielens-affinity-placement-demo.md",
+      "kind": "quest-report-projection",
+      "bytes": 12618,
+      "sha256": "4eebe77073b87d2d6303fb2e5d37e44d040d6b2eec3cdd1f3e56dfe6a5e60f77"
+    },
+    {
+      "path": "solve/report/movielens-authoritative-observation-watermark-admin-contract-fixtures.md",
+      "kind": "quest-report-projection",
+      "bytes": 1888,
+      "sha256": "20522fce68abf7c04298361b80e871d579da8634b5d6529508206765536d1cf9"
+    },
+    {
+      "path": "solve/report/movielens-authoritative-observation-watermark.md",
+      "kind": "quest-report-projection",
+      "bytes": 21372,
+      "sha256": "0892df50aaddac8ac3d48082d03b29df0899c268c9f9a3a325cf63602ef586f2"
+    },
+    {
+      "path": "solve/report/movielens-canonical-leader-publication-retained-wake-integrity-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 2035,
+      "sha256": "cc47df77e3c0433c8a6559e14b401fddc159658d1f5327e380a07f3a0b574b38"
+    },
+    {
+      "path": "solve/report/movielens-colocated-follower-remove-safety.md",
+      "kind": "quest-report-projection",
+      "bytes": 19284,
+      "sha256": "7db87f8170296d603e46ed0a47046a5a1ee2114b79be08e82ea31d7d963da5e9"
+    },
+    {
+      "path": "solve/report/movielens-colocated-follower-replacement-source.md",
+      "kind": "quest-report-projection",
+      "bytes": 15388,
+      "sha256": "16f200349f4faaa49863548938aa944b4f238095fe2967c7aa306079481ca7f3"
+    },
+    {
+      "path": "solve/report/movielens-create-budget-intent-serialization.md",
+      "kind": "quest-report-projection",
+      "bytes": 23005,
+      "sha256": "a725305c9654b324a142fdbd9ede351ad5e33dbcc566d0c0376fdf717c24e877"
+    },
+    {
+      "path": "solve/report/movielens-exact-election-evidence-same-turn-model.md",
+      "kind": "quest-report-projection",
+      "bytes": 5862,
+      "sha256": "c37431b8d651bdf9a400ab89eecbef2a6e2c6ea0be15e02cd7cb9f66e5e298e5"
+    },
+    {
+      "path": "solve/report/movielens-exact-election-evidence-same-turn-owner.md",
+      "kind": "quest-report-projection",
+      "bytes": 9273,
+      "sha256": "a4fa25803a0d686820d2756872154ce880adf6fb76c1bf7d86f37e593ac05364"
+    },
+    {
+      "path": "solve/report/movielens-formation-alive-peer-keepalive-liveness.md",
+      "kind": "quest-report-projection",
+      "bytes": 23312,
+      "sha256": "2bba194947b2792c643f147b22c8dfc35dcb0d0d3004330db181ca83129c1c3f"
+    },
+    {
+      "path": "solve/report/movielens-incremental-replace-spread-nonregression.md",
+      "kind": "quest-report-projection",
+      "bytes": 13429,
+      "sha256": "e4e0b6efdb544310e80d022ba2605df7a097f4db20ec87372388194a838dd3a8"
+    },
+    {
+      "path": "solve/report/movielens-ledger-completion-continuity-discriminator.md",
+      "kind": "quest-report-projection",
+      "bytes": 7285,
+      "sha256": "400afc480931ce6950f93fbb8721f6ddfe79d7c736305c70fc9b962dbd784459"
+    },
+    {
+      "path": "solve/report/movielens-local-leader-row-visibility-formal-model.md",
+      "kind": "quest-report-projection",
+      "bytes": 4956,
+      "sha256": "e38edb5fe988d16b61cce44b8f942ab2e5a3155a400dda07f797864eacb3e336"
+    },
+    {
+      "path": "solve/report/movielens-local-leader-row-visibility-model.md",
+      "kind": "quest-report-projection",
+      "bytes": 5469,
+      "sha256": "abc4e152ea3684532c1797a0b9b06023c3a23c5a557d8ef03e156b7806bc5dee"
+    },
+    {
+      "path": "solve/report/movielens-local-leader-row-visibility.md",
+      "kind": "quest-report-projection",
+      "bytes": 11355,
+      "sha256": "b8d2b690fe552c028ebb678e69fbc5e89a226d6efc9df875f62f5c5652bfc050"
+    },
+    {
+      "path": "solve/report/movielens-nodes-priority-recovery-adverse-ab-rollback-sealed.md",
+      "kind": "quest-report-projection",
+      "bytes": 4572,
+      "sha256": "86eb415f0ee6aa42aaed7198ccd4b026b1a697055ee7dc5b8308166802ece76b"
+    },
+    {
+      "path": "solve/report/movielens-nodes-priority-recovery-adverse-ab-rollback.md",
+      "kind": "quest-report-projection",
+      "bytes": 2185,
+      "sha256": "119c07eba01b23feb264ec6672416c6c966c2ae2c32b0d721ae1281f62e4633b"
+    },
+    {
+      "path": "solve/report/movielens-nodes-priority-recovery-escape.md",
+      "kind": "quest-report-projection",
+      "bytes": 10355,
+      "sha256": "544be22c755aeadfb6ee24f92d1d9301d914411b2fcd6dd88bf06f8783ef93c9"
+    },
+    {
+      "path": "solve/report/movielens-observation-watermark-churn-consolidation.md",
+      "kind": "quest-report-projection",
+      "bytes": 8945,
+      "sha256": "2ea72ff189d5d133f6f2c8687041e015fcc7658ec9c0bfdb7dbdbcb1ae4367dd"
+    },
+    {
+      "path": "solve/report/movielens-operation-ledger-terminal-hold.md",
+      "kind": "quest-report-projection",
+      "bytes": 6569,
+      "sha256": "66916a3caa515fee163af4a0361d86a8c3a757c1ad98e674fd64deeec12ef987"
+    },
+    {
+      "path": "solve/report/movielens-parallel-reduce-result-chronology.md",
+      "kind": "quest-report-projection",
+      "bytes": 20470,
+      "sha256": "9779aaa159843a5539b8e3bc5d3de3095583b730a2187b283267c7fc545063df"
+    },
+    {
+      "path": "solve/report/movielens-pre-schema-priority-spread-admission-authority-measured.md",
+      "kind": "quest-report-projection",
+      "bytes": 5748,
+      "sha256": "2acbf32a29cc2379e74b11aeb8b34e26f88b37f773de9f5ed7678e435ac1bde1"
+    },
+    {
+      "path": "solve/report/movielens-pre-schema-priority-spread-admission-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 3174,
+      "sha256": "a0bafbcf5451d574e14b8008b090e2f2d80164a9d1411b2c0ede2dd8c2e864e6"
+    },
+    {
+      "path": "solve/report/movielens-pre-schema-quiescence-live.md",
+      "kind": "quest-report-projection",
+      "bytes": 25775,
+      "sha256": "82ba0e3523e169a5076b286cd6bd881ae5446c83f9b7386d51783d4c6956e62c"
+    },
+    {
+      "path": "solve/report/movielens-preload-admission-gate-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 9240,
+      "sha256": "c2b82ed00f37b23546ed9fe75aa1ef556305d41b707b953d0a5b7e995770833a"
+    },
+    {
+      "path": "solve/report/movielens-priority-spread-gap-coverage-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 7385,
+      "sha256": "5d34cffb710c7a0f5d40b45034e665737af845b85c3131de4c9c138403f273d0"
+    },
+    {
+      "path": "solve/report/movielens-priority-surrogate-single-followup.md",
+      "kind": "quest-report-projection",
+      "bytes": 19046,
+      "sha256": "41b2b28e6a312c0ab771d19623a29ad71f5ea9b6ad52a4156d05dbcc555a7d81"
+    },
+    {
+      "path": "solve/report/movielens-priority-surrogate-single-owner-arbitration.md",
+      "kind": "quest-report-projection",
+      "bytes": 25438,
+      "sha256": "a50592f19d04ec064a5cfbd411efab288c3117c89f3a2f869aa6ca8c37807fd9"
+    },
+    {
+      "path": "solve/report/movielens-raft-peer-cohort-pruning-election-liveness.md",
+      "kind": "quest-report-projection",
+      "bytes": 6718,
+      "sha256": "136908db0114b3bd4e7ce9852bee51309a1b667220d586be532a0041b97a06ab"
+    },
+    {
+      "path": "solve/report/movielens-ratings-scoped-split-policy-live.md",
+      "kind": "quest-report-projection",
+      "bytes": 13427,
+      "sha256": "9797e3f41ed9fa2ac3ee50df7895b9e189c70e3e91ba240323fe0c79620a554e"
+    },
+    {
+      "path": "solve/report/movielens-ready-lease-cdc-provenance.md",
+      "kind": "quest-report-projection",
+      "bytes": 2868,
+      "sha256": "9d1cea1b3d5306bd7ef244d3ebf71e655f79f9c54b96d5ee591f8da8d513fa75"
+    },
+    {
+      "path": "solve/report/movielens-ready-lease-chronology-discriminator.md",
+      "kind": "quest-report-projection",
+      "bytes": 3218,
+      "sha256": "13e5071f010a51f9fa6326f2ba8ccfa8a5c7d8429a2d4f4ffa63481da1a3629c"
+    },
+    {
+      "path": "solve/report/movielens-ready-lease-maintenance-critical-owner-lane.md",
+      "kind": "quest-report-projection",
+      "bytes": 17830,
+      "sha256": "28587c7474169bd0458fefbf1976edc8cccad7e3501a082b63168629df210a72"
+    },
+    {
+      "path": "solve/report/movielens-ready-lease-witness-report-replay.md",
+      "kind": "quest-report-projection",
+      "bytes": 2690,
+      "sha256": "82c4e2e805b8adf4de19fa61e10d63a200451c5414c7aaaf04406a72029854bf"
+    },
+    {
+      "path": "solve/report/movielens-replace-bootstrap-cohort-authority-measured.md",
+      "kind": "quest-report-projection",
+      "bytes": 3336,
+      "sha256": "b609dd2abf8bef6cd812db35d1e26372173e0f6be322e10541f18fcba9264eef"
+    },
+    {
+      "path": "solve/report/movielens-replace-bootstrap-cohort-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 26731,
+      "sha256": "87da8a54fedaebb5ed8fbc872587fc9a3621b9d9fddf564ea87e9fdf8cc81cc0"
+    },
+    {
+      "path": "solve/report/movielens-stale-only-preflight-repair-scope.md",
+      "kind": "quest-report-projection",
+      "bytes": 4370,
+      "sha256": "ada46a25e18e1c7899c79cd20070f4807b6f2af5b15b9c1b5927f948d973cafe"
+    },
+    {
+      "path": "solve/report/movielens-three-way-affinity-demo.md",
+      "kind": "quest-report-projection",
+      "bytes": 40564,
+      "sha256": "c82d3c4d4797778d4b50ed09aafa05c25ca9f111085141d1982426e80fc4f0d4"
+    },
+    {
+      "path": "solve/report/oci-container-driver-live-activation.md",
+      "kind": "quest-report-projection",
+      "bytes": 13820,
+      "sha256": "5bf5bbf5af6f098b101f7d863e8c0d764a304621d6b9155487b0bc8678d4de71"
+    },
+    {
+      "path": "solve/report/oci-receipt-ledger-lock-release-diagnostic.md",
+      "kind": "quest-report-projection",
+      "bytes": 3767,
+      "sha256": "0b54ab45c039d23c8d4b56b62feaef505445da58b85f61b6c056bd922913ed1e"
+    },
+    {
+      "path": "solve/report/oci-runtime-host-contract-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 10399,
+      "sha256": "d7555da17ef322e32032354349bf3b2ef0c2ca778af00c6ef0dadb45e83f39d7"
+    },
+    {
+      "path": "solve/report/oci-runtime-host-contract.md",
+      "kind": "quest-report-projection",
+      "bytes": 2878,
+      "sha256": "2f19dc77a50de0d9bfd583049af78144ab9ccfae959e2183e08297c1954f2ef9"
+    },
+    {
+      "path": "solve/report/operation-dispatch-completion-owner-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 4963,
+      "sha256": "f5d5555b898195d972f9067e833c882e155e4b9f0143acb4d69ed10f335dd036"
+    },
+    {
+      "path": "solve/report/operation-dispatch-completion-owner-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1961,
+      "sha256": "9fe3b7efd8c6b6a1fc5e4caf4d8b6184789fe47b7340633bb4c7b26d46ca84a2"
+    },
+    {
+      "path": "solve/report/operation-ledger-quorum-authoritative-release.md",
+      "kind": "quest-report-projection",
+      "bytes": 8694,
+      "sha256": "97c4801963cc8184db5da557905d428bd9944fec7cc306c6b32be3595e99af4e"
+    },
+    {
+      "path": "solve/report/operation-workflow-drain-redrive.md",
+      "kind": "quest-report-projection",
+      "bytes": 21801,
+      "sha256": "f45016d848eec709210e479512a369ff234832e83926609290c4be654a394d06"
+    },
+    {
+      "path": "solve/report/ordinary-placement-ready-lease-candidate-admission.md",
+      "kind": "quest-report-projection",
+      "bytes": 3994,
+      "sha256": "6f643f2971a3d9725bf409b1def66a04782d7f4a33189786462ba274647bbe5f"
+    },
+    {
+      "path": "solve/report/owner-complexity-rebalancer-planning-owner-placement-rebalance-planning-clean-receipt.md",
+      "kind": "quest-report-projection",
+      "bytes": 5063,
+      "sha256": "a6082937384558c3adc3e892d4940b352b492ff549b09950633e392602b07548"
+    },
+    {
+      "path": "solve/report/owner-complexity-rebalancer-planning-owner-placement-rebalance-planning.md",
+      "kind": "quest-report-projection",
+      "bytes": 9913,
+      "sha256": "f70e985d58b0b69724679f8b1fd5ad724cfb0bc1f45131cb56d591171604d8f8"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-bootstrap-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1676,
+      "sha256": "c5a699e0a01298f7aca51c6d66be83589ad2161955e972686f62905722d664c6"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-hardening-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 4442,
+      "sha256": "bc6529591b3198514e07971588d0101097fa1cc4e9fa7c2918d0742450b7606a"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-hardening-parameter-snapshot-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 3515,
+      "sha256": "5972af6873cd84e38471a14ef382865480722e0d5f237e6d7bdb1a203785e47d"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-hardening-recursive-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 4782,
+      "sha256": "361d6ad3d40cc921202e232f8cf4daeb2ab3db57183f141a253e2cacde28de91"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-hardening-rest-exclusion-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1948,
+      "sha256": "906b4fb8eecb18ec6118f75968f29cf759934fb09300ba93b31674a4838e217d"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-hardening-rest-exclusion-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 3327,
+      "sha256": "63c71684ba2a6ae01af5d64c0f88b22d829cf9fb87c788ab38b497f0786bf6af"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-proof-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 7667,
+      "sha256": "66b9785bf1b206f481aa02ac87d3c3d7ec8a51e8a8e09cb791414aaf92940d44"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-proof-integrity-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 1693,
+      "sha256": "22de653d7b19fe1c4159d3d7449707f009d5d734f81d9ab31de427830f95aad5"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-census-proof.md",
+      "kind": "quest-report-projection",
+      "bytes": 6521,
+      "sha256": "bc5ddde6ad2f550d78c675cd053a382b0e9e26a2fad7e9a022e94134490c949e"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-control-plane-evidence-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 2329,
+      "sha256": "6623ddfd205f8331a41fa469dc86afd5f85538ace6a017cf06b4ebfb973eac82"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-control-plane-evidence-tooling-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 1752,
+      "sha256": "b48fdd211f8f5e7c7f360663cab3226a71ed38ef8962ec74aab5d14035fa4c89"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-control-plane-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 2718,
+      "sha256": "30378966bfe0b136db9a029556a3e9a471b175a3bae6c4d995380305b9a848e1"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-bootstrap.md",
+      "kind": "quest-report-projection",
+      "bytes": 3224,
+      "sha256": "e00b9c313ce0b5284810f968cb103766c84d52d2ae255fd935548962f218feba"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-control-plane-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 2771,
+      "sha256": "872f55d4447944bb1f3b74d22cb1d075de1e18e8e5dc0b22a61ffa1c520ec04d"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-control-plane.md",
+      "kind": "quest-report-projection",
+      "bytes": 2636,
+      "sha256": "ca0adb32ff9698f9d0b7eb3512afc2b2aa30b403502b798c669cc32bf1a76c16"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-node-create.md",
+      "kind": "quest-report-projection",
+      "bytes": 3529,
+      "sha256": "c0e64dde9d1891ee77017d53a41ac01767dae1104d89438cfca52bb547f0a1ae"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-node-runtime-readiness.md",
+      "kind": "quest-report-projection",
+      "bytes": 3419,
+      "sha256": "6f528bd5491083e49d47e7f90cf43fec1eb5a6c7e242cee4de385565ba1ef601"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-owner-execution.md",
+      "kind": "quest-report-projection",
+      "bytes": 2408,
+      "sha256": "d8df15bcfcb9005ea5adc6751366e88337998738e89edac03336fec2ccd96633"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-partition-domain.md",
+      "kind": "quest-report-projection",
+      "bytes": 4235,
+      "sha256": "b6e352735900d2a4ba828f194f4496cb92ea22ad4c094995b68de1a9fc313d0a"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-query-domain.md",
+      "kind": "quest-report-projection",
+      "bytes": 3478,
+      "sha256": "8922794bb22102b8d0b3ce64aaaf1faa104ec0e356c8b72a7936ffe7bf74cd48"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-raft.md",
+      "kind": "quest-report-projection",
+      "bytes": 2800,
+      "sha256": "72e17cf25585d87f4b25525df2106b35b1bca313915ae5dcf51c930aa5ca8361"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-rebalance-coordinator.md",
+      "kind": "quest-report-projection",
+      "bytes": 2706,
+      "sha256": "839b46e3b100ffce225ae2357ec00d5ea266bdc013fc014175e4fdf2a8b21490"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-rebalancer-repository-policy.md",
+      "kind": "quest-report-projection",
+      "bytes": 4151,
+      "sha256": "66be7982cf3a133c092f823b0733702fbc48ac0d3869d762aa791f1d14dc319f"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-migration-unified-rebalancer.md",
+      "kind": "quest-report-projection",
+      "bytes": 2736,
+      "sha256": "6e535369fa0b09fc7f053fda351df73221ce2119b2af4629072a1fd93b3246e3"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-node-create-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1676,
+      "sha256": "db924332be9babefaa063134f03f94e49b627d773c8a54fc628bade0e6b18941"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-node-runtime-readiness-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1753,
+      "sha256": "e6abe322fee18e420db87687b171c5c52956085e35024260f5ac5b2da78ea67c"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-owner-contract.md",
+      "kind": "quest-report-projection",
+      "bytes": 3020,
+      "sha256": "d83db5fd43c1c15360084a4cb5d7c0ce5054db2b069adb3d012217b56211bbf0"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-owner-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1680,
+      "sha256": "9dee65507aa1e2913d13ef247ba388db1392306516efc8519ef4b7c9554f7031"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-owner-execution-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1648,
+      "sha256": "dd2387ec1736618e648b6fbc71a87f0813cb5824d551d27c582dd3fca4f65ee6"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-owner-implementation-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 2966,
+      "sha256": "d649208086619fe8d18a75be5c17a1390c5fd5ffe3f8d48cb4cd652576cf7b11"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-owner-implementation.md",
+      "kind": "quest-report-projection",
+      "bytes": 2655,
+      "sha256": "09a428398dc6cf358133e9a2ce33da358e28155c65269609e56be4abffea66b4"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-owner-runtime.md",
+      "kind": "quest-report-projection",
+      "bytes": 2335,
+      "sha256": "d64c2859e2ce22046ae1d9bc66b22596dff5d64e141ec742582c4bf5db31fdab"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-owner-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 5082,
+      "sha256": "3c667b933a5a86e2f45579bd228a59990299bf03772cf63853748467bbadb2d4"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-partition-domain-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1709,
+      "sha256": "d028e48b22a2399e96a89f5a3739204cc59ccaf145de1c173ac733ce50801962"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-query-domain-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1677,
+      "sha256": "7df6e125d3b8ee03738c0312db9cde52c52e9459d214da24cb67b65d626551a4"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-raft-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1635,
+      "sha256": "02fe6bcb5a7d6d8859d284dbee26a2308e6f87d823e60304bc21e9816b43386a"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-rebalance-coordinator-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1741,
+      "sha256": "f95c2fa9f3dd15b2a681d960972aa6173507357b784d9814132c7bf7fb405e49"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-rebalancer-repository-policy-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1790,
+      "sha256": "b2f5d258b90a17acc263bdf55d9d977d63ac2959bea6b2149918e1811a3f1c6d"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-single-owner-table-integrity-archive-historical.md",
+      "kind": "quest-report-projection",
+      "bytes": 1752,
+      "sha256": "61efa014026b0bb30c06c44c01fa99f4871860fea48f53fa4f8a101425f59ade"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-single-owner-table-integrity-archive-replacements.md",
+      "kind": "quest-report-projection",
+      "bytes": 1773,
+      "sha256": "14f95cc9cabb59c92224a4ca6dc205c49bcb3e6cc1a01993f51cd7ee1d2d4eac"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-single-owner-table-integrity-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 3126,
+      "sha256": "2be8a913c1d41be88a8b81080b8951e37514866ce585f02ccf4d2dd13e1e9131"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-single-owner-table.md",
+      "kind": "quest-report-projection",
+      "bytes": 19254,
+      "sha256": "8179b016b7ac7eec46c9bfeb5a3910962c75c32eac96af5fa5febb7f2bd605c5"
+    },
+    {
+      "path": "solve/report/partition-class-ladder-unified-rebalancer-evidence-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 1720,
+      "sha256": "6a24179277f92ca2307d32680c7cae529f5939dfc24a8c8efad99f1eb0bbb636"
+    },
+    {
+      "path": "solve/report/partition-live-leader-address-routing.md",
+      "kind": "quest-report-projection",
+      "bytes": 6153,
+      "sha256": "d764ef8e37419203665ad4589047235fbfbf73b512b25d1da4443cee7e0844ef"
+    },
+    {
+      "path": "solve/report/partition-managed-merge-explicit-state-ratchet.md",
+      "kind": "quest-report-projection",
+      "bytes": 1800,
+      "sha256": "98aadcb4a49b25d0f9e05e1b6948c9014ca0f83c3addc580e7e99f8ed97a9cfd"
+    },
+    {
+      "path": "solve/report/pgwire-authentication-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 13416,
+      "sha256": "d7636c7b8aca962ad438b67d7a783d50c40e6bf8af52deaab7282505d44e10ee"
+    },
+    {
+      "path": "solve/report/pgwire-tls-policy-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 10800,
+      "sha256": "5993636804691404f1b463cb675aa26c3ce28827f06f82cf23c7b8c895c56848"
+    },
+    {
+      "path": "solve/report/placement-data-affinity-tier1b.md",
+      "kind": "quest-report-projection",
+      "bytes": 4598,
+      "sha256": "fb7a3e604b446afcb50d77a5bf69d1d27c2b3f71a6f9eefd9a6684bc786ebc79"
+    },
+    {
+      "path": "solve/report/pressure-admission-flagless-cdc-topology-sweep.md",
+      "kind": "quest-report-projection",
+      "bytes": 5092,
+      "sha256": "ee69e51c978bdd4130d14356888c1d6dfaf76811ee082fd5cb00e8af0b6bf5ff"
+    },
+    {
+      "path": "solve/report/pressure-admission-flagless-defer-policy.md",
+      "kind": "quest-report-projection",
+      "bytes": 9434,
+      "sha256": "fc5a27d0230c4d2749121e367e317331b10e4892d29f7fd0498c7b0be50eb0ac"
+    },
+    {
+      "path": "solve/report/pressure-admission-flagless-node-admin-sweep.md",
+      "kind": "quest-report-projection",
+      "bytes": 5180,
+      "sha256": "3b43877f262b8e2a167c68b041fad058ae675f1430ab94af4be70af3adee1c5b"
+    },
+    {
+      "path": "solve/report/pressure-admission-flagless-partition-mg-sweep.md",
+      "kind": "quest-report-projection",
+      "bytes": 5330,
+      "sha256": "a1d93b5cd72dd7c84bcbfc811ceb613eae367891059359fa264966dc68290033"
+    },
+    {
+      "path": "solve/report/pressure-admission-flagless-publication-parking.md",
+      "kind": "quest-report-projection",
+      "bytes": 5744,
+      "sha256": "9738234df9136e679a7bbfc8b3301b454ef6d06c8b5326c09dd1c577413e32d4"
+    },
+    {
+      "path": "solve/report/pressure-admission-flagless-query-logging-sweep.md",
+      "kind": "quest-report-projection",
+      "bytes": 5200,
+      "sha256": "50332db0eb1641243600b73031a74eebf9aa5f09a605e2f6338fdf007e95936c"
+    },
+    {
+      "path": "solve/report/pressure-admission-flagless-rebalancer-brake.md",
+      "kind": "quest-report-projection",
+      "bytes": 5163,
+      "sha256": "4c936a0480cf66985276a69fe52d22ba59db21e6b10f34514824410adfd777a2"
+    },
+    {
+      "path": "solve/report/priority-placement-completed-topology-observation.md",
+      "kind": "quest-report-projection",
+      "bytes": 6397,
+      "sha256": "5ae41694971644a713774c7297faa23a88841bde2dc83884bcc607b2db33d5a0"
+    },
+    {
+      "path": "solve/report/priority-placement-snapshot-owner-reconciliation.md",
+      "kind": "quest-report-projection",
+      "bytes": 8828,
+      "sha256": "386dab7598787abf908cb1a642f25aeb628f5b52ebb063adc0bf06e6193dcbb5"
+    },
+    {
+      "path": "solve/report/priority-recovery-admin-control-plane-admission-publication-single-engaged-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 3955,
+      "sha256": "035ff37399144da64aec748b3a7e7acc384abda4b0ef7e32471872b22e39c60f"
+    },
+    {
+      "path": "solve/report/priority-recovery-admin-control-plane-build-priority-recovery-admission-by-partition-id-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 3916,
+      "sha256": "b79e221f1dda48484a1b1e0f6aa2600babc629a1629e4083656b3c2febe7a704"
+    },
+    {
+      "path": "solve/report/priority-recovery-admin-dormant-context-retirement.md",
+      "kind": "quest-report-projection",
+      "bytes": 3504,
+      "sha256": "7382db9a4372a7ecc3eab498ef2aeece99cdba86ee7985a57388783d153bb79e"
+    },
+    {
+      "path": "solve/report/priority-recovery-authoritative-summary-inventory-alignment.md",
+      "kind": "quest-report-projection",
+      "bytes": 5563,
+      "sha256": "141b4ae2f0d56041cdcaaccedd663d1c31819bc9f48adde02875950271cb63d1"
+    },
+    {
+      "path": "solve/report/priority-recovery-control-plane-normalize-distinct-string-array-authority.md",
+      "kind": "quest-report-projection",
+      "bytes": 3820,
+      "sha256": "66a0f1e255dd97b18824c1abd2bd4736263bc30554558abd6dbc99869f5c74a6"
+    },
+    {
+      "path": "solve/report/priority-recovery-followup-phi-monotonicity.md",
+      "kind": "quest-report-projection",
+      "bytes": 2813,
+      "sha256": "6d3c1fd5eb3f11d65c5fd63a46ed4a0ff0001a6d2ef79edb37409348cfcfb204"
+    },
+    {
+      "path": "solve/report/priority-recovery-owner-inventory-projection-refresh.md",
+      "kind": "quest-report-projection",
+      "bytes": 2108,
+      "sha256": "fcdd939a4ef8b4c69b12f37d8f8416d6f697a20da87b0396e4e8fba99e62f7e9"
+    },
+    {
+      "path": "solve/report/priority-recovery-owner-inventory-tooling-projection-refresh-wave0-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 2168,
+      "sha256": "8f97aacdbac39ab6fbbee86e097dd63958bca0a8907bf9f15019c326f89d7dbc"
+    },
+    {
+      "path": "solve/report/priority-recovery-owner-inventory-tooling-projection-refresh.md",
+      "kind": "quest-report-projection",
+      "bytes": 1959,
+      "sha256": "9b665f0be96f2c851b41885e3d4243e10f0581ebe008674f8f285b60a0f233a9"
+    },
+    {
+      "path": "solve/report/priority-recovery-owner-inventory.md",
+      "kind": "quest-report-projection",
+      "bytes": 4451,
+      "sha256": "2b3494cf7ed5821a253d018b865d882238603fee4a30368889823e8b03dcedae"
+    },
+    {
+      "path": "solve/report/priority-recovery-replace-owner-inventory-unavailable.md",
+      "kind": "quest-report-projection",
+      "bytes": 13522,
+      "sha256": "c835657be97c76637d231171ab10d11adaae44bc572f6afd7507c8614453c738"
+    },
+    {
+      "path": "solve/report/priority-surplus-remove-authoritative-placement-fence.md",
+      "kind": "quest-report-projection",
+      "bytes": 11756,
+      "sha256": "311726fd89a62d1585ca094bfe642f0d2ccd66d4c7e946e77ba80f800d250c54"
+    },
+    {
+      "path": "solve/report/project-hardening-proof-integrity-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 8333,
+      "sha256": "2563a131c731777770d6d2816976d986af51b71a55336e5e4c099f7c8a305919"
+    },
+    {
+      "path": "solve/report/project-hardening-workflow-proof-integrity.md",
+      "kind": "quest-report-projection",
+      "bytes": 3230,
+      "sha256": "4162b003574d54c3490f63ff9adff9323a9aabe6bd6fdbef5da78ac04afc8dde"
+    },
+    {
+      "path": "solve/report/provisioning-admission-ledger-hold-transient-wait.md",
+      "kind": "quest-report-projection",
+      "bytes": 6272,
+      "sha256": "1bd52e81a5925cfb29bf66c7130f6cbd1876d549e6e8b4f2a171c6955e09bc53"
+    },
+    {
+      "path": "solve/report/provisioning-parent-deadline-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 2194,
+      "sha256": "abee094dbb5ab0f9f8dc49b41f1de7c9a410a49d6241c5e9d516375ba6158378"
+    },
+    {
+      "path": "solve/report/query-distributed-decision-state-ratchet.md",
+      "kind": "quest-report-projection",
+      "bytes": 1694,
+      "sha256": "aa0cb349319e33dbd27208b88dfd7395b4148569ac198b42df9577aa47acf7d3"
+    },
+    {
+      "path": "solve/report/quest-git-handoff-requirement.md",
+      "kind": "quest-report-projection",
+      "bytes": 1054,
+      "sha256": "210aef58fc7d1151006e99abd2deb58b15259a147775298abc32eb342b5d18a9"
+    },
+    {
+      "path": "solve/report/quest-model-guidance-theory-use.md",
+      "kind": "quest-report-projection",
+      "bytes": 1109,
+      "sha256": "1cc84ca10056f49c66e3dcaf8786f96556fb27f190020146039f2fcd9738debb"
+    },
+    {
+      "path": "solve/report/quest-source-change-subagent-verification.md",
+      "kind": "quest-report-projection",
+      "bytes": 1087,
+      "sha256": "b1113b28a98a7ca73d214511facfcab970b0b3e9e63d36be5f7929506503a261"
+    },
+    {
+      "path": "solve/report/quest-system-continuation-gates.md",
+      "kind": "quest-report-projection",
+      "bytes": 2212,
+      "sha256": "ca393bf5f69f1119e30c923711ee7ec998d3cc8b4a36aa6eb078d92b0cef3720"
+    },
+    {
+      "path": "solve/report/quest-workflow-signal-quality.md",
+      "kind": "quest-report-projection",
+      "bytes": 2010,
+      "sha256": "16e879737a8c5651bdc9a6eda455205c4f11db7b112b4752797eaffc890bed2e"
+    },
+    {
+      "path": "solve/report/quiescence-observation-lane-decoupling.md",
+      "kind": "quest-report-projection",
+      "bytes": 3026,
+      "sha256": "d82c7f88bfb06f9d83662bd1c963d55384855db58b8f0c203dff828b226279b1"
+    },
+    {
+      "path": "solve/report/raft-candidacy-reluctance-drain-source.md",
+      "kind": "quest-report-projection",
+      "bytes": 3474,
+      "sha256": "5ff09b83c0e899c23c70f4897c99301f574b6948888a44e3f9180f8940ab4843"
+    },
+    {
+      "path": "solve/report/raft-committed-entry-immutability.md",
+      "kind": "quest-report-projection",
+      "bytes": 2711,
+      "sha256": "cf23d324832ba50cb885f629359de35fca34a0f8e6d0774d0f38a8f3d992d851"
+    },
+    {
+      "path": "solve/report/raft-snapshot-gated-compaction.md",
+      "kind": "quest-report-projection",
+      "bytes": 2748,
+      "sha256": "290e5d1faf6fc7f3b58c261052c44eece11d34b18a1f2edc922cfa56ac6bde85"
+    },
+    {
+      "path": "solve/report/rebalancer-own-create-memory-duplicate-replace.md",
+      "kind": "quest-report-projection",
+      "bytes": 6612,
+      "sha256": "c4d206a6a6e50861ace8a6efa414ad6e78027830e5e5912c5d529d87d3c1e2f9"
+    },
+    {
+      "path": "solve/report/release-0-1-0-alpha.md",
+      "kind": "quest-report-projection",
+      "bytes": 2788,
+      "sha256": "cade45366a41754ec133fd9ea934138648b3db141580469b985be75f3774f999"
+    },
+    {
+      "path": "solve/report/replica-operation-insert-retry-idempotency.md",
+      "kind": "quest-report-projection",
+      "bytes": 6479,
+      "sha256": "0d46369bc5eab7179f619853e1202754ab28e2a0f3cc06e9d123798790565115"
+    },
+    {
+      "path": "solve/report/restart-new-ip-name-first-advertising.md",
+      "kind": "quest-report-projection",
+      "bytes": 2023,
+      "sha256": "6c9cfb304dd3760b3fb847c0a647c580e2fdf6f4ce70413d036d18bf5ce5a8aa"
+    },
+    {
+      "path": "solve/report/restart-new-ip-peer-reconnect-unwedge.md",
+      "kind": "quest-report-projection",
+      "bytes": 2090,
+      "sha256": "72c2543beafe773fa723132c80582e9b42677bb75448a042cf1cea1529275556"
+    },
+    {
+      "path": "solve/report/rolling-restart-core-stability.md",
+      "kind": "quest-report-projection",
+      "bytes": 344958,
+      "sha256": "b69bea06ddc15befdca2d5435f484004f665fadf8d97c9a32c9fb8fff61824ab"
+    },
+    {
+      "path": "solve/report/rolling-restart-liveness-downstream-witness.md",
+      "kind": "quest-report-projection",
+      "bytes": 2448,
+      "sha256": "7521b4409bd6cb77cf61de81391393807a5d1df34a15182389ff27d94a9d0055"
+    },
+    {
+      "path": "solve/report/rolling-restart-liveness-emulation.md",
+      "kind": "quest-report-projection",
+      "bytes": 3457,
+      "sha256": "bbade6cdb467cb11fec7e0b993cfc64b4e5ae703cc5a721a84b8a3387b848938"
+    },
+    {
+      "path": "solve/report/rolling-restart-liveness-epic-graduation.md",
+      "kind": "quest-report-projection",
+      "bytes": 1830,
+      "sha256": "23443ccbd98274eb1fc4ffa24f8f64c0281e92efb0b9c853b9cdeff427f766f6"
+    },
+    {
+      "path": "solve/report/rolling-restart-liveness-log-replay.md",
+      "kind": "quest-report-projection",
+      "bytes": 2765,
+      "sha256": "8fe7343bda62a5448fb72c7f3c720a4e585fe1cce1cb69243b1af5ec9b0a906f"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-admin-query-backpressure.md",
+      "kind": "quest-report-projection",
+      "bytes": 2975,
+      "sha256": "0b26783006c4a752346a910fdf2d2fcd7360a5bc80bcba52ebe67a8bc94147ed"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-control-plane-publications-failed-operation-mask.md",
+      "kind": "quest-report-projection",
+      "bytes": 3280,
+      "sha256": "413477cdec0a8f5f693cbc0fb07cc4a3877ccc78c5722109019797cdf5b17502"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-critical-spread.md",
+      "kind": "quest-report-projection",
+      "bytes": 11881,
+      "sha256": "3b7e1677f870ee0a73ac26b1fd183d61acae6cede2e078b0360f6e7466040c5e"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-drain-residual.md",
+      "kind": "quest-report-projection",
+      "bytes": 116171,
+      "sha256": "7608390672815a512362465e91d9dbefd8186a353e6fe5bee807d685387e91a6"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-join-runtime-activation-integrity-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 2050,
+      "sha256": "2da3886b6595731ed4115b3da8b508aa4a740e966d434af17f356acf6ec4d8ab"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-join-runtime-activation-workflow-integrity-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 2284,
+      "sha256": "a215144fd3d0d39ca902b4e0efd3d375acf37703f6a02e7a5eaa0c1f0139d159"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-join-runtime-activation.md",
+      "kind": "quest-report-projection",
+      "bytes": 32063,
+      "sha256": "f0d53ba7369c6c146a09a5b15b908cba76ee33ad3dacbf151df7b36cb7763f4d"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-leadership-quiescence-signature.md",
+      "kind": "quest-report-projection",
+      "bytes": 5443,
+      "sha256": "f77f476ac0c42fb47415b71f2a50a8192cc09f10917dd19b131a49308a52da85"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-liveness-residual-agreement.md",
+      "kind": "quest-report-projection",
+      "bytes": 4238,
+      "sha256": "9f797b4e6edca92593ea8b0273fbe2ebf2426d2b7b244f5d6a5c408078695184"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-load-admission-backpressure.md",
+      "kind": "quest-report-projection",
+      "bytes": 4237,
+      "sha256": "f7b22277cc99df2c4529eaf4d58f6b20d60e5090a2cd71449fb7a7faf05cd248"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-load-lane-admin-emission.md",
+      "kind": "quest-report-projection",
+      "bytes": 4295,
+      "sha256": "d06b729964a8a01014a6ca27474c58720a21932259ba4ad6647740938c7e6b4b"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-load-lane-owner-reproducer.md",
+      "kind": "quest-report-projection",
+      "bytes": 4377,
+      "sha256": "2278f7e5677c302dc7f052e25212b28defad7f060bd88623f627ae2bedc825b1"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-mixed-priority-context-selection.md",
+      "kind": "quest-report-projection",
+      "bytes": 3133,
+      "sha256": "78fef6e669c056fb04a45f73345d6a3497717af62701e79825f846441e31e27e"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-observer-staleness.md",
+      "kind": "quest-report-projection",
+      "bytes": 14222,
+      "sha256": "a81d88206ea37619d8b271128040dda62a03d4e1244f71803f7eca4821600f06"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-operation-drain-owner-progress-token.md",
+      "kind": "quest-report-projection",
+      "bytes": 2709,
+      "sha256": "5287cf1e71ed23931f8e066f5b1ba9e5391329093aceede18c7a7f94ed082a97"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-operation-drain.md",
+      "kind": "quest-report-projection",
+      "bytes": 83532,
+      "sha256": "5428d3cd9a8ad1ad60ef0c7c67ef2b47bf309e971fc3f33b6954ee60245f0bc4"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-passfail-discriminator-census.md",
+      "kind": "quest-report-projection",
+      "bytes": 6614,
+      "sha256": "883c11ff22621d1053b8a40ff9164328d342ca3f7065707ffe87f89145d76fbb"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-postrebalance-diagnostics-routing.md",
+      "kind": "quest-report-projection",
+      "bytes": 2537,
+      "sha256": "2be881264194eb9875988b39ea5a327612d4f5883967f7ef496b11cac4ab0292"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-postrebalance-drain-run15.md",
+      "kind": "quest-report-projection",
+      "bytes": 3128,
+      "sha256": "585a3ec233466a56b86f9230e8caf1bea9911de56af792e8d8ea8692a6c5b0f4"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-postrebalance-trim-drain.md",
+      "kind": "quest-report-projection",
+      "bytes": 3289,
+      "sha256": "525d267c9886f153b1b2401cfad22a29cf09ff682c1587172b2a80ceeb96c308"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-publication-visibility-run2.md",
+      "kind": "quest-report-projection",
+      "bytes": 3044,
+      "sha256": "b3b682445de590ef8b16ce72e48fdcf3e382f6dbc2503ff4b7b422fa025d17d0"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-readiness-analyzer-normalization.md",
+      "kind": "quest-report-projection",
+      "bytes": 3326,
+      "sha256": "53a85c5d3840e9881f85ad44b648dc92d98a9585cbfa6c54f04a84a36f8d3432"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-readiness-support-evidence.md",
+      "kind": "quest-report-projection",
+      "bytes": 3531,
+      "sha256": "18e6ed3d7019571ecb061c1d7aee0fb7137b00a23fee4c91927a3eebcc6afb4c"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-stat-gate-classifier.md",
+      "kind": "quest-report-projection",
+      "bytes": 4885,
+      "sha256": "bbf6a76c8ca4279858aeb878f75920e1c0b9e18e0f6c4d9f613ce7b92c17183c"
+    },
+    {
+      "path": "solve/report/rolling-restart-run4-target-sync-reentry.md",
+      "kind": "quest-report-projection",
+      "bytes": 2702,
+      "sha256": "b85e2f6216cec505968acba61cd6368d09162c87205480fa5f8bcb66173e96ed"
+    },
+    {
+      "path": "solve/report/runtime-replica-state-projection-retained-reconcile-integrity-reseal.md",
+      "kind": "quest-report-projection",
+      "bytes": 4457,
+      "sha256": "c71392690c08314b6cf5a97e7934a2df6d1dd370f3bf542ae36e0358e452f5da"
+    },
+    {
+      "path": "solve/report/runtime-replica-state-projection-retained-reconcile.md",
+      "kind": "quest-report-projection",
+      "bytes": 6185,
+      "sha256": "0da7a5e8daaedaa6fb4af5d7a9ea6ed29cd3f10ba9223c4997a8b74d39ee29f4"
+    },
+    {
+      "path": "solve/report/runtime-replica-state-projection.md",
+      "kind": "quest-report-projection",
+      "bytes": 10315,
+      "sha256": "ae57267e0ff18172d85658eceea0fe151b68f4b2246e8e86d9eb4158aefcc33a"
+    },
+    {
+      "path": "solve/report/runtime-service-active-outcome-remote-owner-handoff.md",
+      "kind": "quest-report-projection",
+      "bytes": 4462,
+      "sha256": "c503d35b87616fb918498202bb2b9d53c70721796ef2c2d5965b6c5a717ea339"
+    },
+    {
+      "path": "solve/report/runtime-service-add-creating-owner-rearm.md",
+      "kind": "quest-report-projection",
+      "bytes": 19580,
+      "sha256": "563ad3ab8ec66feeed8f8fe3d24d0e63d87910ffc3228794ff029de0bbc04d32"
+    },
+    {
+      "path": "solve/report/runtime-service-affinity-observer-intent-parity.md",
+      "kind": "quest-report-projection",
+      "bytes": 12639,
+      "sha256": "89cd8f7d50f14941312e0a9c8e65d912b653f1753a316c980154177239db7ab5"
+    },
+    {
+      "path": "solve/report/runtime-service-affinity-policy-lift.md",
+      "kind": "quest-report-projection",
+      "bytes": 3975,
+      "sha256": "346ad115562edd255418ba90966f0a000a1fa87d2c40d31ae0e8ec0ce7cd395b"
+    },
+    {
+      "path": "solve/report/runtime-service-affinity-suboptimality-observer.md",
+      "kind": "quest-report-projection",
+      "bytes": 4811,
+      "sha256": "1d6e400cdf3f1a53166c13ea7ee4bfe26066e155433a7bce7af01ccf971da391"
+    },
+    {
+      "path": "solve/report/runtime-service-creating-owner-wake-progress-admission.md",
+      "kind": "quest-report-projection",
+      "bytes": 37686,
+      "sha256": "f1e45c777c62e3b4a703e7705df7031ca888b5aeb62a7347eaaa455f78e067f4"
+    },
+    {
+      "path": "solve/report/runtime-service-handler-executor-outcome-late-binding.md",
+      "kind": "quest-report-projection",
+      "bytes": 4418,
+      "sha256": "924f0ffbac955271b586ed24932174d1d4f50080a46bb411f4e7ed0c80a4ee8a"
+    },
+    {
+      "path": "solve/report/runtime-service-handoff-budget-rearm-reentry.md",
+      "kind": "quest-report-projection",
+      "bytes": 13455,
+      "sha256": "68d1783fe92bc24327d9569af28445c361a75326605177a51e5999efda160ad5"
+    },
+    {
+      "path": "solve/report/schema-admission-canonical-drain-handoff.md",
+      "kind": "quest-report-projection",
+      "bytes": 6707,
+      "sha256": "b453ef7fb5004e8f2462874b0d49bd0c13062a23e75a66e5eca88fa34a7c1260"
+    },
+    {
+      "path": "solve/report/schema-provisioning-inline-execute-owner-redrive.md",
+      "kind": "quest-report-projection",
+      "bytes": 4178,
+      "sha256": "64315ee7f03aac021d62727d2931e666191a07ae892aabd8f99e2f56c60bab07"
+    },
+    {
+      "path": "solve/report/schema-provisioning-not-null-intent-recovery-roundtrip.md",
+      "kind": "quest-report-projection",
+      "bytes": 7022,
+      "sha256": "a5917f64b2df6689a1b2421df97832b20781a58d679ddf6c094450a7d22a3b9a"
+    },
+    {
+      "path": "solve/report/seed-join-gate-authoritative-refresh.md",
+      "kind": "quest-report-projection",
+      "bytes": 5306,
+      "sha256": "4136a3b0752baebd5f292673482fb243699a471cfc9d8fe4aa6edc43bbd992fd"
+    },
+    {
+      "path": "solve/report/service-affinity-demo-report-evidence.md",
+      "kind": "quest-report-projection",
+      "bytes": 2799,
+      "sha256": "d576a0f010b1a118850768454b9fb0d327a542fd8e0e3cc3000ea4b893617578"
+    },
+    {
+      "path": "solve/report/service-affinity-identity-wiring.md",
+      "kind": "quest-report-projection",
+      "bytes": 2680,
+      "sha256": "2ee42715de831e0963fde2949cc3b7fb9ecbcc60d3b2945da169711abcb89fd4"
+    },
+    {
+      "path": "solve/report/service-affinity-query-attribution-wiring.md",
+      "kind": "quest-report-projection",
+      "bytes": 2884,
+      "sha256": "48dc62b33fb68f9d8476107ae65375728964a61e72648e611f5ada43ce0bf00f"
+    },
+    {
+      "path": "solve/report/service-cli-package-bin.md",
+      "kind": "quest-report-projection",
+      "bytes": 2073,
+      "sha256": "b987e86b07b19552912b356a00423611664fb2ff021522c69ba3972875c7a03e"
+    },
+    {
+      "path": "solve/report/service-cli-pg-runtime-dependency-v2.md",
+      "kind": "quest-report-projection",
+      "bytes": 5498,
+      "sha256": "5202db0d0ebc7ae61dd85c86613bfffac84aab4108a1088aa877a317a4b672ed"
+    },
+    {
+      "path": "solve/report/service-cli-pg-runtime-dependency.md",
+      "kind": "quest-report-projection",
+      "bytes": 4249,
+      "sha256": "3bc21df76f3b3d48c17025b9bf2782bb37660361c0b9ed0fc841c99977e01cd6"
+    },
+    {
+      "path": "solve/report/service-control-transport-decision.md",
+      "kind": "quest-report-projection",
+      "bytes": 2500,
+      "sha256": "ebcc004913aab928ac70c35ccf34d7915819f6c0a1a5be040e1519ac6be02080"
+    },
+    {
+      "path": "solve/report/service-data-affinity-parallel-reduce-demo-live.md",
+      "kind": "quest-report-projection",
+      "bytes": 5529,
+      "sha256": "6ab7bfc386ff4e8d5b0b7fb1c0a9dd3a18e6ca9358b08fe1439226365cb170bc"
+    },
+    {
+      "path": "solve/report/service-data-affinity-parallel-reduce-demo.md",
+      "kind": "quest-report-projection",
+      "bytes": 5259,
+      "sha256": "58e0874643335feb2cca710c8ab393414939bcb2b93331aec280594a61141fb9"
+    },
+    {
+      "path": "solve/report/service-init-scaffold.md",
+      "kind": "quest-report-projection",
+      "bytes": 3008,
+      "sha256": "7dc7075a3368ff0fc7c28246133c5e9f5a44b88714e5bd94d0427b037c2e0f7c"
+    },
+    {
+      "path": "solve/report/service-install-catalog-owner-concurrency-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 3344,
+      "sha256": "fe0526020332d2faa2d92ebc1bffafdaf63806bbab59a3ea7ad3cbb65d6128c2"
+    },
+    {
+      "path": "solve/report/service-install-catalog-owner.md",
+      "kind": "quest-report-projection",
+      "bytes": 6176,
+      "sha256": "aea8edf0d966637f1e525f77cc3d59b2ea0eaf51c3a77b1a0796d0b05431cf3a"
+    },
+    {
+      "path": "solve/report/service-install-lifecycle-cli-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 3739,
+      "sha256": "2c3df45ce68bb7d4fbbb970ec48881e784509211c89367d10559b6b2c3b05764"
+    },
+    {
+      "path": "solve/report/service-install-lifecycle-cli.md",
+      "kind": "quest-report-projection",
+      "bytes": 6635,
+      "sha256": "91a6a18839b08ecc5aa912cb5cc62dc2e0872550e5cb081b0f9e9474f95d27bb"
+    },
+    {
+      "path": "solve/report/service-installation-reconciler.md",
+      "kind": "quest-report-projection",
+      "bytes": 4880,
+      "sha256": "dd56864a79199dce471589c3c18d1cc536bc1332ced22b1845edae2217b7a002"
+    },
+    {
+      "path": "solve/report/service-lifecycle-authoritative-sql-handoff.md",
+      "kind": "quest-report-projection",
+      "bytes": 21741,
+      "sha256": "5c9e68221ce9208cb75a4df9dcdb694aa14c6409977078d96aecf697eca029e9"
+    },
+    {
+      "path": "solve/report/service-lifecycle-command-catalog-composition.md",
+      "kind": "quest-report-projection",
+      "bytes": 3256,
+      "sha256": "b5a6e48078d1ebc373a94c5c69d8e0f9288b2a1b6f1fa99d971eacb273276dff"
+    },
+    {
+      "path": "solve/report/service-lifecycle-pgwire-executor-handoff.md",
+      "kind": "quest-report-projection",
+      "bytes": 3806,
+      "sha256": "7e3c8f05525a92e85e1d9916a0e7881f07c4584c50b371c22aa43d52c9c2df85"
+    },
+    {
+      "path": "solve/report/service-lifecycle-pgwire-sql-transport.md",
+      "kind": "quest-report-projection",
+      "bytes": 6155,
+      "sha256": "17d3c026e60031f19e12615602b56059a880ee39c3e9b8d94bec4de1b1e5311a"
+    },
+    {
+      "path": "solve/report/service-lifecycle-sql-control-surface.md",
+      "kind": "quest-report-projection",
+      "bytes": 3808,
+      "sha256": "224c4843a8b48b7971c2a305aee0c7ba0ca90c55f12747155837613fd1e0e7b2"
+    },
+    {
+      "path": "solve/report/service-local-oci-layout.md",
+      "kind": "quest-report-projection",
+      "bytes": 4951,
+      "sha256": "a5be656f66c95b9d88911758018c92e38ea416c3ccb63866e92d1ed65c6bc58f"
+    },
+    {
+      "path": "solve/report/service-parallel-reduce-runtime-protocol.md",
+      "kind": "quest-report-projection",
+      "bytes": 2960,
+      "sha256": "dc2c8ee071f276eb159d6646f7ed9eb2bbd5927e1cadd9cc727cae06ca8dcb1b"
+    },
+    {
+      "path": "solve/report/service-partition-access-attribution.md",
+      "kind": "quest-report-projection",
+      "bytes": 4738,
+      "sha256": "815522eb3e006f04505caf83241a74c8c0d85503a1d0c8f3bd1f8b25f7068ef7"
+    },
+    {
+      "path": "solve/report/service-portability-claims-contract.md",
+      "kind": "quest-report-projection",
+      "bytes": 5456,
+      "sha256": "f0b63efa2d4cbf440b623be4a34a4a1b8ca7154f253ffd15c8d6827f42566e2f"
+    },
+    {
+      "path": "solve/report/service-portability-claims-example-fixture-alignment.md",
+      "kind": "quest-report-projection",
+      "bytes": 1733,
+      "sha256": "7b497385fd5adaa2581f6fd50a9275a066bbfa6187d1d7d243dd5caf4833a2d8"
+    },
+    {
+      "path": "solve/report/service-portability-claims-surface-final.md",
+      "kind": "quest-report-projection",
+      "bytes": 8011,
+      "sha256": "07ff671defa85eff1eb3d0325e9ce159ca74e6cde23cfb2ea495a5c39197910e"
+    },
+    {
+      "path": "solve/report/service-portability-claims-surface-v2.md",
+      "kind": "quest-report-projection",
+      "bytes": 2372,
+      "sha256": "be73f9bda756d8608b1c425ecce8493776fcefc5ba9ee33a23e2e6337137aa22"
+    },
+    {
+      "path": "solve/report/service-portability-claims-surface.md",
+      "kind": "quest-report-projection",
+      "bytes": 1905,
+      "sha256": "8c7bd12393afebd759007ed2166097b44d3f4fbf5f21aba23a0597fbdb45e729"
+    },
+    {
+      "path": "solve/report/service-read-locality-policy.md",
+      "kind": "quest-report-projection",
+      "bytes": 5408,
+      "sha256": "60d953f396da922b729d772aec3e52f519369f0468045b42fa4a309a8bef63f4"
+    },
+    {
+      "path": "solve/report/service-static-ratchet-no-headroom.md",
+      "kind": "quest-report-projection",
+      "bytes": 3653,
+      "sha256": "27f8b90f19bbb4d60c9073a31953fa94be44c16c3ef8d35f991ce2399ba344bf"
+    },
+    {
+      "path": "solve/report/solver-acceptance-proof-manifest.md",
+      "kind": "quest-report-projection",
+      "bytes": 3320,
+      "sha256": "5fb45db59227d85bc85043aea206cd54da46594f4674d38dcf01ade36036e1ed"
+    },
+    {
+      "path": "solve/report/solver-deletion-safe-handoff-recovery.md",
+      "kind": "quest-report-projection",
+      "bytes": 4144,
+      "sha256": "5975b2c00f0b2c6b4e9e3ef0adece84e1cfcf2d34756461dcc21ad315562326a"
+    },
+    {
+      "path": "solve/report/solver-handoff-oracle-artifact-ownership.md",
+      "kind": "quest-report-projection",
+      "bytes": 2164,
+      "sha256": "b8f57a1a3c03cb0acda9b6702e2f9aca2a235d70ba2debf666657e3b8000abca"
+    },
+    {
+      "path": "solve/report/solver-historical-artifact-batch-001.md",
+      "kind": "quest-report-projection",
+      "bytes": 2805,
+      "sha256": "30be9cfbd8f2283631aeeba5e318a0a198961110f8fc911ed5509044bfd33f48"
+    },
+    {
+      "path": "solve/report/solver-historical-artifact-batch-tooling.md",
+      "kind": "quest-report-projection",
+      "bytes": 3568,
+      "sha256": "992e2039dcda64b7e7fed35b34f01a3ea181eb029f5ce82a15ce15df7da9b35e"
+    },
+    {
+      "path": "solve/report/solver-historical-artifact-census-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 4261,
+      "sha256": "a09ceaf3baf470b42cf06b0788687f33367ce3a2d32bfdcd9a0ce18add481a03"
+    },
+    {
+      "path": "solve/report/solver-historical-artifact-census.md",
+      "kind": "quest-report-projection",
+      "bytes": 4655,
+      "sha256": "aaf58f3243e0f12f3723ebd8c2571f16e75556aa16b3e8b87719f1ea8a6be770"
+    },
+    {
+      "path": "solve/report/solver-historical-artifact-migration-v2-migration.md",
+      "kind": "quest-report-projection",
+      "bytes": 3887,
+      "sha256": "00c2e00afbb0427a2333fe184425abd78c6988de05bf6109a9eecaf95b7ffeca"
+    },
+    {
+      "path": "solve/report/solver-historical-artifact-migration-v2.md",
+      "kind": "quest-report-projection",
+      "bytes": 2282,
+      "sha256": "7f6b65189f56ce1d0519f65a7d94783322a020282f155491537a4ff3a6b8f169"
+    },
+    {
+      "path": "solve/report/solver-historical-oracle-content-archive.md",
+      "kind": "quest-report-projection",
+      "bytes": 3602,
+      "sha256": "f4e4bfd8376641a9ec2bd2e38ba2305aba394ebf78c3ab445ccdd7c340f01cb7"
+    },
+    {
+      "path": "solve/report/solver-ledger-consistency-log-projection.md",
+      "kind": "quest-report-projection",
+      "bytes": 6135,
+      "sha256": "95c2daaed8e8e74166707a8a8e78d8ee49f505c5b65146bb6ad10dbac030d64a"
+    },
+    {
+      "path": "solve/report/solver-next-checkpoint-projection-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 2284,
+      "sha256": "40cc8d811551d35cc0569239356db3a9fdc66ccbdb0abb831c3f2b381dd257d9"
+    },
+    {
+      "path": "solve/report/solver-operator-park-terminal-evidence-identity.md",
+      "kind": "quest-report-projection",
+      "bytes": 3759,
+      "sha256": "42ff14b599f8a4697d3f9a3606e222816b2d564826bfeedc98df2a28dee038e3"
+    },
+    {
+      "path": "solve/report/solver-package-lock-verification-scope.md",
+      "kind": "quest-report-projection",
+      "bytes": 5105,
+      "sha256": "a4829414bbb5a7dc8e412cffb9a7cd5dea3607e590475dcb4afbe81976e45aab"
+    },
+    {
+      "path": "solve/report/solver-portfolio-projected-terminal-state.md",
+      "kind": "quest-report-projection",
+      "bytes": 3361,
+      "sha256": "b39f4769efa552f7bb06fb2507fa704b2f1faf7a24a2457e81db66415c8f5bd0"
+    },
+    {
+      "path": "solve/report/solver-proof-artifact-census.md",
+      "kind": "quest-report-projection",
+      "bytes": 5319,
+      "sha256": "fe3e10f0905512ff6cc8acfc3daaffd23743c909b7810103b8232544e289d8a9"
+    },
+    {
+      "path": "solve/report/solver-proof-artifact-content-addressing.md",
+      "kind": "quest-report-projection",
+      "bytes": 7074,
+      "sha256": "75f2b4b0a1106bf67a9ceebb2afd4ab4a69b5c45e988fb8141b1e57e2ff8278d"
+    },
+    {
+      "path": "solve/report/solver-scope-classifier-artifact-token-isolation.md",
+      "kind": "quest-report-projection",
+      "bytes": 4495,
+      "sha256": "20962a501ff7888cf4274318ea7aa533706efef59ee17a2dd6a855e737908268"
+    },
+    {
+      "path": "solve/report/solver-scope-pressure-precommit-enforcement.md",
+      "kind": "quest-report-projection",
+      "bytes": 3354,
+      "sha256": "c67cf53c52a855be6c276545aafb52e25b89282ee6825f0d472dccfdf0fa434d"
+    },
+    {
+      "path": "solve/report/solver-snapshot-scope-accounting.md",
+      "kind": "quest-report-projection",
+      "bytes": 4065,
+      "sha256": "099dfec625fa1e92fe3d8b120b041f441c09d3499493a7fb45200635786dacc9"
+    },
+    {
+      "path": "solve/report/solver-static-guideline-ratchet-closure.md",
+      "kind": "quest-report-projection",
+      "bytes": 2665,
+      "sha256": "2a998bc3804f9f5e7cf0e01c830d2bda0408a474040a48c97f5f309e7df31db6"
+    },
+    {
+      "path": "solve/report/solver-terminal-integrity-cutover-exhaustion-fix.md",
+      "kind": "quest-report-projection",
+      "bytes": 2055,
+      "sha256": "41d15ce99d6da654b2e14f8f2a6d25f430effa4842731f1825c0b0532615dacb"
+    },
+    {
+      "path": "solve/report/solver-terminal-integrity-cutover-fail-closed-fix.md",
+      "kind": "quest-report-projection",
+      "bytes": 2139,
+      "sha256": "f523bf921ce360fbd0c060893f12e2dfb6963013cf1e702368844cb62863bd8a"
+    },
+    {
+      "path": "solve/report/solver-terminal-integrity-cutover-verifier-fix.md",
+      "kind": "quest-report-projection",
+      "bytes": 2153,
+      "sha256": "83a56cca1957f719c17a4e35c700f5c99f9f3874e590c7e12d78260d9b28b9de"
+    },
+    {
+      "path": "solve/report/solver-terminal-integrity-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 2791,
+      "sha256": "405967485ad10f4568993f575b59a8d80e7a176073ec24d03beacc2f6ecb1f7d"
+    },
+    {
+      "path": "solve/report/solver-terminal-integrity-red-test-bootstrap-verifier-fix.md",
+      "kind": "quest-report-projection",
+      "bytes": 3048,
+      "sha256": "24748f37250e79b265c7e6111c932fcf26b5bb5d765879d96eb7237c80898781"
+    },
+    {
+      "path": "solve/report/solver-terminal-integrity-red-test-bootstrap.md",
+      "kind": "quest-report-projection",
+      "bytes": 2907,
+      "sha256": "627f9b108c0cc9feccf8d228caf1c9e5c5df87e276ae37ecba12d3cbcd31b3ba"
+    },
+    {
+      "path": "solve/report/solver-verifier-readiness-preflight.md",
+      "kind": "quest-report-projection",
+      "bytes": 2765,
+      "sha256": "6499c3f98cf0dce3dbd6ab539b3fa4a49ea6b37dba994767c8e562205c31e6fd"
+    },
+    {
+      "path": "solve/report/solver-verifier-rejection-supersession-core.md",
+      "kind": "quest-report-projection",
+      "bytes": 3003,
+      "sha256": "9b4469415470da08b214bb02212042fa92ce78a1a6300cc02c1f6585e865ffc2"
+    },
+    {
+      "path": "solve/report/solver-verifier-rejection-supersession-steering.md",
+      "kind": "quest-report-projection",
+      "bytes": 2262,
+      "sha256": "ce11018be6ff022c07604ac21592bbda5a8358dfc410d1dd5dcb18fbcb87cafc"
+    },
+    {
+      "path": "solve/report/solver-verifier-rejection-supersession.md",
+      "kind": "quest-report-projection",
+      "bytes": 4747,
+      "sha256": "ffea79572aae4833ca81d340c63cd5519c56d8178604b138008bad4587e37afa"
+    },
+    {
+      "path": "solve/report/solver-workflow-candidate-verification-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 2967,
+      "sha256": "7dc38568cfc0a9fb3dead0283a242479d914d1a3c914dddd515b522d68020cd6"
+    },
+    {
+      "path": "solve/report/solver-workflow-draft-receipt-signal-quality.md",
+      "kind": "quest-report-projection",
+      "bytes": 2511,
+      "sha256": "f76458bd9f9f8f7609ea6a599a975f997206ac3a91f6588a54db1e4a96564a8f"
+    },
+    {
+      "path": "solve/report/solver-workflow-epic-routing-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 3011,
+      "sha256": "d39ee439f333dd3ad2dd194f650d60fb34868d34f8d8284287b8410146c8236e"
+    },
+    {
+      "path": "solve/report/split-snapshot-transfer-pacing.md",
+      "kind": "quest-report-projection",
+      "bytes": 5159,
+      "sha256": "630ec0a3136dfda47c4b65d91d7d5d01487fe31d8f74f3096744f71f52b9920d"
+    },
+    {
+      "path": "solve/report/spread-cure-at-target-minting-gap.md",
+      "kind": "quest-report-projection",
+      "bytes": 10601,
+      "sha256": "15a89944da07806e8f563719382bec230731941608c1057b3759bf1a93fd5ad7"
+    },
+    {
+      "path": "solve/report/spread-cure-union-escape-and-monotone-gate.md",
+      "kind": "quest-report-projection",
+      "bytes": 8988,
+      "sha256": "91041941292deb08203d9a6eb38fbb3e2a177ab14572118f817350ccb3278f09"
+    },
+    {
+      "path": "solve/report/sql-statement-parser-coverage.md",
+      "kind": "quest-report-projection",
+      "bytes": 2596,
+      "sha256": "bf9b98eda3105405976dac4f85c284f86933cc2cf8f557c2f3659121586a4581"
+    },
+    {
+      "path": "solve/report/steering-doc-clarity.md",
+      "kind": "quest-report-projection",
+      "bytes": 7424,
+      "sha256": "4a9db6b0e55843a1616a591f4d620242e2566583aaa0d2fbbe5376e4e49d4051"
+    },
+    {
+      "path": "solve/report/step-coverage-owner-migration-dispatch-family.md",
+      "kind": "quest-report-projection",
+      "bytes": 3110,
+      "sha256": "71294363160a1d89efa9485cffd8d4f96d4face28f66b418fc233905a664179a"
+    },
+    {
+      "path": "solve/report/step-coverage-owner-migration-recovery-lanes.md",
+      "kind": "quest-report-projection",
+      "bytes": 3269,
+      "sha256": "54ea29ab2ace1c36f5c05813c54e67aac344fc6f463f7fdbfa20ef7a72b334a9"
+    },
+    {
+      "path": "solve/report/step-coverage-single-owner-table.md",
+      "kind": "quest-report-projection",
+      "bytes": 5250,
+      "sha256": "d0ef03347430cb8c7210c2fcb655191b367936585f277c104581efb789c91f9c"
+    },
+    {
+      "path": "solve/report/test-harness-improvement-batch.md",
+      "kind": "quest-report-projection",
+      "bytes": 2140,
+      "sha256": "98c3a12939ea99ea94e78172651eb8ade01ac9b4c136e13a5be07abd98b66ebb"
+    },
+    {
+      "path": "solve/report/tooling-static-cure-hold-ratchet.md",
+      "kind": "quest-report-projection",
+      "bytes": 1745,
+      "sha256": "3019d390fa5dc9af53a2a1dd0407b2a85a5d056bb6557e2703f57f36ff388103"
+    },
+    {
+      "path": "solve/report/tooling-static-partition-analyzer-ratchet.md",
+      "kind": "quest-report-projection",
+      "bytes": 2176,
+      "sha256": "8de8835414fef956da6451d83c04f5829d5ae7d0c31be207ea8a23c5773fc685"
+    },
+    {
+      "path": "solve/report/tooling-static-partition-contract-ratchet-v2.md",
+      "kind": "quest-report-projection",
+      "bytes": 2281,
+      "sha256": "43177b9958ac7ba87ec73eb0dee2eb33366e269906a7c796171e999059f23cef"
+    },
+    {
+      "path": "solve/report/tooling-static-steering-scenario-ratchet.md",
+      "kind": "quest-report-projection",
+      "bytes": 1782,
+      "sha256": "d4bf0d4b95cf2bbf07285d19a549155ff188f986c194b8b4ab9583e4be7d60b1"
+    },
+    {
+      "path": "solve/report/tooling-static-step-voter-ratchet.md",
+      "kind": "quest-report-projection",
+      "bytes": 2074,
+      "sha256": "55e638cd40dd5821959fc39cd2bb4f7cde9217aae10d12ad9df22f6a35487c67"
+    },
+    {
+      "path": "solve/report/transaction-owned-commit-mode-cutover.md",
+      "kind": "quest-report-projection",
+      "bytes": 3704,
+      "sha256": "2b146ce803017f529abd357437e908b3dd65dc7657ee212fdb5fcd9a443782cf"
+    },
+    {
+      "path": "solve/report/transition-mutation-budget-doom-loop.md",
+      "kind": "quest-report-projection",
+      "bytes": 4312,
+      "sha256": "a9aca0ccb1bc303f192013f5651f6684de55f54428616c197b2e03697adefce1"
+    },
+    {
+      "path": "solve/report/unused-export-static-ratchet-no-headroom.md",
+      "kind": "quest-report-projection",
+      "bytes": 2814,
+      "sha256": "4a4a39ed686c176c3610b3b46170474e0fc85f4f937f38dd09d2da3e497ae651"
+    },
+    {
+      "path": "solve/report/user-partition-remote-executor-outcome-owner-wakeup.md",
+      "kind": "quest-report-projection",
+      "bytes": 6570,
+      "sha256": "0579fe6d5ed486cdd24cb189c20640edbb882be256601bf3f330a32926122d32"
+    },
+    {
+      "path": "solve/report/voter-readiness-owner-critical-partition-set-home.md",
+      "kind": "quest-report-projection",
+      "bytes": 3318,
+      "sha256": "9691154729a7a0e16da8f2b6c8a24acaf75f344880ab07d2290e97ecd9f5f2ed"
+    },
+    {
+      "path": "solve/report/voter-readiness-owner-migration-partition-raft-aliases.md",
+      "kind": "quest-report-projection",
+      "bytes": 6407,
+      "sha256": "b01b69552c15aac248972e160ee1e394e5c621381c3bb4238040e984c55cb3bb"
+    },
+    {
+      "path": "solve/report/voter-readiness-owner-migration-raft-node-admin.md",
+      "kind": "quest-report-projection",
+      "bytes": 5254,
+      "sha256": "d76cb894001d25a8dc655d2bc1e9e4a0379d62f3c1438e1dc7d9af87e59eee0c"
+    },
+    {
+      "path": "solve/report/voter-readiness-owner-migration-rebalancer-batch2.md",
+      "kind": "quest-report-projection",
+      "bytes": 5296,
+      "sha256": "af6304c584e989d0e5dceae4bf2cf255231ed1fd87b49f79193097af7f204f3d"
+    },
+    {
+      "path": "solve/report/voter-readiness-owner-migration-rebalancer-control-plane.md",
+      "kind": "quest-report-projection",
+      "bytes": 3288,
+      "sha256": "70a173f9cdf553e482de130bfc3bef9a0d38bae9d6baaff9c527e5a496cc41ba"
+    },
+    {
+      "path": "solve/report/voter-readiness-visibility-single-owner-table.md",
+      "kind": "quest-report-projection",
+      "bytes": 10047,
+      "sha256": "b378c1762420a1079a2b54e7f4100542cf94df50224d9398e6d719eb1cc61637"
+    },
+    {
+      "path": "solve/report/workflow-linking-and-memory-loop.md",
+      "kind": "quest-report-projection",
+      "bytes": 3246,
+      "sha256": "5bb93e5c558f080174f3158a32ded57cc824574ef40ca39f91319f3b187d4148"
+    },
+    {
+      "path": "solve/report/write-path-internal-pacing.md",
+      "kind": "quest-report-projection",
+      "bytes": 10941,
+      "sha256": "144128274ec40176f4c690614ecbe9d3a58919e7e36f825367562d7b920a5cb4"
+    },
+    {
+      "path": "solve/report/write-routing-repair-under-control-plane-moves.md",
+      "kind": "quest-report-projection",
+      "bytes": 8289,
+      "sha256": "587c9bf9a046abdb3470c3f623ab271482e9413d11eb6d8eab78ce5d7ee4bde6"
+    }
+  ],
+  "retained": [
+    {
+      "path": "solve/report/core-logic-live-validation/RESULTS.md",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 6961,
+      "sha256": "b56b105de27122543afcf513e8827203460dd88827b9a55d0db5dff11790e06a"
+    },
+    {
+      "path": "solve/report/core-logic-live-validation/tier1-fresh-join-live.mjs",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 3506,
+      "sha256": "980f147e835bfa791cb605601349af1cbdbb1710c5224dd6cd1b3fbf71073cda"
+    },
+    {
+      "path": "solve/report/core-logic-live-validation/tier1-live-sql-oracle.mjs",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 6390,
+      "sha256": "5d7d7c73e0429819fbf613363d76f579ebb8f4683029ef085ac21684121dbb09"
+    },
+    {
+      "path": "solve/report/core-logic-live-validation/tier2a-on-pass-report.json",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 216210,
+      "sha256": "e2d60b0f167ee34e848bdeb48f6de744d8b904299520d4d7d95396852eda3ea8"
+    },
+    {
+      "path": "solve/report/core-logic-live-validation/tier2a-run1-report.json",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 187040,
+      "sha256": "1531d6e6241238177cf3f5fcfa5e4441435dbed023a9953dbd43e4b9d408fb67"
+    },
+    {
+      "path": "solve/report/core-logic-live-validation/tier2c-fresh-join-stress.mjs",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 4172,
+      "sha256": "2bdf477e31777d33b5b9c3cb3f8a69c47b60c7c9421436cec460b74108fbb6b1"
+    },
+    {
+      "path": "solve/report/formation-probe-runs.ndjson",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 181188,
+      "sha256": "fd9140599812418981a4fc2ff8f0e600468f0dac02f9afb235d404fb5d988284"
+    },
+    {
+      "path": "solve/report/rolling-restart.md",
+      "kind": "non-regenerable-report-evidence",
+      "bytes": 402,
+      "sha256": "2576e4dba7f9dc507758021c8ec7f0f350104d9ee46d32c5194a7d7c12bf1ce8"
+    }
+  ],
+  "totals": {
+    "removedFiles": 378,
+    "removedBytes": 2956897,
+    "retainedFiles": 8,
+    "retainedBytes": 605869
+  }
+}

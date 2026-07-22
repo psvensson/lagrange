@@ -27,6 +27,7 @@ import {
   STATUS_SOLVED,
 } from './constants.js';
 import {
+  changedPathsFromDiffContent,
   expectedChangeDir,
   inspectChangeArtifact,
 } from './change-artifact.js';
@@ -35,7 +36,6 @@ import {
   writeContentAddressedChangeArtifact,
 } from './content-addressed-change-artifact.js';
 import {suggestVerificationTemplates} from './verification-template-suggest.js';
-import {writeReport} from './report.js';
 import {analyzeQuestHealth} from './health.js';
 import {analyzeScopePressureCandidate} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
@@ -45,7 +45,10 @@ import {
   theoryGateContinuation,
   decisionContinues,
 } from './gate.js';
-import {unrecordedEvidenceContinuation} from './continuation.js';
+import {
+  CONTINUATION_BLOCKED_SCOPE,
+  unrecordedEvidenceContinuation,
+} from './continuation.js';
 import {
   resolveWorkspaceBaseCommit,
   verificationState,
@@ -78,6 +81,7 @@ const AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS = Object.freeze([
   'solve/log',
   'solve/report',
 ].map((bookkeepingPath) => `:(exclude)${bookkeepingPath}`));
+const REPORT_PROJECTION_PATHSPEC = 'solve/report';
 
 // The HEAD sha at step-begin time, recorded into the pending file so --auto-diff can
 // snapshot exactly what changed during the attempt (null outside a git work tree).
@@ -111,7 +115,7 @@ function nextAutoDiffArtifactPath(root, questId) {
 // operator-provided diff. An empty diff is an operator error, not a silent no-op.
 function createAutoDiffChangeRef(root, quest, pending) {
   const pin = pending.headCommit || 'HEAD';
-  const out = spawnSync('git', [
+  const authored = spawnSync('git', [
     'diff', '--binary', '--full-index', '--no-ext-diff', pin, '--', '.',
     ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,
   ], {
@@ -119,20 +123,60 @@ function createAutoDiffChangeRef(root, quest, pending) {
     encoding: 'utf8',
     maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
   });
-  if (out.status !== 0 || typeof out.stdout !== 'string') {
+  if (authored.status !== 0 || typeof authored.stdout !== 'string') {
     throw new Error(
-      `auto-diff: git diff ${pin} failed: ${(out.stderr || UNKNOWN_GIT_ERROR).trim()}`,
+      `auto-diff: git diff ${pin} failed: ` +
+      `${(authored.stderr || UNKNOWN_GIT_ERROR).trim()}`,
     );
   }
-  if (out.stdout.trim() === '') {
+  // Report rewrites remain generated bookkeeping, but a deliberate migration
+  // that removes tracked projections must be captured exactly. Add only tracked
+  // deletions from the report tree; ordinary modifications and regenerated
+  // ignored reports stay outside the attempt artifact.
+  const removedReports = spawnSync('git', [
+    'diff', '--binary', '--full-index', '--no-ext-diff', '--diff-filter=D',
+    pin, '--', REPORT_PROJECTION_PATHSPEC,
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
+  });
+  if (removedReports.status !== 0 || typeof removedReports.stdout !== 'string') {
+    throw new Error(
+      `auto-diff: report deletion diff ${pin} failed: ` +
+      `${(removedReports.stderr || UNKNOWN_GIT_ERROR).trim()}`,
+    );
+  }
+  const changedPaths = [...new Set([
+    ...changedPathsFromDiffContent(authored.stdout),
+    ...changedPathsFromDiffContent(removedReports.stdout),
+  ])].sort();
+  if (changedPaths.length === 0) {
     throw new Error(AUTO_DIFF_EMPTY_ERROR);
+  }
+  // Re-diff the exact union once so the persisted payload has Git's canonical
+  // ordering. Concatenating individually valid diffs is not a canonical source
+  // artifact when their path ranges interleave.
+  const canonical = spawnSync('git', [
+    'diff', '--binary', '--full-index', '--no-ext-diff', pin, '--',
+    ...changedPaths,
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
+  });
+  if (canonical.status !== 0 || typeof canonical.stdout !== 'string') {
+    throw new Error(
+      `auto-diff: canonical Git delta ${pin} failed: ` +
+      `${(canonical.stderr || UNKNOWN_GIT_ERROR).trim()}`,
+    );
   }
   const file = nextAutoDiffArtifactPath(root, quest.id);
   const relativeFile = path.relative(root, file);
   return writeContentAddressedChangeArtifact(
     root,
     relativeFile,
-    out.stdout,
+    canonical.stdout,
   );
 }
 
@@ -232,11 +276,15 @@ function stepBegin(root, quest, options = {}) {
   if (!pick) return {terminal: 'exhausted'};
 
   const health = analyzeQuestHealth(root, quest, {state});
-  const gateDecision = resolveGateDecision(root, quest, health.continuation, {
-    log,
-    frontier: pick.def.id,
-    rungIndex: pick.state.rungIndex,
-  });
+  // Scope admission belongs to commit, where the exact candidate exists. A
+  // historical scope signal at begin time would duplicate that gate and consume
+  // an override before it can authorize the candidate it was recorded for.
+  const gateDecision = health.continuation.code === CONTINUATION_BLOCKED_SCOPE ?
+    null : resolveGateDecision(root, quest, health.continuation, {
+      log,
+      frontier: pick.def.id,
+      rungIndex: pick.state.rungIndex,
+    });
   if (gateDecision && !decisionContinues(gateDecision)) {
     return gateDecisionToStepResult(gateDecision);
   }
@@ -318,11 +366,19 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     }),
   );
   if (scopeAdmission.terminal) {
-    throw new Error(
-      SCOPE_PRESSURE_BLOCKED_PREFIX +
+    const scopeProblem = SCOPE_PRESSURE_BLOCKED_PREFIX +
       `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
-      `bytes=${scopeAdmission.changeBytes})`,
-    );
+      `bytes=${scopeAdmission.changeBytes})`;
+    const decision = resolveGateDecision(root, quest, {
+      status: CONTINUATION_BLOCKED_SCOPE,
+      code: CONTINUATION_BLOCKED_SCOPE,
+      problems: [scopeProblem],
+    }, {
+      log,
+      frontier: pending.frontier,
+      rungIndex: pending.rungIndex,
+    });
+    if (!decisionContinues(decision)) throw new Error(scopeProblem);
   }
   const state = projectState(quest, log);
   const def = quest.frontiers.find((frontier) => frontier.id === pending.frontier);
@@ -361,7 +417,6 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     accepted: outcome.accepted === true,
   });
   clearPending(root, quest.id);
-  writeReport(root, quest.id);
   // Attempt recording never commits. The verifier first approves the exact
   // fingerprint, then the operator invokes `solve checkpoint`; terminal handoff
   // remains a separate full-audit action.

@@ -66,7 +66,8 @@ in-repo-steering vs external-memory split.
 4. Load the smallest relevant domain pack(s): architecture, testing, style, or
    governance. Cross-cutting work loads each relevant pack, not just one.
 5. Follow `boot.md` for the first executable action; let the Solver own Quest
-   attempts, findings, verification, state, and terminal report.
+   attempts, findings, verification, and terminal handoff. Reports are optional
+   on-demand projections of that durable state.
 6. Consult source steering under [`docs/steering/`](docs/steering/) only for
    cited detail behind a compact-pack rule, or when repairing pack drift and
    regenerating the packs.

@@ -31,7 +31,6 @@ import {
   projectState,
   readLog,
 } from './store.js';
-import {writeReport} from './report.js';
 import {buildEvidenceIdentity} from './evidence-identity.js';
 import {
   isFrontierProbeEvent,
@@ -380,9 +379,6 @@ export function ingestEvidence(root, {
       validation: null,
     });
   }
-
-  // Regenerate report
-  writeReport(root, questId);
 
   return ingestedEvent;
 }

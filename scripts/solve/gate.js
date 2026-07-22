@@ -199,6 +199,33 @@ export function decisionContinues(decision) {
   return !decision || decision.disposition === DISPOSITION_ADVISORY;
 }
 
+// Terminal owners must honor the exact admission decision that authorized the
+// latest attempt. The override is not active a second time: it has already been
+// consumed by the recorded gate-decision. This predicate merely proves that the
+// latest attempt was admitted under that exact code/problem tuple. A later
+// attempt, or a changed terminal problem, therefore requires a fresh decision.
+export function latestAttemptAdmissionWasOverridden(log, code, problem) {
+  let latestAttemptIndex = -1;
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    if (log[i].type === EVENT_ATTEMPT) {
+      latestAttemptIndex = i;
+      break;
+    }
+  }
+  if (latestAttemptIndex < 0) return false;
+  const frontier = log[latestAttemptIndex].frontier;
+  for (let i = latestAttemptIndex - 1; i >= 0; i -= 1) {
+    const event = log[i];
+    if (event.type === EVENT_ATTEMPT) return false;
+    if (event.type === EVENT_GATE_DECISION && event.frontier === frontier &&
+      event.code === code && event.override &&
+      (event.problems || []).includes(problem)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Map a blocked continuation to a recorded, actionable gate decision. Returns null when
 // the continuation is allowed (no gate). The returned object is the single source of
 // truth callers convert into a run/step result.
