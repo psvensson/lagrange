@@ -39,6 +39,7 @@
 - **operation-dispatch-completion-owner-cutover-main**: independent verification passed for the frozen production and test cutover diff [subagent:owner_cutover_verifier]
 - **operation-dispatch-completion-owner-cutover-main**: independent verification passed for the unchanged frozen production and test cutover diff [subagent:owner_cutover_verifier]
 - **operation-dispatch-completion-owner-cutover-main**: independent aggregate verification passed for the frozen production and test cutover diff [subagent:owner_cutover_verifier]
+- **operation-dispatch-completion-owner-cutover-main**: Controlled live A/B bound two fixed and two exact-revert runs to boot, source, archive, and report fingerprints: all four reached terminal durable rows with released reservations and zero lifecycle residue; the fixed owner-retention path engaged in both fixed runs, with one full affinity pass and one downstream learned-affinity stall. [solve/changes/operation-dispatch-completion-owner-cutover/live/lifecycle-evidence.json]
 
 ## Theories
 _(none recorded)_
