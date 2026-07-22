@@ -13,6 +13,23 @@
 - parent quest: formation-background-release-owner-closure
 - plan: solve/epics/topology-convergence-hardening.md
 
+## Current Blocker
+- Frontier: formation-release-priority-observation-owner-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: observation_gap
+- Movement: unknown: PASS -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-22T09-46-30-107Z.report.json
+- Selected theory: none
+- Next move: continue supervised step for formation-release-priority-observation-owner-main
+- No longer current: PASS; formation-release timing, early ordinary-work admission, in-flight drain, host scheduling, changed workload or timeouts
+
+## Continuation
+- Status: allowed
+- Next action: No open frontier remains; inspect solve report.
+- Blocker: none
+
 ## Scope Pressure
 - Changed files: 3
 - Change bytes: 11030
