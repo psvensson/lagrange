@@ -33,18 +33,26 @@ import {
 } from '../../wasm-service/wasm-service-constants.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
+import {
+  DEPLOYMENT_BINDING_SOURCE_KIND,
+} from '../../control-plane/owners/deployment-binding-contract.js';
+import {
+  hasRequestBindingServiceDefinitionLineage,
+} from '../../control-plane/owners/request-binding-service-definition-contract.js';
 
 const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
 const RUNTIME_SERVICE_REBALANCER_OWNER_NAME = 'RuntimeServiceRebalancerOwner';
 const TYPEOF_STRING = 'string';
 const SINK_WIRING_RETRY_INTERVAL_MS = 5000;
+const BINDING_RECONCILE_INTERVAL_MS = 5000;
 
 // `service_definitions` is the desired-state table for runtime services ONLY
 // (partitions/message-groups live in their own tables), so every row is a
 // RUNTIME_SERVICE entity — there is NO `service_type` column on it (it is dropped
 // by serializeServiceDefinition). The owner therefore selects active definitions
-// by `status` alone; whether a given service should actually run is governed by
-// its `replica_count` (0 = ship-not-started), which the rebalancer's policy reads.
+// by `status`; Binding-derived rows remain excluded until the later activation
+// cutover names Cells. For active legacy/built-in rows, whether a service should
+// actually run is governed by `replica_count`, which the policy reads.
 const SERVICE_DEFINITION_COLUMN = Object.freeze({
   SERVICE_ID: 'service_id',
   STATUS: 'status',
@@ -57,6 +65,7 @@ const REQUIRED_DEPENDENCIES = Object.freeze([
   'tablePolicyService',
   'messageRouter',
   'rebalanceCoordinator',
+  'serviceDefinitionsOwner',
 ]);
 
 const LOG_MSG = Object.freeze({
@@ -66,6 +75,8 @@ const LOG_MSG = Object.freeze({
   PARTITION_SERVICE_MISSING:
     'service_definitions partition service not found; ' +
     'runtime-service owner will not be leadership-gated (inert)',
+  BINDING_COMPILE_FAILED:
+    'Request Binding desired-service compilation failed closed',
 });
 
 class RuntimeServiceRebalancerOwner {
@@ -95,12 +106,17 @@ class RuntimeServiceRebalancerOwner {
     this.tablePolicyService = options.tablePolicyService;
     this.messageRouter = options.messageRouter;
     this.rebalanceCoordinator = options.rebalanceCoordinator;
+    this.serviceDefinitionsOwner = options.serviceDefinitionsOwner;
     this._createRebalancer = typeof options.createRebalancer === 'function' ?
       options.createRebalancer :
       (rebalancerOptions) => new UnifiedRebalancer(rebalancerOptions);
     this._rebalancers = new Map();
     this._isLeader = false;
     this._shuttingDown = false;
+    this._bindingRefreshPromise = Promise.resolve();
+    this._bindingRefreshRunning = false;
+    this._bindingRefreshRequested = false;
+    this._bindingReconcileTimer = null;
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(SUBSYSTEM_NAME) : console;
@@ -109,7 +125,8 @@ class RuntimeServiceRebalancerOwner {
     // quiesced) without waiting for a leadership move. refresh() no-ops
     // while not leader, so the subscription is safe on every node.
     this._cacheChangeListener = (tableName) => {
-      if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS ||
+          tableName === SYSTEM_TABLE_NAME.SERVICE_BINDINGS) {
         this.refresh();
       }
     };
@@ -129,8 +146,10 @@ class RuntimeServiceRebalancerOwner {
     }
     this._isLeader = isLeader === true;
     if (this._isLeader) {
+      this._startBindingReconcileTimer();
       this.refresh();
     } else {
+      this._stopBindingReconcileTimer();
       this._quiesceAll();
     }
   }
@@ -160,6 +179,7 @@ class RuntimeServiceRebalancerOwner {
         this._startRebalancer(serviceId);
       }
     }
+    this._scheduleBindingRefresh();
   }
 
   /**
@@ -169,10 +189,76 @@ class RuntimeServiceRebalancerOwner {
   shutdown() {
     this._shuttingDown = true;
     this._isLeader = false;
+    this._stopBindingReconcileTimer();
     if (typeof this.systemTableCache.offCacheChange === 'function') {
       this.systemTableCache.offCacheChange(this._cacheChangeListener);
     }
     this._quiesceAll();
+  }
+
+  _startBindingReconcileTimer() {
+    if (this._bindingReconcileTimer) return;
+    this._bindingReconcileTimer = setInterval(
+      () => this.refresh(), BINDING_RECONCILE_INTERVAL_MS,
+    );
+    if (typeof this._bindingReconcileTimer.unref === 'function') {
+      this._bindingReconcileTimer.unref();
+    }
+  }
+
+  _stopBindingReconcileTimer() {
+    if (!this._bindingReconcileTimer) return;
+    clearInterval(this._bindingReconcileTimer);
+    this._bindingReconcileTimer = null;
+  }
+
+  _scheduleBindingRefresh() {
+    if (this._shuttingDown || !this._isLeader) {
+      return this._bindingRefreshPromise;
+    }
+    this._bindingRefreshRequested = true;
+    if (this._bindingRefreshRunning) return this._bindingRefreshPromise;
+    this._bindingRefreshRunning = true;
+    this._bindingRefreshPromise = (async () => {
+      while (this._bindingRefreshRequested &&
+          this._isLeader && !this._shuttingDown) {
+        this._bindingRefreshRequested = false;
+        await this._compileRequestBindings();
+      }
+    })().finally(() => {
+      this._bindingRefreshRunning = false;
+    });
+    return this._bindingRefreshPromise;
+  }
+
+  async _compileRequestBindings() {
+    const rows = this.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.SERVICE_BINDINGS,
+      (binding) => binding?.source_kind ===
+        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+    );
+    const requestBindings = (Array.isArray(rows) ? rows : [])
+      .slice()
+      .sort((left, right) =>
+        String(left?.binding_version_id || '')
+          .localeCompare(String(right?.binding_version_id || '')));
+    for (const bindingRow of requestBindings) {
+      if (!this._isLeader || this._shuttingDown) return;
+      try {
+        await this.serviceDefinitionsOwner.reconcileRequestBinding(bindingRow);
+      } catch (error) {
+        this.logger.warn(LOG_MSG.BINDING_COMPILE_FAILED, {
+          bindingVersionId: bindingRow?.binding_version_id || null,
+          code: error?.code || null,
+          error: error?.message,
+          nodeId: this.nodeId,
+        });
+      }
+    }
+  }
+
+  waitForBindingRefresh() {
+    return this._bindingRefreshPromise;
   }
 
   /**
@@ -184,7 +270,8 @@ class RuntimeServiceRebalancerOwner {
       SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
       (definition) =>
         definition?.[SERVICE_DEFINITION_COLUMN.STATUS] ===
-          WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
+          WASM_SERVICE_DEFINITION_STATUS.ACTIVE &&
+        !hasRequestBindingServiceDefinitionLineage(definition),
     );
     const serviceIds = new Set();
     for (const row of Array.isArray(rows) ? rows : []) {

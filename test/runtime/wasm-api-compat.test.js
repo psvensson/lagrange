@@ -24,9 +24,6 @@ import {
   deserializeServiceDefinition,
 } from '../../src/wasm-service/wasm-service-models.js';
 import {
-  handleCreateService,
-} from '../../src/wasm-service/meta-command-handlers.js';
-import {
   applyRuntimeDefaults,
   applyLegacyDefaults,
 } from '../../src/wasm-service/runtime-legacy-mapping.js';
@@ -101,44 +98,7 @@ describe('WASM API compatibility with runtime abstraction', () => {
     });
   });
 
-  // --- 2. Meta command handler compatibility ---
-
-  describe('meta command handler compatibility', () => {
-    it('should create service with runtime fields', () => {
-      const params = {
-        serviceId: TEST_SERVICE_ID,
-        serviceName: TEST_SERVICE_NAME,
-        handlerFunctionId: TEST_HANDLER_ID,
-        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
-        runtimeRef: TEST_HANDLER_ID,
-        runtimeConfig: TEST_RUNTIME_CONFIG,
-      };
-      const result = handleCreateService(params);
-      assert.equal(result.success, true);
-      assert.ok(result.sql.includes(SD_COL.RUNTIME_KIND));
-      assert.ok(result.sql.includes(SD_COL.RUNTIME_REF));
-      assert.ok(result.sql.includes(SD_COL.RUNTIME_CONFIG));
-      assert.ok(
-        result.params.includes(RUNTIME_KIND.WASM_COMPONENT),
-      );
-      assert.ok(result.params.includes(TEST_HANDLER_ID));
-      assert.ok(result.params.includes(TEST_RUNTIME_CONFIG));
-    });
-
-    it('should create service without runtime fields (legacy)',
-      () => {
-        const params = {
-          serviceId: TEST_SERVICE_ID,
-          serviceName: TEST_SERVICE_NAME,
-          handlerFunctionId: TEST_HANDLER_ID,
-        };
-        const result = handleCreateService(params);
-        assert.equal(result.success, true);
-        assert.equal(result.serviceId, TEST_SERVICE_ID);
-      });
-  });
-
-  // --- 3. Driver registry coexistence ---
+  // --- 2. Driver registry coexistence ---
 
   describe('driver registry coexistence', () => {
     it('should register both NativeJsDriver and ' +

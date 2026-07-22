@@ -514,6 +514,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
         tablePolicyService: this.tablePolicyService,
         messageRouter: this.messageRouter,
         rebalanceCoordinator: this.rebalanceCoordinator,
+        serviceDefinitionsOwner:
+          this.systemMetadataOwners.serviceDefinitionsOwner,
         partitionServices: this.partitionServices,
       });
   }

@@ -179,6 +179,9 @@ const SERVICE_DEFINITION_COLUMN_SPEC = Object.freeze({
   [SD_COL.RUNTIME_KIND]: Object.freeze({type: COLUMN_TYPE.TEXT}),
   [SD_COL.RUNTIME_REF]: Object.freeze({type: COLUMN_TYPE.TEXT}),
   [SD_COL.RUNTIME_CONFIG]: Object.freeze({type: COLUMN_TYPE.TEXT}),
+  [SD_COL.BINDING_VERSION_ID]: Object.freeze({type: COLUMN_TYPE.TEXT}),
+  [SD_COL.BINDING_DIGEST]: Object.freeze({type: COLUMN_TYPE.TEXT}),
+  [SD_COL.BINDING_PROJECTION]: Object.freeze({type: COLUMN_TYPE.TEXT}),
   [SD_COL.STATUS]: Object.freeze({
     type: COLUMN_TYPE.TEXT,
     notNull: true,
@@ -222,6 +225,11 @@ const SERVICE_DEFINITIONS_SCHEMA = {
     {name: 'idx_svc_def_handler', columns: [SD_COL.HANDLER_FUNCTION_ID]},
     {name: 'idx_svc_def_status', columns: [SD_COL.STATUS]},
     {name: 'idx_svc_def_runtime_kind', columns: [SD_COL.RUNTIME_KIND]},
+    {
+      name: 'idx_svc_def_binding_version',
+      columns: [SD_COL.BINDING_VERSION_ID],
+      unique: true,
+    },
   ],
 };
 

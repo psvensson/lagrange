@@ -30,6 +30,9 @@ const SD_COL = Object.freeze({
   RUNTIME_KIND: RUNTIME_FIELD.RUNTIME_KIND,
   RUNTIME_REF: RUNTIME_FIELD.RUNTIME_REF,
   RUNTIME_CONFIG: RUNTIME_FIELD.RUNTIME_CONFIG,
+  BINDING_VERSION_ID: 'binding_version_id',
+  BINDING_DIGEST: 'binding_digest',
+  BINDING_PROJECTION: 'binding_projection',
   STATUS: 'status',
   CREATED_AT: 'created_at',
   UPDATED_AT: 'updated_at',
@@ -56,6 +59,9 @@ const SERVICE_DEFINITION_COLUMN_LIST = Object.freeze([
   SD_COL.RUNTIME_KIND,
   SD_COL.RUNTIME_REF,
   SD_COL.RUNTIME_CONFIG,
+  SD_COL.BINDING_VERSION_ID,
+  SD_COL.BINDING_DIGEST,
+  SD_COL.BINDING_PROJECTION,
   SD_COL.STATUS,
   SD_COL.CREATED_AT,
   SD_COL.UPDATED_AT,
@@ -173,6 +179,9 @@ function serializeServiceDefinition(definition) {
     [SD_COL.RUNTIME_KIND]: compat.runtimeKind ?? null,
     [SD_COL.RUNTIME_REF]: compat.runtimeRef ?? null,
     [SD_COL.RUNTIME_CONFIG]: compat.runtimeConfig ?? null,
+    [SD_COL.BINDING_VERSION_ID]: compat.bindingVersionId ?? null,
+    [SD_COL.BINDING_DIGEST]: compat.bindingDigest ?? null,
+    [SD_COL.BINDING_PROJECTION]: compat.bindingProjection ?? null,
     [SD_COL.STATUS]:
       compat.status ??
       WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
@@ -219,6 +228,9 @@ function deserializeServiceDefinition(row) {
     runtimeKind: row[SD_COL.RUNTIME_KIND] ?? null,
     runtimeRef: row[SD_COL.RUNTIME_REF] ?? null,
     runtimeConfig: row[SD_COL.RUNTIME_CONFIG] ?? null,
+    bindingVersionId: row[SD_COL.BINDING_VERSION_ID] ?? null,
+    bindingDigest: row[SD_COL.BINDING_DIGEST] ?? null,
+    bindingProjection: row[SD_COL.BINDING_PROJECTION] ?? null,
     status:
       row[SD_COL.STATUS] ??
       WASM_SERVICE_DEFINITION_STATUS.ACTIVE,

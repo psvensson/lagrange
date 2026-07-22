@@ -69,6 +69,7 @@ function makeOwner(definitions, record) {
     tablePolicyService: {},
     messageRouter: {},
     rebalanceCoordinator: {},
+    serviceDefinitionsOwner: {reconcileRequestBinding: async () => {}},
     createRebalancer: (opts) => makeFakeRebalancer(record, opts),
   });
   owner.testCache = cache;
@@ -148,6 +149,7 @@ test('RuntimeServiceRebalancerOwner', async (t) => {
         tablePolicyService: {},
         messageRouter: {},
         rebalanceCoordinator: {},
+        serviceDefinitionsOwner: {reconcileRequestBinding: async () => {}},
         createRebalancer: (opts) => makeFakeRebalancer(record, opts),
       });
       owner.setLeader(true);
@@ -233,6 +235,7 @@ test('RuntimeServiceRebalancerOwner', async (t) => {
         tablePolicyService: {},
         messageRouter: {},
         rebalanceCoordinator: {},
+        serviceDefinitionsOwner: {reconcileRequestBinding: async () => {}},
         createRebalancer: (opts) => makeFakeRebalancer(record, opts),
         partitionServices,
       });
@@ -286,6 +289,7 @@ test('attachRuntimeServiceRebalancerOwner', async (t) => {
       tablePolicyService: {},
       messageRouter: {},
       rebalanceCoordinator: {},
+      serviceDefinitionsOwner: {reconcileRequestBinding: async () => {}},
       partitionServices,
       createRebalancer: () => ({
         initialize() {},

@@ -118,7 +118,7 @@ reach the binding reconciler fixed point.
 | Immutable bindable Artifact identity | `ServiceInstallCatalogOwner` / `service_packages` | Derive and verify `manifest_digest` from the exact immutable `normalized_manifest`; never select a declaration by OCI digest ordering. |
 | Lifecycle ingress | Authenticated lifecycle SQL, consumed by the CLI | Extend with parameterized `CREATE BINDING $1`; no binding-specific side channel. |
 | Immutable Binding declarations | `DeploymentBindingOwner` / `service_bindings` | Validate and persist one canonical tenant-scoped v0 generation; expose no generic mutation path. |
-| Desired runtime service | `service_definitions` and its reconciler | Compile from Binding during the cutover, then retire declaration writes here. |
+| Desired runtime service | `service_definitions` and its existing planning leader | Compile request Bindings as lineage-bound inactive zero-replica desired rows; retire direct user declaration writes here, and leave activation to the Cell cutover. |
 | Placement and replica lifecycle | `UnifiedRebalancer` and shared replica owners | Extend to derived Cells; do not fork a cell scheduler. |
 | Handler context | Replicated tables and existing KV/timer primitives | Reuse; do not introduce a second state store. |
 
@@ -138,9 +138,11 @@ single owners only when their removal is explicit and structurally guarded.
 3. Seal Binding schema v0 and its single validator/persistence owner. Require
    analyzable v2 artifacts for newly authored Bindings. Quest
    `minimal-deployment-binding-v0-declaration` owns this step.
-4. Compile request Bindings into the existing desired-service lifecycle and
-   make Binding the declaration authority; delete direct competing declaration
-   writes in the same cutover.
+4. Compile request Bindings into the existing desired-service lifecycle as
+   inactive zero-replica rows and make Binding the declaration authority;
+   delete direct competing declaration writes in the same cutover. Quest
+   `minimal-deployment-request-binding-compilation` owns this step without
+   activating runtimes or naming Cells.
 5. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
    same Binding owner one source at a time, deleting superseded surfaces.
 6. Name the derived Cell state and reconcile it through the existing placement
@@ -168,9 +170,9 @@ adding a table, validator, adapter, or feature flag is not completion.
 
 ## First executable slice
 
-Quest `minimal-deployment-artifact-export-contract` completed step 1, and
-`minimal-deployment-artifact-binding-identity-replacement` completed step 2.
-Quest `minimal-deployment-binding-v0-declaration` advances step 3 through the
-authenticated SQL path and the catalog-owned Artifact read. It creates only an
-immutable Binding declaration; request compilation, runtime activation, and
-Cells remain later steps.
+Quest `minimal-deployment-artifact-export-contract` completed step 1,
+`minimal-deployment-artifact-binding-identity-replacement` completed step 2,
+and `minimal-deployment-binding-v0-declaration` completed step 3. Quest
+`minimal-deployment-request-binding-compilation` advances step 4 through the
+existing `service_definitions` planning leader. Its derived rows are inactive
+and request no replicas; runtime activation and Cells remain later steps.

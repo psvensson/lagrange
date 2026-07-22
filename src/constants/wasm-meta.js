@@ -45,11 +45,6 @@ const WASM_META_ACTION = Object.freeze({
   PUBLISH_MODULE: 'publishModule',
   GET_MODULE: 'getModule',
   LIST_MODULES: 'listModules',
-  CREATE_SERVICE: 'createService',
-  UPDATE_SERVICE: 'updateService',
-  SCALE_SERVICE: 'scaleService',
-  ROLLOUT_SERVICE: 'rolloutService',
-  DELETE_SERVICE: 'deleteService',
   GET_OPERATION: 'getOperation',
   STREAM_OPERATIONS: 'streamOperations',
 });

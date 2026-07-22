@@ -130,7 +130,7 @@ describe('admin-meta-delegator', () => {
       assert.throws(
         () => delegateToWasmMeta(
           null,
-          WASM_META_ACTION.CREATE_SERVICE,
+          WASM_META_ACTION.PUBLISH_MODULE,
           {},
         ),
         (err) => err instanceof Error,

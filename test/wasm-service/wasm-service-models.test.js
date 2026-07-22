@@ -170,6 +170,9 @@ describe('wasm-service-models', () => {
         runtimeKind: RUNTIME_KIND.NATIVE_JS,
         runtimeRef: 'admin-handler-v1',
         runtimeConfig: '{"timeout":5000}',
+        bindingVersionId: null,
+        bindingDigest: null,
+        bindingProjection: null,
         status: 'active',
         createdAt: now,
         updatedAt: now,
@@ -198,6 +201,9 @@ describe('wasm-service-models', () => {
       assert.ok(SD_COL.RUNTIME_KIND in row);
       assert.ok(SD_COL.RUNTIME_REF in row);
       assert.ok(SD_COL.RUNTIME_CONFIG in row);
+      assert.ok(SD_COL.BINDING_VERSION_ID in row);
+      assert.ok(SD_COL.BINDING_DIGEST in row);
+      assert.ok(SD_COL.BINDING_PROJECTION in row);
       assert.ok(SD_COL.STATUS in row);
       assert.ok(SD_COL.CREATED_AT in row);
       assert.ok(SD_COL.UPDATED_AT in row);

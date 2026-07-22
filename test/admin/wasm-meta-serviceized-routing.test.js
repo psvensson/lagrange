@@ -167,13 +167,13 @@ describe('sys-wasm-meta serviceized routing (Req 2.3, 7.4)', () => {
       const payload = {serviceId: 'svc-1'};
       const result = delegateToWasmMeta(
         cache,
-        WASM_META_ACTION.CREATE_SERVICE,
+        WASM_META_ACTION.PUBLISH_MODULE,
         payload,
       );
       assert.equal(result.success, true);
       assert.equal(result.serviceId, META_SERVICE_ID.WASM_META);
       assert.equal(
-        result.command, WASM_META_ACTION.CREATE_SERVICE,
+        result.command, WASM_META_ACTION.PUBLISH_MODULE,
       );
       assert.deepEqual(result.payload, payload);
       assert.equal(result.leaderAddress, WASM_LEADER_ADDR);
@@ -186,14 +186,14 @@ describe('sys-wasm-meta serviceized routing (Req 2.3, 7.4)', () => {
         [COLUMN.ADDRESS]: WASM_LEADER_ADDR,
       }]);
       const result = adaptAdminAction(
-        WASM_META_ACTION.DELETE_SERVICE,
+        WASM_META_ACTION.GET_MODULE,
         {serviceId: 'svc-2'},
         cache,
       );
       assert.equal(result.success, true);
       assert.equal(result.serviceId, META_SERVICE_ID.WASM_META);
       assert.equal(
-        result.command, WASM_META_ACTION.DELETE_SERVICE,
+        result.command, WASM_META_ACTION.GET_MODULE,
       );
     });
 
@@ -201,7 +201,7 @@ describe('sys-wasm-meta serviceized routing (Req 2.3, 7.4)', () => {
       const cache = buildCacheMock([]);
       const result = delegateToWasmMeta(
         cache,
-        WASM_META_ACTION.SCALE_SERVICE,
+        WASM_META_ACTION.LIST_MODULES,
         {},
       );
       assert.equal(result.success, false);

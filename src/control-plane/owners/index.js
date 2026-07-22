@@ -10,7 +10,12 @@ export {MessageGroupsOwner} from './message-groups-owner.js';
 export {ReplicaOperationsOwner} from './replica-operations-owner.js';
 export {LogsOwner} from './logs-owner.js';
 export {ServiceEndpointsOwner} from './service-endpoints-owner.js';
-export {ServiceDefinitionsOwner} from './service-definitions-owner.js';
+export {
+  REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE,
+  RequestBindingServiceDefinitionError,
+  buildRequestBindingServiceDefinition,
+  deriveRequestServiceDefinitionId,
+} from './request-binding-service-definition-contract.js';
 export {
   SERVICE_INSTALL_CATALOG_ERROR_CODE,
   SERVICE_INSTALL_DESIRED_STATE,

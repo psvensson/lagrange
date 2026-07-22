@@ -23,6 +23,10 @@ function createOwnerOptions(options = {}) {
 function createSystemMetadataOwners(options = {}) {
   const ownerOptions = createOwnerOptions(options);
   const serviceInstallCatalogOwner = new ServiceInstallCatalogOwner(ownerOptions);
+  const serviceDefinitionsOwner = new ServiceDefinitionsOwner({
+    ...ownerOptions,
+    catalogOwner: serviceInstallCatalogOwner,
+  });
   return Object.freeze({
     controlPlanePublicationsOwner: new ControlPlanePublicationsOwner(ownerOptions),
     nodesOwner: new NodesOwner(ownerOptions),
@@ -33,7 +37,7 @@ function createSystemMetadataOwners(options = {}) {
     replicaOperationsOwner: new ReplicaOperationsOwner(ownerOptions),
     logsOwner: new LogsOwner(ownerOptions),
     serviceEndpointsOwner: new ServiceEndpointsOwner(ownerOptions),
-    serviceDefinitionsOwner: new ServiceDefinitionsOwner(ownerOptions),
+    serviceDefinitionsOwner,
     serviceInstallCatalogOwner,
     deploymentBindingOwner: new DeploymentBindingOwner({
       ...ownerOptions,

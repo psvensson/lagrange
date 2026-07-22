@@ -250,7 +250,7 @@ describe('runtime adapter ingress-only contract', () => {
           [COLUMN.ADDRESS]: leaderAddr,
         }]);
         const result = guardedAdaptAdminAction(
-          WASM_META_ACTION.CREATE_SERVICE,
+          WASM_META_ACTION.PUBLISH_MODULE,
           {name: 'svc'},
           cache,
           MUTATION_GUARD_MODE.REJECT,
@@ -318,7 +318,7 @@ describe('runtime adapter ingress-only contract', () => {
           [COLUMN.ADDRESS]: leaderAddr,
         }]);
         const result = adaptAdminAction(
-          WASM_META_ACTION.DELETE_SERVICE,
+          WASM_META_ACTION.GET_MODULE,
           {serviceId: 'svc-1'},
           cache,
         );

@@ -281,7 +281,7 @@ describe('runtime unavailable errors', () => {
       ]);
       const result = delegateToWasmMeta(
         cache,
-        WASM_META_ACTION.CREATE_SERVICE,
+        WASM_META_ACTION.PUBLISH_MODULE,
         {name: 'svc'},
       );
       assert.equal(result.success, true);

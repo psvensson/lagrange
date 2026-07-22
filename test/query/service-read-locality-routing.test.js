@@ -5,12 +5,11 @@
  * Proves the end-to-end wiring of service_definitions.read_locality:
  *  1. The column is a durable service-definition field with default 'any'
  *     (serialize/deserialize round-trip, schema spec, column list).
- *  2. Create/update meta-command handlers accept and validate the field.
- *  3. The query engine resolves the issuing service's policy from the
+ *  2. The query engine resolves the issuing service's policy from the
  *     node-local system cache (resolveIssuingServiceReadLocality).
- *  4. executeSelect threads the resolved preference into the query
+ *  3. executeSelect threads the resolved preference into the query
  *     executor options (the wiring that un-dormants locality routing).
- *  5. Read routing candidate ordering honors the preference: local node
+ *  4. Read routing candidate ordering honors the preference: local node
  *     first, then same-latency-group replicas, then the rest — and is
  *     UNCHANGED when the policy is off.
  */
@@ -26,11 +25,6 @@ import {
   serializeServiceDefinition,
   deserializeServiceDefinition,
 } from '../../src/wasm-service/wasm-service-models.js';
-import {
-  META_COMMAND_ERROR_MSG,
-  handleCreateService,
-  handleUpdateService,
-} from '../../src/wasm-service/meta-command-handlers.js';
 import {
   SERVICE_DEFINITIONS_SCHEMA,
 } from '../../src/bootstrap/system-table-runtime-schema-definitions.js';
@@ -126,70 +120,6 @@ test('service_definitions carries read_locality: default, round-trip, ' +
 
   t.end();
 });
-
-test('create/update service handlers accept and validate readLocality',
-  (t) => {
-    const created = handleCreateService({
-      serviceId: SVC_ID,
-      serviceName: 'read-local-svc',
-      handlerFunctionId: 'fn-1',
-      readLocality: SERVICE_READ_LOCALITY.SAME_GROUP,
-    });
-    t.equal(created.success, true, 'create accepts same_group');
-    const localityIndex = SERVICE_DEFINITION_COLUMN_LIST
-      .indexOf(SD_COL.READ_LOCALITY);
-    t.equal(
-      created.params[localityIndex],
-      SERVICE_READ_LOCALITY.SAME_GROUP,
-      'INSERT params carry the read_locality value',
-    );
-    t.match(
-      created.sql,
-      new RegExp(SD_COL.READ_LOCALITY),
-      'INSERT projection includes read_locality',
-    );
-
-    const rejected = handleCreateService({
-      serviceId: SVC_ID,
-      serviceName: 'read-local-svc',
-      handlerFunctionId: 'fn-1',
-      readLocality: 'nearest-datacenter',
-    });
-    t.equal(rejected.success, false, 'create rejects unknown locality');
-    t.ok(
-      rejected.errors.includes(META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID),
-      'create reports the readLocality validation error',
-    );
-
-    const updated = handleUpdateService({
-      serviceId: SVC_ID,
-      readLocality: SERVICE_READ_LOCALITY.SAME_GROUP,
-    });
-    t.equal(updated.success, true, 'update accepts same_group');
-    t.match(
-      updated.sql,
-      new RegExp(`${SD_COL.READ_LOCALITY} = `),
-      'UPDATE sets read_locality',
-    );
-    t.equal(
-      updated.params[0],
-      SERVICE_READ_LOCALITY.SAME_GROUP,
-      'UPDATE params carry the read_locality value',
-    );
-
-    const updateRejected = handleUpdateService({
-      serviceId: SVC_ID,
-      readLocality: 'bogus',
-    });
-    t.equal(updateRejected.success, false, 'update rejects unknown locality');
-    t.ok(
-      updateRejected.errors
-        .includes(META_COMMAND_ERROR_MSG.READ_LOCALITY_INVALID),
-      'update reports the readLocality validation error',
-    );
-
-    t.end();
-  });
 
 test('resolveIssuingServiceReadLocality reads the cached definition',
   (t) => {

@@ -327,11 +327,11 @@ describe('Runtime adapter determinism', () => {
         namespace: 'ns', name: 'mod', version: '1.0.0',
       };
       const resultA = guardedAdaptAdminAction(
-        WASM_META_ACTION.CREATE_SERVICE, params, cacheA,
+        WASM_META_ACTION.PUBLISH_MODULE, params, cacheA,
         MUTATION_GUARD_MODE.REJECT,
       );
       const resultB = guardedAdaptAdminAction(
-        WASM_META_ACTION.CREATE_SERVICE, params, cacheB,
+        WASM_META_ACTION.PUBLISH_MODULE, params, cacheB,
         MUTATION_GUARD_MODE.REJECT,
       );
       assert.deepEqual(resultA, resultB);
@@ -391,10 +391,10 @@ describe('Runtime adapter determinism', () => {
       ]);
       const params = {namespace: 'ns', name: 'svc', version: '2.0.0'};
       const resultA = adaptAdminAction(
-        WASM_META_ACTION.SCALE_SERVICE, params, cacheA,
+        WASM_META_ACTION.LIST_MODULES, params, cacheA,
       );
       const resultB = adaptAdminAction(
-        WASM_META_ACTION.SCALE_SERVICE, params, cacheB,
+        WASM_META_ACTION.LIST_MODULES, params, cacheB,
       );
       // Same structure, same keys
       assert.equal(resultA.success, true);
@@ -443,10 +443,10 @@ describe('Runtime adapter determinism', () => {
         ),
       ]);
       const resultA = adaptAdminAction(
-        WASM_META_ACTION.DELETE_SERVICE, {}, cacheA,
+        WASM_META_ACTION.GET_MODULE, {}, cacheA,
       );
       const resultB = adaptAdminAction(
-        WASM_META_ACTION.DELETE_SERVICE, {}, cacheB,
+        WASM_META_ACTION.GET_MODULE, {}, cacheB,
       );
       assert.deepEqual(resultA, resultB);
       assert.equal(resultA.success, false);

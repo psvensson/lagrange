@@ -17,7 +17,6 @@ import {
   NodesOwner,
   PartitionsOwner,
   ReplicaOperationsOwner,
-  ServiceDefinitionsOwner,
   ServiceEndpointsOwner,
   ServicesOwner,
 } from '../../src/control-plane/owners/index.js';
@@ -45,11 +44,6 @@ test('System metadata owner modules exist for each shared metadata family',
         ServiceEndpointsOwner,
         'service-endpoints-owner',
         TABLES.SERVICE_ENDPOINTS,
-      ],
-      [
-        ServiceDefinitionsOwner,
-        'service-definitions-owner',
-        TABLES.SERVICE_DEFINITIONS,
       ],
     ];
 
@@ -367,18 +361,6 @@ test('System metadata owners route typed read and mutation methods through the g
         updateMethod: 'updateEndpoint',
         deleteMethod: 'removeEndpoint',
         row: {endpoint_id: 'endpoint-1'},
-      },
-      {
-        OwnerClass: ServiceDefinitionsOwner,
-        tableName: TABLES.SERVICE_DEFINITIONS,
-        key: 'svc-def-1',
-        readMethod: 'getServiceDefinition',
-        listMethod: 'listServiceDefinitions',
-        insertMethod: 'insertServiceDefinition',
-        upsertMethod: 'upsertServiceDefinition',
-        updateMethod: 'updateServiceDefinition',
-        deleteMethod: 'removeServiceDefinition',
-        row: {service_name: 'svc-def-1'},
       },
     ];
 

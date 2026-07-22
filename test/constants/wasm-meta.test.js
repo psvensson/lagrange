@@ -131,14 +131,6 @@ describe('WASM_META_ACTION', () => {
     assert.equal(WASM_META_ACTION.LIST_MODULES, 'listModules');
   });
 
-  it('should have all service actions', () => {
-    assert.equal(WASM_META_ACTION.CREATE_SERVICE, 'createService');
-    assert.equal(WASM_META_ACTION.UPDATE_SERVICE, 'updateService');
-    assert.equal(WASM_META_ACTION.SCALE_SERVICE, 'scaleService');
-    assert.equal(WASM_META_ACTION.ROLLOUT_SERVICE, 'rolloutService');
-    assert.equal(WASM_META_ACTION.DELETE_SERVICE, 'deleteService');
-  });
-
   it('should have operation query actions', () => {
     assert.equal(WASM_META_ACTION.GET_OPERATION, 'getOperation');
     assert.equal(
@@ -146,8 +138,8 @@ describe('WASM_META_ACTION', () => {
     );
   });
 
-  it('should have exactly ten actions', () => {
-    assert.equal(Object.keys(WASM_META_ACTION).length, 10);
+  it('should have exactly five actions', () => {
+    assert.equal(Object.keys(WASM_META_ACTION).length, 5);
   });
 });
 
