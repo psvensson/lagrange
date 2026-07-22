@@ -1,0 +1,43 @@
+{
+  "id": "minimal-deployment-request-binding-compilation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Every immutable request Binding observed through canonical service_bindings change notification is level-triggered by the existing service_definitions planning leader into exactly one deterministic, lineage-bound inactive zero-replica desired runtime service whose pinned Artifact target, request route, export, contexts, capabilities, budgets, and elasticity projection matches the Binding; replay, cache wake, and leadership reacquisition converge without duplicate writes, malformed or conflicting durable state fails closed, direct user create/update/scale/delete service_definitions ingress and generic mutation APIs are absent while axiomatic built-in definitions remain, and no services, endpoints, runtime lifecycle, or Cell actual is created.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "b40c9ad177ef3b633a26679393a21ee1c146fd36"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-request-binding-compilation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-request-binding-compilation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-request-binding-compilation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

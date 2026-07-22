@@ -17,8 +17,6 @@ invariants, and migration sequence now live in
 
 ## Options under discussion
 
-- **Binding migration order:** request/service ingress first, or the smaller CDC
-  subscription surface first, after the artifact declaration prerequisite lands.
 - **Cell convergence:** introduce the derived Cell vocabulary at the existing
   reconciler boundary before or during partition/service lifecycle consolidation.
 - **Learner sequencing:** make learner replicas part of the first context-backed
@@ -67,3 +65,8 @@ invariants, and migration sequence now live in
   learners, and create-only immutable generation 1. Landed product Quest
   `minimal-deployment-binding-v0-declaration`; request Binding compilation is
   the next cutover rather than a side effect of declaration persistence.
+- 2026-07-22 — Selected request Binding compilation as the first Binding
+  cutover. The existing `service_definitions` planning leader performs one
+  level-triggered CDC-woken projection into inactive zero-replica desired rows;
+  direct user service-definition mutation ingress is retired atomically, while
+  runtime activation and Cells remain later work.
