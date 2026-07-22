@@ -76,3 +76,8 @@ invariants, and migration sequence now live in
   the unused UUID-based `CDCSubscriptionManager` declaration/callback API is
   retired, and actual change-event subscription and dispatch remain deferred to
   Cell activation.
+- 2026-07-22 — Landed `change` and selected `time` as the next source cutover.
+  The shared compiler projects the bounded `interval_ms` declaration into the
+  same inactive zero-replica desired state. Scheduling remains a Cell-activation
+  concern: compilation must not arm a timer or engage the per-replica timer
+  runtime.

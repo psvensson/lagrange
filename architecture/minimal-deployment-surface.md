@@ -118,7 +118,7 @@ reach the binding reconciler fixed point.
 | Immutable bindable Artifact identity | `ServiceInstallCatalogOwner` / `service_packages` | Derive and verify `manifest_digest` from the exact immutable `normalized_manifest`; never select a declaration by OCI digest ordering. |
 | Lifecycle ingress | Authenticated lifecycle SQL, consumed by the CLI | Extend with parameterized `CREATE BINDING $1`; no binding-specific side channel. |
 | Immutable Binding declarations | `DeploymentBindingOwner` / `service_bindings` | Validate and persist one canonical tenant-scoped v0 generation; expose no generic mutation path. |
-| Desired runtime service | `service_definitions` and its existing planning leader | Compile request Bindings as lineage-bound inactive zero-replica desired rows; retire direct user declaration writes here, and leave activation to the Cell cutover. |
+| Desired runtime service | `service_definitions` and its existing planning leader | Compile supported Bindings as lineage-bound inactive zero-replica desired rows; retire direct user declaration writes here, and leave activation to the Cell cutover. |
 | Placement and replica lifecycle | `UnifiedRebalancer` and shared replica owners | Extend to derived Cells; do not fork a cell scheduler. |
 | Handler context | Replicated tables and existing KV/timer primitives | Reuse; do not introduce a second state store. |
 
@@ -145,6 +145,9 @@ single owners only when their removal is explicit and structurally guarded.
    activating runtimes or naming Cells.
 5. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
    same Binding owner one source at a time, deleting superseded surfaces.
+   `change` is complete; Quest
+   `minimal-deployment-time-binding-compilation` owns the next source without
+   scheduling timers or activating a runtime.
 6. Name the derived Cell state and reconcile it through the existing placement
    and replica owners before consolidating partition/service lifecycle code.
 
@@ -172,7 +175,10 @@ adding a table, validator, adapter, or feature flag is not completion.
 
 Quest `minimal-deployment-artifact-export-contract` completed step 1,
 `minimal-deployment-artifact-binding-identity-replacement` completed step 2,
-and `minimal-deployment-binding-v0-declaration` completed step 3. Quest
-`minimal-deployment-request-binding-compilation` advances step 4 through the
-existing `service_definitions` planning leader. Its derived rows are inactive
-and request no replicas; runtime activation and Cells remain later steps.
+`minimal-deployment-binding-v0-declaration` completed step 3, and
+`minimal-deployment-request-binding-compilation` completed step 4. Quest
+`minimal-deployment-change-binding-compilation` completed the first source in
+step 5; `minimal-deployment-time-binding-compilation` advances the next source
+through the same `service_definitions` planning leader. Derived rows remain
+inactive and request no replicas; runtime activation and Cells remain later
+steps.
