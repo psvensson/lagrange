@@ -13,6 +13,23 @@
 - parent quest: operation-ledger-quorum-authoritative-release
 - plan: solve/epics/convergence-loop-and-workflow-overhead.md
 
+## Current Blocker
+- Frontier: priority-surplus-remove-authoritative-placement-fence-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: observation_gap
+- Movement: unknown: PASS -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-22T09-46-30-107Z.report.json
+- Selected theory: none
+- Next move: continue supervised step for priority-surplus-remove-authoritative-placement-fence-main
+- No longer current: PASS
+
+## Continuation
+- Status: allowed
+- Next action: No open frontier remains; inspect solve report.
+- Blocker: none
+
 ## Scope Pressure
 - Changed files: 7
 - Change bytes: 64912
