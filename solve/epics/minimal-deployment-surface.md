@@ -70,3 +70,9 @@ invariants, and migration sequence now live in
   level-triggered CDC-woken projection into inactive zero-replica desired rows;
   direct user service-definition mutation ingress is retired atomically, while
   runtime activation and Cells remain later work.
+- 2026-07-22 — Selected `change` as the next source cutover. The request
+  compiler becomes the shared Binding-to-desired-service compiler, preserving
+  inactive zero-replica output while projecting change operations and tables;
+  the unused UUID-based `CDCSubscriptionManager` declaration/callback API is
+  retired, and actual change-event subscription and dispatch remain deferred to
+  Cell activation.
