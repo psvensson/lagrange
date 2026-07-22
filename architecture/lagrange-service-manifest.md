@@ -545,6 +545,14 @@ Typical mapping:
 The catalog stores the normalized manifest for audit/debugging. Its only durable
 runtime link is `service_definition_id`; node, replica, address, health,
 endpoint, process, and running state stay with the existing actual-state owners.
+For Binding, the catalog derives `manifest_digest` as SHA-256 over the exact
+canonical `normalized_manifest` bytes. The canonical bindable Artifact identity
+is `(package_id, manifest_digest)`, not the OCI payload digest: multiple installed
+declarations may intentionally pin the same OCI bytes while exposing different
+schema-v2 contracts. Schema-v1 packages are not analyzable Binding targets.
+OCI-digest shorthand is deferred from Binding v0; any future resolver must
+receive authenticated eligible package identities and reject more than one
+eligible match rather than selecting globally or by row order.
 An installation is initially `recorded_not_running`, including when its desired
 state is `active`. Only the downstream reconciler may move rollout state after
 consulting and mutating the canonical runtime owners.

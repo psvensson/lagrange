@@ -5,6 +5,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {TABLES} from '../../src/constants/index.js';
 import {createSystemMetadataOwners} from
   '../../src/control-plane/owners/index.js';
+import {
+  SERVICE_INSTALL_CATALOG_ERROR_CODE,
+  ServiceInstallCatalogError,
+} from '../../src/control-plane/owners/service-install-catalog-owner.js';
 import {PostgresWireAdapter} from
   '../../src/query/pg/postgres-wire-adapter.js';
 import {
@@ -571,6 +575,52 @@ describe('service lifecycle SQL durable owner route', () => {
       assert.equal(
         fixture.gateway.rows(TABLES.SERVICE_PACKAGES)[0].package_id,
         packageRow.package_id,
+      );
+
+      const firstIdentity = await fixture.catalogOwner.getPackage(
+        packageRow.package_id);
+      const changed = await adapter.execute(
+        'session-1',
+        'INSTALL SERVICE $1',
+        [installPayload({
+          idempotency_key: 'install-distinct-artifact-contract',
+          manifest: v2Manifest([{
+            name: 'serve-admin',
+            interface: 'request_v1',
+            reads: ['table:global.admin_accounts'],
+            writes: [],
+          }]),
+        })],
+      );
+      assert.equal(changed.success, true);
+      const packageRows = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
+      assert.equal(packageRows.length, 2);
+      const changedRow = packageRows.find(
+        (row) => row.package_id !== packageRow.package_id);
+      const changedIdentity = await fixture.catalogOwner.getPackage(
+        changedRow.package_id);
+      assert.notEqual(changedIdentity.packageId, firstIdentity.packageId);
+      assert.notEqual(
+        changedIdentity.manifestDigest, firstIdentity.manifestDigest);
+      assert.deepEqual(
+        (await fixture.catalogOwner.getBindableArtifact(
+          firstIdentity.packageId,
+          firstIdentity.manifestDigest)).manifest.exports,
+        JSON.parse(packageRow.normalized_manifest).exports,
+      );
+      await assert.rejects(
+        fixture.catalogOwner.resolveUniqueBindableArtifactByDigest(
+          DIGEST_A,
+          [firstIdentity.packageId, changedIdentity.packageId],
+        ),
+        (error) => {
+          assert.ok(error instanceof ServiceInstallCatalogError);
+          assert.equal(
+            error.code,
+            SERVICE_INSTALL_CATALOG_ERROR_CODE.AMBIGUOUS_ARTIFACT_DIGEST,
+          );
+          return true;
+        },
       );
     });
 

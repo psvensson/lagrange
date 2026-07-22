@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import {runGuardTestScenarios} from
-  '../../scripts/checks/guard-test-scenario-runner.js';
+  './checks/guard-test-scenario-runner.js';
 
 const SCENARIO = 'minimal-deployment-artifact-export-contract';
 const REPORT_DIR =

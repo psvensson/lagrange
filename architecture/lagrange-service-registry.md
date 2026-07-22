@@ -440,8 +440,10 @@ This preserves one conceptual model for both development and production.
 The open kernel install catalog owns four replicated, non-cache-propagated
 system tables:
 
--   `service_packages` stores immutable normalized manifest and verified
-    artifact identity.
+-   `service_packages` stores the immutable normalized manifest and verified
+    OCI payload identity. The catalog derives the bindable declaration identity
+    as `(package_id, sha256(normalized_manifest))`; the digest is not a second
+    stored column.
 -   `service_revisions` stores immutable package/configuration revisions.
 -   `service_installations` stores desired state, rollout state, stable
     operation identity, and one `service_definition_id` reference.

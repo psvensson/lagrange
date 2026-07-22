@@ -1,5 +1,6 @@
-import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {describe, it} from 'node:test';
 
 import {
   INITIAL_PARTITION_IDS,
@@ -232,6 +233,13 @@ function manifest(overrides = {}) {
   };
 }
 
+function v2Manifest(exports_) {
+  return manifest({
+    schema_version: 2,
+    exports: exports_,
+  });
+}
+
 function resolvedArtifact(overrides = {}) {
   return {
     status: 'resolved',
@@ -306,6 +314,197 @@ describe('service install catalog system-table contract', () => {
 });
 
 describe('service install catalog production owner', () => {
+  it('owns the immutable package plus manifest-digest binding identity',
+    async () => {
+      const gateway = new DurableCatalogGateway();
+      const catalog = createCatalog(gateway);
+      const firstManifest = v2Manifest([{
+        interface: 'request_v1',
+        name: 'serve',
+        reads: ['table:global.accounts'],
+        writes: [],
+      }]);
+      const first = await catalog.recordPackage({
+        packageId: 'pkg-bindable-a',
+        manifest: firstManifest,
+        resolvedArtifact: resolvedArtifact(),
+      });
+
+      const stored = gateway.rows(TABLES.SERVICE_PACKAGES).get(first.packageId);
+      assert.equal(
+        first.manifestDigest,
+        `sha256:${createHash('sha256')
+          .update(stored.normalized_manifest)
+          .digest('hex')}`,
+      );
+      assert.match(first.manifestDigest, /^sha256:[0-9a-f]{64}$/u);
+      assert.equal(first.manifestSchemaVersion, 2);
+      assert.deepEqual(
+        await catalog.getBindableArtifact(
+          first.packageId, first.manifestDigest),
+        {
+          packageId: first.packageId,
+          manifestDigest: first.manifestDigest,
+          artifactDigest: DIGEST,
+          manifest: firstManifest,
+        },
+      );
+
+      const replay = await catalog.recordPackage({
+        packageId: 'pkg-bindable-a',
+        manifest: {
+          exports: firstManifest.exports,
+          runtime: firstManifest.runtime,
+          artifact: firstManifest.artifact,
+          version: firstManifest.version,
+          name: firstManifest.name,
+          schema_version: firstManifest.schema_version,
+        },
+        resolvedArtifact: resolvedArtifact(),
+      });
+      assert.equal(replay.manifestDigest, first.manifestDigest);
+
+      const unique = await catalog.resolveUniqueBindableArtifactByDigest(
+        DIGEST, [first.packageId]);
+      assert.equal(unique.packageId, first.packageId);
+      assert.equal(unique.manifestDigest, first.manifestDigest);
+      await assert.rejects(
+        catalog.resolveUniqueBindableArtifactByDigest(DIGEST, []),
+        (error) => assertCode(
+          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD),
+      );
+
+      gateway.corrupt(TABLES.SERVICE_PACKAGES, first.packageId, {
+        package_id: 'bad package id',
+      });
+      await assert.rejects(
+        catalog.resolveUniqueBindableArtifactByDigest(
+          DIGEST, [first.packageId]),
+        (error) => assertCode(
+          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
+      );
+      gateway.corrupt(TABLES.SERVICE_PACKAGES, first.packageId, {
+        package_id: first.packageId,
+      });
+
+      await catalog.recordPackage({
+        packageId: 'pkg-bindable-b',
+        manifest: v2Manifest([{
+          interface: 'change_v1',
+          name: 'audit-change',
+          reads: ['table:global.audit'],
+          writes: ['table:global.audit'],
+        }]),
+        resolvedArtifact: resolvedArtifact(),
+      });
+      assert.equal(
+        (await catalog.resolveUniqueBindableArtifactByDigest(
+          DIGEST, [first.packageId])).packageId,
+        first.packageId,
+      );
+      await assert.rejects(
+        catalog.resolveUniqueBindableArtifactByDigest(
+          DIGEST, ['pkg-bindable-a', 'pkg-bindable-b']),
+        (error) => assertCode(
+          error,
+          SERVICE_INSTALL_CATALOG_ERROR_CODE.AMBIGUOUS_ARTIFACT_DIGEST,
+        ),
+      );
+    });
+
+  it('rejects v1 and corrupted durable manifests as bindable artifacts',
+    async () => {
+      const gateway = new DurableCatalogGateway();
+      const catalog = createCatalog(gateway);
+      const v1 = await catalog.recordPackage({
+        packageId: 'pkg-v1',
+        manifest: manifest(),
+        resolvedArtifact: resolvedArtifact(),
+      });
+      await assert.rejects(
+        catalog.getBindableArtifact(v1.packageId, v1.manifestDigest),
+        (error) => assertCode(
+          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE),
+      );
+
+      const v2 = await catalog.recordPackage({
+        packageId: 'pkg-corrupt-v2',
+        manifest: v2Manifest([{
+          interface: 'request_v1',
+          name: 'serve',
+          reads: [],
+          writes: [],
+        }]),
+        resolvedArtifact: resolvedArtifact(),
+      });
+      const row = gateway.rows(TABLES.SERVICE_PACKAGES).get(v2.packageId);
+      const changed = JSON.parse(row.normalized_manifest);
+      changed.exports[0].reads = ['table:global.secret'];
+      gateway.corrupt(TABLES.SERVICE_PACKAGES, v2.packageId, {
+        normalized_manifest: JSON.stringify(changed),
+      });
+      await assert.rejects(
+        catalog.getBindableArtifact(v2.packageId, v2.manifestDigest),
+        (error) => assertCode(
+          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
+      );
+
+      gateway.corrupt(TABLES.SERVICE_PACKAGES, v2.packageId, {
+        normalized_manifest: '{not-json',
+      });
+      await assert.rejects(
+        catalog.getPackage(v2.packageId),
+        (error) => assertCode(
+          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
+      );
+    });
+
+  it('rejects canonical but invalid v2 manifests read from durable state',
+    async () => {
+      const gateway = new DurableCatalogGateway();
+      const catalog = createCatalog(gateway);
+      const invalidManifest = v2Manifest([{
+        interface: 'not_a_real_interface',
+        name: 'serve',
+        reads: [],
+        writes: [],
+      }]);
+      await assert.rejects(
+        catalog.recordPackage({
+          packageId: 'pkg-invalid-before-write',
+          manifest: invalidManifest,
+          resolvedArtifact: resolvedArtifact(),
+        }),
+        (error) => assertCode(
+          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD),
+      );
+      assert.equal(gateway.rows(TABLES.SERVICE_PACKAGES).size, 0);
+
+      const stored = await catalog.recordPackage({
+        packageId: 'pkg-invalid-v2',
+        manifest: v2Manifest([{
+          interface: 'request_v1',
+          name: 'serve',
+          reads: [],
+          writes: [],
+        }]),
+        resolvedArtifact: resolvedArtifact(),
+      });
+      const row = gateway.rows(TABLES.SERVICE_PACKAGES).get(stored.packageId);
+      const invalid = JSON.parse(row.normalized_manifest);
+      invalid.exports[0].interface = 'not_a_real_interface';
+      gateway.corrupt(TABLES.SERVICE_PACKAGES, stored.packageId, {
+        normalized_manifest: JSON.stringify(invalid),
+      });
+
+      await assert.rejects(
+        catalog.resolveUniqueBindableArtifactByDigest(
+          DIGEST, [stored.packageId]),
+        (error) => assertCode(
+          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
+      );
+    });
+
   it('durably records and recovers package, revision, and install intent',
     async () => {
       const gateway = new DurableCatalogGateway();

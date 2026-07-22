@@ -31,9 +31,12 @@ import {
   isPlainObject,
   projectFailure,
   projectInstallation,
+  projectBindableArtifact,
   projectPackage,
   projectRevision,
   requireEnum,
+  requireDigest,
+  requireEligiblePackageIds,
   requireIdentifier,
   sameFields,
   sha256Json,
@@ -266,6 +269,58 @@ class ServiceInstallCatalogOwner {
     const row = await this.readRow(
       this.packageRows, id, CATALOG_PRIMARY_KEY_FIELD.PACKAGE);
     return row ? projectPackage(row) : null;
+  }
+
+  async getBindableArtifact(packageId, manifestDigest) {
+    const id = requireIdentifier(packageId, '/packageId');
+    const digest = requireDigest(
+      manifestDigest, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST_DIGEST);
+    const row = await this.readRow(
+      this.packageRows, id, CATALOG_PRIMARY_KEY_FIELD.PACKAGE);
+    return row ? projectBindableArtifact(row, digest) : null;
+  }
+
+  async resolveUniqueBindableArtifactByDigest(
+    artifactDigest,
+    eligiblePackageIds,
+  ) {
+    const digest = requireDigest(
+      artifactDigest, SERVICE_INSTALL_CATALOG_PATH.ARTIFACT_DIGEST);
+    const eligible = requireEligiblePackageIds(eligiblePackageIds);
+    const result = await readAuthoritativeControlPlaneRows(
+      this.packageRows.requireGateway(),
+      TABLES.SERVICE_PACKAGES,
+      'SELECT * FROM service_packages WHERE artifact_digest = ?',
+      [digest],
+      {owner: this.getOwnerName()},
+    );
+    if (result?.success === false) {
+      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
+        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
+    }
+    const authoritativeRows = Array.isArray(result) ? result : result?.rows;
+    if (!Array.isArray(authoritativeRows)) {
+      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
+        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
+    }
+    for (const row of authoritativeRows) {
+      if (!isPlainObject(row) || row.artifact_digest !== digest) {
+        fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+          SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
+          SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
+      }
+      projectPackage(row);
+    }
+    const rows = authoritativeRows.filter((row) =>
+      eligible.has(row.package_id));
+    if (rows.length > 1) {
+      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.AMBIGUOUS_ARTIFACT_DIGEST,
+        SERVICE_INSTALL_CATALOG_PATH.ARTIFACT_DIGEST,
+        SERVICE_INSTALL_CATALOG_MESSAGE.ARTIFACT_DIGEST_AMBIGUOUS);
+    }
+    return rows[0] ? projectBindableArtifact(rows[0]) : null;
   }
 
   async recordPackage(request = {}, options = {}) {

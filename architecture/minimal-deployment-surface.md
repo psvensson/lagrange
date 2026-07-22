@@ -16,10 +16,12 @@ defined by this contract.
 
 ### Artifact
 
-An Artifact is an immutable OCI object identified by its digest. Runtime kind
-selects an execution strategy; it does not select a packaging or catalog path.
-An artifact exposes stateless handlers. A schema-v2 external manifest declares,
-for every export:
+An Artifact separates immutable deployment declaration identity from OCI payload
+identity. The bindable declaration is the installed `package_id` plus the
+SHA-256 digest of its exact canonical normalized manifest; the manifest pins the
+OCI object by its own digest. Runtime kind selects an execution strategy; it does
+not select a packaging or catalog path. An artifact exposes stateless handlers.
+A schema-v2 external manifest declares, for every export:
 
 - one unique export name;
 - one stable interface identifier; and
@@ -40,17 +42,25 @@ contract. A future Binding may require v2 without reinterpreting v1.
 
 ### Binding
 
-A Binding is the only durable user declaration of execution intent:
+A Binding is the only durable user declaration of execution intent. Its
+canonical target stores the three-part declaration identity:
 
 ```text
-on <source> run <artifact-digest>#<export>
+on <source> run <package-id>@<manifest-digest>#<export>
 ```
+
+OCI-digest shorthand is not part of Binding v0. Any future shorthand must first
+receive an authenticated set of eligible installed package identities, fail
+closed when more than one eligible declaration matches, and persist only the
+canonical three-part identity above.
 
 It is immutable, versioned, replicated, and carries source-typed configuration,
 context namespaces, budgets, capabilities, and elasticity policy. The closed
 source vocabulary is `request`, `change`, `call`, `pushdown`, `time`, `once`,
-and `boot`; each source has one fixed execution semantic. Exact source schemas
-and interface compatibility are deliberately deferred to the Binding Quest.
+and `boot`; each source has one fixed execution semantic. `call` and `pushdown`
+Bindings are durable registrations, while individual statement calls and query
+plans are transient invocations rather than Bindings. Exact source schemas and
+interface compatibility are deliberately deferred to the Binding Quest.
 
 ### Cell
 
@@ -72,7 +82,7 @@ reach the binding reconciler fixed point.
 | --- | --- | --- |
 | External artifact shape | `external-service-manifest.js` | Extend with versioned export declarations. |
 | Artifact resolution | Installable OCI artifact resolver | Reuse unchanged. |
-| Immutable package identity | `ServiceInstallCatalogOwner` / `service_packages` | Retain normalized manifest as artifact metadata. |
+| Immutable bindable Artifact identity | `ServiceInstallCatalogOwner` / `service_packages` | Derive and verify `manifest_digest` from the exact immutable `normalized_manifest`; never select a declaration by OCI digest ordering. |
 | Lifecycle ingress | Authenticated lifecycle SQL, consumed by the CLI | Reuse unchanged; no binding-specific side channel. |
 | Desired runtime service | `service_definitions` and its reconciler | Compile from Binding during the cutover, then retire declaration writes here. |
 | Placement and replica lifecycle | `UnifiedRebalancer` and shared replica owners | Extend to derived Cells; do not fork a cell scheduler. |
@@ -88,14 +98,17 @@ single owners only when their removal is explicit and structurally guarded.
 1. Make new artifact manifests analyzable: schema v2 exports carry canonical
    interface and table access declarations through the live install/catalog
    path while v1 compatibility remains unchanged.
-2. Seal Binding schema v0 and its single validator/persistence owner. Require
+2. Establish the bindable Artifact identity as installed `package_id` plus the
+   digest of exact canonical `normalized_manifest`; make digest-only ambiguity,
+   schema-v1 input, and durable corruption fail closed in the catalog owner.
+3. Seal Binding schema v0 and its single validator/persistence owner. Require
    analyzable v2 artifacts for newly authored Bindings.
-3. Compile request Bindings into the existing desired-service lifecycle and
+4. Compile request Bindings into the existing desired-service lifecycle and
    make Binding the declaration authority; delete direct competing declaration
    writes in the same cutover.
-4. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
+5. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
    same Binding owner one source at a time, deleting superseded surfaces.
-5. Name the derived Cell state and reconcile it through the existing placement
+6. Name the derived Cell state and reconcile it through the existing placement
    and replica owners before consolidating partition/service lifecycle code.
 
 Each step must engage the new owner in the production path it claims. Merely
@@ -103,8 +116,9 @@ adding a table, validator, adapter, or feature flag is not completion.
 
 ## Permanent invariants
 
-- Artifact bytes and normalized manifest identity are immutable and digest
-  pinned; in-flight work remains pinned to its starting version.
+- OCI payload bytes and normalized manifest declarations have distinct immutable
+  digests. A Binding pins `package_id` plus `manifest_digest`; in-flight work
+  remains pinned to its starting version.
 - Code is stateless. Durable state and synchronization live in declared tables.
 - Binding is intent, Cell is actual, and neither is reconstructed from the other
   by readers.
@@ -119,9 +133,10 @@ adding a table, validator, adapter, or feature flag is not completion.
 
 ## First executable slice
 
-Quest `minimal-deployment-artifact-export-contract` advances step 1. Its real
-observable is the authenticated SQL `INSTALL SERVICE` path: a valid v2 manifest
-must persist canonical export declarations in
-`service_packages.normalized_manifest`; malformed v2 declarations must fail
-before artifact resolution or catalog mutation; the generated scaffold must emit
-the same v2 contract. The Quest does not create Bindings or Cells.
+Quest `minimal-deployment-artifact-export-contract` completed step 1. Quest
+`minimal-deployment-artifact-binding-identity` advances step 2. Its real
+observable is the authenticated SQL `INSTALL SERVICE` path plus catalog-owned
+reads: the exact immutable `normalized_manifest` yields `manifest_digest`,
+`package_id` plus that digest returns one v2 declaration, and OCI-digest
+ambiguity, schema v1, or durable corruption fails closed. The Quest does not
+create Bindings, runtime declarations, or Cells.

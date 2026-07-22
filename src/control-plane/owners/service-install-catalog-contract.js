@@ -1,6 +1,8 @@
 import {createHash} from 'node:crypto';
 
 import {TABLES} from '../../constants/index.js';
+import {normalizeExternalServiceManifest} from
+  '../../service/external-service-manifest.js';
 
 const SERVICE_INSTALL_DESIRED_STATE = Object.freeze({
   ACTIVE: 'active',
@@ -43,6 +45,8 @@ const SERVICE_INSTALL_FAILURE_PHASE = Object.freeze({
 
 const SERVICE_INSTALL_CATALOG_ERROR_CODE = Object.freeze({
   ACTUAL_STATE_FIELD_FORBIDDEN: 'actual_state_field_forbidden',
+  AMBIGUOUS_ARTIFACT_DIGEST: 'ambiguous_artifact_digest',
+  ARTIFACT_NOT_ANALYZABLE: 'artifact_not_analyzable',
   ARTIFACT_NOT_RESOLVED: 'artifact_not_resolved',
   CONCURRENT_MODIFICATION: 'concurrent_catalog_modification',
   CORRUPT_RECORD: 'corrupt_catalog_record',
@@ -70,6 +74,9 @@ const SERVICE_INSTALL_CATALOG_OWNER_NAME = Object.freeze({
 });
 
 const SERVICE_INSTALL_CATALOG_PATH = Object.freeze({
+  ARTIFACT_DIGEST: '/artifactDigest',
+  BINDABLE_ARTIFACT: '/bindableArtifact',
+  ELIGIBLE_PACKAGE_IDS: '/eligiblePackageIds',
   FAILURE: '/failure',
   FAILURE_ID: '/failure/failureId',
   FAILURE_INSTALLATION_ID: '/failure/installationId',
@@ -83,6 +90,7 @@ const SERVICE_INSTALL_CATALOG_PATH = Object.freeze({
   PACKAGE: '/package',
   PACKAGE_ID: '/package/packageId',
   PACKAGE_MANIFEST: '/package/manifest',
+  PACKAGE_MANIFEST_DIGEST: '/package/manifestDigest',
   PACKAGE_MANIFEST_ARTIFACT_MEDIA_TYPE:
     '/package/manifest/artifact/media_type',
   PACKAGE_MANIFEST_ARTIFACT_REF: '/package/manifest/artifact/ref',
@@ -101,6 +109,10 @@ const SERVICE_INSTALL_CATALOG_PATH = Object.freeze({
 const SERVICE_INSTALL_CATALOG_MESSAGE = Object.freeze({
   ACTUAL_STATE_OWNED_ELSEWHERE:
     'actual service state belongs to canonical runtime owners',
+  ARTIFACT_DIGEST_AMBIGUOUS:
+    'OCI artifact digest does not identify one installed declaration',
+  ARTIFACT_NOT_ANALYZABLE:
+    'only schema-v2 artifact declarations are bindable',
   ARTIFACT_MISMATCH:
     'resolved artifact must match the normalized manifest and signature policy',
   ARTIFACT_REQUIRED: 'verified artifact resolution is required',
@@ -122,6 +134,14 @@ const SERVICE_INSTALL_CATALOG_MESSAGE = Object.freeze({
   INSTALLATION_STATE_CORRUPT:
     'durable installation state is outside the catalog contract',
   MANIFEST_REQUIRED: 'a normalized external manifest is required',
+  MANIFEST_NOT_NORMALIZED:
+    'external manifest must match its canonical normalized form',
+  PACKAGE_ELIGIBILITY_DUPLICATE:
+    'eligible package identities must be unique',
+  PACKAGE_ELIGIBILITY_REQUIRED:
+    'authenticated eligible package identities are required',
+  PACKAGE_STATE_CORRUPT:
+    'durable package state is outside the catalog contract',
   OPERATION_CONFLICT: 'operation identity is already in use',
   PACKAGE_IMMUTABLE: 'package identity is immutable',
   PACKAGE_MISSING: 'package does not exist',
@@ -144,6 +164,7 @@ const SIGNATURE_STATUS = Object.freeze([
   'verified',
 ]);
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const BINDABLE_MANIFEST_SCHEMA_VERSION = 2;
 const MAX_IDENTIFIER_LENGTH = 256;
 const FORBIDDEN_ACTUAL_FIELDS = new Set([
   'actualState', 'actual_state', 'address', 'endpoint', 'endpoints',
@@ -169,6 +190,17 @@ const PACKAGE_IDENTITY_FIELDS = Object.freeze([
   'package_id', 'package_name', 'package_version', 'manifest_schema_version',
   'runtime_kind', 'artifact_ref', 'artifact_digest', 'artifact_media_type',
   'payload_media_type', 'signature_status', 'normalized_manifest',
+]);
+const PACKAGE_STORED_STRING_FIELDS = Object.freeze([
+  'artifact_media_type',
+  'artifact_ref',
+  'normalized_manifest',
+  'package_id',
+  'package_name',
+  'package_version',
+  'payload_media_type',
+  'runtime_kind',
+  'signature_status',
 ]);
 const REVISION_IDENTITY_FIELDS = Object.freeze([
   'revision_id', 'package_id', 'artifact_digest', 'config_digest',
@@ -256,10 +288,14 @@ function assertShape(value, allowedFields, path) {
   }
 }
 
+function isCanonicalIdentifier(value) {
+  return typeof value === 'string' && value.trim() === value &&
+    value.length > 0 && value.length <= MAX_IDENTIFIER_LENGTH &&
+    !/\s/.test(value);
+}
+
 function requireIdentifier(value, path) {
-  if (typeof value !== 'string' || value.trim() !== value ||
-      value.length === 0 || value.length > MAX_IDENTIFIER_LENGTH ||
-      /\s/.test(value)) {
+  if (!isCanonicalIdentifier(value)) {
     fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD, path,
       `${path} must be a bounded non-whitespace identifier`);
   }
@@ -272,6 +308,30 @@ function requireString(value, path) {
       `${path} must be a non-empty string`);
   }
   return value;
+}
+
+function requireDigest(value, path) {
+  if (typeof value !== 'string' || !SHA256_PATTERN.test(value)) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD, path,
+      `${path} must be a canonical sha256 digest`);
+  }
+  return value;
+}
+
+function requireEligiblePackageIds(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD,
+      SERVICE_INSTALL_CATALOG_PATH.ELIGIBLE_PACKAGE_IDS,
+      SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_ELIGIBILITY_REQUIRED);
+  }
+  const eligible = new Set(value.map((packageId) =>
+    requireIdentifier(packageId, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_ID)));
+  if (eligible.size !== value.length) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD,
+      SERVICE_INSTALL_CATALOG_PATH.ELIGIBLE_PACKAGE_IDS,
+      SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_ELIGIBILITY_DUPLICATE);
+  }
+  return eligible;
 }
 
 function requireEnum(value, enumObject, path) {
@@ -332,7 +392,20 @@ function requireNormalizedManifest(value) {
       SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST,
       SERVICE_INSTALL_CATALOG_MESSAGE.MANIFEST_REQUIRED);
   }
-  return value;
+  const normalized = normalizeExternalServiceManifest(value);
+  if (!normalized?.manifest) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD,
+      SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST,
+      SERVICE_INSTALL_CATALOG_MESSAGE.MANIFEST_REQUIRED);
+  }
+  if (canonicalJson(value, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST) !==
+      canonicalJson(
+        normalized.manifest, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST)) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD,
+      SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST,
+      SERVICE_INSTALL_CATALOG_MESSAGE.MANIFEST_NOT_NORMALIZED);
+  }
+  return normalized.manifest;
 }
 
 function requireResolvedArtifact(manifest, value) {
@@ -407,14 +480,95 @@ function createActualStateReferences(serviceDefinitionId) {
   });
 }
 
+function packageRowHasInspectableFields(row) {
+  return isPlainObject(row) && PACKAGE_STORED_STRING_FIELDS.every(
+    (field) => typeof row[field] === 'string' && row[field].length > 0,
+  ) && isCanonicalIdentifier(row.package_id) &&
+    Number.isSafeInteger(row.manifest_schema_version) &&
+    Number.isSafeInteger(row.created_at) && row.created_at >= 0 &&
+    Number.isSafeInteger(row.updated_at) && row.updated_at >= row.created_at &&
+    SHA256_PATTERN.test(row.artifact_digest);
+}
+
+function parseCanonicalPackageManifest(normalizedManifest) {
+  try {
+    const manifest = JSON.parse(normalizedManifest);
+    const canonical = canonicalJson(
+      manifest, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST);
+    return {canonical, manifest};
+  } catch (_error) {
+    return null;
+  }
+}
+
+function packageManifestMatchesRow(manifest, row) {
+  if (!isPlainObject(manifest) || !isPlainObject(manifest.artifact) ||
+      !isPlainObject(manifest.runtime)) return false;
+  return [
+    [manifest.schema_version, row.manifest_schema_version],
+    [manifest.name, row.package_name],
+    [manifest.version, row.package_version],
+    [manifest.runtime.kind, row.runtime_kind],
+    [manifest.artifact.ref, row.artifact_ref],
+    [manifest.artifact.digest, row.artifact_digest],
+    [manifest.artifact.media_type, row.artifact_media_type],
+    [row.payload_media_type, row.artifact_media_type],
+  ].every(([manifestValue, rowValue]) => manifestValue === rowValue) &&
+    SIGNATURE_STATUS.includes(row.signature_status);
+}
+
+function inspectPackageRow(row) {
+  const parsed = packageRowHasInspectableFields(row) ?
+    parseCanonicalPackageManifest(row.normalized_manifest) : null;
+  const normalized = parsed ?
+    normalizeExternalServiceManifest(parsed.manifest) : null;
+  const normalizedCanonical = normalized?.manifest ? canonicalJson(
+    normalized.manifest, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST) : null;
+  if (!parsed || parsed.canonical !== row.normalized_manifest ||
+      normalizedCanonical !== row.normalized_manifest ||
+      !packageManifestMatchesRow(normalized.manifest, row)) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+      SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST,
+      SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_STATE_CORRUPT);
+  }
+  return deepFreeze({
+    manifest: normalized.manifest,
+    manifestDigest: sha256Json(parsed.canonical),
+  });
+}
+
 function projectPackage(row) {
+  const inspected = inspectPackageRow(row);
   return deepFreeze({
     packageId: row.package_id,
     name: row.package_name,
     version: row.package_version,
+    manifestSchemaVersion: row.manifest_schema_version,
+    manifestDigest: inspected.manifestDigest,
     runtimeKind: row.runtime_kind,
     artifactDigest: row.artifact_digest,
     signatureStatus: row.signature_status,
+  });
+}
+
+function projectBindableArtifact(row, expectedManifestDigest = null) {
+  const inspected = inspectPackageRow(row);
+  if (expectedManifestDigest !== null &&
+      inspected.manifestDigest !== expectedManifestDigest) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
+      SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST_DIGEST,
+      SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_STATE_CORRUPT);
+  }
+  if (row.manifest_schema_version !== BINDABLE_MANIFEST_SCHEMA_VERSION) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE,
+      SERVICE_INSTALL_CATALOG_PATH.BINDABLE_ARTIFACT,
+      SERVICE_INSTALL_CATALOG_MESSAGE.ARTIFACT_NOT_ANALYZABLE);
+  }
+  return deepFreeze({
+    packageId: row.package_id,
+    manifestDigest: inspected.manifestDigest,
+    artifactDigest: row.artifact_digest,
+    manifest: inspected.manifest,
   });
 }
 
@@ -494,9 +648,12 @@ export {
   isPlainObject,
   projectFailure,
   projectInstallation,
+  projectBindableArtifact,
   projectPackage,
   projectRevision,
   requireEnum,
+  requireDigest,
+  requireEligiblePackageIds,
   requireIdentifier,
   sameFields,
   sha256Json,
