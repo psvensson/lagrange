@@ -17,8 +17,6 @@ invariants, and migration sequence now live in
 
 ## Options under discussion
 
-- **Binding schema v0:** exact source-specific configuration, context namespace,
-  budget, capability, and elasticity shapes.
 - **Binding migration order:** request/service ingress first, or the smaller CDC
   subscription surface first, after the artifact declaration prerequisite lands.
 - **Cell convergence:** introduce the derived Cell vocabulary at the existing
@@ -28,13 +26,10 @@ invariants, and migration sequence now live in
 
 ## Open questions
 
-- Which stable interface identifiers may each of the seven Binding sources call?
 - How do durable `call` and `pushdown` registrations map to transient
   per-statement invocations without creating statement-scoped Bindings?
 - What minimum set of axiomatic Cells reaches the binding-reconciler bootstrap
   fixed point?
-- Which invocation, context-size, and safety-interval limits must be sealed as
-  permanent kernel API in Binding v0?
 - When does the current JavaScript-envelope WASM mechanism get renamed or
   removed relative to a genuine component engine?
 
@@ -66,3 +61,9 @@ invariants, and migration sequence now live in
 - 2026-07-22 — Classified `call` and `pushdown` Bindings as durable
   registrations; their individual statement calls and plans are transient
   invocations, not a second ephemeral Binding persistence model.
+- 2026-07-22 — Sealed Binding v0 as a strict seven-variant source union with
+  one-to-one export interfaces, export-bounded contexts, owner-derived Artifact
+  capabilities, explicit resource maxima, fixed odd voters plus bounded
+  learners, and create-only immutable generation 1. Landed product Quest
+  `minimal-deployment-binding-v0-declaration`; request Binding compilation is
+  the next cutover rather than a side effect of declaration persistence.
