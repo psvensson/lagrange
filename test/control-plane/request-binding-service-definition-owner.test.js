@@ -242,14 +242,15 @@ describe('request Binding desired-service compilation owner', () => {
     LoggingService.getInstance().initialize({level: 'error'});
   });
 
-  test('the compiler source set preserves request/change and adds only time',
+  test('the compiler source set preserves request/change/time and adds once',
     () => {
       assert.equal(
         supportsBindingServiceDefinitionSourceKind('request'), true,
       );
       assert.equal(supportsBindingServiceDefinitionSourceKind('change'), true);
       assert.equal(supportsBindingServiceDefinitionSourceKind('time'), true);
-      for (const sourceKind of ['boot', 'call', 'once', 'pushdown']) {
+      assert.equal(supportsBindingServiceDefinitionSourceKind('once'), true);
+      for (const sourceKind of ['boot', 'call', 'pushdown']) {
         assert.equal(
           supportsBindingServiceDefinitionSourceKind(sourceKind),
           false,
