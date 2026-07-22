@@ -29,8 +29,8 @@ invariants, and migration sequence now live in
 ## Open questions
 
 - Which stable interface identifiers may each of the seven Binding sources call?
-- Where do statement-scoped `pushdown` Bindings live when they must never become
-  durable user declarations?
+- How do durable `call` and `pushdown` registrations map to transient
+  per-statement invocations without creating statement-scoped Bindings?
 - What minimum set of axiomatic Cells reaches the binding-reconciler bootstrap
   fixed point?
 - Which invocation, context-size, and safety-interval limits must be sealed as
@@ -56,3 +56,13 @@ invariants, and migration sequence now live in
   `minimal-deployment-artifact-export-contract` as the first executable slice:
   strict analyzable v2 exports through the existing install/catalog owners while
   preserving manifest v1 compatibility.
+- 2026-07-22 — Adversarial review rejected OCI `artifact_digest#export` as a
+  canonical Binding target because one payload digest may back multiple
+  installed manifests. The prerequisite was delivered by
+  `minimal-deployment-artifact-binding-identity-replacement`: canonical Binding
+  targets pin installed `package_id`, derived `manifest_digest`, and export
+  name. Its predecessor remains an exhausted audit record because an early
+  malformed measurement event could not be repaired honestly.
+- 2026-07-22 — Classified `call` and `pushdown` Bindings as durable
+  registrations; their individual statement calls and plans are transient
+  invocations, not a second ephemeral Binding persistence model.

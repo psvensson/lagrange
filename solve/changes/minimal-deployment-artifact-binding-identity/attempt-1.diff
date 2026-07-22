@@ -1,0 +1,680 @@
+diff --git a/architecture/lagrange-service-manifest.md b/architecture/lagrange-service-manifest.md
+index 061e4afada022aa942e3500bb38a8306dd0772df..3e7fc50d31fd3d788285b326d2b3a86952e5de57 100644
+--- a/architecture/lagrange-service-manifest.md
++++ b/architecture/lagrange-service-manifest.md
+@@ -545,6 +545,13 @@ Typical mapping:
+ The catalog stores the normalized manifest for audit/debugging. Its only durable
+ runtime link is `service_definition_id`; node, replica, address, health,
+ endpoint, process, and running state stay with the existing actual-state owners.
++For Binding, the catalog derives `manifest_digest` as SHA-256 over the exact
++canonical `normalized_manifest` bytes. The canonical bindable Artifact identity
++is `(package_id, manifest_digest)`, not the OCI payload digest: multiple installed
++declarations may intentionally pin the same OCI bytes while exposing different
++schema-v2 contracts. Digest-only resolution must fail closed when more than one
++installed package row matches, and schema-v1 packages are not analyzable Binding
++targets.
+ An installation is initially `recorded_not_running`, including when its desired
+ state is `active`. Only the downstream reconciler may move rollout state after
+ consulting and mutating the canonical runtime owners.
+diff --git a/architecture/lagrange-service-registry.md b/architecture/lagrange-service-registry.md
+index 0fe52390f212f3d33bf42dcd489e62eea97150f3..4774bdebb5c71f7a410907ba88a80b95971e593f 100644
+--- a/architecture/lagrange-service-registry.md
++++ b/architecture/lagrange-service-registry.md
+@@ -440,8 +440,10 @@ This preserves one conceptual model for both development and production.
+ The open kernel install catalog owns four replicated, non-cache-propagated
+ system tables:
+ 
+--   `service_packages` stores immutable normalized manifest and verified
+-    artifact identity.
++-   `service_packages` stores the immutable normalized manifest and verified
++    OCI payload identity. The catalog derives the bindable declaration identity
++    as `(package_id, sha256(normalized_manifest))`; the digest is not a second
++    stored column.
+ -   `service_revisions` stores immutable package/configuration revisions.
+ -   `service_installations` stores desired state, rollout state, stable
+     operation identity, and one `service_definition_id` reference.
+diff --git a/architecture/minimal-deployment-surface.md b/architecture/minimal-deployment-surface.md
+index 8be828d25dca6395804d611f5b2d5f52b24bfc69..4be2a1b6a5d3cfb04c6bbac90097c7ab0c13a07f 100644
+--- a/architecture/minimal-deployment-surface.md
++++ b/architecture/minimal-deployment-surface.md
+@@ -16,10 +16,12 @@ defined by this contract.
+ 
+ ### Artifact
+ 
+-An Artifact is an immutable OCI object identified by its digest. Runtime kind
+-selects an execution strategy; it does not select a packaging or catalog path.
+-An artifact exposes stateless handlers. A schema-v2 external manifest declares,
+-for every export:
++An Artifact separates immutable deployment declaration identity from OCI payload
++identity. The bindable declaration is the installed `package_id` plus the
++SHA-256 digest of its exact canonical normalized manifest; the manifest pins the
++OCI object by its own digest. Runtime kind selects an execution strategy; it does
++not select a packaging or catalog path. An artifact exposes stateless handlers.
++A schema-v2 external manifest declares, for every export:
+ 
+ - one unique export name;
+ - one stable interface identifier; and
+@@ -40,17 +42,24 @@ contract. A future Binding may require v2 without reinterpreting v1.
+ 
+ ### Binding
+ 
+-A Binding is the only durable user declaration of execution intent:
++A Binding is the only durable user declaration of execution intent. Its
++canonical target stores the three-part declaration identity:
+ 
+ ```text
+-on <source> run <artifact-digest>#<export>
++on <source> run <package-id>@<manifest-digest>#<export>
+ ```
+ 
++An OCI-digest shorthand may be resolved only when the installed catalog has one
++matching package declaration; ambiguity fails closed, and the shorthand is
++never persisted as Binding identity.
++
+ It is immutable, versioned, replicated, and carries source-typed configuration,
+ context namespaces, budgets, capabilities, and elasticity policy. The closed
+ source vocabulary is `request`, `change`, `call`, `pushdown`, `time`, `once`,
+-and `boot`; each source has one fixed execution semantic. Exact source schemas
+-and interface compatibility are deliberately deferred to the Binding Quest.
++and `boot`; each source has one fixed execution semantic. `call` and `pushdown`
++Bindings are durable registrations, while individual statement calls and query
++plans are transient invocations rather than Bindings. Exact source schemas and
++interface compatibility are deliberately deferred to the Binding Quest.
+ 
+ ### Cell
+ 
+@@ -72,7 +81,7 @@ reach the binding reconciler fixed point.
+ | --- | --- | --- |
+ | External artifact shape | `external-service-manifest.js` | Extend with versioned export declarations. |
+ | Artifact resolution | Installable OCI artifact resolver | Reuse unchanged. |
+-| Immutable package identity | `ServiceInstallCatalogOwner` / `service_packages` | Retain normalized manifest as artifact metadata. |
++| Immutable bindable Artifact identity | `ServiceInstallCatalogOwner` / `service_packages` | Derive and verify `manifest_digest` from the exact immutable `normalized_manifest`; never select a declaration by OCI digest ordering. |
+ | Lifecycle ingress | Authenticated lifecycle SQL, consumed by the CLI | Reuse unchanged; no binding-specific side channel. |
+ | Desired runtime service | `service_definitions` and its reconciler | Compile from Binding during the cutover, then retire declaration writes here. |
+ | Placement and replica lifecycle | `UnifiedRebalancer` and shared replica owners | Extend to derived Cells; do not fork a cell scheduler. |
+@@ -88,14 +97,17 @@ single owners only when their removal is explicit and structurally guarded.
+ 1. Make new artifact manifests analyzable: schema v2 exports carry canonical
+    interface and table access declarations through the live install/catalog
+    path while v1 compatibility remains unchanged.
+-2. Seal Binding schema v0 and its single validator/persistence owner. Require
++2. Establish the bindable Artifact identity as installed `package_id` plus the
++   digest of exact canonical `normalized_manifest`; make digest-only ambiguity,
++   schema-v1 input, and durable corruption fail closed in the catalog owner.
++3. Seal Binding schema v0 and its single validator/persistence owner. Require
+    analyzable v2 artifacts for newly authored Bindings.
+-3. Compile request Bindings into the existing desired-service lifecycle and
++4. Compile request Bindings into the existing desired-service lifecycle and
+    make Binding the declaration authority; delete direct competing declaration
+    writes in the same cutover.
+-4. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
++5. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
+    same Binding owner one source at a time, deleting superseded surfaces.
+-5. Name the derived Cell state and reconcile it through the existing placement
++6. Name the derived Cell state and reconcile it through the existing placement
+    and replica owners before consolidating partition/service lifecycle code.
+ 
+ Each step must engage the new owner in the production path it claims. Merely
+@@ -103,8 +115,9 @@ adding a table, validator, adapter, or feature flag is not completion.
+ 
+ ## Permanent invariants
+ 
+-- Artifact bytes and normalized manifest identity are immutable and digest
+-  pinned; in-flight work remains pinned to its starting version.
++- OCI payload bytes and normalized manifest declarations have distinct immutable
++  digests. A Binding pins `package_id` plus `manifest_digest`; in-flight work
++  remains pinned to its starting version.
+ - Code is stateless. Durable state and synchronization live in declared tables.
+ - Binding is intent, Cell is actual, and neither is reconstructed from the other
+   by readers.
+@@ -119,9 +132,10 @@ adding a table, validator, adapter, or feature flag is not completion.
+ 
+ ## First executable slice
+ 
+-Quest `minimal-deployment-artifact-export-contract` advances step 1. Its real
+-observable is the authenticated SQL `INSTALL SERVICE` path: a valid v2 manifest
+-must persist canonical export declarations in
+-`service_packages.normalized_manifest`; malformed v2 declarations must fail
+-before artifact resolution or catalog mutation; the generated scaffold must emit
+-the same v2 contract. The Quest does not create Bindings or Cells.
++Quest `minimal-deployment-artifact-export-contract` completed step 1. Quest
++`minimal-deployment-artifact-binding-identity` advances step 2. Its real
++observable is the authenticated SQL `INSTALL SERVICE` path plus catalog-owned
++reads: the exact immutable `normalized_manifest` yields `manifest_digest`,
++`package_id` plus that digest returns one v2 declaration, and OCI-digest
++ambiguity, schema v1, or durable corruption fails closed. The Quest does not
++create Bindings, runtime declarations, or Cells.
+diff --git a/src/control-plane/owners/service-install-catalog-contract.js b/src/control-plane/owners/service-install-catalog-contract.js
+index aca332e9f78601458a74d4d5b66269c17dce510f..18a50a785e838ef1e78220b53fc7659f9510fcdc 100644
+--- a/src/control-plane/owners/service-install-catalog-contract.js
++++ b/src/control-plane/owners/service-install-catalog-contract.js
+@@ -43,6 +43,8 @@ const SERVICE_INSTALL_FAILURE_PHASE = Object.freeze({
+ 
+ const SERVICE_INSTALL_CATALOG_ERROR_CODE = Object.freeze({
+   ACTUAL_STATE_FIELD_FORBIDDEN: 'actual_state_field_forbidden',
++  AMBIGUOUS_ARTIFACT_DIGEST: 'ambiguous_artifact_digest',
++  ARTIFACT_NOT_ANALYZABLE: 'artifact_not_analyzable',
+   ARTIFACT_NOT_RESOLVED: 'artifact_not_resolved',
+   CONCURRENT_MODIFICATION: 'concurrent_catalog_modification',
+   CORRUPT_RECORD: 'corrupt_catalog_record',
+@@ -70,6 +72,8 @@ const SERVICE_INSTALL_CATALOG_OWNER_NAME = Object.freeze({
+ });
+ 
+ const SERVICE_INSTALL_CATALOG_PATH = Object.freeze({
++  ARTIFACT_DIGEST: '/artifactDigest',
++  BINDABLE_ARTIFACT: '/bindableArtifact',
+   FAILURE: '/failure',
+   FAILURE_ID: '/failure/failureId',
+   FAILURE_INSTALLATION_ID: '/failure/installationId',
+@@ -83,6 +87,7 @@ const SERVICE_INSTALL_CATALOG_PATH = Object.freeze({
+   PACKAGE: '/package',
+   PACKAGE_ID: '/package/packageId',
+   PACKAGE_MANIFEST: '/package/manifest',
++  PACKAGE_MANIFEST_DIGEST: '/package/manifestDigest',
+   PACKAGE_MANIFEST_ARTIFACT_MEDIA_TYPE:
+     '/package/manifest/artifact/media_type',
+   PACKAGE_MANIFEST_ARTIFACT_REF: '/package/manifest/artifact/ref',
+@@ -101,6 +106,10 @@ const SERVICE_INSTALL_CATALOG_PATH = Object.freeze({
+ const SERVICE_INSTALL_CATALOG_MESSAGE = Object.freeze({
+   ACTUAL_STATE_OWNED_ELSEWHERE:
+     'actual service state belongs to canonical runtime owners',
++  ARTIFACT_DIGEST_AMBIGUOUS:
++    'OCI artifact digest does not identify one installed declaration',
++  ARTIFACT_NOT_ANALYZABLE:
++    'only schema-v2 artifact declarations are bindable',
+   ARTIFACT_MISMATCH:
+     'resolved artifact must match the normalized manifest and signature policy',
+   ARTIFACT_REQUIRED: 'verified artifact resolution is required',
+@@ -122,6 +131,8 @@ const SERVICE_INSTALL_CATALOG_MESSAGE = Object.freeze({
+   INSTALLATION_STATE_CORRUPT:
+     'durable installation state is outside the catalog contract',
+   MANIFEST_REQUIRED: 'a normalized external manifest is required',
++  PACKAGE_STATE_CORRUPT:
++    'durable package state is outside the catalog contract',
+   OPERATION_CONFLICT: 'operation identity is already in use',
+   PACKAGE_IMMUTABLE: 'package identity is immutable',
+   PACKAGE_MISSING: 'package does not exist',
+@@ -144,6 +155,7 @@ const SIGNATURE_STATUS = Object.freeze([
+   'verified',
+ ]);
+ const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
++const BINDABLE_MANIFEST_SCHEMA_VERSION = 2;
+ const MAX_IDENTIFIER_LENGTH = 256;
+ const FORBIDDEN_ACTUAL_FIELDS = new Set([
+   'actualState', 'actual_state', 'address', 'endpoint', 'endpoints',
+@@ -274,6 +286,14 @@ function requireString(value, path) {
+   return value;
+ }
+ 
++function requireDigest(value, path) {
++  if (typeof value !== 'string' || !SHA256_PATTERN.test(value)) {
++    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD, path,
++      `${path} must be a canonical sha256 digest`);
++  }
++  return value;
++}
++
+ function requireEnum(value, enumObject, path) {
+   if (!Object.values(enumObject).includes(value)) {
+     fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD, path,
+@@ -407,17 +427,89 @@ function createActualStateReferences(serviceDefinitionId) {
+   });
+ }
+ 
++function packageRowHasInspectableFields(row) {
++  return isPlainObject(row) && typeof row.normalized_manifest === 'string' &&
++    Number.isSafeInteger(row.manifest_schema_version) &&
++    SHA256_PATTERN.test(row.artifact_digest);
++}
++
++function parseCanonicalPackageManifest(normalizedManifest) {
++  try {
++    const manifest = JSON.parse(normalizedManifest);
++    const canonical = canonicalJson(
++      manifest, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST);
++    return {canonical, manifest};
++  } catch (_error) {
++    return null;
++  }
++}
++
++function packageManifestMatchesRow(manifest, row) {
++  if (!isPlainObject(manifest) || !isPlainObject(manifest.artifact) ||
++      !isPlainObject(manifest.runtime)) return false;
++  return [
++    [manifest.schema_version, row.manifest_schema_version],
++    [manifest.name, row.package_name],
++    [manifest.version, row.package_version],
++    [manifest.runtime.kind, row.runtime_kind],
++    [manifest.artifact.ref, row.artifact_ref],
++    [manifest.artifact.digest, row.artifact_digest],
++    [manifest.artifact.media_type, row.artifact_media_type],
++    [row.payload_media_type, row.artifact_media_type],
++  ].every(([manifestValue, rowValue]) => manifestValue === rowValue) &&
++    SIGNATURE_STATUS.includes(row.signature_status);
++}
++
++function inspectPackageRow(row) {
++  const parsed = packageRowHasInspectableFields(row) ?
++    parseCanonicalPackageManifest(row.normalized_manifest) : null;
++  if (!parsed || parsed.canonical !== row.normalized_manifest ||
++      !packageManifestMatchesRow(parsed.manifest, row)) {
++    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++      SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST,
++      SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_STATE_CORRUPT);
++  }
++  return deepFreeze({
++    manifest: parsed.manifest,
++    manifestDigest: sha256Json(parsed.canonical),
++  });
++}
++
+ function projectPackage(row) {
++  const inspected = inspectPackageRow(row);
+   return deepFreeze({
+     packageId: row.package_id,
+     name: row.package_name,
+     version: row.package_version,
++    manifestSchemaVersion: row.manifest_schema_version,
++    manifestDigest: inspected.manifestDigest,
+     runtimeKind: row.runtime_kind,
+     artifactDigest: row.artifact_digest,
+     signatureStatus: row.signature_status,
+   });
+ }
+ 
++function projectBindableArtifact(row, expectedManifestDigest = null) {
++  const inspected = inspectPackageRow(row);
++  if (expectedManifestDigest !== null &&
++      inspected.manifestDigest !== expectedManifestDigest) {
++    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++      SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST_DIGEST,
++      SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_STATE_CORRUPT);
++  }
++  if (row.manifest_schema_version !== BINDABLE_MANIFEST_SCHEMA_VERSION) {
++    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE,
++      SERVICE_INSTALL_CATALOG_PATH.BINDABLE_ARTIFACT,
++      SERVICE_INSTALL_CATALOG_MESSAGE.ARTIFACT_NOT_ANALYZABLE);
++  }
++  return deepFreeze({
++    packageId: row.package_id,
++    manifestDigest: inspected.manifestDigest,
++    artifactDigest: row.artifact_digest,
++    manifest: inspected.manifest,
++  });
++}
++
+ function projectRevision(row) {
+   return deepFreeze({
+     revisionId: row.revision_id,
+@@ -494,9 +586,11 @@ export {
+   isPlainObject,
+   projectFailure,
+   projectInstallation,
++  projectBindableArtifact,
+   projectPackage,
+   projectRevision,
+   requireEnum,
++  requireDigest,
+   requireIdentifier,
+   sameFields,
+   sha256Json,
+diff --git a/src/control-plane/owners/service-install-catalog-owner.js b/src/control-plane/owners/service-install-catalog-owner.js
+index bd6ced34883e9e83852e5d0b2627c9311a053ce5..897dcb91f9492575888ac9973d942d1a401024cc 100644
+--- a/src/control-plane/owners/service-install-catalog-owner.js
++++ b/src/control-plane/owners/service-install-catalog-owner.js
+@@ -31,9 +31,11 @@ import {
+   isPlainObject,
+   projectFailure,
+   projectInstallation,
++  projectBindableArtifact,
+   projectPackage,
+   projectRevision,
+   requireEnum,
++  requireDigest,
+   requireIdentifier,
+   sameFields,
+   sha256Json,
+@@ -268,6 +270,52 @@ class ServiceInstallCatalogOwner {
+     return row ? projectPackage(row) : null;
+   }
+ 
++  async getBindableArtifact(packageId, manifestDigest) {
++    const id = requireIdentifier(packageId, '/packageId');
++    const digest = requireDigest(
++      manifestDigest, SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST_DIGEST);
++    const row = await this.readRow(
++      this.packageRows, id, CATALOG_PRIMARY_KEY_FIELD.PACKAGE);
++    return row ? projectBindableArtifact(row, digest) : null;
++  }
++
++  async resolveUniqueBindableArtifactByDigest(artifactDigest) {
++    const digest = requireDigest(
++      artifactDigest, SERVICE_INSTALL_CATALOG_PATH.ARTIFACT_DIGEST);
++    const result = await readAuthoritativeControlPlaneRows(
++      this.packageRows.requireGateway(),
++      TABLES.SERVICE_PACKAGES,
++      'SELECT * FROM service_packages WHERE artifact_digest = ?',
++      [digest],
++      {owner: this.getOwnerName()},
++    );
++    if (result?.success === false) {
++      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
++        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
++    }
++    const rows = Array.isArray(result) ? result : result?.rows;
++    if (!Array.isArray(rows)) {
++      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++        SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
++        SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
++    }
++    for (const row of rows) {
++      if (!isPlainObject(row) || row.artifact_digest !== digest) {
++        fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
++          SERVICE_INSTALL_CATALOG_PATH.GATEWAY,
++          SERVICE_INSTALL_CATALOG_MESSAGE.GATEWAY_READ_INVALID);
++      }
++      projectPackage(row);
++    }
++    if (rows.length > 1) {
++      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.AMBIGUOUS_ARTIFACT_DIGEST,
++        SERVICE_INSTALL_CATALOG_PATH.ARTIFACT_DIGEST,
++        SERVICE_INSTALL_CATALOG_MESSAGE.ARTIFACT_DIGEST_AMBIGUOUS);
++    }
++    return rows[0] ? projectBindableArtifact(rows[0]) : null;
++  }
++
+   async recordPackage(request = {}, options = {}) {
+     assertShape(request, PACKAGE_FIELDS, SERVICE_INSTALL_CATALOG_PATH.PACKAGE);
+     const row = buildPackageRow(request, this.timestamp());
+diff --git a/test/control-plane/service-install-catalog-owner.test.js b/test/control-plane/service-install-catalog-owner.test.js
+index 4ec2291427975bf502c48313be29486934f6383c..1a2b0f7bdce768880890057d2f12f5f828835cc6 100644
+--- a/test/control-plane/service-install-catalog-owner.test.js
++++ b/test/control-plane/service-install-catalog-owner.test.js
+@@ -1,5 +1,6 @@
+-import {describe, it} from 'node:test';
+ import assert from 'node:assert/strict';
++import {createHash} from 'node:crypto';
++import {describe, it} from 'node:test';
+ 
+ import {
+   INITIAL_PARTITION_IDS,
+@@ -232,6 +233,13 @@ function manifest(overrides = {}) {
+   };
+ }
+ 
++function v2Manifest(exports_) {
++  return manifest({
++    schema_version: 2,
++    exports: exports_,
++  });
++}
++
+ function resolvedArtifact(overrides = {}) {
+   return {
+     status: 'resolved',
+@@ -306,6 +314,126 @@ describe('service install catalog system-table contract', () => {
+ });
+ 
+ describe('service install catalog production owner', () => {
++  it('owns the immutable package plus manifest-digest binding identity',
++    async () => {
++      const gateway = new DurableCatalogGateway();
++      const catalog = createCatalog(gateway);
++      const firstManifest = v2Manifest([{
++        interface: 'request_v1',
++        name: 'serve',
++        reads: ['table:global.accounts'],
++        writes: [],
++      }]);
++      const first = await catalog.recordPackage({
++        packageId: 'pkg-bindable-a',
++        manifest: firstManifest,
++        resolvedArtifact: resolvedArtifact(),
++      });
++
++      assert.match(first.manifestDigest, /^sha256:[0-9a-f]{64}$/u);
++      const stored = gateway.rows(TABLES.SERVICE_PACKAGES).get(first.packageId);
++      assert.equal(
++        first.manifestDigest,
++        `sha256:${createHash('sha256')
++          .update(stored.normalized_manifest)
++          .digest('hex')}`,
++      );
++      assert.equal(first.manifestSchemaVersion, 2);
++      assert.deepEqual(
++        await catalog.getBindableArtifact(
++          first.packageId, first.manifestDigest),
++        {
++          packageId: first.packageId,
++          manifestDigest: first.manifestDigest,
++          artifactDigest: DIGEST,
++          manifest: firstManifest,
++        },
++      );
++
++      const replay = await catalog.recordPackage({
++        packageId: 'pkg-bindable-a',
++        manifest: {
++          exports: firstManifest.exports,
++          runtime: firstManifest.runtime,
++          artifact: firstManifest.artifact,
++          version: firstManifest.version,
++          name: firstManifest.name,
++          schema_version: firstManifest.schema_version,
++        },
++        resolvedArtifact: resolvedArtifact(),
++      });
++      assert.equal(replay.manifestDigest, first.manifestDigest);
++
++      const unique = await catalog.resolveUniqueBindableArtifactByDigest(DIGEST);
++      assert.equal(unique.packageId, first.packageId);
++      assert.equal(unique.manifestDigest, first.manifestDigest);
++
++      await catalog.recordPackage({
++        packageId: 'pkg-bindable-b',
++        manifest: v2Manifest([{
++          interface: 'change_v1',
++          name: 'audit-change',
++          reads: ['table:global.audit'],
++          writes: ['table:global.audit'],
++        }]),
++        resolvedArtifact: resolvedArtifact(),
++      });
++      await assert.rejects(
++        catalog.resolveUniqueBindableArtifactByDigest(DIGEST),
++        (error) => assertCode(
++          error,
++          SERVICE_INSTALL_CATALOG_ERROR_CODE.AMBIGUOUS_ARTIFACT_DIGEST,
++        ),
++      );
++    });
++
++  it('rejects v1 and corrupted durable manifests as bindable artifacts',
++    async () => {
++      const gateway = new DurableCatalogGateway();
++      const catalog = createCatalog(gateway);
++      const v1 = await catalog.recordPackage({
++        packageId: 'pkg-v1',
++        manifest: manifest(),
++        resolvedArtifact: resolvedArtifact(),
++      });
++      await assert.rejects(
++        catalog.getBindableArtifact(v1.packageId, v1.manifestDigest),
++        (error) => assertCode(
++          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE),
++      );
++
++      const v2 = await catalog.recordPackage({
++        packageId: 'pkg-corrupt-v2',
++        manifest: v2Manifest([{
++          interface: 'request_v1',
++          name: 'serve',
++          reads: [],
++          writes: [],
++        }]),
++        resolvedArtifact: resolvedArtifact(),
++      });
++      const row = gateway.rows(TABLES.SERVICE_PACKAGES).get(v2.packageId);
++      const changed = JSON.parse(row.normalized_manifest);
++      changed.exports[0].reads = ['table:global.secret'];
++      gateway.corrupt(TABLES.SERVICE_PACKAGES, v2.packageId, {
++        normalized_manifest: JSON.stringify(changed),
++      });
++      await assert.rejects(
++        catalog.getBindableArtifact(v2.packageId, v2.manifestDigest),
++        (error) => assertCode(
++          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
++      );
++
++      gateway.corrupt(TABLES.SERVICE_PACKAGES, v2.packageId, {
++        normalized_manifest: '{not-json',
++      });
++      await assert.rejects(
++        catalog.getPackage(v2.packageId),
++        (error) => assertCode(
++          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
++      );
++    });
++
+   it('durably records and recovers package, revision, and install intent',
+     async () => {
+       const gateway = new DurableCatalogGateway();
+diff --git a/test/query/service-lifecycle-sql-control-surface.test.js b/test/query/service-lifecycle-sql-control-surface.test.js
+index 1394a1db690b4efe84810ee800cbca3a8347bd10..b8c453dec2f9e8f963f3c0875cad6d78dd9ad16c 100644
+--- a/test/query/service-lifecycle-sql-control-surface.test.js
++++ b/test/query/service-lifecycle-sql-control-surface.test.js
+@@ -5,6 +5,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ import {TABLES} from '../../src/constants/index.js';
+ import {createSystemMetadataOwners} from
+   '../../src/control-plane/owners/index.js';
++import {
++  SERVICE_INSTALL_CATALOG_ERROR_CODE,
++  ServiceInstallCatalogError,
++} from '../../src/control-plane/owners/service-install-catalog-owner.js';
+ import {PostgresWireAdapter} from
+   '../../src/query/pg/postgres-wire-adapter.js';
+ import {
+@@ -572,6 +576,49 @@ describe('service lifecycle SQL durable owner route', () => {
+         fixture.gateway.rows(TABLES.SERVICE_PACKAGES)[0].package_id,
+         packageRow.package_id,
+       );
++
++      const firstIdentity = await fixture.catalogOwner.getPackage(
++        packageRow.package_id);
++      const changed = await adapter.execute(
++        'session-1',
++        'INSTALL SERVICE $1',
++        [installPayload({
++          idempotency_key: 'install-distinct-artifact-contract',
++          manifest: v2Manifest([{
++            name: 'serve-admin',
++            interface: 'request_v1',
++            reads: ['table:global.admin_accounts'],
++            writes: [],
++          }]),
++        })],
++      );
++      assert.equal(changed.success, true);
++      const packageRows = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
++      assert.equal(packageRows.length, 2);
++      const changedRow = packageRows.find(
++        (row) => row.package_id !== packageRow.package_id);
++      const changedIdentity = await fixture.catalogOwner.getPackage(
++        changedRow.package_id);
++      assert.notEqual(changedIdentity.packageId, firstIdentity.packageId);
++      assert.notEqual(
++        changedIdentity.manifestDigest, firstIdentity.manifestDigest);
++      assert.deepEqual(
++        (await fixture.catalogOwner.getBindableArtifact(
++          firstIdentity.packageId,
++          firstIdentity.manifestDigest)).manifest.exports,
++        JSON.parse(packageRow.normalized_manifest).exports,
++      );
++      await assert.rejects(
++        fixture.catalogOwner.resolveUniqueBindableArtifactByDigest(DIGEST_A),
++        (error) => {
++          assert.ok(error instanceof ServiceInstallCatalogError);
++          assert.equal(
++            error.code,
++            SERVICE_INSTALL_CATALOG_ERROR_CODE.AMBIGUOUS_ARTIFACT_DIGEST,
++          );
++          return true;
++        },
++      );
+     });
+ 
+   it('rejects malformed v2 exports before resolution or catalog writes',
+diff --git a/test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js b/test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2d70be329a5c0d90291b4c297107d565c178498e
+--- /dev/null
++++ b/test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js
+@@ -0,0 +1,43 @@
++import fs from 'node:fs';
++import assert from 'node:assert/strict';
++import {test} from 'node:test';
++
++const CATALOG_OWNER_SOURCE =
++  'src/control-plane/owners/service-install-catalog-owner.js';
++const CATALOG_CONTRACT_SOURCE =
++  'src/control-plane/owners/service-install-catalog-contract.js';
++const PACKAGE_SCHEMA_SOURCE =
++  'src/bootstrap/system-table-runtime-schema-definitions.js';
++
++function between(source, startMarker, endMarker) {
++  const start = source.indexOf(startMarker);
++  const end = source.indexOf(endMarker, start);
++  assert.ok(start >= 0, `${startMarker} must exist`);
++  assert.ok(end > start, `${endMarker} must follow ${startMarker}`);
++  return source.slice(start, end);
++}
++
++test('bindable artifact identity remains catalog-owned and schema-compatible',
++  () => {
++    const owner = fs.readFileSync(CATALOG_OWNER_SOURCE, 'utf8');
++    const contract = fs.readFileSync(CATALOG_CONTRACT_SOURCE, 'utf8');
++    const schemas = fs.readFileSync(PACKAGE_SCHEMA_SOURCE, 'utf8');
++    const packageSchema = between(
++      schemas,
++      'const SERVICE_PACKAGES_SCHEMA = {',
++      'const SERVICE_REVISIONS_SCHEMA = {',
++    );
++
++    assert.match(owner, /async getBindableArtifact\(packageId, manifestDigest\)/u);
++    assert.match(owner, /async resolveUniqueBindableArtifactByDigest/u);
++    assert.match(
++      contract,
++      /manifestDigest: sha256Json\(parsed\.canonical\)/u,
++    );
++    assert.match(
++      contract,
++      /canonical !== row\.normalized_manifest/u,
++    );
++    assert.doesNotMatch(packageSchema, /manifest_digest/u);
++    assert.doesNotMatch(owner, /serviceDefinitionsOwner/u);
++  });
+diff --git a/test/service/run-minimal-deployment-artifact-binding-identity-scenarios.js b/test/service/run-minimal-deployment-artifact-binding-identity-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d4d2d2598e7ed830cd027c4e69651208af7547e9
+--- /dev/null
++++ b/test/service/run-minimal-deployment-artifact-binding-identity-scenarios.js
+@@ -0,0 +1,18 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  '../../scripts/checks/guard-test-scenario-runner.js';
++
++const SCENARIO = 'minimal-deployment-artifact-binding-identity';
++const REPORT_DIR =
++  'test-output/reports/minimal-deployment-artifact-binding-identity';
++const TEST_FILES = Object.freeze([
++  'test/control-plane/service-install-catalog-owner.test.js',
++  'test/query/service-lifecycle-sql-control-surface.test.js',
++  'test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js',
++  'test/service/minimal-deployment-artifact-owner-guard.test.js',
++]);
++
++runGuardTestScenarios({
++  [SCENARIO]: TEST_FILES,
++}, {reportDir: REPORT_DIR});
