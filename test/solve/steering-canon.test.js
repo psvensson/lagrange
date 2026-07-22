@@ -17,6 +17,8 @@ tap.test('LLM steering canon has one owner per concern', (t) => {
   const lifecycle = read('docs/steering/workflow-guidelines/lifecycle.md');
   const canon = read('docs/steering/workflow-guidelines/solver-quests.md');
   const runbook = read('docs/solver-runbook.md');
+  const ignore = read('.gitignore');
+  const toolDescriptions = read('docs/steering/tool-descriptions.json');
 
   t.notMatch(agents, /--executor agent/u,
     'AGENTS owns routing/load order, not an executable boot sequence');
@@ -38,5 +40,15 @@ tap.test('LLM steering canon has one owner per concern', (t) => {
   t.notMatch(canon, /Known System-Theory Hypothesis/u);
   t.match(canon, /docs\/case-studies\/rolling-restart-system-theory\.md/u,
     'Quest-specific case study is outside steering canon');
+  t.match(agents, /Optional early-stage planning.*bounded decision memos/su,
+    'entry routing makes epics optional rather than a mandatory waypoint');
+  t.match(canon, /stop before a second evidence-bearing intervention/u,
+    'direct work has a mechanically stated progressive-promotion boundary');
+  t.match(boot, /failed measurement[\s\S]*before a second evidence-bearing intervention/u,
+    'the executable first-read repeats the promotion stop signal');
+  t.match(ignore, /^\/solve\/OVERVIEW\.generated\.md$/mu,
+    'the self-referential overview is a local projection, not durable state');
+  t.match(toolDescriptions, /ignored local work-overview projection/u,
+    'the operator catalog does not promise a durable overview');
   t.end();
 });

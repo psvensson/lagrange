@@ -38,6 +38,9 @@ models/**/*_TTrace_*.bin
 # generated reports, and attempt change diffs are durable workflow evidence and
 # stay trackable.
 solve/state/
+# Pure work-overview projection. Recording its generating attempt changes the
+# state it displays, so regenerate it locally instead of committing it.
+/solve/OVERVIEW.generated.md
 # Machine-local executor capability and attribution. Never commit credentials or
 # workstation-specific adapter commands.
 /solve/config.json

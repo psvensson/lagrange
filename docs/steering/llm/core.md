@@ -244,7 +244,9 @@ a recorded finding into in-repo steering as a rule (requires
 
 ## Core Principles
 
-1. **Workflow and context** - Start from a selected or newly authored Quest.
+1. **Workflow and context** - Apply the Quest threshold first. Keep bounded,
+   deterministic one-patch work direct; otherwise start from a selected or newly
+   authored Quest.
 2. **Proof integrity** - Prefer compact proof ladders of 3-5 executable
    commands. Never weaken guardrails to make proof pass.
 3. **Coding constraints**:

@@ -40,6 +40,11 @@ First apply the Quest threshold in `AGENTS.md`. Below it, do the bounded work,
 prove it, and commit it without creating workflow state. Above it, start with
 the read-only capability preflight:
 
+Direct work is progressive: a failed measurement, expansion beyond the bounded
+owner scope, or a durable finding needed for handoff is the stop signal. Seal a
+Quest before a second evidence-bearing intervention; preserve the first result as
+provenance rather than backdating it as an attempt.
+
 ```sh
 node scripts/solve.js doctor
 ```

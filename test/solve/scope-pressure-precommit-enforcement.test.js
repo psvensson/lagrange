@@ -137,6 +137,33 @@ tap.test('real step rejects owner and byte overflow independently', (t) => {
   t.end();
 });
 
+tap.test('generated projections stay visible without inflating authored admission', (t) => {
+  const {root, quest} = setup();
+  const changeRef = makeDiff(root, [
+    'scripts/solve/overview.js',
+    'solve/OVERVIEW.generated.md',
+  ], SCOPE_PRESSURE_BYTE_LIMIT + 1000);
+  const inspection = inspectChangeArtifact(root, quest, changeRef);
+  const pressure = analyzeScopePressureCandidate(
+    root, quest, readLog(root, quest.id), inspection,
+  );
+
+  t.same(pressure.changedPaths, [
+    'scripts/solve/overview.js',
+    'solve/OVERVIEW.generated.md',
+  ], 'operator diagnostics retain the complete changed-path set');
+  t.same(pressure.admission.changedPaths, ['scripts/solve/overview.js'],
+    'the authored admission set excludes the known deterministic projection');
+  t.ok(pressure.changedBytes > SCOPE_PRESSURE_BYTE_LIMIT,
+    'raw scope remains observable');
+  t.notOk(scopeTerminalStatus(pressure).terminal,
+    'large deterministic output does not force a fake Quest split');
+  t.same(commit(root, quest, changeRef).violations, [],
+    'the real precommit owner applies the same admission projection');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('handoff rejects historical over-threshold attempt', (t) => {
   const {root, quest} = setup();
   const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>

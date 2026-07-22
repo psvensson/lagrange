@@ -63,12 +63,12 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 41. [ARCH-0094] Any runtime function or semantic concern MUST have one active path after input normalization. _(see system-guidelines.md:143)_
 42. [ARCH-0096] The system must remain correct under contention, topology change, recovery, and control-plane pressure. _(see system-guidelines.md:284)_
 43. [ARCH-0097] All state-mutating operations MUST be safe under retry, redelivery, and recovery sweeps. _(see system-guidelines.md:319)_
-44. [ARCH-0098] Broad ideas must not go straight into code. _(see doctrine/decision-experiments.md:85)_
-45. [ARCH-0099] Do not treat a Quest as SOLVED when only the hot path is fixed. A Quest is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed. _(see doctrine/decision-experiments.md:96)_
+44. [ARCH-0098] Broad ideas must not go straight into code. _(see doctrine/decision-experiments.md:87)_
+45. [ARCH-0099] Do not treat a Quest as SOLVED when only the hot path is fixed. A Quest is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed. _(see doctrine/decision-experiments.md:98)_
 46. [ARCH-0101] Pressure must not become hidden drops, memory growth without bounds, or correctness failures. _(see doctrine/state-encoding.md:31)_
 47. [ARCH-0103] Inferences — derived signals such as error-string matching or absence of a row. An inference may trigger a re-read of actuals; it must never be the witness itself. _(see doctrine/state-encoding.md:101)_
 48. [ARCH-0106] Do not respond to repeated distributed failures by adding more scattered local special cases. _(see doctrine/decision-experiments.md:30)_
-49. [ARCH-0107] Do not treat hot-path green tests as analysis closure while the original scenario now fails for a different named reason. _(see doctrine/decision-experiments.md:132)_
+49. [ARCH-0107] Do not treat hot-path green tests as analysis closure while the original scenario now fails for a different named reason. _(see doctrine/decision-experiments.md:134)_
 50. [ARCH-0111] Do not keep patching symptoms while leaving the boundary porous. _(see doctrine/owner-boundaries.md:53)_
 51. [ARCH-0113] Do not let old migration history or several optional delegated findings create competing active interpretations of the same blocker. _(see doctrine/owner-boundaries.md:91)_
 52. [ARCH-0114] There may be multiple semantic owners, but there must not be many equivalent runtime ingress paths. _(see doctrine/single-path.md:17)_
@@ -87,7 +87,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 65. [ARCH-0134] Pressure must become admission, defer, reject, or coalescing signals. _(see doctrine/state-encoding.md:30)_
 66. [ARCH-0135] Actuals — observed state: a raft-observed leader, an active service row, a committed operation read back from the authority. A gate must consume actuals only. _(see doctrine/state-encoding.md:94)_
 67. [ARCH-0136] New features should strengthen tables, services, policies, and canonical execution paths before introducing new user-visible concepts. _(see system-guidelines.md:340)_
-68. [ARCH-0138] Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a Quest produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof. _(see doctrine/decision-experiments.md:109)_
+68. [ARCH-0138] Use the model ledger as an advisory feedback loop for future model, reasoning-effort, and output-profile choice when a Quest produces useful evidence. Output profile controls final-response and handoff verbosity, not reasoning depth. It must not replace validation, review, sequencing, or closure proof. _(see doctrine/decision-experiments.md:111)_
 69. [ARCH-0139] Targets — intent: replica_count, planned placement, configured cohort sizes. A target must never gate liveness: it legitimately exceeds placed reality on single-node and degraded clusters, so a target-built gate rejects correct work. _(see doctrine/state-encoding.md:97)_
 70. [ARCH-0140] Scenario-driven Quests must maintain scenario causal closure across the whole chain, not only the current first frontier. _(see doctrine/decision-experiments.md:52)_
 71. [ARCH-0143] After repeated bugs at one boundary, the next fix must reduce the number of paths, states, or owners that can cross it. _(see doctrine/owner-boundaries.md:52)_
@@ -96,10 +96,10 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 74. [ARCH-0153] All service communication that should be a message goes through the MessageRouter. _(see system-guidelines.md:305)_
 75. [ARCH-0154] A shared row may have several field owners only when the owned subsets are explicit and non-overlapping. _(see system-guidelines.md:128)_
 76. [ARCH-0158] Internal machinery may appear in diagnostics, but not as ordinary user-facing control surfaces unless explicitly designed as such. _(see system-guidelines.md:338)_
-77. [ARCH-0162] Active implementation should target one executable concern per Quest. _(see doctrine/decision-experiments.md:86)_
-78. [ARCH-0163] Quest status should live in the Solver event log and report rather than in parallel trackers. _(see doctrine/decision-experiments.md:87)_
-79. [ARCH-0165] Implementation work should be as explicit and bounded as the runtime design. _(see doctrine/decision-experiments.md:80)_
-80. [ARCH-0166] Optional real sub-agents should accelerate this sequence, not replace it. _(see doctrine/owner-boundaries.md:99)_
+77. [ARCH-0161] Active implementation should target one executable concern per Quest. _(see doctrine/decision-experiments.md:88)_
+78. [ARCH-0162] Quest status should live in the Solver event log and report rather than in parallel trackers. _(see doctrine/decision-experiments.md:89)_
+79. [ARCH-0164] Implementation work should be as explicit and bounded as the runtime design. _(see doctrine/decision-experiments.md:80)_
+80. [ARCH-0165] Optional real sub-agents should accelerate this sequence, not replace it. _(see doctrine/owner-boundaries.md:99)_
 81. [ARCH-0167] Under load, the system may slow down, defer work, or reject new edge work with structured retry semantics. _(see doctrine/state-encoding.md:27)_
 82. [ARCH-0168] Classification-only is a valid result only when the causal chain is still explicit, the focused probe command and artifact are named, the bounded-progress proof has an observable transition and bound, and the stop condition says why no local runtime patch should continue in that Quest. _(see doctrine/decision-experiments.md:71)_
 
@@ -130,7 +130,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 105. [ARCH-0095] Cache divergence, stale reads, missing rows, and repair needs must surface as typed owner outcomes or diagnostics. _(see system-guidelines.md:231)_
 106. [ARCH-0104] Components constructed with owner dependencies must route owned behavior through those dependencies. _(see runtime-contracts.md:35)_
 107. [ARCH-0105] A transitional delegator must have a removal task, target owner, and structural guard preventing new callers from binding to it. _(see runtime-contracts.md:41)_
-108. [ARCH-0108] Quests must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness. _(see doctrine/decision-experiments.md:135)_
+108. [ARCH-0108] Quests must never close from symptom movement alone (such as changed timeout durations, timing offsets, or message counts); they must prove the named contract transition or owner-boundary correctness. _(see doctrine/decision-experiments.md:137)_
 109. [ARCH-0109] Callers do not reproduce the owner's logic locally, and callers do not keep shadow state for the same concern. _(see doctrine/owner-boundaries.md:24)_
 110. [ARCH-0110] A new owner left running alongside the old path it was meant to replace is an unfinished cutover, not a second owner — record it as incomplete, never as done. _(see doctrine/owner-boundaries.md:28)_
 111. [ARCH-0112] Do not let diagnostics views, retained owner state, bootstrap-normalized ingress state, or cache-local observations drift into a second operational authority by convention. _(see doctrine/owner-boundaries.md:68)_
@@ -148,7 +148,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 123. [ARCH-0152] Retry is not fallback: routing MAY retry or redirect to another live replica or a new leader within the caller budget (for example QueryExecutorWriteRetryRouting); it MUST NOT reconstruct an owner decision from secondary evidence when the owner is unavailable. _(see runtime-contracts.md:195)_
 124. [ARCH-0156] Consumers may not maintain parallel system-data caches outside the declared owner or SystemTableCache. _(see system-guidelines.md:226)_
 125. [ARCH-0157] For one owner key, at most one reconcile execution may be in flight. _(see system-guidelines.md:248)_
-126. [ARCH-0159] Every active Quest must name its residual-closure inventory before code is treated as complete. At minimum that inventory must cover: - owner-path cutovers; - direct and tail consumers; - status, diagnostics, and reporting surfaces; - deletion of superseded paths or stale vocabulary; - required proof layers _(see doctrine/decision-experiments.md:89)_
+126. [ARCH-0159] Every active Quest must name its residual-closure inventory before code is treated as complete. At minimum that inventory must cover: - owner-path cutovers; - direct and tail consumers; - status, diagnostics, and reporting surfaces; - deletion of superseded paths or stale vocabulary; - required proof layers _(see doctrine/decision-experiments.md:91)_
 
 ### Lifecycle & State Machine Rules
 
@@ -206,6 +206,6 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 ### Governance & Scope Controls
 
 162. [ARCH-0088] Known in-scope doctrine or system-guideline violations in the affected area must be fixed before Quest closure. _(see system-guidelines.md:365)_
-163. [ARCH-0137] Do not begin a new local patch on the same architectural boundary while the current Quest still has unresolved in-scope residuals. Either finish the residuals in the current Quest or author a new Quest/frontier before moving on. _(see doctrine/decision-experiments.md:99)_
-164. [ARCH-0161] A human idea should first become either: - a sharpened roadmap item; - or a bounded Quest _(see doctrine/decision-experiments.md:82)_
-165. [ARCH-0164] Runtime Quests that follow such a model should cite it as their scope basis and proof surface. _(see doctrine/decision-experiments.md:49)_
+163. [ARCH-0137] Do not begin a new local patch on the same architectural boundary while the current Quest still has unresolved in-scope residuals. Either finish the residuals in the current Quest or author a new Quest/frontier before moving on. _(see doctrine/decision-experiments.md:101)_
+164. [ARCH-0163] Runtime Quests that follow such a model should cite it as their scope basis and proof surface. _(see doctrine/decision-experiments.md:49)_
+165. [ARCH-0166] A human idea should first become the smallest sufficient form: - direct bounded work with an obvious deterministic proof; - an optional epic while cross-Quest options remain unresolved; - a sharpened roadmap/specification contract for broad scope; - or a bounded Quest when the Quest threshold is met _(see doctrine/decision-experiments.md:82)_

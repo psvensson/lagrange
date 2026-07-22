@@ -284,12 +284,13 @@ export function coupledLocalFixBlocked(log, frontierId = null, satisfiedInvarian
 // scope-pressure signals already fire well below this; crossing the limit means the blast
 // radius is large enough that the Solver must split or shrink scope before more edits.
 export function scopeTerminalStatus(scopePressure) {
-  const fileCount = Array.isArray(scopePressure?.changedPaths) ?
-    scopePressure.changedPaths.length : 0;
-  const ownerCount = Array.isArray(scopePressure?.ownerAreas) ?
-    scopePressure.ownerAreas.length : 0;
-  const changeBytes = Number.isInteger(scopePressure?.changedBytes) ?
-    scopePressure.changedBytes : 0;
+  const admitted = scopePressure?.admission || scopePressure;
+  const fileCount = Array.isArray(admitted?.changedPaths) ?
+    admitted.changedPaths.length : 0;
+  const ownerCount = Array.isArray(admitted?.ownerAreas) ?
+    admitted.ownerAreas.length : 0;
+  const changeBytes = Number.isInteger(admitted?.changedBytes) ?
+    admitted.changedBytes : 0;
   return {
     terminal: fileCount > SCOPE_PRESSURE_FILE_LIMIT ||
       ownerCount > SCOPE_PRESSURE_OWNER_LIMIT ||

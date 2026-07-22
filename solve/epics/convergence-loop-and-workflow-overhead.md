@@ -1,6 +1,6 @@
 ---
 id: convergence-loop-and-workflow-overhead
-status: discussing
+status: active
 roadmapRow: null
 graduatesTo: quests
 ---
@@ -286,7 +286,9 @@ is O3/O4/O7 in formation-complexity-consolidation, sequenced by work item 1.
 5. 1b (chain-depth guard) — after 1a has been exercised once manually.
 6. 2d, 4b — recorded options, not quested.
 
-## Owner calls (resolved 2026-07-19)
+## Decision log
+
+### Owner calls resolved 2026-07-19
 
 The former open questions were decided by the owner on 2026-07-19:
 
@@ -303,3 +305,14 @@ The former open questions were decided by the owner on 2026-07-19:
    report-family artifact key), since an open-only count would not have
    fired on the 2026-07-13..19 chain; false positives are cheap because the
    guard only forces a reflection turn.
+
+### Owner call 2026-07-22 — workflow simplification accepted
+
+The operator accepted the complete simplification program: optional bounded
+epics with derived linked-work stage, progressive promotion from direct work to
+a Quest, a `start`/`continue`/`land` façade over the existing Solver owner,
+verification of landable candidates rather than abandoned attempts, checkpoints
+only at real durability boundaries, and on-demand standard report projection.
+Implementation is split into bounded Quests linked to this epic; the underlying
+seal, probe, append-only log, exact content verification, final composition
+review, audit, scope-safe commit, and no-push guarantees remain mandatory.

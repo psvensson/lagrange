@@ -58,6 +58,7 @@ tap.test('work overview projection', async (t) => {
       specRef: 'widget-spec#T2',
       roadmapRow: 'row-7',
       closesCL: ['CL-009'],
+      planDoc: 'solve/epics/widget.md',
     });
     saveQuest(root, openQuest);
     declareQuest(root, openQuest);
@@ -74,7 +75,10 @@ tap.test('work overview projection', async (t) => {
     t.same(o.roadmapRows[0].quests, ['q-open'], 'quest attributed to its row');
 
     t.equal(o.epics.length, 1);
-    t.equal(o.epics[0].status, 'sharpening', 'front-matter status parsed');
+    t.equal(o.epics[0].stage, 'linked-open',
+      'work stage is derived from the linked open Quest');
+    t.equal(o.epics[0].linkedQuests.length, 1,
+      'epic projection carries its explicit linked Quest');
     t.equal(o.epics[0].graduatesTo, 'widget-spec');
 
     const widget = o.specs.find((s) => s.name === 'widget-spec');
@@ -87,6 +91,76 @@ tap.test('work overview projection', async (t) => {
     t.match(md, /## 4 · Quests — 0 draft \/ 1 open \/ 1 terminal/,
       'draft/open/terminal split rendered');
     t.match(md, /CL-009/, 'open quest closes-CL surfaced');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('derives epic work stage without trusting legacy status prose', (t) => {
+    const root = tmp();
+    fs.mkdirSync(path.join(root, 'solve/epics'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'solve/specs/widget-spec'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'solve/epics/framing.md'),
+      '---\nid: framing\nstatus: resolved\nroadmapRow: null\ngraduatesTo: null\n---\n# Framing\n');
+    fs.writeFileSync(path.join(root, 'solve/epics/graduated.md'),
+      '---\nid: graduated\nepicContractVersion: 2\nroadmapRow: null\ngraduatesTo: widget-spec\n---\n# Graduated\n');
+    fs.writeFileSync(path.join(root, 'solve/epics/terminal.md'),
+      '---\nid: terminal\nstatus: discussing\nroadmapRow: null\ngraduatesTo: null\n---\n# Terminal\n');
+    const linkedTerminal = quest('q-terminal', {
+      planDoc: 'solve/epics/terminal.md',
+    });
+    saveQuest(root, linkedTerminal);
+    declareQuest(root, linkedTerminal);
+    appendEvent(root, 'q-terminal', {
+      type: EVENT_QUEST,
+      status: STATUS_SOLVED,
+      evidence: 'report.json',
+    });
+
+    const overview = buildOverview(root);
+    const byId = new Map(overview.epics.map((epic) => [epic.id, epic]));
+    t.equal(byId.get('framing').stage, 'framing',
+      'stale legacy status does not become work authority');
+    t.equal(byId.get('graduated').stage, 'linked-spec',
+      'an existing explicit spec target produces a mechanical linked-spec stage');
+    t.equal(byId.get('terminal').stage, 'linked-terminal',
+      'all explicitly linked Quests terminal produces linked-terminal');
+    t.match(renderOverview(overview), /\| terminal\s+\| linked-terminal\s+\|/u,
+      'overview renders derived stage instead of legacy status');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('matches exact epic/spec links without roadmap or prefix inference', (t) => {
+    const root = tmp();
+    fs.mkdirSync(path.join(root, 'solve/epics'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'solve/specs/foo'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'solve/epics/direct.md'),
+      '---\nid: direct\nstatus: discussing\nroadmapRow: row-1\ngraduatesTo: null\n---\n# Direct\n');
+    fs.writeFileSync(path.join(root, 'solve/epics/spec.md'),
+      '---\nid: spec\nstatus: discussing\nroadmapRow: null\ngraduatesTo: foo\n---\n# Spec\n');
+    const direct = quest('q-direct', {
+      specRef: 'solve/epics/direct.md#decision', roadmapRow: null,
+    });
+    const spec = quest('q-spec', {
+      planDoc: 'solve/specs/foo/design.md#owner', roadmapRow: null,
+    });
+    const prefix = quest('q-prefix', {
+      specRef: 'foobar#task', roadmapRow: 'row-1',
+    });
+    for (const value of [direct, spec, prefix]) {
+      saveQuest(root, value);
+      declareQuest(root, value);
+    }
+
+    const byId = new Map(buildOverview(root).epics.map((epic) => [epic.id, epic]));
+    t.same(byId.get('direct').linkedQuests.map((item) => item.id), ['q-direct'],
+      'specRef may point directly at an epic');
+    t.same(byId.get('spec').linkedQuests.map((item) => item.id), ['q-spec'],
+      'planDoc may point inside the graduated spec');
+    t.notMatch(byId.get('spec').linkedQuests.map((item) => item.id).join(','), /q-prefix/u,
+      'foo does not prefix-match foobar');
+    t.notMatch(byId.get('direct').linkedQuests.map((item) => item.id).join(','), /q-prefix/u,
+      'sharing a roadmap row does not imply an epic link');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

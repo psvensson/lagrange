@@ -1,7 +1,7 @@
 ---
+epicContractVersion: 2
 id: <kebab-case-id>
 roadmapRow: <id|null>
-status: discussing
 graduatesTo: <spec-name|null>
 ---
 

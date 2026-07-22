@@ -2,7 +2,7 @@
 // Solver planning ledger (epics + quests + logs + oracles).
 //
 // WHY THIS EXISTS. An audit (2026-07-01) found the ledger's write-once metadata rots:
-// an epic's `status:` lags a terminal outcome, a quest is recorded solved while its
+// an epic's hand-authored lifecycle lags linked work, a quest is recorded solved while its
 // closure evidence is absent, an oracle says done while no terminal outcome was written.
 // The bodies stay accurate; the small structured fields drift because they are hand-
 // maintained copies. This check keys ONLY on those structured fields — never on prose
@@ -25,11 +25,14 @@ import {projectState, readLog} from './store.js';
 const EPICS_DIR = 'solve/epics';
 const QUESTS_DIR = 'solve/quests';
 const EPIC_SKIP = new Set(['README.md', '_template.md']);
+const EPIC_CONTRACT_VERSION_DERIVED_STAGE = 2;
+const EPIC_PLANNING_LINE_LIMIT = 150;
 
 // Base status vocabulary. A status is valid if it equals or is prefixed by one of
 // these (bespoke suffixes like `resolved-option-b-refuted-pivot-to-a` are allowed).
 const KNOWN_STATUS_BASES = [
   'discussing', 'sharpening', 'active', 'landed-default-off', 'resolved', 'graduated',
+  'dropped',
 ];
 const TERMINAL_STATE = new Set(['solved', 'exhausted']);
 
@@ -63,15 +66,42 @@ function checkEpics(root, errors, warnings) {
   const dir = path.join(root, EPICS_DIR);
   for (const name of listFiles(dir, '.md')) {
     if (EPIC_SKIP.has(name)) continue;
-    const front = readFrontmatter(fs.readFileSync(path.join(dir, name), 'utf8'));
+    const text = fs.readFileSync(path.join(dir, name), 'utf8');
+    const front = readFrontmatter(text);
     const status = front.status;
-    // E1 (ERROR): every epic must carry a frontmatter `status:`. A status-less epic
-    // is invisible to `overview` (renders as `unknown`) and is where drift hides.
-    if (!status) {
-      errors.push(`epic ${name}: missing frontmatter \`status:\` (E1)`);
+    const declaredContractVersion = front.epicContractVersion;
+    const contractVersion = declaredContractVersion === undefined ? null :
+      Number(declaredContractVersion);
+    if (contractVersion !== null &&
+      contractVersion !== EPIC_CONTRACT_VERSION_DERIVED_STAGE) {
+      errors.push(`epic ${name}: unsupported epicContractVersion ` +
+        `${declaredContractVersion} (E5)`);
       continue;
     }
-    // E2 (WARN): status should be a known base (catches typos / ad-hoc values).
+    if (contractVersion === EPIC_CONTRACT_VERSION_DERIVED_STAGE) {
+      // E1 (ERROR): versioned epics deliberately have no mutable lifecycle field;
+      // overview derives work stage from explicit links and Quest state.
+      if (status) {
+        errors.push(`epic ${name}: version 2 derives work stage and must not ` +
+          'declare `status:` (E1)');
+      }
+      const lineCount = text.trimEnd().split(/\r?\n/u).length;
+      if (lineCount > EPIC_PLANNING_LINE_LIMIT) {
+        errors.push(`epic ${name}: version 2 exceeds the ` +
+          `${EPIC_PLANNING_LINE_LIMIT}-line planning bound (lines=${lineCount}); ` +
+          'graduate executable detail to a spec or Quest (E3)');
+      }
+      if (!/^## Decision log\s*$/mu.test(text)) {
+        errors.push(`epic ${name}: version 2 requires \`## Decision log\` (E4)`);
+      }
+      continue;
+    }
+    // Legacy epics remain readable without a corpus rewrite. When they carry a
+    // status, keep typo detection while preventing it from becoming execution state.
+    if (!status) {
+      errors.push(`epic ${name}: missing legacy frontmatter \`status:\` (E2)`);
+      continue;
+    }
     const known = KNOWN_STATUS_BASES.some(
       (b) => status === b || status.startsWith(`${b}-`));
     if (!known) {

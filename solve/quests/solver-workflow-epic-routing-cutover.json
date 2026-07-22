@@ -1,0 +1,65 @@
+{
+  "id": "solver-workflow-epic-routing-cutover",
+  "authoringContractVersion": 1,
+  "statement": "Epic planning is optional and mechanically projected: bounded work may link directly to its existing authority, epic progress is derived from explicit planning links and linked Quest terminal state while human decisions stay in the decision log, and direct work is promoted to a sealed Quest before a second evidence-bearing intervention.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/convergence-loop-and-workflow-overhead.md",
+    "draftedAtCommit": "335ae98d94e4f6769f897140b4d2078a65a03e08"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-workflow-epic-routing-cutover.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-workflow-epic-routing-cutover-projection",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-workflow-epic-routing-cutover.json"
+        }
+      }
+    },
+    {
+      "id": "solver-workflow-epic-routing-cutover-policy",
+      "priority": 2,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-workflow-epic-routing-cutover.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-planning-owner",
+      "statement": "Epics remain optional rationale records; the Solver overview derives mechanical progress from existing epic links and Quest state without creating a second mutable lifecycle store or inferring human decisions from prose."
+    },
+    {
+      "id": "legacy-epic-compatibility",
+      "statement": "Existing epic frontmatter remains readable during migration, while new epics use the reduced contract and existing bespoke status values do not become execution authority."
+    },
+    {
+      "id": "progressive-quest-routing",
+      "statement": "A bounded deterministic change remains direct work, while owner-contract, live or distributed, cross-session, or competing-intervention work starts as a Quest; direct work that reaches a failed measurement, scope expansion, or durable finding must seal a Quest before the next intervention."
+    },
+    {
+      "id": "focused-proof",
+      "statement": "Focused tests prove optional epic routing, derived linked-work projection across draft/open/terminal Quests and specs, explicit decision preservation, legacy compatibility, and the new-epic size ratchet without rewriting the historical corpus."
+    }
+  ]
+}

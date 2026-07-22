@@ -70,16 +70,19 @@ Use repository documents according to this ownership split:
 
 ## Quest Intake And Execution Flow
 
-All non-trivial implementation work should start from a bounded Quest:
+Route work through the smallest sufficient planning surface:
 
 1. If the request changes product scope, feature sequence, or edition ownership,
    sharpen `../../roadmap.md` or `../../edition-matrix.md` first.
-2. If the request is already in scope, create or select a Quest under
-   `solve/quests/`.
-3. The Quest must cite or encode enough scope context to prevent local invention.
-4. Implementation begins only after `doneWhen`, frontiers, metrics, and
+2. Use an optional epic only while unresolved options span more than one possible
+   Quest. Use a spec or architecture document for an approved multi-Quest contract.
+3. Apply the Quest threshold in `AGENTS.md`; bounded deterministic work remains
+   direct, while owner-contract, live/distributed, cross-session, or competing-
+   intervention work creates or selects a Quest under `solve/quests/`.
+4. A Quest must cite or encode enough scope context to prevent local invention.
+5. Quest implementation begins only after `doneWhen`, frontiers, metrics, and
    constraints are clear.
-5. Completion is claimed only through the Solver report.
+6. Quest completion is claimed only through the Solver report.
 
 `docs/` holds documentation, never active work definition: user/operator-facing
 docs, the agent steering tree under `docs/steering/`, and internal engineering

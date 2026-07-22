@@ -38,7 +38,7 @@ and terminal handoff. This entry point deliberately does not duplicate them.
 | Test policy / regression / harness rules | [`docs/steering/llm/testing.md`](docs/steering/llm/testing.md) |
 | Lint, style, naming policy | [`docs/steering/llm/style.md`](docs/steering/llm/style.md) |
 | Roadmap, scope, governance | [`docs/steering/llm/governance.md`](docs/steering/llm/governance.md) |
-| Early-stage planning (above specs) | [`solve/epics/`](solve/epics/) — one-page intent/options/open-questions before a spec's sealed `doneWhen` exists |
+| Optional early-stage planning | [`solve/epics/`](solve/epics/) — bounded decision memos only when unresolved cross-Quest options need durable discussion |
 | Cross-layer planning trace | `node scripts/solve.js trace --row\|--cl\|--spec\|--quest <id>` (joins quests via their `links` block) |
 | Rule IDs and source citations | `npm run rule -- --id <ID>` (also `--tag`/`--domain`/free-text); browse [`docs/steering/llm/rules-index.md`](docs/steering/llm/rules-index.md). `rules.json` is generator output, too large to Read whole. |
 | Architecture document tree | [`architecture/INDEX.md`](architecture/INDEX.md) |

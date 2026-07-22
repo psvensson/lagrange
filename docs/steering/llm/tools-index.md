@@ -160,7 +160,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## overview
 
-- `overview:write` — Write the durable work-overview board to solve/OVERVIEW.generated.md.
+- `overview:write` — Write the ignored local work-overview projection to solve/OVERVIEW.generated.md.
 
 ## quest
 

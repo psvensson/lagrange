@@ -37,10 +37,14 @@ same "truth" drifts into three conflicting copies.
   "Authority Order" regardless of which channel records it — an external-memory
   note that records a user directive is not demoted by this rule. Either way,
   fix the stale note so the two channels stop disagreeing.
-- **Metadata is part of the diff.** When you substantively change a body / decision-log
-  (a memory file, an epic, a quest), refresh that file's summary metadata — frontmatter
-  `description:`/`status:` AND its index hook (`MEMORY.md` / `MEMORY-ARCHIVE.md` line) — in
-  the SAME edit. A body that advanced past its metadata is a defect, not staleness. An
+- **Metadata is part of the diff.** When you substantively change a memory file,
+  refresh its frontmatter `description:`/`status:` AND its index hook (`MEMORY.md` /
+  `MEMORY-ARCHIVE.md` line) in the SAME edit. When an epic changes, record its dated
+  decision and explicit target link; version 2 epics require `## Decision log`, use
+  a known contract version, and derive work stage instead of mirroring it into
+  `status:`. When a Quest changes outcome, its oracle/event-log
+  state remains authoritative. A body that advanced past its owned metadata is a
+  defect, not staleness. An
   audit (2026-07-01) found this is the single largest drift source: write-once summary
   fields authored at creation and never refreshed as the body evolved over sessions. The
   hand-written index hook is the source of truth for a memory's one-line summary; treat
@@ -48,7 +52,8 @@ same "truth" drifts into three conflicting copies.
   from `description:` — the descriptions are what rot). For the in-repo Solver ledger the
   structured half of this is machine-checked by `npm run solve:consistency`
   ([`scripts/solve/ledger-consistency.js`](../../scripts/solve/ledger-consistency.js)):
-  epic `status:` presence/vocabulary + quest↔oracle↔state consistency. External
+  version 2 epic no-status/size contract, legacy epic vocabulary, and
+  quest↔oracle↔state consistency. External
   auto-memory has no gate, so for it this rule is the only guard.
 
 ## Why

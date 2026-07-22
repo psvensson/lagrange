@@ -1,44 +1,49 @@
-# Epics — the lightweight planning tier above specs
+# Epics — optional decision memos before executable work
 
-An **epic** is a one-page place to think out loud about a roadmap row *before* it is
-sharp enough to become a spec with a sealed `doneWhen`. It is deliberately
-schema-light and tool-free: just a markdown file from `_template.md`.
+An **epic** is a bounded place to resolve options that span more than one potential
+Quest. Use it only while the intended result is not sharp enough for a sealed
+`doneWhen` or a broad approved contract. It is deliberately schema-light: one
+Markdown file from `_template.md`, capped at 150 lines for version 2 epics.
 
 ## Where it sits
 
-```
-roadmap row            (roadmap.md — aspirational sequence)
-   ↓  discuss intent / options / open questions HERE
-EPIC  (solve/epics/<id>.md)        ← this tier
-   ↓  graduate when intent is sharp enough for a sealed doneWhen
-SPEC  (solve/specs/<name>/...)     (design + requirements + tasks)
-   ↓
-QUEST (solve/quests/<id>.json)     (the only MEASURED layer)
-```
+Choose the smallest planning home that matches the work:
 
-Specs are heavy (design + requirements + tasks). Quests are sealed and
-execution-grade. The epic tier fills the gap: a versioned home for half-formed
-planning so that discussion lives in a file under git, not in chat context.
+- bounded deterministic work with an obvious proof: work directly;
+- a bounded executable result: author a Quest;
+- unresolved options spanning possible Quests: use an epic temporarily;
+- an approved multi-Quest contract: use a spec or architecture document.
+
+An epic is not a mandatory waypoint between a roadmap row and a Quest, and an
+epic and spec must not duplicate the same executable plan.
 
 ## Lifecycle
 
-`status` in the front-matter moves through:
+`node scripts/solve.js overview` derives the epic's mechanical work stage from
+explicit links:
 
-- `discussing` — capturing intent, options, and open questions.
-- `sharpening` — converging on one approach; doneWhen is becoming expressible.
-- `graduated` — a spec (and/or quests) now exists; set `graduatesTo`. The epic
-  stays as the rationale record.
-- `dropped` — decided not to pursue; keep the file as a decision record.
+- `framing` — no linked executable work exists;
+- `linked-spec` — `graduatesTo` names an existing spec;
+- `linked-draft` / `linked-open` — an explicitly linked Quest is drafted/open;
+- `linked-terminal` — every explicitly linked Quest is terminal.
+
+These stages describe linked work, not whether the idea was accepted, rejected,
+or dropped. Record those human decisions as dated decision-log entries. Version 2
+epics MUST NOT declare a mutable `status:` field. Legacy status fields remain
+readable during migration but are not execution authority.
 
 ## Conventions
 
-- `roadmapRow` in an epic's front-matter matches the `links.roadmapRow` field on
-  quests (see `solve/quests/*.json`). That shared key lets
-  `node scripts/solve.js trace --row <id>` join roadmap → epic → quest once quests
-  carry the link. No tooling enforces this in v1; it is a convention.
-- One epic per roadmap row (or per cohesive theme). Keep it to roughly one screen;
-  if it grows past that, it is ready to graduate to a spec.
+- `roadmapRow` co-locates planning records in `node scripts/solve.js overview`.
+  It deliberately does not imply an epic-to-Quest link. That link is exact and
+  explicit through `links.planDoc`, `links.specRef`, or an epic's `graduatesTo`
+  target. `trace --row` reports Quests for the row; use `overview` for the full
+  planning graph.
+- Prefer one epic per unresolved decision theme. Version 2 epics are limited to
+  150 lines, require `## Decision log`, and use no `status:`. Unknown contract
+  versions fail closed. Graduate executable detail to a spec or Quest instead
+  of extending the epic.
 - Epics are NOT a closure surface. Measured truth lives in quests and the
   closure-ledger; an epic only records intent and the decision trail.
 
-Start every new roadmap row here. Copy `_template.md` and fill it in.
+Copy `_template.md` only when unresolved cross-Quest framing actually exists.

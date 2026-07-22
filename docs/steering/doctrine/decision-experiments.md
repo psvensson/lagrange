@@ -79,9 +79,11 @@ through prose-only proof.
 
 Implementation work should be as explicit and bounded as the runtime design.
 
-- A human idea should first become either:
-  - a sharpened roadmap item
-  - or a bounded Quest
+- A human idea should first become the smallest sufficient form:
+  - direct bounded work with an obvious deterministic proof
+  - an optional epic while cross-Quest options remain unresolved
+  - a sharpened roadmap/specification contract for broad scope
+  - or a bounded Quest when the Quest threshold is met
 - Broad ideas must not go straight into code.
 - Active implementation should target one executable concern per Quest.
 - Quest status should live in the Solver event log and report rather than in

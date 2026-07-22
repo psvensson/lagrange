@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-07-22T11:30:01.588Z",
+  "generatedAt": "2026-07-22T12:24:54.647Z",
   "stats": {
-    "candidateCount": 421,
-    "dedupedRuleCount": 411,
-    "exportedRuleCount": 411,
+    "candidateCount": 428,
+    "dedupedRuleCount": 418,
+    "exportedRuleCount": 418,
     "aliasRuleCount": 4,
-    "masterRuleCount": 407,
-    "emittedMasterRuleCount": 407,
-    "estimatedAllRulesTokens": 17176
+    "masterRuleCount": 414,
+    "emittedMasterRuleCount": 414,
+    "estimatedAllRulesTokens": 17521
   },
   "sources": [
     {
@@ -196,10 +196,10 @@
       "file": "workflow-guidelines/solver-quests.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 97,
-      "masterRuleCount": 97,
+      "ruleCount": 104,
+      "masterRuleCount": 104,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 97
+      "emittedMasterRuleCount": 104
     },
     {
       "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
@@ -298,7 +298,7 @@
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
       "ruleCount": 29,
-      "estimatedTokens": 3949,
+      "estimatedTokens": 3974,
       "domains": [
         "architecture",
         "testing",
@@ -313,7 +313,7 @@
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "ruleCount": 165,
-      "estimatedTokens": 5611,
+      "estimatedTokens": 5664,
       "domains": [
         "architecture"
       ],
@@ -379,16 +379,16 @@
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 136,
-      "estimatedTokens": 7136,
+      "ruleCount": 143,
+      "estimatedTokens": 7440,
       "domains": [
         "governance"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 136,
+      "masterRuleCount": 143,
       "aliasRuleCount": 0,
-      "indexedRuleCount": 136,
+      "indexedRuleCount": 143,
       "sourceFiles": [
         "roadmap.md",
         "memory-boundary.md",

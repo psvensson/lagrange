@@ -25,10 +25,14 @@ const SPECS_DIR = 'solve/specs';
 // Planning-tier scaffolding that is not itself an epic / spec.
 const EPIC_SKIP = new Set(['README.md', '_template.md']);
 const SPEC_SKIP = new Set(['archived']);
+const EPIC_STAGE_FRAMING = 'framing';
+const EPIC_STAGE_LINKED_SPEC = 'linked-spec';
+const EPIC_STAGE_LINKED_DRAFT = 'linked-draft';
+const EPIC_STAGE_LINKED_OPEN = 'linked-open';
+const EPIC_STAGE_LINKED_TERMINAL = 'linked-terminal';
 
-// The generated board lives alongside the quest data; the `.generated.` infix
-// mirrors FRONTIER.generated.md and signals "do not hand-edit — run
-// `solve overview --write`".
+// This local board lives alongside the Quest data and is ignored by Git because
+// recording an attempt changes the state it projects. Regenerate it on demand.
 export function overviewFilePath(root) {
   return path.join(root, SOLVE_DATA_DIR, 'OVERVIEW.generated.md');
 }
@@ -37,7 +41,7 @@ function normLink(value) {
   return !value || value === 'null' ? null : value;
 }
 
-// Parse one epic markdown file. Front-matter (id/roadmapRow/status/graduatesTo) is
+// Parse one epic markdown file. Front-matter (id/roadmapRow/graduatesTo) is
 // optional — the first epics predate the template — so fall back to the `#`
 // heading for a title and leave unknown fields null.
 function readEpic(file) {
@@ -55,8 +59,10 @@ function readEpic(file) {
   const title = (front.title || (heading ? heading[1] : base)).replace(/^Epic:\s*/i, '').trim();
   return {
     id: front.id || base,
+    file: `${EPICS_DIR}/${path.basename(file)}`,
     title,
-    status: front.status || 'unknown',
+    contractVersion: Number(front.epicContractVersion) || null,
+    legacyStatus: front.status || null,
     roadmapRow: normLink(front.roadmapRow),
     graduatesTo: normLink(front.graduatesTo),
   };
@@ -98,6 +104,7 @@ function linkedQuests(root, portfolio) {
       attempts: row.attempts,
       reopens: row.reopens,
       autoReopens: row.autoReopens || 0,
+      planDoc: typeof links.planDoc === 'string' ? links.planDoc : null,
       specRef: typeof links.specRef === 'string' ? links.specRef : null,
       roadmapRow: links.roadmapRow || null,
       closesCL: Array.isArray(links.closesCL) ? links.closesCL : [],
@@ -105,14 +112,57 @@ function linkedQuests(root, portfolio) {
   });
 }
 
+function linkBase(value) {
+  return typeof value === 'string' ? value.split('#')[0] : null;
+}
+
+function linkTargetsSpec(value, specName) {
+  const base = linkBase(value);
+  if (!base || !specName) return false;
+  const specRoot = `${SPECS_DIR}/${specName}`;
+  return base === specName || base === specRoot || base.startsWith(`${specRoot}/`);
+}
+
+function questLinksEpic(quest, epic) {
+  const links = [quest.planDoc, quest.specRef];
+  if (links.some((value) => linkBase(value) === epic.file)) return true;
+  if (!epic.graduatesTo) return false;
+  return quest.id === epic.graduatesTo ||
+    links.some((value) => linkTargetsSpec(value, epic.graduatesTo));
+}
+
+function epicWorkStage(epic, linkedQuests, linkedSpecs) {
+  if (linkedQuests.some((quest) => quest.open)) return EPIC_STAGE_LINKED_OPEN;
+  if (linkedQuests.some((quest) => quest.draft)) return EPIC_STAGE_LINKED_DRAFT;
+  if (linkedQuests.length > 0) return EPIC_STAGE_LINKED_TERMINAL;
+  if (linkedSpecs.length > 0) return EPIC_STAGE_LINKED_SPEC;
+  return EPIC_STAGE_FRAMING;
+}
+
+function projectEpics(epics, quests, specNames) {
+  const knownSpecs = new Set(specNames);
+  return epics.map((epic) => {
+    const linkedQuests = quests.filter((quest) => questLinksEpic(quest, epic));
+    const linkedSpecs = epic.graduatesTo && knownSpecs.has(epic.graduatesTo) ?
+      [epic.graduatesTo] : [];
+    return {
+      ...epic,
+      stage: epicWorkStage(epic, linkedQuests, linkedSpecs),
+      linkedQuests,
+      linkedSpecs,
+    };
+  });
+}
+
 export function buildOverview(root) {
   const portfolio = buildPortfolio(root);
   const quests = linkedQuests(root, portfolio);
-  const epics = loadEpics(root);
-  const specs = listSpecs(root).map((name) => {
-    // A quest cites a spec by name with optional `#task` suffix, so match by prefix
-    // exactly as `solve trace --spec` does.
-    const matched = quests.filter((quest) => quest.specRef && quest.specRef.startsWith(name));
+  const specNames = listSpecs(root);
+  const epics = projectEpics(loadEpics(root), quests, specNames);
+  const specs = specNames.map((name) => {
+    // Accept the bare spec name or its exact directory boundary; never let a
+    // similarly prefixed spec (`foo` / `foobar`) leak into this projection.
+    const matched = quests.filter((quest) => linkTargetsSpec(quest.specRef, name));
     const open = matched.filter((q) => q.open).length;
     return {name, quests: matched, open, total: matched.length};
   });
@@ -141,17 +191,14 @@ function cell(value) {
   return text || '—';
 }
 
-// Render a markdown table with columns padded to a uniform width so the pipes
-// line up in plain-text / monospace view (the stdout and the written board are
-// both read raw, not only as rendered markdown).
+// Render compact Markdown. Padding every row to the widest cell made a single
+// long Quest id rewrite the entire generated board, turning a small projection
+// change into a very large durability artifact.
 function table(header, rows) {
   if (rows.length === 0) return ['_(none)_', ''];
   const body = rows.map((cells) => header.map((_, i) => cell(cells[i])));
-  const widths = header.map((head, i) =>
-    Math.max(head.length, ...body.map((cells) => cells[i].length)));
-  const row = (cells) =>
-    `| ${cells.map((text, i) => text.padEnd(widths[i])).join(' | ')} |`;
-  const separator = `| ${widths.map((w) => '-'.repeat(Math.max(3, w))).join(' | ')} |`;
+  const row = (cells) => `| ${cells.join(' | ')} |`;
+  const separator = `| ${header.map(() => '---').join(' | ')} |`;
   return [row(header), separator, ...body.map(row), ''];
 }
 
@@ -187,9 +234,9 @@ export function renderOverview(overview) {
   const lines = [
     '# Work overview — top-down',
     '',
-    'Hierarchy: roadmap → epic → spec → quest → attempt, with the closure ledger',
-    'tracking cross-quest invariants alongside. Roadmap / epic / spec / ledger are',
-    'static documents you read; the **Quest log is the only moving part**, and a',
+    'Planning routes are selected, not mandatory: a bounded request may go directly',
+    'to a Quest; unresolved cross-Quest framing may use an epic; a broad approved',
+    'contract may use a spec. The **Quest log is the only execution state**, and a',
     'Quest closes only by the Solver terminal state (SOLVED / EXHAUSTED). This is a',
     'projection — act on a record only after reading its file.',
     '',
@@ -203,10 +250,11 @@ export function renderOverview(overview) {
         [r.id, r.epics.join(', ') || '—', r.quests.join(', ') || '—']))),
 
     `## 2 · Epics — ${epics.length}`,
-    '_Lightweight planning above specs (solve/epics/) — sharpen intent before a sealed doneWhen exists._',
+    '_Optional decision memos for unresolved cross-Quest framing. Stage is derived from explicit links, never from prose status._',
     '',
-    ...table(['id', 'status', 'roadmapRow', 'graduatesTo'],
-      epics.map((e) => [e.id, e.status, e.roadmapRow || '—', e.graduatesTo || '—'])),
+    ...table(['id', 'stage', 'roadmapRow', 'graduatesTo', 'linked'],
+      epics.map((e) => [e.id, e.stage, e.roadmapRow || '—', e.graduatesTo || '—',
+        e.linkedQuests.length || '—'])),
 
     `## 3 · Specs — ${specs.length} (${specsWithOpen} with open quests)`,
     '_Detailed planning (solve/specs/): design + requirements + tasks. Implemented by quests, not a closure surface._',
@@ -249,8 +297,8 @@ export function runOverviewCommand(root) {
   return `${renderOverview(buildOverview(root))}\n`;
 }
 
-// Persist the board to solve/OVERVIEW.generated.md (a pure projection, no
-// wall-clock time, so byte-stable across no-op writes). Returns the written path.
+// Persist the ignored local projection without wall-clock time. No-op writes are
+// byte-stable; workflow events legitimately change it. Returns the written path.
 export function writeOverview(root, markdown) {
   const file = overviewFilePath(root);
   const md = typeof markdown === 'string' ? markdown : runOverviewCommand(root);

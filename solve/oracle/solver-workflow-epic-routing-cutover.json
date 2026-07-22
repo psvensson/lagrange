@@ -1,0 +1,20 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "epic-routing-contract-cut-over",
+  "evidence": {
+    "focusedTests": "npm run test:file -- test/solve/scope-pressure.test.js test/solve/scope-pressure-precommit-enforcement.test.js test/solve/overview.test.js test/solve/ledger-consistency.test.js test/solve/steering-canon.test.js (171 assertions)",
+    "ledgerGate": "npm run solve:consistency (0 errors, 0 warnings)",
+    "generatedSurfaces": "tracked steering pack regenerated; overview regenerated as an ignored local projection",
+    "independentAudit": "epic_routing_audit read-only falsifier and policy synchronization review"
+  },
+  "validations": {
+    "optionalEpicRouting": true,
+    "derivedEpicProjection": true,
+    "explicitDecisionsPreserved": true,
+    "legacyEpicCompatibility": true,
+    "newEpicSizeRatchet": true,
+    "progressiveQuestPromotion": true
+  }
+}

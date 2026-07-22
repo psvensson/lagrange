@@ -21,7 +21,7 @@
   "frontier": "Print the Solver frontier board.",
   "frontier:write": "Write the durable frontier board to solve/FRONTIER.generated.md.",
   "overview": "Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).",
-  "overview:write": "Write the durable work-overview board to solve/OVERVIEW.generated.md.",
+  "overview:write": "Write the ignored local work-overview projection to solve/OVERVIEW.generated.md.",
   "quest:context": "Print full Quest context: status, model guidance, pending step, latest probe, findings, dirty worktree.",
   "commands": "Print the curated Quest-first command quickstart.",
   "hooks:install": "Install the repository git hooks.",

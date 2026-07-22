@@ -21,10 +21,10 @@ function mkFixture() {
   }
   return root;
 }
-function writeEpic(root, name, front) {
+function writeEpic(root, name, front, body = 'body\n') {
   const fm = Object.entries(front).map(([k, v]) => `${k}: ${v}`).join('\n');
   fs.writeFileSync(path.join(root, 'solve/epics', name),
-    `---\n${fm}\n---\n\n# Epic: ${name}\n\nbody\n`);
+    `---\n${fm}\n---\n\n# Epic: ${name}\n\n${body}`);
 }
 function writeJson(root, dir, id, obj) {
   fs.mkdirSync(path.join(root, dir), {recursive: true});
@@ -81,18 +81,78 @@ t.test('consistent ledger has zero errors (baseline non-vacuity)', (t) => {
   t.end();
 });
 
-t.test('E1: epic without frontmatter status is an ERROR (red-on-revert)', (t) => {
+t.test('E1: versioned epic rejects manual status authority', (t) => {
   const root = mkFixture();
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
-  // no `status` key
-  writeEpic(root, 'bad.md', {id: 'bad', roadmapRow: 'null'});
+  writeEpic(root, 'bad.md', {
+    id: 'bad', epicContractVersion: 2, roadmapRow: 'null', status: 'active',
+  }, '## Decision log\n\n- pending\n');
   const withDefect = checkLedgerConsistency(root);
-  t.match(errText(withDefect), /epic bad\.md: missing frontmatter .*status.*\(E1\)/,
-    'E1 fires on a status-less epic');
+  t.match(errText(withDefect),
+    /epic bad\.md: version 2 derives work stage and must not declare `status:` \(E1\)/u,
+    'E1 prevents a second mutable lifecycle owner');
 
-  // revert the defect: add a status -> finding disappears
-  writeEpic(root, 'bad.md', {id: 'bad', status: 'active'});
-  t.equal(checkLedgerConsistency(root).errors.length, 0, 'E1 clears once status is set');
+  writeEpic(root, 'bad.md', {
+    id: 'bad', epicContractVersion: 2, roadmapRow: 'null', graduatesTo: 'null',
+  }, '## Decision log\n\n- pending\n');
+  t.equal(checkLedgerConsistency(root).errors.length, 0,
+    'E1 clears when derived state is the only lifecycle authority');
+  t.end();
+});
+
+t.test('legacy epic status remains readable during migration', (t) => {
+  const root = mkFixture();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  writeEpic(root, 'legacy.md', {id: 'legacy', status: 'active'});
+  const result = checkLedgerConsistency(root);
+  t.equal(result.errors.length, 0, `legacy status is accepted: ${errText(result)}`);
+  t.equal(result.warnings.length, 0, `legacy status remains recognized: ${warnText(result)}`);
+  t.end();
+});
+
+t.test('E3: versioned epic is bounded to one-page planning size', (t) => {
+  const root = mkFixture();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  const longBody = Array.from({length: 151}, (_, index) => `line ${index}`).join('\n');
+  writeEpic(root, 'long.md', {
+    id: 'long', epicContractVersion: 2, roadmapRow: 'null', graduatesTo: 'null',
+  }, `## Decision log\n${longBody}\n`);
+  t.match(errText(checkLedgerConsistency(root)),
+    /epic long\.md: version 2 exceeds the 150-line planning bound.*\(E3\)/u,
+    'new epic cannot grow into a hidden spec');
+
+  writeEpic(root, 'long.md', {id: 'long', status: 'active'}, `${longBody}\n`);
+  t.equal(checkLedgerConsistency(root).errors.length, 0,
+    'historical long epic is grandfathered rather than mass-rewritten');
+  t.end();
+});
+
+t.test('versioned epic requires a decision log and rejects unknown contracts', (t) => {
+  const root = mkFixture();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  writeEpic(root, 'missing-log.md', {
+    id: 'missing-log', epicContractVersion: 2, graduatesTo: 'null',
+  });
+  t.match(errText(checkLedgerConsistency(root)),
+    /epic missing-log\.md: version 2 requires `## Decision log` \(E4\)/u,
+    'explicit human decisions keep one durable home');
+
+  writeEpic(root, 'unknown.md', {
+    id: 'unknown', epicContractVersion: 3, status: 'active',
+  });
+  t.match(errText(checkLedgerConsistency(root)),
+    /epic unknown\.md: unsupported epicContractVersion 3 \(E5\)/u,
+    'unknown contracts fail instead of falling back to legacy');
+  t.end();
+});
+
+t.test('legacy epic still requires its historical status field', (t) => {
+  const root = mkFixture();
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  writeEpic(root, 'legacy.md', {id: 'legacy'});
+  t.match(errText(checkLedgerConsistency(root)),
+    /epic legacy\.md: missing legacy frontmatter `status:` \(E2\)/u,
+    'legacy contract remains fail-closed during migration');
   t.end();
 });
 

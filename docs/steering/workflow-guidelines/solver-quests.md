@@ -24,10 +24,16 @@ contract** (recorded under `architecture/` or in an active spec — changing the
 contract, not merely editing owner-owned code). Below that threshold — a
 single-sitting fix, doc edit, or mechanical change with an obvious proof — do
 the work directly and commit it (core.md "Default Posture: Commit On
-Completion"); the Solver records nothing. When genuinely unsure whether work
-clears the threshold, author the Quest: a Quest that closes SOLVED in one
-attempt costs one command, while untracked multi-attempt work loses its whole
-evidence trail.
+Completion"); the Solver records nothing. A Quest is also required up front for
+live/distributed work, cross-session investigation, or competing interventions,
+because those shapes need durable evidence even when the first patch succeeds.
+
+Direct work is progressive, not a loophole. If it produces a failed measurement,
+expands beyond the original bounded owner scope, or yields a durable finding that
+must survive handoff, stop before a second evidence-bearing intervention and
+author a Quest. Link the earlier evidence as provenance; do not backdate it as a
+Quest attempt. A one-patch deterministic fix remains direct even when the code is
+important, provided it does not change an owner-boundary contract.
 
 A Quest must:
 
@@ -290,6 +296,11 @@ Do not keep patching under a theory whose owner path is no longer current.
 `health` and `report` also project **Scope Pressure** from the Quest's recorded
 `diff:<path>` attempt artifacts. Scope pressure flags broad owner areas, large
 diff stacks, mixed runtime/workflow changes, and mixed runtime/harness changes.
+The diagnostic retains every changed path and raw byte count, while terminal
+admission excludes only the fixed allowlist of deterministic generated boards
+and packed steering projections. Their authored inputs remain counted and their
+freshness gates still fail closed; mechanical output size must not force a fake
+owner split.
 Scope pressure is advisory rather than terminal, but a high-severity signal
 should usually produce a finding, a narrower theory, or a split Quest before
 more code is changed.
@@ -1123,34 +1134,41 @@ reports under `solve/report/` and attempt change artifacts under
 
 Projected state under `solve/state/` is local cache and may be rebuilt from the
 Quest plus append-only log. Do not rely on `solve/state/` as durable memory.
+`solve/OVERVIEW.generated.md` is likewise an ignored local projection: recording
+the attempt that generated it changes the Quest state it displays. Run
+`solve overview --write` on demand; never gate handoff on its checked-in bytes.
 
 ## Ledger Consistency
 
-Summary metadata drifts from content unless it is refreshed in the same edit as the
-body. An audit (2026-07-01) found stale epic `status:` fields (a `discussing` epic
-whose body was landed+validated), quests recorded solved whose oracle-probe target
-was missing, and oracle verdicts marked done with no terminal state recorded. The
-bodies were accurate; the small structured fields lagged.
+Summary metadata drifts from content unless it is derived or refreshed in the same
+edit as the body. An audit (2026-07-01) found stale epic `status:` fields, quests
+recorded solved whose oracle-probe target was missing, and oracle verdicts marked
+done with no terminal state recorded. Version 2 epics remove the duplicated status
+authority: `overview` derives their work stage from links and Quest state, while
+human decisions remain dated decision-log entries.
 
-Rule: when you advance an epic's decision log or a quest's outcome, update its
-structured metadata (`status:`, the oracle/state terminal) in the SAME change. A body
-that moved past its metadata is a defect.
+Rule: when you advance a quest's outcome, update its oracle/state terminal in the
+SAME change. When an epic decision changes, record the dated decision and its
+explicit target link; never mirror linked-work progress into a version 2 `status:`.
 
 `npm run solve:consistency` ([`scripts/solve/ledger-consistency.js`](../../../scripts/solve/ledger-consistency.js))
 gates the machine-checkable half:
 
-- every epic (except `README.md`/`_template.md`) carries a frontmatter `status:` from
-  the known vocabulary (`discussing`/`sharpening`/`active`/`landed-default-off`/`resolved`/`graduated`, plus bespoke suffixes);
+- version 2 epics carry no `status:`, contain `## Decision log`, and remain within
+  the 150-line planning bound; unknown contract versions fail closed, while
+  legacy epics retain their historical status field without driving `overview`;
 - a quest recorded `solved` whose `doneWhen` is an oracle probe has that oracle file
   present (else `solve status` re-reads it as undecided);
 - oracle-`done` vs recorded-terminal-state and latent unclosable oracle probes are
   surfaced as warnings.
 
-It keys ONLY on structured fields (status, probe type, oracle `done`, state
-`questStatus`) — never on decision-log prose, because a body that merely *mentions* a
-terminal outcome about a sub-lever does not make the epic terminal (keyword scraping was
-verified to be a false-positive machine). Judgment-level staleness ("is this epic really
-resolved?") stays a human concern; the check enforces only the invariants that cannot be
+Derived epic stage keys ONLY on explicit planning references and projected Quest
+state — never on status or decision-log prose. The consistency gate separately
+checks structural contract fields and the presence of the exact decision-log
+heading; it never interprets the entry text. A body that merely *mentions* a
+terminal outcome about a sub-lever does not make the epic terminal (keyword
+scraping was verified to be a false-positive machine). Judgment-level acceptance
+stays a human concern; the check enforces only invariants that cannot be
 legitimately violated.
 
 ## Portfolio And Meta Ratio

@@ -2,12 +2,28 @@ import {
   EVENT_ATTEMPT,
   EVENT_FINDING,
 } from './constants.js';
-import {inspectChangeArtifact} from './change-artifact.js';
+import {
+  changedPathsFromDiffContent,
+  inspectChangeArtifact,
+} from './change-artifact.js';
 
 const BROAD_OWNER_AREA_LIMIT = 2;
 const LARGE_DIFF_FILE_LIMIT = 10;
 const SPLIT_GROUP_FILE_LIMIT = 20;
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+const GENERATED_PROJECTION_PATHS = new Set([
+  'docs/steering/llm/architecture.md',
+  'docs/steering/llm/governance.md',
+  'docs/steering/llm/manifest.json',
+  'docs/steering/llm/rules-index.md',
+  'docs/steering/llm/rules.json',
+  'docs/steering/llm/solve-commands.md',
+  'docs/steering/llm/style.md',
+  'docs/steering/llm/testing.md',
+  'docs/steering/llm/tools-index.md',
+  'solve/FRONTIER.generated.md',
+  'solve/OVERVIEW.generated.md',
+]);
 
 function ownerAreaForPath(filePath) {
   const segments = String(filePath || '').split('/');
@@ -94,6 +110,32 @@ function effectiveChangeBytes(inspections) {
   return Math.max(bytes, largestSnapshotBytes);
 }
 
+function isGeneratedProjection(filePath) {
+  return GENERATED_PROJECTION_PATHS.has(filePath);
+}
+
+function authoredPayloadBytes(inspection) {
+  const content = String(inspection.content || '');
+  if (!content.startsWith('diff --git ')) return inspection.payloadBytes || 0;
+  return content.split(/(?=^diff --git )/mu).reduce((total, section) => {
+    const paths = changedPathsFromDiffContent(section);
+    return paths.length > 0 && paths.every(isGeneratedProjection) ? total :
+      total + Buffer.byteLength(section);
+  }, 0);
+}
+
+function admissionInspection(entry) {
+  return {
+    ...entry,
+    inspection: {
+      ...entry.inspection,
+      changedPaths: (entry.inspection.changedPaths || [])
+        .filter((filePath) => !isGeneratedProjection(filePath)),
+      payloadBytes: authoredPayloadBytes(entry.inspection),
+    },
+  };
+}
+
 function summarizeAttempts(inspections) {
   return inspections.map((entry) => {
     const paths = entry.inspection.changedPaths || [];
@@ -153,6 +195,12 @@ function summarizeScopePressure(inspections) {
     entry.inspection.categories || []))].sort();
   const signals = [];
   const changedBytes = effectiveChangeBytes(inspections);
+  const admissionInspections = inspections.map(admissionInspection);
+  const admissionChangedPaths = [...new Set(admissionInspections.flatMap((entry) =>
+    entry.inspection.changedPaths || []))].sort();
+  const admissionOwnerAreas = [...new Set(
+    admissionChangedPaths.map(ownerAreaForPath))].sort();
+  const admissionChangedBytes = effectiveChangeBytes(admissionInspections);
   if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
     signals.push({
       type: 'broad-source-scope',
@@ -186,6 +234,11 @@ function summarizeScopePressure(inspections) {
     ownerAreas,
     categories,
     attempts: summarizeAttempts(inspections),
+    admission: {
+      changedPaths: admissionChangedPaths,
+      changedBytes: admissionChangedBytes,
+      ownerAreas: admissionOwnerAreas,
+    },
     splitPlan: splitPlanFor(changedPaths),
     recommendedActions: recommendedActions(changedPaths, ownerAreas, categories),
     signals,
