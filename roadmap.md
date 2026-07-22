@@ -360,7 +360,7 @@ enough for direct implementation tasks.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|--------|-------|
-| RM-2.0-minimal-deployment-surface | Unified artifact / binding / cell deployment surface | 🔲 | Collapse the mechanism-first deployment surfaces (services, functions, triggers, callbacks, jobs) into three nouns: content-addressed artifacts with declared read/write sets, immutable versioned binding rows (`on <source> run <export>`) as the only declaration, and reconciled cells on one replica substrate (partition-as-service). Design home: `solve/epics/minimal-deployment-surface.md` |
+| RM-2.0-minimal-deployment-surface | Unified artifact / binding / cell deployment surface | 🔲 | Collapse the mechanism-first deployment surfaces into content-addressed artifacts with declared read/write sets, immutable versioned binding rows (`on <source> run <export>`), and reconciled cells on one replica substrate. Selected contract: `architecture/minimal-deployment-surface.md`; remaining cross-Quest choices: `solve/epics/minimal-deployment-surface.md`. |
 
 #### Phase A — Stable External Service Contract
 

@@ -57,6 +57,7 @@ compute moves to the data and cross-node traffic is reduced:
 
 ### Service Platform
 
+- [Minimal Deployment Surface](minimal-deployment-surface.md) - Selected Artifact / Binding / Cell contract and owner-aligned migration sequence.
 - [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md) - Kernel platform API contract.
 - [Service Control Transport](service-control-transport.md) - Authenticated lifecycle SQL ingress, security boundary, owner route, and rejected admin-RPC alternative.
 - [OCI Runtime Host Contract](oci-runtime-host-contract.md) - Bounded Docker Compose host-agent provider, authenticated control envelope, production construction route, and downstream live-proof split.

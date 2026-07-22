@@ -1,0 +1,69 @@
+{
+  "id": "minimal-deployment-artifact-export-contract",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Manifest schema v2 installations preserve v1 compatibility while requiring every normalized artifact export to declare a unique name, a stable interface type, and explicit exact table read/write sets; the default scaffold emits v2 and SQL INSTALL SERVICE persists those declarations through the existing immutable service package catalog.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-2.0-minimal-deployment-surface",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/minimal-deployment-surface.md",
+    "draftedAtCommit": "98d91dd46acabe03499a69c3a03e2537056deb32"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-artifact-export-contract",
+      "reportDir": "test-output/reports/minimal-deployment-artifact-export-contract",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-artifact-export-contract-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-artifact-export-contract",
+          "reportDir": "test-output/reports/minimal-deployment-artifact-export-contract",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "reuse-existing-owners",
+      "statement": "EXTEND src/service/external-service-manifest.js and the existing ServiceLifecycleCommandOwner -> ServiceInstallCatalogOwner -> service_packages.normalized_manifest path. Do not add an artifact registry, package table, lifecycle ingress, or validation owner."
+    },
+    {
+      "id": "versioned-compatibility",
+      "statement": "Manifest schema v1 remains accepted with its existing normalized meaning. Schema v2 becomes the scaffold default and is the only version in this Quest that carries analyzable export access declarations; both versions normalize through the same manifest owner."
+    },
+    {
+      "id": "v2-export-contract",
+      "statement": "Every v2 export has a unique name, a non-empty stable interface identifier, and explicit reads/writes arrays containing sorted unique exact lowercase table:<schema>.<table> references. Wildcards, implicit sets, duplicate names, and unknown export fields are rejected."
+    },
+    {
+      "id": "binding-boundary",
+      "statement": "This Quest does not define the seven binding source schemas, source-to-interface compatibility, a binding table, cell reconciliation, context placement, or artifact execution. Those remain downstream concerns."
+    },
+    {
+      "id": "live-install-observable",
+      "statement": "The deterministic scenario must prove the real SQL INSTALL SERVICE owner path persists the canonical v2 export declarations in service_packages.normalized_manifest, while malformed v2 input is rejected before artifact resolution or catalog mutation and the generated service scaffold emits valid v2 declarations."
+    },
+    {
+      "id": "proof-and-residuals",
+      "statement": "Proof covers the manifest owner, generated scaffold, SQL lifecycle consumer, immutable catalog tail, v1 compatibility, deterministic order normalization, negative schema attacks, static owner guards, and red-on-revert engagement."
+    }
+  ]
+}
