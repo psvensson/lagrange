@@ -13,6 +13,23 @@
 - parent quest: formation-ledger-self-move-blocks-cluster-ops
 - plan: solve/epics/topology-convergence-hardening.md
 
+## Current Blocker
+- Frontier: operation-ledger-quorum-authoritative-release-main
+- Owner: unknown
+- Boundary: unknown
+- Dominant reason: unknown
+- Mechanism: observation_gap
+- Movement: unknown: PASS -> FAIL
+- Latest evidence: test-output/reports/movielens-lagrange-service-affinity-live-2026-07-22T09-46-30-107Z.report.json
+- Selected theory: none
+- Next move: continue supervised step for operation-ledger-quorum-authoritative-release-main
+- No longer current: PASS; Do not reopen operation-ledger owner-release logic, widen admission timeouts, blame host CPU, or treat the final admin timeout as first cause. The next lever is generic destructive priority-REMOVE authority/fencing across leader handoff: cache unions that are conservative for ADD are unsafe for DELETE.
+
+## Continuation
+- Status: allowed
+- Next action: No open frontier remains; inspect solve report.
+- Blocker: none
+
 ## Scope Pressure
 - Changed files: 8
 - Change bytes: 28465
