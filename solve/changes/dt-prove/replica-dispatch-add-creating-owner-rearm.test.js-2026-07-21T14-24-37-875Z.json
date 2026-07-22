@@ -1,0 +1,18 @@
+{
+  "test": "test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js",
+  "src": [
+    "src/control-plane/replica-dispatch-retained-verification.js",
+    "src/control-plane/replica-dispatch-replay-readiness.js",
+    "src/rebalancer/replica-operation-step-policy.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-07-21T14:24:37.809Z"
+}
