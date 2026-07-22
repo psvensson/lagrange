@@ -1,0 +1,26 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "operator-facade-cut-over",
+  "evidence": {
+    "focusedCompatibility": "11 focused files, 555 assertions",
+    "steeringPack": "npm run steering:llm:pack",
+    "consistency": "npm run solve:consistency (0 errors, 0 warnings)",
+    "lint": "targeted ESLint and git diff --check pass"
+  },
+  "validations": {
+    "startCreatesOrResumesWithoutSealing": true,
+    "stableActionCodesAndPayloads": true,
+    "continueDispatchesStructuredCodesOnly": true,
+    "renderedCommandsNeverExecuted": true,
+    "changeCaptureIsExplicit": true,
+    "verifierDriftRejected": true,
+    "rejectionNeverCommits": true,
+    "sourceApprovalCommitsScopeWithoutPush": true,
+    "nonSourceLandingNeedsNoInventedReceipt": true,
+    "componentCommandsRemainAvailable": true,
+    "approvalPreflightsResidualAuditFailures": true,
+    "modelContractApplicabilityRecorded": true
+  }
+}

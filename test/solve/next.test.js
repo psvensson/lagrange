@@ -88,10 +88,12 @@ tap.test('solve next', async (t) => {
     const root = tmp();
     makeOracleQuest(root);
     const projection = buildNextProjection(root, 'demo');
-    t.equal(projection.schemaVersion, 1);
+    t.equal(projection.schemaVersion, 2);
     t.same(projection.action, {
       type: 'executable-command',
       value: 'node scripts/solve.js step --id demo',
+      code: 'begin-step',
+      payload: {questId: 'demo', frontier: 'demo-main'},
     });
     t.same(JSON.parse(runNextCommand(root, 'demo', {json: true})), projection);
     fs.rmSync(root, {recursive: true, force: true});

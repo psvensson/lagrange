@@ -20,16 +20,18 @@ obvious proof — just do the work and commit it. Authoritative statement:
 solver-quests.md "Operating Contract".
 
 For a Quest, use [`boot.md`](docs/steering/llm/boot.md) as the executable
-quickstart. It owns the current commands for capability discovery, draft lint,
-typed next actions, supervised work, autonomous work, verification, checkpoint,
-and terminal handoff. This entry point deliberately does not duplicate them.
+quickstart. The primary operator surface is three verbs: `solve start`,
+`solve continue`, and `solve land`. Component commands remain available for
+diagnostics and exceptional operations; the entry point does not duplicate them.
 
 ## Where Do I Look?
 
 | If you need... | Read / Run |
 | --- | --- |
 | First executable action | [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md) |
-| Current typed Quest action | `node scripts/solve.js next --id <id>` |
+| Start or resume a Quest | `node scripts/solve.js start --id <id>` |
+| Execute its safe next step | `node scripts/solve.js continue --id <id>` |
+| Record a verdict and land | `node scripts/solve.js land --id <id> ...` |
 | Quest process and guardrails | [`docs/steering/workflow-guidelines/solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md) |
 | Solver operator quickstart | [`docs/solver-runbook.md`](docs/solver-runbook.md) |
 | Always-active core operating contract | [`docs/steering/llm/core.md`](docs/steering/llm/core.md) |

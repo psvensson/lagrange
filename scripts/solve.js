@@ -65,6 +65,11 @@ import {
   VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_SCOPE,
 } from './solve/verification.js';
+import {
+  continueQuestWorkflow,
+  landQuestWorkflow,
+  startQuestWorkflow,
+} from './solve/operator-workflow.js';
 
 const LOCAL_STR_OWNED_001 = 'new: Quest ID has append-only history but no Quest file; restore it or author a successor';
 const LOCAL_STR_OWNED_002 = 'new: --force cannot overwrite a Quest with append-only history; author a successor';
@@ -273,11 +278,61 @@ function cmdNew(root, args) {
     inheritRulesOutFindings(root, quest, inheritedParentId) : 0;
   const inheritedLine = inherited ?
     `inherited ${inherited} rulesOut finding(s) from ${inheritedParentId}\n` : '';
-  process.stdout.write(
-    `created ${written}\n${inheritedLine}` +
-    `Edit it, then: node scripts/solve.js next --id ${id}\n`);
+  if (!args.quiet) {
+    process.stdout.write(
+      `created ${written}\n${inheritedLine}` +
+      `Edit it, then: node scripts/solve.js next --id ${id}\n`);
+  }
   emitRetreadWarnings(root, quest);
   refreshFrontierBoard(root);
+  return {quest, written, inherited};
+}
+
+function renderFacadeResult(command, result) {
+  const next = result.next?.action || result.next || null;
+  const lines = [`${command}: ${result.ok === false ? 'blocked' : 'ready'}`];
+  if (result.operation) lines.push(`executed: ${result.operation}`);
+  if (result.verdict) {
+    lines.push(`verdict: ${result.verdict}`);
+    lines.push(`committed: ${result.committed ? 'yes' : 'no'}`);
+  }
+  if (result.lint?.status) lines.push(`lint: ${result.lint.status}`);
+  if (next) {
+    lines.push(`next [${next.code || 'unstructured'}]: ${next.value || '(none)'}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+function writeFacadeResult(command, args, result) {
+  process.stdout.write(args.json === true ?
+    `${JSON.stringify(result, null, 2)}\n` : renderFacadeResult(command, result));
+}
+
+function cmdStart(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error('start: --id <questId> is required');
+  const doctor = buildDoctorReport(root);
+  if (!fs.existsSync(questFilePath(root, id))) {
+    if (typeof args.statement !== 'string') {
+      throw new Error(
+        'start: unknown Quest; pass --statement "<sealed result>" to create it',
+      );
+    }
+    cmdNew(root, {...args, id, quiet: true});
+  }
+  writeFacadeResult('start', args, startQuestWorkflow(root, {...args, id, doctor}));
+}
+
+function cmdContinue(root, args) {
+  const result = continueQuestWorkflow(root, args);
+  if (result.executed) refreshFrontierBoard(root);
+  writeFacadeResult('continue', args, result);
+}
+
+function cmdLand(root, args) {
+  const result = landQuestWorkflow(root, args);
+  refreshFrontierBoard(root);
+  writeFacadeResult('land', args, result);
 }
 
 // Draft-time retread check (and again on each supervised pin): warn when the
@@ -1060,6 +1115,9 @@ function cmdInvariants(root, args) {
 }
 
 const COMMANDS = {
+  'start': cmdStart,
+  'continue': cmdContinue,
+  'land': cmdLand,
   'new': cmdNew,
   'run': cmdRun,
   'status': cmdStatus,

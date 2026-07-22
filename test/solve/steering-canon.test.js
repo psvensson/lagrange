@@ -24,7 +24,7 @@ tap.test('LLM steering canon has one owner per concern', (t) => {
     'AGENTS owns routing/load order, not an executable boot sequence');
   t.match(agents, /complete selective surfaces/u);
 
-  for (const command of ['doctor', 'lint', 'next', 'checkpoint', 'handoff']) {
+  for (const command of ['doctor', 'start', 'continue', 'land', 'checkpoint', 'next']) {
     t.match(boot, new RegExp(`solve\\.js ${command}`, 'u'),
       `boot owns the ${command} first-action command`);
   }

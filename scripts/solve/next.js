@@ -12,7 +12,7 @@ import {buildCurrentBlocker, blockerLabel} from './current-blocker.js';
 import {analyzeQuestHealth} from './health.js';
 import {buildAdvisories, renderAdvisoryLines} from './advisories.js';
 import {buildSealFreshnessAdvisory} from './seal-freshness.js';
-import {typedNextAction} from './next-action.js';
+import {NEXT_ACTION_CODE, typedNextAction} from './next-action.js';
 import {auditQuest} from './audit.js';
 import {
   checkpointVerificationPreflight,
@@ -40,7 +40,7 @@ const TERMINAL_STATUSES = Object.freeze([STATUS_SOLVED, STATUS_EXHAUSTED]);
 const FILE_NOT_FOUND_CODE = 'ENOENT';
 const UNKNOWN_METRIC = '?';
 const LINE_SEPARATOR = '\n';
-const NEXT_SCHEMA_VERSION = 1;
+const NEXT_SCHEMA_VERSION = 2;
 
 // The last event, when it is a recorded non-terminal gate stop (an advisory
 // gate-decision means the run continued, so it is not a stop). Anything after
@@ -66,6 +66,10 @@ function verifierAction(questId, frontier, scope, fingerprint) {
     LOCAL_STR_OWNED_002 +
     LOCAL_STR_OWNED_003 +
     `--verification-scope ${scope} --verification-fingerprint ${fingerprint}`,
+    {
+      code: NEXT_ACTION_CODE.REQUEST_VERIFICATION,
+      payload: {questId, frontier, scope, fingerprint},
+    },
   );
 }
 
@@ -82,6 +86,10 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
       'record separate canonical same-frontier replacement attempts for each ' +
       `unresolved base in the ${questId} verification dossier; then rerun ` +
       `node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+      {
+        code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
+        payload: {questId, phase: 'begin', bases, requiredPaths: paths},
+      },
     );
   }
   const base = bases.length === 1 ? bases[0] :
@@ -90,6 +98,10 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
     `record a canonical same-frontier replacement attempt for ${questId} ` +
     `at base ${base} covering ${paths.join(', ') || '(no paths)'}; then rerun ` +
     `node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+    {
+      code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
+      payload: {questId, phase: 'begin', bases: [base], requiredPaths: paths},
+    },
   );
 }
 
@@ -115,10 +127,15 @@ function nextAction({questId, state, pending, gateStop, blocker,
     return pendingVerifierAction(
       questId, state, pendingVerification, verificationPreflight);
   }
-  if (verification.unresolvedRejectedAttempts.length > 0) {
+  if (verification.unresolvedRejectedAttempts.length > 0 ||
+    verification.unresolvedCandidateRejection) {
+    const phase = pending ? 'commit' : 'begin';
     return typedNextAction(pending ?
       pendingCommitCommand(questId) :
-      `node scripts/solve.js step --id ${questId}`);
+      `node scripts/solve.js step --id ${questId}`, {
+      code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
+      payload: {questId, phase},
+    });
   }
   if (TERMINAL_STATUSES.includes(state.questStatus)) {
     if (verification.attempts.some((attempt) => attempt.contracted) &&
@@ -134,26 +151,59 @@ function nextAction({questId, state, pending, gateStop, blocker,
     }
     if (audit.status === LOCAL_STR_OWNED_008) {
       return typedNextAction(
-        `node scripts/solve.js handoff --id ${questId} --commit`);
+        `node scripts/solve.js handoff --id ${questId} --commit`, {
+          code: NEXT_ACTION_CODE.LAND,
+          payload: {questId},
+        });
     }
     return typedNextAction(
       `resolve terminal audit failures: node scripts/solve.js audit --id ${questId}`,
+      {
+        code: NEXT_ACTION_CODE.REPAIR_AUDIT,
+        payload: {questId},
+      },
     );
   }
   if (verification.uncheckpointedApprovedAttempts.length > 0 &&
     verification.attemptProblems.length === 0) {
-    return typedNextAction(`node scripts/solve.js checkpoint --id ${questId}`);
+    return typedNextAction(`node scripts/solve.js checkpoint --id ${questId}`, {
+      code: NEXT_ACTION_CODE.CHECKPOINT,
+      payload: {questId},
+    });
   }
-  if (pending) return typedNextAction(pendingCommitCommand(questId));
+  if (pending) {
+    return typedNextAction(pendingCommitCommand(questId), {
+      code: NEXT_ACTION_CODE.COMMIT_STEP,
+      payload: {questId},
+    });
+  }
   if (gateStop) {
-    if (gateStop.nextCommand) return typedNextAction(gateStop.nextCommand);
+    if (gateStop.nextCommand) {
+      return typedNextAction(gateStop.nextCommand, {
+        code: NEXT_ACTION_CODE.OPERATOR_ACTION,
+        payload: {
+          questId,
+          stopCode: gateStop.code || gateStop.outcome,
+          problem: (gateStop.problems || [])[0] || null,
+        },
+      });
+    }
     const problem = (gateStop.problems || [])[0] || 'operator judgment required';
-    return typedNextAction(`resolve ${gateStop.code || gateStop.outcome}: ${problem}`);
+    return typedNextAction(`resolve ${gateStop.code || gateStop.outcome}: ${problem}`, {
+      code: NEXT_ACTION_CODE.OPERATOR_ACTION,
+      payload: {questId, stopCode: gateStop.code || gateStop.outcome, problem},
+    });
   }
   if (blocker.nextAction === `continue supervised step for ${blocker.frontier}`) {
-    return typedNextAction(`node scripts/solve.js step --id ${questId}`);
+    return typedNextAction(`node scripts/solve.js step --id ${questId}`, {
+      code: NEXT_ACTION_CODE.BEGIN_STEP,
+      payload: {questId, frontier: blocker.frontier},
+    });
   }
-  return typedNextAction(blocker.nextAction);
+  return typedNextAction(blocker.nextAction, {
+    code: NEXT_ACTION_CODE.OPERATOR_ACTION,
+    payload: {questId, frontier: blocker.frontier},
+  });
 }
 
 export function buildNextProjection(root, questId) {

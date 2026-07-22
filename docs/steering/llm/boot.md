@@ -49,31 +49,42 @@ provenance rather than backdating it as an attempt.
 node scripts/solve.js doctor
 ```
 
-For an existing Quest, ask the Solver for its one typed action:
+For an existing Quest, run the read-only entry point. It combines capability
+preflight, lint, and the stable structured next action without sealing or
+beginning work:
 
 ```sh
-node scripts/solve.js next --id <id>
+node scripts/solve.js start --id <id>
 ```
 
-For a new Quest, author its planning link at creation, validate the draft, then
-use the same typed-action surface:
+For a new Quest, the same command may create and validate the linked draft:
 
 ```sh
-node scripts/solve.js new --id <id> --statement "<sealed result>" \
+node scripts/solve.js start --id <id> --statement "<sealed result>" \
   --spec-ref <spec-or-plan-reference>
-node scripts/solve.js lint --id <id>
-node scripts/solve.js next --id <id>
 ```
 
-`new` writes a versioned draft and stamps `links.draftedAtCommit`; it does not
-seal the goal. The first `step`, `attempt`, or `run` lints the draft and appends
-the declaration. A lint failure appends nothing. `--force` may replace only a
-history-free draft; once a log exists, author a successor Quest.
+Drive routine supervised work with one verb. It executes only structured
+`begin-step` and `commit-step` actions; judgment, verification, checkpoint, and
+repair actions stop for the operator. Committing requires an explicit capture
+choice and summary—working-tree capture is never implicit:
+
+```sh
+node scripts/solve.js continue --id <id>
+# make and prove the bounded change
+node scripts/solve.js continue --id <id> --auto-diff \
+  --summary "<what changed>"
+```
+
+`start` writes a versioned draft and stamps `links.draftedAtCommit` when the
+Quest is new; it does not seal the goal. The first safe continuation lints and
+appends the declaration. A lint failure appends nothing. The lower-level `new`,
+`lint`, `next`, `step`, `audit`, and `handoff` commands remain available for
+diagnostics and exceptional operations.
 
 `doctor` reports whether a live agent adapter is explicitly enabled and
-executable. When it recommends supervised mode, use `step`. When it recommends
-autonomous mode, `next` may return the real agent invocation. The no-op example
-adapter is never treated as a capability.
+executable. Supervised mode uses `continue`; a configured autonomous adapter may
+still use `run`. The no-op example adapter is never treated as a capability.
 
 Version 2 source attempts accumulate into one landing candidate. `next` keeps
 routine work moving; it does not prescribe per-attempt review or checkpoint.
@@ -84,12 +95,15 @@ node scripts/solve.js checkpoint --id <id> --dry-run \
   --reason <handoff|risky-tree|long-running|milestone>
 ```
 
-At a terminal, `next` requests aggregate verification when needed and returns
-`handoff --commit` only after the full audit passes. Findings never commit, and
-no Solver command pushes.
+At a terminal, `start`/`continue` returns `request-verification` with the exact
+fingerprint. After independent review, one command validates the verdict against
+current bytes, records the structured receipt, runs the full audit, and on
+approval commits only Quest scope. Rejection records the fail-closed verdict and
+never commits. No Solver command pushes.
 
 ```sh
-node scripts/solve.js handoff --id <id> --commit
+node scripts/solve.js land --id <id> --verifier <stable-id> \
+  --verdict approve --fingerprint sha256:<64hex> --receipt <ref>
 ```
 
 ## Before Verification Or Checkpoint

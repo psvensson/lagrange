@@ -6,6 +6,36 @@ orientation by [`boot.md`](steering/llm/boot.md), and the binding workflow by
 [`solver-quests.md`](steering/workflow-guidelines/solver-quests.md). The complete
 generated CLI reference is [`solve-commands.md`](steering/llm/solve-commands.md).
 
+## Primary Three-Verb Workflow
+
+```sh
+# Existing Quest: read-only doctor + lint + structured next action.
+node scripts/solve.js start --id my-quest
+
+# New Quest: create and validate the linked draft, but do not seal it.
+node scripts/solve.js start --id my-quest \
+  --statement "The named scenario passes three consecutive fresh runs." \
+  --spec-ref solve/specs/my-feature/requirements.md#acceptance
+
+# Begin, then explicitly capture one proved change.
+node scripts/solve.js continue --id my-quest
+node scripts/solve.js continue --id my-quest --auto-diff \
+  --summary "route the decision through its owner"
+
+# At terminal, use the exact fingerprint returned by start/continue.
+node scripts/solve.js land --id my-quest --verifier <stable-id> \
+  --verdict approve --fingerprint sha256:<64hex> --receipt <ref>
+```
+
+`continue` executes only trusted structured begin/commit codes. It never runs
+the rendered command text, never implicitly captures the worktree, and stops on
+verification, checkpoint, repair, or judgment actions. `land` validates current
+bytes before recording the verdict; rejection never commits, approval uses the
+existing full audit and scope-safe commit, and neither path pushes.
+
+The remaining sections document component commands for diagnostics, explicit
+durability boundaries, and exceptional operations.
+
 ## Orient Without Mutation
 
 ```sh
@@ -20,7 +50,7 @@ autonomous capability. `solve/config.json` is machine-local and ignored by Git.
 Copy [`solve/config.example.json`](../solve/config.example.json) locally and set
 `enabled: true` only after replacing the placeholder with a live executable.
 
-For an existing Quest, do not infer the next command from prose:
+For component-level diagnosis, inspect the same projection directly:
 
 ```sh
 node scripts/solve.js next --id <quest>
@@ -31,6 +61,8 @@ The action is typed as `executable-command`, `command-template`,
 `manual-action`, or `terminal`.
 
 ## Author And Validate A Draft
+
+Normally use `start`; the component form is:
 
 ```sh
 node scripts/solve.js new --id my-quest \
@@ -56,6 +88,8 @@ node scripts/solve.js lint --all --json
 It reports versioned and legacy Quests; it does not migrate or rewrite them.
 
 ## Drive One Supervised Attempt
+
+Normally use `continue`; the component form is:
 
 ```sh
 node scripts/solve.js step --id my-quest
@@ -112,6 +146,8 @@ reason, refuses any candidate drift, commits only Quest scope, and never pushes.
 Routine work skips this section entirely and goes straight to terminal review.
 
 ## Terminal Verification And Handoff
+
+Normally pass the independent verdict to `land`; the component form is:
 
 At SOLVED or EXHAUSTED, source-changing work needs a fresh approval of the
 aggregate fingerprint that `solve next` prints. `both` is valid only when the

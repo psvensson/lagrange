@@ -1,5 +1,17 @@
 {
   "_comment": "Curated descriptions for the solve.js CLI subcommands. Consumed by scripts/gen-solve-commands-index.js (run via `npm run steering:llm:pack`) to emit docs/steering/llm/solve-commands.md. Keys MUST match the COMMANDS map in scripts/solve.js: a registered command missing here renders as `(undocumented)` and a key here that is not registered renders under `Documented but not registered`, so `npm run steering:check` fails on either drift. Add or correct entries here, not in the generated markdown.",
+  "start": {
+    "summary": "Read-only operator entry point: run doctor, optionally create a linked Quest draft, lint it, and return the stable structured next action. It never seals or begins work.",
+    "usage": "node scripts/solve.js start --id <id> [--statement \"<sealed result>\" --class product|process --spec-ref <ref>] [--json]"
+  },
+  "continue": {
+    "summary": "Execute only trusted structured begin/commit action codes from the current next projection. Commit requires explicit --changeRef or explicit --auto-diff plus --summary; rendered command text and judgment/gate actions are never executed.",
+    "usage": "node scripts/solve.js continue --id <id> [--changeRef diff:<path> | --auto-diff] [--summary \"<what changed>\"] [--json]"
+  },
+  "land": {
+    "summary": "Validate an independent verifier verdict against the exact current terminal candidate, record its structured receipt, and on approval perform the existing audit-gated scope-safe commit. Rejection never commits; no path pushes.",
+    "usage": "node scripts/solve.js land --id <id> --verifier <stable-id> --verdict approve|reject --fingerprint sha256:<64hex> --receipt <ref> [--json] (omit verifier flags when the candidate has no source changes)"
+  },
   "new": {
     "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: the first execution command lints and declares it. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists.",
     "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--class product|process] [--plan-doc <path>] [--parent-quest <id>] [--roadmap-row <id>] [--spec-ref <ref>] [--closes-cl <CL-id>] [--inherit-rulesout-from <parentQuestId>]"

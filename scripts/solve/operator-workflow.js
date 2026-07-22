@@ -1,0 +1,262 @@
+// Three-verb operator façade over the component Quest machinery.
+//
+// The human-readable `action.value` is deliberately never parsed or executed.
+// Dispatch is limited to stable action codes and validated payloads produced by
+// buildNextProjection. Component commands remain available for diagnostics.
+
+import {
+  appendFinding,
+  loadQuest,
+  readLog,
+} from './store.js';
+import {buildDoctorReport} from './doctor.js';
+import {lintQuestCorpus} from './quest-lint.js';
+import {buildNextProjection} from './next.js';
+import {NEXT_ACTION_CODE} from './next-action.js';
+import {runStep} from './step.js';
+import {
+  buildVerificationFinding,
+  VERIFICATION_CONTRACT_VERSION,
+  VERIFICATION_SCOPE,
+  verificationState,
+} from './verification.js';
+import {autoCommitQuest} from './handoff.js';
+import {auditQuest} from './audit.js';
+
+const VERDICT_APPROVE = 'approve';
+const VERDICT_REJECT = 'reject';
+const VERIFIER_APPROVAL = 'verifier-approval';
+const VERIFIER_REJECTION = 'verifier-rejection';
+
+function requireId(args, command) {
+  const id = args.id || args._?.[0];
+  if (!id) throw new Error(`${command}: --id <questId> is required`);
+  return id;
+}
+
+function assertStructuredAction(action, questId) {
+  if (!action || typeof action.code !== 'string' ||
+    !action.payload || action.payload.questId !== questId) {
+    throw new Error(
+      'continue: next action lacks a trusted structured code/payload; inspect with solve next',
+    );
+  }
+}
+
+function explicitCommitOptions(args) {
+  const changeRef = typeof args.changeRef === 'string' ? args.changeRef : null;
+  const autoDiff = args['auto-diff'] === true;
+  const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
+  if (changeRef && autoDiff) {
+    throw new Error('continue: pass exactly one of --changeRef or --auto-diff');
+  }
+  if (!changeRef && !autoDiff) {
+    throw new Error(
+      'continue: commit requires explicit --changeRef diff:<path> or --auto-diff',
+    );
+  }
+  if (!summary) throw new Error('continue: commit requires --summary "<what changed>"');
+  return {
+    changeRef: changeRef || undefined,
+    autoDiff,
+    summary,
+  };
+}
+
+function executeStructuredContinuation(root, quest, action, args) {
+  if (action.code === NEXT_ACTION_CODE.BEGIN_STEP) {
+    if (args.changeRef || args['auto-diff'] || args.summary) {
+      throw new Error('continue: begin-step does not accept commit capture arguments');
+    }
+    return {executed: true, operation: 'begin-step', result: runStep(root, quest)};
+  }
+  if (action.code === NEXT_ACTION_CODE.COMMIT_STEP) {
+    return {
+      executed: true,
+      operation: 'commit-step',
+      result: runStep(root, quest, explicitCommitOptions(args)),
+    };
+  }
+  if (action.code === NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT) {
+    const phase = action.payload.phase;
+    if (phase === 'begin') {
+      return {
+        executed: true,
+        operation: 'replace-rejected-attempt:begin',
+        result: runStep(root, quest),
+      };
+    }
+    if (phase === 'commit') {
+      return {
+        executed: true,
+        operation: 'replace-rejected-attempt:commit',
+        result: runStep(root, quest, explicitCommitOptions(args)),
+      };
+    }
+    throw new Error('continue: replacement action has an invalid phase');
+  }
+  return {executed: false, operation: null, result: null};
+}
+
+export function startQuestWorkflow(root, args = {}) {
+  const id = requireId(args, 'start');
+  const doctor = args.doctor || buildDoctorReport(root);
+  const lint = lintQuestCorpus(root, {id});
+  const next = lint.status === 'pass' ? buildNextProjection(root, id) : null;
+  return {
+    schemaVersion: 1,
+    ok: doctor.ok && lint.status === 'pass',
+    questId: id,
+    doctor,
+    lint,
+    next,
+  };
+}
+
+export function continueQuestWorkflow(root, args = {}) {
+  const id = requireId(args, 'continue');
+  const quest = loadQuest(root, id);
+  const before = buildNextProjection(root, id);
+  assertStructuredAction(before.action, id);
+  const execution = executeStructuredContinuation(root, quest, before.action, args);
+  return {
+    schemaVersion: 1,
+    questId: id,
+    before: before.action,
+    ...execution,
+    next: buildNextProjection(root, id),
+  };
+}
+
+function verifierEvidence(verifier) {
+  const value = typeof verifier === 'string' ? verifier.trim() : '';
+  if (!value) throw new Error('land: --verifier <stable-id> is required');
+  return value.startsWith('subagent:') ? value : `subagent:${value}`;
+}
+
+function candidateReceipt(state, fingerprint) {
+  if (!state.candidate?.ok || state.candidate.fingerprint !== fingerprint) {
+    throw new Error('land: rejection fingerprint does not match current candidate bytes');
+  }
+  return {
+    scope: VERIFICATION_SCOPE.CANDIDATE,
+    receipt: state.candidate,
+  };
+}
+
+function aggregateReceipt(state, fingerprint) {
+  const attempts = state.attempts.filter((attempt) => attempt.candidateContract);
+  if (!state.aggregate?.ok || state.aggregate.fingerprint !== fingerprint ||
+    attempts.length === 0) {
+    throw new Error('land: approval fingerprint does not match current aggregate bytes');
+  }
+  return {
+    scope: VERIFICATION_SCOPE.AGGREGATE,
+    receipt: {
+      ...state.aggregate,
+      sourcePaths: state.aggregate.paths,
+      firstAttemptIndex: attempts[0].index,
+      lastAttemptIndex: attempts[attempts.length - 1].index,
+    },
+  };
+}
+
+function receiptForVerdict(state, verdict, fingerprint) {
+  if (verdict === VERDICT_APPROVE) return aggregateReceipt(state, fingerprint);
+  if (verdict === VERDICT_REJECT) return candidateReceipt(state, fingerprint);
+  throw new Error('land: --verdict must be approve|reject');
+}
+
+function assertApprovalCanCompleteAudit(root, quest, fingerprint) {
+  const audit = auditQuest(root, quest);
+  const expectedReceiptProblem =
+    `requires a later aggregate approval for ${fingerprint}`;
+  const residual = audit.problems.filter((item) =>
+    !String(item.message || '').includes(expectedReceiptProblem));
+  if (residual.length > 0) {
+    throw new Error(
+      'land: terminal audit has non-verification problems: ' +
+      residual.map((item) => item.message).join('; '),
+    );
+  }
+}
+
+export function landQuestWorkflow(root, args = {}) {
+  const id = requireId(args, 'land');
+  const quest = loadQuest(root, id);
+  const log = readLog(root, id);
+  const before = buildNextProjection(root, id);
+  if (!['solved', 'exhausted'].includes(before.quest.status)) {
+    throw new Error('land: Quest must be terminal before recording a landing verdict');
+  }
+  const state = verificationState(root, quest, log);
+  if (state.attempts.length === 0) {
+    if (args.verifier || args.verdict || args.fingerprint || args.receipt) {
+      throw new Error('land: this candidate has no source changes and needs no verifier');
+    }
+    const commit = autoCommitQuest(root, id);
+    return {
+      schemaVersion: 1,
+      questId: id,
+      verdict: 'not-required',
+      fingerprint: null,
+      receiptRef: null,
+      committed: commit.committed,
+      commit,
+      next: buildNextProjection(root, id),
+    };
+  }
+  const verdict = typeof args.verdict === 'string' ? args.verdict.trim() : '';
+  const fingerprint = typeof args.fingerprint === 'string' ?
+    args.fingerprint.trim() : '';
+  const evidence = verifierEvidence(args.verifier);
+  const {scope, receipt} = receiptForVerdict(state, verdict, fingerprint);
+  const kind = verdict === VERDICT_APPROVE ? VERIFIER_APPROVAL : VERIFIER_REJECTION;
+  const latest = receipt.attempts?.at(-1) || state.attempts.at(-1);
+  const frontier = latest?.event?.frontier || quest.frontiers?.[0]?.id;
+  if (!frontier) throw new Error('land: current candidate has no frontier');
+  const receiptRef = typeof args.receipt === 'string' ? args.receipt.trim() : '';
+  if (!receiptRef) throw new Error('land: --receipt <verifier-receipt-ref> is required');
+  if (verdict === VERDICT_APPROVE) {
+    assertApprovalCanCompleteAudit(root, quest, fingerprint);
+  }
+  const verification = buildVerificationFinding({
+    kind,
+    evidence,
+    verificationScope: scope,
+    verificationFingerprint: fingerprint,
+    verificationReceipt: receipt,
+    verificationSchemaVersion: VERIFICATION_CONTRACT_VERSION,
+  });
+  appendFinding(root, id, {
+    frontier,
+    claim: verdict === VERDICT_APPROVE ?
+      `independent landing verification passed${receiptRef ? ` (${receiptRef})` : ''}` :
+      `independent landing verification rejected${receiptRef ? ` (${receiptRef})` : ''}`,
+    kind,
+    evidence,
+    verification,
+  });
+  if (verdict === VERDICT_REJECT) {
+    return {
+      schemaVersion: 1,
+      questId: id,
+      verdict,
+      fingerprint,
+      receiptRef,
+      committed: false,
+      next: buildNextProjection(root, id),
+    };
+  }
+  const commit = autoCommitQuest(root, id);
+  return {
+    schemaVersion: 1,
+    questId: id,
+    verdict,
+    fingerprint,
+    receiptRef,
+    committed: commit.committed,
+    commit,
+    next: buildNextProjection(root, id),
+  };
+}

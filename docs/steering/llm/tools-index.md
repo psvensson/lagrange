@@ -180,16 +180,19 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `solve:audit` — Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.
 - `solve:checkpoint` — Explicitly commit one unchanged, fingerprint-approved source attempt; never pushes.
 - `solve:consistency` — `node scripts/solve/ledger-consistency.js`
+- `solve:continue` — `node scripts/solve.js continue`
 - `solve:doctor` — Inspect Git, local adapter, execution mode, and attribution capabilities without mutation.
 - `solve:finding` — Record durable Quest memory for a frontier.
 - `solve:health` — Report Quest loop-health, theory gates, divergence signals, and the next legal action.
 - `solve:ingest-evidence` — Record fresh probe evidence with a content fingerprint before the next attempt.
+- `solve:land` — `node scripts/solve.js land`
 - `solve:lint` — Validate the versioned Quest authoring contract or report the read-only legacy census.
 - `solve:new` — Create an authored Quest file under solve/quests.
 - `solve:next` — Print the typed next action for an existing Quest.
 - `solve:probe` — Measure a scenario metric directly without recording an attempt.
 - `solve:report` — Print the Quest report projection.
 - `solve:run` — `node scripts/solve.js run`
+- `solve:start` — `node scripts/solve.js start`
 - `solve:status` — Print the Solver projection for a Quest.
 - `solve:step` — Begin a supervised attempt and pin the before metric.
 - `solve:step-pending` — Inspect the pinned supervised-step baseline without changing Quest memory.
@@ -282,4 +285,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-186 scripts indexed; 71 have a curated description, 115 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+189 scripts indexed; 71 have a curated description, 118 fall back to their raw command. Improve coverage in the two sources named in the header comment.
