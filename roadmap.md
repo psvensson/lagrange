@@ -356,6 +356,12 @@ Rows in this section are design-preparation scoped until each item is backed by
 a linked architecture or spec document that defines the contract boundary well
 enough for direct implementation tasks.
 
+#### Phase 0 — Minimal Deployment Surface (design)
+
+| Id | Item | Roadmap state | Scope notes |
+|----|------|--------|-------|
+| RM-2.0-minimal-deployment-surface | Unified artifact / binding / cell deployment surface | 🔲 | Collapse the mechanism-first deployment surfaces (services, functions, triggers, callbacks, jobs) into three nouns: content-addressed artifacts with declared read/write sets, immutable versioned binding rows (`on <source> run <export>`) as the only declaration, and reconciled cells on one replica substrate (partition-as-service). Design home: `solve/epics/minimal-deployment-surface.md` |
+
 #### Phase A — Stable External Service Contract
 
 | Item | Roadmap state | Scope notes |
