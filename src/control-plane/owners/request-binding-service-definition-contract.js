@@ -22,6 +22,7 @@ import {
   parseOciReference,
 } from '../../wasm-service/oci-reference.js';
 import {
+  DEPLOYMENT_BINDING_SOURCE_INTERFACE,
   DEPLOYMENT_BINDING_SOURCE_KIND,
   canonicalJson,
   projectBinding,
@@ -46,22 +47,26 @@ const REQUEST_BINDING_SERVICE_DEFINITION_PATH = Object.freeze({
 
 const REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE = Object.freeze({
   ARTIFACT_MISMATCH:
-    'request Binding Artifact does not match its immutable target',
+    'Binding Artifact does not match its immutable target',
   DEPENDENCY_REQUIRED:
-    'request Binding desired-service compiler dependencies are required',
+    'Binding desired-service compiler dependencies are required',
   DESIRED_SERVICE_CONFLICT:
-    'request Binding desired service conflicts with durable state',
+    'Binding desired service conflicts with durable state',
   INVALID_RUNTIME_DESCRIPTOR:
-    'request Binding does not compile to a valid runtime descriptor',
-  SOURCE_UNSUPPORTED: 'only request Bindings compile to desired services',
+    'Binding does not compile to a valid runtime descriptor',
+  SOURCE_UNSUPPORTED:
+    'only request and change Bindings compile to desired services',
 });
 
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
-const REQUEST_BINDING_INTERFACE = 'request_v1';
 const REQUEST_BINDING_SERVICE_DEFINITION_ERROR_NAME =
   'RequestBindingServiceDefinitionError';
 const SERVICE_ID_PREFIX = 'binding-service-';
+const COMPILED_SOURCE_KINDS = new Set([
+  DEPLOYMENT_BINDING_SOURCE_KIND.CHANGE,
+  DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+]);
 const BINDING_LINEAGE_FIELDS = Object.freeze([
   SD_COL.BINDING_VERSION_ID,
   SD_COL.BINDING_DIGEST,
@@ -94,6 +99,10 @@ function hasRequestBindingServiceDefinitionLineage(row) {
       row[SD_COL.SERVICE_ID].startsWith(SERVICE_ID_PREFIX));
 }
 
+function supportsBindingServiceDefinitionSourceKind(sourceKind) {
+  return COMPILED_SOURCE_KINDS.has(sourceKind);
+}
+
 function assertArtifactMatchesBinding(binding, artifact) {
   const target = binding.declaration.target;
   if (!artifact || artifact.packageId !== target.package_id ||
@@ -108,8 +117,10 @@ function assertArtifactMatchesBinding(binding, artifact) {
   const selectedExport = artifact.manifest.exports?.find(
     (entry) => entry.name === target.export_name,
   );
-  if (!selectedExport ||
-      selectedExport.interface !== REQUEST_BINDING_INTERFACE) {
+  const expectedInterface = DEPLOYMENT_BINDING_SOURCE_INTERFACE[
+    binding.declaration.source.kind
+  ];
+  if (!selectedExport || selectedExport.interface !== expectedInterface) {
     fail(
       REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE.ARTIFACT_MISMATCH,
       REQUEST_BINDING_SERVICE_DEFINITION_PATH.ARTIFACT,
@@ -166,8 +177,9 @@ function buildBindingProjection(bindingRow, binding) {
 
 function buildRequestBindingServiceDefinition(bindingRow, artifact) {
   const binding = projectBinding(bindingRow);
-  if (binding.declaration.source.kind !==
-      DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST) {
+  if (!supportsBindingServiceDefinitionSourceKind(
+    binding.declaration.source.kind,
+  )) {
     fail(
       REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE.SOURCE_UNSUPPORTED,
       REQUEST_BINDING_SERVICE_DEFINITION_PATH.SOURCE,
@@ -237,4 +249,5 @@ export {
   deriveRequestServiceDefinitionId,
   hasRequestBindingServiceDefinitionLineage,
   requestBindingServiceDefinitionRowsMatch,
+  supportsBindingServiceDefinitionSourceKind,
 };

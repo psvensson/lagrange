@@ -17,6 +17,8 @@ import {
 } from '../../src/control-plane/owners/index.js';
 import {deriveTenantPackageId} from
   '../../src/control-plane/owners/service-install-catalog-contract.js';
+import {supportsBindingServiceDefinitionSourceKind} from
+  '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -238,6 +240,17 @@ describe('request Binding desired-service compilation owner', () => {
     LoggingService.resetInstance();
     ConfigurationManager.getInstance().initialize({});
     LoggingService.getInstance().initialize({level: 'error'});
+  });
+
+  test('the compiler source set preserves request and adds only change', () => {
+    assert.equal(supportsBindingServiceDefinitionSourceKind('request'), true);
+    assert.equal(supportsBindingServiceDefinitionSourceKind('change'), true);
+    for (const sourceKind of ['boot', 'call', 'once', 'pushdown', 'time']) {
+      assert.equal(
+        supportsBindingServiceDefinitionSourceKind(sourceKind),
+        false,
+      );
+    }
   });
 
   test('the existing planning leader compiles the complete pinned projection ' +

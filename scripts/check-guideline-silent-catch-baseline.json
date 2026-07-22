@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-07-05T14:01:31.519Z",
-  "rawViolationCount": 99,
+  "rawViolationCount": 98,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
@@ -314,15 +314,6 @@
       "line": 474,
       "column": 6,
       "functionName": "shutdownEarlyAdminSqlRuntime",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/function/cdc-subscription-manager.js",
-      "line": 63,
-      "column": 6,
-      "functionName": "initLogger",
       "kind": "silent_catch",
       "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."

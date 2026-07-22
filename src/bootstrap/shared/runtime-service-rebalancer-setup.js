@@ -34,10 +34,8 @@ import {
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {
-  DEPLOYMENT_BINDING_SOURCE_KIND,
-} from '../../control-plane/owners/deployment-binding-contract.js';
-import {
   hasRequestBindingServiceDefinitionLineage,
+  supportsBindingServiceDefinitionSourceKind,
 } from '../../control-plane/owners/request-binding-service-definition-contract.js';
 
 const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
@@ -76,7 +74,7 @@ const LOG_MSG = Object.freeze({
     'service_definitions partition service not found; ' +
     'runtime-service owner will not be leadership-gated (inert)',
   BINDING_COMPILE_FAILED:
-    'Request Binding desired-service compilation failed closed',
+    'Binding desired-service compilation failed closed',
 });
 
 class RuntimeServiceRebalancerOwner {
@@ -223,7 +221,7 @@ class RuntimeServiceRebalancerOwner {
       while (this._bindingRefreshRequested &&
           this._isLeader && !this._shuttingDown) {
         this._bindingRefreshRequested = false;
-        await this._compileRequestBindings();
+        await this._compileBindings();
       }
     })().finally(() => {
       this._bindingRefreshRunning = false;
@@ -231,18 +229,19 @@ class RuntimeServiceRebalancerOwner {
     return this._bindingRefreshPromise;
   }
 
-  async _compileRequestBindings() {
+  async _compileBindings() {
     const rows = this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.SERVICE_BINDINGS,
-      (binding) => binding?.source_kind ===
-        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+      (binding) => supportsBindingServiceDefinitionSourceKind(
+        binding?.source_kind,
+      ),
     );
-    const requestBindings = (Array.isArray(rows) ? rows : [])
+    const bindings = (Array.isArray(rows) ? rows : [])
       .slice()
       .sort((left, right) =>
         String(left?.binding_version_id || '')
           .localeCompare(String(right?.binding_version_id || '')));
-    for (const bindingRow of requestBindings) {
+    for (const bindingRow of bindings) {
       if (!this._isLeader || this._shuttingDown) return;
       try {
         await this.serviceDefinitionsOwner.reconcileRequestBinding(bindingRow);

@@ -3,7 +3,6 @@ import {NUM, STRING} from '../constants/index.js';
 
 const FUNCTION_SUBSYSTEM = Object.freeze({
   QUERY_EXECUTOR: 'function-query-executor',
-  CDC_SUBSCRIPTION_MANAGER: 'cdc-subscription-manager',
   CONTEXT_MANAGER: 'context-manager',
   REGISTRY: 'function-registry',
 });
@@ -22,34 +21,6 @@ const FUNCTION_CONTEXT_TYPE = Object.freeze({
   FUNCTION: 'function',
   SERVICE: 'service',
   USER: 'user',
-});
-
-const FUNCTION_SUBSCRIPTION_TYPE = Object.freeze({
-  CALLBACK: 'callback',
-  INVOKE: 'invoke',
-});
-
-const FUNCTION_CDC_MATCH_TYPE = Object.freeze({
-  INSERT: 'insert',
-  ENTER: 'enter',
-  EXIT: 'exit',
-  UPDATE: 'update',
-  DELETE: 'delete',
-});
-
-const FUNCTION_CDC_OPERATION = Object.freeze({
-  INSERT: 'INSERT',
-  UPDATE: 'UPDATE',
-  DELETE: 'DELETE',
-});
-
-const FUNCTION_EVENT = Object.freeze({
-  SUBSCRIPTION_CREATED: 'subscription-created',
-  SUBSCRIPTION_REMOVED: 'subscription-removed',
-});
-
-const FUNCTION_SEPARATOR = Object.freeze({
-  SUBSCRIPTION_ID: ':',
 });
 
 const FUNCTION_LOG_LIMIT = Object.freeze({
@@ -83,21 +54,6 @@ const FUNCTION_LOG_MSG = Object.freeze({
   CONTEXT_LOOKUP_FAILED: 'Failed to get context',
   CONTEXTS_BY_OWNER_FAILED: 'Failed to get contexts by owner',
   CONTEXTS_BY_TYPE_FAILED: 'Failed to get contexts by type',
-  SUBSCRIPTION_MANAGER_INITIALIZED: 'CDC subscription manager initialized',
-  SUBSCRIPTION_CREATED: 'CDC subscription created',
-  SUBSCRIPTION_INVOKE_CREATED: 'CDC subscription with invoke created',
-  SUBSCRIPTION_REMOVED: 'CDC subscription removed',
-  SUBSCRIPTION_NOT_FOUND: 'Subscription not found for unsubscribe',
-  SUBSCRIPTIONS_REMOVED_FOR_SUBSCRIBER: 'All subscriptions removed for subscriber',
-  CDC_EVENT_HANDLING_FAILED: 'Error handling CDC event for subscription',
-  CDC_CALLBACK_EXECUTED: 'CDC callback executed',
-  CDC_CALLBACK_FAILED: 'CDC callback failed',
-  CDC_INVOKE_MISSING_REGISTRY: 'Function registry not available for invoke',
-  CDC_INVOKE_EXECUTED: 'CDC function invoked',
-  CDC_INVOKE_FAILED: 'CDC function invocation failed',
-  PREDICATE_COMPILE_FAILED: 'Could not compile predicate, matching all',
-  PREDICATE_PARSE_FAILED: 'Could not parse predicate, matching all',
-  SUBSCRIPTION_MANAGER_SHUTDOWN: 'CDC subscription manager shutdown',
 });
 
 const FUNCTION_ERROR_MSG = Object.freeze({
@@ -116,7 +72,6 @@ const FUNCTION_ERROR_MSG = Object.freeze({
   VALID_CONTEXT_TYPE_PREFIX: 'Valid types are: ',
   CDC_INTEGRATION_REQUIRED: 'CDC integration service not available',
   CDC_INTEGRATION_REQUIRED_FOR_POLICY: 'CDC integration service not available',
-  FUNCTION_ID_REQUIRED: 'Function ID is required',
   QUERY_TIMEOUT_PREFIX: 'Query timeout after ',
   QUERY_TIMEOUT_SUFFIX: 'ms',
 });
@@ -126,26 +81,10 @@ const FUNCTION_DEFAULT_VALUE = Object.freeze({
   EMPTY_CONTEXT: STRING.EMPTY_JSON_OBJECT,
 });
 
-const FUNCTION_PREDICATE = Object.freeze({
-  MATCH_ALL: '*',
-  TRUE: 'true',
-});
-
-const FUNCTION_CDC_PREDICATE = Object.freeze({
-  SIMPLE_EQUALS: /^(\w+)\s*=\s*['"]?([^'"]+)['"]?$/,
-});
-
 export {FUNCTION_CONFIG_KEY, FUNCTION_DEFAULT, FUNCTION_LOG_MSG, FUNCTION_SUBSYSTEM};
 export {
-  FUNCTION_CDC_MATCH_TYPE,
-  FUNCTION_CDC_OPERATION,
-  FUNCTION_CDC_PREDICATE,
   FUNCTION_CONTEXT_TYPE,
   FUNCTION_DEFAULT_VALUE,
   FUNCTION_ERROR_MSG,
-  FUNCTION_EVENT,
   FUNCTION_LOG_LIMIT,
-  FUNCTION_PREDICATE,
-  FUNCTION_SEPARATOR,
-  FUNCTION_SUBSCRIPTION_TYPE,
 };
