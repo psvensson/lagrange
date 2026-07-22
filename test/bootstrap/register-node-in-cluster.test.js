@@ -13,6 +13,7 @@ import {CONTROL_PLANE_PHASE_SCOPE} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   ENDPOINT_STATUS,
+  NODE_STATE,
   SERVICE_STATUS,
   STATE,
   TABLES,
@@ -63,8 +64,8 @@ test('registerNodeInCluster() - should create the canonical nodes row and upsert
     t.ok(nodeCall.rowData.disk_gb > 0, 'should have disk_gb > 0');
     t.equal(
       nodeCall.rowData.status,
-      SERVICE_STATUS.ACTIVE,
-      'should persist ACTIVE status in the canonical nodes row',
+      NODE_STATE.JOINING,
+      'should persist JOINING status until ready signaling',
     );
     t.equal(
       nodeCall.rowData.connection_state,
