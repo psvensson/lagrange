@@ -1,0 +1,50 @@
+{
+  "id": "operation-dispatch-completion-owner-tooling",
+  "authoringContractVersion": 1,
+  "statement": "Provide the executable structural census and deterministic scenario runner that prove the operation dispatch completion owner cutover.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/operation-dispatch-completion-continuity.md",
+    "closesCL": [],
+    "parentQuest": "operation-dispatch-completion-owner-cutover",
+    "planDoc": "solve/epics/operation-dispatch-completion-continuity.md",
+    "draftedAtCommit": "40a6a0c5d9bfafa71ab13de092b5402ed69f3e0b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "operation-dispatch-completion-owner-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-dispatch-completion-owner-tooling-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "operation-dispatch-completion-owner-cutover",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "tooling-only-scope",
+      "statement": "This split Quest owns only the structural census and deterministic scenario runner under scripts/; the parent Quest owns the product and test cutover."
+    },
+    {
+      "id": "census-zero",
+      "statement": "The structural checker must report zero forbidden caller-local completion-continuity authorities."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
