@@ -1,0 +1,576 @@
+diff --git a/examples/service-data-affinity/affinity-demo-evidence.js b/examples/service-data-affinity/affinity-demo-evidence.js
+index 7d675371c8604fd85cd8fb6249a2ac02e1ddb66a..4b8b40e0eb6d8420d9790cfd6fae5302fb711145 100644
+--- a/examples/service-data-affinity/affinity-demo-evidence.js
++++ b/examples/service-data-affinity/affinity-demo-evidence.js
+@@ -14,6 +14,7 @@ import {
+ } from '../../src/rebalancer/service-data-affinity-weights.js';
+ import {
+   parseResultSnapshotWitness,
++  RESULT_SNAPSHOT_STATE,
+   resolveCompletePartialSnapshot,
+ } from '../../src/runtime/sql-query-loop-parallel-reduce.js';
+ 
+@@ -139,7 +140,7 @@ function resultSnapshotIsFresh(options) {
+     parallelReduceConfig,
+     partialLimit,
+   );
+-  if (!sourceSnapshot.valid) {
++  if (sourceSnapshot.state !== RESULT_SNAPSHOT_STATE.AVAILABLE) {
+     return false;
+   }
+   const resultComputedAt = Number(serviceTopN[0]?.computed_at);
+diff --git a/examples/service-data-affinity/affinity-demo-live-report.js b/examples/service-data-affinity/affinity-demo-live-report.js
+index 2d12edfb86c87411ca21623e78fdb82d4db7ecb6..b4a5be4e77cb45aa1941f9f51489189d91c113f8 100644
+--- a/examples/service-data-affinity/affinity-demo-live-report.js
++++ b/examples/service-data-affinity/affinity-demo-live-report.js
+@@ -8,6 +8,48 @@ const NOT_OBSERVED_ADMISSION = Object.freeze({
+   state: 'not_observed',
+ });
+ 
++function firstObservedValue(...values) {
++  return values.find((value) => value) || null;
++}
++
++function buildReportDetail(result, error, phaseEvidence, hostScheduling) {
++  return {
++    result: firstObservedValue(result, phaseEvidence.result),
++    schemaAdmission: firstObservedValue(
++      result?.schemaAdmission,
++      phaseEvidence.schemaAdmission,
++      error?.schemaAdmission,
++      NOT_OBSERVED_ADMISSION,
++    ),
++    preloadAdmission: firstObservedValue(
++      result?.preloadAdmission,
++      phaseEvidence.preloadAdmission,
++      error?.preloadAdmission,
++      NOT_OBSERVED_ADMISSION,
++    ),
++    hostScheduling,
++    error: error?.message || null,
++  };
++}
++
++function buildReportOutcome(result, error, hostScheduling) {
++  const passed = Boolean(result?.converged) && !error;
++  const hostInvalid = hostScheduling?.exceeded === true && !passed;
++  const current = {passed, verdict: passed ? 'PASS' : 'FAIL'};
++  if (hostInvalid) {
++    current.verdictReason = 'host_scheduling_gap_budget_exceeded';
++  }
++  return {current, passed};
++}
++
++function buildReportSummary(passed) {
++  return {
++    total: 1,
++    passed: passed ? 1 : 0,
++    failed: passed ? 0 : 1,
++  };
++}
++
+ /**
+  * Build the live report without discarding evidence from phases that completed
+  * before a later phase failed.
+@@ -25,7 +67,6 @@ function buildAffinityDemoLiveReport({
+   error = null,
+   phaseEvidence = {},
+ } = {}) {
+-  const passed = Boolean(result?.converged) && !error;
+   // A FAILED run the host froze past the gap budget is non-measuring, not
+   // red: stamp the shared verdict reason so the Solver invalidates the sample
+   // instead of scoring it. A PASSED run is never invalidated by the budget —
+@@ -33,42 +74,29 @@ function buildAffinityDemoLiveReport({
+   // hot): converging despite adverse scheduling is stronger evidence, not
+   // weaker, and the harvested numbers stay in detail for attribution.
+   const hostScheduling = phaseEvidence?.hostScheduling || null;
+-  const hostInvalid = hostScheduling?.exceeded === true && !passed;
+-  const current = {passed, verdict: passed ? 'PASS' : 'FAIL'};
+-  if (hostInvalid) {
+-    current.verdictReason = 'host_scheduling_gap_budget_exceeded';
+-  }
++  const {current, passed} = buildReportOutcome(
++    result,
++    error,
++    hostScheduling,
++  );
+   return {
+     timestamp,
+     scenario: LIVE_SCENARIO,
+     producer: 'service-data-affinity-demo',
+     fidelity: 'live',
+-    summary: {
+-      total: 1,
+-      passed: passed ? 1 : 0,
+-      failed: passed ? 0 : 1,
+-    },
++    summary: buildReportSummary(passed),
+     optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
+     standardSummary: {
+       scenarios: [{
+         scenario: LIVE_SCENARIO,
+         passed,
+         current,
+-        detail: {
++        detail: buildReportDetail(
+           result,
+-          schemaAdmission:
+-            result?.schemaAdmission ||
+-            phaseEvidence?.schemaAdmission ||
+-            error?.schemaAdmission ||
+-            NOT_OBSERVED_ADMISSION,
+-          preloadAdmission:
+-            result?.preloadAdmission ||
+-            phaseEvidence?.preloadAdmission ||
+-            error?.preloadAdmission ||
+-            NOT_OBSERVED_ADMISSION,
++          error,
++          phaseEvidence,
+           hostScheduling,
+-          error: error?.message || null,
+-        },
++        ),
+       }],
+     },
+   };
+diff --git a/examples/service-data-affinity/run-affinity-demo.js b/examples/service-data-affinity/run-affinity-demo.js
+index 39136fe5def3dd951e4da5c0fb05f3488427503a..f55d511b2f1246404f0cb282904c9f736fde4d27 100644
+--- a/examples/service-data-affinity/run-affinity-demo.js
++++ b/examples/service-data-affinity/run-affinity-demo.js
+@@ -67,6 +67,10 @@ import {
+   buildWeightedLocalitySnapshot,
+   topNRowsEqual,
+ } from './affinity-demo-evidence.js';
++import {
++  parseResultSnapshotWitness,
++  RESULT_SNAPSHOT_STATE,
++} from '../../src/runtime/sql-query-loop-parallel-reduce.js';
+ import {
+   QUALITY_RANKING,
+   RATINGS_AGGREGATE_SQL,
+@@ -416,13 +420,25 @@ async function describeDemoState(referenceTopN, phaseStartedAt) {
+   };
+ }
+ 
+-async function observeDemoPhase(label, referenceTopN, phaseStartedAt, accept) {
++async function observeDemoPhase(
++  label,
++  referenceTopN,
++  phaseStartedAt,
++  accept,
++  onObservation = () => {},
++) {
+   const start = Date.now();
+   let lastProgressSignature = null;
+   let lastProgressAtMs = Date.now();
+   while (Date.now() - start < CONVERGE_TIMEOUT_MS) {
+     await sleep(OBSERVE_INTERVAL_MS);
+     const state = await describeDemoState(referenceTopN, phaseStartedAt);
++    const observedState = {
++      ...state,
++      phaseStartedAt,
++      elapsedMs: Date.now() - start,
++    };
++    onObservation(observedState);
+     const placementLabel = state.placements.map((placement) =>
+       placement.nodeId.slice(0, 8));
+     console.log(
+@@ -436,11 +452,7 @@ async function observeDemoPhase(label, referenceTopN, phaseStartedAt, accept) {
+       `placement=${JSON.stringify(placementLabel)}`,
+     );
+     if (accept(state)) {
+-      return {
+-        ...state,
+-        phaseStartedAt,
+-        elapsedMs: Date.now() - start,
+-      };
++      return observedState;
+     }
+     const progressSignature = JSON.stringify({
+       placementLabel: placementLabel.sort(),
+@@ -485,14 +497,13 @@ function summarizeReduceSlots(reduceSlots) {
+ }
+ 
+ function summarizePhase(state) {
+-  let resultSnapshot = null;
+-  try {
+-    resultSnapshot = JSON.parse(
+-      state.serviceTopN[0]?.[RESULT_SNAPSHOT_COLUMN] || 'null',
+-    );
+-  } catch {
+-    resultSnapshot = null;
+-  }
++  const encodedResultSnapshot =
++    state.serviceTopN[0]?.[RESULT_SNAPSHOT_COLUMN];
++  const resultSnapshot = parseResultSnapshotWitness(
++    encodedResultSnapshot,
++    PARALLEL_REDUCE_CONFIG,
++    TOP_N,
++  );
+   return {
+     phaseStartedAt: state.phaseStartedAt,
+     weightedLocality: state.weightedLocality.localityRatio,
+@@ -505,6 +516,24 @@ function summarizePhase(state) {
+   };
+ }
+ 
++function demoResultObservationIsValid(result) {
++  return result?.resultCorrect === true &&
++    result?.ranking?.length === TOP_N &&
++    result?.learnedAffinity?.resultComputedAt > 0 &&
++    result?.learnedAffinity?.resultSnapshot?.state ===
++      RESULT_SNAPSHOT_STATE.AVAILABLE;
++}
++
++function retainObservedDemoResult(phaseEvidence, observedResult) {
++  if (!demoResultObservationIsValid(observedResult)) return false;
++  const retainedComputedAt =
++    phaseEvidence.result?.learnedAffinity?.resultComputedAt || 0;
++  const observedComputedAt = observedResult.learnedAffinity.resultComputedAt;
++  if (observedComputedAt < retainedComputedAt) return false;
++  phaseEvidence.result = observedResult;
++  return true;
++}
++
+ function isNodeProcessRunning(node) {
+   return Boolean(node?.process && node.process.exitCode === null);
+ }
+@@ -692,6 +721,30 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+     const learned = await observeDemoPhase(
+       'learned-affinity', referenceTopN, learnedPhaseStartedAt,
+       (state) => state.assessment.complete,
++      (state) => {
++        const learnedAffinity = summarizePhase(state);
++        retainObservedDemoResult(phaseEvidence, {
++          converged: false,
++          schemaAdmission,
++          preloadAdmission,
++          lagrangeDistributedSql: {
++            inputRatings: totalRows,
++            returnedAggregateRows: aggregateRows.length,
++            elapsedMs: distributedSqlElapsedMs,
++          },
++          parallelReduce: {
++            replicas: SERVICE_REPLICA_COUNT,
++            mergeCandidates: state.assessment.mergeCandidateCount,
++            elapsedToCorrectOptimalResultMs: state.elapsedMs,
++          },
++          learnedAffinity,
++          resultCorrect: state.assessment.resultCorrect,
++          ranking: state.serviceTopN.map((row) => ({
++            movieId: Number(row.group_key),
++            score: Number(row.agg_value),
++          })),
++        });
++      },
+     );
+     const initialWeightedLocality = await describeWeightedLocality(
+       initial.placements, learned.attributionRows,
+@@ -776,4 +829,4 @@ if (process.argv[1]?.includes('run-affinity-demo.js')) {
+     });
+ }
+ 
+-export {runAffinityDemo, summarizePhase};
++export {retainObservedDemoResult, runAffinityDemo, summarizePhase};
+diff --git a/src/runtime/sql-query-loop-parallel-reduce.js b/src/runtime/sql-query-loop-parallel-reduce.js
+index 0438aa3ead61d072bfa6274daf1d0f665a6b39a1..b62f5bffc2d1416db61036d0d3237a9e7b7d267a 100644
+--- a/src/runtime/sql-query-loop-parallel-reduce.js
++++ b/src/runtime/sql-query-loop-parallel-reduce.js
+@@ -16,6 +16,11 @@ const COORDINATION_QUERY_FAILED =
+   'parallel reduce coordination query failed';
+ const UNASSIGNED_SLOT_ID = 0;
+ const RESULT_SNAPSHOT_SCHEMA_VERSION = 1;
++const RESULT_SNAPSHOT_STATE = Object.freeze({
++  AVAILABLE: 'available',
++  INVALID: 'invalid',
++  UNAVAILABLE: 'unavailable',
++});
+ const RESULT_SNAPSHOT_RESERVED_COLUMNS = new Set([
+   'result_id',
+   'result_json',
+@@ -225,10 +230,16 @@ function buildResultSnapshotWitness(slotStates) {
+ }
+ 
+ function parseResultSnapshotJson(value) {
++  if (value === undefined || value === null || value === '') {
++    return {state: RESULT_SNAPSHOT_STATE.UNAVAILABLE};
++  }
+   try {
+-    return typeof value === 'string' ? JSON.parse(value) : value;
++    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
++    return parsed && typeof parsed === 'object' ?
++      {state: RESULT_SNAPSHOT_STATE.AVAILABLE, value: parsed} :
++      {state: RESULT_SNAPSHOT_STATE.INVALID};
+   } catch {
+-    return null;
++    return {state: RESULT_SNAPSHOT_STATE.INVALID};
+   }
+ }
+ 
+@@ -263,42 +274,57 @@ function normalizeResultSnapshotSlot(slot, expectedSlotId, limit, replicaIds) {
+     resultSnapshotCandidateCountIsValid(candidateCount, limit),
+   ].every(Boolean);
+   if (!valid) {
+-    return null;
++    return {state: RESULT_SNAPSHOT_STATE.INVALID};
+   }
+   return {
+-    slotId: expectedSlotId,
+-    replicaId: slot.replicaId,
+-    computedAt,
+-    candidateCount,
++    state: RESULT_SNAPSHOT_STATE.AVAILABLE,
++    value: {
++      slotId: expectedSlotId,
++      replicaId: slot.replicaId,
++      computedAt,
++      candidateCount,
++    },
+   };
+ }
+ 
+ function parseResultSnapshotWitness(value, config, limit) {
+-  const parsed = parseResultSnapshotJson(value);
++  const parsedResult = parseResultSnapshotJson(value);
+   const slotIds = configuredSlotIds(config);
+-  if (!resultSnapshotHeaderIsValid(parsed, slotIds)) {
+-    return {valid: false};
+-  }
++  let result = {state: parsedResult.state};
+   const replicaIds = new Set();
+   const slots = [];
+-  for (let index = 0; index < slotIds.length; index += 1) {
+-    const slot = normalizeResultSnapshotSlot(
+-      parsed.slots[index],
+-      slotIds[index],
+-      limit,
+-      replicaIds,
+-    );
+-    if (!slot) {
+-      return {valid: false};
++  const headerAvailable =
++    parsedResult.state === RESULT_SNAPSHOT_STATE.AVAILABLE &&
++    resultSnapshotHeaderIsValid(parsedResult.value, slotIds);
++  let slotsAvailable = headerAvailable;
++  if (headerAvailable) {
++    for (let index = 0; index < slotIds.length; index += 1) {
++      const slotResult = normalizeResultSnapshotSlot(
++        parsedResult.value.slots[index],
++        slotIds[index],
++        limit,
++        replicaIds,
++      );
++      slotsAvailable =
++        slotResult.state === RESULT_SNAPSHOT_STATE.AVAILABLE;
++      if (!slotsAvailable) {
++        break;
++      }
++      const slot = slotResult.value;
++      replicaIds.add(slot.replicaId);
++      slots.push(slot);
+     }
+-    replicaIds.add(slot.replicaId);
+-    slots.push(slot);
+   }
+-  return {
+-    valid: true,
+-    schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
+-    slots,
+-  };
++  if (headerAvailable && slotsAvailable) {
++    result = {
++      state: RESULT_SNAPSHOT_STATE.AVAILABLE,
++      schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
++      slots,
++    };
++  } else if (parsedResult.state === RESULT_SNAPSHOT_STATE.AVAILABLE) {
++    result = {state: RESULT_SNAPSHOT_STATE.INVALID};
++  }
++  return result;
+ }
+ 
+ function resolveCompletePartialSnapshot(slotRows, config, limit, nowMs) {
+@@ -393,6 +419,7 @@ async function releaseReduceSlot(slotId, queryExecutor, config, serviceId) {
+ 
+ export {
+   PARALLEL_REDUCE_REASON,
++  RESULT_SNAPSHOT_STATE,
+   UNASSIGNED_SLOT_ID,
+   acquireReduceSlot,
+   isValidParallelReduceConfig,
+diff --git a/test/runtime/movielens-affinity-demo-wiring.test.js b/test/runtime/movielens-affinity-demo-wiring.test.js
+index d5af33ba11945a75027736558f4f8e7981ed63f1..5016ae5fecdc77b02eadd4e7f64c902c80eae83d 100644
+--- a/test/runtime/movielens-affinity-demo-wiring.test.js
++++ b/test/runtime/movielens-affinity-demo-wiring.test.js
+@@ -871,8 +871,29 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     'the live report retains the bounded-candidate verdict');
+   t.equal(reportPhase.assessment.resultFresh, true,
+     'the live report retains result chronology evidence');
+-  t.same(reportPhase.resultSnapshot, JSON.parse(resultSnapshotJson),
+-    'the live report retains the owner-published source snapshot');
++  t.same(reportPhase.resultSnapshot, {
++    state: 'available',
++    ...JSON.parse(resultSnapshotJson),
++  },
++  'the live report retains the owner-published source snapshot');
++  t.same(summarizePhase({
++    ...reportPhase,
++    serviceTopN: [],
++    reduceSlots,
++  }).resultSnapshot, {state: 'unavailable'},
++  'the live report names an unavailable result witness explicitly');
++  t.same(summarizePhase({
++    ...reportPhase,
++    serviceTopN: [{source_snapshot_json: '{invalid'}],
++    reduceSlots,
++  }).resultSnapshot, {state: 'invalid'},
++  'the live report names an invalid result witness explicitly');
++  t.same(summarizePhase({
++    ...reportPhase,
++    serviceTopN: [{source_snapshot_json: '{}'}],
++    reduceSlots,
++  }).resultSnapshot, {state: 'invalid'},
++  'the live report uses the runtime owner grammar for incomplete witnesses');
+   t.equal(reportPhase.assessment.placementOptimal, true,
+     'the live report retains the production-weighted optimum verdict');
+   t.equal(assessAffinityDemoCompletion({
+diff --git a/test/runtime/movielens-live-report-partial-evidence.test.js b/test/runtime/movielens-live-report-partial-evidence.test.js
+index 71b40593f811097dce5fbc5fbb177f956228bc23..d1b87a4bdb087dcc10546e4fc136c1506ce2c039 100644
+--- a/test/runtime/movielens-live-report-partial-evidence.test.js
++++ b/test/runtime/movielens-live-report-partial-evidence.test.js
+@@ -3,6 +3,9 @@ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   buildAffinityDemoLiveReport,
+ } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
++import {
++  retainObservedDemoResult,
++} from '../../examples/service-data-affinity/run-affinity-demo.js';
+ 
+ const TIMESTAMP = '2026-07-15T18:20:58.624Z';
+ 
+@@ -43,6 +46,87 @@ test('live report retains admitted preload evidence when a later phase fails',
+     t.end();
+   });
+ 
++test('live report retains an observed result when later affinity placement stalls',
++  (t) => {
++    const observedResult = {
++      converged: false,
++      resultCorrect: true,
++      ranking: Array.from({length: 10}, (_item, index) => ({
++        movieId: index + 1,
++        score: 10 - index,
++      })),
++      parallelReduce: {replicas: 2, mergeCandidates: 20},
++      learnedAffinity: {
++        resultComputedAt: 42,
++        resultSnapshot: {state: 'available'},
++      },
++    };
++    const phaseEvidence = {};
++    t.equal(
++      retainObservedDemoResult(phaseEvidence, observedResult),
++      true,
++      'an exact owner-parsed result is retained',
++    );
++    const unavailableResult = {
++      converged: false,
++      resultCorrect: false,
++      ranking: [],
++      learnedAffinity: {
++        resultComputedAt: 0,
++        resultSnapshot: {state: 'unavailable'},
++      },
++    };
++    t.equal(
++      retainObservedDemoResult(phaseEvidence, unavailableResult),
++      false,
++      'a later absent read cannot replace observed evidence',
++    );
++    t.equal(
++      phaseEvidence.result,
++      observedResult,
++      'absence proves nothing and preserves the last exact result',
++    );
++    const report = buildAffinityDemoLiveReport({
++      timestamp: TIMESTAMP,
++      error: new Error('learned-affinity stalled'),
++      phaseEvidence,
++    });
++
++    t.equal(report.summary.failed, 1, 'the placement failure remains honest');
++    t.same(
++      reportDetail(report).result,
++      observedResult,
++      'the already-observed result survives the later failure boundary',
++    );
++    t.end();
++  });
++
++test('live report does not claim a result when no valid result was observed',
++  (t) => {
++    const phaseEvidence = {};
++    const unavailableResult = {
++      converged: false,
++      resultCorrect: false,
++      ranking: [],
++      learnedAffinity: {
++        resultComputedAt: 0,
++        resultSnapshot: {state: 'unavailable'},
++      },
++    };
++    t.equal(
++      retainObservedDemoResult(phaseEvidence, unavailableResult),
++      false,
++      'unavailable snapshot is not result production',
++    );
++    const report = buildAffinityDemoLiveReport({
++      timestamp: TIMESTAMP,
++      error: new Error('service never produced a result'),
++      phaseEvidence,
++    });
++    t.equal(reportDetail(report).result, null);
++    t.end();
++  });
++
+ test('live report retains gate-owned evidence when preload itself fails', (t) => {
+   const error = new Error('preload denied');
+   error.preloadAdmission = {
+@@ -89,6 +173,7 @@ test('live runner passes one phase evidence accumulator to success and failure r
+     t.match(source, /runAffinityDemo\(\{phaseEvidence = \{\}\} = \{\}\)/u);
+     t.match(source, /phaseEvidence\.schemaAdmission = schemaAdmission/u);
+     t.match(source, /phaseEvidence\.preloadAdmission = preloadAdmission/u);
++    t.match(source, /retainObservedDemoResult\(phaseEvidence/u);
+     t.match(
+       source,
+       /writeAffinityDemoLiveReport\(null, error, phaseEvidence\)/u,
+diff --git a/test/runtime/sql-query-loop-parallel-reduce-sql.test.js b/test/runtime/sql-query-loop-parallel-reduce-sql.test.js
+index 66ca7d1cd2a0d2c180467ce51529f98fe7b4a2c6..c0a5e562ab1502bdc1c4117cff9be67ec7e9eb6d 100644
+--- a/test/runtime/sql-query-loop-parallel-reduce-sql.test.js
++++ b/test/runtime/sql-query-loop-parallel-reduce-sql.test.js
+@@ -12,6 +12,9 @@ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   SqlQueryLoopRuntimeModule,
+ } from '../../src/runtime/sql-query-loop-runtime-module.js';
++import {
++  parseResultSnapshotWitness,
++} from '../../src/runtime/sql-query-loop-parallel-reduce.js';
+ import {
+   HEALTH_STATUS,
+   PREPARE_STATUS,
+@@ -227,6 +230,15 @@ test('parallel reduce lease SQL: concurrent generations claim unique slots ' +
+   t.equal(assessment.complete, true,
+     'the exact result remains acceptable through its owned snapshot witness');
+ 
++  t.same(parseResultSnapshotWitness(
++    '{invalid', config.parallelReduce, 1,
++  ), {state: 'invalid'},
++  'an invalid result witness uses an explicit state variant');
++  t.same(parseResultSnapshotWitness(
++    undefined, config.parallelReduce, 1,
++  ), {state: 'unavailable'},
++  'an unavailable result witness uses an explicit state variant');
++
+   replacementId = 'svc-affinity-r5';
+   replacement = new SqlQueryLoopRuntimeModule();
+   db.prepare(

@@ -3,8 +3,12 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   buildAffinityDemoLiveReport,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
+import * as affinityDemoRunner from
+  '../../examples/service-data-affinity/run-affinity-demo.js';
 
 const TIMESTAMP = '2026-07-15T18:20:58.624Z';
+const retainObservedDemoResult =
+  affinityDemoRunner.retainObservedDemoResult || (() => false);
 
 function reportDetail(report) {
   return report.standardSummary.scenarios[0].detail;
@@ -40,6 +44,104 @@ test('live report retains admitted preload evidence when a later phase fails',
       'completed preload evidence survives the later failure boundary',
     );
     t.equal(reportDetail(report).error, 'ratings split timed out');
+    t.end();
+  });
+
+test('live report retains an observed result when later affinity placement stalls',
+  (t) => {
+    const observedResult = {
+      converged: false,
+      resultCorrect: true,
+      ranking: Array.from({length: 10}, (_item, index) => ({
+        movieId: index + 1,
+        score: 10 - index,
+      })),
+      parallelReduce: {replicas: 2, mergeCandidates: 20},
+      learnedAffinity: {
+        resultComputedAt: 42,
+        resultSnapshot: {state: 'available'},
+      },
+    };
+    const phaseEvidence = {};
+    t.equal(
+      retainObservedDemoResult(phaseEvidence, observedResult),
+      true,
+      'an exact owner-parsed result is retained',
+    );
+    const unavailableResult = {
+      converged: false,
+      resultCorrect: false,
+      ranking: [],
+      learnedAffinity: {
+        resultComputedAt: 0,
+        resultSnapshot: {state: 'unavailable'},
+      },
+    };
+    t.equal(
+      retainObservedDemoResult(phaseEvidence, unavailableResult),
+      false,
+      'a later absent read cannot replace observed evidence',
+    );
+    t.equal(
+      phaseEvidence.result,
+      observedResult,
+      'absence proves nothing and preserves the last exact result',
+    );
+    const olderResult = {
+      ...observedResult,
+      learnedAffinity: {
+        ...observedResult.learnedAffinity,
+        resultComputedAt: 41,
+      },
+    };
+    t.equal(
+      retainObservedDemoResult(phaseEvidence, olderResult),
+      false,
+      'an older valid observation cannot replace newer evidence',
+    );
+    t.equal(
+      phaseEvidence.result,
+      observedResult,
+      'retained evidence is monotonic by result chronology',
+    );
+    const report = buildAffinityDemoLiveReport({
+      timestamp: TIMESTAMP,
+      error: new Error('learned-affinity stalled'),
+      phaseEvidence,
+    });
+
+    t.equal(report.summary.failed, 1, 'the placement failure remains honest');
+    t.same(
+      reportDetail(report).result,
+      observedResult,
+      'the already-observed result survives the later failure boundary',
+    );
+    t.end();
+  });
+
+test('live report does not claim a result when no valid result was observed',
+  (t) => {
+    const phaseEvidence = {};
+    const unavailableResult = {
+      converged: false,
+      resultCorrect: false,
+      ranking: [],
+      learnedAffinity: {
+        resultComputedAt: 0,
+        resultSnapshot: {state: 'unavailable'},
+      },
+    };
+    t.equal(
+      retainObservedDemoResult(phaseEvidence, unavailableResult),
+      false,
+      'unavailable snapshot is not result production',
+    );
+    const report = buildAffinityDemoLiveReport({
+      timestamp: TIMESTAMP,
+      error: new Error('service never produced a result'),
+      phaseEvidence,
+    });
+    t.equal(reportDetail(report).result, null);
     t.end();
   });
 
@@ -89,6 +191,7 @@ test('live runner passes one phase evidence accumulator to success and failure r
     t.match(source, /runAffinityDemo\(\{phaseEvidence = \{\}\} = \{\}\)/u);
     t.match(source, /phaseEvidence\.schemaAdmission = schemaAdmission/u);
     t.match(source, /phaseEvidence\.preloadAdmission = preloadAdmission/u);
+    t.match(source, /retainObservedDemoResult\(phaseEvidence/u);
     t.match(
       source,
       /writeAffinityDemoLiveReport\(null, error, phaseEvidence\)/u,

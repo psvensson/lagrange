@@ -16,6 +16,11 @@ const COORDINATION_QUERY_FAILED =
   'parallel reduce coordination query failed';
 const UNASSIGNED_SLOT_ID = 0;
 const RESULT_SNAPSHOT_SCHEMA_VERSION = 1;
+const RESULT_SNAPSHOT_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  INVALID: 'invalid',
+  UNAVAILABLE: 'unavailable',
+});
 const RESULT_SNAPSHOT_RESERVED_COLUMNS = new Set([
   'result_id',
   'result_json',
@@ -225,10 +230,16 @@ function buildResultSnapshotWitness(slotStates) {
 }
 
 function parseResultSnapshotJson(value) {
+  if (value === undefined || value === null || value === '') {
+    return {state: RESULT_SNAPSHOT_STATE.UNAVAILABLE};
+  }
   try {
-    return typeof value === 'string' ? JSON.parse(value) : value;
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return parsed && typeof parsed === 'object' ?
+      {state: RESULT_SNAPSHOT_STATE.AVAILABLE, value: parsed} :
+      {state: RESULT_SNAPSHOT_STATE.INVALID};
   } catch {
-    return null;
+    return {state: RESULT_SNAPSHOT_STATE.INVALID};
   }
 }
 
@@ -263,42 +274,57 @@ function normalizeResultSnapshotSlot(slot, expectedSlotId, limit, replicaIds) {
     resultSnapshotCandidateCountIsValid(candidateCount, limit),
   ].every(Boolean);
   if (!valid) {
-    return null;
+    return {state: RESULT_SNAPSHOT_STATE.INVALID};
   }
   return {
-    slotId: expectedSlotId,
-    replicaId: slot.replicaId,
-    computedAt,
-    candidateCount,
+    state: RESULT_SNAPSHOT_STATE.AVAILABLE,
+    value: {
+      slotId: expectedSlotId,
+      replicaId: slot.replicaId,
+      computedAt,
+      candidateCount,
+    },
   };
 }
 
 function parseResultSnapshotWitness(value, config, limit) {
-  const parsed = parseResultSnapshotJson(value);
+  const parsedResult = parseResultSnapshotJson(value);
   const slotIds = configuredSlotIds(config);
-  if (!resultSnapshotHeaderIsValid(parsed, slotIds)) {
-    return {valid: false};
-  }
+  let result = {state: parsedResult.state};
   const replicaIds = new Set();
   const slots = [];
-  for (let index = 0; index < slotIds.length; index += 1) {
-    const slot = normalizeResultSnapshotSlot(
-      parsed.slots[index],
-      slotIds[index],
-      limit,
-      replicaIds,
-    );
-    if (!slot) {
-      return {valid: false};
+  const headerAvailable =
+    parsedResult.state === RESULT_SNAPSHOT_STATE.AVAILABLE &&
+    resultSnapshotHeaderIsValid(parsedResult.value, slotIds);
+  let slotsAvailable = headerAvailable;
+  if (headerAvailable) {
+    for (let index = 0; index < slotIds.length; index += 1) {
+      const slotResult = normalizeResultSnapshotSlot(
+        parsedResult.value.slots[index],
+        slotIds[index],
+        limit,
+        replicaIds,
+      );
+      slotsAvailable =
+        slotResult.state === RESULT_SNAPSHOT_STATE.AVAILABLE;
+      if (!slotsAvailable) {
+        break;
+      }
+      const slot = slotResult.value;
+      replicaIds.add(slot.replicaId);
+      slots.push(slot);
     }
-    replicaIds.add(slot.replicaId);
-    slots.push(slot);
   }
-  return {
-    valid: true,
-    schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
-    slots,
-  };
+  if (headerAvailable && slotsAvailable) {
+    result = {
+      state: RESULT_SNAPSHOT_STATE.AVAILABLE,
+      schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
+      slots,
+    };
+  } else if (parsedResult.state === RESULT_SNAPSHOT_STATE.AVAILABLE) {
+    result = {state: RESULT_SNAPSHOT_STATE.INVALID};
+  }
+  return result;
 }
 
 function resolveCompletePartialSnapshot(slotRows, config, limit, nowMs) {
@@ -393,6 +419,7 @@ async function releaseReduceSlot(slotId, queryExecutor, config, serviceId) {
 
 export {
   PARALLEL_REDUCE_REASON,
+  RESULT_SNAPSHOT_STATE,
   UNASSIGNED_SLOT_ID,
   acquireReduceSlot,
   isValidParallelReduceConfig,

@@ -13,6 +13,9 @@ import {
   SqlQueryLoopRuntimeModule,
 } from '../../src/runtime/sql-query-loop-runtime-module.js';
 import {
+  parseResultSnapshotWitness,
+} from '../../src/runtime/sql-query-loop-parallel-reduce.js';
+import {
   HEALTH_STATUS,
   PREPARE_STATUS,
   START_STATUS,
@@ -226,6 +229,15 @@ test('parallel reduce lease SQL: concurrent generations claim unique slots ' +
     'a later periodic partial cannot retroactively stale a sealed result');
   t.equal(assessment.complete, true,
     'the exact result remains acceptable through its owned snapshot witness');
+
+  t.same(parseResultSnapshotWitness(
+    '{invalid', config.parallelReduce, 1,
+  ), {state: 'invalid'},
+  'an invalid result witness uses an explicit state variant');
+  t.same(parseResultSnapshotWitness(
+    undefined, config.parallelReduce, 1,
+  ), {state: 'unavailable'},
+  'an unavailable result witness uses an explicit state variant');
 
   replacementId = 'svc-affinity-r5';
   replacement = new SqlQueryLoopRuntimeModule();

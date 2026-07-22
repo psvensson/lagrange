@@ -8,6 +8,48 @@ const NOT_OBSERVED_ADMISSION = Object.freeze({
   state: 'not_observed',
 });
 
+function firstObservedValue(...values) {
+  return values.find((value) => value) || null;
+}
+
+function buildReportDetail(result, error, phaseEvidence, hostScheduling) {
+  return {
+    result: firstObservedValue(result, phaseEvidence.result),
+    schemaAdmission: firstObservedValue(
+      result?.schemaAdmission,
+      phaseEvidence.schemaAdmission,
+      error?.schemaAdmission,
+      NOT_OBSERVED_ADMISSION,
+    ),
+    preloadAdmission: firstObservedValue(
+      result?.preloadAdmission,
+      phaseEvidence.preloadAdmission,
+      error?.preloadAdmission,
+      NOT_OBSERVED_ADMISSION,
+    ),
+    hostScheduling,
+    error: error?.message || null,
+  };
+}
+
+function buildReportOutcome(result, error, hostScheduling) {
+  const passed = Boolean(result?.converged) && !error;
+  const hostInvalid = hostScheduling?.exceeded === true && !passed;
+  const current = {passed, verdict: passed ? 'PASS' : 'FAIL'};
+  if (hostInvalid) {
+    current.verdictReason = 'host_scheduling_gap_budget_exceeded';
+  }
+  return {current, passed};
+}
+
+function buildReportSummary(passed) {
+  return {
+    total: 1,
+    passed: passed ? 1 : 0,
+    failed: passed ? 0 : 1,
+  };
+}
+
 /**
  * Build the live report without discarding evidence from phases that completed
  * before a later phase failed.
@@ -25,7 +67,6 @@ function buildAffinityDemoLiveReport({
   error = null,
   phaseEvidence = {},
 } = {}) {
-  const passed = Boolean(result?.converged) && !error;
   // A FAILED run the host froze past the gap budget is non-measuring, not
   // red: stamp the shared verdict reason so the Solver invalidates the sample
   // instead of scoring it. A PASSED run is never invalidated by the budget —
@@ -33,42 +74,29 @@ function buildAffinityDemoLiveReport({
   // hot): converging despite adverse scheduling is stronger evidence, not
   // weaker, and the harvested numbers stay in detail for attribution.
   const hostScheduling = phaseEvidence?.hostScheduling || null;
-  const hostInvalid = hostScheduling?.exceeded === true && !passed;
-  const current = {passed, verdict: passed ? 'PASS' : 'FAIL'};
-  if (hostInvalid) {
-    current.verdictReason = 'host_scheduling_gap_budget_exceeded';
-  }
+  const {current, passed} = buildReportOutcome(
+    result,
+    error,
+    hostScheduling,
+  );
   return {
     timestamp,
     scenario: LIVE_SCENARIO,
     producer: 'service-data-affinity-demo',
     fidelity: 'live',
-    summary: {
-      total: 1,
-      passed: passed ? 1 : 0,
-      failed: passed ? 0 : 1,
-    },
+    summary: buildReportSummary(passed),
     optimizationSummary: {totalPriorityItems: passed ? 0 : 1},
     standardSummary: {
       scenarios: [{
         scenario: LIVE_SCENARIO,
         passed,
         current,
-        detail: {
+        detail: buildReportDetail(
           result,
-          schemaAdmission:
-            result?.schemaAdmission ||
-            phaseEvidence?.schemaAdmission ||
-            error?.schemaAdmission ||
-            NOT_OBSERVED_ADMISSION,
-          preloadAdmission:
-            result?.preloadAdmission ||
-            phaseEvidence?.preloadAdmission ||
-            error?.preloadAdmission ||
-            NOT_OBSERVED_ADMISSION,
+          error,
+          phaseEvidence,
           hostScheduling,
-          error: error?.message || null,
-        },
+        ),
       }],
     },
   };

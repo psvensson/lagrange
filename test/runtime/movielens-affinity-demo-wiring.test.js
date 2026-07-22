@@ -871,8 +871,29 @@ test('single-zone learned-affinity evidence uses production node weights and req
     'the live report retains the bounded-candidate verdict');
   t.equal(reportPhase.assessment.resultFresh, true,
     'the live report retains result chronology evidence');
-  t.same(reportPhase.resultSnapshot, JSON.parse(resultSnapshotJson),
-    'the live report retains the owner-published source snapshot');
+  t.same(reportPhase.resultSnapshot, {
+    state: 'available',
+    ...JSON.parse(resultSnapshotJson),
+  },
+  'the live report retains the owner-published source snapshot');
+  t.same(summarizePhase({
+    ...reportPhase,
+    serviceTopN: [],
+    reduceSlots,
+  }).resultSnapshot, {state: 'unavailable'},
+  'the live report names an unavailable result witness explicitly');
+  t.same(summarizePhase({
+    ...reportPhase,
+    serviceTopN: [{source_snapshot_json: '{invalid'}],
+    reduceSlots,
+  }).resultSnapshot, {state: 'invalid'},
+  'the live report names an invalid result witness explicitly');
+  t.same(summarizePhase({
+    ...reportPhase,
+    serviceTopN: [{source_snapshot_json: '{}'}],
+    reduceSlots,
+  }).resultSnapshot, {state: 'invalid'},
+  'the live report uses the runtime owner grammar for incomplete witnesses');
   t.equal(reportPhase.assessment.placementOptimal, true,
     'the live report retains the production-weighted optimum verdict');
   t.equal(assessAffinityDemoCompletion({

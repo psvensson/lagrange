@@ -68,6 +68,10 @@ import {
   topNRowsEqual,
 } from './affinity-demo-evidence.js';
 import {
+  parseResultSnapshotWitness,
+  RESULT_SNAPSHOT_STATE,
+} from '../../src/runtime/sql-query-loop-parallel-reduce.js';
+import {
   QUALITY_RANKING,
   RATINGS_AGGREGATE_SQL,
   rankMovieQuality,
@@ -416,13 +420,25 @@ async function describeDemoState(referenceTopN, phaseStartedAt) {
   };
 }
 
-async function observeDemoPhase(label, referenceTopN, phaseStartedAt, accept) {
+async function observeDemoPhase(
+  label,
+  referenceTopN,
+  phaseStartedAt,
+  accept,
+  onObservation = () => {},
+) {
   const start = Date.now();
   let lastProgressSignature = null;
   let lastProgressAtMs = Date.now();
   while (Date.now() - start < CONVERGE_TIMEOUT_MS) {
     await sleep(OBSERVE_INTERVAL_MS);
     const state = await describeDemoState(referenceTopN, phaseStartedAt);
+    const observedState = {
+      ...state,
+      phaseStartedAt,
+      elapsedMs: Date.now() - start,
+    };
+    onObservation(observedState);
     const placementLabel = state.placements.map((placement) =>
       placement.nodeId.slice(0, 8));
     console.log(
@@ -436,11 +452,7 @@ async function observeDemoPhase(label, referenceTopN, phaseStartedAt, accept) {
       `placement=${JSON.stringify(placementLabel)}`,
     );
     if (accept(state)) {
-      return {
-        ...state,
-        phaseStartedAt,
-        elapsedMs: Date.now() - start,
-      };
+      return observedState;
     }
     const progressSignature = JSON.stringify({
       placementLabel: placementLabel.sort(),
@@ -485,14 +497,13 @@ function summarizeReduceSlots(reduceSlots) {
 }
 
 function summarizePhase(state) {
-  let resultSnapshot = null;
-  try {
-    resultSnapshot = JSON.parse(
-      state.serviceTopN[0]?.[RESULT_SNAPSHOT_COLUMN] || 'null',
-    );
-  } catch {
-    resultSnapshot = null;
-  }
+  const encodedResultSnapshot =
+    state.serviceTopN[0]?.[RESULT_SNAPSHOT_COLUMN];
+  const resultSnapshot = parseResultSnapshotWitness(
+    encodedResultSnapshot,
+    PARALLEL_REDUCE_CONFIG,
+    TOP_N,
+  );
   return {
     phaseStartedAt: state.phaseStartedAt,
     weightedLocality: state.weightedLocality.localityRatio,
@@ -503,6 +514,24 @@ function summarizePhase(state) {
     assessment: state.assessment,
     elapsedMs: state.elapsedMs,
   };
+}
+
+function demoResultObservationIsValid(result) {
+  return result?.resultCorrect === true &&
+    result?.ranking?.length === TOP_N &&
+    result?.learnedAffinity?.resultComputedAt > 0 &&
+    result?.learnedAffinity?.resultSnapshot?.state ===
+      RESULT_SNAPSHOT_STATE.AVAILABLE;
+}
+
+function retainObservedDemoResult(phaseEvidence, observedResult) {
+  if (!demoResultObservationIsValid(observedResult)) return false;
+  const retainedComputedAt =
+    phaseEvidence.result?.learnedAffinity?.resultComputedAt || 0;
+  const observedComputedAt = observedResult.learnedAffinity.resultComputedAt;
+  if (observedComputedAt < retainedComputedAt) return false;
+  phaseEvidence.result = observedResult;
+  return true;
 }
 
 function isNodeProcessRunning(node) {
@@ -692,6 +721,30 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     const learned = await observeDemoPhase(
       'learned-affinity', referenceTopN, learnedPhaseStartedAt,
       (state) => state.assessment.complete,
+      (state) => {
+        const learnedAffinity = summarizePhase(state);
+        retainObservedDemoResult(phaseEvidence, {
+          converged: false,
+          schemaAdmission,
+          preloadAdmission,
+          lagrangeDistributedSql: {
+            inputRatings: totalRows,
+            returnedAggregateRows: aggregateRows.length,
+            elapsedMs: distributedSqlElapsedMs,
+          },
+          parallelReduce: {
+            replicas: SERVICE_REPLICA_COUNT,
+            mergeCandidates: state.assessment.mergeCandidateCount,
+            elapsedToCorrectOptimalResultMs: state.elapsedMs,
+          },
+          learnedAffinity,
+          resultCorrect: state.assessment.resultCorrect,
+          ranking: state.serviceTopN.map((row) => ({
+            movieId: Number(row.group_key),
+            score: Number(row.agg_value),
+          })),
+        });
+      },
     );
     const initialWeightedLocality = await describeWeightedLocality(
       initial.placements, learned.attributionRows,
@@ -776,4 +829,4 @@ if (process.argv[1]?.includes('run-affinity-demo.js')) {
     });
 }
 
-export {runAffinityDemo, summarizePhase};
+export {retainObservedDemoResult, runAffinityDemo, summarizePhase};

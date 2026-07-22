@@ -14,6 +14,7 @@ import {
 } from '../../src/rebalancer/service-data-affinity-weights.js';
 import {
   parseResultSnapshotWitness,
+  RESULT_SNAPSHOT_STATE,
   resolveCompletePartialSnapshot,
 } from '../../src/runtime/sql-query-loop-parallel-reduce.js';
 
@@ -139,7 +140,7 @@ function resultSnapshotIsFresh(options) {
     parallelReduceConfig,
     partialLimit,
   );
-  if (!sourceSnapshot.valid) {
+  if (sourceSnapshot.state !== RESULT_SNAPSHOT_STATE.AVAILABLE) {
     return false;
   }
   const resultComputedAt = Number(serviceTopN[0]?.computed_at);

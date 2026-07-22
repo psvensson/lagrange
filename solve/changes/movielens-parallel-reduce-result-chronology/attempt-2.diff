@@ -1,0 +1,856 @@
+diff --git a/examples/service-data-affinity/affinity-demo-evidence.js b/examples/service-data-affinity/affinity-demo-evidence.js
+index 8655277108739dca4a353f517de34306abec32f6..7d675371c8604fd85cd8fb6249a2ac02e1ddb66a 100644
+--- a/examples/service-data-affinity/affinity-demo-evidence.js
++++ b/examples/service-data-affinity/affinity-demo-evidence.js
+@@ -13,6 +13,7 @@ import {
+   buildServiceDataAffinityWeights,
+ } from '../../src/rebalancer/service-data-affinity-weights.js';
+ import {
++  parseResultSnapshotWitness,
+   resolveCompletePartialSnapshot,
+ } from '../../src/runtime/sql-query-loop-parallel-reduce.js';
+ 
+@@ -119,6 +120,48 @@ function resolvePartialSnapshotEvidence(
+   }
+ }
+ 
++function resultSnapshotIsFresh(options) {
++  const {
++    serviceTopN,
++    parallelReduceConfig,
++    partialLimit,
++    phaseStartedAt,
++    placedReplicaIds,
++    expectedMergeCandidateCount,
++  } = options;
++  if (serviceTopN.length === 0) {
++    return false;
++  }
++  const snapshotColumn = parallelReduceConfig?.resultSnapshotColumn;
++  const sourceSnapshotJson = serviceTopN[0]?.[snapshotColumn];
++  const sourceSnapshot = parseResultSnapshotWitness(
++    sourceSnapshotJson,
++    parallelReduceConfig,
++    partialLimit,
++  );
++  if (!sourceSnapshot.valid) {
++    return false;
++  }
++  const resultComputedAt = Number(serviceTopN[0]?.computed_at);
++  const sourceReplicaIds = new Set(
++    sourceSnapshot.slots.map((slot) => slot.replicaId),
++  );
++  const sourceCandidateCount = sourceSnapshot.slots.reduce(
++    (count, slot) => count + slot.candidateCount,
++    0,
++  );
++  return Number.isFinite(resultComputedAt) &&
++    resultComputedAt >= phaseStartedAt &&
++    sourceCandidateCount <= expectedMergeCandidateCount &&
++    sameIdentitySet(sourceReplicaIds, placedReplicaIds) &&
++    serviceTopN.every((row) =>
++      Number(row.computed_at) === resultComputedAt &&
++      row[snapshotColumn] === sourceSnapshotJson) &&
++    sourceSnapshot.slots.every((slot) =>
++      slot.computedAt >= phaseStartedAt &&
++      slot.computedAt <= resultComputedAt);
++}
++
+ function assessAffinityDemoCompletion(options) {
+   const {
+     expectedReplicaCount,
+@@ -146,12 +189,14 @@ function assessAffinityDemoCompletion(options) {
+   const partialsFresh = reduceSlots.every((row) =>
+     Number(row.computed_at) >= phaseStartedAt &&
+     Number(row.lease_expires_at) > Date.now());
+-  const latestPartialAt = Math.max(
+-    ...reduceSlots.map((row) => Number(row.computed_at) || 0),
+-  );
+-  const resultFresh = serviceTopN.length > 0 && serviceTopN.every((row) =>
+-    Number(row.computed_at) >= phaseStartedAt &&
+-    Number(row.computed_at) >= latestPartialAt);
++  const resultFresh = resultSnapshotIsFresh({
++    serviceTopN,
++    parallelReduceConfig,
++    partialLimit,
++    phaseStartedAt,
++    placedReplicaIds,
++    expectedMergeCandidateCount,
++  });
+   const partialsBounded = partialSnapshot.complete &&
+     mergeCandidateCount <= expectedMergeCandidateCount;
+   const identitiesCurrent = sameIdentitySet(
+diff --git a/examples/service-data-affinity/run-affinity-demo.js b/examples/service-data-affinity/run-affinity-demo.js
+index 7009081c8b17b1535672a332ddf9d7696aaa313a..bd661796210e88a569dfd9f409a0d5c8d08eab84 100644
+--- a/examples/service-data-affinity/run-affinity-demo.js
++++ b/examples/service-data-affinity/run-affinity-demo.js
+@@ -59,6 +59,9 @@ import {
+ import {
+   writeAffinityDemoLiveReport,
+ } from './affinity-demo-live-report.js';
++import {
++  collectHostSchedulingEvidence,
++} from './host-scheduling-evidence.js';
+ import {
+   assessAffinityDemoCompletion,
+   buildWeightedLocalitySnapshot,
+@@ -111,9 +114,16 @@ const SHARD_SQL_BY_SLOT = Object.freeze({
+ const RESULT_TABLE = 'movielens_top10';
+ const COORDINATION_TABLE = 'movielens_top10_reduce_slots';
+ const RESULT_ID = 'global-top10';
++const RESULT_SNAPSHOT_COLUMN = 'source_snapshot_json';
++const RESULT_SNAPSHOT_REPORT_STATE = Object.freeze({
++  AVAILABLE: 'available',
++  INVALID: 'invalid',
++  UNAVAILABLE: 'unavailable',
++});
+ const CREATE_RESULT_TABLE_SQL =
+   `CREATE TABLE IF NOT EXISTS ${RESULT_TABLE} (` +
+-  'result_id TEXT PRIMARY KEY, result_json TEXT, computed_at INTEGER)';
++  'result_id TEXT PRIMARY KEY, result_json TEXT, computed_at INTEGER, ' +
++  `${RESULT_SNAPSHOT_COLUMN} TEXT NOT NULL DEFAULT '{}')`;
+ const CREATE_COORDINATION_TABLE_SQL =
+   `CREATE TABLE IF NOT EXISTS ${COORDINATION_TABLE} (` +
+   'slot_id INTEGER PRIMARY KEY, replica_id TEXT, ' +
+@@ -127,6 +137,7 @@ const PARALLEL_REDUCE_CONFIG = Object.freeze({
+   leaseMs: REDUCE_SLOT_LEASE_MS,
+   coordinatorSlot: 1,
+   resultId: RESULT_ID,
++  resultSnapshotColumn: RESULT_SNAPSHOT_COLUMN,
+ });
+ 
+ async function startNode(index, dataRoot) {
+@@ -140,7 +151,7 @@ async function startNode(index, dataRoot) {
+     ...process.env,
+     NODE_ADDRESS: `localhost:${restPort}`,
+     REST_API_PORT: String(restPort),
+-    ADMIN_WEBSOCKET_PORT: String(adminPort),
++    ADMIN_WS_PORT: String(adminPort),
+     DATA_DIR: dataDir,
+     LOG_LEVEL: 'info',
+     PARTITION_EVALUATION_INTERVAL_MS: String(PARTITION_EVAL_INTERVAL_MS),
+@@ -341,7 +352,8 @@ async function describeReduceSlots() {
+ async function describeTopN() {
+   try {
+     const rows = await queryRows(
+-      `SELECT result_json, computed_at FROM ${RESULT_TABLE} ` +
++      `SELECT result_json, computed_at, ${RESULT_SNAPSHOT_COLUMN} ` +
++      `FROM ${RESULT_TABLE} ` +
+       `WHERE result_id = ${sqlQuote(RESULT_ID)}`,
+     );
+     const parsed = JSON.parse(rows[0]?.result_json || '[]');
+@@ -350,6 +362,7 @@ async function describeTopN() {
+       group_key: row.groupKey,
+       agg_value: row.aggValue,
+       computed_at: rows[0]?.computed_at,
++      [RESULT_SNAPSHOT_COLUMN]: rows[0]?.[RESULT_SNAPSHOT_COLUMN],
+     }));
+   } catch {
+     return [];
+@@ -477,12 +490,29 @@ function summarizeReduceSlots(reduceSlots) {
+ }
+ 
+ function summarizePhase(state) {
++  const encodedResultSnapshot =
++    state.serviceTopN[0]?.[RESULT_SNAPSHOT_COLUMN];
++  let resultSnapshot = {
++    state: RESULT_SNAPSHOT_REPORT_STATE.UNAVAILABLE,
++  };
++  if (typeof encodedResultSnapshot === 'string' &&
++      encodedResultSnapshot.length > 0) {
++    try {
++      resultSnapshot = {
++        state: RESULT_SNAPSHOT_REPORT_STATE.AVAILABLE,
++        witness: JSON.parse(encodedResultSnapshot),
++      };
++    } catch {
++      resultSnapshot = {state: RESULT_SNAPSHOT_REPORT_STATE.INVALID};
++    }
++  }
+   return {
+     phaseStartedAt: state.phaseStartedAt,
+     weightedLocality: state.weightedLocality.localityRatio,
+     placement: state.placements,
+     slotOwners: summarizeReduceSlots(state.reduceSlots),
+     resultComputedAt: Number(state.serviceTopN[0]?.computed_at) || 0,
++    resultSnapshot,
+     assessment: state.assessment,
+     elapsedMs: state.elapsedMs,
+   };
+@@ -656,8 +686,9 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+     await queryRows(CREATE_RESULT_TABLE_SQL);
+     await queryRows(CREATE_COORDINATION_TABLE_SQL);
+     await queryRows(
+-      `INSERT INTO ${RESULT_TABLE} (result_id, result_json, computed_at) ` +
+-      `VALUES (${sqlQuote(RESULT_ID)}, '[]', 0)`,
++      `INSERT INTO ${RESULT_TABLE} (result_id, result_json, computed_at, ` +
++      `${RESULT_SNAPSHOT_COLUMN}) VALUES (` +
++      `${sqlQuote(RESULT_ID)}, '[]', 0, '{}')`,
+     );
+     await queryRows(
+       `INSERT INTO ${COORDINATION_TABLE} ` +
+@@ -735,6 +766,10 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+   } finally {
+     console.log('Stopping cluster...');
+     await stopNodes(nodes);
++    // Harvest after stop so each node's log is fully flushed. Over-budget host
++    // scheduling marks the report non-measuring rather than red.
++    phaseEvidence.hostScheduling =
++      await collectHostSchedulingEvidence(CLUSTER_DATA_ROOT, NODE_COUNT);
+   }
+ }
+ 
+diff --git a/src/runtime/sql-query-loop-parallel-reduce.js b/src/runtime/sql-query-loop-parallel-reduce.js
+index f8fb81b63f7d892f2a4889d61b90bf301a04ba90..1f30f91c09c5beb439b2793286277d7efcbaa87d 100644
+--- a/src/runtime/sql-query-loop-parallel-reduce.js
++++ b/src/runtime/sql-query-loop-parallel-reduce.js
+@@ -15,6 +15,16 @@ const SQL_SINGLE_QUOTE_ESCAPE = '\'\'';
+ const COORDINATION_QUERY_FAILED =
+   'parallel reduce coordination query failed';
+ const UNASSIGNED_SLOT_ID = 0;
++const RESULT_SNAPSHOT_SCHEMA_VERSION = 1;
++const RESULT_SNAPSHOT_STATE = Object.freeze({
++  AVAILABLE: 'available',
++  INVALID: 'invalid',
++});
++const RESULT_SNAPSHOT_RESERVED_COLUMNS = new Set([
++  'result_id',
++  'result_json',
++  'computed_at',
++]);
+ 
+ const PARALLEL_REDUCE_REASON = Object.freeze({
+   SLOT_UNAVAILABLE: 'slot_unavailable',
+@@ -46,10 +56,18 @@ function hasValidSlotSql(config, slotIds) {
+     isNonEmptyString(config.shardSqlBySlot[String(slotId)]));
+ }
+ 
++function hasValidResultSnapshotIdentifiers(config, resultTable) {
++  return [
++    config?.coordinationTable,
++    resultTable,
++    config?.resultSnapshotColumn,
++  ].every(isValidIdentifier) &&
++    !RESULT_SNAPSHOT_RESERVED_COLUMNS.has(config.resultSnapshotColumn);
++}
++
+ function isValidParallelReduceConfig(config, resultTable) {
+   const slotIds = configuredSlotIds(config);
+-  return isValidIdentifier(config?.coordinationTable) &&
+-    isValidIdentifier(resultTable) &&
++  return hasValidResultSnapshotIdentifiers(config, resultTable) &&
+     isNonEmptyString(config?.resultId) &&
+     Number.isFinite(config?.leaseMs) && config.leaseMs > 0 &&
+     Number.isInteger(config?.coordinatorSlot) &&
+@@ -198,6 +216,104 @@ function mergeDisjointPartialRows(rows, limit) {
+     .slice(0, limit);
+ }
+ 
++function buildResultSnapshotWitness(slotStates) {
++  return {
++    schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
++    slots: slotStates.map(({row, partial}) => ({
++      slotId: Number(row.slot_id),
++      replicaId: row.replica_id,
++      computedAt: Number(row.computed_at),
++      candidateCount: partial.rows.length,
++    })),
++  };
++}
++
++function parseResultSnapshotJson(value) {
++  try {
++    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
++    return parsed && typeof parsed === 'object' ?
++      {state: RESULT_SNAPSHOT_STATE.AVAILABLE, value: parsed} :
++      {state: RESULT_SNAPSHOT_STATE.INVALID};
++  } catch {
++    return {state: RESULT_SNAPSHOT_STATE.INVALID};
++  }
++}
++
++function resultSnapshotHeaderIsValid(parsed, slotIds) {
++  return parsed?.schemaVersion === RESULT_SNAPSHOT_SCHEMA_VERSION &&
++    Array.isArray(parsed.slots) &&
++    parsed.slots.length === slotIds.length;
++}
++
++function resultSnapshotIdentityIsValid(slot, replicaIds) {
++  return isNonEmptyString(slot?.replicaId) &&
++    !replicaIds.has(slot.replicaId);
++}
++
++function resultSnapshotComputedAtIsValid(computedAt) {
++  return Number.isFinite(computedAt) && computedAt > 0;
++}
++
++function resultSnapshotCandidateCountIsValid(candidateCount, limit) {
++  return Number.isInteger(candidateCount) &&
++    candidateCount >= 0 &&
++    candidateCount <= limit;
++}
++
++function normalizeResultSnapshotSlot(slot, expectedSlotId, limit, replicaIds) {
++  const candidateCount = Number(slot?.candidateCount);
++  const computedAt = Number(slot?.computedAt);
++  const valid = [
++    Number(slot?.slotId) === expectedSlotId,
++    resultSnapshotIdentityIsValid(slot, replicaIds),
++    resultSnapshotComputedAtIsValid(computedAt),
++    resultSnapshotCandidateCountIsValid(candidateCount, limit),
++  ].every(Boolean);
++  if (!valid) {
++    return {state: RESULT_SNAPSHOT_STATE.INVALID};
++  }
++  return {
++    state: RESULT_SNAPSHOT_STATE.AVAILABLE,
++    value: {
++      slotId: expectedSlotId,
++      replicaId: slot.replicaId,
++      computedAt,
++      candidateCount,
++    },
++  };
++}
++
++function parseResultSnapshotWitness(value, config, limit) {
++  const parsedResult = parseResultSnapshotJson(value);
++  const slotIds = configuredSlotIds(config);
++  if (parsedResult.state !== RESULT_SNAPSHOT_STATE.AVAILABLE ||
++      !resultSnapshotHeaderIsValid(parsedResult.value, slotIds)) {
++    return {state: RESULT_SNAPSHOT_STATE.INVALID, valid: false};
++  }
++  const replicaIds = new Set();
++  const slots = [];
++  for (let index = 0; index < slotIds.length; index += 1) {
++    const slotResult = normalizeResultSnapshotSlot(
++      parsedResult.value.slots[index],
++      slotIds[index],
++      limit,
++      replicaIds,
++    );
++    if (slotResult.state !== RESULT_SNAPSHOT_STATE.AVAILABLE) {
++      return {state: RESULT_SNAPSHOT_STATE.INVALID, valid: false};
++    }
++    const slot = slotResult.value;
++    replicaIds.add(slot.replicaId);
++    slots.push(slot);
++  }
++  return {
++    state: RESULT_SNAPSHOT_STATE.AVAILABLE,
++    valid: true,
++    schemaVersion: RESULT_SNAPSHOT_SCHEMA_VERSION,
++    slots,
++  };
++}
++
+ function resolveCompletePartialSnapshot(slotRows, config, limit, nowMs) {
+   const slotIds = configuredSlotIds(config);
+   const slotStates = slotIds.map((slotId) => {
+@@ -228,6 +344,7 @@ function resolveCompletePartialSnapshot(slotRows, config, limit, nowMs) {
+       complete: true,
+       candidates,
+       merged: mergeDisjointPartialRows(candidates, limit),
++      witness: buildResultSnapshotWitness(slotStates),
+     };
+   } catch (error) {
+     if (error?.message !== PARALLEL_REDUCE_REASON.SHARD_OVERLAP) {
+@@ -255,12 +372,22 @@ async function publishPartialSnapshot(
+   return computedAt;
+ }
+ 
+-async function publishResultSnapshot(queryExecutor, resultTable, resultId, rows) {
++async function publishResultSnapshot(
++  queryExecutor,
++  resultTable,
++  resultId,
++  rows,
++  resultSnapshotColumn,
++  resultSnapshotWitness,
++) {
+   const resultJson = JSON.stringify(rows);
++  const sourceSnapshotJson = JSON.stringify(resultSnapshotWitness);
+   const computedAt = Date.now();
+   assertQuerySuccess(await queryExecutor(
+     `UPDATE ${resultTable} SET result_json = ${sqlLiteral(resultJson)}, ` +
+-    `computed_at = ${computedAt} WHERE result_id = ${sqlLiteral(resultId)}`,
++    `computed_at = ${computedAt}, ${resultSnapshotColumn} = ` +
++    `${sqlLiteral(sourceSnapshotJson)} ` +
++    `WHERE result_id = ${sqlLiteral(resultId)}`,
+     [],
+   ));
+   return computedAt;
+@@ -283,6 +410,7 @@ export {
+   acquireReduceSlot,
+   isValidParallelReduceConfig,
+   mergeDisjointPartialRows,
++  parseResultSnapshotWitness,
+   publishPartialSnapshot,
+   publishResultSnapshot,
+   readSlotRows,
+diff --git a/src/runtime/sql-query-loop-runtime-module.js b/src/runtime/sql-query-loop-runtime-module.js
+index 2be0c7d5297e7567110d3d1c3c09749a6eda821e..3d1716c29e1160e1a85c68a72b5d92af918f9424 100644
+--- a/src/runtime/sql-query-loop-runtime-module.js
++++ b/src/runtime/sql-query-loop-runtime-module.js
+@@ -33,7 +33,8 @@
+  *     coordinationTable: string, // slot lease + atomic partial snapshot
+  *     leaseMs: number,
+  *     coordinatorSlot: number,
+- *     resultId: string
++ *     resultId: string,
++ *     resultSnapshotColumn: string // owner-published partial witness
+  *   }
+  * }
+  *
+@@ -118,8 +119,8 @@ const SQL_QUERY_LOOP_ERROR = Object.freeze({
+     'requires runtime_config.reduce',
+   PARALLEL_REDUCE_INVALID:
+     'runtime_config.parallelReduce must contain non-empty ' +
+-    'shardSqlBySlot, coordinationTable, resultId, leaseMs, and a valid ' +
+-    'coordinatorSlot; it ' +
++    'shardSqlBySlot, coordinationTable, resultId, resultSnapshotColumn, ' +
++    'leaseMs, and a valid coordinatorSlot; it ' +
+     'requires reduce and resultTable',
+ });
+ 
+@@ -127,6 +128,22 @@ function isNonEmptyString(value) {
+   return typeof value === 'string' && value.length > 0;
+ }
+ 
++function hasValidReduceValueColumn(reduce) {
++  return reduce.aggregate === SQL_QUERY_LOOP_AGGREGATE.COUNT ||
++    isNonEmptyString(reduce.valueColumn);
++}
++
++function hasValidConfidenceParameters(reduce) {
++  const priorWeightValid =
++    Number.isFinite(reduce.priorWeight) && reduce.priorWeight > 0;
++  const confidencePenaltyValid =
++    Number.isFinite(reduce.confidencePenalty) &&
++    reduce.confidencePenalty >= 0;
++  return Number.isFinite(reduce.priorMean) &&
++    priorWeightValid &&
++    confidencePenaltyValid;
++}
++
+ function isValidReduceShape(reduce) {
+   if (!reduce || typeof reduce !== 'object') {
+     return false;
+@@ -138,17 +155,14 @@ function isValidReduceShape(reduce) {
+   if (!Object.values(SQL_QUERY_LOOP_AGGREGATE).includes(reduce.aggregate)) {
+     return false;
+   }
+-  const valueShapeValid =
+-    reduce.aggregate === SQL_QUERY_LOOP_AGGREGATE.COUNT ||
+-    isNonEmptyString(reduce.valueColumn);
+-  if (!valueShapeValid ||
+-      reduce.aggregate !== SQL_QUERY_LOOP_AGGREGATE.CONFIDENCE_ADJUSTED_AVG) {
+-    return valueShapeValid;
++  if (!hasValidReduceValueColumn(reduce)) {
++    return false;
+   }
+-  return Number.isFinite(reduce.priorMean) &&
+-    Number.isFinite(reduce.priorWeight) && reduce.priorWeight > 0 &&
+-    Number.isFinite(reduce.confidencePenalty) &&
+-    reduce.confidencePenalty >= 0;
++  if (reduce.aggregate !==
++      SQL_QUERY_LOOP_AGGREGATE.CONFIDENCE_ADJUSTED_AVG) {
++    return true;
++  }
++  return hasValidConfidenceParameters(reduce);
+ }
+ 
+ function validateReduceConfig(parsed) {
+@@ -534,6 +548,8 @@ class SqlQueryLoopRuntimeModule {
+       config.resultTable,
+       parallel.resultId,
+       snapshot.merged,
++      parallel.resultSnapshotColumn,
++      snapshot.witness,
+     );
+   }
+ 
+diff --git a/test/runtime/movielens-affinity-demo-wiring.test.js b/test/runtime/movielens-affinity-demo-wiring.test.js
+index dca87af12384a52d9cc354597de5ddcaca1056d4..a55ba8fe5a7b2e101bdc9e0debc20a00092a2c62 100644
+--- a/test/runtime/movielens-affinity-demo-wiring.test.js
++++ b/test/runtime/movielens-affinity-demo-wiring.test.js
+@@ -215,6 +215,9 @@ function executeParallelReduceFixtureSql(context, serviceId, sql) {
+     context.result.finalRows = JSON.parse(
+       /result_json = '(\[[^']*\])'/.exec(sql)[1],
+     );
++    context.result.sourceSnapshot = JSON.parse(
++      /source_snapshot_json = '([^']+)'/.exec(sql)[1],
++    );
+     context.result.finalUpdateCount += 1;
+     return {success: true};
+   }
+@@ -535,6 +538,18 @@ test('reduce config validation rejects malformed shapes', async (t) => {
+         resultId: 'result',
+       },
+     },
++    {
++      reduce: {groupBy: 'g', aggregate: 'count', limit: 3},
++      resultTable: 'finals',
++      parallelReduce: {
++        shardSqlBySlot: {1: 'SELECT 1', 2: 'SELECT 2'},
++        coordinationTable: 'partials',
++        leaseMs: 1000,
++        coordinatorSlot: 1,
++        resultId: 'result',
++        resultSnapshotColumn: 'computed_at',
++      },
++    },
+   ];
+   for (const extra of badConfigs) {
+     const prepared = await module.prepare({
+@@ -577,6 +592,7 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
+       leaseMs: 1000,
+       coordinatorSlot: 1,
+       resultId: 'global',
++      resultSnapshotColumn: 'source_snapshot_json',
+     },
+   };
+   const slots = [1, 2].map((slotId) => ({
+@@ -587,7 +603,11 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
+     computed_at: 0,
+   }));
+   const statements = new Map();
+-  const result = {finalRows: [], finalUpdateCount: 0};
++  const result = {
++    finalRows: [],
++    finalUpdateCount: 0,
++    sourceSnapshot: null,
++  };
+   const executorContext = {config, result, slots, statements};
+   const executorFor = (serviceId) =>
+     createParallelReduceFixtureExecutor(executorContext, serviceId);
+@@ -616,6 +636,9 @@ test('parallel reduce: replicas select disjoint shard SQL, publish bounded ' +
+     {groupKey: 50, aggValue: 5},
+     {groupKey: 258, aggValue: 4},
+   ], 'the coordinator atomically publishes the exact global top-N');
++  t.same(result.sourceSnapshot.slots.map((slot) => slot.replicaId),
++    replacements,
++    'the atomic result carries the replica generations of its source partials');
+   const health = await modules[0].health({serviceId: replacements[0]});
+   t.equal(health.partialRowsPublished, 2,
+     'the replica publishes only its configured top-N');
+@@ -772,6 +795,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     leaseMs: 10000,
+     coordinatorSlot: 1,
+     resultId: 'global',
++    resultSnapshotColumn: 'source_snapshot_json',
+   };
+   const placements = [
+     {replicaId: 'svc-affinity-r3', nodeId: 'n1'},
+@@ -793,14 +817,31 @@ test('single-zone learned-affinity evidence uses production node weights and req
+       computed_at: freshComputedAt,
+     },
+   ];
++  const resultSnapshotJson = JSON.stringify({
++    schemaVersion: 1,
++    slots: reduceSlots.map((slot) => ({
++      slotId: slot.slot_id,
++      replicaId: slot.replica_id,
++      computedAt: slot.computed_at,
++      candidateCount: 1,
++    })),
++  });
++  const serviceTopNAt = (computedAt) => topN.map((row) => ({
++    ...row,
++    computed_at: computedAt,
++    source_snapshot_json: resultSnapshotJson,
++  }));
++  const serviceTopNWithSnapshot = (snapshot) => topN.map((row) => ({
++    ...row,
++    computed_at: freshComputedAt,
++    source_snapshot_json: JSON.stringify(snapshot),
++  }));
+   const assessment = assessAffinityDemoCompletion({
+     expectedReplicaCount: 2,
+     placements,
+     weightedLocality: affinityOn,
+     referenceTopN: topN,
+-    serviceTopN: topN.map((row) => ({
+-      ...row, computed_at: freshComputedAt,
+-    })),
++    serviceTopN: serviceTopNAt(freshComputedAt),
+     reduceSlots,
+     expectedMergeCandidateCount: 2,
+     phaseStartedAt,
+@@ -815,9 +856,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     weightedLocality: affinityOn,
+     placements,
+     reduceSlots,
+-    serviceTopN: topN.map((row) => ({
+-      ...row, computed_at: freshComputedAt,
+-    })),
++    serviceTopN: serviceTopNAt(freshComputedAt),
+     assessment,
+     elapsedMs: 25,
+   });
+@@ -832,6 +871,23 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     'the live report retains the bounded-candidate verdict');
+   t.equal(reportPhase.assessment.resultFresh, true,
+     'the live report retains result chronology evidence');
++  t.same(reportPhase.resultSnapshot, {
++    state: 'available',
++    witness: JSON.parse(resultSnapshotJson),
++  },
++    'the live report retains the owner-published source snapshot');
++  t.same(summarizePhase({
++    ...reportPhase,
++    serviceTopN: [],
++    reduceSlots,
++  }).resultSnapshot, {state: 'unavailable'},
++  'the live report names an unavailable result witness explicitly');
++  t.same(summarizePhase({
++    ...reportPhase,
++    serviceTopN: [{source_snapshot_json: '{invalid'}],
++    reduceSlots,
++  }).resultSnapshot, {state: 'invalid'},
++  'the live report names an invalid result witness explicitly');
+   t.equal(reportPhase.assessment.placementOptimal, true,
+     'the live report retains the production-weighted optimum verdict');
+   t.equal(assessAffinityDemoCompletion({
+@@ -839,9 +895,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     placements,
+     weightedLocality: affinityOn,
+     referenceTopN: topN,
+-    serviceTopN: topN.map((row) => ({
+-      ...row, computed_at: freshComputedAt,
+-    })),
++    serviceTopN: serviceTopNAt(freshComputedAt),
+     reduceSlots: reduceSlots.map((slot) => ({
+       ...slot,
+       replica_id: `${slot.replica_id}-stale`,
+@@ -860,9 +914,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
+       ...affinityOn, localityRatio: 1.2,
+     },
+     referenceTopN: topN,
+-    serviceTopN: topN.map((row) => ({
+-      ...row, computed_at: freshComputedAt,
+-    })),
++    serviceTopN: serviceTopNAt(freshComputedAt),
+     reduceSlots,
+     expectedMergeCandidateCount: 2,
+     phaseStartedAt,
+@@ -874,9 +926,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     placements,
+     weightedLocality: affinityOn,
+     referenceTopN: topN,
+-    serviceTopN: topN.map((row) => ({
+-      ...row, computed_at: freshComputedAt,
+-    })),
++    serviceTopN: serviceTopNAt(freshComputedAt),
+     reduceSlots: slots,
+     expectedMergeCandidateCount: 2,
+     phaseStartedAt,
+@@ -898,9 +948,7 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     placements,
+     weightedLocality: affinityOn,
+     referenceTopN: topN,
+-    serviceTopN: topN.map((row) => ({
+-      ...row, computed_at: freshComputedAt - 1,
+-    })),
++    serviceTopN: serviceTopNAt(freshComputedAt - 1),
+     reduceSlots,
+     expectedMergeCandidateCount: 2,
+     phaseStartedAt,
+@@ -908,6 +956,74 @@ test('single-zone learned-affinity evidence uses production node weights and req
+     partialLimit: 1,
+   }).complete, false,
+   'a result older than its accepted partial snapshots cannot close');
++  t.equal(assessAffinityDemoCompletion({
++    expectedReplicaCount: 2,
++    placements,
++    weightedLocality: affinityOn,
++    referenceTopN: topN,
++    serviceTopN: serviceTopNAt(freshComputedAt).map((row) => ({
++      ...row,
++      source_snapshot_json: '{}',
++    })),
++    reduceSlots,
++    expectedMergeCandidateCount: 2,
++    phaseStartedAt,
++    parallelReduceConfig: evidenceParallelConfig,
++    partialLimit: 1,
++  }).complete, false,
++  'an exact result without an owned source-snapshot witness cannot close');
++  const validResultSnapshot = JSON.parse(resultSnapshotJson);
++  const invalidResultSnapshots = [
++    {
++      ...validResultSnapshot,
++      slots: [...validResultSnapshot.slots].reverse(),
++    },
++    {
++      ...validResultSnapshot,
++      slots: validResultSnapshot.slots.map((slot, index) => ({
++        ...slot,
++        replicaId: index === 1 ?
++          validResultSnapshot.slots[0].replicaId :
++          slot.replicaId,
++      })),
++    },
++    {
++      ...validResultSnapshot,
++      slots: validResultSnapshot.slots.map((slot, index) => ({
++        ...slot,
++        candidateCount: index === 0 ? 2 : slot.candidateCount,
++      })),
++    },
++    {
++      ...validResultSnapshot,
++      slots: validResultSnapshot.slots.map((slot, index) => ({
++        ...slot,
++        computedAt: index === 0 ? freshComputedAt + 1 : slot.computedAt,
++      })),
++    },
++  ];
++  const invalidSnapshotLabels = [
++    'reordered stable slots',
++    'duplicate replica identities',
++    'over-limit candidate counts',
++    'source timestamps newer than the result',
++  ];
++  for (let index = 0; index < invalidResultSnapshots.length; index += 1) {
++    const invalidAssessment = assessAffinityDemoCompletion({
++      expectedReplicaCount: 2,
++      placements,
++      weightedLocality: affinityOn,
++      referenceTopN: topN,
++      serviceTopN: serviceTopNWithSnapshot(invalidResultSnapshots[index]),
++      reduceSlots,
++      expectedMergeCandidateCount: 2,
++      phaseStartedAt,
++      parallelReduceConfig: evidenceParallelConfig,
++      partialLimit: 1,
++    });
++    t.equal(invalidAssessment.resultFresh, false,
++      `${invalidSnapshotLabels[index]} cannot forge result freshness`);
++  }
+   t.end();
+ });
+ 
+diff --git a/test/runtime/sql-query-loop-parallel-reduce-sql.test.js b/test/runtime/sql-query-loop-parallel-reduce-sql.test.js
+index d07bcbfb4e930fcb901672726a247866b2008758..744a15663a33be9cc4146d54fa0a1164b9559d91 100644
+--- a/test/runtime/sql-query-loop-parallel-reduce-sql.test.js
++++ b/test/runtime/sql-query-loop-parallel-reduce-sql.test.js
+@@ -12,11 +12,17 @@ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   SqlQueryLoopRuntimeModule,
+ } from '../../src/runtime/sql-query-loop-runtime-module.js';
++import {
++  parseResultSnapshotWitness,
++} from '../../src/runtime/sql-query-loop-parallel-reduce.js';
+ import {
+   HEALTH_STATUS,
+   PREPARE_STATUS,
+   START_STATUS,
+ } from '../../src/runtime/runtime-driver.js';
++import {
++  assessAffinityDemoCompletion,
++} from '../../examples/service-data-affinity/affinity-demo-evidence.js';
+ 
+ const WAIT_TIMEOUT_MS = 1500;
+ const WAIT_POLL_MS = 5;
+@@ -48,9 +54,10 @@ function createLeaseDatabase() {
+     CREATE TABLE final_topn (
+       result_id TEXT PRIMARY KEY,
+       result_json TEXT NOT NULL,
+-      computed_at INTEGER NOT NULL
++      computed_at INTEGER NOT NULL,
++      source_snapshot_json TEXT NOT NULL
+     );
+-    INSERT INTO final_topn VALUES ('global', '[]', 0);
++    INSERT INTO final_topn VALUES ('global', '[]', 0, '{}');
+   `);
+   return db;
+ }
+@@ -117,6 +124,7 @@ test('parallel reduce lease SQL: concurrent generations claim unique slots ' +
+       leaseMs: LEASE_MS,
+       coordinatorSlot: 1,
+       resultId: 'global',
++      resultSnapshotColumn: 'source_snapshot_json',
+     },
+   };
+   const executor = sqliteExecutor(db, new Map([
+@@ -157,6 +165,79 @@ test('parallel reduce lease SQL: concurrent generations claim unique slots ' +
+     'SELECT result_json FROM final_topn WHERE result_id = \'global\'',
+   ).get().result_json), [{groupKey: 1, aggValue: 5}],
+   'the coordinator publishes the exact bounded snapshot through real SQL');
++  const publishedResult = db.prepare(
++    'SELECT result_json, computed_at, source_snapshot_json ' +
++    'FROM final_topn WHERE result_id = \'global\'',
++  ).get();
++  const sourceSnapshot = JSON.parse(publishedResult.source_snapshot_json);
++  const sourceSlots = Array.isArray(sourceSnapshot.slots) ?
++    sourceSnapshot.slots :
++    [];
++  t.equal(sourceSnapshot.schemaVersion, 1,
++    'the result row atomically identifies its partial-snapshot contract');
++  t.same(sourceSlots.map((slot) => slot.slotId), [1, 2],
++    'the witness covers every configured stable slot');
++  t.same(sourceSlots.map((slot) => slot.replicaId), [firstId, secondId],
++    'the witness binds the result to the replica generations it merged');
++  t.same(sourceSlots.map((slot) => slot.candidateCount), [1, 1],
++    'the witness retains the bounded candidate count per partial');
++  t.ok(sourceSlots.every((slot) =>
++    Number(slot.computedAt) > 0 &&
++    Number(slot.computedAt) <= Number(publishedResult.computed_at)),
++  'the result is chronologically downstream of every witnessed partial');
++
++  const laterPartialAt = Number(publishedResult.computed_at) + 1;
++  db.prepare(
++    'UPDATE reduce_slots SET computed_at = ?, lease_expires_at = ? ' +
++    'WHERE slot_id = 2',
++  ).run(laterPartialAt, Date.now() + LEASE_MS);
++  const currentSlots = db.prepare(
++    'SELECT slot_id, replica_id, lease_expires_at, partial_json, ' +
++    'computed_at FROM reduce_slots ORDER BY slot_id',
++  ).all();
++  const resultRows = JSON.parse(publishedResult.result_json);
++  const serviceTopN = resultRows.map((row, index) => ({
++    rank: index + 1,
++    group_key: row.groupKey,
++    agg_value: row.aggValue,
++    computed_at: publishedResult.computed_at,
++    source_snapshot_json: publishedResult.source_snapshot_json,
++  }));
++  const assessment = assessAffinityDemoCompletion({
++    expectedReplicaCount: 2,
++    placements: [
++      {replicaId: firstId, nodeId: 'node-a'},
++      {replicaId: secondId, nodeId: 'node-b'},
++    ],
++    weightedLocality: {
++      placementScore: 2,
++      bestScore: 2,
++      localityRatio: 1,
++    },
++    referenceTopN: serviceTopN,
++    serviceTopN,
++    reduceSlots: currentSlots,
++    expectedMergeCandidateCount: 2,
++    phaseStartedAt: Math.min(
++      Number(publishedResult.computed_at),
++      ...sourceSlots.map((slot) => Number(slot.computedAt)),
++    ) - 1,
++    parallelReduceConfig: config.parallelReduce,
++    partialLimit: 1,
++  });
++  t.equal(assessment.resultFresh, true,
++    'a later periodic partial cannot retroactively stale a sealed result');
++  t.equal(assessment.complete, true,
++    'the exact result remains acceptable through its owned snapshot witness');
++
++  t.same(parseResultSnapshotWitness(
++    '{invalid', config.parallelReduce, 1,
++  ), {state: 'invalid', valid: false},
++  'an invalid result witness uses an explicit state variant');
++  t.same(parseResultSnapshotWitness(
++    undefined, config.parallelReduce, 1,
++  ), {state: 'invalid', valid: false},
++  'an unavailable result witness uses an explicit state variant');
+ 
+   replacementId = 'svc-affinity-r5';
+   replacement = new SqlQueryLoopRuntimeModule();
