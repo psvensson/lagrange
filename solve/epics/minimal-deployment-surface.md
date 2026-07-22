@@ -81,3 +81,7 @@ invariants, and migration sequence now live in
   same inactive zero-replica desired state. Scheduling remains a Cell-activation
   concern: compilation must not arm a timer or engage the per-replica timer
   runtime.
+- 2026-07-22 — Landed `time` and selected `once` as the next source cutover.
+  `once` contributes no source configuration beyond its kind, so the cutover is
+  limited to closed compiler admission and the same inactive zero-replica
+  desired-state projection; invocation remains deferred to Cell activation.
