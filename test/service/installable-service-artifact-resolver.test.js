@@ -14,6 +14,7 @@ import {
   buildArtifactSignaturePayload,
 } from '../../src/service/installable-service-artifact-resolver.js';
 import {
+  EXTERNAL_SERVICE_EXPORT_INTERFACE,
   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
   EXTERNAL_SERVICE_MEDIA_TYPE,
 } from '../../src/service/external-service-manifest.js';
@@ -72,6 +73,12 @@ function makeExternalManifest({
       ...(signature === undefined ? {} : {signature}),
     },
     runtime: {kind: runtimeKind},
+    exports: [{
+      name: 'serve',
+      interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
+      reads: [],
+      writes: [],
+    }],
   };
 }
 

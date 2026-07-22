@@ -124,6 +124,10 @@ class LifecycleCatalogGateway {
   rowCount(table) {
     return this.tables.get(table).size;
   }
+
+  rows(table) {
+    return [...this.tables.get(table).values()].map(clone);
+  }
 }
 
 class FixtureArtifactResolver {
@@ -170,6 +174,14 @@ function manifest(version = '1.0.0', digest = DIGEST_A) {
       media_type: CONTAINER_MEDIA_TYPE,
     },
     runtime: {kind: 'oci_container'},
+  };
+}
+
+function v2Manifest(exports_) {
+  return {
+    ...manifest(),
+    schema_version: 2,
+    exports: exports_,
   };
 }
 
@@ -491,6 +503,101 @@ describe('service lifecycle SQL classification and security boundary', () => {
 });
 
 describe('service lifecycle SQL durable owner route', () => {
+  it('persists canonical v2 artifact exports through authenticated INSTALL SERVICE',
+    async () => {
+      const fixture = createEngineFixture();
+      const adapter = await createAuthenticatedAdapter(fixture.engine);
+      const result = await adapter.execute(
+        'session-1',
+        'INSTALL SERVICE $1',
+        [installPayload({
+          manifest: v2Manifest([
+            {
+              name: 'audit-change',
+              interface: 'change_v1',
+              reads: ['table:global.audit'],
+              writes: ['table:global.audit'],
+            },
+            {
+              name: 'serve',
+              interface: 'request_v1',
+              reads: ['table:global.orders', 'table:global.accounts'],
+              writes: ['table:global.audit'],
+            },
+          ]),
+        })],
+      );
+      assert.equal(result.success, true);
+      const [packageRow] = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
+      assert.equal(packageRow.manifest_schema_version, 2);
+      assert.deepEqual(JSON.parse(packageRow.normalized_manifest).exports, [
+        {
+          interface: 'change_v1',
+          name: 'audit-change',
+          reads: ['table:global.audit'],
+          writes: ['table:global.audit'],
+        },
+        {
+          interface: 'request_v1',
+          name: 'serve',
+          reads: ['table:global.accounts', 'table:global.orders'],
+          writes: ['table:global.audit'],
+        },
+      ]);
+
+      const permuted = await adapter.execute(
+        'session-1',
+        'INSTALL SERVICE $1',
+        [installPayload({
+          idempotency_key: 'install-permuted-artifact-exports',
+          manifest: v2Manifest([
+            {
+              name: 'serve',
+              interface: 'request_v1',
+              reads: ['table:global.accounts', 'table:global.orders'],
+              writes: ['table:global.audit'],
+            },
+            {
+              name: 'audit-change',
+              interface: 'change_v1',
+              reads: ['table:global.audit'],
+              writes: ['table:global.audit'],
+            },
+          ]),
+        })],
+      );
+      assert.equal(permuted.success, true);
+      assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_PACKAGES), 1);
+      assert.equal(
+        fixture.gateway.rows(TABLES.SERVICE_PACKAGES)[0].package_id,
+        packageRow.package_id,
+      );
+    });
+
+  it('rejects malformed v2 exports before resolution or catalog writes',
+    async () => {
+      const fixture = createEngineFixture();
+      const adapter = await createAuthenticatedAdapter(fixture.engine);
+      const rejected = await adapter.execute(
+        'session-1',
+        'INSTALL SERVICE $1',
+        [installPayload({
+          idempotency_key: 'reject-wildcard-export',
+          manifest: v2Manifest([{
+            name: 'serve',
+            interface: 'request_v1',
+            reads: ['table:global.*'],
+            writes: [],
+          }]),
+        })],
+      );
+      assert.equal(rejected.success, false);
+      assert.equal(fixture.artifactResolver.calls.length, 0);
+      for (const table of CATALOG_TABLES) {
+        assert.equal(fixture.gateway.rowCount(table), 0, table);
+      }
+    });
+
   it('records one truthful install and replays without resolving again',
     async () => {
       const fixture = createEngineFixture();

@@ -46,6 +46,7 @@ installation:
 -   Which kernel API versions does it support?
 -   Which configuration fields are valid?
 -   Does it depend on other services?
+-   Which stable handlers does it export, and which tables may they access?
 
 ------------------------------------------------------------------------
 
@@ -81,7 +82,8 @@ installation:
 
 ## Identity
 
--   `schema_version` --- currently `1`
+-   `schema_version` --- currently `2`; version `1` remains accepted for
+    existing packages
 -   `name`
 -   `version`
 -   `display_name`
@@ -92,7 +94,7 @@ Example:
 
 ``` json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "backup-manager",
   "version": "1.2.0",
   "display_name": "Backup Manager",
@@ -192,6 +194,40 @@ Example (OCI container):
   }
 }
 ```
+
+------------------------------------------------------------------------
+
+## Exports (schema version 2)
+
+Every schema-v2 manifest declares at least one stateless handler export. Each
+export has exactly these fields:
+
+-   `name` --- unique lowercase handler name
+-   `interface` --- one of `request_v1`, `change_v1`, `call_v1`,
+    `pushdown_v1`, `time_v1`, `once_v1`, or `boot_v1`
+-   `reads` --- exact table identities read by the handler
+-   `writes` --- exact table identities written by the handler
+
+Table identities use `table:global.<table>`. Both sets are explicit, unique,
+and lexically normalized; empty access is `[]`. Wildcards, omitted sets,
+unknown export fields, and duplicate export names are invalid. A table may
+appear in both sets when the handler both reads and writes it. Interface values
+type the artifact boundary; the Binding contract owns which source may call
+which interface.
+
+``` json
+{
+  "exports": [{
+    "name": "serve",
+    "interface": "request_v1",
+    "reads": ["table:global.accounts", "table:global.orders"],
+    "writes": ["table:global.audit"]
+  }]
+}
+```
+
+Schema-v1 manifests retain their existing contract and do not acquire inferred
+exports. New scaffolds emit schema v2.
 
 ------------------------------------------------------------------------
 
@@ -381,7 +417,7 @@ commercial consumer example only under the current edition matrix.
 
 ``` json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "backup-manager",
   "version": "1.2.0",
   "display_name": "Backup Manager",
@@ -398,6 +434,12 @@ commercial consumer example only under the current edition matrix.
     "kind": "wasm_component",
     "entrypoint": "backup-manager.wasm"
   },
+  "exports": [{
+    "name": "run-backup",
+    "interface": "once_v1",
+    "reads": ["table:global.backup_jobs"],
+    "writes": ["table:global.backup_jobs"]
+  }],
   "replication": {
     "mode": "replicated_service",
     "replicas": 3,
@@ -459,6 +501,8 @@ The kernel should validate at least the following before activation:
 -   artifact `media_type` recognized and consistent with `runtime.kind`
 -   runtime kind is `wasm_component` or `oci_container` (reject
     `native_js` from external manifests)
+-   schema-v2 export names and exact table access sets are unique and canonical
+-   schema-v2 export interfaces belong to the closed stable interface set
 -   capabilities recognized
 -   compatibility range satisfied
 -   configuration schema parseable
@@ -489,7 +533,8 @@ not just as an opaque blob.
 
 Typical mapping:
 
--   manifest identity and verified artifact refs → `service_packages`
+-   manifest identity, export declarations, and verified artifact refs →
+    `service_packages.normalized_manifest`
 -   immutable configuration revisions → `service_revisions`
 -   desired install and rollout state → `service_installations`
 -   typed install failures → `service_install_failures`
@@ -516,6 +561,8 @@ Rules:
 -   breaking changes require a new manifest schema version
 -   unknown optional fields may be ignored
 -   unknown required fields must fail validation
+-   schema v1 remains readable under its sealed contract; v2 is the default for
+    new manifests and must not infer declarations for v1
 
 ------------------------------------------------------------------------
 

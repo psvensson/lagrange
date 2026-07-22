@@ -182,10 +182,16 @@ test('init creates deterministic source and a truthful digest-less template', as
   const manifestPath = path.join(firstTarget, 'lagrange-service.template.json');
   const manifestText = fs.readFileSync(manifestPath, 'utf8');
   const manifest = JSON.parse(manifestText);
-  t.equal(manifest.schema_version, 1);
+  t.equal(manifest.schema_version, 2);
   t.equal(manifest.name, PROJECT_NAME);
   t.equal(manifest.artifact.type, 'oci');
   t.equal(manifest.runtime.kind, 'oci_container');
+  t.same(manifest.exports, [{
+    name: 'serve',
+    interface: 'request_v1',
+    reads: [],
+    writes: [],
+  }]);
   t.equal(Object.hasOwn(manifest.artifact, 'digest'), false);
   t.notMatch(manifestText, /sha256:/);
 

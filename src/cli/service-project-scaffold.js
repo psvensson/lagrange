@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  EXTERNAL_SERVICE_EXPORT_INTERFACE,
   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
   EXTERNAL_SERVICE_MEDIA_TYPE,
   validateExternalServiceManifest,
@@ -17,6 +18,7 @@ const FILE_MODE = 0o644;
 const DIRECTORY_MODE = 0o755;
 const SERVICE_PROJECT_ERROR_NAME = 'ServiceProjectScaffoldError';
 const SERVICE_ARTIFACT_TYPE = 'oci';
+const SERVICE_EXPORT_NAME = 'serve';
 const SERVICE_PACKAGE_TYPE = 'module';
 const SERVICE_START_SCRIPT = 'node src/server.js';
 const SERVICE_TEST_SCRIPT = 'node --test';
@@ -75,6 +77,12 @@ function createManifestTemplate(serviceName) {
     runtime: {
       kind: SERVICE_RUNTIME_KIND,
     },
+    exports: [{
+      name: SERVICE_EXPORT_NAME,
+      interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
+      reads: [],
+      writes: [],
+    }],
   };
 }
 

@@ -10,7 +10,18 @@ import Ajv from 'ajv';
 
 import {RUNTIME_KIND} from '../constants/runtime.js';
 
-const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 1;
+const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 2;
+const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 = 1;
+
+const EXTERNAL_SERVICE_EXPORT_INTERFACE = Object.freeze({
+  BOOT: 'boot_v1',
+  CALL: 'call_v1',
+  CHANGE: 'change_v1',
+  ONCE: 'once_v1',
+  PUSHDOWN: 'pushdown_v1',
+  REQUEST: 'request_v1',
+  TIME: 'time_v1',
+});
 
 const EXTERNAL_SERVICE_MEDIA_TYPE = Object.freeze({
   OCI_CONTAINER: 'application/vnd.oci.image.manifest.v1+json',
@@ -18,6 +29,7 @@ const EXTERNAL_SERVICE_MEDIA_TYPE = Object.freeze({
 });
 
 const EXTERNAL_SERVICE_MANIFEST_ERROR_CODE = Object.freeze({
+  DUPLICATE_EXPORT_NAME: 'duplicate_export_name',
   INVALID_FIELD: 'invalid_field',
   INVALID_ARTIFACT_REF: 'invalid_artifact_ref',
   INVALID_DIGEST: 'invalid_digest',
@@ -46,6 +58,7 @@ const EXTERNAL_SERVICE_MANIFEST_PATH = Object.freeze({
   ARTIFACT_MEDIA_TYPE: '/artifact/media_type',
   ARTIFACT_REF: '/artifact/ref',
   ARTIFACT_TYPE: '/artifact/type',
+  EXPORTS: '/exports',
   ROOT: '/',
   RUNTIME_KIND: '/runtime/kind',
   SCHEMA_VERSION: '/schema_version',
@@ -71,124 +84,176 @@ const STRING_ARRAY_SCHEMA = {
   uniqueItems: true,
 };
 
-const schema = {
+const TABLE_ACCESS_SCHEMA = {
+  type: 'array',
+  items: {
+    type: 'string',
+    pattern: '^table:global\\.[a-z_][a-z0-9_]*$',
+  },
+  uniqueItems: true,
+};
+
+const EXPORTS_SCHEMA = {
+  type: 'array',
+  minItems: 1,
+  items: {
+    type: 'object',
+    required: ['name', 'interface', 'reads', 'writes'],
+    additionalProperties: false,
+    properties: {
+      name: {type: 'string', pattern: '^[a-z][a-z0-9-]{0,127}$'},
+      interface: {enum: Object.values(EXTERNAL_SERVICE_EXPORT_INTERFACE)},
+      reads: TABLE_ACCESS_SCHEMA,
+      writes: TABLE_ACCESS_SCHEMA,
+    },
+  },
+};
+
+const COMMON_REQUIRED_FIELDS = Object.freeze([
+  'schema_version', 'name', 'version', 'artifact', 'runtime',
+]);
+
+const COMMON_PROPERTIES = {
+  name: {
+    type: 'string',
+    pattern: '^[a-z][a-z0-9-]{0,127}$',
+  },
+  version: {
+    type: 'string',
+    pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+' +
+      '(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$',
+  },
+  display_name: {type: 'string', minLength: 1},
+  publisher: {type: 'string', minLength: 1},
+  description: {type: 'string'},
+  artifact: {
+    type: 'object',
+    required: ['type', 'ref', 'digest', 'media_type'],
+    additionalProperties: true,
+    properties: {
+      type: {const: 'oci'},
+      ref: {type: 'string', pattern: '^\\S+$'},
+      digest: {type: 'string', pattern: '^sha256:[0-9a-f]{64}$'},
+      media_type: {
+        enum: Object.values(EXTERNAL_SERVICE_MEDIA_TYPE),
+      },
+      size_bytes: {type: 'integer', minimum: 0},
+      signature: {type: 'object'},
+    },
+  },
+  runtime: {
+    type: 'object',
+    required: ['kind'],
+    additionalProperties: true,
+    properties: {
+      kind: {enum: Object.keys(EXPECTED_MEDIA_TYPE)},
+      entrypoint: {type: 'string', minLength: 1},
+      runtime_options: {type: 'object'},
+    },
+  },
+  replication: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      mode: {
+        enum: ['replicated_service', 'singleton', 'sharded'],
+      },
+      replicas: {type: 'integer', minimum: 1},
+      placement: {type: 'object'},
+      failover_policy: {type: 'object'},
+    },
+  },
+  capabilities: STRING_ARRAY_SCHEMA,
+  compatibility: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      kernel_api: {type: 'string', minLength: 1},
+      cluster_min_version: {type: 'string', minLength: 1},
+      cluster_max_version: {type: 'string', minLength: 1},
+      requires_features: STRING_ARRAY_SCHEMA,
+      edition: {type: 'string', minLength: 1},
+    },
+  },
+  config_schema: {
+    type: 'object',
+    required: ['schema_version', 'format', 'schema'],
+    additionalProperties: true,
+    properties: {
+      schema_version: {type: 'integer', minimum: 1},
+      format: {const: 'json-schema'},
+      schema: {type: 'object'},
+    },
+  },
+  upgrade: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      strategy: {enum: ['rolling', 'canary', 'all_at_once']},
+      max_unavailable: {type: 'integer', minimum: 0},
+      requires_drain: {type: 'boolean'},
+      requires_data_migration: {type: 'boolean'},
+    },
+  },
+  dependencies: {
+    type: 'array',
+    items: {
+      type: 'object',
+      required: ['type', 'name'],
+      additionalProperties: true,
+      properties: {
+        type: {enum: ['service', 'kernel_feature']},
+        name: {type: 'string', minLength: 1},
+        version: {type: 'string', minLength: 1},
+      },
+    },
+  },
+  health: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      startup_probe: {type: 'object'},
+      readiness_probe: {type: 'object'},
+      liveness_probe: {type: 'object'},
+    },
+  },
+};
+
+const schemaV1 = {
   $id: 'lagrange.external-service-manifest.v1',
   type: 'object',
-  required: ['schema_version', 'name', 'version', 'artifact', 'runtime'],
+  required: COMMON_REQUIRED_FIELDS,
+  additionalProperties: true,
+  properties: {
+    schema_version: {
+      type: 'integer',
+      const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1,
+    },
+    ...COMMON_PROPERTIES,
+  },
+};
+
+const schemaV2 = {
+  $id: 'lagrange.external-service-manifest.v2',
+  type: 'object',
+  required: [...COMMON_REQUIRED_FIELDS, 'exports'],
   additionalProperties: true,
   properties: {
     schema_version: {
       type: 'integer',
       const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
     },
-    name: {
-      type: 'string',
-      pattern: '^[a-z][a-z0-9-]{0,127}$',
-    },
-    version: {
-      type: 'string',
-      pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+' +
-        '(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$',
-    },
-    display_name: {type: 'string', minLength: 1},
-    publisher: {type: 'string', minLength: 1},
-    description: {type: 'string'},
-    artifact: {
-      type: 'object',
-      required: ['type', 'ref', 'digest', 'media_type'],
-      additionalProperties: true,
-      properties: {
-        type: {const: 'oci'},
-        ref: {type: 'string', pattern: '^\\S+$'},
-        digest: {type: 'string', pattern: '^sha256:[0-9a-f]{64}$'},
-        media_type: {
-          enum: Object.values(EXTERNAL_SERVICE_MEDIA_TYPE),
-        },
-        size_bytes: {type: 'integer', minimum: 0},
-        signature: {type: 'object'},
-      },
-    },
-    runtime: {
-      type: 'object',
-      required: ['kind'],
-      additionalProperties: true,
-      properties: {
-        kind: {enum: Object.keys(EXPECTED_MEDIA_TYPE)},
-        entrypoint: {type: 'string', minLength: 1},
-        runtime_options: {type: 'object'},
-      },
-    },
-    replication: {
-      type: 'object',
-      additionalProperties: true,
-      properties: {
-        mode: {
-          enum: ['replicated_service', 'singleton', 'sharded'],
-        },
-        replicas: {type: 'integer', minimum: 1},
-        placement: {type: 'object'},
-        failover_policy: {type: 'object'},
-      },
-    },
-    capabilities: STRING_ARRAY_SCHEMA,
-    compatibility: {
-      type: 'object',
-      additionalProperties: true,
-      properties: {
-        kernel_api: {type: 'string', minLength: 1},
-        cluster_min_version: {type: 'string', minLength: 1},
-        cluster_max_version: {type: 'string', minLength: 1},
-        requires_features: STRING_ARRAY_SCHEMA,
-        edition: {type: 'string', minLength: 1},
-      },
-    },
-    config_schema: {
-      type: 'object',
-      required: ['schema_version', 'format', 'schema'],
-      additionalProperties: true,
-      properties: {
-        schema_version: {type: 'integer', minimum: 1},
-        format: {const: 'json-schema'},
-        schema: {type: 'object'},
-      },
-    },
-    upgrade: {
-      type: 'object',
-      additionalProperties: true,
-      properties: {
-        strategy: {enum: ['rolling', 'canary', 'all_at_once']},
-        max_unavailable: {type: 'integer', minimum: 0},
-        requires_drain: {type: 'boolean'},
-        requires_data_migration: {type: 'boolean'},
-      },
-    },
-    dependencies: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['type', 'name'],
-        additionalProperties: true,
-        properties: {
-          type: {enum: ['service', 'kernel_feature']},
-          name: {type: 'string', minLength: 1},
-          version: {type: 'string', minLength: 1},
-        },
-      },
-    },
-    health: {
-      type: 'object',
-      additionalProperties: true,
-      properties: {
-        startup_probe: {type: 'object'},
-        readiness_probe: {type: 'object'},
-        liveness_probe: {type: 'object'},
-      },
-    },
+    ...COMMON_PROPERTIES,
+    exports: EXPORTS_SCHEMA,
   },
 };
 
-const schemaValidator = new Ajv({allErrors: true, strict: true}).compile(schema);
-const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schema);
+const ajv = new Ajv({allErrors: true, strict: true});
+const schemaValidators = new Map([
+  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1, ajv.compile(schemaV1)],
+  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, ajv.compile(schemaV2)],
+]);
+const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schemaV2);
 
 const TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
   'display_name',
@@ -291,8 +356,8 @@ function codeForSchemaError(error, path) {
   return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.INVALID_FIELD;
 }
 
-function schemaErrors() {
-  return (schemaValidator.errors || []).map((error) => {
+function schemaErrors(validator) {
+  return (validator.errors || []).map((error) => {
     const path = pathForSchemaError(error);
     return {
       code: codeForSchemaError(error, path),
@@ -301,6 +366,28 @@ function schemaErrors() {
         EXTERNAL_SERVICE_MANIFEST_MESSAGE.INVALID_SCHEMA_VALUE}`,
     };
   });
+}
+
+function duplicateExportNameErrors(manifest) {
+  if (manifest.schema_version !== EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION ||
+      !Array.isArray(manifest.exports)) {
+    return [];
+  }
+  const seen = new Set();
+  const errors = [];
+  for (const [index, declaration] of manifest.exports.entries()) {
+    const name = declaration?.name;
+    if (typeof name !== 'string' || !seen.has(name)) {
+      if (typeof name === 'string') seen.add(name);
+      continue;
+    }
+    errors.push({
+      code: EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.DUPLICATE_EXPORT_NAME,
+      path: `${EXTERNAL_SERVICE_MANIFEST_PATH.EXPORTS}/${index}/name`,
+      message: `export name ${name} must be unique`,
+    });
+  }
+  return errors;
 }
 
 function mismatchError(manifest) {
@@ -328,6 +415,17 @@ function rejectedResult(errors) {
   });
 }
 
+function normalizedExports(exports_) {
+  return exports_
+    .map((declaration) => ({
+      interface: declaration.interface,
+      name: declaration.name,
+      reads: [...declaration.reads].sort(),
+      writes: [...declaration.writes].sort(),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function normalizedManifest(manifest) {
   const normalized = {
     schema_version: manifest.schema_version,
@@ -335,6 +433,9 @@ function normalizedManifest(manifest) {
     version: manifest.version,
   };
   copyOptionalFields(normalized, manifest, TOP_LEVEL_OPTIONAL_FIELDS);
+  if (manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION) {
+    normalized.exports = normalizedExports(manifest.exports);
+  }
   normalized.artifact = {
     type: manifest.artifact.type,
     ref: manifest.artifact.ref,
@@ -361,8 +462,11 @@ function normalizeExternalServiceManifest(input) {
     }]);
   }
 
-  const structurallyValid = schemaValidator(clone.value);
-  const errors = structurallyValid ? [] : schemaErrors();
+  const validator = schemaValidators.get(clone.value.schema_version) ||
+    schemaValidators.get(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION);
+  const structurallyValid = validator(clone.value);
+  const errors = structurallyValid ? [] : schemaErrors(validator);
+  errors.push(...duplicateExportNameErrors(clone.value));
   const mismatch = mismatchError(clone.value);
   if (mismatch) errors.push(mismatch);
   if (errors.length > 0) return rejectedResult(errors);
@@ -382,6 +486,7 @@ function validateExternalServiceManifest(input) {
 }
 
 export {
+  EXTERNAL_SERVICE_EXPORT_INTERFACE,
   EXTERNAL_SERVICE_MANIFEST_ERROR_CODE,
   EXTERNAL_SERVICE_MANIFEST_SCHEMA,
   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,

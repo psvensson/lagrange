@@ -1,0 +1,947 @@
+diff --git a/architecture/lagrange-service-manifest.md b/architecture/lagrange-service-manifest.md
+index 33bd4a3019620d515c249654ea72e0ef1b12a95a..061e4afada022aa942e3500bb38a8306dd0772df 100644
+--- a/architecture/lagrange-service-manifest.md
++++ b/architecture/lagrange-service-manifest.md
+@@ -46,6 +46,7 @@ installation:
+ -   Which kernel API versions does it support?
+ -   Which configuration fields are valid?
+ -   Does it depend on other services?
++-   Which stable handlers does it export, and which tables may they access?
+ 
+ ------------------------------------------------------------------------
+ 
+@@ -81,7 +82,8 @@ installation:
+ 
+ ## Identity
+ 
+--   `schema_version` --- currently `1`
++-   `schema_version` --- currently `2`; version `1` remains accepted for
++    existing packages
+ -   `name`
+ -   `version`
+ -   `display_name`
+@@ -92,7 +94,7 @@ Example:
+ 
+ ``` json
+ {
+-  "schema_version": 1,
++  "schema_version": 2,
+   "name": "backup-manager",
+   "version": "1.2.0",
+   "display_name": "Backup Manager",
+@@ -195,6 +197,40 @@ Example (OCI container):
+ 
+ ------------------------------------------------------------------------
+ 
++## Exports (schema version 2)
++
++Every schema-v2 manifest declares at least one stateless handler export. Each
++export has exactly these fields:
++
++-   `name` --- unique lowercase handler name
++-   `interface` --- one of `request_v1`, `change_v1`, `call_v1`,
++    `pushdown_v1`, `time_v1`, `once_v1`, or `boot_v1`
++-   `reads` --- exact table identities read by the handler
++-   `writes` --- exact table identities written by the handler
++
++Table identities use `table:global.<table>`. Both sets are explicit, unique,
++and lexically normalized; empty access is `[]`. Wildcards, omitted sets,
++unknown export fields, and duplicate export names are invalid. A table may
++appear in both sets when the handler both reads and writes it. Interface values
++type the artifact boundary; the Binding contract owns which source may call
++which interface.
++
++``` json
++{
++  "exports": [{
++    "name": "serve",
++    "interface": "request_v1",
++    "reads": ["table:global.accounts", "table:global.orders"],
++    "writes": ["table:global.audit"]
++  }]
++}
++```
++
++Schema-v1 manifests retain their existing contract and do not acquire inferred
++exports. New scaffolds emit schema v2.
++
++------------------------------------------------------------------------
++
+ ## Replication
+ 
+ Defines how the service runs in the cluster.
+@@ -381,7 +417,7 @@ commercial consumer example only under the current edition matrix.
+ 
+ ``` json
+ {
+-  "schema_version": 1,
++  "schema_version": 2,
+   "name": "backup-manager",
+   "version": "1.2.0",
+   "display_name": "Backup Manager",
+@@ -398,6 +434,12 @@ commercial consumer example only under the current edition matrix.
+     "kind": "wasm_component",
+     "entrypoint": "backup-manager.wasm"
+   },
++  "exports": [{
++    "name": "run-backup",
++    "interface": "once_v1",
++    "reads": ["table:global.backup_jobs"],
++    "writes": ["table:global.backup_jobs"]
++  }],
+   "replication": {
+     "mode": "replicated_service",
+     "replicas": 3,
+@@ -459,6 +501,8 @@ The kernel should validate at least the following before activation:
+ -   artifact `media_type` recognized and consistent with `runtime.kind`
+ -   runtime kind is `wasm_component` or `oci_container` (reject
+     `native_js` from external manifests)
++-   schema-v2 export names and exact table access sets are unique and canonical
++-   schema-v2 export interfaces belong to the closed stable interface set
+ -   capabilities recognized
+ -   compatibility range satisfied
+ -   configuration schema parseable
+@@ -489,7 +533,8 @@ not just as an opaque blob.
+ 
+ Typical mapping:
+ 
+--   manifest identity and verified artifact refs → `service_packages`
++-   manifest identity, export declarations, and verified artifact refs →
++    `service_packages.normalized_manifest`
+ -   immutable configuration revisions → `service_revisions`
+ -   desired install and rollout state → `service_installations`
+ -   typed install failures → `service_install_failures`
+@@ -516,6 +561,8 @@ Rules:
+ -   breaking changes require a new manifest schema version
+ -   unknown optional fields may be ignored
+ -   unknown required fields must fail validation
++-   schema v1 remains readable under its sealed contract; v2 is the default for
++    new manifests and must not infer declarations for v1
+ 
+ ------------------------------------------------------------------------
+ 
+diff --git a/src/cli/service-project-scaffold.js b/src/cli/service-project-scaffold.js
+index c8c2d36a9df91ea9c4150c6180a40d7e7fcf8484..06a8c555fff9f1390f93a1e013a1816f1e741f00 100644
+--- a/src/cli/service-project-scaffold.js
++++ b/src/cli/service-project-scaffold.js
+@@ -2,6 +2,7 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ 
+ import {
++  EXTERNAL_SERVICE_EXPORT_INTERFACE,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+   EXTERNAL_SERVICE_MEDIA_TYPE,
+   validateExternalServiceManifest,
+@@ -17,6 +18,7 @@ const FILE_MODE = 0o644;
+ const DIRECTORY_MODE = 0o755;
+ const SERVICE_PROJECT_ERROR_NAME = 'ServiceProjectScaffoldError';
+ const SERVICE_ARTIFACT_TYPE = 'oci';
++const SERVICE_EXPORT_NAME = 'serve';
+ const SERVICE_PACKAGE_TYPE = 'module';
+ const SERVICE_START_SCRIPT = 'node src/server.js';
+ const SERVICE_TEST_SCRIPT = 'node --test';
+@@ -75,6 +77,12 @@ function createManifestTemplate(serviceName) {
+     runtime: {
+       kind: SERVICE_RUNTIME_KIND,
+     },
++    exports: [{
++      name: SERVICE_EXPORT_NAME,
++      interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
++      reads: [],
++      writes: [],
++    }],
+   };
+ }
+ 
+diff --git a/src/service/external-service-manifest.js b/src/service/external-service-manifest.js
+index 52240c0bb37090d5d96807ac2da6b4da1baab31b..8f400277721d3b23c1e570cc541badf65c9faeaa 100644
+--- a/src/service/external-service-manifest.js
++++ b/src/service/external-service-manifest.js
+@@ -10,7 +10,18 @@ import Ajv from 'ajv';
+ 
+ import {RUNTIME_KIND} from '../constants/runtime.js';
+ 
+-const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 1;
++const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 2;
++const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 = 1;
++
++const EXTERNAL_SERVICE_EXPORT_INTERFACE = Object.freeze({
++  BOOT: 'boot_v1',
++  CALL: 'call_v1',
++  CHANGE: 'change_v1',
++  ONCE: 'once_v1',
++  PUSHDOWN: 'pushdown_v1',
++  REQUEST: 'request_v1',
++  TIME: 'time_v1',
++});
+ 
+ const EXTERNAL_SERVICE_MEDIA_TYPE = Object.freeze({
+   OCI_CONTAINER: 'application/vnd.oci.image.manifest.v1+json',
+@@ -18,6 +29,7 @@ const EXTERNAL_SERVICE_MEDIA_TYPE = Object.freeze({
+ });
+ 
+ const EXTERNAL_SERVICE_MANIFEST_ERROR_CODE = Object.freeze({
++  DUPLICATE_EXPORT_NAME: 'duplicate_export_name',
+   INVALID_FIELD: 'invalid_field',
+   INVALID_ARTIFACT_REF: 'invalid_artifact_ref',
+   INVALID_DIGEST: 'invalid_digest',
+@@ -46,6 +58,7 @@ const EXTERNAL_SERVICE_MANIFEST_PATH = Object.freeze({
+   ARTIFACT_MEDIA_TYPE: '/artifact/media_type',
+   ARTIFACT_REF: '/artifact/ref',
+   ARTIFACT_TYPE: '/artifact/type',
++  EXPORTS: '/exports',
+   ROOT: '/',
+   RUNTIME_KIND: '/runtime/kind',
+   SCHEMA_VERSION: '/schema_version',
+@@ -71,124 +84,176 @@ const STRING_ARRAY_SCHEMA = {
+   uniqueItems: true,
+ };
+ 
+-const schema = {
+-  $id: 'lagrange.external-service-manifest.v1',
+-  type: 'object',
+-  required: ['schema_version', 'name', 'version', 'artifact', 'runtime'],
+-  additionalProperties: true,
+-  properties: {
+-    schema_version: {
+-      type: 'integer',
+-      const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
++const TABLE_ACCESS_SCHEMA = {
++  type: 'array',
++  items: {
++    type: 'string',
++    pattern: '^table:global\\.[a-z_][a-z0-9_]*$',
++  },
++  uniqueItems: true,
++};
++
++const EXPORTS_SCHEMA = {
++  type: 'array',
++  minItems: 1,
++  items: {
++    type: 'object',
++    required: ['name', 'interface', 'reads', 'writes'],
++    additionalProperties: false,
++    properties: {
++      name: {type: 'string', pattern: '^[a-z][a-z0-9-]{0,127}$'},
++      interface: {enum: Object.values(EXTERNAL_SERVICE_EXPORT_INTERFACE)},
++      reads: TABLE_ACCESS_SCHEMA,
++      writes: TABLE_ACCESS_SCHEMA,
+     },
+-    name: {
+-      type: 'string',
+-      pattern: '^[a-z][a-z0-9-]{0,127}$',
++  },
++};
++
++const COMMON_REQUIRED_FIELDS = Object.freeze([
++  'schema_version', 'name', 'version', 'artifact', 'runtime',
++]);
++
++const COMMON_PROPERTIES = {
++  name: {
++    type: 'string',
++    pattern: '^[a-z][a-z0-9-]{0,127}$',
++  },
++  version: {
++    type: 'string',
++    pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+' +
++      '(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$',
++  },
++  display_name: {type: 'string', minLength: 1},
++  publisher: {type: 'string', minLength: 1},
++  description: {type: 'string'},
++  artifact: {
++    type: 'object',
++    required: ['type', 'ref', 'digest', 'media_type'],
++    additionalProperties: true,
++    properties: {
++      type: {const: 'oci'},
++      ref: {type: 'string', pattern: '^\\S+$'},
++      digest: {type: 'string', pattern: '^sha256:[0-9a-f]{64}$'},
++      media_type: {
++        enum: Object.values(EXTERNAL_SERVICE_MEDIA_TYPE),
++      },
++      size_bytes: {type: 'integer', minimum: 0},
++      signature: {type: 'object'},
+     },
+-    version: {
+-      type: 'string',
+-      pattern: '^[0-9]+\\.[0-9]+\\.[0-9]+' +
+-        '(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$',
++  },
++  runtime: {
++    type: 'object',
++    required: ['kind'],
++    additionalProperties: true,
++    properties: {
++      kind: {enum: Object.keys(EXPECTED_MEDIA_TYPE)},
++      entrypoint: {type: 'string', minLength: 1},
++      runtime_options: {type: 'object'},
+     },
+-    display_name: {type: 'string', minLength: 1},
+-    publisher: {type: 'string', minLength: 1},
+-    description: {type: 'string'},
+-    artifact: {
+-      type: 'object',
+-      required: ['type', 'ref', 'digest', 'media_type'],
+-      additionalProperties: true,
+-      properties: {
+-        type: {const: 'oci'},
+-        ref: {type: 'string', pattern: '^\\S+$'},
+-        digest: {type: 'string', pattern: '^sha256:[0-9a-f]{64}$'},
+-        media_type: {
+-          enum: Object.values(EXTERNAL_SERVICE_MEDIA_TYPE),
+-        },
+-        size_bytes: {type: 'integer', minimum: 0},
+-        signature: {type: 'object'},
++  },
++  replication: {
++    type: 'object',
++    additionalProperties: true,
++    properties: {
++      mode: {
++        enum: ['replicated_service', 'singleton', 'sharded'],
+       },
++      replicas: {type: 'integer', minimum: 1},
++      placement: {type: 'object'},
++      failover_policy: {type: 'object'},
+     },
+-    runtime: {
+-      type: 'object',
+-      required: ['kind'],
+-      additionalProperties: true,
+-      properties: {
+-        kind: {enum: Object.keys(EXPECTED_MEDIA_TYPE)},
+-        entrypoint: {type: 'string', minLength: 1},
+-        runtime_options: {type: 'object'},
+-      },
++  },
++  capabilities: STRING_ARRAY_SCHEMA,
++  compatibility: {
++    type: 'object',
++    additionalProperties: true,
++    properties: {
++      kernel_api: {type: 'string', minLength: 1},
++      cluster_min_version: {type: 'string', minLength: 1},
++      cluster_max_version: {type: 'string', minLength: 1},
++      requires_features: STRING_ARRAY_SCHEMA,
++      edition: {type: 'string', minLength: 1},
+     },
+-    replication: {
+-      type: 'object',
+-      additionalProperties: true,
+-      properties: {
+-        mode: {
+-          enum: ['replicated_service', 'singleton', 'sharded'],
+-        },
+-        replicas: {type: 'integer', minimum: 1},
+-        placement: {type: 'object'},
+-        failover_policy: {type: 'object'},
+-      },
++  },
++  config_schema: {
++    type: 'object',
++    required: ['schema_version', 'format', 'schema'],
++    additionalProperties: true,
++    properties: {
++      schema_version: {type: 'integer', minimum: 1},
++      format: {const: 'json-schema'},
++      schema: {type: 'object'},
+     },
+-    capabilities: STRING_ARRAY_SCHEMA,
+-    compatibility: {
+-      type: 'object',
+-      additionalProperties: true,
+-      properties: {
+-        kernel_api: {type: 'string', minLength: 1},
+-        cluster_min_version: {type: 'string', minLength: 1},
+-        cluster_max_version: {type: 'string', minLength: 1},
+-        requires_features: STRING_ARRAY_SCHEMA,
+-        edition: {type: 'string', minLength: 1},
+-      },
++  },
++  upgrade: {
++    type: 'object',
++    additionalProperties: true,
++    properties: {
++      strategy: {enum: ['rolling', 'canary', 'all_at_once']},
++      max_unavailable: {type: 'integer', minimum: 0},
++      requires_drain: {type: 'boolean'},
++      requires_data_migration: {type: 'boolean'},
+     },
+-    config_schema: {
++  },
++  dependencies: {
++    type: 'array',
++    items: {
+       type: 'object',
+-      required: ['schema_version', 'format', 'schema'],
++      required: ['type', 'name'],
+       additionalProperties: true,
+       properties: {
+-        schema_version: {type: 'integer', minimum: 1},
+-        format: {const: 'json-schema'},
+-        schema: {type: 'object'},
++        type: {enum: ['service', 'kernel_feature']},
++        name: {type: 'string', minLength: 1},
++        version: {type: 'string', minLength: 1},
+       },
+     },
+-    upgrade: {
+-      type: 'object',
+-      additionalProperties: true,
+-      properties: {
+-        strategy: {enum: ['rolling', 'canary', 'all_at_once']},
+-        max_unavailable: {type: 'integer', minimum: 0},
+-        requires_drain: {type: 'boolean'},
+-        requires_data_migration: {type: 'boolean'},
+-      },
++  },
++  health: {
++    type: 'object',
++    additionalProperties: true,
++    properties: {
++      startup_probe: {type: 'object'},
++      readiness_probe: {type: 'object'},
++      liveness_probe: {type: 'object'},
+     },
+-    dependencies: {
+-      type: 'array',
+-      items: {
+-        type: 'object',
+-        required: ['type', 'name'],
+-        additionalProperties: true,
+-        properties: {
+-          type: {enum: ['service', 'kernel_feature']},
+-          name: {type: 'string', minLength: 1},
+-          version: {type: 'string', minLength: 1},
+-        },
+-      },
++  },
++};
++
++const schemaV1 = {
++  $id: 'lagrange.external-service-manifest.v1',
++  type: 'object',
++  required: COMMON_REQUIRED_FIELDS,
++  additionalProperties: true,
++  properties: {
++    schema_version: {
++      type: 'integer',
++      const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1,
+     },
+-    health: {
+-      type: 'object',
+-      additionalProperties: true,
+-      properties: {
+-        startup_probe: {type: 'object'},
+-        readiness_probe: {type: 'object'},
+-        liveness_probe: {type: 'object'},
+-      },
++    ...COMMON_PROPERTIES,
++  },
++};
++
++const schemaV2 = {
++  $id: 'lagrange.external-service-manifest.v2',
++  type: 'object',
++  required: [...COMMON_REQUIRED_FIELDS, 'exports'],
++  additionalProperties: true,
++  properties: {
++    schema_version: {
++      type: 'integer',
++      const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+     },
++    ...COMMON_PROPERTIES,
++    exports: EXPORTS_SCHEMA,
+   },
+ };
+ 
+-const schemaValidator = new Ajv({allErrors: true, strict: true}).compile(schema);
+-const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schema);
++const ajv = new Ajv({allErrors: true, strict: true});
++const schemaValidators = new Map([
++  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1, ajv.compile(schemaV1)],
++  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, ajv.compile(schemaV2)],
++]);
++const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schemaV2);
+ 
+ const TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
+   'display_name',
+@@ -291,8 +356,8 @@ function codeForSchemaError(error, path) {
+   return EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.INVALID_FIELD;
+ }
+ 
+-function schemaErrors() {
+-  return (schemaValidator.errors || []).map((error) => {
++function schemaErrors(validator) {
++  return (validator.errors || []).map((error) => {
+     const path = pathForSchemaError(error);
+     return {
+       code: codeForSchemaError(error, path),
+@@ -303,6 +368,28 @@ function schemaErrors() {
+   });
+ }
+ 
++function duplicateExportNameErrors(manifest) {
++  if (manifest.schema_version !== EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION ||
++      !Array.isArray(manifest.exports)) {
++    return [];
++  }
++  const seen = new Set();
++  const errors = [];
++  for (const [index, declaration] of manifest.exports.entries()) {
++    const name = declaration?.name;
++    if (typeof name !== 'string' || !seen.has(name)) {
++      if (typeof name === 'string') seen.add(name);
++      continue;
++    }
++    errors.push({
++      code: EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.DUPLICATE_EXPORT_NAME,
++      path: `${EXTERNAL_SERVICE_MANIFEST_PATH.EXPORTS}/${index}/name`,
++      message: `export name ${name} must be unique`,
++    });
++  }
++  return errors;
++}
++
+ function mismatchError(manifest) {
+   const kind = manifest.runtime?.kind;
+   const mediaType = manifest.artifact?.media_type;
+@@ -328,6 +415,17 @@ function rejectedResult(errors) {
+   });
+ }
+ 
++function normalizedExports(exports_) {
++  return exports_
++    .map((declaration) => ({
++      interface: declaration.interface,
++      name: declaration.name,
++      reads: [...declaration.reads].sort(),
++      writes: [...declaration.writes].sort(),
++    }))
++    .sort((left, right) => left.name.localeCompare(right.name));
++}
++
+ function normalizedManifest(manifest) {
+   const normalized = {
+     schema_version: manifest.schema_version,
+@@ -335,6 +433,9 @@ function normalizedManifest(manifest) {
+     version: manifest.version,
+   };
+   copyOptionalFields(normalized, manifest, TOP_LEVEL_OPTIONAL_FIELDS);
++  if (manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION) {
++    normalized.exports = normalizedExports(manifest.exports);
++  }
+   normalized.artifact = {
+     type: manifest.artifact.type,
+     ref: manifest.artifact.ref,
+@@ -361,8 +462,11 @@ function normalizeExternalServiceManifest(input) {
+     }]);
+   }
+ 
+-  const structurallyValid = schemaValidator(clone.value);
+-  const errors = structurallyValid ? [] : schemaErrors();
++  const validator = schemaValidators.get(clone.value.schema_version) ||
++    schemaValidators.get(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION);
++  const structurallyValid = validator(clone.value);
++  const errors = structurallyValid ? [] : schemaErrors(validator);
++  errors.push(...duplicateExportNameErrors(clone.value));
+   const mismatch = mismatchError(clone.value);
+   if (mismatch) errors.push(mismatch);
+   if (errors.length > 0) return rejectedResult(errors);
+@@ -382,6 +486,7 @@ function validateExternalServiceManifest(input) {
+ }
+ 
+ export {
++  EXTERNAL_SERVICE_EXPORT_INTERFACE,
+   EXTERNAL_SERVICE_MANIFEST_ERROR_CODE,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+diff --git a/src/service/index.js b/src/service/index.js
+index f88fdfcdef2be140fd81069b60c84527241645f6..808882a9ce39ab9503dcdc0bb5593f2c5d8697d3 100644
+--- a/src/service/index.js
++++ b/src/service/index.js
+@@ -48,6 +48,7 @@ export {
+ } from './service-descriptor.js';
+ 
+ export {
++  EXTERNAL_SERVICE_EXPORT_INTERFACE,
+   EXTERNAL_SERVICE_MANIFEST_ERROR_CODE,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+diff --git a/test/cli/service-init-scaffold.test.js b/test/cli/service-init-scaffold.test.js
+index 1c198205467cbedac52e302337971c63c70741ce..b9c4ab97d79f10ed3b523f330ca18fd842832948 100644
+--- a/test/cli/service-init-scaffold.test.js
++++ b/test/cli/service-init-scaffold.test.js
+@@ -182,10 +182,16 @@ test('init creates deterministic source and a truthful digest-less template', as
+   const manifestPath = path.join(firstTarget, 'lagrange-service.template.json');
+   const manifestText = fs.readFileSync(manifestPath, 'utf8');
+   const manifest = JSON.parse(manifestText);
+-  t.equal(manifest.schema_version, 1);
++  t.equal(manifest.schema_version, 2);
+   t.equal(manifest.name, PROJECT_NAME);
+   t.equal(manifest.artifact.type, 'oci');
+   t.equal(manifest.runtime.kind, 'oci_container');
++  t.same(manifest.exports, [{
++    name: 'serve',
++    interface: 'request_v1',
++    reads: [],
++    writes: [],
++  }]);
+   t.equal(Object.hasOwn(manifest.artifact, 'digest'), false);
+   t.notMatch(manifestText, /sha256:/);
+ 
+diff --git a/test/query/service-lifecycle-sql-control-surface.test.js b/test/query/service-lifecycle-sql-control-surface.test.js
+index 8d69088f5c2b7918861275e9171cf38888f93ea6..1394a1db690b4efe84810ee800cbca3a8347bd10 100644
+--- a/test/query/service-lifecycle-sql-control-surface.test.js
++++ b/test/query/service-lifecycle-sql-control-surface.test.js
+@@ -124,6 +124,10 @@ class LifecycleCatalogGateway {
+   rowCount(table) {
+     return this.tables.get(table).size;
+   }
++
++  rows(table) {
++    return [...this.tables.get(table).values()].map(clone);
++  }
+ }
+ 
+ class FixtureArtifactResolver {
+@@ -173,6 +177,14 @@ function manifest(version = '1.0.0', digest = DIGEST_A) {
+   };
+ }
+ 
++function v2Manifest(exports_) {
++  return {
++    ...manifest(),
++    schema_version: 2,
++    exports: exports_,
++  };
++}
++
+ function installPayload(overrides = {}) {
+   return JSON.stringify({
+     artifact_source: {kind: 'remote_oci'},
+@@ -491,6 +503,101 @@ describe('service lifecycle SQL classification and security boundary', () => {
+ });
+ 
+ describe('service lifecycle SQL durable owner route', () => {
++  it('persists canonical v2 artifact exports through authenticated INSTALL SERVICE',
++    async () => {
++      const fixture = createEngineFixture();
++      const adapter = await createAuthenticatedAdapter(fixture.engine);
++      const result = await adapter.execute(
++        'session-1',
++        'INSTALL SERVICE $1',
++        [installPayload({
++          manifest: v2Manifest([
++            {
++              name: 'audit-change',
++              interface: 'change_v1',
++              reads: ['table:global.audit'],
++              writes: ['table:global.audit'],
++            },
++            {
++              name: 'serve',
++              interface: 'request_v1',
++              reads: ['table:global.orders', 'table:global.accounts'],
++              writes: ['table:global.audit'],
++            },
++          ]),
++        })],
++      );
++      assert.equal(result.success, true);
++      const [packageRow] = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
++      assert.equal(packageRow.manifest_schema_version, 2);
++      assert.deepEqual(JSON.parse(packageRow.normalized_manifest).exports, [
++        {
++          interface: 'change_v1',
++          name: 'audit-change',
++          reads: ['table:global.audit'],
++          writes: ['table:global.audit'],
++        },
++        {
++          interface: 'request_v1',
++          name: 'serve',
++          reads: ['table:global.accounts', 'table:global.orders'],
++          writes: ['table:global.audit'],
++        },
++      ]);
++
++      const permuted = await adapter.execute(
++        'session-1',
++        'INSTALL SERVICE $1',
++        [installPayload({
++          idempotency_key: 'install-permuted-artifact-exports',
++          manifest: v2Manifest([
++            {
++              name: 'serve',
++              interface: 'request_v1',
++              reads: ['table:global.accounts', 'table:global.orders'],
++              writes: ['table:global.audit'],
++            },
++            {
++              name: 'audit-change',
++              interface: 'change_v1',
++              reads: ['table:global.audit'],
++              writes: ['table:global.audit'],
++            },
++          ]),
++        })],
++      );
++      assert.equal(permuted.success, true);
++      assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_PACKAGES), 1);
++      assert.equal(
++        fixture.gateway.rows(TABLES.SERVICE_PACKAGES)[0].package_id,
++        packageRow.package_id,
++      );
++    });
++
++  it('rejects malformed v2 exports before resolution or catalog writes',
++    async () => {
++      const fixture = createEngineFixture();
++      const adapter = await createAuthenticatedAdapter(fixture.engine);
++      const rejected = await adapter.execute(
++        'session-1',
++        'INSTALL SERVICE $1',
++        [installPayload({
++          idempotency_key: 'reject-wildcard-export',
++          manifest: v2Manifest([{
++            name: 'serve',
++            interface: 'request_v1',
++            reads: ['table:global.*'],
++            writes: [],
++          }]),
++        })],
++      );
++      assert.equal(rejected.success, false);
++      assert.equal(fixture.artifactResolver.calls.length, 0);
++      for (const table of CATALOG_TABLES) {
++        assert.equal(fixture.gateway.rowCount(table), 0, table);
++      }
++    });
++
+   it('records one truthful install and replays without resolving again',
+     async () => {
+       const fixture = createEngineFixture();
+diff --git a/test/service/external-service-manifest.test.js b/test/service/external-service-manifest.test.js
+index bb983ce56f635a3a82a1225d896789720b675fa0..4fc52ee0b224d51e2d569d8f23516ff04ec9e69d 100644
+--- a/test/service/external-service-manifest.test.js
++++ b/test/service/external-service-manifest.test.js
+@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
+ import {describe, it} from 'node:test';
+ 
+ import {
++  EXTERNAL_SERVICE_EXPORT_INTERFACE,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+   EXTERNAL_SERVICE_MEDIA_TYPE,
+@@ -15,7 +16,7 @@ const SHA256_A = `sha256:${'a'.repeat(64)}`;
+ 
+ function makeManifest(overrides = {}) {
+   const manifest = {
+-    schema_version: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
++    schema_version: 1,
+     name: 'analytics-worker',
+     version: '3.0.0',
+     artifact: {
+@@ -37,6 +38,21 @@ function makeManifest(overrides = {}) {
+   };
+ }
+ 
++function makeV2Manifest(overrides = {}) {
++  return makeManifest({
++    schema_version: 2,
++    exports: [
++      {
++        name: 'serve',
++        interface: 'request_v1',
++        reads: ['table:global.orders'],
++        writes: ['table:global.order_events'],
++      },
++    ],
++    ...overrides,
++  });
++}
++
+ function rejectionCodes(result) {
+   assert.equal(result.status, 'rejected');
+   return result.errors.map((error) => error.code);
+@@ -44,7 +60,7 @@ function rejectionCodes(result) {
+ 
+ describe('external service manifest contract', () => {
+   it('exports an immutable, explicitly versioned schema', () => {
+-    assert.equal(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, 1);
++    assert.equal(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, 2);
+     assert.equal(
+       EXTERNAL_SERVICE_MANIFEST_SCHEMA.properties.schema_version.const,
+       EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+@@ -55,6 +71,108 @@ describe('external service manifest contract', () => {
+     ), true);
+   });
+ 
++  it('keeps v1 compatible and canonicalizes analyzable v2 exports', () => {
++    const legacy = validateExternalServiceManifest(makeManifest());
++    assert.equal(legacy.valid, true);
++    assert.equal(Object.hasOwn(legacy.manifest, 'exports'), false);
++
++    const result = validateExternalServiceManifest(makeV2Manifest({
++      exports: [
++        {
++          name: 'write-audit',
++          interface: 'change_v1',
++          reads: ['table:global.orders', 'table:global.accounts'],
++          writes: [],
++        },
++        {
++          name: 'serve',
++          interface: 'request_v1',
++          reads: [],
++          writes: ['table:global.order_events', 'table:global.audit'],
++        },
++      ],
++    }));
++    assert.equal(result.valid, true);
++    assert.deepEqual(result.manifest.exports, [
++      {
++        interface: 'request_v1',
++        name: 'serve',
++        reads: [],
++        writes: ['table:global.audit', 'table:global.order_events'],
++      },
++      {
++        interface: 'change_v1',
++        name: 'write-audit',
++        reads: ['table:global.accounts', 'table:global.orders'],
++        writes: [],
++      },
++    ]);
++    assert.equal(Object.isFrozen(result.manifest.exports), true);
++    assert.equal(Object.isFrozen(result.manifest.exports[0]), true);
++  });
++
++  it('accepts every stable interface and preserves declared read-write overlap', () => {
++    for (const [index, interface_] of
++      Object.values(EXTERNAL_SERVICE_EXPORT_INTERFACE).entries()) {
++      const table = `table:global.context_${index}`;
++      const result = validateExternalServiceManifest(makeV2Manifest({
++        exports: [{
++          name: `handler-${index}`,
++          interface: interface_,
++          reads: [table],
++          writes: [table],
++        }],
++      }));
++      assert.equal(result.valid, true, interface_);
++      assert.deepEqual(result.manifest.exports[0].reads, [table]);
++      assert.deepEqual(result.manifest.exports[0].writes, [table]);
++    }
++  });
++
++  it('rejects ambiguous or non-exact v2 export declarations', () => {
++    const attacks = [
++      makeV2Manifest({exports: []}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: '', reads: [], writes: [],
++      }]}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: 'request_v1',
++        reads: ['table:global.*'], writes: [],
++      }]}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: 'request_v1',
++        reads: ['table:global.orders', 'table:global.orders'], writes: [],
++      }]}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: 'request_v1', reads: [], writes: [], extra: true,
++      }]}),
++      makeV2Manifest({exports: [
++        {name: 'serve', interface: 'request_v1', reads: [], writes: []},
++        {name: 'serve', interface: 'call_v1', reads: [], writes: []},
++      ]}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: 'request_v2', reads: [], writes: [],
++      }]}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: 'request_v1',
++        reads: ['table:public.orders'], writes: [],
++      }]}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: 'request_v1',
++        reads: ['table:global.Orders'], writes: [],
++      }]}),
++      makeV2Manifest({exports: [{
++        name: 'Serve', interface: 'request_v1', reads: [], writes: [],
++      }]}),
++      makeV2Manifest({exports: [{
++        name: 'serve', interface: 'request_v1', reads: [],
++      }]}),
++    ];
++    for (const attack of attacks) {
++      assert.equal(validateExternalServiceManifest(attack).valid, false);
++    }
++  });
++
+   it('accepts and deterministically normalizes digest-pinned OCI containers', () => {
+     const input = makeManifest({
+       display_name: 'Analytics Worker',
+@@ -116,7 +234,7 @@ describe('external service manifest contract', () => {
+     ));
+ 
+     const unsupportedCodes = rejectionCodes(normalizeExternalServiceManifest(
+-      makeManifest({schema_version: 2}),
++      makeManifest({schema_version: 3}),
+     ));
+     assert.ok(unsupportedCodes.includes(
+       EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.UNSUPPORTED_SCHEMA_VERSION,
+diff --git a/test/service/installable-service-artifact-resolver.test.js b/test/service/installable-service-artifact-resolver.test.js
+index 39e148f167a7e472a5242678b5919dd69a0e415a..a2cf60fcc2e18ea5e5b589bf892fbe6bfca4afd3 100644
+--- a/test/service/installable-service-artifact-resolver.test.js
++++ b/test/service/installable-service-artifact-resolver.test.js
+@@ -14,6 +14,7 @@ import {
+   buildArtifactSignaturePayload,
+ } from '../../src/service/installable-service-artifact-resolver.js';
+ import {
++  EXTERNAL_SERVICE_EXPORT_INTERFACE,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+   EXTERNAL_SERVICE_MEDIA_TYPE,
+ } from '../../src/service/external-service-manifest.js';
+@@ -72,6 +73,12 @@ function makeExternalManifest({
+       ...(signature === undefined ? {} : {signature}),
+     },
+     runtime: {kind: runtimeKind},
++    exports: [{
++      name: 'serve',
++      interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
++      reads: [],
++      writes: [],
++    }],
+   };
+ }
+ 
+diff --git a/test/service/service-local-oci-layout-builder.test.js b/test/service/service-local-oci-layout-builder.test.js
+index af7069f9a6f4a7174f6be667ca3a0a9dd6f663ff..30cf3f29c6bcd72e776a4e89be3b56b1b3f10c6f 100644
+--- a/test/service/service-local-oci-layout-builder.test.js
++++ b/test/service/service-local-oci-layout-builder.test.js
+@@ -22,6 +22,7 @@ import {
+   InstallableServiceArtifactResolver,
+ } from '../../src/service/installable-service-artifact-resolver.js';
+ import {
++  EXTERNAL_SERVICE_EXPORT_INTERFACE,
+   EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+   EXTERNAL_SERVICE_MEDIA_TYPE,
+ } from '../../src/service/external-service-manifest.js';
+@@ -218,6 +219,12 @@ function externalManifest(receipt) {
+       size_bytes: receipt.topManifestDescriptor.sizeBytes,
+     },
+     runtime: {kind: receipt.runtimeKind},
++    exports: [{
++      name: 'serve',
++      interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
++      reads: [],
++      writes: [],
++    }],
+   };
+ }
+ 

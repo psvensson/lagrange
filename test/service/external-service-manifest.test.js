@@ -12,10 +12,19 @@ import {
 import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 
 const SHA256_A = `sha256:${'a'.repeat(64)}`;
+const STABLE_EXPORT_INTERFACES = Object.freeze([
+  'boot_v1',
+  'call_v1',
+  'change_v1',
+  'once_v1',
+  'pushdown_v1',
+  'request_v1',
+  'time_v1',
+]);
 
 function makeManifest(overrides = {}) {
   const manifest = {
-    schema_version: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
+    schema_version: 1,
     name: 'analytics-worker',
     version: '3.0.0',
     artifact: {
@@ -37,6 +46,21 @@ function makeManifest(overrides = {}) {
   };
 }
 
+function makeV2Manifest(overrides = {}) {
+  return makeManifest({
+    schema_version: 2,
+    exports: [
+      {
+        name: 'serve',
+        interface: 'request_v1',
+        reads: ['table:global.orders'],
+        writes: ['table:global.order_events'],
+      },
+    ],
+    ...overrides,
+  });
+}
+
 function rejectionCodes(result) {
   assert.equal(result.status, 'rejected');
   return result.errors.map((error) => error.code);
@@ -44,7 +68,7 @@ function rejectionCodes(result) {
 
 describe('external service manifest contract', () => {
   it('exports an immutable, explicitly versioned schema', () => {
-    assert.equal(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, 1);
+    assert.equal(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, 2);
     assert.equal(
       EXTERNAL_SERVICE_MANIFEST_SCHEMA.properties.schema_version.const,
       EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
@@ -53,6 +77,108 @@ describe('external service manifest contract', () => {
     assert.equal(Object.isFrozen(
       EXTERNAL_SERVICE_MANIFEST_SCHEMA.properties.capabilities.items,
     ), true);
+  });
+
+  it('keeps v1 compatible and canonicalizes analyzable v2 exports', () => {
+    const legacy = validateExternalServiceManifest(makeManifest());
+    assert.equal(legacy.valid, true);
+    assert.equal(Object.hasOwn(legacy.manifest, 'exports'), false);
+
+    const result = validateExternalServiceManifest(makeV2Manifest({
+      exports: [
+        {
+          name: 'write-audit',
+          interface: 'change_v1',
+          reads: ['table:global.orders', 'table:global.accounts'],
+          writes: [],
+        },
+        {
+          name: 'serve',
+          interface: 'request_v1',
+          reads: [],
+          writes: ['table:global.order_events', 'table:global.audit'],
+        },
+      ],
+    }));
+    assert.equal(result.valid, true);
+    assert.deepEqual(result.manifest.exports, [
+      {
+        interface: 'request_v1',
+        name: 'serve',
+        reads: [],
+        writes: ['table:global.audit', 'table:global.order_events'],
+      },
+      {
+        interface: 'change_v1',
+        name: 'write-audit',
+        reads: ['table:global.accounts', 'table:global.orders'],
+        writes: [],
+      },
+    ]);
+    assert.equal(Object.isFrozen(result.manifest.exports), true);
+    assert.equal(Object.isFrozen(result.manifest.exports[0]), true);
+  });
+
+  it('accepts every stable interface and preserves declared read-write overlap', () => {
+    for (const [index, interface_] of
+      STABLE_EXPORT_INTERFACES.entries()) {
+      const table = `table:global.context_${index}`;
+      const result = validateExternalServiceManifest(makeV2Manifest({
+        exports: [{
+          name: `handler-${index}`,
+          interface: interface_,
+          reads: [table],
+          writes: [table],
+        }],
+      }));
+      assert.equal(result.valid, true, interface_);
+      assert.deepEqual(result.manifest.exports[0].reads, [table]);
+      assert.deepEqual(result.manifest.exports[0].writes, [table]);
+    }
+  });
+
+  it('rejects ambiguous or non-exact v2 export declarations', () => {
+    const attacks = [
+      makeV2Manifest({exports: []}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: '', reads: [], writes: [],
+      }]}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: 'request_v1',
+        reads: ['table:global.*'], writes: [],
+      }]}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: 'request_v1',
+        reads: ['table:global.orders', 'table:global.orders'], writes: [],
+      }]}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: 'request_v1', reads: [], writes: [], extra: true,
+      }]}),
+      makeV2Manifest({exports: [
+        {name: 'serve', interface: 'request_v1', reads: [], writes: []},
+        {name: 'serve', interface: 'call_v1', reads: [], writes: []},
+      ]}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: 'request_v2', reads: [], writes: [],
+      }]}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: 'request_v1',
+        reads: ['table:public.orders'], writes: [],
+      }]}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: 'request_v1',
+        reads: ['table:global.Orders'], writes: [],
+      }]}),
+      makeV2Manifest({exports: [{
+        name: 'Serve', interface: 'request_v1', reads: [], writes: [],
+      }]}),
+      makeV2Manifest({exports: [{
+        name: 'serve', interface: 'request_v1', reads: [],
+      }]}),
+    ];
+    for (const attack of attacks) {
+      assert.equal(validateExternalServiceManifest(attack).valid, false);
+    }
   });
 
   it('accepts and deterministically normalizes digest-pinned OCI containers', () => {
@@ -116,7 +242,7 @@ describe('external service manifest contract', () => {
     ));
 
     const unsupportedCodes = rejectionCodes(normalizeExternalServiceManifest(
-      makeManifest({schema_version: 2}),
+      makeManifest({schema_version: 3}),
     ));
     assert.ok(unsupportedCodes.includes(
       EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.UNSUPPORTED_SCHEMA_VERSION,
