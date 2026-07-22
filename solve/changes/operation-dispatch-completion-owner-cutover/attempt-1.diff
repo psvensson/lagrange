@@ -1,0 +1,2222 @@
+diff --git a/src/control-plane/replica-dispatch-operation-execution.js b/src/control-plane/replica-dispatch-operation-execution.js
+index 91d12cb738d2cc75110d5e23fde1177d6cfd21fc..1dd1b8ec4b48ca626fdceb4b5bf8aee4f36df15c 100644
+--- a/src/control-plane/replica-dispatch-operation-execution.js
++++ b/src/control-plane/replica-dispatch-operation-execution.js
+@@ -385,11 +385,6 @@ class ReplicaDispatchOperationExecution extends ReplicaDispatchReplayReadiness {
+ 
+       this.clearDeferredOperationDispatchRetry(operationId);
+       this.dispatchFailureSignaturesByOperationId.delete(operationId);
+-      this.scheduleRuntimeTargetProgressDispatchVerification(
+-        operationId,
+-        row,
+-        options,
+-      );
+ 
+       this.emit(DISPATCH_EVENT.OPERATION_DISPATCHED, {
+         operationId,
+diff --git a/src/control-plane/replica-dispatch-operation-queue-context.js b/src/control-plane/replica-dispatch-operation-queue-context.js
+index e071df32a4371a9ceb42067ebffa9c05c8147c96..bc18ffab5bf479a38134c894b6f79fb2fa82e6da 100644
+--- a/src/control-plane/replica-dispatch-operation-queue-context.js
++++ b/src/control-plane/replica-dispatch-operation-queue-context.js
+@@ -43,17 +43,6 @@ function extractOperationDispatchProgressContext(context) {
+     progressContext[ControlPlaneField.HANDOFF_MODE] =
+       CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
+   }
+-  if (
+-    context?.[
+-      REPLICA_DISPATCH_SERVICE_LITERAL
+-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+-    ] === true
+-  ) {
+-    progressContext[
+-      REPLICA_DISPATCH_SERVICE_LITERAL
+-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+-    ] = true;
+-  }
+   return Object.keys(progressContext).length > 0 ? progressContext : null;
+ }
+ 
+@@ -156,13 +145,6 @@ function mergeOperationDispatchReconcileContext(
+     incoming,
+     REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH,
+   );
+-  retainTrueContextField(
+-    mergedContext,
+-    retained,
+-    incoming,
+-    REPLICA_DISPATCH_SERVICE_LITERAL
+-      .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE,
+-  );
+   return mergedContext;
+ }
+ 
+diff --git a/src/control-plane/replica-dispatch-reconcile-callbacks.js b/src/control-plane/replica-dispatch-reconcile-callbacks.js
+index ba9d6aa5b60adaf42f15c449ac210546247cef68..10a79bb2c75d3b1200f74170fee04d95c3b16e3a 100644
+--- a/src/control-plane/replica-dispatch-reconcile-callbacks.js
++++ b/src/control-plane/replica-dispatch-reconcile-callbacks.js
+@@ -278,14 +278,6 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
+           context?.[
+             REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH
+           ] === true,
+-        [
+-        REPLICA_DISPATCH_SERVICE_LITERAL
+-          .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+-        ]:
+-          context?.[
+-            REPLICA_DISPATCH_SERVICE_LITERAL
+-              .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+-          ] === true,
+       });
+     } catch (error) {
+       if (
+diff --git a/src/control-plane/replica-dispatch-replay-readiness.js b/src/control-plane/replica-dispatch-replay-readiness.js
+index 47438d910d0cbd5bad14fbf601d62e5419aa3212..291c8dd6dedbd8e5ba9a870e35f9dbc0e4a276c2 100644
+--- a/src/control-plane/replica-dispatch-replay-readiness.js
++++ b/src/control-plane/replica-dispatch-replay-readiness.js
+@@ -2,7 +2,6 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
+ import {ReplicaDispatchServiceLifecycle} from './replica-dispatch-service-lifecycle.js';
+ import {
+   DISPATCH_PENDING_WORKFLOW_STEPS,
+-  RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
+   RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
+   isActiveReplaceSourceRemovalPhase,
+ } from '../rebalancer/replica-operation-step-policy.js';
+@@ -245,24 +244,6 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
+     );
+   }
+ 
+-  /**
+-   * Retention scope of the same row shape: whether a just-successful dispatch
+-   * keeps its one-shot target-progress verification. The dispatch request row
+-   * is built before the dispatch path claims SENDING, so the retained payload
+-   * can still say PENDING while the durable row has advanced — the successful
+-   * dispatch itself is the progress proof. Never used for wake admission.
+-   *
+-   * @param {Object} operation
+-   * @return {boolean}
+-   * @private
+-   */
+-  isRuntimeTargetProgressRetentionRow(operation) {
+-    return this.isRuntimeTargetProgressRowInSteps(
+-      operation,
+-      RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
+-    );
+-  }
+-
+   /**
+    * @param {Object} operation
+    * @param {Set<string>} workflowSteps
+diff --git a/src/control-plane/replica-dispatch-retained-verification.js b/src/control-plane/replica-dispatch-retained-verification.js
+index 5a9c3f35218ddaf809e990a448d9ec14ac0e136b..057ea6546f7b289139d3d1038264ad914c181101 100644
+--- a/src/control-plane/replica-dispatch-retained-verification.js
++++ b/src/control-plane/replica-dispatch-retained-verification.js
+@@ -1,4 +1,3 @@
+-import {REBALANCER_DEFAULT} from '../rebalancer/rebalancer-constants.js';
+ import {
+   REPLICA_DISPATCH_SERVICE_SHARED,
+ } from './replica-dispatch-service-shared.js';
+@@ -54,41 +53,6 @@ function scheduleRemoteDispatchWakeupVerification(
+   );
+ }
+ 
+-function scheduleRuntimeTargetProgressDispatchVerification(
+-  service,
+-  operationId,
+-  row = null,
+-  options = {},
+-) {
+-  if (
+-    !operationId ||
+-    !service.isRuntimeTargetProgressRetentionRow(row) ||
+-    options?.[
+-      REPLICA_DISPATCH_SERVICE_LITERAL
+-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+-    ] === true
+-  ) {
+-    return false;
+-  }
+-  const retryAfterMs =
+-    service.rebalanceCoordinator?.config?.creatingTimeoutMs ||
+-    REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
+-  return retainDispatchVerification(
+-    service,
+-    operationId,
+-    row,
+-    retryAfterMs,
+-    REPLICA_DISPATCH_SERVICE_LITERAL.RETAINED_TARGET_PROGRESS_VERIFICATION,
+-    {
+-      [
+-      REPLICA_DISPATCH_SERVICE_LITERAL
+-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
+-      ]: true,
+-    },
+-  );
+-}
+-
+ export {
+   scheduleRemoteDispatchWakeupVerification,
+-  scheduleRuntimeTargetProgressDispatchVerification,
+ };
+diff --git a/src/control-plane/replica-dispatch-retry-scheduling.js b/src/control-plane/replica-dispatch-retry-scheduling.js
+index ce3049acd12daa2e21ac1de5da2f8b37cb59f0e0..c6ea250117205d5749ede37cf08d824b02edecee 100644
+--- a/src/control-plane/replica-dispatch-retry-scheduling.js
++++ b/src/control-plane/replica-dispatch-retry-scheduling.js
+@@ -9,7 +9,6 @@ import {
+ } from './replica-dispatch-operation-queue-context.js';
+ import {
+   scheduleRemoteDispatchWakeupVerification,
+-  scheduleRuntimeTargetProgressDispatchVerification,
+ } from './replica-dispatch-retained-verification.js';
+ 
+ const {
+@@ -347,27 +346,6 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
+     return scheduleRemoteDispatchWakeupVerification(this, operationId, row);
+   }
+ 
+-  /**
+-   * Retain one bounded runtime target-progress verification after dispatch.
+-   * @param {string} operationId
+-   * @param {Object|null} row
+-   * @param {Object} options
+-   * @return {boolean}
+-   * @private
+-   */
+-  scheduleRuntimeTargetProgressDispatchVerification(
+-    operationId,
+-    row = null,
+-    options = {},
+-  ) {
+-    return scheduleRuntimeTargetProgressDispatchVerification(
+-      this,
+-      operationId,
+-      row,
+-      options,
+-    );
+-  }
+-
+   /**
+    * Preserve one dispatchable replica_operations row across deferred retries so
+    * direct wake-up payloads can survive until cache visibility converges.
+diff --git a/src/control-plane/replica-dispatch-service-shared.js b/src/control-plane/replica-dispatch-service-shared.js
+index 8cf8f249f0be9c124793b7165cee392a0f7df5ab..5bb5c6f8f61a8321a9144039de8ec589ac279d63 100644
+--- a/src/control-plane/replica-dispatch-service-shared.js
++++ b/src/control-plane/replica-dispatch-service-shared.js
+@@ -133,10 +133,6 @@ const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
+   REPLICA_OPERATION_DISPATCH: 'replica_operation_dispatch',
+   REFRESH_ROW_BEFORE_DISPATCH: 'refreshRowBeforeDispatch',
+   DEFERRED_RETRY_PROVENANCE: 'deferredRetryProvenance',
+-  RETAINED_TARGET_PROGRESS_VERIFICATION:
+-    'retained_target_progress_verification',
+-  RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE:
+-    'retainedTargetProgressVerificationProvenance',
+   SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK:
+     'SELECT * FROM nodes WHERE node_id = ?',
+   SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK:
+diff --git a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+index 6973f63b39703a29153ad0b407649770ff64ccd4..e1fa38a0a355c7a5230b35c7f22b5fa08323cd86 100644
+--- a/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
++++ b/src/rebalancer/operation-workflow-dispatch-response-reconcile.js
+@@ -490,6 +490,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
+       await this.failOperation(operation, errorMsg);
+       return this.buildFailedOperationResult(operation.operationId, errorMsg);
+     }
++    this.retainDeliveredCreateProgress(
++      operation,
++      response,
++      replaceRemoveDispatchPhase,
++    );
+     return this._handleDispatchResponse(
+       operation,
+       response,
+diff --git a/src/rebalancer/operation-workflow-observed-progress-retention.js b/src/rebalancer/operation-workflow-observed-progress-retention.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bca29cc607dd13aa1215fa03b7c5c39e36716843
+--- /dev/null
++++ b/src/rebalancer/operation-workflow-observed-progress-retention.js
+@@ -0,0 +1,310 @@
++import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
++import {
++  RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
++} from './replica-operation-step-policy.js';
++
++const {
++  OBSERVED_PROGRESS_RETRY_DELAY_MS,
++  OPERATION_WORKFLOW_OWNER_LITERAL,
++  OperationType,
++  ReplicaOperationResponseStatus,
++  SYSTEM_TABLE_NAME,
++  TIMEOUT_BUDGET_DEFAULT,
++  UNIFIED_SERVICE_TYPE,
++  classifySystemPartition,
++} = OPERATION_WORKFLOW_OWNER_SHARED;
++
++const OBSERVED_PROGRESS_RETRY_KIND = Object.freeze({
++  OBSERVED_PROGRESS: 'observed_progress',
++  DELIVERED_CREATE_PROGRESS: 'delivered_create_progress',
++});
++const DELIVERED_CREATE_PROGRESS_RESPONSE_STATUSES = Object.freeze(
++  new Set([
++    ReplicaOperationResponseStatus.INITIATED,
++    ReplicaOperationResponseStatus.IN_PROGRESS,
++    ReplicaOperationResponseStatus.ALREADY_EXISTS,
++    ReplicaOperationResponseStatus.COMPLETED,
++  ]),
++);
++
++function withObservedProgressRetention(Base) {
++  return class OperationWorkflowObservedProgressRetention extends Base {
++    clearObservedProgressRetry(operationId, options = {}) {
++      const retryEntry =
++        this.observedProgressRetryTimerByOperationId.get(operationId);
++      if (!retryEntry) {
++        return;
++      }
++      if (
++        retryEntry.kind ===
++          OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS &&
++        options.includeDeliveredCreateProgress !== true
++      ) {
++        return;
++      }
++      this.clearTimeoutFn(retryEntry.timeoutHandle);
++      this.observedProgressRetryTimerByOperationId.delete(operationId);
++    }
++
++    armObservedProgressRetry(input) {
++      const {
++        operationId,
++        tableName,
++        cacheOperation,
++        delayMs,
++        kind = OBSERVED_PROGRESS_RETRY_KIND.OBSERVED_PROGRESS,
++        operationSnapshot = null,
++        deadlineMs = null,
++      } = input;
++      if (!operationId) {
++        return false;
++      }
++      const retryDelayMs =
++        Number.isFinite(delayMs) && delayMs > 0 ?
++          Math.floor(delayMs) :
++          OBSERVED_PROGRESS_RETRY_DELAY_MS;
++      const now = Date.now();
++      const desiredAttemptAt = now + retryDelayMs;
++      const existing =
++        this.observedProgressRetryTimerByOperationId.get(operationId);
++      if (existing) {
++        this.mergeObservedProgressRetryEvidence(existing, {
++          deadlineMs,
++          kind,
++          operationSnapshot,
++        });
++        if (desiredAttemptAt >= existing.nextAttemptAt) {
++          return true;
++        }
++        this.clearTimeoutFn(existing.timeoutHandle);
++        existing.nextAttemptAt = desiredAttemptAt;
++        existing.timeoutHandle = this.setTimeoutFn(
++          () => this.runObservedProgressRetry(operationId),
++          retryDelayMs,
++        );
++        return true;
++      }
++      const retryEntry = {
++        cacheOperation,
++        deadlineMs,
++        kind,
++        nextAttemptAt: desiredAttemptAt,
++        operationSnapshot: this.cloneOperationSnapshot(operationSnapshot),
++        tableName,
++        timeoutHandle: null,
++      };
++      retryEntry.timeoutHandle = this.setTimeoutFn(
++        () => this.runObservedProgressRetry(operationId),
++        retryDelayMs,
++      );
++      this.observedProgressRetryTimerByOperationId.set(
++        operationId,
++        retryEntry,
++      );
++      return true;
++    }
++
++    mergeObservedProgressRetryEvidence(existing, incoming) {
++      if (
++        incoming.kind !==
++          OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS
++      ) {
++        return;
++      }
++      existing.kind = incoming.kind;
++      existing.operationSnapshot = this.cloneOperationSnapshot(
++        incoming.operationSnapshot || existing.operationSnapshot,
++      );
++      if (Number.isFinite(incoming.deadlineMs)) {
++        existing.deadlineMs = Number.isFinite(existing.deadlineMs) ?
++          Math.min(existing.deadlineMs, incoming.deadlineMs) :
++          incoming.deadlineMs;
++      }
++    }
++
++    scheduleObservedProgressRetry(
++      operationId,
++      tableName,
++      cacheOperation,
++      delayMs = OBSERVED_PROGRESS_RETRY_DELAY_MS,
++    ) {
++      return this.armObservedProgressRetry({
++        operationId,
++        tableName,
++        cacheOperation,
++        delayMs,
++      });
++    }
++
++    isDeliveredCreateProgressRetentionCandidate(
++      operation,
++      response,
++      replaceRemovePhase = false,
++    ) {
++      const partitionClassification = classifySystemPartition({
++        partitionId: operation?.partitionId || null,
++      });
++      return [
++        replaceRemovePhase !== true,
++        operation?.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
++        operation?.type === OperationType.ADD ||
++          operation?.type === OperationType.REPLACE,
++        RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS.has(
++          operation?.workflowStep,
++        ),
++        partitionClassification.systemTable !== true,
++        DELIVERED_CREATE_PROGRESS_RESPONSE_STATUSES.has(response?.status),
++      ].every(Boolean);
++    }
++
++    retainDeliveredCreateProgress(
++      operation,
++      response,
++      replaceRemovePhase = false,
++    ) {
++      if (!this.isDeliveredCreateProgressRetentionCandidate(
++        operation,
++        response,
++        replaceRemovePhase,
++      )) {
++        return false;
++      }
++      const now = Date.now();
++      const operationStartedAtMs = Number.isFinite(operation.createdAt) ?
++        operation.createdAt :
++        now;
++      const deadlineMs =
++        operationStartedAtMs +
++        TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
++      if (deadlineMs <= now) {
++        return false;
++      }
++      return this.armObservedProgressRetry({
++        operationId: operation.operationId,
++        tableName: SYSTEM_TABLE_NAME.SERVICES,
++        cacheOperation: OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
++        delayMs: Math.min(
++          OBSERVED_PROGRESS_RETRY_DELAY_MS,
++          deadlineMs - now,
++        ),
++        kind: OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS,
++        operationSnapshot: operation,
++        deadlineMs,
++      });
++    }
++
++    rearmDeliveredCreateProgress(retryEntry) {
++      const now = Date.now();
++      if (
++        !Number.isFinite(retryEntry.deadlineMs) ||
++        retryEntry.deadlineMs <= now
++      ) {
++        return false;
++      }
++      return this.armObservedProgressRetry({
++        operationId: retryEntry.operationSnapshot?.operationId || null,
++        tableName: retryEntry.tableName,
++        cacheOperation: retryEntry.cacheOperation,
++        delayMs: Math.min(
++          OBSERVED_PROGRESS_RETRY_DELAY_MS,
++          retryEntry.deadlineMs - now,
++        ),
++        kind: OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS,
++        operationSnapshot: retryEntry.operationSnapshot,
++        deadlineMs: retryEntry.deadlineMs,
++      });
++    }
++
++    async reconcileDeliveredCreateProgress(retryEntry) {
++      const operationId = retryEntry.operationSnapshot?.operationId || null;
++      if (!operationId) {
++        return false;
++      }
++      await this.reconcileObservedProgressOperation(operationId);
++      const visibilityObservation =
++        await this.repository.getOperationByIdVisibilityObservation(
++          operationId,
++          {
++            requireOwnerRpcRead: false,
++            allowPriorityRecoveryDeferredVisibility: true,
++          },
++        );
++      const operation = visibilityObservation?.operation || null;
++      if (
++        operation &&
++        (
++          this.repository.isOperationTerminal(operation) ||
++          !this.repository.isOperationLocallyOwned(operation) ||
++          !RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS.has(
++            operation.workflowStep,
++          )
++        )
++      ) {
++        return true;
++      }
++      return this.rearmDeliveredCreateProgress({
++        ...retryEntry,
++        operationSnapshot: operation || retryEntry.operationSnapshot,
++      });
++    }
++
++    runObservedProgressRetry(operationId) {
++      const retryEntry =
++        this.observedProgressRetryTimerByOperationId.get(operationId);
++      if (!retryEntry) {
++        return;
++      }
++      this.observedProgressRetryTimerByOperationId.delete(operationId);
++      if (this.isShuttingDown) {
++        return;
++      }
++      if (!this.isInitialized || this.isOperationOwnerLaneHeld(operationId)) {
++        this.rearmObservedProgressRetry(operationId, retryEntry);
++        return;
++      }
++      const reconcile =
++        retryEntry.kind ===
++          OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS ?
++          () => this.reconcileDeliveredCreateProgress(retryEntry) :
++          () => this.reconcileObservedProgressOperation(operationId);
++      return this.operationWorkflowRunExclusive(
++        this.getOperationOwnerSingleFlightKey(operationId),
++        reconcile,
++      ).catch((error) => {
++        if (
++          retryEntry.kind ===
++            OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS &&
++          this.rearmDeliveredCreateProgress(retryEntry)
++        ) {
++          return;
++        }
++        this.handleObservedProgressFailure(
++          operationId,
++          retryEntry.tableName,
++          retryEntry.cacheOperation,
++          error,
++        );
++      });
++    }
++
++    rearmObservedProgressRetry(operationId, retryEntry) {
++      if (
++        retryEntry.kind ===
++          OBSERVED_PROGRESS_RETRY_KIND.DELIVERED_CREATE_PROGRESS
++      ) {
++        this.rearmDeliveredCreateProgress(retryEntry);
++      } else if (this.isInitialized) {
++        this.scheduleObservedProgressRetry(
++          operationId,
++          retryEntry.tableName,
++          retryEntry.cacheOperation,
++        );
++      }
++    }
++  };
++}
++
++export {
++  DELIVERED_CREATE_PROGRESS_RESPONSE_STATUSES,
++  withObservedProgressRetention,
++};
+diff --git a/src/rebalancer/operation-workflow-owner-execution-lane.js b/src/rebalancer/operation-workflow-owner-execution-lane.js
+index 106fbfde6f97ae358ad1c2e18d2a319c804cab97..cc28a7ae944680cb1894c341d469b6a77795954f 100644
+--- a/src/rebalancer/operation-workflow-owner-execution-lane.js
++++ b/src/rebalancer/operation-workflow-owner-execution-lane.js
+@@ -110,25 +110,12 @@ class OperationWorkflowOwnerExecutionLane
+       Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
+         retryAfterMs :
+         OBSERVED_PROGRESS_RETRY_DELAY_MS;
+-    const timerHandle = this.setTimeoutFn(() => {
+-      this.observedProgressRetryTimerByOperationId.delete(operationId);
+-      if (this.isShuttingDown || !this.isInitialized) {
+-        return;
+-      }
+-      return this.operationWorkflowRunExclusive(
+-        this.getOperationOwnerSingleFlightKey(operationId),
+-        () => this.reconcileObservedProgressOperation(operationId),
+-      ).catch((error) => {
+-        this.handleObservedProgressFailure(
+-          operationId,
+-          tableName,
+-          cacheOperation,
+-          error,
+-        );
+-      });
+-    }, delayMs);
+-    this.observedProgressRetryTimerByOperationId.set(operationId, timerHandle);
+-    return true;
++    return this.scheduleObservedProgressRetry(
++      operationId,
++      tableName,
++      cacheOperation,
++      delayMs,
++    );
+   }
+ 
+   /**
+diff --git a/src/rebalancer/operation-workflow-owner-retry-registry.js b/src/rebalancer/operation-workflow-owner-retry-registry.js
+index 90be6dfe6a710574e224467619c67e399fdd638d..b28f12c433010c6e72fcf28fed9ec1b15b289dc9 100644
+--- a/src/rebalancer/operation-workflow-owner-retry-registry.js
++++ b/src/rebalancer/operation-workflow-owner-retry-registry.js
+@@ -3,11 +3,13 @@ import {OperationWorkflowTransitionRetryGrace} from './operation-workflow-transi
+ import {
+   OperationWorkflowCoordinatorCreatedHandoffRetryRegistry,
+ } from './operation-workflow-coordinator-created-handoff-retry-registry.js';
++import {
++  withObservedProgressRetention,
++} from './operation-workflow-observed-progress-retention.js';
+ import * as DISPATCH_REARM_EVIDENCE
+   from './operation-workflow-dispatch-rearm-evidence.js';
+ 
+ const {
+-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
+   OPERATION_WORKFLOW_OWNER_LITERAL,
+   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+   DISPATCH_RETRY_DELAY_MS,
+@@ -18,7 +20,9 @@ const {
+ } = OPERATION_WORKFLOW_OWNER_SHARED;
+ 
+ class OperationWorkflowOwnerRetryRegistry extends
+-  OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
++  withObservedProgressRetention(
++    OperationWorkflowCoordinatorCreatedHandoffRetryRegistry,
++  ) {
+   /**
+    * @param {Function} options.allocateCanonicalReplicaId -
+    *   Replica ID allocation callback.
+@@ -131,8 +135,8 @@ class OperationWorkflowOwnerRetryRegistry extends
+       this.clearTimeoutFn(timerHandle);
+     }
+     this.safetyDeferredRetryTimerByOperationId.clear();
+-    for (const timerHandle of this.observedProgressRetryTimerByOperationId.values()) {
+-      this.clearTimeoutFn(timerHandle);
++    for (const retryEntry of this.observedProgressRetryTimerByOperationId.values()) {
++      this.clearTimeoutFn(retryEntry.timeoutHandle);
+     }
+     this.observedProgressRetryTimerByOperationId.clear();
+     for (const timerHandle of this.dispatchRetryTimerByOperationId.values()) {
+@@ -173,76 +177,6 @@ class OperationWorkflowOwnerRetryRegistry extends
+     this.terminalTransitionRepairStateByOperationId.clear();
+   }
+ 
+-  /**
+-   * @param {string} operationId
+-   */
+-  clearObservedProgressRetry(operationId) {
+-    const timerHandle =
+-      this.observedProgressRetryTimerByOperationId.get(operationId);
+-    if (!timerHandle) {
+-      return;
+-    }
+-    this.clearTimeoutFn(timerHandle);
+-    this.observedProgressRetryTimerByOperationId.delete(operationId);
+-  }
+-
+-  /**
+-   * @param {string} operationId
+-   * @param {string} tableName
+-   * @param {string} cacheOperation
+-   * @param {number} [delayMs=OBSERVED_PROGRESS_RETRY_DELAY_MS]
+-   * @return {boolean}
+-   */
+-  scheduleObservedProgressRetry(
+-    operationId,
+-    tableName,
+-    cacheOperation,
+-    delayMs = OBSERVED_PROGRESS_RETRY_DELAY_MS,
+-  ) {
+-    if (!operationId) {
+-      return false;
+-    }
+-    if (this.observedProgressRetryTimerByOperationId.has(operationId)) {
+-      return true;
+-    }
+-
+-    const retryDelayMs =
+-      Number.isFinite(delayMs) && delayMs > 0 ?
+-        delayMs :
+-        OBSERVED_PROGRESS_RETRY_DELAY_MS;
+-    const timerHandle = this.setTimeoutFn(() => {
+-      this.observedProgressRetryTimerByOperationId.delete(operationId);
+-      if (this.isShuttingDown || !this.isInitialized) {
+-        return;
+-      }
+-      if (this.isOperationOwnerLaneHeld(operationId)) {
+-        this.scheduleObservedProgressRetry(
+-          operationId,
+-          tableName,
+-          cacheOperation,
+-          retryDelayMs,
+-        );
+-        return;
+-      }
+-      return this.operationWorkflowRunExclusive(
+-        this.getOperationOwnerSingleFlightKey(operationId),
+-        () => this.reconcileObservedProgressOperation(operationId),
+-      ).catch((error) => {
+-        this.handleObservedProgressFailure(
+-          operationId,
+-          tableName,
+-          cacheOperation,
+-          error,
+-        );
+-      });
+-    }, retryDelayMs);
+-    this.observedProgressRetryTimerByOperationId.set(
+-      operationId,
+-      timerHandle,
+-    );
+-    return true;
+-  }
+-
+   /**
+    * @param {string} operationId
+    */
+diff --git a/src/rebalancer/operation-workflow-recovery-reconcile-shared.js b/src/rebalancer/operation-workflow-recovery-reconcile-shared.js
+index ee3e230a0ec63b717ce94aeacb8843d80fe2faf0..8469a82dd42f1603f9d4d33097c1c7a051045013 100644
+--- a/src/rebalancer/operation-workflow-recovery-reconcile-shared.js
++++ b/src/rebalancer/operation-workflow-recovery-reconcile-shared.js
+@@ -54,6 +54,7 @@ const {
+   TRANSITION_RETRY_DELAY_MS,
+   TYPEOF,
+   TIME_MS,
++  UNIFIED_SERVICE_TYPE,
+   WORKFLOW_STEP,
+   buildTimeoutClassification,
+   classifySystemPartition,
+@@ -723,6 +724,7 @@ const OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED = Object.freeze({
+   TRANSITION_RETRY_DELAY_MS,
+   TYPEOF,
+   TIME_MS,
++  UNIFIED_SERVICE_TYPE,
+   WORKFLOW_STEP,
+   buildTimeoutClassification,
+   classifySystemPartition,
+diff --git a/src/rebalancer/operation-workflow-recovery-status-reconcile.js b/src/rebalancer/operation-workflow-recovery-status-reconcile.js
+index 5732432fccc38b248b849d8297e174fbcb66da40..e482326dba27d73a3cd7d26d07df96a878461453 100644
+--- a/src/rebalancer/operation-workflow-recovery-status-reconcile.js
++++ b/src/rebalancer/operation-workflow-recovery-status-reconcile.js
+@@ -28,6 +28,7 @@ const {
+   TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION_BY_STATE,
+   TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE,
+   TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE,
++  UNIFIED_SERVICE_TYPE,
+   WORKFLOW_STEP,
+   buildTimeoutClassification,
+   classifySystemPartition,
+@@ -36,7 +37,28 @@ const {
+ } = SHARED;
+ 
+ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
++  isRuntimeServiceActiveCacheHandoffAligned(operation) {
++    if (
++      operation?.entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
++      typeof this.repository?.getObservedReplicaStatusFromCache !==
++        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
++    ) {
++      return false;
++    }
++    return this.repository.getObservedReplicaStatusFromCache(
++      operation.replicaId,
++      operation.partitionId,
++      operation.targetNodeId,
++      {
++        allowPartitionNodeFallback: false,
++      },
++    ) === ReplicaStatus.ACTIVE;
++  }
++
+   async confirmActiveReplicaTerminalHandoff(operation) {
++    if (this.isRuntimeServiceActiveCacheHandoffAligned(operation)) {
++      return true;
++    }
+     let cacheAligned = false;
+     if (
+       operation?.replicaId &&
+@@ -65,7 +87,13 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
+       return true;
+     }
+     if (operation.type === OperationType.REPLACE) {
+-      await this.reconcileReplaceActualActive(operation);
++      const replaceProgressApplied =
++        await this.reconcileReplaceActualActive(operation);
++      if (replaceProgressApplied === true) {
++        this.clearObservedProgressRetry(operation.operationId, {
++          includeDeliveredCreateProgress: true,
++        });
++      }
+     } else {
+       await this.completeOperation(operation);
+     }
+diff --git a/src/rebalancer/operation-workflow-transition-persistence.js b/src/rebalancer/operation-workflow-transition-persistence.js
+index e3ee3f6e36142819f59abd6ee6891136314782d8..f060ec677958ca7301008614d31f9d588dcad05c 100644
+--- a/src/rebalancer/operation-workflow-transition-persistence.js
++++ b/src/rebalancer/operation-workflow-transition-persistence.js
+@@ -218,6 +218,9 @@ class OperationWorkflowTransitionPersistence
+    */
+   async completeOperation(operation) {
+     this.clearDispatchRetry(operation?.operationId);
++    this.clearObservedProgressRetry(operation?.operationId, {
++      includeDeliveredCreateProgress: true,
++    });
+     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
+     this.clearExecutorOutcomeRetry(operation?.operationId);
+     const now = Date.now();
+@@ -359,6 +362,9 @@ class OperationWorkflowTransitionPersistence
+    */
+   async failOperation(operation, errorMessage, options = {}) {
+     this.clearDispatchRetry(operation?.operationId);
++    this.clearObservedProgressRetry(operation?.operationId, {
++      includeDeliveredCreateProgress: true,
++    });
+     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
+     this.clearExecutorOutcomeRetry(operation?.operationId);
+     const now = Date.now();
+diff --git a/test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js b/test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+index c5a587dca4a6b10eeb8397f359534fcf7d68428a..073636caf33e556e53a1173dcc63308505f1220e 100644
+--- a/test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
++++ b/test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js
+@@ -7,6 +7,9 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
+ import {
+   ReplicaStatus,
+ } from '../../src/rebalancer/replica-status.js';
++import {
++  ReplicaOperationResponseStatus,
++} from '../../src/rebalancer/replica-operation-constants.js';
+ import {
+   REBALANCER_DEFAULT,
+ } from '../../src/rebalancer/rebalancer-constants.js';
+@@ -55,11 +58,13 @@ function buildRuntimeOperationRow(overrides = {}) {
+  * is never delivered.
+  */
+ function createStrandedAddScenario(operationId) {
++  const operationStartedAtMs = Date.now();
+   const durableCreatingRow = buildRuntimeOperationRow({
+     operation_id: operationId,
+     status: ReplicaStatus.CREATING,
+     workflow_step: WORKFLOW_STEP.CREATING,
+-    updated_at: 1700000000500,
++    created_at: operationStartedAtMs,
++    updated_at: operationStartedAtMs + 500,
+   });
+   const activeServiceRow = {
+     service_id: REPLICA_ID,
+@@ -115,6 +120,10 @@ function createStrandedAddScenario(operationId) {
+       // The deferred-retry dispatch reaches the target and SUCCEEDS; the
+       // durable row commits CREATING while the target's outcome handoff back
+       // to the source is lost at its retry budget.
++      sourceCoordinator.workflowOwner.retainDeliveredCreateProgress(
++        sourceCoordinator.repository.rowToOperation(durableCreatingRow),
++        {status: ReplicaOperationResponseStatus.INITIATED},
++      );
+       return {success: true};
+     }
+     return dispatchOperation(...args);
+@@ -292,3 +301,206 @@ test(
+     }
+   },
+ );
++
++// Quest operation-dispatch-completion-owner-cutover. Exact coordinator-first
++// ordering from the 2026-07-21T18:06 MovieLens run: the dispatch-service lane
++// first defers on operation-row visibility, the coordinator-created owner lane
++// delivers CREATE_REPLICA before that retry, the target completes, and the
++// stale dispatch-service payload is then delivered once more. The target's
++// executor-outcome handoff is absent. Successful delivery itself must retain a
++// bounded owner turn, independent of which caller observes the success.
++test(
++  'coordinator-first CREATE delivery retains owner progress across a stale ' +
++  'dispatch-service retry and lost target handoff',
++  async (t) => {
++    initEnv();
++
++    const operationId = `${OPERATION_ID}-coordinator-first-cutover`;
++    const operationStartedAtMs = Date.now();
++    const operationRow = buildRuntimeOperationRow({
++      operation_id: operationId,
++      status: ReplicaStatus.PENDING,
++      workflow_step: WORKFLOW_STEP.PENDING,
++      created_at: operationStartedAtMs,
++      updated_at: operationStartedAtMs,
++    });
++    const activeServiceRow = {
++      service_id: REPLICA_ID,
++      service_type: 'runtime_service',
++      node_id: TARGET_NODE_ID,
++      status: ReplicaStatus.ACTIVE,
++      created_at: 1700000000510,
++      updated_at: 1700000000514,
++    };
++    const ordering = [];
++    const deliveries = [];
++    const {captureTimer, releaseTimer} = createTimerCapture();
++    let dispatchServiceCallCount = 0;
++    const sourceCoordinator = createTestCoordinator({
++      nodeId: SOURCE_NODE_ID,
++      cacheData: {replicaOperations: [operationRow]},
++      messageRouter: {
++        async deliver(target, payload, options) {
++          deliveries.push({target, payload, options});
++          ordering.push(
++            deliveries.length === 1 ?
++              'coordinator_create_delivery' :
++              'deferred_duplicate_delivery',
++          );
++          return {
++            acknowledged: true,
++            status: ReplicaOperationResponseStatus.INITIATED,
++          };
++        },
++        getConnectionState() {
++          return 'connected';
++        },
++        isOutboundQueueAvailable() {
++          return true;
++        },
++      },
++      setTimeoutFn: captureTimer,
++      clearTimeoutFn: releaseTimer,
++    });
++    const ownerOperation =
++      sourceCoordinator.repository.rowToOperation(operationRow);
++    const dispatchOperation =
++      sourceCoordinator.dispatchOperation.bind(sourceCoordinator);
++    sourceCoordinator.dispatchOperation = async (...args) => {
++      dispatchServiceCallCount += 1;
++      if (dispatchServiceCallCount === 1) {
++        ordering.push('dispatch_service_visibility_defer');
++        const visibilityError =
++          new Error('Cache update not observed for replica operation');
++        visibilityError.retryAfterMs = DISPATCH_DEFER_RETRY_AFTER_MS;
++        throw visibilityError;
++      }
++      return dispatchOperation(...args);
++    };
++    const sourceDispatch = createService({
++      cdcIntegrationService: {
++        updateSystemTableRow: async () => ({success: true}),
++        upsertSystemTableRow: async () => ({success: true}),
++      },
++      rebalanceCoordinator: sourceCoordinator,
++      controlPlaneReadinessService: createMockControlPlaneReadinessService({
++        defaultRepairEligible: true,
++      }),
++      setTimeoutFn: captureTimer,
++      clearTimeoutFn: releaseTimer,
++    });
++    sourceDispatch.replicaOperationsOwner = {
++      async getReplicaOperationFromCache() {
++        return null;
++      },
++    };
++    sourceDispatch.getAuthoritativeReplicaOperationRow = async () => null;
++
++    try {
++      await sourceDispatch.handleReplicaOperationDispatch({
++        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
++        [ControlPlaneField.OPERATION_ID]: operationId,
++        [ControlPlaneField.OPERATION_ROW]: operationRow,
++      });
++      await drainOperationDispatchQueue(sourceDispatch);
++      const visibilityRetry =
++        sourceDispatch.operationDispatchDeferredRetries.get(operationId);
++      t.ok(
++        visibilityRetry,
++        'dispatch-service visibility lag should be retained before the ' +
++        'coordinator-created lane sends',
++      );
++
++      await sourceCoordinator.armCoordinatorCreatedOperationProgress(
++        ownerOperation,
++      );
++      const primedOperation =
++        await sourceCoordinator.repository.queryOperationById(operationId);
++      await sourceCoordinator.workflowOwner.dispatchOperation(
++        primedOperation,
++      );
++      const creatingOperation =
++        await sourceCoordinator.repository.queryOperationById(operationId);
++      t.equal(
++        deliveries.length,
++        1,
++        'the coordinator-created owner lane should deliver CREATE once',
++      );
++      t.equal(
++        creatingOperation?.workflowStep,
++        WORKFLOW_STEP.CREATING,
++        'the successful direct delivery should durably advance to CREATING',
++      );
++      t.ok(
++        sourceCoordinator.workflowOwner
++          .observedProgressRetryTimerByOperationId.has(operationId),
++        'the workflow owner must retain target-progress verification before ' +
++        'the direct caller completes',
++      );
++
++      ordering.push('target_active');
++      visibilityRetry.timeoutHandle.fired = true;
++      await visibilityRetry.timeoutHandle.callback();
++      await drainOperationDispatchQueue(sourceDispatch);
++      t.equal(
++        dispatchServiceCallCount,
++        2,
++        'the stale dispatch-service payload should produce the observed ' +
++        'duplicate delivery attempt',
++      );
++      t.equal(
++        deliveries.length,
++        2,
++        'the deferred dispatch-service pass must traverse the canonical owner ' +
++        'delivery sink instead of simulating a successful duplicate',
++      );
++      t.equal(
++        deliveries[1]?.payload?.type,
++        deliveries[0]?.payload?.type,
++        'the second target delivery must be the same CREATE request class',
++      );
++
++      sourceCoordinator.systemTableCache.upsert('services', activeServiceRow);
++      const retainedEntry = sourceCoordinator.workflowOwner
++        .observedProgressRetryTimerByOperationId.get(operationId);
++      const retainedTimer = retainedEntry?.timeoutHandle || retainedEntry;
++      if (retainedTimer?.callback) {
++        retainedTimer.fired = true;
++        ordering.push('owner_retained_verify');
++        await retainedTimer.callback();
++      }
++
++      const progressedOperation =
++        await sourceCoordinator.repository.queryOperationById(operationId);
++      t.equal(
++        progressedOperation?.workflowStep,
++        WORKFLOW_STEP.ACTIVE,
++        'the retained owner turn must apply exact-target ACTIVE evidence',
++      );
++      t.equal(
++        progressedOperation?.status,
++        ReplicaStatus.ACTIVE,
++        'the durable terminal ADD must release its operation-budget slot',
++      );
++      t.same(
++        ordering,
++        [
++          'dispatch_service_visibility_defer',
++          'coordinator_create_delivery',
++          'target_active',
++          'deferred_duplicate_delivery',
++          'owner_retained_verify',
++        ],
++        'the deterministic seam should preserve the immutable live ordering',
++      );
++      t.notOk(
++        sourceCoordinator.workflowOwner
++          .observedProgressRetryTimerByOperationId.has(operationId),
++        'terminal owner progress should consume the retained obligation',
++      );
++    } finally {
++      sourceDispatch.stop();
++      await sourceCoordinator.shutdown();
++    }
++  },
++);
+diff --git a/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js b/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js
+index 4f48101526f40d2a419a3d13bc38312e9eeb84fa..6d1241f838cdb518a8877f0c2f740006ea9b8394 100644
+--- a/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js
++++ b/test/control-plane/replica-dispatch-runtime-target-progress-retained-verification.test.js
+@@ -3,16 +3,8 @@ import {
+   ControlPlaneField,
+   ControlPlaneMessageType,
+ } from '../../src/control-plane/control-plane-constants.js';
+-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+-import {
+-  ReplicaStatus,
+-} from '../../src/rebalancer/replica-status.js';
+-import {
+-  REBALANCER_DEFAULT,
+-} from '../../src/rebalancer/rebalancer-constants.js';
+ import {
+   createMockControlPlaneReadinessService,
+-  createTestCoordinator,
+ } from '../rebalancer/test-helpers.js';
+ import {
+   createService,
+@@ -22,33 +14,24 @@ import {
+   buildRuntimeReplicaOperationRow,
+   createTimerCapture,
+   drainOperationDispatchQueue,
+-  drainScheduledTimers,
+ } from './replica-dispatch-virtual-timer-test-support.js';
+ 
+-const SOURCE_NODE_ID = 'node-1';
+-const TARGET_NODE_ID = 'node-2';
+-const OPERATION_ID = 'runtime-service-target-progress-retained-verification';
+-const SERVICE_ID = 'svc-movielens-topn';
+-const REPLICA_ID = `${SERVICE_ID}-r2`;
+-const DISPATCH_DEFER_RETRY_AFTER_MS = 250;
+-const CREATING_STEP_TIMEOUT_MS =
+-  REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
++const OPERATION_ID = 'runtime-service-target-progress-owner-cutover';
+ const ROW_IDENTITY = Object.freeze({
+   operationId: OPERATION_ID,
+-  serviceId: SERVICE_ID,
+-  replicaId: REPLICA_ID,
+-  sourceNodeId: SOURCE_NODE_ID,
+-  targetNodeId: TARGET_NODE_ID,
++  serviceId: 'svc-movielens-topn',
++  replicaId: 'svc-movielens-topn-r2',
++  sourceNodeId: 'node-1',
++  targetNodeId: 'node-2',
+ });
+ 
+ function buildRuntimeSendingOperationRow(overrides = {}) {
+   return buildRuntimeReplicaOperationRow(ROW_IDENTITY, overrides);
+ }
+ 
+-function createRetainedVerificationService(dispatchOperation, options = {}) {
++function createDispatchService(dispatchOperation) {
+   const timerCapture = createTimerCapture();
+   const service = createService({
+-    ...options,
+     cdcIntegrationService: {
+       updateSystemTableRow: async () => ({success: true}),
+       upsertSystemTableRow: async () => ({success: true}),
+@@ -68,221 +51,42 @@ function createRetainedVerificationService(dispatchOperation, options = {}) {
+   return {...timerCapture, service};
+ }
+ 
+-// Quest runtime-service-creating-owner-wake-progress-admission, retained
+-// verification after a SUCCESSFUL source dispatch. Sealed production ordering:
+-//   1. The source-owned coordinator-created runtime ADD dispatch defers once
+-//      (retryable), the armed deferred-retry timer fires, and the dispatch
+-//      SUCCEEDS — clearDeferredOperationDispatchRetry destroys the slot on the
+-//      success path of dispatchOperationRow.
+-//   2. The durable operation row commits CREATING; the exact target services
+-//      row is durably ACTIVE.
+-//   3. The target's TARGET_EXECUTOR_OUTCOME remote handoff retry stops at the
+-//      CREATING step timeout without ever reaching the source; simulated by
+-//      never delivering any handoff wake.
+-//   4. Every remaining armed source-side timer is fired through twice the
+-//      CREATING step timeout window.
+-// The terminal assertions are the discriminator: with the slot destroyed by
+-// the successful dispatch there is no deferred-retry edge, no ready-node
+-// replay for a non-system CREATING row, and no planner rearm — on current
+-// code nothing re-enters the row, it stays CREATING forever, and the final
+-// assertions FAIL.
+-test(
+-  'a successful dispatch retains one verification re-entry so a lost target ' +
+-  'handoff still reaches terminal ACTIVE from durable target ACTIVE proof',
+-  async (t) => {
+-    initEnv();
+-
+-    const operationId = `${OPERATION_ID}-lost-handoff-after-success`;
+-    const sendingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-    });
+-    const durableCreatingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-      status: ReplicaStatus.CREATING,
+-      workflow_step: WORKFLOW_STEP.CREATING,
+-      updated_at: 1700000000500,
+-    });
+-    const activeServiceRow = {
+-      service_id: REPLICA_ID,
+-      service_type: 'runtime_service',
+-      node_id: TARGET_NODE_ID,
+-      status: ReplicaStatus.ACTIVE,
+-      created_at: 1700000000510,
+-      updated_at: 1700000000514,
+-    };
+-    const {scheduledTimers, captureTimer, releaseTimer} = createTimerCapture();
+-    const sourceCoordinator = createTestCoordinator({
+-      nodeId: SOURCE_NODE_ID,
+-      cacheData: {
+-        services: [activeServiceRow],
+-        replicaOperations: [durableCreatingRow],
+-      },
+-      cdcIntegrationService: {
+-        async insertSystemTableRow() {
+-          return {success: true};
+-        },
+-        async updateSystemTableRow() {
+-          return {success: true};
+-        },
+-        async refreshAuthoritativeCacheRow() {
+-          return true;
+-        },
+-      },
+-      sqlQueryResults: {
+-        'FROM services WHERE service_id = ?': {
+-          success: true,
+-          rows: [activeServiceRow],
+-        },
+-      },
+-      setTimeoutFn: captureTimer,
+-      clearTimeoutFn: releaseTimer,
+-    });
+-    const dispatchOperation =
+-      sourceCoordinator.dispatchOperation.bind(sourceCoordinator);
+-    let dispatchCallCount = 0;
+-    sourceCoordinator.dispatchOperation = async (...args) => {
+-      dispatchCallCount += 1;
+-      if (dispatchCallCount === 1) {
+-        const retryableError =
+-          new Error('source owner visibility is temporarily unavailable');
+-        retryableError.retryAfterMs = DISPATCH_DEFER_RETRY_AFTER_MS;
+-        throw retryableError;
+-      }
+-      if (dispatchCallCount === 2) {
+-        // The deferred-retry dispatch reaches the target and SUCCEEDS; the
+-        // durable row steps to CREATING while the target's outcome handoff
+-        // back to the source is lost at its retry budget.
+-        return {success: true};
+-      }
+-      return dispatchOperation(...args);
+-    };
+-    const sourceDispatch = createService({
+-      cdcIntegrationService: {
+-        updateSystemTableRow: async () => ({success: true}),
+-        upsertSystemTableRow: async () => ({success: true}),
+-      },
+-      rebalanceCoordinator: sourceCoordinator,
+-      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+-        defaultRepairEligible: true,
+-      }),
+-      setTimeoutFn: captureTimer,
+-      clearTimeoutFn: releaseTimer,
+-    });
+-    // Authoritative row visibility as the source dispatch owner observes it:
+-    // SENDING through the deferred retry and its successful dispatch, then
+-    // converging to the durable CREATING commit.
+-    let visibleOperationRow = sendingRow;
+-    sourceDispatch.replicaOperationsOwner = {
+-      async getReplicaOperationFromCache(requestedOperationId) {
+-        return requestedOperationId === operationId ?
+-          {...visibleOperationRow} :
+-          null;
+-      },
+-    };
+-
+-    try {
+-      await sourceDispatch.handleReplicaOperationDispatch({
+-        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+-        [ControlPlaneField.OPERATION_ID]: operationId,
+-        [ControlPlaneField.OPERATION_ROW]: sendingRow,
+-      });
+-      await drainOperationDispatchQueue(sourceDispatch);
+-
+-      t.equal(
+-        dispatchCallCount,
+-        1,
+-        'the initial source dispatch pass should reach the owner once',
+-      );
+-      const deferredRetry =
+-        sourceDispatch.operationDispatchDeferredRetries.get(operationId);
+-      t.ok(
+-        deferredRetry,
+-        'the retryable failure should arm the existing deferred retry',
+-      );
+-
+-      deferredRetry.timeoutHandle.fired = true;
+-      await deferredRetry.timeoutHandle.callback();
+-      await drainOperationDispatchQueue(sourceDispatch);
+-
+-      t.equal(
+-        dispatchCallCount,
+-        2,
+-        'the deferred-retry dispatch should succeed and clear its slot',
+-      );
+-
+-      // The durable row commits CREATING; the target handoff wake is never
+-      // delivered; no readiness transition and no planner rearm occur.
+-      visibleOperationRow = durableCreatingRow;
+-
+-      await drainScheduledTimers(
+-        scheduledTimers,
+-        sourceDispatch,
+-        CREATING_STEP_TIMEOUT_MS * 2,
+-      );
+-
+-      const progressedOperation =
+-        await sourceCoordinator.repository.queryOperationById(operationId);
+-      t.equal(
+-        progressedOperation?.workflowStep,
+-        WORKFLOW_STEP.ACTIVE,
+-        'the source-owned ADD must progress to ACTIVE once the exact target ' +
+-        'services row is durably ACTIVE, without a delivered handoff wake',
+-      );
+-      t.equal(
+-        progressedOperation?.status,
+-        ReplicaStatus.ACTIVE,
+-        'the source-owned durable operation must reach its terminal state ' +
+-        'instead of remaining CREATING forever after the successful dispatch',
+-      );
+-    } finally {
+-      sourceDispatch.stop();
+-      await sourceCoordinator.shutdown();
+-    }
+-  },
+-);
+-
++// Quest operation-dispatch-completion-owner-cutover. Successful delivery is
++// retained at the workflow-owner transport gate. ReplicaDispatchService keeps
++// transport-failure retries and remote-wakeup verification only; it must not
++// recreate a caller-local target-progress authority after a successful call.
+ test(
+-  'a successful system-table dispatch retains no verification timer',
++  'a successful runtime CREATE call leaves no caller-local progress retry',
+   async (t) => {
+     initEnv();
+ 
+-    const operationId = `${OPERATION_ID}-system-success`;
+     const dispatchCalls = [];
+-    const systemSendingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-      partition_id: 'nodes-p1',
+-      entity_type: 'partition',
+-      entity_id: 'nodes-p1',
+-    });
+-    const {scheduledTimers, service} = createRetainedVerificationService(
++    const {scheduledTimers, service} = createDispatchService(
+       async (operation, options) => {
+         dispatchCalls.push({operation, options});
+         return {success: true};
+       },
+     );
++    const row = buildRuntimeSendingOperationRow();
+ 
+     try {
+       await service.handleReplicaOperationDispatch({
+         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+-        [ControlPlaneField.OPERATION_ID]: operationId,
+-        [ControlPlaneField.OPERATION_ROW]: systemSendingRow,
++        [ControlPlaneField.OPERATION_ID]: OPERATION_ID,
++        [ControlPlaneField.OPERATION_ROW]: row,
+       });
+       await drainOperationDispatchQueue(service);
+ 
+-      t.equal(
+-        dispatchCalls.length,
+-        1,
+-        'the system SENDING dispatch should reach the owner once',
+-      );
++      t.equal(dispatchCalls.length, 1, 'the owner call should run once');
+       t.equal(
+         service.operationDispatchDeferredRetries.size,
+         0,
+-        'a system dispatch success must not retain a verification slot',
++        'successful delivery must not create a dispatch-service retry slot',
+       );
+       t.equal(
+         scheduledTimers.filter((timer) => !timer.cleared).length,
+         0,
+-        'no verification timer may remain armed for system rows',
++        'successful delivery must not arm a dispatch-service timer',
+       );
+     } finally {
+       service.stop();
+@@ -291,65 +95,37 @@ test(
+ );
+ 
+ test(
+-  'a retained verification dispatch is one-shot when the durable row remains ' +
+-  'temporarily unreadable',
++  'system-operation success remains free of caller-local verification work',
+   async (t) => {
+     initEnv();
+ 
+-    const operationId = `${OPERATION_ID}-unreadable-sending-one-shot`;
+-    const sendingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-    });
+     const dispatchCalls = [];
+-    const {scheduledTimers, service} = createRetainedVerificationService(
+-      async (operation, options) => {
+-        dispatchCalls.push({operation, options});
++    const {scheduledTimers, service} = createDispatchService(
++      async (operation) => {
++        dispatchCalls.push(operation);
+         return {success: true};
+       },
+     );
+-    service.replicaOperationsOwner = {
+-      async getReplicaOperationFromCache() {
+-        return null;
+-      },
+-    };
+-    service.getAuthoritativeReplicaOperationRow = async () => null;
++    const row = buildRuntimeSendingOperationRow({
++      operation_id: `${OPERATION_ID}-system`,
++      partition_id: 'nodes-p1',
++      entity_type: 'partition',
++      entity_id: 'nodes-p1',
++    });
+ 
+     try {
+       await service.handleReplicaOperationDispatch({
+         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+-        [ControlPlaneField.OPERATION_ID]: operationId,
+-        [ControlPlaneField.OPERATION_ROW]: sendingRow,
++        [ControlPlaneField.OPERATION_ID]: row.operation_id,
++        [ControlPlaneField.OPERATION_ROW]: row,
+       });
+       await drainOperationDispatchQueue(service);
+ 
++      t.equal(dispatchCalls.length, 1);
++      t.equal(service.operationDispatchDeferredRetries.size, 0);
+       t.equal(
+-        dispatchCalls.length,
+-        1,
+-        'the initial SENDING row should dispatch once',
+-      );
+-
+-      await drainScheduledTimers(
+-        scheduledTimers,
+-        service,
+-        CREATING_STEP_TIMEOUT_MS * 4,
+-      );
+-
+-      t.equal(
+-        dispatchCalls.length,
+-        2,
+-        'the retained verification may dispatch the fallback SENDING row ' +
+-        'once but must not create a periodic replay loop',
+-      );
+-      t.equal(
+-        scheduledTimers.filter((timer) => !timer.cleared && !timer.fired)
+-          .length,
+-        0,
+-        'no later verification window remains armed',
+-      );
+-      t.equal(
+-        service.operationDispatchDeferredRetries.size,
++        scheduledTimers.filter((timer) => !timer.cleared).length,
+         0,
+-        'the one-shot verification leaves no retained retry slot',
+       );
+     } finally {
+       service.stop();
+@@ -358,212 +134,44 @@ test(
+ );
+ 
+ test(
+-  'a row already ACTIVE when the retained verification fires is a no-op',
++  'a retryable transport failure still uses the existing service retry lane',
+   async (t) => {
+     initEnv();
+ 
+-    const operationId = `${OPERATION_ID}-active-before-fire`;
+-    const dispatchCalls = [];
+-    const sendingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
++    let dispatchCallCount = 0;
++    const {service} = createDispatchService(async () => {
++      dispatchCallCount += 1;
++      if (dispatchCallCount === 1) {
++        const error = new Error('operation visibility is temporarily delayed');
++        error.retryAfterMs = 250;
++        throw error;
++      }
++      return {success: true};
+     });
+-    const terminalActiveRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-      status: ReplicaStatus.ACTIVE,
+-      workflow_step: WORKFLOW_STEP.ACTIVE,
+-      updated_at: 1700000000600,
++    const row = buildRuntimeSendingOperationRow({
++      operation_id: `${OPERATION_ID}-failure-retry`,
+     });
+-    const {scheduledTimers, service} = createRetainedVerificationService(
+-      async (operation, options) => {
+-        dispatchCalls.push({operation, options});
+-        return {success: true};
+-      },
+-    );
+-    let visibleOperationRow = sendingRow;
+-    service.replicaOperationsOwner = {
+-      async getReplicaOperationFromCache(requestedOperationId) {
+-        return requestedOperationId === operationId ?
+-          {...visibleOperationRow} :
+-          null;
+-      },
+-    };
+ 
+     try {
+       await service.handleReplicaOperationDispatch({
+         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+-        [ControlPlaneField.OPERATION_ID]: operationId,
+-        [ControlPlaneField.OPERATION_ROW]: sendingRow,
++        [ControlPlaneField.OPERATION_ID]: row.operation_id,
++        [ControlPlaneField.OPERATION_ROW]: row,
+       });
+       await drainOperationDispatchQueue(service);
++      const retry =
++        service.operationDispatchDeferredRetries.get(row.operation_id);
++      t.ok(retry, 'the failure should retain the existing retry slot');
+ 
+-      t.equal(
+-        dispatchCalls.length,
+-        1,
+-        'the runtime SENDING dispatch should reach the owner once',
+-      );
+-
+-      visibleOperationRow = terminalActiveRow;
+-      await drainScheduledTimers(
+-        scheduledTimers,
+-        service,
+-        CREATING_STEP_TIMEOUT_MS * 2,
+-      );
+-
+-      t.equal(
+-        dispatchCalls.length,
+-        1,
+-        'a row already terminal ACTIVE must not be dispatched again',
+-      );
+-      t.equal(
+-        service.operationDispatchDeferredRetries.size,
+-        0,
+-        'the fired verification must leave no retained slot behind',
+-      );
+-    } finally {
+-      service.stop();
+-    }
+-  },
+-);
+-
+-test(
+-  'one-shot provenance survives a retryable verification dispatch failure',
+-  async (t) => {
+-    initEnv();
+-
+-    const operationId = `${OPERATION_ID}-verification-retry-one-shot`;
+-    const sendingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-    });
+-    let dispatchCallCount = 0;
+-    const {scheduledTimers, service} = createRetainedVerificationService(
+-      async () => {
+-        dispatchCallCount += 1;
+-        if (dispatchCallCount === 2) {
+-          const error = new Error('verification dispatch temporarily failed');
+-          error.retryAfterMs = DISPATCH_DEFER_RETRY_AFTER_MS;
+-          throw error;
+-        }
+-        return {success: true};
+-      },
+-    );
+-    service.replicaOperationsOwner = {
+-      async getReplicaOperationFromCache() {
+-        return null;
+-      },
+-    };
+-    service.getAuthoritativeReplicaOperationRow = async () => null;
+-
+-    try {
+-      await service.handleReplicaOperationDispatch({
+-        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+-        [ControlPlaneField.OPERATION_ID]: operationId,
+-        [ControlPlaneField.OPERATION_ROW]: sendingRow,
+-      });
++      retry.timeoutHandle.fired = true;
++      await retry.timeoutHandle.callback();
+       await drainOperationDispatchQueue(service);
+-      await drainScheduledTimers(
+-        scheduledTimers,
+-        service,
+-        CREATING_STEP_TIMEOUT_MS * 3,
+-      );
+ 
++      t.equal(dispatchCallCount, 2, 'the failure retry should run once');
+       t.equal(
+-        dispatchCallCount,
+-        3,
+-        'initial dispatch, one verification failure, and its canonical retry ' +
+-        'are the only owner calls',
+-      );
+-      t.equal(
+-        scheduledTimers.filter((timer) => !timer.cleared && !timer.fired)
+-          .length,
++        service.operationDispatchDeferredRetries.size,
+         0,
+-        'the successful retry cannot rearm the creation-window verification',
+-      );
+-      t.equal(service.operationDispatchDeferredRetries.size, 0);
+-    } finally {
+-      service.stop();
+-    }
+-  },
+-);
+-
+-test(
+-  'the retained verification re-entry never replays unrelated pending rows',
+-  async (t) => {
+-    initEnv();
+-
+-    const operationId = `${OPERATION_ID}-exact-row-only`;
+-    const unrelatedOperationId = `${OPERATION_ID}-unrelated-pending`;
+-    const dispatchCalls = [];
+-    const sendingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-    });
+-    const durableCreatingRow = buildRuntimeSendingOperationRow({
+-      operation_id: operationId,
+-      status: ReplicaStatus.CREATING,
+-      workflow_step: WORKFLOW_STEP.CREATING,
+-      updated_at: 1700000000500,
+-    });
+-    const unrelatedPendingRow = buildRuntimeSendingOperationRow({
+-      operation_id: unrelatedOperationId,
+-      replica_id: `${SERVICE_ID}-r3`,
+-      status: ReplicaStatus.PENDING,
+-      workflow_step: WORKFLOW_STEP.PENDING,
+-    });
+-    // Seeded after startup so the initial cache replay cannot dispatch it;
+-    // only a broad replay from the retained re-entry could reach it.
+-    const cacheReplicaOperations = [];
+-    const {scheduledTimers, service} = createRetainedVerificationService(
+-      async (operation, options) => {
+-        dispatchCalls.push({operation, options});
+-        return {success: true};
+-      },
+-      {cacheReplicaOperations},
+-    );
+-    let visibleOperationRow = sendingRow;
+-    service.replicaOperationsOwner = {
+-      async getReplicaOperationFromCache(requestedOperationId) {
+-        if (requestedOperationId === operationId) {
+-          return {...visibleOperationRow};
+-        }
+-        if (requestedOperationId === unrelatedOperationId) {
+-          return {...unrelatedPendingRow};
+-        }
+-        return null;
+-      },
+-    };
+-
+-    try {
+-      await service.handleReplicaOperationDispatch({
+-        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+-        [ControlPlaneField.OPERATION_ID]: operationId,
+-        [ControlPlaneField.OPERATION_ROW]: sendingRow,
+-      });
+-      await drainOperationDispatchQueue(service);
+-
+-      t.equal(
+-        dispatchCalls.length,
+-        1,
+-        'the runtime SENDING dispatch should reach the owner once',
+-      );
+-
+-      cacheReplicaOperations.push(unrelatedPendingRow);
+-      visibleOperationRow = durableCreatingRow;
+-      await drainScheduledTimers(
+-        scheduledTimers,
+-        service,
+-        CREATING_STEP_TIMEOUT_MS * 2,
+-      );
+-
+-      t.notOk(
+-        dispatchCalls.some(
+-          ({operation}) => operation?.operationId === unrelatedOperationId,
+-        ),
+-        'the retained re-entry must not dispatch unrelated pending rows',
+-      );
+-      t.ok(
+-        dispatchCalls.every(
+-          ({operation}) => operation?.operationId === operationId,
+-        ),
+-        'the retained re-entry stays bounded to its exact operation row',
++        'success after failure should consume the service retry slot',
+       );
+     } finally {
+       service.stop();
+diff --git a/test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js b/test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cba4faf36abb8fc30e652c5f2a0fcc5dc4092899
+--- /dev/null
++++ b/test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+@@ -0,0 +1,389 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {
++  OperationType,
++  ReplicaStatus,
++} from '../../src/rebalancer/replica-status.js';
++import {
++  ReplicaOperationResponseStatus,
++} from '../../src/rebalancer/replica-operation-constants.js';
++import {createTestCoordinator} from './test-helpers.js';
++
++const SOURCE_NODE_ID = 'source-node';
++const TARGET_NODE_ID = 'target-node';
++const SERVICE_ID = 'svc-owner-retention';
++
++function buildRuntimeOperation(overrides = {}) {
++  const now = Date.now();
++  return {
++    operationId: 'delivered-create-progress-operation',
++    type: OperationType.ADD,
++    partitionId: SERVICE_ID,
++    entityType: 'runtime_service',
++    entityId: SERVICE_ID,
++    replicaId: `${SERVICE_ID}-r1`,
++    sourceNodeId: SOURCE_NODE_ID,
++    targetNodeId: TARGET_NODE_ID,
++    status: ReplicaStatus.PENDING,
++    workflowStep: WORKFLOW_STEP.SENDING,
++    createdAt: now,
++    updatedAt: now,
++    completedAt: null,
++    errorMessage: null,
++    stepsHistory: [],
++    ...overrides,
++  };
++}
++
++function createOwnerHarness() {
++  const timers = [];
++  const coordinator = createTestCoordinator({
++    nodeId: SOURCE_NODE_ID,
++    setTimeoutFn(callback, delayMs) {
++      const timer = {callback, delayMs, cleared: false, fired: false};
++      timers.push(timer);
++      return timer;
++    },
++    clearTimeoutFn(timer) {
++      timer.cleared = true;
++    },
++  });
++  return {coordinator, owner: coordinator.workflowOwner, timers};
++}
++
++test(
++  'delivered CREATE evidence upgrades an existing observed wake without a ' +
++  'second timer and survives deferred operation visibility',
++  async (t) => {
++    const {coordinator, owner, timers} = createOwnerHarness();
++    const operation = buildRuntimeOperation();
++
++    try {
++      owner.scheduleObservedProgressRetry(
++        operation.operationId,
++        'services',
++        'upsert',
++        25,
++      );
++      const originalEntry =
++        owner.observedProgressRetryTimerByOperationId.get(
++          operation.operationId,
++        );
++      const originalTimer = originalEntry.timeoutHandle;
++
++      t.ok(
++        owner.retainDeliveredCreateProgress(
++          operation,
++          {status: ReplicaOperationResponseStatus.INITIATED},
++        ),
++        'delivered CREATE should be retained',
++      );
++      const upgradedEntry =
++        owner.observedProgressRetryTimerByOperationId.get(
++          operation.operationId,
++        );
++      t.equal(
++        owner.observedProgressRetryTimerByOperationId.size,
++        1,
++        'ordinary and delivered evidence share one owner registry entry',
++      );
++      t.equal(
++        upgradedEntry.timeoutHandle,
++        originalTimer,
++        'the earlier observed wake remains the next attempt',
++      );
++      t.equal(
++        upgradedEntry.kind,
++        'delivered_create_progress',
++        'the stronger delivered obligation must dominate the weak wake',
++      );
++
++      originalTimer.fired = true;
++      await originalTimer.callback();
++      const rearmedEntry =
++        owner.observedProgressRetryTimerByOperationId.get(
++          operation.operationId,
++        );
++      t.ok(
++        rearmedEntry,
++        'missing operation-row visibility must rearm the bounded obligation',
++      );
++      t.equal(
++        rearmedEntry.kind,
++        'delivered_create_progress',
++        'visibility deferral must not weaken the retained evidence',
++      );
++      t.equal(
++        timers.filter((timer) => !timer.cleared && !timer.fired).length,
++        1,
++        'only one live timer remains after bounded rearm',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'delivered CREATE starts on the existing observed-progress cadence',
++  async (t) => {
++    const {coordinator, owner} = createOwnerHarness();
++    const operation = buildRuntimeOperation({
++      operationId: 'observed-cadence-operation',
++    });
++
++    try {
++      owner.retainDeliveredCreateProgress(
++        operation,
++        {status: ReplicaOperationResponseStatus.INITIATED},
++      );
++      const retryEntry =
++        owner.observedProgressRetryTimerByOperationId.get(
++          operation.operationId,
++        );
++
++      t.equal(
++        retryEntry?.timeoutHandle?.delayMs,
++        250,
++        'retention must leave repeated visibility attempts inside the budget',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'generic observed cleanup cannot consume stronger delivered evidence',
++  async (t) => {
++    const {coordinator, owner} = createOwnerHarness();
++    const operation = buildRuntimeOperation({
++      operationId: 'delivered-evidence-dominates-cleanup',
++    });
++
++    try {
++      owner.retainDeliveredCreateProgress(
++        operation,
++        {status: ReplicaOperationResponseStatus.IN_PROGRESS},
++      );
++
++      owner.clearObservedProgressRetry(operation.operationId);
++
++      t.ok(
++        owner.observedProgressRetryTimerByOperationId.has(
++          operation.operationId,
++        ),
++        'a stale generic observation must leave delivered evidence owned',
++      );
++      owner.clearObservedProgressRetry(operation.operationId, {
++        includeDeliveredCreateProgress: true,
++      });
++      t.notOk(
++        owner.observedProgressRetryTimerByOperationId.has(
++          operation.operationId,
++        ),
++        'explicit completion cleanup consumes the delivered obligation',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'exact runtime target ACTIVE cache proof satisfies terminal handoff while ' +
++  'system operations keep refresh-only semantics',
++  async (t) => {
++    const operation = buildRuntimeOperation({
++      operationId: 'exact-active-cache-handoff',
++      workflowStep: WORKFLOW_STEP.CREATING,
++    });
++    const coordinator = createTestCoordinator({
++      nodeId: SOURCE_NODE_ID,
++      cacheData: {
++        services: [{
++          service_id: operation.replicaId,
++          service_type: operation.entityType,
++          node_id: operation.targetNodeId,
++          status: ReplicaStatus.ACTIVE,
++        }],
++      },
++      cdcIntegrationService: {
++        async refreshAuthoritativeCacheRow() {
++          return false;
++        },
++      },
++    });
++    const owner = coordinator.workflowOwner;
++
++    try {
++      t.equal(
++        await owner.confirmActiveReplicaTerminalHandoff(operation),
++        true,
++        'an already-aligned exact runtime row does not wait on a no-op refresh',
++      );
++      t.equal(
++        await owner.confirmActiveReplicaTerminalHandoff({
++          ...operation,
++          operationId: 'system-refresh-only-handoff',
++          entityType: 'partition',
++          partitionId: 'nodes-p1',
++        }),
++        false,
++        'system operation terminal handoff retains its refresh-only contract',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'delivered-create retention rejects excluded operation and response shapes',
++  async (t) => {
++    const {coordinator, owner} = createOwnerHarness();
++    const initiated = {status: ReplicaOperationResponseStatus.INITIATED};
++    const cases = [
++      buildRuntimeOperation({
++        operationId: 'system-operation',
++        partitionId: 'nodes-p1',
++      }),
++      buildRuntimeOperation({
++        operationId: 'partition-operation',
++        entityType: 'partition',
++      }),
++      buildRuntimeOperation({
++        operationId: 'remove-operation',
++        type: OperationType.REMOVE,
++      }),
++      buildRuntimeOperation({
++        operationId: 'replace-remove-operation',
++        type: OperationType.REPLACE,
++        workflowStep: WORKFLOW_STEP.ACTIVE,
++      }),
++    ];
++
++    try {
++      for (const operation of cases) {
++        t.notOk(
++          owner.retainDeliveredCreateProgress(operation, initiated),
++          `${operation.operationId} must remain outside retention scope`,
++        );
++      }
++      t.notOk(
++        owner.retainDeliveredCreateProgress(
++          buildRuntimeOperation({operationId: 'error-response'}),
++          {status: ReplicaOperationResponseStatus.ERROR},
++        ),
++        'a delivered error response must not retain create progress',
++      );
++      t.equal(
++        owner.observedProgressRetryTimerByOperationId.size,
++        0,
++        'excluded shapes leave no owner work',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test('workflow-owner shutdown clears delivered-create retention', async (t) => {
++  const {coordinator, owner} = createOwnerHarness();
++  const operation = buildRuntimeOperation({operationId: 'shutdown-operation'});
++
++  owner.retainDeliveredCreateProgress(
++    operation,
++    {status: ReplicaOperationResponseStatus.IN_PROGRESS},
++  );
++  const entry =
++    owner.observedProgressRetryTimerByOperationId.get(operation.operationId);
++  t.ok(entry, 'precondition: delivered-create work is retained');
++
++  await coordinator.shutdown();
++
++  t.ok(entry.timeoutHandle.cleared, 'shutdown clears the retained timer');
++  t.equal(
++    owner.observedProgressRetryTimerByOperationId.size,
++    0,
++    'shutdown empties the shared observed-progress registry',
++  );
++});
++
++test(
++  'durable REPLACE target-active progress consumes delivered-create retention',
++  async (t) => {
++    const {coordinator, owner} = createOwnerHarness();
++    const operation = buildRuntimeOperation({
++      operationId: 'replace-target-active-operation',
++      type: OperationType.REPLACE,
++      workflowStep: WORKFLOW_STEP.SYNCING,
++    });
++
++    try {
++      owner.retainDeliveredCreateProgress(
++        operation,
++        {status: ReplicaOperationResponseStatus.COMPLETED},
++      );
++      owner.confirmActiveReplicaTerminalHandoff = async () => true;
++      owner.reconcileReplaceActualActive = async () => true;
++
++      await owner.reconcileActiveReplicaStatus(operation);
++
++      t.notOk(
++        owner.observedProgressRetryTimerByOperationId.has(
++          operation.operationId,
++        ),
++        'a durably applied REPLACE target clears its create obligation',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'a terminal CREATE response consumes retention before owner return',
++  async (t) => {
++    const operation = buildRuntimeOperation({
++      operationId: 'completed-response-operation',
++      workflowStep: WORKFLOW_STEP.PENDING,
++    });
++    const timers = [];
++    const coordinator = createTestCoordinator({
++      nodeId: SOURCE_NODE_ID,
++      cacheData: {replicaOperations: [operation]},
++      setTimeoutFn(callback, delayMs) {
++        const timer = {callback, delayMs, cleared: false};
++        timers.push(timer);
++        return timer;
++      },
++      clearTimeoutFn(timer) {
++        timer.cleared = true;
++      },
++    });
++
++    try {
++      const result =
++        await coordinator.workflowOwner.dispatchOperation(operation.operationId);
++      const durableOperation =
++        await coordinator.repository.queryOperationById(operation.operationId);
++
++      t.ok(result?.success, 'the completed response should succeed');
++      t.equal(durableOperation?.workflowStep, WORKFLOW_STEP.ACTIVE);
++      t.equal(durableOperation?.status, ReplicaStatus.ACTIVE);
++      t.notOk(
++        coordinator.workflowOwner.observedProgressRetryTimerByOperationId.has(
++          operation.operationId,
++        ),
++        'terminal completion must clear the delivered-create entry',
++      );
++      t.ok(
++        timers.every((timer) => timer.cleared),
++        'any timer armed at delivery is cleared during terminal completion',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
+diff --git a/test/scripts/check-operation-dispatch-completion-owner.test.js b/test/scripts/check-operation-dispatch-completion-owner.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..654d3693d02777b4539dabca7b663684cb28bc50
+--- /dev/null
++++ b/test/scripts/check-operation-dispatch-completion-owner.test.js
+@@ -0,0 +1,163 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  collectOperationDispatchCompletionViolations,
++  loadSourceByPath,
++} from '../../scripts/check-operation-dispatch-completion-owner.js';
++
++const DISPATCH_PATH =
++  'src/rebalancer/operation-workflow-dispatch-response-reconcile.js';
++const OWNER_PATH =
++  'src/rebalancer/operation-workflow-observed-progress-retention.js';
++const RECOVERY_PATH =
++  'src/rebalancer/operation-workflow-recovery-status-reconcile.js';
++const TRANSITION_PATH =
++  'src/rebalancer/operation-workflow-transition-persistence.js';
++
++function mutateSource(sourceByPath, filePath, mutate) {
++  const mutated = new Map(sourceByPath);
++  const source = mutated.get(filePath);
++  const nextSource = mutate(source);
++  if (nextSource === source) {
++    throw new Error(`mutation did not change ${filePath}`);
++  }
++  mutated.set(filePath, nextSource);
++  return mutated;
++}
++
++function violationKinds(sourceByPath) {
++  return new Set(
++    collectOperationDispatchCompletionViolations(sourceByPath)
++      .map((violation) => violation.kind),
++  );
++}
++
++test('operation dispatch completion owner census is green on source',
++  async (t) => {
++    const sourceByPath = await loadSourceByPath();
++    t.same(
++      collectOperationDispatchCompletionViolations(sourceByPath),
++      [],
++      'the checked-in owner cutover has zero structural violations',
++    );
++  });
++
++test('census rejects a delivered success that skips owner retention',
++  async (t) => {
++    const sourceByPath = await loadSourceByPath();
++    const mutated = mutateSource(sourceByPath, DISPATCH_PATH, (source) =>
++      source.replace(
++        'this.retainDeliveredCreateProgress',
++        'this.ownerRetentionRemoved',
++      ),
++    );
++    const kinds = violationKinds(mutated);
++    t.ok(kinds.has('delivered_create_owner_submission_census'));
++    t.ok(kinds.has('delivered_create_owner_dominance'));
++  });
++
++test('census rejects a caller-local target-progress scheduler', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, DISPATCH_PATH, (source) =>
++    `${source}\nservice.scheduleRuntimeTargetProgressDispatchVerification();\n`,
++  );
++  t.ok(
++    violationKinds(mutated).has('caller_local_retention_site'),
++    'a caller-local scheduler must increase the metric',
++  );
++});
++
++test('census rejects create-success response coverage drift', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, OWNER_PATH, (source) =>
++    source.replace(
++      'ReplicaOperationResponseStatus.COMPLETED,',
++      'ReplicaOperationResponseStatus.ERROR,',
++    ),
++  );
++  t.ok(
++    violationKinds(mutated).has('create_success_status_coverage'),
++    'status-table drift must increase the metric',
++  );
++});
++
++test('census rejects missing terminal cleanup', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, TRANSITION_PATH, (source) =>
++    source.replaceAll(
++      '    this.clearObservedProgressRetry(operation?.operationId, {\n' +
++      '      includeDeliveredCreateProgress: true,\n' +
++      '    });\n',
++      '',
++    ),
++  );
++  t.ok(
++    violationKinds(mutated).has('terminal_retention_cleanup'),
++    'terminal cleanup removal must increase the metric',
++  );
++});
++
++test('census rejects weak terminal cleanup', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, TRANSITION_PATH, (source) =>
++    source.replaceAll(
++      'includeDeliveredCreateProgress: true',
++      'includeDeliveredCreateProgress: false',
++    ),
++  );
++  t.ok(
++    violationKinds(mutated).has('terminal_retention_cleanup'),
++    'terminal cleanup must explicitly consume delivered-create retention',
++  );
++});
++
++test('census rejects missing REPLACE target-active cleanup', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, RECOVERY_PATH, (source) =>
++    source.replace(
++      '        this.clearObservedProgressRetry(operation.operationId, {\n' +
++      '          includeDeliveredCreateProgress: true,\n' +
++      '        });\n',
++      '',
++    ),
++  );
++  t.ok(
++    violationKinds(mutated).has('replace_target_active_retention_cleanup'),
++    'durable REPLACE target progress must consume owner retention',
++  );
++});
++
++test('census rejects weak REPLACE target-active cleanup', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, RECOVERY_PATH, (source) =>
++    source.replace(
++      'includeDeliveredCreateProgress: true',
++      'includeDeliveredCreateProgress: false',
++    ),
++  );
++  t.ok(
++    violationKinds(mutated).has('replace_target_active_retention_cleanup'),
++    'REPLACE target completion must explicitly consume delivered-create retention',
++  );
++});
++
++test('census rejects a second CREATE delivery sink', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, DISPATCH_PATH, (source) =>
++    `${source}\nowner.deliverReplicaOperationRequest();\n`,
++  );
++  t.ok(
++    violationKinds(mutated).has('create_delivery_sink_census'),
++    'a second transport sink must increase the metric',
++  );
++});
++
++test('census rejects a parallel delivered-create registry', async (t) => {
++  const sourceByPath = await loadSourceByPath();
++  const mutated = mutateSource(sourceByPath, OWNER_PATH, (source) =>
++    `${source}\nthis.operationDeliveredCreateProgress = new Map();\n`,
++  );
++  t.ok(
++    violationKinds(mutated).has('parallel_retention_registry'),
++    'a parallel map must increase the metric',
++  );
++});

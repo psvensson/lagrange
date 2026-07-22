@@ -2,7 +2,6 @@ import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared
 import {ReplicaDispatchServiceLifecycle} from './replica-dispatch-service-lifecycle.js';
 import {
   DISPATCH_PENDING_WORKFLOW_STEPS,
-  RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
   RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
   isActiveReplaceSourceRemovalPhase,
 } from '../rebalancer/replica-operation-step-policy.js';
@@ -242,24 +241,6 @@ class ReplicaDispatchReplayReadiness extends ReplicaDispatchServiceLifecycle {
     return this.isRuntimeTargetProgressRowInSteps(
       operation,
       RUNTIME_TARGET_PROGRESS_WAKE_WORKFLOW_STEPS,
-    );
-  }
-
-  /**
-   * Retention scope of the same row shape: whether a just-successful dispatch
-   * keeps its one-shot target-progress verification. The dispatch request row
-   * is built before the dispatch path claims SENDING, so the retained payload
-   * can still say PENDING while the durable row has advanced — the successful
-   * dispatch itself is the progress proof. Never used for wake admission.
-   *
-   * @param {Object} operation
-   * @return {boolean}
-   * @private
-   */
-  isRuntimeTargetProgressRetentionRow(operation) {
-    return this.isRuntimeTargetProgressRowInSteps(
-      operation,
-      RUNTIME_TARGET_PROGRESS_RETENTION_WORKFLOW_STEPS,
     );
   }
 

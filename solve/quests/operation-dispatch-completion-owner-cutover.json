@@ -1,0 +1,74 @@
+{
+  "id": "operation-dispatch-completion-owner-cutover",
+  "authoringContractVersion": 1,
+  "statement": "Every successful create-phase replica dispatch, whether initiated by ReplicaDispatchService or directly by the operation workflow coordinator, submits one classified delivered outcome to operation_workflow_owner and creates the same bounded retained target-progress obligation before caller completion; in the exact 2026-07-21T17:59:22 coordinator-first ordering (dispatch-service visibility defer, coordinator CREATE_REPLICA delivery before the deferred retry, target completion, duplicate deferred delivery, missing local operation-row visibility, and lost executor-outcome handoff), the canonical source owner applies exact-target ACTIVE evidence to the durable CREATING runtime-service ADD, reaches durable ACTIVE, and releases the operation-budget slot, while duplicate delivery is idempotent, terminal and shutdown cleanup leave no retained work, system-operation behavior is unchanged, every in-scope delivered-success exit is covered by a structural census, no timeout or budget is widened, and no new timer family, retry registry, cache, queue, workflow engine, or transport bypass is introduced.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "runtime-service-add-creating-owner-rearm",
+    "planDoc": "solve/epics/operation-dispatch-completion-continuity.md",
+    "draftedAtCommit": "40a6a0c5d9bfafa71ab13de092b5402ed69f3e0b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "operation-dispatch-completion-owner-cutover",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-dispatch-completion-owner-cutover-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "operation-dispatch-completion-owner-cutover",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "red-before-source",
+      "statement": "Before changing production source, a deterministic production-seam test must replay the exact coordinator-first ordering from the immutable 2026-07-21T18:06 run and fail on current HEAD because successful coordinator delivery leaves no canonical retained target-progress obligation; the same proof must be red on exact source revert after the fix."
+    },
+    {
+      "id": "single-owner-cutover",
+      "statement": "Extend operation_workflow_owner as the sole semantic owner of successful-delivery progress retention. ReplicaDispatchService and coordinator callers may submit normalized delivery outcomes but must not independently decide, arm, clear, reconstruct, or shadow retained progress. Retire the caller-local authority in the same change; no dual path or fallback survives."
+    },
+    {
+      "id": "existing-machinery-only",
+      "statement": "Reuse the existing retained target-progress verification, executor-outcome retry, workflow-step policy, owner serialization, and operation-budget accounting. Do not add a timer family, retry registry, cache, queue, workflow engine, broad row rediscovery sweep, blind replay, direct handler call, transport bypass, timeout increase, budget increase, or feature flag."
+    },
+    {
+      "id": "progress-safety",
+      "statement": "A delivered transport outcome is evidence to retain, not permission to mark target work complete. Durable ACTIVE requires the existing exact replica_id plus target_node_id ACTIVE services proof through the canonical source owner. Duplicate delivery and redelivery remain idempotent; terminal operations and shutdown leave no retained work; missing or stale operation-row visibility defers without fabricating state."
+    },
+    {
+      "id": "success-path-census",
+      "statement": "Add a machine-checkable structural census that enumerates every in-scope delivered create-dispatch success exit and reports metric zero only when each routes through the canonical owner decision. The census must guard against a future caller-local retention site and must not rely on source comments or log strings as authority."
+    },
+    {
+      "id": "system-semantics-preserved",
+      "statement": "System and priority-control-plane operation semantics, REMOVE dispatch, REPLACE source-removal dispatch, safety admission, workflow-step monotonicity, and operation budgets remain unchanged unless the deterministic proof explicitly exercises the shared create-success contract; negative controls must cover excluded paths."
+    },
+    {
+      "id": "hot-path-live-ab",
+      "statement": "Because the cutover changes retry/recovery handling, terminal handoff requires a controlled live A/B after deterministic proof: at least two runs with the fixed source and at least two with the exact runtime cutover reverted, using the same scenario and comparing engagement, duplicate CREATE delivery, stranded CREATING rows, operation-budget holds, aggregate errors, and outcome. Run analyze:latent-blockers and the statistical-run preflight first; do not use live runs as the iteration loop."
+    },
+    {
+      "id": "residual-closure-inventory",
+      "statement": "Before terminal handoff, record the complete success-path consumer inventory: owner cutover, direct callers, tail wakes and outcome consumers, diagnostics, terminal/shutdown deletion work, static census, deterministic proof, model applicability, and live engagement. Any genuinely out-of-scope residual must become a named successor linked to the epic before this Quest can close."
+    }
+  ]
+}

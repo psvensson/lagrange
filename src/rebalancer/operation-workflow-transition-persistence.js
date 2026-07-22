@@ -218,6 +218,9 @@ class OperationWorkflowTransitionPersistence
    */
   async completeOperation(operation) {
     this.clearDispatchRetry(operation?.operationId);
+    this.clearObservedProgressRetry(operation?.operationId, {
+      includeDeliveredCreateProgress: true,
+    });
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
     this.clearExecutorOutcomeRetry(operation?.operationId);
     const now = Date.now();
@@ -359,6 +362,9 @@ class OperationWorkflowTransitionPersistence
    */
   async failOperation(operation, errorMessage, options = {}) {
     this.clearDispatchRetry(operation?.operationId);
+    this.clearObservedProgressRetry(operation?.operationId, {
+      includeDeliveredCreateProgress: true,
+    });
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
     this.clearExecutorOutcomeRetry(operation?.operationId);
     const now = Date.now();

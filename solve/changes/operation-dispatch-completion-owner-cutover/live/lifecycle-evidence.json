@@ -1,0 +1,2261 @@
+{
+  "schemaVersion": 1,
+  "questId": "operation-dispatch-completion-owner-cutover",
+  "generatedAt": "2026-07-22T01:36:35.976Z",
+  "extractionContract": {
+    "logs": "JSON records parsed from node-{0..4}.log in each hash-bound raw archive",
+    "operations": "largest replica_operations SQLite snapshot for svc-movielens-topn",
+    "reservations": "largest storage_reservations SQLite snapshot for svc-movielens-topn",
+    "duplicateMetric": "per operation max(0, target CREATE handler invocations - 1); source CREATE dispatches are reported separately",
+    "terminalRows": [
+      "ACTIVE",
+      "REMOVED"
+    ],
+    "residue": "non-terminal runtime operation rows plus runtime reservations not released"
+  },
+  "runs": [
+    {
+      "id": "fixed-evidence-1",
+      "side": "fixed",
+      "sourceIdentity": {
+        "expectedFingerprint": "bb6d8988260ac9ac",
+        "observedFingerprints": [
+          "bb6d8988260ac9ac"
+        ],
+        "everyNodeMatched": true,
+        "bootRecords": [
+          {
+            "logFile": "node-0.log",
+            "line": 4,
+            "time": "2026-07-22T01:04:36.344Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-0",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-1.log",
+            "line": 4,
+            "time": "2026-07-22T01:04:52.297Z",
+            "nodeId": "228fd917-bbae-4d86-a491-761c6002e8d8",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-1",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-2.log",
+            "line": 4,
+            "time": "2026-07-22T01:04:52.285Z",
+            "nodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-2",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-3.log",
+            "line": 4,
+            "time": "2026-07-22T01:04:52.272Z",
+            "nodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-3",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-4.log",
+            "line": 4,
+            "time": "2026-07-22T01:04:52.264Z",
+            "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-4",
+            "msg": "Distributed Database System starting"
+          }
+        ]
+      },
+      "rawArchive": {
+        "retainedPath": "/home/peter/lagrange-demo-data/service-data-affinity-demo-archive/quest-owner-cutover-fixed-evidence-run-1.tar.gz",
+        "sha256": "95450f834b3450a793feb7b3fdff790892d5cba11f464418418192e0cfc098ee"
+      },
+      "harnessReport": {
+        "repositoryPath": "solve/changes/operation-dispatch-completion-owner-cutover/live/fixed-evidence-run-1-owner-pass-downstream-stall.report.json",
+        "sha256": "c91e8253c06e5457efdebde5fd23129de4a7952c83359f8a97f360b09696c090",
+        "timestamp": "2026-07-22T01:23:50.847Z",
+        "summary": {
+          "total": 1,
+          "passed": 0,
+          "failed": 1
+        },
+        "verdict": "FAIL"
+      },
+      "durableSnapshots": {
+        "replicaOperationsDatabase": "node-0/partitions/replica_operations-p1/replica_operations-p1-r3.db",
+        "replicaOperationsSql": "SELECT operation_id,type,partition_id,entity_type,entity_id,replica_id,source_node_id,target_node_id,status,workflow_step,created_at,updated_at,completed_at,error_message FROM replica_operations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;",
+        "storageReservationsDatabase": "node-0/partitions/storage_reservations-p1/storage_reservations-p1-r1.db",
+        "storageReservationsSql": "SELECT reservation_id,operation_id,status,created_at,updated_at,expires_at,released_at FROM storage_reservations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;"
+      },
+      "summary": {
+        "runtimeOperationCount": 4,
+        "canonicalSourceCreateDispatchCount": 4,
+        "targetCreateHandlerInvocationCount": 10,
+        "repeatedTargetCreateHandlerInvocationCount": 6,
+        "nonTerminalOperationRowCount": 0,
+        "unreleasedReservationCount": 0,
+        "missingOwnerCompletionLogCount": 0
+      },
+      "operations": [
+        {
+          "operationId": "7ca4530c-f360-4866-89fd-7d13aad447ed",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 8655,
+            "time": "2026-07-22T01:13:14.305Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 8770,
+              "time": "2026-07-22T01:13:14.941Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "target": "00b8a074-82c0-4295-9b66-89a46868e447/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-4.log",
+              "line": 4099,
+              "time": "2026-07-22T01:13:14.942Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-4.log",
+              "line": 4112,
+              "time": "2026-07-22T01:13:15.681Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-4.log",
+              "line": 4102,
+              "time": "2026-07-22T01:13:14.950Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 8678,
+              "time": "2026-07-22T01:13:14.662Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 8801,
+              "time": "2026-07-22T01:13:15.670Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 9660,
+            "time": "2026-07-22T01:15:06.384Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 9659,
+            "time": "2026-07-22T01:15:06.384Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "7ca4530c-f360-4866-89fd-7d13aad447ed",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r1",
+            "source_node_id": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "target_node_id": "00b8a074-82c0-4295-9b66-89a46868e447",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784682794304,
+            "updated_at": 1784682906351,
+            "completed_at": 1784682906351,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-7ca4530c-f360-4866-89fd-7d13aad447ed",
+            "operation_id": "7ca4530c-f360-4866-89fd-7d13aad447ed",
+            "status": "released",
+            "created_at": 1784682794504,
+            "updated_at": 1784682906380,
+            "expires_at": 1784683094504,
+            "released_at": 1784682906380
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 2,
+            "repeatedTargetCreateHandlerInvocations": 1,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "3c8e7c2d-ee57-42a5-98c7-dceb6ac0bc7c",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 10633,
+            "time": "2026-07-22T01:16:19.664Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 10680,
+              "time": "2026-07-22T01:16:21.319Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "target": "7dab4f35-a422-47dc-8362-1c24b2879dd1/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-2.log",
+              "line": 1183,
+              "time": "2026-07-22T01:16:21.320Z",
+              "nodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 1187,
+              "time": "2026-07-22T01:16:21.720Z",
+              "nodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 1189,
+              "time": "2026-07-22T01:16:21.794Z",
+              "nodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 1191,
+              "time": "2026-07-22T01:16:21.824Z",
+              "nodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 1193,
+              "time": "2026-07-22T01:16:21.863Z",
+              "nodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-2.log",
+              "line": 1186,
+              "time": "2026-07-22T01:16:21.329Z",
+              "nodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 10668,
+              "time": "2026-07-22T01:16:21.246Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 10712,
+              "time": "2026-07-22T01:16:21.692Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 10723,
+            "time": "2026-07-22T01:16:21.948Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 10722,
+            "time": "2026-07-22T01:16:21.948Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "3c8e7c2d-ee57-42a5-98c7-dceb6ac0bc7c",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r2",
+            "source_node_id": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "target_node_id": "7dab4f35-a422-47dc-8362-1c24b2879dd1",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784682979664,
+            "updated_at": 1784682981909,
+            "completed_at": 1784682981909,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-3c8e7c2d-ee57-42a5-98c7-dceb6ac0bc7c",
+            "operation_id": "3c8e7c2d-ee57-42a5-98c7-dceb6ac0bc7c",
+            "status": "released",
+            "created_at": 1784682980704,
+            "updated_at": 1784682981945,
+            "expires_at": 1784683280704,
+            "released_at": 1784682981945
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 5,
+            "repeatedTargetCreateHandlerInvocations": 4,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "replace-op-89b975f3785daf6185ccb67fe8b43fc1",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 11382,
+            "time": "2026-07-22T01:17:22.061Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "type": "REPLACE",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-4.log",
+              "line": 5971,
+              "time": "2026-07-22T01:17:22.337Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "target": "7314e152-1f5a-4f58-b775-ddcc58a8c33c/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-3.log",
+              "line": 1279,
+              "time": "2026-07-22T01:17:22.337Z",
+              "nodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "replace-replica-6ea0dcaf0e6d26e878539c79692d2bf5",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-3.log",
+              "line": 1282,
+              "time": "2026-07-22T01:17:22.345Z",
+              "nodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "replace-replica-6ea0dcaf0e6d26e878539c79692d2bf5",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-4.log",
+              "line": 5970,
+              "time": "2026-07-22T01:17:22.337Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-4.log",
+              "line": 5974,
+              "time": "2026-07-22T01:17:22.380Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-4.log",
+              "line": 5977,
+              "time": "2026-07-22T01:17:22.479Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "previousStep": "CREATING",
+              "newStep": "ACTIVE",
+              "reason": "dispatch_already_exists",
+              "status": "active",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-4.log",
+              "line": 5982,
+              "time": "2026-07-22T01:17:22.500Z",
+              "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+              "previousStep": "ACTIVE",
+              "newStep": "STOPPING",
+              "reason": "dispatch_stopping",
+              "status": "removing",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-4.log",
+            "line": 6215,
+            "time": "2026-07-22T01:17:41.953Z",
+            "nodeId": "00b8a074-82c0-4295-9b66-89a46868e447",
+            "type": "REPLACE",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": null,
+          "durableOperationRow": {
+            "operation_id": "replace-op-89b975f3785daf6185ccb67fe8b43fc1",
+            "type": "REPLACE",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "replace-replica-6ea0dcaf0e6d26e878539c79692d2bf5",
+            "source_node_id": "00b8a074-82c0-4295-9b66-89a46868e447",
+            "target_node_id": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+            "status": "removed",
+            "workflow_step": "REMOVED",
+            "created_at": 1784683042061,
+            "updated_at": 1784683042506,
+            "completed_at": 1784683042506,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-replace-op-89b975f3785daf6185ccb67fe8b43fc1",
+            "operation_id": "replace-op-89b975f3785daf6185ccb67fe8b43fc1",
+            "status": "released",
+            "created_at": 1784683042249,
+            "updated_at": 1784683043224,
+            "expires_at": 1784683342249,
+            "released_at": 1784683043224
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "517db299-1246-49be-849b-66f48b70ee2f",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 12267,
+            "time": "2026-07-22T01:18:26.650Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 12278,
+              "time": "2026-07-22T01:18:26.811Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "target": "7314e152-1f5a-4f58-b775-ddcc58a8c33c/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-3.log",
+              "line": 1556,
+              "time": "2026-07-22T01:18:26.811Z",
+              "nodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r3",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-3.log",
+              "line": 1560,
+              "time": "2026-07-22T01:18:26.844Z",
+              "nodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r3",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-3.log",
+              "line": 1559,
+              "time": "2026-07-22T01:18:26.814Z",
+              "nodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r3",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 12277,
+              "time": "2026-07-22T01:18:26.811Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 12285,
+              "time": "2026-07-22T01:18:26.839Z",
+              "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 12300,
+            "time": "2026-07-22T01:18:27.535Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 12299,
+            "time": "2026-07-22T01:18:27.535Z",
+            "nodeId": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "517db299-1246-49be-849b-66f48b70ee2f",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r3",
+            "source_node_id": "8a39c6ba-21e8-480d-8562-39c2f440d410",
+            "target_node_id": "7314e152-1f5a-4f58-b775-ddcc58a8c33c",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784683106650,
+            "updated_at": 1784683107055,
+            "completed_at": 1784683107055,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-517db299-1246-49be-849b-66f48b70ee2f",
+            "operation_id": "517db299-1246-49be-849b-66f48b70ee2f",
+            "status": "released",
+            "created_at": 1784683106747,
+            "updated_at": 1784683107517,
+            "expires_at": 1784683406747,
+            "released_at": 1784683107517
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 2,
+            "repeatedTargetCreateHandlerInvocations": 1,
+            "targetCreateCompletions": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "fixed-evidence-2",
+      "side": "fixed",
+      "sourceIdentity": {
+        "expectedFingerprint": "bb6d8988260ac9ac",
+        "observedFingerprints": [
+          "bb6d8988260ac9ac"
+        ],
+        "everyNodeMatched": true,
+        "bootRecords": [
+          {
+            "logFile": "node-0.log",
+            "line": 4,
+            "time": "2026-07-22T01:24:52.743Z",
+            "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-0",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-1.log",
+            "line": 4,
+            "time": "2026-07-22T01:25:05.230Z",
+            "nodeId": "fdf83210-b68a-40d4-ac05-35cf8def15d1",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-1",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-2.log",
+            "line": 4,
+            "time": "2026-07-22T01:25:05.246Z",
+            "nodeId": "43010ddf-338b-44c9-ba47-bc110d25bded",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-2",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-3.log",
+            "line": 4,
+            "time": "2026-07-22T01:25:05.234Z",
+            "nodeId": "ced5889d-7822-4780-8e2d-7eda006be9c8",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-3",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-4.log",
+            "line": 4,
+            "time": "2026-07-22T01:25:05.250Z",
+            "nodeId": "c12b9f72-0532-4857-8f0c-8be55fa508b0",
+            "bootedSrcFingerprint": "bb6d8988260ac9ac",
+            "dataDir": "/media/peter/4509da27-4751-4dee-b366-f3983d0777251/peter/projects/something/data/examples/service-data-affinity-demo/node-4",
+            "msg": "Distributed Database System starting"
+          }
+        ]
+      },
+      "rawArchive": {
+        "retainedPath": "/home/peter/lagrange-demo-data/service-data-affinity-demo-archive/quest-owner-cutover-fixed-evidence-run-2.tar.gz",
+        "sha256": "a77c565c1877e1bfd92785c5dbcd42b182f08d6c05d4f02c6ffc22bac34f4126"
+      },
+      "harnessReport": {
+        "repositoryPath": "solve/changes/operation-dispatch-completion-owner-cutover/live/fixed-evidence-run-2-pass.report.json",
+        "sha256": "28174f05df969267382f1e6e83db22d9f7486e1f4781e2c65a9d2c71205dffb0",
+        "timestamp": "2026-07-22T01:32:08.690Z",
+        "summary": {
+          "total": 1,
+          "passed": 1,
+          "failed": 0
+        },
+        "verdict": "PASS"
+      },
+      "durableSnapshots": {
+        "replicaOperationsDatabase": "node-0/partitions/replica_operations-p1/replica_operations-p1-r3.db",
+        "replicaOperationsSql": "SELECT operation_id,type,partition_id,entity_type,entity_id,replica_id,source_node_id,target_node_id,status,workflow_step,created_at,updated_at,completed_at,error_message FROM replica_operations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;",
+        "storageReservationsDatabase": "node-0/partitions/storage_reservations-p1/storage_reservations-p1-r1.db",
+        "storageReservationsSql": "SELECT reservation_id,operation_id,status,created_at,updated_at,expires_at,released_at FROM storage_reservations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;"
+      },
+      "summary": {
+        "runtimeOperationCount": 2,
+        "canonicalSourceCreateDispatchCount": 2,
+        "targetCreateHandlerInvocationCount": 2,
+        "repeatedTargetCreateHandlerInvocationCount": 0,
+        "nonTerminalOperationRowCount": 0,
+        "unreleasedReservationCount": 0,
+        "missingOwnerCompletionLogCount": 0
+      },
+      "operations": [
+        {
+          "operationId": "0ec46aa4-4cd7-4526-a139-e399934b5d9a",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7267,
+            "time": "2026-07-22T01:30:44.931Z",
+            "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "ced5889d-7822-4780-8e2d-7eda006be9c8",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 7276,
+              "time": "2026-07-22T01:30:45.204Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "target": "ced5889d-7822-4780-8e2d-7eda006be9c8/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-3.log",
+              "line": 998,
+              "time": "2026-07-22T01:30:45.204Z",
+              "nodeId": "ced5889d-7822-4780-8e2d-7eda006be9c8",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-3.log",
+              "line": 1001,
+              "time": "2026-07-22T01:30:45.209Z",
+              "nodeId": "ced5889d-7822-4780-8e2d-7eda006be9c8",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7275,
+              "time": "2026-07-22T01:30:45.204Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 7286,
+              "time": "2026-07-22T01:30:45.287Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 7294,
+            "time": "2026-07-22T01:30:45.452Z",
+            "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "ced5889d-7822-4780-8e2d-7eda006be9c8",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 7293,
+            "time": "2026-07-22T01:30:45.452Z",
+            "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "0ec46aa4-4cd7-4526-a139-e399934b5d9a",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r1",
+            "source_node_id": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "target_node_id": "ced5889d-7822-4780-8e2d-7eda006be9c8",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784683844931,
+            "updated_at": 1784683845308,
+            "completed_at": 1784683845308,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-0ec46aa4-4cd7-4526-a139-e399934b5d9a",
+            "operation_id": "0ec46aa4-4cd7-4526-a139-e399934b5d9a",
+            "status": "released",
+            "created_at": 1784683845161,
+            "updated_at": 1784683845449,
+            "expires_at": 1784684145161,
+            "released_at": 1784683845449
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "aa4e6eec-b248-492e-afea-953aa5866731",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7778,
+            "time": "2026-07-22T01:31:42.290Z",
+            "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 7790,
+              "time": "2026-07-22T01:31:42.465Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "target": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-0.log",
+              "line": 7791,
+              "time": "2026-07-22T01:31:42.466Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7794,
+              "time": "2026-07-22T01:31:42.490Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7789,
+              "time": "2026-07-22T01:31:42.465Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 7809,
+              "time": "2026-07-22T01:31:42.831Z",
+              "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 7817,
+            "time": "2026-07-22T01:31:43.004Z",
+            "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 7816,
+            "time": "2026-07-22T01:31:43.004Z",
+            "nodeId": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "aa4e6eec-b248-492e-afea-953aa5866731",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r2",
+            "source_node_id": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "target_node_id": "5b59556a-b625-4ec3-92ae-c08c03dfe7cb",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784683902290,
+            "updated_at": 1784683902834,
+            "completed_at": 1784683902834,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-aa4e6eec-b248-492e-afea-953aa5866731",
+            "operation_id": "aa4e6eec-b248-492e-afea-953aa5866731",
+            "status": "released",
+            "created_at": 1784683902388,
+            "updated_at": 1784683903001,
+            "expires_at": 1784684202388,
+            "released_at": 1784683903001
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "reverted-final-1",
+      "side": "exact-cutover-reverted",
+      "sourceIdentity": {
+        "expectedFingerprint": "92361311ca67c2c4",
+        "observedFingerprints": [
+          "92361311ca67c2c4"
+        ],
+        "everyNodeMatched": true,
+        "bootRecords": [
+          {
+            "logFile": "node-0.log",
+            "line": 4,
+            "time": "2026-07-22T00:05:36.156Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-0",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-1.log",
+            "line": 4,
+            "time": "2026-07-22T00:05:49.445Z",
+            "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-1",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-2.log",
+            "line": 4,
+            "time": "2026-07-22T00:05:49.448Z",
+            "nodeId": "ba0a7674-0e94-447a-b104-49226e40e89e",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-2",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-3.log",
+            "line": 4,
+            "time": "2026-07-22T00:05:49.441Z",
+            "nodeId": "5324f6ad-2525-4756-9a3c-1971d420541b",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-3",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-4.log",
+            "line": 4,
+            "time": "2026-07-22T00:05:49.442Z",
+            "nodeId": "6e9e8010-ea2e-4b8b-a869-8a9de5be0ad4",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-4",
+            "msg": "Distributed Database System starting"
+          }
+        ]
+      },
+      "rawArchive": {
+        "retainedPath": "/home/peter/lagrange-demo-data/service-data-affinity-demo-archive/quest-owner-cutover-reverted-final-run-1.tar.gz",
+        "sha256": "c31bf4a4d5089b7631bde643375e15a7694b475174d1a264f12cacb4d7d87b8f"
+      },
+      "harnessReport": {
+        "repositoryPath": "solve/changes/operation-dispatch-completion-owner-cutover/live/reverted-final-run-1-owner-pass-downstream-stall.report.json",
+        "sha256": "983c5ed001b3f2f1c3f7ca5616838c2cbac0e812d76409429eb585295b05045d",
+        "timestamp": "2026-07-22T00:18:42.788Z",
+        "summary": {
+          "total": 1,
+          "passed": 0,
+          "failed": 1
+        },
+        "verdict": "FAIL"
+      },
+      "durableSnapshots": {
+        "replicaOperationsDatabase": "node-0/partitions/replica_operations-p1/replica_operations-p1-r3.db",
+        "replicaOperationsSql": "SELECT operation_id,type,partition_id,entity_type,entity_id,replica_id,source_node_id,target_node_id,status,workflow_step,created_at,updated_at,completed_at,error_message FROM replica_operations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;",
+        "storageReservationsDatabase": "node-0/partitions/storage_reservations-p1/storage_reservations-p1-r1.db",
+        "storageReservationsSql": "SELECT reservation_id,operation_id,status,created_at,updated_at,expires_at,released_at FROM storage_reservations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;"
+      },
+      "summary": {
+        "runtimeOperationCount": 4,
+        "canonicalSourceCreateDispatchCount": 4,
+        "targetCreateHandlerInvocationCount": 6,
+        "repeatedTargetCreateHandlerInvocationCount": 2,
+        "nonTerminalOperationRowCount": 0,
+        "unreleasedReservationCount": 0,
+        "missingOwnerCompletionLogCount": 0
+      },
+      "operations": [
+        {
+          "operationId": "05ae9ce4-cad2-4ace-9ee4-33e9b6390c93",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7319,
+            "time": "2026-07-22T00:11:24.004Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 7336,
+              "time": "2026-07-22T00:11:24.243Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "target": "08b47167-ba12-495f-91f2-e426612e0207/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-1.log",
+              "line": 762,
+              "time": "2026-07-22T00:11:24.253Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-1.log",
+              "line": 766,
+              "time": "2026-07-22T00:11:24.332Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-1.log",
+              "line": 765,
+              "time": "2026-07-22T00:11:24.299Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7332,
+              "time": "2026-07-22T00:11:24.206Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 7337,
+              "time": "2026-07-22T00:11:24.259Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 7350,
+            "time": "2026-07-22T00:11:24.451Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 7349,
+            "time": "2026-07-22T00:11:24.451Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "05ae9ce4-cad2-4ace-9ee4-33e9b6390c93",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r1",
+            "source_node_id": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "target_node_id": "08b47167-ba12-495f-91f2-e426612e0207",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784679084004,
+            "updated_at": 1784679084378,
+            "completed_at": 1784679084378,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-05ae9ce4-cad2-4ace-9ee4-33e9b6390c93",
+            "operation_id": "05ae9ce4-cad2-4ace-9ee4-33e9b6390c93",
+            "status": "released",
+            "created_at": 1784679084121,
+            "updated_at": 1784679084448,
+            "expires_at": 1784679384121,
+            "released_at": 1784679084448
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 2,
+            "repeatedTargetCreateHandlerInvocations": 1,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "replace-op-fe5ef14d9d8ca080b38f83c4eddb77e0",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7826,
+            "time": "2026-07-22T00:12:21.299Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "type": "REPLACE",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-1.log",
+              "line": 833,
+              "time": "2026-07-22T00:12:23.420Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "target": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-0.log",
+              "line": 7855,
+              "time": "2026-07-22T00:12:23.422Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "replace-replica-da47d7c796ee2a77686f73a0d893cd36",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7858,
+              "time": "2026-07-22T00:12:23.438Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "replace-replica-da47d7c796ee2a77686f73a0d893cd36",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-1.log",
+              "line": 832,
+              "time": "2026-07-22T00:12:23.418Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-1.log",
+              "line": 838,
+              "time": "2026-07-22T00:12:25.495Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-1.log",
+              "line": 842,
+              "time": "2026-07-22T00:12:27.527Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "previousStep": "CREATING",
+              "newStep": "ACTIVE",
+              "reason": "dispatch_already_exists",
+              "status": "active",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-1.log",
+              "line": 853,
+              "time": "2026-07-22T00:12:30.004Z",
+              "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+              "previousStep": "ACTIVE",
+              "newStep": "STOPPING",
+              "reason": "dispatch_stopping",
+              "status": "removing",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-1.log",
+            "line": 855,
+            "time": "2026-07-22T00:12:32.044Z",
+            "nodeId": "08b47167-ba12-495f-91f2-e426612e0207",
+            "type": "REPLACE",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": null,
+          "durableOperationRow": {
+            "operation_id": "replace-op-fe5ef14d9d8ca080b38f83c4eddb77e0",
+            "type": "REPLACE",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "replace-replica-da47d7c796ee2a77686f73a0d893cd36",
+            "source_node_id": "08b47167-ba12-495f-91f2-e426612e0207",
+            "target_node_id": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "status": "removed",
+            "workflow_step": "REMOVED",
+            "created_at": 1784679141299,
+            "updated_at": 1784679150010,
+            "completed_at": 1784679150010,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-replace-op-fe5ef14d9d8ca080b38f83c4eddb77e0",
+            "operation_id": "replace-op-fe5ef14d9d8ca080b38f83c4eddb77e0",
+            "status": "released",
+            "created_at": 1784679141328,
+            "updated_at": 1784679151451,
+            "expires_at": 1784679441328,
+            "released_at": 1784679151451
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "322cee12-642f-4eda-87cf-3a7fcc6ebf3c",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7833,
+            "time": "2026-07-22T00:12:21.344Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "ba0a7674-0e94-447a-b104-49226e40e89e",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 7840,
+              "time": "2026-07-22T00:12:21.413Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "target": "ba0a7674-0e94-447a-b104-49226e40e89e/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-2.log",
+              "line": 836,
+              "time": "2026-07-22T00:12:21.413Z",
+              "nodeId": "ba0a7674-0e94-447a-b104-49226e40e89e",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 840,
+              "time": "2026-07-22T00:12:21.435Z",
+              "nodeId": "ba0a7674-0e94-447a-b104-49226e40e89e",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-2.log",
+              "line": 839,
+              "time": "2026-07-22T00:12:21.425Z",
+              "nodeId": "ba0a7674-0e94-447a-b104-49226e40e89e",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7838,
+              "time": "2026-07-22T00:12:21.399Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 7843,
+              "time": "2026-07-22T00:12:21.423Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 7854,
+            "time": "2026-07-22T00:12:21.547Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "ba0a7674-0e94-447a-b104-49226e40e89e",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 7853,
+            "time": "2026-07-22T00:12:21.547Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "322cee12-642f-4eda-87cf-3a7fcc6ebf3c",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r2",
+            "source_node_id": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "target_node_id": "ba0a7674-0e94-447a-b104-49226e40e89e",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784679141344,
+            "updated_at": 1784679141469,
+            "completed_at": 1784679141469,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-322cee12-642f-4eda-87cf-3a7fcc6ebf3c",
+            "operation_id": "322cee12-642f-4eda-87cf-3a7fcc6ebf3c",
+            "status": "released",
+            "created_at": 1784679141376,
+            "updated_at": 1784679141544,
+            "expires_at": 1784679441376,
+            "released_at": 1784679141544
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 2,
+            "repeatedTargetCreateHandlerInvocations": 1,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "45d30a49-ac2c-419d-9a6d-cbd38464987f",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 8773,
+            "time": "2026-07-22T00:13:20.418Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 8780,
+              "time": "2026-07-22T00:13:20.617Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "target": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-0.log",
+              "line": 8781,
+              "time": "2026-07-22T00:13:20.618Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r3",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-0.log",
+              "line": 8784,
+              "time": "2026-07-22T00:13:20.625Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r3",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 8779,
+              "time": "2026-07-22T00:13:20.617Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 8788,
+              "time": "2026-07-22T00:13:20.673Z",
+              "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 8792,
+            "time": "2026-07-22T00:13:20.712Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 8791,
+            "time": "2026-07-22T00:13:20.712Z",
+            "nodeId": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "45d30a49-ac2c-419d-9a6d-cbd38464987f",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r3",
+            "source_node_id": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "target_node_id": "0a64e6c5-375f-48cd-b0b8-74a94bf0600c",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784679200418,
+            "updated_at": 1784679200685,
+            "completed_at": 1784679200685,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-45d30a49-ac2c-419d-9a6d-cbd38464987f",
+            "operation_id": "45d30a49-ac2c-419d-9a6d-cbd38464987f",
+            "status": "released",
+            "created_at": 1784679200599,
+            "updated_at": 1784679200710,
+            "expires_at": 1784679500599,
+            "released_at": 1784679200710
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "reverted-final-2",
+      "side": "exact-cutover-reverted",
+      "sourceIdentity": {
+        "expectedFingerprint": "92361311ca67c2c4",
+        "observedFingerprints": [
+          "92361311ca67c2c4"
+        ],
+        "everyNodeMatched": true,
+        "bootRecords": [
+          {
+            "logFile": "node-0.log",
+            "line": 4,
+            "time": "2026-07-22T00:26:17.392Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-0",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-1.log",
+            "line": 4,
+            "time": "2026-07-22T00:26:29.823Z",
+            "nodeId": "66a7d9fd-aa50-4579-b98a-1dbb54552cc0",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-1",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-2.log",
+            "line": 4,
+            "time": "2026-07-22T00:26:29.826Z",
+            "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-2",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-3.log",
+            "line": 4,
+            "time": "2026-07-22T00:26:29.831Z",
+            "nodeId": "0932b664-2e8d-44cf-a443-d22c72b043ab",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-3",
+            "msg": "Distributed Database System starting"
+          },
+          {
+            "logFile": "node-4.log",
+            "line": 4,
+            "time": "2026-07-22T00:26:29.831Z",
+            "nodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+            "bootedSrcFingerprint": "92361311ca67c2c4",
+            "dataDir": "/tmp/session-worktree-9fSuJQ/tree/data/examples/service-data-affinity-demo/node-4",
+            "msg": "Distributed Database System starting"
+          }
+        ]
+      },
+      "rawArchive": {
+        "retainedPath": "/home/peter/lagrange-demo-data/service-data-affinity-demo-archive/quest-owner-cutover-reverted-final-run-2.tar.gz",
+        "sha256": "48a988cde115972834f09187890cf57b8385fbede25c725483b3d56bb59610d5"
+      },
+      "harnessReport": {
+        "repositoryPath": "solve/changes/operation-dispatch-completion-owner-cutover/live/reverted-final-run-2-owner-pass-downstream-stall.report.json",
+        "sha256": "720f1bfdc0df7f9662ea3db536aeb38a858cfaa4ab4de6c38825409c60386453",
+        "timestamp": "2026-07-22T00:39:14.928Z",
+        "summary": {
+          "total": 1,
+          "passed": 0,
+          "failed": 1
+        },
+        "verdict": "FAIL"
+      },
+      "durableSnapshots": {
+        "replicaOperationsDatabase": "node-0/partitions/replica_operations-p1/replica_operations-p1-r3.db",
+        "replicaOperationsSql": "SELECT operation_id,type,partition_id,entity_type,entity_id,replica_id,source_node_id,target_node_id,status,workflow_step,created_at,updated_at,completed_at,error_message FROM replica_operations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;",
+        "storageReservationsDatabase": "node-0/partitions/storage_reservations-p1/storage_reservations-p1-r1.db",
+        "storageReservationsSql": "SELECT reservation_id,operation_id,status,created_at,updated_at,expires_at,released_at FROM storage_reservations WHERE entity_type='runtime_service' AND entity_id='svc-movielens-topn' ORDER BY created_at;"
+      },
+      "summary": {
+        "runtimeOperationCount": 4,
+        "canonicalSourceCreateDispatchCount": 4,
+        "targetCreateHandlerInvocationCount": 5,
+        "repeatedTargetCreateHandlerInvocationCount": 1,
+        "nonTerminalOperationRowCount": 0,
+        "unreleasedReservationCount": 0,
+        "missingOwnerCompletionLogCount": 0
+      },
+      "operations": [
+        {
+          "operationId": "08951e96-e9ec-4a81-9213-cb6b9e975bbd",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7108,
+            "time": "2026-07-22T00:31:53.043Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 7116,
+              "time": "2026-07-22T00:31:53.094Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "target": "42e3878c-a31a-423a-bf72-666e62c50031/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-2.log",
+              "line": 2525,
+              "time": "2026-07-22T00:31:53.094Z",
+              "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-2.log",
+              "line": 2528,
+              "time": "2026-07-22T00:31:53.098Z",
+              "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r1",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7115,
+              "time": "2026-07-22T00:31:53.094Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 7124,
+              "time": "2026-07-22T00:31:53.130Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 7134,
+            "time": "2026-07-22T00:31:53.298Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 7133,
+            "time": "2026-07-22T00:31:53.298Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "08951e96-e9ec-4a81-9213-cb6b9e975bbd",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r1",
+            "source_node_id": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "target_node_id": "42e3878c-a31a-423a-bf72-666e62c50031",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784680313043,
+            "updated_at": 1784680313136,
+            "completed_at": 1784680313136,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-08951e96-e9ec-4a81-9213-cb6b9e975bbd",
+            "operation_id": "08951e96-e9ec-4a81-9213-cb6b9e975bbd",
+            "status": "released",
+            "created_at": 1784680313085,
+            "updated_at": 1784680313293,
+            "expires_at": 1784680613085,
+            "released_at": 1784680313293
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "replace-op-8e2552be8950e687efa72df8772aec85",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7685,
+            "time": "2026-07-22T00:33:00.805Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "type": "REPLACE",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-2.log",
+              "line": 3191,
+              "time": "2026-07-22T00:33:00.970Z",
+              "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+              "target": "bc82abc2-7a0c-4248-bfbe-c19f818184c4/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-4.log",
+              "line": 668,
+              "time": "2026-07-22T00:33:00.970Z",
+              "nodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "replace-replica-a369f34e7e5fa0244b33dcf0f8fd0768",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            },
+            {
+              "logFile": "node-4.log",
+              "line": 672,
+              "time": "2026-07-22T00:33:01.013Z",
+              "nodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "replace-replica-a369f34e7e5fa0244b33dcf0f8fd0768",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-4.log",
+              "line": 671,
+              "time": "2026-07-22T00:33:00.982Z",
+              "nodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "replace-replica-a369f34e7e5fa0244b33dcf0f8fd0768",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-2.log",
+              "line": 3190,
+              "time": "2026-07-22T00:33:00.970Z",
+              "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 3195,
+              "time": "2026-07-22T00:33:01.006Z",
+              "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 3201,
+              "time": "2026-07-22T00:33:01.121Z",
+              "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+              "previousStep": "CREATING",
+              "newStep": "ACTIVE",
+              "reason": "dispatch_already_exists",
+              "status": "active",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-2.log",
+              "line": 3209,
+              "time": "2026-07-22T00:33:01.155Z",
+              "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+              "previousStep": "ACTIVE",
+              "newStep": "STOPPING",
+              "reason": "dispatch_stopping",
+              "status": "removing",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-2.log",
+            "line": 3216,
+            "time": "2026-07-22T00:33:01.284Z",
+            "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+            "type": "REPLACE",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-2.log",
+            "line": 3215,
+            "time": "2026-07-22T00:33:01.284Z",
+            "nodeId": "42e3878c-a31a-423a-bf72-666e62c50031",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "replace-op-8e2552be8950e687efa72df8772aec85",
+            "type": "REPLACE",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "replace-replica-a369f34e7e5fa0244b33dcf0f8fd0768",
+            "source_node_id": "42e3878c-a31a-423a-bf72-666e62c50031",
+            "target_node_id": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+            "status": "removed",
+            "workflow_step": "REMOVED",
+            "created_at": 1784680380805,
+            "updated_at": 1784680381174,
+            "completed_at": 1784680381174,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-replace-op-8e2552be8950e687efa72df8772aec85",
+            "operation_id": "replace-op-8e2552be8950e687efa72df8772aec85",
+            "status": "released",
+            "created_at": 1784680380853,
+            "updated_at": 1784680381254,
+            "expires_at": 1784680680853,
+            "released_at": 1784680381254
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 2,
+            "repeatedTargetCreateHandlerInvocations": 1,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "5b512bd3-5cf8-4440-8f33-e732a3b7a38c",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 7698,
+            "time": "2026-07-22T00:33:00.898Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "66a7d9fd-aa50-4579-b98a-1dbb54552cc0",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 7709,
+              "time": "2026-07-22T00:33:01.068Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "target": "66a7d9fd-aa50-4579-b98a-1dbb54552cc0/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-1.log",
+              "line": 810,
+              "time": "2026-07-22T00:33:01.077Z",
+              "nodeId": "66a7d9fd-aa50-4579-b98a-1dbb54552cc0",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-1.log",
+              "line": 813,
+              "time": "2026-07-22T00:33:01.095Z",
+              "nodeId": "66a7d9fd-aa50-4579-b98a-1dbb54552cc0",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r2",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 7708,
+              "time": "2026-07-22T00:33:01.068Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 7716,
+              "time": "2026-07-22T00:33:01.143Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 7728,
+            "time": "2026-07-22T00:33:01.309Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "66a7d9fd-aa50-4579-b98a-1dbb54552cc0",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 7727,
+            "time": "2026-07-22T00:33:01.309Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "5b512bd3-5cf8-4440-8f33-e732a3b7a38c",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r2",
+            "source_node_id": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "target_node_id": "66a7d9fd-aa50-4579-b98a-1dbb54552cc0",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784680380898,
+            "updated_at": 1784680381195,
+            "completed_at": 1784680381195,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-5b512bd3-5cf8-4440-8f33-e732a3b7a38c",
+            "operation_id": "5b512bd3-5cf8-4440-8f33-e732a3b7a38c",
+            "status": "released",
+            "created_at": 1784680380979,
+            "updated_at": 1784680381306,
+            "expires_at": 1784680680979,
+            "released_at": 1784680381306
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        },
+        {
+          "operationId": "7f3f6abe-a003-45d8-9e9a-ecac56a1d74a",
+          "creator": {
+            "logFile": "node-0.log",
+            "line": 8471,
+            "time": "2026-07-22T00:33:51.963Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+            "entityType": "runtime_service",
+            "entityId": "svc-movielens-topn",
+            "msg": "Creating operation"
+          },
+          "createDispatches": [
+            {
+              "logFile": "node-0.log",
+              "line": 8477,
+              "time": "2026-07-22T00:33:52.013Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "target": "bc82abc2-7a0c-4248-bfbe-c19f818184c4/service/runtime-service-handler",
+              "type": "CREATE_REPLICA",
+              "entityType": "runtime_service",
+              "entityId": "svc-movielens-topn",
+              "replaceRemovePhase": false,
+              "firstAttemptForStep": true,
+              "msg": "Sending replica operation"
+            }
+          ],
+          "targetCreateHandlers": [
+            {
+              "logFile": "node-4.log",
+              "line": 841,
+              "time": "2026-07-22T00:33:52.014Z",
+              "nodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r3",
+              "msg": "Handling CREATE_REPLICA for runtime service"
+            }
+          ],
+          "targetCreateCompletions": [
+            {
+              "logFile": "node-4.log",
+              "line": 844,
+              "time": "2026-07-22T00:33:52.015Z",
+              "nodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+              "entityId": "svc-movielens-topn",
+              "replicaId": "svc-movielens-topn-r3",
+              "msg": "Runtime service replica creation completed"
+            }
+          ],
+          "transitions": [
+            {
+              "logFile": "node-0.log",
+              "line": 8476,
+              "time": "2026-07-22T00:33:52.013Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "previousStep": "PENDING",
+              "newStep": "SENDING",
+              "reason": "dispatch_sending",
+              "status": "pending",
+              "msg": "Operation step changed"
+            },
+            {
+              "logFile": "node-0.log",
+              "line": 8481,
+              "time": "2026-07-22T00:33:52.028Z",
+              "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+              "previousStep": "SENDING",
+              "newStep": "CREATING",
+              "reason": "dispatch_creating",
+              "status": "creating",
+              "msg": "Operation step changed"
+            }
+          ],
+          "terminal": {
+            "logFile": "node-0.log",
+            "line": 8487,
+            "time": "2026-07-22T00:33:52.088Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "type": "ADD",
+            "partitionId": "svc-movielens-topn",
+            "targetNodeId": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+            "msg": "Operation completed"
+          },
+          "reservationRelease": {
+            "logFile": "node-0.log",
+            "line": 8486,
+            "time": "2026-07-22T00:33:52.088Z",
+            "nodeId": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "releasedCount": 1,
+            "msg": "Storage reservation released"
+          },
+          "durableOperationRow": {
+            "operation_id": "7f3f6abe-a003-45d8-9e9a-ecac56a1d74a",
+            "type": "ADD",
+            "partition_id": "svc-movielens-topn",
+            "entity_type": "runtime_service",
+            "entity_id": "svc-movielens-topn",
+            "replica_id": "svc-movielens-topn-r3",
+            "source_node_id": "17783f36-88f3-49e3-a81c-6c317494afb5",
+            "target_node_id": "bc82abc2-7a0c-4248-bfbe-c19f818184c4",
+            "status": "active",
+            "workflow_step": "ACTIVE",
+            "created_at": 1784680431963,
+            "updated_at": 1784680432045,
+            "completed_at": 1784680432045,
+            "error_message": null
+          },
+          "durableReservationRow": {
+            "reservation_id": "res-7f3f6abe-a003-45d8-9e9a-ecac56a1d74a",
+            "operation_id": "7f3f6abe-a003-45d8-9e9a-ecac56a1d74a",
+            "status": "released",
+            "created_at": 1784680432005,
+            "updated_at": 1784680432085,
+            "expires_at": 1784680732005,
+            "released_at": 1784680432085
+          },
+          "counts": {
+            "canonicalSourceCreateDispatches": 1,
+            "targetCreateHandlerInvocations": 1,
+            "repeatedTargetCreateHandlerInvocations": 0,
+            "targetCreateCompletions": 1
+          }
+        }
+      ]
+    }
+  ]
+}

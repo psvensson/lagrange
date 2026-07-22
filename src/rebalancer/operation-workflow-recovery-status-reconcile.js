@@ -28,6 +28,7 @@ const {
   TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION_BY_STATE,
   TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE,
   TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE,
+  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   buildTimeoutClassification,
   classifySystemPartition,
@@ -36,7 +37,28 @@ const {
 } = SHARED;
 
 class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecoveryObservation {
+  isRuntimeServiceActiveCacheHandoffAligned(operation) {
+    if (
+      operation?.entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
+      typeof this.repository?.getObservedReplicaStatusFromCache !==
+        OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
+    ) {
+      return false;
+    }
+    return this.repository.getObservedReplicaStatusFromCache(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
+      {
+        allowPartitionNodeFallback: false,
+      },
+    ) === ReplicaStatus.ACTIVE;
+  }
+
   async confirmActiveReplicaTerminalHandoff(operation) {
+    if (this.isRuntimeServiceActiveCacheHandoffAligned(operation)) {
+      return true;
+    }
     let cacheAligned = false;
     if (
       operation?.replicaId &&
@@ -65,7 +87,13 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       return true;
     }
     if (operation.type === OperationType.REPLACE) {
-      await this.reconcileReplaceActualActive(operation);
+      const replaceProgressApplied =
+        await this.reconcileReplaceActualActive(operation);
+      if (replaceProgressApplied === true) {
+        this.clearObservedProgressRetry(operation.operationId, {
+          includeDeliveredCreateProgress: true,
+        });
+      }
     } else {
       await this.completeOperation(operation);
     }

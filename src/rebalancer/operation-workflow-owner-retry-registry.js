@@ -3,11 +3,13 @@ import {OperationWorkflowTransitionRetryGrace} from './operation-workflow-transi
 import {
   OperationWorkflowCoordinatorCreatedHandoffRetryRegistry,
 } from './operation-workflow-coordinator-created-handoff-retry-registry.js';
+import {
+  withObservedProgressRetention,
+} from './operation-workflow-observed-progress-retention.js';
 import * as DISPATCH_REARM_EVIDENCE
   from './operation-workflow-dispatch-rearm-evidence.js';
 
 const {
-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   DISPATCH_RETRY_DELAY_MS,
@@ -18,7 +20,9 @@ const {
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowOwnerRetryRegistry extends
-  OperationWorkflowCoordinatorCreatedHandoffRetryRegistry {
+  withObservedProgressRetention(
+    OperationWorkflowCoordinatorCreatedHandoffRetryRegistry,
+  ) {
   /**
    * @param {Function} options.allocateCanonicalReplicaId -
    *   Replica ID allocation callback.
@@ -131,8 +135,8 @@ class OperationWorkflowOwnerRetryRegistry extends
       this.clearTimeoutFn(timerHandle);
     }
     this.safetyDeferredRetryTimerByOperationId.clear();
-    for (const timerHandle of this.observedProgressRetryTimerByOperationId.values()) {
-      this.clearTimeoutFn(timerHandle);
+    for (const retryEntry of this.observedProgressRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(retryEntry.timeoutHandle);
     }
     this.observedProgressRetryTimerByOperationId.clear();
     for (const timerHandle of this.dispatchRetryTimerByOperationId.values()) {
@@ -171,76 +175,6 @@ class OperationWorkflowOwnerRetryRegistry extends
     }
     this.terminalTransitionRepairTimerByOperationId.clear();
     this.terminalTransitionRepairStateByOperationId.clear();
-  }
-
-  /**
-   * @param {string} operationId
-   */
-  clearObservedProgressRetry(operationId) {
-    const timerHandle =
-      this.observedProgressRetryTimerByOperationId.get(operationId);
-    if (!timerHandle) {
-      return;
-    }
-    this.clearTimeoutFn(timerHandle);
-    this.observedProgressRetryTimerByOperationId.delete(operationId);
-  }
-
-  /**
-   * @param {string} operationId
-   * @param {string} tableName
-   * @param {string} cacheOperation
-   * @param {number} [delayMs=OBSERVED_PROGRESS_RETRY_DELAY_MS]
-   * @return {boolean}
-   */
-  scheduleObservedProgressRetry(
-    operationId,
-    tableName,
-    cacheOperation,
-    delayMs = OBSERVED_PROGRESS_RETRY_DELAY_MS,
-  ) {
-    if (!operationId) {
-      return false;
-    }
-    if (this.observedProgressRetryTimerByOperationId.has(operationId)) {
-      return true;
-    }
-
-    const retryDelayMs =
-      Number.isFinite(delayMs) && delayMs > 0 ?
-        delayMs :
-        OBSERVED_PROGRESS_RETRY_DELAY_MS;
-    const timerHandle = this.setTimeoutFn(() => {
-      this.observedProgressRetryTimerByOperationId.delete(operationId);
-      if (this.isShuttingDown || !this.isInitialized) {
-        return;
-      }
-      if (this.isOperationOwnerLaneHeld(operationId)) {
-        this.scheduleObservedProgressRetry(
-          operationId,
-          tableName,
-          cacheOperation,
-          retryDelayMs,
-        );
-        return;
-      }
-      return this.operationWorkflowRunExclusive(
-        this.getOperationOwnerSingleFlightKey(operationId),
-        () => this.reconcileObservedProgressOperation(operationId),
-      ).catch((error) => {
-        this.handleObservedProgressFailure(
-          operationId,
-          tableName,
-          cacheOperation,
-          error,
-        );
-      });
-    }, retryDelayMs);
-    this.observedProgressRetryTimerByOperationId.set(
-      operationId,
-      timerHandle,
-    );
-    return true;
   }
 
   /**

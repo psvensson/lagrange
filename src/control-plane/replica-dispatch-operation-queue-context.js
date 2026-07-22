@@ -43,17 +43,6 @@ function extractOperationDispatchProgressContext(context) {
     progressContext[ControlPlaneField.HANDOFF_MODE] =
       CONTROL_PLANE_OPERATION_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME;
   }
-  if (
-    context?.[
-      REPLICA_DISPATCH_SERVICE_LITERAL
-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
-    ] === true
-  ) {
-    progressContext[
-      REPLICA_DISPATCH_SERVICE_LITERAL
-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
-    ] = true;
-  }
   return Object.keys(progressContext).length > 0 ? progressContext : null;
 }
 
@@ -155,13 +144,6 @@ function mergeOperationDispatchReconcileContext(
     retained,
     incoming,
     REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH,
-  );
-  retainTrueContextField(
-    mergedContext,
-    retained,
-    incoming,
-    REPLICA_DISPATCH_SERVICE_LITERAL
-      .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE,
   );
   return mergedContext;
 }

@@ -490,6 +490,11 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       await this.failOperation(operation, errorMsg);
       return this.buildFailedOperationResult(operation.operationId, errorMsg);
     }
+    this.retainDeliveredCreateProgress(
+      operation,
+      response,
+      replaceRemoveDispatchPhase,
+    );
     return this._handleDispatchResponse(
       operation,
       response,

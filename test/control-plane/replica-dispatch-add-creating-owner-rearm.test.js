@@ -8,6 +8,9 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {
   REBALANCER_DEFAULT,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
@@ -55,11 +58,13 @@ function buildRuntimeOperationRow(overrides = {}) {
  * is never delivered.
  */
 function createStrandedAddScenario(operationId) {
+  const operationStartedAtMs = Date.now();
   const durableCreatingRow = buildRuntimeOperationRow({
     operation_id: operationId,
     status: ReplicaStatus.CREATING,
     workflow_step: WORKFLOW_STEP.CREATING,
-    updated_at: 1700000000500,
+    created_at: operationStartedAtMs,
+    updated_at: operationStartedAtMs + 500,
   });
   const activeServiceRow = {
     service_id: REPLICA_ID,
@@ -115,6 +120,10 @@ function createStrandedAddScenario(operationId) {
       // The deferred-retry dispatch reaches the target and SUCCEEDS; the
       // durable row commits CREATING while the target's outcome handoff back
       // to the source is lost at its retry budget.
+      sourceCoordinator.workflowOwner.retainDeliveredCreateProgress(
+        sourceCoordinator.repository.rowToOperation(durableCreatingRow),
+        {status: ReplicaOperationResponseStatus.INITIATED},
+      );
       return {success: true};
     }
     return dispatchOperation(...args);
@@ -289,6 +298,209 @@ test(
     } finally {
       scenario.sourceDispatch.stop();
       await scenario.sourceCoordinator.shutdown();
+    }
+  },
+);
+
+// Quest operation-dispatch-completion-owner-cutover. Exact coordinator-first
+// ordering from the 2026-07-21T18:06 MovieLens run: the dispatch-service lane
+// first defers on operation-row visibility, the coordinator-created owner lane
+// delivers CREATE_REPLICA before that retry, the target completes, and the
+// stale dispatch-service payload is then delivered once more. The target's
+// executor-outcome handoff is absent. Successful delivery itself must retain a
+// bounded owner turn, independent of which caller observes the success.
+test(
+  'coordinator-first CREATE delivery retains owner progress across a stale ' +
+  'dispatch-service retry and lost target handoff',
+  async (t) => {
+    initEnv();
+
+    const operationId = `${OPERATION_ID}-coordinator-first-cutover`;
+    const operationStartedAtMs = Date.now();
+    const operationRow = buildRuntimeOperationRow({
+      operation_id: operationId,
+      status: ReplicaStatus.PENDING,
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: operationStartedAtMs,
+      updated_at: operationStartedAtMs,
+    });
+    const activeServiceRow = {
+      service_id: REPLICA_ID,
+      service_type: 'runtime_service',
+      node_id: TARGET_NODE_ID,
+      status: ReplicaStatus.ACTIVE,
+      created_at: 1700000000510,
+      updated_at: 1700000000514,
+    };
+    const ordering = [];
+    const deliveries = [];
+    const {captureTimer, releaseTimer} = createTimerCapture();
+    let dispatchServiceCallCount = 0;
+    const sourceCoordinator = createTestCoordinator({
+      nodeId: SOURCE_NODE_ID,
+      cacheData: {replicaOperations: [operationRow]},
+      messageRouter: {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          ordering.push(
+            deliveries.length === 1 ?
+              'coordinator_create_delivery' :
+              'deferred_duplicate_delivery',
+          );
+          return {
+            acknowledged: true,
+            status: ReplicaOperationResponseStatus.INITIATED,
+          };
+        },
+        getConnectionState() {
+          return 'connected';
+        },
+        isOutboundQueueAvailable() {
+          return true;
+        },
+      },
+      setTimeoutFn: captureTimer,
+      clearTimeoutFn: releaseTimer,
+    });
+    const ownerOperation =
+      sourceCoordinator.repository.rowToOperation(operationRow);
+    const dispatchOperation =
+      sourceCoordinator.dispatchOperation.bind(sourceCoordinator);
+    sourceCoordinator.dispatchOperation = async (...args) => {
+      dispatchServiceCallCount += 1;
+      if (dispatchServiceCallCount === 1) {
+        ordering.push('dispatch_service_visibility_defer');
+        const visibilityError =
+          new Error('Cache update not observed for replica operation');
+        visibilityError.retryAfterMs = DISPATCH_DEFER_RETRY_AFTER_MS;
+        throw visibilityError;
+      }
+      return dispatchOperation(...args);
+    };
+    const sourceDispatch = createService({
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: sourceCoordinator,
+      controlPlaneReadinessService: createMockControlPlaneReadinessService({
+        defaultRepairEligible: true,
+      }),
+      setTimeoutFn: captureTimer,
+      clearTimeoutFn: releaseTimer,
+    });
+    sourceDispatch.replicaOperationsOwner = {
+      async getReplicaOperationFromCache() {
+        return null;
+      },
+    };
+    sourceDispatch.getAuthoritativeReplicaOperationRow = async () => null;
+
+    try {
+      await sourceDispatch.handleReplicaOperationDispatch({
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operationId,
+        [ControlPlaneField.OPERATION_ROW]: operationRow,
+      });
+      await drainOperationDispatchQueue(sourceDispatch);
+      const visibilityRetry =
+        sourceDispatch.operationDispatchDeferredRetries.get(operationId);
+      t.ok(
+        visibilityRetry,
+        'dispatch-service visibility lag should be retained before the ' +
+        'coordinator-created lane sends',
+      );
+
+      await sourceCoordinator.armCoordinatorCreatedOperationProgress(
+        ownerOperation,
+      );
+      const primedOperation =
+        await sourceCoordinator.repository.queryOperationById(operationId);
+      await sourceCoordinator.workflowOwner.dispatchOperation(
+        primedOperation,
+      );
+      const creatingOperation =
+        await sourceCoordinator.repository.queryOperationById(operationId);
+      t.equal(
+        deliveries.length,
+        1,
+        'the coordinator-created owner lane should deliver CREATE once',
+      );
+      t.equal(
+        creatingOperation?.workflowStep,
+        WORKFLOW_STEP.CREATING,
+        'the successful direct delivery should durably advance to CREATING',
+      );
+      t.ok(
+        sourceCoordinator.workflowOwner
+          .observedProgressRetryTimerByOperationId.has(operationId),
+        'the workflow owner must retain target-progress verification before ' +
+        'the direct caller completes',
+      );
+
+      ordering.push('target_active');
+      visibilityRetry.timeoutHandle.fired = true;
+      await visibilityRetry.timeoutHandle.callback();
+      await drainOperationDispatchQueue(sourceDispatch);
+      t.equal(
+        dispatchServiceCallCount,
+        2,
+        'the stale dispatch-service payload should produce the observed ' +
+        'duplicate delivery attempt',
+      );
+      t.equal(
+        deliveries.length,
+        2,
+        'the deferred dispatch-service pass must traverse the canonical owner ' +
+        'delivery sink instead of simulating a successful duplicate',
+      );
+      t.equal(
+        deliveries[1]?.payload?.type,
+        deliveries[0]?.payload?.type,
+        'the second target delivery must be the same CREATE request class',
+      );
+
+      sourceCoordinator.systemTableCache.upsert('services', activeServiceRow);
+      const retainedEntry = sourceCoordinator.workflowOwner
+        .observedProgressRetryTimerByOperationId.get(operationId);
+      const retainedTimer = retainedEntry?.timeoutHandle || retainedEntry;
+      if (retainedTimer?.callback) {
+        retainedTimer.fired = true;
+        ordering.push('owner_retained_verify');
+        await retainedTimer.callback();
+      }
+
+      const progressedOperation =
+        await sourceCoordinator.repository.queryOperationById(operationId);
+      t.equal(
+        progressedOperation?.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the retained owner turn must apply exact-target ACTIVE evidence',
+      );
+      t.equal(
+        progressedOperation?.status,
+        ReplicaStatus.ACTIVE,
+        'the durable terminal ADD must release its operation-budget slot',
+      );
+      t.same(
+        ordering,
+        [
+          'dispatch_service_visibility_defer',
+          'coordinator_create_delivery',
+          'target_active',
+          'deferred_duplicate_delivery',
+          'owner_retained_verify',
+        ],
+        'the deterministic seam should preserve the immutable live ordering',
+      );
+      t.notOk(
+        sourceCoordinator.workflowOwner
+          .observedProgressRetryTimerByOperationId.has(operationId),
+        'terminal owner progress should consume the retained obligation',
+      );
+    } finally {
+      sourceDispatch.stop();
+      await sourceCoordinator.shutdown();
     }
   },
 );

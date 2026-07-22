@@ -110,25 +110,12 @@ class OperationWorkflowOwnerExecutionLane
       Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
         retryAfterMs :
         OBSERVED_PROGRESS_RETRY_DELAY_MS;
-    const timerHandle = this.setTimeoutFn(() => {
-      this.observedProgressRetryTimerByOperationId.delete(operationId);
-      if (this.isShuttingDown || !this.isInitialized) {
-        return;
-      }
-      return this.operationWorkflowRunExclusive(
-        this.getOperationOwnerSingleFlightKey(operationId),
-        () => this.reconcileObservedProgressOperation(operationId),
-      ).catch((error) => {
-        this.handleObservedProgressFailure(
-          operationId,
-          tableName,
-          cacheOperation,
-          error,
-        );
-      });
-    }, delayMs);
-    this.observedProgressRetryTimerByOperationId.set(operationId, timerHandle);
-    return true;
+    return this.scheduleObservedProgressRetry(
+      operationId,
+      tableName,
+      cacheOperation,
+      delayMs,
+    );
   }
 
   /**

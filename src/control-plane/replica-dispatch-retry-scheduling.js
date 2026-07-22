@@ -9,7 +9,6 @@ import {
 } from './replica-dispatch-operation-queue-context.js';
 import {
   scheduleRemoteDispatchWakeupVerification,
-  scheduleRuntimeTargetProgressDispatchVerification,
 } from './replica-dispatch-retained-verification.js';
 
 const {
@@ -345,27 +344,6 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    */
   scheduleRemoteDispatchWakeupVerification(operationId, row = null) {
     return scheduleRemoteDispatchWakeupVerification(this, operationId, row);
-  }
-
-  /**
-   * Retain one bounded runtime target-progress verification after dispatch.
-   * @param {string} operationId
-   * @param {Object|null} row
-   * @param {Object} options
-   * @return {boolean}
-   * @private
-   */
-  scheduleRuntimeTargetProgressDispatchVerification(
-    operationId,
-    row = null,
-    options = {},
-  ) {
-    return scheduleRuntimeTargetProgressDispatchVerification(
-      this,
-      operationId,
-      row,
-      options,
-    );
   }
 
   /**

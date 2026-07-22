@@ -1,4 +1,3 @@
-import {REBALANCER_DEFAULT} from '../rebalancer/rebalancer-constants.js';
 import {
   REPLICA_DISPATCH_SERVICE_SHARED,
 } from './replica-dispatch-service-shared.js';
@@ -54,41 +53,6 @@ function scheduleRemoteDispatchWakeupVerification(
   );
 }
 
-function scheduleRuntimeTargetProgressDispatchVerification(
-  service,
-  operationId,
-  row = null,
-  options = {},
-) {
-  if (
-    !operationId ||
-    !service.isRuntimeTargetProgressRetentionRow(row) ||
-    options?.[
-      REPLICA_DISPATCH_SERVICE_LITERAL
-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
-    ] === true
-  ) {
-    return false;
-  }
-  const retryAfterMs =
-    service.rebalanceCoordinator?.config?.creatingTimeoutMs ||
-    REBALANCER_DEFAULT.COORDINATOR.CREATING_TIMEOUT_MS;
-  return retainDispatchVerification(
-    service,
-    operationId,
-    row,
-    retryAfterMs,
-    REPLICA_DISPATCH_SERVICE_LITERAL.RETAINED_TARGET_PROGRESS_VERIFICATION,
-    {
-      [
-      REPLICA_DISPATCH_SERVICE_LITERAL
-        .RETAINED_TARGET_PROGRESS_VERIFICATION_PROVENANCE
-      ]: true,
-    },
-  );
-}
-
 export {
   scheduleRemoteDispatchWakeupVerification,
-  scheduleRuntimeTargetProgressDispatchVerification,
 };
