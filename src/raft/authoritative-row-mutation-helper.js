@@ -67,87 +67,125 @@ function classifyGatewayMutationOutcome(result) {
   return null;
 }
 
+function validateMutationHelperOptions(options) {
+  if (!options.tableName) {
+    throw new Error(AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_TABLE_NAME);
+  }
+  if (typeof options.buildWhereClause !== 'function') {
+    throw new Error(
+      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_BUILD_WHERE_CLAUSE,
+    );
+  }
+  if (typeof options.buildUpdateData !== 'function') {
+    throw new Error(
+      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_BUILD_UPDATE_DATA,
+    );
+  }
+  if (typeof options.readValueFromCache !== 'function') {
+    throw new Error(
+      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_READ_VALUE_FROM_CACHE,
+    );
+  }
+}
+
+function normalizeRetryBackoffMultiplier(value) {
+  if (Number.isFinite(value) && value >= 1) {
+    return value;
+  }
+  return AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER;
+}
+
+function normalizeMaxRetryDelayMs(value) {
+  if (Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  return AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS;
+}
+
+function optionalFunction(value) {
+  return typeof value === 'function' ? value : null;
+}
+
+function withDefault(value, fallback) {
+  return value === undefined ? fallback : value;
+}
+
 class AuthoritativeRowMutationHelper {
   constructor(options = {}) {
     const {
       tableName,
       buildWhereClause,
       buildUpdateData,
-      buildUpdateOptions = () => ({}),
+      buildUpdateOptions,
       readValueFromCache,
-      readRowFromCache = null,
-      buildExpectedCacheFields = null,
-      isWriteReady = () => true,
-      prepareFlush = () => ({skip: false}),
-      retryDelayMs = TIME_MS.SECOND,
-      retryBackoffMultiplier =
-      AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
-      maxRetryDelayMs = AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
-      cdcIntegrationService = null,
-      controlPlaneSystemTableGateway = null,
-      nodeId = null,
-      messageRouter = null,
-      systemTableCache = null,
-      refreshObservedRow = null,
-      readAuthoritativeRow = null,
-      onObservedStateChanged = () => {},
-      onAsyncError = () => {},
-      now = () => Date.now(),
-      setTimeoutFn = setTimeout,
-      clearTimeoutFn = clearTimeout,
+      readRowFromCache,
+      buildExpectedCacheFields,
+      isWriteReady,
+      prepareFlush,
+      retryDelayMs,
+      retryBackoffMultiplier,
+      maxRetryDelayMs,
+      cdcIntegrationService,
+      controlPlaneSystemTableGateway,
+      nodeId,
+      messageRouter,
+      systemTableCache,
+      refreshObservedRow,
+      readAuthoritativeRow,
+      onObservedStateChanged,
+      onAsyncError,
+      now,
+      setTimeoutFn,
+      clearTimeoutFn,
     } = options;
 
-    if (!tableName) {
-      throw new Error(AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_TABLE_NAME);
-    }
-    if (typeof buildWhereClause !== 'function') {
-      throw new Error(
-        AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_BUILD_WHERE_CLAUSE,
-      );
-    }
-    if (typeof buildUpdateData !== 'function') {
-      throw new Error(
-        AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_BUILD_UPDATE_DATA,
-      );
-    }
-    if (typeof readValueFromCache !== 'function') {
-      throw new Error(
-        AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_READ_VALUE_FROM_CACHE,
-      );
-    }
+    validateMutationHelperOptions({
+      tableName,
+      buildWhereClause,
+      buildUpdateData,
+      readValueFromCache,
+    });
 
     this.tableName = tableName;
     this.buildWhereClause = buildWhereClause;
     this.buildUpdateData = buildUpdateData;
-    this.buildUpdateOptions = buildUpdateOptions;
+    this.buildUpdateOptions = withDefault(buildUpdateOptions, () => ({}));
     this.readValueFromCache = readValueFromCache;
-    this.readRowFromCache = readRowFromCache;
-    this.buildExpectedCacheFields = buildExpectedCacheFields;
-    this.isWriteReady = isWriteReady;
-    this.prepareFlush = prepareFlush;
-    this.retryDelayMs = retryDelayMs;
-    this.retryBackoffMultiplier = Number.isFinite(retryBackoffMultiplier) &&
-      retryBackoffMultiplier >= 1 ?
-      retryBackoffMultiplier :
-      AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER;
-    this.maxRetryDelayMs = Number.isFinite(maxRetryDelayMs) &&
-      maxRetryDelayMs > 0 ?
-      Math.floor(maxRetryDelayMs) :
-      AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS;
-    this.cdcIntegrationService = cdcIntegrationService;
-    this.controlPlaneSystemTableGateway = controlPlaneSystemTableGateway;
-    this.nodeId = nodeId;
-    this.messageRouter = messageRouter;
-    this.systemTableCache = systemTableCache;
-    this.refreshObservedRow =
-      typeof refreshObservedRow === 'function' ? refreshObservedRow : null;
-    this.readAuthoritativeRow =
-      typeof readAuthoritativeRow === 'function' ? readAuthoritativeRow : null;
-    this.onObservedStateChanged = onObservedStateChanged;
-    this.onAsyncError = onAsyncError;
-    this.now = now;
-    this.setTimeoutFn = setTimeoutFn;
-    this.clearTimeoutFn = clearTimeoutFn;
+    this.readRowFromCache = withDefault(readRowFromCache, null);
+    this.buildExpectedCacheFields = withDefault(
+      buildExpectedCacheFields,
+      null,
+    );
+    this.isWriteReady = withDefault(isWriteReady, () => true);
+    this.prepareFlush = withDefault(prepareFlush, () => ({skip: false}));
+    this.retryDelayMs = withDefault(retryDelayMs, TIME_MS.SECOND);
+    this.retryBackoffMultiplier =
+      normalizeRetryBackoffMultiplier(withDefault(
+        retryBackoffMultiplier,
+        AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
+      ));
+    this.maxRetryDelayMs = normalizeMaxRetryDelayMs(withDefault(
+      maxRetryDelayMs,
+      AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
+    ));
+    this.cdcIntegrationService = withDefault(cdcIntegrationService, null);
+    this.controlPlaneSystemTableGateway = withDefault(
+      controlPlaneSystemTableGateway,
+      null,
+    );
+    this.nodeId = withDefault(nodeId, null);
+    this.messageRouter = withDefault(messageRouter, null);
+    this.systemTableCache = withDefault(systemTableCache, null);
+    this.refreshObservedRow = optionalFunction(refreshObservedRow);
+    this.readAuthoritativeRow = optionalFunction(readAuthoritativeRow);
+    this.onObservedStateChanged = withDefault(
+      onObservedStateChanged,
+      () => {},
+    );
+    this.onAsyncError = withDefault(onAsyncError, () => {});
+    this.now = withDefault(now, () => Date.now());
+    this.setTimeoutFn = withDefault(setTimeoutFn, setTimeout);
+    this.clearTimeoutFn = withDefault(clearTimeoutFn, clearTimeout);
 
     this.pendingValue = null;
     this.persistedValue = null;
@@ -163,7 +201,15 @@ class AuthoritativeRowMutationHelper {
   }
 
   setCdcIntegrationService(cdcIntegrationService) {
+    const dependencyBecameAvailable =
+      !this.cdcIntegrationService && Boolean(cdcIntegrationService);
     this.cdcIntegrationService = cdcIntegrationService;
+    if (
+      dependencyBecameAvailable &&
+      !this.retryTimer
+    ) {
+      this.scheduleFollowUpFlush();
+    }
   }
 
   setControlPlaneSystemTableGateway(controlPlaneSystemTableGateway) {
@@ -207,6 +253,14 @@ class AuthoritativeRowMutationHelper {
   }
 
   async flush() {
+    const admissionResult = this.resolveFlushAdmission();
+    if (admissionResult) {
+      return admissionResult;
+    }
+    return this.executeFlush();
+  }
+
+  resolveFlushAdmission() {
     if (this.shuttingDown) {
       return this.buildResult({
         cacheVisible: this.pendingValue === null,
@@ -230,6 +284,14 @@ class AuthoritativeRowMutationHelper {
     // legacy dedup unchanged.
     const recoveredFromCacheGap =
       this.readAuthoritativeRow ? false : this.syncFromCache();
+    const preparedResult = this.resolvePreparedFlush(recoveredFromCacheGap);
+    if (preparedResult) {
+      return preparedResult;
+    }
+    return this.resolveFlushReadiness(recoveredFromCacheGap);
+  }
+
+  resolvePreparedFlush(recoveredFromCacheGap) {
     const prepareResult = this.prepareFlush({
       pendingValue: this.pendingValue,
       persistedValue: this.persistedValue,
@@ -239,20 +301,26 @@ class AuthoritativeRowMutationHelper {
       this.pendingValue = null;
     }
 
-    if (prepareResult.skip) {
-      if (!prepareResult.clearPending && prepareResult.retry === true) {
-        this.scheduleRetry(prepareResult.retryDelayMs);
-      }
-      return this.buildResult({
-        cacheVisible: this.pendingValue === null,
-        recoveredFromCacheGap,
-        reason:
-          prepareResult.reason || AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
-      });
+    if (!prepareResult.skip) {
+      return null;
     }
+    if (!prepareResult.clearPending && prepareResult.retry === true) {
+      this.scheduleRetry(prepareResult.retryDelayMs);
+    }
+    return this.buildResult({
+      cacheVisible: this.pendingValue === null,
+      recoveredFromCacheGap,
+      reason:
+        prepareResult.reason || AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
+    });
+  }
 
-    if (!this.cdcIntegrationService || !this.pendingValue ||
-      this.pendingValue === this.persistedValue) {
+  resolveFlushReadiness(recoveredFromCacheGap) {
+    const noMutationAvailable =
+      !this.cdcIntegrationService ||
+      !this.pendingValue ||
+      this.pendingValue === this.persistedValue;
+    if (noMutationAvailable) {
       if (this.pendingValue === null ||
           this.pendingValue === this.persistedValue) {
         this.retryAttemptCount = 0;
@@ -266,152 +334,195 @@ class AuthoritativeRowMutationHelper {
       });
     }
 
-    if (!this.isWriteReady()) {
-      this.scheduleRetry();
-      return this.buildResult({
-        recoveredFromCacheGap,
-        reason: AUTHORITATIVE_ROW_MUTATION_REASON.OWNER_NOT_READY,
-      });
+    if (this.isWriteReady()) {
+      return null;
     }
+    this.scheduleRetry();
+    return this.buildResult({
+      recoveredFromCacheGap,
+      reason: AUTHORITATIVE_ROW_MUTATION_REASON.OWNER_NOT_READY,
+    });
+  }
 
+  async executeFlush() {
     this.inFlight = true;
     let writeSucceeded = false;
     const value = this.pendingValue;
     try {
-      let authoritativeRow = null;
-      if (this.readAuthoritativeRow) {
-        const authoritativeProbe = await this.probeAuthoritativeRow(value);
-        if (authoritativeProbe.settled) {
-          return authoritativeProbe.result;
-        }
-        authoritativeRow = authoritativeProbe.row;
+      const authoritativeProbe =
+        await this.resolveAuthoritativeProbe(value);
+      if (authoritativeProbe.settled) {
+        return authoritativeProbe.result;
       }
-      // Ownership/readiness can change while the authoritative point read is
-      // in flight. Re-run the same owner predicate immediately before submit
-      // so a demoted leader cannot publish a stale owner row after losing Raft
-      // authority. Helpers with an unconditional prepareFlush remain unchanged.
-      const preMutationResult = this.prepareFlush({
-        pendingValue: this.pendingValue,
-        persistedValue: this.persistedValue,
-        phase: 'pre-mutation',
-      }) || {skip: false};
-      if (preMutationResult.clearPending && this.pendingValue === value) {
-        this.pendingValue = null;
+      const ownershipResult = this.resolvePreMutationOwnership(value);
+      if (ownershipResult) {
+        return ownershipResult;
       }
-      if (preMutationResult.skip) {
-        if (!preMutationResult.clearPending &&
-          preMutationResult.retry === true) {
-          this.scheduleRetry(preMutationResult.retryDelayMs);
-        }
-        return this.buildResult({
-          reason:
-            preMutationResult.reason ||
-            AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
-        });
-      }
-      const updateData = this.buildUpdateData(value, this.now());
-      const cachedRow = typeof this.readRowFromCache === 'function' ?
-        this.readRowFromCache(this.systemTableCache) :
-        null;
-      const mutationContext = {
-        cachedRow,
-        // The CAS guard must come from the authoritative row when one was
-        // observed: the merged cache row can be locally seeded NEWER than the
-        // durable row (stale-guard protected), so guarding on it zero-rows
-        // forever — permanent retry spin with the write never landing.
-        authoritativeRow,
-        persistedValue: this.persistedValue,
-      };
-      const whereClause = this.buildWhereClause(value, mutationContext);
-      const updateOptionsCandidate =
-        typeof this.buildUpdateOptions === 'function' ?
-          this.buildUpdateOptions(value, updateData, mutationContext) :
-          null;
-      const updateOptions = updateOptionsCandidate &&
-        typeof updateOptionsCandidate === 'object' ?
-        updateOptionsCandidate :
-        {};
-      const expectedCacheFields =
-        typeof this.buildExpectedCacheFields === 'function' ?
-          this.buildExpectedCacheFields(value, updateData) :
-          null;
-      const writeOptions = {
-        ...updateOptions,
-        ...(expectedCacheFields ? {expectedCacheFields} : {}),
-      };
-
-      const partitionResult = await this.getControlPlaneSystemTableGateway()
-        .submitMutation({
-          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-          tableName: this.tableName,
-          whereClause,
-          data: updateData,
-        }, writeOptions);
-      const gatewayFailureReason = classifyGatewayMutationOutcome(
-        partitionResult,
+      const submission = this.buildMutationSubmission(
+        value,
+        authoritativeProbe.row,
       );
-      if (partitionResult?.success === false && gatewayFailureReason) {
-        if (
-          gatewayFailureReason ===
-          AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED
-        ) {
-          await this.recoverFromObservedStateChanged(value, partitionResult);
-        }
-        this.scheduleRetry(partitionResult?.retryAfterMs);
-        return this.buildResult({
-          attempts: 1,
-          partitionResult,
-          reason: gatewayFailureReason,
-        });
-      }
-      const affectedRows = extractAffectedRows(partitionResult);
-      if (gatewayFailureReason === AUTHORITATIVE_ROW_MUTATION_REASON
-        .OBSERVED_STATE_CHANGED ||
-        (affectedRows !== null && affectedRows <= 0)) {
-        await this.recoverFromObservedStateChanged(value, partitionResult);
-        this.scheduleRetry();
-        return this.buildResult({
-          attempts: 1,
-          partitionResult,
-          reason: AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED,
-        });
+      const partitionResult = await this.getControlPlaneSystemTableGateway()
+        .submitMutation(submission.mutation, submission.options);
+      const failureResult =
+        await this.resolveMutationFailure(value, partitionResult);
+      if (failureResult) {
+        return failureResult;
       }
 
-      this.persistedValue = value;
-      if (this.pendingValue === value) {
-        this.pendingValue = null;
-      }
       writeSucceeded = true;
-      this.retryAttemptCount = 0;
-
-      return this.buildResult({
-        applied: true,
-        authoritativeWriteApplied: true,
-        cacheVisible: true,
-        attempts: 1,
-        partitionResult,
-        reason: AUTHORITATIVE_ROW_MUTATION_REASON.APPLIED,
-      });
+      return this.recordAppliedMutation(value, partitionResult);
     } catch (error) {
-      const reason = classifyMutationFailure(error);
-      const mutationResult = this.buildResult({
-        attempts: 1,
-        reason,
-      });
-      error.mutationResult = mutationResult;
-      if (!this.shuttingDown) {
-        this.scheduleRetry(error?.retryAfterMs);
-      }
+      this.decorateFlushError(error);
       throw error;
     } finally {
-      this.inFlight = false;
-      if (!this.shuttingDown &&
-        writeSucceeded &&
-        this.pendingValue &&
-        this.pendingValue !== this.persistedValue) {
-        this.scheduleFollowUpFlush();
-      }
+      this.completeFlush(writeSucceeded);
     }
+  }
+
+  async resolveAuthoritativeProbe(value) {
+    if (!this.readAuthoritativeRow) {
+      return {settled: false, row: null};
+    }
+    return this.probeAuthoritativeRow(value);
+  }
+
+  resolvePreMutationOwnership(value) {
+    // Ownership/readiness can change while the authoritative point read is
+    // in flight. Re-run the same owner predicate immediately before submit
+    // so a demoted leader cannot publish a stale owner row after losing Raft
+    // authority. Helpers with an unconditional prepareFlush remain unchanged.
+    const preMutationResult = this.prepareFlush({
+      pendingValue: this.pendingValue,
+      persistedValue: this.persistedValue,
+      phase: 'pre-mutation',
+    }) || {skip: false};
+    if (preMutationResult.clearPending && this.pendingValue === value) {
+      this.pendingValue = null;
+    }
+    if (!preMutationResult.skip) {
+      return null;
+    }
+    if (!preMutationResult.clearPending &&
+      preMutationResult.retry === true) {
+      this.scheduleRetry(preMutationResult.retryDelayMs);
+    }
+    return this.buildResult({
+      reason:
+        preMutationResult.reason ||
+        AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
+    });
+  }
+
+  buildMutationSubmission(value, authoritativeRow) {
+    const updateData = this.buildUpdateData(value, this.now());
+    const cachedRow = optionalFunction(this.readRowFromCache) ?
+      this.readRowFromCache(this.systemTableCache) :
+      null;
+    const mutationContext = {
+      cachedRow,
+      // The CAS guard must come from the authoritative row when one was
+      // observed: the merged cache row can be locally seeded NEWER than the
+      // durable row (stale-guard protected), so guarding on it zero-rows
+      // forever — permanent retry spin with the write never landing.
+      authoritativeRow,
+      persistedValue: this.persistedValue,
+    };
+    const updateOptionsCandidate = optionalFunction(
+      this.buildUpdateOptions,
+    )?.(value, updateData, mutationContext) || null;
+    const updateOptions = updateOptionsCandidate &&
+      typeof updateOptionsCandidate === 'object' ?
+      updateOptionsCandidate :
+      {};
+    const expectedCacheFields = optionalFunction(
+      this.buildExpectedCacheFields,
+    )?.(value, updateData) || null;
+    return {
+      mutation: {
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: this.tableName,
+        whereClause: this.buildWhereClause(value, mutationContext),
+        data: updateData,
+      },
+      options: {
+        ...updateOptions,
+        ...(expectedCacheFields ? {expectedCacheFields} : {}),
+      },
+    };
+  }
+
+  async resolveMutationFailure(value, partitionResult) {
+    const gatewayFailureReason = classifyGatewayMutationOutcome(
+      partitionResult,
+    );
+    if (partitionResult?.success === false && gatewayFailureReason) {
+      return this.resolveGatewayFailure(
+        value,
+        partitionResult,
+        gatewayFailureReason,
+      );
+    }
+    const affectedRows = extractAffectedRows(partitionResult);
+    const observedStateChanged =
+      gatewayFailureReason ===
+        AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED ||
+      (affectedRows !== null && affectedRows <= 0);
+    if (!observedStateChanged) {
+      return null;
+    }
+    await this.recoverFromObservedStateChanged(value, partitionResult);
+    this.scheduleRetry();
+    return this.buildResult({
+      attempts: 1,
+      partitionResult,
+      reason: AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED,
+    });
+  }
+
+  async resolveGatewayFailure(value, partitionResult, reason) {
+    if (reason === AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED) {
+      await this.recoverFromObservedStateChanged(value, partitionResult);
+    }
+    this.scheduleRetry(partitionResult?.retryAfterMs);
+    return this.buildResult({attempts: 1, partitionResult, reason});
+  }
+
+  recordAppliedMutation(value, partitionResult) {
+    this.persistedValue = value;
+    if (this.pendingValue === value) {
+      this.pendingValue = null;
+    }
+    this.retryAttemptCount = 0;
+    return this.buildResult({
+      applied: true,
+      authoritativeWriteApplied: true,
+      cacheVisible: true,
+      attempts: 1,
+      partitionResult,
+      reason: AUTHORITATIVE_ROW_MUTATION_REASON.APPLIED,
+    });
+  }
+
+  decorateFlushError(error) {
+    error.mutationResult = this.buildResult({
+      attempts: 1,
+      reason: classifyMutationFailure(error),
+    });
+    if (!this.shuttingDown) {
+      this.scheduleRetry(error?.retryAfterMs);
+    }
+  }
+
+  completeFlush(writeSucceeded) {
+    this.inFlight = false;
+    if (this.shuttingDown || !writeSucceeded) {
+      return;
+    }
+    if (!this.pendingValue || this.pendingValue === this.persistedValue) {
+      return;
+    }
+    this.scheduleFollowUpFlush();
   }
 
   /**
@@ -568,6 +679,7 @@ class AuthoritativeRowMutationHelper {
         this.onAsyncError(error, {value: this.pendingValue, retry: true});
       });
     }, boundedDelayMs);
+    this.retryTimer?.unref?.();
   }
 
   resolveRetryDelayMs(delayMs = null) {

@@ -1,0 +1,17 @@
+{
+  "metric": 0,
+  "done": true,
+  "classification": "deterministic-owner-proof-passed",
+  "sourceAttemptFingerprint": "sha256:0b45bb75697041094b6f916b6703d5c48d1f6adaee93a1b64e3d011f8dc23ed2",
+  "proof": {
+    "focusedAssertions": 357,
+    "focusedFiles": 7,
+    "exactRevertArtifact": "solve/changes/dt-prove/dt-movielens-canonical-leader-publication-retained-wake.test.js-2026-07-22T08-06-40-763Z.json",
+    "exactRevertVerdict": "red-on-revert-proven",
+    "eslint": "passed",
+    "runtimeGrammar": "passed",
+    "cyclomaticComplexity": "passed",
+    "cognitiveComplexity": "passed",
+    "fileSize": "passed"
+  }
+}
