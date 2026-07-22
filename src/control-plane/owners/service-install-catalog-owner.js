@@ -27,6 +27,7 @@ import {
   buildPackageRow,
   canonicalJson,
   deepFreeze,
+  deriveTenantPackageId,
   fail,
   isPlainObject,
   projectFailure,
@@ -278,6 +279,17 @@ class ServiceInstallCatalogOwner {
     const row = await this.readRow(
       this.packageRows, id, CATALOG_PRIMARY_KEY_FIELD.PACKAGE);
     return row ? projectBindableArtifact(row, digest) : null;
+  }
+
+  async getBindableArtifactForTenant(packageId, manifestDigest, tenantId) {
+    const artifact = await this.getBindableArtifact(packageId, manifestDigest);
+    if (!artifact) return null;
+    if (deriveTenantPackageId(artifact.manifest, tenantId) !== artifact.packageId) {
+      fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.PACKAGE_NOT_ELIGIBLE,
+        SERVICE_INSTALL_CATALOG_PATH.PACKAGE_ID,
+        SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_NOT_ELIGIBLE);
+    }
+    return artifact;
   }
 
   async resolveUniqueBindableArtifactByDigest(

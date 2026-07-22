@@ -109,6 +109,14 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
     bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
     externalCdcAllowed: false,
   }),
+  [TABLES.SERVICE_BINDINGS]: createTablePolicy(TABLES.SERVICE_BINDINGS, {
+    policyClass: CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
+    authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+    internalCachePropagation: true,
+    readinessRelevant: false,
+    bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
+    externalCdcAllowed: false,
+  }),
   [TABLES.SERVICE_ENDPOINTS]: createTablePolicy(TABLES.SERVICE_ENDPOINTS, {
     policyClass: CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
     authorityClass: CDC_AUTHORITY_CLASS.CONTROL,

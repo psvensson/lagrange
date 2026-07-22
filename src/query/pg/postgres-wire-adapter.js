@@ -43,6 +43,8 @@ function resolveStatementAuthorizationAction(statement) {
     return PGWIRE_AUTH_ACTION.EXECUTE_QUERY;
   }
   switch (classification.command) {
+  case SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING:
+    return PGWIRE_AUTH_ACTION.BINDING_CREATE;
   case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
     return PGWIRE_AUTH_ACTION.SERVICE_INSTALL;
   case SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE:

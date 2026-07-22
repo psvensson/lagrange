@@ -58,6 +58,7 @@ const SERVICE_INSTALL_CATALOG_ERROR_CODE = Object.freeze({
   OPERATION_CONFLICT: 'operation_conflict',
   PACKAGE_CONFLICT: 'package_conflict',
   PACKAGE_NOT_FOUND: 'package_not_found',
+  PACKAGE_NOT_ELIGIBLE: 'package_not_eligible',
   REVISION_CONFLICT: 'revision_conflict',
   REVISION_NOT_FOUND: 'revision_not_found',
 });
@@ -145,6 +146,8 @@ const SERVICE_INSTALL_CATALOG_MESSAGE = Object.freeze({
   OPERATION_CONFLICT: 'operation identity is already in use',
   PACKAGE_IMMUTABLE: 'package identity is immutable',
   PACKAGE_MISSING: 'package does not exist',
+  PACKAGE_NOT_ELIGIBLE:
+    'package identity is not eligible for the authenticated tenant',
   RETRYABLE_BOOLEAN: 'retryable must be boolean',
   REVISION_IMMUTABLE: 'revision identity is immutable',
   REVISION_MISSING: 'revision does not exist',
@@ -383,6 +386,23 @@ function sha256Json(canonicalValue) {
     .update(canonicalValue)
     .digest(SERVICE_INSTALL_CATALOG_LITERAL.HASH_ENCODING);
   return `sha256:${digest}`;
+}
+
+const SHA256_PREFIX_LENGTH = 7;
+
+function deriveTenantPackageId(manifest, tenantId) {
+  if (!isPlainObject(manifest) || typeof tenantId !== 'string' ||
+      tenantId.length === 0) {
+    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.INVALID_FIELD,
+      SERVICE_INSTALL_CATALOG_PATH.ELIGIBLE_PACKAGE_IDS,
+      SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_ELIGIBILITY_REQUIRED);
+  }
+  const manifestWithTenant = canonicalJson(
+    {manifest, tenantId},
+    SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST,
+  );
+  return `service-package-${sha256Json(manifestWithTenant)
+    .slice(SHA256_PREFIX_LENGTH)}`;
 }
 
 function requireNormalizedManifest(value) {
@@ -644,6 +664,7 @@ export {
   buildPackageRow,
   canonicalJson,
   deepFreeze,
+  deriveTenantPackageId,
   fail,
   isPlainObject,
   projectFailure,

@@ -117,6 +117,7 @@ function createAndWireServiceLifecycleCommandOwner(
     });
   const commandOwner = new ServiceLifecycleCommandOwner({
     artifactResolver,
+    bindingOwner: systemMetadataOwners.deploymentBindingOwner,
     catalogOwner: systemMetadataOwners.serviceInstallCatalogOwner,
     signaturePolicy: options.serviceArtifactSignaturePolicy ??
       SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,

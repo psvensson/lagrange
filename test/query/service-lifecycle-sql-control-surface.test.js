@@ -34,12 +34,17 @@ const DIGEST_A = `sha256:${'a'.repeat(64)}`;
 const DIGEST_B = `sha256:${'b'.repeat(64)}`;
 const CONTAINER_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
 const CATALOG_TABLES = Object.freeze([
+  TABLES.SERVICE_BINDINGS,
+  TABLES.SERVICE_DEFINITIONS,
+  TABLES.SERVICE_ENDPOINTS,
   TABLES.SERVICE_PACKAGES,
   TABLES.SERVICE_REVISIONS,
   TABLES.SERVICE_INSTALLATIONS,
   TABLES.SERVICE_INSTALL_FAILURES,
+  TABLES.SERVICES,
 ]);
 const LIFECYCLE_ACTIONS = Object.freeze([
+  PGWIRE_AUTH_ACTION.BINDING_CREATE,
   PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
   PGWIRE_AUTH_ACTION.SERVICE_INSTALL,
   PGWIRE_AUTH_ACTION.SERVICE_READ,
@@ -68,9 +73,13 @@ class LifecycleCatalogGateway {
   primaryKey(table) {
     return {
       [TABLES.SERVICE_PACKAGES]: 'package_id',
+      [TABLES.SERVICE_BINDINGS]: 'binding_version_id',
+      [TABLES.SERVICE_DEFINITIONS]: 'service_id',
+      [TABLES.SERVICE_ENDPOINTS]: 'endpoint_id',
       [TABLES.SERVICE_REVISIONS]: 'revision_id',
       [TABLES.SERVICE_INSTALLATIONS]: 'installation_id',
       [TABLES.SERVICE_INSTALL_FAILURES]: 'failure_id',
+      [TABLES.SERVICES]: 'service_id',
     }[table];
   }
 
@@ -216,14 +225,17 @@ function createSystemCache() {
 function createEngineFixture(options = {}) {
   const gateway = new LifecycleCatalogGateway();
   let now = 1000;
-  const catalogOwner = createSystemMetadataOwners({
+  const systemMetadataOwners = createSystemMetadataOwners({
     controlPlaneSystemTableGateway: gateway,
     now: () => now++,
-  }).serviceInstallCatalogOwner;
+  });
+  const catalogOwner = systemMetadataOwners.serviceInstallCatalogOwner;
+  const bindingOwner = systemMetadataOwners.deploymentBindingOwner;
   const artifactResolver = options.artifactResolver ||
     new FixtureArtifactResolver();
   const commandOwner = new ServiceLifecycleCommandOwner({
     artifactResolver,
+    bindingOwner,
     catalogOwner,
     signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   });
@@ -233,7 +245,14 @@ function createEngineFixture(options = {}) {
     autoStartDistributedTransactionRecovery: false,
   });
   engine.setServiceLifecycleCommandOwner(commandOwner);
-  return {artifactResolver, catalogOwner, commandOwner, engine, gateway};
+  return {
+    artifactResolver,
+    bindingOwner,
+    catalogOwner,
+    commandOwner,
+    engine,
+    gateway,
+  };
 }
 
 function createAuthHandler(allowedActions = LIFECYCLE_ACTIONS) {
@@ -264,6 +283,10 @@ async function createAuthenticatedAdapter(engine, options = {}) {
 
 describe('service lifecycle SQL classification and security boundary', () => {
   it('classifies every lifecycle family before parsing', () => {
+    assert.equal(
+      classifyServiceLifecycleSql('CREATE BINDING $1').command,
+      SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING,
+    );
     assert.equal(
       classifyServiceLifecycleSql('INSTALL SERVICE $1').command,
       SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL,
@@ -349,6 +372,10 @@ describe('service lifecycle SQL classification and security boundary', () => {
       );
       await assert.rejects(
         adapter.execute('generic-session', 'SHOW SERVICES'),
+        /authorized/iu,
+      );
+      await assert.rejects(
+        adapter.execute('generic-session', 'CREATE BINDING $1', ['{}']),
         /authorized/iu,
       );
       await assert.rejects(
@@ -501,12 +528,120 @@ describe('service lifecycle SQL classification and security boundary', () => {
       'service_lifecycle_transaction_unsupported',
     );
     assert.equal(gateway.rowCount(TABLES.SERVICE_INSTALLATIONS), 0);
+    const binding = await adapter.execute(
+      'session-1', 'CREATE BINDING $1', ['{}'],
+    );
+    assert.equal(
+      binding.errorCode,
+      'service_lifecycle_transaction_unsupported',
+    );
+    assert.equal(gateway.rowCount(TABLES.SERVICE_BINDINGS), 0);
     const rollback = await adapter.execute('session-1', 'ROLLBACK');
     assert.equal(rollback.success, true);
   });
 });
 
 describe('service lifecycle SQL durable owner route', () => {
+  it('persists Binding v0 through authenticated CREATE BINDING ' +
+    '(red-on-revert owner engagement)', async () => {
+    const fixture = createEngineFixture();
+    const adapter = await createAuthenticatedAdapter(fixture.engine);
+    const installed = await adapter.execute(
+      'session-1',
+      'INSTALL SERVICE $1',
+      [installPayload({
+        manifest: {
+          ...v2Manifest([{
+            name: 'serve',
+            interface: 'request_v1',
+            reads: ['table:global.orders'],
+            writes: ['table:global.audit'],
+          }]),
+          capabilities: ['network.client', 'clock.read'],
+        },
+      })],
+    );
+    assert.equal(installed.success, true);
+    const [packageRow] = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
+    const package_ = await fixture.catalogOwner.getPackage(packageRow.package_id);
+    const payload = JSON.stringify({
+      schema_version: 0,
+      name: 'orders-api',
+      target: {
+        package_id: package_.packageId,
+        manifest_digest: package_.manifestDigest,
+        export_name: 'serve',
+      },
+      source: {kind: 'request', method: 'POST', path: '/orders'},
+      contexts: ['table:global.audit', 'table:global.orders'],
+      budgets: {
+        cpu_time_ms: 100,
+        wall_time_ms: 1000,
+        memory_bytes: 1048576,
+        input_bytes: 4096,
+        output_bytes: 4096,
+        context_bytes: 8192,
+      },
+      elasticity: {voters: 3, min_learners: 0, max_learners: 2},
+    });
+
+    const spoofedPayload = JSON.parse(payload);
+    spoofedPayload.tenant_id = 'attacker-selected';
+    const spoofed = await adapter.execute(
+      'session-1', 'CREATE BINDING $1', [JSON.stringify(spoofedPayload)]);
+    assert.equal(spoofed.success, false);
+    assert.equal(
+      spoofed.errorCode,
+      SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_PAYLOAD,
+    );
+    const widenedGrammar = await adapter.execute(
+      'session-1', 'CREATE BINDING $1 RETURNING *', [payload]);
+    assert.equal(widenedGrammar.success, false);
+    assert.equal(
+      widenedGrammar.errorCode,
+      SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_GRAMMAR,
+    );
+    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_BINDINGS), 0);
+
+    const created = await adapter.execute(
+      'session-1', 'CREATE BINDING $1', [payload]);
+    assert.equal(created.success, true);
+    assert.equal(created.changes, 1);
+    assert.equal(created.rows[0].action,
+      SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING);
+    assert.equal(created.rows[0].operation_status, 'durable');
+    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_BINDINGS), 1);
+    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_DEFINITIONS), 0);
+    assert.equal(fixture.gateway.rowCount(TABLES.SERVICES), 0);
+    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_ENDPOINTS), 0);
+    const stored = JSON.parse(
+      fixture.gateway.rows(TABLES.SERVICE_BINDINGS)[0].normalized_binding);
+    assert.deepEqual(stored.capabilities, ['clock.read', 'network.client']);
+
+    const replay = await adapter.execute(
+      'session-1', 'CREATE BINDING $1;', [payload]);
+    assert.equal(replay.success, true);
+    assert.equal(replay.changes, 0);
+    assert.equal(replay.rows[0].operation_status, 'replayed');
+
+    const tenantB = await createAuthenticatedAdapter(fixture.engine, {
+      sessionId: 'tenant-b-binding-session',
+      tenantId: 'tenant-b',
+    });
+    const crossTenant = await tenantB.execute(
+      'tenant-b-binding-session', 'CREATE BINDING $1', [payload]);
+    assert.equal(crossTenant.success, false);
+    assert.equal(
+      crossTenant.errorCode,
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
+    );
+    assert.equal(
+      crossTenant.detail.ownerCode,
+      SERVICE_INSTALL_CATALOG_ERROR_CODE.PACKAGE_NOT_ELIGIBLE,
+    );
+    assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_BINDINGS), 1);
+  });
+
   it('persists canonical v2 artifact exports through authenticated INSTALL SERVICE',
     async () => {
       const fixture = createEngineFixture();

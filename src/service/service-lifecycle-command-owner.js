@@ -12,6 +12,10 @@ import {
   SERVICE_INSTALL_DESIRED_STATE,
   ServiceInstallCatalogError,
 } from '../control-plane/owners/index.js';
+import {DeploymentBindingError} from
+  '../control-plane/owners/deployment-binding-contract.js';
+import {deriveTenantPackageId} from
+  '../control-plane/owners/service-install-catalog-contract.js';
 import {SERVICE_LIFECYCLE_COMMAND as SERVICE_LIFECYCLE_SQL_COMMAND} from
   './service-lifecycle-command-contract.js';
 import {
@@ -22,6 +26,7 @@ import {normalizeExternalServiceManifest} from './external-service-manifest.js';
 const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
   ARTIFACT_REJECTED: 'service_lifecycle_artifact_rejected',
   CATALOG_REJECTED: 'service_lifecycle_catalog_rejected',
+  BINDING_REJECTED: 'service_lifecycle_binding_rejected',
   DEPENDENCY_REQUIRED: 'service_lifecycle_dependency_required',
   IDEMPOTENCY_CONFLICT: 'service_lifecycle_idempotency_conflict',
   INVALID_CONFIG: 'service_lifecycle_invalid_config',
@@ -37,6 +42,7 @@ const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
 const SERVICE_LIFECYCLE_COMMAND_STAGE = Object.freeze({
   ARTIFACT: 'artifact_resolution',
   CATALOG: 'catalog_submission',
+  BINDING: 'binding_submission',
   COMMAND: 'command_normalization',
   MANIFEST: 'manifest_normalization',
   SECURITY: 'security_context',
@@ -52,6 +58,7 @@ const SERVICE_LIFECYCLE_COMMAND_PATH = Object.freeze({
   CATALOG: '/catalog',
   CATALOG_PACKAGE: '/catalog/package',
   CATALOG_REVISION: '/catalog/revision',
+  BINDING: '/binding',
   COMMAND: '/command',
   CONFIG: '/payload/config',
   DEPENDENCIES: '/dependencies',
@@ -93,7 +100,6 @@ const SERVICE_LIFECYCLE_ID_KIND = Object.freeze({
   DEFINITION: 'definition',
   INSTALLATION: 'installation',
   OPERATION: 'operation',
-  PACKAGE: 'package',
   REVISION: 'revision',
 });
 
@@ -244,10 +250,7 @@ function normalizeConfig(config) {
 
 function buildIntentIdentity(command, payload, securityContext, manifest) {
   const config = normalizeConfig(payload.config);
-  const packageId = derivedId(SERVICE_LIFECYCLE_ID_KIND.PACKAGE, {
-    manifest,
-    tenantId: securityContext.tenantId,
-  });
+  const packageId = deriveTenantPackageId(manifest, securityContext.tenantId);
   const revisionId = derivedId(SERVICE_LIFECYCLE_ID_KIND.REVISION, {
     artifactSource: canonicalize(payload.artifact_source),
     config,
@@ -335,6 +338,23 @@ function operationRow(command, identity, installation, replayed) {
   });
 }
 
+function bindingOperationRow(command, binding) {
+  return deepFreeze({
+    action: command,
+    binding_id: binding.bindingId,
+    binding_name: binding.name,
+    binding_version_id: binding.bindingVersionId,
+    export_name: binding.declaration.target.export_name,
+    generation: binding.generation,
+    manifest_digest: binding.declaration.target.manifest_digest,
+    operation_status: binding.replayed ?
+      SERVICE_LIFECYCLE_OPERATION_STATUS.REPLAYED :
+      SERVICE_LIFECYCLE_OPERATION_STATUS.DURABLE,
+    package_id: binding.declaration.target.package_id,
+    source_kind: binding.declaration.source.kind,
+  });
+}
+
 function successResult(command, rows, changes = 0) {
   return deepFreeze({
     success: true,
@@ -345,18 +365,39 @@ function successResult(command, rows, changes = 0) {
   });
 }
 
+function classifyDelegatedFailure(error) {
+  if (error instanceof DeploymentBindingError) {
+    return {
+      code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.BINDING_REJECTED,
+      stage: SERVICE_LIFECYCLE_COMMAND_STAGE.BINDING,
+      known: true,
+    };
+  }
+  if (error instanceof ServiceInstallCatalogError) {
+    return {
+      code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
+      stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
+      known: true,
+    };
+  }
+  return {
+    code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
+    stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
+    known: false,
+  };
+}
+
 function failureResult(error) {
-  const known = error instanceof ServiceLifecycleCommandError;
-  const catalog = error instanceof ServiceInstallCatalogError;
-  const code = known ? error.code :
-    SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED;
-  const stage = known ? error.stage : SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG;
-  const path = known ? error.path :
-    (catalog ? error.path : SERVICE_LIFECYCLE_COMMAND_PATH.CATALOG);
-  const ownerCode = catalog ? error.code : undefined;
+  const delegated = classifyDelegatedFailure(error);
+  const lifecycle = error instanceof ServiceLifecycleCommandError;
+  const known = lifecycle || delegated.known;
+  const code = lifecycle ? error.code : delegated.code;
+  const stage = lifecycle ? error.stage : delegated.stage;
+  const path = known ? error.path : SERVICE_LIFECYCLE_COMMAND_PATH.CATALOG;
+  const ownerCode = delegated.known ? error.code : undefined;
   return deepFreeze({
     success: false,
-    error: known || catalog ? error.message :
+    error: known ? error.message :
       SERVICE_LIFECYCLE_COMMAND_MESSAGE.COMMAND_FAILED,
     errorCode: code,
     detail: {
@@ -387,6 +428,7 @@ class ServiceLifecycleCommandOwner {
       );
     }
     this.catalogOwner = options.catalogOwner;
+    this.bindingOwner = options.bindingOwner || null;
     this.artifactResolver = options.artifactResolver;
     this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
   }
@@ -395,6 +437,8 @@ class ServiceLifecycleCommandOwner {
     try {
       const context = validateSecurityContext(securityContext);
       switch (command) {
+      case SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING:
+        return await this.submitBinding(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
       case SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE:
         return await this.submitArtifactIntent(command, payload, context);
@@ -429,6 +473,24 @@ class ServiceLifecycleCommandOwner {
       );
     }
     return result.manifest;
+  }
+
+  async submitBinding(command, payload, securityContext) {
+    if (typeof this.bindingOwner?.createBinding !== 'function') {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.DEPENDENCY_REQUIRED,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.BINDING,
+        SERVICE_LIFECYCLE_COMMAND_PATH.BINDING,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.DEPENDENCIES_REQUIRED,
+      );
+    }
+    const binding = await this.bindingOwner.createBinding(
+      payload, securityContext);
+    return successResult(
+      command,
+      [bindingOperationRow(command, binding)],
+      binding.replayed ? 0 : 1,
+    );
   }
 
   async resolveArtifact(manifest, artifactSource) {

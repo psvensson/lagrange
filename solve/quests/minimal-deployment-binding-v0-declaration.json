@@ -1,0 +1,77 @@
+{
+  "id": "minimal-deployment-binding-v0-declaration",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Authenticated CREATE BINDING persists one tenant-scoped immutable Binding v0 declaration through a single DeploymentBindingOwner: the declaration pins package_id, manifest_digest, and export name; validates one of seven closed source variants against the export interface; normalizes bounded context, budgets, derived capabilities, and fixed-voter/learner elasticity; replays byte-identically or fails typed on conflict; and creates no service_definitions, runtime activation, or Cell state.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-2.0-minimal-deployment-surface",
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "minimal-deployment-artifact-binding-identity-replacement",
+    "planDoc": "solve/epics/minimal-deployment-surface.md",
+    "draftedAtCommit": "2e442b7f6225e39756eb3b2d03591b904e936db8"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-binding-v0-declaration",
+      "reportDir": "test-output/reports",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-binding-v0-declaration-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-binding-v0-declaration",
+          "reportDir": "test-output/reports",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "single-binding-owner",
+      "statement": "Add one DeploymentBindingOwner backed by one service_bindings system table and the existing SystemMetadataOwnerBase/gateway substrate. SQL, bootstrap, cache, and catalog collaborators delegate to this owner; no second validator, registry, raw table writer, or Binding side channel is allowed."
+    },
+    {
+      "id": "immutable-v0-lifecycle",
+      "statement": "Binding v0 is create-only. The owner derives tenant-scoped binding_id from authenticated tenant plus normalized name and binding_version_id from binding_id plus generation 1; exact replay returns replayed, differing replay returns binding_conflict, and no update, delete, mutable active flag, or user-selected generation exists. Later replacement/removal must append a new generation in a separate Quest."
+    },
+    {
+      "id": "closed-source-union",
+      "statement": "The source field is a closed tagged union with no extra fields: request={kind,method,path}; change={kind,operations,tables}; call={kind,name}; pushdown={kind,name}; time={kind,interval_ms}; once={kind}; boot={kind}. Sets normalize lexically. Compatibility is fixed one-to-one to request_v1, change_v1, call_v1, pushdown_v1, time_v1, once_v1, and boot_v1; a mismatch is typed and no interface is accepted from user authority."
+    },
+    {
+      "id": "authenticated-artifact-target",
+      "statement": "Target is exactly package_id, manifest_digest, and export_name. DeploymentBindingOwner resolves it only through ServiceInstallCatalogOwner, verifies package eligibility for the authenticated tenant from the stored canonical manifest and shared package identity derivation, requires schema v2, and rejects missing exports, corruption, digest mismatch, or cross-tenant package IDs without persisting. OCI digest shorthand remains excluded."
+    },
+    {
+      "id": "normalized-policy-envelope",
+      "statement": "contexts is a unique lexical array of canonical table:global.* identities and must be a subset of the selected export's reads/writes. capabilities is owner-derived as the sorted artifact capability set and cannot be supplied or widened by the caller. budgets has exactly cpu_time_ms 1..60000, wall_time_ms 1..300000 and >= cpu_time_ms, memory_bytes 1..1073741824, input_bytes 0..16777216, output_bytes 0..16777216, and context_bytes 0..67108864. elasticity has exactly odd voters 3..9 and min_learners/max_learners with 0 <= min <= max <= 32; artifact replication fields are not reused as Binding authority."
+    },
+    {
+      "id": "authenticated-production-ingress",
+      "statement": "Extend the existing first-class lifecycle SQL path with exact parameterized CREATE BINDING $1 grammar and a distinct pgwire.binding.create policy action. The JSON payload has exactly schema_version, name, target, source, contexts, budgets, and elasticity; authenticated tenant/principal/roles remain server-derived, password-mode defaults authorize the new action, trust mode does not, and SQL transactions remain forbidden."
+    },
+    {
+      "id": "replicated-declaration-not-runtime",
+      "statement": "service_bindings is immutable desired declaration state and is explicitly classified for internal CDC propagation so a later reconciler can wake from replicated change notification. This Quest does not write service_definitions, schedule reconciliation, activate runtimes, publish endpoints, create Cells, add compatibility ingress, or add a feature flag/fallback."
+    },
+    {
+      "id": "proof-and-residuals",
+      "statement": "Proof covers all seven variants and unknown-field rejection, source/interface mismatch, tenant isolation, exact canonical row projection and corruption checks, context/capability non-widening, every numeric boundary, concurrent conflict and applied-write-lost replay, authenticated SQL engagement, bootstrap/schema/cache classification, absence of service_definitions/runtime writes, a structural single-owner guard, and red-on-revert. Existing-cluster provisioning of a newly built-in table is recorded as a cutover prerequisite rather than hidden behind fallback behavior."
+    }
+  ]
+}

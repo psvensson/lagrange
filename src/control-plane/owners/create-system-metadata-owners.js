@@ -1,4 +1,5 @@
 import {ControlPlanePublicationsOwner} from './control-plane-publications-owner.js';
+import {DeploymentBindingOwner} from './deployment-binding-owner.js';
 import {LogsOwner} from './logs-owner.js';
 import {MessageGroupsOwner} from './message-groups-owner.js';
 import {NodeEndpointsOwner} from './node-endpoints-owner.js';
@@ -21,6 +22,7 @@ function createOwnerOptions(options = {}) {
 
 function createSystemMetadataOwners(options = {}) {
   const ownerOptions = createOwnerOptions(options);
+  const serviceInstallCatalogOwner = new ServiceInstallCatalogOwner(ownerOptions);
   return Object.freeze({
     controlPlanePublicationsOwner: new ControlPlanePublicationsOwner(ownerOptions),
     nodesOwner: new NodesOwner(ownerOptions),
@@ -32,7 +34,11 @@ function createSystemMetadataOwners(options = {}) {
     logsOwner: new LogsOwner(ownerOptions),
     serviceEndpointsOwner: new ServiceEndpointsOwner(ownerOptions),
     serviceDefinitionsOwner: new ServiceDefinitionsOwner(ownerOptions),
-    serviceInstallCatalogOwner: new ServiceInstallCatalogOwner(ownerOptions),
+    serviceInstallCatalogOwner,
+    deploymentBindingOwner: new DeploymentBindingOwner({
+      ...ownerOptions,
+      catalogOwner: serviceInstallCatalogOwner,
+    }),
   });
 }
 

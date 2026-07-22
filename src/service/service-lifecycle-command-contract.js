@@ -3,6 +3,7 @@
  */
 
 const SERVICE_LIFECYCLE_COMMAND = Object.freeze({
+  CREATE_BINDING: 'create_binding',
   INSTALL: 'install_service',
   REMOVE: 'remove_service',
   SHOW_ALL: 'show_services',

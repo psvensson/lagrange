@@ -281,6 +281,41 @@ const SERVICE_TIMERS_SCHEMA = {
 };
 
 /**
+ * Immutable tenant-scoped Binding declaration generations.
+ * Runtime actuals and mutable head state are intentionally absent.
+ */
+const SERVICE_BINDINGS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SERVICE_BINDINGS,
+  columns: [
+    {name: 'binding_version_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'binding_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'tenant_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'binding_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'generation', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'binding_digest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'package_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'manifest_digest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'export_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'source_kind', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'normalized_binding', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'created_by', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_service_bindings_identity_generation',
+      columns: ['binding_id', 'generation'],
+      unique: true,
+    },
+    {
+      name: 'idx_service_bindings_tenant_name',
+      columns: ['tenant_id', 'binding_name'],
+    },
+    {name: 'idx_service_bindings_package', columns: ['package_id']},
+  ],
+};
+
+/**
  * Immutable, verified external service package identities.
  * Runtime instance and endpoint observations are intentionally absent.
  */
@@ -605,6 +640,7 @@ export {
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
   SERVICE_DEFINITIONS_SCHEMA,
+  SERVICE_BINDINGS_SCHEMA,
   SERVICE_ENDPOINTS_SCHEMA,
   SERVICE_PARTITION_ACCESS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,
