@@ -199,6 +199,24 @@ describe('admin-runtime-service-views', () => {
       assert.equal(groups[0].health, LOGICAL_SERVICE_HEALTH.PARTIAL);
     });
 
+    it('reports the system-policy target for Binding-derived Cells', () => {
+      const serviceId = `binding-service-${'a'.repeat(64)}`;
+      const endpoints = [createEndpoint({
+        [EP_COL.SERVICE_ID]: serviceId,
+      })];
+      const definitions = [createDefinition({
+        service_id: serviceId,
+        replica_count: 0,
+        binding_version_id: `binding-version-${'b'.repeat(64)}`,
+      })];
+
+      const groups = groupReplicasByLogicalService(endpoints, definitions);
+
+      assert.equal(groups[0].desired_replica_count, 3);
+      assert.equal(groups[0].observed_replica_count, 1);
+      assert.equal(groups[0].health, LOGICAL_SERVICE_HEALTH.PARTIAL);
+    });
+
     it('collects unique nodes per group', () => {
       const endpoints = [
         createEndpoint({

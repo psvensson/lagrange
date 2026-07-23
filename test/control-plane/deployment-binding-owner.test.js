@@ -15,10 +15,12 @@ import {
   DEPLOYMENT_BINDING_SOURCE_INTERFACE,
   DEPLOYMENT_BINDING_SOURCE_KIND,
   DeploymentBindingError,
+  buildBindingRow,
   canonicalJson,
   deriveBindingId,
   deriveBindingVersionId,
   normalizeDeploymentBinding,
+  projectBinding,
 } from '../../src/control-plane/owners/deployment-binding-contract.js';
 import {
   SERVICE_INSTALL_CATALOG_ERROR_CODE,
@@ -204,7 +206,7 @@ async function seedPackage(catalog, tenantId = TENANT) {
 
 function bindingInput(package_, overrides = {}) {
   return {
-    schema_version: 0,
+    schema_version: 1,
     name: 'orders-api',
     target: {
       package_id: package_.packageId,
@@ -221,7 +223,6 @@ function bindingInput(package_, overrides = {}) {
       output_bytes: 4096,
       context_bytes: 8192,
     },
-    elasticity: {voters: 3, min_learners: 0, max_learners: 2},
     ...overrides,
   };
 }
@@ -232,7 +233,7 @@ function assertBindingCode(error, code) {
   return true;
 }
 
-describe('deployment Binding v0 contract', () => {
+describe('deployment Binding v1 contract', () => {
   test('owns the seven closed source-to-interface mappings', () => {
     assert.deepEqual(
       Object.keys(DEPLOYMENT_BINDING_SOURCE_KIND).sort(),
@@ -254,7 +255,7 @@ describe('deployment Binding v0 contract', () => {
 
   test('normalizes a strict request declaration', () => {
     const normalized = normalizeDeploymentBinding({
-      schema_version: 0,
+      schema_version: 1,
       name: 'orders-api',
       target: {
         package_id: `service-package-${'a'.repeat(64)}`,
@@ -271,11 +272,11 @@ describe('deployment Binding v0 contract', () => {
         output_bytes: 4096,
         context_bytes: 8192,
       },
-      elasticity: {voters: 3, min_learners: 0, max_learners: 2},
     });
 
-    assert.equal(normalized.schema_version, 0);
+    assert.equal(normalized.schema_version, 1);
     assert.equal(normalized.source.kind, 'request');
+    assert.equal(Object.hasOwn(normalized, 'elasticity'), false);
     assert.ok(Object.isFrozen(normalized));
   });
 
@@ -288,6 +289,10 @@ describe('deployment Binding v0 contract', () => {
       const valid = bindingInput(package_);
       const invalid = [
         {...valid, capabilities: []},
+        {
+          ...valid,
+          elasticity: {voters: 3, min_learners: 0, max_learners: 2},
+        },
         {...valid, source: {...valid.source, interface: 'request_v1'}},
         {...valid, contexts: ['table:global.orders', 'table:global.orders']},
         {...valid, budgets: {...valid.budgets, cpu_time_ms: 0}},
@@ -303,14 +308,6 @@ describe('deployment Binding v0 contract', () => {
         {...valid, budgets: {...valid.budgets, output_bytes: 16777217}},
         {...valid, budgets: {...valid.budgets, context_bytes: -1}},
         {...valid, budgets: {...valid.budgets, context_bytes: 67108865}},
-        {...valid, elasticity: {...valid.elasticity, voters: 2}},
-        {...valid, elasticity: {...valid.elasticity, voters: 4}},
-        {...valid, elasticity: {...valid.elasticity, voters: 11}},
-        {...valid, elasticity: {...valid.elasticity, min_learners: -1}},
-        {...valid, elasticity: {...valid.elasticity, min_learners: 3}},
-        {...valid, elasticity: {...valid.elasticity, min_learners: 33}},
-        {...valid, elasticity: {...valid.elasticity, max_learners: -1}},
-        {...valid, elasticity: {...valid.elasticity, max_learners: 33}},
         {...valid, source: {kind: 'time', interval_ms: 0}},
         {...valid, source: {kind: 'time', interval_ms: 86400001}},
       ];
@@ -334,7 +331,6 @@ describe('deployment Binding v0 contract', () => {
             output_bytes: 0,
             context_bytes: 0,
           },
-          elasticity: {voters: 3, min_learners: 0, max_learners: 0},
         },
         {
           ...valid,
@@ -347,15 +343,55 @@ describe('deployment Binding v0 contract', () => {
             output_bytes: 16777216,
             context_bytes: 67108864,
           },
-          elasticity: {voters: 9, min_learners: 32, max_learners: 32},
         },
       ]) {
         assert.doesNotThrow(() => normalizeDeploymentBinding(candidate));
       }
     });
+
+  test('replays legacy v0 elasticity without accepting it at v1 ingress',
+    () => {
+      const current = bindingInput({
+        packageId: `service-package-${'a'.repeat(64)}`,
+        manifestDigest: `sha256:${'b'.repeat(64)}`,
+      });
+      const legacyDeclaration = {
+        ...current,
+        capabilities: ['clock.read'],
+        contexts: [...current.contexts].sort(),
+        elasticity: {
+          max_learners: 4,
+          min_learners: 1,
+          voters: 5,
+        },
+        schema_version: 0,
+      };
+      const row = buildBindingRow(
+        legacyDeclaration,
+        SECURITY_CONTEXT,
+        1000,
+      );
+
+      const replayed = projectBinding(row, true);
+
+      assert.equal(replayed.replayed, true);
+      assert.deepEqual(
+        replayed.declaration.elasticity,
+        legacyDeclaration.elasticity,
+      );
+      const {capabilities: _capabilities, ...legacyIngress} =
+        legacyDeclaration;
+      assert.throws(
+        () => normalizeDeploymentBinding(legacyIngress),
+        (error) => assertBindingCode(
+          error,
+          DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+        ),
+      );
+    });
 });
 
-describe('deployment Binding v0 system-table owner', () => {
+describe('deployment Binding system-table owner', () => {
   test('registers one replicated declaration table without runtime actuals', () => {
     const schema = SYSTEM_TABLE_SCHEMAS.find(
       (candidate) => candidate.tableName === TABLES.SERVICE_BINDINGS);

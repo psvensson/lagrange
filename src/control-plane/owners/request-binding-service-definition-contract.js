@@ -61,6 +61,8 @@ const REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE = Object.freeze({
 
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
+const INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND = 'invalid';
+const LEGACY_ELASTICITY_FIELD = 'elasticity';
 const REQUEST_BINDING_SERVICE_DEFINITION_ERROR_NAME =
   'RequestBindingServiceDefinitionError';
 const SERVICE_ID_PREFIX = 'binding-service-';
@@ -116,20 +118,20 @@ function getBindingServiceDefinitionSourceKind(row) {
       typeof bindingDigest !== 'string' ||
       typeof bindingProjection !== 'string' ||
       serviceId !== deriveRequestServiceDefinitionId(bindingVersionId)) {
-    return null;
+    return INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
   }
   try {
     const projection = JSON.parse(bindingProjection);
     if (projection?.binding_version_id !== bindingVersionId ||
         projection?.binding_digest !== bindingDigest) {
-      return null;
+      return INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
     }
     const sourceKind = projection?.declaration?.source?.kind;
     return supportsBindingServiceDefinitionSourceKind(sourceKind) ?
       sourceKind :
-      null;
+      INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
   } catch {
-    return null;
+    return INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
   }
 }
 
@@ -278,6 +280,25 @@ function buildActivatedRequestBindingServiceDefinition(
   }
   return Object.freeze({
     ...compiledDefinition,
+    [SD_COL.STATUS]: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
+  });
+}
+
+function buildLegacyActivatedRequestBindingServiceDefinition(
+  compiledDefinition,
+  binding,
+) {
+  if (!Object.hasOwn(
+    binding?.declaration || {},
+    LEGACY_ELASTICITY_FIELD,
+  ) ||
+      binding?.declaration?.source?.kind !==
+        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST ||
+      !Number.isSafeInteger(binding?.declaration?.elasticity?.voters)) {
+    return null;
+  }
+  return Object.freeze({
+    ...compiledDefinition,
     [SD_COL.REPLICA_COUNT]: binding.declaration.elasticity.voters,
     [SD_COL.STATUS]: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
   });
@@ -295,6 +316,7 @@ export {
   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
   RequestBindingServiceDefinitionError,
   buildActivatedRequestBindingServiceDefinition,
+  buildLegacyActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
   deriveRequestServiceDefinitionId,
   getBindingServiceDefinitionSourceKind,

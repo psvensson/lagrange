@@ -59,12 +59,15 @@ const EXTERNAL_SERVICE_MANIFEST_PATH = Object.freeze({
   ARTIFACT_REF: '/artifact/ref',
   ARTIFACT_TYPE: '/artifact/type',
   EXPORTS: '/exports',
+  REPLICATION: '/replication',
   ROOT: '/',
   RUNTIME_KIND: '/runtime/kind',
   SCHEMA_VERSION: '/schema_version',
 });
 
 const EXTERNAL_SERVICE_MANIFEST_MESSAGE = Object.freeze({
+  CALLER_OWNED_REPLICATION:
+    'service Cell replication is selected by system policy, not manifests',
   INVALID_SCHEMA_VALUE: 'is invalid',
   NOT_JSON_OBJECT: 'external service manifest must be a JSON object',
   NOT_NORMALIZED_JSON_OBJECT:
@@ -77,6 +80,7 @@ const EXPECTED_MEDIA_TYPE = Object.freeze({
   [RUNTIME_KIND.OCI_CONTAINER]: EXTERNAL_SERVICE_MEDIA_TYPE.OCI_CONTAINER,
   [RUNTIME_KIND.WASM_COMPONENT]: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
 });
+const REPLICATION_FIELD = 'replication';
 
 const STRING_ARRAY_SCHEMA = {
   type: 'array',
@@ -151,18 +155,6 @@ const COMMON_PROPERTIES = {
       runtime_options: {type: 'object'},
     },
   },
-  replication: {
-    type: 'object',
-    additionalProperties: true,
-    properties: {
-      mode: {
-        enum: ['replicated_service', 'singleton', 'sharded'],
-      },
-      replicas: {type: 'integer', minimum: 1},
-      placement: {type: 'object'},
-      failover_policy: {type: 'object'},
-    },
-  },
   capabilities: STRING_ARRAY_SCHEMA,
   compatibility: {
     type: 'object',
@@ -219,6 +211,19 @@ const COMMON_PROPERTIES = {
   },
 };
 
+const LEGACY_REPLICATION_SCHEMA = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    mode: {
+      enum: ['replicated_service', 'singleton', 'sharded'],
+    },
+    replicas: {type: 'integer', minimum: 1},
+    placement: {type: 'object'},
+    failover_policy: {type: 'object'},
+  },
+};
+
 const schemaV1 = {
   $id: 'lagrange.external-service-manifest.v1',
   type: 'object',
@@ -230,6 +235,7 @@ const schemaV1 = {
       const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1,
     },
     ...COMMON_PROPERTIES,
+    replication: LEGACY_REPLICATION_SCHEMA,
   },
 };
 
@@ -259,13 +265,16 @@ const TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
   'display_name',
   'publisher',
   'description',
-  'replication',
   'capabilities',
   'compatibility',
   'config_schema',
   'upgrade',
   'dependencies',
   'health',
+]);
+const LEGACY_TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
+  ...TOP_LEVEL_OPTIONAL_FIELDS,
+  'replication',
 ]);
 
 const ARTIFACT_OPTIONAL_FIELDS = Object.freeze(['size_bytes', 'signature']);
@@ -390,6 +399,18 @@ function duplicateExportNameErrors(manifest) {
   return errors;
 }
 
+function callerOwnedReplicationErrors(manifest) {
+  if (manifest.schema_version !== EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION ||
+      !Object.hasOwn(manifest, REPLICATION_FIELD)) {
+    return [];
+  }
+  return [{
+    code: EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.INVALID_FIELD,
+    path: EXTERNAL_SERVICE_MANIFEST_PATH.REPLICATION,
+    message: EXTERNAL_SERVICE_MANIFEST_MESSAGE.CALLER_OWNED_REPLICATION,
+  }];
+}
+
 function mismatchError(manifest) {
   const kind = manifest.runtime?.kind;
   const mediaType = manifest.artifact?.media_type;
@@ -432,7 +453,13 @@ function normalizedManifest(manifest) {
     name: manifest.name,
     version: manifest.version,
   };
-  copyOptionalFields(normalized, manifest, TOP_LEVEL_OPTIONAL_FIELDS);
+  copyOptionalFields(
+    normalized,
+    manifest,
+    manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 ?
+      LEGACY_TOP_LEVEL_OPTIONAL_FIELDS :
+      TOP_LEVEL_OPTIONAL_FIELDS,
+  );
   if (manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION) {
     normalized.exports = normalizedExports(manifest.exports);
   }
@@ -467,6 +494,7 @@ function normalizeExternalServiceManifest(input) {
   const structurallyValid = validator(clone.value);
   const errors = structurallyValid ? [] : schemaErrors(validator);
   errors.push(...duplicateExportNameErrors(clone.value));
+  errors.push(...callerOwnedReplicationErrors(clone.value));
   const mismatch = mismatchError(clone.value);
   if (mismatch) errors.push(mismatch);
   if (errors.length > 0) return rejectedResult(errors);

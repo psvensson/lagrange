@@ -3,6 +3,9 @@ import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 
 const SOURCE = Object.freeze({
+  bindingDeclaration: readFileSync(
+    'src/control-plane/owners/deployment-binding-contract.js', 'utf8',
+  ),
   bindingContract: readFileSync(
     'src/control-plane/owners/request-binding-service-definition-contract.js',
     'utf8',
@@ -17,10 +20,21 @@ const SOURCE = Object.freeze({
   planner: readFileSync(
     'src/bootstrap/shared/runtime-service-rebalancer-setup.js', 'utf8',
   ),
+  runtimePolicy: readFileSync(
+    'src/rebalancer/runtime-service-policy.js', 'utf8',
+  ),
   seedPhase: readFileSync(
     'src/bootstrap/phases/seed-registration-phase.js', 'utf8',
   ),
 });
+
+function between(source, startMarker, endMarker) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  assert.ok(start >= 0, `${startMarker} must exist`);
+  assert.ok(end > start, `${endMarker} must follow ${startMarker}`);
+  return source.slice(start, end);
+}
 
 test('Binding owns user desired-service declaration and the existing planner ' +
   'owns compilation', () => {
@@ -72,6 +86,48 @@ test('request Cell placement keeps compilation two-phase and owner-controlled',
       /DEPLOYMENT_BINDING_SOURCE_KIND\.REQUEST/u,
     );
   });
+
+test('Binding Cells leave replica targets to the existing runtime policy', () => {
+  const ingressFields = between(
+    SOURCE.bindingDeclaration,
+    'const ROOT_FIELDS',
+    'const LEGACY_ROOT_FIELDS',
+  );
+  const ingressNormalizer = between(
+    SOURCE.bindingDeclaration,
+    'function normalizeDeploymentBinding',
+    'function normalizeLegacyStoredDeploymentBinding',
+  );
+  const activation = between(
+    SOURCE.bindingContract,
+    'function buildActivatedRequestBindingServiceDefinition',
+    'function buildLegacyActivatedRequestBindingServiceDefinition',
+  );
+  assert.doesNotMatch(
+    `${ingressFields}\n${ingressNormalizer}`,
+    /elasticity|min_learners|max_learners|voters/u,
+  );
+  assert.doesNotMatch(
+    activation,
+    /binding\.declaration\.elasticity/u,
+  );
+  assert.match(
+    SOURCE.bindingDeclaration,
+    /normalizeLegacyStoredDeploymentBinding/u,
+  );
+  assert.match(
+    SOURCE.bindingContract,
+    /buildLegacyActivatedRequestBindingServiceDefinition/u,
+  );
+  assert.match(
+    SOURCE.runtimePolicy,
+    /REBALANCER_DEFAULT_POLICY\.RUNTIME_SERVICE\.targetReplicaCount/u,
+  );
+  assert.match(
+    SOURCE.runtimePolicy,
+    /hasRequestBindingServiceDefinitionLineage/u,
+  );
+});
 
 test('legacy user service-definition mutation ingress is absent while axiomatic ' +
   'built-ins remain', () => {

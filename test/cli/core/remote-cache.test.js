@@ -287,6 +287,33 @@ test('RemoteCache - getLogicalServices aggregates definitions and endpoints',
       'marks service healthy when desired replicas are healthy');
   });
 
+test('RemoteCache - reports system-policy targets for Binding Cells',
+  async (t) => {
+    const cache = new RemoteCache();
+    const serviceId = `binding-service-${'a'.repeat(64)}`;
+    cache.loadFromDump({
+      service_definitions: [{
+        service_id: serviceId,
+        service_name: 'orders-api',
+        runtime_kind: 'wasm_component',
+        replica_count: 0,
+        binding_version_id: `binding-version-${'b'.repeat(64)}`,
+      }],
+      service_endpoints: [{
+        endpoint_id: 'orders-api-node-1',
+        service_id: serviceId,
+        node_id: 'node-1',
+        health_status: 'healthy',
+      }],
+    });
+
+    const [service] = cache.getLogicalServices();
+    t.equal(service.replica_count, 3,
+      'desired count is the runtime-service policy output');
+    t.equal(service.replica_count_observed, 1);
+    t.equal(service.status, 'partial');
+  });
+
 test('RemoteCache - getLogicalServices supports nodeId filter', async (t) => {
   const cache = new RemoteCache();
   cache.loadFromDump({

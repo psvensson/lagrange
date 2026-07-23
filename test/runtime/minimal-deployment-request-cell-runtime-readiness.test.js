@@ -113,7 +113,6 @@ function definition(overrides = {}) {
     },
     capabilities: ['clock.read'],
     contexts: ['table:global.audit'],
-    elasticity: {max_learners: 0, min_learners: 0, voters: 1},
     name: 'request-cell-binding',
     source: {kind: 'request', method: 'POST', path: '/cell'},
     target: {
@@ -295,7 +294,7 @@ async function assertNotReady(fixture) {
 }
 
 describe('minimal deployment request Cell runtime readiness', () => {
-  test('uses canonical Binding v0 budget boundaries at runtime admission',
+  test('uses canonical Binding budget boundaries at runtime admission',
     () => {
       const minimumBudgets = {
         context_bytes: 0,

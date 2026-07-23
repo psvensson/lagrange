@@ -159,7 +159,6 @@ function attachServiceDefinition(cache) {
         budgets: RUNTIME_BUDGETS,
         capabilities: [],
         contexts: [],
-        elasticity: {voters: 3, min_learners: 1, max_learners: 2},
         name: 'formation-runtime-service-create-lane',
         source: {kind: 'request', method: 'POST', path: '/orders'},
         target: {

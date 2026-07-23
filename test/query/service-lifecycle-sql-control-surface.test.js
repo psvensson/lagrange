@@ -542,7 +542,7 @@ describe('service lifecycle SQL classification and security boundary', () => {
 });
 
 describe('service lifecycle SQL durable owner route', () => {
-  it('persists Binding v0 through authenticated CREATE BINDING ' +
+  it('persists Binding v1 through authenticated CREATE BINDING ' +
     '(red-on-revert owner engagement)', async () => {
     const fixture = createEngineFixture();
     const adapter = await createAuthenticatedAdapter(fixture.engine);
@@ -565,7 +565,7 @@ describe('service lifecycle SQL durable owner route', () => {
     const [packageRow] = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
     const package_ = await fixture.catalogOwner.getPackage(packageRow.package_id);
     const payload = JSON.stringify({
-      schema_version: 0,
+      schema_version: 1,
       name: 'orders-api',
       target: {
         package_id: package_.packageId,
@@ -582,7 +582,6 @@ describe('service lifecycle SQL durable owner route', () => {
         output_bytes: 4096,
         context_bytes: 8192,
       },
-      elasticity: {voters: 3, min_learners: 0, max_learners: 2},
     });
 
     const spoofedPayload = JSON.parse(payload);

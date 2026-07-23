@@ -1,11 +1,12 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {SD_COL} from '../wasm-service/wasm-service-models.js';
 import {
   buildServiceDataAffinityWeights,
 } from './service-data-affinity-weights.js';
 import {
   PLACEMENT_OWNER_POLICY_FIELD,
 } from './placement-owner-evidence.js';
+import {resolveRuntimeServiceTargetReplicaCount} from
+  './runtime-service-policy.js';
 
 const {
   EntityType,
@@ -18,7 +19,6 @@ const {
 } = UNIFIED_REBALANCER_SHARED;
 
 const POLICY_SCHEDULER_CONSTRUCTOR = 'constructor';
-const SERVICE_DEFINITION_REPLICA_COUNT_COLUMN = SD_COL.REPLICA_COUNT;
 
 class UnifiedRebalancerPolicySchedulerMethods {
   /**
@@ -56,11 +56,11 @@ class UnifiedRebalancerPolicySchedulerMethods {
   /**
    * Get runtime service policy.
    *
-   * Starts from the static runtime-service placement defaults and overrides
-   * `targetReplicaCount` with the per-entity desired `replica_count` from this
-   * service's `service_definitions` row, so `scale` and "ship not-started"
-   * (`replica_count = 0`) drive placement. A missing/non-finite/negative value
-   * falls back to the static default; an explicit `0` is honored (place none).
+   * Starts from the system-owned runtime-service placement policy. Legacy
+   * non-Binding definitions may override `targetReplicaCount` with their
+   * desired `replica_count`, preserving built-in scale and "ship not-started"
+   * behavior. Binding-derived definitions never supply placement intent:
+   * target/min/max, topology, capacity, and affinity remain policy outputs.
    *
    * Affinity lift (service↔data affinity placement epic): fresh
    * cross-node attribution rows always become per-node/per-group
@@ -77,12 +77,8 @@ class UnifiedRebalancerPolicySchedulerMethods {
       SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
       this.entityId,
     );
-    const desiredReplicaCount = Number(
-      definition?.[SERVICE_DEFINITION_REPLICA_COUNT_COLUMN],
-    );
-    if (Number.isFinite(desiredReplicaCount) && desiredReplicaCount >= 0) {
-      policy.targetReplicaCount = desiredReplicaCount;
-    }
+    policy.targetReplicaCount =
+      resolveRuntimeServiceTargetReplicaCount(definition);
     const {nodeWeights, groupWeights} = buildServiceDataAffinityWeights({
       systemTableCache: this.systemTableCache,
       serviceId: this.entityId,

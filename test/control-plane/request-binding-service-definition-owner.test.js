@@ -9,6 +9,10 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
+  buildBindingRow,
+} from
+  '../../src/control-plane/owners/deployment-binding-contract.js';
+import {
   REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE,
   RequestBindingServiceDefinitionError,
   buildRequestBindingServiceDefinition,
@@ -156,7 +160,7 @@ function resolvedArtifact() {
 
 function bindingInput(package_, overrides = {}) {
   return {
-    schema_version: 0,
+    schema_version: 1,
     name: 'orders-api',
     target: {
       package_id: package_.packageId,
@@ -173,9 +177,25 @@ function bindingInput(package_, overrides = {}) {
       output_bytes: 8192,
       context_bytes: 16384,
     },
-    elasticity: {voters: 3, min_learners: 1, max_learners: 2},
     ...overrides,
   };
+}
+
+function legacyBindingRow(package_) {
+  return buildBindingRow(
+    {
+      ...bindingInput(package_),
+      capabilities: ['clock.read', 'network.client'],
+      elasticity: {
+        max_learners: 4,
+        min_learners: 1,
+        voters: 5,
+      },
+      schema_version: 0,
+    },
+    SECURITY_CONTEXT,
+    1000,
+  );
 }
 
 function createCache(gateway) {
@@ -284,8 +304,8 @@ describe('request Binding desired-service compilation owner', () => {
       );
     });
 
-  test('the existing planning leader activates the complete pinned projection ' +
-    'at the fixed voter count and admits one placement owner', async () => {
+  test('the planning leader activates the complete pinned projection without ' +
+    'declaring replica intent and admits one placement owner', async () => {
     const fixture = await createFixture();
     fixture.gateway.writes.length = 0;
     const planner = createPlanner(fixture);
@@ -303,7 +323,7 @@ describe('request Binding desired-service compilation owner', () => {
     assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
     assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
     assert.equal(row[SD_COL.STATUS], 'active');
-    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+    assert.equal(row[SD_COL.REPLICA_COUNT], 0);
     assert.equal(row[SD_COL.RUNTIME_KIND], 'oci_container');
     assert.equal(
       row[SD_COL.RUNTIME_REF],
@@ -333,10 +353,7 @@ describe('request Binding desired-service compilation owner', () => {
       projection.declaration.capabilities,
       ['clock.read', 'network.client'],
     );
-    assert.deepEqual(
-      projection.declaration.elasticity,
-      {max_learners: 2, min_learners: 1, voters: 3},
-    );
+    assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
     assert.deepEqual(
       fixture.gateway.writes.map((write) => write.operation),
       ['insert', 'update'],
@@ -372,7 +389,7 @@ describe('request Binding desired-service compilation owner', () => {
       const row = fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS)
         .get(compiled.service_id);
       assert.equal(row[SD_COL.STATUS], 'active');
-      assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+      assert.equal(row[SD_COL.REPLICA_COUNT], 0);
       assert.deepEqual(
         fixture.gateway.writes
           .filter((write) =>
@@ -381,6 +398,54 @@ describe('request Binding desired-service compilation owner', () => {
         ['update'],
       );
       assert.equal(planner.rebalancers.length, 1);
+      planner.owner.shutdown();
+    });
+
+  test('replays a pre-cutover active row without restoring replica authority',
+    async () => {
+      const fixture = await createFixture();
+      const bindingRow = legacyBindingRow(fixture.package_);
+      fixture.gateway.rows(TABLES.SERVICE_BINDINGS).clear();
+      fixture.gateway.rows(TABLES.SERVICE_BINDINGS).set(
+        bindingRow.binding_version_id,
+        clone(bindingRow),
+      );
+      const artifact = await fixture.owners.serviceInstallCatalogOwner
+        .getBindableArtifactForTenant(
+          bindingRow.package_id,
+          bindingRow.manifest_digest,
+          TENANT_ID,
+        );
+      const compiled = buildRequestBindingServiceDefinition(
+        bindingRow,
+        artifact,
+      );
+      const legacyActive = {
+        ...compiled,
+        [SD_COL.REPLICA_COUNT]: 5,
+        [SD_COL.STATUS]: 'active',
+      };
+      fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).set(
+        compiled.service_id,
+        clone(legacyActive),
+      );
+      fixture.gateway.writes.length = 0;
+      const planner = createPlanner(fixture);
+
+      planner.owner.setLeader(true);
+      await planner.owner.waitForBindingRefresh();
+
+      assert.deepEqual(
+        fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS)
+          .get(compiled.service_id),
+        legacyActive,
+      );
+      assert.equal(fixture.gateway.writes.length, 0);
+      assert.equal(planner.rebalancers.length, 1);
+      assert.equal(
+        planner.rebalancers[0].options.entityId,
+        compiled.service_id,
+      );
       planner.owner.shutdown();
     });
 
@@ -449,7 +514,7 @@ describe('request Binding desired-service compilation owner', () => {
     await planner.owner.waitForBindingRefresh();
     const row = [...fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).values()][0];
     assert.equal(row[SD_COL.STATUS], 'active');
-    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+    assert.equal(row[SD_COL.REPLICA_COUNT], 0);
     assert.equal(planner.rebalancers.length, 1);
     planner.owner.shutdown();
   });
@@ -595,7 +660,7 @@ describe('request Binding desired-service compilation owner', () => {
     );
     const row = [...fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).values()][0];
     assert.equal(row[SD_COL.STATUS], 'active');
-    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+    assert.equal(row[SD_COL.REPLICA_COUNT], 0);
 
     fixture.gateway.writes.length = 0;
     await Promise.all([

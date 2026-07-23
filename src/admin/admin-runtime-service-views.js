@@ -17,6 +17,8 @@ import {
   WASM_SERVICE_PROTOCOL,
   WASM_SERVICE_HEALTH_STATUS,
 } from '../wasm-service/wasm-service-constants.js';
+import {resolveRuntimeServiceTargetReplicaCount} from
+  '../rebalancer/runtime-service-policy.js';
 import {
   LOGICAL_SERVICE_HEALTH,
   VIEW_ROW_KIND,
@@ -95,18 +97,19 @@ function groupReplicasByLogicalService(endpoints, definitions) {
 
   const result = [];
   for (const [serviceId, replicas] of groups) {
-    const definition = defMap.get(serviceId) || {};
-    const desiredCount = definition.replica_count ??
-      definition.replicaCount ?? 0;
+    const definition = defMap.get(serviceId);
+    const desiredCount = definition ?
+      resolveRuntimeServiceTargetReplicaCount(definition) :
+      0;
     const healthyCount = countHealthyReplicas(replicas);
 
     result.push({
       row_kind: VIEW_ROW_KIND.LOGICAL_SERVICE,
       service_id: serviceId,
-      service_name: definition.service_name ||
-        definition.serviceName || serviceId,
-      runtime_kind: definition.runtime_kind ||
-        definition.runtimeKind || STRING.UNKNOWN,
+      service_name: definition?.service_name ||
+        definition?.serviceName || serviceId,
+      runtime_kind: definition?.runtime_kind ||
+        definition?.runtimeKind || STRING.UNKNOWN,
       desired_replica_count: desiredCount,
       observed_replica_count: replicas.length,
       healthy_replica_count: healthyCount,

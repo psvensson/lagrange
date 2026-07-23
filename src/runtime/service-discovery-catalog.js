@@ -17,6 +17,8 @@ import {
   normalizeEndpointRows,
 } from './endpoint-sync-source-query.js';
 import {groupEndpointRows} from './endpoint-sync-planner.js';
+import {resolveRuntimeServiceTargetReplicaCount} from
+  '../rebalancer/runtime-service-policy.js';
 
 
 const SERVICE_DISCOVERY_DEFAULT = Object.freeze({
@@ -76,12 +78,7 @@ function resolveDefinitionReplicaCount(row) {
   if (!row || typeof row !== 'object') {
     return null;
   }
-  const rawReplicaCount = row.replica_count ?? row.replicaCount;
-  const parsedReplicaCount = Number(rawReplicaCount);
-  if (!Number.isInteger(parsedReplicaCount) || parsedReplicaCount < 0) {
-    return null;
-  }
-  return parsedReplicaCount;
+  return resolveRuntimeServiceTargetReplicaCount(row);
 }
 
 /**

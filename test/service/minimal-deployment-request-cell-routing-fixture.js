@@ -23,6 +23,7 @@ import {
 } from '../../src/control-plane/owners/deployment-binding-contract.js';
 import {
   buildActivatedRequestBindingServiceDefinition,
+  buildLegacyActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
 } from
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
@@ -59,6 +60,11 @@ const REQUEST_INTERFACE = 'request_v1';
 const REQUEST_EXPORT = 'run';
 const ROUTING_CELL_NAME = 'routing-cell';
 const ROUTING_CELL_VERSION = '1.0.0';
+const LEGACY_BINDING_CELL_SHAPE = Object.freeze({
+  max_learners: 4,
+  min_learners: 1,
+  voters: 5,
+});
 const JOURNAL_SQL_PREFIX = Object.freeze({
   INSERT: 'INSERT',
   SELECT: 'SELECT',
@@ -169,13 +175,8 @@ function createBindingDeclaration(
       wall_time_ms: 1_000,
     },
     contexts: [],
-    elasticity: {
-      max_learners: 0,
-      min_learners: 0,
-      voters: 3,
-    },
     name: overrides.name || 'routing-cell',
-    schema_version: 0,
+    schema_version: 1,
     source: {
       kind: 'request',
       method: overrides.method || 'POST',
@@ -187,10 +188,16 @@ function createBindingDeclaration(
       package_id: artifact.packageId,
     },
   };
-  return bindDeploymentArtifact(
+  const declaration = bindDeploymentArtifact(
     normalizeDeploymentBinding(input),
     artifact,
   );
+  if (!overrides.legacy) return declaration;
+  return Object.freeze({
+    ...declaration,
+    elasticity: LEGACY_BINDING_CELL_SHAPE,
+    schema_version: 0,
+  });
 }
 
 function createDeploymentRows(overrides = {}) {
@@ -206,10 +213,10 @@ function createDeploymentRows(overrides = {}) {
     overrides.createdAt || 1,
   );
   const binding = projectBinding(bindingRow);
-  const definition = buildActivatedRequestBindingServiceDefinition(
-    buildRequestBindingServiceDefinition(bindingRow, artifact),
-    binding,
-  );
+  const compiled = buildRequestBindingServiceDefinition(bindingRow, artifact);
+  const definition = overrides.legacy ?
+    buildLegacyActivatedRequestBindingServiceDefinition(compiled, binding) :
+    buildActivatedRequestBindingServiceDefinition(compiled, binding);
   return {artifact, binding, bindingRow, declaration, definition};
 }
 

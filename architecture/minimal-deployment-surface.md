@@ -21,24 +21,38 @@ identity. The bindable declaration is the installed `package_id` plus the
 SHA-256 digest of its exact canonical normalized manifest; the manifest pins the
 OCI object by its own digest. Runtime kind selects an execution strategy; it does
 not select a packaging or catalog path. An artifact exposes stateless handlers.
-A schema-v2 external manifest declares, for every export:
+The external manifest declares, for every export:
 
 - one unique export name;
-- one stable interface identifier; and
-- explicit exact table read and write sets.
+- one stable interface identifier.
 
-Access references use canonical lowercase `table:global.<table>` identities.
-They are sets: normalized order is lexical, duplicates and wildcards are
-invalid, and empty access is written as `[]`, never inferred from absence.
 The interface identifier types the artifact boundary without prescribing which
 Binding source may call it; source-to-interface compatibility belongs to the
-Binding contract.
+Binding contract. Replication, placement, and table authorization are not
+Artifact properties. Schema-v2 manifests that carry caller-owned `replication`
+intent are rejected; v1 remains readable only as a legacy compatibility
+surface.
 
-Manifest fields are the runtime-neutral canonical vehicle. A future WIT adapter
-may compile component metadata into the same fields, but must not become a
-second declaration authority. Manifest v1 remains readable under its existing
-contract; v2 is the default for new scaffolds and the first analyzable artifact
-contract. A future Binding may require v2 without reinterpreting v1.
+Manifest fields are the runtime-neutral canonical vehicle for executable
+identity and interfaces. A future WIT adapter may compile component metadata
+into the same fields, but must not become a second declaration authority.
+Manifest v1 remains readable under its existing contract; v2 is the default for
+new scaffolds.
+
+### Runtime access policy
+
+Table authorization is durable control-plane configuration managed separately
+from Artifacts and Bindings. It may be changed without rebuilding an Artifact,
+rewriting a Binding, generating a lock file, or running an ingestion pipeline.
+The policy owner resolves the authenticated tenant, principal/service identity,
+operation, and canonical table identity at the point of access and fails closed
+when no rule authorizes it.
+
+Observed reads and writes are not authority. The existing runtime access metrics
+path publishes direct, time-bounded observations that the existing
+runtime-service policy converts into data-affinity weights. Those observations
+may decay, move placement, and improve locality, but they never generate or
+promote manifests, Bindings, or access-policy rows.
 
 ### Binding
 
@@ -49,22 +63,26 @@ canonical target stores the three-part declaration identity:
 on <source> run <package-id>@<manifest-digest>#<export>
 ```
 
-OCI-digest shorthand is not part of Binding v0. Any future shorthand must first
+OCI-digest shorthand is not part of Binding v1. Any future shorthand must first
 receive an authenticated set of eligible installed package identities, fail
 closed when more than one eligible declaration matches, and persist only the
 canonical three-part identity above.
 
-It is immutable, versioned, replicated, and carries source-typed configuration,
-context namespaces, budgets, capabilities, and elasticity policy. The closed
-source vocabulary is `request`, `change`, `call`, `pushdown`, `time`, `once`,
-and `boot`; each source has one fixed execution semantic. `call` and `pushdown`
-Bindings are durable registrations, while individual statement calls and query
-plans are transient invocations rather than Bindings.
+It is immutable, versioned, replicated, and carries source-typed invocation
+configuration, budgets, and owner-derived capabilities. It carries neither
+table authorization nor Cell replica shape. The closed source vocabulary is
+`request`, `change`, `call`, `pushdown`, `time`, `once`, and `boot`; each source
+has one fixed execution semantic. `call` and `pushdown` Bindings are durable
+registrations, while individual statement calls and query plans are transient
+invocations rather than Bindings.
 
-Binding schema v0 is an exact object with `schema_version`, `name`, `target`,
-`source`, `contexts`, `budgets`, and `elasticity`; unknown fields are invalid.
-Its source is one of these closed variants, with one fixed compatible Artifact
-interface:
+Binding schema v1's live migration contract is an exact object with
+`schema_version`, `name`, `target`, `source`, `contexts`, and `budgets`; unknown
+fields are invalid. `contexts` is still required and bounded by the selected
+export's serialized `reads`/`writes` as a migration tail. It is not the selected
+runtime authorization authority: the later versioned access-policy cutover
+removes all three fields together rather than reinterpreting v1. Its source is
+one of these closed variants, with one fixed compatible Artifact interface:
 
 | Source | Exact source fields | Artifact interface |
 | --- | --- | --- |
@@ -76,24 +94,27 @@ interface:
 | `once` | `kind` | `once_v1` |
 | `boot` | `kind` | `boot_v1` |
 
-`contexts` is a lexical unique subset of the selected export's exact read/write
-sets; change-source tables obey the same bound. Artifact capabilities are
-derived and stored lexically by the owner, never accepted as caller authority.
-Budgets are a closed set of safe-integer limits: CPU `1..60000` ms, wall time
-`1..300000` ms and not below CPU, memory `1..1073741824` bytes, input/output
-`0..16777216` bytes each, and context `0..67108864` bytes. Elasticity is an odd
-fixed voter count `3..9` plus independently bounded learners
-`0 <= min_learners <= max_learners <= 32`; Artifact replication fields do not
-become Binding authority.
+Change-source `tables` select which change events invoke the handler; they do
+not authorize handler reads or writes. Artifact capabilities are derived and
+stored lexically by the owner, never accepted as caller authority. Budgets are a
+closed set of safe-integer limits: CPU `1..60000` ms, wall time `1..300000` ms
+and not below CPU, memory `1..1073741824` bytes, input/output `0..16777216`
+bytes each, and context `0..67108864` bytes.
 
-V0 is create-only. `DeploymentBindingOwner` derives one tenant-scoped logical
+Pre-cutover schema-v0 rows remain readable through a replay-only decoder so an
+upgrade cannot strand existing Cells. Their historical `elasticity` bytes stay
+covered by the immutable row digest and may be exposed for audit, but neither
+reconciliation nor placement treats them as replica intent. New ingress accepts
+only schema v1 and rejects that field.
+
+V1 is create-only. `DeploymentBindingOwner` derives one tenant-scoped logical
 identity and immutable generation 1, stores a digest of the canonical Binding,
 and permits only byte-identical replay. Replacement and removal will append
 later generations; no mutable `active` flag, update, or delete path exists in
-v0. Authenticated `CREATE BINDING $1` is the only v0 ingress. The
+v1. Authenticated `CREATE BINDING $1` is the only v1 ingress. The
 `service_bindings` table is internally CDC-propagated declaration state so a
-later reconciler can wake from replicated changes, but v0 does not compile a
-runtime service.
+later reconciler can wake from replicated changes. V1 compilation derives
+desired state; it does not directly execute a runtime service.
 
 ### Cell
 
@@ -114,21 +135,40 @@ rebalancer owns placement into `services`. `ServiceRuntimeLifecycle` and
 does not add a table, scheduler, replica owner, or runtime lifecycle.
 
 The first cutover admits only request Binding lineage. The planning owner
-level-triggers each existing inactive request-derived row to `status = active`
-and `replica_count = binding.elasticity.voters`, preserving its service
-identity, pinned runtime descriptor, Binding lineage, and canonical projection.
-The runtime-service owner then stops excluding that request lineage and drives
-the existing placement path. The other six Binding sources remain inactive and
-at zero replicas until their own activation Quests. This transition is
-owner-controlled derived state; it does not add mutable Binding ingress.
+level-triggers each existing inactive request-derived row to `status = active`,
+preserving its service identity, pinned runtime descriptor, Binding lineage, and
+canonical projection. Its stored `replica_count = 0` is a non-authoritative
+legacy placeholder. The runtime-service policy recognizes Binding lineage and
+derives target, minimum, maximum, topology, capacity, and data affinity directly
+from system policy. One shared projection exposes that effective target to the
+rebalancer, admin, CLI, and discovery readers without writing a generated count
+back to desired state. The other six Binding sources remain inactive until
+their own activation Quests.
 
 Service state is context-as-table. The first placement cutover does not invent a
 per-Cell store or claim local context materialization before a genuine runtime
-is ready. Fixed voters are sequenced first: `elasticity.voters` alone determines
-the initial runtime-service placement target. Persisted `min_learners` and
-`max_learners` remain non-authoritative for placement until a later learner
-capacity Quest uses the same replica substrate; adding learners must not change
-the fixed odd voter set or consensus quorum.
+is ready. Cell capacity is a policy output, not application intent. Changes to
+Cell capacity do not alter partition/message-group quorum ownership; partition
+replication remains governed by its existing kind-specific policy.
+
+### Invocation partitioning
+
+Invocation partitioning is independent of Cell capacity. A transport-specific,
+control-plane-managed key extractor may derive a canonical actor key from the
+already normalized invocation—for HTTP, for example, a configured path
+parameter or authenticated claim. A transport-neutral assignment policy then
+selects from the ready actuals already admitted by
+`RequestBindingRouteResolver`; it does not create Cells or bypass the existing
+dispatcher and runtime owners.
+
+The first pluggable assignment candidate is rendezvous hashing over stable
+replica identities because it supports arbitrary replica membership and
+minimizes remapping when capacity changes. Hashing provides affinity, not an
+absolute ownership guarantee: a failed or removed actual cannot remain the
+destination. If per-actor single ownership across topology changes is required
+for correctness, the reusable next layer is a fixed logical-shard namespace
+with epoch-fenced ownership and handoff through existing replicated metadata
+owners. No separate scheduler or replica lifecycle is selected.
 
 The axiomatic bootstrap set is exactly the existing bootstrap-owned
 system-table/message-group partition actuals plus the built-in
@@ -144,17 +184,21 @@ kind-specific data-plane path.
 
 | Concern | Selected authority | Contract action |
 | --- | --- | --- |
-| External artifact shape | `external-service-manifest.js` | Extend with versioned export declarations. |
+| External artifact shape | `external-service-manifest.js` | Carry executable identity and versioned export interfaces; reject caller-owned Cell replication and retire table access declarations. |
 | Artifact resolution | Installable OCI artifact resolver | Reuse unchanged. |
 | Immutable bindable Artifact identity | `ServiceInstallCatalogOwner` / `service_packages` | Derive and verify `manifest_digest` from the exact immutable `normalized_manifest`; never select a declaration by OCI digest ordering. |
 | Lifecycle ingress | Authenticated lifecycle SQL, consumed by the CLI | Extend with parameterized `CREATE BINDING $1`; no binding-specific side channel. |
-| Immutable Binding declarations | `DeploymentBindingOwner` / `service_bindings` | Validate and persist one canonical tenant-scoped v0 generation; expose no generic mutation path. |
+| Immutable Binding declarations | `DeploymentBindingOwner` / `service_bindings` | Validate target, invocation trigger, and budgets; carry no table authorization or replica intent and expose no generic mutation path. |
+| Runtime table authorization | One direct control-plane access-policy owner | Authorize exact runtime accesses from durable policy configured independently of Artifact and Binding lifecycles; do not generate declaration files from observations. |
+| Observed service-to-data affinity | Existing service partition access metrics/publisher and runtime-service policy | Feed fresh, decaying read/write observations directly into placement weights; observations never become authorization. |
 | Desired runtime service | `service_definitions` and its existing planning leader | Compile supported Bindings as lineage-bound inactive zero-replica desired rows; retire direct user declaration writes here, and leave activation to the Cell cutover. |
-| Request Cell desired-state activation | `ServiceDefinitionsOwner` under the existing `service_definitions-p1` planning leader | Level-trigger only request-derived rows to active desired state with target count equal to fixed voters; preserve immutable Binding lineage and keep other sources inactive. |
-| Placement and replica lifecycle | `RuntimeServiceRebalancerOwner`, `UnifiedRebalancer`, shared replica owners, and `ServiceRuntimeLifecycle` | Admit request lineage through the existing `services` actual and runtime path; do not fork a Cell scheduler or call a placed-but-not-running actual a Cell. |
+| Request Cell desired-state activation | `ServiceDefinitionsOwner` under the existing `service_definitions-p1` planning leader | Level-trigger only request-derived rows to active desired state without writing a target count; preserve immutable Binding lineage and keep other sources inactive. |
+| Placement and replica lifecycle | `RuntimeServiceRebalancerOwner`, `UnifiedRebalancer`, shared replica owners, and `ServiceRuntimeLifecycle` | Derive Binding Cell shape from the existing runtime-service policy and admit request lineage through the existing `services` actual/runtime path; do not fork a scheduler. |
+| Effective replica reporting | Shared runtime-service policy projection | Reuse the placement decision in admin, CLI, and discovery views; do not snapshot generated policy output into Binding desired state. |
 | Handler context | Replicated tables and existing KV/timer primitives | Reuse; local materialization and handoff must engage the existing owners after genuine runtime execution exists, without a second state store. |
 | Request data-plane ingress | One node HTTP adapter plus canonical security-context validation | Authenticate into a server-derived context and normalize a request; do not select a target, trust client-supplied owner identity, or dispatch directly. |
 | Request Binding route resolution | `RequestBindingRouteResolver` | Resolve one tenant-scoped immutable method/path declaration to its exact Binding version and a current ready actual; fail closed on ambiguity or stale state and do not repair owner state. |
+| Optional invocation partitioning | Transport key extractors plus one transport-neutral assignment policy inside the existing route resolver | Extract a canonical actor key from normalized invocation properties and select among current ready actuals; no replica-count or lifecycle authority. |
 | Request invocation delivery | `ServiceDispatcher`, `MessageRouter`, and the runtime invocation owner established by Cell readiness | Translate the resolved invocation into one canonical `Service_Message`, revalidate at the receiver, and require processed component-response evidence; do not add direct-local, endpoint-bypass, or acknowledged-only success paths. |
 
 `code`, `module_manifests`, `service_definitions`, stored functions, CDC
@@ -165,12 +209,12 @@ single owners only when their removal is explicit and structurally guarded.
 ## Migration sequence
 
 1. Make new artifact manifests analyzable: schema v2 exports carry canonical
-   interface and table access declarations through the live install/catalog
-   path while v1 compatibility remains unchanged.
+   interface declarations through the live install/catalog path while v1
+   compatibility remains unchanged.
 2. Establish the bindable Artifact identity as installed `package_id` plus the
    digest of exact canonical `normalized_manifest`; make digest-only ambiguity,
    schema-v1 input, and durable corruption fail closed in the catalog owner.
-3. Seal Binding schema v0 and its single validator/persistence owner. Require
+3. Seal Binding schema v1 and its single validator/persistence owner. Require
    analyzable v2 artifacts for newly authored Bindings. Quest
    `minimal-deployment-binding-v0-declaration` owns this step.
 4. Compile request Bindings into the existing desired-service lifecycle as
@@ -186,13 +230,21 @@ single owners only when their removal is explicit and structurally guarded.
    Artifact, or activating a runtime.
 6. Introduce Cell semantics before consolidating partition/service lifecycle
    code, in closure-gated slices:
-   1. activate request-derived desired state at the fixed voter count and engage
-      the existing runtime-service placement path;
+   1. activate request-derived desired state and engage the existing
+      system-policy-owned runtime-service placement path;
    2. make a placed request actual genuinely ready through a real runtime engine
       and the existing lifecycle, with table-backed context;
    3. route request invocation to that ready Cell; and
-   4. activate the remaining sources and elastic learners through the same
-      owners, one executable concern at a time.
+   4. activate the remaining sources through the same owners, one executable
+      concern at a time.
+7. Move table authorization from Artifact export and Binding context
+   declarations to directly managed runtime access policy. Keep the existing
+   observed access publisher as live affinity telemetry; do not generate or
+   ingest declarations from it.
+8. Add optional actor-key invocation partitioning inside the existing route
+   resolver. Start with a transport-key extractor and rendezvous assignment over
+   ready actuals; add fixed logical shards and epoch-fenced handoff only if
+   strict single ownership is selected as a correctness requirement.
 
 Each step must engage the new owner in the production path it claims. Merely
 adding a table, validator, adapter, or feature flag is not completion.
@@ -204,16 +256,17 @@ a running Cell while `wasm_component` remains only a lifecycle scaffold.
 - OCI payload bytes and normalized manifest declarations have distinct immutable
   digests. A Binding pins `package_id` plus `manifest_digest`; in-flight work
   remains pinned to its starting version.
-- Code is stateless. Durable state and synchronization live in declared tables.
+- Code is stateless. Durable state and synchronization live in tables.
 - Binding is intent, Cell is actual, and neither is reconstructed from the other
   by readers.
 - One validator owns each normalized boundary. DDL, CLI, and compatibility
   syntax compile to that owner rather than re-validating locally.
-- Read/write sets are exact declarations suitable for dependency analysis; a
-  wildcard or omitted set is never treated as safe.
+- Runtime table authorization comes only from directly managed access policy.
+  Observed access is affinity telemetry and never grants authority.
 - Reconciliation wakes from canonical replicated change notification and is
   level-triggered, idempotent, and eventually stable.
-- Scaling capacity does not silently change consensus quorum.
+- Cell capacity is a system-policy output and does not change
+  partition/message-group consensus quorum.
 - Exactly one existing runtime-service rebalancer owns placement for each active
   Binding-derived service; Cell activation cannot introduce a parallel planner.
 - A Binding-derived actual is not called a Cell until the existing runtime
@@ -236,9 +289,10 @@ sources now compile through the same `service_definitions` planning leader, and
 all derived rows remain inactive with zero replicas.
 
 Quest `minimal-deployment-request-cell-placement` completed the first slice of
-step 6: the request-only transition to active fixed-voter desired state and
-engagement of the existing `RuntimeServiceRebalancerOwner` /
-`UnifiedRebalancer` placement path.
+step 6. Quest `minimal-deployment-system-owned-cell-replication` corrects that
+slice so request activation carries no caller-owned replica shape and the
+existing `RuntimeServiceRebalancerOwner` / `UnifiedRebalancer` policy is the
+sole Cell-capacity authority.
 
 Quest `minimal-deployment-request-cell-runtime-readiness` completed the second
 slice: genuine component execution through the existing runtime registry,
@@ -253,5 +307,9 @@ the runtime invocation owner. Its durable invocation journal prevents duplicate
 component effects, and bounded shutdown cancels and drains active ingress while
 retiring correlated transport waiters.
 
-The fourth slice remains: activate the other six Binding sources and elastic
-learners through the same desired-state, replica, and runtime owners.
+The next serialized owner-boundary cutover is step 7: replace the still-live
+Artifact export `reads`/`writes` and Binding `contexts` authorization path with
+directly managed runtime access policy while retaining observed access as live
+affinity telemetry. After that, activate the other six Binding sources through
+the same desired-state, replica, and runtime owners. Actor-key partitioning
+remains an explicit routing-policy design choice, not a Cell replica request.

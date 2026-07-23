@@ -77,12 +77,25 @@ describe('external service manifest contract', () => {
     assert.equal(Object.isFrozen(
       EXTERNAL_SERVICE_MANIFEST_SCHEMA.properties.capabilities.items,
     ), true);
+    assert.equal(
+      Object.hasOwn(EXTERNAL_SERVICE_MANIFEST_SCHEMA.properties, 'replication'),
+      false,
+    );
   });
 
   it('keeps v1 compatible and canonicalizes analyzable v2 exports', () => {
-    const legacy = validateExternalServiceManifest(makeManifest());
+    const legacy = validateExternalServiceManifest(makeManifest({
+      replication: {
+        mode: 'replicated_service',
+        replicas: 3,
+      },
+    }));
     assert.equal(legacy.valid, true);
     assert.equal(Object.hasOwn(legacy.manifest, 'exports'), false);
+    assert.deepEqual(legacy.manifest.replication, {
+      mode: 'replicated_service',
+      replicas: 3,
+    });
 
     const result = validateExternalServiceManifest(makeV2Manifest({
       exports: [
@@ -117,6 +130,21 @@ describe('external service manifest contract', () => {
     ]);
     assert.equal(Object.isFrozen(result.manifest.exports), true);
     assert.equal(Object.isFrozen(result.manifest.exports[0]), true);
+  });
+
+  it('rejects caller-owned Cell replication in v2 manifests', () => {
+    const result = normalizeExternalServiceManifest(makeV2Manifest({
+      replication: {
+        mode: 'replicated_service',
+        replicas: 9,
+        placement: {avoid_same_host: true},
+      },
+    }));
+
+    assert.ok(rejectionCodes(result).includes(
+      EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.INVALID_FIELD,
+    ));
+    assert.ok(result.errors.some((error) => error.path === '/replication'));
   });
 
   it('accepts every stable interface and preserves declared read-write overlap', () => {

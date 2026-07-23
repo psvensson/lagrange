@@ -279,6 +279,49 @@ test('getRuntimeServicePolicy derives targetReplicaCount from service_definition
   });
 });
 
+test('Binding-derived runtime policy owns replica shape', async (t) => {
+  initEnv();
+  const rebalancer = createRebalancer({
+    serviceDefinitions: [
+      {
+        service_id: 'sys-postgres-wire',
+        service_type: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
+        status: 'active',
+        replica_count: 9,
+        binding_version_id: `binding-version-${'a'.repeat(64)}`,
+        binding_digest: `sha256:${'b'.repeat(64)}`,
+        binding_projection: JSON.stringify({
+          binding_version_id: `binding-version-${'a'.repeat(64)}`,
+          binding_digest: `sha256:${'b'.repeat(64)}`,
+          declaration: {
+            source: {kind: 'request'},
+          },
+        }),
+      },
+    ],
+  });
+
+  const policy = await rebalancer.getPolicy();
+  t.equal(
+    policy.targetReplicaCount,
+    REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.targetReplicaCount,
+    'legacy desired-count data cannot override a Binding-derived target',
+  );
+  t.equal(
+    policy.minReplicaCount,
+    REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.minReplicaCount,
+  );
+  t.equal(
+    policy.maxReplicaCount,
+    REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.maxReplicaCount,
+  );
+  t.same(
+    policy.placementConstraints,
+    REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE.placementConstraints,
+    'topology and capacity constraints remain system policy',
+  );
+});
+
 // --- Replica discovery ---
 
 test('getCurrentReplicas discovers runtime-service replicas', async (t) => {

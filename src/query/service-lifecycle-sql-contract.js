@@ -50,7 +50,6 @@ const SERVICE_LIFECYCLE_SQL_LITERAL = Object.freeze({
 const MUTATION_PAYLOAD_FIELDS = Object.freeze({
   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]: Object.freeze([
     'schema_version', 'name', 'target', 'source', 'contexts', 'budgets',
-    'elasticity',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]: Object.freeze([
     'artifact_source', 'config', 'idempotency_key', 'manifest',
@@ -69,7 +68,6 @@ const MUTATION_PAYLOAD_FIELDS = Object.freeze({
 const REQUIRED_PAYLOAD_FIELDS = Object.freeze({
   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]: Object.freeze([
     'schema_version', 'name', 'target', 'source', 'contexts', 'budgets',
-    'elasticity',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]: Object.freeze([
     'artifact_source', 'idempotency_key', 'manifest',

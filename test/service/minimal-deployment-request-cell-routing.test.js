@@ -387,7 +387,7 @@ describe('minimal deployment request Cell routing', () => {
   test('routes genuine HTTP responses before and after handoff with fences',
     async () => {
       initializeTestEnvironment();
-      const rows = createDeploymentRows();
+      const rows = createDeploymentRows({legacy: true});
       const cache = new MutableSystemTableCache(rows);
       const journal = new MemoryInvocationJournal();
       const replicaA = `${rows.definition.service_id}-r1`;

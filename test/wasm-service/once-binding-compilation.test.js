@@ -121,7 +121,7 @@ function bindingSource(sourceKind) {
 
 function bindingInput(package_, sourceKind = 'once', overrides = {}) {
   return {
-    schema_version: 0,
+    schema_version: 1,
     name: `orders-${sourceKind}`,
     target: {
       package_id: package_.packageId,
@@ -138,7 +138,6 @@ function bindingInput(package_, sourceKind = 'once', overrides = {}) {
       output_bytes: 1024,
       context_bytes: 2048,
     },
-    elasticity: {voters: 3, min_learners: 0, max_learners: 0},
     ...overrides,
   };
 }
@@ -265,11 +264,7 @@ describe('once Binding compilation cutover', () => {
     assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
     assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
     assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
-    assert.deepEqual(projection.declaration.elasticity, {
-      max_learners: 0,
-      min_learners: 0,
-      voters: 3,
-    });
+    assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
     assert.deepEqual(
       fixture.gateway.writes.map((write) => write.tableName),
       [TABLES.SERVICE_DEFINITIONS],
@@ -415,11 +410,7 @@ describe('boot Binding compilation cutover', () => {
     assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
     assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
     assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
-    assert.deepEqual(projection.declaration.elasticity, {
-      max_learners: 0,
-      min_learners: 0,
-      voters: 3,
-    });
+    assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
     assert.deepEqual(
       fixture.gateway.writes.map((write) => write.tableName),
       [TABLES.SERVICE_DEFINITIONS],
@@ -587,11 +578,7 @@ function defineNamedBindingCompilationCutover(sourceKind) {
       assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
       assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
       assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
-      assert.deepEqual(projection.declaration.elasticity, {
-        max_learners: 0,
-        min_learners: 0,
-        voters: 3,
-      });
+      assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
       assert.deepEqual(
         fixture.gateway.writes.map((write) => write.tableName),
         [TABLES.SERVICE_DEFINITIONS],

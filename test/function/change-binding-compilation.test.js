@@ -116,7 +116,7 @@ function manifest() {
 
 function bindingInput(package_, overrides = {}) {
   return {
-    schema_version: 0,
+    schema_version: 1,
     name: 'orders-change',
     target: {
       package_id: package_.packageId,
@@ -137,7 +137,6 @@ function bindingInput(package_, overrides = {}) {
       output_bytes: 8192,
       context_bytes: 16384,
     },
-    elasticity: {voters: 3, min_learners: 1, max_learners: 2},
     ...overrides,
   };
 }
@@ -262,11 +261,7 @@ describe('change Binding compilation cutover', () => {
       ['clock.read', 'network.client'],
     );
     assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
-    assert.deepEqual(projection.declaration.elasticity, {
-      max_learners: 2,
-      min_learners: 1,
-      voters: 3,
-    });
+    assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
     assert.deepEqual(
       fixture.gateway.writes.map((write) => write.tableName),
       [TABLES.SERVICE_DEFINITIONS],

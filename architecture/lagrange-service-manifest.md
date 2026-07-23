@@ -1,7 +1,7 @@
 # Lagrange Service Manifest
 
 This document defines the **service package manifest** format for
-installable replicated services in Lagrange.
+installable services in Lagrange.
 
 The manifest is the contract between:
 
@@ -41,12 +41,11 @@ installation:
 -   Which runtime executes it?
 -   Which artifact should be fetched?
 -   Which capabilities does it require?
--   How many replicas should run?
 -   How should it be upgraded?
 -   Which kernel API versions does it support?
 -   Which configuration fields are valid?
 -   Does it depend on other services?
--   Which stable handlers does it export, and which tables may they access?
+-   Which stable handlers does it export?
 
 ------------------------------------------------------------------------
 
@@ -205,58 +204,33 @@ export has exactly these fields:
 -   `name` --- unique lowercase handler name
 -   `interface` --- one of `request_v1`, `change_v1`, `call_v1`,
     `pushdown_v1`, `time_v1`, `once_v1`, or `boot_v1`
--   `reads` --- exact table identities read by the handler
--   `writes` --- exact table identities written by the handler
-
-Table identities use `table:global.<table>`. Both sets are explicit, unique,
-and lexically normalized; empty access is `[]`. Wildcards, omitted sets,
-unknown export fields, and duplicate export names are invalid. A table may
-appear in both sets when the handler both reads and writes it. Interface values
-type the artifact boundary; the Binding contract owns which source may call
-which interface.
+Interface values type the artifact boundary; the Binding contract owns which
+source may call which interface. Table authorization is managed directly as
+runtime access-policy configuration and is not an Artifact declaration.
 
 ``` json
 {
   "exports": [{
     "name": "serve",
-    "interface": "request_v1",
-    "reads": ["table:global.accounts", "table:global.orders"],
-    "writes": ["table:global.audit"]
+    "interface": "request_v1"
   }]
 }
 ```
 
 Schema-v1 manifests retain their existing contract and do not acquire inferred
-exports. New scaffolds emit schema v2.
+exports. New scaffolds emit schema v2. The live v2 validator still carries
+`reads`/`writes` as a serialized migration tail; the minimal-deployment
+access-policy cutover removes those fields and their Binding-context dependency
+in one owner-boundary change.
 
 ------------------------------------------------------------------------
 
-## Replication
+## Runtime placement
 
-Defines how the service runs in the cluster.
-
-Fields:
-
--   `mode` --- `replicated_service`, `singleton`, `sharded`, future
-    modes
--   `replicas`
--   `placement`
--   `failover_policy`
-
-Example:
-
-``` json
-{
-  "replication": {
-    "mode": "replicated_service",
-    "replicas": 3,
-    "placement": {
-      "regions": ["eu-north-1"],
-      "avoid_same_host": true
-    }
-  }
-}
-```
+Cell target, minimum, maximum, topology, capacity, failover, and data-affinity
+decisions belong to system runtime-service policy. Schema-v2 manifests reject
+`replication`; it is not a user request. Schema-v1 `replication` remains readable
+only for compatibility and does not become Binding-derived Cell authority.
 
 ------------------------------------------------------------------------
 
@@ -436,17 +410,8 @@ commercial consumer example only under the current edition matrix.
   },
   "exports": [{
     "name": "run-backup",
-    "interface": "once_v1",
-    "reads": ["table:global.backup_jobs"],
-    "writes": ["table:global.backup_jobs"]
+    "interface": "once_v1"
   }],
-  "replication": {
-    "mode": "replicated_service",
-    "replicas": 3,
-    "placement": {
-      "avoid_same_host": true
-    }
-  },
   "capabilities": [
     "cdc.subscribe",
     "snapshot.read",
@@ -501,8 +466,9 @@ The kernel should validate at least the following before activation:
 -   artifact `media_type` recognized and consistent with `runtime.kind`
 -   runtime kind is `wasm_component` or `oci_container` (reject
     `native_js` from external manifests)
--   schema-v2 export names and exact table access sets are unique and canonical
+-   schema-v2 export names are unique and canonical
 -   schema-v2 export interfaces belong to the closed stable interface set
+-   schema-v2 manifests carry no caller-owned Cell replication
 -   capabilities recognized
 -   compatibility range satisfied
 -   configuration schema parseable
@@ -550,7 +516,7 @@ canonical `normalized_manifest` bytes. The canonical bindable Artifact identity
 is `(package_id, manifest_digest)`, not the OCI payload digest: multiple installed
 declarations may intentionally pin the same OCI bytes while exposing different
 schema-v2 contracts. Schema-v1 packages are not analyzable Binding targets.
-OCI-digest shorthand is deferred from Binding v0; any future resolver must
+OCI-digest shorthand is deferred from Binding v1; any future resolver must
 receive authenticated eligible package identities and reject more than one
 eligible match rather than selecting globally or by row order.
 An installation is initially `recorded_not_running`, including when its desired

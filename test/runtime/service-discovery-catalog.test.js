@@ -70,6 +70,30 @@ describe('service-discovery-catalog', () => {
     assert.equal(entry.replicas[1].endpointId, 'sys-postgres-wire-ep-node-2');
   });
 
+  it('projects the system-policy target for Binding-derived Cells', () => {
+    const serviceId = `binding-service-${'a'.repeat(64)}`;
+    const endpointRows = [createEndpointRow({
+      [EP_COL.ENDPOINT_ID]: 'orders-api-ep-node-1',
+      [EP_COL.SERVICE_ID]: serviceId,
+    })];
+    const definitionRows = [{
+      service_id: serviceId,
+      replica_count: 0,
+      binding_version_id: `binding-version-${'b'.repeat(64)}`,
+    }];
+
+    const [entry] = buildServiceDiscoveryCatalog(endpointRows, {
+      definitionRows,
+    });
+
+    assert.equal(entry.desiredReplicaCount, 3);
+    assert.deepEqual(entry.desiredReplicaCountByServiceId, {
+      [serviceId]: 3,
+    });
+    assert.equal(entry.observedReplicaCount, 1);
+    assert.equal(entry.health, SERVICE_DISCOVERY_HEALTH.HEALTHY);
+  });
+
   it('applies protocol, service, node, and health filters deterministically', () => {
     const endpointRows = [
       createEndpointRow({

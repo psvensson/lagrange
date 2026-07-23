@@ -1,8 +1,7 @@
 /**
  * RuntimeServiceRebalancerOwner — the single planning leader that reconciles
- * RUNTIME_SERVICE desired state (`service_definitions.replica_count`, read via
- * `getRuntimeServicePolicy`) to placed replicas (the `services` table), running
- * one `UnifiedRebalancer` per active runtime service.
+ * active RUNTIME_SERVICE desired state to placed replicas (the `services`
+ * table), running one `UnifiedRebalancer` per active runtime service.
  *
  * This is the missing piece that makes runtime services (e.g. the built-in
  * `sys-postgres-wire` Postgres-wire endpoint) first-class replicated entities:
@@ -54,9 +53,9 @@ const BINDING_RECONCILE_INTERVAL_MS = 5000;
 // RUNTIME_SERVICE entity — there is NO `service_type` column on it (it is dropped
 // by serializeServiceDefinition). The owner therefore selects active definitions
 // by `status`. Active request-Binding lineage is admitted to the same owner;
-// other Binding sources and malformed lineage fail closed. Whether an admitted
-// service should actually run is governed by `replica_count`, which the policy
-// reads.
+// other Binding sources and malformed lineage fail closed. Binding-derived
+// replica targets are system-policy outputs; the legacy `replica_count` column
+// remains authoritative only for non-Binding definitions.
 const SERVICE_DEFINITION_COLUMN = Object.freeze({
   SERVICE_ID: 'service_id',
   STATUS: 'status',

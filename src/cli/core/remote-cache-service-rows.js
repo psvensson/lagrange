@@ -1,3 +1,6 @@
+import {resolveRuntimeServiceTargetReplicaCount} from
+  '../../rebalancer/runtime-service-policy.js';
+
 const LOCAL_STR_RUNTIME_SERVICE = 'runtime_service';
 const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_NONE = 'none';
@@ -288,12 +291,10 @@ export function getEndpointsByServiceId(tables) {
  * @return {number}
  */
 export function resolveReplicaCount(definition) {
-  const raw = definition?.replica_count ?? definition?.replicaCount ?? 0;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (!definition) {
     return 0;
   }
-  return Math.floor(parsed);
+  return resolveRuntimeServiceTargetReplicaCount(definition);
 }
 
 /**

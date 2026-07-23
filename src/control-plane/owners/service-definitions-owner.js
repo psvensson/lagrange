@@ -10,6 +10,7 @@ import {
   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
   RequestBindingServiceDefinitionError,
   buildActivatedRequestBindingServiceDefinition,
+  buildLegacyActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
   requestBindingServiceDefinitionRowsMatch,
 } from './request-binding-service-definition-contract.js';
@@ -36,7 +37,6 @@ class ServiceDefinitionRowOwner extends SystemMetadataOwnerBase {
     return this.updateByPrimaryKey(
       expected[SD_COL.SERVICE_ID],
       {
-        [SD_COL.REPLICA_COUNT]: expected[SD_COL.REPLICA_COUNT],
         [SD_COL.STATUS]: expected[SD_COL.STATUS],
       },
       options,
@@ -109,7 +109,9 @@ class ServiceDefinitionsOwner {
   }
 
   assertDesiredService(existing, expected) {
-    if (!requestBindingServiceDefinitionRowsMatch(existing, expected)) {
+    const allowed = Array.isArray(expected) ? expected : [expected];
+    if (!allowed.some((candidate) =>
+      requestBindingServiceDefinitionRowsMatch(existing, candidate))) {
       throw new RequestBindingServiceDefinitionError(
         REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE.DESIRED_SERVICE_CONFLICT,
         REQUEST_BINDING_SERVICE_DEFINITION_PATH.DESIRED_SERVICE,
@@ -144,23 +146,21 @@ class ServiceDefinitionsOwner {
     const expected = buildActivatedRequestBindingServiceDefinition(
       compiled, binding,
     );
+    const legacyExpected =
+      buildLegacyActivatedRequestBindingServiceDefinition(compiled, binding);
+    const allowedStates = [compiled, expected, legacyExpected].filter(Boolean);
+    const allowedActiveStates = [expected, legacyExpected].filter(Boolean);
     return this.runSerialized(binding.bindingVersionId, async () => {
       let created = false;
       let lineageRow = await this.readBindingServiceDefinition(
         expected, options,
       );
       if (lineageRow) {
-        if (!requestBindingServiceDefinitionRowsMatch(lineageRow, compiled) &&
-            !requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
-          this.assertDesiredService(lineageRow, expected);
-        }
+        this.assertDesiredService(lineageRow, allowedStates);
       } else {
         const existing = await this.getServiceDefinition(compiled.service_id);
         if (existing) {
-          if (!requestBindingServiceDefinitionRowsMatch(existing, compiled) &&
-              !requestBindingServiceDefinitionRowsMatch(existing, expected)) {
-            this.assertDesiredService(existing, expected);
-          }
+          this.assertDesiredService(existing, allowedStates);
           lineageRow = existing;
         } else {
           try {
@@ -179,13 +179,7 @@ class ServiceDefinitionsOwner {
               }
               throw error;
             }
-            if (!requestBindingServiceDefinitionRowsMatch(
-              recovered, compiled,
-            ) && !requestBindingServiceDefinitionRowsMatch(
-              recovered, expected,
-            )) {
-              this.assertDesiredService(recovered, expected);
-            }
+            this.assertDesiredService(recovered, allowedStates);
             lineageRow = recovered;
           }
           if (!lineageRow) {
@@ -197,7 +191,8 @@ class ServiceDefinitionsOwner {
         }
       }
 
-      if (!requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
+      if (!allowedActiveStates.some((candidate) =>
+        requestBindingServiceDefinitionRowsMatch(lineageRow, candidate))) {
         try {
           await rowOwnerFor(this).activateRequestServiceDefinition(
             expected, options,
@@ -206,7 +201,8 @@ class ServiceDefinitionsOwner {
           const recovered = await this.readBindingServiceDefinition(
             expected, options,
           );
-          if (!requestBindingServiceDefinitionRowsMatch(recovered, expected)) {
+          if (!allowedActiveStates.some((candidate) =>
+            requestBindingServiceDefinitionRowsMatch(recovered, candidate))) {
             throw error;
           }
         }
@@ -214,8 +210,8 @@ class ServiceDefinitionsOwner {
       const persisted = await this.readBindingServiceDefinition(
         expected, options,
       );
-      this.assertDesiredService(persisted, expected);
-      return Object.freeze({created, serviceDefinition: expected});
+      this.assertDesiredService(persisted, allowedActiveStates);
+      return Object.freeze({created, serviceDefinition: persisted});
     });
   }
 }
