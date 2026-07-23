@@ -25,12 +25,14 @@ function runKnip() {
   if (result.error) {
     throw result.error;
   }
+  // Knip's own stderr (configuration hints, warnings) passes through so the
+  // gate never shows less than `npm run test:unused` did.
+  if (result.stderr) process.stderr.write(result.stderr);
   let report;
   try {
     report = JSON.parse(result.stdout);
   } catch {
     process.stderr.write(result.stdout);
-    process.stderr.write(result.stderr ?? '');
     throw new Error('knip did not produce parseable JSON output');
   }
   return report;

@@ -19,7 +19,13 @@ const IMPORT_DECLARATION = 'ImportDeclaration';
 const JS_EXTENSION = '.js';
 
 function gitLines(root, args) {
-  const out = execFileSync('git', args, {cwd: root, encoding: 'utf8'});
+  // stderr is piped, not inherited: an unreadable base is an expected degrade
+  // path (caller catches), and git's "fatal:" noise must not leak into `next`.
+  const out = execFileSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   return out.split('\n').filter(Boolean);
 }
 
