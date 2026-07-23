@@ -85,42 +85,43 @@ class DurableGateway {
   }
 }
 
-function manifest() {
+function manifest(sourceKind = 'once') {
+  const exportName = `${sourceKind}-handler`;
   return {
     schema_version: 2,
-    name: 'orders-once-service',
+    name: `orders-${sourceKind}-service`,
     version: '1.0.0',
     capabilities: ['clock.read'],
     exports: [{
-      name: 'once-handler',
-      interface: 'once_v1',
+      name: exportName,
+      interface: `${sourceKind}_v1`,
       reads: ['table:global.orders'],
       writes: ['table:global.audit'],
     }],
     artifact: {
       type: 'oci',
-      ref: 'registry.example.test/acme/orders-once:1.0.0',
+      ref: `registry.example.test/acme/orders-${sourceKind}:1.0.0`,
       digest: ARTIFACT_DIGEST,
       media_type: 'application/wasm',
     },
     runtime: {
       kind: 'wasm_component',
-      entrypoint: 'once-handler',
+      entrypoint: exportName,
       runtime_options: {memoryLimitMb: 16},
     },
   };
 }
 
-function bindingInput(package_, overrides = {}) {
+function bindingInput(package_, sourceKind = 'once', overrides = {}) {
   return {
     schema_version: 0,
-    name: 'orders-initialize',
+    name: `orders-${sourceKind}`,
     target: {
       package_id: package_.packageId,
       manifest_digest: package_.manifestDigest,
-      export_name: 'once-handler',
+      export_name: `${sourceKind}-handler`,
     },
-    source: {kind: 'once'},
+    source: {kind: sourceKind},
     contexts: ['table:global.audit', 'table:global.orders'],
     budgets: {
       cpu_time_ms: 25,
@@ -135,13 +136,13 @@ function bindingInput(package_, overrides = {}) {
   };
 }
 
-function resolvedArtifact() {
+function resolvedArtifact(sourceKind = 'once') {
   return {
     status: 'resolved',
     artifact: {
       digest: ARTIFACT_DIGEST,
       payloadMediaType: 'application/wasm',
-      signature: {status: 'verified', keyId: 'publisher-once'},
+      signature: {status: 'verified', keyId: `publisher-${sourceKind}`},
     },
   };
 }
@@ -165,19 +166,22 @@ function createCache(gateway) {
 }
 
 async function createFixture(options = {}) {
+  const sourceKind = options.sourceKind || 'once';
   const gateway = new DurableGateway();
   const owners = createSystemMetadataOwners({
     controlPlaneSystemTableGateway: gateway,
     now: () => 3000,
   });
-  const value = manifest();
+  const value = manifest(sourceKind);
   const packageId = deriveTenantPackageId(value, TENANT_ID);
   const package_ = await owners.serviceInstallCatalogOwner.recordPackage({
     packageId,
     manifest: value,
-    resolvedArtifact: resolvedArtifact(),
+    resolvedArtifact: resolvedArtifact(sourceKind),
   });
-  const input = bindingInput(package_, options.bindingOverrides);
+  const input = bindingInput(
+    package_, sourceKind, options.bindingOverrides,
+  );
   const binding = await owners.deploymentBindingOwner.createBinding(
     input, SECURITY_CONTEXT,
   );
@@ -356,6 +360,158 @@ describe('once Binding compilation cutover', () => {
     const malformed = {
       ...corrupt.bindingRow,
       binding_version_id: `binding-version-${'d'.repeat(64)}`,
+    };
+    corrupt.gateway.rows(TABLES.SERVICE_BINDINGS).clear();
+    corrupt.gateway.rows(TABLES.SERVICE_BINDINGS).set(
+      malformed.binding_version_id, malformed,
+    );
+    const corruptPlanner = createPlanner(corrupt);
+    corruptPlanner.owner.setLeader(true);
+    await corruptPlanner.owner.waitForBindingRefresh();
+    assert.equal(corrupt.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 0);
+    assert.equal(corruptPlanner.rebalancers.length, 0);
+    corruptPlanner.owner.shutdown();
+  });
+});
+
+describe('boot Binding compilation cutover', () => {
+  beforeEach(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+  });
+
+  test('production planning preserves the kind-only projection without ' +
+    'hooking cluster bootstrap', async () => {
+    const fixture = await createFixture({sourceKind: 'boot'});
+    fixture.gateway.writes.length = 0;
+    const planner = createPlanner(fixture);
+    planner.owner.setLeader(true);
+    await planner.owner.waitForBindingRefresh();
+
+    const serviceId = deriveRequestServiceDefinitionId(
+      fixture.binding.bindingVersionId,
+    );
+    const row = fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).get(serviceId);
+    assert.ok(row);
+    assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
+    assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
+    assert.equal(row[SD_COL.STATUS], 'inactive');
+    assert.equal(row[SD_COL.REPLICA_COUNT], 0);
+    assert.equal(
+      row[SD_COL.RUNTIME_REF],
+      `registry.example.test/acme/orders-boot:1.0.0@${ARTIFACT_DIGEST}`,
+    );
+    const projection = JSON.parse(row[SD_COL.BINDING_PROJECTION]);
+    assert.deepEqual(projection.declaration.source, {kind: 'boot'});
+    assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
+    assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
+    assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
+    assert.deepEqual(projection.declaration.elasticity, {
+      max_learners: 0,
+      min_learners: 0,
+      voters: 3,
+    });
+    assert.deepEqual(
+      fixture.gateway.writes.map((write) => write.tableName),
+      [TABLES.SERVICE_DEFINITIONS],
+    );
+    assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
+    assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
+    assert.equal(planner.rebalancers.length, 0);
+    const compilerSource = readFileSync(
+      'src/control-plane/owners/request-binding-service-definition-contract.js',
+      'utf8',
+    );
+    assert.doesNotMatch(
+      compilerSource,
+      /BOOTSTRAP_PHASE|BootstrapService|bootstrapPipeline|bootstrapApi|onBootstrap/u,
+    );
+    planner.owner.shutdown();
+  });
+
+  test('cache wake, replay, leadership reacquisition, repair, lost response, ' +
+    'and concurrent replay converge', async () => {
+    const fixture = await createFixture({sourceKind: 'boot'});
+    const planner = createPlanner(fixture);
+    planner.owner.setLeader(true);
+    await planner.owner.waitForBindingRefresh();
+    fixture.gateway.writes.length = 0;
+
+    planner.cache.emit(TABLES.SERVICE_BINDINGS);
+    await planner.owner.waitForBindingRefresh();
+    planner.owner.refresh();
+    await planner.owner.waitForBindingRefresh();
+    planner.owner.setLeader(false);
+    planner.owner.setLeader(true);
+    await planner.owner.waitForBindingRefresh();
+    assert.equal(fixture.gateway.writes.length, 0);
+
+    const serviceId = deriveRequestServiceDefinitionId(
+      fixture.binding.bindingVersionId,
+    );
+    planner.owner.setLeader(false);
+    fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
+    planner.owner.setLeader(true);
+    await planner.owner.waitForBindingRefresh();
+    assert.equal(fixture.gateway.writes.length, 1);
+    planner.owner.shutdown();
+
+    const lost = await createFixture({
+      sourceKind: 'boot', loseDesiredInsertResponse: true,
+    });
+    const lostPlanner = createPlanner(lost);
+    lostPlanner.owner.setLeader(true);
+    await lostPlanner.owner.waitForBindingRefresh();
+    assert.equal(lost.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 1);
+    lostPlanner.owner.shutdown();
+
+    const concurrent = await createFixture({sourceKind: 'boot'});
+    concurrent.gateway.writes.length = 0;
+    const results = await Promise.all([
+      concurrent.owners.serviceDefinitionsOwner.reconcileRequestBinding(
+        concurrent.bindingRow,
+      ),
+      concurrent.owners.serviceDefinitionsOwner.reconcileRequestBinding(
+        concurrent.bindingRow,
+      ),
+    ]);
+    assert.equal(results.filter((result) => result.created).length, 1);
+    assert.equal(concurrent.gateway.writes.length, 1);
+  });
+
+  test('conflicting and malformed durable boot state fails closed', async () => {
+    const fixture = await createFixture({sourceKind: 'boot'});
+    const artifact = await fixture.owners.serviceInstallCatalogOwner
+      .getBindableArtifactForTenant(
+        fixture.bindingRow.package_id,
+        fixture.bindingRow.manifest_digest,
+        TENANT_ID,
+      );
+    const expected = buildRequestBindingServiceDefinition(
+      fixture.bindingRow, artifact,
+    );
+    fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).set(
+      expected.service_id,
+      {...expected, binding_version_id: null, status: 'active'},
+    );
+    await assert.rejects(
+      fixture.owners.serviceDefinitionsOwner.reconcileRequestBinding(
+        fixture.bindingRow,
+      ),
+      assertConflict,
+    );
+    const planner = createPlanner(fixture);
+    planner.owner.setLeader(true);
+    await planner.owner.waitForBindingRefresh();
+    assert.equal(planner.rebalancers.length, 0);
+    planner.owner.shutdown();
+
+    const corrupt = await createFixture({sourceKind: 'boot'});
+    const malformed = {
+      ...corrupt.bindingRow,
+      binding_version_id: `binding-version-${'c'.repeat(64)}`,
     };
     corrupt.gateway.rows(TABLES.SERVICE_BINDINGS).clear();
     corrupt.gateway.rows(TABLES.SERVICE_BINDINGS).set(
