@@ -174,3 +174,9 @@ invariants, and migration sequence now live in
   single ownership remains an explicit option requiring fixed logical shards,
   ownership epochs, and handoff through existing replicated metadata owners;
   it does not justify a second scheduler or replica lifecycle.
+- 2026-07-23 — Completed
+  `minimal-deployment-runtime-access-policy-cutover`. Schema-v3 Artifacts and
+  schema-v2 Bindings carry no access declarations. Authenticated direct
+  configuration reuses the durable config owner; SQL and Component access
+  resolve the same live policy and fail closed. Existing partition-access
+  observations remain affinity telemetry only.
