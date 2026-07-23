@@ -289,6 +289,7 @@ class WasiComponentCellRuntime {
     readContexts,
     writeEffects,
     cancelOperation = () => {},
+    options = {},
   ) {
     const state = this.cells.get(serviceId);
     if (!state?.ready) {
@@ -304,7 +305,11 @@ class WasiComponentCellRuntime {
       );
     }
     const wallTimeLimitMs = state.cell.budgets.wall_time_ms;
-    const wallDeadlineMs = Date.now() + wallTimeLimitMs;
+    const configuredDeadlineMs = Date.now() + wallTimeLimitMs;
+    const wallDeadlineMs =
+      Number.isFinite(options.deadlineMs) ?
+        Math.min(configuredDeadlineMs, options.deadlineMs) :
+        configuredDeadlineMs;
     const inputBytes = encodedBytes(args);
     if (inputBytes > state.cell.budgets.input_bytes) {
       await this.stop(serviceId);
@@ -336,6 +341,9 @@ class WasiComponentCellRuntime {
         );
       }
       const initialCpu = await state.worker.cpuUsage();
+      if (typeof options.beforeComponentInvoke === 'function') {
+        options.beforeComponentInvoke();
+      }
       const cpuMonitor = this.monitorCpuBudget(
         state,
         initialCpu,
@@ -391,8 +399,10 @@ class WasiComponentCellRuntime {
       );
       return result.value;
     } catch (error) {
-      cancelOperation(error.message);
-      await this.stop(serviceId);
+      if (error?.preserveReplicaState !== true) {
+        cancelOperation(error.message);
+        await this.stop(serviceId);
+      }
       throw error;
     } finally {
       state.busy = false;

@@ -22,10 +22,6 @@
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
 import {CancellationToken} from '../query/cancellation-token.js';
 import {
-  QUERY_RESULT_BUDGET_ERROR_CODE,
-} from '../query/query-result-budget.js';
-import {createSqlRequest} from '../query/sql-request.js';
-import {
   RuntimeDriver,
   PREPARE_STATUS,
   START_STATUS,
@@ -40,6 +36,10 @@ import {
   isRequestCellDefinition,
   projectRequestCellRuntime,
 } from './request-cell-runtime-contract.js';
+import {
+  readRequestCellContexts,
+  writeRequestCellEffects,
+} from './request-cell-component-context-owner.js';
 import {WasiComponentCellRuntime} from
   './wasi-component-cell-runtime.js';
 
@@ -78,10 +78,6 @@ const WASM_COMPONENT_ERROR = Object.freeze({
     'request Cell Component invocation failed',
   COMPONENT_START_FAILED:
     'request Cell Component startup failed',
-  SQL_EXECUTOR_REQUIRED:
-    'request Cell table effects require the current SQL executor',
-  SQL_REQUEST_FAILED:
-    'request Cell table request failed',
 });
 
 const DRIVER_ACTION = Object.freeze({
@@ -100,16 +96,6 @@ const DRIVER_SEPARATOR = Object.freeze({
   DETAIL: ': ',
   ERROR_LIST: '; ',
 });
-const BYTE_ENCODING = 'utf8';
-const QUERY_BUDGET_RESULT_MAX_BYTES = 'RESULT_MAX_BYTES';
-const QUERY_BUDGET_RESULT_MAX_ROWS = 'RESULT_MAX_ROWS';
-const CONTEXT_QUERY_ROW_LIMIT_OFFSET = 1;
-const CONTEXT_ROW_BYTES_FIELD = '__request_cell_row_bytes';
-const REQUEST_CELL_BUDGET_ERROR_CODE = 'request_cell_budget_exhausted';
-const CONTEXT_ROW_BYTES_SQL =
-  'COALESCE(length(CAST(key AS BLOB)), 0) + ' +
-  'COALESCE(length(CAST(value AS BLOB)), 0)';
-
 const DRIVER_ENDPOINT_DEFAULT = Object.freeze({
   HOST: 'localhost',
   PROTOCOL: 'ws',
@@ -179,51 +165,6 @@ function resolveDriverTenantId(value) {
     value?.tenant_id ??
     value?.definition?.tenantId ??
     value?.definition?.tenant_id;
-}
-
-function encodedBytes(value) {
-  return Buffer.byteLength(JSON.stringify(value), BYTE_ENCODING);
-}
-
-function contextBudgetFailure(actual, limit) {
-  const error = new Error(
-    `Binding context_bytes budget exhausted (${actual} > ${limit})`,
-  );
-  error.code = REQUEST_CELL_BUDGET_ERROR_CODE;
-  return error;
-}
-
-function isQueryResultBudgetErrorCode(code) {
-  return code === QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED ||
-    code === QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED;
-}
-
-function resolveSqlRequestFailure(result) {
-  if (result && result.firstFailedParticipant) {
-    return result.firstFailedParticipant;
-  }
-  if (result && Array.isArray(result.participantFailures) &&
-      result.participantFailures.length > 0) {
-    return result.participantFailures[0];
-  }
-  return result;
-}
-
-function assertSqlRequestSucceeded(result, contextByteLimit = null) {
-  if (result && result.success === true) return;
-  const failure = resolveSqlRequestFailure(result);
-  if (contextByteLimit !== null &&
-      isQueryResultBudgetErrorCode(failure && failure.errorCode)) {
-    throw contextBudgetFailure(
-      contextByteLimit + CONTEXT_QUERY_ROW_LIMIT_OFFSET,
-      contextByteLimit,
-    );
-  }
-  throw new Error(
-    result && result.error ?
-      result.error :
-      WASM_COMPONENT_ERROR.SQL_REQUEST_FAILED,
-  );
 }
 
 /**
@@ -691,7 +632,8 @@ class WasmComponentDriver extends RuntimeDriver {
 
   async invoke(replicaContext, invocation = {}) {
     const serviceId = resolveDriverServiceId(replicaContext);
-    if (!this._requestCells.has(serviceId)) {
+    const cell = this._requestCells.get(serviceId);
+    if (!cell) {
       throw new DriverLifecycleError(
         this.kind,
         DRIVER_ACTION.INVOKE,
@@ -702,27 +644,38 @@ class WasmComponentDriver extends RuntimeDriver {
       ...this._replicaContexts.get(serviceId),
       ...replicaContext,
     };
+    const tenantId = resolveDriverTenantId(currentContext);
     const cancellationToken = new CancellationToken();
     try {
       return await this._componentRuntime.invoke(
         serviceId,
         invocation.args || [],
         (wallBudget) =>
-          this.#readComponentContexts(
-            currentContext,
-            wallBudget,
+          readRequestCellContexts({
             cancellationToken,
-          ),
+            cell,
+            replicaContext: currentContext,
+            serviceId,
+            tenantId,
+            wallBudget,
+          }),
         (effects, wallBudget) =>
-          this.#writeComponentEffects(
-            currentContext,
-            effects,
-            wallBudget,
+          writeRequestCellEffects({
             cancellationToken,
-          ),
+            effects,
+            replicaContext: currentContext,
+            serviceId,
+            tenantId,
+            wallBudget,
+          }),
         (reason) => cancellationToken.cancel(reason),
+        {
+          beforeComponentInvoke: invocation.assertCurrentTarget,
+          deadlineMs: invocation.deadlineMs,
+        },
       );
     } catch (cause) {
+      if (cause?.preserveReplicaState === true) throw cause;
       await this._componentRuntime.stop(serviceId);
       this._running.delete(serviceId);
       throw new DriverLifecycleError(
@@ -732,112 +685,6 @@ class WasmComponentDriver extends RuntimeDriver {
           `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
         {cause},
       );
-    }
-  }
-
-  async #readComponentContexts(
-    replicaContext,
-    wallBudget,
-    cancellationToken,
-  ) {
-    const serviceId = resolveDriverServiceId(replicaContext);
-    const cell = this._requestCells.get(serviceId);
-    const readableTables = cell.tables.filter((table) => table.read);
-    if (readableTables.length === 0) return [];
-    if (typeof replicaContext.sqlRequestExecutor !== 'function') {
-      throw new Error(WASM_COMPONENT_ERROR.SQL_EXECUTOR_REQUIRED);
-    }
-    const snapshots = [];
-    for (const table of readableTables) {
-      const emptySnapshot = [
-        ...snapshots,
-        {context: table.context, rows: []},
-      ];
-      const minimumBytes = encodedBytes(emptySnapshot);
-      if (minimumBytes > cell.budgets.context_bytes) {
-        throw contextBudgetFailure(
-          minimumBytes,
-          cell.budgets.context_bytes,
-        );
-      }
-      const remainingBytes =
-        cell.budgets.context_bytes - encodedBytes(snapshots);
-      const tableName = table.context.replace(/^table:/u, '');
-      const quotedTable = '"' + tableName.replaceAll('"', '""') + '"';
-      const request = createSqlRequest({
-        budgets: {
-          [QUERY_BUDGET_RESULT_MAX_BYTES]: remainingBytes,
-          [QUERY_BUDGET_RESULT_MAX_ROWS]: remainingBytes,
-        },
-        parameters: [
-          remainingBytes,
-          remainingBytes,
-          remainingBytes + CONTEXT_QUERY_ROW_LIMIT_OFFSET,
-        ],
-        sessionId: serviceId,
-        statement:
-          `SELECT CASE WHEN (${CONTEXT_ROW_BYTES_SQL}) <= ? ` +
-          'THEN key ELSE NULL END AS key, ' +
-          `CASE WHEN (${CONTEXT_ROW_BYTES_SQL}) <= ? ` +
-          'THEN value ELSE NULL END AS value, ' +
-          `(${CONTEXT_ROW_BYTES_SQL}) AS ` +
-          `"${CONTEXT_ROW_BYTES_FIELD}" ` +
-          `FROM ${quotedTable} LIMIT ?`,
-        tenantId: resolveDriverTenantId(replicaContext),
-        timeoutBudget: wallBudget,
-        cancellationToken,
-      });
-      const result = await replicaContext.sqlRequestExecutor(request);
-      assertSqlRequestSucceeded(result, remainingBytes);
-      const oversizedRow = (result?.rows || []).find(
-        (row) => row[CONTEXT_ROW_BYTES_FIELD] > remainingBytes,
-      );
-      if (oversizedRow) {
-        throw contextBudgetFailure(
-          oversizedRow[CONTEXT_ROW_BYTES_FIELD],
-          remainingBytes,
-        );
-      }
-      snapshots.push({
-        context: table.context,
-        rows: (result?.rows || []).map((row) => ({
-          key: row.key,
-          value: row.value,
-        })),
-      });
-      const actualBytes = encodedBytes(snapshots);
-      if (actualBytes > cell.budgets.context_bytes) {
-        throw contextBudgetFailure(
-          actualBytes,
-          cell.budgets.context_bytes,
-        );
-      }
-    }
-    return snapshots;
-  }
-
-  async #writeComponentEffects(
-    replicaContext,
-    effects,
-    wallBudget,
-    cancellationToken,
-  ) {
-    if (effects.length === 0) return;
-    if (typeof replicaContext.sqlRequestExecutor !== 'function') {
-      throw new Error(WASM_COMPONENT_ERROR.SQL_EXECUTOR_REQUIRED);
-    }
-    for (const effect of effects) {
-      const tableName = effect.context.replace(/^table:/u, '');
-      const quotedTable = `"${tableName.replaceAll('"', '""')}"`;
-      const result = await replicaContext.sqlRequestExecutor(createSqlRequest({
-        parameters: [effect.key, effect.value],
-        sessionId: resolveDriverServiceId(replicaContext),
-        statement: `INSERT INTO ${quotedTable} (key, value) VALUES (?, ?)`,
-        tenantId: resolveDriverTenantId(replicaContext),
-        timeoutBudget: wallBudget,
-        cancellationToken,
-      }));
-      assertSqlRequestSucceeded(result);
     }
   }
 }

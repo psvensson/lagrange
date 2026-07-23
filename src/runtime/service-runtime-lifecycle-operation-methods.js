@@ -1,9 +1,11 @@
 import {PREPARE_STATUS} from './runtime-driver.js';
+import {RequestCellRoutingError} from
+  '../service/request-cell-routing-contract.js';
+import {createRequestCellInvocationOwner} from
+  './request-cell-invocation-owner.js';
 
 const RUNTIME_DRIVER_START_FAILED = 'runtime driver start failed';
 const RUNTIME_DRIVER_PREPARE_FAILED = 'runtime driver prepare failed';
-const CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE =
-  'current SQL request executor is unavailable';
 const RUNTIME_DRIVER_INVOKE_UNSUPPORTED =
   'runtime driver does not support invocation';
 const RUNTIME_INVOKE_OPERATION = 'invoke';
@@ -29,46 +31,13 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
     validateEndpointIntent,
   } = deps;
 
-  function resolveIssuingServiceIdentity(definition, replicaServiceId) {
-    return definition.entityId ??
-      definition.service_id ?? replicaServiceId;
-  }
-
-  function executeWithCurrentSqlRequestExecutor(
-    owner, issuingServiceIdentity, request,
-  ) {
-    const currentQueryExecutor = owner._queryExecutorFactory?.(
-      issuingServiceIdentity,
-    );
-    if (typeof currentQueryExecutor?.executeRequest !== 'function') {
-      throw new Error(CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE);
-    }
-    return currentQueryExecutor.executeRequest(request);
-  }
-
-  function injectServiceQueryExecutor(
-    owner, definition, serviceId, replicaContext, runtimeKind,
-  ) {
-    if (!owner._queryExecutorFactory) {
-      return;
-    }
-    const issuingServiceIdentity =
-      resolveIssuingServiceIdentity(definition, serviceId);
-    const queryExecutor = owner._queryExecutorFactory(issuingServiceIdentity);
-    replicaContext.queryExecutor = queryExecutor;
-    if (typeof queryExecutor?.executeRequest === 'function') {
-      replicaContext.sqlRequestExecutor = (request) =>
-        executeWithCurrentSqlRequestExecutor(
-          owner,
-          issuingServiceIdentity,
-          request,
-        );
-    }
-    owner.emit(
-      QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
-      {runtimeKind, serviceId},
-    );
-  }
+  const {
+    injectServiceQueryExecutor,
+    invokeWithDurableFence,
+  } = createRequestCellInvocationOwner({
+    QUERY_EXECUTOR_FACTORY_EVENT,
+    WASM_OPERATION_STATE,
+  });
 
   function assertDriverStartSucceeded(
     result, runtimeKind, serviceId, operation,
@@ -610,15 +579,29 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         if (typeof driver.invoke !== 'function') {
           throw new Error(RUNTIME_DRIVER_INVOKE_UNSUPPORTED);
         }
-        return await driver.invoke(replicaContext, invocation);
+        const invokeDriver = () =>
+          driver.invoke(replicaContext, invocation);
+        if (invocation?.invocationId) {
+          return await invokeWithDurableFence(
+            this,
+            definition,
+            serviceId,
+            invocation,
+            invokeDriver,
+          );
+        }
+        return await invokeDriver();
       } catch (error) {
-        await this._projectReplicaState(
-          serviceId,
-          definition,
-          RUNTIME_REPLICA_STATUS.FAILED,
-          {error_message: error.message},
-        );
+        if (error?.preserveReplicaState !== true) {
+          await this._projectReplicaState(
+            serviceId,
+            definition,
+            RUNTIME_REPLICA_STATUS.FAILED,
+            {error_message: error.message},
+          );
+        }
         if (error instanceof LifecycleOrchestrationError) throw error;
+        if (error instanceof RequestCellRoutingError) throw error;
         throw new LifecycleOrchestrationError(
           operation,
           runtimeKind,

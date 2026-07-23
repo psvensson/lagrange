@@ -142,6 +142,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           cdcIntegrationService: this.cdcIntegrationService,
           systemTableCache,
           serviceLifecycleManager: this.serviceLifecycleManager,
+          serviceRuntimeLifecycle: this.serviceRuntimeLifecycle,
           rpcClient: this.rpcClient,
           executorOutcomeEmitter:
             this.rebalanceCoordinator?.executorOutcomeEmitter,

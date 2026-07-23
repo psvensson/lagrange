@@ -13,6 +13,7 @@ const {
   ROUTER_NO_CONNECTION_ERROR_CODE,
   RouterMessageType,
   TRANSPORT_ERROR_MSG,
+  TRANSPORT_EVENT,
   TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
@@ -25,6 +26,42 @@ const {
   resolveRequestIdFromMessage,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
+
+function deliveryAbortReason(signal) {
+  return signal?.reason instanceof Error ?
+    signal.reason :
+    new Error(ROUTER_ERROR_MSG.SHUTDOWN);
+}
+
+function assertDeliveryOpen(signal) {
+  if (signal?.aborted) throw deliveryAbortReason(signal);
+}
+
+function awaitDeliveryWithCancellation(deliveryPromise, signal) {
+  if (!signal) return deliveryPromise;
+  if (signal.aborted) {
+    return Promise.reject(deliveryAbortReason(signal));
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const complete = (settle, value) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
+      settle(value);
+    };
+    const onAbort = () => complete(reject, deliveryAbortReason(signal));
+    signal.addEventListener(
+      TRANSPORT_EVENT.ABORT,
+      onAbort,
+      {once: true},
+    );
+    Promise.resolve(deliveryPromise).then(
+      (value) => complete(resolve, value),
+      (error) => complete(reject, error),
+    );
+  });
+}
 
 export async function deliverLocal(
   router,
@@ -97,9 +134,11 @@ export async function deliver(
   options = {},
 ) {
   const deliverStartMs = Date.now();
+  assertDeliveryOpen(options.signal);
   if (!router.initialized) {
     await router.initialize();
   }
+  assertDeliveryOpen(options.signal);
   const deliveryTimeoutMs =
     Number.isFinite(options.timeoutMs) &&
     options.timeoutMs > TRANSPORT_NUM.ZERO ?
@@ -128,17 +167,20 @@ export async function deliver(
   if (!targetNodeId) {
     throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
   }
-  const deliveryOutcome = await router.resolveDeliveryOutcome(
-    targetAddress,
-    message,
-    messageId,
-    targetNodeId,
-    correlationId,
-    {
-      ...options,
-      deliverySource,
-      timeoutMs: deliveryTimeoutMs,
-    },
+  const deliveryOutcome = await awaitDeliveryWithCancellation(
+    router.resolveDeliveryOutcome(
+      targetAddress,
+      message,
+      messageId,
+      targetNodeId,
+      correlationId,
+      {
+        ...options,
+        deliverySource,
+        timeoutMs: deliveryTimeoutMs,
+      },
+    ),
+    options.signal,
   );
   const normalizedOutcome = normalizeDeliveryOutcome(deliveryOutcome);
   const result = normalizedOutcome.result;
@@ -264,6 +306,7 @@ export async function deliverRemote(
   const responsePromise = router.registerPendingResponse(messageId, targetNodeId, {
     deliverySource: resolveDeliverySource(targetAddress, payload, options),
     responseContext: options.responseContext,
+    signal: options.signal,
   });
   let earlyResponseError = null;
   responsePromise.catch((error) => {

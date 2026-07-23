@@ -8,6 +8,12 @@ import {
 } from './partition-service-raft-lifecycle-wiring.js';
 import {PartitionServiceCoreBase} from './partition-service-core-base.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {
+  generateCreateIndexSQL,
+} from '../bootstrap/system-table-schema-sql.js';
+import {
+  getSchemaByTableName,
+} from '../bootstrap/system-table-schemas-constants.js';
 
 const {
   AddressManager,
@@ -699,6 +705,13 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     this.ensureMessageGroupsTableColumns();
     this.ensurePartitionsTableColumns();
     this.ensureSqlTransactionsTableColumns();
+    const indexSchema =
+      this.tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS ?
+        getSchemaByTableName(this.tableName) || this.schema :
+        this.schema;
+    for (const indexSql of generateCreateIndexSQL(indexSchema)) {
+      this.db.exec(indexSql);
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_TABLE, {
       tableName: this.tableName,
       partitionId: this.partitionId,

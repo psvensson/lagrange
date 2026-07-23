@@ -1,0 +1,63 @@
+{
+  "id": "minimal-deployment-request-cell-routing-shutdown-fence",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The complete minimal request Cell routing candidate lands as one exact unit with durable single-effect fencing and bounded shutdown: active ingress dispatches receive one cancellation signal through ServiceDispatcher and MessageRouter, shutdown awaits naturally drained request accounting, correlated transport response waiters are retired and absorb late responses, and already-completed component results remain durably replayable; the routing scenario passes three consecutive fresh runs and independent exact-candidate verification.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-2.0-minimal-deployment-surface",
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "minimal-deployment-request-cell-routing-durable-fence",
+    "planDoc": "solve/epics/minimal-deployment-surface.md",
+    "draftedAtCommit": "3b215532b6931ba56fe83ffe6374736de479be2e"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-request-cell-routing",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-request-cell-routing-shutdown-fence-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-request-cell-routing",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, use an independent subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "complete-exact-candidate",
+      "statement": "The candidate must include the complete request Cell routing delta from base commit 3b215532b6931ba56fe83ffe6374736de479be2e, including durable journal fencing, request ingress and dispatch owners, transport cancellation and retired-response ownership, production storage initialization, and all focused proofs."
+    },
+    {
+      "id": "shutdown-drain-contract",
+      "statement": "Shutdown must abort each active ingress request with one signal propagated through ServiceDispatcher and MessageRouter, prevent any further retry, await natural active and per-target accounting cleanup, retire the exact correlated response waiter, absorb a late response, and never discard or rearm a component result that was already durably completed."
+    },
+    {
+      "id": "durable-effect-fence",
+      "statement": "At most one component invocation may cross concurrent runtime owners for a tenant and idempotency key, a zero-row or unknown journal compare-and-set must fail closed, and any failure after a component result exists must remain ambiguous and never be rearmed."
+    },
+    {
+      "id": "routing-contract-preserved",
+      "statement": "Preserve authenticated immutable request-Binding selection, canonical ServiceDispatcher and MessageRouter delivery, receiver-fresh admission, bounded retry and pressure, genuine processed Component responses, handoff, restart, late-response, no-handler, unmatched, ambiguous, concurrent ordering, and shutdown replay proofs."
+    },
+    {
+      "id": "inherited-static-debt-no-growth",
+      "statement": "Do not raise or weaken any static baseline; candidate-scoped checks must be clean, and broad inherited baseline failures must not grow relative to base commit 3b215532b6931ba56fe83ffe6374736de479be2e."
+    }
+  ]
+}

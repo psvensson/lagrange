@@ -41,6 +41,8 @@ class RuntimeServiceHandlerSetup {
    * @param {Object} options.systemTableCache - Cache (required).
    * @param {Object} options.serviceLifecycleManager - Lifecycle
    *   manager (required).
+   * @param {Object} [options.serviceRuntimeLifecycle] - Runtime invocation
+   *   owner.
    * @param {Object} [options.rpcClient] - Optional RPC client.
    * @param {Object} [options.executorOutcomeEmitter] - Optional executor
    *   outcome emitter shared with the rebalance coordinator.
@@ -54,6 +56,7 @@ class RuntimeServiceHandlerSetup {
       cdcIntegrationService,
       systemTableCache,
       serviceLifecycleManager,
+      serviceRuntimeLifecycle,
       rpcClient,
       executorOutcomeEmitter,
     } = options;
@@ -101,6 +104,7 @@ class RuntimeServiceHandlerSetup {
       systemTableCache,
       cdcIntegrationService,
       serviceLifecycleManager,
+      serviceRuntimeLifecycle,
       executorOutcomeEmitter,
     });
 

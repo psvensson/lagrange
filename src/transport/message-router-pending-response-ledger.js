@@ -9,6 +9,7 @@ const {
   ROUTER_LOG_MSG,
   SERVICE_RESPONSE_DISPOSITION_KIND,
   TRANSPORT_ERROR_MSG,
+  TRANSPORT_EVENT,
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
   buildRetiredPendingClassification,
@@ -22,6 +23,28 @@ const {
  * register/arm/settle/cancel pending response waiters, and settle inbound ACKs.
  */
 class MessageRouterPendingResponseLedger {
+  /**
+   * Remove the AbortSignal listener owned by one pending response.
+   * @param {Object} pending
+   * @return {void}
+   * @private
+   */
+  detachPendingResponseAbortSignal(pending) {
+    if (
+      pending?.abortSignal &&
+      pending?.abortListener
+    ) {
+      pending.abortSignal.removeEventListener(
+        TRANSPORT_EVENT.ABORT,
+        pending.abortListener,
+      );
+    }
+    if (pending) {
+      pending.abortSignal = null;
+      pending.abortListener = null;
+    }
+  }
+
   /**
    * Rate-limit unmatched service-response warnings so response storms do not
    * bury the underlying transport/control-plane failure that caused them.
@@ -256,15 +279,65 @@ class MessageRouterPendingResponseLedger {
    */
   registerPendingResponse(messageId, targetNodeId = null, options = {}) {
     return new Promise((resolve, reject) => {
-      this.pendingResponses.set(messageId, {
+      const pending = {
+        abortListener: null,
+        abortSignal: null,
         resolve,
         reject,
         timeoutId: null,
         targetNodeId,
         deliverySource: normalizeIdentifier(options?.deliverySource) || null,
         responseContext: normalizeIdentifier(options?.responseContext) || null,
-      });
+      };
+      const signal = options?.signal;
+      if (
+        signal &&
+        typeof signal.addEventListener === TRANSPORT_TYPEOF.FUNCTION
+      ) {
+        pending.abortSignal = signal;
+        pending.abortListener = () => {
+          this.abortPendingResponse(messageId, signal.reason);
+        };
+      }
+      this.pendingResponses.set(messageId, pending);
+      if (signal?.aborted) {
+        pending.abortListener();
+      } else if (pending.abortListener) {
+        signal.addEventListener(
+          TRANSPORT_EVENT.ABORT,
+          pending.abortListener,
+          {once: true},
+        );
+      }
     });
+  }
+
+  /**
+   * Reject and retire one waiter when its delivery owner is cancelled.
+   * @param {string} messageId
+   * @param {*} reason
+   * @return {boolean} True when a waiter was aborted.
+   * @private
+   */
+  abortPendingResponse(messageId, reason = null) {
+    const pending = this.pendingResponses.get(messageId);
+    if (!pending) return false;
+    if (pending.timeoutId) {
+      clearTimeout(pending.timeoutId);
+    }
+    this.detachPendingResponseAbortSignal(pending);
+    this.pendingResponses.delete(messageId);
+    this.rememberRetiredPendingResponse(
+      messageId,
+      pending,
+      RETIRED_PENDING_RESPONSE_REASON.CANCELLED,
+    );
+    pending.reject(
+      reason instanceof Error ?
+        reason :
+        new Error(ROUTER_ERROR_MSG.SHUTDOWN),
+    );
+    return true;
   }
   /**
    * Arm timeout for a pending SERVICE_RESPONSE waiter.
@@ -282,6 +355,7 @@ class MessageRouterPendingResponseLedger {
     }
     const timeoutId = setTimeout(() => {
       this.pendingResponses.delete(messageId);
+      this.detachPendingResponseAbortSignal(pending);
       this.rememberRetiredPendingResponse(
         messageId,
         pending,
@@ -312,6 +386,7 @@ class MessageRouterPendingResponseLedger {
     if (pending.timeoutId) {
       clearTimeout(pending.timeoutId);
     }
+    this.detachPendingResponseAbortSignal(pending);
     this.pendingResponses.delete(messageId);
     if (error) {
       pending.reject(new Error(error));
@@ -334,6 +409,7 @@ class MessageRouterPendingResponseLedger {
     if (pending.timeoutId) {
       clearTimeout(pending.timeoutId);
     }
+    this.detachPendingResponseAbortSignal(pending);
     this.pendingResponses.delete(messageId);
     if (options?.ignoreLateResponse === true) {
       this.rememberRetiredPendingResponse(
@@ -356,6 +432,7 @@ class MessageRouterPendingResponseLedger {
         if (pending.timeoutId) {
           clearTimeout(pending.timeoutId);
         }
+        this.detachPendingResponseAbortSignal(pending);
         this.pendingResponses.delete(messageId);
         this.rememberRetiredPendingResponse(
           messageId,

@@ -589,6 +589,7 @@ function createBootstrapApiRuntimeMethods(options = {}) {
 
     async shutdown() {
       this.stopMoveReplicaAssignmentSweep();
+      await this.requestCellHttpAdapter?.shutdown?.();
       const wasInitialized = this.initialized === true;
       const hadFastify = Boolean(this.fastify);
       const serverListening = this.fastify?.server?.listening === true;

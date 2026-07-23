@@ -33,12 +33,55 @@ import {
   RUNTIME_SERVICE_HANDLER_LOG_MSG,
   RUNTIME_SERVICE_HANDLER_SUBSYSTEM} from
   './runtime-service-handler-constants.js';
+import {
+  assertCurrentRequestCellTarget,
+  handleRequestCellInvocation,
+} from './runtime-service-request-cell-handler.js';
+import {RequestBindingRouteResolver} from
+  '../service/request-binding-route-resolver.js';
+import {
+  REQUEST_CELL_ROUTE_MESSAGE_TYPE,
+  REQUEST_CELL_ROUTE_OPERATION,
+} from '../service/request-cell-routing-contract.js';
 
 function buildReplicaOperationResponse(status, fields = {}) {
   return {
     status,
     ...fields,
   };
+}
+
+function resolveRequestCellServiceEnvelope(envelope) {
+  if (envelope?.operation === REQUEST_CELL_ROUTE_OPERATION) {
+    return envelope;
+  }
+  if (envelope?.payload?.operation === REQUEST_CELL_ROUTE_OPERATION) {
+    return envelope.payload;
+  }
+  return null;
+}
+
+async function dispatchRuntimeServiceMessage(
+  handler,
+  type,
+  payload,
+  serviceEnvelope,
+) {
+  if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
+    return handler.handleCreateReplica(payload);
+  }
+  if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
+    return handler.handleRemoveReplica(payload);
+  }
+  if (type === REQUEST_CELL_ROUTE_MESSAGE_TYPE) {
+    return handler.handleRequestCellInvocation(serviceEnvelope);
+  }
+  const unknownType =
+    RUNTIME_SERVICE_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;
+  return buildReplicaOperationResponse(
+    ReplicaOperationResponseStatus.ERROR,
+    {error: unknownType(type)},
+  );
 }
 
 class RuntimeServiceHandler extends EventEmitter {
@@ -56,7 +99,14 @@ class RuntimeServiceHandler extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.serviceLifecycleManager =
     options.serviceLifecycleManager || null;
+    this.serviceRuntimeLifecycle =
+      options.serviceRuntimeLifecycle || null;
     this.rpcClient = null;
+    this.requestBindingRouteResolver =
+      options.requestBindingRouteResolver ||
+      new RequestBindingRouteResolver({
+        systemTableCacheProvider: () => this.systemTableCache,
+      });
 
     // Executor outcome emitter — replaces direct replica_operations writes.
     this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;
@@ -105,29 +155,22 @@ class RuntimeServiceHandler extends EventEmitter {
    * @return {Promise<Object>} Response.
    */
   async handleMessage(envelope) {
-    const {payload, correlationId} = envelope;
-    const type = payload?.[ReplicaOperationField.TYPE];
+    const {correlationId} = envelope;
+    const serviceEnvelope = resolveRequestCellServiceEnvelope(envelope);
+    const payload = serviceEnvelope?.payload || envelope.payload;
+    const type = payload?.[ReplicaOperationField.TYPE] || payload?.type;
 
     this.logger.debug(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.MESSAGE_RECEIVED,
       {type, correlationId, operationId: payload?.operationId},
     );
 
-    let response;
-    if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
-      response = await this.handleCreateReplica(payload);
-    } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
-      response = await this.handleRemoveReplica(payload);
-    } else {
-      const unknownType =
-      RUNTIME_SERVICE_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;
-      response = buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ERROR,
-        {
-          error: unknownType(type),
-        },
-      );
-    }
+    const response = await dispatchRuntimeServiceMessage(
+      this,
+      type,
+      payload,
+      serviceEnvelope,
+    );
 
     return {...response, correlationId};
   }
@@ -276,6 +319,7 @@ class RuntimeServiceHandler extends EventEmitter {
         serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
         replicaId,
         entityId,
+        nodeId: this.nodeId,
         ...definition,
         // service_definitions rows are stored snake_case, but the runtime
         // descriptor validator (and adapter) read camelCase. Provide the
@@ -296,7 +340,10 @@ class RuntimeServiceHandler extends EventEmitter {
       );
 
       this.localReplicas.set(replicaId, {
-        replicaId, entityId, status: ReplicaStatus.ACTIVE,
+        replicaHandle,
+        replicaId,
+        entityId,
+        status: ReplicaStatus.ACTIVE,
       });
 
       // Emit active outcome — coordinator will transition workflow.
@@ -511,6 +558,8 @@ class RuntimeServiceHandler extends EventEmitter {
         serviceId: replicaId,
         serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
         replicaId,
+        entityId,
+        nodeId: this.nodeId,
         ...(definition || {}),
       };
 
@@ -557,6 +606,23 @@ class RuntimeServiceHandler extends EventEmitter {
     } finally {
       this.inProgressOperations.delete(operationId);
     }
+  }
+
+  assertCurrentRequestCellTarget(
+    request,
+    route,
+    invocation,
+  ) {
+    return assertCurrentRequestCellTarget(
+      this,
+      request,
+      route,
+      invocation,
+    );
+  }
+
+  async handleRequestCellInvocation(envelope) {
+    return handleRequestCellInvocation(this, envelope);
   }
 
   /**

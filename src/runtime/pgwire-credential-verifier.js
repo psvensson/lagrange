@@ -76,6 +76,7 @@ function buildPgwireCredentialVerifier(env = process.env) {
 }
 
 export {
+  PGWIRE_CREDENTIAL_ENV,
   PGWIRE_CREDENTIAL_CONFIG_ERROR,
   credentialTupleMatches,
   buildPgwireCredentialVerifier,

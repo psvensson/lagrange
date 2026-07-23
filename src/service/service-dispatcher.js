@@ -13,6 +13,11 @@ import {
 } from '../transport/transport-semantic-outcome.js';
 import {assertServiceMessageEnvelope} from './service-message-contract.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
+import {
+  REQUEST_CELL_ROUTE_CLASSIFICATION,
+  REQUEST_CELL_ROUTE_ERROR_CODE,
+  createRoutingFailure,
+} from './request-cell-routing-contract.js';
 
 const LOCAL_STR_UNKNOWN_ERROR = 'unknown_error';
 
@@ -29,6 +34,11 @@ const SERVICE_DISPATCHER_ERROR = Object.freeze({
     'leaderResolver must return targetAddress',
   DELIVERY_REJECTED:
     'message delivery was not acknowledged',
+  DEADLINE_EXPIRED:
+    'Request deadline expired before service dispatch',
+  NO_HANDLER: 'no handler',
+  PROCESSED_RESPONSE_REQUIRED:
+    'message delivery did not include handler completion evidence',
 });
 
 const DISPATCHER_POLICY_TYPE = Object.freeze({
@@ -67,6 +77,68 @@ function resolveNodeId(context) {
   return context?.nodeId ||
     context?.clientInfo?.nodeId ||
     null;
+}
+
+function assertDispatchOpen(context) {
+  const signal = context?.signal;
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error ?
+    signal.reason :
+    createRoutingFailure(
+      REQUEST_CELL_ROUTE_ERROR_CODE.SHUTTING_DOWN,
+      SERVICE_DISPATCHER_ERROR.DEADLINE_EXPIRED,
+      {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+    );
+}
+
+function buildDeliveryOptions(target, traceId, context) {
+  const deadlineMs = context?.deadlineMs;
+  const remainingMs = Number.isFinite(deadlineMs) ?
+    deadlineMs - Date.now() :
+    null;
+  if (remainingMs !== null && remainingMs <= 0) {
+    throw createRoutingFailure(
+      REQUEST_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
+      SERVICE_DISPATCHER_ERROR.DEADLINE_EXPIRED,
+    );
+  }
+  return {
+    responseContext: context?.responseContext,
+    signal: context?.signal,
+    targetNodeId: target.targetNodeId || null,
+    timeoutMs: remainingMs === null ? undefined : remainingMs,
+    traceId,
+  };
+}
+
+function createDeliveryFailure(delivery) {
+  if (
+    delivery.reasonCode ===
+      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER
+  ) {
+    return createRoutingFailure(
+      REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+      `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}:` +
+        ` ${delivery?.error || SERVICE_DISPATCHER_ERROR.NO_HANDLER}`,
+      {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+    );
+  }
+  if (
+    delivery.reasonCode ===
+      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT
+  ) {
+    return createRoutingFailure(
+      REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
+      `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}: message timeout`,
+      {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS},
+    );
+  }
+  return createRoutingFailure(
+    REQUEST_CELL_ROUTE_ERROR_CODE.TRANSPORT_FAILED,
+    `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}:` +
+      ` ${delivery?.error || LOCAL_STR_UNKNOWN_ERROR}`,
+    {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS},
+  );
 }
 
 class ServiceDispatcher {
@@ -248,6 +320,7 @@ class ServiceDispatcher {
     try {
       validatedEnvelope = assertServiceMessageEnvelope(envelope);
       traceId = resolveTraceId(validatedEnvelope, context);
+      assertDispatchOpen(context);
 
       this._logger.debug(DISPATCHER_LOG.DISPATCH_START, {
         ...this._buildLogContext(validatedEnvelope, context),
@@ -257,10 +330,12 @@ class ServiceDispatcher {
         validatedEnvelope,
         context,
       );
+      assertDispatchOpen(authorizedContext);
       const target = await this._leaderResolver(
         validatedEnvelope,
         authorizedContext,
       );
+      assertDispatchOpen(authorizedContext);
       if (!target || typeof target.targetAddress !== 'string') {
         throw new Error(SERVICE_DISPATCHER_ERROR.TARGET_ADDRESS_REQUIRED);
       }
@@ -269,19 +344,24 @@ class ServiceDispatcher {
         await this._messageRouter.deliver(
           target.targetAddress,
           validatedEnvelope,
-          {
-            targetNodeId: target.targetNodeId || null,
-            traceId,
-          },
+          buildDeliveryOptions(target, traceId, authorizedContext),
         ),
       );
 
       if (!isDeliveredTransportDeliveryOutcome(delivery) ||
           delivery.reasonCode ===
             TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
-        throw new Error(
-          `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}:` +
-          ` ${delivery?.error || LOCAL_STR_UNKNOWN_ERROR}`,
+        throw createDeliveryFailure(delivery);
+      }
+      if (
+        authorizedContext?.requireProcessedResponse === true &&
+        delivery.processed !== true &&
+        delivery.handlerProcessed !== true
+      ) {
+        throw createRoutingFailure(
+          REQUEST_CELL_ROUTE_ERROR_CODE.ACK_ONLY,
+          SERVICE_DISPATCHER_ERROR.PROCESSED_RESPONSE_REQUIRED,
+          {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.AMBIGUOUS},
         );
       }
 

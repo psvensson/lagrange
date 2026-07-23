@@ -285,12 +285,13 @@ describe('WASM_OPERATIONS_SCHEMA', () => {
     }
   });
 
-  it('should have idempotency index on tenant + key', () => {
+  it('should have unique idempotency index on tenant + key', () => {
     const idx = WASM_OPERATIONS_SCHEMA.indices.find(
-      (i) => i.name === 'idx_wasm_ops_idempotency',
+      (i) => i.name === 'uidx_wasm_ops_tenant_idempotency',
     );
     assert.ok(idx);
     assert.deepEqual(idx.columns, ['tenant_id', 'idempotency_key']);
+    assert.equal(idx.unique, true);
   });
 
   it('should default state to pending', () => {
@@ -311,6 +312,13 @@ describe('generateCreateIndexSQL for new tables', () => {
   it('should generate index SQL for wasm_operations', () => {
     const sqls = generateCreateIndexSQL(WASM_OPERATIONS_SCHEMA);
     assert.equal(sqls.length, 3);
+    assert.ok(sqls.some(
+      (sql) =>
+        sql ===
+          'CREATE UNIQUE INDEX IF NOT EXISTS ' +
+          'uidx_wasm_ops_tenant_idempotency ' +
+          'ON wasm_operations(tenant_id, idempotency_key)',
+    ));
   });
 
   it('should return empty array for tables with no indices', () => {

@@ -609,8 +609,9 @@ const WASM_OPERATIONS_SCHEMA = {
       columns: ['state'],
     },
     {
-      name: 'idx_wasm_ops_idempotency',
+      name: 'uidx_wasm_ops_tenant_idempotency',
       columns: ['tenant_id', 'idempotency_key'],
+      unique: true,
     },
   ],
 };

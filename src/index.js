@@ -201,6 +201,7 @@ async function startJoinNode(options) {
     controlPlaneWriteHealthProvider:
       createControlPlaneWriteHealthProvider(nodeJoiningService),
     runtimeOwner: nodeJoiningService.runtimeDependencyOwner,
+    requestCellEnv: env,
     rolloutControls,
   });
 
@@ -408,6 +409,7 @@ async function startJoinNode(options) {
  */
 async function startSeedNode(options) {
   const {config, mainLogger, dataDirectoryManager, rolloutControls} = options;
+  const env = options.env || process.env;
   const nodeId = config.get(CONFIG_KEY.NODE_ID);
   const {
     wsPort,
@@ -472,6 +474,7 @@ async function startSeedNode(options) {
       createControlPlaneWriteHealthProvider(bootstrapService),
     bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
     runtimeOwner: bootstrapService.runtimeDependencyOwner,
+    requestCellEnv: env,
     rolloutControls,
   });
 

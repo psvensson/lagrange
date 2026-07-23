@@ -46,7 +46,9 @@ function generateCreateIndexSQL(schema) {
 
   return schema.indices.map((idx) => {
     const columns = idx.columns.join(', ');
-    return `CREATE INDEX IF NOT EXISTS ${idx.name} ON ${schema.tableName}(${columns})`;
+    const uniqueness = idx.unique ? 'UNIQUE ' : '';
+    return `CREATE ${uniqueness}INDEX IF NOT EXISTS ${idx.name} ` +
+      `ON ${schema.tableName}(${columns})`;
   });
 }
 

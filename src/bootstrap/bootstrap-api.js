@@ -77,6 +77,8 @@ import {installBootstrapApiRegistrationMethods} from
   './bootstrap-api-registration-methods.js';
 import {installBootstrapApiServerMethods} from
   './bootstrap-api-server-methods.js';
+import {createRequestCellRoutingSurface} from
+  '../service/request-cell-routing-surface.js';
 
 const LOCAL_STR_BOOTSTRAPAPI = 'BootstrapAPI';
 const LOCAL_STR_FUNCTION = 'function';
@@ -211,6 +213,24 @@ class BootstrapAPI {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(BOOTSTRAP_API_SUBSYSTEM) : console;
+    this.requestCellRoutingSurface =
+      options.requestCellRoutingSurface ||
+      createRequestCellRoutingSurface({
+        authenticateRequest: options.requestCellAuthenticateRequest,
+        authorize: options.requestCellAuthorize,
+        deadlineMs: options.requestCellDeadlineMs,
+        env: options.requestCellEnv,
+        logger: this.logger,
+        maxAttempts: options.requestCellMaxAttempts,
+        maxInFlight: options.requestCellMaxInFlight,
+        maxInFlightPerTarget:
+          options.requestCellMaxInFlightPerTarget,
+        messageRouterProvider: () => this.messageRouter,
+        systemTableCacheProvider: () => this.getSystemTableCache(),
+      });
+    this.requestCellHttpAdapter =
+      options.requestCellHttpAdapter ||
+      this.requestCellRoutingSurface.httpAdapter;
     this.serviceRegistrationVisibilityOwner =
       new ServiceRegistrationVisibilityOwner({
         delegates: {

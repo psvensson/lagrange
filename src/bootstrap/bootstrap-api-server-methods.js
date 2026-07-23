@@ -14,6 +14,14 @@ import {
 import {installBootstrapApiMethods} from './bootstrap-api-method-installer.js';
 
 const LOCAL_STR_METRICS_BOOTSTRAP_API_HEALTH_INITIALIZIN = 'metrics.bootstrap_api.health.initializing';
+const REQUEST_CELL_HTTP_METHODS = Object.freeze([
+  'DELETE',
+  'GET',
+  'PATCH',
+  'POST',
+  'PUT',
+]);
+const REQUEST_CELL_HTTP_ROUTES = Object.freeze(['/', '/*']);
 
 const bootstrapApiServerMethods = {
   /**
@@ -125,6 +133,17 @@ const bootstrapApiServerMethods = {
     this.fastify.get(BOOTSTRAP_API_ROUTE.CLUSTER_STATE, async (_request, _reply) => {
       return this.getClusterState();
     });
+
+    for (const method of REQUEST_CELL_HTTP_METHODS) {
+      for (const url of REQUEST_CELL_HTTP_ROUTES) {
+        this.fastify.route({
+          handler: async (request, reply) =>
+            this.requestCellHttpAdapter.handle(request, reply),
+          method,
+          url,
+        });
+      }
+    }
   },
 
   /**

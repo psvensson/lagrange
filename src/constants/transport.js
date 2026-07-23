@@ -158,6 +158,7 @@ function normalizeToWebSocketAddress(nodeAddress) {
 }
 
 const TRANSPORT_EVENT = Object.freeze({
+  ABORT: 'abort',
   INITIALIZED: 'initialized',
   CONNECTION: 'connection',
   LISTENING: 'listening',

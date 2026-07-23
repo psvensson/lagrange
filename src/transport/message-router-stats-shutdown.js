@@ -130,6 +130,7 @@ class MessageRouterStatsShutdown {
     const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
     for (const [, pending] of this.pendingResponses) {
       clearTimeout(pending.timeoutId);
+      this.detachPendingResponseAbortSignal(pending);
       pending.reject(shutdownError);
     }
     this.pendingResponses.clear();
