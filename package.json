@@ -52,6 +52,7 @@
     "test:sharded:serial": "npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2",
     "test:cli": "find test/cli -type f -name '*.test.js' -print0 | sort -z | xargs -0 node scripts/run-test-files.js",
     "test:unused": "knip --exclude exports,duplicates",
+    "test:unused:push": "node scripts/checks/push-gate-unused-files.js",
     "test:unused:prod": "knip --production --include dependencies",
     "test:unused:exports": "knip --include exports",
     "test:unused:ratchet": "node scripts/check-unused-exports.js",

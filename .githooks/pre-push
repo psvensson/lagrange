@@ -3,6 +3,9 @@
 # seconds warm — cache shared with pre-commit at node_modules/.cache/eslint/).
 # Keeps 'npm run lint' green without waiting for a full test:static run.
 # Bypass with git push --no-verify (emergencies only).
+# Unused-file findings on untracked paths do not block: untracked files are
+# never part of a push (a concurrent session's in-flight work must not gate
+# this one). See scripts/checks/push-gate-unused-files.js.
 set -euo pipefail
-npm run -s test:unused
+npm run -s test:unused:push
 npx eslint --cache --cache-location node_modules/.cache/eslint/ src/ test/ scripts/ --ignore-pattern 'test/.gitkeep'
