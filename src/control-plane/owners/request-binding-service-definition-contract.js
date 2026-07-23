@@ -105,6 +105,34 @@ function hasRequestBindingServiceDefinitionLineage(row) {
       row[SD_COL.SERVICE_ID].startsWith(SERVICE_ID_PREFIX));
 }
 
+function getBindingServiceDefinitionSourceKind(row) {
+  const serviceId = row?.[SD_COL.SERVICE_ID];
+  const bindingVersionId = row?.[SD_COL.BINDING_VERSION_ID];
+  const bindingDigest = row?.[SD_COL.BINDING_DIGEST];
+  const bindingProjection = row?.[SD_COL.BINDING_PROJECTION];
+  if (!hasRequestBindingServiceDefinitionLineage(row) ||
+      typeof serviceId !== 'string' ||
+      typeof bindingVersionId !== 'string' ||
+      typeof bindingDigest !== 'string' ||
+      typeof bindingProjection !== 'string' ||
+      serviceId !== deriveRequestServiceDefinitionId(bindingVersionId)) {
+    return null;
+  }
+  try {
+    const projection = JSON.parse(bindingProjection);
+    if (projection?.binding_version_id !== bindingVersionId ||
+        projection?.binding_digest !== bindingDigest) {
+      return null;
+    }
+    const sourceKind = projection?.declaration?.source?.kind;
+    return supportsBindingServiceDefinitionSourceKind(sourceKind) ?
+      sourceKind :
+      null;
+  } catch {
+    return null;
+  }
+}
+
 function supportsBindingServiceDefinitionSourceKind(sourceKind) {
   return COMPILED_SOURCE_KINDS.has(sourceKind);
 }
@@ -240,6 +268,21 @@ function buildRequestBindingServiceDefinition(bindingRow, artifact) {
   });
 }
 
+function buildActivatedRequestBindingServiceDefinition(
+  compiledDefinition,
+  binding,
+) {
+  if (binding?.declaration?.source?.kind !==
+      DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST) {
+    return compiledDefinition;
+  }
+  return Object.freeze({
+    ...compiledDefinition,
+    [SD_COL.REPLICA_COUNT]: binding.declaration.elasticity.voters,
+    [SD_COL.STATUS]: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
+  });
+}
+
 function requestBindingServiceDefinitionRowsMatch(left, right) {
   return SERVICE_DEFINITION_COLUMN_LIST.every(
     (field) => left?.[field] === right?.[field],
@@ -251,8 +294,10 @@ export {
   REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE,
   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
   RequestBindingServiceDefinitionError,
+  buildActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
   deriveRequestServiceDefinitionId,
+  getBindingServiceDefinitionSourceKind,
   hasRequestBindingServiceDefinitionLineage,
   requestBindingServiceDefinitionRowsMatch,
   supportsBindingServiceDefinitionSourceKind,

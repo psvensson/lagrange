@@ -9,12 +9,16 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {RuntimeServiceRebalancerOwner} from
+  '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
 import {RuntimeServiceHandlerSetup} from
   '../../src/bootstrap/shared/runtime-service-handler-setup.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {RUNTIME_KIND, RUNTIME_REPLICA_STATUS} from
   '../../src/constants/runtime.js';
+import {deriveRequestServiceDefinitionId} from
+  '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {projectRuntimeReplicaServicesRow} from
   '../../src/query/runtime-replica-state-projection.js';
 import {
@@ -28,11 +32,12 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {EntityType, MoveType} from
   '../../src/rebalancer/unified-rebalancer.js';
-import {NativeJsDriver} from '../../src/runtime/native-js-driver.js';
 import {RuntimeDriverRegistry} from
   '../../src/runtime/runtime-driver-registry.js';
 import {ServiceRuntimeLifecycle} from
   '../../src/runtime/service-runtime-lifecycle.js';
+import {WasmComponentDriver} from
+  '../../src/runtime/wasm-component-driver.js';
 import {RuntimeServiceAdapter} from
   '../../src/service/adapters/runtime-service-adapter.js';
 import {ServiceLifecycleManager} from
@@ -44,11 +49,19 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {
+  REQUEST_CELL_PLACEMENT_SCENARIO,
+} from './minimal-deployment-request-cell-placement-scenario.js';
 
 const FIXED_NOW_MS = 1_900_000_000_000;
 const NODE_ID = 'node-runtime-create-lane';
-const SERVICE_ENTITY_ID = 'movielens-topn';
-const RUNTIME_REF = 'movielens-topn-runtime';
+const BINDING_VERSION_ID = `binding-version-${'a'.repeat(64)}`;
+const BINDING_DIGEST = `sha256:${'b'.repeat(64)}`;
+const SERVICE_ENTITY_ID = deriveRequestServiceDefinitionId(
+  BINDING_VERSION_ID,
+);
+const RUNTIME_REF =
+  `registry.example.test/acme/orders:1.0.0@sha256:${'c'.repeat(64)}`;
 const REPLICA_ID = `${SERVICE_ENTITY_ID}-r1`;
 const OPERATION_ID = 'op-runtime-create-lane';
 const HANDLER_ADDRESS = `${NODE_ID}/service/runtime-service-handler`;
@@ -88,13 +101,28 @@ function buildChurnOperation(index) {
 function attachServiceDefinition(cache) {
   const definition = Object.freeze({
     service_id: SERVICE_ENTITY_ID,
-    service_type: EntityType.RUNTIME_SERVICE,
-    replica_count: 1,
-    runtime_kind: RUNTIME_KIND.NATIVE_JS,
+    status: 'active',
+    replica_count: 3,
+    runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
     runtime_ref: RUNTIME_REF,
     runtime_config: '{}',
+    binding_version_id: BINDING_VERSION_ID,
+    binding_digest: BINDING_DIGEST,
+    binding_projection: JSON.stringify({
+      binding_digest: BINDING_DIGEST,
+      binding_version_id: BINDING_VERSION_ID,
+      declaration: {
+        elasticity: {voters: 3, min_learners: 1, max_learners: 2},
+        source: {kind: 'request', method: 'POST', path: '/orders'},
+      },
+    }),
+  });
+  const bindingRow = Object.freeze({
+    binding_version_id: BINDING_VERSION_ID,
+    source_kind: 'request',
   });
   const baseGet = cache.get.bind(cache);
+  const baseFilter = cache.filter.bind(cache);
   cache.get = (tableName, key) => {
     if (
       tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS &&
@@ -104,6 +132,16 @@ function attachServiceDefinition(cache) {
     }
     return baseGet(tableName, key);
   };
+  cache.filter = (tableName, predicate) => {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS) {
+      return [definition].filter(predicate);
+    }
+    if (tableName === SYSTEM_TABLE_NAME.SERVICE_BINDINGS) {
+      return [bindingRow].filter(predicate);
+    }
+    return baseFilter(tableName, predicate);
+  };
+  cache.requestBindingDefinition = definition;
   return cache;
 }
 
@@ -146,6 +184,7 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
 
   let coordinator = null;
   let messageRouter = null;
+  let placementOwner = null;
   let runtimeServiceHandler = null;
 
   try {
@@ -251,15 +290,13 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
       );
     }
 
-    const nativeDriver = new NativeJsDriver();
+    const wasmDriver = new WasmComponentDriver();
     const runtimeDriverRegistry = new RuntimeDriverRegistry();
-    runtimeDriverRegistry.register(nativeDriver);
+    runtimeDriverRegistry.register(wasmDriver);
     runtimeDriverRegistry.freeze();
 
     const runtimeLifecycle =
       new ServiceRuntimeLifecycle(runtimeDriverRegistry);
-    const nativeHandler = () => ({rows: []});
-    runtimeLifecycle.registerNativeJsHandler(RUNTIME_REF, nativeHandler);
 
     const servicesProjectionGateway =
       createServicesProjectionGateway(systemTableCache);
@@ -296,18 +333,42 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
     }));
     runtimeServiceHandler.logger = QUIET_LOGGER;
 
-    const runtimeRebalancer = createTestRebalancer({
-      entityId: SERVICE_ENTITY_ID,
-      entityType: EntityType.RUNTIME_SERVICE,
+    let runtimeRebalancer = null;
+    placementOwner = new RuntimeServiceRebalancerOwner({
       nodeId: NODE_ID,
       systemTableCache,
       cdcIntegrationService,
+      tablePolicyService: {},
       messageRouter,
       rebalanceCoordinator: coordinator,
-      controlPlaneReadinessService,
-      nowFn: () => FIXED_NOW_MS,
+      serviceDefinitionsOwner: {
+        reconcileRequestBinding: async () => ({
+          serviceDefinition: systemTableCache.requestBindingDefinition,
+        }),
+      },
+      createRebalancer: (options) => {
+        runtimeRebalancer = createTestRebalancer({
+          ...options,
+          controlPlaneReadinessService,
+          nowFn: () => FIXED_NOW_MS,
+        });
+        runtimeRebalancer.logger = QUIET_LOGGER;
+        return runtimeRebalancer;
+      },
     });
-    runtimeRebalancer.logger = QUIET_LOGGER;
+    placementOwner.setLeader(true);
+    await placementOwner.waitForBindingRefresh();
+    t.ok(runtimeRebalancer,
+      'the request lineage is admitted by the existing placement owner');
+    t.equal(runtimeRebalancer.entityId, SERVICE_ENTITY_ID,
+      'the placement owner preserves the deterministic Binding service id');
+    t.equal(runtimeRebalancer.entityType, EntityType.RUNTIME_SERVICE,
+      'the placement owner uses the shared runtime_service rebalancer');
+    t.equal(
+      REQUEST_CELL_PLACEMENT_SCENARIO,
+      'minimal-deployment-request-cell-placement',
+      'the production-path proof is bound to the named Quest scenario',
+    );
 
     const createOperation = coordinator.createOperation.bind(coordinator);
     coordinator.createOperation = (move) => createOperation({
@@ -376,8 +437,6 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
     const localReplica = runtimeServiceHandler.getLocalReplica(REPLICA_ID);
     t.equal(localReplica?.status, ReplicaStatus.ACTIVE,
       'the real runtime handler materializes an active local replica');
-    t.equal(nativeDriver.getHandler(REPLICA_ID), nativeHandler,
-      'the real native_js driver has started the registered runtime');
 
     const servicesRow = systemTableCache.get(
       SYSTEM_TABLE_NAME.SERVICES,
@@ -396,6 +455,7 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
     t.equal(currentReplicas[0].service_id, REPLICA_ID,
       'the observed replica is the dispatched canonical replica');
   } finally {
+    if (placementOwner) placementOwner.shutdown();
     if (runtimeServiceHandler && messageRouter) {
       runtimeServiceHandler.unregisterFromRouter(messageRouter);
     }

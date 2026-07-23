@@ -9,6 +9,7 @@ import {
   REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE,
   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
   RequestBindingServiceDefinitionError,
+  buildActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
   requestBindingServiceDefinitionRowsMatch,
 } from './request-binding-service-definition-contract.js';
@@ -28,6 +29,17 @@ class ServiceDefinitionRowOwner extends SystemMetadataOwnerBase {
       `${this.buildSelectAllSql()} WHERE ${SD_COL.BINDING_VERSION_ID} = ?`,
       [bindingVersionId],
       {...options, owner: this.getOwnerName()},
+    );
+  }
+
+  async activateRequestServiceDefinition(expected, options = {}) {
+    return this.updateByPrimaryKey(
+      expected[SD_COL.SERVICE_ID],
+      {
+        [SD_COL.REPLICA_COUNT]: expected[SD_COL.REPLICA_COUNT],
+        [SD_COL.STATUS]: expected[SD_COL.STATUS],
+      },
+      options,
     );
   }
 }
@@ -106,7 +118,7 @@ class ServiceDefinitionsOwner {
     }
   }
 
-  async findBindingServiceDefinition(expected, options = {}) {
+  async readBindingServiceDefinition(expected, options = {}) {
     const result = await rowOwnerFor(this).readByBindingVersionId(
       expected[SD_COL.BINDING_VERSION_ID],
       options,
@@ -116,7 +128,6 @@ class ServiceDefinitionsOwner {
       this.assertDesiredService(null, expected);
     }
     if (rows.length === 0) return null;
-    this.assertDesiredService(rows[0], expected);
     return rows[0];
   }
 
@@ -127,47 +138,84 @@ class ServiceDefinitionsOwner {
       binding.declaration.target.manifest_digest,
       binding.tenantId,
     );
-    const expected = buildRequestBindingServiceDefinition(
+    const compiled = buildRequestBindingServiceDefinition(
       bindingRow, artifact,
     );
+    const expected = buildActivatedRequestBindingServiceDefinition(
+      compiled, binding,
+    );
     return this.runSerialized(binding.bindingVersionId, async () => {
-      const lineageRow = await this.findBindingServiceDefinition(
+      let created = false;
+      let lineageRow = await this.readBindingServiceDefinition(
         expected, options,
       );
       if (lineageRow) {
-        return Object.freeze({created: false, serviceDefinition: expected});
-      }
-      const existing = await this.getServiceDefinition(expected.service_id);
-      if (existing) {
-        this.assertDesiredService(existing, expected);
-        return Object.freeze({created: false, serviceDefinition: expected});
-      }
-      try {
-        await rowOwnerFor(this).insertRow(expected, options);
-      } catch (error) {
-        const recovered = await this.findBindingServiceDefinition(
-          expected, options,
-        );
-        if (!recovered) {
-          const conflicting = await this.getServiceDefinition(
-            expected.service_id,
-          );
-          if (conflicting) this.assertDesiredService(conflicting, expected);
-          throw error;
+        if (!requestBindingServiceDefinitionRowsMatch(lineageRow, compiled) &&
+            !requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
+          this.assertDesiredService(lineageRow, expected);
         }
-        return Object.freeze({created: false, serviceDefinition: expected});
+      } else {
+        const existing = await this.getServiceDefinition(compiled.service_id);
+        if (existing) {
+          if (!requestBindingServiceDefinitionRowsMatch(existing, compiled) &&
+              !requestBindingServiceDefinitionRowsMatch(existing, expected)) {
+            this.assertDesiredService(existing, expected);
+          }
+          lineageRow = existing;
+        } else {
+          try {
+            await rowOwnerFor(this).insertRow(compiled, options);
+            created = true;
+          } catch (error) {
+            const recovered = await this.readBindingServiceDefinition(
+              compiled, options,
+            );
+            if (!recovered) {
+              const conflicting = await this.getServiceDefinition(
+                compiled.service_id,
+              );
+              if (conflicting) {
+                this.assertDesiredService(conflicting, compiled);
+              }
+              throw error;
+            }
+            if (!requestBindingServiceDefinitionRowsMatch(
+              recovered, compiled,
+            ) && !requestBindingServiceDefinitionRowsMatch(
+              recovered, expected,
+            )) {
+              this.assertDesiredService(recovered, expected);
+            }
+            lineageRow = recovered;
+          }
+          if (!lineageRow) {
+            lineageRow = await this.readBindingServiceDefinition(
+              compiled, options,
+            );
+            this.assertDesiredService(lineageRow, compiled);
+          }
+        }
       }
-      const persisted = await this.findBindingServiceDefinition(
+
+      if (!requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
+        try {
+          await rowOwnerFor(this).activateRequestServiceDefinition(
+            expected, options,
+          );
+        } catch (error) {
+          const recovered = await this.readBindingServiceDefinition(
+            expected, options,
+          );
+          if (!requestBindingServiceDefinitionRowsMatch(recovered, expected)) {
+            throw error;
+          }
+        }
+      }
+      const persisted = await this.readBindingServiceDefinition(
         expected, options,
       );
-      if (!persisted) {
-        throw new RequestBindingServiceDefinitionError(
-          REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE.DESIRED_SERVICE_CONFLICT,
-          REQUEST_BINDING_SERVICE_DEFINITION_PATH.DESIRED_SERVICE,
-          REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE.DESIRED_SERVICE_CONFLICT,
-        );
-      }
-      return Object.freeze({created: true, serviceDefinition: expected});
+      this.assertDesiredService(persisted, expected);
+      return Object.freeze({created, serviceDefinition: expected});
     });
   }
 }

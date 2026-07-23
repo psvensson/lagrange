@@ -43,6 +43,7 @@ class DurableGateway {
     ));
     this.writes = [];
     this.lostInsertResponses = new Set();
+    this.lostUpdateResponses = new Set();
   }
 
   schema(tableName) {
@@ -89,8 +90,30 @@ class DurableGateway {
     return {success: true, affectedRows: 1};
   }
 
+  async updateSystemTableRow(tableName, whereClause, data) {
+    const table = this.rows(tableName);
+    const key = whereClause[this.primaryKey(tableName)];
+    const existing = table.get(key);
+    if (!existing) return {success: true, affectedRows: 0};
+    const row = {...existing, ...clone(data)};
+    table.set(key, row);
+    this.writes.push({
+      operation: 'update',
+      tableName,
+      row: clone(row),
+    });
+    if (this.lostUpdateResponses.delete(tableName)) {
+      throw new Error('update response lost after durable apply');
+    }
+    return {success: true, affectedRows: 1};
+  }
+
   loseNextInsertResponse(tableName) {
     this.lostInsertResponses.add(tableName);
+  }
+
+  loseNextUpdateResponse(tableName) {
+    this.lostUpdateResponses.add(tableName);
   }
 }
 
@@ -205,6 +228,9 @@ async function createFixture(options = {}) {
   if (options.loseDesiredInsertResponse) {
     gateway.loseNextInsertResponse(TABLES.SERVICE_DEFINITIONS);
   }
+  if (options.loseActivationUpdateResponse) {
+    gateway.loseNextUpdateResponse(TABLES.SERVICE_DEFINITIONS);
+  }
   return {binding, bindingRow, gateway, owners, package_};
 }
 
@@ -258,8 +284,8 @@ describe('request Binding desired-service compilation owner', () => {
       );
     });
 
-  test('the existing planning leader compiles the complete pinned projection ' +
-    'without creating a runtime actual', async () => {
+  test('the existing planning leader activates the complete pinned projection ' +
+    'at the fixed voter count and admits one placement owner', async () => {
     const fixture = await createFixture();
     fixture.gateway.writes.length = 0;
     const planner = createPlanner(fixture);
@@ -276,8 +302,8 @@ describe('request Binding desired-service compilation owner', () => {
     assert.ok(row, 'the request Binding produced one desired service row');
     assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
     assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
-    assert.equal(row[SD_COL.STATUS], 'inactive');
-    assert.equal(row[SD_COL.REPLICA_COUNT], 0);
+    assert.equal(row[SD_COL.STATUS], 'active');
+    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
     assert.equal(row[SD_COL.RUNTIME_KIND], 'oci_container');
     assert.equal(
       row[SD_COL.RUNTIME_REF],
@@ -312,14 +338,51 @@ describe('request Binding desired-service compilation owner', () => {
       {max_learners: 2, min_learners: 1, voters: 3},
     );
     assert.deepEqual(
-      fixture.gateway.writes.map((write) => write.tableName),
-      [TABLES.SERVICE_DEFINITIONS],
+      fixture.gateway.writes.map((write) => write.operation),
+      ['insert', 'update'],
     );
     assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
     assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
-    assert.equal(planner.rebalancers.length, 0);
+    assert.equal(planner.rebalancers.length, 1);
+    assert.equal(planner.rebalancers[0].options.entityId, serviceId);
+    assert.equal(planner.rebalancers[0].options.entityType, 'runtime_service');
     planner.owner.shutdown();
   });
+
+  test('an existing inactive compiled request row advances with one owner update',
+    async () => {
+      const fixture = await createFixture();
+      const artifact = await fixture.owners.serviceInstallCatalogOwner
+        .getBindableArtifactForTenant(
+          fixture.bindingRow.package_id,
+          fixture.bindingRow.manifest_digest,
+          TENANT_ID,
+        );
+      const compiled = buildRequestBindingServiceDefinition(
+        fixture.bindingRow, artifact,
+      );
+      fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).set(
+        compiled.service_id, clone(compiled),
+      );
+      const planner = createPlanner(fixture);
+
+      planner.owner.setLeader(true);
+      await planner.owner.waitForBindingRefresh();
+
+      const row = fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS)
+        .get(compiled.service_id);
+      assert.equal(row[SD_COL.STATUS], 'active');
+      assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+      assert.deepEqual(
+        fixture.gateway.writes
+          .filter((write) =>
+            write.tableName === TABLES.SERVICE_DEFINITIONS)
+          .map((write) => write.operation),
+        ['update'],
+      );
+      assert.equal(planner.rebalancers.length, 1);
+      planner.owner.shutdown();
+    });
 
   test('CDC wake, replay, and leadership reacquisition are stable and repair ' +
     'a missing derived row', async () => {
@@ -351,8 +414,8 @@ describe('request Binding desired-service compilation owner', () => {
     assert.equal(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 2,
       'the replicated Binding cache wake compiles the new declaration');
     assert.deepEqual(
-      fixture.gateway.writes.map((write) => write.tableName),
-      [TABLES.SERVICE_DEFINITIONS],
+      fixture.gateway.writes.map((write) => write.operation),
+      ['insert', 'update'],
     );
     fixture.gateway.writes.length = 0;
 
@@ -363,7 +426,8 @@ describe('request Binding desired-service compilation owner', () => {
     fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
-    assert.equal(fixture.gateway.writes.length, 1, 'leader scan repairs absence');
+    assert.equal(fixture.gateway.writes.length, 2,
+      'leader scan repairs and reactivates absence');
     assert.ok(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).has(serviceId));
     planner.owner.shutdown();
   });
@@ -374,7 +438,19 @@ describe('request Binding desired-service compilation owner', () => {
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
     assert.equal(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 1);
-    assert.equal(planner.rebalancers.length, 0);
+    assert.equal(planner.rebalancers.length, 1);
+    planner.owner.shutdown();
+  });
+
+  test('lost activation responses recover by authoritative replay', async () => {
+    const fixture = await createFixture({loseActivationUpdateResponse: true});
+    const planner = createPlanner(fixture);
+    planner.owner.setLeader(true);
+    await planner.owner.waitForBindingRefresh();
+    const row = [...fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).values()][0];
+    assert.equal(row[SD_COL.STATUS], 'active');
+    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+    assert.equal(planner.rebalancers.length, 1);
     planner.owner.shutdown();
   });
 
@@ -486,7 +562,50 @@ describe('request Binding desired-service compilation owner', () => {
       ),
     ]);
     assert.equal(results.filter((result) => result.created).length, 1);
-    assert.equal(fixture.gateway.writes.length, 1);
+    assert.deepEqual(
+      fixture.gateway.writes.map((write) => write.operation),
+      ['insert', 'update'],
+    );
     assert.equal(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 1);
+  });
+
+  test('overlapping planning-owner instances converge through insert and ' +
+    'activation races', async () => {
+    const fixture = await createFixture();
+    const peerOwners = createSystemMetadataOwners({
+      controlPlaneSystemTableGateway: fixture.gateway,
+      now: () => 1000,
+    });
+    fixture.gateway.writes.length = 0;
+
+    const results = await Promise.all([
+      fixture.owners.serviceDefinitionsOwner.reconcileRequestBinding(
+        fixture.bindingRow,
+      ),
+      peerOwners.serviceDefinitionsOwner.reconcileRequestBinding(
+        fixture.bindingRow,
+      ),
+    ]);
+
+    assert.equal(results.filter((result) => result.created).length, 1);
+    assert.equal(
+      fixture.gateway.writes.filter((write) =>
+        write.operation === 'insert').length,
+      1,
+    );
+    const row = [...fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).values()][0];
+    assert.equal(row[SD_COL.STATUS], 'active');
+    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+
+    fixture.gateway.writes.length = 0;
+    await Promise.all([
+      fixture.owners.serviceDefinitionsOwner.reconcileRequestBinding(
+        fixture.bindingRow,
+      ),
+      peerOwners.serviceDefinitionsOwner.reconcileRequestBinding(
+        fixture.bindingRow,
+      ),
+    ]);
+    assert.equal(fixture.gateway.writes.length, 0);
   });
 });

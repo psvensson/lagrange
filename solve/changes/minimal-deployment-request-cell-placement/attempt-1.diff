@@ -1,0 +1,721 @@
+diff --git a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+index a9af8fed31423336842ed261e0ac98d42a3ceba9..512d81334aa26558b0553f040ecf232c4a26ab38 100644
+--- a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
++++ b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+@@ -18,5 +18,5 @@
+   "expectationMet": true,
+   "temporalViolated": false,
+   "exitCode": 0,
+-  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-07-21 14:27:19.\nProgress(7) at 2026-07-21 14:27:19: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-07-21 14:27:19)\nFinished checking temporal properties in 00s at 2026-07-21 14:27:19\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-07-21 14:27:19)"
++  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-07-23 09:45:46.\nProgress(7) at 2026-07-23 09:45:46: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-07-23 09:45:46)\nFinished checking temporal properties in 00s at 2026-07-23 09:45:46\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-07-23 09:45:47)"
+ }
+diff --git a/src/bootstrap/shared/runtime-service-rebalancer-setup.js b/src/bootstrap/shared/runtime-service-rebalancer-setup.js
+index 099f7a0bffa47e7ae7ea7ed4346f99dcf15e5334..1d433e048c0ac16e330f33c0c0eebab3f6866c65 100644
+--- a/src/bootstrap/shared/runtime-service-rebalancer-setup.js
++++ b/src/bootstrap/shared/runtime-service-rebalancer-setup.js
+@@ -34,9 +34,13 @@ import {
+ import {LoggingService} from '../../logging/logging-service.js';
+ import {DependencyError} from '../bootstrap-errors.js';
+ import {
++  getBindingServiceDefinitionSourceKind,
+   hasRequestBindingServiceDefinitionLineage,
+   supportsBindingServiceDefinitionSourceKind,
+ } from '../../control-plane/owners/request-binding-service-definition-contract.js';
++import {
++  DEPLOYMENT_BINDING_SOURCE_KIND,
++} from '../../control-plane/owners/deployment-binding-contract.js';
+ 
+ const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
+ const RUNTIME_SERVICE_REBALANCER_OWNER_NAME = 'RuntimeServiceRebalancerOwner';
+@@ -48,9 +52,10 @@ const BINDING_RECONCILE_INTERVAL_MS = 5000;
+ // (partitions/message-groups live in their own tables), so every row is a
+ // RUNTIME_SERVICE entity — there is NO `service_type` column on it (it is dropped
+ // by serializeServiceDefinition). The owner therefore selects active definitions
+-// by `status`; Binding-derived rows remain excluded until the later activation
+-// cutover names Cells. For active legacy/built-in rows, whether a service should
+-// actually run is governed by `replica_count`, which the policy reads.
++// by `status`. Active request-Binding lineage is admitted to the same owner;
++// other Binding sources and malformed lineage fail closed. Whether an admitted
++// service should actually run is governed by `replica_count`, which the policy
++// reads.
+ const SERVICE_DEFINITION_COLUMN = Object.freeze({
+   SERVICE_ID: 'service_id',
+   STATUS: 'status',
+@@ -159,6 +164,14 @@ class RuntimeServiceRebalancerOwner {
+    * get an owner and removed ones are quiesced.
+    */
+   refresh() {
++    if (this._shuttingDown || !this._isLeader) {
++      return;
++    }
++    this._reconcileRebalancerSet();
++    this._scheduleBindingRefresh();
++  }
++
++  _reconcileRebalancerSet() {
+     if (this._shuttingDown || !this._isLeader) {
+       return;
+     }
+@@ -177,7 +190,6 @@ class RuntimeServiceRebalancerOwner {
+         this._startRebalancer(serviceId);
+       }
+     }
+-    this._scheduleBindingRefresh();
+   }
+ 
+   /**
+@@ -225,6 +237,7 @@ class RuntimeServiceRebalancerOwner {
+       }
+     })().finally(() => {
+       this._bindingRefreshRunning = false;
++      this._reconcileRebalancerSet();
+     });
+     return this._bindingRefreshPromise;
+   }
+@@ -270,7 +283,11 @@ class RuntimeServiceRebalancerOwner {
+       (definition) =>
+         definition?.[SERVICE_DEFINITION_COLUMN.STATUS] ===
+           WASM_SERVICE_DEFINITION_STATUS.ACTIVE &&
+-        !hasRequestBindingServiceDefinitionLineage(definition),
++        (
++          !hasRequestBindingServiceDefinitionLineage(definition) ||
++          getBindingServiceDefinitionSourceKind(definition) ===
++            DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST
++        ),
+     );
+     const serviceIds = new Set();
+     for (const row of Array.isArray(rows) ? rows : []) {
+diff --git a/src/control-plane/owners/request-binding-service-definition-contract.js b/src/control-plane/owners/request-binding-service-definition-contract.js
+index 7e5deb05a49440d02d118148f337e6a9ac44bf88..a45aff43955bbee98a9495c24679f72378600a83 100644
+--- a/src/control-plane/owners/request-binding-service-definition-contract.js
++++ b/src/control-plane/owners/request-binding-service-definition-contract.js
+@@ -105,6 +105,34 @@ function hasRequestBindingServiceDefinitionLineage(row) {
+       row[SD_COL.SERVICE_ID].startsWith(SERVICE_ID_PREFIX));
+ }
+ 
++function getBindingServiceDefinitionSourceKind(row) {
++  const serviceId = row?.[SD_COL.SERVICE_ID];
++  const bindingVersionId = row?.[SD_COL.BINDING_VERSION_ID];
++  const bindingDigest = row?.[SD_COL.BINDING_DIGEST];
++  const bindingProjection = row?.[SD_COL.BINDING_PROJECTION];
++  if (!hasRequestBindingServiceDefinitionLineage(row) ||
++      typeof serviceId !== 'string' ||
++      typeof bindingVersionId !== 'string' ||
++      typeof bindingDigest !== 'string' ||
++      typeof bindingProjection !== 'string' ||
++      serviceId !== deriveRequestServiceDefinitionId(bindingVersionId)) {
++    return null;
++  }
++  try {
++    const projection = JSON.parse(bindingProjection);
++    if (projection?.binding_version_id !== bindingVersionId ||
++        projection?.binding_digest !== bindingDigest) {
++      return null;
++    }
++    const sourceKind = projection?.declaration?.source?.kind;
++    return supportsBindingServiceDefinitionSourceKind(sourceKind) ?
++      sourceKind :
++      null;
++  } catch {
++    return null;
++  }
++}
++
+ function supportsBindingServiceDefinitionSourceKind(sourceKind) {
+   return COMPILED_SOURCE_KINDS.has(sourceKind);
+ }
+@@ -240,6 +268,21 @@ function buildRequestBindingServiceDefinition(bindingRow, artifact) {
+   });
+ }
+ 
++function buildActivatedRequestBindingServiceDefinition(
++  compiledDefinition,
++  binding,
++) {
++  if (binding?.declaration?.source?.kind !==
++      DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST) {
++    return compiledDefinition;
++  }
++  return Object.freeze({
++    ...compiledDefinition,
++    [SD_COL.REPLICA_COUNT]: binding.declaration.elasticity.voters,
++    [SD_COL.STATUS]: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
++  });
++}
++
+ function requestBindingServiceDefinitionRowsMatch(left, right) {
+   return SERVICE_DEFINITION_COLUMN_LIST.every(
+     (field) => left?.[field] === right?.[field],
+@@ -251,8 +294,10 @@ export {
+   REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE,
+   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
+   RequestBindingServiceDefinitionError,
++  buildActivatedRequestBindingServiceDefinition,
+   buildRequestBindingServiceDefinition,
+   deriveRequestServiceDefinitionId,
++  getBindingServiceDefinitionSourceKind,
+   hasRequestBindingServiceDefinitionLineage,
+   requestBindingServiceDefinitionRowsMatch,
+   supportsBindingServiceDefinitionSourceKind,
+diff --git a/src/control-plane/owners/service-definitions-owner.js b/src/control-plane/owners/service-definitions-owner.js
+index 15d3ef1f4bca575cc23c07edb5bfcf330116faa8..4ed4eeac3d1eb13511d635c35086478e369fa483 100644
+--- a/src/control-plane/owners/service-definitions-owner.js
++++ b/src/control-plane/owners/service-definitions-owner.js
+@@ -9,6 +9,7 @@ import {
+   REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE,
+   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
+   RequestBindingServiceDefinitionError,
++  buildActivatedRequestBindingServiceDefinition,
+   buildRequestBindingServiceDefinition,
+   requestBindingServiceDefinitionRowsMatch,
+ } from './request-binding-service-definition-contract.js';
+@@ -30,6 +31,17 @@ class ServiceDefinitionRowOwner extends SystemMetadataOwnerBase {
+       {...options, owner: this.getOwnerName()},
+     );
+   }
++
++  async activateRequestServiceDefinition(expected, options = {}) {
++    return this.updateByPrimaryKey(
++      expected[SD_COL.SERVICE_ID],
++      {
++        [SD_COL.REPLICA_COUNT]: expected[SD_COL.REPLICA_COUNT],
++        [SD_COL.STATUS]: expected[SD_COL.STATUS],
++      },
++      options,
++    );
++  }
+ }
+ 
+ function rowOwnerFor(owner) {
+@@ -106,7 +118,7 @@ class ServiceDefinitionsOwner {
+     }
+   }
+ 
+-  async findBindingServiceDefinition(expected, options = {}) {
++  async readBindingServiceDefinition(expected, options = {}) {
+     const result = await rowOwnerFor(this).readByBindingVersionId(
+       expected[SD_COL.BINDING_VERSION_ID],
+       options,
+@@ -116,7 +128,6 @@ class ServiceDefinitionsOwner {
+       this.assertDesiredService(null, expected);
+     }
+     if (rows.length === 0) return null;
+-    this.assertDesiredService(rows[0], expected);
+     return rows[0];
+   }
+ 
+@@ -127,47 +138,75 @@ class ServiceDefinitionsOwner {
+       binding.declaration.target.manifest_digest,
+       binding.tenantId,
+     );
+-    const expected = buildRequestBindingServiceDefinition(
++    const compiled = buildRequestBindingServiceDefinition(
+       bindingRow, artifact,
+     );
++    const expected = buildActivatedRequestBindingServiceDefinition(
++      compiled, binding,
++    );
+     return this.runSerialized(binding.bindingVersionId, async () => {
+-      const lineageRow = await this.findBindingServiceDefinition(
++      let created = false;
++      let lineageRow = await this.readBindingServiceDefinition(
+         expected, options,
+       );
+       if (lineageRow) {
+-        return Object.freeze({created: false, serviceDefinition: expected});
+-      }
+-      const existing = await this.getServiceDefinition(expected.service_id);
+-      if (existing) {
+-        this.assertDesiredService(existing, expected);
+-        return Object.freeze({created: false, serviceDefinition: expected});
++        if (!requestBindingServiceDefinitionRowsMatch(lineageRow, compiled) &&
++            !requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
++          this.assertDesiredService(lineageRow, expected);
++        }
++      } else {
++        const existing = await this.getServiceDefinition(compiled.service_id);
++        if (existing) {
++          this.assertDesiredService(existing, compiled);
++          lineageRow = existing;
++        } else {
++          try {
++            await rowOwnerFor(this).insertRow(compiled, options);
++            created = true;
++          } catch (error) {
++            const recovered = await this.readBindingServiceDefinition(
++              compiled, options,
++            );
++            if (!recovered) {
++              const conflicting = await this.getServiceDefinition(
++                compiled.service_id,
++              );
++              if (conflicting) {
++                this.assertDesiredService(conflicting, compiled);
++              }
++              throw error;
++            }
++            this.assertDesiredService(recovered, compiled);
++            lineageRow = recovered;
++          }
++          if (!lineageRow) {
++            lineageRow = await this.readBindingServiceDefinition(
++              compiled, options,
++            );
++            this.assertDesiredService(lineageRow, compiled);
++          }
++        }
+       }
+-      try {
+-        await rowOwnerFor(this).insertRow(expected, options);
+-      } catch (error) {
+-        const recovered = await this.findBindingServiceDefinition(
+-          expected, options,
+-        );
+-        if (!recovered) {
+-          const conflicting = await this.getServiceDefinition(
+-            expected.service_id,
++
++      if (!requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
++        try {
++          await rowOwnerFor(this).activateRequestServiceDefinition(
++            expected, options,
+           );
+-          if (conflicting) this.assertDesiredService(conflicting, expected);
+-          throw error;
++        } catch (error) {
++          const recovered = await this.readBindingServiceDefinition(
++            expected, options,
++          );
++          if (!requestBindingServiceDefinitionRowsMatch(recovered, expected)) {
++            throw error;
++          }
+         }
+-        return Object.freeze({created: false, serviceDefinition: expected});
+       }
+-      const persisted = await this.findBindingServiceDefinition(
++      const persisted = await this.readBindingServiceDefinition(
+         expected, options,
+       );
+-      if (!persisted) {
+-        throw new RequestBindingServiceDefinitionError(
+-          REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE.DESIRED_SERVICE_CONFLICT,
+-          REQUEST_BINDING_SERVICE_DEFINITION_PATH.DESIRED_SERVICE,
+-          REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE.DESIRED_SERVICE_CONFLICT,
+-        );
+-      }
+-      return Object.freeze({created: true, serviceDefinition: expected});
++      this.assertDesiredService(persisted, expected);
++      return Object.freeze({created, serviceDefinition: expected});
+     });
+   }
+ }
+diff --git a/test/control-plane/request-binding-service-definition-owner.test.js b/test/control-plane/request-binding-service-definition-owner.test.js
+index ea712baa6401a1f2f44853357da1793bebc94b68..c051a0680dccd22f83e96a036ecdee6ab0404722 100644
+--- a/test/control-plane/request-binding-service-definition-owner.test.js
++++ b/test/control-plane/request-binding-service-definition-owner.test.js
+@@ -43,6 +43,7 @@ class DurableGateway {
+     ));
+     this.writes = [];
+     this.lostInsertResponses = new Set();
++    this.lostUpdateResponses = new Set();
+   }
+ 
+   schema(tableName) {
+@@ -89,9 +90,31 @@ class DurableGateway {
+     return {success: true, affectedRows: 1};
+   }
+ 
++  async updateSystemTableRow(tableName, whereClause, data) {
++    const table = this.rows(tableName);
++    const key = whereClause[this.primaryKey(tableName)];
++    const existing = table.get(key);
++    if (!existing) return {success: true, affectedRows: 0};
++    const row = {...existing, ...clone(data)};
++    table.set(key, row);
++    this.writes.push({
++      operation: 'update',
++      tableName,
++      row: clone(row),
++    });
++    if (this.lostUpdateResponses.delete(tableName)) {
++      throw new Error('update response lost after durable apply');
++    }
++    return {success: true, affectedRows: 1};
++  }
++
+   loseNextInsertResponse(tableName) {
+     this.lostInsertResponses.add(tableName);
+   }
++
++  loseNextUpdateResponse(tableName) {
++    this.lostUpdateResponses.add(tableName);
++  }
+ }
+ 
+ function manifest() {
+@@ -205,6 +228,9 @@ async function createFixture(options = {}) {
+   if (options.loseDesiredInsertResponse) {
+     gateway.loseNextInsertResponse(TABLES.SERVICE_DEFINITIONS);
+   }
++  if (options.loseActivationUpdateResponse) {
++    gateway.loseNextUpdateResponse(TABLES.SERVICE_DEFINITIONS);
++  }
+   return {binding, bindingRow, gateway, owners, package_};
+ }
+ 
+@@ -258,8 +284,8 @@ describe('request Binding desired-service compilation owner', () => {
+       );
+     });
+ 
+-  test('the existing planning leader compiles the complete pinned projection ' +
+-    'without creating a runtime actual', async () => {
++  test('the existing planning leader activates the complete pinned projection ' +
++    'at the fixed voter count and admits one placement owner', async () => {
+     const fixture = await createFixture();
+     fixture.gateway.writes.length = 0;
+     const planner = createPlanner(fixture);
+@@ -276,8 +302,8 @@ describe('request Binding desired-service compilation owner', () => {
+     assert.ok(row, 'the request Binding produced one desired service row');
+     assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
+     assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
+-    assert.equal(row[SD_COL.STATUS], 'inactive');
+-    assert.equal(row[SD_COL.REPLICA_COUNT], 0);
++    assert.equal(row[SD_COL.STATUS], 'active');
++    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
+     assert.equal(row[SD_COL.RUNTIME_KIND], 'oci_container');
+     assert.equal(
+       row[SD_COL.RUNTIME_REF],
+@@ -312,15 +338,52 @@ describe('request Binding desired-service compilation owner', () => {
+       {max_learners: 2, min_learners: 1, voters: 3},
+     );
+     assert.deepEqual(
+-      fixture.gateway.writes.map((write) => write.tableName),
+-      [TABLES.SERVICE_DEFINITIONS],
++      fixture.gateway.writes.map((write) => write.operation),
++      ['insert', 'update'],
+     );
+     assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
+     assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
+-    assert.equal(planner.rebalancers.length, 0);
++    assert.equal(planner.rebalancers.length, 1);
++    assert.equal(planner.rebalancers[0].options.entityId, serviceId);
++    assert.equal(planner.rebalancers[0].options.entityType, 'runtime_service');
+     planner.owner.shutdown();
+   });
+ 
++  test('an existing inactive compiled request row advances with one owner update',
++    async () => {
++      const fixture = await createFixture();
++      const artifact = await fixture.owners.serviceInstallCatalogOwner
++        .getBindableArtifactForTenant(
++          fixture.bindingRow.package_id,
++          fixture.bindingRow.manifest_digest,
++          TENANT_ID,
++        );
++      const compiled = buildRequestBindingServiceDefinition(
++        fixture.bindingRow, artifact,
++      );
++      fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).set(
++        compiled.service_id, clone(compiled),
++      );
++      const planner = createPlanner(fixture);
++
++      planner.owner.setLeader(true);
++      await planner.owner.waitForBindingRefresh();
++
++      const row = fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS)
++        .get(compiled.service_id);
++      assert.equal(row[SD_COL.STATUS], 'active');
++      assert.equal(row[SD_COL.REPLICA_COUNT], 3);
++      assert.deepEqual(
++        fixture.gateway.writes
++          .filter((write) =>
++            write.tableName === TABLES.SERVICE_DEFINITIONS)
++          .map((write) => write.operation),
++        ['update'],
++      );
++      assert.equal(planner.rebalancers.length, 1);
++      planner.owner.shutdown();
++    });
++
+   test('CDC wake, replay, and leadership reacquisition are stable and repair ' +
+     'a missing derived row', async () => {
+     const fixture = await createFixture();
+@@ -351,8 +414,8 @@ describe('request Binding desired-service compilation owner', () => {
+     assert.equal(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 2,
+       'the replicated Binding cache wake compiles the new declaration');
+     assert.deepEqual(
+-      fixture.gateway.writes.map((write) => write.tableName),
+-      [TABLES.SERVICE_DEFINITIONS],
++      fixture.gateway.writes.map((write) => write.operation),
++      ['insert', 'update'],
+     );
+     fixture.gateway.writes.length = 0;
+ 
+@@ -363,7 +426,8 @@ describe('request Binding desired-service compilation owner', () => {
+     fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
+     planner.owner.setLeader(true);
+     await planner.owner.waitForBindingRefresh();
+-    assert.equal(fixture.gateway.writes.length, 1, 'leader scan repairs absence');
++    assert.equal(fixture.gateway.writes.length, 2,
++      'leader scan repairs and reactivates absence');
+     assert.ok(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).has(serviceId));
+     planner.owner.shutdown();
+   });
+@@ -374,7 +438,19 @@ describe('request Binding desired-service compilation owner', () => {
+     planner.owner.setLeader(true);
+     await planner.owner.waitForBindingRefresh();
+     assert.equal(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 1);
+-    assert.equal(planner.rebalancers.length, 0);
++    assert.equal(planner.rebalancers.length, 1);
++    planner.owner.shutdown();
++  });
++
++  test('lost activation responses recover by authoritative replay', async () => {
++    const fixture = await createFixture({loseActivationUpdateResponse: true});
++    const planner = createPlanner(fixture);
++    planner.owner.setLeader(true);
++    await planner.owner.waitForBindingRefresh();
++    const row = [...fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).values()][0];
++    assert.equal(row[SD_COL.STATUS], 'active');
++    assert.equal(row[SD_COL.REPLICA_COUNT], 3);
++    assert.equal(planner.rebalancers.length, 1);
+     planner.owner.shutdown();
+   });
+ 
+@@ -486,7 +562,10 @@ describe('request Binding desired-service compilation owner', () => {
+       ),
+     ]);
+     assert.equal(results.filter((result) => result.created).length, 1);
+-    assert.equal(fixture.gateway.writes.length, 1);
++    assert.deepEqual(
++      fixture.gateway.writes.map((write) => write.operation),
++      ['insert', 'update'],
++    );
+     assert.equal(fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 1);
+   });
+ });
+diff --git a/test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js b/test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js
+index fd15260f2574ab4fda5eb12983e25786c525efd5..9f5754ca1b987effe87699e7f29dade039cd45c9 100644
+--- a/test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js
++++ b/test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js
+@@ -9,12 +9,16 @@
+  */
+ 
+ import {test} from '../../src/test-helpers/tap.js';
++import {RuntimeServiceRebalancerOwner} from
++  '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
+ import {RuntimeServiceHandlerSetup} from
+   '../../src/bootstrap/shared/runtime-service-handler-setup.js';
+ import {SYSTEM_TABLE_NAME} from
+   '../../src/bootstrap/system-table-schemas-constants.js';
+ import {RUNTIME_KIND, RUNTIME_REPLICA_STATUS} from
+   '../../src/constants/runtime.js';
++import {deriveRequestServiceDefinitionId} from
++  '../../src/control-plane/owners/request-binding-service-definition-contract.js';
+ import {projectRuntimeReplicaServicesRow} from
+   '../../src/query/runtime-replica-state-projection.js';
+ import {
+@@ -28,11 +32,12 @@ import {
+ } from '../../src/rebalancer/rebalancer-constants.js';
+ import {EntityType, MoveType} from
+   '../../src/rebalancer/unified-rebalancer.js';
+-import {NativeJsDriver} from '../../src/runtime/native-js-driver.js';
+ import {RuntimeDriverRegistry} from
+   '../../src/runtime/runtime-driver-registry.js';
+ import {ServiceRuntimeLifecycle} from
+   '../../src/runtime/service-runtime-lifecycle.js';
++import {WasmComponentDriver} from
++  '../../src/runtime/wasm-component-driver.js';
+ import {RuntimeServiceAdapter} from
+   '../../src/service/adapters/runtime-service-adapter.js';
+ import {ServiceLifecycleManager} from
+@@ -47,8 +52,13 @@ import {
+ 
+ const FIXED_NOW_MS = 1_900_000_000_000;
+ const NODE_ID = 'node-runtime-create-lane';
+-const SERVICE_ENTITY_ID = 'movielens-topn';
+-const RUNTIME_REF = 'movielens-topn-runtime';
++const BINDING_VERSION_ID = `binding-version-${'a'.repeat(64)}`;
++const BINDING_DIGEST = `sha256:${'b'.repeat(64)}`;
++const SERVICE_ENTITY_ID = deriveRequestServiceDefinitionId(
++  BINDING_VERSION_ID,
++);
++const RUNTIME_REF =
++  `registry.example.test/acme/orders:1.0.0@sha256:${'c'.repeat(64)}`;
+ const REPLICA_ID = `${SERVICE_ENTITY_ID}-r1`;
+ const OPERATION_ID = 'op-runtime-create-lane';
+ const HANDLER_ADDRESS = `${NODE_ID}/service/runtime-service-handler`;
+@@ -88,13 +98,24 @@ function buildChurnOperation(index) {
+ function attachServiceDefinition(cache) {
+   const definition = Object.freeze({
+     service_id: SERVICE_ENTITY_ID,
+-    service_type: EntityType.RUNTIME_SERVICE,
+-    replica_count: 1,
+-    runtime_kind: RUNTIME_KIND.NATIVE_JS,
++    status: 'active',
++    replica_count: 3,
++    runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
+     runtime_ref: RUNTIME_REF,
+     runtime_config: '{}',
++    binding_version_id: BINDING_VERSION_ID,
++    binding_digest: BINDING_DIGEST,
++    binding_projection: JSON.stringify({
++      binding_digest: BINDING_DIGEST,
++      binding_version_id: BINDING_VERSION_ID,
++      declaration: {
++        elasticity: {voters: 3, min_learners: 1, max_learners: 2},
++        source: {kind: 'request', method: 'POST', path: '/orders'},
++      },
++    }),
+   });
+   const baseGet = cache.get.bind(cache);
++  const baseFilter = cache.filter.bind(cache);
+   cache.get = (tableName, key) => {
+     if (
+       tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS &&
+@@ -104,6 +125,12 @@ function attachServiceDefinition(cache) {
+     }
+     return baseGet(tableName, key);
+   };
++  cache.filter = (tableName, predicate) => {
++    if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS) {
++      return [definition].filter(predicate);
++    }
++    return baseFilter(tableName, predicate);
++  };
+   return cache;
+ }
+ 
+@@ -146,6 +173,7 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
+ 
+   let coordinator = null;
+   let messageRouter = null;
++  let placementOwner = null;
+   let runtimeServiceHandler = null;
+ 
+   try {
+@@ -251,15 +279,13 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
+       );
+     }
+ 
+-    const nativeDriver = new NativeJsDriver();
++    const wasmDriver = new WasmComponentDriver();
+     const runtimeDriverRegistry = new RuntimeDriverRegistry();
+-    runtimeDriverRegistry.register(nativeDriver);
++    runtimeDriverRegistry.register(wasmDriver);
+     runtimeDriverRegistry.freeze();
+ 
+     const runtimeLifecycle =
+       new ServiceRuntimeLifecycle(runtimeDriverRegistry);
+-    const nativeHandler = () => ({rows: []});
+-    runtimeLifecycle.registerNativeJsHandler(RUNTIME_REF, nativeHandler);
+ 
+     const servicesProjectionGateway =
+       createServicesProjectionGateway(systemTableCache);
+@@ -296,18 +322,33 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
+     }));
+     runtimeServiceHandler.logger = QUIET_LOGGER;
+ 
+-    const runtimeRebalancer = createTestRebalancer({
+-      entityId: SERVICE_ENTITY_ID,
+-      entityType: EntityType.RUNTIME_SERVICE,
++    let runtimeRebalancer = null;
++    placementOwner = new RuntimeServiceRebalancerOwner({
+       nodeId: NODE_ID,
+       systemTableCache,
+       cdcIntegrationService,
++      tablePolicyService: {},
+       messageRouter,
+       rebalanceCoordinator: coordinator,
+-      controlPlaneReadinessService,
+-      nowFn: () => FIXED_NOW_MS,
++      serviceDefinitionsOwner: {reconcileRequestBinding: async () => {}},
++      createRebalancer: (options) => {
++        runtimeRebalancer = createTestRebalancer({
++          ...options,
++          controlPlaneReadinessService,
++          nowFn: () => FIXED_NOW_MS,
++        });
++        runtimeRebalancer.logger = QUIET_LOGGER;
++        return runtimeRebalancer;
++      },
+     });
+-    runtimeRebalancer.logger = QUIET_LOGGER;
++    placementOwner.setLeader(true);
++    await placementOwner.waitForBindingRefresh();
++    t.ok(runtimeRebalancer,
++      'the request lineage is admitted by the existing placement owner');
++    t.equal(runtimeRebalancer.entityId, SERVICE_ENTITY_ID,
++      'the placement owner preserves the deterministic Binding service id');
++    t.equal(runtimeRebalancer.entityType, EntityType.RUNTIME_SERVICE,
++      'the placement owner uses the shared runtime_service rebalancer');
+ 
+     const createOperation = coordinator.createOperation.bind(coordinator);
+     coordinator.createOperation = (move) => createOperation({
+@@ -376,8 +417,6 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
+     const localReplica = runtimeServiceHandler.getLocalReplica(REPLICA_ID);
+     t.equal(localReplica?.status, ReplicaStatus.ACTIVE,
+       'the real runtime handler materializes an active local replica');
+-    t.equal(nativeDriver.getHandler(REPLICA_ID), nativeHandler,
+-      'the real native_js driver has started the registered runtime');
+ 
+     const servicesRow = systemTableCache.get(
+       SYSTEM_TABLE_NAME.SERVICES,
+@@ -396,6 +435,7 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
+     t.equal(currentReplicas[0].service_id, REPLICA_ID,
+       'the observed replica is the dispatched canonical replica');
+   } finally {
++    if (placementOwner) placementOwner.shutdown();
+     if (runtimeServiceHandler && messageRouter) {
+       runtimeServiceHandler.unregisterFromRouter(messageRouter);
+     }
+diff --git a/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js b/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js
+index 791c31943bd51672be6c62f5ca7daf97842f25c5..011a89ec7146cc5855240f7c37cb3414227be7d9 100644
+--- a/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js
++++ b/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js
+@@ -28,7 +28,7 @@ test('Binding owns user desired-service declaration and the existing planner ' +
+   assert.match(SOURCE.planner, /reconcileRequestBinding/u);
+   assert.match(SOURCE.planner, /serviceDefinitionsOwner/u);
+   assert.match(SOURCE.definitionsOwner, /buildRequestBindingServiceDefinition/u);
+-  assert.match(SOURCE.definitionsOwner, /insertRow\(expected/u);
++  assert.match(SOURCE.definitionsOwner, /insertRow\(compiled/u);
+   assert.doesNotMatch(
+     SOURCE.definitionsOwner,
+     /class ServiceDefinitionsOwner extends SystemMetadataOwnerBase/u,
+@@ -39,7 +39,7 @@ test('Binding owns user desired-service declaration and the existing planner ' +
+   );
+ });
+ 
+-test('compiled Binding rows remain desired-only until the Cell activation cutover',
++test('request Cell placement keeps compilation two-phase and owner-controlled',
+   () => {
+     assert.match(
+       SOURCE.bindingContract,
+@@ -51,10 +51,26 @@ test('compiled Binding rows remain desired-only until the Cell activation cutove
+     );
+     assert.match(SOURCE.bindingContract, /SD_COL\.BINDING_VERSION_ID/u);
+     assert.match(SOURCE.bindingContract, /SD_COL\.BINDING_PROJECTION/u);
++    assert.match(
++      SOURCE.definitionsOwner,
++      /buildActivatedRequestBindingServiceDefinition/u,
++    );
++    assert.match(
++      SOURCE.definitionsOwner,
++      /activateRequestServiceDefinition/u,
++    );
+     assert.match(
+       SOURCE.planner,
+       /hasRequestBindingServiceDefinitionLineage/u,
+     );
++    assert.match(
++      SOURCE.planner,
++      /getBindingServiceDefinitionSourceKind/u,
++    );
++    assert.match(
++      SOURCE.planner,
++      /DEPLOYMENT_BINDING_SOURCE_KIND\.REQUEST/u,
++    );
+   });
+ 
+ test('legacy user service-definition mutation ingress is absent while axiomatic ' +

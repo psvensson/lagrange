@@ -28,7 +28,7 @@ test('Binding owns user desired-service declaration and the existing planner ' +
   assert.match(SOURCE.planner, /reconcileRequestBinding/u);
   assert.match(SOURCE.planner, /serviceDefinitionsOwner/u);
   assert.match(SOURCE.definitionsOwner, /buildRequestBindingServiceDefinition/u);
-  assert.match(SOURCE.definitionsOwner, /insertRow\(expected/u);
+  assert.match(SOURCE.definitionsOwner, /insertRow\(compiled/u);
   assert.doesNotMatch(
     SOURCE.definitionsOwner,
     /class ServiceDefinitionsOwner extends SystemMetadataOwnerBase/u,
@@ -39,7 +39,7 @@ test('Binding owns user desired-service declaration and the existing planner ' +
   );
 });
 
-test('compiled Binding rows remain desired-only until the Cell activation cutover',
+test('request Cell placement keeps compilation two-phase and owner-controlled',
   () => {
     assert.match(
       SOURCE.bindingContract,
@@ -52,8 +52,24 @@ test('compiled Binding rows remain desired-only until the Cell activation cutove
     assert.match(SOURCE.bindingContract, /SD_COL\.BINDING_VERSION_ID/u);
     assert.match(SOURCE.bindingContract, /SD_COL\.BINDING_PROJECTION/u);
     assert.match(
+      SOURCE.definitionsOwner,
+      /buildActivatedRequestBindingServiceDefinition/u,
+    );
+    assert.match(
+      SOURCE.definitionsOwner,
+      /activateRequestServiceDefinition/u,
+    );
+    assert.match(
       SOURCE.planner,
       /hasRequestBindingServiceDefinitionLineage/u,
+    );
+    assert.match(
+      SOURCE.planner,
+      /getBindingServiceDefinitionSourceKind/u,
+    );
+    assert.match(
+      SOURCE.planner,
+      /DEPLOYMENT_BINDING_SOURCE_KIND\.REQUEST/u,
     );
   });
 
