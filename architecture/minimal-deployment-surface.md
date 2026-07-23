@@ -232,8 +232,13 @@ step 5, followed by `minimal-deployment-time-binding-compilation` and
 sources now compile through the same `service_definitions` planning leader, and
 all derived rows remain inactive with zero replicas.
 
-Quest `minimal-deployment-request-cell-placement` is the first slice of step 6.
-It owns the request-only transition to active fixed-voter desired state and
-engagement of the existing `RuntimeServiceRebalancerOwner` / `UnifiedRebalancer`
-placement path. It does not claim component execution, handler readiness,
-request routing, local context materialization, or learner elasticity.
+Quest `minimal-deployment-request-cell-placement` completed the first slice of
+step 6: the request-only transition to active fixed-voter desired state and
+engagement of the existing `RuntimeServiceRebalancerOwner` /
+`UnifiedRebalancer` placement path.
+
+Quest `minimal-deployment-request-cell-runtime-readiness` owns the second slice:
+genuine component execution through the existing runtime registry, driver, and
+lifecycle owners, including declared table-backed context and the transition
+from placed actual to ready/running Cell. It does not own external HTTP request
+routing.

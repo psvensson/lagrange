@@ -20,16 +20,11 @@ invariants, and migration sequence now live in
 - **Transient invocation routing:** resolve durable `call` and `pushdown`
   registration names to ready Cells through an existing owner, or introduce a
   shared invocation resolver before either data-plane integration.
-- **Genuine component execution:** replace the current JavaScript-envelope WASM
-  scaffold before request routing, or make that replacement and the first ready
-  request Cell one closure-gated Quest.
 
 ## Open questions
 
 - How do durable `call` and `pushdown` registrations map to transient
   per-statement invocations without creating statement-scoped Bindings?
-- When does the current JavaScript-envelope WASM mechanism get renamed or
-  removed relative to a genuine component engine?
 
 ## Decision log
 
@@ -123,3 +118,12 @@ invariants, and migration sequence now live in
   `minimal-deployment-request-cell-placement` for the engaged placement slice;
   genuine component execution, ready handler context, and request routing
   remain separately closure-gated.
+- 2026-07-23 — Landed
+  `minimal-deployment-request-cell-placement`; request Binding desired state now
+  engages the existing runtime-service placement path, but the placed actual is
+  not yet a Cell because `wasm_component` remains a lifecycle scaffold.
+- 2026-07-23 — Selected genuine component execution plus the first ready
+  request Cell as one closure-gated executable concern in
+  `minimal-deployment-request-cell-runtime-readiness`. It extends the existing
+  runtime registry, driver, and lifecycle owners, requires declared table-backed
+  context, and excludes external request routing.
