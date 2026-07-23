@@ -1,0 +1,43 @@
+{
+  "id": "minimal-deployment-change-cell-runtime-activation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Each immutable change Binding converges through the existing service_definitions-p1 planning owner from inactive zero replicas to active at elasticity.voters, is placed by the sole RuntimeServiceRebalancerOwner and UnifiedRebalancer path, and becomes a genuinely loaded ready and healthy change_v1 WASI Component whose declared context, capabilities, and budgets are enforced and whose canonical change envelope produces component effects under direct runtime invocation; request Cell behavior remains unchanged, the other five sources stay inactive, and no CDC subscription or dispatch path is added.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-2.0-minimal-deployment-surface",
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "minimal-deployment-request-cell-routing-shutdown-fence",
+    "planDoc": "solve/epics/minimal-deployment-surface.md",
+    "draftedAtCommit": "0193c0ed905f38d9712df33a613c17f04b2ab7de"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-change-cell-runtime-activation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-change-cell-runtime-activation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-change-cell-runtime-activation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
