@@ -85,3 +85,7 @@ invariants, and migration sequence now live in
   `once` contributes no source configuration beyond its kind, so the cutover is
   limited to closed compiler admission and the same inactive zero-replica
   desired-state projection; invocation remains deferred to Cell activation.
+- 2026-07-23 — Landed `once` and selected `boot` as the next source cutover.
+  `boot` is a handler source, not a node/cluster bootstrap hook: it receives the
+  same inactive zero-replica desired-state projection, while invocation and all
+  infrastructure bootstrap lifecycle remain unchanged until Cell activation.

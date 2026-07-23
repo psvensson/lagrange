@@ -1,0 +1,43 @@
+{
+  "id": "minimal-deployment-boot-binding-compilation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Every immutable boot Binding is CDC-woken and level-triggered by the existing service_definitions planning leader through the shared compiler into exactly one deterministic, lineage-bound inactive zero-replica desired service preserving its pinned Artifact and full canonical projection; replay converges idempotently, invalid durable state fails closed, request, change, time, and once remain unchanged, and compilation neither hooks cluster bootstrap nor creates an invocation or runtime actual.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "b76b033b074bbc77659a57ab3314c62c4c2edb0d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-boot-binding-compilation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-boot-binding-compilation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-boot-binding-compilation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

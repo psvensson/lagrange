@@ -145,9 +145,9 @@ single owners only when their removal is explicit and structurally guarded.
    activating runtimes or naming Cells.
 5. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
    same Binding owner one source at a time, deleting superseded surfaces.
-   `change` and `time` are complete; Quest
-   `minimal-deployment-once-binding-compilation` owns the next source without
-   invoking the Artifact or activating a runtime.
+   `change`, `time`, and `once` are complete; Quest
+   `minimal-deployment-boot-binding-compilation` owns the next source without
+   hooking cluster bootstrap, invoking the Artifact, or activating a runtime.
 6. Name the derived Cell state and reconcile it through the existing placement
    and replica owners before consolidating partition/service lifecycle code.
 
@@ -178,7 +178,8 @@ Quest `minimal-deployment-artifact-export-contract` completed step 1,
 `minimal-deployment-binding-v0-declaration` completed step 3, and
 `minimal-deployment-request-binding-compilation` completed step 4. Quest
 `minimal-deployment-change-binding-compilation` completed the first source in
-step 5, followed by `minimal-deployment-time-binding-compilation`. Quest
-`minimal-deployment-once-binding-compilation` advances the next source through
-the same `service_definitions` planning leader. Derived rows remain inactive
-and request no replicas; runtime activation and Cells remain later steps.
+step 5, followed by `minimal-deployment-time-binding-compilation` and
+`minimal-deployment-once-binding-compilation`. Quest
+`minimal-deployment-boot-binding-compilation` advances the next source through
+the same `service_definitions` planning leader. Derived rows remain inactive and
+request no replicas; runtime activation and Cells remain later steps.
