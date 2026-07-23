@@ -5,6 +5,7 @@
 
 import {checkpointGateProblemsForLog} from './audit.js';
 import {EVENT_FINDING} from './constants.js';
+import {importClosureGaps} from './import-closure.js';
 import {suggestVerificationTemplates} from './verification-template-suggest.js';
 import {
   canonicalSourceDelta,
@@ -187,6 +188,11 @@ export function checkpointVerificationPreflight(root, quest, log, options = {}) 
   const aggregate = state.aggregate;
   const singlePendingFingerprint = pendingApprovals.length === 1 ?
     pendingApprovals[0].fingerprint : null;
+  // Advisory only: closure gaps inform the pre-delegation decision without
+  // flipping readiness — the exact-fingerprint gate stays the sole authority.
+  const importClosure = candidate ?
+    importClosureGaps(root, state.candidate) :
+    {omittedChangedPaths: [], importGaps: []};
   return {
     readyAfterRequiredApprovals:
       pendingApprovals.length === state.pendingAttempts.length &&
@@ -202,6 +208,7 @@ export function checkpointVerificationPreflight(root, quest, log, options = {}) 
         (attempt) => attemptPreflightDossier(root, attempt),
       ),
     replacementGroups,
+    importClosure,
     applicableTemplates: applicablePreflightTemplates(root, [
       ...pendingWithFingerprints,
       ...(state.candidate?.attempts || []),
@@ -255,6 +262,22 @@ function appendAggregatePreflightLines(lines, aggregate) {
   );
 }
 
+function appendImportClosureLines(lines, importClosure) {
+  if (!importClosure || importClosure.importGaps.length === 0) return;
+  for (const gap of importClosure.importGaps) {
+    lines.push(
+      `import-closure gap: candidate ${gap.importer} imports ` +
+      `${gap.imported}, which changed against the base but is NOT in the ` +
+      'candidate — verifiers reject omitted owners; include it (or record ' +
+      'why it is out of scope) BEFORE spending a verifier turn',
+    );
+  }
+  lines.push(
+    'changed outside candidate: ' +
+    importClosure.omittedChangedPaths.join(', '),
+  );
+}
+
 function appendTemplateAndProblemLines(lines, preflight) {
   if (preflight.applicableTemplates.length > 0) {
     lines.push(`applicable templates: ${preflight.applicableTemplates
@@ -284,6 +307,7 @@ export function checkpointVerificationPreflightLines(preflight) {
     preflight.approvedUncheckpointedReceipts,
   );
   appendReplacementGroupLines(lines, preflight.replacementGroups);
+  appendImportClosureLines(lines, preflight.importClosure);
   appendAggregatePreflightLines(lines, preflight.aggregate);
   appendTemplateAndProblemLines(lines, preflight);
   return lines;

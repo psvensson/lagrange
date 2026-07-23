@@ -28,6 +28,7 @@ import {
   EVENT_EVIDENCE_INGESTED,
   EVENT_GUARD_OVERRIDE,
   EVENT_REFLECTION,
+  SAME_GUARD_OVERRIDE_LIMIT,
   STATUS_OPEN,
   STATUS_SOLVED,
   STATUS_PARKED,
@@ -588,7 +589,9 @@ export function readRulesOutFindings(root, questId) {
 
 // Record a recorded-reason override of an overridable soft guard. The reason is mandatory
 // and must be non-empty: an override without a falsifiable justification is meaningless and
-// is refused at the boundary so the log never carries a blank escape hatch.
+// is refused at the boundary so the log never carries a blank escape hatch. Same-guard
+// overrides are further capped per (frontier, code) by SAME_GUARD_OVERRIDE_LIMIT over the
+// quest's whole life — see the constant's rationale.
 export function appendGuardOverride(root, questId, override) {
   const reason = typeof override.reason === 'string' ? override.reason.trim() : '';
   if (!reason) {
@@ -596,6 +599,20 @@ export function appendGuardOverride(root, questId, override) {
   }
   if (typeof override.code !== 'string' || !override.code.trim()) {
     throw new Error('guard override requires a --code (the guard being overridden)');
+  }
+  const frontier = override.frontier || null;
+  const priorSameGuard = readLog(root, questId).filter((event) =>
+    event.type === EVENT_GUARD_OVERRIDE &&
+    (event.frontier || null) === frontier &&
+    event.code === override.code).length;
+  if (priorSameGuard >= SAME_GUARD_OVERRIDE_LIMIT) {
+    throw new Error(
+      `guard override refused: ${override.code} has already been overridden ` +
+      `${priorSameGuard} times on frontier ${frontier || '<none>'} ` +
+      `(limit ${SAME_GUARD_OVERRIDE_LIMIT}). A guard that keeps firing is ` +
+      'diagnosing a mis-scoped quest — re-scope instead of overriding again: ' +
+      'split the candidate into a narrower quest, park the frontier, or ' +
+      'author a successor quest for the remainder.');
   }
   return appendEvent(root, questId, {
     type: EVENT_GUARD_OVERRIDE,

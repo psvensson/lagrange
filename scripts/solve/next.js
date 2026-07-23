@@ -22,6 +22,7 @@ import {verificationState} from './verification.js';
 import {
   EVENT_GATE_DECISION,
   OUTCOME_CONTINUE,
+  RUNG_INDEX_MODEL,
   STATUS_SOLVED,
   STATUS_EXHAUSTED,
 } from './constants.js';
@@ -54,9 +55,19 @@ function lastEventGateStop(log) {
   return null;
 }
 
-function pendingCommitCommand(questId) {
+function pendingModelEvidenceRequired(pending) {
+  return Boolean(pending) && pending.rungIndex === RUNG_INDEX_MODEL;
+}
+
+function pendingCommitCommand(questId, pending) {
+  // Surfacing the model-rung declaration here — before the attempt is spent —
+  // prevents the commit from bouncing on the theory gate's "model evidence or
+  // modelNotApplicable is required at model rung" and forcing a full rerun.
+  const modelSuffix = pendingModelEvidenceRequired(pending) ?
+    ' --modelRef <model:ref> (or --modelNotApplicable "<why the model does not apply>")' :
+    '';
   return `node scripts/solve.js step --id ${questId} --commit --auto-diff ` +
-    LOCAL_STR_OWNED_001;
+    LOCAL_STR_OWNED_001 + modelSuffix;
 }
 
 function verifierAction(questId, frontier, scope, fingerprint) {
@@ -131,7 +142,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
     verification.unresolvedCandidateRejection) {
     const phase = pending ? 'commit' : 'begin';
     return typedNextAction(pending ?
-      pendingCommitCommand(questId) :
+      pendingCommitCommand(questId, pending) :
       `node scripts/solve.js step --id ${questId}`, {
       code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
       payload: {questId, phase},
@@ -172,7 +183,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
     });
   }
   if (pending) {
-    return typedNextAction(pendingCommitCommand(questId), {
+    return typedNextAction(pendingCommitCommand(questId, pending), {
       code: NEXT_ACTION_CODE.COMMIT_STEP,
       payload: {questId},
     });
@@ -240,6 +251,8 @@ export function buildNextProjection(root, questId) {
     }),
     pendingStep: pending ? {
       frontier: pending.frontier,
+      rungIndex: pending.rungIndex ?? null,
+      modelEvidenceRequiredAtCommit: pendingModelEvidenceRequired(pending),
       beforeMetric: pending.before?.metric ?? null,
       abortCommand: `node scripts/solve.js step --id ${questId} --abort`,
     } : null,
@@ -274,6 +287,10 @@ export function buildNextLines(root, questId) {
     lines.push(`pending step: ${pendingStep.frontier} pinned at metric ` +
       `${pendingStep.beforeMetric ?? UNKNOWN_METRIC} — commit it, or abort with ` +
       pendingStep.abortCommand);
+    if (pendingStep.modelEvidenceRequiredAtCommit) {
+      lines.push('model rung: commit requires --modelRef <model:ref> or ' +
+        '--modelNotApplicable "<why the architecture model does not apply>"');
+    }
   }
   if (lastStop) {
     lines.push(`last stop: ${lastStop.code} ` +

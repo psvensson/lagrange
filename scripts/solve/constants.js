@@ -174,6 +174,13 @@ export const INVESTIGATION_BUDGET = 3;
 // the original semantics after the leading `observe` rung shifted the ladder by one.
 export const SYSTEM_THEORY_STALL_THRESHOLD = RUNG_INDEX_MODEL;
 
+// Lifetime ceiling on same-guard overrides per (frontier, code). Unlike the
+// single-use override consumed by the gate (which resets on honest progress), this
+// tally never resets: a guard that has to be overridden this many times on one
+// frontier is diagnosing a mis-scoped quest, and the answer is a re-scope decision
+// (split the quest, park, or author a successor), never one more override.
+export const SAME_GUARD_OVERRIDE_LIMIT = 3;
+
 // Convergence guards: generic Solver detectors that keep an autonomous Quest from
 // spinning on a coupled-invariant oscillation (one invariant family is fixed while a
 // definitionally-coupled family re-breaks, ad infinitum). Each guard keys off real
