@@ -8,6 +8,8 @@
  * UnifiedRebalancer replica read model.
  */
 
+import {createHash} from 'node:crypto';
+
 import {test} from '../../src/test-helpers/tap.js';
 import {RuntimeServiceRebalancerOwner} from
   '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
@@ -17,6 +19,8 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {RUNTIME_KIND, RUNTIME_REPLICA_STATUS} from
   '../../src/constants/runtime.js';
+import {canonicalJson} from
+  '../../src/control-plane/owners/deployment-binding-contract.js';
 import {deriveRequestServiceDefinitionId} from
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {projectRuntimeReplicaServicesRow} from
@@ -60,11 +64,50 @@ const BINDING_DIGEST = `sha256:${'b'.repeat(64)}`;
 const SERVICE_ENTITY_ID = deriveRequestServiceDefinitionId(
   BINDING_VERSION_ID,
 );
+const ARTIFACT_DIGEST = `sha256:${'c'.repeat(64)}`;
 const RUNTIME_REF =
-  `registry.example.test/acme/orders:1.0.0@sha256:${'c'.repeat(64)}`;
+  `registry.example.test/acme/orders:1.0.0@${ARTIFACT_DIGEST}`;
 const REPLICA_ID = `${SERVICE_ENTITY_ID}-r1`;
 const OPERATION_ID = 'op-runtime-create-lane';
 const HANDLER_ADDRESS = `${NODE_ID}/service/runtime-service-handler`;
+const RUNTIME_PACKAGE_ID = 'tenant-package-runtime-create-lane';
+const RUNTIME_EXPORT_NAME = 'run';
+const RUNTIME_COMPONENT_BYTES = Buffer.from(
+  'formation-runtime-service-create-lane',
+);
+const RUNTIME_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
+  .update(RUNTIME_COMPONENT_BYTES)
+  .digest('hex')}`;
+const RUNTIME_BUDGETS = Object.freeze({
+  context_bytes: 0,
+  cpu_time_ms: 50,
+  input_bytes: 4096,
+  memory_bytes: 64 * 1024 * 1024,
+  output_bytes: 4096,
+  wall_time_ms: 100,
+});
+const RUNTIME_MANIFEST = Object.freeze({
+  artifact: Object.freeze({
+    digest: ARTIFACT_DIGEST,
+    media_type: 'application/wasm',
+    ref: 'registry.example.test/acme/orders:1.0.0',
+    type: 'oci',
+  }),
+  capabilities: Object.freeze([]),
+  exports: Object.freeze([Object.freeze({
+    interface: 'request_v1',
+    name: RUNTIME_EXPORT_NAME,
+    reads: Object.freeze([]),
+    writes: Object.freeze([]),
+  })]),
+  name: 'formation-runtime-service-create-lane',
+  runtime: Object.freeze({kind: RUNTIME_KIND.WASM_COMPONENT}),
+  schema_version: 2,
+  version: '1.0.0',
+});
+const RUNTIME_MANIFEST_DIGEST = `sha256:${createHash('sha256')
+  .update(canonicalJson(RUNTIME_MANIFEST))
+  .digest('hex')}`;
 
 const QUIET_LOGGER = Object.freeze({
   debug() {},
@@ -105,16 +148,27 @@ function attachServiceDefinition(cache) {
     replica_count: 3,
     runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
     runtime_ref: RUNTIME_REF,
-    runtime_config: '{}',
+    runtime_config: JSON.stringify({export_name: RUNTIME_EXPORT_NAME}),
+    resource_budget: JSON.stringify(RUNTIME_BUDGETS),
     binding_version_id: BINDING_VERSION_ID,
     binding_digest: BINDING_DIGEST,
     binding_projection: JSON.stringify({
       binding_digest: BINDING_DIGEST,
       binding_version_id: BINDING_VERSION_ID,
       declaration: {
+        budgets: RUNTIME_BUDGETS,
+        capabilities: [],
+        contexts: [],
         elasticity: {voters: 3, min_learners: 1, max_learners: 2},
+        name: 'formation-runtime-service-create-lane',
         source: {kind: 'request', method: 'POST', path: '/orders'},
+        target: {
+          export_name: RUNTIME_EXPORT_NAME,
+          manifest_digest: RUNTIME_MANIFEST_DIGEST,
+          package_id: RUNTIME_PACKAGE_ID,
+        },
       },
+      tenant_id: 'tenant-a',
     }),
   });
   const bindingRow = Object.freeze({
@@ -175,6 +229,44 @@ function waitForMatchingEvent(emitter, eventName, predicate) {
     };
     emitter.on(eventName, listener);
   });
+}
+
+function createPlacementComponentRuntime() {
+  const running = new Set();
+  return {
+    health(serviceId) {
+      return running.has(serviceId);
+    },
+    start(cell) {
+      running.add(cell.serviceId);
+    },
+    stop(serviceId) {
+      running.delete(serviceId);
+    },
+  };
+}
+
+async function assertOrdinaryChurnRemainsRejected(t, coordinator) {
+  for (const partitionId of ['movie-spread-p4', 'movie-spread-p5']) {
+    let rejection = null;
+    try {
+      await coordinator.ensureConcurrentOperationBudgetAllowed(
+        OperationType.REPLACE,
+        {
+          partitionId,
+          entityType: EntityType.PARTITION,
+          entityId: partitionId,
+        },
+      );
+    } catch (error) {
+      rejection = error;
+    }
+    t.equal(
+      rejection?.rebalanceSkipReason,
+      REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+      `${partitionId} churn cannot consume the create-reserved slot`,
+    );
+  }
 }
 
 test('formation runtime-service create lane survives sustained REPLACE churn ' +
@@ -269,28 +361,23 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
       'the real admission helper closes the ordinary lane at that boundary',
     );
 
-    for (const partitionId of ['movie-spread-p4', 'movie-spread-p5']) {
-      let rejection = null;
-      try {
-        await coordinator.ensureConcurrentOperationBudgetAllowed(
-          OperationType.REPLACE,
-          {
-            partitionId,
-            entityType: EntityType.PARTITION,
-            entityId: partitionId,
-          },
-        );
-      } catch (error) {
-        rejection = error;
-      }
-      t.equal(
-        rejection?.rebalanceSkipReason,
-        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-        `${partitionId} churn cannot consume the create-reserved slot`,
-      );
-    }
+    await assertOrdinaryChurnRemainsRejected(t, coordinator);
 
-    const wasmDriver = new WasmComponentDriver();
+    const loadedArtifactTargets = [];
+    const wasmDriver = new WasmComponentDriver({
+      artifactLoader: async (target) => {
+        loadedArtifactTargets.push(target);
+        return {
+          artifactDigest: ARTIFACT_DIGEST,
+          bytes: RUNTIME_COMPONENT_BYTES,
+          manifest: RUNTIME_MANIFEST,
+          manifestDigest: RUNTIME_MANIFEST_DIGEST,
+          packageId: RUNTIME_PACKAGE_ID,
+          payloadDigest: RUNTIME_PAYLOAD_DIGEST,
+        };
+      },
+      componentRuntime: createPlacementComponentRuntime(),
+    });
     const runtimeDriverRegistry = new RuntimeDriverRegistry();
     runtimeDriverRegistry.register(wasmDriver);
     runtimeDriverRegistry.freeze();
@@ -419,6 +506,10 @@ test('formation runtime-service create lane survives sustained REPLACE churn ' +
 
     const projected = await activeProjection;
     const completed = await operationCompleted;
+    t.equal(loadedArtifactTargets.length, 1,
+      'the placed request lineage loads its pinned Artifact once');
+    t.equal(loadedArtifactTargets[0].packageId, RUNTIME_PACKAGE_ID,
+      'the runtime owner receives the immutable Binding package identity');
     t.equal(projected.serviceId, REPLICA_ID,
       'real runtime lifecycle projects the replica identity ACTIVE');
     t.equal(completed.operation.workflowStep, 'ACTIVE',
