@@ -242,7 +242,7 @@ describe('request Binding desired-service compilation owner', () => {
     LoggingService.getInstance().initialize({level: 'error'});
   });
 
-  test('the compiler source set preserves prior sources and adds only call',
+  test('the compiler source set includes all seven Binding source kinds',
     () => {
       assert.equal(
         supportsBindingServiceDefinitionSourceKind('request'), true,
@@ -254,7 +254,7 @@ describe('request Binding desired-service compilation owner', () => {
       assert.equal(supportsBindingServiceDefinitionSourceKind('call'), true);
       assert.equal(
         supportsBindingServiceDefinitionSourceKind('pushdown'),
-        false,
+        true,
       );
     });
 

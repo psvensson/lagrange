@@ -534,6 +534,18 @@ describe('boot Binding compilation cutover', () => {
 });
 
 function defineNamedBindingCompilationCutover(sourceKind) {
+  const invocationKind = sourceKind === 'call' ?
+    'a statement call' :
+    'query pushdown';
+  const forbiddenInvocationPattern = new RegExp([
+    'CallbackExecutionHost',
+    'PARTITION_CALLBACK',
+    'WasmCallAdapter',
+    'executePushdown',
+    'executeRequest',
+    'pushdownDecisions',
+    'pushdownPlan',
+  ].join('|'), 'u');
   describe(`${sourceKind} Binding compilation cutover`, () => {
     beforeEach(() => {
       ConfigurationManager.resetInstance();
@@ -543,7 +555,7 @@ function defineNamedBindingCompilationCutover(sourceKind) {
     });
 
     test('production planning preserves the named registration without ' +
-      'registering or invoking a statement call', async () => {
+      `registering or invoking ${invocationKind}`, async () => {
       const fixture = await createFixture({sourceKind});
       fixture.gateway.writes.length = 0;
       const planner = createPlanner(fixture);
@@ -593,7 +605,7 @@ function defineNamedBindingCompilationCutover(sourceKind) {
       );
       assert.doesNotMatch(
         compilerSource,
-        /CallbackExecutionHost|PARTITION_CALLBACK|WasmCallAdapter|executeRequest/u,
+        forbiddenInvocationPattern,
       );
       planner.owner.shutdown();
     });
@@ -700,3 +712,4 @@ function defineNamedBindingCompilationCutover(sourceKind) {
 }
 
 defineNamedBindingCompilationCutover('call');
+defineNamedBindingCompilationCutover('pushdown');
