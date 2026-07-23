@@ -89,3 +89,7 @@ invariants, and migration sequence now live in
   `boot` is a handler source, not a node/cluster bootstrap hook: it receives the
   same inactive zero-replica desired-state projection, while invocation and all
   infrastructure bootstrap lifecycle remain unchanged until Cell activation.
+- 2026-07-23 — Landed `boot` and selected `call` as the next source cutover.
+  `call` is a durable named registration compiled into the same inactive
+  zero-replica desired state; individual statement invocations remain transient
+  and deferred until Cell activation.
