@@ -17,17 +17,17 @@ invariants, and migration sequence now live in
 
 ## Options under discussion
 
-- **Cell convergence:** introduce the derived Cell vocabulary at the existing
-  reconciler boundary before or during partition/service lifecycle consolidation.
-- **Learner sequencing:** make learner replicas part of the first context-backed
-  Cell, or defer elasticity until the fixed-voter context path is engaged.
+- **Transient invocation routing:** resolve durable `call` and `pushdown`
+  registration names to ready Cells through an existing owner, or introduce a
+  shared invocation resolver before either data-plane integration.
+- **Genuine component execution:** replace the current JavaScript-envelope WASM
+  scaffold before request routing, or make that replacement and the first ready
+  request Cell one closure-gated Quest.
 
 ## Open questions
 
 - How do durable `call` and `pushdown` registrations map to transient
   per-statement invocations without creating statement-scoped Bindings?
-- What minimum set of axiomatic Cells reaches the binding-reconciler bootstrap
-  fixed point?
 - When does the current JavaScript-envelope WASM mechanism get renamed or
   removed relative to a genuine component engine?
 
@@ -97,3 +97,29 @@ invariants, and migration sequence now live in
   compilation cutover. `pushdown` is likewise a durable named registration;
   individual query-plan invocations remain transient and compilation neither
   installs nor executes pushdown behavior.
+- 2026-07-23 — Landed `pushdown`; all seven Binding sources now compile through
+  the existing `service_definitions` planning leader into inactive zero-replica
+  desired state.
+- 2026-07-23 — Fixed the Cell owner boundary before lifecycle consolidation:
+  Binding-derived `service_definitions` rows are desired state, `services` rows
+  are replica actuals, and only an actual made ready and running by
+  `ServiceRuntimeLifecycle` is a Cell. `RuntimeServiceRebalancerOwner` and one
+  existing `UnifiedRebalancer` per active service remain the only placement
+  path; no Cell table, scheduler, or lifecycle is added.
+- 2026-07-23 — Fixed request-only activation as the first Cell slice. The
+  `service_definitions-p1` planning leader level-triggers request-derived rows
+  to `status = active` with `replica_count = elasticity.voters`, preserves
+  immutable lineage and runtime projection, and admits that lineage to the
+  existing runtime-service placement owner. The other six sources remain
+  inactive at zero replicas.
+- 2026-07-23 — Fixed learner sequencing: voter placement engages first and
+  learner bounds remain persisted but non-authoritative until a later Quest
+  adds elastic capacity through the same replica substrate without changing
+  consensus quorum.
+- 2026-07-23 — Fixed the axiomatic bootstrap boundary to the existing
+  bootstrap-owned system-table/message-group partition actuals and the three
+  built-in meta runtime services. The Cell cutover adds no seed registration,
+  built-in, or Binding-derived user Cell. Started product Quest
+  `minimal-deployment-request-cell-placement` for the engaged placement slice;
+  genuine component execution, ready handler context, and request routing
+  remain separately closure-gated.

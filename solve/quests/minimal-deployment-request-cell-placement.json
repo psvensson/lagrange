@@ -1,0 +1,43 @@
+{
+  "id": "minimal-deployment-request-cell-placement",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Each request Binding's derived service converges idempotently from inactive and zero replicas through the existing service_definitions-p1 owner to active at elasticity.voters and onward through its sole RuntimeServiceRebalancerOwner-managed UnifiedRebalancer into a services actual on the production replica path, including after planning-leadership reacquisition.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "9300ee53a432c58f496f958643ac028c4bbf15b3"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-request-cell-placement",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-request-cell-placement-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-request-cell-placement",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

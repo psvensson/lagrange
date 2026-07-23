@@ -99,15 +99,46 @@ runtime service.
 
 A Cell is a derived running actual: a placed, disposable instance of a stateless
 handler plus a local materialization of its table-backed context. Users never
-declare cells. One reconciliation and replica substrate owns placement,
-recovery, snapshot, handoff, and readiness for partitions and handlers while
-preserving kind-specific data-plane fast paths.
+declare Cells. A Binding-derived `service_definitions` row is desired state, not
+a Cell; its placed `services` rows are replica actuals, and the name Cell applies
+only when the existing runtime lifecycle has made such an actual ready and
+running. This distinction prevents planning or placement alone from being
+reported as runtime activation.
 
-Service state is context-as-table. A service is a request Binding plus
-co-replicated context. Elastic learners may add handler/context capacity without
-changing the fixed odd voter set. Partitions are built-in services at the cell
-contract layer; bootstrap creates only the minimal axiomatic cells needed to
-reach the binding reconciler fixed point.
+The existing `service_definitions-p1` leader remains the single planning owner.
+It reconciles immutable Binding lineage into desired state through
+`ServiceDefinitionsOwner`; `RuntimeServiceRebalancerOwner` admits active desired
+rows, instantiates one `UnifiedRebalancer` per admitted service, and that
+rebalancer owns placement into `services`. `ServiceRuntimeLifecycle` and
+`RuntimeDriverRegistry` remain the only runtime-start boundary. Cell vocabulary
+does not add a table, scheduler, replica owner, or runtime lifecycle.
+
+The first cutover admits only request Binding lineage. The planning owner
+level-triggers each existing inactive request-derived row to `status = active`
+and `replica_count = binding.elasticity.voters`, preserving its service
+identity, pinned runtime descriptor, Binding lineage, and canonical projection.
+The runtime-service owner then stops excluding that request lineage and drives
+the existing placement path. The other six Binding sources remain inactive and
+at zero replicas until their own activation Quests. This transition is
+owner-controlled derived state; it does not add mutable Binding ingress.
+
+Service state is context-as-table. The first placement cutover does not invent a
+per-Cell store or claim local context materialization before a genuine runtime
+is ready. Fixed voters are sequenced first: `elasticity.voters` alone determines
+the initial runtime-service placement target. Persisted `min_learners` and
+`max_learners` remain non-authoritative for placement until a later learner
+capacity Quest uses the same replica substrate; adding learners must not change
+the fixed odd voter set or consensus quorum.
+
+The axiomatic bootstrap set is exactly the existing bootstrap-owned
+system-table/message-group partition actuals plus the built-in
+`sys-admin-meta`, `sys-wasm-meta`, and `sys-postgres-wire` runtime services.
+These already provide the replicated catalog, Binding/desired-state tables,
+planning leadership, and authenticated ingress needed to reach the reconciler
+fixed point. The Cell cutover adds no seed registry, no new built-in, and no
+Binding-derived user Cell to that axiomatic set. Partitions remain built-in
+services at the Cell contract layer while preserving their existing
+kind-specific data-plane path.
 
 ## Existing owners to extend
 
@@ -119,8 +150,9 @@ reach the binding reconciler fixed point.
 | Lifecycle ingress | Authenticated lifecycle SQL, consumed by the CLI | Extend with parameterized `CREATE BINDING $1`; no binding-specific side channel. |
 | Immutable Binding declarations | `DeploymentBindingOwner` / `service_bindings` | Validate and persist one canonical tenant-scoped v0 generation; expose no generic mutation path. |
 | Desired runtime service | `service_definitions` and its existing planning leader | Compile supported Bindings as lineage-bound inactive zero-replica desired rows; retire direct user declaration writes here, and leave activation to the Cell cutover. |
-| Placement and replica lifecycle | `UnifiedRebalancer` and shared replica owners | Extend to derived Cells; do not fork a cell scheduler. |
-| Handler context | Replicated tables and existing KV/timer primitives | Reuse; do not introduce a second state store. |
+| Request Cell desired-state activation | `ServiceDefinitionsOwner` under the existing `service_definitions-p1` planning leader | Level-trigger only request-derived rows to active desired state with target count equal to fixed voters; preserve immutable Binding lineage and keep other sources inactive. |
+| Placement and replica lifecycle | `RuntimeServiceRebalancerOwner`, `UnifiedRebalancer`, shared replica owners, and `ServiceRuntimeLifecycle` | Admit request lineage through the existing `services` actual and runtime path; do not fork a Cell scheduler or call a placed-but-not-running actual a Cell. |
+| Handler context | Replicated tables and existing KV/timer primitives | Reuse; local materialization and handoff must engage the existing owners after genuine runtime execution exists, without a second state store. |
 
 `code`, `module_manifests`, `service_definitions`, stored functions, CDC
 subscriptions, and callback registrations are migration inputs, not new peers of
@@ -149,11 +181,20 @@ single owners only when their removal is explicit and structurally guarded.
    `minimal-deployment-pushdown-binding-compilation` owns the final source as a
    durable named registration without installing query pushdown, invoking the
    Artifact, or activating a runtime.
-6. Name the derived Cell state and reconcile it through the existing placement
-   and replica owners before consolidating partition/service lifecycle code.
+6. Introduce Cell semantics before consolidating partition/service lifecycle
+   code, in closure-gated slices:
+   1. activate request-derived desired state at the fixed voter count and engage
+      the existing runtime-service placement path;
+   2. make a placed request actual genuinely ready through a real runtime engine
+      and the existing lifecycle, with table-backed context;
+   3. route request invocation to that ready Cell; and
+   4. activate the remaining sources and elastic learners through the same
+      owners, one executable concern at a time.
 
 Each step must engage the new owner in the production path it claims. Merely
 adding a table, validator, adapter, or feature flag is not completion.
+Placement is evidence of the first Cell cutover slice, but it is not evidence of
+a running Cell while `wasm_component` remains only a lifecycle scaffold.
 
 ## Permanent invariants
 
@@ -170,6 +211,10 @@ adding a table, validator, adapter, or feature flag is not completion.
 - Reconciliation wakes from canonical replicated change notification and is
   level-triggered, idempotent, and eventually stable.
 - Scaling capacity does not silently change consensus quorum.
+- Exactly one existing runtime-service rebalancer owns placement for each active
+  Binding-derived service; Cell activation cannot introduce a parallel planner.
+- A Binding-derived actual is not called a Cell until the existing runtime
+  lifecycle reports it ready and running.
 - No feature flag or parallel fallback path survives a landing session.
 
 ## First executable slice
@@ -182,8 +227,13 @@ Quest `minimal-deployment-artifact-export-contract` completed step 1,
 step 5, followed by `minimal-deployment-time-binding-compilation` and
 `minimal-deployment-once-binding-compilation` and
 `minimal-deployment-boot-binding-compilation` and
-`minimal-deployment-call-binding-compilation`. Quest
-`minimal-deployment-pushdown-binding-compilation` advances the final source
-through the same `service_definitions` planning leader. Derived rows remain
-inactive and request no replicas; query-plan invocation, runtime activation,
-and Cells remain later steps.
+`minimal-deployment-call-binding-compilation` and
+`minimal-deployment-pushdown-binding-compilation` completed step 5. All seven
+sources now compile through the same `service_definitions` planning leader, and
+all derived rows remain inactive with zero replicas.
+
+Quest `minimal-deployment-request-cell-placement` is the first slice of step 6.
+It owns the request-only transition to active fixed-voter desired state and
+engagement of the existing `RuntimeServiceRebalancerOwner` / `UnifiedRebalancer`
+placement path. It does not claim component execution, handler readiness,
+request routing, local context materialization, or learner elasticity.
