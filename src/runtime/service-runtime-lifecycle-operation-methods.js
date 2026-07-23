@@ -1,6 +1,12 @@
+import {PREPARE_STATUS} from './runtime-driver.js';
+
 const RUNTIME_DRIVER_START_FAILED = 'runtime driver start failed';
+const RUNTIME_DRIVER_PREPARE_FAILED = 'runtime driver prepare failed';
 const CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE =
   'current SQL request executor is unavailable';
+const RUNTIME_DRIVER_INVOKE_UNSUPPORTED =
+  'runtime driver does not support invocation';
+const RUNTIME_INVOKE_OPERATION = 'invoke';
 
 function createServiceRuntimeLifecycleOperationMethods(deps) {
   const {
@@ -77,6 +83,35 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
     }
   }
 
+  function assertDriverPrepareSucceeded(
+    result, runtimeKind, serviceId, operation,
+  ) {
+    if (result?.status === PREPARE_STATUS.FAILED) {
+      throw new LifecycleOrchestrationError(
+        operation,
+        runtimeKind,
+        serviceId,
+        result.error || RUNTIME_DRIVER_PREPARE_FAILED,
+      );
+    }
+  }
+
+  function shouldReconcileIdempotentRuntime(
+    owner, runtimeKind, definition,
+  ) {
+    return owner._resolveDriver(runtimeKind)
+      .requiresRuntimeReconciliation(definition);
+  }
+
+  function withIdempotentOperation(result, operation) {
+    if (!operation?.idempotent) return result;
+    return {
+      ...result,
+      idempotent: true,
+      operationId: operation.operationId,
+    };
+  }
+
   class ServiceRuntimeLifecycleOperationMethods {
   /**
    * Prepare runtime artifacts for a service definition.
@@ -120,7 +155,10 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         );
 
         // Idempotency hit: return existing operation identity
-        if (operation && operation.idempotent) {
+        if (operation && operation.idempotent &&
+            !shouldReconcileIdempotentRuntime(
+              this, runtimeKind, definition,
+            )) {
           const durationMs = Date.now() - start;
           const result = {
             status: operation.existing.state ??
@@ -150,6 +188,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
             context :
             {...context, handlerMap: this._nativeJsHandlerMap};
         const result = await driver.prepare(definition, prepareContext);
+        assertDriverPrepareSucceeded(result, runtimeKind, serviceId, op);
         const durationMs = Date.now() - start;
 
         await this._projectReplicaState(
@@ -167,7 +206,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         this.emit(LIFECYCLE_EVENT.PREPARE_SUCCESS, {
           runtimeKind, serviceId, durationMs, result,
         });
-        return result;
+        return withIdempotentOperation(result, operation);
       } catch (err) {
         const durationMs = Date.now() - start;
         if (operation && !(err instanceof OperationJournalError) &&
@@ -247,6 +286,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       const start = Date.now();
       let operation = null;
       let causeId = null;
+      let driver = null;
 
       try {
         operation = await this._journalCreate(
@@ -255,7 +295,10 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         );
 
         // Idempotency hit: return existing operation identity
-        if (operation && operation.idempotent) {
+        if (operation && operation.idempotent &&
+            !shouldReconcileIdempotentRuntime(
+              this, runtimeKind, definition,
+            )) {
           const durationMs = Date.now() - start;
           const result = {
             status: operation.existing.state ??
@@ -287,7 +330,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
           this, definition, serviceId, replicaContext, runtimeKind,
         );
 
-        const driver = this._resolveDriver(runtimeKind);
+        driver = this._resolveDriver(runtimeKind);
         const result = await driver.start(replicaContext);
         assertDriverStartSucceeded(result, runtimeKind, serviceId, op);
         const durationMs = Date.now() - start;
@@ -332,6 +375,10 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
           }
         }
 
+        await this._projectReplicaState(
+          serviceId, definition, RUNTIME_REPLICA_STATUS.ACTIVE, null, {causeId},
+        );
+
         await this._journalTransition(
           operation, serviceId, runtimeKind, op,
           WASM_OPERATION_STATE.IN_PROGRESS,
@@ -339,16 +386,13 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
           result,
         );
 
-        await this._projectReplicaState(
-          serviceId, definition, RUNTIME_REPLICA_STATUS.ACTIVE, null, {causeId},
-        );
-
         this.emit(LIFECYCLE_EVENT.START_SUCCESS, {
           runtimeKind, serviceId, durationMs, result,
         });
-        return result;
+        return withIdempotentOperation(result, operation);
       } catch (err) {
         const durationMs = Date.now() - start;
+        await driver?.stop(replicaContext).catch(() => {});
         if (operation && !(err instanceof OperationJournalError) &&
           !(err instanceof IdempotencyCheckError)) {
           await this._journalTransition(
@@ -531,6 +575,56 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         }
         throw new LifecycleOrchestrationError(
           op, runtimeKind, serviceId, err.message, {cause: err},
+        );
+      }
+    }
+
+    async invoke(replicaContext, invocation) {
+      const definition = replicaContext?.definition ?? replicaContext;
+      const runtimeKind = resolveRuntimeKind(definition);
+      const serviceId = resolveServiceId(definition);
+      const operation = RUNTIME_INVOKE_OPERATION;
+      if (!runtimeKind) {
+        throw new LifecycleOrchestrationError(
+          operation,
+          LOCAL_STR_NONE,
+          serviceId,
+          LOCAL_STR_VUZ91,
+        );
+      }
+      this._validateRuntimeDescriptor(
+        definition,
+        runtimeKind,
+        operation,
+        serviceId,
+      );
+      try {
+        injectServiceQueryExecutor(
+          this,
+          definition,
+          serviceId,
+          replicaContext,
+          runtimeKind,
+        );
+        const driver = this._resolveDriver(runtimeKind);
+        if (typeof driver.invoke !== 'function') {
+          throw new Error(RUNTIME_DRIVER_INVOKE_UNSUPPORTED);
+        }
+        return await driver.invoke(replicaContext, invocation);
+      } catch (error) {
+        await this._projectReplicaState(
+          serviceId,
+          definition,
+          RUNTIME_REPLICA_STATUS.FAILED,
+          {error_message: error.message},
+        );
+        if (error instanceof LifecycleOrchestrationError) throw error;
+        throw new LifecycleOrchestrationError(
+          operation,
+          runtimeKind,
+          serviceId,
+          error.message,
+          {cause: error},
         );
       }
     }

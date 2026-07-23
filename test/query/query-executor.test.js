@@ -82,6 +82,42 @@ test('QueryExecutor - executes SELECT on multiple partitions', async (t) => {
   mockPartitionData.clear();
 });
 
+test('QueryExecutor - sends bounded SELECT result limits and deadline to ' +
+  'the partition', async (t) => {
+  const delivered = [];
+  const executor = new QueryExecutor({
+    messageRouter: {
+      async deliver(_address, message) {
+        delivered.push(message);
+        return {
+          acknowledged: true,
+          rows: [],
+          success: true,
+        };
+      },
+    },
+    systemCache: createMockSystemCache(['p1']),
+  });
+  const deadlineMs = Date.now() + 1_000;
+
+  const result = await executor.executeSelect(
+    parseSQL('SELECT * FROM users'),
+    ['p1'],
+    [],
+    {
+      resultMaxBytes: 513,
+      resultMaxRows: 9,
+      timeoutBudget: {deadlineMs},
+    },
+  );
+
+  t.equal(result.success, true);
+  t.equal(delivered.length, 1);
+  t.equal(delivered[0].resultMaxBytes, 513);
+  t.equal(delivered[0].resultMaxRows, 9);
+  t.equal(delivered[0].resultDeadlineMs, deadlineMs);
+});
+
 test('QueryExecutor - executeSelect forwards explicit routing readiness to ' +
   'partition fanout', async (t) => {
   const executor = new QueryExecutor({

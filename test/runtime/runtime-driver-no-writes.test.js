@@ -62,6 +62,8 @@ const CONTRACT_METHODS = [
   'start',
   'stop',
   'health',
+  'requiresRuntimeReconciliation',
+  'invoke',
 ];
 
 // --- Write/persist/save method names that must NOT exist ---

@@ -1,5 +1,10 @@
 import {createHash} from 'node:crypto';
 
+import {
+  DEPLOYMENT_BINDING_BUDGET_FIELDS,
+  DEPLOYMENT_BINDING_BUDGET_LIMITS,
+} from '../../constants/deployment-binding.js';
+
 const DEPLOYMENT_BINDING_SCHEMA_VERSION = 0;
 const DEPLOYMENT_BINDING_GENERATION = 1;
 
@@ -84,10 +89,6 @@ const ROOT_FIELDS = Object.freeze([
 const TARGET_FIELDS = Object.freeze([
   'package_id', 'manifest_digest', 'export_name',
 ]);
-const BUDGET_FIELDS = Object.freeze([
-  'cpu_time_ms', 'wall_time_ms', 'memory_bytes', 'input_bytes',
-  'output_bytes', 'context_bytes',
-]);
 const ELASTICITY_FIELDS = Object.freeze([
   'voters', 'min_learners', 'max_learners',
 ]);
@@ -98,15 +99,6 @@ const REQUEST_METHODS = Object.freeze([
 const TIME_INTERVAL_LIMITS = Object.freeze({
   minimum: 1,
   maximum: 86400000,
-});
-
-const BUDGET_LIMITS = Object.freeze({
-  context_bytes: Object.freeze({minimum: 0, maximum: 67108864}),
-  cpu_time_ms: Object.freeze({minimum: 1, maximum: 60000}),
-  input_bytes: Object.freeze({minimum: 0, maximum: 16777216}),
-  memory_bytes: Object.freeze({minimum: 1, maximum: 1073741824}),
-  output_bytes: Object.freeze({minimum: 0, maximum: 16777216}),
-  wall_time_ms: Object.freeze({minimum: 1, maximum: 300000}),
 });
 
 const NAME_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
@@ -312,11 +304,14 @@ function normalizeSource(source) {
 
 function normalizeBudgets(budgets) {
   requireExactFields(
-    budgets, BUDGET_FIELDS, DEPLOYMENT_BINDING_PATH.BUDGETS);
+    budgets,
+    DEPLOYMENT_BINDING_BUDGET_FIELDS,
+    DEPLOYMENT_BINDING_PATH.BUDGETS,
+  );
   const normalized = {};
-  for (const field of BUDGET_FIELDS) {
+  for (const field of DEPLOYMENT_BINDING_BUDGET_FIELDS) {
     normalized[field] = requireInteger(
-      budgets[field], BUDGET_LIMITS[field],
+      budgets[field], DEPLOYMENT_BINDING_BUDGET_LIMITS[field],
       `${DEPLOYMENT_BINDING_PATH.BUDGETS}/${field}`,
     );
   }

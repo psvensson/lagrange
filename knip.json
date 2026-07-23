@@ -4,6 +4,7 @@
     "src/index.js!",
     "src/cli/bin/lagrange-admin.js!",
     "src/threading/service-worker.js!",
+    "src/runtime/wasi-component-cell-worker.js!",
     "src/test-helpers/worker/entry-runner.js",
     "src/test-helpers/worker/admin-cli-direct-runner.js",
     "test/**/*.test.js",

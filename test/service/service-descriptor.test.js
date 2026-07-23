@@ -27,6 +27,32 @@ describe('service descriptor normalization', () => {
     assert.equal(normalized.runtimeKind, RUNTIME_KIND.NATIVE_JS);
     assert.equal(normalized.runtimeConfig, '{"x":1}');
   });
+
+  it('preserves immutable request Cell runtime extensions', () => {
+    const normalized = normalizeServiceDescriptor({
+      service_id: 'request-cell',
+      service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+      replica_count: 1,
+      runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
+      runtime_ref: 'registry.test/request-cell@sha256:abc',
+      runtime_config: '{"export_name":"run"}',
+      binding_digest: 'sha256:binding',
+      binding_projection: '{"binding":"projection"}',
+      binding_version_id: 'binding-version',
+      resource_budget: '{"memory_bytes":65536}',
+    });
+
+    assert.equal(normalized.binding_digest, 'sha256:binding');
+    assert.equal(
+      normalized.binding_projection,
+      '{"binding":"projection"}',
+    );
+    assert.equal(normalized.binding_version_id, 'binding-version');
+    assert.equal(
+      normalized.resource_budget,
+      '{"memory_bytes":65536}',
+    );
+  });
 });
 
 describe('service descriptor validation by service kind', () => {

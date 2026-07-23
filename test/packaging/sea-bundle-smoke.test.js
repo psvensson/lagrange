@@ -1,6 +1,7 @@
 import {dirname, join} from 'path';
 import {fileURLToPath} from 'url';
 import {spawn} from 'child_process';
+import {Worker} from 'worker_threads';
 import os from 'os';
 import fs from 'fs';
 import {test} from '../../src/test-helpers/tap.js';
@@ -13,7 +14,16 @@ const projectRoot = join(__dirname, '../..');
 const buildEntrypoint = join(projectRoot, 'scripts/build-sea.js');
 const mainBundle = join(projectRoot, 'dist/index.bundle.cjs');
 const cliBundle = join(projectRoot, 'dist/admin-cli.bundle.cjs');
+const requestCellWorkerBundle =
+  join(projectRoot, 'dist/request-cell-worker.bundle.mjs');
 const mainEntrypoint = join(projectRoot, 'src/index.js');
+
+function waitForWorkerStartup(worker) {
+  return new Promise((resolve, reject) => {
+    worker.once('message', resolve);
+    worker.once('error', reject);
+  });
+}
 
 function runSpawnedBundle(args, env, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
@@ -49,6 +59,27 @@ test('SEA bundle smoke test', async (t) => {
   t.equal(build.exitCode, 0, 'build script exits cleanly');
   t.equal(fs.existsSync(mainBundle), true, 'main bundle exists after build');
   t.equal(fs.existsSync(cliBundle), true, 'CLI bundle exists after build');
+  t.equal(
+    fs.existsSync(requestCellWorkerBundle),
+    true,
+    'request Cell worker bundle exists after build',
+  );
+
+  const requestCellWorker = new Worker(requestCellWorkerBundle, {
+    workerData: {
+      bytes: new Uint8Array([0]),
+      capabilities: [],
+      exportName: 'run',
+      tables: [],
+    },
+  });
+  t.teardown(() => requestCellWorker.terminate());
+  const workerStartup = await waitForWorkerStartup(requestCellWorker);
+  t.equal(
+    workerStartup.type,
+    'start_failed',
+    'bundled request Cell worker loads and rejects corrupt component bytes',
+  );
 
   const cliHelp = await runEntrypoint(cliBundle, {
     args: ['--help'],

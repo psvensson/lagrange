@@ -83,6 +83,7 @@ class SQLQueryEngineRequestDispatch extends
           timeoutMs: sqlRequest.timeoutMs,
           timeoutBudget: sqlRequest.timeoutBudget,
           cancellationToken: sqlRequest.cancellationToken || null,
+          budgets: sqlRequest.budgets,
           ...(sqlRequest.securityContext ?
             {securityContext: sqlRequest.securityContext} : {}),
         },

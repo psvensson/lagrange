@@ -5,6 +5,12 @@ import {
   createPartitionServiceTransactionSessionMethods,
 } from './partition-service-transaction-session-methods.js';
 
+const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
+  DEADLINE_MS: 'resultDeadlineMs',
+  MAX_BYTES: 'resultMaxBytes',
+  MAX_ROWS: 'resultMaxRows',
+});
+
 const {
   ERRORS,
   PARTITION_SERVICE_COLUMN,
@@ -367,6 +373,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       [QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY]: idempotencyKey,
       [QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION]: migrationOperation,
       [QUERY_PAYLOAD_FIELD_MIGRATION_ID]: migrationId,
+      [QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS]: resultDeadlineMs,
+      [QUERY_RESULT_REQUEST_FIELD.MAX_BYTES]: resultMaxBytes,
+      [QUERY_RESULT_REQUEST_FIELD.MAX_ROWS]: resultMaxRows,
     } = payload;
     if (!sql) {
       return {
@@ -425,6 +434,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           idempotencyKey: idempotencyKey || null,
           splitMirrorOrigin: splitMirrorOrigin || null,
           sessionId: sessionId || null,
+          resultDeadlineMs,
+          resultMaxBytes,
+          resultMaxRows,
         });
       }
       // A routed write can come back rejected without throwing (for example
@@ -437,6 +449,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         acknowledged: true,
         success: resultSuccess,
         ...(resultSuccess || !result?.error ? {} : {error: result.error}),
+        ...(resultSuccess || !result?.errorCode ?
+          {} :
+          {errorCode: result.errorCode}),
         rows: result.rows,
         changes: result.changes,
         count: result.count,
@@ -451,7 +466,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         error: error.message,
         partitionId: this.partitionId,
       });
-      throw error;
+      return {
+        acknowledged: true,
+        success: false,
+        error: error.message,
+        errorCode: error.code || null,
+        partitionId: this.partitionId,
+      };
     }
   }
   /**

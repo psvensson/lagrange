@@ -18,6 +18,7 @@
  */
 
 import {HeartbeatService} from '../../control-plane/heartbeat-service.js';
+import {join} from 'node:path';
 import {LeaseService} from '../../control-plane/lease-service.js';
 import {EndpointService} from '../../control-plane/endpoint-service.js';
 import {
@@ -79,6 +80,8 @@ const CONTROL_PLANE_SETUP_SUBSYSTEM =
 const CONTROL_PLANE_SETUP_NAME = 'ControlPlaneSetup';
 const TYPEOF_FUNCTION = 'function';
 const NUMERIC_ZERO = 0;
+const INSTALLABLE_SERVICE_COMPONENT_CACHE_DIR =
+  'installable-service-components';
 
 /**
  * Log messages for ControlPlaneSetup.
@@ -108,13 +111,20 @@ const ERROR_MSG = Object.freeze({
   TRANSACTION_COORDINATOR_REQUIRED: 'transactionCoordinator',
 });
 
+function createInstallableServiceArtifactResolver(options) {
+  return options.installableServiceArtifactResolver ||
+    new InstallableServiceArtifactResolver({
+      componentCacheDir: options.dataDir ?
+        join(options.dataDir, INSTALLABLE_SERVICE_COMPONENT_CACHE_DIR) :
+        null,
+      remoteProvider: options.installableServiceRemoteProvider,
+    });
+}
+
 function createAndWireServiceLifecycleCommandOwner(
   options, controlPlaneRuntimeBundle, systemMetadataOwners,
 ) {
-  const artifactResolver = options.installableServiceArtifactResolver ||
-    new InstallableServiceArtifactResolver({
-      remoteProvider: options.installableServiceRemoteProvider,
-    });
+  const artifactResolver = createInstallableServiceArtifactResolver(options);
   const commandOwner = new ServiceLifecycleCommandOwner({
     artifactResolver,
     bindingOwner: systemMetadataOwners.deploymentBindingOwner,
@@ -124,6 +134,11 @@ function createAndWireServiceLifecycleCommandOwner(
   });
   const sqlQueryEngine = controlPlaneRuntimeBundle.sqlQueryEngine;
   bindServiceLifecycleCommandOwnerToSqlRuntime(commandOwner, sqlQueryEngine);
+  if (options.wasmComponentDriver) {
+    options.wasmComponentDriver.setArtifactLoader(
+      (target) => commandOwner.loadComponentArtifact(target),
+    );
+  }
   return commandOwner;
 }
 

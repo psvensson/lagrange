@@ -8,6 +8,7 @@
  *   start(replicaContext)           → Promise<StartResult>
  *   stop(replicaContext)            → Promise<void>
  *   health(replicaContext)          → Promise<HealthResult>
+ *   invoke(replicaContext, request)  → Promise<unknown>
  *
  * Contract rules:
  *   1. No driver writes system metadata directly.
@@ -29,6 +30,7 @@ const LOCAL_STR_PREPARE = 'prepare';
 const LOCAL_STR_START = 'start';
 const LOCAL_STR_STOP = 'stop';
 const LOCAL_STR_HEALTH = 'health';
+const LOCAL_STR_INVOKE = 'invoke';
 
 // --- Result status constants ---
 
@@ -171,6 +173,14 @@ class RuntimeDriver {
    */
   async health(_replicaContext) {
     throw new DriverNotImplementedError(this.kind, LOCAL_STR_HEALTH);
+  }
+
+  requiresRuntimeReconciliation(_definition) {
+    return false;
+  }
+
+  async invoke(_replicaContext, _invocation) {
+    throw new DriverNotImplementedError(this.kind, LOCAL_STR_INVOKE);
   }
 }
 

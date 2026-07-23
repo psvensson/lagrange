@@ -393,6 +393,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       }
     }
     const controlPlane = await ControlPlaneSetup.create({
+      dataDir: this.dataDir,
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
       advertisedNodeWsAddress: this.advertisedNodeWsAddress,
@@ -407,6 +408,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       rebalanceCoordinator: this.rebalanceCoordinator,
       bootstrapReadinessState: this.bootstrapReadinessState,
       executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
+      wasmComponentDriver: this.runtimeDrivers.wasmComponentDriver,
       controlPlaneWriteRetryTimeoutMs: this.config.controlPlaneWriteRetryTimeoutMs,
       controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,
       controlPlaneWriteRetryMaxDelayMs: this.config.controlPlaneWriteRetryMaxDelayMs,

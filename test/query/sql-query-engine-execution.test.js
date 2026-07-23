@@ -6,6 +6,9 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {CancellationToken} from
+  '../../src/query/cancellation-token.js';
+import {createSqlRequest} from '../../src/query/sql-request.js';
 import {
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -48,6 +51,57 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
 } from './sql-query-engine-test-support.js';
+
+test('SQLQueryEngine preserves canonical result and deadline budgets for ' +
+  'SELECT execution', async (t) => {
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [{
+      partition_id: 'p1',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }],
+  );
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
+  let capturedOptions = null;
+  engine.queryExecutor = {
+    async executeSelect(_ast, partitionIds, _params, options) {
+      capturedOptions = options;
+      return {
+        count: 0,
+        partitions: partitionIds,
+        rows: [],
+        success: true,
+      };
+    },
+  };
+  const cancellationToken = new CancellationToken();
+  const timeoutBudget = {
+    configuredBudgetMs: 1_000,
+    deadlineMs: Date.now() + 1_000,
+    startedAtMs: Date.now(),
+  };
+
+  const result = await engine.executeRequest(createSqlRequest({
+    budgets: {
+      RESULT_MAX_BYTES: 512,
+      RESULT_MAX_ROWS: 17,
+    },
+    cancellationToken,
+    statement: 'SELECT * FROM users',
+    timeoutBudget,
+  }));
+
+  t.equal(result.success, true);
+  t.equal(capturedOptions.resultMaxBytes, 512);
+  t.equal(capturedOptions.resultMaxRows, 17);
+  t.equal(capturedOptions.timeoutBudget, timeoutBudget);
+  t.equal(capturedOptions.cancellationToken, cancellationToken);
+});
 
 
 test('SQLQueryEngine emits shared pressure diagnostics with query-plane ' +

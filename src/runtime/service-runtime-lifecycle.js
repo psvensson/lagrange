@@ -457,9 +457,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    *
    * Builds a row object with the required services-table columns
    * and delegates the write to the configured state projection
-   * writer. Failures are emitted as events but do not block the
-   * lifecycle operation — the projection is best-effort so that
-   * a transient CDC/SQL failure does not prevent replica startup.
+   * writer. Failures are emitted as events. ACTIVE is an admission
+   * boundary and therefore fails closed; cleanup projections remain
+   * best-effort so their own failure cannot mask the initiating error.
    *
    * Requirements: 5.1, 5.2, 5.4, 13.1
    *
@@ -495,6 +495,9 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTION_FAILED, {
         serviceId, status, nodeId, causeId, error: err,
       });
+      if (status === RUNTIME_REPLICA_STATUS.ACTIVE) {
+        throw err;
+      }
     }
   }
 

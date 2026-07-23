@@ -5,11 +5,7 @@
  * Digest, manifest/media, and detached-signature policy checks are shared.
  */
 
-import {
-  createHash,
-  createPublicKey,
-  verify as verifySignature,
-} from 'node:crypto';
+import {createHash, createPublicKey, verify as verifySignature} from 'node:crypto';
 import {readFile, stat} from 'node:fs/promises';
 import path from 'node:path';
 
@@ -22,6 +18,7 @@ import {
   OCI_IMAGE_LAYOUT_VERSION,
   OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 } from './oci-image-layout-contract.js';
+import {InstallableComponentCache} from './installable-component-cache.js';
 
 const INSTALLABLE_ARTIFACT_SOURCE_KIND = Object.freeze({
   LOCAL_OCI_LAYOUT: 'local_oci_layout',
@@ -59,11 +56,13 @@ const SIGNATURE_STATUS = Object.freeze({
 });
 
 const DEFAULT_MAX_DESCRIPTOR_BYTES = 4 * 1024 * 1024;
+const DEFAULT_MAX_COMPONENT_BYTES = 256 * 1024 * 1024;
 const MAX_LAYOUT_MARKER_BYTES = 4 * 1024;
 const MAX_INDEX_BYTES = 1024 * 1024;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const ED25519_SIGNATURE_BYTES = 64;
+const SHA256_PREFIX_LENGTH = 7;
 const SIGNATURE_DOMAIN = 'lagrange.installable-service-artifact.v1';
 
 const ARTIFACT_RESOLUTION_STATUS = Object.freeze({
@@ -136,6 +135,8 @@ const INSTALLABLE_ARTIFACT_MESSAGE = Object.freeze({
   MANIFEST_SHAPE_INVALID: 'OCI image manifest shape is invalid',
   MAX_DESCRIPTOR_BYTES_INVALID:
     'maxDescriptorBytes must be a positive safe integer',
+  MAX_COMPONENT_BYTES_INVALID:
+    'maxComponentBytes must be a positive safe integer',
   REMOTE_ACQUISITION_FAILED: 'remote OCI descriptor acquisition failed',
   REMOTE_PROVIDER_INVALID: 'remote OCI provider returned an invalid result',
   REMOTE_PROVIDER_MISSING: 'remote OCI provider is not configured',
@@ -207,6 +208,23 @@ function normalizeBytes(value) {
     INSTALLABLE_ARTIFACT_PATH.SOURCE_BYTES,
     INSTALLABLE_ARTIFACT_MESSAGE.SOURCE_BYTES_REQUIRED,
   );
+}
+
+function createComponentCacheRegistration(
+  manifest,
+  acquisition,
+  verified,
+  readBytes,
+  resolutions,
+) {
+  return {
+    artifactDigest: manifest.artifact.digest,
+    location: acquisition.location,
+    payloadDescriptor: verified.payloadDescriptor,
+    readBytes,
+    resolutions,
+    sourceKind: acquisition.sourceKind,
+  };
 }
 
 function validateSignaturePolicy(signaturePolicy) {
@@ -450,16 +468,26 @@ async function readJson(file, maximumBytes, code, pathValue) {
     fail(code, pathValue, INSTALLABLE_ARTIFACT_MESSAGE.LAYOUT_METADATA_INVALID);
   }
 }
-
 class InstallableServiceArtifactResolver {
   constructor(options = {}) {
     this.remoteProvider = options.remoteProvider || null;
     this.maxDescriptorBytes = options.maxDescriptorBytes ||
       DEFAULT_MAX_DESCRIPTOR_BYTES;
+    this.maxComponentBytes = options.maxComponentBytes ||
+      DEFAULT_MAX_COMPONENT_BYTES;
+    this.componentCache = InstallableComponentCache.fromResolverOptions(
+      options, this.maxComponentBytes);
+    this.resolvedComponents = new Map();
     if (!Number.isSafeInteger(this.maxDescriptorBytes) ||
         this.maxDescriptorBytes <= 0) {
       throw new TypeError(
         INSTALLABLE_ARTIFACT_MESSAGE.MAX_DESCRIPTOR_BYTES_INVALID,
+      );
+    }
+    if (!Number.isSafeInteger(this.maxComponentBytes) ||
+        this.maxComponentBytes <= 0) {
+      throw new TypeError(
+        INSTALLABLE_ARTIFACT_MESSAGE.MAX_COMPONENT_BYTES_INVALID,
       );
     }
   }
@@ -483,6 +511,14 @@ class InstallableServiceArtifactResolver {
         manifest.artifact,
         signaturePolicy,
       );
+      const registration = createComponentCacheRegistration(
+        manifest,
+        acquisition,
+        verified,
+        (resolved) => this.acquireComponentBytes(resolved),
+        this.resolvedComponents,
+      );
+      await this.componentCache.register(registration);
       return deepFreeze({
         status: ARTIFACT_RESOLUTION_STATUS.RESOLVED,
         artifact: {
@@ -499,6 +535,121 @@ class InstallableServiceArtifactResolver {
     } catch (error) {
       return rejected(error);
     }
+  }
+
+  async loadComponentPayload(request = {}) {
+    const manifestResult = validateExternalServiceManifest(request.manifest);
+    if (!manifestResult.valid) {
+      throw new ArtifactResolutionFailure(
+        INSTALLABLE_ARTIFACT_ERROR_CODE.MANIFEST_INVALID,
+        INSTALLABLE_ARTIFACT_PATH.SOURCE,
+        INSTALLABLE_ARTIFACT_MESSAGE.MANIFEST_INVALID,
+      );
+    }
+    const manifest = manifestResult.manifest;
+    if (manifest.runtime.kind !== RUNTIME_KIND.WASM_COMPONENT ||
+        request.artifactDigest !== manifest.artifact.digest) {
+      throw new ArtifactResolutionFailure(
+        INSTALLABLE_ARTIFACT_ERROR_CODE.DIGEST_MISMATCH,
+        INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR_DIGEST,
+        INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_DIGEST_MISMATCH,
+      );
+    }
+    let resolved = this.resolvedComponents.get(request.artifactDigest);
+    if (!resolved) {
+      const cached = await this.componentCache.load(request.artifactDigest);
+      if (cached) return cached;
+      const acquisition = await this.acquireRemote(
+        manifest,
+        manifest.artifact.ref,
+      );
+      const verified = this.verifyDescriptor(manifest, acquisition);
+      resolved = {
+        location: acquisition.location,
+        payloadDescriptor: verified.payloadDescriptor,
+        sourceKind: acquisition.sourceKind,
+      };
+      this.resolvedComponents.set(request.artifactDigest, resolved);
+    }
+    const bytes = await this.acquireComponentBytes(resolved);
+    return {
+      bytes,
+      payloadDigest: resolved.payloadDescriptor.digest,
+    };
+  }
+
+  async acquireComponentBytes(resolved) {
+    const descriptor = validateOciDescriptor(
+      resolved.payloadDescriptor,
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
+    );
+    let bytes;
+    if (resolved.sourceKind ===
+        INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT) {
+      bytes = await readBounded(
+        path.join(
+          resolved.location,
+          OCI_LAYOUT_ENTRY.BLOBS,
+          OCI_LAYOUT_ENTRY.SHA256,
+          descriptor.digest.slice(SHA256_PREFIX_LENGTH),
+        ),
+        this.maxComponentBytes,
+        INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE,
+        INSTALLABLE_ARTIFACT_PATH.SOURCE_BLOBS,
+      );
+    } else {
+      const result = await this.acquireRemoteBlob(resolved, descriptor);
+      bytes = result.bytes;
+    }
+    if (bytes.length !== descriptor.size ||
+        bytes.length > this.maxComponentBytes ||
+        sha256(bytes) !== descriptor.digest) {
+      fail(
+        INSTALLABLE_ARTIFACT_ERROR_CODE.DIGEST_MISMATCH,
+        INSTALLABLE_ARTIFACT_PATH.DESCRIPTOR_DIGEST,
+        INSTALLABLE_ARTIFACT_MESSAGE.DESCRIPTOR_DIGEST_MISMATCH,
+      );
+    }
+    return bytes;
+  }
+
+  async acquireRemoteBlob(resolved, descriptor) {
+    if (!this.remoteProvider ||
+        typeof this.remoteProvider.resolveDescriptor !== 'function') {
+      fail(
+        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
+        INSTALLABLE_ARTIFACT_PATH.SOURCE,
+        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_MISSING,
+      );
+    }
+    let result;
+    try {
+      result = await this.remoteProvider.resolveDescriptor({
+        digest: descriptor.digest,
+        maxBytes: this.maxComponentBytes,
+        reference: resolved.location,
+      });
+    } catch (_error) {
+      fail(
+        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_READ_FAILED,
+        INSTALLABLE_ARTIFACT_PATH.SOURCE,
+        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_ACQUISITION_FAILED,
+      );
+    }
+    const returnedDescriptor = validateOciDescriptor(
+      result?.descriptor,
+      INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
+    );
+    if (returnedDescriptor.digest !== descriptor.digest ||
+        returnedDescriptor.size !== descriptor.size ||
+        returnedDescriptor.mediaType !== descriptor.mediaType) {
+      fail(
+        INSTALLABLE_ARTIFACT_ERROR_CODE.SOURCE_RESULT_INVALID,
+        INSTALLABLE_ARTIFACT_PATH.SOURCE_DESCRIPTOR,
+        INSTALLABLE_ARTIFACT_MESSAGE.REMOTE_PROVIDER_INVALID,
+      );
+    }
+    return {bytes: normalizeBytes(result.bytes)};
   }
 
   async acquire(manifest, source) {
@@ -611,7 +762,7 @@ class InstallableServiceArtifactResolver {
         root,
         OCI_LAYOUT_ENTRY.BLOBS,
         OCI_LAYOUT_ENTRY.SHA256,
-        descriptor.digest.slice(7),
+        descriptor.digest.slice(SHA256_PREFIX_LENGTH),
       ),
       this.maxDescriptorBytes,
       INSTALLABLE_ARTIFACT_ERROR_CODE.DESCRIPTOR_TOO_LARGE,

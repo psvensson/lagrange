@@ -51,6 +51,9 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
       }
 
       const controlPlane = await ControlPlaneSetup.create({
+        dataDir: this.dataDirectoryManager?.isInitialized() ?
+          this.dataDirectoryManager.getDataDir() :
+          null,
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
         advertisedNodeWsAddress: this.advertisedNodeWsAddress,
@@ -65,6 +68,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
         rebalanceCoordinator: this.rebalanceCoordinator,
         bootstrapReadinessState: this.bootstrapReadinessState,
         executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
+        wasmComponentDriver: this.runtimeDrivers.wasmComponentDriver,
         controlPlaneWriteRetryTimeoutMs: this.config.controlPlaneWriteRetryTimeoutMs,
         controlPlaneWriteRetryBaseDelayMs: this.config.controlPlaneWriteRetryBaseDelayMs,
         controlPlaneWriteRetryMaxDelayMs: this.config.controlPlaneWriteRetryMaxDelayMs,

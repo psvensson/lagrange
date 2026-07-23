@@ -19,6 +19,7 @@ const LOCAL_STR_NODE = 'node';
 const LOCAL_STR_NODE22 = 'node22';
 const LOCAL_STR_DIST = 'dist';
 const LOCAL_STR_CJS = 'cjs';
+const LOCAL_STR_ESM = 'esm';
 const LOCAL_STR_TRUE = '"true"';
 const LOCAL_STR_BUILDING_SEA_BUNDLES = '=== Building SEA Bundles ===\n';
 const LOCAL_STR_CREATED_DIST_DIRECTORY = 'Created dist directory\n';
@@ -73,13 +74,27 @@ const BUNDLES = [
     name: 'Replica Worker',
     external: MAIN_RUNTIME_EXTERNALS,
   },
+  {
+    entryPoint: join(
+      projectRoot,
+      'src/runtime/wasi-component-cell-worker.js',
+    ),
+    outputFile: 'request-cell-worker.bundle.mjs',
+    name: 'Request Cell Worker',
+    external: ['@bytecodealliance/jco-transpile'],
+    format: LOCAL_STR_ESM,
+  },
 ];
 
 const RUNTIME_PACKAGES = [
+  '@bytecodealliance',
+  '@oxc-minify',
   'better-sqlite3',
+  'binaryen',
   'bindings',
   'blessed',
   'file-uri-to-path',
+  'oxc-minify',
   'piscina',
 ];
 
@@ -89,11 +104,13 @@ const RUNTIME_PACKAGES = [
  * @param {string} outputFile - Output bundle basename
  * @param {string} name - Bundle name for logging
  * @param {string[]} external - External packages
+ * @param {string} [format] - esbuild output format
  */
-async function buildBundle(entryPoint, outputFile, name, external) {
+async function buildBundle(entryPoint, outputFile, name, external, format) {
   console.log(`Building ${name} bundle...`);
 
   const startTime = Date.now();
+  const outputFormat = format || LOCAL_STR_CJS;
 
   await esbuild.build({
     entryPoints: [entryPoint],
@@ -101,7 +118,7 @@ async function buildBundle(entryPoint, outputFile, name, external) {
     platform: LOCAL_STR_NODE,
     target: LOCAL_STR_NODE22,
     outfile: join(projectRoot, LOCAL_STR_DIST, outputFile),
-    format: LOCAL_STR_CJS,
+    format: outputFormat,
     external,
     minify: true,
     sourcemap: false,
@@ -109,9 +126,9 @@ async function buildBundle(entryPoint, outputFile, name, external) {
     define: {
       'process.env.SEA_BUILD': LOCAL_STR_TRUE,
     },
-    banner: {
-      js: BUILD_BANNER,
-    },
+    banner: outputFormat === LOCAL_STR_CJS ?
+      {js: BUILD_BANNER} :
+      undefined,
   });
 
   const duration = Date.now() - startTime;
@@ -153,6 +170,7 @@ async function main() {
         bundle.outputFile,
         bundle.name,
         bundle.external,
+        bundle.format,
       );
     }
 

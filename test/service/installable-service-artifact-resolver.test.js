@@ -28,7 +28,8 @@ function digest(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
-function makeOciManifest({wasm = false} = {}) {
+function makeOciManifest({wasm = false, wasmPayload = null} = {}) {
+  const payload = wasmPayload || Buffer.alloc(128);
   return Buffer.from(JSON.stringify({
     schemaVersion: 2,
     mediaType: OCI_IMAGE_MANIFEST_MEDIA_TYPE,
@@ -39,8 +40,8 @@ function makeOciManifest({wasm = false} = {}) {
     },
     layers: wasm ? [{
       mediaType: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
-      digest: `sha256:${'b'.repeat(64)}`,
-      size: 128,
+      digest: digest(payload),
+      size: payload.length,
     }] : [],
   }));
 }
@@ -193,6 +194,148 @@ describe('installable service artifact owner', () => {
     assert.equal(result.artifact.payloadDescriptor.size, 128);
     assert.equal(result.artifact.signature.status, 'unsigned_allowed');
   });
+
+  it('loads and re-verifies the manifest-pinned local Component payload',
+    async (t) => {
+      const payload = Buffer.from('genuine-component-payload');
+      const bytes = makeOciManifest({wasm: true, wasmPayload: payload});
+      const descriptor = makeDescriptor(bytes);
+      const root = await writeOciLayout(t, descriptor, bytes);
+      const payloadDigest = digest(payload);
+      const payloadPath = path.join(
+        root,
+        'blobs',
+        'sha256',
+        payloadDigest.slice(7),
+      );
+      await writeFile(payloadPath, payload);
+      const manifest = makeExternalManifest({
+        descriptor,
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
+      });
+      const resolver = new InstallableServiceArtifactResolver();
+      const resolved = await resolver.resolve({
+        manifest,
+        signaturePolicy: policy(
+          ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
+        ),
+        source: source(
+          INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
+          root,
+        ),
+      });
+      assert.equal(resolved.status, 'resolved');
+
+      const loaded = await resolver.loadComponentPayload({
+        artifactDigest: descriptor.digest,
+        manifest,
+      });
+      assert.deepEqual(loaded.bytes, payload);
+      assert.equal(loaded.payloadDigest, payloadDigest);
+
+      await writeFile(payloadPath, Buffer.from('tampered-component'));
+      await assert.rejects(
+        () => resolver.loadComponentPayload({
+          artifactDigest: descriptor.digest,
+          manifest,
+        }),
+        (error) =>
+          error.code === INSTALLABLE_ARTIFACT_ERROR_CODE.DIGEST_MISMATCH,
+      );
+    },
+  );
+
+  it('reacquires a remote Component payload after resolver restart',
+    async () => {
+      const payload = Buffer.from('remote-genuine-component');
+      const bytes = makeOciManifest({wasm: true, wasmPayload: payload});
+      const descriptor = makeDescriptor(bytes);
+      const payloadDescriptor = {
+        digest: digest(payload),
+        mediaType: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
+        size: payload.length,
+      };
+      const provider = {
+        async resolveDescriptor(request) {
+          return request.digest === descriptor.digest ?
+            {bytes, descriptor} :
+            {bytes: payload, descriptor: payloadDescriptor};
+        },
+      };
+      const manifest = makeExternalManifest({
+        descriptor,
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
+      });
+      const installerResolver = new InstallableServiceArtifactResolver({
+        remoteProvider: provider,
+      });
+      const resolved = await installerResolver.resolve({
+        manifest,
+        signaturePolicy: policy(
+          ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
+        ),
+        source: source(INSTALLABLE_ARTIFACT_SOURCE_KIND.REMOTE_OCI),
+      });
+      assert.equal(resolved.status, 'resolved');
+
+      const restartedResolver = new InstallableServiceArtifactResolver({
+        remoteProvider: provider,
+      });
+      const loaded = await restartedResolver.loadComponentPayload({
+        artifactDigest: descriptor.digest,
+        manifest,
+      });
+      assert.deepEqual(loaded.bytes, payload);
+      assert.equal(loaded.payloadDigest, payloadDescriptor.digest);
+    },
+  );
+
+  it('loads a locally installed Component from the durable restart cache',
+    async (t) => {
+      const payload = Buffer.from('cached-local-component');
+      const bytes = makeOciManifest({wasm: true, wasmPayload: payload});
+      const descriptor = makeDescriptor(bytes);
+      const root = await writeOciLayout(t, descriptor, bytes);
+      const payloadDigest = digest(payload);
+      await writeFile(
+        path.join(root, 'blobs', 'sha256', payloadDigest.slice(7)),
+        payload,
+      );
+      const cacheDir = await mkdtemp(
+        path.join(tmpdir(), 'lagrange-component-cache-'),
+      );
+      t.after(() => rm(cacheDir, {recursive: true, force: true}));
+      const manifest = makeExternalManifest({
+        descriptor,
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
+      });
+      const installer = new InstallableServiceArtifactResolver({
+        componentCacheDir: cacheDir,
+      });
+      const resolved = await installer.resolve({
+        manifest,
+        signaturePolicy: policy(
+          ARTIFACT_SIGNATURE_POLICY_MODE.VERIFY_IF_PRESENT,
+        ),
+        source: source(
+          INSTALLABLE_ARTIFACT_SOURCE_KIND.LOCAL_OCI_LAYOUT,
+          root,
+        ),
+      });
+      assert.equal(resolved.status, 'resolved');
+      await rm(root, {recursive: true, force: true});
+
+      const restarted = new InstallableServiceArtifactResolver({
+        componentCacheDir: cacheDir,
+      });
+      const loaded = await restarted.loadComponentPayload({
+        artifactDigest: descriptor.digest,
+        manifest,
+      });
+      assert.deepEqual(loaded.bytes, payload);
+      assert.equal(loaded.payloadDigest, payloadDigest);
+    },
+  );
 
   it('routes remote and local acquisition through the same normalized result', async (t) => {
     const bytes = makeOciManifest();

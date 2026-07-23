@@ -545,6 +545,11 @@ class PartitionWorkerService extends ReplicaWorkerBase {
       const result = this.sqliteStore.executeQuery(
         message.sql,
         message.params || [],
+        {
+          resultDeadlineMs: message.resultDeadlineMs,
+          resultMaxBytes: message.resultMaxBytes,
+          resultMaxRows: message.resultMaxRows,
+        },
       );
 
       this.logger.debug(PARTITION_WORKER_LOG_MSG.QUERY_COMPLETED, {
@@ -566,7 +571,10 @@ class PartitionWorkerService extends ReplicaWorkerBase {
         partitionId: this.partitionId,
         error: error.message,
       });
-      return {error: error.message};
+      return {
+        error: error.message,
+        errorCode: error.code || null,
+      };
     }
   }
 

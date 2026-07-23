@@ -261,7 +261,10 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         distributedPlan,
         routingReadinessDimension,
         timeoutMs: queryOptions.timeoutMs,
+        timeoutBudget: queryOptions.timeoutBudget || null,
         cancellationToken: queryOptions.cancellationToken || null,
+        resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
+        resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
       },
     );
     const executionDurationMs = Date.now() - executionStartTimeMs;

@@ -37,6 +37,8 @@ const CONTRACT_METHODS = [
   'start',
   'stop',
   'health',
+  'requiresRuntimeReconciliation',
+  'invoke',
 ];
 
 describe('WasmComponentDriver contract conformance', () => {
@@ -285,6 +287,7 @@ describe('WasmComponentDriver contract conformance', () => {
       const allowed = new Set([
         'constructor',
         ...CONTRACT_METHODS,
+        'setArtifactLoader',
       ]);
       for (const name of proto) {
         assert.ok(

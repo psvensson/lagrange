@@ -6,6 +6,11 @@ import {
   buildSelectFanoutPlan,
 } from './distributed/distributed-select-fanout-plan.js';
 
+function partitionBudgetShare(limit, partitionCount) {
+  if (!Number.isSafeInteger(limit) || limit < 0) return null;
+  return Math.floor(limit / Math.max(1, partitionCount));
+}
+
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   ConfigurationManager,
@@ -397,6 +402,14 @@ class QueryExecutorBase {
       (expr) => this.buildExpressionSQL(expr),
     );
     const sql = this.buildSelectSQL(fanoutPlan.partitionAst);
+    const resultMaxBytes = partitionBudgetShare(
+      options.resultMaxBytes,
+      partitionIds.length,
+    );
+    const resultMaxRows = partitionBudgetShare(
+      options.resultMaxRows,
+      partitionIds.length,
+    );
 
     // Execute on all partitions in parallel (read operations can go to any replica)
     const results = await this.executeOnPartitions(
@@ -412,7 +425,10 @@ class QueryExecutorBase {
         deliveryPriority: options.deliveryPriority,
         routingReadinessDimension: options.routingReadinessDimension,
         timeoutMs: options.timeoutMs,
+        timeoutBudget: options.timeoutBudget || null,
         cancellationToken: options.cancellationToken || null,
+        resultMaxBytes,
+        resultMaxRows,
         tableName: ast.table,
       },
     );

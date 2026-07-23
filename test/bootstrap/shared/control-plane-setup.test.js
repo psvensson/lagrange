@@ -303,6 +303,7 @@ describe('ControlPlaneSetup', () => {
 
     it('should return decomposed services and coordinator',
       async () => {
+        let componentArtifactLoader = null;
         const result = await ControlPlaneSetup.create({
           nodeId: 'test-node',
           nodeAddress: 'localhost:8080',
@@ -310,6 +311,11 @@ describe('ControlPlaneSetup', () => {
           cdcIntegrationService: mockCdcIntegrationService,
           systemTableCache: mockSystemTableCache,
           tablePolicyService: mockTablePolicyService,
+          wasmComponentDriver: {
+            setArtifactLoader(loader) {
+              componentArtifactLoader = loader;
+            },
+          },
         });
 
         createdServices.push(result);
@@ -333,6 +339,7 @@ describe('ControlPlaneSetup', () => {
           result.endpointService.serviceEndpointsOwner,
           result.systemMetadataOwners.serviceEndpointsOwner,
         );
+        assert.strictEqual(typeof componentArtifactLoader, 'function');
       });
 
     it('should keep lease sweep frozen until activation barrier',

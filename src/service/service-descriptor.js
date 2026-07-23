@@ -19,6 +19,45 @@ const DESCRIPTOR_ERROR = Object.freeze({
   ADAPTER_RESOLUTION_REQUIRED:
     'adapterResolver must return exactly one adapter for serviceType',
 });
+const RUNTIME_EXTENSION_FIELD = Object.freeze({
+  BINDING_DIGEST: 'binding_digest',
+  BINDING_PROJECTION: 'binding_projection',
+  BINDING_VERSION_ID: 'binding_version_id',
+  RESOURCE_BUDGET: 'resource_budget',
+});
+
+function firstDefined(primary, fallback) {
+  return primary ?? fallback;
+}
+
+function serializeRuntimeExtensionBudget(descriptor) {
+  const budget = firstDefined(
+    descriptor?.resource_budget,
+    descriptor?.resourceBudget,
+  );
+  return budget === undefined || typeof budget === 'string' ?
+    budget :
+    JSON.stringify(budget);
+}
+
+function runtimeExtensionFields(descriptor) {
+  return {
+    [RUNTIME_EXTENSION_FIELD.BINDING_DIGEST]:
+      firstDefined(descriptor?.binding_digest, descriptor?.bindingDigest),
+    [RUNTIME_EXTENSION_FIELD.BINDING_PROJECTION]:
+      firstDefined(
+        descriptor?.binding_projection,
+        descriptor?.bindingProjection,
+      ),
+    [RUNTIME_EXTENSION_FIELD.BINDING_VERSION_ID]:
+      firstDefined(
+        descriptor?.binding_version_id,
+        descriptor?.bindingVersionId,
+      ),
+    [RUNTIME_EXTENSION_FIELD.RESOURCE_BUDGET]:
+      serializeRuntimeExtensionBudget(descriptor),
+  };
+}
 
 /**
  * Normalize a mixed-case descriptor into canonical camelCase fields.
@@ -32,6 +71,7 @@ function normalizeServiceDescriptor(descriptor) {
     null;
 
   return {
+    ...runtimeExtensionFields(descriptor),
     [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: serviceId,
     [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]:
       descriptor?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE] ||

@@ -13,6 +13,36 @@ const {
   QUERY_MESSAGE_TYPE,
 } = QUERY_EXECUTOR_SHARED;
 
+const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
+  DEADLINE_MS: 'resultDeadlineMs',
+  MAX_BYTES: 'resultMaxBytes',
+  MAX_ROWS: 'resultMaxRows',
+});
+
+function copySafeResultLimit(request, field, value) {
+  if (Number.isSafeInteger(value) && value >= 0) {
+    request[field] = value;
+  }
+}
+
+function copyQueryResultLimits(request, executionOptions) {
+  copySafeResultLimit(
+    request,
+    QUERY_RESULT_REQUEST_FIELD.MAX_BYTES,
+    executionOptions.resultMaxBytes,
+  );
+  copySafeResultLimit(
+    request,
+    QUERY_RESULT_REQUEST_FIELD.MAX_ROWS,
+    executionOptions.resultMaxRows,
+  );
+  copySafeResultLimit(
+    request,
+    QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS,
+    executionOptions.timeoutBudget?.deadlineMs,
+  );
+}
+
 function createDefaultPartitionRequestBuilder({
   executionOptions,
   params,
@@ -68,6 +98,7 @@ function createDefaultPartitionRequestBuilder({
           executionOptions.migrationId;
       }
     }
+    copyQueryResultLimits(request, executionOptions);
     return request;
   };
 }

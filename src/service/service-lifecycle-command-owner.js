@@ -511,6 +511,35 @@ class ServiceLifecycleCommandOwner {
     return result;
   }
 
+  async loadComponentArtifact(target) {
+    const artifact = await this.catalogOwner.getBindableArtifact(
+      target.packageId,
+      target.manifestDigest,
+    );
+    const selectedExport = artifact?.manifest?.exports?.find(
+      (entry) => entry.name === target.exportName,
+    );
+    if (!artifact ||
+        artifact.artifactDigest !== target.artifactDigest ||
+        !selectedExport) {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT,
+        SERVICE_LIFECYCLE_COMMAND_PATH.ARTIFACT_SOURCE,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_REJECTED,
+      );
+    }
+    const payload = await this.artifactResolver.loadComponentPayload({
+      artifactDigest: target.artifactDigest,
+      manifest: artifact.manifest,
+    });
+    return {
+      ...artifact,
+      bytes: payload.bytes,
+      payloadDigest: payload.payloadDigest,
+    };
+  }
+
   async replayIfDurable(command, identity) {
     const existing = await this.catalogOwner.getInstallationByOperationId(
       identity.operationId,

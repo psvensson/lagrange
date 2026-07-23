@@ -3,6 +3,8 @@ import {PartitionServiceTransactionBase} from './partition-service-transaction-b
 import {
   startPartitionRaftWriteCommit,
 } from './partition-service-raft-write-commit.js';
+import {collectBoundedSqliteRows} from
+  '../query/query-result-budget.js';
 
 
 const {
@@ -52,7 +54,12 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
       if (isSelect) {
         const sqliteStartMs = Date.now();
-        const rows = stmt.all(...params);
+        const rows = collectBoundedSqliteRows(stmt, params, {
+          cancellationToken: options.cancellationToken || null,
+          deadlineMs: options.resultDeadlineMs,
+          maxBytes: options.resultMaxBytes,
+          maxRows: options.resultMaxRows,
+        });
         const transaction = this.resolveActiveTransactionState(
           options.sessionId || null,
         );

@@ -5,6 +5,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  QUERY_RESULT_BUDGET_ERROR_CODE,
+} from '../../src/query/query-result-budget.js';
 import {SQLiteStore} from '../../src/storage/sqlite-store.js';
 import {
   SQLITE_STORE_ERROR_MSG,
@@ -146,6 +149,52 @@ test('executeQuery with SELECT returns rows', async (t) => {
     store.close();
   }
 });
+
+test('executeQuery bounds SELECT rows, bytes, and wall-time while iterating',
+  async (t) => {
+    const store = createInitializedStore();
+
+    try {
+      store.executeQuery(
+        `INSERT INTO ${TEST_TABLE_NAME} (id, name, value)` +
+        ' VALUES (?, ?, ?)',
+        [1, 'x'.repeat(4_096), 10],
+      );
+      t.throws(
+        () => store.executeQuery(
+          `SELECT * FROM ${TEST_TABLE_NAME}`,
+          [],
+          {resultMaxBytes: 128},
+        ),
+        {
+          code: QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED,
+        },
+      );
+      t.throws(
+        () => store.executeQuery(
+          `SELECT * FROM ${TEST_TABLE_NAME}`,
+          [],
+          {resultMaxRows: 0},
+        ),
+        {
+          code: QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED,
+        },
+      );
+      t.throws(
+        () => store.executeQuery(
+          `SELECT * FROM ${TEST_TABLE_NAME}`,
+          [],
+          {resultDeadlineMs: Date.now() - 1},
+        ),
+        {
+          code: QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED,
+        },
+      );
+    } finally {
+      store.close();
+    }
+  },
+);
 
 test('executeQuery SELECT on empty table returns empty rows',
   async (t) => {

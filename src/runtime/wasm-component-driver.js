@@ -20,6 +20,11 @@
  */
 
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
+import {CancellationToken} from '../query/cancellation-token.js';
+import {
+  QUERY_RESULT_BUDGET_ERROR_CODE,
+} from '../query/query-result-budget.js';
+import {createSqlRequest} from '../query/sql-request.js';
 import {
   RuntimeDriver,
   PREPARE_STATUS,
@@ -30,6 +35,13 @@ import {
   DriverValidationError,
   DriverLifecycleError,
 } from './runtime-driver-errors.js';
+import {
+  bindRequestCellArtifact,
+  isRequestCellDefinition,
+  projectRequestCellRuntime,
+} from './request-cell-runtime-contract.js';
+import {WasiComponentCellRuntime} from
+  './wasi-component-cell-runtime.js';
 
 // --- Driver-specific constants ---
 
@@ -60,9 +72,20 @@ const WASM_COMPONENT_ERROR = Object.freeze({
     'WASM lock validation failed',
   UNKNOWN_LIFECYCLE_FAILURE:
     'unknown lifecycle failure',
+  ARTIFACT_LOADER_REQUIRED:
+    'request Cell Artifact loader is unavailable',
+  COMPONENT_INVOKE_FAILED:
+    'request Cell Component invocation failed',
+  COMPONENT_START_FAILED:
+    'request Cell Component startup failed',
+  SQL_EXECUTOR_REQUIRED:
+    'request Cell table effects require the current SQL executor',
+  SQL_REQUEST_FAILED:
+    'request Cell table request failed',
 });
 
 const DRIVER_ACTION = Object.freeze({
+  INVOKE: 'invoke',
   PREPARE: 'prepare',
   START: 'start',
   STOP: 'stop',
@@ -77,6 +100,15 @@ const DRIVER_SEPARATOR = Object.freeze({
   DETAIL: ': ',
   ERROR_LIST: '; ',
 });
+const BYTE_ENCODING = 'utf8';
+const QUERY_BUDGET_RESULT_MAX_BYTES = 'RESULT_MAX_BYTES';
+const QUERY_BUDGET_RESULT_MAX_ROWS = 'RESULT_MAX_ROWS';
+const CONTEXT_QUERY_ROW_LIMIT_OFFSET = 1;
+const CONTEXT_ROW_BYTES_FIELD = '__request_cell_row_bytes';
+const REQUEST_CELL_BUDGET_ERROR_CODE = 'request_cell_budget_exhausted';
+const CONTEXT_ROW_BYTES_SQL =
+  'COALESCE(length(CAST(key AS BLOB)), 0) + ' +
+  'COALESCE(length(CAST(value AS BLOB)), 0)';
 
 const DRIVER_ENDPOINT_DEFAULT = Object.freeze({
   HOST: 'localhost',
@@ -109,32 +141,89 @@ function buildValidationFailureError(baseMessage, errors) {
 }
 
 function resolvePreparePolicyFailure(context, definition) {
-  if (context?.validationPipeline) {
-    const pipelineResult = context.validationPipeline(definition);
-    if (!pipelineResult.valid) {
-      return buildValidationFailureError(
-        WASM_COMPONENT_ERROR.VALIDATION_PIPELINE_FAILED,
-        pipelineResult.errors || [],
-      );
-    }
-  } else if (context?.dependencyResolver) {
-    const resolveResult = context.dependencyResolver(definition);
-    if (!resolveResult.resolved) {
-      return buildValidationFailureError(
-        WASM_COMPONENT_ERROR.DEPENDENCY_RESOLUTION_FAILED,
-        resolveResult.errors || [],
-      );
-    }
-  } else if (context?.lockValidator) {
-    const lockResult = context.lockValidator(definition);
-    if (!lockResult.valid) {
-      return buildValidationFailureError(
-        WASM_COMPONENT_ERROR.LOCK_VALIDATION_FAILED,
-        lockResult.errors || [],
-      );
-    }
+  const policies = [
+    {
+      error: WASM_COMPONENT_ERROR.VALIDATION_PIPELINE_FAILED,
+      execute: context?.validationPipeline,
+      success: 'valid',
+    },
+    {
+      error: WASM_COMPONENT_ERROR.DEPENDENCY_RESOLUTION_FAILED,
+      execute: context?.dependencyResolver,
+      success: 'resolved',
+    },
+    {
+      error: WASM_COMPONENT_ERROR.LOCK_VALIDATION_FAILED,
+      execute: context?.lockValidator,
+      success: 'valid',
+    },
+  ];
+  const policy = policies.find((candidate) =>
+    typeof candidate.execute === 'function');
+  if (!policy) return undefined;
+  const result = policy.execute.call(context, definition);
+  return result[policy.success] ?
+    undefined :
+    buildValidationFailureError(policy.error, result.errors || []);
+}
+
+function resolveDriverServiceId(value) {
+  return value?.[DRIVER_FIELD.SERVICE_ID] ??
+    value?.[DRIVER_FIELD.SERVICE_ID_LEGACY] ??
+    value?.definition?.[DRIVER_FIELD.SERVICE_ID] ??
+    value?.definition?.[DRIVER_FIELD.SERVICE_ID_LEGACY];
+}
+
+function resolveDriverTenantId(value) {
+  return value?.tenantId ??
+    value?.tenant_id ??
+    value?.definition?.tenantId ??
+    value?.definition?.tenant_id;
+}
+
+function encodedBytes(value) {
+  return Buffer.byteLength(JSON.stringify(value), BYTE_ENCODING);
+}
+
+function contextBudgetFailure(actual, limit) {
+  const error = new Error(
+    `Binding context_bytes budget exhausted (${actual} > ${limit})`,
+  );
+  error.code = REQUEST_CELL_BUDGET_ERROR_CODE;
+  return error;
+}
+
+function isQueryResultBudgetErrorCode(code) {
+  return code === QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED ||
+    code === QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED;
+}
+
+function resolveSqlRequestFailure(result) {
+  if (result && result.firstFailedParticipant) {
+    return result.firstFailedParticipant;
   }
-  return undefined;
+  if (result && Array.isArray(result.participantFailures) &&
+      result.participantFailures.length > 0) {
+    return result.participantFailures[0];
+  }
+  return result;
+}
+
+function assertSqlRequestSucceeded(result, contextByteLimit = null) {
+  if (result && result.success === true) return;
+  const failure = resolveSqlRequestFailure(result);
+  if (contextByteLimit !== null &&
+      isQueryResultBudgetErrorCode(failure && failure.errorCode)) {
+    throw contextBudgetFailure(
+      contextByteLimit + CONTEXT_QUERY_ROW_LIMIT_OFFSET,
+      contextByteLimit,
+    );
+  }
+  throw new Error(
+    result && result.error ?
+      result.error :
+      WASM_COMPONENT_ERROR.SQL_REQUEST_FAILED,
+  );
 }
 
 /**
@@ -153,7 +242,7 @@ function resolvePreparePolicyFailure(context, definition) {
  * @extends RuntimeDriver
  */
 class WasmComponentDriver extends RuntimeDriver {
-  constructor() {
+  constructor(options = {}) {
     super(RUNTIME_KIND.WASM_COMPONENT);
 
     /**
@@ -178,6 +267,23 @@ class WasmComponentDriver extends RuntimeDriver {
      * @private
      */
     this._lifecycles = new Map();
+
+    this._artifactLoader = options.artifactLoader || null;
+    this._componentRuntime =
+      options.componentRuntime || new WasiComponentCellRuntime();
+    this._requestCells = new Map();
+    this._replicaContexts = new Map();
+  }
+
+  setArtifactLoader(loader) {
+    if (typeof loader !== 'function') {
+      throw new TypeError(WASM_COMPONENT_ERROR.ARTIFACT_LOADER_REQUIRED);
+    }
+    this._artifactLoader = loader;
+  }
+
+  requiresRuntimeReconciliation(definition) {
+    return isRequestCellDefinition(definition);
   }
 
   /**
@@ -248,10 +354,51 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
-    const serviceId =
-      definition[DRIVER_FIELD.SERVICE_ID] ??
-      definition[DRIVER_FIELD.SERVICE_ID_LEGACY];
+    const serviceId = resolveDriverServiceId(definition);
 
+    if (isRequestCellDefinition(definition)) {
+      return this.#prepareRequestCell(definition, serviceId);
+    }
+
+    return this.#prepareLegacyReplica(definition, context, serviceId);
+  }
+
+  async #prepareRequestCell(definition, serviceId) {
+    if (!this._artifactLoader) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED,
+        WASM_COMPONENT_ERROR.ARTIFACT_LOADER_REQUIRED,
+      );
+    }
+    try {
+      const runtime = projectRequestCellRuntime(definition);
+      const artifact = await this._artifactLoader(runtime);
+      const cell = bindRequestCellArtifact(runtime, artifact);
+      const existing = this._requestCells.get(serviceId);
+      if (existing &&
+          (existing.bindingDigest !== cell.bindingDigest ||
+           existing.payloadDigest !== cell.payloadDigest)) {
+        await this._componentRuntime.stop(serviceId);
+        this._running.delete(serviceId);
+      }
+      this._requestCells.set(serviceId, cell);
+      this._prepared.set(serviceId, definition);
+      return {status: PREPARE_STATUS.READY};
+    } catch (cause) {
+      await this._componentRuntime.stop(serviceId);
+      this._running.delete(serviceId);
+      this._replicaContexts.delete(serviceId);
+      this._requestCells.delete(serviceId);
+      this._prepared.delete(serviceId);
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED,
+        `${cause.code || WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
+          `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+      );
+    }
+  }
+
+  #prepareLegacyReplica(definition, context, serviceId) {
     const wasmLifecycle = context?.wasmLifecycle;
     if (wasmLifecycle) {
       if (typeof wasmLifecycle !== 'object') {
@@ -301,8 +448,7 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
-    const serviceId = replicaContext[DRIVER_FIELD.SERVICE_ID] ??
-      replicaContext[DRIVER_FIELD.SERVICE_ID_LEGACY];
+    const serviceId = resolveDriverServiceId(replicaContext);
     if (!serviceId) {
       throw new DriverLifecycleError(
         this.kind, DRIVER_ACTION.START,
@@ -320,56 +466,100 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
-    const lifecycle = this._lifecycles.get(serviceId);
-    if (lifecycle) {
-      try {
-        const startResult = lifecycle.startReplica(
-          serviceId, replicaContext.startOptions,
-        );
-
-        if (!startResult) {
-          return buildDriverStatusResult(
-            START_STATUS.FAILED,
-            WASM_COMPONENT_ERROR.START_REPLICA_NO_RESULT,
-          );
-        }
-
-        if (startResult.started === false) {
-          const result = buildDriverStatusResult(
-            START_STATUS.FAILED,
-            `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}` +
-              `${DRIVER_SEPARATOR.DETAIL}` +
-              `${startResult.error || WASM_COMPONENT_ERROR.UNKNOWN_LIFECYCLE_FAILURE}`,
-          );
-          if (startResult.diagnostic) {
-            result.diagnostic = startResult.diagnostic;
-          }
-          return result;
-        }
-
-        this._running.add(serviceId);
-
-        const result = {status: START_STATUS.RUNNING};
-        if (startResult && startResult.port) {
-          result.endpointIntent = {
-            host: replicaContext.endpointHost ??
-              replicaContext.address ??
-              DRIVER_ENDPOINT_DEFAULT.HOST,
-            port: startResult.port,
-            protocol: replicaContext.endpointProtocol ??
-              DRIVER_ENDPOINT_DEFAULT.PROTOCOL,
-          };
-        }
-        return result;
-      } catch (cause) {
-        return buildDriverStatusResult(
-          START_STATUS.FAILED,
-          `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}` +
-            `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
-        );
-      }
+    const requestCell = this._requestCells.get(serviceId);
+    if (requestCell) {
+      return this.#startRequestCell(
+        requestCell,
+        replicaContext,
+        serviceId,
+      );
     }
 
+    const lifecycle = this._lifecycles.get(serviceId);
+    if (lifecycle) {
+      return this.#startLegacyReplica(
+        lifecycle,
+        replicaContext,
+        serviceId,
+      );
+    }
+
+    return this.#startStandaloneReplica(replicaContext, serviceId);
+  }
+
+  async #startRequestCell(requestCell, replicaContext, serviceId) {
+    try {
+      await this._componentRuntime.start(requestCell);
+      if (!await this._componentRuntime.health(serviceId)) {
+        throw new Error(WASM_COMPONENT_ERROR.NOT_STARTED);
+      }
+      this._replicaContexts.set(serviceId, replicaContext);
+      this._running.add(serviceId);
+      return {status: START_STATUS.RUNNING};
+    } catch (cause) {
+      this._replicaContexts.delete(serviceId);
+      this._running.delete(serviceId);
+      return buildDriverStatusResult(
+        START_STATUS.FAILED,
+        `${cause.code || WASM_COMPONENT_ERROR.COMPONENT_START_FAILED}` +
+          `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+      );
+    }
+  }
+
+  #startLegacyReplica(lifecycle, replicaContext, serviceId) {
+    try {
+      const startResult = lifecycle.startReplica(
+        serviceId, replicaContext.startOptions,
+      );
+      return this.#projectLegacyStartResult(
+        startResult,
+        replicaContext,
+        serviceId,
+      );
+    } catch (cause) {
+      return buildDriverStatusResult(
+        START_STATUS.FAILED,
+        `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}` +
+          `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+      );
+    }
+  }
+
+  #projectLegacyStartResult(startResult, replicaContext, serviceId) {
+    if (!startResult) {
+      return buildDriverStatusResult(
+        START_STATUS.FAILED,
+        WASM_COMPONENT_ERROR.START_REPLICA_NO_RESULT,
+      );
+    }
+    if (startResult.started === false) {
+      const result = buildDriverStatusResult(
+        START_STATUS.FAILED,
+        `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}` +
+          `${DRIVER_SEPARATOR.DETAIL}` +
+          `${startResult.error ||
+            WASM_COMPONENT_ERROR.UNKNOWN_LIFECYCLE_FAILURE}`,
+      );
+      if (startResult.diagnostic) result.diagnostic = startResult.diagnostic;
+      return result;
+    }
+    this._running.add(serviceId);
+    const result = {status: START_STATUS.RUNNING};
+    if (startResult.port) {
+      result.endpointIntent = {
+        host: replicaContext.endpointHost ??
+          replicaContext.address ??
+          DRIVER_ENDPOINT_DEFAULT.HOST,
+        port: startResult.port,
+        protocol: replicaContext.endpointProtocol ??
+          DRIVER_ENDPOINT_DEFAULT.PROTOCOL,
+      };
+    }
+    return result;
+  }
+
+  #startStandaloneReplica(replicaContext, serviceId) {
     // No lifecycle — standalone/test mode
     this._running.add(serviceId);
 
@@ -405,8 +595,7 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
-    const serviceId = replicaContext[DRIVER_FIELD.SERVICE_ID] ??
-      replicaContext[DRIVER_FIELD.SERVICE_ID_LEGACY];
+    const serviceId = resolveDriverServiceId(replicaContext);
     if (!serviceId) {
       throw new DriverLifecycleError(
         this.kind, DRIVER_ACTION.STOP,
@@ -415,6 +604,9 @@ class WasmComponentDriver extends RuntimeDriver {
     }
 
     const lifecycle = this._lifecycles.get(serviceId);
+    if (this._requestCells.has(serviceId)) {
+      await this._componentRuntime.stop(serviceId);
+    }
     if (lifecycle) {
       try {
         await lifecycle.stopReplica(serviceId);
@@ -431,6 +623,8 @@ class WasmComponentDriver extends RuntimeDriver {
     this._running.delete(serviceId);
     this._prepared.delete(serviceId);
     this._lifecycles.delete(serviceId);
+    this._requestCells.delete(serviceId);
+    this._replicaContexts.delete(serviceId);
   }
 
   /**
@@ -452,8 +646,7 @@ class WasmComponentDriver extends RuntimeDriver {
         detail: WASM_COMPONENT_ERROR.REPLICA_CONTEXT_REQUIRED,
       };
     } else {
-      const serviceId = replicaContext[DRIVER_FIELD.SERVICE_ID] ??
-        replicaContext[DRIVER_FIELD.SERVICE_ID_LEGACY];
+      const serviceId = resolveDriverServiceId(replicaContext);
       if (!serviceId) {
         result = {
           status: HEALTH_STATUS.UNKNOWN,
@@ -476,8 +669,12 @@ class WasmComponentDriver extends RuntimeDriver {
           ),
         };
       } else {
+        const requestCell = this._requestCells.get(serviceId);
         const lifecycle = this._lifecycles.get(serviceId);
-        const replica = lifecycle ? lifecycle.getReplica(serviceId) : true;
+        const replica = requestCell ?
+          await this._componentRuntime.health(serviceId) :
+          lifecycle ? lifecycle.getReplica(serviceId) : true;
+        if (!replica) this._running.delete(serviceId);
         result = replica ? {
           status: HEALTH_STATUS.HEALTHY,
         } : {
@@ -490,6 +687,158 @@ class WasmComponentDriver extends RuntimeDriver {
       }
     }
     return result;
+  }
+
+  async invoke(replicaContext, invocation = {}) {
+    const serviceId = resolveDriverServiceId(replicaContext);
+    if (!this._requestCells.has(serviceId)) {
+      throw new DriverLifecycleError(
+        this.kind,
+        DRIVER_ACTION.INVOKE,
+        WASM_COMPONENT_ERROR.NOT_STARTED,
+      );
+    }
+    const currentContext = {
+      ...this._replicaContexts.get(serviceId),
+      ...replicaContext,
+    };
+    const cancellationToken = new CancellationToken();
+    try {
+      return await this._componentRuntime.invoke(
+        serviceId,
+        invocation.args || [],
+        (wallBudget) =>
+          this.#readComponentContexts(
+            currentContext,
+            wallBudget,
+            cancellationToken,
+          ),
+        (effects, wallBudget) =>
+          this.#writeComponentEffects(
+            currentContext,
+            effects,
+            wallBudget,
+            cancellationToken,
+          ),
+        (reason) => cancellationToken.cancel(reason),
+      );
+    } catch (cause) {
+      await this._componentRuntime.stop(serviceId);
+      this._running.delete(serviceId);
+      throw new DriverLifecycleError(
+        this.kind,
+        DRIVER_ACTION.INVOKE,
+        `${cause.code || WASM_COMPONENT_ERROR.COMPONENT_INVOKE_FAILED}` +
+          `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+        {cause},
+      );
+    }
+  }
+
+  async #readComponentContexts(
+    replicaContext,
+    wallBudget,
+    cancellationToken,
+  ) {
+    const serviceId = resolveDriverServiceId(replicaContext);
+    const cell = this._requestCells.get(serviceId);
+    const readableTables = cell.tables.filter((table) => table.read);
+    if (readableTables.length === 0) return [];
+    if (typeof replicaContext.sqlRequestExecutor !== 'function') {
+      throw new Error(WASM_COMPONENT_ERROR.SQL_EXECUTOR_REQUIRED);
+    }
+    const snapshots = [];
+    for (const table of readableTables) {
+      const emptySnapshot = [
+        ...snapshots,
+        {context: table.context, rows: []},
+      ];
+      const minimumBytes = encodedBytes(emptySnapshot);
+      if (minimumBytes > cell.budgets.context_bytes) {
+        throw contextBudgetFailure(
+          minimumBytes,
+          cell.budgets.context_bytes,
+        );
+      }
+      const remainingBytes =
+        cell.budgets.context_bytes - encodedBytes(snapshots);
+      const tableName = table.context.replace(/^table:/u, '');
+      const quotedTable = '"' + tableName.replaceAll('"', '""') + '"';
+      const request = createSqlRequest({
+        budgets: {
+          [QUERY_BUDGET_RESULT_MAX_BYTES]: remainingBytes,
+          [QUERY_BUDGET_RESULT_MAX_ROWS]: remainingBytes,
+        },
+        parameters: [
+          remainingBytes,
+          remainingBytes,
+          remainingBytes + CONTEXT_QUERY_ROW_LIMIT_OFFSET,
+        ],
+        sessionId: serviceId,
+        statement:
+          `SELECT CASE WHEN (${CONTEXT_ROW_BYTES_SQL}) <= ? ` +
+          'THEN key ELSE NULL END AS key, ' +
+          `CASE WHEN (${CONTEXT_ROW_BYTES_SQL}) <= ? ` +
+          'THEN value ELSE NULL END AS value, ' +
+          `(${CONTEXT_ROW_BYTES_SQL}) AS ` +
+          `"${CONTEXT_ROW_BYTES_FIELD}" ` +
+          `FROM ${quotedTable} LIMIT ?`,
+        tenantId: resolveDriverTenantId(replicaContext),
+        timeoutBudget: wallBudget,
+        cancellationToken,
+      });
+      const result = await replicaContext.sqlRequestExecutor(request);
+      assertSqlRequestSucceeded(result, remainingBytes);
+      const oversizedRow = (result?.rows || []).find(
+        (row) => row[CONTEXT_ROW_BYTES_FIELD] > remainingBytes,
+      );
+      if (oversizedRow) {
+        throw contextBudgetFailure(
+          oversizedRow[CONTEXT_ROW_BYTES_FIELD],
+          remainingBytes,
+        );
+      }
+      snapshots.push({
+        context: table.context,
+        rows: (result?.rows || []).map((row) => ({
+          key: row.key,
+          value: row.value,
+        })),
+      });
+      const actualBytes = encodedBytes(snapshots);
+      if (actualBytes > cell.budgets.context_bytes) {
+        throw contextBudgetFailure(
+          actualBytes,
+          cell.budgets.context_bytes,
+        );
+      }
+    }
+    return snapshots;
+  }
+
+  async #writeComponentEffects(
+    replicaContext,
+    effects,
+    wallBudget,
+    cancellationToken,
+  ) {
+    if (effects.length === 0) return;
+    if (typeof replicaContext.sqlRequestExecutor !== 'function') {
+      throw new Error(WASM_COMPONENT_ERROR.SQL_EXECUTOR_REQUIRED);
+    }
+    for (const effect of effects) {
+      const tableName = effect.context.replace(/^table:/u, '');
+      const quotedTable = `"${tableName.replaceAll('"', '""')}"`;
+      const result = await replicaContext.sqlRequestExecutor(createSqlRequest({
+        parameters: [effect.key, effect.value],
+        sessionId: resolveDriverServiceId(replicaContext),
+        statement: `INSERT INTO ${quotedTable} (key, value) VALUES (?, ?)`,
+        tenantId: resolveDriverTenantId(replicaContext),
+        timeoutBudget: wallBudget,
+        cancellationToken,
+      }));
+      assertSqlRequestSucceeded(result);
+    }
   }
 }
 

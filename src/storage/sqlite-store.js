@@ -16,6 +16,8 @@ import {
   SQLITE_STORE_OPERATION_PATTERN,
   SQLITE_STORE_PRAGMA,
 } from './sqlite-store-constants.js';
+import {collectBoundedSqliteRows} from
+  '../query/query-result-budget.js';
 
 /**
  * SQL fragments used for schema-to-SQL conversion.
@@ -91,7 +93,7 @@ class SQLiteStore {
    * @param {Array} [params=[]] - Query parameters.
    * @return {Object} Result with rows/rowCount or changes/lastInsertRowid.
    */
-  executeQuery(sql, params = []) {
+  executeQuery(sql, params = [], options = {}) {
     if (!this.initialized) {
       throw new Error(SQLITE_STORE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -109,7 +111,7 @@ class SQLiteStore {
     const trimmedUpper = sql.trim().toUpperCase();
 
     if (SQLITE_STORE_OPERATION_PATTERN.SELECT.test(trimmedUpper)) {
-      return this.executeRead(sql, params);
+      return this.executeRead(sql, params, options);
     }
     return this.executeWrite(sql, params);
   }
@@ -169,10 +171,15 @@ class SQLiteStore {
    * @return {Object} Result with rows and rowCount.
    * @private
    */
-  executeRead(sql, params) {
+  executeRead(sql, params, options = {}) {
     try {
       const stmt = this.db.prepare(sql);
-      const rows = stmt.all(...params);
+      const rows = collectBoundedSqliteRows(stmt, params, {
+        cancellationToken: options.cancellationToken || null,
+        deadlineMs: options.resultDeadlineMs,
+        maxBytes: options.resultMaxBytes,
+        maxRows: options.resultMaxRows,
+      });
       return {
         rows,
         rowCount: rows.length,
