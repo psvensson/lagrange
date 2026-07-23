@@ -206,7 +206,7 @@ async function seedPackage(catalog, tenantId = TENANT) {
 
 function bindingInput(package_, overrides = {}) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     name: 'orders-api',
     target: {
       package_id: package_.packageId,
@@ -214,7 +214,6 @@ function bindingInput(package_, overrides = {}) {
       export_name: 'request-handler',
     },
     source: {kind: 'request', method: 'POST', path: '/orders'},
-    contexts: ['table:global.orders', 'table:global.audit'],
     budgets: {
       cpu_time_ms: 100,
       wall_time_ms: 1000,
@@ -233,7 +232,7 @@ function assertBindingCode(error, code) {
   return true;
 }
 
-describe('deployment Binding v1 contract', () => {
+describe('deployment Binding v2 contract', () => {
   test('owns the seven closed source-to-interface mappings', () => {
     assert.deepEqual(
       Object.keys(DEPLOYMENT_BINDING_SOURCE_KIND).sort(),
@@ -255,7 +254,7 @@ describe('deployment Binding v1 contract', () => {
 
   test('normalizes a strict request declaration', () => {
     const normalized = normalizeDeploymentBinding({
-      schema_version: 1,
+      schema_version: 2,
       name: 'orders-api',
       target: {
         package_id: `service-package-${'a'.repeat(64)}`,
@@ -263,7 +262,6 @@ describe('deployment Binding v1 contract', () => {
         export_name: 'serve',
       },
       source: {kind: 'request', method: 'POST', path: '/orders'},
-      contexts: ['table:global.orders'],
       budgets: {
         cpu_time_ms: 100,
         wall_time_ms: 1000,
@@ -274,7 +272,8 @@ describe('deployment Binding v1 contract', () => {
       },
     });
 
-    assert.equal(normalized.schema_version, 1);
+    assert.equal(normalized.schema_version, 2);
+    assert.equal(Object.hasOwn(normalized, 'contexts'), false);
     assert.equal(normalized.source.kind, 'request');
     assert.equal(Object.hasOwn(normalized, 'elasticity'), false);
     assert.ok(Object.isFrozen(normalized));
@@ -294,7 +293,7 @@ describe('deployment Binding v1 contract', () => {
           elasticity: {voters: 3, min_learners: 0, max_learners: 2},
         },
         {...valid, source: {...valid.source, interface: 'request_v1'}},
-        {...valid, contexts: ['table:global.orders', 'table:global.orders']},
+        {...valid, contexts: ['table:global.orders']},
         {...valid, budgets: {...valid.budgets, cpu_time_ms: 0}},
         {...valid, budgets: {...valid.budgets, cpu_time_ms: 60001}},
         {...valid, budgets: {...valid.budgets, wall_time_ms: 0}},
@@ -349,7 +348,7 @@ describe('deployment Binding v1 contract', () => {
       }
     });
 
-  test('replays legacy v0 elasticity without accepting it at v1 ingress',
+  test('replays legacy v0/v1 access tails without accepting them at v2 ingress',
     () => {
       const current = bindingInput({
         packageId: `service-package-${'a'.repeat(64)}`,
@@ -358,7 +357,7 @@ describe('deployment Binding v1 contract', () => {
       const legacyDeclaration = {
         ...current,
         capabilities: ['clock.read'],
-        contexts: [...current.contexts].sort(),
+        contexts: ['table:global.orders'],
         elasticity: {
           max_learners: 4,
           min_learners: 1,
@@ -378,6 +377,20 @@ describe('deployment Binding v1 contract', () => {
       assert.deepEqual(
         replayed.declaration.elasticity,
         legacyDeclaration.elasticity,
+      );
+      const legacyV1Declaration = {
+        ...current,
+        capabilities: ['clock.read'],
+        contexts: ['table:global.orders'],
+        schema_version: 1,
+      };
+      const legacyV1 = projectBinding(
+        buildBindingRow(legacyV1Declaration, SECURITY_CONTEXT, 1001),
+        true,
+      );
+      assert.deepEqual(
+        legacyV1.declaration.contexts,
+        ['table:global.orders'],
       );
       const {capabilities: _capabilities, ...legacyIngress} =
         legacyDeclaration;
@@ -426,29 +439,26 @@ describe('deployment Binding system-table owner', () => {
       const owners = createOwners(gateway);
       const package_ = await seedPackage(owners.serviceInstallCatalogOwner);
       const variants = [
-        ['boot', {kind: 'boot'}, 'boot-handler', []],
-        ['call', {kind: 'call', name: 'orders-call'}, 'call-handler',
-          ['table:global.orders']],
+        ['boot', {kind: 'boot'}, 'boot-handler'],
+        ['call', {kind: 'call', name: 'orders-call'}, 'call-handler'],
         ['change', {
           kind: 'change',
           operations: ['update', 'insert'],
           tables: ['table:global.orders'],
-        }, 'change-handler', ['table:global.audit', 'table:global.orders']],
-        ['once', {kind: 'once'}, 'once-handler', ['table:global.audit']],
+        }, 'change-handler'],
+        ['once', {kind: 'once'}, 'once-handler'],
         ['pushdown', {kind: 'pushdown', name: 'orders-filter'},
-          'pushdown-handler', ['table:global.orders']],
+          'pushdown-handler'],
         ['request', {kind: 'request', method: 'POST', path: '/orders'},
-          'request-handler', ['table:global.audit', 'table:global.orders']],
-        ['time', {kind: 'time', interval_ms: 60000}, 'time-handler',
-          ['table:global.audit']],
+          'request-handler'],
+        ['time', {kind: 'time', interval_ms: 60000}, 'time-handler'],
       ];
 
-      for (const [kind, source, exportName, contexts] of variants) {
+      for (const [kind, source, exportName] of variants) {
         const created = await owners.deploymentBindingOwner.createBinding(
           bindingInput(package_, {
             name: `binding-${kind}`,
             source,
-            contexts,
             target: {...bindingInput(package_).target, export_name: exportName},
           }),
           SECURITY_CONTEXT,
@@ -500,7 +510,7 @@ describe('deployment Binding system-table owner', () => {
     );
   });
 
-  test('fails closed on interface, context, source-table, and tenant widening',
+  test('fails closed on interface, context fields, malformed triggers, and tenant widening',
     async () => {
       const gateway = new DurableBindingGateway();
       const owners = createOwners(gateway);
@@ -526,7 +536,7 @@ describe('deployment Binding system-table owner', () => {
           source: {
             kind: 'change',
             operations: ['insert'],
-            tables: ['table:global.secret'],
+            tables: ['table:global.*'],
           },
           target: {
             ...bindingInput(package_).target,
@@ -535,6 +545,22 @@ describe('deployment Binding system-table owner', () => {
         }), SECURITY_CONTEXT),
         (error) => assertBindingCode(
           error, DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD),
+      );
+      const triggerOnly = await owner.createBinding(bindingInput(package_, {
+        name: 'change-secret-trigger',
+        source: {
+          kind: 'change',
+          operations: ['insert'],
+          tables: ['table:global.secret'],
+        },
+        target: {
+          ...bindingInput(package_).target,
+          export_name: 'change-handler',
+        },
+      }), SECURITY_CONTEXT);
+      assert.deepEqual(
+        triggerOnly.declaration.source.tables,
+        ['table:global.secret'],
       );
       await assert.rejects(
         owner.createBinding(bindingInput(package_), {
@@ -550,7 +576,7 @@ describe('deployment Binding system-table owner', () => {
           return true;
         },
       );
-      assert.equal(gateway.rows(TABLES.SERVICE_BINDINGS).size, 0);
+      assert.equal(gateway.rows(TABLES.SERVICE_BINDINGS).size, 1);
     });
 
   test('replays exact bytes and types immutable conflicts', async () => {

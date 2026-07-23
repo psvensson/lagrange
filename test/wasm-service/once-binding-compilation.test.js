@@ -121,7 +121,7 @@ function bindingSource(sourceKind) {
 
 function bindingInput(package_, sourceKind = 'once', overrides = {}) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     name: `orders-${sourceKind}`,
     target: {
       package_id: package_.packageId,
@@ -129,7 +129,6 @@ function bindingInput(package_, sourceKind = 'once', overrides = {}) {
       export_name: `${sourceKind}-handler`,
     },
     source: bindingSource(sourceKind),
-    contexts: ['table:global.audit', 'table:global.orders'],
     budgets: {
       cpu_time_ms: 25,
       wall_time_ms: 250,
@@ -261,7 +260,7 @@ describe('once Binding compilation cutover', () => {
     assert.equal(row[SD_COL.HANDLER_FUNCTION_ID], row[SD_COL.RUNTIME_REF]);
     const projection = JSON.parse(row[SD_COL.BINDING_PROJECTION]);
     assert.deepEqual(projection.declaration.source, {kind: 'once'});
-    assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
+    assert.equal(Object.hasOwn(projection.declaration, 'contexts'), false);
     assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
     assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
     assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
@@ -407,7 +406,7 @@ describe('boot Binding compilation cutover', () => {
     );
     const projection = JSON.parse(row[SD_COL.BINDING_PROJECTION]);
     assert.deepEqual(projection.declaration.source, {kind: 'boot'});
-    assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
+    assert.equal(Object.hasOwn(projection.declaration, 'contexts'), false);
     assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
     assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
     assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
@@ -575,7 +574,7 @@ function defineNamedBindingCompilationCutover(sourceKind) {
         projection.declaration.source,
         {kind: sourceKind, name: `orders-${sourceKind}`},
       );
-      assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
+      assert.equal(Object.hasOwn(projection.declaration, 'contexts'), false);
       assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
       assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
       assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);

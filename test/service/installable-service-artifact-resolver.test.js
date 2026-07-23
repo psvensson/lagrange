@@ -77,8 +77,6 @@ function makeExternalManifest({
     exports: [{
       name: 'serve',
       interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
-      reads: [],
-      writes: [],
     }],
   };
 }

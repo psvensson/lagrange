@@ -137,7 +137,6 @@ class WasiComponentCellRuntime {
         exportName: cell.exportName,
         memoryBytes: cell.budgets.memory_bytes,
         requestCellWorker: true,
-        tables: cell.tables,
       },
     });
     const state = {
@@ -355,7 +354,7 @@ class WasiComponentCellRuntime {
           this.send(
             state,
             CELL_MESSAGE.INVOKE,
-            {args, tableReads},
+            {args, tableReads, tables: options.tables || []},
             this.remainingWallBudgetMs(
               wallDeadlineMs,
               wallTimeLimitMs,

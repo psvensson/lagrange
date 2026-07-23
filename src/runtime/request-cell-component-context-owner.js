@@ -17,6 +17,8 @@ const CONTEXT_VALUE_PROJECTION_SQL = 'THEN value ELSE NULL END AS value, ';
 const SQL_EXECUTOR_REQUIRED =
   'request Cell table effects require the current SQL executor';
 const SQL_REQUEST_FAILED = 'request Cell table request failed';
+const TABLE_WRITE_NOT_AUTHORIZED =
+  'request Cell table write is outside the current runtime access policy';
 
 function encodedBytes(value) {
   return Buffer.byteLength(JSON.stringify(value), BYTE_ENCODING);
@@ -127,10 +129,11 @@ async function readRequestCellContexts({
   cell,
   replicaContext,
   serviceId,
+  tables,
   tenantId,
   wallBudget,
 }) {
-  const readableTables = cell.tables.filter((table) => table.read);
+  const readableTables = tables.filter((table) => table.read);
   if (readableTables.length === 0) return [];
   assertSqlRequestExecutor(replicaContext);
   const snapshots = [];
@@ -177,12 +180,19 @@ async function writeRequestCellEffects({
   effects,
   replicaContext,
   serviceId,
+  tables,
   tenantId,
   wallBudget,
 }) {
   if (effects.length === 0) return;
   assertSqlRequestExecutor(replicaContext);
+  const writableContexts = new Set(
+    tables.filter((table) => table.write).map((table) => table.context),
+  );
   for (const effect of effects) {
+    if (!writableContexts.has(effect.context)) {
+      throw new Error(TABLE_WRITE_NOT_AUTHORIZED);
+    }
     const tableName = effect.context.replace(/^table:/u, '');
     const quotedTable = `"${tableName.replaceAll('"', '""')}"`;
     const result = await replicaContext.sqlRequestExecutor(createSqlRequest({

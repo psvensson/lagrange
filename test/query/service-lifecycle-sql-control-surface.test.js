@@ -34,6 +34,7 @@ const DIGEST_A = `sha256:${'a'.repeat(64)}`;
 const DIGEST_B = `sha256:${'b'.repeat(64)}`;
 const CONTAINER_MEDIA_TYPE = 'application/vnd.oci.image.manifest.v1+json';
 const CATALOG_TABLES = Object.freeze([
+  TABLES.CONFIG,
   TABLES.SERVICE_BINDINGS,
   TABLES.SERVICE_DEFINITIONS,
   TABLES.SERVICE_ENDPOINTS,
@@ -44,6 +45,7 @@ const CATALOG_TABLES = Object.freeze([
   TABLES.SERVICES,
 ]);
 const LIFECYCLE_ACTIONS = Object.freeze([
+  PGWIRE_AUTH_ACTION.ACCESS_CONFIGURE,
   PGWIRE_AUTH_ACTION.BINDING_CREATE,
   PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
   PGWIRE_AUTH_ACTION.SERVICE_INSTALL,
@@ -72,6 +74,7 @@ class LifecycleCatalogGateway {
 
   primaryKey(table) {
     return {
+      [TABLES.CONFIG]: 'config_key',
       [TABLES.SERVICE_PACKAGES]: 'package_id',
       [TABLES.SERVICE_BINDINGS]: 'binding_version_id',
       [TABLES.SERVICE_DEFINITIONS]: 'service_id',
@@ -237,6 +240,7 @@ function createEngineFixture(options = {}) {
     artifactResolver,
     bindingOwner,
     catalogOwner,
+    runtimeAccessPolicyOwner: systemMetadataOwners.runtimeAccessPolicyOwner,
     signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   });
   const engine = new SQLQueryEngine({
@@ -245,6 +249,9 @@ function createEngineFixture(options = {}) {
     autoStartDistributedTransactionRecovery: false,
   });
   engine.setServiceLifecycleCommandOwner(commandOwner);
+  engine.setRuntimeAccessPolicyOwner(
+    systemMetadataOwners.runtimeAccessPolicyOwner,
+  );
   return {
     artifactResolver,
     bindingOwner,
@@ -542,7 +549,7 @@ describe('service lifecycle SQL classification and security boundary', () => {
 });
 
 describe('service lifecycle SQL durable owner route', () => {
-  it('persists Binding v1 through authenticated CREATE BINDING ' +
+  it('persists Binding v2 and direct access policy through authenticated SQL ' +
     '(red-on-revert owner engagement)', async () => {
     const fixture = createEngineFixture();
     const adapter = await createAuthenticatedAdapter(fixture.engine);
@@ -565,7 +572,7 @@ describe('service lifecycle SQL durable owner route', () => {
     const [packageRow] = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
     const package_ = await fixture.catalogOwner.getPackage(packageRow.package_id);
     const payload = JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       name: 'orders-api',
       target: {
         package_id: package_.packageId,
@@ -573,7 +580,6 @@ describe('service lifecycle SQL durable owner route', () => {
         export_name: 'serve',
       },
       source: {kind: 'request', method: 'POST', path: '/orders'},
-      contexts: ['table:global.audit', 'table:global.orders'],
       budgets: {
         cpu_time_ms: 100,
         wall_time_ms: 1000,
@@ -616,6 +622,37 @@ describe('service lifecycle SQL durable owner route', () => {
     const stored = JSON.parse(
       fixture.gateway.rows(TABLES.SERVICE_BINDINGS)[0].normalized_binding);
     assert.deepEqual(stored.capabilities, ['clock.read', 'network.client']);
+    assert.equal(Object.hasOwn(stored, 'contexts'), false);
+
+    const configured = await adapter.execute(
+      'session-1',
+      'CONFIGURE SERVICE ACCESS $1',
+      [JSON.stringify({
+        schema_version: 1,
+        binding_name: 'orders-api',
+        tables: [
+          {
+            slot: 0,
+            table: 'table:global.orders',
+            operations: ['read'],
+          },
+          {
+            slot: 1,
+            table: 'table:global.audit',
+            operations: ['write'],
+          },
+        ],
+      })],
+    );
+    assert.equal(configured.success, true);
+    assert.equal(configured.rows[0].table_slots, 2);
+    assert.equal(fixture.gateway.rowCount(TABLES.CONFIG), 1);
+    const [accessRow] = fixture.gateway.rows(TABLES.CONFIG);
+    assert.equal(accessRow.value_type, 'json');
+    assert.equal(
+      JSON.parse(accessRow.config_value).service_id,
+      configured.rows[0].service_id,
+    );
 
     const replay = await adapter.execute(
       'session-1', 'CREATE BINDING $1;', [payload]);

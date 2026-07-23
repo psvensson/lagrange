@@ -6,7 +6,8 @@ import {
 } from '../../constants/deployment-binding.js';
 
 const DEPLOYMENT_BINDING_SCHEMA_VERSION_V0 = 0;
-const DEPLOYMENT_BINDING_SCHEMA_VERSION = 1;
+const DEPLOYMENT_BINDING_SCHEMA_VERSION_V1 = 1;
+const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;
 const DEPLOYMENT_BINDING_GENERATION = 1;
 
 const DEPLOYMENT_BINDING_SOURCE_KIND = Object.freeze({
@@ -63,7 +64,7 @@ const DEPLOYMENT_BINDING_MESSAGE = Object.freeze({
     'durable binding state is outside a supported Binding contract',
   DEPENDENCY_REQUIRED: 'deployment Binding owner dependencies are required',
   INTERFACE_MISMATCH: 'binding source cannot invoke the selected export interface',
-  INVALID_FIELD: 'binding declaration is outside the Binding v1 contract',
+  INVALID_FIELD: 'binding declaration is outside the Binding v2 contract',
   SECURITY_CONTEXT_REQUIRED:
     'authenticated tenant, principal, and roles are required',
 });
@@ -85,10 +86,14 @@ const SOURCE_FIELDS = Object.freeze({
 });
 
 const ROOT_FIELDS = Object.freeze([
-  'schema_version', 'name', 'target', 'source', 'contexts', 'budgets',
+  'schema_version', 'name', 'target', 'source', 'budgets',
 ]);
-const LEGACY_ROOT_FIELDS = Object.freeze([
+const LEGACY_V1_ROOT_FIELDS = Object.freeze([
   ...ROOT_FIELDS,
+  'contexts',
+]);
+const LEGACY_V0_ROOT_FIELDS = Object.freeze([
+  ...LEGACY_V1_ROOT_FIELDS,
   'elasticity',
 ]);
 const TARGET_FIELDS = Object.freeze([
@@ -372,10 +377,6 @@ function normalizeDeploymentBinding(input) {
   }
   const normalized = canonicalize({
     budgets: normalizeBudgets(input.budgets),
-    contexts: requireUniqueSortedStrings(input.contexts, {
-      path: DEPLOYMENT_BINDING_PATH.CONTEXTS,
-      accept: (value) => TABLE_PATTERN.test(value),
-    }),
     name: requireName(input.name, DEPLOYMENT_BINDING_PATH.NAME),
     schema_version: DEPLOYMENT_BINDING_SCHEMA_VERSION,
     source: normalizeSource(input.source),
@@ -384,10 +385,36 @@ function normalizeDeploymentBinding(input) {
   return deepFreeze(normalized);
 }
 
-function normalizeLegacyStoredDeploymentBinding(input) {
+function normalizeLegacyV1StoredDeploymentBinding(input) {
   requireExactFields(
     input,
-    LEGACY_ROOT_FIELDS,
+    LEGACY_V1_ROOT_FIELDS,
+    DEPLOYMENT_BINDING_PATH.BINDING,
+  );
+  if (input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION_V1) {
+    fail(
+      DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+      DEPLOYMENT_BINDING_PATH.SCHEMA_VERSION,
+      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD,
+    );
+  }
+  return deepFreeze(canonicalize({
+    budgets: normalizeBudgets(input.budgets),
+    contexts: requireUniqueSortedStrings(input.contexts, {
+      path: DEPLOYMENT_BINDING_PATH.CONTEXTS,
+      accept: (value) => TABLE_PATTERN.test(value),
+    }),
+    name: requireName(input.name, DEPLOYMENT_BINDING_PATH.NAME),
+    schema_version: DEPLOYMENT_BINDING_SCHEMA_VERSION_V1,
+    source: normalizeSource(input.source),
+    target: normalizeTarget(input.target),
+  }));
+}
+
+function normalizeLegacyV0StoredDeploymentBinding(input) {
+  requireExactFields(
+    input,
+    LEGACY_V0_ROOT_FIELDS,
     DEPLOYMENT_BINDING_PATH.BINDING,
   );
   if (input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION_V0) {
@@ -441,21 +468,6 @@ function bindDeploymentArtifact(declaration, artifact) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.INTERFACE_MISMATCH,
       DEPLOYMENT_BINDING_PATH.SOURCE,
       DEPLOYMENT_BINDING_MESSAGE.INTERFACE_MISMATCH);
-  }
-  const allowedContexts = new Set([
-    ...exportDeclaration.reads,
-    ...exportDeclaration.writes,
-  ]);
-  if (declaration.contexts.some((table) => !allowedContexts.has(table))) {
-    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
-      DEPLOYMENT_BINDING_PATH.CONTEXTS,
-      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
-  }
-  if (declaration.source.kind === DEPLOYMENT_BINDING_SOURCE_KIND.CHANGE &&
-      declaration.source.tables.some((table) => !allowedContexts.has(table))) {
-    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
-      `${DEPLOYMENT_BINDING_PATH.SOURCE}/tables`,
-      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
   const bound = canonicalize({
     ...declaration,
@@ -527,10 +539,14 @@ function normalizeStoredBinding(parsed) {
   }
   const {capabilities, ...input} = parsed;
   try {
-    const declaration =
-      input.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V0 ?
-        normalizeLegacyStoredDeploymentBinding(input) :
-        normalizeDeploymentBinding(input);
+    let declaration;
+    if (input.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V0) {
+      declaration = normalizeLegacyV0StoredDeploymentBinding(input);
+    } else if (input.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V1) {
+      declaration = normalizeLegacyV1StoredDeploymentBinding(input);
+    } else {
+      declaration = normalizeDeploymentBinding(input);
+    }
     return canonicalize({
       ...declaration,
       capabilities: normalizeCapabilities(capabilities),
@@ -540,6 +556,13 @@ function normalizeStoredBinding(parsed) {
       DEPLOYMENT_BINDING_PATH.BINDING,
       DEPLOYMENT_BINDING_MESSAGE.CORRUPT_RECORD);
   }
+}
+
+function rebindStoredDeploymentArtifact(declaration, artifact) {
+  return bindDeploymentArtifact(
+    normalizeStoredBinding(declaration),
+    artifact,
+  );
 }
 
 function bindingRowHasExactFields(row) {
@@ -633,5 +656,6 @@ export {
   deriveBindingVersionId,
   normalizeDeploymentBinding,
   projectBinding,
+  rebindStoredDeploymentArtifact,
   validateSecurityContext,
 };

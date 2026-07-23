@@ -61,6 +61,14 @@ function makeV2Manifest(overrides = {}) {
   });
 }
 
+function makeV3Manifest(overrides = {}) {
+  return makeManifest({
+    schema_version: 3,
+    exports: [{name: 'serve', interface: 'request_v1'}],
+    ...overrides,
+  });
+}
+
 function rejectionCodes(result) {
   assert.equal(result.status, 'rejected');
   return result.errors.map((error) => error.code);
@@ -68,7 +76,7 @@ function rejectionCodes(result) {
 
 describe('external service manifest contract', () => {
   it('exports an immutable, explicitly versioned schema', () => {
-    assert.equal(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, 2);
+    assert.equal(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, 3);
     assert.equal(
       EXTERNAL_SERVICE_MANIFEST_SCHEMA.properties.schema_version.const,
       EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
@@ -81,6 +89,30 @@ describe('external service manifest contract', () => {
       Object.hasOwn(EXTERNAL_SERVICE_MANIFEST_SCHEMA.properties, 'replication'),
       false,
     );
+  });
+
+  it('keeps table access out of current Artifact exports', () => {
+    const accepted = validateExternalServiceManifest(makeV3Manifest({
+      exports: [
+        {name: 'write-audit', interface: 'change_v1'},
+        {name: 'serve', interface: 'request_v1'},
+      ],
+    }));
+    assert.equal(accepted.valid, true);
+    assert.deepEqual(accepted.manifest.exports, [
+      {interface: 'request_v1', name: 'serve'},
+      {interface: 'change_v1', name: 'write-audit'},
+    ]);
+    for (const field of ['reads', 'writes']) {
+      const rejected = validateExternalServiceManifest(makeV3Manifest({
+        exports: [{
+          name: 'serve',
+          interface: 'request_v1',
+          [field]: [],
+        }],
+      }));
+      assert.equal(rejected.valid, false, field);
+    }
   });
 
   it('keeps v1 compatible and canonicalizes analyzable v2 exports', () => {
@@ -270,7 +302,7 @@ describe('external service manifest contract', () => {
     ));
 
     const unsupportedCodes = rejectionCodes(normalizeExternalServiceManifest(
-      makeManifest({schema_version: 3}),
+      makeManifest({schema_version: 4}),
     ));
     assert.ok(unsupportedCodes.includes(
       EXTERNAL_SERVICE_MANIFEST_ERROR_CODE.UNSUPPORTED_SCHEMA_VERSION,

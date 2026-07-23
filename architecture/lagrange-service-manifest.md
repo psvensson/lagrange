@@ -196,9 +196,9 @@ Example (OCI container):
 
 ------------------------------------------------------------------------
 
-## Exports (schema version 2)
+## Exports (schema version 3)
 
-Every schema-v2 manifest declares at least one stateless handler export. Each
+Every schema-v3 manifest declares at least one stateless handler export. Each
 export has exactly these fields:
 
 -   `name` --- unique lowercase handler name
@@ -217,11 +217,10 @@ runtime access-policy configuration and is not an Artifact declaration.
 }
 ```
 
-Schema-v1 manifests retain their existing contract and do not acquire inferred
-exports. New scaffolds emit schema v2. The live v2 validator still carries
-`reads`/`writes` as a serialized migration tail; the minimal-deployment
-access-policy cutover removes those fields and their Binding-context dependency
-in one owner-boundary change.
+Schema-v1 and schema-v2 manifests retain their existing replay contracts and do
+not acquire inferred exports. New scaffolds emit schema v3. Schema-v2
+`reads`/`writes` are a serialized migration tail only and never authorize live
+runtime access; schema-v3 removes them.
 
 ------------------------------------------------------------------------
 

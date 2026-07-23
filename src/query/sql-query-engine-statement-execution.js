@@ -2,6 +2,8 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   SQLQueryEngineServiceLifecycleExecution,
 } from './sql-query-engine-service-lifecycle-execution.js';
+import {RUNTIME_ACCESS_POLICY_DECISION} from
+  '../control-plane/owners/runtime-access-policy-owner.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -392,6 +394,11 @@ class SQLQueryEngineStatementExecution extends
     cancellationToken?.throwIfCancelled?.();
 
     try {
+      const accessFailure = await this.authorizeRuntimeServiceStatement(
+        ast,
+        options,
+      );
+      if (accessFailure) return accessFailure;
       const ingressPressureDecision = this.evaluateQueryIngressPressure(
         ast,
         options,
@@ -522,6 +529,34 @@ class SQLQueryEngineStatementExecution extends
       });
       return failureResult;
     }
+  }
+
+  async authorizeRuntimeServiceStatement(ast, options = {}) {
+    const issuingServiceId = options?.issuingServiceId;
+    if (typeof issuingServiceId !== LOCAL_STR_STRING ||
+        issuingServiceId.length === 0) {
+      return null;
+    }
+    const owner = this.runtimeAccessPolicyOwner;
+    if (!owner || typeof owner.authorizeStatement !== LOCAL_STR_FUNCTION) {
+      return {
+        success: false,
+        error: QUERY_ERROR_MSG.RUNTIME_ACCESS_DENIED,
+        errorCode: QUERY_ERROR_CODE.RUNTIME_ACCESS_DENIED,
+        reasonCode: 'policy_owner_unavailable',
+      };
+    }
+    const decision = await owner.authorizeStatement(issuingServiceId, ast);
+    if (decision.decision === RUNTIME_ACCESS_POLICY_DECISION.ALLOWED) {
+      return null;
+    }
+    return {
+      success: false,
+      error: QUERY_ERROR_MSG.RUNTIME_ACCESS_DENIED,
+      errorCode: QUERY_ERROR_CODE.RUNTIME_ACCESS_DENIED,
+      reasonCode: decision.reason,
+      ...(decision.access ? {access: decision.access} : {}),
+    };
   }
 
   evaluateQueryIngressPressure(ast, options = {}) {

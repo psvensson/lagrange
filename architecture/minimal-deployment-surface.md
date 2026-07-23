@@ -36,8 +36,8 @@ surface.
 Manifest fields are the runtime-neutral canonical vehicle for executable
 identity and interfaces. A future WIT adapter may compile component metadata
 into the same fields, but must not become a second declaration authority.
-Manifest v1 remains readable under its existing contract; v2 is the default for
-new scaffolds.
+Manifest v1 and v2 remain readable under their existing contracts; v3 is the
+default for new scaffolds and carries only executable identity and interfaces.
 
 ### Runtime access policy
 
@@ -76,12 +76,12 @@ has one fixed execution semantic. `call` and `pushdown` Bindings are durable
 registrations, while individual statement calls and query plans are transient
 invocations rather than Bindings.
 
-Binding schema v1's live migration contract is an exact object with
+Binding schema v1's replay-only migration contract is an exact object with
 `schema_version`, `name`, `target`, `source`, `contexts`, and `budgets`; unknown
 fields are invalid. `contexts` is still required and bounded by the selected
 export's serialized `reads`/`writes` as a migration tail. It is not the selected
-runtime authorization authority: the later versioned access-policy cutover
-removes all three fields together rather than reinterpreting v1. Its source is
+runtime authorization authority. Binding schema v2 removes `contexts` entirely;
+new ingress accepts only v2 while v0/v1 bytes remain replayable. Its source is
 one of these closed variants, with one fixed compatible Artifact interface:
 
 | Source | Exact source fields | Artifact interface |
@@ -105,13 +105,13 @@ Pre-cutover schema-v0 rows remain readable through a replay-only decoder so an
 upgrade cannot strand existing Cells. Their historical `elasticity` bytes stay
 covered by the immutable row digest and may be exposed for audit, but neither
 reconciliation nor placement treats them as replica intent. New ingress accepts
-only schema v1 and rejects that field.
+only schema v2 and rejects that field.
 
-V1 is create-only. `DeploymentBindingOwner` derives one tenant-scoped logical
+V2 is create-only. `DeploymentBindingOwner` derives one tenant-scoped logical
 identity and immutable generation 1, stores a digest of the canonical Binding,
 and permits only byte-identical replay. Replacement and removal will append
 later generations; no mutable `active` flag, update, or delete path exists in
-v1. Authenticated `CREATE BINDING $1` is the only v1 ingress. The
+v2. Authenticated `CREATE BINDING $1` is the only v2 ingress. The
 `service_bindings` table is internally CDC-propagated declaration state so a
 later reconciler can wake from replicated changes. V1 compilation derives
 desired state; it does not directly execute a runtime service.
@@ -307,9 +307,10 @@ the runtime invocation owner. Its durable invocation journal prevents duplicate
 component effects, and bounded shutdown cancels and drains active ingress while
 retiring correlated transport waiters.
 
-The next serialized owner-boundary cutover is step 7: replace the still-live
-Artifact export `reads`/`writes` and Binding `contexts` authorization path with
-directly managed runtime access policy while retaining observed access as live
-affinity telemetry. After that, activate the other six Binding sources through
+Step 7 is complete: schema-v3 Artifacts and schema-v2 Bindings carry no access
+declarations. Authenticated `CONFIGURE SERVICE ACCESS $1` directly updates the
+existing durable config path; SQL and Component invocation resolve that policy
+at access time and fail closed, while observed access remains affinity-only
+telemetry. Next, activate the other six Binding sources through
 the same desired-state, replica, and runtime owners. Actor-key partitioning
 remains an explicit routing-policy design choice, not a Cell replica request.

@@ -78,6 +78,8 @@ const WASM_COMPONENT_ERROR = Object.freeze({
     'request Cell Component invocation failed',
   COMPONENT_START_FAILED:
     'request Cell Component startup failed',
+  RUNTIME_ACCESS_POLICY_DENIED:
+    'request Cell runtime access policy is unavailable or denied',
 });
 
 const DRIVER_ACTION = Object.freeze({
@@ -165,6 +167,26 @@ function resolveDriverTenantId(value) {
     value?.tenant_id ??
     value?.definition?.tenantId ??
     value?.definition?.tenant_id;
+}
+
+async function resolveRuntimeAccessTables(replicaContext) {
+  const resolver = replicaContext?.queryExecutor?.getRuntimeAccessPolicy;
+  if (typeof resolver !== 'function') {
+    const error = new Error(WASM_COMPONENT_ERROR.RUNTIME_ACCESS_POLICY_DENIED);
+    error.code = 'RUNTIME_ACCESS_DENIED';
+    throw error;
+  }
+  const resolved = await resolver();
+  if (resolved?.status !== 'resolved' ||
+      !Array.isArray(resolved?.policy?.tables)) {
+    const error = new Error(
+      `${WASM_COMPONENT_ERROR.RUNTIME_ACCESS_POLICY_DENIED}` +
+      `${resolved?.reason ? `${DRIVER_SEPARATOR.DETAIL}${resolved.reason}` : ''}`,
+    );
+    error.code = 'RUNTIME_ACCESS_DENIED';
+    throw error;
+  }
+  return resolved.policy.tables;
 }
 
 /**
@@ -647,6 +669,7 @@ class WasmComponentDriver extends RuntimeDriver {
     const tenantId = resolveDriverTenantId(currentContext);
     const cancellationToken = new CancellationToken();
     try {
+      const tables = await resolveRuntimeAccessTables(currentContext);
       return await this._componentRuntime.invoke(
         serviceId,
         invocation.args || [],
@@ -656,6 +679,7 @@ class WasmComponentDriver extends RuntimeDriver {
             cell,
             replicaContext: currentContext,
             serviceId,
+            tables,
             tenantId,
             wallBudget,
           }),
@@ -665,6 +689,7 @@ class WasmComponentDriver extends RuntimeDriver {
             effects,
             replicaContext: currentContext,
             serviceId,
+            tables,
             tenantId,
             wallBudget,
           }),
@@ -672,6 +697,7 @@ class WasmComponentDriver extends RuntimeDriver {
         {
           beforeComponentInvoke: invocation.assertCurrentTarget,
           deadlineMs: invocation.deadlineMs,
+          tables,
         },
       );
     } catch (cause) {

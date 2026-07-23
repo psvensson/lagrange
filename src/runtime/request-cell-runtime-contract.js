@@ -25,7 +25,6 @@ const LIST_SEPARATOR = ',';
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const REQUEST_CELL_CONTRACT_FIELD = Object.freeze({
   BINDING_CAPABILITIES: 'Binding capabilities',
-  BINDING_CONTEXTS: 'Binding contexts',
   BINDING_DIGEST: 'binding_digest',
   BINDING_PROJECTION: 'binding_projection',
   EXPORT_NAME: 'target.export_name',
@@ -41,8 +40,6 @@ const REQUEST_CELL_CONTRACT_MESSAGE = Object.freeze({
     'loaded Artifact capabilities do not match the Binding projection',
   ARTIFACT_IDENTITY_MISMATCH:
     'loaded Artifact does not match the immutable Binding identity',
-  BINDING_CONTEXT_OUTSIDE_EXPORT:
-    'Binding context is outside the selected export declaration',
   BINDING_PROJECTION_INVALID:
     'binding_projection must describe a request Binding',
   BUDGETS_INVALID:
@@ -228,10 +225,6 @@ function projectRequestCellRuntime(definition) {
       declaration.capabilities,
       REQUEST_CELL_CONTRACT_FIELD.BINDING_CAPABILITIES,
     ),
-    contexts: requireSortedUniqueStrings(
-      declaration.contexts,
-      REQUEST_CELL_CONTRACT_FIELD.BINDING_CONTEXTS,
-    ),
     exportName: requireString(
       target.export_name,
       REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
@@ -319,23 +312,6 @@ function requireArtifactCapabilities(runtime, manifest) {
   }
 }
 
-function projectArtifactTables(runtime, selectedExport) {
-  const reads = new Set(selectedExport.reads || []);
-  const writes = new Set(selectedExport.writes || []);
-  const tables = runtime.contexts.map((context) => Object.freeze({
-    context,
-    read: reads.has(context),
-    write: writes.has(context),
-  }));
-  if (tables.some((table) => !table.read && !table.write)) {
-    fail(
-      REQUEST_CELL_RUNTIME_ERROR_CODE.EXPORT_MISMATCH,
-      REQUEST_CELL_CONTRACT_MESSAGE.BINDING_CONTEXT_OUTSIDE_EXPORT,
-    );
-  }
-  return Object.freeze(tables);
-}
-
 function requireComponentBytes(artifact) {
   const componentBytes =
     Buffer.isBuffer(artifact.bytes) ||
@@ -354,7 +330,7 @@ function requireComponentBytes(artifact) {
 
 function bindRequestCellArtifact(runtime, artifact) {
   const manifest = requireArtifactIdentity(runtime, artifact);
-  const selectedExport = requireSelectedExport(runtime, manifest);
+  requireSelectedExport(runtime, manifest);
   requireArtifactCapabilities(runtime, manifest);
   return Object.freeze({
     ...runtime,
@@ -364,7 +340,6 @@ function bindRequestCellArtifact(runtime, artifact) {
       REQUEST_CELL_RUNTIME_ERROR_CODE.ARTIFACT_MISMATCH,
       REQUEST_CELL_CONTRACT_FIELD.PAYLOAD_DIGEST,
     ),
-    tables: projectArtifactTables(runtime, selectedExport),
   });
 }
 

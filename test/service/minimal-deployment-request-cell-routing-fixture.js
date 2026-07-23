@@ -135,12 +135,10 @@ function createManifest() {
     exports: [{
       interface: REQUEST_INTERFACE,
       name: REQUEST_EXPORT,
-      reads: [],
-      writes: [],
     }],
     name: ROUTING_CELL_NAME,
     runtime: {kind: RUNTIME_KIND.WASM_COMPONENT},
-    schema_version: 2,
+    schema_version: 3,
     version: ROUTING_CELL_VERSION,
   };
 }
@@ -174,9 +172,8 @@ function createBindingDeclaration(
       output_bytes: 4_096,
       wall_time_ms: 1_000,
     },
-    contexts: [],
     name: overrides.name || 'routing-cell',
-    schema_version: 1,
+    schema_version: 2,
     source: {
       kind: 'request',
       method: overrides.method || 'POST',
@@ -195,6 +192,7 @@ function createBindingDeclaration(
   if (!overrides.legacy) return declaration;
   return Object.freeze({
     ...declaration,
+    contexts: [],
     elasticity: LEGACY_BINDING_CELL_SHAPE,
     schema_version: 0,
   });
@@ -343,6 +341,10 @@ class MemoryInvocationJournal {
     const execute = (sql, params) => this.execute(sql, params);
     execute.executeInternal = execute;
     execute.executeRequest = async () => ({rows: [], success: true});
+    execute.getRuntimeAccessPolicy = async () => ({
+      policy: {tables: []},
+      status: 'resolved',
+    });
     return execute;
   }
 }
@@ -394,6 +396,10 @@ class SqliteInvocationJournal {
     const execute = (sql, params) => this.execute(sql, params);
     execute.executeInternal = execute;
     execute.executeRequest = async () => ({rows: [], success: true});
+    execute.getRuntimeAccessPolicy = async () => ({
+      policy: {tables: []},
+      status: 'resolved',
+    });
     return execute;
   }
 

@@ -116,7 +116,7 @@ function manifest() {
 
 function bindingInput(package_, overrides = {}) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     name: 'orders-change',
     target: {
       package_id: package_.packageId,
@@ -128,7 +128,6 @@ function bindingInput(package_, overrides = {}) {
       operations: ['delete', 'insert', 'update'],
       tables: ['table:global.audit', 'table:global.orders'],
     },
-    contexts: ['table:global.audit', 'table:global.orders'],
     budgets: {
       cpu_time_ms: 100,
       wall_time_ms: 1000,
@@ -255,7 +254,7 @@ describe('change Binding compilation cutover', () => {
     );
     const projection = JSON.parse(row[SD_COL.BINDING_PROJECTION]);
     assert.deepEqual(projection.declaration.source, fixture.input.source);
-    assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
+    assert.equal(Object.hasOwn(projection.declaration, 'contexts'), false);
     assert.deepEqual(
       projection.declaration.capabilities,
       ['clock.read', 'network.client'],

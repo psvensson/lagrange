@@ -160,7 +160,7 @@ function resolvedArtifact() {
 
 function bindingInput(package_, overrides = {}) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     name: 'orders-api',
     target: {
       package_id: package_.packageId,
@@ -168,7 +168,6 @@ function bindingInput(package_, overrides = {}) {
       export_name: 'request-handler',
     },
     source: {kind: 'request', method: 'POST', path: '/orders'},
-    contexts: ['table:global.audit', 'table:global.orders'],
     budgets: {
       cpu_time_ms: 100,
       wall_time_ms: 1000,
@@ -186,6 +185,7 @@ function legacyBindingRow(package_) {
     {
       ...bindingInput(package_),
       capabilities: ['clock.read', 'network.client'],
+      contexts: ['table:global.audit', 'table:global.orders'],
       elasticity: {
         max_learners: 4,
         min_learners: 1,
@@ -345,10 +345,7 @@ describe('request Binding desired-service compilation owner', () => {
       projection.declaration.source,
       {kind: 'request', method: 'POST', path: '/orders'},
     );
-    assert.deepEqual(
-      projection.declaration.contexts,
-      ['table:global.audit', 'table:global.orders'],
-    );
+    assert.equal(Object.hasOwn(projection.declaration, 'contexts'), false);
     assert.deepEqual(
       projection.declaration.capabilities,
       ['clock.read', 'network.client'],

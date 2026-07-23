@@ -12,6 +12,7 @@ import {
   deriveBindingVersionId,
   normalizeDeploymentBinding,
   projectBinding,
+  rebindStoredDeploymentArtifact,
   validateSecurityContext,
 } from './deployment-binding-contract.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
@@ -133,10 +134,11 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
     if (!row) return null;
     const binding = projectBinding(row);
     if (binding.tenantId !== context.tenantId) return null;
-    const {capabilities: _capabilities, ...input} = binding.declaration;
-    const artifact = await this.resolveArtifact(input, context);
-    const rebound = bindDeploymentArtifact(
-      normalizeDeploymentBinding(input), artifact);
+    const artifact = await this.resolveArtifact(binding.declaration, context);
+    const rebound = rebindStoredDeploymentArtifact(
+      binding.declaration,
+      artifact,
+    );
     if (canonicalJson(rebound) !== row.normalized_binding) {
       throw new DeploymentBindingError(
         DEPLOYMENT_BINDING_ERROR_CODE.CORRUPT_RECORD,

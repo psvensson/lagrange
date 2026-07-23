@@ -22,7 +22,7 @@ class SQLQueryEngineRequestDispatch extends
   SQLQueryEngineLifecycleAndCallbackDispatch {
   suppressedMetricFailureCount = 0;
 
-  async executeRequest(sqlRequest) {
+  async executeRequest(sqlRequest, executionOptions = {}) {
     if (!isSqlRequest(sqlRequest)) {
       throw new Error(ADAPTER_ERROR_MSG.INVALID_SQL_REQUEST);
     }
@@ -36,7 +36,10 @@ class SQLQueryEngineRequestDispatch extends
 
     const dispatchStartMs = Date.now();
     try {
-      const result = await this.dispatchSqlRequest(sqlRequest);
+      const result = await this.dispatchSqlRequest(
+        sqlRequest,
+        executionOptions,
+      );
       this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_COMPLETE, {
         executionMode,
         success: result.success,
@@ -57,7 +60,7 @@ class SQLQueryEngineRequestDispatch extends
     }
   }
 
-  async dispatchSqlRequest(sqlRequest) {
+  async dispatchSqlRequest(sqlRequest, executionOptions = {}) {
     switch (sqlRequest.executionMode) {
     case EXECUTION_MODE.SQL_STATEMENT: {
       const lifecycleExecution = await this.tryExecuteServiceLifecycleSql(
@@ -84,6 +87,8 @@ class SQLQueryEngineRequestDispatch extends
           timeoutBudget: sqlRequest.timeoutBudget,
           cancellationToken: sqlRequest.cancellationToken || null,
           budgets: sqlRequest.budgets,
+          ...(typeof executionOptions.issuingServiceId === 'string' ?
+            {issuingServiceId: executionOptions.issuingServiceId} : {}),
           ...(sqlRequest.securityContext ?
             {securityContext: sqlRequest.securityContext} : {}),
         },

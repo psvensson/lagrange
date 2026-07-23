@@ -10,7 +10,8 @@ import Ajv from 'ajv';
 
 import {RUNTIME_KIND} from '../constants/runtime.js';
 
-const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 2;
+const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 3;
+const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2 = 2;
 const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 = 1;
 
 const EXTERNAL_SERVICE_EXPORT_INTERFACE = Object.freeze({
@@ -97,7 +98,7 @@ const TABLE_ACCESS_SCHEMA = {
   uniqueItems: true,
 };
 
-const EXPORTS_SCHEMA = {
+const LEGACY_EXPORTS_SCHEMA = {
   type: 'array',
   minItems: 1,
   items: {
@@ -109,6 +110,20 @@ const EXPORTS_SCHEMA = {
       interface: {enum: Object.values(EXTERNAL_SERVICE_EXPORT_INTERFACE)},
       reads: TABLE_ACCESS_SCHEMA,
       writes: TABLE_ACCESS_SCHEMA,
+    },
+  },
+};
+
+const EXPORTS_SCHEMA = {
+  type: 'array',
+  minItems: 1,
+  items: {
+    type: 'object',
+    required: ['name', 'interface'],
+    additionalProperties: false,
+    properties: {
+      name: {type: 'string', pattern: '^[a-z][a-z0-9-]{0,127}$'},
+      interface: {enum: Object.values(EXTERNAL_SERVICE_EXPORT_INTERFACE)},
     },
   },
 };
@@ -247,6 +262,21 @@ const schemaV2 = {
   properties: {
     schema_version: {
       type: 'integer',
+      const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2,
+    },
+    ...COMMON_PROPERTIES,
+    exports: LEGACY_EXPORTS_SCHEMA,
+  },
+};
+
+const schemaV3 = {
+  $id: 'lagrange.external-service-manifest.v3',
+  type: 'object',
+  required: [...COMMON_REQUIRED_FIELDS, 'exports'],
+  additionalProperties: true,
+  properties: {
+    schema_version: {
+      type: 'integer',
       const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
     },
     ...COMMON_PROPERTIES,
@@ -257,9 +287,10 @@ const schemaV2 = {
 const ajv = new Ajv({allErrors: true, strict: true});
 const schemaValidators = new Map([
   [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1, ajv.compile(schemaV1)],
-  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, ajv.compile(schemaV2)],
+  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2, ajv.compile(schemaV2)],
+  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, ajv.compile(schemaV3)],
 ]);
-const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schemaV2);
+const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schemaV3);
 
 const TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
   'display_name',
@@ -378,7 +409,10 @@ function schemaErrors(validator) {
 }
 
 function duplicateExportNameErrors(manifest) {
-  if (manifest.schema_version !== EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION ||
+  if (![EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2,
+    EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION].includes(
+    manifest.schema_version,
+  ) ||
       !Array.isArray(manifest.exports)) {
     return [];
   }
@@ -400,7 +434,7 @@ function duplicateExportNameErrors(manifest) {
 }
 
 function callerOwnedReplicationErrors(manifest) {
-  if (manifest.schema_version !== EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION ||
+  if (manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 ||
       !Object.hasOwn(manifest, REPLICATION_FIELD)) {
     return [];
   }
@@ -436,14 +470,19 @@ function rejectedResult(errors) {
   });
 }
 
-function normalizedExports(exports_) {
+function normalizedExports(exports_, schemaVersion) {
   return exports_
-    .map((declaration) => ({
-      interface: declaration.interface,
-      name: declaration.name,
-      reads: [...declaration.reads].sort(),
-      writes: [...declaration.writes].sort(),
-    }))
+    .map((declaration) => {
+      const normalized = {
+        interface: declaration.interface,
+        name: declaration.name,
+      };
+      if (schemaVersion === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2) {
+        normalized.reads = [...declaration.reads].sort();
+        normalized.writes = [...declaration.writes].sort();
+      }
+      return normalized;
+    })
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -460,8 +499,11 @@ function normalizedManifest(manifest) {
       LEGACY_TOP_LEVEL_OPTIONAL_FIELDS :
       TOP_LEVEL_OPTIONAL_FIELDS,
   );
-  if (manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION) {
-    normalized.exports = normalizedExports(manifest.exports);
+  if (manifest.schema_version !== EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1) {
+    normalized.exports = normalizedExports(
+      manifest.exports,
+      manifest.schema_version,
+    );
   }
   normalized.artifact = {
     type: manifest.artifact.type,

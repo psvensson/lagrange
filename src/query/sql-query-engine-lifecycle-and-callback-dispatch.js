@@ -165,6 +165,14 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     this.tableCreationService.setCDCIntegrationService(service);
   }
 
+  /**
+   * Set the sole runtime table-authorization owner.
+   * @param {Object|null} owner
+   */
+  setRuntimeAccessPolicyOwner(owner) {
+    this.runtimeAccessPolicyOwner = owner || null;
+  }
+
   getControlPlaneSystemTableGateway() {
     return this.controlPlaneSystemTableGateway;
   }
@@ -357,7 +365,13 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       queryExecutor.executeInternal = (sql, params) =>
         this.executeQuery(sql, params, {sessionId: serviceId});
       queryExecutor.executeRequest = (request) =>
-        this.executeRequest(request);
+        this.executeRequest(request, {issuingServiceId: serviceId});
+      queryExecutor.getRuntimeAccessPolicy = () =>
+        this.runtimeAccessPolicyOwner?.getRuntimePolicy(serviceId) ||
+        Promise.resolve(Object.freeze({
+          status: 'denied',
+          reason: 'policy_owner_unavailable',
+        }));
       return queryExecutor;
     });
   }

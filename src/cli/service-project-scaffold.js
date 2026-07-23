@@ -80,8 +80,6 @@ function createManifestTemplate(serviceName) {
     exports: [{
       name: SERVICE_EXPORT_NAME,
       interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
-      reads: [],
-      writes: [],
     }],
   };
 }

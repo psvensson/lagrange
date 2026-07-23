@@ -217,6 +217,7 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
         visibilityResult = normalizeSystemTableVisibilityResult(
           await context.waitForCacheUpdate(tableName, id, true, {
             allowPendingVisibility: options?.allowPendingVisibility === true,
+            expectedFields: options?.expectedCacheFields,
           }),
         );
       }

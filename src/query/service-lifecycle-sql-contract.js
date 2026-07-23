@@ -48,8 +48,11 @@ const SERVICE_LIFECYCLE_SQL_LITERAL = Object.freeze({
 });
 
 const MUTATION_PAYLOAD_FIELDS = Object.freeze({
+  [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]: Object.freeze([
+    'schema_version', 'binding_name', 'tables',
+  ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]: Object.freeze([
-    'schema_version', 'name', 'target', 'source', 'contexts', 'budgets',
+    'schema_version', 'name', 'target', 'source', 'budgets',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]: Object.freeze([
     'artifact_source', 'config', 'idempotency_key', 'manifest',
@@ -66,8 +69,11 @@ const MUTATION_PAYLOAD_FIELDS = Object.freeze({
 });
 
 const REQUIRED_PAYLOAD_FIELDS = Object.freeze({
+  [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]: Object.freeze([
+    'schema_version', 'binding_name', 'tables',
+  ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]: Object.freeze([
-    'schema_version', 'name', 'target', 'source', 'contexts', 'budgets',
+    'schema_version', 'name', 'target', 'source', 'budgets',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]: Object.freeze([
     'artifact_source', 'idempotency_key', 'manifest',
@@ -95,6 +101,10 @@ const SQL_WHITESPACE_PATTERN = /\s/u;
 
 const COMMAND_PREFIX = Object.freeze([
   Object.freeze({
+    pattern: /^\s*CONFIGURE\s+SERVICE\s+ACCESS\b/iu,
+    command: SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS,
+  }),
+  Object.freeze({
     pattern: /^\s*CREATE\s+BINDING\b/iu,
     command: SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING,
   }),
@@ -117,6 +127,8 @@ const COMMAND_PREFIX = Object.freeze([
 ]);
 
 const EXACT_STATEMENT = Object.freeze({
+  [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]:
+    /^\s*CONFIGURE\s+SERVICE\s+ACCESS\s+\$1\s*;?\s*$/iu,
   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]:
     /^\s*CREATE\s+BINDING\s+\$1\s*;?\s*$/iu,
   [SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL]:

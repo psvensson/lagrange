@@ -490,6 +490,7 @@ describe('pgwire-runtime-module', () => {
         }, {});
 
         for (const action of [
+          PGWIRE_AUTH_ACTION.ACCESS_CONFIGURE,
           PGWIRE_AUTH_ACTION.BINDING_CREATE,
           PGWIRE_AUTH_ACTION.SERVICE_INSTALL,
           PGWIRE_AUTH_ACTION.SERVICE_READ,

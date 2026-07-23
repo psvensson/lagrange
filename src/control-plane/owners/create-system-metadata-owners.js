@@ -6,6 +6,7 @@ import {NodeEndpointsOwner} from './node-endpoints-owner.js';
 import {NodesOwner} from './nodes-owner.js';
 import {PartitionsOwner} from './partitions-owner.js';
 import {ReplicaOperationsOwner} from './replica-operations-owner.js';
+import {RuntimeAccessPolicyOwner} from './runtime-access-policy-owner.js';
 import {ServiceDefinitionsOwner} from './service-definitions-owner.js';
 import {ServiceEndpointsOwner} from './service-endpoints-owner.js';
 import {ServiceInstallCatalogOwner} from './service-install-catalog-owner.js';
@@ -27,6 +28,10 @@ function createSystemMetadataOwners(options = {}) {
     ...ownerOptions,
     catalogOwner: serviceInstallCatalogOwner,
   });
+  const deploymentBindingOwner = new DeploymentBindingOwner({
+    ...ownerOptions,
+    catalogOwner: serviceInstallCatalogOwner,
+  });
   return Object.freeze({
     controlPlanePublicationsOwner: new ControlPlanePublicationsOwner(ownerOptions),
     nodesOwner: new NodesOwner(ownerOptions),
@@ -39,9 +44,10 @@ function createSystemMetadataOwners(options = {}) {
     serviceEndpointsOwner: new ServiceEndpointsOwner(ownerOptions),
     serviceDefinitionsOwner,
     serviceInstallCatalogOwner,
-    deploymentBindingOwner: new DeploymentBindingOwner({
+    deploymentBindingOwner,
+    runtimeAccessPolicyOwner: new RuntimeAccessPolicyOwner({
       ...ownerOptions,
-      catalogOwner: serviceInstallCatalogOwner,
+      bindingOwner: deploymentBindingOwner,
     }),
   });
 }

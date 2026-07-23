@@ -364,6 +364,43 @@ test(
   },
 );
 
+test(
+  'CDCIntegrationService - upsert forwards exact cache visibility fields',
+  async (t) => {
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: createMockSqlQueryEngine(),
+      systemTableCache: {
+        onCacheChange() {},
+        offCacheChange() {},
+      },
+    });
+    service.initialize();
+    const waitCalls = [];
+    service.waitForCacheUpdate = async (...args) => waitCalls.push(args);
+
+    await service.upsertSystemTableRow(
+      SYSTEM_TABLE_NAME.CONFIG,
+      {
+        config_key: 'runtime.access.service.example',
+        config_value: '{"tables":[]}',
+      },
+      {
+        expectedCacheFields: {
+          config_value: '{"tables":[]}',
+        },
+      },
+    );
+
+    t.same(
+      waitCalls[0]?.[3]?.expectedFields,
+      {config_value: '{"tables":[]}'},
+      'acknowledgement should wait for the exact replacement value',
+    );
+    t.end();
+  },
+);
+
 test('CDCIntegrationService - upsertSystemTableRow skips cache wait when requested',
   async (t) => {
     const mockSqlEngine = createMockSqlQueryEngine();

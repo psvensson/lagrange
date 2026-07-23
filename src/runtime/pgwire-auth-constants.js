@@ -18,6 +18,7 @@ const PGWIRE_AUTH_DECISION = Object.freeze({
 // --- Auth actions for policy checks ---
 
 const PGWIRE_AUTH_ACTION = Object.freeze({
+  ACCESS_CONFIGURE: 'pgwire.access.configure',
   BINDING_CREATE: 'pgwire.binding.create',
   CONNECT: 'pgwire.connect',
   EXECUTE_QUERY: 'pgwire.execute_query',
@@ -29,6 +30,7 @@ const PGWIRE_AUTH_ACTION = Object.freeze({
 
 const PGWIRE_AUTH_DEFAULT_ACTIONS = Object.freeze({
   PASSWORD: Object.freeze([
+    PGWIRE_AUTH_ACTION.ACCESS_CONFIGURE,
     PGWIRE_AUTH_ACTION.BINDING_CREATE,
     PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
     PGWIRE_AUTH_ACTION.SERVICE_INSTALL,

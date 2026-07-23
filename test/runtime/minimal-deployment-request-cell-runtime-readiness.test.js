@@ -70,6 +70,15 @@ const PAYLOAD_DIGEST = `sha256:${createHash('sha256')
   .update(COMPONENT_BYTES)
   .digest('hex')}`;
 const SERVICE_ID = 'binding-service-request-cell';
+const ACCESS_TABLES = Object.freeze([
+  Object.freeze({
+    context: 'table:global.audit',
+    operations: Object.freeze(['read', 'write']),
+    read: true,
+    slot: 0,
+    write: true,
+  }),
+]);
 
 function manifest() {
   return {
@@ -83,8 +92,8 @@ function manifest() {
     exports: [{
       interface: 'request_v1',
       name: 'run',
-      reads: ['table:global.audit'],
-      writes: ['table:global.audit'],
+      reads: ['table:global.legacy_denied'],
+      writes: ['table:global.legacy_denied'],
     }],
     name: 'request-cell',
     runtime: {kind: RUNTIME_KIND.WASM_COMPONENT},
@@ -112,7 +121,7 @@ function definition(overrides = {}) {
       wall_time_ms: 100,
     },
     capabilities: ['clock.read'],
-    contexts: ['table:global.audit'],
+    contexts: ['table:global.legacy_denied'],
     name: 'request-cell-binding',
     source: {kind: 'request', method: 'POST', path: '/cell'},
     target: {
@@ -211,6 +220,11 @@ function createFixture(options = {}) {
   const projections = [];
   const sqlRequests = [];
   lifecycle.setQueryExecutorFactory(() => ({
+    getRuntimeAccessPolicy: async () =>
+      options.accessPolicyResult || {
+        status: 'resolved',
+        policy: {tables: ACCESS_TABLES},
+      },
     executeRequest: async (request) => {
       assert.equal(isSqlRequest(request), true);
       sqlRequests.push(request);
@@ -400,6 +414,36 @@ describe('minimal deployment request Cell runtime readiness', () => {
         /INSERT INTO "global\.audit"/u,
       );
       assert.deepEqual(fixture.sqlRequests[1].parameters, [7, 42]);
+      await fixture.lifecycle.stop(fixture.replica);
+    },
+  );
+
+  test('applies direct access policy changes on the next invocation',
+    async () => {
+      const options = {
+        accessPolicyResult: {
+          reason: 'policy_not_found',
+          status: 'denied',
+        },
+      };
+      const fixture = createFixture(options);
+      await fixture.lifecycle.prepare(fixture.replica.definition, {});
+      await fixture.lifecycle.start(fixture.replica);
+      await assert.rejects(
+        () => fixture.lifecycle.invoke(fixture.replica, {args: [0]}),
+        /RUNTIME_ACCESS_DENIED/u,
+      );
+      await assertNotReady(fixture);
+
+      options.accessPolicyResult = {
+        policy: {tables: ACCESS_TABLES},
+        status: 'resolved',
+      };
+      await fixture.lifecycle.start(fixture.replica);
+      assert.equal(
+        await fixture.lifecycle.invoke(fixture.replica, {args: [0]}),
+        10,
+      );
       await fixture.lifecycle.stop(fixture.replica);
     },
   );

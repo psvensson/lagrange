@@ -60,6 +60,7 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
   engine.systemCache = options.systemCache || null;
   engine.messageRouter = options.messageRouter || null;
   engine.cdcIntegrationService = options.cdcIntegrationService || null;
+  engine.runtimeAccessPolicyOwner = options.runtimeAccessPolicyOwner || null;
   engine.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
   engine.controlPlaneSystemTableGateway =
     options.controlPlaneSystemTableGateway ||

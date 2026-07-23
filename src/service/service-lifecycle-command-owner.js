@@ -12,6 +12,8 @@ import {
   SERVICE_INSTALL_DESIRED_STATE,
   ServiceInstallCatalogError,
 } from '../control-plane/owners/index.js';
+import {RuntimeAccessPolicyError} from
+  '../control-plane/owners/runtime-access-policy-owner.js';
 import {DeploymentBindingError} from
   '../control-plane/owners/deployment-binding-contract.js';
 import {deriveTenantPackageId} from
@@ -24,6 +26,7 @@ import {
 import {normalizeExternalServiceManifest} from './external-service-manifest.js';
 
 const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
+  ACCESS_POLICY_REJECTED: 'service_lifecycle_access_policy_rejected',
   ARTIFACT_REJECTED: 'service_lifecycle_artifact_rejected',
   CATALOG_REJECTED: 'service_lifecycle_catalog_rejected',
   BINDING_REJECTED: 'service_lifecycle_binding_rejected',
@@ -40,6 +43,7 @@ const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
 });
 
 const SERVICE_LIFECYCLE_COMMAND_STAGE = Object.freeze({
+  ACCESS_POLICY: 'access_policy_submission',
   ARTIFACT: 'artifact_resolution',
   CATALOG: 'catalog_submission',
   BINDING: 'binding_submission',
@@ -54,6 +58,7 @@ const SERVICE_LIFECYCLE_OPERATION_STATUS = Object.freeze({
 });
 
 const SERVICE_LIFECYCLE_COMMAND_PATH = Object.freeze({
+  ACCESS_POLICY: '/access_policy',
   ARTIFACT_SOURCE: '/payload/artifact_source',
   CATALOG: '/catalog',
   CATALOG_PACKAGE: '/catalog/package',
@@ -70,6 +75,8 @@ const SERVICE_LIFECYCLE_COMMAND_PATH = Object.freeze({
 });
 
 const SERVICE_LIFECYCLE_COMMAND_MESSAGE = Object.freeze({
+  ACCESS_POLICY_OWNER_REQUIRED:
+    'runtime access policy owner is required for access configuration',
   ARTIFACT_REJECTED: 'installable service artifact was rejected',
   CATALOG_PACKAGE_MISSING: 'catalog revision references a missing package',
   CATALOG_REVISION_MISSING:
@@ -366,6 +373,13 @@ function successResult(command, rows, changes = 0) {
 }
 
 function classifyDelegatedFailure(error) {
+  if (error instanceof RuntimeAccessPolicyError) {
+    return {
+      code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ACCESS_POLICY_REJECTED,
+      stage: SERVICE_LIFECYCLE_COMMAND_STAGE.ACCESS_POLICY,
+      known: true,
+    };
+  }
   if (error instanceof DeploymentBindingError) {
     return {
       code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.BINDING_REJECTED,
@@ -429,6 +443,7 @@ class ServiceLifecycleCommandOwner {
     }
     this.catalogOwner = options.catalogOwner;
     this.bindingOwner = options.bindingOwner || null;
+    this.runtimeAccessPolicyOwner = options.runtimeAccessPolicyOwner || null;
     this.artifactResolver = options.artifactResolver;
     this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
   }
@@ -437,6 +452,8 @@ class ServiceLifecycleCommandOwner {
     try {
       const context = validateSecurityContext(securityContext);
       switch (command) {
+      case SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS:
+        return await this.configureAccess(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING:
         return await this.submitBinding(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
@@ -473,6 +490,27 @@ class ServiceLifecycleCommandOwner {
       );
     }
     return result.manifest;
+  }
+
+  async configureAccess(command, payload, securityContext) {
+    if (!this.runtimeAccessPolicyOwner) {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.DEPENDENCY_REQUIRED,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.ACCESS_POLICY,
+        SERVICE_LIFECYCLE_COMMAND_PATH.ACCESS_POLICY,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.ACCESS_POLICY_OWNER_REQUIRED,
+      );
+    }
+    const policy = await this.runtimeAccessPolicyOwner.configureBindingAccess(
+      payload,
+      securityContext,
+    );
+    return successResult(command, [{
+      binding_version_id: policy.bindingVersionId,
+      schema_version: policy.schemaVersion,
+      service_id: policy.serviceId,
+      table_slots: policy.tables.length,
+    }], 1);
   }
 
   async submitBinding(command, payload, securityContext) {

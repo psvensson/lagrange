@@ -34,16 +34,17 @@ class ComponentPolicyError extends Error {
 let selectedExport = null;
 let currentEffects = null;
 let currentTableReads = null;
+let currentTables = null;
 
 function requireTable(index, access) {
-  const table = workerData.tables[index];
+  const table = currentTables.find((entry) => entry.slot === index);
   if (!table || !table[access]) {
     const code = access === 'read' ?
       WORKER_ERROR_CODE.TABLE_READ_DENIED :
       WORKER_ERROR_CODE.TABLE_WRITE_DENIED;
     throw new ComponentPolicyError(
       code,
-      `Component ${access} access is not declared for table index ${index}`,
+      `Component ${access} access is not configured for table slot ${index}`,
     );
   }
   return table;
@@ -113,6 +114,7 @@ async function instantiateComponent() {
 async function invoke(message) {
   currentEffects = [];
   currentTableReads = message.tableReads;
+  currentTables = Array.isArray(message.tables) ? message.tables : [];
   try {
     const value = await selectedExport(...message.args);
     parentPort.postMessage({
@@ -133,6 +135,7 @@ async function invoke(message) {
   } finally {
     currentEffects = null;
     currentTableReads = null;
+    currentTables = null;
   }
 }
 

@@ -68,6 +68,11 @@ function buildEngine() {
     systemCache: createMockSystemCache(tables, partitions, null),
     messageRouter: createMockMessageRouter(),
     nodeId: NODE_ID,
+    runtimeAccessPolicyOwner: {
+      async authorizeStatement() {
+        return {decision: 'allowed'};
+      },
+    },
   });
   return engine;
 }

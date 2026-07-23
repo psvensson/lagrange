@@ -113,7 +113,7 @@ function manifest() {
 
 function bindingInput(package_, overrides = {}) {
   return {
-    schema_version: 1,
+    schema_version: 2,
     name: 'orders-refresh',
     target: {
       package_id: package_.packageId,
@@ -121,7 +121,6 @@ function bindingInput(package_, overrides = {}) {
       export_name: 'time-handler',
     },
     source: {kind: 'time', interval_ms: 60000},
-    contexts: ['table:global.audit', 'table:global.orders'],
     budgets: {
       cpu_time_ms: 50,
       wall_time_ms: 500,
@@ -250,7 +249,7 @@ describe('time Binding compilation cutover', () => {
     assert.deepEqual(projection.declaration.source, {
       kind: 'time', interval_ms: 60000,
     });
-    assert.deepEqual(projection.declaration.contexts, fixture.input.contexts);
+    assert.equal(Object.hasOwn(projection.declaration, 'contexts'), false);
     assert.deepEqual(projection.declaration.capabilities, ['clock.read']);
     assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
     assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);

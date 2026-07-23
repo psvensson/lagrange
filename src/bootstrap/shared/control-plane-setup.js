@@ -129,11 +129,15 @@ function createAndWireServiceLifecycleCommandOwner(
     artifactResolver,
     bindingOwner: systemMetadataOwners.deploymentBindingOwner,
     catalogOwner: systemMetadataOwners.serviceInstallCatalogOwner,
+    runtimeAccessPolicyOwner: systemMetadataOwners.runtimeAccessPolicyOwner,
     signaturePolicy: options.serviceArtifactSignaturePolicy ??
       SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   });
   const sqlQueryEngine = controlPlaneRuntimeBundle.sqlQueryEngine;
   bindServiceLifecycleCommandOwnerToSqlRuntime(commandOwner, sqlQueryEngine);
+  sqlQueryEngine.setRuntimeAccessPolicyOwner(
+    systemMetadataOwners.runtimeAccessPolicyOwner,
+  );
   if (options.wasmComponentDriver) {
     options.wasmComponentDriver.setArtifactLoader(
       (target) => commandOwner.loadComponentArtifact(target),
