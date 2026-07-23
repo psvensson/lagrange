@@ -137,3 +137,12 @@ invariants, and migration sequence now live in
   owner resolves immutable request Binding method/path declarations to current
   ready actuals. No new lifecycle, transport, endpoint, or replica owner is
   introduced; remaining Binding sources and elastic learners stay deferred.
+- 2026-07-23 — Landed the complete request Cell routing aggregate through
+  `minimal-deployment-request-cell-routing-shutdown-fence`. Canonical HTTP
+  ingress now resolves immutable request Bindings to ready actuals through the
+  existing dispatcher, transport, and runtime owners; a durable invocation
+  journal enforces single-effect replay, and bounded shutdown cancels and drains
+  active requests while absorbing late correlated responses. The first three
+  Cell slices are complete. The epic frontier is now step 6.4: activate the
+  remaining six sources and elastic learners without adding a second placement
+  or lifecycle owner.

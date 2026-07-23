@@ -240,15 +240,18 @@ step 6: the request-only transition to active fixed-voter desired state and
 engagement of the existing `RuntimeServiceRebalancerOwner` /
 `UnifiedRebalancer` placement path.
 
-Quest `minimal-deployment-request-cell-runtime-readiness` owns the second slice:
-genuine component execution through the existing runtime registry, driver, and
-lifecycle owners, including declared table-backed context and the transition
-from placed actual to ready/running Cell. It does not own external HTTP request
-routing.
+Quest `minimal-deployment-request-cell-runtime-readiness` completed the second
+slice: genuine component execution through the existing runtime registry,
+driver, and lifecycle owners, including declared table-backed context and the
+transition from placed actual to ready/running Cell.
 
-Quest `minimal-deployment-request-cell-routing` is serialized after runtime
-readiness and owns the third slice: one canonical HTTP request ingress resolves
-an immutable request Binding through `RequestBindingRouteResolver` to a ready
-actual and delivers the canonical `Service_Message` through
-`ServiceDispatcher` and `MessageRouter` to the runtime invocation owner.
-Neither Quest activates the remaining six sources or elastic learners.
+Quest `minimal-deployment-request-cell-routing-shutdown-fence` completed the
+third slice: one canonical HTTP request ingress resolves an immutable request
+Binding through `RequestBindingRouteResolver` to a ready actual and delivers the
+canonical `Service_Message` through `ServiceDispatcher` and `MessageRouter` to
+the runtime invocation owner. Its durable invocation journal prevents duplicate
+component effects, and bounded shutdown cancels and drains active ingress while
+retiring correlated transport waiters.
+
+The fourth slice remains: activate the other six Binding sources and elastic
+learners through the same desired-state, replica, and runtime owners.
