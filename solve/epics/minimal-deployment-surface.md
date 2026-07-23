@@ -93,3 +93,7 @@ invariants, and migration sequence now live in
   `call` is a durable named registration compiled into the same inactive
   zero-replica desired state; individual statement invocations remain transient
   and deferred until Cell activation.
+- 2026-07-23 — Landed `call` and selected `pushdown` as the final source
+  compilation cutover. `pushdown` is likewise a durable named registration;
+  individual query-plan invocations remain transient and compilation neither
+  installs nor executes pushdown behavior.

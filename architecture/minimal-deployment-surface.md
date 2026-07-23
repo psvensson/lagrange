@@ -145,10 +145,10 @@ single owners only when their removal is explicit and structurally guarded.
    activating runtimes or naming Cells.
 5. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
    same Binding owner one source at a time, deleting superseded surfaces.
-   `change`, `time`, `once`, and `boot` are complete; Quest
-   `minimal-deployment-call-binding-compilation` owns the next source as a
-   durable named registration without invoking the Artifact or activating a
-   runtime.
+   `change`, `time`, `once`, `boot`, and `call` are complete; Quest
+   `minimal-deployment-pushdown-binding-compilation` owns the final source as a
+   durable named registration without installing query pushdown, invoking the
+   Artifact, or activating a runtime.
 6. Name the derived Cell state and reconcile it through the existing placement
    and replica owners before consolidating partition/service lifecycle code.
 
@@ -181,8 +181,9 @@ Quest `minimal-deployment-artifact-export-contract` completed step 1,
 `minimal-deployment-change-binding-compilation` completed the first source in
 step 5, followed by `minimal-deployment-time-binding-compilation` and
 `minimal-deployment-once-binding-compilation` and
-`minimal-deployment-boot-binding-compilation`. Quest
-`minimal-deployment-call-binding-compilation` advances the next source through
-the same `service_definitions` planning leader. Derived rows remain inactive
-and request no replicas; statement invocation, runtime activation, and Cells
-remain later steps.
+`minimal-deployment-boot-binding-compilation` and
+`minimal-deployment-call-binding-compilation`. Quest
+`minimal-deployment-pushdown-binding-compilation` advances the final source
+through the same `service_definitions` planning leader. Derived rows remain
+inactive and request no replicas; query-plan invocation, runtime activation,
+and Cells remain later steps.
