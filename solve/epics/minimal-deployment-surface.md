@@ -20,11 +20,17 @@ invariants, and migration sequence now live in
 - **Transient invocation routing:** resolve durable `call` and `pushdown`
   registration names to ready Cells through an existing owner, or introduce a
   shared invocation resolver before either data-plane integration.
+- **Actor-key stability:** use rendezvous assignment over ready actuals for
+  low-churn affinity, or add fixed logical shards with epoch-fenced ownership
+  when single actor ownership must survive topology changes.
 
 ## Open questions
 
 - How do durable `call` and `pushdown` registrations map to transient
   per-statement invocations without creating statement-scoped Bindings?
+- Which normalized, authenticated transport properties may runtime routing
+  policy use as an actor key, and which services require strict ownership rather
+  than best-effort affinity?
 
 ## Decision log
 
@@ -146,3 +152,25 @@ invariants, and migration sequence now live in
   Cell slices are complete. The epic frontier is now step 6.4: activate the
   remaining six sources and elastic learners without adding a second placement
   or lifecycle owner.
+- 2026-07-23 — Application-owner correction superseded the 2026-07-22 exact
+  manifest read/write decision and the 2026-07-23 fixed-voter/learner
+  decisions. Artifact and Binding declarations carry neither table
+  authorization nor Cell replica shape. Table authorization moves to directly
+  managed runtime access-policy configuration; observed access remains direct,
+  decaying affinity telemetry and never generates a manifest, Binding, lock
+  file, or promotion/ingestion waterfall.
+- 2026-07-23 — Started
+  `minimal-deployment-system-owned-cell-replication`. It removes Binding
+  elasticity and v2 Artifact replication input, activates request desired state
+  without a count request, and reuses the existing runtime-service policy for
+  target/min/max, topology, capacity, and affinity. One shared policy projection
+  is reused by placement, admin, CLI, and discovery readers; partition quorum
+  ownership is unchanged.
+- 2026-07-23 — Actor partitioning is a routing-policy axis, not a replica-count
+  input. The current resolver's invocation-id modulo selection provides no actor
+  affinity and reshuffles broadly as membership changes. The selected first
+  candidate reuses its ready-actual filtering with a transport-specific
+  canonical key extractor and transport-neutral rendezvous assignment. Strict
+  single ownership remains an explicit option requiring fixed logical shards,
+  ownership epochs, and handoff through existing replicated metadata owners;
+  it does not justify a second scheduler or replica lifecycle.
