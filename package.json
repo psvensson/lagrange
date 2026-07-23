@@ -217,9 +217,10 @@
   "author": "",
   "license": "AGPL-3.0-only",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.12.0"
   },
   "dependencies": {
+    "@bytecodealliance/jco-transpile": "0.4.2",
     "@fastify/websocket": "^11.2.0",
     "@markwylde/liferaft": "^1.4.0",
     "ajv": "^8.17.1",
