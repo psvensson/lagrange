@@ -61,14 +61,13 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 20
+## Open quests — 19
 
 | id | class | attempts | reopens | closes |
 | --- | --- | --- | --- | --- |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | — |
 | formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | — |
-| minimal-deployment-system-owned-cell-replication | product | 3 | 0 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | — |
 | movielens-local-leader-row-visibility-model | product | 1 | 0 | — |
