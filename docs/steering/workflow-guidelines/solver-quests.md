@@ -258,6 +258,15 @@ restore sequencing obligation, but it never rewrites the report verdict, metric,
 or `doneWhen`; it must cite the immutable failure and route the actual defect.
 See operational-ground-truth.md "Target-not-reached is non-discriminating."
 
+## Scenario Runner Location
+
+A Quest's scenario runner (the script that calls `runGuardTestScenarios` from
+`scripts/checks/guard-test-scenario-runner.js`) lives under `scripts/` — author
+new ones in `scripts/checks/`. Never place a runner under `test/`: knip's entry
+patterns cover `scripts/**` but not `test/**` runners, so a `test/`-located
+runner is flagged as an unused file and blocks the push gate. Do not copy the
+runner path from an old verification receipt; receipts are history, not policy.
+
 ## Current Blocker And Diagnostic Movement
 
 `status`, `health`, and `report` project a **Current Blocker** from the latest

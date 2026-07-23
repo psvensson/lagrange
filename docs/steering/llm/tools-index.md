@@ -272,6 +272,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:unused` — `knip --exclude exports,duplicates`
 - `test:unused:exports` — `knip --include exports`
 - `test:unused:prod` — `knip --production --include dependencies`
+- `test:unused:push` — `node scripts/checks/push-gate-unused-files.js`
 - `test:unused:ratchet` — `node scripts/check-unused-exports.js`
 
 ## test-output
@@ -285,4 +286,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-189 scripts indexed; 71 have a curated description, 118 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+190 scripts indexed; 71 have a curated description, 119 fall back to their raw command. Improve coverage in the two sources named in the header comment.

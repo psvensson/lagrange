@@ -14,6 +14,11 @@
  *
  * Deterministic and fast (no Docker); safe to run N times for a
  * doneWhen's `consecutive` gate.
+ *
+ * Location rule: runner scripts live under `scripts/` (new ones under
+ * `scripts/checks/`), never under `test/`. Knip's entry patterns cover
+ * `scripts/**` but not `test/**` runners, so a `test/`-located runner is
+ * flagged as an unused file and blocks the push gate.
  */
 
 import fs from 'node:fs';
