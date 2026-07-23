@@ -140,9 +140,9 @@ Binding-derived user Cell to that axiomatic set. Partitions remain built-in
 services at the Cell contract layer while preserving their existing
 kind-specific data-plane path.
 
-## Existing owners to extend
+## Selected owner map
 
-| Concern | Existing authority | Contract action |
+| Concern | Selected authority | Contract action |
 | --- | --- | --- |
 | External artifact shape | `external-service-manifest.js` | Extend with versioned export declarations. |
 | Artifact resolution | Installable OCI artifact resolver | Reuse unchanged. |
@@ -153,6 +153,9 @@ kind-specific data-plane path.
 | Request Cell desired-state activation | `ServiceDefinitionsOwner` under the existing `service_definitions-p1` planning leader | Level-trigger only request-derived rows to active desired state with target count equal to fixed voters; preserve immutable Binding lineage and keep other sources inactive. |
 | Placement and replica lifecycle | `RuntimeServiceRebalancerOwner`, `UnifiedRebalancer`, shared replica owners, and `ServiceRuntimeLifecycle` | Admit request lineage through the existing `services` actual and runtime path; do not fork a Cell scheduler or call a placed-but-not-running actual a Cell. |
 | Handler context | Replicated tables and existing KV/timer primitives | Reuse; local materialization and handoff must engage the existing owners after genuine runtime execution exists, without a second state store. |
+| Request data-plane ingress | One node HTTP adapter plus canonical security-context validation | Authenticate into a server-derived context and normalize a request; do not select a target, trust client-supplied owner identity, or dispatch directly. |
+| Request Binding route resolution | `RequestBindingRouteResolver` | Resolve one tenant-scoped immutable method/path declaration to its exact Binding version and a current ready actual; fail closed on ambiguity or stale state and do not repair owner state. |
+| Request invocation delivery | `ServiceDispatcher`, `MessageRouter`, and the runtime invocation owner established by Cell readiness | Translate the resolved invocation into one canonical `Service_Message`, revalidate at the receiver, and require processed component-response evidence; do not add direct-local, endpoint-bypass, or acknowledged-only success paths. |
 
 `code`, `module_manifests`, `service_definitions`, stored functions, CDC
 subscriptions, and callback registrations are migration inputs, not new peers of
@@ -242,3 +245,10 @@ genuine component execution through the existing runtime registry, driver, and
 lifecycle owners, including declared table-backed context and the transition
 from placed actual to ready/running Cell. It does not own external HTTP request
 routing.
+
+Quest `minimal-deployment-request-cell-routing` is serialized after runtime
+readiness and owns the third slice: one canonical HTTP request ingress resolves
+an immutable request Binding through `RequestBindingRouteResolver` to a ready
+actual and delivers the canonical `Service_Message` through
+`ServiceDispatcher` and `MessageRouter` to the runtime invocation owner.
+Neither Quest activates the remaining six sources or elastic learners.

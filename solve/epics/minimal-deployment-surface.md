@@ -127,3 +127,13 @@ invariants, and migration sequence now live in
   `minimal-deployment-request-cell-runtime-readiness`. It extends the existing
   runtime registry, driver, and lifecycle owners, requires declared table-backed
   context, and excludes external request routing.
+- 2026-07-23 — Authored the serialized child Quest
+  `minimal-deployment-request-cell-routing`. It owns the single HTTP
+  ingress-to-Binding-to-ready-actual invocation cutover only after the
+  runtime-readiness parent is complete. REUSED: canonical security-context
+  validation, `ServiceDispatcher`, `MessageRouter`, and the parent-established
+  runtime invocation owner. EXTENDED: the node HTTP composition gains one
+  data-plane adapter. NEW: one `RequestBindingRouteResolver`, because no current
+  owner resolves immutable request Binding method/path declarations to current
+  ready actuals. No new lifecycle, transport, endpoint, or replica owner is
+  introduced; remaining Binding sources and elastic learners stay deferred.
