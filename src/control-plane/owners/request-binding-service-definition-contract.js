@@ -55,7 +55,7 @@ const REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE = Object.freeze({
   INVALID_RUNTIME_DESCRIPTOR:
     'Binding does not compile to a valid runtime descriptor',
   SOURCE_UNSUPPORTED:
-    'only request, change, time, once, and boot Bindings compile to desired services',
+    'only request, change, time, once, boot, and call Bindings compile to desired services',
 });
 
 const HASH_ALGORITHM = 'sha256';
@@ -65,6 +65,7 @@ const REQUEST_BINDING_SERVICE_DEFINITION_ERROR_NAME =
 const SERVICE_ID_PREFIX = 'binding-service-';
 const COMPILED_SOURCE_KINDS = new Set([
   DEPLOYMENT_BINDING_SOURCE_KIND.BOOT,
+  DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
   DEPLOYMENT_BINDING_SOURCE_KIND.CHANGE,
   DEPLOYMENT_BINDING_SOURCE_KIND.ONCE,
   DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,

@@ -242,7 +242,7 @@ describe('request Binding desired-service compilation owner', () => {
     LoggingService.getInstance().initialize({level: 'error'});
   });
 
-  test('the compiler source set preserves prior sources and adds only boot',
+  test('the compiler source set preserves prior sources and adds only call',
     () => {
       assert.equal(
         supportsBindingServiceDefinitionSourceKind('request'), true,
@@ -251,12 +251,11 @@ describe('request Binding desired-service compilation owner', () => {
       assert.equal(supportsBindingServiceDefinitionSourceKind('time'), true);
       assert.equal(supportsBindingServiceDefinitionSourceKind('once'), true);
       assert.equal(supportsBindingServiceDefinitionSourceKind('boot'), true);
-      for (const sourceKind of ['call', 'pushdown']) {
-        assert.equal(
-          supportsBindingServiceDefinitionSourceKind(sourceKind),
-          false,
-        );
-      }
+      assert.equal(supportsBindingServiceDefinitionSourceKind('call'), true);
+      assert.equal(
+        supportsBindingServiceDefinitionSourceKind('pushdown'),
+        false,
+      );
     });
 
   test('the existing planning leader compiles the complete pinned projection ' +
