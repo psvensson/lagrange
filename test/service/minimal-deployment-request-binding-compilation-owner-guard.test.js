@@ -45,7 +45,7 @@ test('Binding owns user desired-service declaration and the existing planner ' +
   );
 });
 
-test('request Cell placement keeps compilation two-phase and owner-controlled',
+test('Binding Cell placement keeps compilation two-phase and owner-controlled',
   () => {
     assert.match(
       SOURCE.bindingContract,
@@ -63,7 +63,7 @@ test('request Cell placement keeps compilation two-phase and owner-controlled',
     );
     assert.match(
       SOURCE.definitionsOwner,
-      /activateRequestServiceDefinition/u,
+      /activateBindingServiceDefinition/u,
     );
     assert.match(
       SOURCE.planner,
@@ -75,6 +75,14 @@ test('request Cell placement keeps compilation two-phase and owner-controlled',
     );
     assert.match(
       SOURCE.planner,
+      /isDeploymentBindingCellSourceKind/u,
+    );
+    assert.match(
+      SOURCE.bindingContract,
+      /DEPLOYMENT_BINDING_SOURCE_KIND\.CHANGE/u,
+    );
+    assert.match(
+      SOURCE.bindingContract,
       /DEPLOYMENT_BINDING_SOURCE_KIND\.REQUEST/u,
     );
   });

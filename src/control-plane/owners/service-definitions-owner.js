@@ -32,7 +32,7 @@ class ServiceDefinitionRowOwner extends SystemMetadataOwnerBase {
     );
   }
 
-  async activateRequestServiceDefinition(expected, options = {}) {
+  async activateBindingServiceDefinition(expected, options = {}) {
     return this.updateByPrimaryKey(
       expected[SD_COL.SERVICE_ID],
       {
@@ -132,6 +132,69 @@ class ServiceDefinitionsOwner {
     return rows[0];
   }
 
+  async insertBindingServiceDefinition(compiled, allowedStates, options) {
+    try {
+      await rowOwnerFor(this).insertRow(compiled, options);
+    } catch (error) {
+      const recovered = await this.readBindingServiceDefinition(
+        compiled, options,
+      );
+      if (!recovered) {
+        const conflicting = await this.getServiceDefinition(
+          compiled.service_id,
+        );
+        if (conflicting) this.assertDesiredService(conflicting, compiled);
+        throw error;
+      }
+      this.assertDesiredService(recovered, allowedStates);
+      return {created: false, lineageRow: recovered};
+    }
+    const lineageRow = await this.readBindingServiceDefinition(
+      compiled, options,
+    );
+    this.assertDesiredService(lineageRow, compiled);
+    return {created: true, lineageRow};
+  }
+
+  async resolveBindingServiceDefinition(
+    compiled,
+    expected,
+    allowedStates,
+    options,
+  ) {
+    const lineageRow = await this.readBindingServiceDefinition(
+      expected, options,
+    );
+    if (lineageRow) {
+      this.assertDesiredService(lineageRow, allowedStates);
+      return {created: false, lineageRow};
+    }
+    const existing = await this.getServiceDefinition(compiled.service_id);
+    if (existing) {
+      this.assertDesiredService(existing, allowedStates);
+      return {created: false, lineageRow: existing};
+    }
+    return this.insertBindingServiceDefinition(
+      compiled, allowedStates, options,
+    );
+  }
+
+  async ensureBindingServiceDefinitionActive(lineageRow, expected, options) {
+    if (requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) return;
+    try {
+      await rowOwnerFor(this).activateBindingServiceDefinition(
+        expected, options,
+      );
+    } catch (error) {
+      const recovered = await this.readBindingServiceDefinition(
+        expected, options,
+      );
+      if (!requestBindingServiceDefinitionRowsMatch(recovered, expected)) {
+        throw error;
+      }
+    }
+  }
+
   async reconcileRequestBinding(bindingRow, options = {}) {
     const binding = projectBinding(bindingRow);
     const artifact = await this.catalogOwner.getBindableArtifactForTenant(
@@ -147,60 +210,18 @@ class ServiceDefinitionsOwner {
     );
     const allowedStates = [compiled, expected];
     return this.runSerialized(binding.bindingVersionId, async () => {
-      let created = false;
-      let lineageRow = await this.readBindingServiceDefinition(
-        expected, options,
+      const {created, lineageRow} =
+        await this.resolveBindingServiceDefinition(
+          compiled,
+          expected,
+          allowedStates,
+          options,
+        );
+      await this.ensureBindingServiceDefinitionActive(
+        lineageRow,
+        expected,
+        options,
       );
-      if (lineageRow) {
-        this.assertDesiredService(lineageRow, allowedStates);
-      } else {
-        const existing = await this.getServiceDefinition(compiled.service_id);
-        if (existing) {
-          this.assertDesiredService(existing, allowedStates);
-          lineageRow = existing;
-        } else {
-          try {
-            await rowOwnerFor(this).insertRow(compiled, options);
-            created = true;
-          } catch (error) {
-            const recovered = await this.readBindingServiceDefinition(
-              compiled, options,
-            );
-            if (!recovered) {
-              const conflicting = await this.getServiceDefinition(
-                compiled.service_id,
-              );
-              if (conflicting) {
-                this.assertDesiredService(conflicting, compiled);
-              }
-              throw error;
-            }
-            this.assertDesiredService(recovered, allowedStates);
-            lineageRow = recovered;
-          }
-          if (!lineageRow) {
-            lineageRow = await this.readBindingServiceDefinition(
-              compiled, options,
-            );
-            this.assertDesiredService(lineageRow, compiled);
-          }
-        }
-      }
-
-      if (!requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
-        try {
-          await rowOwnerFor(this).activateRequestServiceDefinition(
-            expected, options,
-          );
-        } catch (error) {
-          const recovered = await this.readBindingServiceDefinition(
-            expected, options,
-          );
-          if (!requestBindingServiceDefinitionRowsMatch(recovered, expected)) {
-            throw error;
-          }
-        }
-      }
       const persisted = await this.readBindingServiceDefinition(
         expected, options,
       );

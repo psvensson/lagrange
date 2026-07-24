@@ -5,6 +5,8 @@ import {
   DEPLOYMENT_BINDING_BUDGET_LIMITS,
 } from '../constants/deployment-binding.js';
 import {
+  DEPLOYMENT_BINDING_SOURCE_INTERFACE,
+  isDeploymentBindingCellSourceKind,
   normalizeDeploymentBinding,
 } from '../control-plane/owners/deployment-binding-contract.js';
 import {
@@ -21,8 +23,7 @@ const REQUEST_CELL_RUNTIME_ERROR_CODE = Object.freeze({
 });
 
 const REQUEST_CELL_RUNTIME_ERROR_NAME = 'RequestCellRuntimeContractError';
-const REQUEST_SOURCE_KIND = 'request';
-const REQUEST_EXPORT_INTERFACE = 'request_v1';
+const NORMALIZED_MANIFEST_ACCEPTED_STATUS = 'accepted';
 const WASM_COMPONENT_MEDIA_TYPE = 'application/wasm';
 const WASM_COMPONENT_RUNTIME_KIND = 'wasm_component';
 const HASH_ALGORITHM = 'sha256';
@@ -30,6 +31,8 @@ const HASH_ENCODING = 'hex';
 const LIST_SEPARATOR = ',';
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const REQUEST_CELL_CONTRACT_FIELD = Object.freeze({
+  BUDGETS_PATH: '/budgets',
+  BUDGETS_PATH_PREFIX: '/budgets/',
   BINDING_CAPABILITIES: 'Binding capabilities',
   BINDING_DIGEST: 'binding_digest',
   BINDING_PROJECTION: 'binding_projection',
@@ -47,7 +50,7 @@ const REQUEST_CELL_CONTRACT_MESSAGE = Object.freeze({
   ARTIFACT_IDENTITY_MISMATCH:
     'loaded Artifact does not match the immutable Binding identity',
   BINDING_PROJECTION_INVALID:
-    'binding_projection must describe a request Binding',
+    'binding_projection must describe a runtime-enabled Binding',
   BUDGETS_INVALID:
     'resource_budget is outside the Binding budget contract',
   BUDGETS_MISMATCH:
@@ -159,8 +162,10 @@ function parseBindingProjection(definition) {
       capabilities,
     };
   } catch (error) {
-    if (error?.path === '/budgets' ||
-        error?.path?.startsWith('/budgets/')) {
+    if (error?.path === REQUEST_CELL_CONTRACT_FIELD.BUDGETS_PATH ||
+        error?.path?.startsWith(
+          REQUEST_CELL_CONTRACT_FIELD.BUDGETS_PATH_PREFIX,
+        )) {
       fail(
         REQUEST_CELL_RUNTIME_ERROR_CODE.BUDGET_INVALID,
         REQUEST_CELL_CONTRACT_MESSAGE.BUDGETS_INVALID,
@@ -171,7 +176,7 @@ function parseBindingProjection(definition) {
       REQUEST_CELL_CONTRACT_MESSAGE.BINDING_PROJECTION_INVALID,
     );
   }
-  if (declaration.source.kind !== REQUEST_SOURCE_KIND) {
+  if (!isDeploymentBindingCellSourceKind(declaration.source.kind)) {
     fail(
       REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
       REQUEST_CELL_CONTRACT_MESSAGE.BINDING_PROJECTION_INVALID,
@@ -266,6 +271,7 @@ function projectRequestCellRuntime(definition) {
       REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
       REQUEST_CELL_CONTRACT_FIELD.SERVICE_ID,
     ),
+    sourceKind: declaration.source.kind,
   });
 }
 
@@ -293,20 +299,27 @@ function sha256Bytes(value) {
     .digest(HASH_ENCODING)}`;
 }
 
+function artifactIdentityMatches(runtime, artifact, manifest) {
+  if (!artifact || !manifest) return false;
+  return [
+    [artifact.packageId, runtime.packageId],
+    [artifact.manifestDigest, runtime.manifestDigest],
+    [artifact.artifactDigest, runtime.artifactDigest],
+    [manifest.artifact.digest, runtime.artifactDigest],
+    [manifest.artifact.media_type, WASM_COMPONENT_MEDIA_TYPE],
+    [manifest.runtime.kind, WASM_COMPONENT_RUNTIME_KIND],
+    [sha256Json(manifest), runtime.manifestDigest],
+    [sha256Json(artifact.manifest), runtime.manifestDigest],
+  ].every(([actual, expected]) => actual === expected);
+}
+
 function requireArtifactIdentity(runtime, artifact) {
   const result = normalizeExternalServiceManifest(artifact?.manifest);
-  const manifest = result.status === 'accepted' ? result.manifest : null;
-  const identityMatches = [
-    [artifact?.packageId, runtime.packageId],
-    [artifact?.manifestDigest, runtime.manifestDigest],
-    [artifact?.artifactDigest, runtime.artifactDigest],
-    [manifest?.artifact?.digest, runtime.artifactDigest],
-    [manifest?.artifact?.media_type, WASM_COMPONENT_MEDIA_TYPE],
-    [manifest?.runtime?.kind, WASM_COMPONENT_RUNTIME_KIND],
-    [sha256Json(manifest), runtime.manifestDigest],
-    [sha256Json(artifact?.manifest), runtime.manifestDigest],
-  ].every(([actual, expected]) => actual === expected);
-  if (!identityMatches) {
+  const manifest =
+    result.status === NORMALIZED_MANIFEST_ACCEPTED_STATUS ?
+      result.manifest :
+      null;
+  if (!artifactIdentityMatches(runtime, artifact, manifest)) {
     fail(
       REQUEST_CELL_RUNTIME_ERROR_CODE.ARTIFACT_MISMATCH,
       REQUEST_CELL_CONTRACT_MESSAGE.ARTIFACT_IDENTITY_MISMATCH,
@@ -320,7 +333,8 @@ function requireSelectedExport(runtime, manifest) {
     (entry) => entry.name === runtime.exportName,
   );
   if (!selectedExport ||
-      selectedExport.interface !== REQUEST_EXPORT_INTERFACE) {
+      selectedExport.interface !==
+        DEPLOYMENT_BINDING_SOURCE_INTERFACE[runtime.sourceKind]) {
     fail(
       REQUEST_CELL_RUNTIME_ERROR_CODE.EXPORT_MISMATCH,
       REQUEST_CELL_CONTRACT_MESSAGE.SELECTED_EXPORT_MISSING,

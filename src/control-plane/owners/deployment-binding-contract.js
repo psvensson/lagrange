@@ -10,6 +10,7 @@ import {
 
 const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;
 const DEPLOYMENT_BINDING_GENERATION = 1;
+const NORMALIZED_MANIFEST_ACCEPTED_STATUS = 'accepted';
 
 const DEPLOYMENT_BINDING_SOURCE_KIND = Object.freeze({
   BOOT: 'boot',
@@ -30,6 +31,10 @@ const DEPLOYMENT_BINDING_SOURCE_INTERFACE = Object.freeze({
   [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: 'request_v1',
   [DEPLOYMENT_BINDING_SOURCE_KIND.TIME]: 'time_v1',
 });
+const DEPLOYMENT_BINDING_CELL_SOURCE_KINDS = new Set([
+  DEPLOYMENT_BINDING_SOURCE_KIND.CHANGE,
+  DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+]);
 
 const DEPLOYMENT_BINDING_ERROR_CODE = Object.freeze({
   ARTIFACT_NOT_FOUND: 'binding_artifact_not_found',
@@ -357,7 +362,7 @@ function bindDeploymentArtifact(declaration, artifact) {
   const normalizedManifest = normalizeExternalServiceManifest(
     artifact.manifest,
   );
-  if (normalizedManifest.status !== 'accepted' ||
+  if (normalizedManifest.status !== NORMALIZED_MANIFEST_ACCEPTED_STATUS ||
       canonicalJson(normalizedManifest.manifest) !==
         canonicalJson(artifact.manifest)) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.ARTIFACT_NOT_FOUND,
@@ -546,6 +551,10 @@ function bindingRowsMatch(left, right) {
     (field) => left?.[field] === right?.[field]);
 }
 
+function isDeploymentBindingCellSourceKind(sourceKind) {
+  return DEPLOYMENT_BINDING_CELL_SOURCE_KINDS.has(sourceKind);
+}
+
 export {
   DEPLOYMENT_BINDING_ERROR_CODE,
   DEPLOYMENT_BINDING_MESSAGE,
@@ -559,6 +568,7 @@ export {
   canonicalJson,
   deriveBindingId,
   deriveBindingVersionId,
+  isDeploymentBindingCellSourceKind,
   normalizeDeploymentBinding,
   normalizeStoredDeploymentBinding,
   projectBinding,

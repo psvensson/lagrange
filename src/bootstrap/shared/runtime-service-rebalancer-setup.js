@@ -39,9 +39,8 @@ import {
   supportsBindingServiceDefinitionSourceKind,
 } from '../../control-plane/owners/request-binding-service-definition-contract.js';
 import {
-  DEPLOYMENT_BINDING_SOURCE_KIND,
+  isDeploymentBindingCellSourceKind,
 } from '../../control-plane/owners/deployment-binding-contract.js';
-
 const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
 const RUNTIME_SERVICE_REBALANCER_OWNER_NAME = 'RuntimeServiceRebalancerOwner';
 const TYPEOF_STRING = 'string';
@@ -52,8 +51,8 @@ const BINDING_RECONCILE_INTERVAL_MS = 5000;
 // (partitions/message-groups live in their own tables), so every row is a
 // RUNTIME_SERVICE entity — there is NO `service_type` column on it (it is dropped
 // by serializeServiceDefinition). The owner therefore selects active definitions
-// by `status`. Active request-Binding lineage is admitted to the same owner;
-// other Binding sources and malformed lineage fail closed. Binding-derived
+// by `status`. Activated Binding lineage is admitted to the same owner;
+// inactive Binding sources and malformed lineage fail closed. Binding-derived
 // replica targets are system-policy outputs; the legacy `replica_count` column
 // remains authoritative only for non-Binding definitions.
 const SERVICE_DEFINITION_COLUMN = Object.freeze({
@@ -120,7 +119,7 @@ class RuntimeServiceRebalancerOwner {
     this._bindingRefreshRunning = false;
     this._bindingRefreshRequested = false;
     this._bindingReconcileTimer = null;
-    this._reconciledRequestDefinitions = new Map();
+    this._eligibleCellDefinitions = new Map();
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(SUBSYSTEM_NAME) : console;
@@ -154,7 +153,7 @@ class RuntimeServiceRebalancerOwner {
       this.refresh();
     } else {
       this._stopBindingReconcileTimer();
-      this._reconciledRequestDefinitions.clear();
+      this._eligibleCellDefinitions.clear();
       this._quiesceAll();
     }
   }
@@ -202,7 +201,7 @@ class RuntimeServiceRebalancerOwner {
     this._shuttingDown = true;
     this._isLeader = false;
     this._stopBindingReconcileTimer();
-    this._reconciledRequestDefinitions.clear();
+    this._eligibleCellDefinitions.clear();
     if (typeof this.systemTableCache.offCacheChange === 'function') {
       this.systemTableCache.offCacheChange(this._cacheChangeListener);
     }
@@ -257,34 +256,46 @@ class RuntimeServiceRebalancerOwner {
       .sort((left, right) =>
         String(left?.binding_version_id || '')
           .localeCompare(String(right?.binding_version_id || '')));
-    const reconciledRequestDefinitions = new Map();
+    const eligibleCellDefinitions = new Map();
     for (const bindingRow of bindings) {
       if (!this._isLeader || this._shuttingDown) return;
-      try {
-        const result =
-          await this.serviceDefinitionsOwner.reconcileRequestBinding(bindingRow);
-        const definition = result?.serviceDefinition;
-        if (definition?.[SERVICE_DEFINITION_COLUMN.STATUS] ===
-              WASM_SERVICE_DEFINITION_STATUS.ACTIVE &&
-            getBindingServiceDefinitionSourceKind(definition) ===
-              DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST) {
-          reconciledRequestDefinitions.set(
-            definition[SERVICE_DEFINITION_COLUMN.SERVICE_ID],
-            definition,
-          );
-        }
-      } catch (error) {
-        this.logger.warn(LOG_MSG.BINDING_COMPILE_FAILED, {
-          bindingVersionId: bindingRow?.binding_version_id || null,
-          code: error?.code || null,
-          error: error?.message,
-          nodeId: this.nodeId,
-        });
-      }
+      await this._reconcileBinding(
+        bindingRow,
+        eligibleCellDefinitions,
+      );
     }
     if (this._isLeader && !this._shuttingDown) {
-      this._reconciledRequestDefinitions = reconciledRequestDefinitions;
+      this._eligibleCellDefinitions = eligibleCellDefinitions;
     }
+  }
+
+  async _reconcileBinding(bindingRow, eligibleCellDefinitions) {
+    try {
+      const result =
+        await this.serviceDefinitionsOwner.reconcileRequestBinding(bindingRow);
+      const definition = result?.serviceDefinition;
+      if (this._isRuntimeEnabledBindingDefinition(definition)) {
+        eligibleCellDefinitions.set(
+          definition[SERVICE_DEFINITION_COLUMN.SERVICE_ID],
+          definition,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(LOG_MSG.BINDING_COMPILE_FAILED, {
+        bindingVersionId: bindingRow?.binding_version_id || null,
+        code: error?.code || null,
+        error: error?.message,
+        nodeId: this.nodeId,
+      });
+    }
+  }
+
+  _isRuntimeEnabledBindingDefinition(definition) {
+    return definition?.[SERVICE_DEFINITION_COLUMN.STATUS] ===
+        WASM_SERVICE_DEFINITION_STATUS.ACTIVE &&
+      isDeploymentBindingCellSourceKind(
+        getBindingServiceDefinitionSourceKind(definition),
+      );
   }
 
   waitForBindingRefresh() {
@@ -303,7 +314,7 @@ class RuntimeServiceRebalancerOwner {
           WASM_SERVICE_DEFINITION_STATUS.ACTIVE &&
         (
           !hasRequestBindingServiceDefinitionLineage(definition) ||
-          this._isReconciledRequestDefinition(definition)
+          this._isEligibleCellDefinition(definition)
         ),
     );
     const serviceIds = new Set();
@@ -316,14 +327,15 @@ class RuntimeServiceRebalancerOwner {
     return serviceIds;
   }
 
-  _isReconciledRequestDefinition(definition) {
-    if (getBindingServiceDefinitionSourceKind(definition) !==
-        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST) {
+  _isEligibleCellDefinition(definition) {
+    if (!isDeploymentBindingCellSourceKind(
+      getBindingServiceDefinitionSourceKind(definition),
+    )) {
       return false;
     }
     const serviceId = definition?.[SERVICE_DEFINITION_COLUMN.SERVICE_ID];
-    const reconciled = this._reconciledRequestDefinitions.get(serviceId);
-    return requestBindingServiceDefinitionRowsMatch(definition, reconciled);
+    const eligible = this._eligibleCellDefinitions.get(serviceId);
+    return requestBindingServiceDefinitionRowsMatch(definition, eligible);
   }
 
   /**
