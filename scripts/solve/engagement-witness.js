@@ -46,7 +46,8 @@ export function engagementWitnessAdvisory({log, frontierId, changedPaths, theory
   }
   const witness = log.slice(windowStart).find((event) =>
     event.type === EVENT_FINDING &&
-    ENGAGEMENT_WITNESS_FINDING_KINDS.includes(event.kind));
+    ENGAGEMENT_WITNESS_FINDING_KINDS.includes(event.kind) &&
+    (!event.frontier || event.frontier === frontierId));
   if (witness) {
     return {
       satisfied: true,

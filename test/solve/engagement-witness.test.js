@@ -97,4 +97,25 @@ tap.test('engagement-witness advisory', async (t) => {
       'attempts on other frontiers do not close this frontier\'s window');
     t.end();
   });
+
+  t.test('a witness on a different frontier does not satisfy this one', (t) => {
+    const foreign = engagementWitnessAdvisory({
+      log: [finding('live-validation', {frontier: 'q-other-main'})],
+      frontierId: FRONTIER,
+      changedPaths: ['src/owner.js'],
+      theoryRef: 'th-1',
+    });
+    t.equal(foreign.satisfied, false,
+      'another frontier\'s witness proves nothing about this leg');
+
+    const unscoped = engagementWitnessAdvisory({
+      log: [finding('live-validation', {frontier: undefined})],
+      frontierId: FRONTIER,
+      changedPaths: ['src/owner.js'],
+      theoryRef: 'th-1',
+    });
+    t.equal(unscoped.satisfied, true,
+      'a frontier-less witness finding still counts');
+    t.end();
+  });
 });
