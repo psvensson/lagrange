@@ -20,7 +20,7 @@ the current cross-Quest frontier and unresolved choices.
 
 Artifact schema v3, Binding schema v2, all seven source compilers, direct runtime
 access policy, request Cell placement/readiness/routing, change Cell placement,
-and time Cell placement are landed.
+time Cell placement, and once Cell placement are landed.
 
 Cell activation reuses one chain:
 
@@ -31,12 +31,14 @@ Cell activation reuses one chain:
 3. `ServiceRuntimeLifecycle`, `RuntimeDriverRegistry`, and
    `WasmComponentDriver` remain the only Component readiness boundary.
 
-Boot, call, once, and pushdown still compile to inactive zero-replica desired
-state. Activate them one source per Quest through that same chain. Each Quest
-must keep caller replica intent absent and must not install its invocation
-mechanism, source-specific planner, scheduler, or alternate runtime contract.
+Boot, call, and pushdown still compile to inactive zero-replica desired state.
+Activate them one source per Quest through that same chain. Each Quest must keep
+caller replica intent absent and must not install its invocation mechanism,
+source-specific planner, scheduler, or alternate runtime contract. Boot is next;
+its kind-only declaration makes placement and readiness independently provable
+without adding a bootstrap hook or invocation owner.
 
-After those four placements, decide whether any source-specific invocation
+After those three placements, decide whether any source-specific invocation
 cutover is independently valuable. Do not couple placement with dispatch.
 
 ## Open choices
@@ -83,3 +85,6 @@ cutover is independently valuable. Do not couple placement with dispatch.
 - 2026-07-24 — Selected once as the next placement slice because its kind-only
   declaration makes activation/readiness independently provable without adding
   an invocation owner.
+- 2026-07-24 — Quest `minimal-deployment-once-cell-placement` landed. Selected
+  `minimal-deployment-boot-cell-placement` next because boot has the same
+  kind-only declaration while bootstrap invocation remains a separate concern.
