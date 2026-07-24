@@ -39,6 +39,8 @@ import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
 
 const TENANT_ID = 'tenant-once';
 const ARTIFACT_DIGEST = `sha256:${'e'.repeat(64)}`;
+const COMPONENT_EXPORT_NAME = 'run';
+const KIND_ONLY_COMPONENT_SOURCE_KINDS = new Set(['boot', 'once']);
 const COMPONENT_BYTES = Buffer.from(
   'AGFzbQ0AAQAHGwFCAgFAAAB3BAAOZ2V0LXJhbmRvbS11NjQBAAodAQAYd2FzaTpyYW5k' +
   'b20vcmFuZG9tQDAuMi4wBQAHXwFCBgFAAgV0YWJsZXkDa2V5eQB6BAAEcmVhZAEAAUAD' +
@@ -130,8 +132,8 @@ class DurableGateway {
 }
 
 function manifest(sourceKind = 'once') {
-  const exportName = sourceKind === 'once' ?
-    'run' :
+  const exportName = KIND_ONLY_COMPONENT_SOURCE_KINDS.has(sourceKind) ?
+    COMPONENT_EXPORT_NAME :
     `${sourceKind}-handler`;
   return {
     schema_version: 3,
@@ -148,7 +150,7 @@ function manifest(sourceKind = 'once') {
       digest: ARTIFACT_DIGEST,
       media_type: 'application/wasm',
     },
-    runtime: sourceKind === 'once' ?
+    runtime: KIND_ONLY_COMPONENT_SOURCE_KINDS.has(sourceKind) ?
       {kind: 'wasm_component'} :
       {
         kind: 'wasm_component',
@@ -172,8 +174,8 @@ function bindingInput(package_, sourceKind = 'once', overrides = {}) {
     target: {
       package_id: package_.packageId,
       manifest_digest: package_.manifestDigest,
-      export_name: sourceKind === 'once' ?
-        'run' :
+      export_name: KIND_ONLY_COMPONENT_SOURCE_KINDS.has(sourceKind) ?
+        COMPONENT_EXPORT_NAME :
         `${sourceKind}-handler`,
     },
     source: bindingSource(sourceKind),
@@ -265,12 +267,12 @@ function createPlanner(fixture) {
   return {cache, owner, rebalancers};
 }
 
-async function assertOnceComponentReadiness(definition, bindingRow) {
+async function assertComponentReadiness(definition, bindingRow, sourceKind) {
   const driver = new WasmComponentDriver({
     artifactLoader: async () => ({
       artifactDigest: ARTIFACT_DIGEST,
       bytes: COMPONENT_BYTES,
-      manifest: manifest(),
+      manifest: manifest(sourceKind),
       manifestDigest: bindingRow.manifest_digest,
       packageId: bindingRow.package_id,
       payloadDigest: COMPONENT_PAYLOAD_DIGEST,
@@ -285,7 +287,7 @@ async function assertOnceComponentReadiness(definition, bindingRow) {
   lifecycle.setStateProjectionWriter(async (_serviceId, projection) => {
     projections.push(projection);
   });
-  const replica = {definition, nodeId: 'node-once'};
+  const replica = {definition, nodeId: `node-${sourceKind}`};
 
   assert.equal(
     (await lifecycle.prepare(definition, {})).status,
@@ -367,7 +369,7 @@ describe('once Binding compilation cutover', () => {
       compilerSources,
       /TimerManager|createTimer|onTimerFired|\.invoke\(/u,
     );
-    await assertOnceComponentReadiness(row, fixture.bindingRow);
+    await assertComponentReadiness(row, fixture.bindingRow, 'once');
     planner.owner.shutdown();
   });
 
@@ -472,8 +474,8 @@ describe('boot Binding compilation cutover', () => {
     LoggingService.getInstance().initialize({level: 'error'});
   });
 
-  test('production planning preserves the kind-only projection without ' +
-    'hooking cluster bootstrap', async () => {
+  test('production planning activates the kind-only projection and admits one ' +
+    'system-owned placement without hooking cluster bootstrap', async () => {
     const fixture = await createFixture({sourceKind: 'boot'});
     fixture.gateway.writes.length = 0;
     const planner = createPlanner(fixture);
@@ -487,8 +489,9 @@ describe('boot Binding compilation cutover', () => {
     assert.ok(row);
     assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
     assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
-    assert.equal(row[SD_COL.STATUS], 'inactive');
+    assert.equal(row[SD_COL.STATUS], 'active');
     assert.equal(row[SD_COL.REPLICA_COUNT], 0);
+    assert.equal(row[SD_COL.RUNTIME_KIND], 'wasm_component');
     assert.equal(
       row[SD_COL.RUNTIME_REF],
       `registry.example.test/acme/orders-boot:1.0.0@${ARTIFACT_DIGEST}`,
@@ -501,19 +504,22 @@ describe('boot Binding compilation cutover', () => {
     assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
     assert.deepEqual(
       fixture.gateway.writes.map((write) => write.tableName),
-      [TABLES.SERVICE_DEFINITIONS],
+      [TABLES.SERVICE_DEFINITIONS, TABLES.SERVICE_DEFINITIONS],
     );
     assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
     assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
-    assert.equal(planner.rebalancers.length, 0);
-    const compilerSource = readFileSync(
+    assert.equal(planner.rebalancers.length, 1);
+    assert.equal(planner.rebalancers[0].entityId, serviceId);
+    assert.equal(planner.rebalancers[0].entityType, 'runtime_service');
+    const compilerSource = [
       'src/control-plane/owners/request-binding-service-definition-contract.js',
-      'utf8',
-    );
+      'src/bootstrap/shared/runtime-service-rebalancer-setup.js',
+    ].map((path) => readFileSync(path, 'utf8')).join('\n');
     assert.doesNotMatch(
       compilerSource,
       /BOOTSTRAP_PHASE|BootstrapService|bootstrapPipeline|bootstrapApi|onBootstrap/u,
     );
+    await assertComponentReadiness(row, fixture.bindingRow, 'boot');
     planner.owner.shutdown();
   });
 
@@ -541,7 +547,7 @@ describe('boot Binding compilation cutover', () => {
     fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
-    assert.equal(fixture.gateway.writes.length, 1);
+    assert.equal(fixture.gateway.writes.length, 2);
     planner.owner.shutdown();
 
     const lost = await createFixture({
@@ -564,7 +570,7 @@ describe('boot Binding compilation cutover', () => {
       ),
     ]);
     assert.equal(results.filter((result) => result.created).length, 1);
-    assert.equal(concurrent.gateway.writes.length, 1);
+    assert.equal(concurrent.gateway.writes.length, 2);
   });
 
   test('conflicting and malformed durable boot state fails closed', async () => {

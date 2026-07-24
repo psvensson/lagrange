@@ -124,7 +124,7 @@ rebalancer owns placement into `services`. `ServiceRuntimeLifecycle` and
 `RuntimeDriverRegistry` remain the only runtime-start boundary. Cell vocabulary
 does not add a table, scheduler, replica owner, or runtime lifecycle.
 
-Cell activation currently admits request, change, time, and once Binding
+Cell activation currently admits request, change, time, once, and boot Binding
 lineage. The planning owner level-triggers each matching inactive derived row to
 `status = active`, preserving its service identity, pinned runtime descriptor,
 Binding lineage, and canonical projection. Its stored `replica_count = 0` is a
@@ -132,8 +132,8 @@ non-authoritative sentinel. The runtime-service policy recognizes Binding
 lineage and derives target, minimum, maximum, topology, capacity, and data
 affinity directly from system policy. One shared projection exposes that
 effective target to the rebalancer, admin, CLI, and discovery readers without
-writing a generated count back to desired state. Boot, call, and pushdown
-sources remain inactive until their own activation Quests.
+writing a generated count back to desired state. Call and pushdown sources
+remain inactive until their own activation Quests.
 
 Service state is context-as-table. The first placement cutover does not invent a
 per-Cell store or claim local context materialization before a genuine runtime
@@ -225,7 +225,7 @@ contracts.
       and the existing lifecycle, with table-backed context;
    3. route request invocation to that ready Cell; and
    4. activate the remaining sources through the same owners, one executable
-      concern at a time; change, time, and once are active, leaving boot, call,
+      concern at a time; change, time, once, and boot are active, leaving call
       and pushdown.
 7. Move table authorization from Artifact export and Binding context
    declarations to directly managed runtime access policy. Keep the existing
@@ -300,11 +300,12 @@ retiring correlated transport waiters.
 
 Quests `minimal-deployment-change-cell-placement`,
 `minimal-deployment-time-cell-placement`, and
-`minimal-deployment-once-cell-placement` continue step 6 through the same
+`minimal-deployment-once-cell-placement`, and
+`minimal-deployment-boot-cell-placement` continue step 6 through the same
 desired-state, placement, and component-runtime owners. They activate change,
-time, and once lineage without caller replica intent, CDC dispatch, timer
-scheduling, one-shot invocation, or source-specific planners; boot, call, and
-pushdown remain inactive.
+time, once, and boot lineage without caller replica intent, CDC dispatch, timer
+scheduling, one-shot invocation, bootstrap invocation, or source-specific
+planners; call and pushdown remain inactive.
 
 Step 7 is complete: schema-v3 Artifacts and schema-v2 Bindings carry no access
 declarations. Authenticated `CONFIGURE SERVICE ACCESS $1` directly updates the
@@ -312,6 +313,6 @@ existing durable config path; SQL and Component invocation resolve that policy
 at access time and fail closed, while observed access remains affinity-only
 telemetry. Quest `minimal-deployment-single-version-contract-cutover` removes
 all alternate Artifact and Binding decoders before the remaining Cell
-activation work. Next, activate boot, call, and pushdown through the same
-desired-state, replica, and runtime owners. Actor-key partitioning remains an
-explicit routing-policy design choice, not a Cell replica request.
+activation work. Next, activate call and pushdown through the same desired-state,
+replica, and runtime owners. Actor-key partitioning remains an explicit
+routing-policy design choice, not a Cell replica request.
