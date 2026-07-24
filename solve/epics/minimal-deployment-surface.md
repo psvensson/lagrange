@@ -20,7 +20,8 @@ the current cross-Quest frontier and unresolved choices.
 
 Artifact schema v3, Binding schema v2, all seven source compilers, direct runtime
 access policy, request Cell placement/readiness/routing, change Cell placement,
-time Cell placement, once Cell placement, and boot Cell placement are landed.
+time Cell placement, once Cell placement, boot Cell placement, and call Cell
+placement are landed.
 
 Cell activation reuses one chain:
 
@@ -31,15 +32,15 @@ Cell activation reuses one chain:
 3. `ServiceRuntimeLifecycle`, `RuntimeDriverRegistry`, and
    `WasmComponentDriver` remain the only Component readiness boundary.
 
-Call and pushdown still compile to inactive zero-replica desired state. Activate
-them one source per Quest through that same chain. Each Quest must keep caller
-replica intent absent and must not install its invocation mechanism,
-source-specific planner, scheduler, or alternate runtime contract. Call is next;
-its durable named registration makes placement and readiness independently
-provable without adding a statement invocation resolver.
+Pushdown still compiles to inactive zero-replica desired state. Activate it
+through that same chain while keeping caller replica intent absent and without
+installing query execution, a source-specific planner, a scheduler, or an
+alternate runtime contract. Pushdown is next; its durable named registration
+makes placement and readiness independently provable without adding query
+invocation.
 
-After those two placements, decide whether any source-specific invocation
-cutover is independently valuable. Do not couple placement with dispatch.
+After that placement, decide whether any source-specific invocation cutover is
+independently valuable. Do not couple placement with dispatch.
 
 ## Open choices
 
@@ -92,3 +93,6 @@ cutover is independently valuable. Do not couple placement with dispatch.
   the exact boot Cell candidate after its predecessor's malformed proof history.
   Selected `minimal-deployment-call-cell-placement` next because the durable
   named registration can be placed independently of statement invocation.
+- 2026-07-24 — Quest `minimal-deployment-call-cell-placement` landed. Selected
+  `minimal-deployment-pushdown-cell-placement` next because the durable named
+  registration can be placed independently of query execution.
