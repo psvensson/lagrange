@@ -99,6 +99,12 @@
       "priority": 118
     },
     {
+      "file": "audience-boundary.md",
+      "role": "reference-only",
+      "domain": "governance",
+      "reason": "Doc-audience zoning doctrine; enforced mechanically by audit:doc-audience, so agents need the pointer, not packed rules."
+    },
+    {
       "file": "workflow-guidelines/lifecycle.md",
       "role": "reference-only",
       "domain": "governance",

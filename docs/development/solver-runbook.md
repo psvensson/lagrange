@@ -1,10 +1,14 @@
+---
+audience: development
+---
+
 # Solver Operator Runbook
 
 This is an example-oriented operator aid. It does not define policy or a second
-boot sequence. Load order is owned by [`AGENTS.md`](../AGENTS.md), executable
-orientation by [`boot.md`](steering/llm/boot.md), and the binding workflow by
-[`solver-quests.md`](steering/workflow-guidelines/solver-quests.md). The complete
-generated CLI reference is [`solve-commands.md`](steering/llm/solve-commands.md).
+boot sequence. Load order is owned by [`AGENTS.md`](../../AGENTS.md), executable
+orientation by [`boot.md`](../steering/llm/boot.md), and the binding workflow by
+[`solver-quests.md`](../steering/workflow-guidelines/solver-quests.md). The complete
+generated CLI reference is [`solve-commands.md`](../steering/llm/solve-commands.md).
 
 ## Primary Three-Verb Workflow
 
@@ -47,7 +51,7 @@ node scripts/solve.js doctor --json
 runnable supervised or autonomous mode. A missing config, `enabled: false`, an
 unexecutable command, or the no-op example adapter never masquerades as a live
 autonomous capability. `solve/config.json` is machine-local and ignored by Git.
-Copy [`solve/config.example.json`](../solve/config.example.json) locally and set
+Copy [`solve/config.example.json`](../../solve/config.example.json) locally and set
 `enabled: true` only after replacing the placeholder with a live executable.
 
 For component-level diagnosis, inspect the same projection directly:

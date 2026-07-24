@@ -11,7 +11,7 @@ last_reviewed: 2026-07-22
 > **Canonical source.** The Solver is the repository work system. Its unit of
 > work is a **Quest**: one sealed goal, one append-only event log, measured
 > attempts, durable findings, Quest-native theories, and a terminal state. Runbook:
-> [`../../../docs/solver-runbook.md`](../../../docs/solver-runbook.md).
+> [`../../../docs/development/solver-runbook.md`](../../../docs/development/solver-runbook.md).
 
 # Quest Workflow
 

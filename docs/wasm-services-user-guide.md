@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # WASM Services Architecture and Current Runtime Guide
 
 This guide covers the two `wasm_component` runtime axes: the landed

@@ -1,3 +1,7 @@
+---
+audience: development
+---
+
 # Workflow Improvement Plan — Linking Planning Layers & Closing the Memory Loop
 
 Status: VERIFIED (subagent-checked 2026-06-17; corrections applied inline)

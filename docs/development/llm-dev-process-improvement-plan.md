@@ -1,3 +1,7 @@
+---
+audience: development
+---
+
 # LLM Development / Bugfixing Process Improvement Plan
 
 Status: VERIFIED (adversarial subagent pass applied 2026-06-15). Author: analysis

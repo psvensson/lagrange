@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T13:37:09.042Z",
+  "generatedAt": "2026-07-24T15:29:26.080Z",
   "stats": {
     "candidateCount": 429,
     "dedupedRuleCount": 419,
@@ -145,6 +145,16 @@
       "masterRuleCount": 6,
       "aliasRuleCount": 0,
       "emittedMasterRuleCount": 6
+    },
+    {
+      "file": "audience-boundary.md",
+      "role": "reference-only",
+      "domain": "governance",
+      "ruleCount": 0,
+      "masterRuleCount": 0,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 0,
+      "reason": "Doc-audience zoning doctrine; enforced mechanically by audit:doc-audience, so agents need the pointer, not packed rules."
     },
     {
       "file": "workflow-guidelines/lifecycle.md",
@@ -392,6 +402,7 @@
       "sourceFiles": [
         "roadmap.md",
         "memory-boundary.md",
+        "audience-boundary.md",
         "workflow-guidelines/lifecycle.md",
         "workflow-guidelines/validators.md",
         "workflow-guidelines/quest-artifacts.md",

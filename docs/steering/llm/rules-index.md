@@ -30,6 +30,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | code-style.md | packed | style | 14 | 0 | — |
 | roadmap.md | packed | governance | 13 | 0 | — |
 | memory-boundary.md | packed | governance | 6 | 0 | — |
+| audience-boundary.md | reference-only | governance | 0 | 0 | Doc-audience zoning doctrine; enforced mechanically by audit:doc-audience, so agents need the pointer, not packed rules. |
 | workflow-guidelines/lifecycle.md | reference-only | governance | 0 | 0 | Convenience lifecycle summary; solver-quests.md owns the binding workflow contract. |
 | workflow-guidelines/validators.md | packed | governance | 4 | 0 | — |
 | workflow-guidelines/quest-artifacts.md | packed | governance | 3 | 0 | — |

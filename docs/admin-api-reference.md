@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # Admin API Reference
 
 How admin commands are structured and routed. All admin mutations are owned

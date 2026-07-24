@@ -566,17 +566,10 @@ If you are just passing through the repo, the fastest way to get oriented is:
    rather than only as documents (`npm test` is the full sharded suite and
    takes much longer)
 
-If you are an LLM or are handing work to one, start with the compact handoff:
-
-```bash
-npm run quest:context
-```
-
-That command prints the active Quest, latest probe, findings, pending step,
-useful commands, and dirty worktree summary. After that, start from the steering
-entry point [AGENTS.md](AGENTS.md) and load the compact steering pack index
-[docs/steering/llm/README.md](docs/steering/llm/README.md) instead of opening
-every steering document by default.
+Working on this codebase with an AI agent (or as one)? Start at the steering
+entry point [AGENTS.md](AGENTS.md); `npm run quest:context` prints the active
+work handoff. Everything agent-facing hangs off that file — nothing else in
+this README is agent guidance.
 
 ---
 
@@ -698,9 +691,6 @@ Guard commands that are useful while changing the codebase:
 ```bash
 # Print common local workflows
 npm run commands
-
-# Inspect the active Quest, latest probe, findings, and pending step
-npm run quest:context
 
 # Enforce table_policies ownership rules in scenario SQL
 npm run guard:scenario-policy:file

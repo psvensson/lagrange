@@ -1,3 +1,7 @@
+---
+audience: development
+---
+
 # Admission Decision Model
 
 This note defines the required model for any boundary that admits, excludes,

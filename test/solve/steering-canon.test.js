@@ -16,7 +16,7 @@ tap.test('LLM steering canon has one owner per concern', (t) => {
   const boot = read('docs/steering/llm/boot.md');
   const lifecycle = read('docs/steering/workflow-guidelines/lifecycle.md');
   const canon = read('docs/steering/workflow-guidelines/solver-quests.md');
-  const runbook = read('docs/solver-runbook.md');
+  const runbook = read('docs/development/solver-runbook.md');
   const ignore = read('.gitignore');
   const toolDescriptions = read('docs/steering/tool-descriptions.json');
 

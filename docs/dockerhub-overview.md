@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 <!--
   Docker Hub repository overview for docker.io/psvensson/lagrange.
 

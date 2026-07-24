@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # Runtime Resource Diagnostics
 
 Use the admin diagnostics endpoint to inspect process memory/CPU/disk-write

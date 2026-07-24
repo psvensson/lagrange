@@ -1,3 +1,7 @@
+---
+audience: development
+---
+
 # Autonomy-by-default + Parallel-first — steering change plan
 
 Status: ARCHIVED (implemented; historical plan, not active steering)

@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # Latency Topology Operations
 
 Operator runbook for latency-aware topology: nodes are measured and assigned

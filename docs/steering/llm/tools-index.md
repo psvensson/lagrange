@@ -58,6 +58,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:attempt-preflight` — `npm run audit:file-size && npm run audit:style-terminal-vocabulary && npm run audit:step-coverage-owner`
 - `audit:closure-ledger` — Validate closure-ledger state.
 - `audit:cure-typing-owner` — `node scripts/check-cure-typing-owner.js`
+- `audit:doc-audience` — `node scripts/check-doc-audience.js`
 - `audit:file-size` — Report oversized production and test files.
 - `audit:file-size:strict` — `node scripts/check-file-size-thresholds.js --strict`
 - `audit:guideline:boundary-mode-contracts` — Check boundary-mode contracts for combinable policy options.
@@ -286,4 +287,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-190 scripts indexed; 71 have a curated description, 119 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+191 scripts indexed; 71 have a curated description, 120 fall back to their raw command. Improve coverage in the two sources named in the header comment.

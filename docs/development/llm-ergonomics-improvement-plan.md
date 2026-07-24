@@ -1,3 +1,7 @@
+---
+audience: development
+---
+
 # LLM Ergonomics Improvement Plan (WS8–WS12)
 
 Status: IMPLEMENTED + VERIFIED (adversarial subagent passes on both the plan and

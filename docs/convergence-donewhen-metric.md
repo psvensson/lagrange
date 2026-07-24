@@ -1,3 +1,7 @@
+---
+audience: development
+---
+
 # Rolling-restart convergence `doneWhen` — variance-aware metric
 
 Status: **proposed** (operator to seal the threshold constant). Supersedes the

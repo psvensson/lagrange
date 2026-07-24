@@ -41,7 +41,7 @@ const WORKFLOW_PATH_PREFIXES = Object.freeze([
   'test/solve/',
   'test/scripts/list-commands.test.js',
   'docs/steering/',
-  'docs/solver-runbook.md',
+  'docs/development/',
   'AGENTS.md',
 ]);
 

@@ -46,7 +46,7 @@ async function runCheck(explicitPaths = null) {
     'Numbered segment/stage/part filenames carry no semantic meaning. Split large',
     'files into semantically named owner/boundary modules behind the existing',
     'entrypoint instead (no digits in the new filename). See',
-    'docs/llm-dev-process-improvement-plan.md (WS7) and the ordinal inventory.',
+    'docs/development/llm-dev-process-improvement-plan.md (WS7) and the ordinal inventory.',
   ];
   return {ok: false, message: lines.join(NEWLINE)};
 }

@@ -1,3 +1,7 @@
+---
+audience: development
+---
+
 # Deterministic & Directed Testing Strategy (DT1–DT8)
 
 Status: PARTIALLY IMPLEMENTED + VERIFIED (2026-06-16). The cheap, verifiable tier is

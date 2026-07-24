@@ -139,6 +139,16 @@
       "emittedMasterRuleCount": 6
     },
     {
+      "file": "audience-boundary.md",
+      "role": "reference-only",
+      "domain": "governance",
+      "ruleCount": 0,
+      "masterRuleCount": 0,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 0,
+      "reason": "Doc-audience zoning doctrine; enforced mechanically by audit:doc-audience, so agents need the pointer, not packed rules."
+    },
+    {
       "file": "workflow-guidelines/lifecycle.md",
       "role": "reference-only",
       "domain": "governance",
@@ -7457,5 +7467,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-23T13:37:09.040Z"
+  "generatedAt": "2026-07-24T15:29:26.078Z"
 }

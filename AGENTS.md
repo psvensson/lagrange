@@ -33,7 +33,7 @@ diagnostics and exceptional operations; the entry point does not duplicate them.
 | Execute its safe next step | `node scripts/solve.js continue --id <id>` |
 | Record a verdict and land | `node scripts/solve.js land --id <id> ...` |
 | Quest process and guardrails | [`docs/steering/workflow-guidelines/solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md) |
-| Solver operator quickstart | [`docs/solver-runbook.md`](docs/solver-runbook.md) |
+| Solver operator quickstart | [`docs/development/solver-runbook.md`](docs/development/solver-runbook.md) |
 | Always-active core operating contract | [`docs/steering/llm/core.md`](docs/steering/llm/core.md) |
 | Boot, authority, and first commands | [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md) |
 | Architecture / owner boundaries / runtime contracts | [`docs/steering/llm/architecture.md`](docs/steering/llm/architecture.md) |
@@ -58,7 +58,9 @@ in-process substrate (virtual clock, seeded RNG, fault injection) is mapped in
 [`docs/deterministic-directed-testing-plan.md`](docs/deterministic-directed-testing-plan.md).
 It is not restated here so the two copies cannot drift; see
 [`docs/steering/memory-boundary.md`](docs/steering/memory-boundary.md) for the
-in-repo-steering vs external-memory split.
+in-repo-steering vs external-memory split and
+[`docs/steering/audience-boundary.md`](docs/steering/audience-boundary.md) for
+the human/development/agent documentation zones.
 
 ## Steering Load Order
 

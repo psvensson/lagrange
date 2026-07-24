@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # Listener port model
 
 Lagrange nodes expose three distinct listener ports from one configuration

@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # Storage Capacity Operations Guide
 
 Operator reference for node storage budgets, capacity diagnostics,

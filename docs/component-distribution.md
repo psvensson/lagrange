@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # Component Distribution
 
 Package identity, registry mapping, OCI source references,

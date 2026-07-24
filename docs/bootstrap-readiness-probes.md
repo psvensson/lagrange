@@ -1,3 +1,7 @@
+---
+audience: human
+---
+
 # Bootstrap Readiness Probes
 
 This document defines the runtime probe contract for seed nodes and deployment
