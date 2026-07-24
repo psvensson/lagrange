@@ -24,6 +24,15 @@ const SELECTABLE_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_SUPPORTED,
 ]);
 
+// Workflow-bookkeeping finding kinds that never carry a resume head: their
+// presence after the latest structured evidence does not mean a result was
+// recorded prose-only.
+const WORKFLOW_FINDING_KINDS = Object.freeze([
+  'verifier-approval',
+  'verifier-rejection',
+  'inherited-rulesout',
+]);
+
 function last(items) {
   return items.length > 0 ? items[items.length - 1] : null;
 }
@@ -336,6 +345,18 @@ export function buildCurrentBlocker({quest, log, state, frontierId = null}) {
   const oscillation = effectiveFrontierId ?
     detectOscillation(log, effectiveFrontierId) :
     {oscillating: false, label: null, count: 0, revisits: []};
+  // R2 resume-surface check: the card is built ONLY from structured
+  // evidence-ingestion fields and selected theories. When there is NO
+  // structured evidence at all but substantive prose findings exist, a
+  // resume-critical result (a pinned binding head, a decided next move) is
+  // living only in prose — the next session would reconstruct state from raw
+  // log archaeology. Keyed on event types and kinds, never on prose content.
+  const proseOnlyResume = movement.movement === MOVEMENT_NO_EVIDENCE &&
+    log.some((event) =>
+      event.type === EVENT_FINDING &&
+      (!effectiveFrontierId || !event.frontier ||
+        event.frontier === effectiveFrontierId) &&
+      !WORKFLOW_FINDING_KINDS.includes(event.kind));
   const noLongerCurrentBlockers = [];
   if (movement.previous &&
     movement.movement !== BLOCKER_MOVEMENT_SAME &&
@@ -366,6 +387,7 @@ export function buildCurrentBlocker({quest, log, state, frontierId = null}) {
     oscillationLabel: oscillation.label,
     oscillationCount: oscillation.count,
     noLongerCurrentBlockers: [...new Set(noLongerCurrentBlockers)].filter(Boolean),
+    proseOnlyResume,
   };
 }
 
@@ -391,6 +413,13 @@ export function renderCurrentBlocker(blocker) {
   if (blocker.noLongerCurrentBlockers.length > 0) {
     lines.push('- No longer current: ' +
       blocker.noLongerCurrentBlockers.join('; '));
+  }
+  if (blocker.proseOnlyResume) {
+    lines.push(
+      '- Resume surface: EMPTY while prose findings exist — a binding head ' +
+      'recorded only in a finding claim is lost on resume. Ingest evidence ' +
+      'carrying owner/boundary/reason/nextAction, or select a frontier ' +
+      'theory, so the next session resumes from a structured head.');
   }
   return lines;
 }
