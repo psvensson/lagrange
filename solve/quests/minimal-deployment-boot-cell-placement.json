@@ -1,0 +1,43 @@
+{
+  "id": "minimal-deployment-boot-cell-placement",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A current schema-v2 boot Binding compiles through the sole ServiceDefinitionsOwner into one active service definition, keeps caller replica intent absent, is admitted by the existing RuntimeServiceRebalancerOwner to exactly one system-policy-owned UnifiedRebalancer, and binds its boot_v1 export through the sole component runtime readiness path; request, change, time, and once Cell behavior remain unchanged, call and pushdown stay inactive, and no bootstrap invocation, bootstrap hook, seed registry, source-specific planner, alternate contract, caller replica control, or per-replica boot runtime is introduced.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-2.0-minimal-deployment-surface",
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "minimal-deployment-once-cell-placement",
+    "planDoc": "solve/epics/minimal-deployment-surface.md",
+    "draftedAtCommit": "49d27482c94c0683c5ba814438a9ed472519e3a5"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-boot-cell-placement",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-boot-cell-placement-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-boot-cell-placement",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
