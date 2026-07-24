@@ -4,7 +4,7 @@ status: pointer
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/architecture.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-24
 ---
 
 > **Pointer — not a rule source.** This file only routes architecture-document

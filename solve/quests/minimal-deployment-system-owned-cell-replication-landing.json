@@ -6,7 +6,7 @@
   "priority": 1,
   "class": "product",
   "links": {
-    "roadmapRow": null,
+    "roadmapRow": "RM-2.0-minimal-deployment-surface",
     "specRef": null,
     "closesCL": [],
     "parentQuest": "minimal-deployment-system-owned-cell-replication",

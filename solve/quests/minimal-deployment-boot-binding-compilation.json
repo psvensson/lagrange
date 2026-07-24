@@ -6,7 +6,7 @@
   "priority": 1,
   "class": "product",
   "links": {
-    "roadmapRow": null,
+    "roadmapRow": "RM-2.0-minimal-deployment-surface",
     "specRef": "architecture/minimal-deployment-surface.md",
     "closesCL": [],
     "parentQuest": null,
