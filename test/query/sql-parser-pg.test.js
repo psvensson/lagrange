@@ -18,6 +18,97 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
+test('PG mode - CREATE TABLE projects schema identifiers as strings',
+  async (t) => {
+    const parser = new SQLParser(
+      'CREATE TABLE "global.request_binding_audit" ' +
+        '(key INTEGER PRIMARY KEY, value INTEGER)',
+      {dialect: PARSER_DIALECT.POSTGRESQL},
+    );
+    const ast = parser.parse();
+
+    t.equal(ast.tableName, 'global.request_binding_audit');
+    t.same(ast.columns.map((column) => column.name), ['key', 'value']);
+    t.same(ast.primaryKey, ['key']);
+  },
+);
+
+test('PG mode - SELECT without LIMIT omits the parser sentinel',
+  async (t) => {
+    const ast = new SQLParser(
+      'SELECT key FROM "global.request_binding_audit"',
+      {dialect: PARSER_DIALECT.POSTGRESQL},
+    ).parse();
+
+    t.equal(ast.limit, null);
+  },
+);
+
+test('PG mode - parameterized LIMIT fails instead of becoming unbounded',
+  async (t) => {
+    t.throws(
+      () => new SQLParser(
+        'SELECT key FROM "global.request_binding_audit" LIMIT $1',
+        {dialect: PARSER_DIALECT.POSTGRESQL},
+      ).parse(),
+      /LIMIT count must be an integer literal/u,
+    );
+  },
+);
+
+test('PG mode - LIMIT ALL is the explicit unbounded form', async (t) => {
+  const ast = new SQLParser(
+    'SELECT key FROM "global.request_binding_audit" LIMIT ALL',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  ).parse();
+
+  t.equal(ast.limit, null);
+});
+
+test('PG mode - LIMIT ALL with OFFSET fails instead of dropping OFFSET',
+  async (t) => {
+    t.throws(
+      () => new SQLParser(
+        'SELECT key FROM "global.request_binding_audit" LIMIT ALL OFFSET 5',
+        {dialect: PARSER_DIALECT.POSTGRESQL},
+      ).parse(),
+      /LIMIT ALL with OFFSET is unsupported/u,
+    );
+  },
+);
+
+test('PG mode - OFFSET without LIMIT fails instead of becoming LIMIT',
+  async (t) => {
+    t.throws(
+      () => new SQLParser(
+        'SELECT key FROM "global.request_binding_audit" OFFSET 5',
+        {dialect: PARSER_DIALECT.POSTGRESQL},
+      ).parse(),
+      /OFFSET without LIMIT is unsupported/u,
+    );
+  },
+);
+
+test('PG mode - INSERT and UPDATE project identifiers as strings',
+  async (t) => {
+    const insert = new SQLParser(
+      'INSERT INTO wasm_operations (operation_id, tenant_id) VALUES ($1, $2)',
+      {dialect: PARSER_DIALECT.POSTGRESQL},
+    ).parse();
+    const update = new SQLParser(
+      'UPDATE wasm_operations SET state = $1, updated_at = $2 ' +
+        'WHERE operation_id = $3',
+      {dialect: PARSER_DIALECT.POSTGRESQL},
+    ).parse();
+
+    t.same(insert.columns, ['operation_id', 'tenant_id']);
+    t.same(
+      update.assignments.map((assignment) => assignment.column),
+      ['state', 'updated_at'],
+    );
+  },
+);
+
 // --- Positional parameter tests (Requirements: 2.1, 2.2, 2.3, 2.4) ---
 
 test('PG mode - $1 positional param produces parameter node', async (t) => {

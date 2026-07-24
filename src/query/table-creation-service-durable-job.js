@@ -25,7 +25,7 @@ const TABLE_CREATION_DURABLE_JOB_METHODS = Object.freeze({
       schemaOwnerFenceToken: job.ownerFenceToken,
       assertProvisioningOwnership: job.assertOwnership,
       timeoutBudget: null,
-      cancellationToken: null,
+      cancellationToken: this.schemaProvisioningCancellationToken,
     });
   },
 

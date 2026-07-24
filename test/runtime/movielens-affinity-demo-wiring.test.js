@@ -1163,6 +1163,11 @@ test('parallel coordination executor uses normal SQL without polluting ' +
   const executor = factory('svc-affinity');
   await executor('SELECT * FROM ratings', []);
   await executor.executeInternal('SELECT * FROM reduce_slots', []);
+  await executor.executeInternal(
+    'SELECT * FROM wasm_operations WHERE tenant_id = $1',
+    ['tenant-a'],
+    {dialect: 'postgresql'},
+  );
   t.equal(calls[0].options.issuingServiceId, 'svc-affinity',
     'workload SQL contributes to the service/data affinity matrix');
   t.equal(calls[1].options.issuingServiceId, undefined,
@@ -1170,5 +1175,9 @@ test('parallel coordination executor uses normal SQL without polluting ' +
       'coordination table');
   t.equal(calls[1].options.sessionId, 'svc-affinity',
     'internal SQL retains the service session and normal query path');
+  t.equal(calls[2].options.dialect, 'postgresql',
+    'runtime owners can select the internal SQL parser dialect');
+  t.equal(calls[2].options.sessionId, 'svc-affinity',
+    'dialect selection cannot replace the bound service session');
   t.end();
 });

@@ -27,6 +27,30 @@ const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
 });
 
 describe('startup-sql-runtime-handoff', () => {
+  it('rebinds runtime access policy ownership to the final engine', () => {
+    const runtimeAccessPolicyOwner = {
+      async getRuntimePolicy() {
+        return {status: 'resolved'};
+      },
+    };
+    let attachedOwner = null;
+    const sqlQueryEngine = {
+      setRuntimeAccessPolicyOwner(owner) {
+        attachedOwner = owner;
+      },
+    };
+
+    attachSqlRuntimeToStartupOwner({
+      owner: {
+        systemMetadataOwners: {runtimeAccessPolicyOwner},
+      },
+      sqlQueryEngine,
+      systemTableCache: {},
+    });
+
+    assert.strictEqual(attachedOwner, runtimeAccessPolicyOwner);
+  });
+
   it('rebinds the exact lifecycle owner and catalog gateway to the final engine',
     async () => {
       const systemTableCache = {

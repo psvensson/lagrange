@@ -183,6 +183,32 @@ test('TableCreationService - stops periodic split/merge evaluation on shutdown',
     t.equal(stopCalls, 1);
   });
 
+test('TableCreationService - does not log shutdown cancellation as failure',
+  async (t) => {
+    let errorLogs = 0;
+    const service = new TableCreationService({
+      partitionProvisioner: async () => {
+        throw new Error('Schema provisioning cancelled during shutdown');
+      },
+    });
+    service.logger = {
+      debug() {},
+      error() {
+        errorLogs += 1;
+      },
+    };
+
+    await t.rejects(service.provisionInitialPartition({
+      cancellationToken: {isCancelled: () => true},
+      partitionId: 'partition-shutdown',
+      replicaCount: 3,
+      tableId: 'table-shutdown',
+      tableName: 'shutdown_table',
+    }), /cancelled during shutdown/u);
+    t.equal(errorLogs, 0);
+    await service.shutdown();
+  });
+
 test('TableCreationService - triggers split/merge evaluation on table policy cache updates',
   async (t) => {
     let evaluationCalls = 0;

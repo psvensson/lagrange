@@ -87,7 +87,6 @@ function buildContextReadRequest({
     parameters: [
       remainingBytes,
       remainingBytes,
-      remainingBytes + CONTEXT_QUERY_ROW_LIMIT_OFFSET,
     ],
     sessionId: serviceId,
     statement:
@@ -97,7 +96,8 @@ function buildContextReadRequest({
       CONTEXT_VALUE_PROJECTION_SQL +
       `(${CONTEXT_ROW_BYTES_SQL}) AS ` +
       `"${CONTEXT_ROW_BYTES_FIELD}" ` +
-      `FROM ${quotedTable} LIMIT ?`,
+      `FROM ${quotedTable} LIMIT ` +
+      `${remainingBytes + CONTEXT_QUERY_ROW_LIMIT_OFFSET}`,
     tenantId,
     timeoutBudget: wallBudget,
     cancellationToken,

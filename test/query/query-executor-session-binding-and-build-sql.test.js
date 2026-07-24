@@ -907,6 +907,40 @@ test('QueryExecutor - handles redirect when leader also fails', async (t) => {
 
 // --- RETURNING clause reconstruction tests (Requirements: 3.2, 3.3) ---
 
+test('QueryExecutor - preserves qualified logical table names as SQLite identifiers',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache(['p1']),
+    });
+
+    t.match(
+      executor.buildSelectSQL(parseSQL(
+        'SELECT key FROM "global.request_binding_audit"',
+      )),
+      /FROM "global\.request_binding_audit"$/u,
+    );
+    t.match(
+      executor.buildInsertSQL(parseSQL(
+        'INSERT INTO "global.request_binding_audit" ' +
+          '(key, value) VALUES (1, 42)',
+      )),
+      /^INSERT INTO "global\.request_binding_audit"/u,
+    );
+    t.match(
+      executor.buildUpdateSQL(parseSQL(
+        'UPDATE "global.request_binding_audit" SET value = 43 WHERE key = 1',
+      )),
+      /^UPDATE "global\.request_binding_audit"/u,
+    );
+    t.match(
+      executor.buildDeleteSQL(parseSQL(
+        'DELETE FROM "global.request_binding_audit" WHERE key = 1',
+      )),
+      /^DELETE FROM "global\.request_binding_audit"/u,
+    );
+  });
+
 test('QueryExecutor - buildInsertSQL appends RETURNING *', async (t) => {
   const executor = new QueryExecutor({
     messageRouter: createMockMessageRouter(),

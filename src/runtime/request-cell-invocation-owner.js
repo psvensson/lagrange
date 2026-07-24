@@ -13,6 +13,7 @@ import {
 
 const CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE =
   'current SQL request executor is unavailable';
+const INVOCATION_JOURNAL_DIALECT = 'postgresql';
 const RUNTIME_INVOKE_OPERATION = 'invoke';
 const INVOCATION_COMMAND_SEPARATOR = ':';
 const INVOCATION_ERROR_SEPARATOR = '; ';
@@ -124,7 +125,11 @@ function createRequestCellInvocationOwner(deps) {
     const queryExecutor =
       owner._queryExecutorFactory?.(issuingServiceIdentity);
     if (typeof queryExecutor?.executeInternal === 'function') {
-      return queryExecutor.executeInternal;
+      return (sql, params) => queryExecutor.executeInternal(
+        sql,
+        params,
+        {dialect: INVOCATION_JOURNAL_DIALECT},
+      );
     }
     if (typeof queryExecutor === 'function') return queryExecutor;
     throw new RequestCellRoutingError(

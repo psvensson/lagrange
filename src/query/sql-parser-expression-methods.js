@@ -34,6 +34,11 @@ const PG_CASE_ARG_TYPE = Object.freeze({
 });
 
 const PG_EXISTS_NAME = 'EXISTS';
+const SHARED_STRUCTURED_NODE_TYPES = new Set([
+  PG_NODE_TYPE.CAST,
+  PG_NODE_TYPE.CASE,
+  PG_NODE_TYPE.FUNCTION,
+]);
 
 const SQL_OPERATOR = Object.freeze({
   IN: 'IN',
@@ -74,7 +79,14 @@ const sqlParserExpressionMethods = {
       return null;
     }
 
-    // PG-specific node types (only when dialect is postgresql)
+    // node-sql-parser emits the same structured nodes for CASE, CAST, and
+    // function calls in SQLite and PostgreSQL modes. Convert those before the
+    // dialect-specific parameter and boolean handling below.
+    if (SHARED_STRUCTURED_NODE_TYPES.has(expr.type)) {
+      return this.convertPgExpression(expr);
+    }
+
+    // PostgreSQL-only node types.
     if (this.dialect === PARSER_DIALECT.POSTGRESQL) {
       const pgResult = this.convertPgExpression(expr);
       if (pgResult) {
@@ -129,10 +141,10 @@ const sqlParserExpressionMethods = {
   },
 
   /**
-   * Handles PG-specific AST node types produced by node-sql-parser
-   * in postgresql mode. Returns null if the node is not PG-specific
-   * and should fall through to the standard switch.
-   * @param {Object} expr - PG AST expression node.
+   * Handles structured and PostgreSQL-specific AST nodes produced by
+   * node-sql-parser. Returns null if the node should fall through to the
+   * standard switch.
+   * @param {Object} expr - External parser AST expression node.
    * @returns {Object|null} Converted Internal_AST node, or null.
    */
   convertPgExpression(expr) {

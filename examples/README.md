@@ -1,6 +1,6 @@
 # Examples
 
-Four example families live here, ordered by how much infrastructure they
+Five example families live here, ordered by how much infrastructure they
 need. Each has its own README with exact commands.
 
 ## How these relate to the deployment surface
@@ -10,9 +10,12 @@ INSTALL SERVICE and CREATE BINDING over the SQL ingress
 ([`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md),
 operator flow in
 [`docs/wasm-services-user-guide.md`](../docs/wasm-services-user-guide.md)).
-None of the current examples demonstrates that surface yet; each exercises an
-adjacent layer:
+The **request-binding-deployment** example demonstrates that surface end to
+end. The remaining families exercise adjacent layers:
 
+- **request-binding-deployment** installs a source-built WASI component,
+  declares its immutable request Binding and table policy, and invokes a ready
+  Cell over HTTP.
 - **service-portability** starts a built-in (axiomatic) runtime service —
   the bootstrap set that exists before any Binding.
 - **distributed-sql** uses the partition-callback path (`code`,
@@ -21,6 +24,16 @@ adjacent layer:
   to demonstrate the same system placement policy that owns Cell capacity.
 - **kubernetes-endpoint-sync-controller** is a projection-only consumer of
   endpoint metadata, downstream of any runtime service.
+
+## [request-binding-deployment/](request-binding-deployment/README.md)
+
+Build a committed WAT component into a reproducible local OCI layout, boot a
+disposable local node, deploy it with `INSTALL SERVICE`, `CREATE BINDING`, and
+`CONFIGURE SERVICE ACCESS`, then verify matched, denied, and unmatched HTTP
+request behavior against a ready Cell.
+
+- **Prerequisites**: Node.js 22.12+, repository dependencies, and `wasm-tools`
+  on `PATH`.
 
 ## [service-portability/](service-portability/README.md)
 
@@ -44,7 +57,9 @@ implemented in that matrix.
 The rehearsal is not a WebAssembly binary or component. Service deployment is
 declared through INSTALL SERVICE and CREATE BINDING (see
 [`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md));
-no example demonstrates that surface yet.
+the runnable
+[`request-binding-deployment`](request-binding-deployment/README.md) example
+demonstrates that surface with a genuine WASI component.
 Managed OCI container execution is not implemented yet, and OCI callback
 invocation remains unsupported.
 

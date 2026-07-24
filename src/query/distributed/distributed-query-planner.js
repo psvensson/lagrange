@@ -15,6 +15,7 @@ import {
   DISTRIBUTED_ROLE_HINT,
   DISTRIBUTED_STATEMENT_TYPE,
 } from './distributed-query-plan-constants.js';
+import {renderSqliteIdentifier} from '../sqlite-identifier.js';
 
 const LOCAL_STR_NULL = 'NULL';
 const LOCAL_STR_SQUOTE_SQUOTE = '\'\'';
@@ -706,9 +707,11 @@ class DistributedQueryPlanner {
       '*';
     const aliasSuffix = tablePlan.tableAlias &&
       tablePlan.tableAlias !== tablePlan.tableName ?
-      ` AS ${tablePlan.tableAlias}` :
+      ` AS ${renderSqliteIdentifier(tablePlan.tableAlias)}` :
       '';
-    let sql = `SELECT ${projection} FROM ${tablePlan.tableName}${aliasSuffix}`;
+    let sql =
+      `SELECT ${projection} FROM ` +
+      `${renderSqliteIdentifier(tablePlan.tableName)}${aliasSuffix}`;
     if (tablePlan.localPredicate) {
       sql += ` WHERE ${this.renderExpression(tablePlan.localPredicate)}`;
     }

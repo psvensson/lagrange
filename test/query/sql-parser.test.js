@@ -91,6 +91,35 @@ test('SQLParser - parses SELECT with aggregate functions', async (t) => {
   t.equal(ast.columns[2].expression.function, 'AVG');
 });
 
+test('SQLParser - parses SQLite CASE, function, and CAST expressions',
+  async (t) => {
+    const parser = new SQLParser(
+      'SELECT CASE WHEN COALESCE(length(CAST(value AS BLOB)), 0) <= ? ' +
+      'THEN value ELSE NULL END AS value FROM audit',
+    );
+    const ast = parser.parse();
+    const expression = ast.columns[0].expression;
+
+    t.equal(expression.type, 'case');
+    t.equal(expression.conditions.length, 1);
+    t.equal(expression.conditions[0].when.type, 'binary');
+    t.equal(expression.conditions[0].when.left.type, 'function_call');
+    t.equal(expression.conditions[0].when.left.name, 'coalesce');
+    t.equal(
+      expression.conditions[0].when.left.args[0].args[0].type,
+      'cast',
+    );
+    t.equal(
+      expression.conditions[0].when.left.args[0].args[0].affinity,
+      'BLOB',
+    );
+    t.same(
+      expression.conditions[0].when.right,
+      {type: 'parameter', index: 0},
+    );
+    t.equal(expression.elseExpr.value, null);
+  });
+
 test('SQLParser - parses SELECT with JOIN', async (t) => {
   const parser = new SQLParser(
     'SELECT u.name, o.total FROM users u ' +

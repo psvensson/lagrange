@@ -247,6 +247,35 @@ test('DistributedQueryPlanner - records pushdown diagnostics', async (t) => {
   t.equal(plan.diagnostics.pushdownDecisions[0].projectionPushedDown, true);
 });
 
+test('DistributedQueryPlanner - quotes qualified logical table names in fragments',
+  async (t) => {
+    const tableName = 'global.request_binding_audit';
+    const partitions = [{
+      partition_id: 'request-binding-audit-p1',
+      table_name: tableName,
+      partition_key_start: null,
+      partition_key_end: null,
+    }];
+    const tables = [{table_name: tableName, primaryKey: 'key'}];
+    const resolver = new PartitionResolver({
+      systemCache: createSystemCache(partitions, tables),
+    });
+    const planner = new DistributedQueryPlanner({
+      partitionResolver: resolver,
+      getTablePartitions: getTablePartitionsFactory(partitions),
+    });
+
+    const ast = new SQLParser(
+      'SELECT key, value FROM "global.request_binding_audit"',
+    ).parse();
+    const plan = planner.planSelect(ast, []);
+
+    t.equal(
+      plan.fragmentPlans[0].sql,
+      'SELECT key, value FROM "global.request_binding_audit"',
+    );
+  });
+
 test('DistributedQueryPlanner - consumes updated partition map after split-style changes',
   async (t) => {
     const partitions = [

@@ -336,9 +336,10 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
 
     const confirmEmptyLocalReadWithOwnerRpc =
       this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast);
+    const executableSql = this.queryExecutor.buildSelectSQL(ast);
     const localResult = await authoritativeControlPlaneView.readRows(
       tableName,
-      rawSql,
+      executableSql,
       params,
       {
         allowSqlFallback: false,

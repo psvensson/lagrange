@@ -56,6 +56,15 @@ const {
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
+function quoteSqliteIdentifier(identifier) {
+  return PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE +
+    String(identifier).replaceAll(
+      PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE,
+      PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE.repeat(2),
+    ) +
+    PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE;
+}
+
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
    * Resolve the current raft term when a live raft instance exists; the
@@ -698,7 +707,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         return def;
       })
       .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql = `CREATE TABLE IF NOT EXISTS ${this.tableName} (${columns})`;
+    const sql =
+      `CREATE TABLE IF NOT EXISTS ${quoteSqliteIdentifier(this.tableName)} ` +
+      `(${columns})`;
     this.db.exec(sql);
     this.ensureNodesTableColumns();
     this.ensureTablesTableColumns();

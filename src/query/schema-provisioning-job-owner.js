@@ -158,6 +158,7 @@ class SchemaProvisioningJobOwner {
     this.retrySetTimeoutFn = options.retrySetTimeoutFn || setTimeout;
     this.retryClearTimeoutFn = options.retryClearTimeoutFn || clearTimeout;
     this.retryTimersByWorkflowId = new Map();
+    this.shuttingDown = false;
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         now: this.now,
@@ -188,6 +189,7 @@ class SchemaProvisioningJobOwner {
   }
 
   scheduleRetry(intent, executor) {
+    if (this.shuttingDown) return;
     const workflow = this.workflowCoordinator.getWorkflowById(
       intent.workflowId,
     );
@@ -200,6 +202,10 @@ class SchemaProvisioningJobOwner {
     }
     const scheduled = {timerId: null};
     const retry = () => {
+      if (this.shuttingDown) {
+        this.clearScheduledRetry(intent.workflowId);
+        return;
+      }
       if (this.retryTimersByWorkflowId.get(intent.workflowId) !== scheduled) {
         return;
       }
@@ -218,6 +224,13 @@ class SchemaProvisioningJobOwner {
       Math.max(1, workflow.retryAfterMs || this.retryAfterMs),
     );
     scheduled.timerId?.unref?.();
+  }
+
+  shutdown() {
+    this.shuttingDown = true;
+    for (const workflowId of [...this.retryTimersByWorkflowId.keys()]) {
+      this.clearScheduledRetry(workflowId);
+    }
   }
 
   refreshWorkflowFromRow(row) {

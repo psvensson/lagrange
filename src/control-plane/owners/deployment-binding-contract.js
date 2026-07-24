@@ -7,6 +7,7 @@ import {
 import {
   normalizeExternalServiceManifest,
 } from '../../service/external-service-manifest.js';
+import {COLUMN} from '../../constants/columns.js';
 
 const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;
 const DEPLOYMENT_BINDING_GENERATION = 1;
@@ -481,9 +482,15 @@ function rebindStoredDeploymentArtifact(declaration, artifact) {
 }
 
 function bindingRowHasExactFields(row) {
-  return isPlainObject(row) &&
-    Object.keys(row).length === BINDING_ROW_FIELDS.length &&
-    BINDING_ROW_FIELDS.every((field) => Object.hasOwn(row, field));
+  if (!isPlainObject(row) ||
+      !BINDING_ROW_FIELDS.every((field) => Object.hasOwn(row, field))) {
+    return false;
+  }
+  return Object.keys(row).every(
+    (field) =>
+      BINDING_ROW_FIELDS.includes(field) ||
+      field === COLUMN.UPDATED_AT_HLC,
+  );
 }
 
 function bindingRowHasInspectableValues(row) {

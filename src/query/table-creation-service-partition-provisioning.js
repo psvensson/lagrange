@@ -70,13 +70,17 @@ const PARTITION_PROVISIONING_METHODS = Object.freeze({
         minimumRoutableReplicaCount,
       });
     } catch (error) {
-      this.logger.error(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_FAILED, {
-        tableId,
-        tableName,
-        partitionId,
-        replicaCount,
-        error: error.message,
-      });
+      const cancelledDuringShutdown =
+        context?.cancellationToken?.isCancelled?.() === true;
+      if (!cancelledDuringShutdown) {
+        this.logger.error(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_FAILED, {
+          tableId,
+          tableName,
+          partitionId,
+          replicaCount,
+          error: error.message,
+        });
+      }
       if (!error.code) {
         error.code = QUERY_ERROR_CODE.INTERNAL_ERROR;
       }

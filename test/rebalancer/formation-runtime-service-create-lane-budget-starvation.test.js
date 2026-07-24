@@ -243,6 +243,34 @@ function createPlacementComponentRuntime() {
   };
 }
 
+test('post-formation runtime-service create keeps its reserved admission turn ' +
+  'while the shared empty-read backoff is armed', async (t) => {
+  const coordinator = createTestCoordinator({
+    cacheData: {replicaOperations: []},
+    enableTimeouts: false,
+    nodeId: NODE_ID,
+  });
+  coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 60_000;
+  coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs =
+    FIXED_NOW_MS;
+
+  try {
+    await coordinator.ensureConcurrentOperationBudgetAllowed(
+      OperationType.ADD,
+      {
+        entityId: SERVICE_ENTITY_ID,
+        entityType: EntityType.RUNTIME_SERVICE,
+        partitionId: SERVICE_ENTITY_ID,
+      },
+    );
+    t.pass(
+      'the genuine create reaches its authoritative reserved-slot read',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 async function assertOrdinaryChurnRemainsRejected(t, coordinator) {
   for (const partitionId of ['movie-spread-p4', 'movie-spread-p5']) {
     let rejection = null;

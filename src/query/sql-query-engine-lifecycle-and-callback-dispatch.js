@@ -6,6 +6,9 @@ import {initializeSqlQueryEngineInstance} from
   './sql-query-engine-instance-initializer.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
+const RUNTIME_ACCESS_POLICY_OWNER_UNAVAILABLE =
+  'policy_owner_unavailable';
 const LOCAL_NUM_ONE_HUNDRED = 100;
 const LOCAL_STR_COMPLETED = 'completed';
 const LOCAL_STR_FAILED = 'failed';
@@ -362,15 +365,18 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       // Runtime-internal coordination must not distort the service's
       // data-affinity matrix. It shares the normal SQL path and session
       // but deliberately omits issuingServiceId attribution.
-      queryExecutor.executeInternal = (sql, params) =>
-        this.executeQuery(sql, params, {sessionId: serviceId});
+      queryExecutor.executeInternal = (sql, params, options = {}) =>
+        this.executeQuery(sql, params, {
+          ...options,
+          sessionId: serviceId,
+        });
       queryExecutor.executeRequest = (request) =>
         this.executeRequest(request, {issuingServiceId: serviceId});
       queryExecutor.getRuntimeAccessPolicy = () =>
         this.runtimeAccessPolicyOwner?.getRuntimePolicy(serviceId) ||
         Promise.resolve(Object.freeze({
-          status: 'denied',
-          reason: 'policy_owner_unavailable',
+          status: RUNTIME_ACCESS_POLICY_DENIED_STATUS,
+          reason: RUNTIME_ACCESS_POLICY_OWNER_UNAVAILABLE,
         }));
       return queryExecutor;
     });

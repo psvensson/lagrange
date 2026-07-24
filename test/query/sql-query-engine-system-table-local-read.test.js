@@ -100,16 +100,19 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
     const result = await engine.executeQuery(
       'SELECT * FROM services WHERE service_type = \'partition\'',
     );
+    const serviceRead = cdcReads.find(
+      (read) => read.tableName === SYSTEM_TABLE_NAME.SERVICES,
+    );
 
     t.equal(result.success, true, 'should succeed from local authoritative rows');
     t.equal(result.rows.length, 1, 'should return local authoritative rows');
     t.equal(
-      cdcReads[0]?.tableName,
+      serviceRead?.tableName,
       SYSTEM_TABLE_NAME.SERVICES,
       'should query the canonical system table',
     );
     t.equal(
-      cdcReads[0]?.options?.allowSqlFallback,
+      serviceRead?.options?.allowSqlFallback,
       false,
       'should not recurse into routed SQL from the SQL engine fast path',
     );
@@ -161,6 +164,33 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
     t.equal(deliveries.length, 0,
       'shared authoritative reads should still bypass routed delivery');
     t.equal(result.rows.length, 1);
+  });
+
+test('SQLQueryEngine - PG system-table reads execute normalized SQLite SQL locally',
+  async (t) => {
+    const authoritativeReads = [];
+    const engine = new SQLQueryEngine({
+      systemCache: createMockSystemCache(),
+      authoritativeControlPlaneView: {
+        async readRows(tableName, sql, params) {
+          authoritativeReads.push({tableName, sql, params});
+          return {success: true, rows: [], rowCount: 0};
+        },
+      },
+    });
+
+    const result = await engine.executeQuery(
+      'SELECT * FROM services WHERE service_id = $1',
+      ['svc-1'],
+      {dialect: 'postgresql'},
+    );
+
+    t.equal(result.success, true);
+    t.equal(
+      authoritativeReads[0].sql,
+      'SELECT * FROM services WHERE (service_id = ?)',
+    );
+    t.same(authoritativeReads[0].params, ['svc-1']);
   });
 
 test('SQLQueryEngine - bounded system-table primary-key lookups confirm ' +

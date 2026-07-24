@@ -138,6 +138,12 @@ function shouldBypassConcurrentBudgetEmptyBackoff(
   ) {
     return false;
   }
+  if (isGenuineServiceCreateAdmission(
+    normalizedMoveType,
+    options.entityType,
+  )) {
+    return true;
+  }
   const partitionId = String(options.partitionId || '').trim();
   if (partitionId.length === 0) {
     return false;

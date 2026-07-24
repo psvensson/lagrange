@@ -410,8 +410,9 @@ describe('minimal deployment request Cell runtime readiness', () => {
       assert.equal(fixture.sqlRequests.length, 2);
       assert.match(
         fixture.sqlRequests[0].statement,
-        /FROM "global\.audit" LIMIT \?/u,
+        /FROM "global\.audit" LIMIT \d+$/u,
       );
+      assert.equal(fixture.sqlRequests[0].parameters.length, 2);
       assert.equal(
         fixture.sqlRequests[0].budgets.RESULT_MAX_BYTES <= 4096,
         true,
@@ -625,6 +626,11 @@ describe('minimal deployment request Cell runtime readiness', () => {
         assert.equal(selectedRows.length, 1);
         assert.equal(selectedRows[0].value, null);
         assert.equal(selectedRows[0].__request_cell_row_bytes, 4097);
+        const selectRequest = fixture.sqlRequests.find(
+          (request) => request.statement.startsWith('SELECT'),
+        );
+        assert.match(selectRequest.statement, / LIMIT \d+$/u);
+        assert.equal(selectRequest.parameters.length, 2);
         await assertNotReady(fixture);
       } finally {
         store.close();

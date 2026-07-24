@@ -1,4 +1,5 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {renderSqliteIdentifier} from './sqlite-identifier.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -34,7 +35,7 @@ const queryExecutorSqlCommandMethods = {
     if (ast.from.subquery) {
       sql += ` FROM (${this.buildSelectSQL(ast.from.subquery)})`;
     } else {
-      sql += ` FROM ${ast.from.name}`;
+      sql += ` FROM ${renderSqliteIdentifier(ast.from.name)}`;
     }
     if (ast.from.alias) {
       sql += ` AS ${ast.from.alias}`;
@@ -47,7 +48,9 @@ const queryExecutorSqlCommandMethods = {
           ` ${join.joinType} JOIN` +
           ` (${this.buildSelectSQL(join.table.subquery)})`;
       } else {
-        sql += ` ${join.joinType} JOIN ${join.table.name}`;
+        sql +=
+          ` ${join.joinType} JOIN ` +
+          renderSqliteIdentifier(join.table.name);
       }
       if (join.table.alias) {
         sql += ` AS ${join.table.alias}`;
@@ -386,7 +389,7 @@ const queryExecutorSqlCommandMethods = {
     } else {
       sql = `${SQL.INSERT_INTO} `;
     }
-    sql += ast.table;
+    sql += renderSqliteIdentifier(ast.table);
     if (ast.columns) {
       sql += ` (${ast.columns.join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_14)})`;
     }
@@ -478,7 +481,7 @@ const queryExecutorSqlCommandMethods = {
    * @private
    */
   buildUpdateSQL(ast) {
-    let sql = `UPDATE ${ast.table} SET `;
+    let sql = `UPDATE ${renderSqliteIdentifier(ast.table)} SET `;
     const sets = ast.assignments.map(
       (assignment) =>
         `${assignment.column} = ${this.buildExpressionSQL(assignment.value)}`,
@@ -569,7 +572,7 @@ const queryExecutorSqlCommandMethods = {
    * @private
    */
   buildDeleteSQL(ast) {
-    let sql = `DELETE FROM ${ast.table}`;
+    let sql = `DELETE FROM ${renderSqliteIdentifier(ast.table)}`;
     if (ast.where) {
       sql += ` WHERE ${this.buildExpressionSQL(ast.where)}`;
     }

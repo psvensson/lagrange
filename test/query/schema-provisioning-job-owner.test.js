@@ -179,6 +179,62 @@ test('durable schema job atomically records intent and replays one terminal ' +
   );
 });
 
+test('table creation shutdown cancels durable work and disarms retries',
+  async (t) => {
+    const gateway = createGateway();
+    const retryTimers = [];
+    const clearedTimers = [];
+    const service = createService(gateway, [], {
+      schemaProvisioningRetrySetTimeoutFn(callback, delayMs) {
+        const timer = {callback, delayMs, unref() {}};
+        retryTimers.push(timer);
+        return timer;
+      },
+      schemaProvisioningRetryClearTimeoutFn(timer) {
+        clearedTimers.push(timer);
+      },
+    });
+    let executionOptions = null;
+    let provisionCallCount = 0;
+    service.executeCreateTableProvisioning = async (_ast, options) => {
+      executionOptions = options;
+      provisionCallCount += 1;
+      return {
+        contractState: OWNER_CONTRACT_STATE.PENDING,
+        nextAction: 'retry',
+      };
+    };
+
+    const pending = await service.createTable(createAst());
+    t.equal(pending.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.equal(provisionCallCount, 1);
+    t.equal(retryTimers.length, 1);
+    t.equal(
+      service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size,
+      1,
+    );
+    t.ok(executionOptions.cancellationToken);
+    t.equal(executionOptions.cancellationToken.isCancelled(), false);
+
+    await service.shutdown();
+
+    t.equal(executionOptions.cancellationToken.isCancelled(), true);
+    t.equal(service.schemaProvisioningJobOwner.shuttingDown, true);
+    t.equal(
+      service.schemaProvisioningJobOwner.retryTimersByWorkflowId.size,
+      0,
+    );
+    t.same(clearedTimers, retryTimers);
+
+    retryTimers[0].callback();
+    await new Promise((resolve) => setImmediate(resolve));
+    t.equal(
+      provisionCallCount,
+      1,
+      'a raced retry callback cannot restart provisioning after shutdown',
+    );
+  });
+
 test('durable schema job resumes after crash immediately after intent insert',
   async (t) => {
     const gateway = createGateway();

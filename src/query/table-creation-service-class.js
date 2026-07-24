@@ -10,6 +10,7 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {NUM} from '../constants/index.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {QUERY_SUBSYSTEM} from './query-constants.js';
+import {CancellationToken} from './cancellation-token.js';
 import {defineTableCreationCreateTableMethod} from './table-creation-service-create-table.js';
 import {defineTableCreationDurableJobMethod} from './table-creation-service-durable-job.js';
 import {SchemaProvisioningJobOwner} from './schema-provisioning-job-owner.js';
@@ -23,6 +24,8 @@ import {defineTableCreationMetadataLookup} from './table-creation-service-metada
 import {defineTableCreationExistingTableReconciliation} from './table-creation-service-existing-table-reconciliation.js';
 import {defineTableCreationResultProjection} from './table-creation-service-result-projection.js';
 
+const SCHEMA_PROVISIONING_SHUTDOWN_REASON =
+  'Schema provisioning cancelled during shutdown';
 
 /**
  * TableCreationService handles table creation with automatic partition key
@@ -64,6 +67,7 @@ class TableCreationService {
         retrySetTimeoutFn: options.schemaProvisioningRetrySetTimeoutFn,
         retryClearTimeoutFn: options.schemaProvisioningRetryClearTimeoutFn,
       });
+    this.schemaProvisioningCancellationToken = new CancellationToken();
     this.partitionSplitMergeManager = null;
     this.tablePolicyByTableId = new Map();
     this.partitionSizeByPartitionId = new Map();
@@ -140,6 +144,10 @@ class TableCreationService {
    * @return {Promise<void>}
    */
   async shutdown() {
+    this.schemaProvisioningJobOwner?.shutdown?.();
+    this.schemaProvisioningCancellationToken.cancel(
+      SCHEMA_PROVISIONING_SHUTDOWN_REASON,
+    );
     this.detachCachePolicyListener();
     this.stopPeriodicSplitMergeEvaluation();
   }

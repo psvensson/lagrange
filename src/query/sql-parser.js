@@ -34,6 +34,14 @@ const PARSER_ERROR_MSG = Object.freeze({
   EMPTY_SQL_STATEMENT: 'Empty SQL statement',
   SPLIT_STORAGE_THRESHOLD_SAFE_INTEGER:
     'split_storage_threshold must be a safe integer',
+  LIMIT_COUNT_MUST_BE_INTEGER_LITERAL:
+    'LIMIT count must be an integer literal',
+  LIMIT_OFFSET_MUST_BE_INTEGER_LITERAL:
+    'LIMIT offset must be an integer literal',
+  LIMIT_ALL_WITH_OFFSET_UNSUPPORTED:
+    'LIMIT ALL with OFFSET is unsupported',
+  OFFSET_WITHOUT_LIMIT_UNSUPPORTED:
+    'OFFSET without LIMIT is unsupported',
   UNSUPPORTED_CREATE_TYPE_PREFIX: 'Unsupported CREATE type: ',
   UNSUPPORTED_DROP_TYPE_PREFIX: 'Unsupported DROP type: ',
   UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
@@ -83,6 +91,8 @@ const SQL_JOIN_TYPE = Object.freeze({
 const SQL_SORT_DIRECTION = Object.freeze({
   ASC: 'ASC',
 });
+const SQL_LIMIT_ALL = 'ALL';
+const SQL_LIMIT_OFFSET_SEPARATOR = 'offset';
 
 /**
  * node-sql-parser expression-level AST type identifiers.
@@ -136,6 +146,59 @@ function extractCreateTableStorageOptions(sql) {
     options: {
       tablePolicy: {splitStorageThreshold},
     },
+  };
+}
+
+function externalSchemaIdentifier(value) {
+  if (typeof value === 'string') return value;
+  const candidate =
+    value?.expr?.value ??
+    value?.value ??
+    value?.column;
+  return typeof candidate === 'string' ? candidate : String(candidate || '');
+}
+
+function isLimitAllNode(node) {
+  return node?.type === EXT_EXPR_TYPE.ORIGIN &&
+    String(node.value).toUpperCase() === SQL_LIMIT_ALL;
+}
+
+function requireIntegerLimitLiteral(node, errorMessage) {
+  const value = node?.value;
+  if (!Number.isInteger(value)) {
+    throw new Error(errorMessage);
+  }
+  return value;
+}
+
+function convertExternalLimit(limit) {
+  const values = limit?.value;
+  if (!Array.isArray(values) || values.length === 0) {
+    return null;
+  }
+  if (isLimitAllNode(values[0])) {
+    if (values.length > 1) {
+      throw new Error(PARSER_ERROR_MSG.LIMIT_ALL_WITH_OFFSET_UNSUPPORTED);
+    }
+    return null;
+  }
+  if (
+    limit.seperator === SQL_LIMIT_OFFSET_SEPARATOR &&
+    values.length === 1
+  ) {
+    throw new Error(PARSER_ERROR_MSG.OFFSET_WITHOUT_LIMIT_UNSUPPORTED);
+  }
+  return {
+    count: requireIntegerLimitLiteral(
+      values[0],
+      PARSER_ERROR_MSG.LIMIT_COUNT_MUST_BE_INTEGER_LITERAL,
+    ),
+    offset: values.length > 1 ?
+      requireIntegerLimitLiteral(
+        values[1],
+        PARSER_ERROR_MSG.LIMIT_OFFSET_MUST_BE_INTEGER_LITERAL,
+      ) :
+      null,
   };
 }
 
@@ -318,7 +381,9 @@ class SQLParser {
 
   convertInsert(ast) {
     const tableName = ast.table[0].table;
-    const columns = ast.columns || null;
+    const columns = Array.isArray(ast.columns) ?
+      ast.columns.map((column) => externalSchemaIdentifier(column)) :
+      null;
     const values = [];
     const insertMode = this.getInsertMode(ast);
 
@@ -378,7 +443,7 @@ class SQLParser {
   convertUpdate(ast) {
     const tableName = ast.table[0].table;
     const assignments = ast.set.map((s) => ({
-      column: s.column,
+      column: externalSchemaIdentifier(s.column),
       value: this.convertValue(s.value),
     }));
     return {
@@ -421,7 +486,7 @@ class SQLParser {
     for (const def of ast.create_definitions || []) {
       if (def.resource === SQL_SCHEMA_KEYWORD.COLUMN) {
         const column = {
-          name: def.column.column,
+          name: externalSchemaIdentifier(def.column.column),
           dataType: {
             name: def.definition.dataType,
             length: def.definition.length || null,
@@ -439,11 +504,15 @@ class SQLParser {
         }
       } else if (def.resource === SQL_SCHEMA_KEYWORD.CONSTRAINT) {
         if (def.constraint_type === SQL_SCHEMA_KEYWORD.PRIMARY_KEY) {
-          const pkColumns = def.definition.map((d) => d.column);
+          const pkColumns = def.definition.map(
+            (definition) => externalSchemaIdentifier(definition.column),
+          );
           tableConstraints.push({type: LOCAL_STR_PRIMARY_KEY, columns: pkColumns});
           primaryKey = pkColumns;
         } else if (def.constraint_type === SQL_SCHEMA_KEYWORD.UNIQUE) {
-          const uniqueColumns = def.definition.map((d) => d.column);
+          const uniqueColumns = def.definition.map(
+            (definition) => externalSchemaIdentifier(definition.column),
+          );
           tableConstraints.push({type: LOCAL_STR_UNIQUE, columns: uniqueColumns});
         }
       }
@@ -589,13 +658,7 @@ class SQLParser {
   }
 
   convertLimit(limit) {
-    if (!limit || !limit.value) {
-      return null;
-    }
-    const values = limit.value;
-    const count = values[0]?.value;
-    const offset = values.length > 1 ? values[1]?.value : null;
-    return {count, offset};
+    return convertExternalLimit(limit);
   }
 }
 

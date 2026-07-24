@@ -8,6 +8,19 @@ import {
 
 const LOCAL_STR_FUNCTION = 'function';
 
+function attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine) {
+  const runtimeAccessPolicyOwner =
+    owner.systemMetadataOwners?.runtimeAccessPolicyOwner ||
+    owner.serviceLifecycleCommandOwner?.runtimeAccessPolicyOwner ||
+    null;
+  if (
+    runtimeAccessPolicyOwner &&
+    typeof sqlQueryEngine.setRuntimeAccessPolicyOwner === LOCAL_STR_FUNCTION
+  ) {
+    sqlQueryEngine.setRuntimeAccessPolicyOwner(runtimeAccessPolicyOwner);
+  }
+}
+
 /**
  * Attach the final runtime SQL engine to the canonical startup owner.
  *
@@ -35,6 +48,7 @@ function attachSqlRuntimeToStartupOwner(options) {
     owner.serviceLifecycleCommandOwner || null,
     sqlQueryEngine,
   );
+  attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine);
   owner.sqlQueryEngine = sqlQueryEngine;
 
   const bootstrapTopologySnapshotOwner =

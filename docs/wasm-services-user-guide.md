@@ -10,6 +10,8 @@ Its repository path is `docs/service-portability-capabilities.json`.
 **Service portability status:** external services are deployed through
 INSTALL SERVICE and CREATE BINDING (section 5); a Binding-derived Cell runs a
 genuine WASI component with budget and declared-table enforcement. The
+[`request-binding-deployment`](../examples/request-binding-deployment/README.md)
+example is the runnable local proof. The
 `wasm_component` *callback* example is a separate, older axis: it wraps
 JavaScript source in a `js_wasm_component_v1` envelope and evaluates it as
 JavaScript. It is not a WebAssembly binary or component.
@@ -358,6 +360,22 @@ component's status, headers, and body. Invocation for the other source kinds
 (timer firing, CDC dispatch, statement/query invocation, bootstrap hooks) is
 declared by the Binding but cut over separately; placement and readiness do
 not depend on it.
+
+### 5.5 Run the Request Binding Example
+
+The committed example builds a genuine component from WAT source, packages it
+as a reproducible local OCI layout, boots a disposable local node, submits all
+three lifecycle statements through the authenticated PostgreSQL adapter, and
+invokes the resulting ready Cell over HTTP:
+
+```bash
+node examples/request-binding-deployment/run-request-binding-deployment.js
+```
+
+It verifies the component's `202` status, response header, and body; a declared
+table write; denial of undeclared table slot 1; and zero component invocations
+for an unmatched route. Prerequisites and the exact scope are in
+[`examples/request-binding-deployment/README.md`](../examples/request-binding-deployment/README.md).
 
 ## 6. Administer Existing Services
 

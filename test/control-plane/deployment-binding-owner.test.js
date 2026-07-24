@@ -597,4 +597,35 @@ describe('deployment Binding system-table owner', () => {
         error, DEPLOYMENT_BINDING_ERROR_CODE.CORRUPT_RECORD),
     );
   });
+
+  test('accepts only the cache HLC annotation beyond durable Binding fields',
+    async () => {
+      const gateway = new DurableBindingGateway();
+      const owners = createOwners(gateway);
+      const package_ = await seedPackage(owners.serviceInstallCatalogOwner);
+      const created = await owners.deploymentBindingOwner.createBinding(
+        bindingInput(package_), SECURITY_CONTEXT);
+      const row = gateway.rows(TABLES.SERVICE_BINDINGS)
+        .get(created.bindingVersionId);
+      row.updated_at_hlc = '1000-0-service_bindings-p1-r1';
+
+      const cached = await owners.deploymentBindingOwner.getBindingByName(
+        'orders-api',
+        SECURITY_CONTEXT,
+      );
+      assert.equal(cached.bindingVersionId, created.bindingVersionId);
+
+      row.unowned_projection = 'rejected';
+      await assert.rejects(
+        owners.deploymentBindingOwner.getBindingByName(
+          'orders-api',
+          SECURITY_CONTEXT,
+        ),
+        (error) => assertBindingCode(
+          error,
+          DEPLOYMENT_BINDING_ERROR_CODE.CORRUPT_RECORD,
+        ),
+      );
+    },
+  );
 });
