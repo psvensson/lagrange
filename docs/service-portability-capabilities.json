@@ -7,11 +7,12 @@
       "callbackInvocation": "internal_supported"
     },
     "wasm_component": {
-      "externalInstall": "unsupported",
-      "managedExecution": "lifecycle_scaffold",
+      "externalInstall": "sql_install_service",
+      "managedExecution": "genuine_wasi_component_cell",
       "callbackInvocation": "javascript_envelope_rehearsal",
-      "artifactFormat": "js_wasm_component_v1",
-      "genuineComponentExecution": false
+      "callbackArtifactFormat": "js_wasm_component_v1",
+      "genuineComponentExecution": true,
+      "genuineComponentExecutionPath": "binding_cell_runtime"
     },
     "oci_container": {
       "externalInstall": "unsupported",

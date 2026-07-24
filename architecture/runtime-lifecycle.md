@@ -197,7 +197,7 @@ State labels in this section are explicit and mandatory.
 | Runtime Kind | Purpose | Status |
 |-------------|---------|--------|
 | `native_js` | Run existing in-process handlers as replicated service workloads (admin first) | Active |
-| `wasm_component` | Target: run WASI/component workloads with manifest/capability/dependency enforcement | Lifecycle scaffold; current callback example is a JavaScript envelope, not component execution |
+| `wasm_component` | Run WASI component workloads with manifest/capability/dependency enforcement | Genuine WASI component execution on the Binding/Cell readiness path (transpile, instantiate, budget and declared-table enforcement); the callback example remains a JavaScript envelope rehearsal, not component execution |
 | `oci_container` | Target: run digest-pinned OCI container workloads | Descriptor and in-memory lifecycle scaffold; no real container activation |
 
 The authoritative current support matrix is

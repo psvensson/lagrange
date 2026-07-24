@@ -104,3 +104,14 @@ No further Quest is selected from this epic. The Solver overview derives
   overview now derives `linked-terminal`; source-specific invocation and
   optional actor-key routing remain separate follow-on choices with no selected
   target from this epic.
+- 2026-07-24 — Owner reconciled the service-portability claims surface with
+  this epic's landed evidence: `docs/service-portability-capabilities.json`
+  and its gate now state the `wasm_component` axes separately — SQL
+  `INSTALL SERVICE` installation and genuine WASI component execution on the
+  Binding/Cell readiness path (evidence:
+  `minimal-deployment-request-cell-runtime-readiness`), while the callback
+  path remains a JavaScript-envelope rehearsal and managed OCI container
+  execution remains unimplemented. This satisfies service-portability R1
+  ("distinguish current behavior, internal rehearsal machinery, and
+  production-supported external service behavior") without weakening its
+  callback or OCI constraints.

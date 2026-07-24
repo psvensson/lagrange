@@ -38,7 +38,9 @@ tap.test('runtime architecture points to the truthful capability owner', (t) => 
 
   t.match(architecture, /docs\/service-portability-capabilities\.json/u);
   t.match(architecture,
-    /Lifecycle scaffold; current callback example is a JavaScript envelope/u);
+    /Genuine WASI component execution on the Binding\/Cell readiness path/u);
+  t.match(architecture,
+    /callback example remains a JavaScript envelope rehearsal/u);
   t.match(architecture,
     /Descriptor and in-memory lifecycle scaffold; no real container activation/u);
   t.end();

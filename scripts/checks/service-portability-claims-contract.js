@@ -30,17 +30,21 @@ const CAPABILITY_STATE = Object.freeze({
   UNSUPPORTED: 'unsupported',
   KERNEL_INTERNAL: 'kernel_internal',
   INTERNAL_SUPPORTED: 'internal_supported',
-  LIFECYCLE_SCAFFOLD: 'lifecycle_scaffold',
+  SQL_INSTALL_SERVICE: 'sql_install_service',
+  GENUINE_WASI_CELL: 'genuine_wasi_component_cell',
   JS_ENVELOPE_REHEARSAL: 'javascript_envelope_rehearsal',
   OCI_LIFECYCLE_SCAFFOLD: 'descriptor_and_in_memory_lifecycle_scaffold',
 });
+
+const WASI_CELL_EXECUTION_PATH = 'binding_cell_runtime';
 
 const CLAIM_MARKER = Object.freeze({
   CAPABILITY_LINK: 'docs/service-portability-capabilities.json',
   DISCLOSURE: 'Service portability status:',
   JS_NOT_WASM: 'not a WebAssembly binary or component',
-  EXTERNAL_INSTALL_UNAVAILABLE:
-    'External service installation is not implemented yet',
+  BINDING_DEPLOYMENT: 'INSTALL SERVICE and CREATE BINDING',
+  OCI_EXECUTION_UNAVAILABLE:
+    'Managed OCI container execution is not implemented yet',
   OCI_CALLBACK_UNSUPPORTED: 'OCI callback invocation remains unsupported',
 });
 
@@ -68,13 +72,15 @@ const CONTRACT_ERROR = Object.freeze({
   NATIVE_CALLBACK:
     'native_js callback invocation must be labelled internal_supported',
   WASM_EXTERNAL:
-    'wasm_component external installation must remain unsupported until cutover',
+    'wasm_component external installation must be labelled sql_install_service',
   WASM_MANAGED:
-    'wasm_component managed execution must be labelled lifecycle_scaffold',
+    'wasm_component managed execution must be labelled genuine_wasi_component_cell',
   WASM_CALLBACK:
     'wasm_component callback path must be labelled javascript envelope rehearsal',
   WASM_GENUINE:
-    'genuineComponentExecution must remain false until real engine cutover',
+    'genuineComponentExecution must be true for the binding cell runtime path',
+  WASM_GENUINE_PATH:
+    'genuineComponentExecutionPath must name the binding cell runtime path',
   OCI_EXTERNAL:
     'oci_container external installation must remain unsupported until cutover',
   OCI_MANAGED:
@@ -105,10 +111,7 @@ const FORBIDDEN_PUBLIC_CLAIMS = Object.freeze([
   /build, upload,\s+and run distributed WASM services/iu,
   /compute \(JS\/WASM services\)/iu,
   /active runtime executes distributed functions as genuine WebAssembly modules/iu,
-  /third-party WASM services can be installed from external manifests today/iu,
   /OCI callbacks can now be invoked by partition_callback/iu,
-  /WASM is (?:one|an) execution format in the system/iu,
-  /WASM matters here because it is a useful unit for sandboxed, portable, replicable compute/iu,
 ]);
 
 function addProblem(problems, condition, message) {
@@ -129,18 +132,22 @@ function validateNativeCapabilities(nativeRuntime, problems) {
 
 function validateWasmCapabilities(wasmRuntime, problems) {
   addProblem(problems,
-    wasmRuntime?.externalInstall === CAPABILITY_STATE.UNSUPPORTED,
+    wasmRuntime?.externalInstall === CAPABILITY_STATE.SQL_INSTALL_SERVICE,
     CONTRACT_ERROR.WASM_EXTERNAL);
   addProblem(problems,
-    wasmRuntime?.managedExecution === CAPABILITY_STATE.LIFECYCLE_SCAFFOLD,
+    wasmRuntime?.managedExecution === CAPABILITY_STATE.GENUINE_WASI_CELL,
     CONTRACT_ERROR.WASM_MANAGED);
   addProblem(problems,
     wasmRuntime?.callbackInvocation === CAPABILITY_STATE.JS_ENVELOPE_REHEARSAL,
     CONTRACT_ERROR.WASM_CALLBACK);
-  addProblem(problems, wasmRuntime?.artifactFormat === LEGACY_ARTIFACT_FORMAT,
-    `wasm_component rehearsal must name ${LEGACY_ARTIFACT_FORMAT}`);
-  addProblem(problems, wasmRuntime?.genuineComponentExecution === false,
+  addProblem(problems,
+    wasmRuntime?.callbackArtifactFormat === LEGACY_ARTIFACT_FORMAT,
+    `wasm_component callback rehearsal must name ${LEGACY_ARTIFACT_FORMAT}`);
+  addProblem(problems, wasmRuntime?.genuineComponentExecution === true,
     CONTRACT_ERROR.WASM_GENUINE);
+  addProblem(problems,
+    wasmRuntime?.genuineComponentExecutionPath === WASI_CELL_EXECUTION_PATH,
+    CONTRACT_ERROR.WASM_GENUINE_PATH);
 }
 
 function validateOciCapabilities(ociRuntime, problems) {

@@ -91,10 +91,7 @@ tap.test('runtime implementation drift requires a capability-contract update',
 
 const SEMANTIC_FALSE_CLAIMS = Object.freeze([
   'The active runtime executes distributed functions as genuine WebAssembly modules.',
-  'Third-party WASM services can be installed from external manifests today.',
   'OCI callbacks can now be invoked by partition_callback.',
-  'WASM is one execution format in the system.',
-  'WASM matters here because it is a useful unit for sandboxed, portable, replicable compute.',
 ]);
 
 for (const falseClaim of SEMANTIC_FALSE_CLAIMS) {

@@ -22,8 +22,11 @@ Each example directory contains:
 The machine-readable capability contract is
 [`docs/service-portability-capabilities.json`](../../docs/service-portability-capabilities.json).
 **Service portability status:** this directory demonstrates the callback path
-described by that current-state contract, not the target install ecosystem.
-External service installation is not implemented yet. `native_js` is
+described by that current-state contract, not the deployment surface. Service
+deployment is declared through INSTALL SERVICE and CREATE BINDING (see
+[`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md));
+the callback path here predates it.
+Managed OCI container execution is not implemented yet. `native_js` is
 kernel-internal, and OCI callback invocation remains unsupported.
 
 The sixth example deliberately exercises the current `wasm_component` routing
