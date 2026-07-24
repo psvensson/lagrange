@@ -4,7 +4,7 @@ Global architecture role, principles, and single-path ownership contract.
 
 ## Document Role
 
-This document governs the current architecture of the repository.
+This document describes the current architecture of the system.
 
 Use this file for:
 

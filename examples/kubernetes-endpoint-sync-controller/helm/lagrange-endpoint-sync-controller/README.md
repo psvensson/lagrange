@@ -1,32 +1,32 @@
 # lagrange-endpoint-sync-controller Chart
 
-Sample chart for deploying a Kubernetes-side endpoint sync controller that
-projects Lagrange `service_endpoints` metadata into native Kubernetes objects.
+This chart deploys a Kubernetes-side endpoint sync controller that projects
+Lagrange `service_endpoints` metadata into native Kubernetes objects.
 
-## Runtime Entrypoint
+## Runtime entrypoint
 
-The container image should start:
+Your container image should start:
 
 ```bash
 node scripts/start-endpoint-sync-controller.js
 ```
 
-This script reads endpoint-sync env vars plus in-cluster service account
+The script reads endpoint-sync env vars plus in-cluster service account
 credentials for Kubernetes API access.
 
-If your image does not define this as default entrypoint, set:
+If your image does not define this as the default entrypoint, set:
 
 - `controller.command[0]=node`
 - `controller.command[1]=scripts/start-endpoint-sync-controller.js`
 
-## Required Values
+## Required values
 
 - `source.adminStreamUrl`
 
-## Optional Secret
+## Optional secret
 
-If the source admin API requires a token, create a secret and point chart values
-at it:
+If the source admin API requires a token, create a secret and point the chart
+values at it:
 
 ```bash
 kubectl -n endpoint-sync create secret generic endpoint-sync-auth \

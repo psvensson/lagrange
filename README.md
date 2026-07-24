@@ -310,9 +310,10 @@ Current runtime support is recorded in
 [`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
 **Service portability status:** the matrix is the current implementation claim;
 architecture documents may describe later target contracts.
-The uploaded `wasm_component` callback example is an internal lifecycle rehearsal:
-its JavaScript source is serialized into `js_wasm_component_v1` and evaluated as
-JavaScript. It is not a WebAssembly binary or component. This callback axis is
+The uploaded `wasm_component` callback example exercises the lifecycle but does
+not run real WebAssembly: its JavaScript source is serialized into
+`js_wasm_component_v1` and evaluated as JavaScript. It is not a WebAssembly
+binary or component. This callback axis is
 separate from the Artifact / Binding / Cell deployment surface (which runs
 genuine WASI components); `native_js` remains kernel-internal.
 

@@ -71,13 +71,13 @@ compute moves to the data and cross-node traffic is reduced:
 
 ### Contracts & Invariants
 
-- [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants, owners, models, runtime paths, Quest history, archived trace evidence, and residual evidence.
-- [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence)** verifies an entry's optional `liveEvidence` predicate against the running system or a deterministic repro; HELD/BREACHED status is machine-derived, and a BREACH means this documentation no longer reflects the system. The evaluation tooling is part of the development workflow (see the generated command reference in the steering tree).
+- [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants to their owners, models, and runtime paths.
+- [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence)** verifies an entry's optional `liveEvidence` predicate against the running system or a deterministic repro; a BREACHED status means the running system has diverged from this registry.
 - [Core System Logic Contract](contracts/core-system-logic.md) - Low-resolution core owner-flow contract backed by an architecture-adjacent statechart.
 - [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md) - Startup readiness and handoff temporal contract backed by TLA+.
 - [Rolling Restart Rebalancer Handoff Contract](contracts/rolling-restart-rebalancer-handoff.md) - Priority recovery handoff convergence contract and decision-table binding.
 - [Active Gate Convergence Contract](contracts/active-gate-convergence.md) - Coupled active-gate/rebalancer invariant contract backed by TLA+ and fast-check models.
-- [Quest Lifecycle Contract](contracts/quest-lifecycle.md) - Development-process contract (not system architecture): workflow statechart for Quest attempts, findings, closure, and redirect safety. Kept under `contracts/` because contract tooling discovers records by directory.
+- [Quest Lifecycle Contract](contracts/quest-lifecycle.md) - Internal development-process contract (not system architecture): workflow statechart for the repository's unit of work.
 
 ### Models
 

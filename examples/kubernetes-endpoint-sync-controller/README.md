@@ -2,12 +2,10 @@
 
 This example shows how to deploy a Kubernetes-side endpoint sync controller
 that projects Lagrange `service_endpoints` metadata into selector-less
-Kubernetes `Service` + `EndpointSlice` resources.
+Kubernetes `Service` + `EndpointSlice` resources. Use it as a starting point
+for your own deployment.
 
-This is a sample packaging artifact intended for integration testing and
-customer onboarding.
-
-## Kubernetes vs Lagrange (Key Differences)
+## Kubernetes vs Lagrange (key differences)
 
 Lagrange and Kubernetes solve different ownership problems:
 
@@ -19,21 +17,21 @@ Lagrange and Kubernetes solve different ownership problems:
 | Service discovery objects | Kubernetes builds from Pod labels | Endpoint sync controller projects from Lagrange metadata |
 | Control-plane mutations | Kubernetes-native APIs | Lagrange SQL/CDC and internal control-plane services |
 
-Practical implication:
+In practice:
 
 - Kubernetes is still the infrastructure/orchestration layer.
 - Lagrange remains source-of-truth for service placement and endpoint intent.
 - Endpoint sync is the bridge: it publishes Lagrange endpoint intent into
   native Kubernetes `Service`/`EndpointSlice` objects.
 
-## Layout
+## What's inside
 
 - `helm/lagrange-endpoint-sync-controller/`: sample Helm chart
 
-## Built-In System Services (Expected)
+## Services you should expect to see
 
-These are the core replicated system services you should see in a standard
-Lagrange deployment:
+These are the core replicated system services in a standard Lagrange
+deployment:
 
 | Service ID | Purpose | Typical External Use |
 | --- | --- | --- |
@@ -41,13 +39,13 @@ Lagrange deployment:
 | `sys-wasm-meta` | WASM meta/lifecycle commands | Internal control-plane ops |
 | `sys-postgres-wire` | PostgreSQL wire ingress | Client database traffic |
 
-For endpoint sync with default values (`sync.protocolAllowList=[postgresql]`),
-the main exported service is usually `sys-postgres-wire`.
+With default values (`sync.protocolAllowList=[postgresql]`), the main exported
+service is usually `sys-postgres-wire`.
 
 Public internet exposure should normally use user services, not `sys-*`
 internal control-plane services.
 
-## Name You Will Use (User Service Example)
+## Names you will see (user service example)
 
 Assume a user service `foo` that publishes endpoint rows with protocol `http`.
 
@@ -61,14 +59,14 @@ The projected name comes from:
 - `<serviceNamePrefix>-<logicalServiceName>-<protocol>`
 - Example: `svc-foo-http`
 
-## Render Chart
+## Render the chart
 
 ```bash
 helm template endpoint-sync \
   examples/kubernetes-endpoint-sync-controller/helm/lagrange-endpoint-sync-controller
 ```
 
-## Quick Start (Local Process)
+## Quick start (local process)
 
 Run one controller process from this repo with in-cluster Kubernetes API auth:
 
@@ -79,21 +77,21 @@ ENDPOINT_SYNC_LEASE_NAMESPACE=endpoint-sync \
 npm run start:endpoint-sync
 ```
 
-Notes:
+Good to know:
 
 - The runner uses `scripts/start-endpoint-sync-controller.js`.
 - Kubernetes API credentials are read from in-cluster service account files.
 - If `ENDPOINT_SYNC_TARGET_NAMESPACE` is omitted, it falls back to the service account namespace.
 
-## Verify Chart Scenarios
+## Verify chart scenarios
 
-Deterministic render/lint checks for default and override scenarios:
+Run the deterministic render/lint checks for default and override scenarios:
 
 ```bash
 npm run test:chart:endpoint-sync
 ```
 
-## Install Chart
+## Install the chart
 
 ```bash
 helm upgrade --install endpoint-sync \
@@ -107,7 +105,7 @@ helm upgrade --install endpoint-sync \
   --set source.auth.existingSecret.tokenKey=token
 ```
 
-## Key Values
+## Key values
 
 - `source.adminStreamUrl`: Admin WebSocket URL (`/api/admin/stream`)
 - `source.query.timeoutMs`: source query timeout per fetch cycle
@@ -120,7 +118,7 @@ helm upgrade --install endpoint-sync \
 - `leaderElection.enabled`: lease-based single-writer mode
 - `controller.command` / `controller.args`: optional container command override
 
-## End-To-End Path To Public Domain
+## End-to-end path to a public domain
 
 Example target domain: `foo.example.com`
 

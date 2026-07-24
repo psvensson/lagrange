@@ -15,19 +15,15 @@ Its repository path is `docs/service-portability-capabilities.json`.
 INSTALL SERVICE and CREATE BINDING (section 5); a Binding-derived Cell runs a
 genuine WASI component with budget and declared-table enforcement. The
 [`request-binding-deployment`](../examples/request-binding-deployment/README.md)
-example is the runnable local proof. The
+example runs this end to end locally. The
 `wasm_component` *callback* example is a separate, older axis: it wraps
 JavaScript source in a `js_wasm_component_v1` envelope and evaluates it as
 JavaScript. It is not a WebAssembly binary or component.
 Managed OCI container execution is not implemented yet, and OCI callback
 invocation remains unsupported.
 
-When a real runtime capability cuts over, update these surfaces together in one
-verified Quest: increment the capability contract version, change the runtime
-state, replace its implementation evidence probe, update every inventoried
-public document and example contract, add the former limitation as a negative
-regression, and run both the behavioral and public-claims guards. Leaving old
-evidence markers in dead code is not sufficient to change a capability state.
+These capability states change together when a runtime capability actually
+lands; the JSON matrix above is always the authoritative implementation claim.
 
 ## 1. Control Plane Overview
 
@@ -43,7 +39,7 @@ Active operator path:
 4. Dispatchable ingress messages are translated to canonical `Service_Message`
    envelopes and executed through the shared dispatcher contract.
 
-## 2. Prerequisites for the Current Rehearsal
+## 2. Prerequisites (JavaScript Callback Examples)
 
 1. Node is running (`npm start`), and you know the admin WebSocket port.
    - Default port: REST port + 1 (`8081` when REST uses `8080`)
@@ -367,7 +363,7 @@ not depend on it.
 
 ### 5.5 Run the Request Binding Example
 
-The committed example builds a genuine component from WAT source, packages it
+This example builds a genuine component from WAT source, packages it
 as a reproducible local OCI layout, boots a disposable local node, submits all
 three lifecycle statements through the authenticated PostgreSQL adapter, and
 invokes the resulting ready Cell over HTTP:
