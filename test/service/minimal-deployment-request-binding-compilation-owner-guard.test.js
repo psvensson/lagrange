@@ -102,12 +102,17 @@ test('Binding Cell placement keeps compilation two-phase and owner-controlled',
     );
     assert.equal(
       isDeploymentBindingCellSourceKind(
+        DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
+      ),
+      true,
+    );
+    assert.equal(
+      isDeploymentBindingCellSourceKind(
         DEPLOYMENT_BINDING_SOURCE_KIND.ONCE,
       ),
       true,
     );
     for (const inactiveSourceKind of [
-      DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
       DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN,
     ]) {
       assert.equal(

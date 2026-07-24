@@ -40,7 +40,15 @@ import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
 const TENANT_ID = 'tenant-once';
 const ARTIFACT_DIGEST = `sha256:${'e'.repeat(64)}`;
 const COMPONENT_EXPORT_NAME = 'run';
-const KIND_ONLY_COMPONENT_SOURCE_KINDS = new Set(['boot', 'once']);
+const COMPONENT_RUN_EXPORT_SOURCE_KINDS = new Set(['boot', 'call', 'once']);
+const NAMED_BINDING_CELL_MODE = Object.freeze({
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+});
+const NAMED_BINDING_CELL_MODE_BY_SOURCE = Object.freeze({
+  call: NAMED_BINDING_CELL_MODE.ACTIVE,
+  pushdown: NAMED_BINDING_CELL_MODE.INACTIVE,
+});
 const COMPONENT_BYTES = Buffer.from(
   'AGFzbQ0AAQAHGwFCAgFAAAB3BAAOZ2V0LXJhbmRvbS11NjQBAAodAQAYd2FzaTpyYW5k' +
   'b20vcmFuZG9tQDAuMi4wBQAHXwFCBgFAAgV0YWJsZXkDa2V5eQB6BAAEcmVhZAEAAUAD' +
@@ -132,7 +140,7 @@ class DurableGateway {
 }
 
 function manifest(sourceKind = 'once') {
-  const exportName = KIND_ONLY_COMPONENT_SOURCE_KINDS.has(sourceKind) ?
+  const exportName = COMPONENT_RUN_EXPORT_SOURCE_KINDS.has(sourceKind) ?
     COMPONENT_EXPORT_NAME :
     `${sourceKind}-handler`;
   return {
@@ -150,7 +158,7 @@ function manifest(sourceKind = 'once') {
       digest: ARTIFACT_DIGEST,
       media_type: 'application/wasm',
     },
-    runtime: KIND_ONLY_COMPONENT_SOURCE_KINDS.has(sourceKind) ?
+    runtime: COMPONENT_RUN_EXPORT_SOURCE_KINDS.has(sourceKind) ?
       {kind: 'wasm_component'} :
       {
         kind: 'wasm_component',
@@ -174,7 +182,7 @@ function bindingInput(package_, sourceKind = 'once', overrides = {}) {
     target: {
       package_id: package_.packageId,
       manifest_digest: package_.manifestDigest,
-      export_name: KIND_ONLY_COMPONENT_SOURCE_KINDS.has(sourceKind) ?
+      export_name: COMPONENT_RUN_EXPORT_SOURCE_KINDS.has(sourceKind) ?
         COMPONENT_EXPORT_NAME :
         `${sourceKind}-handler`,
     },
@@ -619,6 +627,7 @@ describe('boot Binding compilation cutover', () => {
 });
 
 function defineNamedBindingCompilationCutover(sourceKind) {
+  const cellMode = NAMED_BINDING_CELL_MODE_BY_SOURCE[sourceKind];
   const invocationKind = sourceKind === 'call' ?
     'a statement call' :
     'query pushdown';
@@ -657,7 +666,7 @@ function defineNamedBindingCompilationCutover(sourceKind) {
         fixture.binding.bindingVersionId,
       );
       assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
-      assert.equal(row[SD_COL.STATUS], 'inactive');
+      assert.equal(row[SD_COL.STATUS], cellMode);
       assert.equal(row[SD_COL.REPLICA_COUNT], 0);
       assert.equal(
         row[SD_COL.RUNTIME_REF],
@@ -675,11 +684,20 @@ function defineNamedBindingCompilationCutover(sourceKind) {
       assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
       assert.deepEqual(
         fixture.gateway.writes.map((write) => write.tableName),
-        [TABLES.SERVICE_DEFINITIONS],
+        cellMode === NAMED_BINDING_CELL_MODE.ACTIVE ?
+          [TABLES.SERVICE_DEFINITIONS, TABLES.SERVICE_DEFINITIONS] :
+          [TABLES.SERVICE_DEFINITIONS],
       );
       assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
       assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
-      assert.equal(planner.rebalancers.length, 0);
+      if (cellMode === NAMED_BINDING_CELL_MODE.ACTIVE) {
+        assert.equal(planner.rebalancers.length, 1);
+        assert.equal(planner.rebalancers[0].entityId, serviceId);
+        assert.equal(planner.rebalancers[0].entityType, 'runtime_service');
+        await assertComponentReadiness(row, fixture.bindingRow, sourceKind);
+      } else {
+        assert.equal(planner.rebalancers.length, 0);
+      }
       const compilerSource = readFileSync(
         'src/control-plane/owners/request-binding-service-definition-contract.js',
         'utf8',
@@ -715,7 +733,10 @@ function defineNamedBindingCompilationCutover(sourceKind) {
       fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
       planner.owner.setLeader(true);
       await planner.owner.waitForBindingRefresh();
-      assert.equal(fixture.gateway.writes.length, 1);
+      assert.equal(
+        fixture.gateway.writes.length,
+        cellMode === NAMED_BINDING_CELL_MODE.ACTIVE ? 2 : 1,
+      );
       planner.owner.shutdown();
 
       const lost = await createFixture({
@@ -739,7 +760,10 @@ function defineNamedBindingCompilationCutover(sourceKind) {
         ),
       ]);
       assert.equal(results.filter((result) => result.created).length, 1);
-      assert.equal(concurrent.gateway.writes.length, 1);
+      assert.equal(
+        concurrent.gateway.writes.length,
+        cellMode === NAMED_BINDING_CELL_MODE.ACTIVE ? 2 : 1,
+      );
     });
 
     test(`conflicting and malformed durable ${sourceKind} state fails closed`,
