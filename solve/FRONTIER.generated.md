@@ -2,9 +2,9 @@
 
 Latest dated gate seen in records: 20260702T075154Z. This is a projection; act on a record only after reading its file.
 
-## Closure frontier — 15 active of 42 records
+## Closure frontier — 13 active of 42 records
 
-Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publication (2) · placement-planning-feedback (1) · placement-priority-spread (3) · readiness-projection (3) · restart-rejoin-identity (1) · transport-replication-backpressure (1)
+Areas: harness-control-snapshot (2) · membership-publication (2) · placement-planning-feedback (1) · placement-priority-spread (3) · readiness-projection (3) · restart-rejoin-identity (1) · transport-replication-backpressure (1)
 
 ### harness-control-snapshot
 
@@ -12,13 +12,6 @@ Areas: harness-control-snapshot (2) · harness-oracle (2) · membership-publicat
 | --- | --- | --- | --- |
 | CL-002 | narrowed | — | harness-control-snapshot |
 | CL-025 | narrowed | — | harness-control-snapshot |
-
-### harness-oracle
-
-| Id | Status | Last gate | Concern |
-| --- | --- | --- | --- |
-| CL-030 | open | 20260612T173105Z | harness-oracle (primary) + node-resource-safety (secondary) |
-| CL-031 | open | 20260612T223302Z | harness-oracle (blindness) + node-resource-safety (root) |
 
 ### membership-publication
 
