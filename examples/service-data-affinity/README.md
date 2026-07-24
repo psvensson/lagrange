@@ -87,6 +87,21 @@ runtime-service policy then uses the production node weights and converges on
 the best weighted node set. `read_locality` still controls query routing, but
 does not turn placement affinity on or off.
 
+## Scope note: internal substrate, not the deployment surface
+
+This demo drives the internal placement substrate directly: the harness
+writes a `service_definitions` row for a `native_js` query-loop module and
+pins two replicas so the disjoint-shard merge arithmetic is reproducible.
+That direct write is demo scaffolding against a migration-input table — it is
+not how users deploy services. User deployment is declared through the
+Artifact / Binding / Cell surface
+([`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md)),
+where a Binding carries no replica intent and Cell capacity is system-policy
+output — the same placement policy whose affinity behavior this demo
+demonstrates. A `native_js` query-loop module has no component export, so
+this workload is not expressible as a Binding until source invocation for
+non-request Bindings cuts over.
+
 ## Follow the implementation
 
 | Concern | File |

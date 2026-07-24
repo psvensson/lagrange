@@ -19,9 +19,17 @@
  *      whose replicas land on different node subsets. Distributed
  *      grouped SQL emits one AVG/COUNT row per movie and establishes the
  *      confidence-adjusted top-10 reference result.
- *   3. A REAL runtime service is deployed (service_definitions row,
- *      runtime_kind native_js, runtime_ref sql-query-loop-runtime)
+ *   3. A REAL runtime service is started on the internal placement
+ *      substrate: the harness writes a service_definitions row directly
+ *      (runtime_kind native_js, runtime_ref sql-query-loop-runtime)
  *      with read_locality='any' (routing choice, not an affinity switch).
+ *      This direct write is demo scaffolding against a migration-input
+ *      table, not the user deployment surface; user deployment is
+ *      declared through Bindings (architecture/minimal-deployment-
+ *      surface.md), where replica capacity is system-policy output. A
+ *      native_js query-loop module has no component export, so it is
+ *      not expressible as a Binding; the demo pins its replica shape
+ *      only to make the shard/merge arithmetic reproducible.
  *      Stable leased slot 1 reduces
  *      movie ids <= 1000 and slot 2 reduces ids > 1000. Because group
  *      keys are disjoint, the slot-1 replica can exactly merge the two
@@ -695,8 +703,9 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       `in ${distributedSqlElapsedMs}ms (rather than ${totalRows} ratings).`);
 
     console.log(
-      `[4/5] Deploying the ${SERVICE_ID} runtime service ` +
-      `(${SERVICE_REPLICA_COUNT} replicas, intrinsic data affinity): ` +
+      `[4/5] Starting the ${SERVICE_ID} runtime service on the internal ` +
+      `substrate (${SERVICE_REPLICA_COUNT} replicas pinned by the demo ` +
+      'harness, intrinsic data affinity): ' +
       'disjoint movie-id shards compute a confidence-adjusted Bayesian ' +
       'ranking, publish 10 candidates each, and slot 1 merges them)...');
     await queryRows(CREATE_RESULT_TABLE_SQL);

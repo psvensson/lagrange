@@ -41,8 +41,14 @@ The measured PostgreSQL slice is intentionally explicit:
 
 It is not a claim of arbitrary ORM compatibility or complete PostgreSQL
 behavior. This database-portability milestone also does not claim that Lagrange
-installs or manages the application container. Managed OCI execution and genuine
-WASM components are later stages of the service-portability ladder.
+installs or manages the application container. Managed OCI execution is a
+later stage of the service-portability ladder.
+
+Scope note: this example starts the built-in `sys-postgres-wire` runtime
+service directly — one of the axiomatic bootstrap services that exists before
+any Binding. It exercises the runtime substrate, not the user deployment
+surface; services are deployed through INSTALL SERVICE and CREATE BINDING
+([`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md)).
 
 The certificates and private key in `certs/` are local example fixtures only.
 Never use them outside this disposable proof.

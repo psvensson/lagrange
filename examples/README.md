@@ -3,6 +3,25 @@
 Four example families live here, ordered by how much infrastructure they
 need. Each has its own README with exact commands.
 
+## How these relate to the deployment surface
+
+User deployment on Lagrange is declared through Artifact / Binding / Cell —
+INSTALL SERVICE and CREATE BINDING over the SQL ingress
+([`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md),
+operator flow in
+[`docs/wasm-services-user-guide.md`](../docs/wasm-services-user-guide.md)).
+None of the current examples demonstrates that surface yet; each exercises an
+adjacent layer:
+
+- **service-portability** starts a built-in (axiomatic) runtime service —
+  the bootstrap set that exists before any Binding.
+- **distributed-sql** uses the partition-callback path (`code`,
+  `module_manifests`), a migration input that predates Bindings.
+- **service-data-affinity** drives the internal placement substrate directly
+  to demonstrate the same system placement policy that owns Cell capacity.
+- **kubernetes-endpoint-sync-controller** is a projection-only consumer of
+  endpoint metadata, downstream of any runtime service.
+
 ## [service-portability/](service-portability/README.md)
 
 Build one immutable Node/`pg` application image and run it unchanged against
