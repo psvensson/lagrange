@@ -193,10 +193,10 @@ function manifest(version = '1.0.0', digest = DIGEST_A) {
   };
 }
 
-function v2Manifest(exports_) {
+function v3Manifest(exports_) {
   return {
     ...manifest(),
-    schema_version: 2,
+    schema_version: 3,
     exports: exports_,
   };
 }
@@ -558,11 +558,9 @@ describe('service lifecycle SQL durable owner route', () => {
       'INSTALL SERVICE $1',
       [installPayload({
         manifest: {
-          ...v2Manifest([{
+          ...v3Manifest([{
             name: 'serve',
             interface: 'request_v1',
-            reads: ['table:global.orders'],
-            writes: ['table:global.audit'],
           }]),
           capabilities: ['network.client', 'clock.read'],
         },
@@ -653,7 +651,6 @@ describe('service lifecycle SQL durable owner route', () => {
       JSON.parse(accessRow.config_value).service_id,
       configured.rows[0].service_id,
     );
-
     const replay = await adapter.execute(
       'session-1', 'CREATE BINDING $1;', [payload]);
     assert.equal(replay.success, true);
@@ -678,7 +675,7 @@ describe('service lifecycle SQL durable owner route', () => {
     assert.equal(fixture.gateway.rowCount(TABLES.SERVICE_BINDINGS), 1);
   });
 
-  it('persists canonical v2 artifact exports through authenticated INSTALL SERVICE',
+  it('persists canonical v3 artifact exports through authenticated INSTALL SERVICE',
     async () => {
       const fixture = createEngineFixture();
       const adapter = await createAuthenticatedAdapter(fixture.engine);
@@ -686,37 +683,29 @@ describe('service lifecycle SQL durable owner route', () => {
         'session-1',
         'INSTALL SERVICE $1',
         [installPayload({
-          manifest: v2Manifest([
+          manifest: v3Manifest([
             {
               name: 'audit-change',
               interface: 'change_v1',
-              reads: ['table:global.audit'],
-              writes: ['table:global.audit'],
             },
             {
               name: 'serve',
               interface: 'request_v1',
-              reads: ['table:global.orders', 'table:global.accounts'],
-              writes: ['table:global.audit'],
             },
           ]),
         })],
       );
       assert.equal(result.success, true);
       const [packageRow] = fixture.gateway.rows(TABLES.SERVICE_PACKAGES);
-      assert.equal(packageRow.manifest_schema_version, 2);
+      assert.equal(packageRow.manifest_schema_version, 3);
       assert.deepEqual(JSON.parse(packageRow.normalized_manifest).exports, [
         {
           interface: 'change_v1',
           name: 'audit-change',
-          reads: ['table:global.audit'],
-          writes: ['table:global.audit'],
         },
         {
           interface: 'request_v1',
           name: 'serve',
-          reads: ['table:global.accounts', 'table:global.orders'],
-          writes: ['table:global.audit'],
         },
       ]);
 
@@ -725,18 +714,14 @@ describe('service lifecycle SQL durable owner route', () => {
         'INSTALL SERVICE $1',
         [installPayload({
           idempotency_key: 'install-permuted-artifact-exports',
-          manifest: v2Manifest([
+          manifest: v3Manifest([
             {
               name: 'serve',
               interface: 'request_v1',
-              reads: ['table:global.accounts', 'table:global.orders'],
-              writes: ['table:global.audit'],
             },
             {
               name: 'audit-change',
               interface: 'change_v1',
-              reads: ['table:global.audit'],
-              writes: ['table:global.audit'],
             },
           ]),
         })],
@@ -755,11 +740,9 @@ describe('service lifecycle SQL durable owner route', () => {
         'INSTALL SERVICE $1',
         [installPayload({
           idempotency_key: 'install-distinct-artifact-contract',
-          manifest: v2Manifest([{
+          manifest: v3Manifest([{
             name: 'serve-admin',
             interface: 'request_v1',
-            reads: ['table:global.admin_accounts'],
-            writes: [],
           }]),
         })],
       );
@@ -795,7 +778,7 @@ describe('service lifecycle SQL durable owner route', () => {
       );
     });
 
-  it('rejects malformed v2 exports before resolution or catalog writes',
+  it('rejects malformed v3 exports before resolution or catalog writes',
     async () => {
       const fixture = createEngineFixture();
       const adapter = await createAuthenticatedAdapter(fixture.engine);
@@ -804,7 +787,7 @@ describe('service lifecycle SQL durable owner route', () => {
         'INSTALL SERVICE $1',
         [installPayload({
           idempotency_key: 'reject-wildcard-export',
-          manifest: v2Manifest([{
+          manifest: v3Manifest([{
             name: 'serve',
             interface: 'request_v1',
             reads: ['table:global.*'],

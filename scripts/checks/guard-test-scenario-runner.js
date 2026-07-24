@@ -41,7 +41,7 @@ function runGuardFile(file) {
   };
 }
 
-function buildReport(scenario, results, timestamp) {
+function buildReport(scenario, results, timestamp, metadata = {}) {
   const failing = results.filter((r) => !r.passed);
   const passed = failing.length === 0;
   return {
@@ -51,7 +51,7 @@ function buildReport(scenario, results, timestamp) {
     // guard evidence from live-run evidence when weighing a MEASURED
     // closure (a green DT proves test-code binding, not live binding).
     producer: 'guard-test-scenario-runner',
-    fidelity: 'deterministic-guard',
+    fidelity: metadata.fidelity || 'deterministic-guard',
     summary: {
       total: results.length,
       passed: results.length - failing.length,
@@ -78,11 +78,11 @@ function buildReport(scenario, results, timestamp) {
   };
 }
 
-function runScenario(scenarios, scenario, reportDir) {
+function runScenario(scenarios, scenario, reportDir, metadata) {
   const files = scenarios[scenario];
   const results = files.map(runGuardFile);
   const timestamp = new Date().toISOString();
-  const report = buildReport(scenario, results, timestamp);
+  const report = buildReport(scenario, results, timestamp, metadata);
 
   fs.mkdirSync(reportDir, {recursive: true});
   const fileStamp = timestamp.replace(/[:.]/g, '-');
@@ -122,7 +122,7 @@ function runGuardTestScenarios(scenarios, options = {}) {
   }
   let allPassed = true;
   for (const name of names) {
-    if (!runScenario(scenarios, name, reportDir)) allPassed = false;
+    if (!runScenario(scenarios, name, reportDir, options)) allPassed = false;
   }
   process.exitCode = allPassed ? 0 : 1;
 }

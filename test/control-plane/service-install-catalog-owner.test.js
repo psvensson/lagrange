@@ -240,6 +240,13 @@ function v2Manifest(exports_) {
   });
 }
 
+function v3Manifest(exports_) {
+  return manifest({
+    schema_version: 3,
+    exports: exports_,
+  });
+}
+
 function resolvedArtifact(overrides = {}) {
   return {
     status: 'resolved',
@@ -318,11 +325,9 @@ describe('service install catalog production owner', () => {
     async () => {
       const gateway = new DurableCatalogGateway();
       const catalog = createCatalog(gateway);
-      const firstManifest = v2Manifest([{
+      const firstManifest = v3Manifest([{
         interface: 'request_v1',
         name: 'serve',
-        reads: ['table:global.accounts'],
-        writes: [],
       }]);
       const first = await catalog.recordPackage({
         packageId: 'pkg-bindable-a',
@@ -338,7 +343,7 @@ describe('service install catalog production owner', () => {
           .digest('hex')}`,
       );
       assert.match(first.manifestDigest, /^sha256:[0-9a-f]{64}$/u);
-      assert.equal(first.manifestSchemaVersion, 2);
+      assert.equal(first.manifestSchemaVersion, 3);
       assert.deepEqual(
         await catalog.getBindableArtifact(
           first.packageId, first.manifestDigest),
@@ -389,11 +394,9 @@ describe('service install catalog production owner', () => {
 
       await catalog.recordPackage({
         packageId: 'pkg-bindable-b',
-        manifest: v2Manifest([{
+        manifest: v3Manifest([{
           interface: 'change_v1',
           name: 'audit-change',
-          reads: ['table:global.audit'],
-          writes: ['table:global.audit'],
         }]),
         resolvedArtifact: resolvedArtifact(),
       });
@@ -412,10 +415,45 @@ describe('service install catalog production owner', () => {
       );
     });
 
-  it('rejects v1 and corrupted durable manifests as bindable artifacts',
+  it('accepts only current v3 and rejects v1, v2, and corruption',
     async () => {
       const gateway = new DurableCatalogGateway();
       const catalog = createCatalog(gateway);
+      const current = await catalog.recordPackage({
+        packageId: 'pkg-v3',
+        manifest: v3Manifest([{
+          interface: 'request_v1',
+          name: 'serve',
+        }]),
+        resolvedArtifact: resolvedArtifact(),
+      });
+      assert.equal(
+        (await catalog.getBindableArtifact(
+          current.packageId,
+          current.manifestDigest,
+        )).manifest.schema_version,
+        3,
+      );
+      const v2 = await catalog.recordPackage({
+        packageId: 'pkg-v2',
+        manifest: v2Manifest([{
+          interface: 'request_v1',
+          name: 'serve',
+          reads: [],
+          writes: [],
+        }]),
+        resolvedArtifact: resolvedArtifact(),
+      });
+      await assert.rejects(
+        () => catalog.getBindableArtifact(
+          v2.packageId,
+          v2.manifestDigest,
+        ),
+        (error) => assertCode(
+          error,
+          SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE,
+        ),
+      );
       const v1 = await catalog.recordPackage({
         packageId: 'pkg-v1',
         manifest: manifest(),
@@ -427,47 +465,47 @@ describe('service install catalog production owner', () => {
           error, SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE),
       );
 
-      const v2 = await catalog.recordPackage({
-        packageId: 'pkg-corrupt-v2',
-        manifest: v2Manifest([{
+      const corruptCurrent = await catalog.recordPackage({
+        packageId: 'pkg-corrupt-v3',
+        manifest: v3Manifest([{
           interface: 'request_v1',
           name: 'serve',
-          reads: [],
-          writes: [],
         }]),
         resolvedArtifact: resolvedArtifact(),
       });
-      const row = gateway.rows(TABLES.SERVICE_PACKAGES).get(v2.packageId);
+      const row = gateway.rows(TABLES.SERVICE_PACKAGES)
+        .get(corruptCurrent.packageId);
       const changed = JSON.parse(row.normalized_manifest);
       changed.exports[0].reads = ['table:global.secret'];
-      gateway.corrupt(TABLES.SERVICE_PACKAGES, v2.packageId, {
+      gateway.corrupt(TABLES.SERVICE_PACKAGES, corruptCurrent.packageId, {
         normalized_manifest: JSON.stringify(changed),
       });
       await assert.rejects(
-        catalog.getBindableArtifact(v2.packageId, v2.manifestDigest),
+        catalog.getBindableArtifact(
+          corruptCurrent.packageId,
+          corruptCurrent.manifestDigest,
+        ),
         (error) => assertCode(
           error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
       );
 
-      gateway.corrupt(TABLES.SERVICE_PACKAGES, v2.packageId, {
+      gateway.corrupt(TABLES.SERVICE_PACKAGES, corruptCurrent.packageId, {
         normalized_manifest: '{not-json',
       });
       await assert.rejects(
-        catalog.getPackage(v2.packageId),
+        catalog.getPackage(corruptCurrent.packageId),
         (error) => assertCode(
           error, SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD),
       );
     });
 
-  it('rejects canonical but invalid v2 manifests read from durable state',
+  it('rejects canonical but invalid v3 manifests read from durable state',
     async () => {
       const gateway = new DurableCatalogGateway();
       const catalog = createCatalog(gateway);
-      const invalidManifest = v2Manifest([{
+      const invalidManifest = v3Manifest([{
         interface: 'not_a_real_interface',
         name: 'serve',
-        reads: [],
-        writes: [],
       }]);
       await assert.rejects(
         catalog.recordPackage({
@@ -481,12 +519,10 @@ describe('service install catalog production owner', () => {
       assert.equal(gateway.rows(TABLES.SERVICE_PACKAGES).size, 0);
 
       const stored = await catalog.recordPackage({
-        packageId: 'pkg-invalid-v2',
-        manifest: v2Manifest([{
+        packageId: 'pkg-invalid-v3',
+        manifest: v3Manifest([{
           interface: 'request_v1',
           name: 'serve',
-          reads: [],
-          writes: [],
         }]),
         resolvedArtifact: resolvedArtifact(),
       });

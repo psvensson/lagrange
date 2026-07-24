@@ -64,6 +64,9 @@ describe('ControlPlaneSetup', () => {
         setServiceLifecycleCommandOwner(owner) {
           this.serviceLifecycleCommandOwner = owner;
         },
+        setRuntimeAccessPolicyOwner(owner) {
+          this.runtimeAccessPolicyOwner = owner;
+        },
       },
     };
 
@@ -334,6 +337,14 @@ describe('ControlPlaneSetup', () => {
           mockCdcIntegrationService.sqlQueryEngine
             .serviceLifecycleCommandOwner,
           result.serviceLifecycleCommandOwner,
+        );
+        assert.strictEqual(
+          result.serviceLifecycleCommandOwner.runtimeAccessPolicyOwner,
+          result.systemMetadataOwners.runtimeAccessPolicyOwner,
+        );
+        assert.strictEqual(
+          mockCdcIntegrationService.sqlQueryEngine.runtimeAccessPolicyOwner,
+          result.systemMetadataOwners.runtimeAccessPolicyOwner,
         );
         assert.strictEqual(
           result.endpointService.serviceEndpointsOwner,

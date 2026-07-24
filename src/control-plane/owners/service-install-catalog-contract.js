@@ -113,7 +113,7 @@ const SERVICE_INSTALL_CATALOG_MESSAGE = Object.freeze({
   ARTIFACT_DIGEST_AMBIGUOUS:
     'OCI artifact digest does not identify one installed declaration',
   ARTIFACT_NOT_ANALYZABLE:
-    'only schema-v2 artifact declarations are bindable',
+    'only current schema-v3 artifact declarations are bindable',
   ARTIFACT_MISMATCH:
     'resolved artifact must match the normalized manifest and signature policy',
   ARTIFACT_REQUIRED: 'verified artifact resolution is required',
@@ -167,7 +167,7 @@ const SIGNATURE_STATUS = Object.freeze([
   'verified',
 ]);
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const BINDABLE_MANIFEST_SCHEMA_VERSION = 2;
+const BINDABLE_MANIFEST_SCHEMA_VERSION = 3;
 const MAX_IDENTIFIER_LENGTH = 256;
 const FORBIDDEN_ACTUAL_FIELDS = new Set([
   'actualState', 'actual_state', 'address', 'endpoint', 'endpoints',
