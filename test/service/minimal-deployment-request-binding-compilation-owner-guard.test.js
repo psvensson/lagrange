@@ -85,6 +85,10 @@ test('Binding Cell placement keeps compilation two-phase and owner-controlled',
       SOURCE.bindingContract,
       /DEPLOYMENT_BINDING_SOURCE_KIND\.REQUEST/u,
     );
+    assert.match(
+      SOURCE.bindingContract,
+      /DEPLOYMENT_BINDING_SOURCE_KIND\.TIME/u,
+    );
   });
 
 test('Binding Cells leave replica targets to the existing runtime policy', () => {
