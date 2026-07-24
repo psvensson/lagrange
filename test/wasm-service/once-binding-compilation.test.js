@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {beforeEach, describe, test} from 'node:test';
@@ -21,10 +22,42 @@ import {
 import {deriveTenantPackageId} from
   '../../src/control-plane/owners/service-install-catalog-contract.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  HEALTH_STATUS,
+  PREPARE_STATUS,
+  START_STATUS,
+} from '../../src/runtime/runtime-driver.js';
+import {RuntimeDriverRegistry} from
+  '../../src/runtime/runtime-driver-registry.js';
+import {ServiceRuntimeLifecycle} from
+  '../../src/runtime/service-runtime-lifecycle.js';
+import {WasiComponentCellRuntime} from
+  '../../src/runtime/wasi-component-cell-runtime.js';
+import {WasmComponentDriver} from
+  '../../src/runtime/wasm-component-driver.js';
 import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
 
 const TENANT_ID = 'tenant-once';
 const ARTIFACT_DIGEST = `sha256:${'e'.repeat(64)}`;
+const COMPONENT_BYTES = Buffer.from(
+  'AGFzbQ0AAQAHGwFCAgFAAAB3BAAOZ2V0LXJhbmRvbS11NjQBAAodAQAYd2FzaTpyYW5k' +
+  'b20vcmFuZG9tQDAuMi4wBQAHXwFCBgFAAgV0YWJsZXkDa2V5eQB6BAAEcmVhZAEAAUAD' +
+  'BXRhYmxleQNrZXl5BXZhbHVlegEABAAFd3JpdGUBAQFAAQpjYXBhYmlsaXR5eQB6BAAK' +
+  'Y2FwYWJpbGl0eQECChoBABVsYWdyYW5nZTpjZWxsL2NvbnRleHQFAQYJAQEAAQRyZWFk' +
+  'CAUBAQAAAAYKAQEAAQV3cml0ZQgFAQEAAQAGDwEBAAEKY2FwYWJpbGl0eQgFAQEAAgAC' +
+  'HwEBAwRyZWFkAAAFd3JpdGUAAQpjYXBhYmlsaXR5AAIB1gEAYXNtAQAAAAESA2ACf38B' +
+  'f2ADf39/AGABfwF/AikDA2N0eARyZWFkAAADY3R4BXdyaXRlAAEDY3R4CmNhcGFiaWxp' +
+  'dHkAAgMCAQIHBwEDcnVuAAMKTQFLACAARQR/QQBBBxAAQQBBB0EqEAFBABACagUgAEEB' +
+  'RgR/QeMAQQcQAAUgAEECRgR/QeMAEAIFIABBA0YEfwNADAALAAUgAAsLCwsLADEEbmFt' +
+  'ZQACAW0BGgMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AwoBAwEEBWFnYWluAgoBAAAB' +
+  'A2N0eBIABw4BQAEHcmVxdWVzdHoAegYJAQAAAQEDcnVuCAYBAAADAAILCQEAA3J1bgED' +
+  'AABdDmNvbXBvbmVudC1uYW1lARwAAAMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AQYA' +
+  'EQEAAW0BDAASAgAEY3R4aQEBaQEHAQEDA3J1bgEPBQIABnJhbmRvbQEDY3R4',
+  'base64',
+);
+const COMPONENT_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
+  .update(COMPONENT_BYTES)
+  .digest('hex')}`;
 const SECURITY_CONTEXT = Object.freeze({
   tenantId: TENANT_ID,
   principal: 'once-deployer',
@@ -83,10 +116,23 @@ class DurableGateway {
     this.writes.push({operation: 'upsert', tableName, row: clone(row)});
     return {success: true, affectedRows: 1};
   }
+
+  async updateSystemTableRow(tableName, whereClause, data) {
+    const rows = this.rows(tableName);
+    const key = whereClause[this.primaryKey(tableName)];
+    const existing = rows.get(key);
+    if (!existing) return {success: true, affectedRows: 0};
+    const row = {...existing, ...clone(data)};
+    rows.set(key, row);
+    this.writes.push({operation: 'update', tableName, row: clone(row)});
+    return {success: true, affectedRows: 1};
+  }
 }
 
 function manifest(sourceKind = 'once') {
-  const exportName = `${sourceKind}-handler`;
+  const exportName = sourceKind === 'once' ?
+    'run' :
+    `${sourceKind}-handler`;
   return {
     schema_version: 3,
     name: `orders-${sourceKind}-service`,
@@ -102,11 +148,13 @@ function manifest(sourceKind = 'once') {
       digest: ARTIFACT_DIGEST,
       media_type: 'application/wasm',
     },
-    runtime: {
-      kind: 'wasm_component',
-      entrypoint: exportName,
-      runtime_options: {memoryLimitMb: 16},
-    },
+    runtime: sourceKind === 'once' ?
+      {kind: 'wasm_component'} :
+      {
+        kind: 'wasm_component',
+        entrypoint: exportName,
+        runtime_options: {memoryLimitMb: 16},
+      },
   };
 }
 
@@ -124,7 +172,9 @@ function bindingInput(package_, sourceKind = 'once', overrides = {}) {
     target: {
       package_id: package_.packageId,
       manifest_digest: package_.manifestDigest,
-      export_name: `${sourceKind}-handler`,
+      export_name: sourceKind === 'once' ?
+        'run' :
+        `${sourceKind}-handler`,
     },
     source: bindingSource(sourceKind),
     budgets: {
@@ -215,6 +265,44 @@ function createPlanner(fixture) {
   return {cache, owner, rebalancers};
 }
 
+async function assertOnceComponentReadiness(definition, bindingRow) {
+  const driver = new WasmComponentDriver({
+    artifactLoader: async () => ({
+      artifactDigest: ARTIFACT_DIGEST,
+      bytes: COMPONENT_BYTES,
+      manifest: manifest(),
+      manifestDigest: bindingRow.manifest_digest,
+      packageId: bindingRow.package_id,
+      payloadDigest: COMPONENT_PAYLOAD_DIGEST,
+    }),
+    componentRuntime: new WasiComponentCellRuntime(),
+  });
+  const registry = new RuntimeDriverRegistry();
+  registry.register(driver);
+  registry.freeze();
+  const lifecycle = new ServiceRuntimeLifecycle(registry);
+  const projections = [];
+  lifecycle.setStateProjectionWriter(async (_serviceId, projection) => {
+    projections.push(projection);
+  });
+  const replica = {definition, nodeId: 'node-once'};
+
+  assert.equal(
+    (await lifecycle.prepare(definition, {})).status,
+    PREPARE_STATUS.READY,
+  );
+  assert.equal(
+    (await lifecycle.start(replica)).status,
+    START_STATUS.RUNNING,
+  );
+  assert.equal(
+    (await lifecycle.health(replica)).status,
+    HEALTH_STATUS.HEALTHY,
+  );
+  assert.equal(projections.at(-1).status, 'active');
+  await lifecycle.stop(replica);
+}
+
 function assertConflict(error) {
   assert.ok(error instanceof RequestBindingServiceDefinitionError);
   assert.equal(
@@ -232,8 +320,8 @@ describe('once Binding compilation cutover', () => {
     LoggingService.getInstance().initialize({level: 'error'});
   });
 
-  test('production planning preserves the kind-only full projection without ' +
-    'invoking the Artifact', async () => {
+  test('production planning activates the kind-only full projection and ' +
+    'admits one system-owned placement without one-shot invocation', async () => {
     const fixture = await createFixture();
     fixture.gateway.writes.length = 0;
     const planner = createPlanner(fixture);
@@ -248,7 +336,7 @@ describe('once Binding compilation cutover', () => {
     assert.ok(row);
     assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
     assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
-    assert.equal(row[SD_COL.STATUS], 'inactive');
+    assert.equal(row[SD_COL.STATUS], 'active');
     assert.equal(row[SD_COL.REPLICA_COUNT], 0);
     assert.equal(row[SD_COL.RUNTIME_KIND], 'wasm_component');
     assert.equal(
@@ -264,11 +352,13 @@ describe('once Binding compilation cutover', () => {
     assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
     assert.deepEqual(
       fixture.gateway.writes.map((write) => write.tableName),
-      [TABLES.SERVICE_DEFINITIONS],
+      [TABLES.SERVICE_DEFINITIONS, TABLES.SERVICE_DEFINITIONS],
     );
     assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
     assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
-    assert.equal(planner.rebalancers.length, 0);
+    assert.equal(planner.rebalancers.length, 1);
+    assert.equal(planner.rebalancers[0].entityId, serviceId);
+    assert.equal(planner.rebalancers[0].entityType, 'runtime_service');
     const compilerSources = [
       'src/control-plane/owners/request-binding-service-definition-contract.js',
       'src/bootstrap/shared/runtime-service-rebalancer-setup.js',
@@ -277,6 +367,7 @@ describe('once Binding compilation cutover', () => {
       compilerSources,
       /TimerManager|createTimer|onTimerFired|\.invoke\(/u,
     );
+    await assertOnceComponentReadiness(row, fixture.bindingRow);
     planner.owner.shutdown();
   });
 
@@ -304,7 +395,7 @@ describe('once Binding compilation cutover', () => {
     fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
-    assert.equal(fixture.gateway.writes.length, 1);
+    assert.equal(fixture.gateway.writes.length, 2);
     planner.owner.shutdown();
 
     const lost = await createFixture({loseDesiredInsertResponse: true});
@@ -325,7 +416,7 @@ describe('once Binding compilation cutover', () => {
       ),
     ]);
     assert.equal(results.filter((result) => result.created).length, 1);
-    assert.equal(concurrent.gateway.writes.length, 1);
+    assert.equal(concurrent.gateway.writes.length, 2);
   });
 
   test('conflicting and malformed durable once state fails closed', async () => {

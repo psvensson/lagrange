@@ -1,0 +1,354 @@
+diff --git a/architecture/minimal-deployment-surface.md b/architecture/minimal-deployment-surface.md
+index 2069dcd16561c40818f7d2bbb396d255fb3a639b..0ab561f52fb777224de30b27922f83ac9eaa6a00 100644
+--- a/architecture/minimal-deployment-surface.md
++++ b/architecture/minimal-deployment-surface.md
+@@ -124,15 +124,15 @@ rebalancer owns placement into `services`. `ServiceRuntimeLifecycle` and
+ `RuntimeDriverRegistry` remain the only runtime-start boundary. Cell vocabulary
+ does not add a table, scheduler, replica owner, or runtime lifecycle.
+ 
+-Cell activation currently admits request, change, and time Binding lineage. The
+-planning owner level-triggers each matching inactive derived row to
++Cell activation currently admits request, change, time, and once Binding
++lineage. The planning owner level-triggers each matching inactive derived row to
+ `status = active`, preserving its service identity, pinned runtime descriptor,
+ Binding lineage, and canonical projection. Its stored `replica_count = 0` is a
+ non-authoritative sentinel. The runtime-service policy recognizes Binding
+ lineage and derives target, minimum, maximum, topology, capacity, and data
+ affinity directly from system policy. One shared projection exposes that
+ effective target to the rebalancer, admin, CLI, and discovery readers without
+-writing a generated count back to desired state. Boot, call, once, and pushdown
++writing a generated count back to desired state. Boot, call, and pushdown
+ sources remain inactive until their own activation Quests.
+ 
+ Service state is context-as-table. The first placement cutover does not invent a
+@@ -225,7 +225,7 @@ contracts.
+       and the existing lifecycle, with table-backed context;
+    3. route request invocation to that ready Cell; and
+    4. activate the remaining sources through the same owners, one executable
+-      concern at a time; change and time are active, leaving boot, call, once,
++      concern at a time; change, time, and once are active, leaving boot, call,
+       and pushdown.
+ 7. Move table authorization from Artifact export and Binding context
+    declarations to directly managed runtime access policy. Keep the existing
+@@ -298,11 +298,13 @@ the runtime invocation owner. Its durable invocation journal prevents duplicate
+ component effects, and bounded shutdown cancels and drains active ingress while
+ retiring correlated transport waiters.
+ 
+-Quests `minimal-deployment-change-cell-placement` and
+-`minimal-deployment-time-cell-placement` continue step 6 through the same
+-desired-state, placement, and component-runtime owners. They activate change
+-and time lineage without caller replica intent, CDC dispatch, timer scheduling,
+-or source-specific planners; boot, call, once, and pushdown remain inactive.
++Quests `minimal-deployment-change-cell-placement`,
++`minimal-deployment-time-cell-placement`, and
++`minimal-deployment-once-cell-placement` continue step 6 through the same
++desired-state, placement, and component-runtime owners. They activate change,
++time, and once lineage without caller replica intent, CDC dispatch, timer
++scheduling, one-shot invocation, or source-specific planners; boot, call, and
++pushdown remain inactive.
+ 
+ Step 7 is complete: schema-v3 Artifacts and schema-v2 Bindings carry no access
+ declarations. Authenticated `CONFIGURE SERVICE ACCESS $1` directly updates the
+@@ -310,6 +312,6 @@ existing durable config path; SQL and Component invocation resolve that policy
+ at access time and fail closed, while observed access remains affinity-only
+ telemetry. Quest `minimal-deployment-single-version-contract-cutover` removes
+ all alternate Artifact and Binding decoders before the remaining Cell
+-activation work. Next, activate boot, call, once, and pushdown through the same
++activation work. Next, activate boot, call, and pushdown through the same
+ desired-state, replica, and runtime owners. Actor-key partitioning remains an
+ explicit routing-policy design choice, not a Cell replica request.
+diff --git a/scripts/run-minimal-deployment-once-cell-placement-scenarios.js b/scripts/run-minimal-deployment-once-cell-placement-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b0c55695cfa3e6ed21a8bfa7a67830d88f01a2cc
+--- /dev/null
++++ b/scripts/run-minimal-deployment-once-cell-placement-scenarios.js
+@@ -0,0 +1,24 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIO = 'minimal-deployment-once-cell-placement';
++const FIDELITY = 'production-path-in-process';
++const REPORT_DIR = 'test-output/reports';
++const TEST_FILES = Object.freeze([
++  'test/wasm-service/once-binding-compilation.test.js',
++  'test/wasm-service/time-binding-compilation.test.js',
++  'test/function/change-binding-compilation.test.js',
++  'test/control-plane/request-binding-service-definition-owner.test.js',
++  'test/bootstrap/runtime-service-rebalancer-owner.test.js',
++  'test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js',
++  'test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js',
++]);
++
++runGuardTestScenarios({
++  [SCENARIO]: TEST_FILES,
++}, {
++  fidelity: FIDELITY,
++  reportDir: REPORT_DIR,
++});
+diff --git a/src/control-plane/owners/deployment-binding-contract.js b/src/control-plane/owners/deployment-binding-contract.js
+index 099076a5c592045be821edc80f4464b595e0c440..7ceead3d415df2109d7c4c0160af6c55c1ebe633 100644
+--- a/src/control-plane/owners/deployment-binding-contract.js
++++ b/src/control-plane/owners/deployment-binding-contract.js
+@@ -33,6 +33,7 @@ const DEPLOYMENT_BINDING_SOURCE_INTERFACE = Object.freeze({
+ });
+ const DEPLOYMENT_BINDING_CELL_SOURCE_KINDS = new Set([
+   DEPLOYMENT_BINDING_SOURCE_KIND.CHANGE,
++  DEPLOYMENT_BINDING_SOURCE_KIND.ONCE,
+   DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+   DEPLOYMENT_BINDING_SOURCE_KIND.TIME,
+ ]);
+diff --git a/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js b/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js
+index 319995e6128495e0f02272a37c43711ef3268ba5..428b0bef9768330fc3f23879480c5f8ebe76a33c 100644
+--- a/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js
++++ b/test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js
+@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
+ import {readFileSync} from 'node:fs';
+ import {test} from 'node:test';
+ 
++import {
++  DEPLOYMENT_BINDING_SOURCE_KIND,
++  isDeploymentBindingCellSourceKind,
++} from '../../src/control-plane/owners/deployment-binding-contract.js';
++
+ const SOURCE = Object.freeze({
+   bindingDeclaration: readFileSync(
+     'src/control-plane/owners/deployment-binding-contract.js', 'utf8',
+@@ -89,6 +94,22 @@ test('Binding Cell placement keeps compilation two-phase and owner-controlled',
+       SOURCE.bindingContract,
+       /DEPLOYMENT_BINDING_SOURCE_KIND\.TIME/u,
+     );
++    assert.equal(
++      isDeploymentBindingCellSourceKind(
++        DEPLOYMENT_BINDING_SOURCE_KIND.ONCE,
++      ),
++      true,
++    );
++    for (const inactiveSourceKind of [
++      DEPLOYMENT_BINDING_SOURCE_KIND.BOOT,
++      DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
++      DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN,
++    ]) {
++      assert.equal(
++        isDeploymentBindingCellSourceKind(inactiveSourceKind),
++        false,
++      );
++    }
+   });
+ 
+ test('Binding Cells leave replica targets to the existing runtime policy', () => {
+diff --git a/test/wasm-service/once-binding-compilation.test.js b/test/wasm-service/once-binding-compilation.test.js
+index ddf5989b7a174f933b49ce4599dd8d9c90b30739..404875ec45f8344989379818cffb60bc9dd70ce4 100644
+--- a/test/wasm-service/once-binding-compilation.test.js
++++ b/test/wasm-service/once-binding-compilation.test.js
+@@ -1,3 +1,4 @@
++import {createHash} from 'node:crypto';
+ import assert from 'node:assert/strict';
+ import {readFileSync} from 'node:fs';
+ import {beforeEach, describe, test} from 'node:test';
+@@ -21,10 +22,42 @@ import {
+ import {deriveTenantPackageId} from
+   '../../src/control-plane/owners/service-install-catalog-contract.js';
+ import {LoggingService} from '../../src/logging/logging-service.js';
++import {
++  HEALTH_STATUS,
++  PREPARE_STATUS,
++  START_STATUS,
++} from '../../src/runtime/runtime-driver.js';
++import {RuntimeDriverRegistry} from
++  '../../src/runtime/runtime-driver-registry.js';
++import {ServiceRuntimeLifecycle} from
++  '../../src/runtime/service-runtime-lifecycle.js';
++import {WasiComponentCellRuntime} from
++  '../../src/runtime/wasi-component-cell-runtime.js';
++import {WasmComponentDriver} from
++  '../../src/runtime/wasm-component-driver.js';
+ import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
+ 
+ const TENANT_ID = 'tenant-once';
+ const ARTIFACT_DIGEST = `sha256:${'e'.repeat(64)}`;
++const COMPONENT_BYTES = Buffer.from(
++  'AGFzbQ0AAQAHGwFCAgFAAAB3BAAOZ2V0LXJhbmRvbS11NjQBAAodAQAYd2FzaTpyYW5k' +
++  'b20vcmFuZG9tQDAuMi4wBQAHXwFCBgFAAgV0YWJsZXkDa2V5eQB6BAAEcmVhZAEAAUAD' +
++  'BXRhYmxleQNrZXl5BXZhbHVlegEABAAFd3JpdGUBAQFAAQpjYXBhYmlsaXR5eQB6BAAK' +
++  'Y2FwYWJpbGl0eQECChoBABVsYWdyYW5nZTpjZWxsL2NvbnRleHQFAQYJAQEAAQRyZWFk' +
++  'CAUBAQAAAAYKAQEAAQV3cml0ZQgFAQEAAQAGDwEBAAEKY2FwYWJpbGl0eQgFAQEAAgAC' +
++  'HwEBAwRyZWFkAAAFd3JpdGUAAQpjYXBhYmlsaXR5AAIB1gEAYXNtAQAAAAESA2ACf38B' +
++  'f2ADf39/AGABfwF/AikDA2N0eARyZWFkAAADY3R4BXdyaXRlAAEDY3R4CmNhcGFiaWxp' +
++  'dHkAAgMCAQIHBwEDcnVuAAMKTQFLACAARQR/QQBBBxAAQQBBB0EqEAFBABACagUgAEEB' +
++  'RgR/QeMAQQcQAAUgAEECRgR/QeMAEAIFIABBA0YEfwNADAALAAUgAAsLCwsLADEEbmFt' +
++  'ZQACAW0BGgMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AwoBAwEEBWFnYWluAgoBAAAB' +
++  'A2N0eBIABw4BQAEHcmVxdWVzdHoAegYJAQAAAQEDcnVuCAYBAAADAAILCQEAA3J1bgED' +
++  'AABdDmNvbXBvbmVudC1uYW1lARwAAAMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AQYA' +
++  'EQEAAW0BDAASAgAEY3R4aQEBaQEHAQEDA3J1bgEPBQIABnJhbmRvbQEDY3R4',
++  'base64',
++);
++const COMPONENT_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
++  .update(COMPONENT_BYTES)
++  .digest('hex')}`;
+ const SECURITY_CONTEXT = Object.freeze({
+   tenantId: TENANT_ID,
+   principal: 'once-deployer',
+@@ -83,10 +116,23 @@ class DurableGateway {
+     this.writes.push({operation: 'upsert', tableName, row: clone(row)});
+     return {success: true, affectedRows: 1};
+   }
++
++  async updateSystemTableRow(tableName, whereClause, data) {
++    const rows = this.rows(tableName);
++    const key = whereClause[this.primaryKey(tableName)];
++    const existing = rows.get(key);
++    if (!existing) return {success: true, affectedRows: 0};
++    const row = {...existing, ...clone(data)};
++    rows.set(key, row);
++    this.writes.push({operation: 'update', tableName, row: clone(row)});
++    return {success: true, affectedRows: 1};
++  }
+ }
+ 
+ function manifest(sourceKind = 'once') {
+-  const exportName = `${sourceKind}-handler`;
++  const exportName = sourceKind === 'once' ?
++    'run' :
++    `${sourceKind}-handler`;
+   return {
+     schema_version: 3,
+     name: `orders-${sourceKind}-service`,
+@@ -102,11 +148,13 @@ function manifest(sourceKind = 'once') {
+       digest: ARTIFACT_DIGEST,
+       media_type: 'application/wasm',
+     },
+-    runtime: {
+-      kind: 'wasm_component',
+-      entrypoint: exportName,
+-      runtime_options: {memoryLimitMb: 16},
+-    },
++    runtime: sourceKind === 'once' ?
++      {kind: 'wasm_component'} :
++      {
++        kind: 'wasm_component',
++        entrypoint: exportName,
++        runtime_options: {memoryLimitMb: 16},
++      },
+   };
+ }
+ 
+@@ -124,7 +172,9 @@ function bindingInput(package_, sourceKind = 'once', overrides = {}) {
+     target: {
+       package_id: package_.packageId,
+       manifest_digest: package_.manifestDigest,
+-      export_name: `${sourceKind}-handler`,
++      export_name: sourceKind === 'once' ?
++        'run' :
++        `${sourceKind}-handler`,
+     },
+     source: bindingSource(sourceKind),
+     budgets: {
+@@ -215,6 +265,44 @@ function createPlanner(fixture) {
+   return {cache, owner, rebalancers};
+ }
+ 
++async function assertOnceComponentReadiness(definition, bindingRow) {
++  const driver = new WasmComponentDriver({
++    artifactLoader: async () => ({
++      artifactDigest: ARTIFACT_DIGEST,
++      bytes: COMPONENT_BYTES,
++      manifest: manifest(),
++      manifestDigest: bindingRow.manifest_digest,
++      packageId: bindingRow.package_id,
++      payloadDigest: COMPONENT_PAYLOAD_DIGEST,
++    }),
++    componentRuntime: new WasiComponentCellRuntime(),
++  });
++  const registry = new RuntimeDriverRegistry();
++  registry.register(driver);
++  registry.freeze();
++  const lifecycle = new ServiceRuntimeLifecycle(registry);
++  const projections = [];
++  lifecycle.setStateProjectionWriter(async (_serviceId, projection) => {
++    projections.push(projection);
++  });
++  const replica = {definition, nodeId: 'node-once'};
++
++  assert.equal(
++    (await lifecycle.prepare(definition, {})).status,
++    PREPARE_STATUS.READY,
++  );
++  assert.equal(
++    (await lifecycle.start(replica)).status,
++    START_STATUS.RUNNING,
++  );
++  assert.equal(
++    (await lifecycle.health(replica)).status,
++    HEALTH_STATUS.HEALTHY,
++  );
++  assert.equal(projections.at(-1).status, 'active');
++  await lifecycle.stop(replica);
++}
++
+ function assertConflict(error) {
+   assert.ok(error instanceof RequestBindingServiceDefinitionError);
+   assert.equal(
+@@ -232,8 +320,8 @@ describe('once Binding compilation cutover', () => {
+     LoggingService.getInstance().initialize({level: 'error'});
+   });
+ 
+-  test('production planning preserves the kind-only full projection without ' +
+-    'invoking the Artifact', async () => {
++  test('production planning activates the kind-only full projection and ' +
++    'admits one system-owned placement without one-shot invocation', async () => {
+     const fixture = await createFixture();
+     fixture.gateway.writes.length = 0;
+     const planner = createPlanner(fixture);
+@@ -248,7 +336,7 @@ describe('once Binding compilation cutover', () => {
+     assert.ok(row);
+     assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
+     assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
+-    assert.equal(row[SD_COL.STATUS], 'inactive');
++    assert.equal(row[SD_COL.STATUS], 'active');
+     assert.equal(row[SD_COL.REPLICA_COUNT], 0);
+     assert.equal(row[SD_COL.RUNTIME_KIND], 'wasm_component');
+     assert.equal(
+@@ -264,11 +352,13 @@ describe('once Binding compilation cutover', () => {
+     assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
+     assert.deepEqual(
+       fixture.gateway.writes.map((write) => write.tableName),
+-      [TABLES.SERVICE_DEFINITIONS],
++      [TABLES.SERVICE_DEFINITIONS, TABLES.SERVICE_DEFINITIONS],
+     );
+     assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
+     assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
+-    assert.equal(planner.rebalancers.length, 0);
++    assert.equal(planner.rebalancers.length, 1);
++    assert.equal(planner.rebalancers[0].entityId, serviceId);
++    assert.equal(planner.rebalancers[0].entityType, 'runtime_service');
+     const compilerSources = [
+       'src/control-plane/owners/request-binding-service-definition-contract.js',
+       'src/bootstrap/shared/runtime-service-rebalancer-setup.js',
+@@ -277,6 +367,7 @@ describe('once Binding compilation cutover', () => {
+       compilerSources,
+       /TimerManager|createTimer|onTimerFired|\.invoke\(/u,
+     );
++    await assertOnceComponentReadiness(row, fixture.bindingRow);
+     planner.owner.shutdown();
+   });
+ 
+@@ -304,7 +395,7 @@ describe('once Binding compilation cutover', () => {
+     fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
+     planner.owner.setLeader(true);
+     await planner.owner.waitForBindingRefresh();
+-    assert.equal(fixture.gateway.writes.length, 1);
++    assert.equal(fixture.gateway.writes.length, 2);
+     planner.owner.shutdown();
+ 
+     const lost = await createFixture({loseDesiredInsertResponse: true});
+@@ -325,7 +416,7 @@ describe('once Binding compilation cutover', () => {
+       ),
+     ]);
+     assert.equal(results.filter((result) => result.created).length, 1);
+-    assert.equal(concurrent.gateway.writes.length, 1);
++    assert.equal(concurrent.gateway.writes.length, 2);
+   });
+ 
+   test('conflicting and malformed durable once state fails closed', async () => {

@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 
+import {
+  DEPLOYMENT_BINDING_SOURCE_KIND,
+  isDeploymentBindingCellSourceKind,
+} from '../../src/control-plane/owners/deployment-binding-contract.js';
+
 const SOURCE = Object.freeze({
   bindingDeclaration: readFileSync(
     'src/control-plane/owners/deployment-binding-contract.js', 'utf8',
@@ -89,6 +94,22 @@ test('Binding Cell placement keeps compilation two-phase and owner-controlled',
       SOURCE.bindingContract,
       /DEPLOYMENT_BINDING_SOURCE_KIND\.TIME/u,
     );
+    assert.equal(
+      isDeploymentBindingCellSourceKind(
+        DEPLOYMENT_BINDING_SOURCE_KIND.ONCE,
+      ),
+      true,
+    );
+    for (const inactiveSourceKind of [
+      DEPLOYMENT_BINDING_SOURCE_KIND.BOOT,
+      DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
+      DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN,
+    ]) {
+      assert.equal(
+        isDeploymentBindingCellSourceKind(inactiveSourceKind),
+        false,
+      );
+    }
   });
 
 test('Binding Cells leave replica targets to the existing runtime policy', () => {
