@@ -10,7 +10,7 @@ const TEST_FILES = Object.freeze([
   'test/query/service-lifecycle-sql-control-surface.test.js',
   'test/runtime/pgwire-runtime-module.test.js',
   'test/cache/default-cache-sync-table-selection.test.js',
-  'test/service/minimal-deployment-binding-v0-owner-guard.test.js',
+  'test/service/minimal-deployment-binding-owner-guard.test.js',
 ]);
 
 runGuardTestScenarios({

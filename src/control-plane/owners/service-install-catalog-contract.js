@@ -46,7 +46,6 @@ const SERVICE_INSTALL_FAILURE_PHASE = Object.freeze({
 const SERVICE_INSTALL_CATALOG_ERROR_CODE = Object.freeze({
   ACTUAL_STATE_FIELD_FORBIDDEN: 'actual_state_field_forbidden',
   AMBIGUOUS_ARTIFACT_DIGEST: 'ambiguous_artifact_digest',
-  ARTIFACT_NOT_ANALYZABLE: 'artifact_not_analyzable',
   ARTIFACT_NOT_RESOLVED: 'artifact_not_resolved',
   CONCURRENT_MODIFICATION: 'concurrent_catalog_modification',
   CORRUPT_RECORD: 'corrupt_catalog_record',
@@ -76,7 +75,6 @@ const SERVICE_INSTALL_CATALOG_OWNER_NAME = Object.freeze({
 
 const SERVICE_INSTALL_CATALOG_PATH = Object.freeze({
   ARTIFACT_DIGEST: '/artifactDigest',
-  BINDABLE_ARTIFACT: '/bindableArtifact',
   ELIGIBLE_PACKAGE_IDS: '/eligiblePackageIds',
   FAILURE: '/failure',
   FAILURE_ID: '/failure/failureId',
@@ -112,8 +110,6 @@ const SERVICE_INSTALL_CATALOG_MESSAGE = Object.freeze({
     'actual service state belongs to canonical runtime owners',
   ARTIFACT_DIGEST_AMBIGUOUS:
     'OCI artifact digest does not identify one installed declaration',
-  ARTIFACT_NOT_ANALYZABLE:
-    'only current schema-v3 artifact declarations are bindable',
   ARTIFACT_MISMATCH:
     'resolved artifact must match the normalized manifest and signature policy',
   ARTIFACT_REQUIRED: 'verified artifact resolution is required',
@@ -167,7 +163,6 @@ const SIGNATURE_STATUS = Object.freeze([
   'verified',
 ]);
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const BINDABLE_MANIFEST_SCHEMA_VERSION = 3;
 const MAX_IDENTIFIER_LENGTH = 256;
 const FORBIDDEN_ACTUAL_FIELDS = new Set([
   'actualState', 'actual_state', 'address', 'endpoint', 'endpoints',
@@ -578,11 +573,6 @@ function projectBindableArtifact(row, expectedManifestDigest = null) {
     fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.CORRUPT_RECORD,
       SERVICE_INSTALL_CATALOG_PATH.PACKAGE_MANIFEST_DIGEST,
       SERVICE_INSTALL_CATALOG_MESSAGE.PACKAGE_STATE_CORRUPT);
-  }
-  if (row.manifest_schema_version !== BINDABLE_MANIFEST_SCHEMA_VERSION) {
-    fail(SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE,
-      SERVICE_INSTALL_CATALOG_PATH.BINDABLE_ARTIFACT,
-      SERVICE_INSTALL_CATALOG_MESSAGE.ARTIFACT_NOT_ANALYZABLE);
   }
   return deepFreeze({
     packageId: row.package_id,

@@ -4,9 +4,10 @@ import {
   DEPLOYMENT_BINDING_BUDGET_FIELDS,
   DEPLOYMENT_BINDING_BUDGET_LIMITS,
 } from '../../constants/deployment-binding.js';
+import {
+  normalizeExternalServiceManifest,
+} from '../../service/external-service-manifest.js';
 
-const DEPLOYMENT_BINDING_SCHEMA_VERSION_V0 = 0;
-const DEPLOYMENT_BINDING_SCHEMA_VERSION_V1 = 1;
 const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;
 const DEPLOYMENT_BINDING_GENERATION = 1;
 
@@ -46,9 +47,7 @@ const DEPLOYMENT_BINDING_PATH = Object.freeze({
   BUDGETS: '/budgets',
   CAPABILITIES: '/capabilities',
   CATALOG_OWNER: '/catalogOwner',
-  CONTEXTS: '/contexts',
   CREATED_AT: '/created_at',
-  ELASTICITY: '/elasticity',
   NAME: '/name',
   NOW: '/now',
   SCHEMA_VERSION: '/schema_version',
@@ -61,7 +60,7 @@ const DEPLOYMENT_BINDING_MESSAGE = Object.freeze({
   ARTIFACT_MISSING: 'bindable artifact target does not exist',
   BINDING_IMMUTABLE: 'binding name is already bound to another declaration',
   CORRUPT_RECORD:
-    'durable binding state is outside a supported Binding contract',
+    'durable binding state is outside the current Binding contract',
   DEPENDENCY_REQUIRED: 'deployment Binding owner dependencies are required',
   INTERFACE_MISMATCH: 'binding source cannot invoke the selected export interface',
   INVALID_FIELD: 'binding declaration is outside the Binding v2 contract',
@@ -88,24 +87,9 @@ const SOURCE_FIELDS = Object.freeze({
 const ROOT_FIELDS = Object.freeze([
   'schema_version', 'name', 'target', 'source', 'budgets',
 ]);
-const LEGACY_V1_ROOT_FIELDS = Object.freeze([
-  ...ROOT_FIELDS,
-  'contexts',
-]);
-const LEGACY_V0_ROOT_FIELDS = Object.freeze([
-  ...LEGACY_V1_ROOT_FIELDS,
-  'elasticity',
-]);
 const TARGET_FIELDS = Object.freeze([
   'package_id', 'manifest_digest', 'export_name',
 ]);
-const LEGACY_ELASTICITY_FIELDS = Object.freeze([
-  'voters', 'min_learners', 'max_learners',
-]);
-const LEGACY_ELASTICITY_LIMITS = Object.freeze({
-  LEARNERS: Object.freeze({minimum: 0, maximum: 32}),
-  VOTERS: Object.freeze({minimum: 3, maximum: 9}),
-});
 const CHANGE_OPERATIONS = Object.freeze(['delete', 'insert', 'update']);
 const REQUEST_METHODS = Object.freeze([
   'DELETE', 'GET', 'PATCH', 'POST', 'PUT',
@@ -337,37 +321,6 @@ function normalizeBudgets(budgets) {
   return normalized;
 }
 
-function normalizeLegacyElasticity(elasticity) {
-  requireExactFields(
-    elasticity,
-    LEGACY_ELASTICITY_FIELDS,
-    DEPLOYMENT_BINDING_PATH.ELASTICITY,
-  );
-  const voters = requireInteger(
-    elasticity.voters,
-    LEGACY_ELASTICITY_LIMITS.VOTERS,
-    `${DEPLOYMENT_BINDING_PATH.ELASTICITY}/voters`,
-  );
-  const minLearners = requireInteger(
-    elasticity.min_learners,
-    LEGACY_ELASTICITY_LIMITS.LEARNERS,
-    `${DEPLOYMENT_BINDING_PATH.ELASTICITY}/min_learners`,
-  );
-  const maxLearners = requireInteger(
-    elasticity.max_learners,
-    LEGACY_ELASTICITY_LIMITS.LEARNERS,
-    `${DEPLOYMENT_BINDING_PATH.ELASTICITY}/max_learners`,
-  );
-  if (voters % 2 === 0 || minLearners > maxLearners) {
-    fail(
-      DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
-      DEPLOYMENT_BINDING_PATH.ELASTICITY,
-      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD,
-    );
-  }
-  return {max_learners: maxLearners, min_learners: minLearners, voters};
-}
-
 function normalizeDeploymentBinding(input) {
   requireExactFields(input, ROOT_FIELDS, DEPLOYMENT_BINDING_PATH.BINDING);
   if (input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION) {
@@ -383,59 +336,6 @@ function normalizeDeploymentBinding(input) {
     target: normalizeTarget(input.target),
   });
   return deepFreeze(normalized);
-}
-
-function normalizeLegacyV1StoredDeploymentBinding(input) {
-  requireExactFields(
-    input,
-    LEGACY_V1_ROOT_FIELDS,
-    DEPLOYMENT_BINDING_PATH.BINDING,
-  );
-  if (input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION_V1) {
-    fail(
-      DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
-      DEPLOYMENT_BINDING_PATH.SCHEMA_VERSION,
-      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD,
-    );
-  }
-  return deepFreeze(canonicalize({
-    budgets: normalizeBudgets(input.budgets),
-    contexts: requireUniqueSortedStrings(input.contexts, {
-      path: DEPLOYMENT_BINDING_PATH.CONTEXTS,
-      accept: (value) => TABLE_PATTERN.test(value),
-    }),
-    name: requireName(input.name, DEPLOYMENT_BINDING_PATH.NAME),
-    schema_version: DEPLOYMENT_BINDING_SCHEMA_VERSION_V1,
-    source: normalizeSource(input.source),
-    target: normalizeTarget(input.target),
-  }));
-}
-
-function normalizeLegacyV0StoredDeploymentBinding(input) {
-  requireExactFields(
-    input,
-    LEGACY_V0_ROOT_FIELDS,
-    DEPLOYMENT_BINDING_PATH.BINDING,
-  );
-  if (input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION_V0) {
-    fail(
-      DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
-      DEPLOYMENT_BINDING_PATH.SCHEMA_VERSION,
-      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD,
-    );
-  }
-  return deepFreeze(canonicalize({
-    budgets: normalizeBudgets(input.budgets),
-    contexts: requireUniqueSortedStrings(input.contexts, {
-      path: DEPLOYMENT_BINDING_PATH.CONTEXTS,
-      accept: (value) => TABLE_PATTERN.test(value),
-    }),
-    elasticity: normalizeLegacyElasticity(input.elasticity),
-    name: requireName(input.name, DEPLOYMENT_BINDING_PATH.NAME),
-    schema_version: DEPLOYMENT_BINDING_SCHEMA_VERSION_V0,
-    source: normalizeSource(input.source),
-    target: normalizeTarget(input.target),
-  }));
 }
 
 function normalizeCapabilities(capabilities) {
@@ -454,7 +354,17 @@ function bindDeploymentArtifact(declaration, artifact) {
       DEPLOYMENT_BINDING_PATH.ARTIFACT,
       DEPLOYMENT_BINDING_MESSAGE.ARTIFACT_MISSING);
   }
-  const exportDeclaration = artifact.manifest.exports?.find(
+  const normalizedManifest = normalizeExternalServiceManifest(
+    artifact.manifest,
+  );
+  if (normalizedManifest.status !== 'accepted' ||
+      canonicalJson(normalizedManifest.manifest) !==
+        canonicalJson(artifact.manifest)) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.ARTIFACT_NOT_FOUND,
+      DEPLOYMENT_BINDING_PATH.ARTIFACT,
+      DEPLOYMENT_BINDING_MESSAGE.ARTIFACT_MISSING);
+  }
+  const exportDeclaration = normalizedManifest.manifest.exports.find(
     (entry) => entry.name === declaration.target.export_name,
   );
   if (!exportDeclaration) {
@@ -471,7 +381,9 @@ function bindDeploymentArtifact(declaration, artifact) {
   }
   const bound = canonicalize({
     ...declaration,
-    capabilities: normalizeCapabilities(artifact.manifest.capabilities),
+    capabilities: normalizeCapabilities(
+      normalizedManifest.manifest.capabilities,
+    ),
   });
   return deepFreeze(bound);
 }
@@ -530,7 +442,7 @@ function buildBindingRow(declaration, securityContext, createdAt) {
   });
 }
 
-function normalizeStoredBinding(parsed) {
+function normalizeStoredDeploymentBinding(parsed) {
   if (!isPlainObject(parsed) ||
       !Object.hasOwn(parsed, CAPABILITIES_FIELD)) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.CORRUPT_RECORD,
@@ -539,14 +451,7 @@ function normalizeStoredBinding(parsed) {
   }
   const {capabilities, ...input} = parsed;
   try {
-    let declaration;
-    if (input.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V0) {
-      declaration = normalizeLegacyV0StoredDeploymentBinding(input);
-    } else if (input.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V1) {
-      declaration = normalizeLegacyV1StoredDeploymentBinding(input);
-    } else {
-      declaration = normalizeDeploymentBinding(input);
-    }
+    const declaration = normalizeDeploymentBinding(input);
     return canonicalize({
       ...declaration,
       capabilities: normalizeCapabilities(capabilities),
@@ -560,7 +465,7 @@ function normalizeStoredBinding(parsed) {
 
 function rebindStoredDeploymentArtifact(declaration, artifact) {
   return bindDeploymentArtifact(
-    normalizeStoredBinding(declaration),
+    normalizeStoredDeploymentBinding(declaration),
     artifact,
   );
 }
@@ -612,7 +517,7 @@ function inspectBindingRow(row) {
       DEPLOYMENT_BINDING_PATH.BINDING,
       DEPLOYMENT_BINDING_MESSAGE.CORRUPT_RECORD);
   }
-  const declaration = normalizeStoredBinding(parsed);
+  const declaration = normalizeStoredDeploymentBinding(parsed);
   if (!bindingRowMatchesDeclaration(row, declaration)) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.CORRUPT_RECORD,
       DEPLOYMENT_BINDING_PATH.BINDING,
@@ -655,6 +560,7 @@ export {
   deriveBindingId,
   deriveBindingVersionId,
   normalizeDeploymentBinding,
+  normalizeStoredDeploymentBinding,
   projectBinding,
   rebindStoredDeploymentArtifact,
   validateSecurityContext,

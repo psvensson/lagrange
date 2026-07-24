@@ -28,14 +28,6 @@ const SOURCE = Object.freeze({
   ),
 });
 
-function between(source, startMarker, endMarker) {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start);
-  assert.ok(start >= 0, `${startMarker} must exist`);
-  assert.ok(end > start, `${endMarker} must follow ${startMarker}`);
-  return source.slice(start, end);
-}
-
 test('Binding owns user desired-service declaration and the existing planner ' +
   'owns compilation', () => {
   assert.match(SOURCE.planner, /SYSTEM_TABLE_NAME\.SERVICE_BINDINGS/u);
@@ -88,36 +80,21 @@ test('request Cell placement keeps compilation two-phase and owner-controlled',
   });
 
 test('Binding Cells leave replica targets to the existing runtime policy', () => {
-  const ingressFields = between(
-    SOURCE.bindingDeclaration,
-    'const ROOT_FIELDS',
-    'const LEGACY_ROOT_FIELDS',
-  );
-  const ingressNormalizer = between(
-    SOURCE.bindingDeclaration,
-    'function normalizeDeploymentBinding',
-    'function normalizeLegacyStoredDeploymentBinding',
-  );
-  const activation = between(
-    SOURCE.bindingContract,
-    'function buildActivatedRequestBindingServiceDefinition',
-    'function buildLegacyActivatedRequestBindingServiceDefinition',
-  );
   assert.doesNotMatch(
-    `${ingressFields}\n${ingressNormalizer}`,
+    SOURCE.bindingDeclaration,
     /elasticity|min_learners|max_learners|voters/u,
   );
   assert.doesNotMatch(
-    activation,
+    SOURCE.bindingContract,
     /binding\.declaration\.elasticity/u,
   );
-  assert.match(
+  assert.doesNotMatch(
     SOURCE.bindingDeclaration,
-    /normalizeLegacyStoredDeploymentBinding/u,
+    /normalizeLegacy|LEGACY_/u,
   );
-  assert.match(
+  assert.doesNotMatch(
     SOURCE.bindingContract,
-    /buildLegacyActivatedRequestBindingServiceDefinition/u,
+    /buildLegacy|LEGACY_/u,
   );
   assert.match(
     SOURCE.runtimePolicy,

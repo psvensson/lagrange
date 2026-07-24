@@ -10,7 +10,6 @@ import {
   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
   RequestBindingServiceDefinitionError,
   buildActivatedRequestBindingServiceDefinition,
-  buildLegacyActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
   requestBindingServiceDefinitionRowsMatch,
 } from './request-binding-service-definition-contract.js';
@@ -146,10 +145,7 @@ class ServiceDefinitionsOwner {
     const expected = buildActivatedRequestBindingServiceDefinition(
       compiled, binding,
     );
-    const legacyExpected =
-      buildLegacyActivatedRequestBindingServiceDefinition(compiled, binding);
-    const allowedStates = [compiled, expected, legacyExpected].filter(Boolean);
-    const allowedActiveStates = [expected, legacyExpected].filter(Boolean);
+    const allowedStates = [compiled, expected];
     return this.runSerialized(binding.bindingVersionId, async () => {
       let created = false;
       let lineageRow = await this.readBindingServiceDefinition(
@@ -191,8 +187,7 @@ class ServiceDefinitionsOwner {
         }
       }
 
-      if (!allowedActiveStates.some((candidate) =>
-        requestBindingServiceDefinitionRowsMatch(lineageRow, candidate))) {
+      if (!requestBindingServiceDefinitionRowsMatch(lineageRow, expected)) {
         try {
           await rowOwnerFor(this).activateRequestServiceDefinition(
             expected, options,
@@ -201,8 +196,7 @@ class ServiceDefinitionsOwner {
           const recovered = await this.readBindingServiceDefinition(
             expected, options,
           );
-          if (!allowedActiveStates.some((candidate) =>
-            requestBindingServiceDefinitionRowsMatch(recovered, candidate))) {
+          if (!requestBindingServiceDefinitionRowsMatch(recovered, expected)) {
             throw error;
           }
         }
@@ -210,7 +204,7 @@ class ServiceDefinitionsOwner {
       const persisted = await this.readBindingServiceDefinition(
         expected, options,
       );
-      this.assertDesiredService(persisted, allowedActiveStates);
+      this.assertDesiredService(persisted, expected);
       return Object.freeze({created, serviceDefinition: persisted});
     });
   }

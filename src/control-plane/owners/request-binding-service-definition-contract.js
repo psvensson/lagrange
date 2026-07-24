@@ -25,6 +25,7 @@ import {
   DEPLOYMENT_BINDING_SOURCE_INTERFACE,
   DEPLOYMENT_BINDING_SOURCE_KIND,
   canonicalJson,
+  normalizeStoredDeploymentBinding,
   projectBinding,
 } from './deployment-binding-contract.js';
 
@@ -62,7 +63,6 @@ const REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE = Object.freeze({
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 const INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND = 'invalid';
-const LEGACY_ELASTICITY_FIELD = 'elasticity';
 const REQUEST_BINDING_SERVICE_DEFINITION_ERROR_NAME =
   'RequestBindingServiceDefinitionError';
 const SERVICE_ID_PREFIX = 'binding-service-';
@@ -126,7 +126,10 @@ function getBindingServiceDefinitionSourceKind(row) {
         projection?.binding_digest !== bindingDigest) {
       return INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
     }
-    const sourceKind = projection?.declaration?.source?.kind;
+    const declaration = normalizeStoredDeploymentBinding(
+      projection?.declaration,
+    );
+    const sourceKind = declaration.source.kind;
     return supportsBindingServiceDefinitionSourceKind(sourceKind) ?
       sourceKind :
       INVALID_BINDING_SERVICE_DEFINITION_SOURCE_KIND;
@@ -284,26 +287,6 @@ function buildActivatedRequestBindingServiceDefinition(
   });
 }
 
-function buildLegacyActivatedRequestBindingServiceDefinition(
-  compiledDefinition,
-  binding,
-) {
-  if (!Object.hasOwn(
-    binding?.declaration || {},
-    LEGACY_ELASTICITY_FIELD,
-  ) ||
-      binding?.declaration?.source?.kind !==
-        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST ||
-      !Number.isSafeInteger(binding?.declaration?.elasticity?.voters)) {
-    return null;
-  }
-  return Object.freeze({
-    ...compiledDefinition,
-    [SD_COL.REPLICA_COUNT]: binding.declaration.elasticity.voters,
-    [SD_COL.STATUS]: WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
-  });
-}
-
 function requestBindingServiceDefinitionRowsMatch(left, right) {
   return SERVICE_DEFINITION_COLUMN_LIST.every(
     (field) => left?.[field] === right?.[field],
@@ -316,7 +299,6 @@ export {
   REQUEST_BINDING_SERVICE_DEFINITION_PATH,
   RequestBindingServiceDefinitionError,
   buildActivatedRequestBindingServiceDefinition,
-  buildLegacyActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
   deriveRequestServiceDefinitionId,
   getBindingServiceDefinitionSourceKind,

@@ -87,15 +87,13 @@ class DurableGateway {
 
 function manifest() {
   return {
-    schema_version: 2,
+    schema_version: 3,
     name: 'orders-time-service',
     version: '1.0.0',
     capabilities: ['clock.read'],
     exports: [{
       name: 'time-handler',
       interface: 'time_v1',
-      reads: ['table:global.orders'],
-      writes: ['table:global.audit'],
     }],
     artifact: {
       type: 'oci',

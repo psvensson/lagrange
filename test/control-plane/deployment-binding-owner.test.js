@@ -15,12 +15,10 @@ import {
   DEPLOYMENT_BINDING_SOURCE_INTERFACE,
   DEPLOYMENT_BINDING_SOURCE_KIND,
   DeploymentBindingError,
-  buildBindingRow,
   canonicalJson,
   deriveBindingId,
   deriveBindingVersionId,
   normalizeDeploymentBinding,
-  projectBinding,
 } from '../../src/control-plane/owners/deployment-binding-contract.js';
 import {
   SERVICE_INSTALL_CATALOG_ERROR_CODE,
@@ -138,39 +136,18 @@ function createOwners(gateway, now = createClock()) {
 
 function manifest() {
   return {
-    schema_version: 2,
+    schema_version: 3,
     name: 'binding-targets',
     version: '1.0.0',
     capabilities: ['network.client', 'clock.read'],
     exports: [
-      {
-        name: 'boot-handler', interface: 'boot_v1',
-        reads: [], writes: [],
-      },
-      {
-        name: 'call-handler', interface: 'call_v1',
-        reads: ['table:global.orders'], writes: [],
-      },
-      {
-        name: 'change-handler', interface: 'change_v1',
-        reads: ['table:global.orders'], writes: ['table:global.audit'],
-      },
-      {
-        name: 'once-handler', interface: 'once_v1',
-        reads: [], writes: ['table:global.audit'],
-      },
-      {
-        name: 'pushdown-handler', interface: 'pushdown_v1',
-        reads: ['table:global.orders'], writes: [],
-      },
-      {
-        name: 'request-handler', interface: 'request_v1',
-        reads: ['table:global.orders'], writes: ['table:global.audit'],
-      },
-      {
-        name: 'time-handler', interface: 'time_v1',
-        reads: [], writes: ['table:global.audit'],
-      },
+      {name: 'boot-handler', interface: 'boot_v1'},
+      {name: 'call-handler', interface: 'call_v1'},
+      {name: 'change-handler', interface: 'change_v1'},
+      {name: 'once-handler', interface: 'once_v1'},
+      {name: 'pushdown-handler', interface: 'pushdown_v1'},
+      {name: 'request-handler', interface: 'request_v1'},
+      {name: 'time-handler', interface: 'time_v1'},
     ],
     artifact: {
       type: 'oci',
@@ -346,61 +323,6 @@ describe('deployment Binding v2 contract', () => {
       ]) {
         assert.doesNotThrow(() => normalizeDeploymentBinding(candidate));
       }
-    });
-
-  test('replays legacy v0/v1 access tails without accepting them at v2 ingress',
-    () => {
-      const current = bindingInput({
-        packageId: `service-package-${'a'.repeat(64)}`,
-        manifestDigest: `sha256:${'b'.repeat(64)}`,
-      });
-      const legacyDeclaration = {
-        ...current,
-        capabilities: ['clock.read'],
-        contexts: ['table:global.orders'],
-        elasticity: {
-          max_learners: 4,
-          min_learners: 1,
-          voters: 5,
-        },
-        schema_version: 0,
-      };
-      const row = buildBindingRow(
-        legacyDeclaration,
-        SECURITY_CONTEXT,
-        1000,
-      );
-
-      const replayed = projectBinding(row, true);
-
-      assert.equal(replayed.replayed, true);
-      assert.deepEqual(
-        replayed.declaration.elasticity,
-        legacyDeclaration.elasticity,
-      );
-      const legacyV1Declaration = {
-        ...current,
-        capabilities: ['clock.read'],
-        contexts: ['table:global.orders'],
-        schema_version: 1,
-      };
-      const legacyV1 = projectBinding(
-        buildBindingRow(legacyV1Declaration, SECURITY_CONTEXT, 1001),
-        true,
-      );
-      assert.deepEqual(
-        legacyV1.declaration.contexts,
-        ['table:global.orders'],
-      );
-      const {capabilities: _capabilities, ...legacyIngress} =
-        legacyDeclaration;
-      assert.throws(
-        () => normalizeDeploymentBinding(legacyIngress),
-        (error) => assertBindingCode(
-          error,
-          DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
-        ),
-      );
     });
 });
 
@@ -662,7 +584,7 @@ describe('deployment Binding system-table owner', () => {
     const row = gateway.rows(TABLES.SERVICE_BINDINGS)
       .get(created.bindingVersionId);
     const tampered = JSON.parse(row.normalized_binding);
-    tampered.capabilities = ['attacker.widened'];
+    tampered.schema_version = 99;
     row.normalized_binding = JSON.stringify(tampered);
     row.binding_digest = `sha256:${createHash('sha256')
       .update(row.normalized_binding)

@@ -4,6 +4,12 @@ import {
   DEPLOYMENT_BINDING_BUDGET_FIELDS,
   DEPLOYMENT_BINDING_BUDGET_LIMITS,
 } from '../constants/deployment-binding.js';
+import {
+  normalizeDeploymentBinding,
+} from '../control-plane/owners/deployment-binding-contract.js';
+import {
+  normalizeExternalServiceManifest,
+} from '../service/external-service-manifest.js';
 import {parseOciReference} from '../wasm-service/oci-reference.js';
 
 const REQUEST_CELL_RUNTIME_ERROR_CODE = Object.freeze({
@@ -43,7 +49,7 @@ const REQUEST_CELL_CONTRACT_MESSAGE = Object.freeze({
   BINDING_PROJECTION_INVALID:
     'binding_projection must describe a request Binding',
   BUDGETS_INVALID:
-    'resource_budget is outside the Binding v0 budget contract',
+    'resource_budget is outside the Binding budget contract',
   BUDGETS_MISMATCH:
     'runtime budgets do not match the immutable Binding',
   COMPONENT_DIGEST_MISMATCH:
@@ -145,8 +151,27 @@ function parseBindingProjection(definition) {
     REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
     REQUEST_CELL_CONTRACT_FIELD.BINDING_PROJECTION,
   );
-  const declaration = projection.declaration;
-  if (!declaration || declaration.source?.kind !== REQUEST_SOURCE_KIND) {
+  let declaration;
+  try {
+    const {capabilities, ...bindingInput} = projection.declaration;
+    declaration = {
+      ...normalizeDeploymentBinding(bindingInput),
+      capabilities,
+    };
+  } catch (error) {
+    if (error?.path === '/budgets' ||
+        error?.path?.startsWith('/budgets/')) {
+      fail(
+        REQUEST_CELL_RUNTIME_ERROR_CODE.BUDGET_INVALID,
+        REQUEST_CELL_CONTRACT_MESSAGE.BUDGETS_INVALID,
+      );
+    }
+    fail(
+      REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
+      REQUEST_CELL_CONTRACT_MESSAGE.BINDING_PROJECTION_INVALID,
+    );
+  }
+  if (declaration.source.kind !== REQUEST_SOURCE_KIND) {
     fail(
       REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
       REQUEST_CELL_CONTRACT_MESSAGE.BINDING_PROJECTION_INVALID,
@@ -269,7 +294,8 @@ function sha256Bytes(value) {
 }
 
 function requireArtifactIdentity(runtime, artifact) {
-  const manifest = artifact?.manifest;
+  const result = normalizeExternalServiceManifest(artifact?.manifest);
+  const manifest = result.status === 'accepted' ? result.manifest : null;
   const identityMatches = [
     [artifact?.packageId, runtime.packageId],
     [artifact?.manifestDigest, runtime.manifestDigest],
@@ -278,6 +304,7 @@ function requireArtifactIdentity(runtime, artifact) {
     [manifest?.artifact?.media_type, WASM_COMPONENT_MEDIA_TYPE],
     [manifest?.runtime?.kind, WASM_COMPONENT_RUNTIME_KIND],
     [sha256Json(manifest), runtime.manifestDigest],
+    [sha256Json(artifact?.manifest), runtime.manifestDigest],
   ].every(([actual, expected]) => actual === expected);
   if (!identityMatches) {
     fail(

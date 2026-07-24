@@ -180,9 +180,10 @@ class FixtureArtifactResolver {
 
 function manifest(version = '1.0.0', digest = DIGEST_A) {
   return {
-    schema_version: 1,
+    schema_version: 3,
     name: 'analytics-worker',
     version,
+    exports: [{name: 'serve', interface: 'request_v1'}],
     artifact: {
       type: 'oci',
       ref: `registry.example.test/analytics-worker@${digest}`,
@@ -193,10 +194,9 @@ function manifest(version = '1.0.0', digest = DIGEST_A) {
   };
 }
 
-function v3Manifest(exports_) {
+function manifestWithExports(exports_) {
   return {
     ...manifest(),
-    schema_version: 3,
     exports: exports_,
   };
 }
@@ -558,7 +558,7 @@ describe('service lifecycle SQL durable owner route', () => {
       'INSTALL SERVICE $1',
       [installPayload({
         manifest: {
-          ...v3Manifest([{
+          ...manifestWithExports([{
             name: 'serve',
             interface: 'request_v1',
           }]),
@@ -683,7 +683,7 @@ describe('service lifecycle SQL durable owner route', () => {
         'session-1',
         'INSTALL SERVICE $1',
         [installPayload({
-          manifest: v3Manifest([
+          manifest: manifestWithExports([
             {
               name: 'audit-change',
               interface: 'change_v1',
@@ -714,7 +714,7 @@ describe('service lifecycle SQL durable owner route', () => {
         'INSTALL SERVICE $1',
         [installPayload({
           idempotency_key: 'install-permuted-artifact-exports',
-          manifest: v3Manifest([
+          manifest: manifestWithExports([
             {
               name: 'serve',
               interface: 'request_v1',
@@ -740,7 +740,7 @@ describe('service lifecycle SQL durable owner route', () => {
         'INSTALL SERVICE $1',
         [installPayload({
           idempotency_key: 'install-distinct-artifact-contract',
-          manifest: v3Manifest([{
+          manifest: manifestWithExports([{
             name: 'serve-admin',
             interface: 'request_v1',
           }]),
@@ -787,7 +787,7 @@ describe('service lifecycle SQL durable owner route', () => {
         'INSTALL SERVICE $1',
         [installPayload({
           idempotency_key: 'reject-wildcard-export',
-          manifest: v3Manifest([{
+          manifest: manifestWithExports([{
             name: 'serve',
             interface: 'request_v1',
             reads: ['table:global.*'],

@@ -6,6 +6,9 @@ import {
   RUNTIME_KIND,
   UNIFIED_SERVICE_TYPE,
 } from '../../src/constants/index.js';
+import {
+  canonicalJson,
+} from '../../src/control-plane/owners/deployment-binding-contract.js';
 import {RuntimeServiceHandler} from
   '../../src/node/runtime-service-handler.js';
 import {
@@ -34,6 +37,9 @@ import {
   SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   ServiceLifecycleCommandOwner,
 } from '../../src/service/service-lifecycle-command-owner.js';
+import {
+  normalizeExternalServiceManifest,
+} from '../../src/service/external-service-manifest.js';
 import {RuntimeServiceAdapter} from
   '../../src/service/adapters/runtime-service-adapter.js';
 import {ServiceLifecycleManager} from
@@ -70,6 +76,7 @@ const PAYLOAD_DIGEST = `sha256:${createHash('sha256')
   .update(COMPONENT_BYTES)
   .digest('hex')}`;
 const SERVICE_ID = 'binding-service-request-cell';
+const PACKAGE_ID = `service-package-${'c'.repeat(64)}`;
 const ACCESS_TABLES = Object.freeze([
   Object.freeze({
     context: 'table:global.audit',
@@ -81,7 +88,7 @@ const ACCESS_TABLES = Object.freeze([
 ]);
 
 function manifest() {
-  return {
+  const result = normalizeExternalServiceManifest({
     artifact: {
       digest: ARTIFACT_DIGEST,
       media_type: 'application/wasm',
@@ -92,19 +99,19 @@ function manifest() {
     exports: [{
       interface: 'request_v1',
       name: 'run',
-      reads: ['table:global.legacy_denied'],
-      writes: ['table:global.legacy_denied'],
     }],
     name: 'request-cell',
     runtime: {kind: RUNTIME_KIND.WASM_COMPONENT},
-    schema_version: 2,
+    schema_version: 3,
     version: '1.0.0',
-  };
+  });
+  assert.equal(result.status, 'accepted');
+  return result.manifest;
 }
 
 function manifestDigest(value) {
   return `sha256:${createHash('sha256')
-    .update(JSON.stringify(value))
+    .update(canonicalJson(value))
     .digest('hex')}`;
 }
 
@@ -121,13 +128,13 @@ function definition(overrides = {}) {
       wall_time_ms: 100,
     },
     capabilities: ['clock.read'],
-    contexts: ['table:global.legacy_denied'],
     name: 'request-cell-binding',
+    schema_version: 2,
     source: {kind: 'request', method: 'POST', path: '/cell'},
     target: {
       export_name: 'run',
       manifest_digest: digest,
-      package_id: 'tenant-package-request-cell',
+      package_id: PACKAGE_ID,
     },
   };
   return {
@@ -175,7 +182,7 @@ function boundRequestCell(overrides = {}) {
     bytes: COMPONENT_BYTES,
     manifest: componentManifest,
     manifestDigest: manifestDigest(componentManifest),
-    packageId: 'tenant-package-request-cell',
+    packageId: PACKAGE_ID,
     payloadDigest: PAYLOAD_DIGEST,
   });
 }
@@ -188,7 +195,7 @@ function createFixture(options = {}) {
     artifactDigest: ARTIFACT_DIGEST,
     manifest: componentManifest,
     manifestDigest: manifestDigest(componentManifest),
-    packageId: 'tenant-package-request-cell',
+    packageId: PACKAGE_ID,
   };
   const commandOwner = new ServiceLifecycleCommandOwner({
     artifactResolver: {
@@ -784,7 +791,7 @@ describe('minimal deployment request Cell runtime readiness', () => {
             bytes: COMPONENT_BYTES,
             manifest: manifest(),
             manifestDigest: manifestDigest(manifest()),
-            packageId: 'tenant-package-request-cell',
+            packageId: PACKAGE_ID,
             payloadDigest: PAYLOAD_DIGEST,
           };
         },
@@ -829,7 +836,7 @@ describe('minimal deployment request Cell runtime readiness', () => {
           bytes: COMPONENT_BYTES,
           manifest: manifest(),
           manifestDigest: manifestDigest(manifest()),
-          packageId: 'tenant-package-request-cell',
+          packageId: PACKAGE_ID,
           payloadDigest: PAYLOAD_DIGEST,
         }),
       });

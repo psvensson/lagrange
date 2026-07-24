@@ -130,9 +130,10 @@ class FixtureArtifactResolver {
 
 function manifest(version = '1.0.0', digest = DIGEST_A) {
   return {
-    schema_version: 1,
+    schema_version: 3,
     name: 'analytics-worker',
     version,
+    exports: [{name: 'serve', interface: 'request_v1'}],
     artifact: {
       type: 'oci',
       ref: `registry.example.test/analytics-worker@${digest}`,

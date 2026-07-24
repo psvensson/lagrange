@@ -99,9 +99,10 @@ function definition() {
 
 function manifest() {
   return {
-    schema_version: 1,
+    schema_version: 3,
     name: SERVICE_NAME,
     version: '1.0.0',
+    exports: [{name: 'serve', interface: 'request_v1'}],
     artifact: {
       type: 'oci',
       ref: `registry.example.test/${SERVICE_NAME}@${DIGEST}`,

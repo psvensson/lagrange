@@ -219,9 +219,13 @@ function createCatalog(gateway, now = createClock()) {
 
 function manifest(overrides = {}) {
   return {
-    schema_version: 1,
+    schema_version: 3,
     name: 'analytics-worker',
     version: '3.0.0',
+    exports: [{
+      interface: 'request_v1',
+      name: 'serve',
+    }],
     artifact: {
       type: 'oci',
       ref: 'registry.example.test/analytics-worker:3.0.0',
@@ -231,20 +235,6 @@ function manifest(overrides = {}) {
     runtime: {kind: 'oci_container'},
     ...overrides,
   };
-}
-
-function v2Manifest(exports_) {
-  return manifest({
-    schema_version: 2,
-    exports: exports_,
-  });
-}
-
-function v3Manifest(exports_) {
-  return manifest({
-    schema_version: 3,
-    exports: exports_,
-  });
 }
 
 function resolvedArtifact(overrides = {}) {
@@ -325,10 +315,10 @@ describe('service install catalog production owner', () => {
     async () => {
       const gateway = new DurableCatalogGateway();
       const catalog = createCatalog(gateway);
-      const firstManifest = v3Manifest([{
+      const firstManifest = manifest({exports: [{
         interface: 'request_v1',
         name: 'serve',
-      }]);
+      }]});
       const first = await catalog.recordPackage({
         packageId: 'pkg-bindable-a',
         manifest: firstManifest,
@@ -394,10 +384,10 @@ describe('service install catalog production owner', () => {
 
       await catalog.recordPackage({
         packageId: 'pkg-bindable-b',
-        manifest: v3Manifest([{
+        manifest: manifest({exports: [{
           interface: 'change_v1',
           name: 'audit-change',
-        }]),
+        }]}),
         resolvedArtifact: resolvedArtifact(),
       });
       assert.equal(
@@ -415,16 +405,16 @@ describe('service install catalog production owner', () => {
       );
     });
 
-  it('accepts only current v3 and rejects v1, v2, and corruption',
+  it('accepts only the current contract and rejects durable corruption',
     async () => {
       const gateway = new DurableCatalogGateway();
       const catalog = createCatalog(gateway);
       const current = await catalog.recordPackage({
-        packageId: 'pkg-v3',
-        manifest: v3Manifest([{
+        packageId: 'pkg-current',
+        manifest: manifest({exports: [{
           interface: 'request_v1',
           name: 'serve',
-        }]),
+        }]}),
         resolvedArtifact: resolvedArtifact(),
       });
       assert.equal(
@@ -434,43 +424,13 @@ describe('service install catalog production owner', () => {
         )).manifest.schema_version,
         3,
       );
-      const v2 = await catalog.recordPackage({
-        packageId: 'pkg-v2',
-        manifest: v2Manifest([{
-          interface: 'request_v1',
-          name: 'serve',
-          reads: [],
-          writes: [],
-        }]),
-        resolvedArtifact: resolvedArtifact(),
-      });
-      await assert.rejects(
-        () => catalog.getBindableArtifact(
-          v2.packageId,
-          v2.manifestDigest,
-        ),
-        (error) => assertCode(
-          error,
-          SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE,
-        ),
-      );
-      const v1 = await catalog.recordPackage({
-        packageId: 'pkg-v1',
-        manifest: manifest(),
-        resolvedArtifact: resolvedArtifact(),
-      });
-      await assert.rejects(
-        catalog.getBindableArtifact(v1.packageId, v1.manifestDigest),
-        (error) => assertCode(
-          error, SERVICE_INSTALL_CATALOG_ERROR_CODE.ARTIFACT_NOT_ANALYZABLE),
-      );
 
       const corruptCurrent = await catalog.recordPackage({
-        packageId: 'pkg-corrupt-v3',
-        manifest: v3Manifest([{
+        packageId: 'pkg-corrupt-current',
+        manifest: manifest({exports: [{
           interface: 'request_v1',
           name: 'serve',
-        }]),
+        }]}),
         resolvedArtifact: resolvedArtifact(),
       });
       const row = gateway.rows(TABLES.SERVICE_PACKAGES)
@@ -499,14 +459,14 @@ describe('service install catalog production owner', () => {
       );
     });
 
-  it('rejects canonical but invalid v3 manifests read from durable state',
+  it('rejects canonical but invalid manifests read from durable state',
     async () => {
       const gateway = new DurableCatalogGateway();
       const catalog = createCatalog(gateway);
-      const invalidManifest = v3Manifest([{
+      const invalidManifest = manifest({exports: [{
         interface: 'not_a_real_interface',
         name: 'serve',
-      }]);
+      }]});
       await assert.rejects(
         catalog.recordPackage({
           packageId: 'pkg-invalid-before-write',
@@ -519,11 +479,11 @@ describe('service install catalog production owner', () => {
       assert.equal(gateway.rows(TABLES.SERVICE_PACKAGES).size, 0);
 
       const stored = await catalog.recordPackage({
-        packageId: 'pkg-invalid-v3',
-        manifest: v3Manifest([{
+        packageId: 'pkg-invalid-current',
+        manifest: manifest({exports: [{
           interface: 'request_v1',
           name: 'serve',
-        }]),
+        }]}),
         resolvedArtifact: resolvedArtifact(),
       });
       const row = gateway.rows(TABLES.SERVICE_PACKAGES).get(stored.packageId);

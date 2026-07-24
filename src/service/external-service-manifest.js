@@ -1,5 +1,5 @@
 /**
- * Versioned structural contract for externally installable service manifests.
+ * Structural contract for externally installable service manifests.
  *
  * This owner validates and normalizes manifest data only. Artifact resolution,
  * digest comparison, signature policy, persistence, and activation belong to
@@ -11,8 +11,6 @@ import Ajv from 'ajv';
 import {RUNTIME_KIND} from '../constants/runtime.js';
 
 const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 3;
-const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2 = 2;
-const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 = 1;
 
 const EXTERNAL_SERVICE_EXPORT_INTERFACE = Object.freeze({
   BOOT: 'boot_v1',
@@ -87,31 +85,6 @@ const STRING_ARRAY_SCHEMA = {
   type: 'array',
   items: {type: 'string', minLength: 1},
   uniqueItems: true,
-};
-
-const TABLE_ACCESS_SCHEMA = {
-  type: 'array',
-  items: {
-    type: 'string',
-    pattern: '^table:global\\.[a-z_][a-z0-9_]*$',
-  },
-  uniqueItems: true,
-};
-
-const LEGACY_EXPORTS_SCHEMA = {
-  type: 'array',
-  minItems: 1,
-  items: {
-    type: 'object',
-    required: ['name', 'interface', 'reads', 'writes'],
-    additionalProperties: false,
-    properties: {
-      name: {type: 'string', pattern: '^[a-z][a-z0-9-]{0,127}$'},
-      interface: {enum: Object.values(EXTERNAL_SERVICE_EXPORT_INTERFACE)},
-      reads: TABLE_ACCESS_SCHEMA,
-      writes: TABLE_ACCESS_SCHEMA,
-    },
-  },
 };
 
 const EXPORTS_SCHEMA = {
@@ -226,50 +199,7 @@ const COMMON_PROPERTIES = {
   },
 };
 
-const LEGACY_REPLICATION_SCHEMA = {
-  type: 'object',
-  additionalProperties: true,
-  properties: {
-    mode: {
-      enum: ['replicated_service', 'singleton', 'sharded'],
-    },
-    replicas: {type: 'integer', minimum: 1},
-    placement: {type: 'object'},
-    failover_policy: {type: 'object'},
-  },
-};
-
-const schemaV1 = {
-  $id: 'lagrange.external-service-manifest.v1',
-  type: 'object',
-  required: COMMON_REQUIRED_FIELDS,
-  additionalProperties: true,
-  properties: {
-    schema_version: {
-      type: 'integer',
-      const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1,
-    },
-    ...COMMON_PROPERTIES,
-    replication: LEGACY_REPLICATION_SCHEMA,
-  },
-};
-
-const schemaV2 = {
-  $id: 'lagrange.external-service-manifest.v2',
-  type: 'object',
-  required: [...COMMON_REQUIRED_FIELDS, 'exports'],
-  additionalProperties: true,
-  properties: {
-    schema_version: {
-      type: 'integer',
-      const: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2,
-    },
-    ...COMMON_PROPERTIES,
-    exports: LEGACY_EXPORTS_SCHEMA,
-  },
-};
-
-const schemaV3 = {
+const schema = {
   $id: 'lagrange.external-service-manifest.v3',
   type: 'object',
   required: [...COMMON_REQUIRED_FIELDS, 'exports'],
@@ -285,12 +215,8 @@ const schemaV3 = {
 };
 
 const ajv = new Ajv({allErrors: true, strict: true});
-const schemaValidators = new Map([
-  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1, ajv.compile(schemaV1)],
-  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2, ajv.compile(schemaV2)],
-  [EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION, ajv.compile(schemaV3)],
-]);
-const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schemaV3);
+const validateSchema = ajv.compile(schema);
+const EXTERNAL_SERVICE_MANIFEST_SCHEMA = deepFreeze(schema);
 
 const TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
   'display_name',
@@ -303,11 +229,6 @@ const TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
   'dependencies',
   'health',
 ]);
-const LEGACY_TOP_LEVEL_OPTIONAL_FIELDS = Object.freeze([
-  ...TOP_LEVEL_OPTIONAL_FIELDS,
-  'replication',
-]);
-
 const ARTIFACT_OPTIONAL_FIELDS = Object.freeze(['size_bytes', 'signature']);
 const RUNTIME_OPTIONAL_FIELDS = Object.freeze(['entrypoint', 'runtime_options']);
 
@@ -409,11 +330,7 @@ function schemaErrors(validator) {
 }
 
 function duplicateExportNameErrors(manifest) {
-  if (![EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2,
-    EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION].includes(
-    manifest.schema_version,
-  ) ||
-      !Array.isArray(manifest.exports)) {
+  if (!Array.isArray(manifest.exports)) {
     return [];
   }
   const seen = new Set();
@@ -434,8 +351,7 @@ function duplicateExportNameErrors(manifest) {
 }
 
 function callerOwnedReplicationErrors(manifest) {
-  if (manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 ||
-      !Object.hasOwn(manifest, REPLICATION_FIELD)) {
+  if (!Object.hasOwn(manifest, REPLICATION_FIELD)) {
     return [];
   }
   return [{
@@ -470,19 +386,12 @@ function rejectedResult(errors) {
   });
 }
 
-function normalizedExports(exports_, schemaVersion) {
+function normalizedExports(exports_) {
   return exports_
-    .map((declaration) => {
-      const normalized = {
-        interface: declaration.interface,
-        name: declaration.name,
-      };
-      if (schemaVersion === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V2) {
-        normalized.reads = [...declaration.reads].sort();
-        normalized.writes = [...declaration.writes].sort();
-      }
-      return normalized;
-    })
+    .map((declaration) => ({
+      interface: declaration.interface,
+      name: declaration.name,
+    }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -492,19 +401,8 @@ function normalizedManifest(manifest) {
     name: manifest.name,
     version: manifest.version,
   };
-  copyOptionalFields(
-    normalized,
-    manifest,
-    manifest.schema_version === EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1 ?
-      LEGACY_TOP_LEVEL_OPTIONAL_FIELDS :
-      TOP_LEVEL_OPTIONAL_FIELDS,
-  );
-  if (manifest.schema_version !== EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION_V1) {
-    normalized.exports = normalizedExports(
-      manifest.exports,
-      manifest.schema_version,
-    );
-  }
+  copyOptionalFields(normalized, manifest, TOP_LEVEL_OPTIONAL_FIELDS);
+  normalized.exports = normalizedExports(manifest.exports);
   normalized.artifact = {
     type: manifest.artifact.type,
     ref: manifest.artifact.ref,
@@ -531,10 +429,8 @@ function normalizeExternalServiceManifest(input) {
     }]);
   }
 
-  const validator = schemaValidators.get(clone.value.schema_version) ||
-    schemaValidators.get(EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION);
-  const structurallyValid = validator(clone.value);
-  const errors = structurallyValid ? [] : schemaErrors(validator);
+  const structurallyValid = validateSchema(clone.value);
+  const errors = structurallyValid ? [] : schemaErrors(validateSchema);
   errors.push(...duplicateExportNameErrors(clone.value));
   errors.push(...callerOwnedReplicationErrors(clone.value));
   const mismatch = mismatchError(clone.value);

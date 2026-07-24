@@ -70,7 +70,7 @@ const RUNTIME_REF =
 const REPLICA_ID = `${SERVICE_ENTITY_ID}-r1`;
 const OPERATION_ID = 'op-runtime-create-lane';
 const HANDLER_ADDRESS = `${NODE_ID}/service/runtime-service-handler`;
-const RUNTIME_PACKAGE_ID = 'tenant-package-runtime-create-lane';
+const RUNTIME_PACKAGE_ID = `service-package-${'c'.repeat(64)}`;
 const RUNTIME_EXPORT_NAME = 'run';
 const RUNTIME_COMPONENT_BYTES = Buffer.from(
   'formation-runtime-service-create-lane',
@@ -97,12 +97,10 @@ const RUNTIME_MANIFEST = Object.freeze({
   exports: Object.freeze([Object.freeze({
     interface: 'request_v1',
     name: RUNTIME_EXPORT_NAME,
-    reads: Object.freeze([]),
-    writes: Object.freeze([]),
   })]),
   name: 'formation-runtime-service-create-lane',
   runtime: Object.freeze({kind: RUNTIME_KIND.WASM_COMPONENT}),
-  schema_version: 2,
+  schema_version: 3,
   version: '1.0.0',
 });
 const RUNTIME_MANIFEST_DIGEST = `sha256:${createHash('sha256')
@@ -145,7 +143,7 @@ function attachServiceDefinition(cache) {
   const definition = Object.freeze({
     service_id: SERVICE_ENTITY_ID,
     status: 'active',
-    replica_count: 3,
+    replica_count: 0,
     runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
     runtime_ref: RUNTIME_REF,
     runtime_config: JSON.stringify({export_name: RUNTIME_EXPORT_NAME}),
@@ -158,8 +156,8 @@ function attachServiceDefinition(cache) {
       declaration: {
         budgets: RUNTIME_BUDGETS,
         capabilities: [],
-        contexts: [],
         name: 'formation-runtime-service-create-lane',
+        schema_version: 2,
         source: {kind: 'request', method: 'POST', path: '/orders'},
         target: {
           export_name: RUNTIME_EXPORT_NAME,

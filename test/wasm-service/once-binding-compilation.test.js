@@ -88,15 +88,13 @@ class DurableGateway {
 function manifest(sourceKind = 'once') {
   const exportName = `${sourceKind}-handler`;
   return {
-    schema_version: 2,
+    schema_version: 3,
     name: `orders-${sourceKind}-service`,
     version: '1.0.0',
     capabilities: ['clock.read'],
     exports: [{
       name: exportName,
       interface: `${sourceKind}_v1`,
-      reads: ['table:global.orders'],
-      writes: ['table:global.audit'],
     }],
     artifact: {
       type: 'oci',

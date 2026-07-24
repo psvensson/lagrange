@@ -29,15 +29,14 @@ The external manifest declares, for every export:
 The interface identifier types the artifact boundary without prescribing which
 Binding source may call it; source-to-interface compatibility belongs to the
 Binding contract. Replication, placement, and table authorization are not
-Artifact properties. Schema-v2 manifests that carry caller-owned `replication`
-intent are rejected; v1 remains readable only as a legacy compatibility
-surface.
+Artifact properties. The sole Artifact contract is schema v3. Ingress,
+normalization, durable catalog replay, scaffolding, and runtime binding all use
+that same contract; other schema versions are not decoded.
 
 Manifest fields are the runtime-neutral canonical vehicle for executable
 identity and interfaces. A future WIT adapter may compile component metadata
 into the same fields, but must not become a second declaration authority.
-Manifest v1 and v2 remain readable under their existing contracts; v3 is the
-default for new scaffolds and carries only executable identity and interfaces.
+Schema v3 carries only executable identity and interfaces.
 
 ### Runtime access policy
 
@@ -63,7 +62,7 @@ canonical target stores the three-part declaration identity:
 on <source> run <package-id>@<manifest-digest>#<export>
 ```
 
-OCI-digest shorthand is not part of Binding v1. Any future shorthand must first
+OCI-digest shorthand is not part of the Binding contract. Any future shorthand must first
 receive an authenticated set of eligible installed package identities, fail
 closed when more than one eligible declaration matches, and persist only the
 canonical three-part identity above.
@@ -76,13 +75,10 @@ has one fixed execution semantic. `call` and `pushdown` Bindings are durable
 registrations, while individual statement calls and query plans are transient
 invocations rather than Bindings.
 
-Binding schema v1's replay-only migration contract is an exact object with
-`schema_version`, `name`, `target`, `source`, `contexts`, and `budgets`; unknown
-fields are invalid. `contexts` is still required and bounded by the selected
-export's serialized `reads`/`writes` as a migration tail. It is not the selected
-runtime authorization authority. Binding schema v2 removes `contexts` entirely;
-new ingress accepts only v2 while v0/v1 bytes remain replayable. Its source is
-one of these closed variants, with one fixed compatible Artifact interface:
+The sole Binding contract is schema v2. Its exact root is `schema_version`,
+`name`, `target`, `source`, and `budgets`; unknown fields are invalid at ingress
+and durable replay. Its source is one of these closed variants, with one fixed
+compatible Artifact interface:
 
 | Source | Exact source fields | Artifact interface |
 | --- | --- | --- |
@@ -101,19 +97,13 @@ closed set of safe-integer limits: CPU `1..60000` ms, wall time `1..300000` ms
 and not below CPU, memory `1..1073741824` bytes, input/output `0..16777216`
 bytes each, and context `0..67108864` bytes.
 
-Pre-cutover schema-v0 rows remain readable through a replay-only decoder so an
-upgrade cannot strand existing Cells. Their historical `elasticity` bytes stay
-covered by the immutable row digest and may be exposed for audit, but neither
-reconciliation nor placement treats them as replica intent. New ingress accepts
-only schema v2 and rejects that field.
-
-V2 is create-only. `DeploymentBindingOwner` derives one tenant-scoped logical
+Schema v2 is create-only. `DeploymentBindingOwner` derives one tenant-scoped logical
 identity and immutable generation 1, stores a digest of the canonical Binding,
 and permits only byte-identical replay. Replacement and removal will append
 later generations; no mutable `active` flag, update, or delete path exists in
-v2. Authenticated `CREATE BINDING $1` is the only v2 ingress. The
+the contract. Authenticated `CREATE BINDING $1` is the only Binding ingress. The
 `service_bindings` table is internally CDC-propagated declaration state so a
-later reconciler can wake from replicated changes. V1 compilation derives
+later reconciler can wake from replicated changes. Binding compilation derives
 desired state; it does not directly execute a runtime service.
 
 ### Cell
@@ -138,7 +128,7 @@ The first cutover admits only request Binding lineage. The planning owner
 level-triggers each existing inactive request-derived row to `status = active`,
 preserving its service identity, pinned runtime descriptor, Binding lineage, and
 canonical projection. Its stored `replica_count = 0` is a non-authoritative
-legacy placeholder. The runtime-service policy recognizes Binding lineage and
+sentinel. The runtime-service policy recognizes Binding lineage and
 derives target, minimum, maximum, topology, capacity, and data affinity directly
 from system policy. One shared projection exposes that effective target to the
 rebalancer, admin, CLI, and discovery readers without writing a generated count
@@ -184,7 +174,7 @@ kind-specific data-plane path.
 
 | Concern | Selected authority | Contract action |
 | --- | --- | --- |
-| External artifact shape | `external-service-manifest.js` | Carry executable identity and versioned export interfaces; reject caller-owned Cell replication and retire table access declarations. |
+| External artifact shape | `external-service-manifest.js` | Carry executable identity and typed export interfaces in the sole schema-v3 contract; reject caller-owned Cell replication and table access declarations. |
 | Artifact resolution | Installable OCI artifact resolver | Reuse unchanged. |
 | Immutable bindable Artifact identity | `ServiceInstallCatalogOwner` / `service_packages` | Derive and verify `manifest_digest` from the exact immutable `normalized_manifest`; never select a declaration by OCI digest ordering. |
 | Lifecycle ingress | Authenticated lifecycle SQL, consumed by the CLI | Extend with parameterized `CREATE BINDING $1`; no binding-specific side channel. |
@@ -203,19 +193,18 @@ kind-specific data-plane path.
 
 `code`, `module_manifests`, `service_definitions`, stored functions, CDC
 subscriptions, and callback registrations are migration inputs, not new peers of
-Artifact/Binding/Cell. Compatibility adapters may compile old ingress into the
-single owners only when their removal is explicit and structurally guarded.
+Artifact/Binding/Cell. They do not create alternate Artifact or Binding
+contracts.
 
 ## Migration sequence
 
-1. Make new artifact manifests analyzable: schema v2 exports carry canonical
-   interface declarations through the live install/catalog path while v1
-   compatibility remains unchanged.
+1. Make Artifact manifests analyzable: the sole schema-v3 contract carries
+   canonical interface declarations through the live install/catalog path.
 2. Establish the bindable Artifact identity as installed `package_id` plus the
    digest of exact canonical `normalized_manifest`; make digest-only ambiguity,
-   schema-v1 input, and durable corruption fail closed in the catalog owner.
-3. Seal Binding schema v1 and its single validator/persistence owner. Require
-   analyzable v2 artifacts for newly authored Bindings. Quest
+   non-current input, and durable corruption fail closed in the catalog owner.
+3. Seal Binding schema v2 and its single validator/persistence owner. Require
+   current analyzable artifacts for every Binding. Quest
    `minimal-deployment-binding-v0-declaration` owns this step.
 4. Compile request Bindings into the existing desired-service lifecycle as
    inactive zero-replica rows and make Binding the declaration authority;
@@ -259,8 +248,8 @@ a running Cell while `wasm_component` remains only a lifecycle scaffold.
 - Code is stateless. Durable state and synchronization live in tables.
 - Binding is intent, Cell is actual, and neither is reconstructed from the other
   by readers.
-- One validator owns each normalized boundary. DDL, CLI, and compatibility
-  syntax compile to that owner rather than re-validating locally.
+- One validator owns each normalized boundary. DDL and CLI syntax compile to
+  that owner rather than re-validating locally.
 - Runtime table authorization comes only from directly managed access policy.
   Observed access is affinity telemetry and never grants authority.
 - Reconciliation wakes from canonical replicated change notification and is
@@ -311,6 +300,8 @@ Step 7 is complete: schema-v3 Artifacts and schema-v2 Bindings carry no access
 declarations. Authenticated `CONFIGURE SERVICE ACCESS $1` directly updates the
 existing durable config path; SQL and Component invocation resolve that policy
 at access time and fail closed, while observed access remains affinity-only
-telemetry. Next, activate the other six Binding sources through
+telemetry. Quest `minimal-deployment-single-version-contract-cutover` removes
+all alternate Artifact and Binding decoders before the remaining Cell
+activation work. Next, activate the other six Binding sources through
 the same desired-state, replica, and runtime owners. Actor-key partitioning
 remains an explicit routing-policy design choice, not a Cell replica request.

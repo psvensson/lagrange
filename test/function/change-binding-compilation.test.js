@@ -90,15 +90,13 @@ class DurableGateway {
 
 function manifest() {
   return {
-    schema_version: 2,
+    schema_version: 3,
     name: 'orders-change-service',
     version: '1.0.0',
     capabilities: ['clock.read', 'network.client'],
     exports: [{
       name: 'change-handler',
       interface: 'change_v1',
-      reads: ['table:global.orders'],
-      writes: ['table:global.audit'],
     }],
     artifact: {
       type: 'oci',

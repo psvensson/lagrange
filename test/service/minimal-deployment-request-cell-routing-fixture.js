@@ -23,7 +23,6 @@ import {
 } from '../../src/control-plane/owners/deployment-binding-contract.js';
 import {
   buildActivatedRequestBindingServiceDefinition,
-  buildLegacyActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
 } from
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
@@ -60,11 +59,6 @@ const REQUEST_INTERFACE = 'request_v1';
 const REQUEST_EXPORT = 'run';
 const ROUTING_CELL_NAME = 'routing-cell';
 const ROUTING_CELL_VERSION = '1.0.0';
-const LEGACY_BINDING_CELL_SHAPE = Object.freeze({
-  max_learners: 4,
-  min_learners: 1,
-  voters: 5,
-});
 const JOURNAL_SQL_PREFIX = Object.freeze({
   INSERT: 'INSERT',
   SELECT: 'SELECT',
@@ -189,13 +183,7 @@ function createBindingDeclaration(
     normalizeDeploymentBinding(input),
     artifact,
   );
-  if (!overrides.legacy) return declaration;
-  return Object.freeze({
-    ...declaration,
-    contexts: [],
-    elasticity: LEGACY_BINDING_CELL_SHAPE,
-    schema_version: 0,
-  });
+  return declaration;
 }
 
 function createDeploymentRows(overrides = {}) {
@@ -212,8 +200,7 @@ function createDeploymentRows(overrides = {}) {
   );
   const binding = projectBinding(bindingRow);
   const compiled = buildRequestBindingServiceDefinition(bindingRow, artifact);
-  const definition = overrides.legacy ?
-    buildLegacyActivatedRequestBindingServiceDefinition(compiled, binding) :
+  const definition =
     buildActivatedRequestBindingServiceDefinition(compiled, binding);
   return {artifact, binding, bindingRow, declaration, definition};
 }

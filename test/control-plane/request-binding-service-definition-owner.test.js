@@ -9,10 +9,6 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
-  buildBindingRow,
-} from
-  '../../src/control-plane/owners/deployment-binding-contract.js';
-import {
   REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE,
   RequestBindingServiceDefinitionError,
   buildRequestBindingServiceDefinition,
@@ -123,15 +119,13 @@ class DurableGateway {
 
 function manifest() {
   return {
-    schema_version: 2,
+    schema_version: 3,
     name: 'orders-service',
     version: '1.0.0',
     capabilities: ['network.client', 'clock.read'],
     exports: [{
       name: 'request-handler',
       interface: 'request_v1',
-      reads: ['table:global.orders'],
-      writes: ['table:global.audit'],
     }],
     artifact: {
       type: 'oci',
@@ -178,24 +172,6 @@ function bindingInput(package_, overrides = {}) {
     },
     ...overrides,
   };
-}
-
-function legacyBindingRow(package_) {
-  return buildBindingRow(
-    {
-      ...bindingInput(package_),
-      capabilities: ['clock.read', 'network.client'],
-      contexts: ['table:global.audit', 'table:global.orders'],
-      elasticity: {
-        max_learners: 4,
-        min_learners: 1,
-        voters: 5,
-      },
-      schema_version: 0,
-    },
-    SECURITY_CONTEXT,
-    1000,
-  );
 }
 
 function createCache(gateway) {
@@ -395,54 +371,6 @@ describe('request Binding desired-service compilation owner', () => {
         ['update'],
       );
       assert.equal(planner.rebalancers.length, 1);
-      planner.owner.shutdown();
-    });
-
-  test('replays a pre-cutover active row without restoring replica authority',
-    async () => {
-      const fixture = await createFixture();
-      const bindingRow = legacyBindingRow(fixture.package_);
-      fixture.gateway.rows(TABLES.SERVICE_BINDINGS).clear();
-      fixture.gateway.rows(TABLES.SERVICE_BINDINGS).set(
-        bindingRow.binding_version_id,
-        clone(bindingRow),
-      );
-      const artifact = await fixture.owners.serviceInstallCatalogOwner
-        .getBindableArtifactForTenant(
-          bindingRow.package_id,
-          bindingRow.manifest_digest,
-          TENANT_ID,
-        );
-      const compiled = buildRequestBindingServiceDefinition(
-        bindingRow,
-        artifact,
-      );
-      const legacyActive = {
-        ...compiled,
-        [SD_COL.REPLICA_COUNT]: 5,
-        [SD_COL.STATUS]: 'active',
-      };
-      fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).set(
-        compiled.service_id,
-        clone(legacyActive),
-      );
-      fixture.gateway.writes.length = 0;
-      const planner = createPlanner(fixture);
-
-      planner.owner.setLeader(true);
-      await planner.owner.waitForBindingRefresh();
-
-      assert.deepEqual(
-        fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS)
-          .get(compiled.service_id),
-        legacyActive,
-      );
-      assert.equal(fixture.gateway.writes.length, 0);
-      assert.equal(planner.rebalancers.length, 1);
-      assert.equal(
-        planner.rebalancers[0].options.entityId,
-        compiled.service_id,
-      );
       planner.owner.shutdown();
     });
 
