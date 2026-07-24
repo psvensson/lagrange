@@ -20,7 +20,7 @@ the current cross-Quest frontier and unresolved choices.
 
 Artifact schema v3, Binding schema v2, all seven source compilers, direct runtime
 access policy, request Cell placement/readiness/routing, change Cell placement,
-time Cell placement, and once Cell placement are landed.
+time Cell placement, once Cell placement, and boot Cell placement are landed.
 
 Cell activation reuses one chain:
 
@@ -31,14 +31,14 @@ Cell activation reuses one chain:
 3. `ServiceRuntimeLifecycle`, `RuntimeDriverRegistry`, and
    `WasmComponentDriver` remain the only Component readiness boundary.
 
-Boot, call, and pushdown still compile to inactive zero-replica desired state.
-Activate them one source per Quest through that same chain. Each Quest must keep
-caller replica intent absent and must not install its invocation mechanism,
-source-specific planner, scheduler, or alternate runtime contract. Boot is next;
-its kind-only declaration makes placement and readiness independently provable
-without adding a bootstrap hook or invocation owner.
+Call and pushdown still compile to inactive zero-replica desired state. Activate
+them one source per Quest through that same chain. Each Quest must keep caller
+replica intent absent and must not install its invocation mechanism,
+source-specific planner, scheduler, or alternate runtime contract. Call is next;
+its durable named registration makes placement and readiness independently
+provable without adding a statement invocation resolver.
 
-After those three placements, decide whether any source-specific invocation
+After those two placements, decide whether any source-specific invocation
 cutover is independently valuable. Do not couple placement with dispatch.
 
 ## Open choices
@@ -88,3 +88,7 @@ cutover is independently valuable. Do not couple placement with dispatch.
 - 2026-07-24 — Quest `minimal-deployment-once-cell-placement` landed. Selected
   `minimal-deployment-boot-cell-placement` next because boot has the same
   kind-only declaration while bootstrap invocation remains a separate concern.
+- 2026-07-24 — Quest `minimal-deployment-boot-cell-placement-migration` landed
+  the exact boot Cell candidate after its predecessor's malformed proof history.
+  Selected `minimal-deployment-call-cell-placement` next because the durable
+  named registration can be placed independently of statement invocation.
