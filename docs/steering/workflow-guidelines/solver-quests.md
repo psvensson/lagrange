@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/governance.md
 parent_index: ../workflow-guidelines/INDEX.md
-last_reviewed: 2026-07-22
+last_reviewed: 2026-07-24
 ---
 
 > **Canonical source.** The Solver is the repository work system. Its unit of
