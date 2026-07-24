@@ -84,6 +84,20 @@ const COOL_WAIT_POLL_MS = 30 * 1000;
 /** Each slot gets at most one non-measuring re-run before giving up. */
 const MAX_RERUNS_PER_SLOT = 1;
 
+/**
+ * Disk-contention preflight (PSI). Sustained I/O stall pressure surfaces
+ * mid-run as event-loop gaps and non-measuring verdicts (the NVMe relocation
+ * lesson: node-0 at 55% blocked produced runs the harness had to throw away).
+ * Catch the unfit host BEFORE spending the run: do not start while
+ * /proc/pressure/io reports `some avg10` at/above this percentage.
+ */
+const IO_PRESSURE_FILE = '/proc/pressure/io';
+const IO_QUIET_MAX_SOME_AVG10 = 15;
+/** How long to wait for I/O quiet before declaring the session inconclusive. */
+const IO_WAIT_TOTAL_MS = 10 * 60 * 1000;
+/** Poll interval while waiting for I/O pressure to drain. */
+const IO_WAIT_POLL_MS = 30 * 1000;
+
 /** Session exit codes: gate failed vs could-not-measure. */
 const EXIT_GATE_FAILED = 1;
 const EXIT_INCONCLUSIVE = 2;
@@ -141,6 +155,52 @@ async function waitForCoolStart(io) {
     }
     io.log(`Max core ${tempC}C >= ${COOL_START_MAX_C}C; cooling down...`);
     await io.sleep(COOL_WAIT_POLL_MS);
+  }
+}
+
+/**
+ * Extract the `some avg10` percentage from /proc/pressure/io PSI text.
+ * @param {string} text raw PSI file content
+ * @return {number|null} percentage, or null when unparsable
+ */
+export function ioSomeAvg10FromPsi(text) {
+  const match = /^some avg10=([0-9.]+)/m.exec(text || '');
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Read current I/O stall pressure (`some avg10`, percent) from PSI.
+ * @param {Function} read injectable readFileSync-style reader (tests)
+ * @return {Promise<number|null>} percentage, or null when PSI is unavailable
+ */
+export async function readIoPressureSomeAvg10(read = readFileSync) {
+  try {
+    return ioSomeAvg10FromPsi(read(IO_PRESSURE_FILE, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Wait until disk I/O pressure is low enough to start a measuring run.
+ * PSI unavailable (non-Linux, PSI off) never blocks: fitness is then simply
+ * unestablished pre-run and the existing post-run gap harvest still governs.
+ * @param {Object} io {readIoPressure, sleep, log}
+ * @return {Promise<{ok: boolean, someAvg10: number|null}>}
+ */
+async function waitForIoQuietStart(io) {
+  const deadline = Date.now() + IO_WAIT_TOTAL_MS;
+  for (;;) {
+    const someAvg10 = await io.readIoPressure();
+    if (someAvg10 === null || someAvg10 < IO_QUIET_MAX_SOME_AVG10) {
+      return {ok: true, someAvg10};
+    }
+    if (Date.now() >= deadline) {
+      return {ok: false, someAvg10};
+    }
+    io.log(`I/O pressure some avg10 ${someAvg10}% >= ` +
+      `${IO_QUIET_MAX_SOME_AVG10}%; waiting for disk contention to drain...`);
+    await io.sleep(IO_WAIT_POLL_MS);
   }
 }
 
@@ -250,6 +310,7 @@ export async function runRepetitionSession(runClass, io = {}) {
   const resolvedIo = {
     execRun: io.execRun || (() => execRepetition(policy.script)),
     readTemp: io.readTemp || readMaxCoreTempC,
+    readIoPressure: io.readIoPressure || readIoPressureSomeAvg10,
     sleep: io.sleep || ((ms) => new Promise((r) => setTimeout(r, ms))),
     log: io.log || ((msg) => console.log(msg)),
     now: io.now || (() => new Date().toISOString()),
@@ -321,7 +382,15 @@ async function runSlot(runClass, slot, policy, io, runs) {
       io.log(`Cool-down wait exhausted at ${cool.tempC}C; session inconclusive.`);
       return SLOT_OUTCOME.INCONCLUSIVE;
     }
-    io.log(`[${runClass} ${slot + 1}/${policy.repetitions}] starting (max core ${cool.tempC}C)`);
+    const quiet = await waitForIoQuietStart(io);
+    if (!quiet.ok) {
+      io.log(`I/O-quiet wait exhausted at some avg10 ${quiet.someAvg10}%; ` +
+        'session inconclusive.');
+      return SLOT_OUTCOME.INCONCLUSIVE;
+    }
+    io.log(`[${runClass} ${slot + 1}/${policy.repetitions}] starting ` +
+      `(max core ${cool.tempC}C, io some avg10 ` +
+      `${quiet.someAvg10 === null ? 'n/a' : `${quiet.someAvg10}%`})`);
     const startedAt = io.now();
     const {exitCode, reportRefs} = await io.execRun();
     const postTempC = await io.readTemp();
@@ -332,6 +401,7 @@ async function runSlot(runClass, slot, policy, io, runs) {
       startedAt,
       exitCode,
       preTempC: cool.tempC,
+      preIoSomeAvg10: quiet.someAvg10,
       postTempC,
       green: verdict.green,
       nonMeasuring: verdict.nonMeasuring,

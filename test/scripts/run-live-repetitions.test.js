@@ -14,7 +14,9 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {
   classifyRepetition,
+  ioSomeAvg10FromPsi,
   maxTempFromSensorsJson,
+  readIoPressureSomeAvg10,
   reportRefFromLine,
   runRepetitionSession,
 } from '../../scripts/run-live-repetitions.js';
@@ -22,10 +24,12 @@ import {
 function fakeIo({
   execResults,
   temps,
+  ioPressures = [],
   sourceFingerprints = ['source-a', 'source-a'],
 }) {
   const execQueue = [...execResults];
   const tempQueue = [...temps];
+  const ioPressureQueue = [...ioPressures];
   const fingerprintQueue = [...sourceFingerprints];
   return {
     execRun: async () => {
@@ -36,6 +40,8 @@ function fakeIo({
       return next;
     },
     readTemp: async () => (tempQueue.length > 0 ? tempQueue.shift() : 45),
+    readIoPressure: async () =>
+      (ioPressureQueue.length > 0 ? ioPressureQueue.shift() : null),
     sleep: async () => {},
     log: () => {},
     now: () => '2026-07-19T12:00:00.000Z',
@@ -187,4 +193,40 @@ test('reportRefFromLine recognizes both runners evidence lines', async (t) => {
     reportRefFromLine('Archived run to solve/report/formation-probe-runs.ndjson'),
     'solve/report/formation-probe-runs.ndjson');
   t.equal(reportRefFromLine('Stopping cluster...'), null);
+});
+
+test('ioSomeAvg10FromPsi parses PSI text and rejects garbage', async (t) => {
+  const psi = 'some avg10=23.45 avg60=10.11 avg300=3.02 total=123456\n' +
+    'full avg10=9.99 avg60=4.20 avg300=1.00 total=65432\n';
+  t.equal(ioSomeAvg10FromPsi(psi), 23.45, 'reads the some line, not full');
+  t.equal(ioSomeAvg10FromPsi('full avg10=9.99\n'), null);
+  t.equal(ioSomeAvg10FromPsi(''), null);
+  t.equal(ioSomeAvg10FromPsi(null), null);
+});
+
+test('readIoPressureSomeAvg10 returns null when PSI is unavailable', async (t) => {
+  const value = await readIoPressureSomeAvg10(() => {
+    throw new Error('ENOENT');
+  });
+  t.equal(value, null, 'missing PSI never blocks a run');
+});
+
+test('high I/O pressure delays the run until it drains', async (t) => {
+  const io = fakeIo({
+    execResults: greens(5),
+    temps: [],
+    ioPressures: [40, 25, 5],
+  });
+  const session = await runRepetitionSession('probe', io);
+  t.equal(session.gatePassed, true,
+    'run starts once some avg10 drops below the quiet bound');
+  t.equal(session.runs[0].preIoSomeAvg10, 5,
+    'the pressure the run actually started at is recorded');
+});
+
+test('unavailable PSI records n/a pressure and proceeds', async (t) => {
+  const io = fakeIo({execResults: greens(5), temps: []});
+  const session = await runRepetitionSession('probe', io);
+  t.equal(session.gatePassed, true);
+  t.equal(session.runs[0].preIoSomeAvg10, null);
 });
