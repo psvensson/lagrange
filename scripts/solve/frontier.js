@@ -61,6 +61,16 @@ function renderClosureFrontier(records) {
   return lines;
 }
 
+// An open quest is flagged stale when its last log event is more than this many
+// days behind the NEWEST last-event among open quests — not behind wall-clock
+// now. Anchoring on the portfolio's own newest event keeps the board a pure
+// projection (repeated writes with no state change stay byte-identical) while
+// still exposing quests the active work has left behind. A stale flag is a
+// worklist signal: park it, reseal it narrower, or record why it stays open.
+export const STALE_OPEN_QUEST_DAYS = 7;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function renderOpenQuests(portfolio, closesById) {
   const open = portfolio.rows.filter((r) => r.open);
   const lines = [`## Open quests — ${open.length}`, ''];
@@ -68,13 +78,29 @@ function renderOpenQuests(portfolio, closesById) {
     lines.push('_(no open quests)_', '');
     return lines;
   }
-  lines.push('| id | class | attempts | reopens | closes |');
-  lines.push('| --- | --- | --- | --- | --- |');
+  const newestMs = Math.max(...open.map((r) => Date.parse(r.lastEventTs || '') || 0));
+  const stale = (r) => {
+    const ms = Date.parse(r.lastEventTs || '');
+    return Number.isFinite(ms) && newestMs - ms > STALE_OPEN_QUEST_DAYS * DAY_MS;
+  };
+  const staleCount = open.filter(stale).length;
+  lines.push('| id | class | attempts | reopens | last event | closes |');
+  lines.push('| --- | --- | --- | --- | --- | --- |');
   for (const r of open) {
     const closes = (closesById.get(r.id) || []).join(', ') || '—';
-    lines.push(`| ${r.id} | ${r.class} | ${r.attempts} | ${r.reopens} | ${closes} |`);
+    const lastEvent = r.lastEventTs ?
+      `${r.lastEventTs.slice(0, 10)}${stale(r) ? ' ⚠ stale' : ''}` : '—';
+    lines.push(
+      `| ${r.id} | ${r.class} | ${r.attempts} | ${r.reopens} | ${lastEvent} | ${closes} |`);
   }
   lines.push('');
+  if (staleCount > 0) {
+    lines.push(
+      `> ${staleCount} open quest(s) are ⚠ stale (last event more than ` +
+      `${STALE_OPEN_QUEST_DAYS} days behind the newest open-quest event): ` +
+      'each needs an explicit decision — park it, reseal it narrower, or ' +
+      'record on the quest why it stays open.', '');
+  }
   return lines;
 }
 

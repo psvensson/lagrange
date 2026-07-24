@@ -69,6 +69,7 @@ export function questPortfolioRow(quest, log) {
   const autoReopens = state.frontiers.reduce((sum, f) => sum + (f.autoReopenCount || 0), 0);
   const cannotMeasure = state.frontiers.filter(
     (f) => f.status === STATUS_PARKED && f.parkKind === PARK_KIND_CANNOT_MEASURE).length;
+  const lastEventTs = log.length > 0 ? log[log.length - 1].ts || null : null;
   return {
     id: quest.id,
     class: questClass(quest),
@@ -82,6 +83,7 @@ export function questPortfolioRow(quest, log) {
     reopens,
     autoReopens,
     cannotMeasure,
+    lastEventTs,
   };
 }
 
