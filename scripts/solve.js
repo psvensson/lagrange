@@ -815,10 +815,12 @@ function cmdStep(root, args) {
     `changeRef: ${r.changeRef}\n` : '';
   const templateLines = (r.verificationTemplates || [])
     .map((t) => `suggested verification template: ${t.template}\n`).join('');
+  const witnessLine = r.engagementWitness && !r.engagementWitness.satisfied ?
+    `${r.engagementWitness.message}\n` : '';
   process.stdout.write(
     `recorded attempt on ${r.frontier}: metric ${r.before} -> ${r.after} ` +
     `(${moved})${r.done ? ' DONE' : ''}${viol}\n${autoDiffLine}${templateLines}` +
-    commitLine(r.commit));
+    witnessLine + commitLine(r.commit));
   emitAdvisories(root, quest);
   refreshFrontierBoard(root);
 }

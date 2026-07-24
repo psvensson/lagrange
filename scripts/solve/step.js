@@ -19,7 +19,8 @@ import {
 import {readLog, projectState, assertSafeQuestId} from './store.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
-import {stepTheoryGateProblems} from './theory.js';
+import {resolveAttemptTheoryRef, stepTheoryGateProblems} from './theory.js';
+import {engagementWitnessAdvisory} from './engagement-witness.js';
 import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {
   SOLVE_DATA_DIR,
@@ -402,6 +403,17 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   const gateResult = theoryGateResult(root, quest, log, readinessProblems, pick);
   if (gateResult) return gateResult;
 
+  // Advisory only (never blocks): a source-changing commit under an effective
+  // theory should carry a precondition/engagement witness finding, per the
+  // steering rule this projects. Computed against the pre-commit log so the
+  // witness window ends at this attempt.
+  const engagementWitness = engagementWitnessAdvisory({
+    log,
+    frontierId: def.id,
+    changedPaths: changeInspection.changedPaths || [],
+    theoryRef: resolveAttemptTheoryRef(state, def.id, options.theoryRef),
+  });
+
   const outcome = finalizeAttempt(root, quest, ctx, pick, pending.before, {
     changeRef,
     summary: options.summary || null,
@@ -433,6 +445,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     changeRef,
     verificationTemplates: suggestChangeVerificationTemplates(
       root, changeInspection),
+    engagementWitness,
     commit,
   };
 }
