@@ -40,14 +40,18 @@ import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
 const TENANT_ID = 'tenant-once';
 const ARTIFACT_DIGEST = `sha256:${'e'.repeat(64)}`;
 const COMPONENT_EXPORT_NAME = 'run';
-const COMPONENT_RUN_EXPORT_SOURCE_KINDS = new Set(['boot', 'call', 'once']);
+const COMPONENT_RUN_EXPORT_SOURCE_KINDS = new Set([
+  'boot',
+  'call',
+  'once',
+  'pushdown',
+]);
 const NAMED_BINDING_CELL_MODE = Object.freeze({
   ACTIVE: 'active',
-  INACTIVE: 'inactive',
 });
 const NAMED_BINDING_CELL_MODE_BY_SOURCE = Object.freeze({
   call: NAMED_BINDING_CELL_MODE.ACTIVE,
-  pushdown: NAMED_BINDING_CELL_MODE.INACTIVE,
+  pushdown: NAMED_BINDING_CELL_MODE.ACTIVE,
 });
 const COMPONENT_BYTES = Buffer.from(
   'AGFzbQ0AAQAHGwFCAgFAAAB3BAAOZ2V0LXJhbmRvbS11NjQBAAodAQAYd2FzaTpyYW5k' +

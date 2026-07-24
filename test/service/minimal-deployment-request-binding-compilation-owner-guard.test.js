@@ -112,14 +112,12 @@ test('Binding Cell placement keeps compilation two-phase and owner-controlled',
       ),
       true,
     );
-    for (const inactiveSourceKind of [
-      DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN,
-    ]) {
-      assert.equal(
-        isDeploymentBindingCellSourceKind(inactiveSourceKind),
-        false,
-      );
-    }
+    assert.equal(
+      isDeploymentBindingCellSourceKind(
+        DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN,
+      ),
+      true,
+    );
   });
 
 test('Binding Cells leave replica targets to the existing runtime policy', () => {
