@@ -360,17 +360,18 @@ test('coordinator createOperation persists readiness snapshot in initial step',
             type: params[1],
             partition_id: params[2],
             replica_id: params[3],
-            source_node_id: params[4],
-            target_node_id: params[5],
-            status: params[6],
-            workflow_step: params[7],
-            created_at: params[8],
-            updated_at: params[9],
-            completed_at: params[10],
-            error_message: params[11],
-            steps_history: params[12],
-            entity_type: params[13],
-            entity_id: params[14],
+            target_claim_key: params[4],
+            source_node_id: params[5],
+            target_node_id: params[6],
+            status: params[7],
+            workflow_step: params[8],
+            created_at: params[9],
+            updated_at: params[10],
+            completed_at: params[11],
+            error_message: params[12],
+            steps_history: params[13],
+            entity_type: params[14],
+            entity_id: params[15],
           };
           if (typeof persistedOperationRow.steps_history === 'string') {
             persistedStepsHistory = JSON.parse(
@@ -420,8 +421,8 @@ test('coordinator createOperation persists readiness snapshot in initial step',
             };
           }
           if (params && Array.isArray(params) && params.length > NUM.TEN) {
-            // INSERT_OPERATION — capture stepsHistory (param index 12)
-            const historyJson = params[12];
+            // INSERT_OPERATION — capture stepsHistory (param index 13)
+            const historyJson = params[13];
             if (typeof historyJson === 'string') {
               persistedStepsHistory = JSON.parse(historyJson);
             }
@@ -430,17 +431,18 @@ test('coordinator createOperation persists readiness snapshot in initial step',
               type: params[1],
               partition_id: params[2],
               replica_id: params[3],
-              source_node_id: params[4],
-              target_node_id: params[5],
-              status: params[6],
-              workflow_step: params[7],
-              created_at: params[8],
-              updated_at: params[9],
-              completed_at: params[10],
-              error_message: params[11],
-              steps_history: params[12],
-              entity_type: params[13],
-              entity_id: params[14],
+              target_claim_key: params[4],
+              source_node_id: params[5],
+              target_node_id: params[6],
+              status: params[7],
+              workflow_step: params[8],
+              created_at: params[9],
+              updated_at: params[10],
+              completed_at: params[11],
+              error_message: params[12],
+              steps_history: params[13],
+              entity_type: params[14],
+              entity_id: params[15],
             };
           }
           return {success: true, rows: [], affectedRows: 1, changes: 1};

@@ -41,6 +41,9 @@ import {
 import {
   isDeploymentBindingCellSourceKind,
 } from '../../control-plane/owners/deployment-binding-contract.js';
+import {
+  RuntimeServiceLegacyTargetReconciler,
+} from './runtime-service-legacy-target-reconciler.js';
 const SUBSYSTEM_NAME = 'runtime-service-rebalancer-owner';
 const RUNTIME_SERVICE_REBALANCER_OWNER_NAME = 'RuntimeServiceRebalancerOwner';
 const TYPEOF_STRING = 'string';
@@ -123,13 +126,21 @@ class RuntimeServiceRebalancerOwner {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(SUBSYSTEM_NAME) : console;
+    this._legacyTargetReconciler =
+      new RuntimeServiceLegacyTargetReconciler({
+        systemTableCache: this.systemTableCache,
+        rebalanceCoordinator: this.rebalanceCoordinator,
+        logger: this.logger,
+      });
     // Reconcile on every service_definitions cache change so services
     // deployed AFTER leadership attach get an owner (and deleted ones are
     // quiesced) without waiting for a leadership move. refresh() no-ops
     // while not leader, so the subscription is safe on every node.
     this._cacheChangeListener = (tableName) => {
       if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS ||
-          tableName === SYSTEM_TABLE_NAME.SERVICE_BINDINGS) {
+          tableName === SYSTEM_TABLE_NAME.SERVICE_BINDINGS ||
+          tableName === SYSTEM_TABLE_NAME.SERVICES ||
+          tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
         this.refresh();
       }
     };
@@ -170,6 +181,7 @@ class RuntimeServiceRebalancerOwner {
     }
     this._reconcileRebalancerSet();
     this._scheduleBindingRefresh();
+    this._legacyTargetReconciler.schedule();
   }
 
   _reconcileRebalancerSet() {
@@ -300,6 +312,10 @@ class RuntimeServiceRebalancerOwner {
 
   waitForBindingRefresh() {
     return this._bindingRefreshPromise;
+  }
+
+  waitForLegacyTargetReconciliation() {
+    return this._legacyTargetReconciler.waitForIdle();
   }
 
   /**

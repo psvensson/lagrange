@@ -63,6 +63,7 @@ function assignReplicaOperationRepositoryRowMethods(
         entityType: row.entity_type || SERVICE_TYPE.PARTITION,
         entityId: row.entity_id || row.partition_id,
         replicaId: row.replica_id,
+        targetClaimKey: row.target_claim_key || null,
         sourceNodeId: row.source_node_id,
         targetNodeId: row.target_node_id,
         status: row.status,

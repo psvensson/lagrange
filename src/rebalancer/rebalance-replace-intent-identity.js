@@ -2,6 +2,11 @@ import {createHash} from 'node:crypto';
 import {
   REPLICA_OPERATION_INSERT_DISPOSITION,
 } from './replica-operation-insert-disposition.js';
+import {UNIFIED_SERVICE_TYPE} from
+  '../constants/unified-service-lifecycle.js';
+import {
+  runtimeServiceDispatchedReplicaBelongsToEntity,
+} from './runtime-service-replica-identity.js';
 
 const REPLACE_INTENT_ID_VERSION = 'rebalance-replace-v1';
 const REPLACE_OPERATION_ID_PREFIX = 'replace-op-';
@@ -85,7 +90,10 @@ function buildCoordinatorReplaceIntentIdentity(context = {}) {
   return Object.freeze({
     baseOperationIntentId: operationIntentId,
     operationIntentId,
-    replicaIntentId: buildReplicaId(operationIntentId),
+    replicaIntentId:
+      entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ?
+        null :
+        buildReplicaId(operationIntentId),
     collidedOperationIntentIds: Object.freeze([]),
   });
 }
@@ -108,7 +116,10 @@ function buildSuccessorReplaceIntentIdentity(identity, terminalOperationId) {
   return Object.freeze({
     baseOperationIntentId: identity.baseOperationIntentId,
     operationIntentId,
-    replicaIntentId: buildReplicaId(operationIntentId),
+    replicaIntentId:
+      identity.replicaIntentId === null ?
+        null :
+        buildReplicaId(operationIntentId),
     collidedOperationIntentIds,
   });
 }
@@ -135,11 +146,24 @@ function replaceIntentCollisionMatches(context = {}) {
   if (!existing) {
     return false;
   }
+  const replicaIdentityMatches =
+    entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ?
+      [
+        runtimeServiceDispatchedReplicaBelongsToEntity(
+          existing.replicaId,
+          entityId,
+        ),
+        runtimeServiceDispatchedReplicaBelongsToEntity(
+          operation?.replicaId,
+          entityId,
+        ),
+      ].every(Boolean) :
+      existing.replicaId === operation?.replicaId;
   return [
     existing.type === REPLACE_OPERATION_TYPE,
     replaceIntentEntityMatches(existing, entityType, entityId),
     existing.sourceReplicaId === move?.replicaId,
-    existing.replicaId === operation?.replicaId,
+    replicaIdentityMatches,
     replaceIntentTargetMatches(existing, move, allowTargetChurn),
   ].every(Boolean);
 }

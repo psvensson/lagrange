@@ -3,10 +3,13 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './prior
 import {TIME_MS} from '../constants/time.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {UNIFIED_SERVICE_TYPE} from
+  '../constants/unified-service-lifecycle.js';
 
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  OperationType,
   PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS,
@@ -47,6 +50,15 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
         await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
       }
       if (STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES.has(responseStatus)) {
+        if (
+          operation?.type === OperationType.REPLACE &&
+          operation?.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+          !await this.confirmActiveReplicaTerminalHandoff(operation)
+        ) {
+          return this.buildSuccessfulOperationResult(operation.operationId, {
+            status: ReplicaOperationResponseStatus.IN_PROGRESS,
+          });
+        }
         await this.completeOperation(operation);
         return this.buildSuccessfulOperationResult(operation.operationId, {
           status: responseStatus,

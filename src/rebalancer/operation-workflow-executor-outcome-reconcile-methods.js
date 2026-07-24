@@ -466,7 +466,11 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     const outcomeType = outcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
     const workflowStep = outcome[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP];
     const activeReplicaHandoffRequired =
-      outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE &&
+      (
+        outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ||
+        outcomeType ===
+          EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE
+      ) &&
       workflowStep === WORKFLOW_STEP.ACTIVE &&
       (
         operation.type === OperationType.ADD ||
@@ -474,11 +478,17 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       );
     if (
       activeReplicaHandoffRequired &&
-      !await this.confirmActiveReplicaTerminalHandoff(operation)
+      !await this.confirmActiveReplicaTerminalHandoff(operation, {
+        scheduleObservedProgressRetry: false,
+      })
     ) {
       // Executor completion is evidence to reconcile, not permission to
       // bypass the recovery owner's authoritative SERVICES cache handoff.
-      // Retain the original outcome as well as the handoff's cache wake-up.
+      // Transfer the earlier delivered-create wake-up to the stronger
+      // executor evidence so delayed visibility retains exactly one owner.
+      this.clearObservedProgressRetry(operationId, {
+        includeDeliveredCreateProgress: true,
+      });
       this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
       return;
     }

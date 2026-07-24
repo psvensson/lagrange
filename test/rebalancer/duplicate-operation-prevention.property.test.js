@@ -116,14 +116,18 @@ function createMockSqlQueryEngine(options = {}) {
       if (sql.includes('INSERT INTO replica_operations') ||
           sql.includes('INSERT OR IGNORE')) {
         // Insert new operation
-        const [operationId, type, partitionId, replicaId, sourceNodeId,
-          targetNodeId, status, workflowStep, createdAt, updatedAt,
-          completedAt, errorMessage, stepsHistory, entityType, entityId] = params;
+        const [
+          operationId, type, partitionId, replicaId, targetClaimKey,
+          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+          entityId,
+        ] = params;
         const newOp = {
           operation_id: operationId,
           type,
           partition_id: partitionId,
           replica_id: replicaId,
+          target_claim_key: targetClaimKey,
           source_node_id: sourceNodeId,
           target_node_id: targetNodeId,
           status,

@@ -28,6 +28,9 @@ import {
   EXECUTOR_OUTCOME_TYPE} from
   '../rebalancer/executor-outcome-constants.js';
 import {
+  runtimeServiceDispatchedReplicaBelongsToEntity,
+} from '../rebalancer/runtime-service-replica-identity.js';
+import {
   RUNTIME_SERVICE_HANDLER_ADDRESS,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG,
   RUNTIME_SERVICE_HANDLER_LOG_MSG,
@@ -201,6 +204,26 @@ class RuntimeServiceHandler extends EventEmitter {
         {
           error:
           RUNTIME_SERVICE_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+    if (!runtimeServiceDispatchedReplicaBelongsToEntity(
+      replicaId,
+      entityId,
+    )) {
+      this.logger.warn(
+        RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_INVALID_REPLICA_ID,
+        {operationId, entityId, replicaId, nodeId: this.nodeId},
+      );
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ERROR,
+        {
+          error:
+            RUNTIME_SERVICE_HANDLER_ERROR_MSG.CREATE_INVALID_REPLICA_ID,
+          errorCode:
+            RUNTIME_SERVICE_HANDLER_ERROR_MSG.CREATE_INVALID_REPLICA_ID_CODE,
+          deferRetry: false,
           nodeId: this.nodeId,
         },
       );
@@ -420,6 +443,32 @@ class RuntimeServiceHandler extends EventEmitter {
     });
   }
 
+  recoverLocalReplicaForRemoval(replicaId, entityId) {
+    if (typeof this.systemTableCache?.get !== 'function') {
+      return null;
+    }
+    const row = this.systemTableCache.get(
+      SYSTEM_TABLE_NAME.SERVICES,
+      replicaId,
+    );
+    if (
+      !row ||
+      row.service_id !== replicaId ||
+      row.service_type !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
+      row.node_id !== this.nodeId ||
+      row.status === ReplicaStatus.REMOVED
+    ) {
+      return null;
+    }
+    const recoveredReplica = {
+      replicaId,
+      entityId,
+      status: row.status || ReplicaStatus.ACTIVE,
+    };
+    this.localReplicas.set(replicaId, recoveredReplica);
+    return recoveredReplica;
+  }
+
   /**
    * Handle REMOVE_REPLICA for a runtime service.
    * @param {Object} request - Operation request payload.
@@ -455,7 +504,9 @@ class RuntimeServiceHandler extends EventEmitter {
       );
     }
 
-    const replica = this.localReplicas.get(replicaId);
+    const replica =
+      this.localReplicas.get(replicaId) ||
+      this.recoverLocalReplicaForRemoval(replicaId, entityId);
     if (!replica) {
       this.logger.warn(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_NOT_FOUND,

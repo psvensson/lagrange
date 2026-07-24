@@ -117,6 +117,7 @@ export function registerReplicaOperationRepositoryTailTests({
           },
         ]),
         replica_id: 'control_plane_publications-p1-r4',
+        target_claim_key: null,
       },
       'update payload should preserve immutable context so cache-applied ' +
       'mutations cannot collapse replica_operations rows',

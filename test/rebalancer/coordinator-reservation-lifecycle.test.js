@@ -70,12 +70,15 @@ function createTrackingSqlEngine() {
     reservations,
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
-        const [opId, type, partId, repId, srcNode, tgtNode,
-          status, step, created, updated, completed, err,
-          history, entityType, entityId] = params;
+        const [
+          opId, type, partId, repId, targetClaimKey, srcNode, tgtNode,
+          status, step, created, updated, completed, err, history,
+          entityType, entityId,
+        ] = params;
         operations.set(opId, {
           operation_id: opId, type, partition_id: partId,
-          replica_id: repId, source_node_id: srcNode,
+          replica_id: repId, target_claim_key: targetClaimKey,
+          source_node_id: srcNode,
           target_node_id: tgtNode, status, workflow_step: step,
           created_at: created, updated_at: updated,
           completed_at: completed, error_message: err,

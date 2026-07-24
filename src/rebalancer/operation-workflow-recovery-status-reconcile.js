@@ -1,6 +1,9 @@
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+import {
+  runtimeServiceDispatchedReplicaBelongsToEntity,
+} from './runtime-service-replica-identity.js';
 
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
@@ -55,7 +58,20 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     ) === ReplicaStatus.ACTIVE;
   }
 
-  async confirmActiveReplicaTerminalHandoff(operation) {
+  async confirmActiveReplicaTerminalHandoff(operation, options = {}) {
+    if (
+      operation?.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+      !runtimeServiceDispatchedReplicaBelongsToEntity(
+        operation.replicaId,
+        operation.entityId,
+      )
+    ) {
+      await this.failOperation(
+        operation,
+        'Runtime-service replacement target has non-canonical identity',
+      );
+      return false;
+    }
     if (this.isRuntimeServiceActiveCacheHandoffAligned(operation)) {
       return true;
     }
@@ -69,16 +85,25 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       cacheAligned =
         await this.repository.refreshAuthoritativeReplicaCacheRow(
           operation.replicaId,
+          operation.targetNodeId,
         );
     }
-    if (cacheAligned === true) {
+    if (
+      cacheAligned === true &&
+      (
+        operation?.entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
+        this.isRuntimeServiceActiveCacheHandoffAligned(operation)
+      )
+    ) {
       return true;
     }
-    this.scheduleObservedProgressRetry(
-      operation.operationId,
-      SYSTEM_TABLE_NAME.SERVICES,
-      OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
-    );
+    if (options.scheduleObservedProgressRetry !== false) {
+      this.scheduleObservedProgressRetry(
+        operation.operationId,
+        SYSTEM_TABLE_NAME.SERVICES,
+        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+      );
+    }
     return false;
   }
 
@@ -105,7 +130,10 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     sourceReplicaId,
     sourceObservation,
   ) {
-    if (sourceObservation?.lifecycleStatus === ReplicaStatus.FAILED) {
+    if (
+      sourceObservation?.lifecycleStatus === ReplicaStatus.FAILED &&
+      operation?.entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
+    ) {
       return true;
     }
     if (

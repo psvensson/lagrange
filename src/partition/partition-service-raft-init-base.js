@@ -716,6 +716,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     this.ensureMessageGroupsTableColumns();
     this.ensurePartitionsTableColumns();
     this.ensureSqlTransactionsTableColumns();
+    this.ensureReplicaOperationsTableColumns();
     const indexSchema =
       this.tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS ?
         getSchemaByTableName(this.tableName) || this.schema :

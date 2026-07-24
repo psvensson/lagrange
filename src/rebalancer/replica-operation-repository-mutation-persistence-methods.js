@@ -51,6 +51,20 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         preferOwnerRpcReadLeader: true,
       });
     if (!existingOperation) {
+      const conflictingTargetOperation =
+        await repository.queryAuthoritativeOperationByTargetClaimKey(
+          operation.targetClaimKey,
+        );
+      if (conflictingTargetOperation) {
+        repository.emitReplicaOperationPersistenceDivergence(
+          conflictingTargetOperation,
+        );
+        return buildNewOperationPersistResult(
+          resultOptions,
+          REPLICA_OPERATION_INSERT_DISPOSITION.TARGET_CLAIM_CONFLICT,
+          conflictingTargetOperation,
+        );
+      }
       throw new Error(
         REPLICA_OPERATION_REPOSITORY_LITERAL
           .AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED +
@@ -131,6 +145,7 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
                   operation.type,
                   operation.partitionId,
                   operation.replicaId,
+                  operation.targetClaimKey || null,
                   operation.sourceNodeId,
                   operation.targetNodeId,
                   operation.status,

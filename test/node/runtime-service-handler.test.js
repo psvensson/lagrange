@@ -206,6 +206,33 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
     assert.equal(response.nodeId, 'test-node');
   });
 
+  it('rejects non-canonical dispatched identities before lifecycle effects',
+    async () => {
+      for (const replicaId of [
+        'replace-replica-deadbeef',
+        'sys-postgres-wire',
+        'sys-postgres-wire-other-r1',
+      ]) {
+        const {handler, lifecycle} = createHandler();
+        const response = await handler.handleCreateReplica({
+          [ReplicaOperationField.OPERATION_ID]: `op-${replicaId}`,
+          [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+          [ReplicaOperationField.REPLICA_ID]: replicaId,
+        });
+        assert.equal(
+          response.status,
+          ReplicaOperationResponseStatus.ERROR,
+        );
+        assert.equal(
+          response.errorCode,
+          'runtime_service_replica_identity_invalid',
+        );
+        assert.equal(response.deferRetry, false);
+        assert.equal(lifecycle.calls.length, 0);
+        assert.equal(handler.getLocalReplica(replicaId), undefined);
+      }
+    });
+
   it('returns ALREADY_EXISTS for active replica', async () => {
     const emittedOutcomes = [];
     const {handler} = createHandler({
@@ -409,6 +436,52 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     });
     assert.equal(
       response.status, ReplicaOperationResponseStatus.INITIATED,
+    );
+  });
+
+  it('reconstructs a persisted legacy target after handler restart before ' +
+    'removal', async () => {
+    const legacyReplicaId = 'replace-replica-persisted-runtime';
+    const cache = createMockCache({
+      service_definitions: [
+        {
+          service_id: 'sys-postgres-wire',
+          service_type: 'runtime_service',
+          runtime_kind: 'native_js',
+          runtime_ref: 'postgres-wire-runtime',
+        },
+      ],
+      services: [
+        {
+          service_id: legacyReplicaId,
+          service_type: 'runtime_service',
+          node_id: 'test-node',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
+    });
+    const {handler, lifecycle} = createHandler({cache});
+
+    const response = await handler.handleRemoveReplica({
+      [ReplicaOperationField.OPERATION_ID]:
+          'legacy-runtime-target-cleanup-op',
+      [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+      [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+    });
+    assert.equal(
+      response.status,
+      ReplicaOperationResponseStatus.INITIATED,
+    );
+
+    await flushImmediate();
+    await flushImmediate();
+
+    assert.equal(lifecycle.calls.length, 1);
+    assert.equal(lifecycle.calls[0].method, 'stopReplica');
+    assert.equal(lifecycle.calls[0].handle.serviceId, legacyReplicaId);
+    assert.equal(
+      handler.getLocalReplica(legacyReplicaId).status,
+      ReplicaStatus.REMOVED,
     );
   });
 

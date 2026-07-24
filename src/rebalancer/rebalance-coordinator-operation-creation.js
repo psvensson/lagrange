@@ -7,10 +7,19 @@ import {
 import {
   REPLICA_OPERATION_INSERT_DISPOSITION,
 } from './replica-operation-insert-disposition.js';
+import {
+  buildRuntimeServiceTargetClaimKey,
+  runtimeServiceDispatchedReplicaBelongsToEntity,
+} from './runtime-service-replica-identity.js';
+import {UNIFIED_SERVICE_TYPE} from
+  '../constants/unified-service-lifecycle.js';
 
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER = 'Failed to prime coordinator-created operation progress';
+const RUNTIME_TARGET_CLAIM_RETRY_LIMIT = 8;
+const INVALID_RUNTIME_SERVICE_TARGET_IDENTITY =
+  'INVALID_RUNTIME_SERVICE_TARGET_IDENTITY';
 
 const {
   ControlPlaneReadinessService,
@@ -46,6 +55,54 @@ function buildLedgerInterlockProbeContext(move, normalizedMoveType) {
 }
 
 class RebalanceCoordinatorOperationCreation {
+  assertRuntimeServiceTargetIdentity(
+    replicaId,
+    entityType,
+    entityId,
+    operationType,
+  ) {
+    if (
+      entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
+      (
+        operationType !== OperationType.ADD &&
+        operationType !== OperationType.REPLACE
+      ) ||
+      runtimeServiceDispatchedReplicaBelongsToEntity(replicaId, entityId)
+    ) {
+      return;
+    }
+    const error = new Error(
+      `Runtime-service ${operationType} target must use canonical ` +
+        `${entityId}-rN identity`,
+    );
+    error.code = INVALID_RUNTIME_SERVICE_TARGET_IDENTITY;
+    throw error;
+  }
+
+  assertExplicitRuntimeServiceTargetIdentity(
+    move,
+    entityType,
+    entityId,
+    operationType,
+  ) {
+    if (entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+      return;
+    }
+    const explicitTargetReplicaId =
+      operationType === OperationType.ADD ?
+        move?.replicaId || move?.replicaIntentId :
+        move?.replicaIntentId;
+    if (!explicitTargetReplicaId) {
+      return;
+    }
+    this.assertRuntimeServiceTargetIdentity(
+      explicitTargetReplicaId,
+      entityType,
+      entityId,
+      operationType,
+    );
+  }
+
   assertMembershipPublicationEpoch(move) {
     const requestedEpoch = Number(move?.membershipPublicationEpoch);
     if (!Number.isInteger(requestedEpoch) || requestedEpoch < 0) {
@@ -98,6 +155,12 @@ class RebalanceCoordinatorOperationCreation {
     const entityId = move.entityId || move.partitionId;
     const partitionId = move.partitionId || entityId;
     const normalizedMoveType = this.normalizeMoveType(move?.type);
+    this.assertExplicitRuntimeServiceTargetIdentity(
+      move,
+      entityType,
+      entityId,
+      normalizedMoveType,
+    );
     const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
     const criticalAddLikeIntentKey = this.buildCriticalAddLikeIntentKey(
@@ -552,6 +615,10 @@ class RebalanceCoordinatorOperationCreation {
       criticalAddLikeIntentKey,
       sourceNodeId,
     } = context;
+    const targetClaimCollisionReplicaIds =
+      Array.isArray(context.targetClaimCollisionReplicaIds) ?
+        context.targetClaimCollisionReplicaIds :
+        [];
 
     const operationId = move.operationIntentId || uuidv4();
     const sourceReplicaId =
@@ -576,6 +643,7 @@ class RebalanceCoordinatorOperationCreation {
           partitionId,
           entityType,
           entityId,
+          excludeReplicaIds: targetClaimCollisionReplicaIds,
         });
     } else if (
       normalizedMoveType === OperationType.REPLACE &&
@@ -586,8 +654,25 @@ class RebalanceCoordinatorOperationCreation {
           partitionId,
           entityType,
           entityId,
-          excludeReplicaIds: sourceReplicaId ? [sourceReplicaId] : [],
+          excludeReplicaIds: [
+            ...(sourceReplicaId ? [sourceReplicaId] : []),
+            ...targetClaimCollisionReplicaIds,
+          ],
         });
+    }
+    if (
+      entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+      (
+        normalizedMoveType === OperationType.ADD ||
+        normalizedMoveType === OperationType.REPLACE
+      )
+    ) {
+      this.assertRuntimeServiceTargetIdentity(
+        operationReplicaId,
+        entityType,
+        entityId,
+        normalizedMoveType,
+      );
     }
 
     // Create operation using the helper from replica-status.js
@@ -603,6 +688,18 @@ class RebalanceCoordinatorOperationCreation {
     });
     operation.entityType = entityType;
     operation.entityId = entityId;
+    if (
+      entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+      (
+        normalizedMoveType === OperationType.ADD ||
+        normalizedMoveType === OperationType.REPLACE
+      )
+    ) {
+      operation.targetClaimKey = buildRuntimeServiceTargetClaimKey(
+        operationReplicaId,
+        entityId,
+      );
+    }
     if (
       move?.deferDispatchUntilBootstrapTopology === true &&
       operation.stepsHistory.length > 0
@@ -672,9 +769,35 @@ class RebalanceCoordinatorOperationCreation {
     const persistResult = normalizeOperationPersistResult(
       await this.persistNewOperation(
         operation,
-        context.replaceIntentIdentity ? {returnDisposition: true} : undefined,
+        context.replaceIntentIdentity || operation.targetClaimKey ?
+          {returnDisposition: true} :
+          undefined,
       ),
     );
+    if (
+      persistResult.disposition ===
+        REPLICA_OPERATION_INSERT_DISPOSITION.TARGET_CLAIM_CONFLICT
+    ) {
+      const conflictingReplicaId = persistResult.operation?.replicaId;
+      if (
+        !operation.targetClaimKey ||
+        typeof conflictingReplicaId !== 'string' ||
+        conflictingReplicaId.length === 0 ||
+        targetClaimCollisionReplicaIds.length >=
+          RUNTIME_TARGET_CLAIM_RETRY_LIMIT
+      ) {
+        throw new Error(
+          `Runtime target claim retry exhausted: ${operation.operationId}`,
+        );
+      }
+      return this.createOperationRecordInternal({
+        ...context,
+        targetClaimCollisionReplicaIds: [
+          ...targetClaimCollisionReplicaIds,
+          conflictingReplicaId,
+        ],
+      });
+    }
     if (
       persistResult.disposition ===
       REPLICA_OPERATION_INSERT_DISPOSITION.EXISTING

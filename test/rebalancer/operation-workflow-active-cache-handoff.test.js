@@ -15,9 +15,14 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
+import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
 } from '../../src/rebalancer/executor-outcome-constants.js';
+import {UNIFIED_SERVICE_TYPE} from
+  '../../src/constants/unified-service-lifecycle.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const TEST_NODE_ID = 'active-cache-handoff-owner';
@@ -202,8 +207,9 @@ test(
       );
       t.same(
         observedRetryOperationIds,
-        [TEST_REPLACE_OPERATION_ID],
-        'the shared terminal-handoff owner also retains its cache wake-up',
+        [],
+        'executor reconciliation keeps one retry owner instead of arming a ' +
+          'second cache wake-up',
       );
 
       cacheRefreshHost.cacheMutationTarget = cache;
@@ -242,10 +248,12 @@ test(
   'ACTIVE target reconciliation retains the operation until its exact ' +
     'authoritative SERVICES row is aligned into cache',
   async (t) => {
+    const cache = new SystemTableCache();
     const refreshCalls = [];
     let refreshAligned = false;
     const coordinator = createTestCoordinator({
       nodeId: TEST_NODE_ID,
+      systemTableCache: cache,
       cdcIntegrationService: {
         async insertSystemTableRow() {
           return {success: true};
@@ -286,9 +294,14 @@ test(
         [{
           tableName: SYSTEM_TABLE_NAME.SERVICES,
           key: TEST_REPLICA_ID,
-          options: {expectedFields: {status: ReplicaStatus.ACTIVE}},
+          options: {
+            expectedFields: {
+              status: ReplicaStatus.ACTIVE,
+              node_id: TEST_NODE_ID,
+            },
+          },
         }],
-        'the handoff refreshes only the exact target SERVICES row',
+        'the handoff refreshes the exact target row on its intended node',
       );
       t.same(
         completedOperationIds,
@@ -302,6 +315,11 @@ test(
       );
 
       refreshAligned = true;
+      cache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.SERVICES,
+        CDC_OPERATION.UPSERT,
+        buildAuthoritativeServiceRow(),
+      );
       const completed = await coordinator.workflowOwner
         .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
 
@@ -310,6 +328,80 @@ test(
         completedOperationIds,
         [TEST_OPERATION_ID],
         'the operation completes after the target row is cache-visible',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'authoritative ACTIVE on the wrong node cannot release terminal handoff',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const wrongNodeId = 'wrong-active-cache-handoff-target';
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CDC_OPERATION.UPSERT,
+      buildAuthoritativeServiceRow({
+        service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        partition_id: null,
+        node_id: wrongNodeId,
+      }),
+    );
+    const refreshCalls = [];
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: cache,
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+        async updateSystemTableRow() {
+          return {success: true};
+        },
+        async refreshAuthoritativeCacheRow(tableName, key, options) {
+          refreshCalls.push({tableName, key, options});
+          return true;
+        },
+      },
+    });
+    const operation = buildSyncingAddOperation();
+    operation.entityType = UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
+    operation.entityId = TEST_PARTITION_ID;
+    const completedOperationIds = [];
+    const scheduledOperationIds = [];
+    coordinator.workflowOwner.completeOperation =
+      async (completedOperation) => {
+        completedOperationIds.push(completedOperation.operationId);
+      };
+    coordinator.workflowOwner.scheduleObservedProgressRetry =
+      (operationId) => {
+        scheduledOperationIds.push(operationId);
+        return true;
+      };
+
+    try {
+      const deferred = await coordinator.workflowOwner
+        .applyReconciledReplicaStatus(operation, ReplicaStatus.ACTIVE);
+
+      t.equal(deferred, true, 'wrong-node authority remains owned progress');
+      t.same(completedOperationIds, [], 'terminal state remains blocked');
+      t.same(scheduledOperationIds, [TEST_OPERATION_ID]);
+      t.same(
+        refreshCalls[0]?.options,
+        {
+          expectedFields: {
+            status: ReplicaStatus.ACTIVE,
+            node_id: TEST_NODE_ID,
+          },
+        },
+        'authoritative repair itself requires intended-node alignment',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID).node_id,
+        wrongNodeId,
+        'a truthy repair result is rechecked against the cache owner boundary',
       );
     } finally {
       await coordinator.shutdown();
@@ -597,6 +689,174 @@ test(
         scheduledOperationIds,
         [TEST_OPERATION_ID],
         'the owner retains a retry instead of accepting ambiguous absence',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'runtime ACTIVE outcome retains bounded retry ownership and cannot retire its ' +
+    'source before exact SERVICES visibility',
+  async (t) => {
+    const entityId = 'svc-runtime-active-handoff';
+    const targetReplicaId = `${entityId}-r3`;
+    const operation = buildSyncingReplaceOperation();
+    operation.operationId = 'runtime-active-cache-handoff-replace';
+    operation.partitionId = entityId;
+    operation.entityType = UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
+    operation.entityId = entityId;
+    operation.replicaId = targetReplicaId;
+    const cache = new SystemTableCache();
+    const authoritativeRow = {
+      ...buildAuthoritativeServiceRow({
+        service_id: targetReplicaId,
+        replica_id: targetReplicaId,
+        service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        partition_id: null,
+      }),
+    };
+    cache.applySystemTableChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      CDC_OPERATION.UPSERT,
+      {...authoritativeRow, status: ReplicaStatus.SYNCING},
+    );
+    const cacheRefreshHost = buildProductionCacheRefreshHost({
+      cache,
+      authoritativeRow,
+      dropRepair: true,
+    });
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_SOURCE_NODE_ID,
+      systemTableCache: cache,
+      cdcIntegrationService: cacheRefreshHost,
+    });
+    const sourceRetirementOperationIds = [];
+    coordinator.repository.getOperationByIdVisibilityObservation =
+      async () => ({
+        state: 'present',
+        operation,
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    coordinator.workflowOwner.reconcileReplaceActualActive =
+      async (replaceOperation) => {
+        sourceRetirementOperationIds.push(replaceOperation.operationId);
+        return true;
+      };
+    const outcome = Object.freeze({
+      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: operation.operationId,
+      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
+        EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.ACTIVE,
+      [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: targetReplicaId,
+      [EXECUTOR_OUTCOME_FIELD.PARTITION_ID]: entityId,
+      [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: Date.now(),
+    });
+
+    try {
+      coordinator.workflowOwner.retainDeliveredCreateProgress(
+        {
+          ...operation,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.SENDING,
+        },
+        {status: ReplicaOperationResponseStatus.IN_PROGRESS},
+      );
+      t.equal(
+        coordinator.workflowOwner.observedProgressRetryTimerByOperationId.size,
+        1,
+        'production dispatch already owns delivered-create progress',
+      );
+      await coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
+
+      t.same(
+        sourceRetirementOperationIds,
+        [],
+        'executor evidence cannot retire the source early',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryTimerByOperationId.size,
+        1,
+        'one bounded executor-outcome retry owns delayed visibility',
+      );
+      t.equal(
+        coordinator.workflowOwner.observedProgressRetryTimerByOperationId.size,
+        0,
+        'executor evidence consumes the earlier dispatch retry owner',
+      );
+
+      cache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.SERVICES,
+        CDC_OPERATION.UPSERT,
+        authoritativeRow,
+      );
+      await coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
+      t.same(
+        sourceRetirementOperationIds,
+        [operation.operationId],
+        'the source retires once after exact target visibility',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryTimerByOperationId.size,
+        0,
+        'successful handoff consumes retry ownership',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'runtime recovery fails an opaque ACTIVE target and does not treat source ' +
+    'FAILED as retirement proof',
+  async (t) => {
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_SOURCE_NODE_ID,
+      enableTimeouts: false,
+    });
+    const operation = buildSyncingReplaceOperation();
+    operation.entityType = UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE;
+    operation.entityId = 'svc-runtime-legacy-recovery';
+    operation.replicaId = 'replace-replica-legacy-runtime';
+    const failedOperationIds = [];
+    const sourceRetirementOperationIds = [];
+    coordinator.workflowOwner.failOperation =
+      async (failedOperation) => {
+        failedOperationIds.push(failedOperation.operationId);
+      };
+    coordinator.workflowOwner.reconcileReplaceActualActive =
+      async (replaceOperation) => {
+        sourceRetirementOperationIds.push(replaceOperation.operationId);
+        return true;
+      };
+
+    try {
+      await coordinator.workflowOwner.reconcileActiveReplicaStatus(operation);
+
+      t.same(
+        failedOperationIds,
+        [operation.operationId],
+        'the operation owner fails the invalid legacy workflow',
+      );
+      t.same(
+        sourceRetirementOperationIds,
+        [],
+        'invalid target evidence never starts source retirement',
+      );
+      t.equal(
+        coordinator.workflowOwner.isActiveReplaceSourceRetirementObserved(
+          operation,
+          `${operation.entityId}-r1`,
+          {
+            state: 'present',
+            lifecycleStatus: ReplicaStatus.FAILED,
+          },
+        ),
+        false,
+        'generic runtime FAILED is not authoritative retirement evidence',
       );
     } finally {
       await coordinator.shutdown();

@@ -352,7 +352,15 @@ test(
     const timers = [];
     const coordinator = createTestCoordinator({
       nodeId: SOURCE_NODE_ID,
-      cacheData: {replicaOperations: [operation]},
+      cacheData: {
+        replicaOperations: [operation],
+        services: [{
+          service_id: operation.replicaId,
+          service_type: operation.entityType,
+          node_id: operation.targetNodeId,
+          status: ReplicaStatus.ACTIVE,
+        }],
+      },
       setTimeoutFn(callback, delayMs) {
         const timer = {callback, delayMs, cleared: false};
         timers.push(timer);

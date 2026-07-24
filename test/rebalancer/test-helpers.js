@@ -58,6 +58,8 @@ function normalizeReplicaOperationRow(row = {}) {
   const operationId = row.operation_id ?? row.operationId ?? null;
   const partitionId = row.partition_id ?? row.partitionId ?? null;
   const replicaId = row.replica_id ?? row.replicaId ?? null;
+  const targetClaimKey =
+    row.target_claim_key ?? row.targetClaimKey ?? null;
   const sourceNodeId = row.source_node_id ?? row.sourceNodeId ?? null;
   const targetNodeId = row.target_node_id ?? row.targetNodeId ?? row.nodeId ?? null;
   const workflowStep = row.workflow_step ?? row.workflowStep ?? null;
@@ -83,6 +85,8 @@ function normalizeReplicaOperationRow(row = {}) {
   normalized.partitionId = partitionId;
   normalized.replica_id = replicaId;
   normalized.replicaId = replicaId;
+  normalized.target_claim_key = targetClaimKey;
+  normalized.targetClaimKey = targetClaimKey;
   normalized.source_node_id = sourceNodeId;
   normalized.sourceNodeId = sourceNodeId;
   normalized.target_node_id = targetNodeId;
@@ -631,7 +635,8 @@ function createTestCoordinator(options = {}) {
       // Handle INSERT operations
       if (sql.includes('INSERT INTO replica_operations')) {
         const [
-          operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
+          operationId, type, partitionId, replicaId, targetClaimKey,
+          sourceNodeId, targetNodeId,
           status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
           stepsHistory, entityType, entityId,
         ] = params;
@@ -641,6 +646,7 @@ function createTestCoordinator(options = {}) {
           type,
           partition_id: partitionId,
           replica_id: replicaId,
+          target_claim_key: targetClaimKey,
           source_node_id: sourceNodeId,
           target_node_id: targetNodeId,
           status,
@@ -682,6 +688,7 @@ function createTestCoordinator(options = {}) {
         let filteredOps = allOps;
         const equalityFilters = [
           {pattern: 'operation_id = ?', field: 'operation_id'},
+          {pattern: 'target_claim_key = ?', field: 'target_claim_key'},
           {pattern: 'partition_id = ?', field: 'partition_id'},
           {pattern: 'target_node_id = ?', field: 'target_node_id'},
           {pattern: 'source_node_id = ?', field: 'source_node_id'},

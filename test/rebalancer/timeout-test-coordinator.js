@@ -30,9 +30,9 @@ function createTimeoutTestCoordinator(options = {}) {
     executeQuery: async (sql, params) => {
       if (sql.includes('INSERT INTO replica_operations')) {
         const [
-          operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
-          status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
-          stepsHistory,
+          operationId, type, partitionId, replicaId, targetClaimKey,
+          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+          updatedAt, completedAt, errorMessage, stepsHistory,
         ] = params;
 
         trackedOperations.set(operationId, {
@@ -40,6 +40,7 @@ function createTimeoutTestCoordinator(options = {}) {
           type,
           partition_id: partitionId,
           replica_id: replicaId,
+          target_claim_key: targetClaimKey,
           source_node_id: sourceNodeId,
           target_node_id: targetNodeId,
           status,

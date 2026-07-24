@@ -258,9 +258,10 @@ function assignReplicaOperationRepositoryObservationMethods(
    * cache before its operation owner releases terminal workflow state.
    *
      * @param {string} replicaId
+     * @param {string} targetNodeId
      * @return {Promise<boolean>}
      */
-    async refreshAuthoritativeReplicaCacheRow(replicaId) {
+    async refreshAuthoritativeReplicaCacheRow(replicaId, targetNodeId) {
       const refreshAuthoritativeCacheRow =
         this.cdcIntegrationService?.refreshAuthoritativeCacheRow;
       if (
@@ -274,7 +275,12 @@ function assignReplicaOperationRepositoryObservationMethods(
           this.cdcIntegrationService,
           SYSTEM_TABLE_NAME.SERVICES,
           replicaId,
-          {expectedFields: {status: ReplicaStatus.ACTIVE}},
+          {
+            expectedFields: {
+              status: ReplicaStatus.ACTIVE,
+              node_id: targetNodeId,
+            },
+          },
         )
       ) === true;
     }

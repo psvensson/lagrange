@@ -177,6 +177,7 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   PARTITION_TRANSITION_STATE: 'partition_transition_state',
   PARTITION_TRANSITION_METADATA: 'partition_transition_metadata',
   PARTITION_VERSION: 'partition_version',
+  TARGET_CLAIM_KEY: 'target_claim_key',
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
@@ -212,6 +213,8 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN partition_transition_metadata TEXT',
   ADD_PARTITION_VERSION:
     'ADD COLUMN partition_version INTEGER NOT NULL DEFAULT 1',
+  ADD_TARGET_CLAIM_KEY:
+    'ADD COLUMN target_claim_key TEXT',
   BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS:
     'SET connection_state = ws_connection_state ' +
     'WHERE ws_connection_state IS NOT NULL',
@@ -324,6 +327,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Added partition_transition_metadata column to tables table',
   ADDED_PARTITIONS_TABLE_NAME: 'Added table_name column to partitions table',
   ADDED_PARTITION_VERSION: 'Added partition_version column to partitions table',
+  ADDED_REPLICA_OPERATIONS_TARGET_CLAIM_KEY:
+    'Added target_claim_key column to replica_operations table',
   RECEIVED_RAFT_PACKET: 'Received Raft packet',
   SENDING_RAFT_RESPONSE: 'Sending Raft response',
   FAILED_RAFT_RESPONSE: 'Failed to send Raft response',

@@ -119,6 +119,8 @@ import {buildReplicatedServiceBootstrapTopology} from '../service/replicated-ser
 const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID:
     'SELECT * FROM replica_operations WHERE operation_id = ?',
+  SELECT_OPERATION_BY_TARGET_CLAIM:
+    'SELECT * FROM replica_operations WHERE target_claim_key = ?',
   SELECT_OPERATIONS_BY_PARTITION:
     'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations
@@ -135,10 +137,11 @@ const SQL = Object.freeze({
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
     WHERE type = ?`,
   INSERT_OPERATION: `INSERT INTO replica_operations (
-    operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
+    operation_id, type, partition_id, replica_id, target_claim_key,
+    source_node_id, target_node_id,
     status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history,
     entity_type, entity_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   UPDATE_OPERATION: `UPDATE replica_operations SET 
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?, 
     error_message = ?, steps_history = ?, replica_id = ?

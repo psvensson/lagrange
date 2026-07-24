@@ -61,6 +61,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'entity_type', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'entity_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'replica_id', type: COLUMN_TYPE.TEXT},
+    {name: 'target_claim_key', type: COLUMN_TYPE.TEXT},
     {name: 'source_node_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'target_node_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true}, // ReplicaStatus value
@@ -76,6 +77,11 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'idx_replica_ops_status', columns: ['status']},
     {name: 'idx_replica_ops_partition', columns: ['partition_id']},
     {name: 'idx_replica_ops_entity', columns: ['entity_type', 'entity_id']},
+    {
+      name: 'idx_replica_ops_target_claim_key',
+      columns: ['target_claim_key'],
+      unique: true,
+    },
     {
       name: 'idx_replica_ops_source_step_type',
       columns: ['source_node_id', 'workflow_step', 'type'],

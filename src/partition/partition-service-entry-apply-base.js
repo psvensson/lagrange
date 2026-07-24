@@ -37,6 +37,29 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase {
+  ensureReplicaOperationsTableColumns() {
+    if (this.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+      return;
+    }
+    const columns = this.db
+      .prepare(`PRAGMA table_info(${this.tableName})`)
+      .all();
+    const hasTargetClaimKey = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.TARGET_CLAIM_KEY,
+    );
+    if (!hasTargetClaimKey) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+          PARTITION_SERVICE_COLUMN_SQL.ADD_TARGET_CLAIM_KEY,
+      );
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG
+          .ADDED_REPLICA_OPERATIONS_TARGET_CLAIM_KEY,
+        {tableName: this.tableName, partitionId: this.partitionId},
+      );
+    }
+  }
+
   ensureSqlTransactionsTableColumns() {
     if (this.tableName !== SYSTEM_TABLE_NAME.SQL_TRANSACTIONS) {
       return;

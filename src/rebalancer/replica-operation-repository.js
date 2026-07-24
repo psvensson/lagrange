@@ -149,6 +149,8 @@ const REPLICA_OPERATION_REPOSITORY_LITERAL = Object.freeze({
 });
 const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',
+  SELECT_OPERATION_BY_TARGET_CLAIM:
+    'SELECT * FROM replica_operations WHERE target_claim_key = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
     WHERE (source_node_id = ? OR target_node_id = ?)
     AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
@@ -172,11 +174,11 @@ const SQL = Object.freeze({
     WHERE type = ?`,
   SELECT_ALL_OPERATIONS: 'SELECT * FROM replica_operations ORDER BY created_at DESC',
   INSERT_OPERATION: `INSERT INTO replica_operations (
-    operation_id, type, partition_id, replica_id, source_node_id,
+    operation_id, type, partition_id, replica_id, target_claim_key, source_node_id,
     target_node_id, status, workflow_step, created_at, updated_at,
     completed_at, error_message, steps_history,
     entity_type, entity_id
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   UPDATE_OPERATION: `UPDATE replica_operations SET 
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?, 
     error_message = ?, steps_history = ?, replica_id = ?

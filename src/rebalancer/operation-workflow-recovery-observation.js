@@ -23,6 +23,7 @@ const {
   ReplicaStatus,
   STOPPING_REPLICA_OBSERVATION_STATE,
   TRANSITION_RETRY_DELAY_MS,
+  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   classifySystemPartition,
 } = SHARED;
@@ -633,8 +634,15 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       stoppingReplicaObservation.state ===
         STOPPING_REPLICA_OBSERVATION_STATE.ABSENT ||
       (operation.type === OperationType.REPLACE &&
+        operation.entityType !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
         actualStatus === ReplicaStatus.FAILED)
     ) {
+      if (
+        operation.type === OperationType.REPLACE &&
+        !await this.confirmActiveReplicaTerminalHandoff(operation)
+      ) {
+        return true;
+      }
       await this.completeOperation(operation);
       return true;
     }
@@ -692,6 +700,9 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       removingReplicaId,
       stoppingReplicaObservation,
     )) {
+      if (!await this.confirmActiveReplicaTerminalHandoff(operation)) {
+        return true;
+      }
       await this.completeOperation(operation);
       return true;
     }

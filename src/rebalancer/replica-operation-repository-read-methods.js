@@ -424,6 +424,41 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       return observation.operation;
     }
 
+    /**
+     * Query the authoritative operation holding one durable runtime target
+     * identity claim.
+     * @param {string} targetClaimKey
+     * @return {Promise<object|null>}
+     */
+    async queryAuthoritativeOperationByTargetClaimKey(targetClaimKey) {
+      if (
+        typeof targetClaimKey !== 'string' ||
+        targetClaimKey.length === 0
+      ) {
+        return null;
+      }
+      const result = await this.executeReplicaOperationsRead(
+        SQL.SELECT_OPERATION_BY_TARGET_CLAIM,
+        [targetClaimKey],
+        {
+          ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+          preferOwnerRpcReadLeader: true,
+          retryOnRetryableFailure: true,
+        },
+      );
+      if (
+        result?.success !== true ||
+        !Array.isArray(result.rows) ||
+        result.rows.length === 0
+      ) {
+        return null;
+      }
+      const operation = this.rowToOperation(result.rows[0]);
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        operation :
+        null;
+    }
+
     async getOperationByIdVisibilityObservation(operationId, options = {}) {
       const authoritativeObservation = await this.queryAuthoritativeOperationVisibilityObservation(
         operationId,

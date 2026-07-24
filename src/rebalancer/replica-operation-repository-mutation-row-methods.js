@@ -10,6 +10,7 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         type: operation.type,
         partition_id: operation.partitionId,
         replica_id: operation.replicaId,
+        target_claim_key: operation.targetClaimKey || null,
         source_node_id: operation.sourceNodeId,
         target_node_id: operation.targetNodeId,
         status: operation.status,
@@ -39,6 +40,7 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         error_message: operation.errorMessage,
         steps_history: JSON.stringify(operation.stepsHistory),
         replica_id: operation.replicaId,
+        target_claim_key: operation.targetClaimKey || null,
       };
     }
 

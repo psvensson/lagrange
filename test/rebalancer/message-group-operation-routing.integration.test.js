@@ -340,15 +340,18 @@ test('Message-group operation routing integration', async (t) => {
         executeQuery: async (sql, params) => {
           queries.push({sql, params});
           if (sql.includes('INSERT INTO replica_operations')) {
-            const [operationId, type, partitionId, replicaId, sourceNodeId,
-              targetNodeId, status, workflowStep, createdAt, updatedAt,
-              completedAt, errorMessage, stepsHistory, entityType, entityId] =
-              params;
+            const [
+              operationId, type, partitionId, replicaId, targetClaimKey,
+              sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+              updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+              entityId,
+            ] = params;
             trackedOperations.set(operationId, {
               operation_id: operationId,
               type,
               partition_id: partitionId,
               replica_id: replicaId,
+              target_claim_key: targetClaimKey,
               source_node_id: sourceNodeId,
               target_node_id: targetNodeId,
               status,
@@ -488,7 +491,7 @@ test('Message-group operation routing integration', async (t) => {
           insertQuery.params.includes('message_group'),
           'insert params should include message_group entity type',
         );
-        const stepsHistory = JSON.parse(insertQuery.params[12]);
+        const stepsHistory = JSON.parse(insertQuery.params[13]);
         t.same(
           stepsHistory[0]?.replicaIds,
           ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],

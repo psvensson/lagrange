@@ -22,6 +22,8 @@ const RUNTIME_SERVICE_HANDLER_LOG_MSG = Object.freeze({
   CREATE_REQUEST: 'Handling CREATE_REPLICA for runtime service',
   CREATE_MISSING_FIELDS:
     'CREATE_REPLICA missing required fields for runtime service',
+  CREATE_INVALID_REPLICA_ID:
+    'CREATE_REPLICA rejected non-canonical runtime replica identity',
   CREATE_ALREADY_ACTIVE:
     'Runtime service replica already exists in active state',
   CREATE_IN_PROGRESS:
@@ -59,6 +61,10 @@ const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
   UNKNOWN_MESSAGE_TYPE: (type) => `Unknown message type: ${type}`,
   CREATE_REQUIRED_FIELDS:
     'CREATE_REPLICA requires operationId, entityId, and replicaId',
+  CREATE_INVALID_REPLICA_ID:
+    'CREATE_REPLICA requires canonical entityId-rN replica identity',
+  CREATE_INVALID_REPLICA_ID_CODE:
+    'runtime_service_replica_identity_invalid',
   REMOVE_REQUIRED_FIELDS:
     'REMOVE_REPLICA requires operationId, entityId, and replicaId',
   LIFECYCLE_MANAGER_REQUIRED:
