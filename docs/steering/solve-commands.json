@@ -28,6 +28,10 @@
     "summary": "Write an ignored on-demand Quest report projected from the declaration and event log. Report presence and freshness never gate audit or handoff.",
     "usage": "node scripts/solve.js report --id <id>"
   },
+  "meta-ratio": {
+    "summary": "Commit-level meta-to-product ratio over a bounded git window: product (src/, examples/, charts/) vs test-only vs meta (solve/, docs/, scripts/, config only). The retrospective's overhead trend line; complements portfolio's quest-class ratio.",
+    "usage": "node scripts/solve.js meta-ratio [--days <n>]"
+  },
   "portfolio": {
     "summary": "Cross-Quest portfolio view and meta-ratio over all quests.",
     "usage": "node scripts/solve.js portfolio"

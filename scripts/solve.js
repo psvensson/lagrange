@@ -43,6 +43,7 @@ import {runUpgradeCommand} from './solve/upgrade.js';
 import {runReopenCommand} from './solve/reopen.js';
 import {runParkCommand} from './solve/park.js';
 import {runPortfolioCommand, buildPortfolio, loadAllQuests} from './solve/portfolio.js';
+import {runMetaRatioCommand} from './solve/meta-ratio.js';
 import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runCheckpointCommand, runHandoffCommand} from './solve/handoff.js';
@@ -946,6 +947,12 @@ function cmdPortfolio(root) {
   process.stdout.write(runPortfolioCommand(root));
 }
 
+// Commit-level meta-to-product ratio for the retrospective cadence; like
+// portfolio it is cross-cutting and takes no --id.
+function cmdMetaRatio(root, args) {
+  process.stdout.write(`${runMetaRatioCommand(root, {days: args.days})}\n`);
+}
+
 // Frontier fuses the closure-ledger active records with the open quests into one
 // boot-orientation screen; like portfolio it is cross-cutting and takes no --id.
 // --write also persists solve/FRONTIER.generated.md (a regenerable board file).
@@ -1125,6 +1132,7 @@ const COMMANDS = {
   'status': cmdStatus,
   'report': cmdReport,
   'portfolio': cmdPortfolio,
+  'meta-ratio': cmdMetaRatio,
   'frontier': cmdFrontier,
   'overview': cmdOverview,
   'trace': cmdTrace,
