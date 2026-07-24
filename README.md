@@ -91,8 +91,8 @@ The differences in practice are:
 - cross-partition work is explicit through primitives like `lookup`, `emit`,
   and `broadcast`
 - replicated service descriptors and callback modules are first-class runtime
-  metadata, not just SQL-side extension hooks; genuine component execution is
-  still a planned cutover
+  metadata, not just SQL-side extension hooks; deployed service components run
+  as genuine WASI components on the Binding/Cell path
 
 If you only need some row-level logic near a single-node database, stored
 procedures are the simpler tool. Lagrange is aiming at the point where the
@@ -170,14 +170,15 @@ every cross-partition step behind a convenient abstraction.
 
 No.
 
-WASM is a target execution format for externally installable services, not the
-entire story. Today the repo contains built-in runtime services, regular systems
-code, and a JavaScript-envelope lifecycle rehearsal. The README example is about
-the execution model more than the packaging format.
+WASM is the execution format for externally installed services, not the
+entire story. The repo contains built-in runtime services, regular systems
+code, the Binding/Cell component runtime, and an older JavaScript-envelope
+callback rehearsal. The README example is about the execution model more than
+the packaging format.
 
-WASM matters here because a genuine component can become a useful unit for
-sandboxed, portable, replicable compute once the component runtime is delivered.
-It is not the only way to think about the runtime.
+WASM matters here because a genuine component is a useful unit for sandboxed,
+portable, replicable compute — that is what a Binding-derived Cell runs. It is
+not the only way to think about the runtime.
 
 ### Is This A Database With Extra Compute, Or A Compute System With Storage?
 
@@ -254,7 +255,7 @@ little more coupling for more efficiency.
    application keeps speaking the PostgreSQL wire protocol and never learns it
    moved. This is the expected most common early path.
    *Status: the PostgreSQL wire surface and the affinity placement machinery
-   exist; external OCI service installation is not implemented yet (see the
+   exist; managed OCI container execution is not implemented yet (see the
    capability matrix below). The MovieLens affinity demo shows the placement
    behavior this rung buys, currently through an internal service rather than
    an installed container.*
@@ -268,10 +269,23 @@ little more coupling for more efficiency.
    across its replicas — rather than in captured closures.
    *Status: embedded and uploaded callbacks work today; the merged surface and
    the shared service context are design-stage.*
-3. **WASM components (target).** The same callback shape as a portable,
-   sandboxed, digest-pinned artifact installed through the same service
-   surface. *Status: not yet — today's `wasm_component` path is a
-   JavaScript-envelope lifecycle rehearsal, not genuine component execution.*
+3. **WASM components (landed).** A portable, sandboxed, digest-pinned
+   artifact deployed through the Artifact / Binding / Cell surface.
+   *Status: landed — a service is deployed through INSTALL SERVICE and CREATE
+   BINDING; the resulting Cell runs a genuine WASI component with budget and
+   declared-table enforcement. The older `wasm_component` **callback** form
+   remains a JavaScript-envelope rehearsal, and invocation for non-request
+   Binding sources cuts over separately.*
+
+Deployment is declared with exactly three concepts — **Artifact** (installed,
+digest-pinned package), **Binding** (immutable user intent tying one Artifact
+export to a typed source: `request`, `change`, `time`, `once`, `boot`, `call`,
+or `pushdown`), and **Cell** (a ready, running Binding-derived actual whose
+replica capacity is system-policy output, never a caller request). The
+architecture is
+[`architecture/minimal-deployment-surface.md`](architecture/minimal-deployment-surface.md)
+and the operator flow is
+[`docs/wasm-services-user-guide.md`](docs/wasm-services-user-guide.md).
 
 The plan of record for this ladder is the service-portability-ladder spec
 ([`solve/specs/service-portability-ladder/`](solve/specs/service-portability-ladder/requirements.md));
@@ -298,8 +312,9 @@ Current runtime support is recorded in
 architecture documents may describe later target contracts.
 The uploaded `wasm_component` callback example is an internal lifecycle rehearsal:
 its JavaScript source is serialized into `js_wasm_component_v1` and evaluated as
-JavaScript. It is not a WebAssembly binary or component. External service
-installation is not implemented yet, and `native_js` remains kernel-internal.
+JavaScript. It is not a WebAssembly binary or component. This callback axis is
+separate from the Artifact / Binding / Cell deployment surface (which runs
+genuine WASI components); `native_js` remains kernel-internal.
 
 - **Embedded** — run the runtime inside your own Node process and call
   `runtime.run(fn)` directly (the [Example](#example) below). This is the

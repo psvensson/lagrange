@@ -81,8 +81,9 @@ installation:
 
 ## Identity
 
--   `schema_version` --- currently `2`; version `1` remains accepted for
-    existing packages
+-   `schema_version` --- required constant `3`; the validator
+    (`src/service/external-service-manifest.js`) rejects any other value as
+    `UNSUPPORTED_SCHEMA_VERSION`
 -   `name`
 -   `version`
 -   `display_name`
@@ -93,7 +94,7 @@ Example:
 
 ``` json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "name": "backup-manager",
   "version": "1.2.0",
   "display_name": "Backup Manager",
@@ -196,9 +197,9 @@ Example (OCI container):
 
 ------------------------------------------------------------------------
 
-## Exports (schema version 3)
+## Exports
 
-Every schema-v3 manifest declares at least one stateless handler export. Each
+Every manifest declares at least one stateless handler export. Each
 export has exactly these fields:
 
 -   `name` --- unique lowercase handler name
@@ -217,19 +218,17 @@ runtime access-policy configuration and is not an Artifact declaration.
 }
 ```
 
-Schema-v1 and schema-v2 manifests retain their existing replay contracts and do
-not acquire inferred exports. New scaffolds emit schema v3. Schema-v2
-`reads`/`writes` are a serialized migration tail only and never authorize live
-runtime access; schema-v3 removes them.
+Exports are always explicit declarations; no export is ever inferred. The
+manifest carries no `reads`/`writes` table declarations: table authorization is
+runtime access-policy configuration, never an Artifact property.
 
 ------------------------------------------------------------------------
 
 ## Runtime placement
 
 Cell target, minimum, maximum, topology, capacity, failover, and data-affinity
-decisions belong to system runtime-service policy. Schema-v2 manifests reject
-`replication`; it is not a user request. Schema-v1 `replication` remains readable
-only for compatibility and does not become Binding-derived Cell authority.
+decisions belong to system runtime-service policy. The manifest rejects
+`replication`; replica shape is never a user request.
 
 ------------------------------------------------------------------------
 
@@ -390,7 +389,7 @@ commercial consumer example only under the current edition matrix.
 
 ``` json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "name": "backup-manager",
   "version": "1.2.0",
   "display_name": "Backup Manager",
@@ -457,7 +456,7 @@ commercial consumer example only under the current edition matrix.
 The kernel should validate at least the following before activation:
 
 -   required fields present
--   manifest `schema_version` is supported
+-   manifest `schema_version` equals the required constant
 -   version format valid
 -   artifact type is `oci`
 -   artifact reference valid
@@ -465,9 +464,9 @@ The kernel should validate at least the following before activation:
 -   artifact `media_type` recognized and consistent with `runtime.kind`
 -   runtime kind is `wasm_component` or `oci_container` (reject
     `native_js` from external manifests)
--   schema-v2 export names are unique and canonical
--   schema-v2 export interfaces belong to the closed stable interface set
--   schema-v2 manifests carry no caller-owned Cell replication
+-   export names are unique and canonical
+-   export interfaces belong to the closed stable interface set
+-   the manifest carries no caller-owned Cell replication
 -   capabilities recognized
 -   compatibility range satisfied
 -   configuration schema parseable
@@ -514,8 +513,8 @@ For Binding, the catalog derives `manifest_digest` as SHA-256 over the exact
 canonical `normalized_manifest` bytes. The canonical bindable Artifact identity
 is `(package_id, manifest_digest)`, not the OCI payload digest: multiple installed
 declarations may intentionally pin the same OCI bytes while exposing different
-schema-v2 contracts. Schema-v1 packages are not analyzable Binding targets.
-OCI-digest shorthand is deferred from Binding v1; any future resolver must
+manifest contracts.
+OCI-digest shorthand is not part of the Binding contract; any future resolver must
 receive authenticated eligible package identities and reject more than one
 eligible match rather than selecting globally or by row order.
 An installation is initially `recorded_not_running`, including when its desired
@@ -526,16 +525,17 @@ consulting and mutating the canonical runtime owners.
 
 # Stability Policy
 
-The manifest schema should evolve using explicit schema versions.
+There is exactly one manifest contract; superseded shapes live only in git
+history and are never decoded at runtime.
 
 Rules:
 
 -   additive changes are preferred
--   breaking changes require a new manifest schema version
+-   breaking changes replace the sole contract (bump the `schema_version`
+    constant, migrate every producer and consumer in the same landing, keep no
+    fallback decoder)
 -   unknown optional fields may be ignored
 -   unknown required fields must fail validation
--   schema v1 remains readable under its sealed contract; v2 is the default for
-    new manifests and must not infer declarations for v1
 
 ------------------------------------------------------------------------
 

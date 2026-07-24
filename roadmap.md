@@ -354,9 +354,9 @@ installable replicated services.
 
 Rows in this section are design-preparation scoped until each item is backed by
 a linked architecture or spec document that defines the contract boundary well
-enough for direct implementation tasks.
+enough for direct implementation tasks; Phase 0 has landed.
 
-#### Phase 0 — Minimal Deployment Surface (design)
+#### Phase 0 — Minimal Deployment Surface
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|--------|-------|

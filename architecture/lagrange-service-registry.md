@@ -14,6 +14,13 @@ This means:
 -   the cluster catalog answers **what this cluster wants installed**
 -   the reconciler answers **how desired state becomes running state**
 
+This document covers distribution and installation only. Execution intent is
+not declared here: a Binding remains the sole durable user declaration of
+execution intent, and installed packages become running Cells only through
+the deployment surface owned by
+[`minimal-deployment-surface.md`](minimal-deployment-surface.md)
+(`INSTALL SERVICE`, `CREATE BINDING`, `CONFIGURE SERVICE ACCESS`).
+
 ------------------------------------------------------------------------
 
 # Goals
@@ -142,7 +149,7 @@ source input. For `oci_container`, the pinned input is a context fingerprint
 plus context, Dockerfile, and build arguments; the injected production adapter
 executes `docker buildx build` with an OCI directory export. For
 `wasm_component`, the input is an already-built binary payload. The builder
-does not compile or validate a component and never treats the legacy
+does not compile or validate a component and never treats the
 JavaScript callback envelope as WebAssembly.
 
 Before atomic, digest-addressed publication, the owner verifies the complete

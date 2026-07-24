@@ -33,9 +33,12 @@ WASM actions received by `sys-admin-meta` are auto-delegated via
 `AdminMetaDelegator` (`src/admin/admin-meta-delegator.js`), which checks
 `WASM_DELEGATION_ACTIONS` and routes through `MetaServiceRouter` to the
 `sys-wasm-meta` leader. The `sys-wasm-meta` command surface
-(`publishModule`, `createService`, `scaleService`, ...) is documented in
+(`publishModule`, `createService`, `scaleService`, ...) is internal substrate
+for embedders and diagnostics, documented in
 `docs/wasm-services-user-guide.md` (section "Internal Meta Command
-Surface").
+Surface"). It is not the deployment path: services are deployed through the
+lifecycle SQL statements (`INSTALL SERVICE`, `CREATE BINDING`,
+`CONFIGURE SERVICE ACCESS`) described in that guide's section 5.
 
 ## Operational Diagnostics Endpoints
 

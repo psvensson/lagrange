@@ -115,10 +115,17 @@ The manifest includes:
 -   version
 -   runtime kind
 -   entrypoint
--   replication mode
 -   configuration schema
 -   required capabilities
 -   compatibility constraints
+
+The manifest carries no replica or replication declaration: Cell capacity and
+placement are system-policy output, never a caller request. The authoritative
+manifest contract is
+[`lagrange-service-manifest.md`](lagrange-service-manifest.md), and the
+deployment declaration surface (Artifact / Binding / Cell, `INSTALL SERVICE`,
+`CREATE BINDING`, `CONFIGURE SERVICE ACCESS`) is owned by
+[`minimal-deployment-surface.md`](minimal-deployment-surface.md).
 
 Example:
 
@@ -136,7 +143,6 @@ Example:
     "kind": "wasm_component",
     "entrypoint": "backup-manager.wasm"
   },
-  "replicas": 3,
   "capabilities": [
     "cdc.subscribe",
     "snapshot.read",
@@ -145,9 +151,9 @@ Example:
 }
 ```
 
-Installation is declarative:
-
-    INSTALL SERVICE 'lagrange/backup-manager' VERSION '1.2.0';
+Installation is declarative through the landed SQL surface: `INSTALL SERVICE`
+takes the manifest and artifact source as its single JSON bind parameter (see
+`minimal-deployment-surface.md` for the exact payload).
 
 ------------------------------------------------------------------------
 

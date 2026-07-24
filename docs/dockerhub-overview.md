@@ -21,9 +21,10 @@ runtime services near the data they read.
 
 > **Service portability status:** the current implementation matrix is
 > [`docs/service-portability-capabilities.json`](https://codeberg.org/psvensson/lagrange/src/branch/main/docs/service-portability-capabilities.json).
-> `native_js` is kernel-internal, the current `wasm_component` example is a
-> JavaScript-envelope lifecycle rehearsal, and external WASM/OCI installation
-> is not implemented yet.
+> `native_js` is kernel-internal, and the current `wasm_component` callback
+> example is a JavaScript-envelope lifecycle rehearsal. External services are
+> deployed through INSTALL SERVICE and CREATE BINDING; managed OCI container
+> execution is not implemented yet.
 
 > **Experimental / alpha.** `0.x` releases carry no backward-compatibility
 > guarantee. See the

@@ -22,9 +22,12 @@ The current support matrix is
 [`docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
 **Service portability status:** examples may claim only capabilities marked as
 implemented in that matrix.
-The rehearsal is not a WebAssembly binary or component. External service
-installation is not implemented yet, and OCI callback invocation remains
-unsupported.
+The rehearsal is not a WebAssembly binary or component. Service deployment is
+declared through INSTALL SERVICE and CREATE BINDING (see
+[`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md));
+no example demonstrates that surface yet.
+Managed OCI container execution is not implemented yet, and OCI callback
+invocation remains unsupported.
 
 - **Prerequisites**: a running Lagrange node (`npm start` from the repo root).
 - The per-example `index.js` files are callback modules loaded by the runner,

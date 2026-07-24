@@ -1,21 +1,20 @@
 # WASM Services Architecture and Current Runtime Guide
 
-This guide distinguishes the current embedded lifecycle scaffolding from the
-target external WASM service contract.
+This guide covers the two `wasm_component` runtime axes: the landed
+Artifact / Binding / Cell deployment surface, and the older callback rehearsal
+machinery that predates it.
 
 Current runtime support is machine-readable in
 [`service-portability-capabilities.json`](service-portability-capabilities.json).
 Its repository path is `docs/service-portability-capabilities.json`.
-**Service portability status:** current instructions are limited by that matrix;
-target-only sections are labelled explicitly.
-The current `wasm_component` callback example wraps JavaScript source in a
-`js_wasm_component_v1` envelope and evaluates it as JavaScript. It is not a
-WebAssembly binary or component. External service installation is not
-implemented yet, and OCI callback invocation remains unsupported.
-
-Sections that show `.wasm` artifacts and external service publication describe
-the target manifest/control-plane contract. They are not a currently runnable
-copy-and-paste installation path.
+**Service portability status:** external services are deployed through
+INSTALL SERVICE and CREATE BINDING (section 5); a Binding-derived Cell runs a
+genuine WASI component with budget and declared-table enforcement. The
+`wasm_component` *callback* example is a separate, older axis: it wraps
+JavaScript source in a `js_wasm_component_v1` envelope and evaluates it as
+JavaScript. It is not a WebAssembly binary or component.
+Managed OCI container execution is not implemented yet, and OCI callback
+invocation remains unsupported.
 
 When a real runtime capability cuts over, update these surfaces together in one
 verified Quest: increment the capability contract version, change the runtime
@@ -115,9 +114,14 @@ Response shape (`query_result`) includes callback execution metadata:
 }
 ```
 
-## 4. Target Artifact Upload Workflow (Not Yet Active)
+## 4. Callback Module Upload (Migration-Input Path)
 
-The target artifact workflow is:
+This path serves the callback axis only. `code`, `module_manifests`, and
+callback registrations are migration inputs, not peers of
+Artifact / Binding / Cell; external service payloads are distributed through
+`INSTALL SERVICE` (section 5) instead.
+
+The callback upload workflow is:
 
 1. Store executable bytes/metadata in `code`
 2. Publish module metadata in `module_manifests`
@@ -212,127 +216,160 @@ WHERE namespace = 'acme' AND name = 'hello'
 ORDER BY created_at DESC;
 ```
 
-## 5. Target External WASM Service Lifecycle (Not Yet Active)
+## 5. Deploy an External Service: Artifact / Binding / Cell
 
-The intended catalog contract uses a service definition as declarative desired
-state. The current lifecycle scaffolding does not prove that an externally
-supplied component binary is installed or invoked.
+Deployment uses exactly three concepts:
+
+- **Artifact** — an installed, immutable package: a validated manifest plus a
+  digest-pinned payload, identified by `(package_id, manifest_digest)`.
+- **Binding** — the only durable user declaration of execution intent. It pins
+  an Artifact export to a typed source (`request`, `change`, `time`, `once`,
+  `boot`, `call`, or `pushdown`) with explicit budgets. Bindings are immutable
+  and carry no replica intent.
+- **Cell** — a Binding-derived actual that the runtime lifecycle reports ready
+  and running. Replica capacity and placement are system-policy output, never
+  a caller request.
+
+The full architecture is
+[`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md).
+All three statements below travel over the standard SQL ingress with exactly
+one JSON string bind parameter (`$1`).
+
+### 5.1 Install the Artifact
 
 ```sql
-INSERT INTO service_definitions (
-  service_id,
-  service_name,
-  service_profile,
-  handler_function_id,
-  runtime_kind,
-  runtime_ref,
-  runtime_config,
-  read_consistency,
-  write_consistency,
-  replica_count,
-  protocol,
-  resource_budget,
-  safety_interval_ms,
-  status,
-  created_at,
-  updated_at
-) VALUES (
-  'svc-acme-hello',
-  'acme-hello-service',
-  'default',
-  'fn-acme-hello-v1',
-  'wasm_component',
-  'fn-acme-hello-v1',
-  '{}',
-  'strong',
-  'strong',
-  3,
-  'websocket',
-  '{}',
-  500,
-  'active',
-  CAST(strftime('%s','now') AS INTEGER) * 1000,
-  CAST(strftime('%s','now') AS INTEGER) * 1000
-);
+INSTALL SERVICE $1;
 ```
 
-`resource_budget` may include:
-`cpuTimeLimitMs`, `memoryLimitBytes`, `sessionSizeLimitBytes`,
-`serviceSizeLimitBytes`.
+with a payload of the form:
 
-Constraints to respect:
-
-1. `replica_count` must be odd and `>= 3`
-2. `runtime_kind = wasm_component` requires non-empty `runtime_ref`
-3. `handler_function_id` must exist in `code` for non-SQL service profiles
-4. Consistency values should be valid (`leader_only`/`strong`/`eventual` for
-   reads, `strong`/`async` for writes)
-
-### 5.1 Verify Service Definition
-
-```sql
-SELECT service_id, service_name, handler_function_id, replica_count, status, updated_at
-FROM service_definitions
-WHERE service_id = 'svc-acme-hello';
+```json
+{
+  "artifact_source": {"kind": "remote_oci"},
+  "idempotency_key": "install-acme-hello-1",
+  "manifest": { "...": "external service manifest (see architecture/lagrange-service-manifest.md)" }
+}
 ```
 
-### 5.2 Verify Runtime Replicas and Endpoints
+The install catalog validates the manifest, records the package, and projects
+the bindable Artifact identity: `package_id`
+(`service-package-<64 hex>`) and `manifest_digest` (`sha256:<64 hex>`, taken
+over the exact canonical normalized manifest bytes).
 
 ```sql
-SELECT service_id, node_id, service_type, raft_role, status, address
+SELECT package_id, manifest_digest, name, version
+FROM service_packages;
+```
+
+`UPGRADE $1` (same payload fields) records a new package revision;
+`REMOVE $1` (`{idempotency_key, service_name}`) retires it. `SHOW SERVICES`
+and `SHOW SERVICE $1` project catalog state.
+
+### 5.2 Declare the Binding
+
+```sql
+CREATE BINDING $1;
+```
+
+```json
+{
+  "schema_version": 2,
+  "name": "acme-hello",
+  "target": {
+    "package_id": "service-package-<64 hex>",
+    "manifest_digest": "sha256:<64 hex>",
+    "export_name": "serve"
+  },
+  "source": {"kind": "request", "method": "GET", "path": "/acme/hello"},
+  "budgets": {
+    "cpu_time_ms": 100,
+    "wall_time_ms": 1000,
+    "memory_bytes": 33554432,
+    "input_bytes": 1048576,
+    "output_bytes": 1048576,
+    "context_bytes": 1048576
+  }
+}
+```
+
+Source shapes are closed per kind: `request` takes `method` + static `path`;
+`change` takes `operations` + `tables`; `time` takes `interval_ms`; `call` and
+`pushdown` take a registration `name`; `once` and `boot` take only `kind`.
+The `export_name` must match a manifest export whose `interface` corresponds
+to the source kind (`request` → `request_v1`, and so on). There is no replica
+field anywhere in a Binding: the compiled desired row carries
+`replica_count = 0` as a non-authoritative sentinel, and actual Cell capacity
+is owned by the system placement policy.
+
+### 5.3 Authorize Table Access (Direct Runtime Policy)
+
+Table authorization is runtime access-policy configuration, applied to an
+existing Binding by name — it is never declared in the Artifact manifest:
+
+```sql
+CONFIGURE SERVICE ACCESS $1;
+```
+
+```json
+{
+  "schema_version": 1,
+  "binding_name": "acme-hello",
+  "tables": [
+    {"slot": 0, "table": "table:global.orders", "operations": ["read", "write"]}
+  ]
+}
+```
+
+Access to any table outside the configured policy is denied at the component
+boundary. Observed access is decaying affinity telemetry and never grants
+authority.
+
+### 5.4 Convergence to a Ready Cell
+
+One owner chain activates every Binding source kind:
+
+1. `ServiceDefinitionsOwner` reconciles immutable Binding lineage into desired
+   state and activates explicitly enabled source kinds.
+2. `RuntimeServiceRebalancerOwner` admits active lineage to exactly one
+   system-policy-owned `UnifiedRebalancer`, which owns replica capacity and
+   placement.
+3. `ServiceRuntimeLifecycle`, `RuntimeDriverRegistry`, and
+   `WasmComponentDriver` load the manifest-pinned payload, instantiate the
+   export as a genuine WASI component, and enforce declared-table context and
+   budgets. Only an actual reported ready and running is a Cell.
+
+Verify:
+
+```sql
+SELECT service_id, node_id, status, address
 FROM services
-WHERE group_id = 'svc-acme-hello' OR service_id LIKE 'svc-acme-hello%';
+WHERE service_id LIKE '%acme-hello%';
 ```
 
 ```sql
 SELECT endpoint_id, service_id, node_id, protocol, address, port, health_status
 FROM service_endpoints
-WHERE service_id = 'svc-acme-hello';
+WHERE service_id LIKE '%acme-hello%';
 ```
 
-### 5.3 Intended Unified Lifecycle Convergence
-
-Service startup and maintenance are ownership-controlled:
-
-1. `service_definitions` is desired state for replica count and runtime
-   descriptor (`runtime_kind`, `runtime_ref`, `runtime_config`).
-2. `ServiceReconciler` computes drift between desired and actual service rows.
-3. `ServiceLifecycleManager` is the only owner of create/start/stop/restart.
-4. The target is for built-ins and externally installed WASM services to
-   converge through the same path; external activation is not implemented yet.
+For a `request` Binding, an authenticated HTTP request whose method and static
+path match the Binding is resolved to a current ready Cell and returns the
+component's status, headers, and body. Invocation for the other source kinds
+(timer firing, CDC dispatch, statement/query invocation, bootstrap hooks) is
+declared by the Binding but cut over separately; placement and readiness do
+not depend on it.
 
 ## 6. Administer Existing Services
 
-### 6.1 Update Service Config
+Binding-managed services are administered through the lifecycle statements in
+section 5 (`INSTALL SERVICE`, `UPGRADE`, `REMOVE`, `SHOW SERVICES`,
+`CONFIGURE SERVICE ACCESS`, `CREATE BINDING`). Bindings are immutable: a
+change in intent is a new Binding generation, not an update. There is no user
+scaling operation — replica capacity is system-policy output.
 
-```sql
-UPDATE service_definitions
-SET read_consistency = 'eventual',
-    write_consistency = 'async',
-    safety_interval_ms = 750,
-    updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
-WHERE service_id = 'svc-acme-hello';
-```
-
-### 6.2 Scale Service
-
-```sql
-UPDATE service_definitions
-SET replica_count = 5,
-    updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
-WHERE service_id = 'svc-acme-hello';
-```
-
-Use odd replica counts only: `3`, `5`, `7`, ...
-
-### 6.3 Soft-Delete (Deactivate) Service
-
-```sql
-UPDATE service_definitions
-SET status = 'inactive',
-    updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
-WHERE service_id = 'svc-acme-hello';
-```
+Direct writes to `service_definitions`, `services`, or `service_endpoints`
+are internal substrate operations, not a user surface; those tables are
+migration inputs owned by the control-plane owners.
 
 ## 7. Distributed SQL Examples Packaging and Run Flow
 
@@ -506,6 +543,10 @@ LIMIT 100;
 
 ## 10. Internal Meta Command Surface (For Embedders)
 
+These commands are internal substrate for embedders and diagnostics. They are
+not the deployment declaration surface — user deployment is declared through
+the lifecycle SQL statements in section 5.
+
 The command names owned by `sys-wasm-meta` are:
 
 1. `publishModule`
@@ -530,8 +571,9 @@ If no meta leader is routable, routing fails with
 
 ## 11. Troubleshooting
 
-1. Error: `Replica count must be an odd number >= 3`
-   - Fix `replica_count` to odd values (`3`, `5`, `7`, ...).
+1. Error: `DeploymentBindingError` with an `INVALID_FIELD` path
+   - The Binding payload must carry exactly the fields for its source kind
+     (section 5.2); check the reported JSON-pointer path.
 2. Error: `Handler function not found in code table`
    - Insert/verify `code.function_id` before creating service definition.
 3. Error: digest format invalid
