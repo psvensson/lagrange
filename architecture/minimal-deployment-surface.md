@@ -3,7 +3,8 @@
 This document owns the selected architecture for collapsing Lagrange's
 mechanism-first deployment surfaces into three nouns: **Artifact**, **Binding**,
 and **Cell**. It is the contract boundary for roadmap row
-`RM-2.0-minimal-deployment-surface`; executable work remains in linked Quests.
+`RM-2.0-minimal-deployment-surface`; implementation evidence lives in its linked
+terminal Quests.
 
 ## Scope and edition boundary
 
@@ -212,10 +213,10 @@ contracts.
    activating runtimes or naming Cells.
 5. Move `change`, `call`, `pushdown`, `time`, `once`, and `boot` ingress to the
    same Binding owner one source at a time, deleting superseded surfaces.
-   `change`, `time`, `once`, `boot`, and `call` are complete; Quest
-   `minimal-deployment-pushdown-binding-compilation` owns the final source as a
-   durable named registration without installing query pushdown, invoking the
-   Artifact, or activating a runtime.
+   All six are complete; Quest
+   `minimal-deployment-pushdown-binding-compilation` completed the final source
+   as a durable named registration without installing query pushdown, invoking
+   the Artifact, or activating a runtime.
 6. Introduce Cell semantics before consolidating partition/service lifecycle
    code, in closure-gated slices:
    1. activate request-derived desired state and engage the existing
@@ -229,10 +230,12 @@ contracts.
    declarations to directly managed runtime access policy. Keep the existing
    observed access publisher as live affinity telemetry; do not generate or
    ingest declarations from it.
-8. Add optional actor-key invocation partitioning inside the existing route
-   resolver. Start with a transport-key extractor and rendezvous assignment over
-   ready actuals; add fixed logical shards and epoch-fenced handoff only if
-   strict single ownership is selected as a correctness requirement.
+8. If a future routing contract needs actor-key invocation partitioning, add it
+   inside the existing route resolver. Start with a transport-key extractor and
+   rendezvous assignment over ready actuals; add fixed logical shards and
+   epoch-fenced handoff only if strict single ownership is selected as a
+   correctness requirement. This optional routing policy is not part of the
+   completed deployment-surface row.
 
 Each step must engage the new owner in the production path it claims. Merely
 adding a table, validator, adapter, or feature flag is not completion.

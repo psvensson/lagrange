@@ -360,7 +360,7 @@ enough for direct implementation tasks.
 
 | Id | Item | Roadmap state | Scope notes |
 |----|------|--------|-------|
-| RM-2.0-minimal-deployment-surface | Unified artifact / binding / cell deployment surface | 🔲 | Collapse the mechanism-first deployment surfaces into content-addressed artifacts with declared read/write sets, immutable versioned binding rows (`on <source> run <export>`), and reconciled cells on one replica substrate. Selected contract: `architecture/minimal-deployment-surface.md`; remaining cross-Quest choices: `solve/epics/minimal-deployment-surface.md`. |
+| RM-2.0-minimal-deployment-surface | Unified artifact / binding / cell deployment surface | ✅ | Landed: content-addressed schema-v3 Artifacts, immutable schema-v2 Bindings (`on <source> run <export>`) for all seven sources, direct runtime access policy, and reconciled ready/running Cells on the existing runtime-service substrate. Request routing is landed; non-request invocation and optional actor-key routing are separate follow-ons. Contract: `architecture/minimal-deployment-surface.md`; decision trail: `solve/epics/minimal-deployment-surface.md`. |
 
 #### Phase A — Stable External Service Contract
 

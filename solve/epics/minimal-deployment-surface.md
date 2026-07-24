@@ -16,12 +16,12 @@ selected architecture, owner map, invariants, and migration sequence live in
 Quest event logs retain completed implementation history; this memo keeps only
 the current cross-Quest frontier and unresolved choices.
 
-## Current frontier
+## Landed frontier
 
 Artifact schema v3, Binding schema v2, all seven source compilers, direct runtime
 access policy, request Cell placement/readiness/routing, change Cell placement,
 time Cell placement, once Cell placement, boot Cell placement, and call Cell
-placement are landed.
+placement are landed. Pushdown Cell placement completes the seventh source.
 
 Cell activation reuses one chain:
 
@@ -32,27 +32,27 @@ Cell activation reuses one chain:
 3. `ServiceRuntimeLifecycle`, `RuntimeDriverRegistry`, and
    `WasmComponentDriver` remain the only Component readiness boundary.
 
-Pushdown still compiles to inactive zero-replica desired state. Activate it
-through that same chain while keeping caller replica intent absent and without
-installing query execution, a source-specific planner, a scheduler, or an
-alternate runtime contract. Pushdown is next; its durable named registration
-makes placement and readiness independently provable without adding query
-invocation.
+All seven Binding sources now compile inactive first and activate through that
+same chain. Request has canonical invocation routing; the other sources have
+placement and readiness without coupling deployment to their dispatch
+mechanisms.
 
-After that placement, decide whether any source-specific invocation cutover is
-independently valuable. Do not couple placement with dispatch.
+No further Quest is selected from this epic. The Solver overview derives
+`linked-terminal` from its linked Quest outcomes.
 
-## Open choices
+## Deferred follow-on choices
 
 - **Transient named invocation:** map durable `call` and `pushdown`
   registrations to transient statement/query invocations through an existing
-  owner, or establish one shared invocation resolver first.
+  owner, or establish one shared invocation resolver first, only when that
+  invocation cutover is independently valuable.
 - **Actor-key stability:** use rendezvous assignment over ready actuals for
   low-churn affinity, or add fixed logical shards with epoch-fenced ownership
-  only where strict single ownership is a correctness requirement.
-- **Source invocation order:** after placement closure, choose the first
-  independently testable source-specific invocation cutover; scheduling,
-  dispatch, and data-plane integration remain separate concerns.
+  only where strict single ownership is a correctness requirement. This is
+  optional routing policy, not incomplete Cell deployment.
+- **Source invocation order:** choose any future source-specific invocation
+  cutover in its own planning context; scheduling, dispatch, and data-plane
+  integration remain separate concerns.
 
 ## Current invariants
 
@@ -96,3 +96,11 @@ independently valuable. Do not couple placement with dispatch.
 - 2026-07-24 — Quest `minimal-deployment-call-cell-placement` landed. Selected
   `minimal-deployment-pushdown-cell-placement` next because the durable named
   registration can be placed independently of query execution.
+- 2026-07-24 — Quest `minimal-deployment-pushdown-cell-placement` landed after
+  exact-candidate review caught and repaired a stale architecture paragraph.
+  All seven sources now share the selected Cell owner chain.
+- 2026-07-24 — Residual audit exhausted three superseded predecessor records in
+  favor of their landed migration or stricter replacement Quests. The Solver
+  overview now derives `linked-terminal`; source-specific invocation and
+  optional actor-key routing remain separate follow-on choices with no selected
+  target from this epic.
