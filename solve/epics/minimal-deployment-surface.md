@@ -7,176 +7,79 @@ graduatesTo: null
 
 # Minimal deployment surface: artifacts, bindings, cells
 
-## Intent (why now)
+## Intent
 
-Lagrange exposes several mechanism-first ways to deploy code, backed by
-overlapping registries and validators. This epic retains only unresolved choices
-that span later Quests. The selected three-noun architecture, owner map,
-invariants, and migration sequence now live in
+Converge Lagrange deployment on Artifact / Binding / Cell without parallel
+registries, validators, planners, replica controls, or runtime lifecycles. The
+selected architecture, owner map, invariants, and migration sequence live in
 [`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md).
+Quest event logs retain completed implementation history; this memo keeps only
+the current cross-Quest frontier and unresolved choices.
 
-## Options under discussion
+## Current frontier
 
-- **Transient invocation routing:** resolve durable `call` and `pushdown`
-  registration names to ready Cells through an existing owner, or introduce a
-  shared invocation resolver before either data-plane integration.
+Artifact schema v3, Binding schema v2, all seven source compilers, direct runtime
+access policy, request Cell placement/readiness/routing, change Cell placement,
+and time Cell placement are landed.
+
+Cell activation reuses one chain:
+
+1. `ServiceDefinitionsOwner` reconciles immutable Binding lineage into desired
+   state and activates only explicitly enabled source kinds.
+2. `RuntimeServiceRebalancerOwner` admits active lineage to exactly one
+   system-policy-owned `UnifiedRebalancer`.
+3. `ServiceRuntimeLifecycle`, `RuntimeDriverRegistry`, and
+   `WasmComponentDriver` remain the only Component readiness boundary.
+
+Boot, call, once, and pushdown still compile to inactive zero-replica desired
+state. Activate them one source per Quest through that same chain. Each Quest
+must keep caller replica intent absent and must not install its invocation
+mechanism, source-specific planner, scheduler, or alternate runtime contract.
+
+After those four placements, decide whether any source-specific invocation
+cutover is independently valuable. Do not couple placement with dispatch.
+
+## Open choices
+
+- **Transient named invocation:** map durable `call` and `pushdown`
+  registrations to transient statement/query invocations through an existing
+  owner, or establish one shared invocation resolver first.
 - **Actor-key stability:** use rendezvous assignment over ready actuals for
   low-churn affinity, or add fixed logical shards with epoch-fenced ownership
-  when single actor ownership must survive topology changes.
+  only where strict single ownership is a correctness requirement.
+- **Source invocation order:** after placement closure, choose the first
+  independently testable source-specific invocation cutover; scheduling,
+  dispatch, and data-plane integration remain separate concerns.
 
-## Open questions
+## Current invariants
 
-- How do durable `call` and `pushdown` registrations map to transient
-  per-statement invocations without creating statement-scoped Bindings?
-- Which normalized, authenticated transport properties may runtime routing
-  policy use as an actor key, and which services require strict ownership rather
-  than best-effort affinity?
+- Artifact / Binding / Cell are the complete deployment vocabulary.
+- Binding is immutable user intent; Cell capacity is system-policy output.
+- `replica_count = 0` on Binding-derived desired rows is a non-authoritative
+  sentinel, never a caller request.
+- Binding-derived actuals become Cells only after the existing runtime lifecycle
+  reports them ready and running.
+- Table authorization comes from direct runtime policy. Observed access is
+  decaying affinity telemetry and never grants authority.
+- Placement, invocation routing, and actor-key assignment are separate axes.
+- No Cell table, scheduler, seed registry, feature flag, compatibility decoder,
+  or second source of truth survives a landing.
 
 ## Decision log
 
-- 2026-07-22 — Selected Artifact / Binding / Cell as the complete deployment
-  vocabulary; fixed seven Binding sources; code is stateless and context is
-  table-backed.
-- 2026-07-22 — Selected one Cell contract over the existing replica substrate,
-  fixed voters plus elastic learners, partition-as-built-in-service, and
-  axiomatic bootstrap Cells.
-- 2026-07-22 — Literature and adversarial review required artifact exports to
-  declare read/write sets, immutable version-pinned Bindings, and CDC-woken
-  eventually-stable reconciliation.
-- 2026-07-22 — Graduated the selected architecture and migration order to
-  `architecture/minimal-deployment-surface.md`; the epic now retains only
-  cross-Quest choices.
-- 2026-07-22 — Started product Quest
-  `minimal-deployment-artifact-export-contract` as the first executable slice:
-  strict analyzable v2 exports through the existing install/catalog owners while
-  preserving manifest v1 compatibility.
-- 2026-07-22 — Adversarial review rejected OCI `artifact_digest#export` as a
-  canonical Binding target because one payload digest may back multiple
-  installed manifests. The prerequisite was delivered by
-  `minimal-deployment-artifact-binding-identity-replacement`: canonical Binding
-  targets pin installed `package_id`, derived `manifest_digest`, and export
-  name. Its predecessor remains an exhausted audit record because an early
-  malformed measurement event could not be repaired honestly.
-- 2026-07-22 — Classified `call` and `pushdown` Bindings as durable
-  registrations; their individual statement calls and plans are transient
-  invocations, not a second ephemeral Binding persistence model.
-- 2026-07-22 — Sealed Binding v0 as a strict seven-variant source union with
-  one-to-one export interfaces, export-bounded contexts, owner-derived Artifact
-  capabilities, explicit resource maxima, fixed odd voters plus bounded
-  learners, and create-only immutable generation 1. Landed product Quest
-  `minimal-deployment-binding-v0-declaration`; request Binding compilation is
-  the next cutover rather than a side effect of declaration persistence.
-- 2026-07-22 — Selected request Binding compilation as the first Binding
-  cutover. The existing `service_definitions` planning leader performs one
-  level-triggered CDC-woken projection into inactive zero-replica desired rows;
-  direct user service-definition mutation ingress is retired atomically, while
-  runtime activation and Cells remain later work.
-- 2026-07-22 — Selected `change` as the next source cutover. The request
-  compiler becomes the shared Binding-to-desired-service compiler, preserving
-  inactive zero-replica output while projecting change operations and tables;
-  the unused UUID-based `CDCSubscriptionManager` declaration/callback API is
-  retired, and actual change-event subscription and dispatch remain deferred to
-  Cell activation.
-- 2026-07-22 — Landed `change` and selected `time` as the next source cutover.
-  The shared compiler projects the bounded `interval_ms` declaration into the
-  same inactive zero-replica desired state. Scheduling remains a Cell-activation
-  concern: compilation must not arm a timer or engage the per-replica timer
-  runtime.
-- 2026-07-22 — Landed `time` and selected `once` as the next source cutover.
-  `once` contributes no source configuration beyond its kind, so the cutover is
-  limited to closed compiler admission and the same inactive zero-replica
-  desired-state projection; invocation remains deferred to Cell activation.
-- 2026-07-23 — Landed `once` and selected `boot` as the next source cutover.
-  `boot` is a handler source, not a node/cluster bootstrap hook: it receives the
-  same inactive zero-replica desired-state projection, while invocation and all
-  infrastructure bootstrap lifecycle remain unchanged until Cell activation.
-- 2026-07-23 — Landed `boot` and selected `call` as the next source cutover.
-  `call` is a durable named registration compiled into the same inactive
-  zero-replica desired state; individual statement invocations remain transient
-  and deferred until Cell activation.
-- 2026-07-23 — Landed `call` and selected `pushdown` as the final source
-  compilation cutover. `pushdown` is likewise a durable named registration;
-  individual query-plan invocations remain transient and compilation neither
-  installs nor executes pushdown behavior.
-- 2026-07-23 — Landed `pushdown`; all seven Binding sources now compile through
-  the existing `service_definitions` planning leader into inactive zero-replica
-  desired state.
-- 2026-07-23 — Fixed the Cell owner boundary before lifecycle consolidation:
-  Binding-derived `service_definitions` rows are desired state, `services` rows
-  are replica actuals, and only an actual made ready and running by
-  `ServiceRuntimeLifecycle` is a Cell. `RuntimeServiceRebalancerOwner` and one
-  existing `UnifiedRebalancer` per active service remain the only placement
-  path; no Cell table, scheduler, or lifecycle is added.
-- 2026-07-23 — Fixed request-only activation as the first Cell slice. The
-  `service_definitions-p1` planning leader level-triggers request-derived rows
-  to `status = active` with `replica_count = elasticity.voters`, preserves
-  immutable lineage and runtime projection, and admits that lineage to the
-  existing runtime-service placement owner. The other six sources remain
-  inactive at zero replicas.
-- 2026-07-23 — Fixed learner sequencing: voter placement engages first and
-  learner bounds remain persisted but non-authoritative until a later Quest
-  adds elastic capacity through the same replica substrate without changing
-  consensus quorum.
-- 2026-07-23 — Fixed the axiomatic bootstrap boundary to the existing
-  bootstrap-owned system-table/message-group partition actuals and the three
-  built-in meta runtime services. The Cell cutover adds no seed registration,
-  built-in, or Binding-derived user Cell. Started product Quest
-  `minimal-deployment-request-cell-placement` for the engaged placement slice;
-  genuine component execution, ready handler context, and request routing
-  remain separately closure-gated.
-- 2026-07-23 — Landed
-  `minimal-deployment-request-cell-placement`; request Binding desired state now
-  engages the existing runtime-service placement path, but the placed actual is
-  not yet a Cell because `wasm_component` remains a lifecycle scaffold.
-- 2026-07-23 — Selected genuine component execution plus the first ready
-  request Cell as one closure-gated executable concern in
-  `minimal-deployment-request-cell-runtime-readiness`. It extends the existing
-  runtime registry, driver, and lifecycle owners, requires declared table-backed
-  context, and excludes external request routing.
-- 2026-07-23 — Authored the serialized child Quest
-  `minimal-deployment-request-cell-routing`. It owns the single HTTP
-  ingress-to-Binding-to-ready-actual invocation cutover only after the
-  runtime-readiness parent is complete. REUSED: canonical security-context
-  validation, `ServiceDispatcher`, `MessageRouter`, and the parent-established
-  runtime invocation owner. EXTENDED: the node HTTP composition gains one
-  data-plane adapter. NEW: one `RequestBindingRouteResolver`, because no current
-  owner resolves immutable request Binding method/path declarations to current
-  ready actuals. No new lifecycle, transport, endpoint, or replica owner is
-  introduced; remaining Binding sources and elastic learners stay deferred.
-- 2026-07-23 — Landed the complete request Cell routing aggregate through
-  `minimal-deployment-request-cell-routing-shutdown-fence`. Canonical HTTP
-  ingress now resolves immutable request Bindings to ready actuals through the
-  existing dispatcher, transport, and runtime owners; a durable invocation
-  journal enforces single-effect replay, and bounded shutdown cancels and drains
-  active requests while absorbing late correlated responses. The first three
-  Cell slices are complete. The epic frontier is now step 6.4: activate the
-  remaining six sources and elastic learners without adding a second placement
-  or lifecycle owner.
-- 2026-07-23 — Application-owner correction superseded the 2026-07-22 exact
-  manifest read/write decision and the 2026-07-23 fixed-voter/learner
-  decisions. Artifact and Binding declarations carry neither table
-  authorization nor Cell replica shape. Table authorization moves to directly
-  managed runtime access-policy configuration; observed access remains direct,
-  decaying affinity telemetry and never generates a manifest, Binding, lock
-  file, or promotion/ingestion waterfall.
-- 2026-07-23 — Started
-  `minimal-deployment-system-owned-cell-replication`. It removes Binding
-  elasticity and v2 Artifact replication input, activates request desired state
-  without a count request, and reuses the existing runtime-service policy for
-  target/min/max, topology, capacity, and affinity. One shared policy projection
-  is reused by placement, admin, CLI, and discovery readers; partition quorum
-  ownership is unchanged.
-- 2026-07-23 — Actor partitioning is a routing-policy axis, not a replica-count
-  input. The current resolver's invocation-id modulo selection provides no actor
-  affinity and reshuffles broadly as membership changes. The selected first
-  candidate reuses its ready-actual filtering with a transport-specific
-  canonical key extractor and transport-neutral rendezvous assignment. Strict
-  single ownership remains an explicit option requiring fixed logical shards,
-  ownership epochs, and handoff through existing replicated metadata owners;
-  it does not justify a second scheduler or replica lifecycle.
-- 2026-07-23 — Completed
-  `minimal-deployment-runtime-access-policy-cutover`. Schema-v3 Artifacts and
-  schema-v2 Bindings carry no access declarations. Authenticated direct
-  configuration reuses the durable config owner; SQL and Component access
-  resolve the same live policy and fail closed. Existing partition-access
-  observations remain affinity telemetry only.
+- 2026-07-22 — Selected Artifact / Binding / Cell and seven typed Binding
+  sources. Bindings pin installed `package_id`, canonical `manifest_digest`, and
+  export name. All sources compile through the existing desired-service owner.
+- 2026-07-23 — Fixed Cell as a ready/running Binding-derived actual on the
+  existing replica substrate. Request placement, genuine Component readiness,
+  and canonical request routing landed as separate closure-gated slices.
+- 2026-07-23 — Application-owner correction removed Artifact/Binding table
+  authorization and caller-owned replica shape. Direct runtime policy owns
+  authorization; existing runtime-service policy owns capacity and placement.
+- 2026-07-24 — Activated change lineage through the shared Cell owner chain;
+  CDC subscription and event dispatch remain deferred.
+- 2026-07-24 — Activated time lineage through the shared Cell owner chain;
+  timer scheduling and invocation remain deferred.
+- 2026-07-24 — Selected once as the next placement slice because its kind-only
+  declaration makes activation/readiness independently provable without adding
+  an invocation owner.
