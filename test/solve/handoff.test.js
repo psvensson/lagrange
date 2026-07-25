@@ -12,7 +12,10 @@ import {
   renderHandoff,
   autoCommitQuest,
 } from '../../scripts/solve/handoff.js';
+import {runFrontierCommand} from '../../scripts/solve/frontier.js';
 import {execFileSync} from 'node:child_process';
+
+const FRONTIER_BOARD_PATH = 'solve/FRONTIER.generated.md';
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-'));
@@ -298,6 +301,65 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
       fs.rmSync(root, {recursive: true, force: true});
       t.end();
     });
+
+  t.test('the committed frontier board equals a regeneration of the committed tree',
+    (t) => {
+      // Regression: questArtifactPaths claimed the board is "dirty exactly when this
+      // Quest's own landing made it stale" because every lifecycle command
+      // regenerates it. False — autoCommitQuest is called from INSIDE the workflow
+      // (loop.js, operator-workflow.js) while the CLI's refreshFrontierBoard runs
+      // afterwards, so the on-disk board still predated this Quest's terminal event.
+      // Either the board was clean and never entered the pathspec at all (the board
+      // at HEAD kept listing the landed Quest as open, and the tree was left dirty),
+      // or stale bytes from an earlier command got committed under this Quest.
+      const root = tmp();
+      initGit(root);
+      const {quest, oracle} = makeQuest(root);
+      runStep(root, quest);
+      fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+      runStep(root, quest, {
+        changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+        summary: 'scoped doc fix',
+      });
+
+      t.ok(autoCommitQuest(root, quest.id).committed, 'the Quest lands');
+
+      const committedBoard = execFileSync(
+        'git', ['show', `HEAD:${FRONTIER_BOARD_PATH}`],
+        {cwd: root, encoding: 'utf8'});
+      t.equal(committedBoard, runFrontierCommand(root),
+        'the committed board is the board for the tree it was committed with');
+
+      const status = execFileSync('git', ['status', '--porcelain', '-uall'],
+        {cwd: root, encoding: 'utf8'});
+      t.notMatch(status, /FRONTIER\.generated\.md/u,
+        'landing leaves no board delta behind for a bookkeeping commit');
+
+      fs.rmSync(root, {recursive: true, force: true});
+      t.end();
+    });
+
+  t.test('a board that cannot be regenerated never strands a verified Quest', (t) => {
+    // A board is a projection. Losing it must not leave a verified Quest with an
+    // uncommitted tree, so regeneration failure is reported and stepped over.
+    const root = tmp();
+    initGit(root);
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped doc fix',
+    });
+    // Make the board path unwritable by turning it into a directory.
+    fs.mkdirSync(path.join(root, FRONTIER_BOARD_PATH), {recursive: true});
+
+    t.ok(autoCommitQuest(root, quest.id).committed,
+      'the Quest still lands when the board cannot be written');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 
   t.test('auto-commit commits, nothing else — it never pushes', (t) => {
     const root = tmp();

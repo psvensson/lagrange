@@ -36,7 +36,7 @@ import {
   inspectChangeArtifact,
 } from './change-artifact.js';
 import {SOLVE_DATA_DIR} from './constants.js';
-import {frontierFilePath} from './frontier.js';
+import {frontierFilePath, runFrontierCommand, writeFrontier} from './frontier.js';
 import {resolveCoauthorTrailer} from './operator-config.js';
 import {
   checkpointVerificationPreflight,
@@ -81,13 +81,18 @@ function questOracleFilePath(root, questId) {
 // The fixed solve/ artifacts a Quest owns by construction, whether or not they
 // are currently dirty. The change directory is expressed as a prefix.
 //
-// The generated frontier board belongs here even though it is not id-owned: every
-// lifecycle command already regenerates it (see refreshFrontierBoard), so it is
-// dirty exactly when this Quest's own landing made it stale. Leaving it out forced
-// a separate bookkeeping commit after each landing. It is a pure projection of
-// Solver state with no wall-clock content, so with two Quests in flight a landing
-// may sweep the other's board delta — byte-identical either way, which is why this
-// widens the owned fixed set without weakening classifyDirtyPaths.
+// The generated frontier board belongs here even though it is not id-owned:
+// autoCommitQuest regenerates it immediately before computing this scope (see
+// refreshFrontierBoardForCommit), so it is dirty exactly when this Quest's own
+// landing staled it. Leaving it out forced a separate bookkeeping commit after each
+// landing.
+//
+// The board's only correctness property is that it equals a regeneration of the tree
+// it was committed with; the regeneration above is what establishes that, and no
+// lock can improve on it. It is a pure projection with no wall-clock content, so with
+// two Quests in flight a landing may sweep the other's board delta — the swept bytes
+// are still a correct projection of the committed tree, which is why this widens the
+// owned fixed set without weakening classifyDirtyPaths.
 function questArtifactPaths(root, questId) {
   return {
     files: [
@@ -336,6 +341,30 @@ function insideWorkTree(root) {
   }
 }
 
+// Regenerate the frontier board so the bytes this commit captures are the board for
+// the tree being committed.
+//
+// This must run BEFORE buildHandoff, not merely before the git calls. autoCommitQuest
+// is invoked from inside the workflow (loop.js, operator-workflow.js) while the CLI's
+// own refreshFrontierBoard runs afterwards, so at this point the on-disk board still
+// predates this Quest's terminal event. And buildHandoff computes inScope from the
+// dirty tree: a board regenerated after it is neither dirty-listed nor in the
+// pathspec, so `git commit --only` would not pick it up at all. Regenerating here
+// makes the board dirty exactly when this Quest's own landing staled it — which is
+// what questArtifactPaths already claims.
+//
+// Never fails the commit: a board is a projection, and losing it must not strand a
+// verified Quest with an uncommitted tree (same contract as solve.js
+// refreshFrontierBoard).
+function refreshFrontierBoardForCommit(root) {
+  try {
+    writeFrontier(root, runFrontierCommand(root));
+  } catch (err) {
+    process.stderr.write(
+      `frontier board refresh before commit skipped: ${err.message}\n`);
+  }
+}
+
 // Auto commit a Quest's in-scope work once it finishes, so the Solver persists its
 // own scope-clean changes instead of accumulating an unrecoverable dirty tree. The
 // commit gate is minimal — the quest must have FINISHED without errors (a SOLVED
@@ -351,6 +380,7 @@ export function autoCommitQuest(root, questId, options = {}) {
   }
   const checkpoint = options.checkpoint === true;
   const quest = loadQuest(root, questId);
+  refreshFrontierBoardForCommit(root);
   const handoff = buildHandoff(root, quest, {
     checkpoint,
     checkpointReason: options.checkpointReason,
