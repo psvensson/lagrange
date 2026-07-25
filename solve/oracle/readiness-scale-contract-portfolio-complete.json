@@ -1,0 +1,12 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "complete-path-union-recorded",
+  "detail": {
+    "expectedPlanningPathCount": 24,
+    "newEpicCount": 3,
+    "newSpecFileCount": 6,
+    "modifiedExistingPlanningPathCount": 15
+  }
+}
