@@ -14,9 +14,11 @@
     "draftedAtCommit": "627238f762c11a502e4a06ac19e2e530db446713"
   },
   "doneWhen": {
-    "probe": "oracle",
+    "probe": "scenario-harness",
     "args": {
-      "file": "solve/oracle/complexity-ratchet-closure-wave1.json"
+      "scenario": "complexity-ratchet-closure-wave1-v2",
+      "consecutive": 3,
+      "metric": "priority"
     }
   },
   "frontiers": [
@@ -24,9 +26,10 @@
       "id": "complexity-ratchet-closure-wave1-v2-main",
       "priority": 1,
       "metric": {
-        "probe": "oracle",
+        "probe": "scenario-harness",
         "args": {
-          "file": "solve/oracle/complexity-ratchet-closure-wave1.json"
+          "scenario": "complexity-ratchet-closure-wave1-v2",
+          "metric": "priority"
         }
       }
     }
