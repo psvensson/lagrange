@@ -1,0 +1,48 @@
+{
+  "id": "readiness-scale-portfolio-planning",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The planning portfolio explicitly owns Raft snapshot recovery, supported scale certification, feasibility-qualified placement balance, topology convergence SLOs, keyed Cell routing, generic Cell continuity, and non-request invocation without duplicating established runtime, placement, OCI, or backup owners; its linked specifications define bounded snapshot pressure, resource/performance gates, typed degraded outcomes, staged executable Quests, and current documentation truth.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "roadmap.md",
+    "draftedAtCommit": "53ff03a6cf70d98f103253c517d2e2f3c3498654"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/readiness-scale-portfolio-planning.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "readiness-scale-portfolio-planning-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/readiness-scale-portfolio-planning.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "planning-only",
+      "statement": "This Quest changes planning, architecture, and documentation truth only; it must not claim or implement the product capabilities delegated to its successor Quests."
+    },
+    {
+      "id": "reuse-established-owners",
+      "statement": "The portfolio must extend the existing Raft, UnifiedRebalancer, RequestBindingRouteResolver, Cell lifecycle, topology-convergence, and service-portability owners without introducing parallel runtime or placement machinery."
+    }
+  ]
+}
