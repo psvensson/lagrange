@@ -305,6 +305,5 @@ function withObservedProgressRetention(Base) {
 }
 
 export {
-  DELIVERED_CREATE_PROGRESS_RESPONSE_STATUSES,
   withObservedProgressRetention,
 };

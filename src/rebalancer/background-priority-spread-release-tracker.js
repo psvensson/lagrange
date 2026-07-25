@@ -181,7 +181,6 @@ function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
 }
 
 export {
-  BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE,
   isBackgroundPrioritySpreadReleaseActive,
   isBackgroundPrioritySpreadReleaseOwner,
   observeActiveBackgroundPrioritySpreadReleaseBlocked,

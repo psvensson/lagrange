@@ -84,6 +84,18 @@ const AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS = Object.freeze([
   'solve/report',
 ].map((bookkeepingPath) => `:(exclude)${bookkeepingPath}`));
 const REPORT_PROJECTION_PATHSPEC = 'solve/report';
+// git diff never sees untracked files, so a brand-new test or script created
+// during the attempt silently falls out of the sealed artifact — the exact
+// omission an independent verifier must reject (behavior change sealed
+// without its regression guard). Guard the source-owning trees; stray
+// operator files elsewhere stay irrelevant to the seal.
+const AUTO_DIFF_UNTRACKED_GUARD_PATHSPECS = Object.freeze([
+  'docs',
+  'examples',
+  'scripts',
+  'src',
+  'test',
+]);
 
 // The HEAD sha at step-begin time, recorded into the pending file so --auto-diff can
 // snapshot exactly what changed during the attempt (null outside a git work tree).
@@ -126,6 +138,27 @@ function nextAutoDiffArtifactPath(root, questId) {
 // operator-provided diff. An empty diff is an operator error, not a silent no-op.
 function createAutoDiffChangeRef(root, quest, pending) {
   const pin = pending.headCommit || 'HEAD';
+  const untracked = spawnSync('git', [
+    'ls-files', '--others', '--exclude-standard', '--',
+    ...AUTO_DIFF_UNTRACKED_GUARD_PATHSPECS,
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
+  });
+  const untrackedSourceFiles = (untracked.stdout || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (untrackedSourceFiles.length > 0) {
+    throw new Error(
+      'auto-diff: untracked source files would be silently omitted from ' +
+      'the sealed attempt artifact: ' +
+      `${untrackedSourceFiles.join(', ')} — ` +
+      'run git add -N <file> to include them (or delete them) before ' +
+      'committing the step',
+    );
+  }
   const authored = spawnSync('git', [
     'diff', '--binary', '--full-index', '--no-ext-diff', pin, '--', '.',
     ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,

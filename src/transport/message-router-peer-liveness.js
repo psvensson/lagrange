@@ -101,5 +101,4 @@ export async function pingNode(router, nodeId, timeoutMs = null) {
 
 export {
   buildRecentPeerLivenessEvidence,
-  getRouterPeerLivenessEvidence,
 };

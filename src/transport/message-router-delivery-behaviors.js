@@ -699,34 +699,6 @@ export function getConnectionHandoffDiagnostics(router, nodeId) {
   };
 }
 
-export async function pingNode(router, nodeId, timeoutMs = null) {
-  const connection = router.nodeConnections.get(nodeId);
-  if (
-    !connection ||
-    connection.state !== ConnectionState.CONNECTED ||
-    !connection.ws
-  ) {
-    return false;
-  }
-  const pingId = uuidv4();
-  const timeout = timeoutMs ?? router.pingTimeoutMs;
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      router.pendingPings.delete(pingId);
-      resolve(false);
-    }, timeout);
-    router.pendingPings.set(pingId, {
-      resolve,
-      timeout: timer,
-    });
-    router.sendRaw(connection.ws, {
-      type: RouterMessageType.PING,
-      pingId,
-      timestamp: Date.now(),
-    });
-  });
-}
-
 export function getConnectedNodes(router) {
   const connected = [];
   for (const [_nodeId, connection] of router.nodeConnections) {

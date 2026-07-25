@@ -120,8 +120,10 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Run the versioned short developer proof through the fail-closed acceptance executor.',
       }),
       Object.freeze({
-        command: 'npm test -- test/path/to/file.test.js',
-        description: 'Run one focused TAP test file.',
+        command: 'npm run test:file -- test/path/to/file.test.js',
+        description: 'Run one focused TAP test file via the fail-closed ' +
+          'runner (npm test ignores file arguments and runs the full ' +
+          'sharded suite).',
       }),
       Object.freeze({
         command: 'npm run test:metrics:scoped -- <files...>',

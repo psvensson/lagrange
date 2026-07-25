@@ -31,5 +31,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
 export {
   REQUEST_CELL_PLACEMENT_SCENARIO,
-  runRequestCellPlacementScenario,
 };

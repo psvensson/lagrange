@@ -202,6 +202,16 @@ Use this list before non-trivial work:
     its functionality; never pin a flag in a test. Inherited flags are recorded
     debt — retire or promote on contact. See fixtures.md "No Flag-Coupled Tests"
     and roadmap.md "Feature Flag Lifecycle".
+20. **Do not leave a static ratchet above its baseline on `main`.** After
+    landing work that touches `src/`, `test/`, or `scripts/`, run the cheap
+    ratchet trio — `npm run test:duplication`,
+    `node scripts/check-unused-exports.js`,
+    `node scripts/check-circular-dependencies.js` — and reduce real
+    violations before ending the session; never raise a baseline to pass.
+    When a checker reports tightening headroom, ratchet the baseline down in
+    the same commit (one-way-baseline rule). Focused test runs and the
+    Solver's scoped commit handoff do NOT run these gates, so drift lands
+    silently unless this check is explicit.
 
 ## Tool Discovery
 

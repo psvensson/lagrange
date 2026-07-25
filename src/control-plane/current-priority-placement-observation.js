@@ -193,6 +193,5 @@ function buildCurrentPriorityPlacementObservation(options = {}) {
 }
 
 export {
-  CURRENT_PRIORITY_PLACEMENT_OBSERVATION_STATE,
   buildCurrentPriorityPlacementObservation,
 };

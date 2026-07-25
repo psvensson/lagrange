@@ -1,63 +1,15 @@
-import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {existsSync, readFileSync} from 'node:fs';
 import {beforeEach, describe, test} from 'node:test';
 
 import {
-  RuntimeServiceRebalancerOwner,
-} from '../../src/bootstrap/shared/runtime-service-rebalancer-setup.js';
-import {
-  SYSTEM_TABLE_SCHEMAS,
-} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {ConfigurationManager} from
-  '../../src/config/configuration-manager.js';
-import {TABLES} from '../../src/constants/index.js';
-import {
-  REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE,
-  RequestBindingServiceDefinitionError,
-  buildRequestBindingServiceDefinition,
-  createSystemMetadataOwners,
-  deriveRequestServiceDefinitionId,
-} from '../../src/control-plane/owners/index.js';
-import {deriveTenantPackageId} from
-  '../../src/control-plane/owners/service-install-catalog-contract.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {
-  HEALTH_STATUS,
-  PREPARE_STATUS,
-  START_STATUS,
-} from '../../src/runtime/runtime-driver.js';
-import {RuntimeDriverRegistry} from
-  '../../src/runtime/runtime-driver-registry.js';
-import {ServiceRuntimeLifecycle} from
-  '../../src/runtime/service-runtime-lifecycle.js';
-import {WasiComponentCellRuntime} from
-  '../../src/runtime/wasi-component-cell-runtime.js';
-import {WasmComponentDriver} from
-  '../../src/runtime/wasm-component-driver.js';
-import {SD_COL} from '../../src/wasm-service/wasm-service-models.js';
+  assertCompiledServiceDefinitionRow,
+  createBindingCompilationKit,
+  resetTestSingletons,
+} from '../wasm-service/binding-compilation-test-harness.js';
 
 const TENANT_ID = 'tenant-change';
 const ARTIFACT_DIGEST = `sha256:${'c'.repeat(64)}`;
-const COMPONENT_BYTES = Buffer.from(
-  'AGFzbQ0AAQAHGwFCAgFAAAB3BAAOZ2V0LXJhbmRvbS11NjQBAAodAQAYd2FzaTpyYW5k' +
-  'b20vcmFuZG9tQDAuMi4wBQAHXwFCBgFAAgV0YWJsZXkDa2V5eQB6BAAEcmVhZAEAAUAD' +
-  'BXRhYmxleQNrZXl5BXZhbHVlegEABAAFd3JpdGUBAQFAAQpjYXBhYmlsaXR5eQB6BAAK' +
-  'Y2FwYWJpbGl0eQECChoBABVsYWdyYW5nZTpjZWxsL2NvbnRleHQFAQYJAQEAAQRyZWFk' +
-  'CAUBAQAAAAYKAQEAAQV3cml0ZQgFAQEAAQAGDwEBAAEKY2FwYWJpbGl0eQgFAQEAAgAC' +
-  'HwEBAwRyZWFkAAAFd3JpdGUAAQpjYXBhYmlsaXR5AAIB1gEAYXNtAQAAAAESA2ACf38B' +
-  'f2ADf39/AGABfwF/AikDA2N0eARyZWFkAAADY3R4BXdyaXRlAAEDY3R4CmNhcGFiaWxp' +
-  'dHkAAgMCAQIHBwEDcnVuAAMKTQFLACAARQR/QQBBBxAAQQBBB0EqEAFBABACagUgAEEB' +
-  'RgR/QeMAQQcQAAUgAEECRgR/QeMAEAIFIABBA0YEfwNADAALAAUgAAsLCwsLADEEbmFt' +
-  'ZQACAW0BGgMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AwoBAwEEBWFnYWluAgoBAAAB' +
-  'A2N0eBIABw4BQAEHcmVxdWVzdHoAegYJAQAAAQEDcnVuCAYBAAADAAILCQEAA3J1bgED' +
-  'AABdDmNvbXBvbmVudC1uYW1lARwAAAMABHJlYWQBBXdyaXRlAgpjYXBhYmlsaXR5AQYA' +
-  'EQEAAW0BDAASAgAEY3R4aQEBaQEHAQEDA3J1bgEPBQIABnJhbmRvbQEDY3R4',
-  'base64',
-);
-const COMPONENT_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
-  .update(COMPONENT_BYTES)
-  .digest('hex')}`;
 const LEGACY_MANAGER_PATH = 'src/function/cdc-subscription-manager.js';
 const LEGACY_MANAGER_TEST_PATH =
   'test/function/cdc-subscription-manager.test.js';
@@ -66,71 +18,6 @@ const SECURITY_CONTEXT = Object.freeze({
   principal: 'change-deployer',
   roles: Object.freeze(['deployer']),
 });
-
-function clone(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-}
-
-class DurableGateway {
-  constructor() {
-    this.storage = new Map(SYSTEM_TABLE_SCHEMAS.map(
-      (schema) => [schema.tableName, new Map()],
-    ));
-    this.writes = [];
-    this.lostInsertResponses = new Set();
-  }
-
-  rows(tableName) {
-    return this.storage.get(tableName);
-  }
-
-  primaryKey(tableName) {
-    const schema = SYSTEM_TABLE_SCHEMAS.find(
-      (candidate) => candidate.tableName === tableName,
-    );
-    return schema.primaryKey?.[0] ||
-      schema.columns.find((column) => column.primaryKey)?.name;
-  }
-
-  async readAuthoritativeRows(tableName, sql, params) {
-    const rows = [...this.rows(tableName).values()];
-    const field = / WHERE ([a-z_]+) = \?$/u.exec(sql)?.[1];
-    return {
-      success: true,
-      rows: clone(field ?
-        rows.filter((row) => row[field] === params[0]) : rows),
-    };
-  }
-
-  async insertSystemTableRow(tableName, row) {
-    const rows = this.rows(tableName);
-    const key = row[this.primaryKey(tableName)];
-    if (rows.has(key)) return {success: false, error: 'duplicate key'};
-    rows.set(key, clone(row));
-    this.writes.push({operation: 'insert', tableName, row: clone(row)});
-    if (this.lostInsertResponses.delete(tableName)) {
-      throw new Error('insert response lost after durable apply');
-    }
-    return {success: true, affectedRows: 1};
-  }
-
-  async upsertSystemTableRow(tableName, row) {
-    this.rows(tableName).set(row[this.primaryKey(tableName)], clone(row));
-    this.writes.push({operation: 'upsert', tableName, row: clone(row)});
-    return {success: true, affectedRows: 1};
-  }
-
-  async updateSystemTableRow(tableName, whereClause, data) {
-    const rows = this.rows(tableName);
-    const key = whereClause[this.primaryKey(tableName)];
-    const existing = rows.get(key);
-    if (!existing) return {success: true, affectedRows: 0};
-    const row = {...existing, ...clone(data)};
-    rows.set(key, row);
-    this.writes.push({operation: 'update', tableName, row: clone(row)});
-    return {success: true, affectedRows: 1};
-  }
-}
 
 function manifest() {
   return {
@@ -154,7 +41,7 @@ function manifest() {
   };
 }
 
-function bindingInput(package_, overrides = {}) {
+function bindingInput(package_, _sourceKind, overrides = {}) {
   return {
     schema_version: 2,
     name: 'orders-change',
@@ -191,257 +78,55 @@ function resolvedArtifact() {
   };
 }
 
-function createCache(gateway) {
-  const listeners = new Set();
-  return {
-    filter(tableName, predicate) {
-      return [...gateway.rows(tableName).values()].filter(predicate);
-    },
-    onCacheChange(listener) {
-      listeners.add(listener);
-    },
-    offCacheChange(listener) {
-      listeners.delete(listener);
-    },
-    emit(tableName) {
-      for (const listener of listeners) listener(tableName, 'INSERT', {});
-    },
-  };
-}
-
-async function createFixture(options = {}) {
-  const gateway = new DurableGateway();
-  const owners = createSystemMetadataOwners({
-    controlPlaneSystemTableGateway: gateway,
-    now: () => 1000,
-  });
-  const value = manifest();
-  const packageId = deriveTenantPackageId(value, TENANT_ID);
-  const package_ = await owners.serviceInstallCatalogOwner.recordPackage({
-    packageId,
-    manifest: value,
-    resolvedArtifact: resolvedArtifact(),
-  });
-  const input = bindingInput(package_, options.bindingOverrides);
-  const binding = await owners.deploymentBindingOwner.createBinding(
-    input, SECURITY_CONTEXT,
-  );
-  const bindingRow = gateway.rows(TABLES.SERVICE_BINDINGS)
-    .get(binding.bindingVersionId);
-  if (options.loseDesiredInsertResponse) {
-    gateway.lostInsertResponses.add(TABLES.SERVICE_DEFINITIONS);
-  }
-  return {binding, bindingRow, gateway, input, owners};
-}
-
-function createPlanner(fixture) {
-  const cache = createCache(fixture.gateway);
-  const rebalancers = [];
-  const owner = new RuntimeServiceRebalancerOwner({
-    nodeId: 'node-change',
-    systemTableCache: cache,
-    cdcIntegrationService: {sqlQueryEngine: {}},
-    tablePolicyService: {},
-    messageRouter: {},
-    rebalanceCoordinator: {},
-    serviceDefinitionsOwner: fixture.owners.serviceDefinitionsOwner,
-    createRebalancer: (options) => {
-      rebalancers.push(options);
-      return {initialize() {}, setLeader() {}, shutdown() {}};
-    },
-  });
-  return {cache, owner, rebalancers};
-}
-
-async function assertChangeComponentReadiness(definition, bindingRow) {
-  const driver = new WasmComponentDriver({
-    artifactLoader: async () => ({
-      artifactDigest: ARTIFACT_DIGEST,
-      bytes: COMPONENT_BYTES,
-      manifest: manifest(),
-      manifestDigest: bindingRow.manifest_digest,
-      packageId: bindingRow.package_id,
-      payloadDigest: COMPONENT_PAYLOAD_DIGEST,
-    }),
-    componentRuntime: new WasiComponentCellRuntime(),
-  });
-  const registry = new RuntimeDriverRegistry();
-  registry.register(driver);
-  registry.freeze();
-  const lifecycle = new ServiceRuntimeLifecycle(registry);
-  const projections = [];
-  lifecycle.setStateProjectionWriter(async (_serviceId, projection) => {
-    projections.push(projection);
-  });
-  const replica = {definition, nodeId: 'node-change'};
-
-  assert.equal(
-    (await lifecycle.prepare(definition, {})).status,
-    PREPARE_STATUS.READY,
-  );
-  assert.equal(
-    (await lifecycle.start(replica)).status,
-    START_STATUS.RUNNING,
-  );
-  assert.equal(
-    (await lifecycle.health(replica)).status,
-    HEALTH_STATUS.HEALTHY,
-  );
-  assert.equal(projections.at(-1).status, 'active');
-  await lifecycle.stop(replica);
-}
-
-function assertConflict(error) {
-  assert.ok(error instanceof RequestBindingServiceDefinitionError);
-  assert.equal(
-    error.code,
-    REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE.DESIRED_SERVICE_CONFLICT,
-  );
-  return true;
-}
+const kit = createBindingCompilationKit({
+  tenantId: TENANT_ID,
+  securityContext: SECURITY_CONTEXT,
+  nowMs: 1000,
+  plannerNodeId: 'node-change',
+  replicaNodeId: () => 'node-change',
+  artifactDigest: ARTIFACT_DIGEST,
+  buildManifest: manifest,
+  buildBindingInput: bindingInput,
+  buildResolvedArtifact: resolvedArtifact,
+});
 
 describe('change Binding compilation cutover', () => {
   beforeEach(() => {
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-    ConfigurationManager.getInstance().initialize({});
-    LoggingService.getInstance().initialize({level: 'error'});
+    resetTestSingletons();
   });
 
   test('production planning activates the full source projection and admits ' +
     'one system-owned placement path without dispatching an event', async () => {
-    const fixture = await createFixture();
+    const fixture = await kit.createFixture();
     fixture.gateway.writes.length = 0;
-    const planner = createPlanner(fixture);
+    const planner = kit.createPlanner(fixture);
 
     planner.owner.setLeader(true);
     await planner.owner.waitForBindingRefresh();
 
-    const serviceId = deriveRequestServiceDefinitionId(
-      fixture.binding.bindingVersionId,
-    );
-    const row = fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).get(serviceId);
-    assert.ok(row);
-    assert.equal(row[SD_COL.BINDING_VERSION_ID], fixture.binding.bindingVersionId);
-    assert.equal(row[SD_COL.BINDING_DIGEST], fixture.bindingRow.binding_digest);
-    assert.equal(row[SD_COL.STATUS], 'active');
-    assert.equal(row[SD_COL.REPLICA_COUNT], 0);
-    assert.equal(row[SD_COL.RUNTIME_KIND], 'wasm_component');
-    assert.equal(
-      row[SD_COL.RUNTIME_REF],
-      `registry.example.test/acme/orders-change:1.0.0@${ARTIFACT_DIGEST}`,
-    );
-    const projection = JSON.parse(row[SD_COL.BINDING_PROJECTION]);
+    const {projection, row} = assertCompiledServiceDefinitionRow({
+      fixture,
+      planner,
+      runtimeRef:
+        `registry.example.test/acme/orders-change:1.0.0@${ARTIFACT_DIGEST}`,
+    });
     assert.deepEqual(projection.declaration.source, fixture.input.source);
-    assert.equal(Object.hasOwn(projection.declaration, 'contexts'), false);
     assert.deepEqual(
       projection.declaration.capabilities,
       ['clock.read', 'network.client'],
     );
-    assert.deepEqual(projection.declaration.budgets, fixture.input.budgets);
-    assert.equal(Object.hasOwn(projection.declaration, 'elasticity'), false);
-    assert.deepEqual(
-      fixture.gateway.writes.map((write) => write.tableName),
-      [TABLES.SERVICE_DEFINITIONS, TABLES.SERVICE_DEFINITIONS],
-    );
-    assert.equal(fixture.gateway.rows(TABLES.SERVICES).size, 0);
-    assert.equal(fixture.gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
-    assert.equal(planner.rebalancers.length, 1);
-    assert.equal(planner.rebalancers[0].entityId, serviceId);
-    assert.equal(planner.rebalancers[0].entityType, 'runtime_service');
-    await assertChangeComponentReadiness(row, fixture.bindingRow);
+    await kit.assertComponentReadiness(row, fixture.bindingRow);
     planner.owner.shutdown();
   });
 
   test('cache wake, replay, leadership reacquisition, repair, lost response, ' +
     'and concurrent replay converge', async () => {
-    const fixture = await createFixture();
-    const planner = createPlanner(fixture);
-    planner.owner.setLeader(true);
-    await planner.owner.waitForBindingRefresh();
-    fixture.gateway.writes.length = 0;
-
-    planner.cache.emit(TABLES.SERVICE_BINDINGS);
-    await planner.owner.waitForBindingRefresh();
-    planner.owner.setLeader(false);
-    planner.owner.setLeader(true);
-    await planner.owner.waitForBindingRefresh();
-    assert.equal(fixture.gateway.writes.length, 0);
-
-    const serviceId = deriveRequestServiceDefinitionId(
-      fixture.binding.bindingVersionId,
-    );
-    planner.owner.setLeader(false);
-    fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).delete(serviceId);
-    planner.owner.setLeader(true);
-    await planner.owner.waitForBindingRefresh();
-    assert.equal(fixture.gateway.writes.length, 2);
-    planner.owner.shutdown();
-
-    const lost = await createFixture({loseDesiredInsertResponse: true});
-    const lostPlanner = createPlanner(lost);
-    lostPlanner.owner.setLeader(true);
-    await lostPlanner.owner.waitForBindingRefresh();
-    assert.equal(lost.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 1);
-    lostPlanner.owner.shutdown();
-
-    const concurrent = await createFixture();
-    concurrent.gateway.writes.length = 0;
-    const results = await Promise.all([
-      concurrent.owners.serviceDefinitionsOwner.reconcileRequestBinding(
-        concurrent.bindingRow,
-      ),
-      concurrent.owners.serviceDefinitionsOwner.reconcileRequestBinding(
-        concurrent.bindingRow,
-      ),
-    ]);
-    assert.equal(results.filter((result) => result.created).length, 1);
-    assert.equal(concurrent.gateway.writes.length, 2);
+    await kit.runReplayConvergenceScenario();
   });
 
   test('conflicting and malformed durable change state fails closed',
     async () => {
-      const fixture = await createFixture();
-      const artifact = await fixture.owners.serviceInstallCatalogOwner
-        .getBindableArtifactForTenant(
-          fixture.bindingRow.package_id,
-          fixture.bindingRow.manifest_digest,
-          TENANT_ID,
-        );
-      const expected = buildRequestBindingServiceDefinition(
-        fixture.bindingRow, artifact,
-      );
-      fixture.gateway.rows(TABLES.SERVICE_DEFINITIONS).set(
-        expected.service_id,
-        {...expected, binding_version_id: null, status: 'active'},
-      );
-      await assert.rejects(
-        fixture.owners.serviceDefinitionsOwner.reconcileRequestBinding(
-          fixture.bindingRow,
-        ),
-        assertConflict,
-      );
-      const planner = createPlanner(fixture);
-      planner.owner.setLeader(true);
-      await planner.owner.waitForBindingRefresh();
-      assert.equal(planner.rebalancers.length, 0);
-      planner.owner.shutdown();
-
-      const corrupt = await createFixture();
-      const malformed = {
-        ...corrupt.bindingRow,
-        binding_version_id: `binding-version-${'f'.repeat(64)}`,
-      };
-      corrupt.gateway.rows(TABLES.SERVICE_BINDINGS).clear();
-      corrupt.gateway.rows(TABLES.SERVICE_BINDINGS).set(
-        malformed.binding_version_id, malformed,
-      );
-      const corruptPlanner = createPlanner(corrupt);
-      corruptPlanner.owner.setLeader(true);
-      await corruptPlanner.owner.waitForBindingRefresh();
-      assert.equal(corrupt.gateway.rows(TABLES.SERVICE_DEFINITIONS).size, 0);
-      assert.equal(corruptPlanner.rebalancers.length, 0);
-      corruptPlanner.owner.shutdown();
+      await kit.runFailClosedScenario({corruptFillChar: 'f'});
     });
 
   test('the legacy declaration, callback API, tests, and private constants ' +

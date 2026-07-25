@@ -449,7 +449,6 @@ export {
   OPERATION_LEDGER_PLACEMENT_OBSERVATION_STATE,
   evaluateOperationLedgerQuorumConcentration,
   getAuthoritativeOperationLedgerPlacementObservation,
-  getOperationLedgerPlacementObservationFromRows,
   getOperationLedgerQuorumObservation,
   isConcentratedOperationLedgerPartition,
 };

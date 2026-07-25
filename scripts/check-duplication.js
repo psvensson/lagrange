@@ -42,8 +42,9 @@ const RATCHET_TARGETS = [
     // guideline-check-shared.js. Ratchet DOWN only from here.
     name: 'src+scripts',
     directories: ['src', 'scripts'],
-    baselineCloneGroupCount: 73,
-    baselineDuplicatedLineCount: 2239,
+    // 2026-07-25: tightened 73/2239 -> 66/2095 (measured; one-way-baseline rule).
+    baselineCloneGroupCount: 66,
+    baselineDuplicatedLineCount: 2095,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -59,8 +60,11 @@ const RATCHET_TARGETS = [
     name: 'test',
     directories: ['test'],
     // 2026-07-19: tightened 845/32308 -> 842/32209 (measured; one-way-baseline rule).
+    // 2026-07-25: re-measured 842/32140 after extracting the shared
+    // binding-compilation test harness; line baseline tightened, group
+    // baseline already exact.
     baselineCloneGroupCount: 842,
-    baselineDuplicatedLineCount: 32209,
+    baselineDuplicatedLineCount: 32140,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

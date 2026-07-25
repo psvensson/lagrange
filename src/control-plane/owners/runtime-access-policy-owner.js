@@ -576,15 +576,10 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
 }
 
 export {
-  RUNTIME_ACCESS_OPERATION,
   RUNTIME_ACCESS_POLICY_DECISION,
-  RUNTIME_ACCESS_POLICY_ERROR_CODE,
   RUNTIME_ACCESS_POLICY_REASON,
-  RUNTIME_ACCESS_POLICY_SCHEMA_VERSION,
   RUNTIME_ACCESS_POLICY_STATUS,
   RuntimeAccessPolicyError,
   RuntimeAccessPolicyOwner,
-  canonicalTableIdentity,
-  normalizePolicyInput,
   statementAccesses,
 };

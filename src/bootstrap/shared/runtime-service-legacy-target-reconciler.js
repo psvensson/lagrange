@@ -310,5 +310,4 @@ class RuntimeServiceLegacyTargetReconciler {
 export {
   LEGACY_CLEANUP_OPERATION_PREFIX,
   RuntimeServiceLegacyTargetReconciler,
-  isLegacyRuntimeTargetRow,
 };
