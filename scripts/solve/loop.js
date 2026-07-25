@@ -429,6 +429,11 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     satisfiedInvariants: satisfiedInvariants.length > 0 ? satisfiedInvariants : null,
     nodeExit: after.nodeExit?.present ? after.nodeExit : null,
     discrimination: normalizeDiscrimination(result.discrimination || ctx.discrimination || null),
+    // Descriptive cost of producing this attempt (dossier bytes, agent duration).
+    // Namespaced so the never-gate rule stays greppable, and null for every executor
+    // that does not measure — absent telemetry is never a violation, which is what
+    // keeps the whole historical corpus and the dry/manual paths valid.
+    telemetry: result.telemetry || null,
   };
   const honestyViolations = validateAttempt(event, ctx.honestyCtx);
   event.changeRefIdentity = changeArtifactIdentity(

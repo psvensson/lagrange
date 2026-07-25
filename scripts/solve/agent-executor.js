@@ -284,10 +284,38 @@ function readReflectionResponse(responseFile) {
   }
 }
 
+// Provider-neutral cost of one attempt, measured by the Solver rather than
+// self-reported by the adapter.
+//
+// Deliberately NOT tokens or dollars: the Solver never depends on a specific agent,
+// CLI or model (see the module header), so a token count would either bind it to one
+// provider or take an adapter's unverifiable word for it. Bytes and milliseconds are
+// measurable here and mean the same thing for every adapter.
+//
+// DESCRIPTIVE ONLY. Nothing in the ladder, the gates or the honesty checks may read
+// this — an attempt is judged by its probe, never by how long it took or how much
+// context it was handed. `findingsBytes`/`findingsCount` exist to size the dossier
+// budget against measured reality instead of an offline reconstruction of it.
+function attemptTelemetry(dossier, serialized, startedAt) {
+  const findings = Array.isArray(dossier.findings) ? dossier.findings : [];
+  return {
+    dossierBytes: Buffer.byteLength(serialized, LOCAL_STR_OWNED_003),
+    findingsBytes: Buffer.byteLength(
+      JSON.stringify(findings), LOCAL_STR_OWNED_003),
+    findingsCount: findings.length,
+    agentDurationMs: Date.now() - startedAt,
+  };
+}
+
 // A failed/timed-out/malformed agent run is a no-op attempt: a null changeRef means the
 // honesty check rejects any claimed metric movement, so the rung escalates honestly.
-function noop(reason) {
-  return {changeRef: null, summary: `agent no-op: ${reason}`};
+//
+// A no-op still carries its telemetry. The timeout path is precisely where duration
+// matters most — it is the only signal that a per-attempt budget is being burned
+// wholesale — so dropping telemetry here would blind the measurement exactly where it
+// is most needed.
+function noop(reason, telemetry = null) {
+  return {changeRef: null, summary: `agent no-op: ${reason}`, telemetry};
 }
 
 export function makeAgentExecutor(root, options = {}) {
@@ -301,8 +329,14 @@ export function makeAgentExecutor(root, options = {}) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-agent-'));
       const requestFile = path.join(dir, 'request.json');
       const responseFile = path.join(dir, 'response.json');
-      fs.writeFileSync(requestFile, JSON.stringify(buildDossier(task, repoRoot), null, 2));
+      const dossier = buildDossier(task, repoRoot);
+      // Serialize once into a named local so the bytes the agent actually receives
+      // are the bytes measured — a reconstructed estimate drifts from reality, which
+      // is how the first attempt at sizing this was wrong by 2x.
+      const serialized = JSON.stringify(dossier, null, 2);
+      fs.writeFileSync(requestFile, serialized);
       const [cmd, ...args] = buildArgv(config.agentCommand, requestFile, responseFile);
+      const startedAt = Date.now();
       const result = run(cmd, args, {
         cwd: repoRoot,
         timeout: timeoutMs,
@@ -310,13 +344,18 @@ export function makeAgentExecutor(root, options = {}) {
           SOLVE_REQUEST_FILE: requestFile, SOLVE_RESPONSE_FILE: responseFile},
         encoding: 'utf8',
       });
+      const telemetry = attemptTelemetry(dossier, serialized, startedAt);
       if (result.error && result.error.code === 'ETIMEDOUT') {
-        return noop(`timeout after ${timeoutMs}ms`);
+        return noop(`timeout after ${timeoutMs}ms`, telemetry);
       }
       if (result.status !== 0) {
-        return noop(`exit ${result.status === null ? 'signal' : result.status}`);
+        return noop(`exit ${result.status === null ? 'signal' : result.status}`,
+          telemetry);
       }
-      return readResponse(responseFile) || noop('no valid response file');
+      const response = readResponse(responseFile);
+      return response ?
+        {...response, telemetry} :
+        noop('no valid response file', telemetry);
     },
     // Step-back reflection turn over the same generic file contract: the request carries
     // kind: "reflection" plus the reflection prompt and a compact health snapshot; the agent

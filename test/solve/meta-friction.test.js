@@ -86,14 +86,77 @@ tap.test('workflow friction ranking', async (t) => {
     t.end();
   });
 
+  t.test('measured cost is attributed to violation rows only', (t) => {
+    // A violation embeds the attempt it rejected, so its telemetry says what the
+    // voided work actually cost. Overrides and parks reference no attempt.
+    const {rows} = tallyFrictionEvents([
+      entry('q1', {type: 'violation', scope: 'attempt-integrity',
+        violations: NULL_METRIC_PAIR,
+        attempt: {telemetry: {agentDurationMs: 30_000}}}),
+      entry('q2', {type: 'violation', scope: 'attempt-integrity',
+        violations: NULL_METRIC_PAIR,
+        attempt: {telemetry: {agentDurationMs: 12_000}}}),
+      entry('q3', {type: 'guard-override', code: 'blocked-scope'}),
+    ]);
+    const violations = rows.find((r) => r.kind === 'violation');
+    t.equal(violations.wastedMs, 42_000, 'measured durations accumulate');
+    t.equal(violations.measured, 2);
+    t.equal(rows.find((r) => r.kind === 'override').measured, 0,
+      'an override row carries no cost because it references no attempt');
+    t.end();
+  });
+
+  t.test('attempts without telemetry contribute count but not cost', (t) => {
+    // The entire historical corpus predates telemetry; it must still rank.
+    const {rows} = tallyFrictionEvents([
+      entry('q1', {type: 'violation', scope: 'attempt-integrity',
+        violations: NULL_METRIC_PAIR, attempt: {}}),
+      entry('q2', {type: 'violation', scope: 'attempt-integrity',
+        violations: NULL_METRIC_PAIR,
+        attempt: {telemetry: {agentDurationMs: 5_000}}}),
+    ]);
+    t.equal(rows[0].count, 2, 'both are counted');
+    t.equal(rows[0].measured, 1, 'only one is measured');
+    t.equal(rows[0].wastedMs, 5_000);
+    t.end();
+  });
+
+  t.test('an unmeasured row renders a dash, never a misleading zero', (t) => {
+    const md = renderMetaFriction({
+      days: 7, total: 2,
+      rows: [
+        {kind: 'override', key: 'blocked-scope', count: 2, quests: ['q1'],
+          wastedMs: 0, measured: 0},
+      ],
+      parks: [],
+    });
+    t.match(md, /\| — \|/u, 'no measurement renders as a dash');
+    t.notMatch(md, /\| 0s \|/u, 'a blank cost is not reported as zero cost');
+    t.end();
+  });
+
+  t.test('a partially measured row says how much of it was measured', (t) => {
+    const md = renderMetaFriction({
+      days: 7, total: 3,
+      rows: [
+        {kind: 'violation', key: 'null metric pair', count: 3, quests: ['q1'],
+          wastedMs: 42_000, measured: 2},
+      ],
+      parks: [],
+    });
+    t.match(md, /42s \(2\/3\)/u, 'partial measurement is stated, not implied');
+    t.end();
+  });
+
   t.test('renders the ranking and the dominant-cause advisory', (t) => {
     const md = renderMetaFriction({
       days: 7,
       total: 12,
       rows: [
         {kind: 'violation', key: 'attempt-integrity: null metric pair', count: 11,
-          quests: ['q1', 'q2']},
-        {kind: 'override', key: 'blocked-scope', count: 1, quests: ['q3']},
+          quests: ['q1', 'q2'], wastedMs: 0, measured: 0},
+        {kind: 'override', key: 'blocked-scope', count: 1, quests: ['q3'],
+          wastedMs: 0, measured: 0},
       ],
       parks: [{questId: 'q3', kind: 'exhausted', reason: 'budget spent'}],
     });

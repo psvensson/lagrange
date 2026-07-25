@@ -229,6 +229,66 @@ tap.test('agent executor reflect() over the generic file contract', async (t) =>
     t.end();
   });
 
+  t.test('every run path carries measured telemetry, including the failures', (t) => {
+    const root = tmp();
+    const okSpawn = (cmd, args) => {
+      const diff = path.join(root, 'agent.diff');
+      fs.writeFileSync(diff, '# change\n');
+      fs.writeFileSync(args[1],
+        JSON.stringify({changeRef: `diff:${diff}`, summary: 'did it'}));
+      return {status: 0};
+    };
+    const ok = makeAgentExecutor(root, {config: CONFIG, spawn: okSpawn}).run(TASK);
+    t.ok(ok.telemetry, 'a successful run reports telemetry');
+    t.ok(ok.telemetry.dossierBytes > 0, 'dossier bytes are measured');
+    t.equal(ok.telemetry.findingsCount, 1, 'findings are counted');
+    t.ok(ok.telemetry.findingsBytes > 0, 'findings bytes are measured separately');
+    t.type(ok.telemetry.agentDurationMs, 'number', 'duration is measured');
+
+    // The timeout path is the one that matters most: it is the only signal that a
+    // per-attempt budget is being burned wholesale, so it must not drop telemetry.
+    const timeoutSpawn = () => ({error: {code: 'ETIMEDOUT'}});
+    const timedOut = makeAgentExecutor(root, {config: CONFIG, spawn: timeoutSpawn})
+      .run(TASK);
+    t.equal(timedOut.changeRef, null, 'a timeout is still a no-op attempt');
+    t.ok(timedOut.telemetry, 'a timed-out run still reports telemetry');
+    t.ok(timedOut.telemetry.dossierBytes > 0,
+      'the dossier it was handed is still measured');
+
+    const failSpawn = () => ({status: 1});
+    const failed = makeAgentExecutor(root, {config: CONFIG, spawn: failSpawn})
+      .run(TASK);
+    t.ok(failed.telemetry, 'a non-zero exit still reports telemetry');
+
+    const malformedSpawn = (cmd, args) => {
+      fs.writeFileSync(args[1], 'not json');
+      return {status: 0};
+    };
+    const malformed = makeAgentExecutor(root, {config: CONFIG, spawn: malformedSpawn})
+      .run(TASK);
+    t.ok(malformed.telemetry, 'a malformed response still reports telemetry');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('measured dossier bytes are the bytes the agent actually received', (t) => {
+    // Reconstructed estimates drift from reality; that is how the first sizing of
+    // this was wrong by 2x. Assert against the request file on disk.
+    const root = tmp();
+    let requestBytes = 0;
+    const spawn = (cmd, args) => {
+      requestBytes = fs.statSync(args[0]).size;
+      fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'n/a'}));
+      return {status: 0};
+    };
+    const out = makeAgentExecutor(root, {config: CONFIG, spawn}).run(TASK);
+    t.equal(out.telemetry.dossierBytes, requestBytes,
+      'telemetry reports the exact request payload size');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('a non-zero / malformed reflection run yields a null note (still recordable)', (t) => {
     const root = tmp();
     const failSpawn = () => ({status: 1});
