@@ -27,6 +27,7 @@ guardrail command map.
 | `report` | Write an ignored on-demand Quest report projected from the declaration and event log. Report presence and freshness never gate audit or handoff. | `node scripts/solve.js report --id <id>` |
 | `portfolio` | Cross-Quest portfolio view and meta-ratio over all quests. | `node scripts/solve.js portfolio` |
 | `meta-ratio` | Commit-level meta-to-product ratio over a bounded git window: product (src/, examples/, charts/) vs test-only vs meta (solve/, docs/, scripts/, config only). The retrospective's overhead trend line; complements portfolio's quest-class ratio. | `node scripts/solve.js meta-ratio [--days <n>]` |
+| `meta-friction` | Ranks recorded workflow friction over a bounded window: violation classes (grouped by the set that fires together), charged guard-override codes, and parks with their reasons. Starts a retrospective from what actually fired rather than from recollection; complements meta-ratio's overhead trend line. | `node scripts/solve.js meta-friction [--days <n>]` |
 | `frontier` | Render the frontier board; `--write` persists it to solve/FRONTIER.generated.md (the durable boot board). | `node scripts/solve.js frontier [--write]` |
 | `overview` | Live roadmap -> epic -> spec -> quest -> ledger overview; `--write` persists the ignored local projection. | `node scripts/solve.js overview [--write]` |
 | `trace` | Cross-layer planning trace joining quests via their `links` block. Pass exactly one selector. | `node scripts/solve.js trace --row <id> | --cl <CL-#> | --spec <ref> | --quest <id>` |
@@ -54,4 +55,4 @@ guardrail command map.
 
 ---
 
-33 subcommands registered; 33 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
+34 subcommands registered; 34 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.

@@ -61,4 +61,74 @@ tap.test('same-guard overrides are capped per frontier and code', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('re-authorizing an already-covered scope spends no budget', (t) => {
+    // The scope analyzer unions all prior attempts, so a large atomic candidate
+    // makes the guard re-fire on every later attempt — including a byte-identical
+    // re-submission forced by a voided receipt or a verifier-required repair.
+    // Charging those exhausted a real Quest's lifetime budget and parked verified
+    // work. The cap is for scope GROWTH, so repetition must be free.
+    const {root, quest} = setup();
+    const scope = ['src/a.js', 'src/b.js', 'test/a.test.js'];
+    for (let i = 0; i < SAME_GUARD_OVERRIDE_LIMIT; i += 1) {
+      override(root, quest, {scopeSignature: scope});
+    }
+    const again = override(root, quest, {scopeSignature: scope});
+    t.equal(again.scopeReauthorization, true,
+      'an identical candidate is recorded as a re-authorization');
+    const subset = override(root, quest, {scopeSignature: ['src/a.js']});
+    t.equal(subset.scopeReauthorization, true,
+      'a narrower candidate is covered by what was already authorized');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('reaching a new path is still charged and still capped', (t) => {
+    // Each override here reaches a path no earlier one authorized, so each is
+    // charged — the salami-slicing defense must survive the repetition exemption.
+    const {root, quest} = setup();
+    const scope = ['src/a.js'];
+    for (let i = 0; i < SAME_GUARD_OVERRIDE_LIMIT; i += 1) {
+      scope.push(`src/grown-${i}.js`);
+      override(root, quest, {scopeSignature: [...scope]});
+    }
+    const charged = readLog(root, quest.id).filter((event) =>
+      event.type === 'guard-override' && event.scopeReauthorization !== true);
+    t.equal(charged.length, SAME_GUARD_OVERRIDE_LIMIT,
+      'every growing override was charged');
+    t.throws(
+      () => override(root, quest, {scopeSignature: [...scope, 'src/grown-again.js']}),
+      /re-scope instead of overriding again/u,
+      'genuine scope growth still hits the cap',
+    );
+    const recorded = readLog(root, quest.id)
+      .filter((event) => event.type === 'guard-override');
+    t.equal(recorded.length, SAME_GUARD_OVERRIDE_LIMIT,
+      'the refused override was never appended');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('free re-authorizations do not themselves consume the cap', (t) => {
+    // A re-authorization must not silently become budget for later growth, but it
+    // must also not count against it — otherwise repetition still exhausts the cap
+    // one step removed.
+    const {root, quest} = setup();
+    const scope = ['src/a.js'];
+    override(root, quest, {scopeSignature: scope});
+    for (let i = 0; i < 5; i += 1) override(root, quest, {scopeSignature: scope});
+    t.ok(override(root, quest, {scopeSignature: ['src/a.js', 'src/second.js']}),
+      'a second genuine growth is still affordable after many repetitions');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an override with no derivable scope is charged exactly as before', (t) => {
+    const {root, quest} = setup();
+    for (let i = 0; i < SAME_GUARD_OVERRIDE_LIMIT; i += 1) override(root, quest);
+    t.throws(() => override(root, quest), /re-scope instead of overriding again/u,
+      'the signature is an exemption, never a bypass');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });

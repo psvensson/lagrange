@@ -3,6 +3,7 @@ import tap from 'tap';
 import {
   validateAttempt,
   validateGoalpostsImmutable,
+  baselineAbsentSample,
   METRIC_DIRECTION_LOWER_IS_BETTER,
 } from '../../scripts/solve/honesty.js';
 
@@ -52,6 +53,60 @@ tap.test('honesty checks (the only process)', async (t) => {
     const v = validateAttempt(attempt({metricAfter: null}), okCtx);
     t.ok(v.some((e) => e.includes('finite numbers')));
     t.ok(v.some((e) => e.includes('invalidSample=true')));
+    t.end();
+  });
+
+  t.test('a baseline-absent first attempt may carry a null metricBefore', (t) => {
+    // The honest first measurement of a frontier: the before-probe found no prior
+    // run to baseline against, but the attempt itself measured cleanly. Rejecting
+    // this manufactured 11 integrity violations in two days on correct work.
+    const v = validateAttempt(
+      attempt({baselineAbsent: true, metricBefore: null, metricAfter: 3}),
+      okCtx,
+    );
+    t.same(v, [], 'an absent baseline is not dishonest data');
+    t.end();
+  });
+
+  t.test('baselineAbsent exempts metricBefore ONLY, never metricAfter', (t) => {
+    const v = validateAttempt(
+      attempt({baselineAbsent: true, metricBefore: null, metricAfter: null}),
+      okCtx,
+    );
+    t.ok(v.some((e) => e.includes('finite numbers')), 'a null result is still rejected');
+    t.ok(v.some((e) => e.includes('invalidSample=true')));
+    t.end();
+  });
+
+  t.test('baselineAbsent still requires its evidence artifact', (t) => {
+    const v = validateAttempt(
+      attempt({baselineAbsent: true, metricBefore: null}),
+      {...okCtx, fileExists: () => false},
+    );
+    t.ok(v.some((e) => e.includes('evidence artifact missing')));
+    t.end();
+  });
+
+  t.test('baselineAbsent cannot launder a non-null junk metricBefore', (t) => {
+    const v = validateAttempt(
+      attempt({baselineAbsent: true, metricBefore: 'none'}),
+      okCtx,
+    );
+    t.ok(v.some((e) => e.includes('finite numbers')),
+      'the exemption is keyed on null, not on the flag alone');
+    t.end();
+  });
+
+  t.test('baselineAbsentSample is derived from probe samples, not declared', (t) => {
+    const absent = {metric: null, invalidSample: true};
+    t.equal(baselineAbsentSample(absent, {metric: 3}), true,
+      'no baseline + a measuring result is baseline-absent');
+    t.equal(baselineAbsentSample(absent, {metric: null, invalidSample: true}), false,
+      'a non-measuring result stays non-measuring, not baseline-absent');
+    t.equal(baselineAbsentSample({metric: null}, {metric: 3}), false,
+      'a null before the probe did not flag is not absolved');
+    t.equal(baselineAbsentSample({metric: 5, invalidSample: true}, {metric: 3}), false,
+      'a real baseline is never treated as absent');
     t.end();
   });
 

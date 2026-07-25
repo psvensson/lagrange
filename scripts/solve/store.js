@@ -587,11 +587,37 @@ export function readRulesOutFindings(root, questId) {
     }));
 }
 
+// A scope signature is the sorted set of paths an override authorized, derived from
+// the real change artifact — never from operator prose, so it cannot be self-declared.
+// Re-authorizing a signature already covered by an earlier override on the same guard
+// is a REPETITION, not scope GROWTH, and must not spend lifetime budget.
+export function scopeSignatureOf(changedPaths) {
+  if (!Array.isArray(changedPaths) || changedPaths.length === 0) return null;
+  const unique = [...new Set(changedPaths.filter(
+    (item) => typeof item === 'string' && item.length > 0))].sort();
+  return unique.length > 0 ? unique : null;
+}
+
+function signatureIsCoveredBy(candidate, authorized) {
+  if (!candidate || !authorized) return false;
+  const covered = new Set(authorized);
+  return candidate.every((item) => covered.has(item));
+}
+
 // Record a recorded-reason override of an overridable soft guard. The reason is mandatory
 // and must be non-empty: an override without a falsifiable justification is meaningless and
 // is refused at the boundary so the log never carries a blank escape hatch. Same-guard
 // overrides are further capped per (frontier, code) by SAME_GUARD_OVERRIDE_LIMIT over the
 // quest's whole life — see the constant's rationale.
+//
+// The cap exists to catch a quest whose scope keeps GROWING. It must not charge for
+// re-authorizing an unchanged candidate: the scope analyzer unions all prior attempts,
+// so once attempt 1 is a large atomic cutover the guard necessarily re-fires on every
+// later attempt, including a byte-identical re-submission forced by a voided receipt or
+// a verifier-required repair. Charging those consumed a real Quest's entire lifetime
+// budget on 2026-07-24 and parked verified work with nothing left to spend. So an
+// override whose scope signature is covered by an already-authorized one is recorded as
+// a free re-authorization; anything that reaches a NEW path is charged as before.
 export function appendGuardOverride(root, questId, override) {
   const reason = typeof override.reason === 'string' ? override.reason.trim() : '';
   if (!reason) {
@@ -601,11 +627,16 @@ export function appendGuardOverride(root, questId, override) {
     throw new Error('guard override requires a --code (the guard being overridden)');
   }
   const frontier = override.frontier || null;
-  const priorSameGuard = readLog(root, questId).filter((event) =>
+  const scopeSignature = scopeSignatureOf(override.scopeSignature);
+  const sameGuard = readLog(root, questId).filter((event) =>
     event.type === EVENT_GUARD_OVERRIDE &&
     (event.frontier || null) === frontier &&
-    event.code === override.code).length;
-  if (priorSameGuard >= SAME_GUARD_OVERRIDE_LIMIT) {
+    event.code === override.code);
+  const reauthorizes = scopeSignature !== null && sameGuard.some((event) =>
+    signatureIsCoveredBy(scopeSignature, event.scopeSignature));
+  const priorSameGuard = sameGuard.filter(
+    (event) => event.scopeReauthorization !== true).length;
+  if (!reauthorizes && priorSameGuard >= SAME_GUARD_OVERRIDE_LIMIT) {
     throw new Error(
       `guard override refused: ${override.code} has already been overridden ` +
       `${priorSameGuard} times on frontier ${frontier || '<none>'} ` +
@@ -620,6 +651,8 @@ export function appendGuardOverride(root, questId, override) {
     code: override.code,
     problem: typeof override.problem === 'string' ? override.problem : null,
     reason,
+    scopeSignature,
+    scopeReauthorization: reauthorizes,
   });
 }
 

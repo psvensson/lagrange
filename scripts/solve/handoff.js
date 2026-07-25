@@ -36,6 +36,7 @@ import {
   inspectChangeArtifact,
 } from './change-artifact.js';
 import {SOLVE_DATA_DIR} from './constants.js';
+import {frontierFilePath} from './frontier.js';
 import {resolveCoauthorTrailer} from './operator-config.js';
 import {
   checkpointVerificationPreflight,
@@ -79,6 +80,14 @@ function questOracleFilePath(root, questId) {
 
 // The fixed solve/ artifacts a Quest owns by construction, whether or not they
 // are currently dirty. The change directory is expressed as a prefix.
+//
+// The generated frontier board belongs here even though it is not id-owned: every
+// lifecycle command already regenerates it (see refreshFrontierBoard), so it is
+// dirty exactly when this Quest's own landing made it stale. Leaving it out forced
+// a separate bookkeeping commit after each landing. It is a pure projection of
+// Solver state with no wall-clock content, so with two Quests in flight a landing
+// may sweep the other's board delta — byte-identical either way, which is why this
+// widens the owned fixed set without weakening classifyDirtyPaths.
 function questArtifactPaths(root, questId) {
   return {
     files: [
@@ -86,6 +95,7 @@ function questArtifactPaths(root, questId) {
       logFilePath(root, questId),
       stateFilePath(root, questId),
       questOracleFilePath(root, questId),
+      frontierFilePath(root),
     ].map((absolute) => toRootRelative(root, absolute)),
     changeDirPrefix: `${toRootRelative(root, expectedChangeDir(root, questId))}/`,
   };

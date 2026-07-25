@@ -32,6 +32,10 @@
     "summary": "Commit-level meta-to-product ratio over a bounded git window: product (src/, examples/, charts/) vs test-only vs meta (solve/, docs/, scripts/, config only). The retrospective's overhead trend line; complements portfolio's quest-class ratio.",
     "usage": "node scripts/solve.js meta-ratio [--days <n>]"
   },
+  "meta-friction": {
+    "summary": "Ranks recorded workflow friction over a bounded window: violation classes (grouped by the set that fires together), charged guard-override codes, and parks with their reasons. Starts a retrospective from what actually fired rather than from recollection; complements meta-ratio's overhead trend line.",
+    "usage": "node scripts/solve.js meta-friction [--days <n>]"
+  },
   "portfolio": {
     "summary": "Cross-Quest portfolio view and meta-ratio over all quests.",
     "usage": "node scripts/solve.js portfolio"

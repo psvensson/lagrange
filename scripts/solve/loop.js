@@ -61,11 +61,11 @@ import {
 } from './constants.js';
 import {
   INTEGRITY_EVENT_SCHEMA_VERSION,
-  INTEGRITY_RESOLUTION_FRESH_SAMPLE,
   INTEGRITY_RESOLUTION_NEW_QUEST,
   INTEGRITY_SCOPE_ATTEMPT,
   INTEGRITY_SCOPE_GOALPOSTS,
   acceptedReplacementViolationIds,
+  integrityResolutionPolicyFor,
   integrityViolationId,
   terminalIntegrityAllowsClosure,
   terminalIntegrityProblems,
@@ -88,6 +88,7 @@ import {pickFrontier} from './scheduler.js';
 import {
   validateAttempt,
   validateGoalpostsImmutable,
+  baselineAbsentSample,
   METRIC_DIRECTION_LOWER_IS_BETTER,
 } from './honesty.js';
 import {
@@ -384,6 +385,10 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   const diagnosticMovement = diagnosticMovementFor(log, pick.def.id);
   const satisfiedInvariants = Array.isArray(after.satisfiedInvariants) ?
     after.satisfiedInvariants : [];
+  // An absent baseline is not a non-measuring run: absolving it here keeps a clean
+  // first attempt out of both the integrity-violation path and the cannot-measure
+  // retry budget. Every other before/after combination keeps its prior semantics.
+  const baselineAbsent = baselineAbsentSample(before, after);
   const event = {
     type: EVENT_ATTEMPT,
     frontier: pick.def.id,
@@ -395,7 +400,10 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
     metricBefore: before.metric,
     metricAfter: after.metric,
     metricDirection: METRIC_DIRECTION_LOWER_IS_BETTER,
-    invalidSample: Boolean(before.invalidSample) || Boolean(after.invalidSample),
+    invalidSample: baselineAbsent ?
+      false :
+      Boolean(before.invalidSample) || Boolean(after.invalidSample),
+    baselineAbsent,
     done: after.done === true,
     evidence: after.evidence,
     beforeEvidence: before.evidence || null,
@@ -473,7 +481,11 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
         violations: honestyViolations,
         attempt: event,
       }),
-      resolutionPolicy: INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+      resolutionPolicy: integrityResolutionPolicyFor({
+        frontier: pick.def.id,
+        replacementProbeKey: event.probeKey,
+        failedEvidenceFingerprint: event.evidenceFingerprint || null,
+      }),
       replacementProbeKey: event.probeKey,
       failedEvidenceFingerprint: event.evidenceFingerprint || null,
       violations: honestyViolations,
@@ -551,7 +563,11 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
         violations: regressionViolations,
         attempt: event,
       }),
-      resolutionPolicy: INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+      resolutionPolicy: integrityResolutionPolicyFor({
+        frontier: pick.def.id,
+        replacementProbeKey: event.probeKey,
+        failedEvidenceFingerprint: event.evidenceFingerprint || null,
+      }),
       replacementProbeKey: event.probeKey,
       failedEvidenceFingerprint: event.evidenceFingerprint || null,
       violations: regressionViolations,

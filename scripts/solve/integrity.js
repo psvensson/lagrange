@@ -115,6 +115,27 @@ export function unresolvedIntegrityViolations(log) {
       !resolved.has(event.violationId)));
 }
 
+// Choose the resolution policy a violation can actually satisfy, instead of
+// hardcoding fresh-accepted-sample at the emit site. A fresh sample REPLACES a named
+// failed measurement, so it needs a frontier, a replacement probe identity, and a
+// failed evidence fingerprint. An attempt that produced no evidence at all cannot
+// supply one — stamping fresh-accepted-sample on it emits a violation that
+// malformedIntegrityViolationReasons immediately rejects and that
+// unresolvedIntegrityViolations can never clear, silently making the Quest unlandable
+// from that instant. new-quest-only is the honest policy for that case: it is
+// well-formed without replacement identity and already means "reseal in a successor".
+export function integrityResolutionPolicyFor(violation) {
+  const hasReplacementIdentity =
+    typeof violation?.frontier === 'string' && violation.frontier.length > 0 &&
+    typeof violation?.replacementProbeKey === 'string' &&
+    violation.replacementProbeKey.length > 0 &&
+    typeof violation?.failedEvidenceFingerprint === 'string' &&
+    violation.failedEvidenceFingerprint.length > 0;
+  return hasReplacementIdentity ?
+    INTEGRITY_RESOLUTION_FRESH_SAMPLE :
+    INTEGRITY_RESOLUTION_NEW_QUEST;
+}
+
 export function malformedIntegrityViolationReasons(event) {
   if (event?.type !== EVENT_VIOLATION ||
     event.eventSchemaVersion !== INTEGRITY_EVENT_SCHEMA_VERSION) {

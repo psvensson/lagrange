@@ -252,4 +252,70 @@ tap.test('synchronous runStep (P3)', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('an absent baseline does not manufacture an integrity violation', (t) => {
+    // Regression: stepBegin persisted the before-sample WITHOUT invalidSample, so
+    // stepCommit rebuilt `metricBefore: null, invalidSample: false` — precisely the
+    // state checkMetricEvidence rejects. Eleven correct attempts across two days
+    // were voided this way, each forcing a re-measure of unchanged work under the
+    // fresh-accepted-sample policy, and each re-measure re-fired the scope guard.
+    const root = tmp();
+    const oracle = path.join(root, 'o.json');
+    // No prior run to baseline against: the probe reports an honest non-measurement.
+    fs.writeFileSync(oracle, JSON.stringify({metric: null, invalidSample: true, target: 0}));
+    const quest = goalFor(oracle);
+    saveQuest(root, quest);
+
+    const begin = runStep(root, quest);
+    t.equal(begin.before.metric, null, 'the first attempt has no baseline');
+
+    // The attempt itself measures cleanly.
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+
+    const r = runStep(root, quest, {
+      changeRef: makeDiff(root, 'first'),
+      summary: 'first measured attempt on a fresh frontier',
+    });
+
+    t.same(r.violations, [], 'a clean first attempt records no violation');
+    const log = readLog(root, quest.id);
+    t.equal(log.filter((event) => event.type === 'violation').length, 0,
+      'no attempt-integrity violation is emitted');
+    t.equal(log.filter((event) => event.type === 'non-measurement').length, 0,
+      'an absent baseline does not spend the cannot-measure retry budget');
+    const attemptEvent = log.find((event) => event.type === EVENT_ATTEMPT);
+    t.ok(attemptEvent, 'the attempt is persisted as an ordinary attempt');
+    t.equal(attemptEvent.baselineAbsent, true, 'the absent baseline is recorded');
+    t.equal(attemptEvent.invalidSample, false,
+      'a measuring attempt is not demoted to non-measuring');
+    t.equal(attemptEvent.metricAfter, 2, 'the measured result is retained');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a genuinely non-measuring attempt is still not credited', (t) => {
+    // The mirror case must keep its old behavior: when the RESULT does not measure,
+    // the attempt is a non-measurement regardless of the baseline.
+    const root = tmp();
+    const oracle = path.join(root, 'o.json');
+    fs.writeFileSync(oracle, JSON.stringify({metric: null, invalidSample: true, target: 0}));
+    const quest = goalFor(oracle);
+    saveQuest(root, quest);
+
+    runStep(root, quest);
+    const r = runStep(root, quest, {
+      changeRef: makeDiff(root, 'blocked'),
+      summary: 'harness produced no trustworthy metric',
+    });
+
+    t.equal(r.commit.skipped, 'non-measuring-sample',
+      'a non-measuring result is still routed to non-measurement');
+    const log = readLog(root, quest.id);
+    t.equal(log.filter((event) => event.type === 'non-measurement').length, 1,
+      'the cannot-measure retry budget is still spent when nothing measured');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });

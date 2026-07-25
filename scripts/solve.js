@@ -36,6 +36,8 @@ import {analyzeQuestHealth, renderHealth} from './solve/health.js';
 import {buildAdvisories, renderAdvisoryLines} from './solve/advisories.js';
 import {buildCurrentBlocker} from './solve/current-blocker.js';
 import {analyzeScopePressure} from './solve/scope-pressure.js';
+import {applyInheritedParentLinks, applySiblingSkeleton}
+  from './solve/quest-derivation.js';
 import {detectUnrecordedEvidence, ingestEvidence} from './solve/evidence.js';
 import {runAttemptCommand} from './solve/attempt.js';
 import {runAuditCommand} from './solve/audit.js';
@@ -44,6 +46,7 @@ import {runReopenCommand} from './solve/reopen.js';
 import {runParkCommand} from './solve/park.js';
 import {runPortfolioCommand, buildPortfolio, loadAllQuests} from './solve/portfolio.js';
 import {runMetaRatioCommand} from './solve/meta-ratio.js';
+import {runMetaFrictionCommand} from './solve/meta-friction.js';
 import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runCheckpointCommand, runHandoffCommand} from './solve/handoff.js';
@@ -269,10 +272,18 @@ function cmdNew(root, args) {
       LOCAL_STR_OWNED_007,
     );
   }
-  const parentId = inheritedParentId || linkedParentId;
+  const siblingId = typeof args.from === 'string' ? args.from : null;
+  const parentId = inheritedParentId || linkedParentId || siblingId;
   if (parentId) {
-    loadQuest(root, parentId); // Fail before writing anything if the parent is unknown.
+    const parent = loadQuest(root, parentId); // Fail before writing anything.
     quest.links.parentQuest = parentId;
+    applyInheritedParentLinks(quest, parent);
+    if (siblingId) {
+      applySiblingSkeleton(quest, parent, {
+        statement: args.statement,
+        classExplicit: args.class !== undefined,
+      });
+    }
   }
   const written = saveQuest(root, quest);
   const inherited = inheritedParentId ?
@@ -688,6 +699,26 @@ const OVERRIDE_GUARD_ALIASES = Object.freeze({
   'blocked-scope': CONTINUATION_BLOCKED_SCOPE,
 });
 
+const OVERRIDE_REAUTHORIZED_LINE =
+  '(re-authorizes an already-covered scope — no lifetime budget spent)\n';
+const OVERRIDE_CHARGED_LINE =
+  '(authorizes one bypass of the next matching guard; reset by honest progress)\n';
+
+// The scope this override authorizes, read from the change artifacts already on
+// record — never from the operator's --reason. A later override whose scope is
+// covered by this one is re-authorizing unchanged work (a voided receipt, a
+// verifier-required repair of the same candidate) rather than growing scope, and
+// must not spend lifetime budget. Advisory-derived: if the analysis cannot run we
+// record no signature, which charges the override exactly as before.
+function authorizedScopeSignature(root, quest) {
+  try {
+    return analyzeScopePressure(root, quest, readLog(root, quest.id),
+      {ignoreBaselines: true}).changedPaths || null;
+  } catch {
+    return null;
+  }
+}
+
 function cmdOverride(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('override: --id <questId> is required');
@@ -707,16 +738,18 @@ function cmdOverride(root, args) {
   if (typeof args.reason !== 'string' || !args.reason.trim()) {
     throw new Error('override: --reason "<falsifiable justification>" is required');
   }
-  loadQuest(root, id);
+  const quest = loadQuest(root, id);
   const stamped = appendGuardOverride(root, id, {
     frontier: args.frontier,
     code,
     problem: typeof args.problem === 'string' ? args.problem : null,
     reason: args.reason,
+    scopeSignature: authorizedScopeSignature(root, quest),
   });
   process.stdout.write(
     `recorded override of ${code} for ${args.frontier} @ ${stamped.ts}\n` +
-    '(authorizes one bypass of the next matching guard; reset by honest progress)\n');
+    (stamped.scopeReauthorization ?
+      OVERRIDE_REAUTHORIZED_LINE : OVERRIDE_CHARGED_LINE));
 }
 
 function cmdReflect(root, args) {
@@ -953,6 +986,13 @@ function cmdMetaRatio(root, args) {
   process.stdout.write(`${runMetaRatioCommand(root, {days: args.days})}\n`);
 }
 
+// Ranks recorded workflow friction (violations, charged guard overrides, parks) so a
+// retrospective starts from what actually fired rather than from what was remembered.
+// Cross-cutting like meta-ratio and portfolio; takes no --id.
+function cmdMetaFriction(root, args) {
+  process.stdout.write(`${runMetaFrictionCommand(root, {days: args.days})}\n`);
+}
+
 // Frontier fuses the closure-ledger active records with the open quests into one
 // boot-orientation screen; like portfolio it is cross-cutting and takes no --id.
 // --write also persists solve/FRONTIER.generated.md (a regenerable board file).
@@ -1133,6 +1173,7 @@ const COMMANDS = {
   'report': cmdReport,
   'portfolio': cmdPortfolio,
   'meta-ratio': cmdMetaRatio,
+  'meta-friction': cmdMetaFriction,
   'frontier': cmdFrontier,
   'overview': cmdOverview,
   'trace': cmdTrace,

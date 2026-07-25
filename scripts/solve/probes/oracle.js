@@ -23,6 +23,11 @@ export const oracleProbe = {
       metric,
       done,
       evidence: file,
+      // A real harness reports invalidSample when a run produced no trustworthy
+      // metric (or when no run exists yet to baseline against). The oracle exposes
+      // the same signal so the non-measuring and baseline-absent branches of the
+      // control loop stay exercisable without a live harness.
+      invalidSample: data.invalidSample === true,
       classification: data.classification || null,
       detail: data,
     };

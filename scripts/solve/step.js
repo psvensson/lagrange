@@ -295,12 +295,18 @@ function stepBegin(root, quest, options = {}) {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
     headCommit: resolveStepBaseCommit(root, quest, log, pick.def.id),
+    // The persisted before-sample must carry invalidSample. Dropping it made
+    // stepCommit reconstruct `metricBefore: null` with `invalidSample: false`,
+    // which is exactly the state checkMetricEvidence rejects — so an honest first
+    // attempt against a scenario with no prior run manufactured its own
+    // attempt-integrity violation and forced a re-measure of unchanged work.
     before: {
       metric: before.metric,
       done: before.done,
       evidence: before.evidence,
       evidenceIdentity: before.evidenceIdentity || null,
       evidenceFingerprint: before.evidenceFingerprint || null,
+      invalidSample: Boolean(before.invalidSample),
     },
   };
   return {

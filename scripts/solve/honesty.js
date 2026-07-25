@@ -28,6 +28,22 @@ function isValidMetricValue(value, invalidSample) {
   return isFiniteNumber(value) || (invalidSample && value === null);
 }
 
+// A BASELINE-ABSENT attempt is the honest first measurement of a frontier: the
+// before-probe found no prior run to baseline against, but the attempt itself
+// measured cleanly. That is categorically different from a NON-MEASURING attempt
+// (the run produced no trustworthy metric), and conflating the two cost real work
+// in both directions — a dropped baseline flag manufactured integrity violations,
+// while an honoured one demoted successful attempts into the cannot-measure park
+// budget. The absent baseline is absolved only when the after-sample genuinely
+// measured; progress still requires a finite metricBefore (see decideAndRecord),
+// so an absent baseline can never be spent as an unearned improvement.
+export function baselineAbsentSample(before, after) {
+  return before.metric === null &&
+    Boolean(before.invalidSample) &&
+    !after.invalidSample &&
+    isFiniteNumber(after.metric);
+}
+
 // Check 1 + 2: metrics are real numbers read from an existing evidence artifact, and
 // the metric direction is explicitly the supported monotone one (so "progress" can
 // not be redefined per attempt).
@@ -39,11 +55,20 @@ function checkMetricEvidence(event, ctx) {
   // null metricBefore/metricAfter is permitted (the ladder treats it as a stall and
   // climbs). Without this exemption an honest blocked run would be punished as if it
   // were dishonest, which is exactly the false-floor bug this guards against.
-  if (!isValidMetricValue(event.metricBefore, event.invalidSample) ||
+  // A baseline-absent attempt exempts metricBefore ONLY. metricAfter must still be
+  // a real measured number, the evidence artifact is still required below, and the
+  // exemption cannot be self-declared: finalizeAttempt derives it from the two probe
+  // samples, never from operator input.
+  const baselineExempt = event.baselineAbsent === true &&
+    event.metricBefore === null;
+  if (!(baselineExempt ||
+      isValidMetricValue(event.metricBefore, event.invalidSample)) ||
     !isValidMetricValue(event.metricAfter, event.invalidSample)) {
     violations.push('metricBefore/metricAfter must be finite numbers from a probe');
   }
-  const hasNullMetric = event.metricBefore === null || event.metricAfter === null;
+  const hasNullMetric =
+    (event.metricBefore === null && !baselineExempt) ||
+    event.metricAfter === null;
   if (hasNullMetric && event.invalidSample !== true) {
     violations.push('null metrics require invalidSample=true');
   }

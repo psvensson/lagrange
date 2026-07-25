@@ -126,12 +126,16 @@ tap.test('scope-safe handoff (Concern 4)', async (t) => {
       'solve/log/demo.ndjson',
       'solve/report/demo.md',
       'solve/changes/demo/fix.diff',
+      'solve/FRONTIER.generated.md',
       'docs/demo.md',
       'src/unrelated-other-quest.js',
       'solve/quests/other-quest.json',
     ];
     const handoff = buildHandoff(root, quest, {dirtyFiles});
     t.ok(handoff.ok, 'audit passed so handoff is allowed');
+    t.ok(handoff.inScope.includes('solve/FRONTIER.generated.md'),
+      'the regenerated frontier board lands with the Quest that staled it, ' +
+      'instead of needing a separate bookkeeping commit');
     t.ok(handoff.inScope.includes('docs/demo.md'), 'includes diff-referenced file');
     t.ok(handoff.inScope.includes('solve/changes/demo/fix.diff'), 'includes change artifact');
     t.ok(handoff.inScope.includes('solve/quests/demo.json'), 'includes quest file');
