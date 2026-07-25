@@ -149,12 +149,13 @@ service↔data affinity mechanism.
 
 **Not to be confused with** the *placement*-side data-access affinity scoring
 dimension (`calculateDataAffinityScoreDimensions` in
-`src/rebalancer/placement-owner-decision.js`), which would move replicas toward
-the services that read them. That scoring dimension is scaffolded in the placement
-scorer but gated off — no production policy sets `preferDataAffinity` yet, so it
-does not affect placement today (background in
-[`future/activation-cost-aware-placement.md`](future/activation-cost-aware-placement.md)).
-Read-locality routing above is the active, user-observable affinity mechanism.
+`src/rebalancer/placement-owner-decision.js`). Placement and read routing remain
+separate decisions, but both are active: fresh, decaying
+`service_partition_access` evidence is aggregated by runtime-service policy into
+`dataAffinity.groupWeights`, and production policy sets `preferDataAffinity`
+when usable evidence exists. The placement scorer then trades that affinity
+gradient against spread, capacity, and incumbent movement cost. Read-locality
+routing above still independently selects which data replica serves a read.
 
 ## Storage Capacity-Aware Placement
 

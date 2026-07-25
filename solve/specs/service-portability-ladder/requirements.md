@@ -97,6 +97,12 @@ surfaces.
   identity and reconciled after failure.
 - Killing a named active instance must result in that exact instance stopping
   and one distinct replacement becoming ready without persistent over-replication.
+- Generic Cell request continuity, stale-route recovery, and duplicate-effect
+  prevention are owned by
+  `solve/specs/request-invocation-partitioning/requirements.md`. OCI acceptance
+  consumes that terminal and adds provider-specific container, probe, endpoint,
+  log, and restart evidence; it does not implement a second routing/failover
+  mechanism.
 - Kubernetes/containerd support is a separate provider milestone and is not
   implied by a Docker-based first proof.
 
@@ -180,4 +186,3 @@ Rung 2 (R8) completion is not yet part of the E3 terminal: its acceptance rows
 are authored into Phase 5 once the epic's open questions are decided, and it
 then receives its own live-acceptance terminal rather than silently widening
 E3.
-

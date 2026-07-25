@@ -276,6 +276,11 @@ Enterprise
 | Node reintegration | ✅ |
 | Failover SLO definition | 🔲 |
 | Durability SLO definition | 🔲 |
+| Raft snapshot recovery and bounded log lifecycle | 🔲 |
+| Supported data-plane scale envelope | 🔲 |
+| Feasibility-qualified placement balance SLO | 🔲 |
+| Topology convergence SLO | 🔲 |
+| Large-scale data-plane certification | 🔲 |
 
 ---
 
@@ -305,6 +310,14 @@ Enterprise
 | Embedding service | 🔲 |
 
 ### 3. External Kernel Platform API — 🟢 Community core / 🔴 Enterprise extensions
+
+#### Phase 0 — Minimal Deployment Follow-ons — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Keyed invocation routing | 🔲 | Trusted actor-key extraction and rendezvous assignment over ready Cells |
+| Generic Cell request continuity and failover | 🔲 | Provider-neutral route recovery and duplicate-effect safety |
+| Non-request source invocation | 🔲 | CDC, timer, once, boot, named call, and pushdown execution through existing Cell owners |
 
 #### Phase A — Stable External Service Contract — 🟢 Community
 

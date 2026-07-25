@@ -2,10 +2,11 @@
 
 ## Overview
 
-Reframes the chronic `rolling-restart` non-convergence as a **metastable
-failure** and applies the research-ranked cures, reusing existing machinery
-rather than building new subsystems. Full framing, citations, and verification
-status are in
+This is the historical metastability design model for chronic
+`rolling-restart` non-convergence. It remains reusable research input, but July
+20 evidence in `solve/epics/topology-convergence-hardening.md` is the current
+frontier authority and must be re-established before selecting a mechanism
+below. Full framing, citations, and historical verification status are in
 [architecture/future/metastable-convergence-resilience.md](../../../architecture/future/metastable-convergence-resilience.md).
 The empirical signature (0–4 `missingPublishedCount` swing; retries as the
 dominant sustaining mechanism; admission-throttling proven ineffective) is
@@ -74,7 +75,8 @@ rebalancer concurrency budgets (`rebalance-coordinator-concurrent-add-budget.js`
 
 ## Cross-cutting
 
-- All runtime changes behind config flags, default-off.
+- Temporary experiment controls are allowed only within a landing session; the
+  selected behavior is promoted with the control removed or removed entirely.
 - Phases 1–3 are mutually reinforcing (each frees load the others need) but
   sequenced by risk/leverage; Phase 1 alone may shift the distribution enough to
   confirm the metastability thesis.

@@ -150,6 +150,15 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-25 — **Scale proof handed to the certification program:** this epic
+  continues to own access attribution, policy composition, and affinity
+  semantics through the existing runtime-service policy and
+  `UnifiedRebalancer`. It does not add a global scheduler. The successor
+  `solve/specs/large-scale-data-plane-certification/` owns feasibility-aware
+  oracle comparison, remote-byte/weighted-distance thresholds, movement and
+  post-convergence churn bounds, stale-evidence decay, topology-change
+  interaction, and the large live profiles. The MovieLens terminal remains the
+  newcomer-facing functional proof, not scale certification.
 - 2026-07-21 — **Demo repositioned inside the three-rung deployment ladder
   (user decision):** the canonical deployment story is rung 1 (unchanged
   pg-talking app in an OCI container, managed and placed near its data),

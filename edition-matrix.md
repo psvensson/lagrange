@@ -23,7 +23,7 @@ Implementation rule:
 | PostgreSQL compatibility | Community | AGPL repo | `roadmap.md` | Yes | Community database compatibility |
 | Security and tenancy | Enterprise | External / commercial | `product-roadmap.md` plus external paid backlog | No | Tenant isolation, RBAC, enterprise security controls |
 | Cross-region replication | Enterprise | External / commercial | `product-roadmap.md` plus external paid backlog | No | Enterprise durability and replication feature set |
-| Production guarantees | Community | AGPL repo | `roadmap.md` | Yes | Community production-readiness guarantees |
+| Production guarantees | Community | AGPL repo | `roadmap.md` | Yes | Includes Raft snapshot/log lifecycle, supported scale profiles, balance/convergence SLOs, and certification; excludes user backup/restore/PITR |
 | Multi-stage distributed plans | Community | AGPL repo | `roadmap.md` | Yes | Community query execution platform |
 | Advanced runtime services | Community | AGPL repo | `roadmap.md` | Yes | Runtime substrate and community service capabilities |
 | External kernel platform API | Community | AGPL repo | `roadmap.md` | Yes | Public service-platform contract work |

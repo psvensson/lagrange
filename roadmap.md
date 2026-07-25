@@ -304,14 +304,19 @@ also enable future paid system services.
 
 ### 3. Production Guarantees
 
-| Item | Roadmap state | Scope notes |
-|------|--------|-------|
-| Replica count guarantees | ✅ | |
-| Replica recovery | ✅ | |
-| Failure detection | ✅ | |
-| Node reintegration | ✅ | |
-| Failover SLO definition | 🔲 | Requires a dedicated spec defining metric, measurement window, reporting surface, and test gate before implementation starts |
-| Durability SLO definition | 🔲 | Requires a dedicated spec defining durability target, failure envelope, reporting surface, and test gate before implementation starts |
+| Id | Item | Roadmap state | Scope notes |
+|----|------|--------|-------|
+| — | Replica count guarantees | ✅ | |
+| — | Replica recovery | ✅ | |
+| — | Failure detection | ✅ | |
+| — | Node reintegration | ✅ | |
+| — | Failover SLO definition | 🔲 | Define hardware class, workload, failure envelope, pass-rate confidence bound, convergence percentiles, reporting surface, and representative gate. The topology contract must be refreshed from `solve/epics/topology-convergence-hardening.md` before a Quest links this row. |
+| — | Durability SLO definition | 🔲 | Define acknowledged-write durability, restart/rebuild envelope, measurement surface, and adversarial gate before implementation starts |
+| — | Raft snapshot recovery and bounded log lifecycle | 🔲 | Versioned checkpoint creation, separately bounded snapshot transfer pressure, atomic install/restart recovery, compacted-leader catch-up, retention, and physical compaction. Spec: `solve/specs/raft-snapshot-transfer-install/`. |
+| — | Supported data-plane scale envelope | 🔲 | Publish only measured node/table/partition/replica/data-volume profiles tied to a hardware class and workload. Spec: `solve/specs/large-scale-data-plane-certification/`. |
+| — | Feasibility-qualified placement balance SLO | 🔲 | Hard constraints, byte/replica/leader/load/affinity objectives, oracle or lower-bound gap, bounded movement, and typed degraded outcomes when the target is infeasible. Spec: `solve/specs/large-scale-data-plane-certification/`. |
+| — | Topology convergence SLO | 🔲 | Statistical, hardware-relative convergence after add, failure, restart, replacement, and decommission; no single-run or timeout-extension certification. Contract: `solve/epics/topology-convergence-hardening.md` plus `solve/specs/large-scale-data-plane-certification/`. |
+| — | Large-scale data-plane certification | 🔲 | Separate metadata-cardinality and physical-byte ladders, with enforced throughput, latency, heap/RSS, file-descriptor, queue, in-flight-work, and leak gates. Spec: `solve/specs/large-scale-data-plane-certification/`. |
 
 ---
 
@@ -361,6 +366,9 @@ enough for direct implementation tasks; Phase 0 has landed.
 | Id | Item | Roadmap state | Scope notes |
 |----|------|--------|-------|
 | RM-2.0-minimal-deployment-surface | Unified artifact / binding / cell deployment surface | ✅ | Landed: content-addressed schema-v3 Artifacts, immutable schema-v2 Bindings (`on <source> run <export>`) for all seven sources, direct runtime access policy, and reconciled ready/running Cells on the existing runtime-service substrate. Request routing is landed; non-request invocation and optional actor-key routing are separate follow-ons. Contract: `architecture/minimal-deployment-surface.md`; decision trail: `solve/epics/minimal-deployment-surface.md`. |
+| — | Keyed invocation routing | 🔲 | Transport-owned canonical actor-key extraction plus transport-neutral rendezvous assignment inside `RequestBindingRouteResolver`; strict single ownership requires a separate fixed-shard/epoch contract. Spec: `solve/specs/request-invocation-partitioning/`. |
+| — | Generic Cell request continuity and failover | 🔲 | Ready-actual replacement, route continuity, receiver revalidation, durable effect deduplication, and bounded stale-route recovery. OCI portability consumes this proof rather than owning a second continuity mechanism. Spec: `solve/specs/request-invocation-partitioning/`. |
+| — | Non-request source invocation | 🔲 | Activate CDC, timer, once, boot, call, and pushdown execution one source at a time through the existing desired-state, Cell, dispatcher, and runtime owners; placement alone is not invocation proof. Plan: `solve/epics/minimal-deployment-surface.md`. |
 
 #### Phase A — Stable External Service Contract
 

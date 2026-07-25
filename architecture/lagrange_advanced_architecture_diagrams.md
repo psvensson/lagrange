@@ -359,8 +359,8 @@ end
 
 Placement (where replicas live, write/topology-time) and read-locality routing
 (which replica a read is sent to, read-time) are **two distinct layers** that are
-easy to conflate. Read-locality routing is the shipped service↔data affinity
-differentiator; two placement *scoring dimensions* are still future.
+easy to conflate. Both service↔data placement affinity and read-locality routing
+are active; activation-cost scoring remains future.
 
 ```mermaid
 flowchart TD
@@ -371,7 +371,7 @@ subgraph L1["Layer 1 — Placement (write-time / topology)"]
   MP --> D1[replica count + spread<br>TablePolicyService]
   MP --> D2[storage capacity + pressure<br>StorageAdmissionService]
   MP --> D3[activation cost / image locality<br>FUTURE]
-  MP --> D4["data-access affinity<br>scaffolded, gated off"]
+  MP --> D4["data-access affinity<br>ACTIVE from fresh access evidence"]
   MP --> RC[RebalanceCoordinator<br>ADD / REPLACE / REMOVE<br>via replica_operations]
 end
 
@@ -384,11 +384,11 @@ end
 
 ### What this communicates
 
-- `UnifiedRebalancer` + the single `MovePlanner` own placement; the production
-  scoring is replica-spread + storage. Activation-cost is a planned *placement*
-  dimension (see `future/activation-cost-aware-placement.md`); the data-access
-  affinity dimension (`calculateDataAffinityScoreDimensions`) is scaffolded in
-  the scorer but gated off — no production policy sets `preferDataAffinity` yet.
+- `UnifiedRebalancer` + the single `MovePlanner` own placement. Production
+  scoring composes replica spread, storage, incumbent movement cost, and
+  data-access affinity derived from fresh `service_partition_access` evidence.
+  Activation-cost remains a planned placement dimension (see
+  `future/activation-cost-aware-placement.md`).
 - **Read-locality is a separate, shipped routing policy:** a service with
   `read_locality = same_group` has its reads steered to its own latency group
   (local node first); `any` keeps uniform load-spreading. This is resolved

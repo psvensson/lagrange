@@ -55,7 +55,7 @@ activation is explicitly `recorded_not_running`.
 | --- | --- | --- |
 | C0 | `oci-runtime-host-contract` | Docker Compose host-agent provider boundary and production binding are sealed; Kubernetes is excluded. |
 | C1 | `oci-container-driver-live-activation` | Provider-backed digest pull/create/start/inspect/stop/remove replaces in-memory lifecycle simulation. |
-| C2 | `oci-container-health-endpoint-log-recovery` | Real probes, canonical endpoints, logs, kill, and exactly-one replacement work. |
+| C2 | `oci-container-health-endpoint-log-recovery` | Real probes, canonical endpoints, logs, provider kill, and exactly-one replacement work; generic Cell request continuity is consumed from its sibling terminal, not re-owned here. |
 | C3a | `service-replica-identity-contract` | Credential issuance, rotation, revocation, and redaction semantics are sealed. |
 | C3b | `oci-service-sql-identity-attribution` | Authenticated server-derived identity produces fresh canonical access evidence. |
 | C4a | `oci-activation-evidence-owner` | Image presence and pull/activation evidence have one owner. |
@@ -84,7 +84,7 @@ Milestone M4 proves genuine component execution through the same install surface
 | --- | --- | --- |
 | E1 | `service-portability-example-fixture` | Versioned Node/`pg` fixture, data, manifests, compose stages, and exact expected results exist. |
 | E2 | `service-portability-example-runner-report` | One command creates isolated artifacts and emits the versioned evidence report. |
-| E3 | `service-portability-example-live` | Fresh-clone production-path proof covers parity, security, OCI recovery, attribution, placement, WASM, negatives, teardown, and replay. |
+| E3 | `service-portability-example-live` | Fresh-clone production-path proof covers parity, security, provider-specific OCI recovery, consumed generic Cell continuity, attribution, placement, WASM, negatives, teardown, and replay. |
 | E4 | successor `movielens-portability-ladder-live` | Advanced dataset reuses terminal MovieLens evidence and the canonical owners. |
 
 Milestone M5 is the complete evaluator journey.

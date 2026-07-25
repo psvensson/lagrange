@@ -44,18 +44,13 @@ convergence Quests to the active closure-ledger records they must close, so
 
 ## Active work (the live frontier)
 
-> **UPDATE 2026-07-01 (supersedes the 2026-06-23 sub-frontier below):** both coupled heads were worked
-> to terminal. Head A (`leadership_unstable` / over-replication) is root-fixed by the PROCESS_ALIVE
-> occupancy guard (`4700a47b`) and PROVEN convergent (self-stabilization Φ-proof `37175d73`). Head B
-> (`convergence_timeout` / establishment-write wedge) is EXHAUSTED — no write lever survives
-> ([`control-plane-write-wedge-leader-local-establishment.md`](control-plane-write-wedge-leader-local-establishment.md),
-> now `resolved`); the run3-class stale-IP stall closed with the transport fixes. So
-> [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md) is `resolved`,
-> and the residual gate `TOPOLOGY_BLOCKED` is the bounded async LATENCY of a proven-convergent loop vs
-> the fixed window — **NOT a source bug; do not chase it as one on current HEAD.** The binding goal
-> Historical note: this was the state before the 2026-07-20 WIP sweep.
-> `rolling-restart-core-stability` is now terminal EXHAUSTED by operator
-> decision; see the release-truth correction above.
+The historical coupled heads were worked to terminal, and
+`rolling-restart-core-stability` is EXHAUSTED by operator decision. It is not the
+current binding goal and must not be reopened. The next product Quest is a
+newly sealed representative rolling-restart gate after
+`formation-complexity-consolidation.md` closes the selected cache-observation
+precondition. `membership-publication-drain-determinism` and the owner-model
+Quests remain solved mechanism evidence, not release certification.
 
 > **(historical 2026-06-23 sub-frontier — SUPERSEDED by the update above):**
 > [`convergence-timeout-leadership-settle.md`](convergence-timeout-leadership-settle.md) — after the
@@ -64,10 +59,10 @@ convergence Quests to the active closure-ledger records they must close, so
 > `leadership_unstable` (rebalancer-leadership lockstep flap) + `convergence_timeout` (control-plane
 > write/establishment readiness-budget burn).
 
-Quests (see `npm run overview` / `solve trace`):
+Historical mechanism Quests (see `npm run overview` / `solve trace`):
 
-- `rolling-restart-core-stability` — the binding goal: 3 consecutive harness runs
-  with no priority items. Closes `CL-001`, `CL-004`, `CL-030`.
+- `rolling-restart-core-stability` — EXHAUSTED omnibus predecessor; never a
+  current release terminal.
 - `membership-publication-drain-determinism` — deterministic, self-rescheduling
   publication drain (PublicationConvergence model property). Closes `CL-001`.
 
@@ -76,6 +71,19 @@ Owner-model Quests that formalize the four semantic owners this depends on
 `model-readiness-handoff-liveness`, `model-projection-freshness-epoch-fencing`,
 `model-owner-trace-validation`, `model-bounded-retry-exit-routing` — all SOLVED;
 they bound the design space this convergence work executes against.
+
+## Successor SLO contract
+
+The fresh representative Quest must bind its result to a named hardware class,
+node count, workload, failure schedule, and clean-start protocol. It reports
+pass rate with a confidence interval, failure-class distribution, and p50/p95
+convergence time; it never closes from one run or a longer timeout. Correctness
+and acknowledged-write durability stay hard gates.
+
+`solve/specs/metastable-convergence-resilience/` is historical mechanism input,
+not current causal authority. Its stale persistent-feature-flag requirement is
+removed in the planning refresh. Temporary experiment controls must be promoted
+or deleted within the landing session.
 
 ## Where to start each session
 
@@ -96,6 +104,10 @@ cheap pilot that grounds the frontier before any expensive fan-out or gate.
 
 ## Decision log
 
+- 2026-07-25 — Removed the exhausted omnibus Quest from the active-goal list and
+  selected a fresh, hardware-relative statistical terminal after the current
+  cache-observation prerequisite. Linked scale certification requirements at
+  `solve/specs/large-scale-data-plane-certification/requirements.md`.
 - 2026-06-18 — Epic authored as the direction surface for the rolling-restart
   convergence push; quests linked to specs + closure records in the same pass
   (links backfill). Status `sharpening`: goal is sharp, the `closesCL` set for the

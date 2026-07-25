@@ -1,6 +1,6 @@
 # Requirements Document: Metastable Convergence Resilience
 
-## Introduction
+## Introduction and current authority
 
 During a `rolling-restart` the control plane reconverges **non-deterministically**:
 the same code and scenario yield `missingPublishedCount` anywhere from 0 to 4
@@ -12,12 +12,18 @@ control plane, is saturated by a re-init burst, cannot service rejoining peers'
 handshakes, and some nodes exhaust a retry budget and tear themselves down.
 
 Single-layer fixes (transport reconnect; join re-attempt) and an
-admission-concurrency throttle did not move the outcome. The research-backed
-direction (see
+admission-concurrency throttle did not move the historical sample. The
+research-backed direction (see
 [architecture/future/metastable-convergence-resilience.md](../../../architecture/future/metastable-convergence-resilience.md))
 is to (1) make convergence measurable, then (2) break the sustaining retry loop,
 (3) keep rejoiners from loading the owner before catch-up, and (4) disperse
 ownership adaptively.
+
+This document is mechanism input, not current causal authority. July 20 evidence
+in `solve/epics/topology-convergence-hardening.md` supersedes its original
+single-root narrative with an absent/expired owner-authored ready-lease
+precondition. Any successor Quest must re-establish its live precondition and
+use the fresh representative statistical gate.
 
 ## Requirements
 
@@ -63,7 +69,10 @@ A flaky liveness property cannot be fixed against single-run pass/fail.
 
 ### Requirement 4 — Safe rollout
 
-- Every behavior change SHALL be guarded by a config flag, default-off, so the
-  baseline is unchanged until explicitly enabled.
+- An experiment MAY use a bounded test/control configuration, but no temporary
+  feature flag SHALL survive its landing session. The selected behavior is
+  either promoted unconditionally with the control removed or removed entirely.
 - A change SHALL be accepted only if it shifts the Requirement-0 distribution,
   never on a single run.
+- Source-changing acceptance SHALL include real-seam engagement or red-on-revert
+  evidence in addition to the statistical distribution.

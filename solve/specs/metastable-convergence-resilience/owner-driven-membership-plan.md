@@ -1,5 +1,9 @@
 # Implementation Plan: Owner-Driven Membership Publication
 
+> Historical plan: its June root narrative is not current selection authority.
+> Reuse requires a fresh live precondition witness against the July 20 frontier
+> in `solve/epics/topology-convergence-hardening.md`.
+
 Two workstreams from the rolling-restart root cause + the scale-safety review:
 **A) Liveness** — give the membership-publication *owner* an unconditional driver
 (today every trigger is gated behind an operation that itself stalls).
@@ -41,11 +45,12 @@ all runs — pure liveness.
 
 ## Prior work already committed (this is FINISH + RELOCATE, not greenfield)
 
-Most of the owner-driven mechanics already exist, flag-gated and default-off:
+Historical commits introduced most owner-driven mechanics behind temporary
+controls:
 `b1363bdd` (steady-state predicate `isControlPlanePublicationsWriteLeader`),
 `7513ffe1` (heartbeat tick decoupled from the send outcome), `98d55204`
-(diagnostics). The plan below is to make these actually *run* during the stall and
-make them scale-safe — not to build from scratch.
+(diagnostics). Current code and engagement must be re-inspected before reuse; no
+temporary control may survive a successor landing.
 
 ## Workstream A — Unconditional periodic owner driver (liveness)
 
@@ -169,7 +174,8 @@ make them scale-safe — not to build from scratch.
   (a single membership partition could itself become a throughput bottleneck);
   note as a known scale ceiling, acceptable for now, revisit if membership write
   qpm ever approaches the partition's limit.
-- All runtime changes default-off, accepted only against the statistical gate.
+- Any runtime experiment is accepted only against the statistical gate and must
+  promote or remove its temporary control within the landing session.
 
 ## Rollout (revised order, per review)
 
@@ -180,7 +186,8 @@ make them scale-safe — not to build from scratch.
 3. **B1/B2/B3** — scale-safety hardening (non-splittable policy, partition
    resolution, Raft-path guard).
 
-Each flag-gated, each validated against the gate. **Credit Raft (term fence) for
-the single-source-of-truth property in all docs — not the gate, not the epoch
-column, not the owner-key.** The dedicated interval must start UNCONDITIONALLY;
-if it is ever gated behind metadata-publication readiness, the trap recurs.
+Each candidate is validated against the gate with any temporary control removed
+before landing. **Credit Raft (term fence) for the single-source-of-truth
+property in all docs — not the gate, not the epoch column, not the owner-key.**
+The dedicated interval must start UNCONDITIONALLY; if it is ever gated behind
+metadata-publication readiness, the trap recurs.

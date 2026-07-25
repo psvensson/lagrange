@@ -1,7 +1,10 @@
 # Implementation Plan: Metastable Convergence Resilience
 
-Sequenced by risk/leverage. Phase 0 gates everything. Every runtime change is
-default-off and accepted only against the Phase-0 statistical gate.
+Sequenced by risk/leverage. Phase 0 gates everything. This plan records
+historical mechanism candidates; July 20 evidence in
+`solve/epics/topology-convergence-hardening.md` selects the current frontier.
+Any runtime experiment is accepted only against the Phase-0 statistical gate
+and must remove or promote its temporary control within the landing session.
 
 ## Phase 0 — Measurement gate (prerequisite)
 
@@ -42,11 +45,13 @@ default-off and accepted only against the Phase-0 statistical gate.
   `startJoinNode` builds a new router → same-port bind conflict) and the join
   lifecycle machine is STOPPED-terminal after cleanup. Requires a *reuse-retry*
   path that re-drives the join on the existing router/runtime instead of
-  re-composing — a larger lifecycle change, flag-gated, measured against the
-  Phase-0 gate. Scope separately from 1.7a.
+  re-composing — a larger lifecycle change measured against the Phase-0 gate
+  with any temporary experiment control removed before landing. Scope
+  separately from 1.7a.
 - [ ] 1.8 Audit all retry budgets for "give up → self-destruct"; convert hard
   give-ups to "back off long, stay alive, keep probing".
-- [ ] 1.9 Gate via config flag; validate against Phase-0 distribution.
+- [ ] 1.9 Validate against the Phase-0 distribution and remove the temporary
+  experiment control before landing.
 
 ## Phase 2 — Learner / catch-up membership
 
@@ -55,7 +60,8 @@ default-off and accepted only against the Phase-0 statistical gate.
 - [ ] 2.2 Bound catch-up; replan a too-slow joiner via the learner-never-
   promotable decision instead of looping (`priority-recovery-snapshot-burndown.js`).
 - [ ] 2.3 Unify learner / not-caught-up with publication `WAIT_OWNER_RECOVERY`.
-- [ ] 2.4 Gate via config flag; validate against Phase-0 distribution.
+- [ ] 2.4 Validate against the Phase-0 distribution and remove the temporary
+  experiment control before landing.
 
 ## Phase 3 — Disperse ownership; adaptive rebalancing
 
@@ -63,9 +69,14 @@ default-off and accepted only against the Phase-0 statistical gate.
   priority-spread recovery).
 - [ ] 3.2 Replace fixed `maxConcurrentMoves`/transfer caps with a rate adaptive
   to `spreadGap`/`readyDistinctNodeCount`.
-- [ ] 3.3 Gate via config flag; validate against Phase-0 distribution.
+- [ ] 3.3 Validate against the Phase-0 distribution and remove the temporary
+  experiment control before landing.
 
-## Phase 4 — Leader-driven recovery establishment (the recovery-bootstrap) ★ primary
+## Phase 4 — Historical leader-driven recovery candidate
+
+This phase records the June hypothesis and is no longer the selected current
+root. It may be reused only if a fresh precondition witness shows the same
+driver/owner boundary on current code.
 
 The deterministic root cause (see memory `rolling-restart-publication-nonconvergence-root`
 and `recovery-as-second-bootstrap-impossibility`): membership publication is driven
@@ -110,9 +121,10 @@ path, `partition-service-segment-3-part-1.js:608-715`).
 - [ ] 4.3 Fence: only the current Raft leader + current membership epoch
   (`CURRENT`/`STALE`/`FUTURE`) writes; deposed-leader writes fenced out → no
   split-brain. KEEP Raft quorum commit (no async).
-- [ ] 4.4 Gate via config flag (default off); validate against the deterministic
+- [ ] 4.4 Validate with a temporary experiment control against the deterministic
   3-node reproducer + the correctness/progress gate. Win = STALLED→CONVERGED,
-  corruptCount stays 0, invariants clean.
+  corruptCount stays 0, invariants clean; remove or promote the control before
+  landing.
 
 ## Done-when
 

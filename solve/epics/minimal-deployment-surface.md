@@ -37,22 +37,26 @@ same chain. Request has canonical invocation routing; the other sources have
 placement and readiness without coupling deployment to their dispatch
 mechanisms.
 
-No further Quest is selected from this epic. The Solver overview derives
-`linked-terminal` from its linked Quest outcomes.
+The completed deployment row remains terminal. Three follow-ons are now selected
+as separate roadmap scope rather than widening that row:
 
-## Deferred follow-on choices
+1. keyed request assignment graduates to
+   `solve/epics/request-invocation-partitioning.md`;
+2. generic Cell request continuity is its live terminal and is consumed by OCI
+   portability rather than re-owned there; and
+3. non-request invocation advances one source at a time through the existing
+   ingress, dispatcher, runtime, authorization, and effect owners.
+
+## Follow-on boundaries
 
 - **Transient named invocation:** map durable `call` and `pushdown`
-  registrations to transient statement/query invocations through an existing
-  owner, or establish one shared invocation resolver first, only when that
-  invocation cutover is independently valuable.
-- **Actor-key stability:** use rendezvous assignment over ready actuals for
-  low-churn affinity, or add fixed logical shards with epoch-fenced ownership
-  only where strict single ownership is a correctness requirement. This is
-  optional routing policy, not incomplete Cell deployment.
-- **Source invocation order:** choose any future source-specific invocation
-  cutover in its own planning context; scheduling, dispatch, and data-plane
-  integration remain separate concerns.
+  registrations to transient statement/query invocations through existing
+  owners. No declaration-side direct execution path is allowed.
+- **Actor-key stability:** rendezvous assignment supplies low-churn affinity.
+  Fixed logical shards with epoch-fenced ownership remain a later contract only
+  if strict single ownership becomes a correctness requirement.
+- **Source invocation order:** change, time, once, boot, call, and pushdown each
+  receive their own executable concern before any combined matrix terminal.
 
 ## Current invariants
 
@@ -70,6 +74,11 @@ No further Quest is selected from this epic. The Solver overview derives
 
 ## Decision log
 
+- 2026-07-25 — Selected keyed invocation, generic Cell continuity, and
+  non-request source invocation as separate follow-ons. Request routing work
+  targets `solve/specs/request-invocation-partitioning/`; source cutovers retain
+  the existing Cell and dispatch owners. The completed minimal-deployment row
+  remains unchanged.
 - 2026-07-22 — Selected Artifact / Binding / Cell and seven typed Binding
   sources. Bindings pin installed `package_id`, canonical `manifest_digest`, and
   export name. All sources compile through the existing desired-service owner.
