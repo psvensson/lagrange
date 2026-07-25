@@ -28,7 +28,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   runRuntimeServiceReplaceCanonicalTargetHandoffScenario();
 }
 
+// Only the scenario name is exported: the runner is reached through the main guard
+// above when the harness executes this file directly, so exporting it as well would
+// add an unused export with no caller.
 export {
   RUNTIME_SERVICE_REPLACE_CANONICAL_TARGET_HANDOFF_SCENARIO,
-  runRuntimeServiceReplaceCanonicalTargetHandoffScenario,
 };

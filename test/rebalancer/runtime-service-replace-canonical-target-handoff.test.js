@@ -37,6 +37,9 @@ import {
   createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {
+  RUNTIME_SERVICE_REPLACE_CANONICAL_TARGET_HANDOFF_SCENARIO,
+} from './runtime-service-replace-canonical-target-handoff-scenario.js';
 
 const ENTITY_ID = 'svc-runtime-replace-proof';
 const SOURCE_NODE_ID = 'node-runtime-source';
@@ -288,6 +291,13 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
     await coordinator.executeOperation(created);
     const completed = await completion;
 
+    // Pin the scenario runner's identity to the test that proves it, so the name
+    // the harness measures and the name this file claims cannot drift apart.
+    t.equal(
+      RUNTIME_SERVICE_REPLACE_CANONICAL_TARGET_HANDOFF_SCENARIO,
+      'runtime-service-replace-canonical-target-handoff',
+      'the scenario runner measures this proof under the sealed scenario name',
+    );
     t.equal(
       completed.operationId,
       created.operationId,
