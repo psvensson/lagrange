@@ -350,7 +350,9 @@ export function checkpointVerificationPreflightLines(preflight) {
         `${entry.commitsScanned} scanned commits (no single base identifiable)` :
         entry.reproducible === false ?
           `; recorded bytes reproduce from none of ${entry.commitsScanned} ` +
-          'scanned commits' : ''),
+          // A bounded negative is not a complete negative; saying "none" over a
+          // truncated scan would overstate the search.
+          `scanned commits${entry.scanTruncated ? ' (scan truncated)' : ''}` : ''),
     );
   }
   appendReplacementGroupLines(lines, preflight.replacementGroups);

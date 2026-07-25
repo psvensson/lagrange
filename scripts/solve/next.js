@@ -125,9 +125,18 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
   }
   const base = bases.length === 1 ? bases[0] :
     pendingVerification.event.workspaceBaseCommit || '<missing>';
+  // The fallback base comes from the pending attempt itself; when its dossier
+  // classified that base as unresolvable, an "at base <sha>" instruction would
+  // demand an attempt that can never be recorded.
+  const pendingDossier = (preflight.pendingApprovals || []).find(
+    (dossier) => dossier.fingerprint === pendingVerification.fingerprint);
+  const baseInstruction = pendingDossier?.problemCode ?
+    `at a reachable base (${pendingDossier.problemCode} recorded base; the ` +
+      'step pin resolves to current HEAD)' :
+    `at base ${base}`;
   return typedNextAction(
     `record a canonical same-frontier replacement attempt for ${questId} ` +
-    `at base ${base} covering ${paths.join(', ') || '(no paths)'}; then rerun ` +
+    `${baseInstruction} covering ${paths.join(', ') || '(no paths)'}; then rerun ` +
     `node scripts/solve.js checkpoint --id ${questId} --dry-run`,
     {
       code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
@@ -171,6 +180,24 @@ function nextAction({questId, state, pending, gateStop, blocker,
   if (TERMINAL_STATUSES.includes(state.questStatus)) {
     if (verification.attempts.some((attempt) => attempt.contracted) &&
       !verification.aggregateApproval) {
+      // An uncomputable aggregate has no fingerprint a verifier could ever
+      // approve — sending the operator to "spawn a verifier for
+      // sha256:<unavailable>" is a dead end. Surface the aggregate's own typed
+      // actionable problem instead, which names the repair.
+      if (!verification.aggregate.ok && verification.aggregate.problem) {
+        return typedNextAction(
+          `${verification.aggregate.problem}; begin with: ` +
+          `node scripts/solve.js step --id ${questId}`,
+          {
+            code: NEXT_ACTION_CODE.REPAIR_AUDIT,
+            payload: {
+              questId,
+              problemCode: verification.aggregate.code || null,
+              requiredPaths: verification.aggregate.paths || [],
+            },
+          },
+        );
+      }
       const latest = [...verification.attempts].reverse()
         .find((attempt) => attempt.contracted);
       return verifierAction(

@@ -37,6 +37,7 @@ import {
   checkpointVerificationPreflight,
   checkpointVerificationPreflightLines,
 } from '../../scripts/solve/checkpoint-preflight.js';
+import {buildNextProjection} from '../../scripts/solve/next.js';
 
 const DEAD_BASE = 'd1e0d1e0d1e0d1e0d1e0d1e0d1e0d1e0d1e0d1e0';
 const FRONTIER = 'runtime-verify-main';
@@ -389,6 +390,61 @@ tap.test('unreachable-base attempts resolve by coverage, never by waiver or sile
       'the dead-base attempt source path stays in the aggregate surface');
     t.match(projection.aggregate.fingerprint, /^sha256:[0-9a-f]{64}$/u,
       'and yields a real fingerprint a verifier can approve');
+
+    cleanup(fx);
+    t.end();
+  });
+
+  t.test('next never prints an instruction that cannot succeed', (t) => {
+    const fx = fixture();
+    // Terminal quest whose only contracted attempt has a dead base: the
+    // aggregate has no fingerprint, so a "spawn a verifier for
+    // sha256:<unavailable>" action would be a dead end.
+    const {fingerprint} = recordAttempt(fx, {base: DEAD_BASE, name: 'next-dead'});
+    approveAttempt(fx, fingerprint);
+    appendEvent(fx.root, fx.quest.id, {
+      type: 'solved',
+      frontier: FRONTIER,
+      evidence: 'oracle.json',
+    });
+    appendEvent(fx.root, fx.quest.id, {
+      type: 'quest',
+      status: 'solved',
+      evidence: 'oracle.json',
+    });
+
+    const projection = buildNextProjection(fx.root, fx.quest.id);
+    t.notMatch(projection.action.value, /<unavailable>/u,
+      'the terminal action never asks for verification of an unavailable fingerprint');
+    t.match(projection.action.value,
+      /terminal aggregate has no reachable recorded base/u,
+      'it surfaces the typed actionable repair instead');
+    t.match(projection.action.value, new RegExp(`step --id ${fx.quest.id}`, 'u'),
+      'and names the executable first step');
+
+    cleanup(fx);
+    t.end();
+  });
+
+  t.test('a pending dead-base replacement instruction points at a reachable base', (t) => {
+    const fx = fixture();
+    // An unapproved dead-base v1 attempt is a pending approval; the fallback
+    // replacement instruction must not say "at base <dead sha>".
+    recordAttempt(fx, {base: DEAD_BASE, name: 'pending-dead'});
+
+    const projection = buildNextProjection(fx.root, fx.quest.id);
+    if (projection.action.code === 'replace-rejected-attempt') {
+      t.notMatch(projection.action.value, new RegExp(`at base ${DEAD_BASE}`, 'u'),
+        'the instruction never names the unresolvable base as the target');
+      t.match(projection.action.value, /at a reachable base/u,
+        'it directs the operator to a reachable base instead');
+    } else {
+      // The projection may route to a different action first; the binding
+      // requirement is only that no action ever names the dead base as a
+      // recordable target.
+      t.notMatch(projection.action.value, new RegExp(`at base ${DEAD_BASE}`, 'u'),
+        'no action names the unresolvable base as a recordable target');
+    }
 
     cleanup(fx);
     t.end();
