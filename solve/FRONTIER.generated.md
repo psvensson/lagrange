@@ -2,9 +2,9 @@
 
 Latest dated gate seen in records: 20260702T075154Z. This is a projection; act on a record only after reading its file.
 
-## Closure frontier — 13 active of 42 records
+## Closure frontier — 12 active of 42 records
 
-Areas: harness-control-snapshot (2) · membership-publication (2) · placement-planning-feedback (1) · placement-priority-spread (3) · readiness-projection (3) · restart-rejoin-identity (1) · transport-replication-backpressure (1)
+Areas: harness-control-snapshot (2) · membership-publication (2) · placement-planning-feedback (1) · placement-priority-spread (3) · readiness-projection (3) · restart-rejoin-identity (1)
 
 ### harness-control-snapshot
 
@@ -47,12 +47,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | Id | Status | Last gate | Concern |
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
-
-### transport-replication-backpressure
-
-| Id | Status | Last gate | Concern |
-| --- | --- | --- | --- |
-| CL-009 | narrowed | 20260611T052934Z | transport-replication-backpressure |
 
 ## Open quests — 18
 
