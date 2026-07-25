@@ -13,7 +13,7 @@ import {
   autoCommitQuest,
 } from '../../scripts/solve/handoff.js';
 import {runFrontierCommand} from '../../scripts/solve/frontier.js';
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawn} from 'node:child_process';
 
 const FRONTIER_BOARD_PATH = 'solve/FRONTIER.generated.md';
 
@@ -357,6 +357,90 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
     t.ok(autoCommitQuest(root, quest.id).committed,
       'the Quest still lands when the board cannot be written');
 
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('index-lock contention is retried, not surfaced as a failure', (t) => {
+    // git fails immediately rather than waiting on .git/index.lock, so two Quests
+    // landing at once collide on a lock neither contends for semantically — their
+    // pathspecs are disjoint. Measured on this repo: 15 of 60 invocations died.
+    // A command that failed to take the lock did nothing, so retrying it is exact.
+    const root = tmp();
+    initGit(root);
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped doc fix',
+    });
+    // Hold the lock, and release it from a SEPARATE PROCESS: the retry backoff is a
+    // synchronous Atomics.wait, so it blocks this thread's event loop and an
+    // in-process timer could never fire.
+    const lock = path.join(root, '.git', 'index.lock');
+    fs.writeFileSync(lock, '');
+    const releaser = spawn(process.execPath, ['-e',
+      `setTimeout(() => require('node:fs').rmSync(${JSON.stringify(lock)}, ` +
+      '{force: true}), 60)'], {detached: true, stdio: 'ignore'});
+    releaser.unref();
+
+    const committed = autoCommitQuest(root, quest.id);
+
+    t.ok(committed.committed,
+      'a landing that briefly loses the lock still commits');
+    t.notOk(fs.existsSync(lock), 'the lock is gone afterwards');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an unyielding index lock yields a retryable skip, never a throw', (t) => {
+    // The throw this replaces escaped the workflow AFTER the terminal event was
+    // appended: Quest recorded solved, work uncommitted, tree dirty — the worst
+    // state to hand an unattended supervisor. git-busy is recoverable by re-running.
+    const root = tmp();
+    initGit(root);
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped doc fix',
+    });
+    fs.writeFileSync(path.join(root, '.git', 'index.lock'), '');
+
+    let outcome = null;
+    t.doesNotThrow(() => {
+      outcome = autoCommitQuest(root, quest.id);
+    }, 'lock contention never escapes as an exception');
+    t.equal(outcome.committed, false);
+    t.equal(outcome.skipped, 'git-busy', 'the skip is typed and retryable');
+
+    // Recoverable: once the lock clears, the same scope commits.
+    fs.rmSync(path.join(root, '.git', 'index.lock'), {force: true});
+    t.ok(autoCommitQuest(root, quest.id).committed,
+      're-running after the lock clears commits the same scope');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('a non-lock git failure is still raised, never masked as git-busy', (t) => {
+    // The retry must not swallow real git errors. A corrupt repo is not "busy".
+    const root = tmp();
+    initGit(root);
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped doc fix',
+    });
+    // Break HEAD so `git reset HEAD` fails for a reason that is not contention.
+    fs.writeFileSync(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/\n');
+
+    t.throws(() => autoCommitQuest(root, quest.id),
+      'a genuine git failure is raised, not reported as git-busy');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

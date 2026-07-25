@@ -306,7 +306,10 @@ function renderFacadeResult(command, result) {
   if (result.operation) lines.push(`executed: ${result.operation}`);
   if (result.verdict) {
     lines.push(`verdict: ${result.verdict}`);
-    lines.push(`committed: ${result.committed ? 'yes' : 'no'}`);
+    // Name the skip reason. An unattended supervisor has to tell a retryable
+    // git-busy landing apart from a commit-gate refusal that needs a human.
+    lines.push(`committed: ${result.committed ? 'yes' :
+      `no (${result.commit?.skipped || 'unknown'})`}`);
   }
   if (result.lint?.status) lines.push(`lint: ${result.lint.status}`);
   if (next) {

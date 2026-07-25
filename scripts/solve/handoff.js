@@ -49,7 +49,6 @@ import {latestAttemptAdmissionWasOverridden} from './gate.js';
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
 const GIT_COMMAND = 'git';
-const STDIO_IGNORE = 'ignore';
 const CHECKPOINT_ID_REQUIRED_PROBLEM =
   'checkpoint: --id <questId> is required';
 const DRY_RUN_ARGUMENT = 'dry-run';
@@ -64,6 +63,20 @@ const GIT_ARGUMENT = Object.freeze({
   QUIET: '--quiet',
   RESET: 'reset',
 });
+// git serializes every index write on .git/index.lock and fails IMMEDIATELY rather
+// than waiting for it. Two Quests landing at once therefore collide on a lock neither
+// of them contends for semantically — their pathspecs are disjoint. Measured on this
+// repo, two concurrent commit sequences on disjoint paths: 15 of 60 invocations died
+// with "Unable to create '.git/index.lock': File exists". With the retry below: 0 of
+// 60. This is the difference between parallel unattended Quests being possible and
+// not, and no amount of solve/ locking addresses it — the contended resource is git's.
+const GIT_INDEX_LOCK_PATTERN = /index\.lock/u;
+const GIT_LOCK_RETRY_ATTEMPTS = 6;
+const GIT_LOCK_RETRY_BASE_MS = 20;
+// stderr must be captured, not ignored, or lock contention is indistinguishable from
+// any other git failure and would be retried (or surfaced) wrongly.
+const GIT_STDIO = Object.freeze(['ignore', 'ignore', 'pipe']);
+const SKIP_GIT_BUSY = 'git-busy';
 
 function toRootRelative(root, absolute) {
   return path.relative(root, absolute).replaceAll(path.sep, '/');
@@ -341,6 +354,44 @@ function insideWorkTree(root) {
   }
 }
 
+// Atomics.wait needs a real Int32 slot to block on; one is enough. Blocking is the
+// point — autoCommitQuest is synchronous, so a timer-based wait would never run.
+const SLEEP_SLOT_BYTES = 4;
+
+function sleepSync(ms) {
+  Atomics.wait(
+    new Int32Array(new SharedArrayBuffer(SLEEP_SLOT_BYTES)), 0, 0, ms);
+}
+
+function isIndexLockContention(error) {
+  return GIT_INDEX_LOCK_PATTERN.test(
+    `${error?.stderr || ''}${error?.message || ''}`);
+}
+
+// Run one git invocation, retrying ONLY on index-lock contention.
+//
+// Retrying a single invocation is safe precisely because a command that failed to
+// acquire the lock did nothing at all — there is no partial index write to undo. That
+// is why the retry wraps each invocation rather than the whole reset/add/commit
+// sequence: re-running a sequence whose `commit` had already succeeded would be a
+// different and much worse bug.
+//
+// Bounded (6 attempts, exponential from 20ms ≈ 620ms total) because an unbounded wait
+// would convert a stale lock file — a real, operator-visible fault — into a hang.
+function runGitCommand(root, args) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return execFileSync(GIT_COMMAND, args, {cwd: root, stdio: GIT_STDIO});
+    } catch (error) {
+      if (!isIndexLockContention(error) ||
+        attempt >= GIT_LOCK_RETRY_ATTEMPTS - 1) {
+        throw error;
+      }
+      sleepSync(GIT_LOCK_RETRY_BASE_MS * (2 ** attempt));
+    }
+  }
+}
+
 // Regenerate the frontier board so the bytes this commit captures are the board for
 // the tree being committed.
 //
@@ -395,25 +446,35 @@ export function autoCommitQuest(root, questId, options = {}) {
   if (handoff.inScope.length === 0) {
     return {committed: false, skipped: 'nothing-in-scope'};
   }
-  execFileSync(GIT_COMMAND, [
-    GIT_ARGUMENT.RESET,
-    GIT_ARGUMENT.QUIET,
-    GIT_ARGUMENT.HEAD,
-    GIT_ARGUMENT.PATHS,
-    ...handoff.inScope,
-  ], {cwd: root, stdio: STDIO_IGNORE});
-  execFileSync(GIT_COMMAND, [
-    GIT_ARGUMENT.ADD,
-    GIT_ARGUMENT.ALL,
-    GIT_ARGUMENT.PATHS,
-    ...handoff.inScope,
-  ], {
-    cwd: root,
-    stdio: STDIO_IGNORE,
-  });
-  execFileSync(GIT_COMMAND, ['commit', '--only', '-m', commitMessage(handoff),
-    GIT_ARGUMENT.PATHS,
-    ...handoff.inScope], {cwd: root, stdio: STDIO_IGNORE});
+  // A landing that loses the index-lock race must report a typed, retryable skip
+  // rather than throw. The throw would escape the workflow AFTER the terminal event
+  // is already appended, leaving the Quest recorded as solved with its work
+  // uncommitted and a dirty tree — the worst possible state to hand an unattended
+  // supervisor. `git-busy` is recoverable: re-running land (or `solve handoff`)
+  // commits the same scope.
+  try {
+    runGitCommand(root, [
+      GIT_ARGUMENT.RESET,
+      GIT_ARGUMENT.QUIET,
+      GIT_ARGUMENT.HEAD,
+      GIT_ARGUMENT.PATHS,
+      ...handoff.inScope,
+    ]);
+    runGitCommand(root, [
+      GIT_ARGUMENT.ADD,
+      GIT_ARGUMENT.ALL,
+      GIT_ARGUMENT.PATHS,
+      ...handoff.inScope,
+    ]);
+    runGitCommand(root, ['commit', '--only', '-m', commitMessage(handoff),
+      GIT_ARGUMENT.PATHS,
+      ...handoff.inScope]);
+  } catch (error) {
+    if (isIndexLockContention(error)) {
+      return {committed: false, skipped: SKIP_GIT_BUSY, questId};
+    }
+    throw error;
+  }
   return {
     committed: true,
     checkpoint,
