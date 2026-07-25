@@ -90,7 +90,7 @@ const {
   selectActiveGateForPublicationConvergence,
 } = Object.assign({}, foundation, priority);
 
-export function attachCanonicalPublicationEvidence(controlPlane) {
+function attachCanonicalPublicationEvidence(controlPlane) {
   if (!isRecord(controlPlane)) {
     return null;
   }
@@ -113,7 +113,7 @@ export function attachCanonicalPublicationEvidence(controlPlane) {
   };
 }
 
-export function mergePriorityRecoveryObservationSnapshots(primaryObservation, fallbackObservation) {
+function mergePriorityRecoveryObservationSnapshots(primaryObservation, fallbackObservation) {
   const hasPrimaryObservation = isRecord(primaryObservation);
   const hasFallbackObservation = isRecord(fallbackObservation);
   if (!hasPrimaryObservation && !hasFallbackObservation) {
@@ -421,7 +421,7 @@ export function resolveDominantReasonFromFirstFaultTimeline(firstFaultTimeline) 
 }
 
 
-export function resolveFinalConsistencyRootCauseClass(finalConsistency) {
+function resolveFinalConsistencyRootCauseClass(finalConsistency) {
   const reasonCode = String(finalConsistency?.reasonCode || '').trim();
   const state = String(finalConsistency?.state || '').trim();
   if (
@@ -445,7 +445,7 @@ export function resolveFinalConsistencyRootCauseClass(finalConsistency) {
   return ROOT_CAUSE_CLASS_UNKNOWN;
 }
 
-export function resolveStructuredFinalConsistencyFailure(controlPlane) {
+function resolveStructuredFinalConsistencyFailure(controlPlane) {
   const finalConsistency =
     controlPlane?.finalConsistency &&
     typeof controlPlane.finalConsistency === JS_OBJECT_TYPE &&
@@ -489,7 +489,7 @@ export function resolveStructuredFinalConsistencyFailure(controlPlane) {
     null;
 }
 
-export function resolveFinalConsistencyFailureFromMessage(entry) {
+function resolveFinalConsistencyFailureFromMessage(entry) {
   const errorMessage = String(entry?.error || '');
   if (errorMessage.includes(FINAL_CONSISTENCY_LEADER_MISMATCH_MESSAGE_PREFIX)) {
     return {
@@ -507,7 +507,7 @@ export function resolveFinalConsistencyFailure(entry, controlPlane) {
   );
 }
 
-export function resolveControlPlaneQuiescenceRootCauseClass(quiescence) {
+function resolveControlPlaneQuiescenceRootCauseClass(quiescence) {
   const state = String(quiescence?.state || '').trim();
   const canonicalBlocker = String(quiescence?.canonicalBlocker || '').trim();
   if (
@@ -590,7 +590,7 @@ export function hasOpenPublicationOrPriorityRecoveryBlocker(publicationConvergen
   );
 }
 
-export function resolvePublicationBlockedDominantReason(publicationConvergence) {
+function resolvePublicationBlockedDominantReason(publicationConvergence) {
   if (!isRecord(publicationConvergence)) {
     return null;
   }
@@ -690,7 +690,7 @@ export function resolveActiveGateSnapshotCoverageBlocker(progress = null) {
     null;
 }
 
-export function hasActiveGateSnapshotCoveragePending(publicationConvergence) {
+function hasActiveGateSnapshotCoveragePending(publicationConvergence) {
   const progress =
     publicationConvergence?.activeGateProgress ||
     publicationConvergence?.activeGate?.progress ||
@@ -698,7 +698,7 @@ export function hasActiveGateSnapshotCoveragePending(publicationConvergence) {
   return resolveActiveGateSnapshotCoverageBlocker(progress) !== null;
 }
 
-export function collectPublicationMissingActiveNodeReasonCandidates(
+function collectPublicationMissingActiveNodeReasonCandidates(
   publicationConvergence,
 ) {
   const activeGateProgress =
@@ -721,7 +721,7 @@ export function collectPublicationMissingActiveNodeReasonCandidates(
   ]).map((reason) => normalizeActiveGateBlockerReason(reason));
 }
 
-export function resolvePublicationMissingActiveNodeReason(publicationConvergence) {
+function resolvePublicationMissingActiveNodeReason(publicationConvergence) {
   const missingPublishedNodeIds = normalizeDistinctStringArray(
     publicationConvergence?.missingPublishedNodeIds,
   );
@@ -760,7 +760,7 @@ export function hasPublicationMissingActiveNodeBlocker(publicationConvergence) {
     null;
 }
 
-export function resolveActiveGateDominantBlockerReason(publicationConvergence) {
+function resolveActiveGateDominantBlockerReason(publicationConvergence) {
   const activeGateProgress =
     publicationConvergence?.activeGateProgress ||
     publicationConvergence?.activeGate?.progress ||
@@ -905,7 +905,7 @@ export function filterReasonCountsForClosedPublication({
   return filteredReasonCounts;
 }
 
-export function hasReadyActiveGatePublicationConvergence(publicationConvergence) {
+function hasReadyActiveGatePublicationConvergence(publicationConvergence) {
   if (!isRecord(publicationConvergence)) {
     return false;
   }
@@ -941,14 +941,14 @@ export function hasReadyActiveGatePublicationConvergence(publicationConvergence)
   );
 }
 
-export function hasClosedPostActiveConvergenceOwners(publicationConvergence) {
+function hasClosedPostActiveConvergenceOwners(publicationConvergence) {
   return (
     hasReadyActiveGatePublicationConvergence(publicationConvergence) &&
     !hasOpenPublicationOrPriorityRecoveryBlocker(publicationConvergence)
   );
 }
 
-export function hasClosedPublicationConvergenceEvidence(publicationConvergence) {
+function hasClosedPublicationConvergenceEvidence(publicationConvergence) {
   if (!isRecord(publicationConvergence)) {
     return false;
   }
@@ -964,19 +964,19 @@ export function hasClosedPublicationConvergenceEvidence(publicationConvergence) 
   );
 }
 
-export function hasConvergenceTimeoutError(entry) {
+function hasConvergenceTimeoutError(entry) {
   return String(entry?.error || EMPTY_STRING).startsWith(
     FAILURE_BARRIER_ERROR_PREFIX_CONVERGENCE_TIMEOUT,
   );
 }
 
-export function hasRestartRecoveryTimeoutError(entry) {
+function hasRestartRecoveryTimeoutError(entry) {
   return String(entry?.error || EMPTY_STRING).startsWith(
     FAILURE_BARRIER_ERROR_PREFIX_RESTART_RECOVERY_TIMEOUT,
   );
 }
 
-export function normalizeRestartRecoveryReadinessFieldValue(value) {
+function normalizeRestartRecoveryReadinessFieldValue(value) {
   const normalizedValue = String(value ?? EMPTY_STRING).trim();
   if (normalizedValue === RESTART_RECOVERY_READINESS_BOOLEAN_TRUE) {
     return true;
@@ -994,12 +994,12 @@ export function normalizeRestartRecoveryReadinessFieldValue(value) {
   return normalizedValue;
 }
 
-export function normalizeRestartRecoveryReadinessNumber(value) {
+function normalizeRestartRecoveryReadinessNumber(value) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? Math.floor(numericValue) : null;
 }
 
-export function parseRestartRecoveryReadinessFieldMap(observationText) {
+function parseRestartRecoveryReadinessFieldMap(observationText) {
   const fields = {};
   for (const segment of observationText.split(
     RESTART_RECOVERY_READINESS_FIELD_SEPARATOR,
@@ -1020,13 +1020,13 @@ export function parseRestartRecoveryReadinessFieldMap(observationText) {
   return fields;
 }
 
-export function isRestartRecoveryAdminReachabilityRefused(lastError) {
+function isRestartRecoveryAdminReachabilityRefused(lastError) {
   return String(lastError || EMPTY_STRING)
     .toLowerCase()
     .includes(RESTART_RECOVERY_READINESS_ADMIN_REFUSED_FRAGMENT);
 }
 
-export function resolveRestartRecoveryReadinessOwnerState(observation) {
+function resolveRestartRecoveryReadinessOwnerState(observation) {
   const evidence = Object.freeze({
     ready:
       observation?.ready === true ||
@@ -1051,7 +1051,7 @@ export function resolveRestartRecoveryReadinessOwnerState(observation) {
   return null;
 }
 
-export function resolveRestartRecoveryReadinessObservation(entry) {
+function resolveRestartRecoveryReadinessObservation(entry) {
   const errorMessage = String(entry?.error || '');
   if (!errorMessage.startsWith(
     FAILURE_BARRIER_ERROR_PREFIX_RESTART_RECOVERY_TIMEOUT,
@@ -1137,21 +1137,21 @@ export function resolveRestartRecoveryReadinessObservation(entry) {
   });
 }
 
-export function isSupersededFailureBarrierRootCause(rootCauseClass) {
+function isSupersededFailureBarrierRootCause(rootCauseClass) {
   const normalizedRootCauseClass = String(rootCauseClass || '').trim();
   return FAILURE_BARRIER_SUPERSEDED_ROOT_CAUSE_CLASS_SET.has(
     normalizedRootCauseClass,
   );
 }
 
-export function isSupersededFailureBarrierReason(dominantReason) {
+function isSupersededFailureBarrierReason(dominantReason) {
   const normalizedDominantReason = String(dominantReason || '').toLowerCase();
   return FAILURE_BARRIER_SUPERSEDED_REASON_FRAGMENT_SET.some((fragment) =>
     normalizedDominantReason.includes(fragment),
   );
 }
 
-export function shouldApplyConvergenceFailureBarrier({
+function shouldApplyConvergenceFailureBarrier({
   existingFailure,
   publicationConvergence,
 }) {
@@ -1163,7 +1163,7 @@ export function shouldApplyConvergenceFailureBarrier({
   );
 }
 
-export function hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence) {
+function hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence) {
   if (!hasOpenPublicationOrPriorityRecoveryBlocker(publicationConvergence)) {
     return false;
   }
@@ -1179,7 +1179,7 @@ export function hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence)
   );
 }
 
-export function resolveRestartRecoveryFailureBarrierReason({
+function resolveRestartRecoveryFailureBarrierReason({
   existingFailure,
   publicationConvergence,
   terminalRecoveryReadiness,
@@ -1199,14 +1199,14 @@ export function resolveRestartRecoveryFailureBarrierReason({
   return FAILURE_BARRIER_REASON_RESTART_RECOVERY_TIMEOUT;
 }
 
-export function resolveRestartRecoveryFailureBarrierRootCauseClass(dominantReason) {
+function resolveRestartRecoveryFailureBarrierRootCauseClass(dominantReason) {
   if (dominantReason === STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING) {
     return ROOT_CAUSE_CLASS_TOPOLOGY;
   }
   return ROOT_CAUSE_CLASS_STARTUP;
 }
 
-export function resolveRestartRecoveryFailureBarrier({
+function resolveRestartRecoveryFailureBarrier({
   entry,
   existingFailure,
   publicationConvergence,
@@ -1230,7 +1230,7 @@ export function resolveRestartRecoveryFailureBarrier({
   };
 }
 
-export function resolveConvergenceFailureBarrier({
+function resolveConvergenceFailureBarrier({
   entry,
   existingFailure,
   publicationConvergence,

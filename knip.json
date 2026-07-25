@@ -14,12 +14,14 @@
     "test/integration/cdc-debug-test.js",
     "test/distributed/scenarios/*.js",
     "test/runtime/pgwire-test-matrix.js",
-    "scripts/**/*.js"
+    "scripts/**/*.js",
+    "examples/**/*.js"
   ],
   "project": [
     "src/**/*.js!",
     "test/**/*.js",
-    "scripts/**/*.js"
+    "scripts/**/*.js",
+    "examples/**/*.js"
   ],
   "ignore": [
     "dist/**",

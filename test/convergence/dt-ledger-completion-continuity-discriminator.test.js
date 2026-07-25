@@ -353,12 +353,16 @@ function buildSweepCoordinator({operationRows, serviceRows}) {
         }
         return {success: true};
       }
+      // The exact-target observation SELECTs full identity columns and
+      // rejects rows whose node_id does not match the intended target
+      // (doesObservedReplicaRowMatchTarget), so the authoritative services
+      // read must answer with the whole tracked row, not a bare status.
       if (sql.includes('services') && sql.includes('service_id = ?')) {
         const [serviceId] = params;
         const service = trackedServices.get(serviceId);
         return {
           success: true,
-          rows: service ? [{status: service.status}] : [],
+          rows: service ? [{...service}] : [],
         };
       }
       if (sql.includes('services') && sql.includes('partition_id = ?')) {
@@ -367,7 +371,7 @@ function buildSweepCoordinator({operationRows, serviceRows}) {
           s.partition_id === partitionId && s.node_id === nodeId);
         return {
           success: true,
-          rows: matching.length ? [{status: matching[0].status}] : [],
+          rows: matching.map((service) => ({...service})),
         };
       }
       if (sql.includes('replica_operations')) {
@@ -400,6 +404,24 @@ function buildSweepCoordinator({operationRows, serviceRows}) {
     cdcIntegrationService: {
       insertSystemTableRow: async () => ({success: true}),
       updateSystemTableRow: async () => ({success: true}),
+      // Authoritative cache-alignment seam: confirmActiveReplicaTerminalHandoff
+      // gates SYNCING->ACTIVE completion on this repair reporting that the
+      // exact SERVICES row matches the expected fields (see
+      // operation-workflow-active-cache-handoff.test.js). Report alignment
+      // only from the tracked authoritative service rows so the redrive
+      // completes on real evidence, never on a blanket stub.
+      refreshAuthoritativeCacheRow: async (tableName, key, options = {}) => {
+        if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+          return false;
+        }
+        const serviceRow = trackedServices.get(key);
+        if (!serviceRow) {
+          return false;
+        }
+        return Object.entries(options.expectedFields || {}).every(
+          ([field, expectedValue]) => serviceRow[field] === expectedValue,
+        );
+      },
     },
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),

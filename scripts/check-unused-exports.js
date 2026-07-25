@@ -15,7 +15,7 @@ import {createOptions} from 'knip/session';
 
 import {printRatchetTighteningHint} from './metric-check-helpers.js';
 
-const BASELINE_UNUSED_EXPORT_COUNT = 1623;
+const BASELINE_UNUSED_EXPORT_COUNT = 1451;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
