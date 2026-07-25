@@ -574,38 +574,70 @@ function candidateVerificationState(root, log, candidate) {
   let unresolvedRejection = null;
   const problems = [];
   if (rejection) {
-    const rejectedPaths = new Set(rejection.receipt.paths);
-    const replacementPaths = new Set(candidate.paths || []);
-    // Same-base is the strict rule; when the rejected receipt's base no longer
-    // resolves, the equality is unsatisfiable by construction, so the same
-    // invariant is enforced at a reachable base instead: a later, different
-    // candidate covering every rejected path — which still needs its own exact
-    // approval before anything lands. Nothing is waived; the review moves to
-    // current bytes.
-    const rejectedBaseDead = baseRecordedButUnreachable(
-      root, rejection.receipt.baseCommit);
-    const baseAcceptable = rejectedBaseDead ?
-      baseCommitReachable(root, candidate.baseCommit) :
-      candidate.baseCommit === rejection.receipt.baseCommit;
-    const replaced = baseAcceptable &&
-      candidate.fingerprint !== rejection.receipt.fingerprint &&
-      candidate.lastAttemptIndex > rejection.receipt.lastAttemptIndex &&
-      [...rejectedPaths].every((filePath) => replacementPaths.has(filePath));
-    if (!replaced) {
+    const problem = candidateRejectionProblem(root, candidate, rejection);
+    if (problem) {
       unresolvedRejection = rejection;
-      problems.push({
-        message: rejectedBaseDead ?
-          `landing candidate rejection anchored at a ${BASE_UNREACHABLE_CODE} ` +
-            'base requires a later changed-fingerprint path-superset candidate ' +
-            'at a reachable base' :
-          'landing candidate rejection requires a later same-base, ' +
-            'changed-fingerprint path-superset candidate',
-        ts: rejection.event.ts || null,
-        frontier: rejection.event.frontier || null,
-      });
+      problems.push(problem);
     }
   }
   return {approval, rejection, unresolvedRejection, problems};
+}
+
+// Same-base is the strict rule; when the rejected receipt's base no longer
+// resolves, the equality is unsatisfiable by construction, so the same
+// invariant is enforced at a reachable base instead: a later, different
+// candidate covering every rejected path — which still needs its own exact
+// approval before anything lands. Nothing is waived; the review moves to
+// current bytes. Returns null when the rejection is resolved.
+function candidateRejectionProblem(root, candidate, rejection) {
+  const rejectedPaths = new Set(rejection.receipt.paths);
+  const replacementPaths = new Set(candidate.paths || []);
+  const rejectedBaseDead = baseRecordedButUnreachable(
+    root, rejection.receipt.baseCommit);
+  const baseAcceptable = rejectedBaseDead ?
+    baseCommitReachable(root, candidate.baseCommit) :
+    candidate.baseCommit === rejection.receipt.baseCommit;
+  const replaced = baseAcceptable &&
+    candidate.fingerprint !== rejection.receipt.fingerprint &&
+    candidate.lastAttemptIndex > rejection.receipt.lastAttemptIndex &&
+    [...rejectedPaths].every((filePath) => replacementPaths.has(filePath));
+  if (replaced) return null;
+  return {
+    message: rejectedBaseDead ?
+      `landing candidate rejection anchored at a ${BASE_UNREACHABLE_CODE} ` +
+        'base requires a later changed-fingerprint path-superset candidate ' +
+        'at a reachable base' :
+      'landing candidate rejection requires a later same-base, ' +
+        'changed-fingerprint path-superset candidate',
+    ts: rejection.event.ts || null,
+    frontier: rejection.event.frontier || null,
+  };
+}
+
+// Direct the operator at the rule that can actually be satisfied: the
+// same-base form when the rejected base still resolves, the live-base coverage
+// form when it does not.
+function unresolvedRejectionEntry(root, attempt, rejection) {
+  const deadBase = baseRecordedButUnreachable(
+    root, attempt.event.workspaceBaseCommit);
+  return {
+    problem: attemptProblem(
+      attempt,
+      deadBase ?
+        `was explicitly rejected at ${attempt.fingerprint} and its recorded ` +
+          `base is ${BASE_UNREACHABLE_CODE}; requires a later same-frontier ` +
+          'source attempt at a reachable base covering every rejected ' +
+          'source path plus its own later exact approval' :
+        `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
+          LOCAL_STR_OWNED_017 +
+          LOCAL_STR_OWNED_018,
+    ),
+    entry: {
+      attempt,
+      rejection: rejection.rejection.event,
+      baseUnreachable: deadBase,
+    },
+  };
 }
 
 export function verificationState(root, quest, log, options = {}) {
@@ -646,27 +678,9 @@ export function verificationState(root, quest, log, options = {}) {
       continue;
     }
     if (rejection) {
-      // Direct the operator at the rule that can actually be satisfied: the
-      // same-base form when the rejected base still resolves, the live-base
-      // coverage form when it does not.
-      const deadBase = baseRecordedButUnreachable(
-        root, attempt.event.workspaceBaseCommit);
-      attemptProblems.push(attemptProblem(
-        attempt,
-        deadBase ?
-          `was explicitly rejected at ${attempt.fingerprint} and its recorded ` +
-            `base is ${BASE_UNREACHABLE_CODE}; requires a later same-frontier ` +
-            'source attempt at a reachable base covering every rejected ' +
-            'source path plus its own later exact approval' :
-          `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
-            LOCAL_STR_OWNED_017 +
-            LOCAL_STR_OWNED_018,
-      ));
-      unresolvedRejectedAttempts.push({
-        attempt,
-        rejection: rejection.rejection.event,
-        baseUnreachable: deadBase,
-      });
+      const unresolved = unresolvedRejectionEntry(root, attempt, rejection);
+      attemptProblems.push(unresolved.problem);
+      unresolvedRejectedAttempts.push(unresolved.entry);
       continue;
     }
     const approval = laterApproval(

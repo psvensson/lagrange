@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "960825a20861d9efa3b1dfa4cad7d77a1665acd2669fa51adaa9b0ae112400d9"
+    "sourceSha256": "2db968ca4152de083b4b01eb406b73b81a39ddfb06caf10e7a99e76b3ee6122c"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,7 +18,7 @@
   },
   "metrics": {
     "moduleCount": 65,
-    "publicExportCount": 747,
+    "publicExportCount": 740,
     "importEdgeCount": 298,
     "crossLayerEdgeCount": 92,
     "layerDirectionViolationCount": 44,
@@ -576,28 +576,14 @@
       "layer": "owner_decision",
       "rationale": "owner policy or actuation surface",
       "exports": [
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_EVIDENCE_SOURCE",
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_MODE",
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE",
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE_TABLE",
-        "buildPriorityRecoverySchedulingOwnerEvidence",
         "buildPriorityRecoverySchedulingOwnersByPartitionId",
         "inheritPriorityRecoverySchedulingOwner",
-        "isPriorityRecoverySchedulingOwner",
-        "resolveLivePriorityRecoverySchedulingOwnerPartitionIds",
-        "resolvePriorityRecoverySchedulingOwner"
+        "isPriorityRecoverySchedulingOwner"
       ],
       "localExports": [
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_EVIDENCE_SOURCE",
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_MODE",
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE",
-        "PRIORITY_RECOVERY_SCHEDULING_OWNER_STATE_TABLE",
-        "buildPriorityRecoverySchedulingOwnerEvidence",
         "buildPriorityRecoverySchedulingOwnersByPartitionId",
         "inheritPriorityRecoverySchedulingOwner",
-        "isPriorityRecoverySchedulingOwner",
-        "resolveLivePriorityRecoverySchedulingOwnerPartitionIds",
-        "resolvePriorityRecoverySchedulingOwner"
+        "isPriorityRecoverySchedulingOwner"
       ]
     },
     {

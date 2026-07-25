@@ -160,6 +160,52 @@ function pendingVerifierAction(questId, state, pendingVerification, preflight) {
   );
 }
 
+function terminalQuestAction(questId, verification, audit) {
+  if (verification.attempts.some((attempt) => attempt.contracted) &&
+    !verification.aggregateApproval) {
+    // An uncomputable aggregate has no fingerprint a verifier could ever
+    // approve — sending the operator to "spawn a verifier for
+    // sha256:<unavailable>" is a dead end. Surface the aggregate's own typed
+    // actionable problem instead, which names the repair.
+    if (!verification.aggregate.ok && verification.aggregate.problem) {
+      return typedNextAction(
+        `${verification.aggregate.problem}; begin with: ` +
+        `node scripts/solve.js step --id ${questId}`,
+        {
+          code: NEXT_ACTION_CODE.REPAIR_AUDIT,
+          payload: {
+            questId,
+            problemCode: verification.aggregate.code || null,
+            requiredPaths: verification.aggregate.paths || [],
+          },
+        },
+      );
+    }
+    const latest = [...verification.attempts].reverse()
+      .find((attempt) => attempt.contracted);
+    return verifierAction(
+      questId,
+      latest.event.frontier,
+      LOCAL_STR_OWNED_006,
+      verification.aggregate.fingerprint || LOCAL_STR_OWNED_007,
+    );
+  }
+  if (audit.status === LOCAL_STR_OWNED_008) {
+    return typedNextAction(
+      `node scripts/solve.js handoff --id ${questId} --commit`, {
+        code: NEXT_ACTION_CODE.LAND,
+        payload: {questId},
+      });
+  }
+  return typedNextAction(
+    `resolve terminal audit failures: node scripts/solve.js audit --id ${questId}`,
+    {
+      code: NEXT_ACTION_CODE.REPAIR_AUDIT,
+      payload: {questId},
+    },
+  );
+}
+
 function nextAction({questId, state, pending, gateStop, blocker,
   verification, verificationPreflight, audit}) {
   const pendingVerification = verification.pendingAttempts[0];
@@ -178,49 +224,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
     });
   }
   if (TERMINAL_STATUSES.includes(state.questStatus)) {
-    if (verification.attempts.some((attempt) => attempt.contracted) &&
-      !verification.aggregateApproval) {
-      // An uncomputable aggregate has no fingerprint a verifier could ever
-      // approve — sending the operator to "spawn a verifier for
-      // sha256:<unavailable>" is a dead end. Surface the aggregate's own typed
-      // actionable problem instead, which names the repair.
-      if (!verification.aggregate.ok && verification.aggregate.problem) {
-        return typedNextAction(
-          `${verification.aggregate.problem}; begin with: ` +
-          `node scripts/solve.js step --id ${questId}`,
-          {
-            code: NEXT_ACTION_CODE.REPAIR_AUDIT,
-            payload: {
-              questId,
-              problemCode: verification.aggregate.code || null,
-              requiredPaths: verification.aggregate.paths || [],
-            },
-          },
-        );
-      }
-      const latest = [...verification.attempts].reverse()
-        .find((attempt) => attempt.contracted);
-      return verifierAction(
-        questId,
-        latest.event.frontier,
-        LOCAL_STR_OWNED_006,
-        verification.aggregate.fingerprint || LOCAL_STR_OWNED_007,
-      );
-    }
-    if (audit.status === LOCAL_STR_OWNED_008) {
-      return typedNextAction(
-        `node scripts/solve.js handoff --id ${questId} --commit`, {
-          code: NEXT_ACTION_CODE.LAND,
-          payload: {questId},
-        });
-    }
-    return typedNextAction(
-      `resolve terminal audit failures: node scripts/solve.js audit --id ${questId}`,
-      {
-        code: NEXT_ACTION_CODE.REPAIR_AUDIT,
-        payload: {questId},
-      },
-    );
+    return terminalQuestAction(questId, verification, audit);
   }
   if (verification.uncheckpointedApprovedAttempts.length > 0 &&
     verification.attemptProblems.length === 0) {
