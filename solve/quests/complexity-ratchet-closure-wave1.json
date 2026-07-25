@@ -1,0 +1,40 @@
+{
+  "id": "complexity-ratchet-closure-wave1",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The cognitive-complexity ratchet passes at no more than its 179-violation baseline and the cyclomatic-complexity ratchet passes at no more than its 1847-violation baseline, achieved solely by behavior-preserving reduction of real violations with neither baseline raised; the duplication, circular-dependency, unused-export, and file-size ratchets do not regress; and the test files exercising every touched source owner remain green.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "cognitive-complexity-ratchet-closure",
+    "planDoc": "solve/epics/roadmap-integrity-wave-0.md",
+    "draftedAtCommit": "f72b2f460f7a3ea3d15d1ca48bd905596da3995c"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/complexity-ratchet-closure-wave1.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "complexity-ratchet-closure-wave1-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/complexity-ratchet-closure-wave1.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
