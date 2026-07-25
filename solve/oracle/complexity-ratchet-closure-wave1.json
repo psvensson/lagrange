@@ -1,18 +1,18 @@
 {
-  "metric": 7,
+  "metric": 0,
   "target": 0,
-  "done": false,
+  "done": true,
   "classification": "complexity-ratchet-closure-wave1",
   "detail": {
     "cognitive": {
-      "exitCode": 1,
-      "count": 184,
+      "exitCode": 0,
+      "count": 179,
       "baseline": 179,
       "threshold": 20
     },
     "cyclomatic": {
-      "exitCode": 1,
-      "count": 1849,
+      "exitCode": 0,
+      "count": 1847,
       "baseline": 1847,
       "threshold": 12
     }
