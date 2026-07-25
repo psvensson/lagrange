@@ -52,30 +52,30 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 
 | Id | Status | Last gate | Concern |
 | --- | --- | --- | --- |
-| CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
+| CL-009 | narrowed | 20260611T052934Z | transport-replication-backpressure |
 
 ## Open quests — 18
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
-| formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-17 | — |
+| formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-17 ⚠ stale | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 | — |
 | movielens-local-leader-row-visibility-model | product | 1 | 0 | 2026-07-20 | — |
-| movielens-nodes-priority-recovery-escape | product | 1 | 0 | 2026-07-16 | — |
-| movielens-operation-ledger-terminal-hold | product | 1 | 0 | 2026-07-16 | — |
+| movielens-nodes-priority-recovery-escape | product | 1 | 0 | 2026-07-16 ⚠ stale | — |
+| movielens-operation-ledger-terminal-hold | product | 1 | 0 | 2026-07-16 ⚠ stale | — |
 | movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-07-22 | — |
-| movielens-pre-schema-priority-spread-admission-authority | product | 0 | 0 | 2026-07-16 | — |
+| movielens-pre-schema-priority-spread-admission-authority | product | 0 | 0 | 2026-07-16 ⚠ stale | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | 2026-07-20 | — |
 | movielens-three-way-affinity-demo | product | 9 | 0 | 2026-07-21 | — |
-| oci-container-driver-live-activation | product | 8 | 0 | 2026-07-15 ⚠ stale | — |
+| oci-container-driver-live-activation | product | 8 | 0 | 2026-07-25 | — |
 | operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-22 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 | — |
-| service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-11 ⚠ stale | — |
+| service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |
 
-> 2 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 4 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 
