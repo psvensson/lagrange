@@ -12,6 +12,11 @@
 #     changeRef must be "diff:<path>" (an existing patch file).
 #   - Report ONLY what you did. Never claim success — the solver re-measures via the
 #     probe, so a failed or dishonest run simply shows no metric movement.
+#   - START CLEAN. The solver invokes this once per attempt and carries state forward
+#     in the dossier, rebuilt from the durable log each time. Do NOT resume a previous
+#     session/thread: a resumed agent accumulates context the solver cannot see or
+#     bound, which is exactly what makes a long unattended run fill one context window
+#     and fail. `solve doctor` warns if agentCommand looks like it resumes.
 #
 # This stub just echoes the dossier and emits an empty (no-op) response, which the
 # honesty check treats as "no change". Replace the middle with a real agent call.

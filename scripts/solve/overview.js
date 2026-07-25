@@ -17,7 +17,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {SOLVE_DATA_DIR} from './constants.js';
-import {parseClosureLedger, concernArea} from '../closure-ledger-state.js';
+import {parseClosureLedger, closureLedgerPaths, concernArea}
+  from '../closure-ledger-state.js';
 import {buildPortfolio, loadAllQuests} from './portfolio.js';
 
 const EPICS_DIR = 'solve/epics';
@@ -155,6 +156,7 @@ function projectEpics(epics, quests, specNames) {
 }
 
 export function buildOverview(root) {
+  const ledger = closureLedgerPaths(root);
   const portfolio = buildPortfolio(root);
   const quests = linkedQuests(root, portfolio);
   const specNames = listSpecs(root);
@@ -180,7 +182,9 @@ export function buildOverview(root) {
     epics,
     specs,
     quests,
-    records: parseClosureLedger(),
+    // Root-scoped for the same reason as the frontier board: the bare call resolves
+    // against this file's location, not the root being projected.
+    records: parseClosureLedger(ledger.dir, ledger.indexPath),
   };
 }
 

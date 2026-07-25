@@ -83,6 +83,32 @@ tap.test('frontier open-quest staleness', async (t) => {
     t.end();
   });
 
+  t.test('the ledger is read from the projected root, not the real repository', (t) => {
+    // parseClosureLedger's defaults resolve against its own file location, so a bare
+    // call silently means "the real repo" whatever root is being projected. A board
+    // built over a temporary root was rendering this repository's CL records.
+    const root = tmp();
+    declareQuestAt(root, quest('q-only'), '2026-07-24T09:00:00.000Z');
+    const board = renderFrontier(buildFrontier(root));
+
+    t.notMatch(board, /CL-0\d\d/u,
+      'no closure record from the real repository leaks into a foreign root');
+
+    // And a ledger that IS present under the root is read.
+    const ledgerDir = path.join(root,
+      'solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger');
+    fs.mkdirSync(ledgerDir, {recursive: true});
+    fs.writeFileSync(path.join(ledgerDir, 'CL-777.md'), [
+      '# CL-777 — local record', '', '### STATE', '- status: open',
+      '- concern: local-only concern', '',
+    ].join('\n'));
+    t.match(renderFrontier(buildFrontier(root)), /CL-777/u,
+      'the root own ledger is what gets projected');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('board is a pure projection: repeated renders are byte-identical', (t) => {
     const root = tmp();
     declareQuestAt(root, quest('q-fresh'), '2026-07-24T09:00:00.000Z');

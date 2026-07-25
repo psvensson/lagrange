@@ -325,7 +325,15 @@ export function writeContentAddressedChangeArtifact(
   fs.mkdirSync(path.dirname(objectPath), {recursive: true});
   let objectCreated = false;
   if (!fs.existsSync(objectPath)) {
-    fs.writeFileSync(objectPath, gzipSync(payload));
+    // Write-then-rename, because existsSync is a publication check as well as a
+    // skip check: a concurrent Quest that observed a half-written object would read
+    // short bytes and fail its own written-verification. rename(2) is atomic within
+    // a filesystem, so the object is either absent or complete, never partial. The
+    // path is content-addressed, so a concurrent writer produces identical bytes and
+    // last-writer-wins is indistinguishable from first-writer-wins.
+    const temporary = `${objectPath}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, gzipSync(payload));
+    fs.renameSync(temporary, objectPath);
     objectCreated = true;
   }
   const objectBytes = fs.readFileSync(objectPath);

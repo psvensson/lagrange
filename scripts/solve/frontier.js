@@ -12,7 +12,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {SOLVE_DATA_DIR} from './constants.js';
-import {parseClosureLedger, concernArea} from '../closure-ledger-state.js';
+import {parseClosureLedger, closureLedgerPaths, concernArea}
+  from '../closure-ledger-state.js';
 import {buildPortfolio, loadAllQuests} from './portfolio.js';
 
 const ACTIVE_GATE_PREVIEW = 8;
@@ -105,7 +106,11 @@ function renderOpenQuests(portfolio, closesById) {
 }
 
 export function buildFrontier(root) {
-  const records = parseClosureLedger();
+  // Scope the ledger to the root being projected. Calling parseClosureLedger() bare
+  // resolves against this file's location, so a board built over any other root
+  // silently spliced in the real repository's CL records.
+  const ledger = closureLedgerPaths(root);
+  const records = parseClosureLedger(ledger.dir, ledger.indexPath);
   const portfolio = buildPortfolio(root);
   // Join each quest's optional links.closesCL onto its row so the board shows
   // which closure records an open quest is on the hook for. buildPortfolio rows

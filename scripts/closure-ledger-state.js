@@ -26,10 +26,13 @@ import {fileURLToPath} from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
-const LEDGER_BASE = path.join(
-  ROOT, 'solve/specs/membership-lifecycle-placement-hard-cutover');
-const LEDGER_DIR = path.join(LEDGER_BASE, 'closure-ledger');
-const INDEX_PATH = path.join(LEDGER_BASE, 'closure-ledger.md');
+const LEDGER_BASE_RELATIVE =
+  'solve/specs/membership-lifecycle-placement-hard-cutover';
+const LEDGER_DIR_NAME = 'closure-ledger';
+const LEDGER_INDEX_NAME = 'closure-ledger.md';
+const LEDGER_BASE = path.join(ROOT, LEDGER_BASE_RELATIVE);
+const LEDGER_DIR = path.join(LEDGER_BASE, LEDGER_DIR_NAME);
+const INDEX_PATH = path.join(LEDGER_BASE, LEDGER_INDEX_NAME);
 const GENERATED_PATH = path.join(LEDGER_BASE, 'closure-ledger.generated.md');
 const EXIT_OK = 0;
 const EXIT_DRIFT = 2;
@@ -152,6 +155,21 @@ export function concernArea(concern) {
 // with the index, and `normalized` is false for any record still lacking a STATE
 // block — both are zero once `--migrate-state` has run, and the drift guard keeps
 // them zero.
+// Ledger paths for an arbitrary repo root.
+//
+// The module defaults resolve against THIS FILE's location, which silently means "the
+// real repository" no matter what root a caller is operating on. That is right for the
+// repo-wide tools, and wrong for anything that takes a root: a projection built over a
+// temporary root would splice the real repo's CL records into a fixture. Callers that
+// carry a root should derive their paths here instead of relying on the defaults.
+export function closureLedgerPaths(root) {
+  const base = path.join(root, LEDGER_BASE_RELATIVE);
+  return {
+    dir: path.join(base, LEDGER_DIR_NAME),
+    indexPath: path.join(base, LEDGER_INDEX_NAME),
+  };
+}
+
 export function parseClosureLedger(dir = LEDGER_DIR, indexPath = INDEX_PATH) {
   const records = parseRecords(dir);
   const index = parseIndex(indexPath);

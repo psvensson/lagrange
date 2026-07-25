@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import {buildDoctorReport} from '../../scripts/solve/doctor.js';
+import {adapterSessionWarning, buildDoctorReport, renderDoctor}
+  from '../../scripts/solve/doctor.js';
 import {inspectAgentConfig} from '../../scripts/solve/agent-executor.js';
 import {
   inspectCoauthorAttribution,
@@ -32,6 +33,42 @@ tap.test('solve doctor capability inspection', async (t) => {
 
     writeConfig(root, JSON.stringify({enabled: false, agentCommand: process.execPath}));
     t.equal(inspectAgentConfig(root).state, 'disabled');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an adapter that looks like it resumes a session is flagged', (t) => {
+    // The executor contract is one fresh agent per attempt — state travels in the
+    // dossier, not in an accumulating conversation. agentCommand is an arbitrary argv
+    // template though, so a resuming adapter would silently defeat that and the
+    // dossier budget with it. Advisory, never a gate.
+    t.match(adapterSessionWarning('claude --resume abc {requestFile} {responseFile}'),
+      /--resume/u);
+    t.match(adapterSessionWarning('agent --continue {requestFile}'), /--continue/u);
+    t.match(adapterSessionWarning('agent --session s1 {requestFile}'), /--session/u);
+    t.equal(adapterSessionWarning('node adapter.js {requestFile} {responseFile}'), null,
+      'an ordinary one-shot adapter is not flagged');
+    t.equal(adapterSessionWarning(null), null, 'an absent command is not flagged');
+
+    const root = tmp();
+    writeConfig(root, JSON.stringify({
+      enabled: true,
+      agentCommand: `${process.execPath} --resume x {requestFile} {responseFile}`,
+    }));
+    const report = buildDoctorReport(root);
+    t.ok(report.agentExecutor.sessionWarning, 'the warning reaches the report');
+    t.equal(report.recommendedMode, 'autonomous',
+      'it is advisory — it never downgrades the recommended mode');
+    t.match(renderDoctor(report), /warning:.*--resume/u, 'and it is rendered');
+
+    writeConfig(root, JSON.stringify({
+      enabled: true,
+      agentCommand: `${process.execPath} {requestFile} {responseFile}`,
+    }));
+    t.equal(buildDoctorReport(root).agentExecutor.sessionWarning, null);
+    t.notMatch(renderDoctor(buildDoctorReport(root)), /warning:/u,
+      'a clean adapter renders no warning line');
+
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

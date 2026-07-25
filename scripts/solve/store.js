@@ -139,10 +139,23 @@ export function loadQuest(root, questId) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+// Replace a whole file atomically.
+//
+// Quest and state files are truncate-then-write, but every cross-Quest projection
+// (buildFrontier -> buildPortfolio -> loadAllQuests) reads ALL of them. A reader that
+// caught a mid-write file got a truncated JSON document and threw — id-scoped writes
+// are only safe from each other, not from the readers that sweep every id. rename(2)
+// is atomic within a filesystem, so a reader sees the old document or the new one.
+function writeFileAtomic(file, contents) {
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, contents);
+  fs.renameSync(temporary, file);
+}
+
 export function saveQuest(root, quest) {
   const file = questFilePath(root, quest.id);
   ensureDir(path.dirname(file));
-  fs.writeFileSync(file, `${JSON.stringify(quest, null, 2)}\n`);
+  writeFileAtomic(file, `${JSON.stringify(quest, null, 2)}\n`);
   return file;
 }
 
@@ -534,7 +547,7 @@ export function rebuildState(root, quest) {
   const state = projectState(quest, log);
   const file = stateFilePath(root, quest.id);
   ensureDir(path.dirname(file));
-  fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`);
+  writeFileAtomic(file, `${JSON.stringify(state, null, 2)}\n`);
   return state;
 }
 

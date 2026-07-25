@@ -46,6 +46,33 @@ function inspectGit(root, spawn) {
   };
 }
 
+// Flags an adapter that looks like it resumes a session.
+//
+// The executor contract is one fresh spawn per attempt: state reaches the agent as a
+// dossier rebuilt from the durable log, not as an accumulating conversation. That is
+// what keeps a long unattended run from filling one agent's context, and it is what
+// the dossier budget is sized against. But agentCommand is an arbitrary argv template
+// — nothing stops it resuming a session, and if it does, context accumulates silently
+// and the Solver cannot tell. Advisory, not a gate: some wrapper may legitimately
+// carry one of these words, and a false positive must not block an operator.
+const SESSION_RESUMING_FLAGS = Object.freeze([
+  '--resume', '--continue', '--session', '--thread',
+]);
+
+const SESSION_FLAG_JOIN = ', ';
+const SESSION_WARNING_TAIL =
+  ': the executor contract is one fresh agent per attempt, and a resumed session ' +
+  'accumulates context the Solver cannot see or bound. Confirm the adapter starts ' +
+  'clean each invocation.';
+
+export function adapterSessionWarning(command) {
+  if (typeof command !== 'string' || !command) return null;
+  const found = SESSION_RESUMING_FLAGS.filter((flag) => command.includes(flag));
+  if (found.length === 0) return null;
+  return `agentCommand contains ${found.join(SESSION_FLAG_JOIN)}` +
+    SESSION_WARNING_TAIL;
+}
+
 export function buildDoctorReport(root, options = {}) {
   const spawn = options.spawn || spawnSync;
   const env = options.env || process.env;
@@ -65,6 +92,7 @@ export function buildDoctorReport(root, options = {}) {
       command: agent.command,
       executable: agent.executable,
       issues: agent.issues,
+      sessionWarning: adapterSessionWarning(agent.command),
     },
     git,
     attribution,
@@ -83,11 +111,17 @@ export function renderDoctor(report) {
   const attribution = report.attribution.trailer ?
     `${report.attribution.source}: ${report.attribution.trailer}` :
     (report.attribution.issue || 'none (commit messages omit a co-author trailer)');
-  return [
+  const lines = [
     `mode: ${report.recommendedMode}`,
     `agent executor: ${agentState}`,
+  ];
+  if (report.agentExecutor.sessionWarning) {
+    lines.push(`  warning: ${report.agentExecutor.sessionWarning}`);
+  }
+  lines.push(
     `git: ${gitState}`,
     `attribution: ${attribution}`,
     `next: ${report.next}`,
-  ].join(LINE_SEPARATOR) + LINE_SEPARATOR;
+  );
+  return lines.join(LINE_SEPARATOR) + LINE_SEPARATOR;
 }
