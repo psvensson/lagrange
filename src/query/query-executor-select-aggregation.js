@@ -4,6 +4,34 @@ const {
   QUERY_EXECUTOR_LITERAL,
 } = QUERY_EXECUTOR_SHARED;
 
+// Compare one ORDER BY clause's values. Returns 0 whenever the original inline
+// comparator would have fallen through to the next clause: equal values, and
+// unequal values that answer neither < nor > (e.g. mixed types).
+function compareOrderByClauseValues(aVal, bVal, dir) {
+  if (aVal === bVal) {
+    return 0;
+  }
+  if (aVal === null) {
+    return dir;
+  }
+  if (bVal === null) {
+    return -dir;
+  }
+  if (
+    typeof aVal === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+    typeof bVal === QUERY_EXECUTOR_LITERAL.STRING_STRING
+  ) {
+    return aVal.localeCompare(bVal) * dir;
+  }
+  if (aVal < bVal) {
+    return -dir;
+  }
+  if (aVal > bVal) {
+    return dir;
+  }
+  return 0;
+}
+
 const queryExecutorSelectAggregationMethods = {
   /**
    * Aggregate SELECT results from multiple partitions.
@@ -472,32 +500,9 @@ const queryExecutorSelectAggregationMethods = {
       for (const clause of orderBy) {
         const col = clause.expression?.column || clause.column;
         const dir = clause.direction === 'DESC' ? -1 : 1;
-        const aVal = a[col];
-        const bVal = b[col];
-        if (aVal === bVal) {
-          continue;
-        }
-        if (aVal === null) {
-          return dir;
-        }
-        if (bVal === null) {
-          return -dir;
-        }
-        if (
-          typeof aVal === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-          typeof bVal === QUERY_EXECUTOR_LITERAL.STRING_STRING
-        ) {
-          const cmp = aVal.localeCompare(bVal);
-          if (cmp !== 0) {
-            return cmp * dir;
-          }
-        } else {
-          if (aVal < bVal) {
-            return -dir;
-          }
-          if (aVal > bVal) {
-            return dir;
-          }
+        const comparison = compareOrderByClauseValues(a[col], b[col], dir);
+        if (comparison !== 0) {
+          return comparison;
         }
       }
       return 0;

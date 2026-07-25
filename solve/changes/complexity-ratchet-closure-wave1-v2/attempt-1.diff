@@ -1,0 +1,305 @@
+diff --git a/src/admin/admin-control-snapshot-local-diagnostics-methods.js b/src/admin/admin-control-snapshot-local-diagnostics-methods.js
+index d542c9b9562626afe8fa8265cbbe9ea2c11b2f63..6caff103cf341d1fd25de131dea34bc443a31041 100644
+--- a/src/admin/admin-control-snapshot-local-diagnostics-methods.js
++++ b/src/admin/admin-control-snapshot-local-diagnostics-methods.js
+@@ -39,6 +39,20 @@ function resolveBoundedSnapshotProbeDeadlineMs(queryTimeoutMs) {
+   return Math.min(marginBoundedMs, halfBudgetMs);
+ }
+ 
++// Diagnostics from one local partition service, or null for either
++// unavailability shape: a service without the diagnostics method, or a method
++// returning a non-object.
++function resolveCdcSubscriptionDiagnostics(partitionService) {
++  if (
++    !partitionService ||
++    typeof partitionService.getCDCSubscriptionDiagnostics !== 'function'
++  ) {
++    return null;
++  }
++  const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
++  return diagnostics && typeof diagnostics === 'object' ? diagnostics : null;
++}
++
+ function buildControlSnapshotResolveOptions(options = {}) {
+   const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
+   return {
+@@ -217,23 +231,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
+           if (!partitionId) {
+             continue;
+           }
+-          if (
+-            !partitionService ||
+-            typeof partitionService.getCDCSubscriptionDiagnostics !==
+-              'function'
+-          ) {
+-            partitionDiagnosticsById[partitionId] = {
+-              diagnosticsAvailable: false,
+-              ready: false,
+-              subscriberCount: 0,
+-              bufferedEvents: 0,
+-              bufferReplayInFlight: false,
+-            };
+-            missingDiagnosticsPartitionIds.push(partitionId);
+-            continue;
+-          }
+-          const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
+-          if (!diagnostics || typeof diagnostics !== 'object') {
++          const diagnostics =
++            resolveCdcSubscriptionDiagnostics(partitionService);
++          if (!diagnostics) {
+             partitionDiagnosticsById[partitionId] = {
+               diagnosticsAvailable: false,
+               ready: false,
+diff --git a/src/bootstrap/join-readiness-replica-operation-methods.js b/src/bootstrap/join-readiness-replica-operation-methods.js
+index 6477e3a23ce369d0e85fcc4e31155f8f97b9d97d..5a70a5632ded875e3e3339852046c0dbacc2da7d 100644
+--- a/src/bootstrap/join-readiness-replica-operation-methods.js
++++ b/src/bootstrap/join-readiness-replica-operation-methods.js
+@@ -23,6 +23,18 @@ const JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND = Object.freeze({
+     'self_source_active_target_replacement',
+ });
+ 
++// A partition operation outside the discovery-critical set has no bearing on
++// whether this joining node can serve or route; it is excluded only when the
++// discovery-critical set is known and the operation names a partition group.
++function isNonDiscoveryPartitionOperation(
++  normalizedOperation, discoveryCriticalPartitionIds) {
++  return normalizedOperation.entityType ===
++      JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE.PARTITION &&
++    discoveryCriticalPartitionIds.size > 0 &&
++    normalizedOperation.partitionGroupId.length > 0 &&
++    !discoveryCriticalPartitionIds.has(normalizedOperation.partitionGroupId);
++}
++
+ function createJoinReadinessReplicaOperationMethods(options = {}) {
+   const canonicalJoinDiscoveryCriticalTables =
+     options.canonicalJoinDiscoveryCriticalTables || new Set();
+@@ -83,15 +95,8 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
+             excludedWarmingTargetCount++;
+             continue;
+           }
+-          if (
+-            normalizedOperation.entityType ===
+-              JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE.PARTITION &&
+-            discoveryCriticalPartitionIds.size > 0 &&
+-            normalizedOperation.partitionGroupId.length > 0 &&
+-            !discoveryCriticalPartitionIds.has(
+-              normalizedOperation.partitionGroupId,
+-            )
+-          ) {
++          if (isNonDiscoveryPartitionOperation(
++            normalizedOperation, discoveryCriticalPartitionIds)) {
+             excludedNonDiscoveryPartitionCount++;
+             continue;
+           }
+diff --git a/src/cdc/cdc-routed-mutation-readiness.js b/src/cdc/cdc-routed-mutation-readiness.js
+index 9b25c51960a1246894cef8c17b3db194b5e22029..4906a5dd05145fca45e5a9c2a019b4309f8624c6 100644
+--- a/src/cdc/cdc-routed-mutation-readiness.js
++++ b/src/cdc/cdc-routed-mutation-readiness.js
+@@ -56,6 +56,28 @@ const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
+ const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
+ const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
+ 
++// Candidates for direct bootstrap-mode SQL: when the table maps to an initial
++// partition id, only that partition qualifies; otherwise any service declaring
++// the table by name or id.
++function selectDirectSqlCandidates(services, tableName, targetPartitionId) {
++  const candidates = [];
++  for (const service of services.values()) {
++    if (!service) {
++      continue;
++    }
++    if (targetPartitionId) {
++      if (service.partitionId === targetPartitionId) {
++        candidates.push(service);
++      }
++      continue;
++    }
++    if (service.tableName === tableName || service.tableId === tableName) {
++      candidates.push(service);
++    }
++  }
++  return candidates;
++}
++
+ class CDCRoutedMutationReadiness {
+   hasActiveSystemTableWriteMirror(tableName) {
+     const sqlQueryEngine = this.sqlQueryEngine;
+@@ -173,21 +195,8 @@ class CDCRoutedMutationReadiness {
+     }
+     const tableName = tableNameResult.tableName;
+     const targetPartitionId = INITIAL_PARTITION_IDS[tableName] || null;
+-    const candidates = [];
+-    for (const service of this.localPartitionServices.values()) {
+-      if (!service) {
+-        continue;
+-      }
+-      if (targetPartitionId) {
+-        if (service.partitionId === targetPartitionId) {
+-          candidates.push(service);
+-        }
+-        continue;
+-      }
+-      if (service.tableName === tableName || service.tableId === tableName) {
+-        candidates.push(service);
+-      }
+-    }
++    const candidates = selectDirectSqlCandidates(
++      this.localPartitionServices, tableName, targetPartitionId);
+ 
+     const initializedCandidates =
+       candidates.length > 0 ? candidates : [];
+diff --git a/src/control-plane/control-plane-error-classification.js b/src/control-plane/control-plane-error-classification.js
+index 6e1b2b19aa13d905d36810af8c3ab305e6382770..4bcdfef2637a69d437b162d8dd84f8e8d118b516 100644
+--- a/src/control-plane/control-plane-error-classification.js
++++ b/src/control-plane/control-plane-error-classification.js
+@@ -111,6 +111,37 @@ function getDirectControlPlaneRetryAfterMs(value) {
+     0;
+ }
+ 
++// A candidate enters the collection when it is a first visit of an object or
++// any string; other primitives are skipped.
++function admitLinkedFailureCandidate(candidate, visited) {
++  if (!candidate) {
++    return false;
++  }
++  if (typeof candidate === 'object') {
++    if (visited.has(candidate)) {
++      return false;
++    }
++    visited.add(candidate);
++    return true;
++  }
++  return typeof candidate === 'string';
++}
++
++function enqueueLinkedFailureSources(queue, candidate) {
++  if (candidate.cause) {
++    queue.push(candidate.cause);
++  }
++  if (candidate.firstFailedParticipant &&
++      typeof candidate.firstFailedParticipant === 'object') {
++    queue.push(candidate.firstFailedParticipant);
++  }
++  if (Array.isArray(candidate.participantFailures)) {
++    for (const participantFailure of candidate.participantFailures) {
++      queue.push(participantFailure);
++    }
++  }
++}
++
+ function collectLinkedControlPlaneFailures(value) {
+   const queue = [value];
+   const visited = new Set();
+@@ -119,34 +150,12 @@ function collectLinkedControlPlaneFailures(value) {
+   while (queue.length > 0 &&
+       collected.length < MAX_LINKED_CONTROL_PLANE_FAILURES) {
+     const candidate = queue.shift();
+-    if (!candidate) {
+-      continue;
+-    }
+-    if (typeof candidate === 'object') {
+-      if (visited.has(candidate)) {
+-        continue;
+-      }
+-      visited.add(candidate);
+-    } else if (typeof candidate !== 'string') {
++    if (!admitLinkedFailureCandidate(candidate, visited)) {
+       continue;
+     }
+-
+     collected.push(candidate);
+-    if (typeof candidate !== 'object') {
+-      continue;
+-    }
+-
+-    if (candidate.cause) {
+-      queue.push(candidate.cause);
+-    }
+-    if (candidate.firstFailedParticipant &&
+-        typeof candidate.firstFailedParticipant === 'object') {
+-      queue.push(candidate.firstFailedParticipant);
+-    }
+-    if (Array.isArray(candidate.participantFailures)) {
+-      for (const participantFailure of candidate.participantFailures) {
+-        queue.push(participantFailure);
+-      }
++    if (typeof candidate === 'object') {
++      enqueueLinkedFailureSources(queue, candidate);
+     }
+   }
+ 
+diff --git a/src/query/query-executor-select-aggregation.js b/src/query/query-executor-select-aggregation.js
+index 8c0e081a58c5b4e3877a4d092832be759ec9b3e7..9d62a3a2627558e2f539196771b5838597cf9a88 100644
+--- a/src/query/query-executor-select-aggregation.js
++++ b/src/query/query-executor-select-aggregation.js
+@@ -4,6 +4,34 @@ const {
+   QUERY_EXECUTOR_LITERAL,
+ } = QUERY_EXECUTOR_SHARED;
+ 
++// Compare one ORDER BY clause's values. Returns 0 whenever the original inline
++// comparator would have fallen through to the next clause: equal values, and
++// unequal values that answer neither < nor > (e.g. mixed types).
++function compareOrderByClauseValues(aVal, bVal, dir) {
++  if (aVal === bVal) {
++    return 0;
++  }
++  if (aVal === null) {
++    return dir;
++  }
++  if (bVal === null) {
++    return -dir;
++  }
++  if (
++    typeof aVal === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
++    typeof bVal === QUERY_EXECUTOR_LITERAL.STRING_STRING
++  ) {
++    return aVal.localeCompare(bVal) * dir;
++  }
++  if (aVal < bVal) {
++    return -dir;
++  }
++  if (aVal > bVal) {
++    return dir;
++  }
++  return 0;
++}
++
+ const queryExecutorSelectAggregationMethods = {
+   /**
+    * Aggregate SELECT results from multiple partitions.
+@@ -472,32 +500,9 @@ const queryExecutorSelectAggregationMethods = {
+       for (const clause of orderBy) {
+         const col = clause.expression?.column || clause.column;
+         const dir = clause.direction === 'DESC' ? -1 : 1;
+-        const aVal = a[col];
+-        const bVal = b[col];
+-        if (aVal === bVal) {
+-          continue;
+-        }
+-        if (aVal === null) {
+-          return dir;
+-        }
+-        if (bVal === null) {
+-          return -dir;
+-        }
+-        if (
+-          typeof aVal === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+-          typeof bVal === QUERY_EXECUTOR_LITERAL.STRING_STRING
+-        ) {
+-          const cmp = aVal.localeCompare(bVal);
+-          if (cmp !== 0) {
+-            return cmp * dir;
+-          }
+-        } else {
+-          if (aVal < bVal) {
+-            return -dir;
+-          }
+-          if (aVal > bVal) {
+-            return dir;
+-          }
++        const comparison = compareOrderByClauseValues(a[col], b[col], dir);
++        if (comparison !== 0) {
++          return comparison;
+         }
+       }
+       return 0;

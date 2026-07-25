@@ -111,6 +111,37 @@ function getDirectControlPlaneRetryAfterMs(value) {
     0;
 }
 
+// A candidate enters the collection when it is a first visit of an object or
+// any string; other primitives are skipped.
+function admitLinkedFailureCandidate(candidate, visited) {
+  if (!candidate) {
+    return false;
+  }
+  if (typeof candidate === 'object') {
+    if (visited.has(candidate)) {
+      return false;
+    }
+    visited.add(candidate);
+    return true;
+  }
+  return typeof candidate === 'string';
+}
+
+function enqueueLinkedFailureSources(queue, candidate) {
+  if (candidate.cause) {
+    queue.push(candidate.cause);
+  }
+  if (candidate.firstFailedParticipant &&
+      typeof candidate.firstFailedParticipant === 'object') {
+    queue.push(candidate.firstFailedParticipant);
+  }
+  if (Array.isArray(candidate.participantFailures)) {
+    for (const participantFailure of candidate.participantFailures) {
+      queue.push(participantFailure);
+    }
+  }
+}
+
 function collectLinkedControlPlaneFailures(value) {
   const queue = [value];
   const visited = new Set();
@@ -119,34 +150,12 @@ function collectLinkedControlPlaneFailures(value) {
   while (queue.length > 0 &&
       collected.length < MAX_LINKED_CONTROL_PLANE_FAILURES) {
     const candidate = queue.shift();
-    if (!candidate) {
+    if (!admitLinkedFailureCandidate(candidate, visited)) {
       continue;
     }
-    if (typeof candidate === 'object') {
-      if (visited.has(candidate)) {
-        continue;
-      }
-      visited.add(candidate);
-    } else if (typeof candidate !== 'string') {
-      continue;
-    }
-
     collected.push(candidate);
-    if (typeof candidate !== 'object') {
-      continue;
-    }
-
-    if (candidate.cause) {
-      queue.push(candidate.cause);
-    }
-    if (candidate.firstFailedParticipant &&
-        typeof candidate.firstFailedParticipant === 'object') {
-      queue.push(candidate.firstFailedParticipant);
-    }
-    if (Array.isArray(candidate.participantFailures)) {
-      for (const participantFailure of candidate.participantFailures) {
-        queue.push(participantFailure);
-      }
+    if (typeof candidate === 'object') {
+      enqueueLinkedFailureSources(queue, candidate);
     }
   }
 

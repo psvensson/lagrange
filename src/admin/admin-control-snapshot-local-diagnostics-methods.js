@@ -39,6 +39,20 @@ function resolveBoundedSnapshotProbeDeadlineMs(queryTimeoutMs) {
   return Math.min(marginBoundedMs, halfBudgetMs);
 }
 
+// Diagnostics from one local partition service, or null for either
+// unavailability shape: a service without the diagnostics method, or a method
+// returning a non-object.
+function resolveCdcSubscriptionDiagnostics(partitionService) {
+  if (
+    !partitionService ||
+    typeof partitionService.getCDCSubscriptionDiagnostics !== 'function'
+  ) {
+    return null;
+  }
+  const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
+  return diagnostics && typeof diagnostics === 'object' ? diagnostics : null;
+}
+
 function buildControlSnapshotResolveOptions(options = {}) {
   const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
   return {
@@ -217,23 +231,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           if (!partitionId) {
             continue;
           }
-          if (
-            !partitionService ||
-            typeof partitionService.getCDCSubscriptionDiagnostics !==
-              'function'
-          ) {
-            partitionDiagnosticsById[partitionId] = {
-              diagnosticsAvailable: false,
-              ready: false,
-              subscriberCount: 0,
-              bufferedEvents: 0,
-              bufferReplayInFlight: false,
-            };
-            missingDiagnosticsPartitionIds.push(partitionId);
-            continue;
-          }
-          const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
-          if (!diagnostics || typeof diagnostics !== 'object') {
+          const diagnostics =
+            resolveCdcSubscriptionDiagnostics(partitionService);
+          if (!diagnostics) {
             partitionDiagnosticsById[partitionId] = {
               diagnosticsAvailable: false,
               ready: false,

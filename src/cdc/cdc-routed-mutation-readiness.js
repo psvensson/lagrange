@@ -56,6 +56,28 @@ const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
 const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
 const CDC_ROUTED_MUTATION_READINESS_CONSTRUCTOR = 'constructor';
 
+// Candidates for direct bootstrap-mode SQL: when the table maps to an initial
+// partition id, only that partition qualifies; otherwise any service declaring
+// the table by name or id.
+function selectDirectSqlCandidates(services, tableName, targetPartitionId) {
+  const candidates = [];
+  for (const service of services.values()) {
+    if (!service) {
+      continue;
+    }
+    if (targetPartitionId) {
+      if (service.partitionId === targetPartitionId) {
+        candidates.push(service);
+      }
+      continue;
+    }
+    if (service.tableName === tableName || service.tableId === tableName) {
+      candidates.push(service);
+    }
+  }
+  return candidates;
+}
+
 class CDCRoutedMutationReadiness {
   hasActiveSystemTableWriteMirror(tableName) {
     const sqlQueryEngine = this.sqlQueryEngine;
@@ -173,21 +195,8 @@ class CDCRoutedMutationReadiness {
     }
     const tableName = tableNameResult.tableName;
     const targetPartitionId = INITIAL_PARTITION_IDS[tableName] || null;
-    const candidates = [];
-    for (const service of this.localPartitionServices.values()) {
-      if (!service) {
-        continue;
-      }
-      if (targetPartitionId) {
-        if (service.partitionId === targetPartitionId) {
-          candidates.push(service);
-        }
-        continue;
-      }
-      if (service.tableName === tableName || service.tableId === tableName) {
-        candidates.push(service);
-      }
-    }
+    const candidates = selectDirectSqlCandidates(
+      this.localPartitionServices, tableName, targetPartitionId);
 
     const initializedCandidates =
       candidates.length > 0 ? candidates : [];

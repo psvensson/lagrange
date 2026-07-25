@@ -23,6 +23,18 @@ const JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND = Object.freeze({
     'self_source_active_target_replacement',
 });
 
+// A partition operation outside the discovery-critical set has no bearing on
+// whether this joining node can serve or route; it is excluded only when the
+// discovery-critical set is known and the operation names a partition group.
+function isNonDiscoveryPartitionOperation(
+  normalizedOperation, discoveryCriticalPartitionIds) {
+  return normalizedOperation.entityType ===
+      JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE.PARTITION &&
+    discoveryCriticalPartitionIds.size > 0 &&
+    normalizedOperation.partitionGroupId.length > 0 &&
+    !discoveryCriticalPartitionIds.has(normalizedOperation.partitionGroupId);
+}
+
 function createJoinReadinessReplicaOperationMethods(options = {}) {
   const canonicalJoinDiscoveryCriticalTables =
     options.canonicalJoinDiscoveryCriticalTables || new Set();
@@ -83,15 +95,8 @@ function createJoinReadinessReplicaOperationMethods(options = {}) {
             excludedWarmingTargetCount++;
             continue;
           }
-          if (
-            normalizedOperation.entityType ===
-              JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE.PARTITION &&
-            discoveryCriticalPartitionIds.size > 0 &&
-            normalizedOperation.partitionGroupId.length > 0 &&
-            !discoveryCriticalPartitionIds.has(
-              normalizedOperation.partitionGroupId,
-            )
-          ) {
+          if (isNonDiscoveryPartitionOperation(
+            normalizedOperation, discoveryCriticalPartitionIds)) {
             excludedNonDiscoveryPartitionCount++;
             continue;
           }
