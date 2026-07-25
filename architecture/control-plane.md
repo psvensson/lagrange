@@ -40,80 +40,40 @@ Single-Path Contract items 4 and 8 reference this queue.
 Membership publication moves reconciled active nodes to *published* by draining a
 snapshot queue through `reconcileActiveGateMembershipPublication`
 (`src/control-plane/membership-publication-active-gate-reconcile.js`). This drain
-is the dominant chronic blocker for the `rolling-restart` scenario: a reconciled
-node can stay unpublished (`missingPublishedCount > 0`) when a drain pass no-ops
-without rescheduling, when a publication-row readback returns the `ABSENT_ROW`
-sentinel silently, or when an owner-not-local / epoch-fence short-circuit defers
-the drain across an ownership change. The invariant is
+must retain a wake obligation while any reconciled node remains unpublished
+(`missingPublishedCount > 0`). Publication-row readback treats `ABSENT_ROW` as
+not published, and owner-locality or epoch-fence deferral returns a typed
+retry/wait action instead of proving completion. The invariant is
 `publication-drain-deterministic`: while reconciled active nodes remain
 unpublished, a drain or wake action must stay enabled. Full failure class,
 risky-path list, and the model/test regression guards live in the
 [Active Gate Convergence Contract](contracts/active-gate-convergence.md).
 
-### Convergence Liveness Across Layers (Rolling-Restart Root)
+### Convergence and Publication Ownership
 
-The publication drain is the *most downstream* layer of a longer convergence
-chain, and during `rolling-restart` it is frequently blocked from deeper up.
-Convergence of a restarted node is emergent across an (implicit) precondition
-ladder — `connected → joined → control-plane-writable → snapshot-covered →
-published` — owned by separate subsystems with separate diagnostic
-vocabularies. **No single component owns the end-to-end liveness property "every
-active node eventually reaches `publishedActiveNodeIds`";** it is the side
-effect of every layer not refusing progress.
+An active node progresses through connected, joined, control-plane-writable,
+snapshot-covered, and published states. The transitions have explicit owners;
+no consumer may infer readiness from elapsed time or from a missing row:
 
-Observed root chain (fast-local 5-node, instrumented 2026-06):
+| Transition | Current owner and contract |
+| --- | --- |
+| Connection and join | Bootstrap and transport owners return typed retryable or terminal outcomes |
+| Control-plane participation | `ControlPlaneReadinessService` builds the canonical readiness dimensions |
+| Publication planning | `MembershipPublicationCoordinator` selects eligible targets and queues publication work |
+| Durable publication | `reconcileActiveGateMembershipPublication` validates owner/epoch fences, drains the queue, and confirms row visibility |
+| Projection | Readiness and admin projections expose the durable publication state and typed residual reason |
 
-1. The surviving seed is often the *sole* published node and is saturated by the
-   cluster's control-plane re-init burst (dozens of replica-leadership
-   acquisitions, coordinator rebinds, service-lifecycle ops in the first ~60s).
-2. Rejoining peers' outbound WebSocket reconnects to the seed then **time out at
-   connect** (`WebSocket connection timeout after 10000–30000ms`,
-   `establishConnection` in
-   `src/transport/message-router-connection-lifecycle-methods.js`) while dialing
-   a *correct, stable* address — the socket is not closed mid-handshake and the
-   address is not stale; the saturated owner does not complete the upgrade in
-   time.
-3. Convergence-critical writes then fail `ROUTER_CONNECTION_CLOSED` (the
-   delivery-deferred-while-reconnecting signal), the rejoin's `services` /
-   `control_plane_publications` upserts cannot land, and the publication never
-   drains those nodes.
+Publication deferral uses the active-gate handoff contract. Its next action is
+typed as proceed, retry, wait for owner recovery, or stop. A retryable residual
+must retain an enabled queue or wake action; a silent no-change return is not a
+valid terminal outcome while reconciled active nodes remain unpublished.
+Convergence-critical publication and join work uses the protected pressure
+lanes, while background node-state publication remains background work.
 
-Two findings rule out tempting culprits and narrow the search:
-
-- **Priority is already carried end-to-end for convergence writes** — *not* a
-  gap. Join admission (`JOIN_ADMISSION_DELIVERY_PRIORITY='critical'`), join
-  publication (`JOIN_PUBLICATION_DELIVERY_PRIORITY='critical'`), and
-  `control_plane_publications` mutation (workload class `PUBLICATION_MUTATION` →
-  `PRESSURE_WORK_CLASS.CRITICAL`) all ride the protected critical reserve lane.
-  The high-volume `Outbound queue saturated` events are the deliberately
-  background `NODE_STATE_PUBLICATION_BACKGROUND` path and cannot starve the
-  critical lane. Backpressure/priority is not the convergence blocker.
-- **The join give-up makes a transient transport problem permanent.** On `Join
-  retryable resume budget exhausted` the node previously ran failed-join cleanup
-  that stopped its router and exited with no auto-rejoin. `src/index.js` now
-  re-attempts a fresh join on `joinResult.retryable` (bounded via
-  `LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS`); robustness, not the root fix.
-
-The architectural gap is that the blockers are all *local* safety/throttle
-owners (connection-direction tie-break, incoming-close disposition, per-source
-delivery caps, join retry budget, publication `WAIT_OWNER_RECOVERY`) with no
-*liveness* owner composing the chain, surfacing the single binding blocker, and
-escalating it. The building blocks for that composed convergence contract
-already exist and should be wired, not rebuilt: `owner-outcome-contract.js`
-(envelope, already generalized into cross-owner handoff contracts); the
-`control-plane-readiness-constants.js` dimensions + `ControlPlaneReadinessService`
-(precondition ladder; ordering currently implicit); the
-`projection-readiness-decision.js` ordered `{reason, matches}` first-match
-binding-blocker idiom; and the `OutboundDeliveryPriority` / `pressure-governor.js`
-reserve lanes (a model to imitate). The genuinely missing piece is a thin
-convergence/liveness owner — a natural host is the Invariant Engine — carrying
-an eventually-converge liveness invariant plus a composed binding-blocker
-readout. Transport mitigations landed so far (reconnect-on-incoming-close in
-`src/transport/message-router-connection-close-reconnect.js` and
-adopt-over-dead-on-open in
-`src/transport/message-router-connection-lifecycle-methods.js`) reduce
-connection stranding
-but do not by themselves stabilize convergence under owner saturation.
+The executable liveness and safety contract is
+[Active Gate Convergence Contract](contracts/active-gate-convergence.md).
+Historical harness diagnoses and rejected hypotheses remain in Solver evidence,
+not in this current architecture description.
 
 ### Invariant Engine
 
@@ -150,36 +110,6 @@ Closure policy:
 3. Harness reruns are confirmation artifacts, not sole closure
    evidence.
 
-### Phase Exit Criteria
-
-`PhaseExitCriteria` (`src/control-plane/phase-exit-criteria.js`)
-defines measurable exit gates per migration phase.
-
-| Phase | Exit gates |
-| --- | --- |
-| Queue consolidation | No inline progression; single in-flight enforced |
-| Workflow and transaction unification | No ad-hoc multi-row commits; monotonic transition history |
-| Read-model and readiness closure | One read-model contract per decision; typed divergence events |
-| Timeout and invariant enforcement | Typed timeout classes emitted; hard invariant gates active |
-| Dual-path removal | No remaining dual progression paths; docs match implementation |
-
-Each phase carries rollback notes. Phase constants live in
-`src/control-plane/phase-exit-constants.js`.
-
-### Dual-Path Closure Verification
-
-`DualPathClosure` (`src/control-plane/dual-path-closure.js`) verifies
-no dual progression paths remain after phase closure.
-
-Detected violation types:
-
-1. Temporary toggles not removed at phase boundary.
-2. Duplicate progression branches for the same concern.
-3. Legacy code paths that should have been deleted.
-
-Each concern (dispatch, rebalance, split) must have exactly one
-progression owner path after closure.
-
 ### Forbidden Patterns
 
 1. Running long progression logic inline from event handlers.
@@ -189,7 +119,8 @@ progression owner path after closure.
    of deriving from remaining budget.
 5. Closing harness-discovered failures without a deterministic
    reproduction test.
-6. Leaving dual progression paths after a migration phase closes.
+6. Maintaining dual progression paths for one semantic concern.
+
 ## System Tables
 
 ### CDC Propagation Classification
@@ -345,15 +276,16 @@ The general `STATE` enum (`src/constants/states.js`) retains only non-node value
 - Single authority for all replica state tracking
 - ReplicaLifecycleManager and ReplicaHandler delegate to it (no independent state maps)
 - All replica state changes produce exactly one CDC write to the services table
-- Replaces the former triple-tracking in ReplicaStateMachine, ReplicaLifecycleManager, and ReplicaHandler
 - Owns partition-replica lifecycle persistence in `services`:
   initial row creation for runtime-created replicas and later partial lifecycle
   transitions
 - Does not own `raft_role`; Raft-role persistence remains with the replica
   service (`PartitionService` / `MessageGroupService`)
 
-### Control Plane Services (Decomposed)
-The former monolithic ControlPlaneService is decomposed into four focused services, each with a CREATED -> INITIALIZED -> RUNNING -> STOPPED lifecycle:
+### Control Plane Services
+
+Four focused services each follow a
+CREATED -> INITIALIZED -> RUNNING -> STOPPED lifecycle:
 
 - **HeartbeatService** (`src/control-plane/heartbeat-service.js`) — periodic heartbeat updates, consecutive failure tracking
 - **LeaseService** (`src/control-plane/lease-service.js`) — lease-based readiness tracking, expired lease sweeping
@@ -364,8 +296,9 @@ A thin `ControlPlaneService` facade remains for backward compatibility, delegati
 
 ### UnifiedRebalancer
 - Manages replica placement for partitions, message groups, and
-  replicated service groups (entity types: `wasm_service`,
-  `runtime_service`)
+  `runtime_service` Cells
+- Does not construct a `wasm_service` rebalancer; that enum and policy remain
+  legacy scaffold
 - Operates autonomously (no manual placement)
 - Uses policies to determine target replica count and placement
 - Runtime services (`sys-postgres-wire`) use cluster-global

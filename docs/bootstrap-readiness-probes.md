@@ -48,8 +48,10 @@ health evidence. It is not an alternate ownership path.
 
 ### `GET /health` (compatibility endpoint)
 
-- Meaning: legacy compatibility endpoint.
-- Behavior: remains available during migration window.
+- Meaning: legacy process/SQL-engine availability endpoint.
+- Behavior: always returns `200`; the body reports `initializing` with
+  `ready: false` until the SQL engine exists, then `healthy` with
+  `ready: true`.
 - Notes: non-authoritative for join readiness; use `/readyz` for readiness.
 
 ## Kubernetes Baseline Profile
@@ -88,14 +90,12 @@ Tune these values with observed startup latency in each environment.
 - Prefer retries against readiness probes instead of bootstrap operations.
 - Preserve upstream `503` responses for visibility instead of masking failures.
 
-## `/health` Migration Guidance
+## Compatibility Use Of `/health`
 
-1. Keep `/health` during rollout for existing tooling that only checks process
-   liveness.
-2. Move readiness gating to `/readyz` for orchestrators and load balancers.
-3. Use `/startupz` for startup probes to avoid readiness flapping on boot.
-4. Update dashboards and alerts to track `/readyz` status and reason codes.
-5. Remove `/health` readiness assumptions from clients before deprecation.
+Existing tooling may use `/health` only for compatibility and must inspect its
+body if SQL-engine availability matters. Orchestrators and load balancers use
+`/readyz`; startup probes use `/startupz`; pure process-liveness checks use
+`/livez`. Do not infer join or traffic readiness from the `/health` status code.
 
 ## Operator Interpretation Rules
 

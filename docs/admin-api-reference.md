@@ -20,6 +20,17 @@ canonical `Service_Message` envelopes (`messageId`, `serviceId`,
 contract holds across ingress protocols. Every metadata write flows through
 SQL/CDC.
 
+Admin ingress supports the current `observe` and `enforce` enforcement modes
+from `ADMIN_ENFORCEMENT_MODE`; the configured default is `enforce`. Observe mode
+logs deprecated-path use without permitting a second mutation owner. Enforce
+mode rejects deprecated direct mutations with `BYPASS_REJECTED`. Runtime
+ownership remains with the replicated meta-services in both modes.
+
+OCI runtime descriptors are recognized only when
+`oci_container_enabled` is enabled. The default is disabled, and the current
+OCI implementation is a descriptor and in-memory lifecycle scaffold rather
+than real container activation.
+
 ## sys-admin-meta Actions (ADMIN_META_ACTION)
 
 Defined in `src/admin/admin-meta-command-handlers.js`:
@@ -82,4 +93,3 @@ these CLI message formats and the meta-service command handler interface.
 
 1. `docs/wasm-services-user-guide.md`
 2. `docs/runtime-resource-diagnostics.md`
-3. `docs/runtime-ownership-rollout-runbook.md`

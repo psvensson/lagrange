@@ -52,7 +52,7 @@ routes are compatibility adapters forwarding to:
 - `sys-admin-meta` (broader admin surfaces, delegates WASM ownership)
 - `sys-postgres-wire` (PostgreSQL wire protocol ingress)
 All three services are provisioned during seed bootstrap.
-Under the unified runtime target, these services are runtime-selected via
+In the unified runtime model, these services are selected via
 `service_definitions.runtime_kind` and orchestrated through one lifecycle
 owner.
 
@@ -127,7 +127,6 @@ AdminWebSocketAPI debug route adapter
 - Joining sub-phases: CONTACTING_SEED -> CONNECTING_WEBSOCKET -> CREATING/JOINING_MG -> WAITING_LEADERSHIP -> QUERYING_STATE
 - Phase gates can be registered per sub-phase for validation
 - Terminal sub-phases auto-advance the parent state
-- Replaces the former independent BootstrapPhaseStateMachine, JoiningPhaseStateMachine, and EnhancedBootstrapStateMachine
 
 ### FailureDetector (Single Instance)
 - Single failure detection component (no duplicate detection in NodeLifecycleService)
@@ -196,7 +195,7 @@ No other source file may call `applySystemTableChange` directly.
 - Bootstrap mode for seed node direct writes (temporary, cleared after registration)
 - Normal mode routes through SQL engine to partition leaders
 - Generates CDC events that update all node caches
-- Single bootstrap writer: replaces the former BootstrapPartitionWriter and BootstrapSystemTableWriter
+- Single bootstrap writer for system-table mutation
 - Runtime CDC event processing is instantiated once via `CDCEventHandler`
 - `handleEpochChangeCDC` and `handleNodeStateCDC` delegate to that single runtime handler path
 - Epoch propagation is cluster-scoped via `config.current_epoch` and `setEpochManager(...)`
@@ -208,8 +207,8 @@ No other source file may call `applySystemTableChange` directly.
   (`source === OWNER_RPC_LANE`) it follows the upsert with
   `applyAuthoritativeCacheSweep`, which deletes cache-only rows absent from that
   complete authoritative set. Local-replica reads (a possibly-lagging follower) never
-  drive eviction. A periodic owner-rate-limited sweep for stable nodes is a tracked
-  follow-up.
+  drive eviction. No periodic owner-rate-limited sweep for stable nodes is
+  implemented.
 
 ### PartitionService
 - SQLite-backed Raft group for data storage
@@ -238,40 +237,49 @@ No other source file may call `applySystemTableChange` directly.
 - Ensures message delivery with retry logic
 - Every node has at least one message group replica
 
-### Runtime_Driver_Registry (Target Owner)
+### RuntimeDriverRegistry
+- Implemented by `src/runtime/runtime-driver-registry.js`
 - Single owner mapping `runtime_kind` to runtime driver implementation
 - Deterministic lookup; unknown kinds fail closed with typed errors
 - No fallback to alternate runtime drivers
 
-### Service_Runtime_Lifecycle (Target Owner)
+### ServiceRuntimeLifecycle
+- Implemented by `src/runtime/service-runtime-lifecycle.js`
 - Single owner for runtime `prepare/start/stop/health` orchestration
 - Coordinates endpoint intent registration through one write path
 - Coordinates operation lifecycle transitions through SQL/CDC-owned records
 - Shared owner across `native_js`, `wasm_component`, and `oci_container`
 - Injects service-scoped query executors into replica contexts during `start()`
-  so service replicas can query tables through the standard SQL execution path.
+  so service Cells can query tables through the standard SQL execution path.
   The query executor factory is owned by `SQLQueryEngine` and wired via
   `setQueryExecutorFactory()`. This is the single injection point for
   service-to-table query access — no driver or lifecycle module may create
   its own query path.
 
-### Runtime Drivers (Target Model)
+### Runtime Drivers
 - `Native_JS_Driver`:
   runs existing admin/service handlers in replicated runtime execution
 - `Wasm_Component_Driver`:
   runs WASM component/module workloads with existing policy checks
 - `OCI_Container_Driver`:
-  runs digest-pinned OCI workloads under feature gate and policy controls
+  validates digest-pinned OCI descriptors and supports the in-memory lifecycle
+  scaffold when `oci_container_enabled` is enabled; real container activation
+  is not implemented
 
-### WasmServiceReplica
-- Third Raft group type alongside partitions and message groups
-- Extends `RaftReplicaBase` with `entityType` set to `WASM_SERVICE`
-- Integrates SessionKVStore (replicated KV), SafetyInterval (read consistency), TimerManager (persistent timers), and WasmExecutor (WASM function execution)
-- Registers in `services` table with `service_type` set to `wasm_service`
-- Managed by `UnifiedRebalancer` for replica placement using the same policy-based approach as other entity types
+### Legacy WasmServiceReplica Scaffold
+- `WasmServiceReplica` extends `RaftReplicaBase` with `entityType` set to
+  `WASM_SERVICE` and composes `SessionKVStore`, `SafetyInterval`,
+  `TimerManager`, and `WasmExecutor`.
+- Production startup constructs neither `WasmServiceLifecycle` nor a
+  `wasm_service` `UnifiedRebalancer`; its Raft field therefore has no active
+  production initialization path.
+- Treat the enum, lifecycle, and replica classes as legacy scaffold, not a
+  replicated service-state guarantee.
+- Current WASI execution uses `Wasm_Component_Driver` in placed
+  `runtime_service` Cells; durable service data remains in tables.
 
 ### WasmMetaService (`sys-wasm-meta`)
-- Built-in replicated WASM service for external WASM entity management
+- Built-in placed runtime service for external WASM entity management
 - Provisioned during seed bootstrap via `MetaServiceFactory`
   (`src/wasm-service/meta-service-factory.js`)
 - Lifecycle integration via `MetaServiceLifecycle`
@@ -348,12 +356,12 @@ Key components:
 - `PgWireStartupSafetyGate` — ensures control-plane readiness
   before PG wire startup; prevents bootstrap/join deadlocks on
   PG wire failure
-- `PgWireCutoverGuard` — hard cutover verification; rejects any
-  standalone listener startup path outside the replicated service
+- `PgWireCutoverGuard` — listener-uniqueness verification; rejects any
+  standalone listener startup path outside the runtime service
 
 Ownership rules:
 - No standalone PG wire TCP listener path exists. The replicated
-  service path is the only listener owner (hard cutover).
+  runtime-service path is the only listener owner.
 - Session state is replica-local by design. Horizontal scaling
   works through endpoint discovery and client reconnect.
 - All metadata writes flow through SQL/CDC; the runtime module

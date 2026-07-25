@@ -60,7 +60,7 @@ For local builds, build and push your own image and pass
 - **Migration from the original chart defaults:** values files containing
   `admin.websocketHost: 0.0.0.0` or
   `admin.allowInsecureExternalBind: true` now fail rendering. Remove those
-  overrides. The chart no longer publishes port 8081; use REST health and
+  overrides. The chart does not publish port 8081; use REST health and
   readiness endpoints for orchestration. There is intentionally no insecure
   compatibility flag.
 

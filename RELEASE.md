@@ -66,8 +66,8 @@ This is the one property a distributed release must be candid about.
   safety invariants (no corruption, no unexpected node exit, no blind/stale
   oracle reads).
 - **Bounded-time convergence is not guaranteed.** Rolling-restart convergence is
-  statistical: the per-run scenario-PASS rate is ≈25–33%, and the honest bar is
-  a Wilson-95 lower bound over a fixed-code window of N ≥ 20 runs
+  statistical: the honest bar is a Wilson-95 lower bound over a fixed-code
+  window of at least 15 runs
   (`docs/convergence-donewhen-metric.md`), not "converges by time T".
 - **Eventual stabilization is proven** for the sole residual head via a
   monotone Φ-fixpoint over the real rebalancer kernel
@@ -77,7 +77,7 @@ This is the one property a distributed release must be candid about.
 
 Do not gate ordinary pushes on the statistical convergence rate — it is
 satisfiable or violable by variance alone and would make CI flaky. Track it as a
-trend and promote only on a sealed N ≥ 20 Wilson bar.
+trend and promote only through the sealed Wilson-bar rule.
 
 ## Runner prerequisite
 

@@ -14,6 +14,7 @@ const DIFF_PREFIX = 'diff:';
 const DIFF_EXTENSION = '.diff';
 const DESCRIPTOR_EXTENSION = '.diff.json';
 const GZIP_EXTENSION = '.diff.gz';
+const MARKDOWN_EXTENSION = '.md';
 const CONTENT_ADDRESSED_STORAGE_KIND = 'content-addressed';
 const ROOT_PACKAGE_LOCK_PATH = 'package-lock.json';
 const QUEST_SCOPE_RUNTIME = 'runtime';
@@ -216,6 +217,7 @@ export function classifyPath(filePath) {
   if (WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
     return QUEST_SCOPE_WORKFLOW;
   }
+  if (normalized.endsWith(MARKDOWN_EXTENSION)) return 'docs';
   if (RUNTIME_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
     return QUEST_SCOPE_RUNTIME;
   }
@@ -277,10 +279,15 @@ export function classifyQuestScope(quest) {
     return QUEST_SCOPE_RUNTIME;
   }
   // Process Quests may own either runtime migration scaffolding or the Solver
-  // itself. A cited owner source is stronger than prose vocabulary. Evidence
-  // and generated bookkeeping paths are not source-owner citations; their
-  // basenames must not turn a runtime owner Quest into a workflow Quest.
-  const citedScope = citedSourceOwnerScope(quest?.statement);
+  // itself. A cited owner source in the sealed statement or planning links is
+  // stronger than prose vocabulary. Evidence and generated bookkeeping paths
+  // are not source-owner citations; their basenames must not turn a runtime
+  // owner Quest into a workflow Quest.
+  const citedScope = citedSourceOwnerScope([
+    quest?.statement,
+    quest?.links?.specRef,
+    quest?.links?.planDoc,
+  ].filter(Boolean).join(' '));
   if (citedScope) return citedScope;
   const haystack = [
     quest?.id,

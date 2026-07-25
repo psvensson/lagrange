@@ -19,7 +19,7 @@ links:
 > The mechanism analysis below remains valid history; the levers (R1/R2/R3) are done/superseded.
 
 > **FRESH-AGENT START HERE.** This epic is self-contained. Read
-> [`docs/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md)
+> [`docs/steering/operational-ground-truth.md`](../../docs/steering/operational-ground-truth.md)
 > first (deterministic-first / gate-last / research-existing / subagent-verify /
 > **coupled-invariant: stop single-frontier patching**). All file:line below were
 > verified at HEAD `be388072` on 2026-06-23 but are POSITIONAL — re-grep before

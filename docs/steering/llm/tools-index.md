@@ -59,6 +59,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:closure-ledger` — Validate closure-ledger state.
 - `audit:cure-typing-owner` — `node scripts/check-cure-typing-owner.js`
 - `audit:doc-audience` — `node scripts/check-doc-audience.js`
+- `audit:documentation-current` — `node scripts/check-documentation-current-state.js`
 - `audit:file-size` — Report oversized production and test files.
 - `audit:file-size:strict` — `node scripts/check-file-size-thresholds.js --strict`
 - `audit:guideline:boundary-mode-contracts` — Check boundary-mode contracts for combinable policy options.
@@ -241,6 +242,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:deps` — `depcruise --config dependency-cruiser.config.cjs src scripts test`
 - `test:distributed:boundary:transition` — `node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js`
 - `test:distributed:checkpoint:7node:transaction-recovery` — `node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery`
+- `test:documentation-current-state` — `node scripts/run-documentation-current-state-scenario.js documentation-current-state-contract`
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
 - `test:fast` — Run non-bootstrap, non-integration TAP tests.
@@ -287,4 +289,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-191 scripts indexed; 71 have a curated description, 120 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+193 scripts indexed; 71 have a curated description, 122 fall back to their raw command. Improve coverage in the two sources named in the header comment.

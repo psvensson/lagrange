@@ -10,7 +10,7 @@ import {
 } from './guideline-check-shared.js';
 
 const RULE_REFERENCE =
-  'architecture/runtime-grammar-hierarchy.md and current-owner-maps.md';
+  'docs/steering/doctrine/state-encoding.md and architecture/current-owner-maps.md';
 
 const VIOLATION_KIND = Object.freeze({
   FORBIDDEN_FRAGMENT: 'runtime_grammar_forbidden_fragment',

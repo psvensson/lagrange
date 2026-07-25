@@ -1,8 +1,7 @@
 # Lagrange Admin CLI User Guide
 
 This guide covers the Lagrange Admin CLI, a terminal-based administration tool
-for Lagrange. The command is `lagrange-admin` (the pre-rename `ddb-admin` alias was
-removed before the first release).
+for Lagrange. The command is `lagrange-admin`.
 
 ## Table of Contents
 

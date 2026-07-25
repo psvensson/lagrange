@@ -13,8 +13,7 @@ handshakes, and some nodes exhaust a retry budget and tear themselves down.
 
 Single-layer fixes (transport reconnect; join re-attempt) and an
 admission-concurrency throttle did not move the historical sample. The
-research-backed direction (see
-[architecture/future/metastable-convergence-resilience.md](../../../architecture/future/metastable-convergence-resilience.md))
+research-backed direction (see [research-input.md](research-input.md))
 is to (1) make convergence measurable, then (2) break the sustaining retry loop,
 (3) keep rejoiners from loading the owner before catch-up, and (4) disperse
 ownership adaptively.

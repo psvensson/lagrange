@@ -175,28 +175,16 @@
   ],
   "metrics": [
     {
-      "name": "Quest context",
-      "probe": "npm run quest:context -- --id rolling-restart-core-stability"
+      "name": "Quest lifecycle statechart",
+      "probe": "npm run model:statecharts"
     },
     {
-      "name": "Solver report",
-      "probe": "npm run solve:report -- --id rolling-restart-core-stability"
-    },
-    {
-      "name": "Quest theory list",
-      "probe": "npm run solve:theory -- list --id rolling-restart-core-stability"
-    },
-    {
-      "name": "Quest health",
-      "probe": "npm run solve:health -- --id rolling-restart-core-stability"
-    },
-    {
-      "name": "Quest status current blocker",
-      "probe": "node scripts/solve.js status --id rolling-restart-core-stability"
-    },
-    {
-      "name": "contract validator",
+      "name": "system contract registry",
       "probe": "npm run model:contract-records"
+    },
+    {
+      "name": "Solver lifecycle regressions",
+      "probe": "npm run test:file -- test/solve/step.test.js test/solve/evidence.test.js test/solve/next.test.js"
     }
   ],
   "questRefs": [
@@ -212,28 +200,28 @@
         "severity": "medium - work appears complete while future agents cannot replay what moved the metric",
         "detectability": "high - Quest status shows attempts and findings counts directly",
         "mitigation": "drive active orientation through quest-context and require solve step/finding events for durable work history",
-        "probe": "npm run quest:context -- --id rolling-restart-core-stability"
+        "probe": "npm run test:file -- test/solve/step.test.js"
       },
       {
         "failureMode": "same-frontier work widens or models without theory evidence",
         "severity": "medium - the Quest can return to local patch loops after the first stall",
         "detectability": "high - solve health emits theory-required and model-required signals",
         "mitigation": "step begin/commit and run preflight enforce selected frontier theory and model rung evidence",
-        "probe": "npm run solve:health -- --id rolling-restart-core-stability"
+        "probe": "npm run test:file -- test/solve/step-theory-gates.test.js"
       },
       {
         "failureMode": "latest blocker changes while an older selected theory continues to steer widened work",
         "severity": "medium - attempts can optimize a no-longer-current owner path",
         "detectability": "high - current blocker projection and solve health emit selected-theory-stale",
         "mitigation": "record theory result movement or select a fresh owner-path theory before widened/model/change-approach attempts",
-        "probe": "node scripts/solve.js health --id rolling-restart-core-stability"
+        "probe": "npm run test:file -- test/solve/evidence.test.js"
       },
       {
         "failureMode": "Quest source edits silently spread across unrelated owner areas",
         "severity": "medium - a single Quest can become hard to verify or hand off honestly",
         "detectability": "medium - scope pressure is derived from recorded diff artifacts and shown in health/report",
         "mitigation": "narrow the theory, split the Quest, or record a finding that justifies the mixed scope before more source work",
-        "probe": "node scripts/solve.js report --id rolling-restart-core-stability"
+        "probe": "npm run test:file -- test/solve/scope-pressure-precommit-enforcement.test.js"
       }
     ],
     "stpa": [

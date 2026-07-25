@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-07-24T15:29:26.080Z",
+  "generatedAt": "2026-07-25T09:07:25.701Z",
   "stats": {
-    "candidateCount": 429,
-    "dedupedRuleCount": 419,
-    "exportedRuleCount": 419,
+    "candidateCount": 436,
+    "dedupedRuleCount": 425,
+    "exportedRuleCount": 425,
     "aliasRuleCount": 4,
-    "masterRuleCount": 415,
-    "emittedMasterRuleCount": 415,
-    "estimatedAllRulesTokens": 17666
+    "masterRuleCount": 421,
+    "emittedMasterRuleCount": 421,
+    "estimatedAllRulesTokens": 17862
   },
   "sources": [
     {
@@ -50,10 +50,10 @@
       "file": "doctrine/state-encoding.md",
       "role": "packed",
       "domain": "architecture",
-      "ruleCount": 20,
-      "masterRuleCount": 19,
+      "ruleCount": 27,
+      "masterRuleCount": 26,
       "aliasRuleCount": 1,
-      "emittedMasterRuleCount": 19
+      "emittedMasterRuleCount": 26
     },
     {
       "file": "doctrine/decision-experiments.md",
@@ -322,16 +322,16 @@
       "name": "architecture",
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
-      "ruleCount": 165,
-      "estimatedTokens": 5664,
+      "ruleCount": 171,
+      "estimatedTokens": 5871,
       "domains": [
         "architecture"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 165,
+      "masterRuleCount": 171,
       "aliasRuleCount": 3,
-      "indexedRuleCount": 168,
+      "indexedRuleCount": 174,
       "sourceFiles": [
         "system-guidelines.md",
         "runtime-contracts.md",

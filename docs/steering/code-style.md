@@ -4,7 +4,7 @@ status: canonical
 always_load: false
 source_of_truth: self
 compiled_pack: docs/steering/llm/style.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-25
 ---
 
 > **Canonical source.** Lint, formatting, naming. Regenerate the style pack with `npm run steering:llm:pack`.
@@ -73,9 +73,9 @@ When writing or modifying code:
   `this` resolution visible, lint-provable, and unit-testable without the
   class. Existing mixin fragments are established debt, not license: keep
   them working, and migrate a fragment to explicit context when other work
-  already restructures it (no standalone mass-rewrite). See
-  `architecture/ordinal-file-decomposition-roadmap.md` for the sanctioned
-  decomposition shapes.
+  already restructures it (no standalone mass-rewrite). Preserve the existing
+  entrypoint while moving each responsibility into a semantically named owner,
+  contract, decision, state, or consumer module.
 
 ## Constants And Naming
 

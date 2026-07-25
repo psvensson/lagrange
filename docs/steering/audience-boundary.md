@@ -55,6 +55,13 @@ external agent memory).
 link ban outside the portal allowlist, and that relocated legacy paths do not
 reappear.
 
+Audience and lifecycle are separate classifications. The lifecycle contract in
+[`docs/development/documentation-lifecycle.md`](../development/documentation-lifecycle.md)
+keeps current documentation separate from active planning, generated surfaces,
+compatibility pointers, release history, and immutable evidence.
+`scripts/check-documentation-current-state.js` enforces that boundary through
+`npm run audit:documentation-current`.
+
 ## Why
 
 Humans landing in generated agent packs waste time reverse-engineering

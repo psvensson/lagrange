@@ -102,7 +102,7 @@ agent exposes only the runtime operations and identity labels required by the
 driver, authenticates callers, and owns engine-specific translation.
 
 The selected contract is recorded in
-[`architecture/oci-runtime-host-contract.md`](../../../architecture/oci-runtime-host-contract.md).
+[`oci-runtime-host-contract.md`](oci-runtime-host-contract.md).
 It uses a private authenticated Unix-domain control socket, agent-derived
 resource labels, a closed operation/result grammar, and one production
 construction route through seed and join startup into `createRuntimeStartupWiring`.

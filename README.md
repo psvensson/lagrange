@@ -11,8 +11,8 @@ there first and move only the data that actually has to move.
 That puts Lagrange somewhere between a distributed SQL database, a dataflow
 runtime, and a service platform. Tables are split into partitions, every
 partition is copied to several nodes, SQL goes through one execution engine,
-and the cluster places service replicas on the nodes that store the data they
-use.
+and the cluster places runtime-service Cells on the nodes that store the data
+they use.
 
 This repo is for people interested in building or studying that model. It is
 substantial, but still experimental.
@@ -31,9 +31,9 @@ In practice that means:
 - table data is split into partitions, each replicated across nodes with Raft
 - SQL runs through a shared execution path
 - distributed compute runs on the nodes that own the relevant partitions
-- services are replicated too, and the cluster places each service replica on
-  a node holding as many replicas of the partitions it accesses as possible —
-  and re-places it as the data layout changes
+- runtime services are decomposed into placed Cells, and the cluster places
+  each Cell on a node holding as many replicas of the partitions it accesses
+  as possible — then re-places it as the data layout changes
 - services can query tables without a separate data access stack
 
 If you have ever built a system that looked like this:
@@ -51,24 +51,40 @@ Lagrange explores a tighter loop:
 client -> cluster -> execute near the data -> return results
 ```
 
-To be clear about where the novelty is: any distributed system can read
-remote data over the network. What Lagrange adds is placement. Services are
-replicated things, just like partitions, and the cluster continuously
-positions each service replica so it sits as close as possible to as many
-replicas of the data it reads and writes. Locality is something the cluster
-produces and maintains for you, not something you engineer by hand and watch
-decay as the data moves.
+To be clear about where the novelty is: any distributed system can read remote
+data over the network. What Lagrange adds is placement. Runtime services are
+decomposed into placed Cells; unlike data partitions, they do not have a
+per-service Raft log or replicate process-local state. Their durable state lives
+in ordinary partitioned and replicated tables. The cluster continuously
+positions each Cell so it sits as close as possible to the data replicas it
+reads and writes. Locality is something the cluster produces and maintains for
+you, not something you engineer by hand and watch decay as the data moves.
 
 A classical distributed database splits tables into partitions, replicates
 those partitions across nodes, and routes each request to the right one:
 
 ![Classical distributed database: logical tables split into partitions, replicated across nodes, requests routed to the right partitions and run in parallel](docs/dist_db.png)
 
-Lagrange keeps that data layer and adds a partitioned *service* layer on top of
-it — service instances are placed on or near the data they access, so compute
-moves to the data instead of the data moving to the compute:
+Lagrange keeps that data layer and adds a placed *service* layer on top of it —
+service Cells are placed on or near the data they access, so compute moves to
+the data instead of the data moving to the compute:
 
-![Lagrange data + service layer: a partitioned service layer sits above the logical tables, and service instances are co-located with the data partitions they read and write](docs/dist_db_service.png)
+```mermaid
+flowchart TB
+  C1["Order Processor Cell<br/>node-a"]:::cell
+  C2["Order Processor Cell<br/>node-c"]:::cell
+  O1["Orders P1<br/>Raft replica"]:::data
+  O2["Orders P2<br/>Raft replica"]:::data
+  S["Durable service state<br/>ordinary tables"]:::data
+
+  C1 -. "reads / writes" .-> O1
+  C2 -. "reads / writes" .-> O2
+  C1 -. "persists" .-> S
+  C2 -. "persists" .-> S
+
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef cell fill:#dcfce7,stroke:#166534,color:#052e16
+```
 
 ---
 
@@ -91,7 +107,7 @@ The differences in practice are:
 - cross-partition work is explicit through primitives like `lookup`, `emit`,
   and `broadcast`
 - replicated service descriptors and callback modules are first-class runtime
-  metadata, not just SQL-side extension hooks; deployed service components run
+  metadata, not just SQL-side extension hooks; deployed service Cells run
   as genuine WASI components on the Binding/Cell path
 
 If you only need some row-level logic near a single-node database, stored
@@ -106,8 +122,8 @@ deployment system, and failure domain.
 
 Lagrange is not mainly about replacing a container scheduler. The difference
 is that compute placement is derived from data ownership: the cluster decides
-where each service replica runs based on which nodes store the data it
-touches, and keeps adjusting that placement as the data layout changes.
+where each service Cell runs based on which nodes store the data it touches,
+and keeps adjusting that placement as the data layout changes.
 
 In practice that changes a few things:
 
@@ -230,8 +246,8 @@ Current building blocks include:
   services, and internal system queries
 - distributed execution primitives such as `lookup`, `emit`, and `broadcast`
   (defined in the [Example](#example) section)
-- WASM service lifecycle scaffolding, currently exercised by a JavaScript
-  artifact envelope rather than compiled WebAssembly
+- genuine WASI component execution through the Artifact / Binding / Cell
+  deployment surface, plus a separate legacy JavaScript-envelope callback path
 - cluster diagnostics, health probes, live query support, and an admin CLI
 - distributed failure and stress testing infrastructure
 
@@ -244,38 +260,18 @@ See [roadmap.md](roadmap.md) for the canonical implementation roadmap.
 
 ## How You Deploy Code To Lagrange
 
-There are three intended ways to get your code running on a Lagrange cluster —
-a ladder ordered by how aware your code is of Lagrange. Each rung trades a
-little more coupling for more efficiency.
+Two execution surfaces are available today:
 
-1. **Bring your container (no code changes).** Package your existing
-   PostgreSQL-talking application as an OCI container and let Lagrange run it
-   as a managed, replicated service — placing each replica near the data it
-   actually accesses, and re-placing it as the data layout changes. Your
-   application keeps speaking the PostgreSQL wire protocol and never learns it
-   moved. This is the expected most common early path.
-   *Status: the PostgreSQL wire surface and the affinity placement machinery
-   exist; managed OCI container execution is not implemented yet (see the
-   capability matrix below). The MovieLens affinity demo shows the placement
-   behavior this rung buys, currently through an internal service rather than
-   an installed container.*
-2. **Callbacks (Lagrange-aware).** Write an async function against the `ctx`
-   surface and hand it to the cluster, which ships it to the nodes owning the
-   partitions it reads — compute moves to the data instead of the service
-   merely sitting near it. Today this has two forms, embedded and uploaded
-   (described in the mental model below); the design direction is one merged
-   callback surface. Cross-replica state is planned to live in a **shared
-   service context** — a redis-like store scoped to the service and shared
-   across its replicas — rather than in captured closures.
-   *Status: embedded and uploaded callbacks work today; the merged surface and
-   the shared service context are design-stage.*
-3. **WASM components (landed).** A portable, sandboxed, digest-pinned
-   artifact deployed through the Artifact / Binding / Cell surface.
-   *Status: landed — a service is deployed through INSTALL SERVICE and CREATE
-   BINDING; the resulting Cell runs a genuine WASI component with budget and
-   declared-table enforcement. The older `wasm_component` **callback** form
-   remains a JavaScript-envelope rehearsal, and invocation for non-request
-   Binding sources cuts over separately.*
+1. **Artifact / Binding / Cell WASM components.** Install a digest-pinned
+   Artifact with `INSTALL SERVICE`, declare immutable request execution intent
+   with `CREATE BINDING`, and let the cluster derive ready Cells. The Cell runs
+   a genuine WASI component with budget and declared-table enforcement.
+   Request Bindings are invocable; the other accepted Binding source kinds are
+   stored and activated but do not yet have public invocation adapters.
+2. **Lagrange-aware callbacks.** An async `run(ctx)` callback can execute
+   through the embedded runtime or the uploaded callback-module path. The
+   uploaded `wasm_component` callback format is a JavaScript envelope, not a
+   WebAssembly component.
 
 Deployment is declared with exactly three concepts — **Artifact** (installed,
 digest-pinned package), **Binding** (immutable user intent tying one Artifact
@@ -287,10 +283,11 @@ architecture is
 and the operator flow is
 [`docs/wasm-services-user-guide.md`](docs/wasm-services-user-guide.md).
 
-The plan of record for this ladder is the service-portability-ladder spec
-([`solve/specs/service-portability-ladder/`](solve/specs/service-portability-ladder/requirements.md));
-current runtime support is recorded in
+Managed OCI container activation is unsupported. The authoritative current
+runtime matrix is
 [`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
+Future deployment work is tracked in
+[`solve/specs/service-portability-ladder/`](solve/specs/service-portability-ladder/requirements.md).
 
 ---
 
@@ -302,14 +299,11 @@ to emit results, and the distribution primitives below when a step genuinely has
 to cross partitions. That function is the unit Lagrange schedules — there is no
 separate worker service to stand up.
 
-**Two ways to hand that function to the cluster** (the two current forms of
-ladder rung 2 above — the design direction is to merge them into one callback
-surface):
+**Two ways to hand that function to the cluster:**
 
 Current runtime support is recorded in
 [`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
 **Service portability status:** the matrix is the current implementation claim;
-architecture documents may describe later target contracts.
 The uploaded `wasm_component` callback example exercises the lifecycle but does
 not run real WebAssembly: its JavaScript source is serialized into
 `js_wasm_component_v1` and evaluated as JavaScript. It is not a WebAssembly
@@ -330,10 +324,9 @@ genuine WASI components); `native_js` remains kernel-internal.
   callback lifecycle. They do not yet demonstrate an externally installable
   service artifact.
 
-**Where state goes.** Treat the callback as stateless: it may be serialized,
-shipped, and run on several nodes, so captured closure scope is not a place to
-keep state. Durable state belongs in tables; cross-replica working state is
-what the planned shared service context (ladder rung 2 above) is for.
+**Where state goes.** Treat the callback as stateless: it may be serialized and
+run on several nodes, so captured closure scope is not a place to
+keep state. Durable shared state belongs in tables.
 
 **Where it runs.** The `SELECT` in your callback names a table. The cluster
 resolves that table to the partitions that hold its rows, and the nodes that own
@@ -581,9 +574,9 @@ blocks:
 
 - **Partition Groups**: table storage backed by Raft and SQLite
 - **Message Groups**: cluster communication and routing
-- **Runtime Service Groups**: replicated service lifecycle and placement; the
-  current uploaded callback rehearsal executes JavaScript rather than a genuine
-  WASM component
+- **Runtime Service Cells**: shared lifecycle and placement for `native_js` and
+  genuine `wasm_component` workloads; the older uploaded callback rehearsal is
+  a separate JavaScript-envelope compatibility path
 
 ```mermaid
 flowchart TD
@@ -622,9 +615,10 @@ execution:
 The deeper architecture docs live here:
 
 - [architecture/INDEX.md](architecture/INDEX.md) (canonical entry point)
+- [architecture/system-model.md](architecture/system-model.md) — the illustrated
+  mental model, and the start of the five process walkthroughs (partitioning,
+  replication, rebalancing, request routing, data affinity)
 - [architecture/README.md](architecture/README.md)
-- [architecture/lagrange_architecture_diagrams.md](architecture/lagrange_architecture_diagrams.md)
-- [architecture/lagrange_advanced_architecture_diagrams.md](architecture/lagrange_advanced_architecture_diagrams.md)
 
 ---
 
@@ -649,12 +643,12 @@ canonical request model.
 Compute can run on the nodes that already own the data it needs, with explicit
 primitives for cross-partition work when locality is not enough.
 
-### WASM Component Direction
+### WASM Component Runtime
 
-The target runtime executes genuine WebAssembly components for a small,
-portable deployment artifact. Today the `wasm_component` callback example is a
-JavaScript-envelope lifecycle rehearsal; it does not yet provide component
-sandboxing or language-neutral execution.
+The Artifact / Binding / Cell path executes genuine WASI components with
+budget and declared-table enforcement. The separate legacy `wasm_component`
+callback example evaluates a JavaScript envelope and must not be used as
+evidence for component execution.
 
 ### Service Query Bridge
 

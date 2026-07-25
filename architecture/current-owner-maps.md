@@ -24,12 +24,10 @@ For durable implementation rules, use
 
 This file is long reference material. Jump to a section:
 
-- [Runtime Grammar Hierarchy](#runtime-grammar-hierarchy) — active target hierarchy for runtime coherence work
+- [Runtime Grammar](#runtime-grammar) — current evidence-to-presentation layer order
 - [Core Ownership Assignments](#core-ownership-assignments) — the top-level concern → owner map
 - [Topology Workflow Owner Map](#topology-workflow-owner-map) — split/rebalance/replace workflow owners
 - [Operation Progress Owner File Map](#operation-progress-owner-file-map) — per-file owners of operation progression
-- [Rebalancer Segment Removal Ledger](#rebalancer-segment-removal-ledger) — decomposition removal tracking (rebalancer)
-- [Control-Plane Snapshot Stage Removal Ledger](#control-plane-snapshot-stage-removal-ledger) — decomposition removal tracking (snapshot)
 - [Shared Control-Plane Building Blocks](#shared-control-plane-building-blocks) — the owner-contract kernels catalog (largest section)
 - [Distributed Harness Building Blocks](#distributed-harness-building-blocks) — benchmark/harness admission owners
 - [Active Boundary Catalog](#active-boundary-catalog) — the canonical hotspot-boundary table
@@ -38,10 +36,9 @@ The narrative behind the shared control-plane owner contracts lives in
 [`readiness-and-owner-contracts.md`](readiness-and-owner-contracts.md); this file
 is the concrete owner/evidence/vocabulary catalog.
 
-## Runtime Grammar Hierarchy
+## Runtime Grammar
 
-The current active target hierarchy for runtime coherence work is defined in
-[runtime-grammar-hierarchy.md](./runtime-grammar-hierarchy.md).
+Current runtime decisions use this normalized layer order:
 
 The layer order is:
 
@@ -57,7 +54,8 @@ The important active rule is:
 - `decision` is the first layer allowed to answer canonical current meaning
 - `presentation` may summarize `decision`, but must not invent new runtime
   meaning
-- the current pilot slice is priority recovery under load
+- priority recovery, readiness, admin, and harness consumers use this order
+  without defining a second decision vocabulary
 
 ## Core Ownership Assignments
 
@@ -123,50 +121,6 @@ Current workflow ownership boundaries are:
   `operation_progress.state`, `operation_progress.lastAcceptedEventId`, and
   event projections. Historical report adapters may render old fields only as
   presentation-only compatibility, outside lifecycle decision code.
-
-## Rebalancer Segment Removal Ledger
-
-The following ordinal files are allowlisted temporary compatibility wrappers.
-They may not implement or import the `operation_progress` resource/FSM/store
-path. New operation-progress runtime work must land in the named owner files
-listed above.
-
-| Legacy file | Classification | Replacement owner file | Deletion condition |
-| --- | --- | --- | --- |
-| `src/rebalancer/unified-rebalancer-segment-1.js` | temporary compatibility wrapper | `src/rebalancer/unified-rebalancer.js` | Delete after unified rebalancer construction imports no ordinal classes. |
-| `src/rebalancer/unified-rebalancer-segment-2.js` | extract into responsibility-named module | `src/rebalancer/move-planner.js` | Delete after placement planning helpers consume `MovePlanner` directly. |
-| `src/rebalancer/unified-rebalancer-segment-3.js` | extract into responsibility-named module | future `src/rebalancer/replica-operation-status-projection.js` | Delete after replica-operation progress/status projection moves to the named projection module. |
-| `src/rebalancer/unified-rebalancer-segment-4-stage-1.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-one helpers move to the named evaluation module. |
-| `src/rebalancer/unified-rebalancer-segment-4-stage-2.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-two helpers move to the named evaluation module. |
-| `src/rebalancer/unified-rebalancer-segment-4-stage-3.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-three helpers move to the named evaluation module. |
-| `src/rebalancer/unified-rebalancer-segment-4-stage-4.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-four helpers move to the named evaluation module. |
-| `src/rebalancer/unified-rebalancer-segment-4-stage-5.js` | extract into responsibility-named module | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after health/admission stage-five helpers move to the named evaluation module. |
-| `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js` | temporary compatibility wrapper | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after shared health/admission constants move to the named evaluation module. |
-| `src/rebalancer/unified-rebalancer-segment-4.js` | temporary compatibility wrapper | future `src/rebalancer/rebalance-health-evaluation.js` | Delete after segment-four public imports point at the named evaluation module. |
-| `src/rebalancer/unified-rebalancer-segment-5.js` | temporary compatibility wrapper | `src/rebalancer/unified-rebalancer.js` | Delete after the top-level unified rebalancer class composes named modules directly. |
-
-## Control-Plane Snapshot Stage Removal Ledger
-
-The priority-recovery snapshot ordinal stage files have been decomposed into
-responsibility-named owner modules (rename/extract only; behavior unchanged and
-the `priority-recovery-snapshot.js` seam export surface is stable). New
-control-plane snapshot work must land in these semantic owner files rather than
-ordinal stage files.
-
-| Retired ordinal file | Classification | Successor owner file | Status |
-| --- | --- | --- | --- |
-| `src/control-plane/priority-recovery-snapshot-stage-1.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-ingress.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-2.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-eligibility.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-3.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-publication.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-4.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-active-gate.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-5.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-workflow.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-6.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-rebalancer.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-7.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-observation.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-8.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-actuation.js` | Removed; renamed to successor (re-exported through `priority-recovery-snapshot.js`). |
-| `src/control-plane/priority-recovery-snapshot-stage-9.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-burndown.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-10.js` | barrel folded into named dispatch module | `src/control-plane/priority-recovery-dispatch-snapshot.js` | Removed; consumers import the dispatch snapshot module directly. |
-| `src/control-plane/priority-recovery-snapshot-stage-11.js` | extracted into responsibility-named module | `src/control-plane/priority-recovery-snapshot-closure.js` | Removed; renamed to successor. |
-| `src/control-plane/priority-recovery-snapshot-stage-shared.js` | shared snapshot constants | `src/control-plane/priority-recovery-snapshot-contract.js` | Removed; renamed to successor. |
 
 ## Shared Control-Plane Building Blocks
 
@@ -305,9 +259,9 @@ The current shared building blocks for control-plane work are:
    - keeps owner-specific fields such as `visibilityState`, `outcome`,
      `reasonCodes`, `runtimeAuthority`, `retryAfterMs`, or durable
      phase as reasons/evidence instead of widening the public branch surface
-   - is now cut through `ControlPlaneSystemTableGateway`,
+   - is used by `ControlPlaneSystemTableGateway`,
      `AdminWebSocketAPI`, harness query parsing, and
-     `table-distribution-helpers` as the first live migration slice
+     `table-distribution-helpers`
    - is shared by learner-promotion admission, priority remove-safety,
      and other recovery consumers so temporary overflow and recovery
      projection membership both come from one recovery-owned contract
@@ -566,7 +520,7 @@ The current shared building blocks for distributed harness load work are:
 5. `PublicationScopedConsistencyComparison`
    - owned by `assertConsistency(...)` and
      `assertConsistencyFromSnapshots(...)` in
-     `test/distributed/harness/assertions-segment-3.js`
+     `test/distributed/harness/assertions-consistency-checks.js`
    - derives one canonical final-consistency contract from:
      - canonical control-snapshot `leaders`
      - published membership / authoritative active-node view
@@ -586,7 +540,7 @@ The current shared building blocks for distributed harness load work are:
      rows into the runtime
      `deriveMembershipPublicationCandidate(...)` publication derivation
    - emits a diagnostic-only durable-vs-replayed priority-spread comparison
-   - is shared by local failed-run triage and future Quest analysis so
+   - is shared by local failed-run triage and Quest analysis so
      the harness can identify stale publication summaries without inventing a
      second publication-planning grammar or rerunning the scenario
 

@@ -21,6 +21,11 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const NEWLINE = '\n';
+const MARKDOWN_EXTENSION = '.md';
+const TEXT_ENCODING = 'utf8';
+const AUDIENCE_JOIN_SEPARATOR = '|';
+const PASS_MESSAGE = 'Documentation audience boundary holds.';
+const RULES_MESSAGE = 'Rules: docs/steering/audience-boundary.md.';
 
 const AUDIENCE_VALUES = Object.freeze(['human', 'development', 'agent']);
 const AUDIENCE_LINE_PATTERN = /^audience:\s*(\S+)\s*$/mu;
@@ -42,6 +47,12 @@ const TOMBSTONE_PATHS = Object.freeze([
   'docs/llm-dev-process-improvement-plan.md',
   'docs/workflow-improvement-plan.md',
   'docs/autonomy-and-parallel-defaults-plan.md',
+  'docs/development/llm-ergonomics-improvement-plan.md',
+  'docs/development/llm-dev-process-improvement-plan.md',
+  'docs/development/workflow-improvement-plan.md',
+  'docs/development/autonomy-and-parallel-defaults-plan.md',
+  'docs/runtime-unification-and-modularization-spec.md',
+  'docs/runtime-ownership-rollout-runbook.md',
   'analysis-2026-07-17-last-hours-review.md',
 ]);
 
@@ -53,12 +64,12 @@ function listMarkdown(relativeDir, {recursive}) {
     if (entry.isDirectory()) {
       return recursive ? listMarkdown(relativePath, {recursive}) : [];
     }
-    return entry.name.endsWith('.md') ? [relativePath] : [];
+    return entry.name.endsWith(MARKDOWN_EXTENSION) ? [relativePath] : [];
   });
 }
 
 function readRepoFile(relativePath) {
-  return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
+  return fs.readFileSync(path.join(REPO_ROOT, relativePath), TEXT_ENCODING);
 }
 
 function findMissingAudience(relativePath) {
@@ -68,7 +79,10 @@ function findMissingAudience(relativePath) {
     return [`${relativePath}: missing \`audience:\` frontmatter`];
   }
   if (!AUDIENCE_VALUES.includes(audience[1])) {
-    return [`${relativePath}: audience "${audience[1]}" is not one of ${AUDIENCE_VALUES.join('|')}`];
+    return [
+      `${relativePath}: audience "${audience[1]}" is not one of ` +
+      AUDIENCE_VALUES.join(AUDIENCE_JOIN_SEPARATOR),
+    ];
   }
   return [];
 }
@@ -100,7 +114,7 @@ function runCheck() {
         []),
   ];
   if (problems.length === 0) {
-    return {ok: true, message: 'Documentation audience boundary holds.'};
+    return {ok: true, message: PASS_MESSAGE};
   }
   return {
     ok: false,
@@ -108,7 +122,7 @@ function runCheck() {
       `Found ${problems.length} audience-boundary violation(s):`,
       ...problems.map((problem) => `  - ${problem}`),
       '',
-      'Rules: docs/steering/audience-boundary.md.',
+      RULES_MESSAGE,
     ].join(NEWLINE),
   };
 }

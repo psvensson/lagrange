@@ -94,12 +94,12 @@ Admission decisions are logged with reason codes:
 Storage admission supports two operational modes controlled by
 `rebalancer.storageAdmissionMode`:
 
-### Observe Mode (Default for Migration)
+### Observe Mode
 
 In observe mode, admission checks run and log decisions but do not
-block operations. Use this mode when:
+block operations. This is an explicit diagnostic mode; it is not the default.
+Use it when:
 
-- Rolling out storage capacity for the first time
 - Validating budget values against real workloads
 - Auditing admission decisions before enforcement
 
@@ -109,14 +109,16 @@ been enforced, allowing operators to verify correctness.
 ### Enforce Mode
 
 In enforce mode, admission denials block storage-increasing
-operations. Transition to enforce mode after confirming:
+operations. This is the default. Before retaining or restoring enforce mode,
+confirm:
 
 1. All nodes have valid `storage_budget_bytes` values
 2. Observe-mode logs show expected admission behavior
 3. Reservation reconciliation has run at least once
 
-To transition: update `rebalancer.storageAdmissionMode` to `enforce`
-in the cluster config table.
+Set `rebalancer.storageAdmissionMode` to `observe` or `enforce` in the cluster
+configuration. Treat observe mode as a temporary operator choice because it
+does not enforce storage safety decisions.
 
 ## Troubleshooting Low-Space Conditions
 

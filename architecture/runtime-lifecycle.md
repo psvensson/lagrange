@@ -27,9 +27,9 @@ Load-ready and repair-only states are explicit:
 6. Replica lifecycle state-machine states `pending`, `creating`, `syncing`,
    `removing`, and `failed` are repair-only; `removed` is terminal and
    non-serving.
-## Unified Service Lifecycle Owners (Hard Cutover)
+## Unified Service Lifecycle Owners
 
-Final owner map for service lifecycle cutover:
+Current owner map for service lifecycle:
 
 1. `ServiceLifecycleManager` is the only owner of create/start/stop/restart
    for all service kinds (`partition`, `message_group`, `runtime_service`).
@@ -72,7 +72,7 @@ Unified lifecycle anti-patterns (forbidden):
 2. Branching admin ingress behavior on "dispatcher path vs local path" before
    canonical envelope translation.
 3. Parallel reconciliation loops outside `ServiceReconciler`.
-4. Feature flags or fallback branches that preserve pre-cutover lifecycle
+4. Feature flags or fallback branches that preserve alternate lifecycle
    ownership paths.
 
 ### Startup Adapters and Steady-State Owners
@@ -101,9 +101,8 @@ Mandatory owner boundaries:
 
 ## Ownership Consolidation (Architecture Traceability)
 
-This section is the canonical owner map. The ownership-consolidation work it
-tracked shipped; its `architecture-ownership-consolidation` spec has since been
-archived out of the tree, so this map — not that spec — is the live source.
+This table is the canonical current owner map for runtime startup and
+steady-state composition.
 
 | Concern | Owner | Runtime boundary |
 | --- | --- | --- |
@@ -154,9 +153,7 @@ and control-plane workflows.
 
 ## Unified Service Runtime
 
-State labels in this section are explicit and mandatory.
-
-### Active
+### Current Owner Contract
 
 1. `sys-admin-meta`, `sys-wasm-meta`, and `sys-postgres-wire` are
    replicated control-plane / ingress services.
@@ -174,23 +171,11 @@ State labels in this section are explicit and mandatory.
 6. `sys-postgres-wire` is a built-in replicated runtime service
    providing PostgreSQL wire protocol ingress. Lifecycle, placement,
    and endpoint ownership follow the unified runtime model. No
-   standalone listener path exists (hard cutover).
+   standalone listener path exists.
 
-### Target
-
-1. Runtime descriptor use stays explicit in `service_definitions`
-   (`runtime_kind`, `runtime_ref`, `runtime_config`) for all runtime-aware
-   services.
-2. Adapter ingress remains fixed, and mutation ownership remains serviceized
-   via replicated meta services.
-3. Documentation, tests, and status claims stay closure-gated by live evidence
-   (the Solver event log and `contracts/invariants.json`), not by the archived
-   `runtime-ownership-closure` spec.
-
-### Planned
-
-1. `oci_container` runtime moves from gated runway to fully enabled only after
-   policy, rollout, and operations gates are met.
+Runtime descriptors remain explicit in `service_definitions`
+(`runtime_kind`, `runtime_ref`, `runtime_config`). Adapter ingress remains
+fixed, and mutation ownership remains with replicated meta services.
 
 ### Runtime Kinds
 
@@ -198,12 +183,12 @@ State labels in this section are explicit and mandatory.
 |-------------|---------|--------|
 | `native_js` | Run existing in-process handlers as replicated service workloads (admin first) | Active |
 | `wasm_component` | Run WASI component workloads with manifest/capability/dependency enforcement | Genuine WASI component execution on the Binding/Cell readiness path (transpile, instantiate, budget and declared-table enforcement); the callback example remains a JavaScript envelope rehearsal, not component execution |
-| `oci_container` | Target: run digest-pinned OCI container workloads | Descriptor and in-memory lifecycle scaffold; no real container activation |
+| `oci_container` | Validate digest-pinned OCI container descriptors | Descriptor and in-memory lifecycle scaffold; no real container activation |
 
 The authoritative current support matrix is
 [`../docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
-Architecture sections below describe the intended owner model even where the
-runtime-specific activation provider has not landed.
+The sections below describe the implemented owner model. The capability matrix
+is authoritative for whether a runtime has a real activation provider.
 
 ## Canonical Owner Rows vs Read Models
 
@@ -286,8 +271,8 @@ Runtime-aware service rows use:
 2. `runtime_ref` - artifact identity (module/handler id or image digest ref)
 3. `runtime_config` - runtime-specific JSON configuration
 
-Legacy WASM-centric fields remain readable during migration but runtime
-selection and lifecycle ownership follow the unified runtime model above.
+Compatibility WASM-centric fields remain readable, but runtime selection and
+lifecycle ownership follow the unified runtime model above.
 
 ### Runtime Control Flow
 
@@ -312,7 +297,7 @@ Service_Runtime_Lifecycle
       │
       └──► Query executor injection (start only):
            SQLQueryEngine.setQueryExecutorFactory() -> replicaContext.queryExecutor
-           Service replicas query tables through the standard SQL execution path.
+           Service Cells query tables through the standard SQL execution path.
 ```
 
 ### Runtime Anti-Patterns (Forbidden)
@@ -328,11 +313,11 @@ Service_Runtime_Lifecycle
 8. Marking closure tasks complete without production-path evidence.
 9. Standalone PG wire TCP listener outside the replicated service
    path (`sys-postgres-wire` is the only PG wire listener owner).
-10. Service replicas creating their own query routing, partition
+10. Service Cells creating their own query routing, partition
     resolution, or SQL execution path instead of using the injected
     `replicaContext.queryExecutor` from `ServiceRuntimeLifecycle`.
 
-### Migration Posture
+### Runtime Ownership Invariants
 
 The unified runtime model has one steady-state posture:
 
@@ -341,9 +326,7 @@ The unified runtime model has one steady-state posture:
    `sys-wasm-meta`) and the SQL/CDC write path without owning a separate
    mutation path.
 2. Direct node-local mutation ownership paths are not reachable after
-   initialization. If a temporary migration step exists during rollout, it
-   must be bootstrap-only or branch-local, have a documented removal point,
-   and must not be re-enabled through a runtime mode switch.
+   initialization.
 3. Rollback, if required, happens by reverting the deployment or branch to a
    prior implementation, not by restoring a live fallback path in the same
    runtime.
@@ -353,31 +336,17 @@ The unified runtime model has one steady-state posture:
 1. `docs/admin-api-reference.md`
 2. `docs/wasm-services-user-guide.md`
 
-The `runtime-ownership-closure` closure-matrix and completion-gates specs have
-been archived out of the tree; runtime-ownership status is now derived from live
-evidence (see the Solver and `contracts/invariants.json`).
-## Safety Interval (Read Consistency)
+## Legacy WASM Replica State
 
-WASM service groups use a CockroachDB-style closed-timestamp mechanism for strong reads without routing all reads to the leader.
+`SafetyInterval`, `SessionKVStore`, and `TimerManager` remain composed by the
+legacy `WasmServiceReplica` classes, but production startup constructs neither
+their lifecycle owner nor a `wasm_service` rebalancer. Closed-timestamp reads,
+Raft-backed service KV, and exactly-once service timers are therefore not
+current runtime guarantees.
 
-- The leader periodically broadcasts its committed log index and timestamp to followers
-- Followers track their local applied index and the last leader broadcast
-- A follower can serve a strong read locally when its applied index >= the leader's last broadcast index AND the broadcast is within the configured safety interval
-- When a follower's apply lag exceeds the safety interval, it forwards the read to the leader
-- Three read consistency modes:
-  - **leader_only** — all reads route to the Raft leader
-  - **strong** — reads served locally when within safety interval, forwarded to leader otherwise
-  - **eventual** — any replica serves reads from local state without staleness checks
-
-## Timer Persistence and Exactly-Once Semantics
-
-WASM service groups support persistent timers with exactly-once firing guarantees.
-
-- Timer entries are stored in the Raft-replicated KV store under the reserved `_timers/` prefix
-- Only the Raft leader runs active timers; followers store timer state but do not schedule execution
-- On leader election, the new leader reconstructs all active timers from the KV store, skipping entries with `fired` or `cancelled` status
-- **Fire-before-invoke**: when a timer fires, the leader marks it as `fired` via a Raft-committed write BEFORE invoking the handler function
-- If the leader fails after committing the fired marker but before completing handler invocation, the new leader sees the `fired` status and does not re-fire, ensuring exactly-once semantics
+Current WASI components run through `Wasm_Component_Driver` in
+`runtime_service` Cells. Their durable state and synchronization use tables and
+the ordinary partition replication path.
 
 ## Epoch Management
 

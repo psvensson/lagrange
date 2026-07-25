@@ -7,9 +7,6 @@ Status: revision 10, program complete; final program re-audit approved
 Epic:
 [`solve/epics/owner-boundary-hardening-and-unification.md`](../../epics/owner-boundary-hardening-and-unification.md)
 
-Review source:
-[`docs/reviews/2026-07-10-recent-work-direction-review.md`](../../../docs/reviews/2026-07-10-recent-work-direction-review.md)
-
 ## Result
 
 The reviewed integrity, durability, deadline, security, ownership, transaction,

@@ -9,13 +9,10 @@ graduatesTo: owner-boundary-hardening-and-unification
 
 ## Intent
 
-Turn the July 2026 direction review into small, independently provable
-owner-boundary cutovers. Integrity, durability, deadline, and secure-default
-corrections land before broader convergence work. Consolidation then reuses the
-repository's existing owners instead of creating parallel sources of truth.
-
-Review source:
-[`docs/reviews/2026-07-10-recent-work-direction-review.md`](../../docs/reviews/2026-07-10-recent-work-direction-review.md)
+Define small, independently provable owner-boundary cutovers. Integrity,
+durability, deadline, and secure-default corrections land before broader
+convergence work. Consolidation reuses the repository's existing owners instead
+of creating parallel sources of truth.
 
 Executable plan:
 [`solve/specs/owner-boundary-hardening-and-unification/implementation-plan.md`](../specs/owner-boundary-hardening-and-unification/implementation-plan.md)

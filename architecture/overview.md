@@ -47,8 +47,9 @@ A scalable distributed database where:
   (minimum floor from `POLICY_DEFAULT.MIN_REPLICA_COUNT` in
   `src/policy/policy-constants.js`)
 - ALL partitions use SQLite for storage
-- Replicated service groups host service runtimes selected by
-  `service_definitions.runtime_kind` (WASM, native admin, PG wire)
+- Placed `runtime_service` Cells host runtimes selected by
+  `service_definitions.runtime_kind` (WASI components, native admin, PG wire);
+  durable state remains in partitioned tables
 
 ## Core Principles
 
@@ -72,7 +73,7 @@ To prevent overlap and contradictory runtime behavior:
 
 1. **SQL Execution:** `SqlCore` (SQLQueryEngine) is the single SQL planner and
    executor. All entrypoints (internal, external protocol, WASM DB.call,
-   service replica `replicaContext.queryExecutor`)
+   service Cell `replicaContext.queryExecutor`)
    normalize into `SqlRequest` and delegate to SqlCore. No fallback engine.
 2. **Placement Planning:** `MovePlanner` is the only planner implementation.  
    `UnifiedRebalancer` may orchestrate, but must not duplicate planning logic.
@@ -133,7 +134,7 @@ To prevent overlap and contradictory runtime behavior:
    (`src/workflow/owner-key-reconcile-queue.js`). The queue de-duplicates by
    owner key and drains items through a single reconcile callback. Periodic
    polling loops remain as recovery-only paths.
-9. **SQL Scaling:** SQL service replicas use the replicated service lifecycle
+9. **SQL Scaling:** SQL service Cells use the shared service lifecycle
    (`service_profile = 'sql_engine'`, active `runtime_kind = native_js`
    via `SQL_ENGINE_RUNTIME_KIND`). No parallel SQL-specific scaling framework.
 10. **WASM Entity Management:** External module/service administration flows
@@ -173,9 +174,9 @@ To prevent overlap and contradictory runtime behavior:
     wires it into `AdminWebSocketAPI`, and bridges `SystemTableCache` CDC
     notifications to active live subscriptions.
 
-### Distributed SQL Canonical Ownership (Hard Cutover)
+### Distributed SQL Canonical Ownership
 
-The distributed SQL layer is now single-path and owner-specific:
+The distributed SQL layer is single-path and owner-specific:
 
 1. `DistributedQueryPlanner` is the only owner of multi-table partition
    planning, predicate-shape diagnostics, join strategy selection, and
@@ -224,7 +225,7 @@ The distributed SQL layer is now single-path and owner-specific:
    deterministic table, partition, replica-operation, and replica identities
    make replay level-triggered and idempotent. READY activation resumes
    nonterminal rows. CREATE has no legacy fallback, exact-fence transitions
-   require a live durable lease, and pre-cutover metadata must match the
+   require a live durable lease, and existing metadata must match the
    deterministic identity and schema before replay attaches. Admin and
    PostgreSQL project the same typed job
    outcome (`55P03` with structured retry detail on protocol deadline).

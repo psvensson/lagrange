@@ -1,4 +1,4 @@
-# Architecture Support Documents
+# Current Architecture
 
 This directory contains the current architecture index and supporting
 system-description documents.
@@ -11,28 +11,27 @@ Canonical repo-relative path: `architecture/INDEX.md`.
 Add detailed subsystem documents here only when the material is architectural
 and link them from `INDEX.md`.
 
-## Diagram Packs
+## Illustrated Walkthrough
 
-- [Lagrange Architecture Diagrams](lagrange_architecture_diagrams.md)
-- [Lagrange Advanced Architecture Diagrams](lagrange_advanced_architecture_diagrams.md)
+- [The Lagrange System Model](system-model.md) — start here; also defines the
+  colour legend shared by every process diagram
+- [Process: Partitioning](process-partitioning.md)
+- [Process: Replication](process-replication.md)
+- [Process: Rebalancing](process-rebalancing.md)
+- [Process: Request Routing](process-request-routing.md)
+- [Process: Data Affinity](process-data-affinity.md)
 
-These two files are the primary visual architecture references and should stay
-aligned with the ownership and execution model in `INDEX.md`.
+These are the primary visual architecture references and should stay aligned
+with the ownership and execution model in `INDEX.md`.
 
 ## Current Supporting Documents
 
 - [Architecture Models](models/)
 - [Core System Logic Contract](contracts/core-system-logic.md)
 - [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md)
-- [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md)
 - [Lagrange Service Manifest](lagrange-service-manifest.md)
 - [Lagrange Service Registry](lagrange-service-registry.md)
 
-## Future Architecture
-
-The `future/` subdirectory contains forward-looking architecture documents
-for planned features. When a feature moves to in-progress, promote its
-document to this directory and link from `INDEX.md`.
-
-- [Activation-Cost-Aware Placement](future/activation-cost-aware-placement.md)
-- [Native Artifact Store](future/native-artifact-store.md)
+Unimplemented designs live under `solve/specs/` and are linked from the
+roadmap. Files under `architecture/` describe implemented behavior and current
+contracts only.

@@ -5,6 +5,7 @@ import os from 'node:os';
 
 import {auditQuest} from '../../scripts/solve/audit.js';
 import {
+  classifyPath,
   classifyQuestScope,
   inspectChangeArtifact,
 } from '../../scripts/solve/change-artifact.js';
@@ -63,6 +64,21 @@ function approveLatestAttempt(root, quest, frontier = `${quest.id}-main`) {
 }
 
 tap.test('Quest audit', async (t) => {
+  t.test('classifies Markdown by content while preserving owner boundaries',
+    (t) => {
+      t.equal(classifyPath('src/cli/README.md'), 'docs',
+        'runtime-tree Markdown remains documentation');
+      t.equal(classifyPath('test/distributed/README.local.md'), 'docs',
+        'distributed-harness Markdown remains documentation');
+      t.equal(classifyPath('src/cli/admin.js'), 'runtime',
+        'runtime source remains runtime');
+      t.equal(classifyPath('test/distributed/scenario.js'), 'runtime',
+        'distributed source remains runtime');
+      t.equal(classifyPath('docs/development/solver-runbook.md'), 'workflow',
+        'workflow-owned Markdown keeps workflow scope');
+      t.end();
+    });
+
   t.test('source citations own scope while artifact filename tokens do not', (t) => {
     const root = tmp();
     const runtimeQuest = {
@@ -85,6 +101,13 @@ tap.test('Quest audit', async (t) => {
         'authoritative design.',
       frontiers: [{id: 'owner-record-main'}],
     };
+    const linkedWorkflowQuest = {
+      id: 'linked-process-owner',
+      class: 'process',
+      statement: 'The linked process contract replays successfully.',
+      links: {specRef: 'docs/development/documentation-lifecycle.md'},
+      frontiers: [{id: 'linked-process-owner-main'}],
+    };
 
     t.equal(classifyQuestScope(runtimeQuest), 'runtime',
       'an evidence filename cannot override the cited runtime source owner');
@@ -99,6 +122,8 @@ tap.test('Quest audit', async (t) => {
       'a genuine Solver source path classifies as workflow scope');
     t.equal(classifyQuestScope(designQuest), 'workflow',
       'a genuine architecture-contract citation survives artifact masking');
+    t.equal(classifyQuestScope(linkedWorkflowQuest), 'workflow',
+      'a process Quest planning link participates in owner-scope classification');
     t.equal(classifyQuestScope({
       id: 'generic-scope-check',
       class: 'process',

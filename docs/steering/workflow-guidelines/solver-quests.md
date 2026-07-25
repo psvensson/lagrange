@@ -1157,8 +1157,8 @@ change artifacts under `solve/changes/` and non-regenerable evidence under
 
 Projected state under `solve/state/` is local cache and may be rebuilt from the
 Quest plus append-only log. Ordinary `solve/report/<quest-id>.md` files with a
-matching declaration and log, plus `solve/OVERVIEW.generated.md`, are likewise
-ignored local projections. Generate either on demand. Their presence, mtime,
+matching declaration and log, plus the generated `OVERVIEW.generated.md`, are
+likewise ignored local projections. Generate either on demand. Their presence, mtime,
 or bytes MUST NOT gate `next`, audit, checkpoint, or terminal handoff.
 
 Files under `solve/report/` that cannot be reconstructed from one Quest

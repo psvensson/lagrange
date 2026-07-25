@@ -280,14 +280,14 @@ also enable future paid system services.
 | Manifest validation rules | 🔲 | Required fields, format and capability validation. Architecture: `architecture/lagrange-service-manifest.md` |
 | Service catalog system tables | 🔲 | Desired/actual installed-service state and failure recording. Architecture: `architecture/lagrange-service-registry.md` |
 | Installation reconciler | 🔲 | Fetch/validate/place/start-stop convergence for service revisions. Architecture: `architecture/lagrange-service-registry.md` |
-| Service lifecycle API | 🔲 | `onInstall`, `onStart`, `onStop`, `onUpgrade`, `onUninstall`. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
-| Replicated service state API | 🔲 | Stable service-owned state surface above replicated storage. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
-| CDC subscription API | 🔲 | Change-stream consumption for service workflows. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
-| Admin surface registration | 🔲 | Services register SQL/CLI/HTTP control surfaces. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
-| Capability enforcement | 🔲 | Kernel gates service access to privileged APIs. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
-| Consistent snapshot API | 🔲 | Required for cluster-consistent reads and service barriers. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
-| Topology API | 🔲 | Required for service placement and orchestration. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
-| Event emission API | 🔲 | Structured progress and failure reporting for system services. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| Service lifecycle API | 🔲 | `onInstall`, `onStart`, `onStop`, `onUpgrade`, `onUninstall`. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
+| Replicated service state API | 🔲 | Stable service-owned state surface above replicated storage. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
+| CDC subscription API | 🔲 | Change-stream consumption for service workflows. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
+| Admin surface registration | 🔲 | Services register SQL/CLI/HTTP control surfaces. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
+| Capability enforcement | 🔲 | Kernel gates service access to privileged APIs. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
+| Consistent snapshot API | 🔲 | Required for cluster-consistent reads and service barriers. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
+| Topology API | 🔲 | Required for service placement and orchestration. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
+| Event emission API | 🔲 | Structured progress and failure reporting for system services. Design: `solve/specs/service-portability-ladder/kernel-platform-api-v0.md` |
 
 ### 2. PostgreSQL Compatibility
 
@@ -344,7 +344,7 @@ also enable future paid system services.
 | OCI container runtime | 🔧 | Process-isolated execution for container-packaged services. Align active work with `architecture/lagrange-service-registry.md`, `architecture/lagrange-service-manifest.md`, and `solve/specs/activation-cost-aware-placement/` |
 | OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
 | Artifact media type discrimination | 🔲 | Distinguish WASM binary vs container image in OCI artifacts |
-| Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `solve/specs/activation-cost-aware-placement/`. Architecture: `architecture/future/activation-cost-aware-placement.md` |
+| Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `solve/specs/activation-cost-aware-placement/`. |
 | Vector search service | 🔲 | |
 | Embedding service | 🔲 | |
 
@@ -453,7 +453,7 @@ coordination live in the same system:
 | Reference-counted GC | 🔲 | Content-addressed deduplication with reference counting for safe cleanup |
 | OCI Distribution API compatibility | 🔲 | Optional: expose OCI-compatible pull API so external tools can interact with the cluster as a registry |
 
-Architecture: `architecture/future/native-artifact-store.md`
+Planning design: `solve/specs/native-artifact-store/design.md`
 
 Design principle: same cluster, same nodes, same replication — different
 object semantics for artifact bytes. No special registry nodes required.

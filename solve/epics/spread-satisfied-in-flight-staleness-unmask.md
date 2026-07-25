@@ -61,7 +61,7 @@ links:
 
 > **START-HERE handoff for a fresh agent.** Everything to begin is below; file:line verified
 > at HEAD `99033274` (2026-06-23) but POSITIONAL — re-grep before trusting. Read
-> [`docs/steering/operational-ground-truth.md`](../steering/operational-ground-truth.md) first
+> [`docs/steering/operational-ground-truth.md`](../../docs/steering/operational-ground-truth.md) first
 > (deterministic-first / gate-last / research-existing / subagent-verify / never-conclude-from-N=1).
 
 ## TL;DR (what to build, and the one hard rule)

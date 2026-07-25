@@ -4,9 +4,9 @@ Where data and services live, and how that changes safely: the unified address
 format, Raft consensus configuration, the UnifiedRebalancer,
 storage-capacity-aware placement, and message-group assignment.
 
-Partitions, message groups, and replicated service groups are all placed by
-the same rebalancer — a partition is one kind of rebalanced entity, not a
-special case. The membership and ownership rows these decisions read are
+Partitions, message groups, and runtime-service Cells are all placed by the
+same rebalancer — a partition is one kind of rebalanced entity, not a special
+case. The membership and ownership rows these decisions read are
 defined in [control-plane.md](control-plane.md); the readiness states that
 gate moves are in [runtime-lifecycle.md](runtime-lifecycle.md);
 operator-facing capacity controls are in
@@ -28,8 +28,9 @@ Examples:
 Entity types:
 - `partition` - Partition service replicas
 - `message-group` - Message group replicas
-- `wasm-service` - WASM service group replicas
-- `runtime-service` - Runtime service replicas (e.g., PG wire)
+- `wasm-service` - Legacy WASM replica address vocabulary; no production
+  rebalancer currently constructs this entity kind
+- `runtime-service` - Placed runtime-service Cells (e.g., PG wire)
 - `lifecycle` - Node lifecycle handler
 
 ## Raft Consensus
@@ -59,8 +60,8 @@ Entity types:
 ### Log Storage
 - Message groups: In-memory log adapter
 - Partitions: SQLite log adapter (persistent)
-- Replicated service groups (`wasm_service`, `runtime_service`):
-  SQLite log adapter (persistent)
+- Runtime-service Cells have no service-state Raft log; durable state remains in
+  partitioned tables.
 
 The in-memory adapter is ephemeral across process restart; that weaker
 durability contract does not permit deleting committed entries while the
@@ -69,23 +70,24 @@ transfer, or install, so both retain the complete committed prefix needed by a
 lagging follower's ordinary AppendEntries recovery. Explicit compaction returns
 the typed `snapshot_protocol_unavailable` no-change outcome. Clearing an
 in-memory adapter during lifecycle teardown is whole-instance destruction, not
-live log compaction. Physical prefix removal remains gated on the separately
-planned [Raft snapshot transfer/install protocol](future/raft-snapshot-transfer-install.md).
+live log compaction. Physical prefix removal is unsupported.
 
 ## Rebalancing
 
 ### UnifiedRebalancer
 
 The `UnifiedRebalancer` is the single rebalancer implementation for
-partitions, message groups, and replicated service groups (entity types:
-`wasm_service`, `runtime_service`). Each partition/message group/service
-leader runs its own rebalancer instance, making independent decisions
-that converge to optimal state.
+partitions, message groups, and `runtime_service` Cells. Partition and
+message-group instances run on their entity's Raft leader; runtime-service
+instances are owned by the `service_definitions` planning leader. The
+`wasm_service` enum retains a default policy, but production startup constructs
+no rebalancer for it.
 
 Key characteristics:
-- **Per-entity rebalancer**: Each partition/message group/service has its own
-  rebalancer instance
-- **Leader-driven**: Only the Raft leader runs the rebalancer for that entity
+- **Per-entity rebalancer**: Each partition, message group, or active runtime
+  service has its own rebalancer instance
+- **Leader-driven**: Entity Raft leaders own partition/message-group decisions;
+  the `service_definitions` planning leader owns runtime-service decisions
 - **Event-driven**: Emits `nodeStateChange` and `rebalanceNeeded` events for observability
 - **Policy-based**: Uses `TablePolicyService` for placement decisions
 - **Coordinator delegation**: Delegates operation execution to `RebalanceCoordinator`
@@ -144,7 +146,7 @@ At read time, `SqlCore` calls `resolveIssuingServiceReadLocality(queryOptions)`
 service's definition from the node-local CDC-fed `SystemTableCache`. No issuing
 service, no definition, or `any` yields uniform routing; `same_group` steers
 partition-routing candidate selection toward the local latency group
-(`src/query/sql-query-engine-select-execution.js`). This is the shipped
+(`src/query/sql-query-engine-select-execution.js`). This is the current
 service↔data affinity mechanism.
 
 **Not to be confused with** the *placement*-side data-access affinity scoring

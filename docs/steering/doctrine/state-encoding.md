@@ -5,7 +5,7 @@ always_load: false
 source_of_truth: self
 compiled_pack: rules.json corpus (below architecture pack cap; query via npm run rule)
 parent_index: ../doctrine/INDEX.md
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-25
 ---
 
 > **Canonical source.** Doctrine sub-file: state encoding, lifetime, pressure, progress grammar. Index: [`INDEX.md`](INDEX.md).
@@ -82,12 +82,42 @@ plateau condition, the design is not finished.
 When one decision depends on several live signals, separate observation from
 policy.
 
-- Collect evidence first.
-- Normalize it into one immutable snapshot per entity.
-- Let one canonical adjudicator emit the final state, reasons, and retryability.
-- Treat weaker or cross-plane signals as degraded evidence unless the spec says
-  they are equivalent.
-- Never let degraded evidence promote a blocked entity to ready or admitted.
+Every multi-signal admission or readiness boundary has four stages:
+
+1. Collect observations.
+2. Normalize them into one immutable snapshot per entity.
+3. Adjudicate the snapshot in one pure decision function.
+4. Act on that decision and emit diagnostics.
+
+Collectors may fetch, retry, and annotate evidence, but they do not emit the
+final verdict. The normalized snapshot keeps observations, their evidence
+classes, and policy targets distinct.
+
+Classify every observation before adjudication:
+
+- **Authoritative** — owned by the same semantic owner and plane; may directly
+  admit or reject.
+- **Equivalent** — another access path to the same owner and plane; may confirm
+  or refute only the equivalence declared by the governing contract.
+- **Degraded** — weaker, indirect, or cross-plane; may explain, defer, or
+  improve diagnostics, but must not promote a blocked entity to ready.
+- **Contradictory** — authoritative or equivalent signals disagree; produces
+  reconciliation with explicit reasons, never a local exemption.
+
+Never let degraded evidence promote a blocked entity to ready or admitted.
+
+The canonical adjudicator applies static ineligibility first, waits for missing
+authoritative proof, treats only contract-declared hard blockers as terminal,
+and allows equivalent proof to clear only the blocker classes for which
+equivalence is declared. Policy targets must not be rewritten from the
+survivors observed during one attempt.
+
+Its verdict is the only legal source for cohort selection, retries, and
+human-readable diagnostics. It includes `state`, `admit`, `retryable`,
+`reasonCodes`, `evidenceUsed`, and `missingProof`. State names are
+boundary-specific but must distinguish static exclusion, missing discovery or
+owner proof, equivalent-confirmation wait, admission, reconciliation, and hard
+rejection.
 
 Every input to a liveness or safety gate must be classified before use:
 
@@ -110,7 +140,9 @@ raft-observed leader and the published leader pointer, both actuals.)
 
 If fixes keep arriving as new boolean exemptions, the decision boundary is not
 modeled yet. Replace the branch pile with an explicit state model and decision
-table.
+table. Cover each state and blocker class with table-driven tests, including a
+regression that degraded evidence cannot promote and a regression that policy
+targets remain distinct from incidental survivors.
 
 ## 15. Lifecycle Boundaries Must Publish One Progress Grammar
 

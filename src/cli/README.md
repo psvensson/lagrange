@@ -4,8 +4,7 @@ A terminal-based administration tool for Lagrange, inspired by K9s for
 Kubernetes. It provides real-time visibility into cluster state through the
 CDC-synchronized local cache.
 
-The command is `lagrange-admin` (the pre-rename `ddb-admin` alias was removed
-before the first release).
+The command is `lagrange-admin`.
 
 ## System Requirements
 

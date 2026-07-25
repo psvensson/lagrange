@@ -75,29 +75,13 @@ Phase 5: Cache Hydration
 8. Ready -> Node is ready to serve queries
 ```
 
-> **Risky path — join starves on undrained membership publication.** Step 4
-> (and the `querying_state` phase generally) blocks on control-plane readiness,
-> which depends on every reconciled active node being *published*. If the
-> membership-publication drain strands a reconciled-but-unpublished node, the
-> join cannot satisfy readiness and exhausts `retryableFailureResumeMaxElapsedMs`
-> (`src/bootstrap/node-joining-admission-readiness.js`), logging `Join retryable
-> resume budget exhausted`. The join timeout is a *downstream symptom*; the owner
-> defect is the publication drain. See the
-> [Active Gate Convergence Contract](contracts/active-gate-convergence.md)
-> ("Membership Publication Drain") for the full failure class and regression
-> guards.
->
-> **Two amplifiers make the symptom worse than the root.** (1) The drain itself
-> is often blocked even deeper up: the rejoin's system-table upserts fail with
-> `ROUTER_CONNECTION_CLOSED` because the peer's WebSocket reconnect to the
-> (saturated, sole-published) owner **times out at connect** — see
-> [Active Gate Convergence Contract → Upstream Transport / Owner-Handshake
-> Root](contracts/active-gate-convergence.md). (2) On budget exhaustion the
-> failed-join cleanup previously *stopped the router and exited the process* with
-> no auto-rejoin, converting a transient transport problem into a permanently
-> unreachable node. `src/index.js` now re-composes a fresh join on
-> `joinResult.retryable` (bounded via `LAGRANGE_JOIN_REATTEMPT_MAX_ATTEMPTS`,
-> default 4) instead of exiting — robustness/defense-in-depth, not the root fix.
+Step 4 consumes the canonical control-plane readiness and publication
+projection. A reconciled node is not treated as published until the durable row
+is visible. Retryable join and transport outcomes preserve the join state,
+retain their owner wake or retry action, and re-enter through the bounded join
+attempt policy; terminal outcomes stop. The publication drain obligations and
+executable guard are defined by the
+[Active Gate Convergence Contract](contracts/active-gate-convergence.md#publication-drain-obligations).
 
 ## Data Flow
 
@@ -267,7 +251,7 @@ mechanism). CDC events buffered on source partitions during the
 failover window are replayed when the new leader's subscriber
 registers via the existing `cdcEventBuffer` replay mechanism.
 
-### Meta Service Management Flow (Unified Runtime Target)
+### Meta Service Management Flow
 
 ```
 External Client (CI/SDK)

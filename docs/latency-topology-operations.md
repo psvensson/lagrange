@@ -57,7 +57,7 @@ Configured under `latency.*`:
 
 Invalid values fail validation at startup/config apply time.
 
-## Rollout Sequence
+## Changing Propagation Mode
 
 1. Verify `latency_groups` and `inter_group_latencies` appear in bootstrap
    snapshots/cache dumps.

@@ -14,14 +14,9 @@ and [`docs/steering/`](../steering/)). Zoning rules:
 
 - [solver-runbook.md](solver-runbook.md) — example-oriented operator aid for
   the Solver Quest workflow (the repo's unit of work)
-- [autonomy-and-parallel-defaults-plan.md](autonomy-and-parallel-defaults-plan.md)
-  — autonomy and parallelism defaults plan
-- [llm-dev-process-improvement-plan.md](llm-dev-process-improvement-plan.md)
-  — LLM dev-process improvement plan
-- [llm-ergonomics-improvement-plan.md](llm-ergonomics-improvement-plan.md)
-  — LLM ergonomics improvement plan
-- [workflow-improvement-plan.md](workflow-improvement-plan.md) — workflow
-  improvement plan
+- [documentation-lifecycle.md](documentation-lifecycle.md) — current
+  documentation, planning, generated-output, compatibility, history, and
+  evidence boundaries
 
 Development-audience documents whose paths are pinned by machine consumers
 stay outside this directory (see the audience-boundary doc): notably

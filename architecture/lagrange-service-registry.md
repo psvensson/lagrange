@@ -1,522 +1,123 @@
-# Lagrange Service Registry and Installation Model
+# Service Installation Catalog
 
-This document defines how services are **published, discovered,
-installed, upgraded, and removed** in Lagrange.
+This document describes the current external service artifact and installation
+owners. The cluster can validate and record installable artifacts, expose
+catalog state through authenticated lifecycle SQL and the CLI, and feed
+installed WASM artifacts into the separate Artifact / Binding / Cell
+deployment surface. A catalog installation is not evidence that a runtime
+instance is running.
 
-The key design principle is:
+## External Ingress
 
-> Services are distributed from registries, but installed state is owned
-> by the cluster.
+The supported external control route is:
 
-This means:
-
--   a registry answers **what artifacts exist**
--   the cluster catalog answers **what this cluster wants installed**
--   the reconciler answers **how desired state becomes running state**
-
-This document covers distribution and installation only. Execution intent is
-not declared here: a Binding remains the sole durable user declaration of
-execution intent, and installed packages become running Cells only through
-the deployment surface owned by
-[`minimal-deployment-surface.md`](minimal-deployment-surface.md)
-(`INSTALL SERVICE`, `CREATE BINDING`, `CONFIGURE SERVICE ACCESS`).
-
-------------------------------------------------------------------------
-
-# Goals
-
-The installation model must support:
-
--   public community services
--   private commercial services
--   customer-private registries
--   local development workflows
--   upgrades and rollbacks
--   air-gapped deployments
--   deterministic recovery after node failure
-
-------------------------------------------------------------------------
-
-# AGPL Scope Boundary
-
-This document defines the open installation substrate: registries, catalog
-state, reconciliation, artifact fetch/verification, and service lifecycle
-convergence.
-
-Commercial services and enterprise controls may consume this substrate, but
-their behavior is not implemented here. In this repository, backup/PITR,
-tenant isolation, RBAC, KMS/secrets providers, commercial license activation,
-and entitlement checks are external extension points unless `edition-matrix.md`
-is changed.
-
-------------------------------------------------------------------------
-
-# Core Concepts
-
-## 1. Artifact Registry
-
-A registry stores service artifacts and associated manifests.
-
-All installable service artifacts use OCI as the canonical and only
-packaging and distribution format for v0. OCI is used purely as a
-content-addressable distribution layer — it does not imply that all
-services run as containers. WASM components are shipped as OCI
-artifacts with a WASM-specific media type, then extracted and loaded
-in-process by the kernel. Container images are shipped as standard
-OCI images and handed to a container runtime.
-
-Reasons for OCI-only:
-
--   existing distribution ecosystem
--   tags and digests
--   authentication
--   mirroring
--   enterprise familiarity
--   one fetch path for all runtime kinds
--   compatibility with both container images and WASM artifacts
-
-Example references:
-
-``` text
-registry.lagrange.dev/services/backup-manager:1.2.0
-registry.example.com/acme/custom-audit:2.4.1
+```text
+CLI or PostgreSQL client
+  -> authenticated PostgreSQL wire
+  -> action-specific lifecycle authorization
+  -> lifecycle SQL command owner
+  -> artifact resolver and install catalog owner
+  -> typed operation and catalog projection
 ```
 
-------------------------------------------------------------------------
+The lifecycle grammar is:
 
-## 2. Cluster Service Catalog
-
-The registry is not the source of truth for installation state.
-
-The cluster stores desired and actual service state in replicated system
-tables.
-
-The catalog tracks:
-
--   configured registries
--   known packages
--   desired installations
--   resolved revisions
--   running instances
--   failures and rollout state
-
-This ensures the cluster can recover deterministically even if the
-upstream registry is temporarily unavailable.
-
-------------------------------------------------------------------------
-
-## 3. Reconciler
-
-A service installation reconciler watches desired state and performs
-actions:
-
--   fetch OCI artifact (runtime-kind-agnostic; always an OCI pull)
--   verify digest/signature
--   validate compatibility
--   extract payload based on `artifact.media_type`
--   allocate runtime placement
--   activate via the appropriate runtime driver (`wasm_component`
-    loads in-process; `oci_container` delegates to container runtime)
--   stop instances
--   roll forward
--   roll back
-
-The reconciler's fetch and verification path is identical for all
-runtime kinds. Only the final activation step branches by
-`runtime.kind` declared in the manifest.
-
-This follows the same pattern as other Lagrange control-plane workflows.
-
-------------------------------------------------------------------------
-
-# Installation Sources
-
-Lagrange supports multiple artifact sources under one install model.
-All sources produce or serve OCI-compatible artifact layouts.
-
-## Remote OCI registry
-
-Primary production path.
-
-## Local artifact path
-
-Development path. Produces an OCI-compatible directory layout so the
-install path remains uniform.
-
-`ServiceLocalOciLayoutBuilder` is the one local build owner. Callers provide an
-explicit runtime kind, platform, `SOURCE_DATE_EPOCH`, output root, and pinned
-source input. For `oci_container`, the pinned input is a context fingerprint
-plus context, Dockerfile, and build arguments; the injected production adapter
-executes `docker buildx build` with an OCI directory export. For
-`wasm_component`, the input is an already-built binary payload. The builder
-does not compile or validate a component and never treats the
-JavaScript callback envelope as WebAssembly.
-
-Before atomic, digest-addressed publication, the owner verifies the complete
-layout graph: one top image-manifest descriptor, exact config and layer blob
-sizes/digests, container OCI layer media types, or exactly one
-`application/wasm` layer with an empty deterministic config. The owner pins the
-prepared output directory identity across exporter and publication awaits, and
-requires the layout root, `blobs`, and `blobs/sha256` to be owned ordinary
-directories rather than links. Its deeply frozen receipt contains `layoutPath`,
-`runtimeKind`, `topManifestDescriptor`,
-`payloadDescriptors`, `totalPayloadBytes`, `platform`, `sourceDateEpoch`, and
-`buildInputFingerprint`. Identical inputs are idempotent and reproduce the same
-content graph. This receipt is the S5b/S5c seam: S5c later materializes and
-submits the final external manifest. S5b does not write catalog state, register
-an artifact, or activate a runtime.
-
-Example:
-
-``` bash
-lagrange service dev-install ./dist/backup-manager
-```
-
-## Local mirror / air-gapped registry
-
-Enterprise path. A local OCI registry mirror.
-
-Example:
-
-``` bash
-lagrange registry add registry.internal.example.com
-```
-
-The user experience remains uniform regardless of source because all
-sources speak OCI.
-
-------------------------------------------------------------------------
-
-# Recommended CLI
-
-``` bash
-lagrange registry add registry.lagrange.dev
-lagrange registry list
-lagrange service search backup
-lagrange service install lagrange/backup-manager@1.2.0
-lagrange service upgrade lagrange/backup-manager@1.3.0
-lagrange service remove lagrange/backup-manager
-lagrange service list
-lagrange service status backup-manager
-```
-
-------------------------------------------------------------------------
-
-# Recommended SQL / Admin Surface
-
-``` sql
+```sql
 INSTALL SERVICE $1;
 UPGRADE SERVICE $1;
 REMOVE SERVICE $1;
 SHOW SERVICE $1;
 SHOW SERVICES;
+CONFIGURE SERVICE ACCESS $1;
+CREATE BINDING $1;
 ```
 
-The first four forms use one JSON bind parameter. Install and upgrade carry a
-versioned external manifest, artifact source, stable idempotency key, and
-optional revision config. Remove carries the service name and idempotency key;
-the single-service read carries only the service name. Authenticated session
-context and the server's signature policy are never client payload fields.
-`SHOW SERVICES` has no parameters. The returned rows expose durable catalog
-operation and rollout state; `recorded_not_running` is not reported as running
-instance state.
-
-------------------------------------------------------------------------
-
-# Installation Lifecycle
-
-## 1. Discover
-
-The user selects a package and version from one or more registries.
-
-## 2. Resolve
-
-The cluster resolves:
-
--   canonical package identity
--   version/tag
--   artifact digest
--   manifest
--   dependencies
-
-## 3. Validate
-
-The cluster validates:
-
--   manifest schema
--   kernel API compatibility
--   declared edition compatibility metadata
--   capability permissions
--   configuration schema
--   dependency satisfaction
-
-Commercial entitlement evaluation is an external extension point, not an AGPL
-kernel requirement.
-
-## 4. Record desired state
-
-The cluster writes desired install state into system tables.
-
-At this point the operation is durable and recoverable.
-
-## 5. Reconcile
-
-The reconciler fetches and activates the service.
-
-## 6. Observe
-
-The cluster records health, rollout progress, and failures.
-
-------------------------------------------------------------------------
-
-# Remove Lifecycle
-
-Removal should also be declarative.
-
-1.  desired state becomes `absent`
-2.  reconciler drains/stops instances
-3.  service-owned runtime processes terminate
-4.  retained data is either preserved or removed per policy
-5.  catalog marks installation removed
-
-This allows safe uninstall without ad hoc host cleanup.
-
-------------------------------------------------------------------------
-
-# Upgrade Lifecycle
-
-Upgrade should be versioned and rollback-capable.
-
-1.  user sets desired target version
-2.  cluster validates compatibility
-3.  reconciler starts rollout according to manifest strategy
-4.  health checks monitor activation
-5.  success marks new revision active
-6.  failure triggers rollback or pause
-
-Supported strategies should include:
-
--   rolling
--   canary
--   all-at-once
-
-------------------------------------------------------------------------
-
-# Rollback Model
-
-The cluster should preserve service revision history.
-
-A rollback is conceptually just:
-
--   change desired active revision
--   reconcile to prior known-good artifact/config pair
-
-This is far safer than reinstalling manually from memory.
-
-------------------------------------------------------------------------
-
-# Registry Configuration
-
-A cluster should support multiple registries.
-
-Registry metadata includes:
-
--   name
--   URL / endpoint
--   auth reference
--   trust policy
--   priority / search order
--   mirror-of relationship
-
-This allows:
-
--   official public registry
--   official commercial registry
--   customer-private registry
--   local mirror
-
-------------------------------------------------------------------------
-
-# Trust and Verification
-
-Before activation the cluster should verify, where applicable:
-
--   artifact digest
--   manifest digest
--   signature
--   publisher identity
--   allowed capability set
-
-A trust policy can determine whether unsigned or untrusted packages are
-allowed.
-
-This is especially important once third-party services exist.
-
-## Artifact owner boundary
-
-`InstallableServiceArtifactResolver` is the single structural verification
-owner for remote and development sources. A remote registry provider acquires
-an OCI descriptor; a local source reads the standard `oci-layout`,
-`index.json`, and digest-addressed blob. Both acquisitions then use the same
-verification path:
-
-1. bound descriptor size before parsing;
-2. recompute and compare the pinned `sha256` digest;
-3. validate the OCI image-manifest shape and descriptor size;
-4. require container manifests or exactly one `application/wasm` layer,
-   according to the external manifest; and
-5. apply the explicitly configured signature policy.
-
-The signature policy has three modes and no implicit default:
-
--   `required` --- a detached Ed25519 signature must verify against a
-    configured trusted public key;
--   `verify_if_present` --- unsigned artifacts are allowed, but a present
-    signature must verify; and
--   `disabled` --- signature verification is explicitly bypassed for the
-    configured environment.
-
-Detached signatures cover the domain-separated canonical artifact digest,
-not a mutable tag. The owner returns normalized verified metadata; it does not
-store the artifact, write catalog state, authenticate to registries, activate a
-runtime, or substitute for the later container/WASM payload consumer.
-
-For the local development producer, full graph validation occurs before the
-layout reaches this acquisition boundary. The build owner and resolver have
-non-overlapping roles: the former publishes a complete content-addressed graph;
-the latter binds the selected top descriptor and runtime media to the external
-manifest and trust policy.
-
-------------------------------------------------------------------------
-
-# External Licensing Extension Point
-
-The installation platform itself belongs in the open-source kernel.
-
-However, services may still declare edition requirements such as:
-
--   `community`
--   `pro`
--   `enterprise`
-
-An external commercial layer may require a valid license token or entitlement
-before activating certain packages.
-
-This keeps the **mechanism open** while allowing **content and
-entitlement** to remain commercial.
-
-The AGPL repo must not implement commercial license activation or entitlement
-checks from this document alone.
-
-------------------------------------------------------------------------
-
-# Failure Handling
-
-The reconciler should record structured failure state, including:
-
--   artifact fetch failed
--   digest mismatch
--   manifest invalid
--   incompatible kernel API
--   capability denied
--   health check failed
--   rollout timed out
-
-Failures should be durable and queryable, not just logged.
-
-------------------------------------------------------------------------
-
-# Development Workflow
-
-Even with a registry-first model, local development must remain fast.
-
-Recommended flow:
-
-1.  build service locally
-2.  publish to local registry or dev source
-3.  install into dev cluster using the normal install path
-4.  inspect instances and logs
-5.  repeat
-
-This preserves one conceptual model for both development and production.
-
-------------------------------------------------------------------------
-
-# Install Catalog System Tables
-
-The open kernel install catalog owns four replicated, non-cache-propagated
-system tables:
-
--   `service_packages` stores the immutable normalized manifest and verified
-    OCI payload identity. The catalog derives the bindable declaration identity
-    as `(package_id, sha256(normalized_manifest))`; the digest is not a second
-    stored column.
--   `service_revisions` stores immutable package/configuration revisions.
--   `service_installations` stores desired state, rollout state, stable
-    operation identity, and one `service_definition_id` reference.
--   `service_install_failures` stores closed, typed failure code/phase facts
-    without provider exception text.
-
-The production `service-install-catalog-owner` is composed through the existing
-system-metadata owner factory and reads/writes through the control-plane system
-table gateway. It does not create a storage path of its own. New installation
-intent is durably `recorded_not_running`; the catalog never projects a `running`
-field or accepts caller-supplied actual state.
-
-Overlapping package, revision, installation, operation, and failure mutations
-are serialized within an owner. Durable uniqueness remains the cross-owner
-backstop: an insert conflict is resolved by an authoritative re-read and is
-returned either as an unchanged replay or a typed identity conflict. Rollout
-and latest-failure changes use the observed rollout state and monotonic update
-timestamp as a compare-and-swap fence, so a stale concurrent writer cannot
-overwrite the winner.
-
-Runtime ownership remains unchanged: `service_definitions` owns runtime
-deployment intent, `services` owns instance actuals, and `service_endpoints`
-owns endpoint actuals. The catalog's `service_definition_id` is a correlation
-identity, not a copied instance or endpoint record.
-
-Optional later additions:
-
--   service repository configuration
--   service dependency records
--   external commercial entitlement references
--   external secret-provider references
-
-------------------------------------------------------------------------
-
-# Open vs Commercial Boundary
-
-Open-source kernel provides:
-
--   registry support
--   install/remove/upgrade machinery
--   system catalog
--   reconciliation
--   capability enforcement
--   extension-point metadata for commercial consumers when required by the
-    AGPL substrate
-
-Commercial layers provide:
-
--   commercial service artifacts
--   commercial registries
--   commercial entitlements
--   premium service implementations
--   license-token activation
--   RBAC, tenancy, KMS, and secret-provider behavior
-
-This is the clean platform boundary.
-
-------------------------------------------------------------------------
-
-# Expected Outcome
-
-A registry-first installation model gives Lagrange:
-
--   cleaner architecture than file-based loading
--   easier install/remove UX
--   stronger cluster consistency
--   better upgrade safety
--   better commercial packaging
--   a plausible future service ecosystem
+Mutation payloads carry the caller's requested artifact, configuration, and
+idempotency input. Tenant, principal, roles, signature policy, durable owner
+identity, and owner outcomes come from the server and are not accepted as
+payload authority. The node-local admin WebSocket is a compatibility and
+diagnostics adapter, not a fallback lifecycle transport.
+
+## Artifact Acquisition
+
+[`InstallableServiceArtifactResolver`](../src/service/installable-service-artifact-resolver.js)
+is the single verification owner for remote OCI descriptors and local OCI image
+layouts. Both sources converge on the same checks:
+
+1. validate the external manifest;
+2. bound and parse the selected OCI descriptor;
+3. recompute the pinned SHA-256 digest and descriptor size;
+4. verify image-manifest media shape;
+5. require container media or exactly one `application/wasm` layer according
+   to the manifest runtime; and
+6. apply the explicit signature policy.
+
+Signature policy has exactly three modes: `required`,
+`verify_if_present`, and `disabled`. Detached Ed25519 signatures cover the
+domain-separated artifact digest. The resolver returns verified normalized
+metadata; it does not persist desired state or activate a runtime.
+
+Local layouts are produced by
+[`ServiceLocalOciLayoutBuilder`](../src/service/service-local-oci-layout-builder.js).
+It emits and validates a content-addressed OCI directory graph. The builder
+does not compile WASM, write catalog rows, or activate a runtime.
+
+## Catalog Ownership
+
+[`ServiceInstallCatalogOwner`](../src/control-plane/owners/service-install-catalog-owner.js)
+owns four replicated system tables through the control-plane table gateway:
+
+| Table | Current authority |
+| --- | --- |
+| `service_packages` | Immutable normalized manifest and verified OCI artifact identity |
+| `service_revisions` | Immutable package/configuration revisions |
+| `service_installations` | Desired install state, rollout state, stable operation identity, and optional `service_definition_id` correlation |
+| `service_install_failures` | Immutable typed failure facts |
+
+The catalog accepts no running-instance, endpoint, node, process, or health
+fields. Those remain owned by `service_definitions`, `services`, and
+`service_endpoints`. Package, revision, installation, operation, and failure
+identities are idempotent and immutable; conflicting replay returns a typed
+identity error. Rollout updates use compare-and-swap fencing so stale writers
+cannot overwrite a newer state.
+
+One OCI payload digest may back more than one installed declaration. Binding
+therefore identifies an Artifact by installed `package_id` plus the SHA-256 of
+its exact normalized manifest, never by globally selecting a package from OCI
+digest order.
+
+## Installation Reconciliation
+
+[`ServiceInstallationReconciler`](../src/service/service-installation-reconciler.js)
+is leader-scoped, periodic, generation-fenced, and single-flight per
+installation. Its current activation behavior is deliberately bounded:
+
+- supported external runtime kinds are recognized;
+- unsupported direct activation is recorded as the typed non-retryable
+  `activation_unsupported` failure;
+- the durable rollout state settles at `recorded_not_running`; and
+- never-activated installations can transition idempotently through
+  `removing` to `removed`.
+
+It does not currently fetch and start a real OCI container, publish endpoints,
+or report a catalog installation as a running actual. Genuine WASI component
+execution is reached through `CREATE BINDING` and the Artifact / Binding / Cell
+path documented in
+[`minimal-deployment-surface.md`](minimal-deployment-surface.md).
+
+## Runtime Support
+
+The machine-readable implementation claim is
+[`docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
+At present:
+
+- `wasm_component` supports external installation and genuine WASI Cell
+  execution;
+- `native_js` is kernel-internal; and
+- `oci_container` supports descriptor validation and an in-memory lifecycle
+  scaffold, but not real container activation.
+
+Registry search, registry configuration, air-gapped mirror management,
+entitlements, commercial package policy, and the external kernel API are not
+current catalog surfaces. Their work belongs in the roadmap and
+`solve/specs/`, not this architecture contract.

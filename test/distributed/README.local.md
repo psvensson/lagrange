@@ -676,28 +676,13 @@ Key settings:
 3. `requireSamples` — fail when insufficient samples are collected (default
    `false`).
 
-### Temporary `failOnDetection: false` override
+### Local Profile Enforcement
 
-Both `local.json` (5-node) and `local-three-node.json` (3-node) currently set
-`failOnDetection: false`. This is a **temporary** workaround for known seed
-memory growth during rolling restarts (Bug G — post-restart redistribution
-deadlock causes the seed to accumulate all replicas and grow monotonically).
+`local.json` (5-node) and `local-three-node.json` (3-node) collect leak
+diagnostics but set `failOnDetection: false` and `requireSamples: false`.
+Results from those profiles do not certify leak freedom. The report summarizer
+prints a `!` warning when a non-enforcing run detects growth.
 
-This override **must be removed** once either:
-
-1. The redistribution deadlock (Bug G) is fixed and clean rolling restarts
-   show stable seed memory, proving the growth was caused by replica
-   accumulation.
-2. Or the growth is confirmed to be a genuine leak unrelated to redistribution,
-   in which case the leak itself must be fixed first.
-
-Do not leave `failOnDetection: false` as a permanent setting. It masks future
-memory leaks and defeats the purpose of the analyzer. Re-enable it as soon as
-the underlying issue is resolved.
-
-While the override is active, detections are not fully silent:
-`npm run summarize:harness` reads each report's `memoryLeakAssertion` and
-prints a `!` warning line for any run where a leak was detected but not
-enforced, naming the leaking nodes and this section. Treat those warnings as
-the re-arm signal — if they stop appearing on clean rolling restarts, gate 1
-above is satisfied and `failOnDetection` must be flipped back to `true`.
+Use `local-memory-soak.json` for leak certification. That profile sets both
+`failOnDetection: true` and `requireSamples: true`, so a detection or an
+insufficient sample set fails the run.

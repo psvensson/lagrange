@@ -1,6 +1,6 @@
 # Service Control Transport
 
-## Decision
+## Current Transport
 
 The external service lifecycle control transport is first-class lifecycle SQL
 over authenticated PostgreSQL wire. The CLI is a client of that SQL surface; it
@@ -29,7 +29,7 @@ External lifecycle control may not use PG wire trust mode. Trust mode remains a
 loopback-only database-development policy. A client-supplied tenant, principal,
 role, service identity, or owner outcome is never authoritative.
 
-The initial executable grammar is deliberately parameterized and closed:
+The executable grammar is parameterized and closed:
 
 ```sql
 INSTALL SERVICE $1;
@@ -77,47 +77,14 @@ not mutate catalog tables directly to bypass the command owner. Artifact
 signature policy is server-configured and explicit; a command payload cannot
 weaken it.
 
-## Reused, extended, and new
+## Current Boundary
 
-- **REUSED:** the production PG wire listener, TLS policy, credential verifier,
-  session authorization hook, canonical SQL request ingress, SQL execution
-  owner, and existing service/meta-service lifecycle owners.
-- **EXTENDED:** PG wire/SQL authorization gains lifecycle-specific actions; the
-  canonical request carries server-derived security context; SQL gains the
-  lifecycle statement family and typed operation projection.
-- **NEW:** no network transport, authentication protocol, or CLI mutation path.
-  The desired-state catalog and reconciler are new downstream semantic owners
-  already assigned to separate Phase 1 Quests.
+The control surface implements lifecycle SQL ingress, action authorization,
+server-context propagation, and command composition over the manifest,
+artifact, Binding, access-policy, and desired-state catalog owners. It does not
+own reconciliation or runtime activation. The CLI is a stateless client of this
+surface.
 
-## Rejected alternative
-
-An authenticated private admin RPC is rejected for the Phase 1 production
-surface. The existing admin WebSocket is documented and wired as a node-local
-compatibility and diagnostics adapter; externally binding it currently requires
-an explicit insecure-bind opt-in. Promoting it would add a second external
-protocol, duplicate PG wire authentication/TLS work, make cluster-global intent
-look node-addressed, and encourage the CLI to depend on a compatibility adapter.
-
-The admin adapter may continue to serve bounded loopback diagnostics and legacy
-compatibility. It must not become a fallback when lifecycle SQL is unavailable.
-
-## Downstream proof obligations
-
-- `service-lifecycle-sql-control-surface` proves unauthenticated, generically
-  authorized, and client-spoofed lifecycle commands fail closed, while an
-  authenticated action-authorized command reaches the catalog owner.
-- `service-install-catalog-owner` proves SQL does not become a desired-state or
-  actual-state owner.
-- `service-install-lifecycle-cli` proves install, list, status, and remove use
-  this SQL path and contain no admin-WebSocket or direct-table mutation fallback.
-- Live Phase 1 acceptance must inspect the authenticated session, action verdict,
-  stable operation identity, catalog row, and canonical actual-state projection.
-
-## Non-goals
-
-The Phase 1 control surface now implements lifecycle SQL ingress, action
-authorization, server-context propagation, and command composition over the
-manifest, artifact, and desired-state catalog owners. It still does not own
-reconciliation, runtime activation, or CLI commands; those remain separate
-owner-boundary Quests. This decision does not select an OCI runtime provider
-and does not introduce enterprise RBAC or tenancy.
+The admin WebSocket remains a bounded loopback compatibility and diagnostics
+adapter and requires an explicit insecure-bind opt-in for external exposure. It
+is not a fallback when lifecycle SQL is unavailable.

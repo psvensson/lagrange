@@ -2,264 +2,102 @@
 audience: development
 ---
 
-# Rolling-restart convergence `doneWhen` — variance-aware metric
+# Rolling-Restart Convergence Metric
 
-Status: **proposed** (operator to seal the threshold constant). Supersedes the
-prior `doneWhen` of "scenario-PASS 3 consecutive runs", which is not a defensible
-bar for this system (see §1).
+This is the current closure contract for rolling-restart convergence. It
+separates hard safety from variance-aware bounded-time convergence and is
+implemented by the stat-gate summary plus
+[`convergence-sealed-bars.json`](../test/distributed/config/convergence-sealed-bars.json).
 
-## 1. Why the old bar was wrong
+## 1. Verdict Shape
 
-Scenario-PASS is bistable: on byte-identical code the cluster either lands in a
-convergent basin or a slow/limit-cycle basin, with a measured per-run PASS rate
-of ≈25–33%. "3 consecutive PASS" on a ~0.30 Bernoulli process has probability
-≈0.30³ ≈ **2.7% per 3-run window** — it is satisfiable by *variance alone* with
-no code improvement, and a genuinely better system (say p=0.6) still clears it
-only ~22% of the time. The bar has almost no power to tell "we improved" from
-"we got lucky", which is why every lever's gate verdict carried a "within
-variance" caveat.
+A fixed-code run window is evaluated on two independent axes:
 
-A per-run *deterministic* discriminator would be ideal, but the monotone-drain /
-limit-cycle hypothesis was **refuted** as a PASS/FAIL discriminator: three
-independent in-flight-churn measures (ADD-storm cadence over ~150 runs,
-late-window op creation, in-flight-count post-peak rises) all fail to separate
-PASS from FAIL (PASS mean ≈ FAIL mean, complete overlap). The bistability is a
-**latency/race-tail** phenomenon — whether a critical-path op (leadership
-handoff, spread establishment, voter-ready promotion under load) finishes before
-the per-restart budget — not a sustained loop. So the bar is necessarily
-**statistical**, and the productive levers are latency-tail reducers.
+- **Safety floor:** every run has zero corruption, unexpected node exits,
+  oracle blindness, and stale-source execution.
+- **Convergence:** the Wilson 95% lower confidence bound of the scenario pass
+  rate meets the sealed environment bar.
 
-## 2. The metric
+Any safety breach dominates the result. A high pass rate cannot compensate for
+one unsafe run.
 
-A run is judged on two independent axes:
+## 2. Why the Convergence Axis Is Statistical
 
-- **SAFETY floor (hard, never relaxed):** every run must have
-  `CORRUPT = NODE_EXIT = ORACLE_BLIND = staleSource = 0`. This is the real
-  invariant and is already met on every gate.
-- **CONVERGENCE bar (statistical):** over a fixed-code window of **N ≥ 20** runs,
-  the **Wilson 95% lower confidence bound** of the scenario-PASS rate must be
-  **≥ T**.
+Rolling-restart completion is sensitive to CPU and latency tails. A short
+consecutive-pass streak can occur by variance and is therefore only a liveness
+signal, not closure evidence. The aggregate uses a Wilson lower bound so the
+verdict incorporates sample uncertainty instead of treating the point estimate
+as certainty.
 
-Using the Wilson *lower bound* (not the point estimate) is what makes the bar
-honest under variance: it certifies "the system reliably passes at least T of the
-time, with 95% confidence", and it is exactly the value the operator's
-"set-it-high-then-halve-until-the-last-working-value" calibration converges to
-(the highest T the setup can actually sustain).
+The deterministic tier remains the first choice for timer, message-ordering,
+and owner-state defects. It does not model CPU contention or real-container
+transport effects; see
+[`deterministic-directed-testing-plan.md`](deterministic-directed-testing-plan.md).
 
-## 3. The threshold formula `T(N, hardware)`
+## 3. Environment Scaling
 
-The threshold depends on the cluster size and the hardware/network, via a simple
-per-restart model.
+The model treats a run as a sequence of node restarts. If `q` is the probability
+that one restart re-quiesces within its calibrated work budget, the first-order
+node-count model is:
 
-A rolling-restart run restarts **N_nodes** nodes one at a time; after each
-restart the cluster must re-quiesce within a per-restart budget window `W`
-(spread re-established, surplus drained, leadership settled). Let `q` be the
-probability that one restart re-quiesces within `W`. Treating the restarts as
-first-order independent and identically distributed:
-
-```
-passRate  ≈  q ^ N_nodes
+```text
+T(nodeCount) = qTarget ^ nodeCount
 ```
 
-and therefore the sealed threshold is
+`scripts/calibrate-machine.js` measures the host factor used to scale work-bound
+timeouts. Re-run that cheap calibration when runner hardware changes, not for
+ordinary source changes. The sealed pass-rate bar is a code-capability
+reference and is changed only through the promotion rule below.
 
+## 4. Gate Interpretation
+
+The stat gate reports one of these outcomes:
+
+- `SAFETY_VIOLATED` — at least one hard safety count is non-zero.
+- `ABOVE_BAR` — safety is clean and the Wilson lower bound meets the bar.
+- `BELOW_BAR` — safety is clean and the Wilson upper bound is below the bar.
+- `INCONCLUSIVE` — safety is clean but the interval straddles the bar.
+- `NO_SEALED_BAR` — the scenario has no configured reference.
+
+An inconclusive window does not authorize a pass or fail claim. Increase the
+sample only when the statistical claim is the question being answered.
+
+## 5. Sealed `doneWhen`
+
+For the five-node `rolling-restart` scenario, the current contract is:
+
+1. use a fixed-code window of at least 15 runs;
+2. require `CORRUPT = NODE_EXIT = ORACLE_BLIND = staleSource = 0` in every run;
+3. require the Wilson 95% lower bound of the scenario-pass rate to be at least
+   **`T(5) = 0.357`**; and
+4. treat a consecutive-pass probe only as a liveness heartbeat.
+
+The corresponding per-restart target is **`qTarget = 0.812`**. The executable
+values live in
+[`convergence-sealed-bars.json`](../test/distributed/config/convergence-sealed-bars.json);
+this document and that file must change together.
+
+## 6. Promotion Rule
+
+The bar may move upward only when a fresh, fixed-code window of at least 15
+runs:
+
+1. satisfies the safety floor;
+2. has a Wilson 95% lower bound strictly above the current bar; and
+3. records the new bar, node count, `qTarget`, window, source identity, and
+   evidence together.
+
+The bar is never recalibrated downward to make a change pass. Hardware changes
+use the machine-factor calibration; material scenario-shape changes require a
+new explicit reference rather than silently rewriting this one.
+
+## 7. Operating Commands
+
+```sh
+node scripts/calibrate-machine.js
+bash scripts/rolling-restart-stat-gate.sh 15
 ```
-T(N_nodes)  =  q_target ^ N_nodes
-```
 
-Properties (why this is the right shape):
-
-- **Node count:** `q^N` falls *exponentially* with N — adding nodes makes any
-  fixed passRate exponentially harder. This is the dominant, provable dependence.
-- **Hardware / network:** `q` rises with CPU and falls with network RTT. The gate
-  already scales the per-restart budget `W` by `machineFactor`
-  (`LAGRANGE_MACHINE_FACTOR`), which holds `q` *approximately* constant across
-  hardware; residual super-linear coordination cost on larger/slower setups
-  lowers `q` and is absorbed by re-calibrating `q_target` per environment.
-- **Code:** `q` is what a latency-tail lever (e.g. immediate leadership-handoff
-  escalation) actually raises — so "did the lever help?" becomes "did the
-  calibrated `q` rise?", which is variance-robust and node-count-independent.
-
-`q_target` is calibrated as `q_target = p̂_lowerWilson ^ (1 / N_ref)` where
-`p̂_lowerWilson` is the Wilson 95% lower bound of the measured passRate at the
-reference node count `N_ref`.
-
-## 3b. Two calibrations — what is computed ONCE vs what is sealed ONCE
-
-There are two distinct calibrated quantities. **Neither is recomputed on an
-ordinary code change.** Keeping them separate is the whole point: the expensive
-thing must not be code-dependent.
-
-1. **The hardware factor (a HARDWARE property — cheap, stable, compute-once).**
-   This already exists: `scripts/calibrate-machine.js` runs a ~1 s micro-benchmark
-   (sqlite full-log scan + readiness-snapshot JSON serialize/parse + a CPU term —
-   the documented convergence hot-path mix) and emits `LAGRANGE_MACHINE_FACTOR =
-   hostFactor × cpuScaling`, measured against a stored reference
-   (`test/distributed/calibration-baseline.json`; this dev box IS the reference,
-   `hostFactor = 1.0`). The gate and the harness
-   (`convergence-budget-calibration.js`) **scale the work-bound timeouts by this
-   factor**, so a slower/faster box gets proportionally larger/smaller budgets.
-   It is a property of the *hardware*, so it is **re-measured only when the
-   hardware changes** (`--establish-baseline` on a new reference box, or the
-   per-host probe on a new runner) — never on a code change. "Other (logic)
-   factors" — node count via the `q^N` model, per-scenario work-bound budget
-   shape — compose on top of this hardware factor and may change with code; the
-   hardware term does not.
-
-2. **The passRate baseline (a CODE/CAPABILITY property — expensive, sealed once).**
-   This is the hours-long N≥15 gate (§4). It is **sealed once** as the reference
-   bar `T(5) = 0.109` and recorded here; ordinary changes are *compared against*
-   the sealed bar, they do **not** re-derive it. You spend gate-hours again only
-   to **deliberately validate an improvement** (e.g. a latency-tail lever) against
-   the fixed bar, and you re-seal `T` upward only if the new Wilson lower bound
-   clears the old one. So a routine change costs **zero** convergence-gate hours;
-   a milestone "did this lever raise q?" check costs one N≥15 gate, by choice.
-
-In short: the hardware factor (the thing that *should* be a reusable hardware
-constant) is the cheap ~1 s probe and is already wired into the timeouts; the
-hours-long value is the code-capability passRate, which is sealed once and
-referenced, not recomputed per change.
-
-## 4. Calibration for the current setup (5 nodes)
-
-Current setup: **N_ref = 5 nodes**, `resourceLimits.cpus = 1.0`, `memory = 2g`,
-`machineFactor = 1.0`, observed converged walls ≈ 590–682 s.
-
-Calibration run: `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY=true bash
-scripts/rolling-restart-stat-gate.sh 20` at the post-L1 HEAD (`src/` fingerprint
-`4ed4073b`). The un-mask flag is used so PASS labels are honest (no optimistic
-false-PASS).
-
-> **CALIBRATION RESULT (gate `20260627T073124Z`, N=15 — stopped early; see note):**
-> passRate `p̂ = 4/15 = 0.267` (sequence `fPffffffffPffPP`); Wilson 95% CI
-> `[0.109, 0.520]`; **sealed `T(5) = p̂_lowerWilson = 0.109`**; per-restart
-> `q_target = T0^(1/5) = 0.642` (point `q = p̂^(1/5) = 0.768`). The measured
-> `p̂ = 0.267` matches the campaign-long historical ≈0.27, confirming the sample
-> is representative.
->
-> **Why N=15 not 20:** the run was stopped after 15 because the marginal
-> information was diminishing — at p̂≈0.27 the Wilson interval stays wide
-> regardless of a few more runs, the point estimate had already converged on the
-> historical value, and the remaining compute is better spent on the lever
-> validation gate. (Six more runs would have moved the lower bound only within
-> ≈[0.08, 0.12].)
->
-> **SAFE-floor finding from the calibration:** `CORRUPT` / data-invariant
-> breaches were **0 on all 15 runs** (the core invariant holds), BUT **1/15
-> runs had an unexpected `NODE_EXIT`** (run4 — the known intermittent
-> rejoin-time node death, EADDRINUSE-8082 class). So the strict `NODE_EXIT = 0
-> every run` floor is **not** currently met (~7% intermittent). This is a real
-> residual to drive to zero, tracked separately from convergence.
->
-> **Failure diversity:** the 11 FAIL runs span ~10 distinct dominant reasons
-> (recovery-pending, leadership_unstable, spread_open, admin_reachability,
-> convergence_timeout, quiescence, publication_missing, readiness_probe,
-> observability_backlog, replica_operations_in_flight). No single binding root —
-> direct confirmation of the multi-headed latency-tail that motivates this metric.
-
-## 5. Sealed `doneWhen` (proposed)
-
-> The rolling-restart convergence quest is SOLVED when, over a window of N ≥ 15
-> fixed-code runs:
-> 1. **SAFETY (hard, never relaxed):** every run has
->    `CORRUPT = NODE_EXIT = ORACLE_BLIND = stale = 0`; AND
-> 2. **CONVERGENCE:** the Wilson 95% lower bound of the scenario-PASS rate is
->    `≥ T(N_nodes) = q_target ^ N_nodes`. For the current 5-node setup,
->    `q_target = 0.642`, so **`T(5) = 0.109`**.
-
-Status against this bar at the post-L1 baseline (gate `073124Z`, N=15):
-- **CONVERGENCE: MET** — measured Wilson lower bound = 0.109 = T(5) (by
-  construction; this is the calibrated current capability).
-- **SAFETY: NOT fully met** — `CORRUPT = 0` on all 15, but `NODE_EXIT` was 1/15
-  (the intermittent rejoin death). So the binding open work is the **NODE_EXIT
-  residual**, not convergence.
-
-This separates the two concerns honestly: convergence is at its hardware-limited
-optimum for this code, and the remaining hard-floor gap is a specific,
-reproducible node-death bug. **Improving convergence** beyond the floor is then a
-distinct, measurable goal: raise the calibrated `q_target` by reducing a
-critical-path latency tail (current frontier: leadership-handoff — see Lever A —
-and voter-ready-spread under load), then re-run N≥15 and **re-seal `T` upward**
-only if the new Wilson lower bound clears the old one (that is the evidence that
-a lever actually helped, immune to single-run variance).
-
-## 6. Certification — SOLVED (operator-attested, 2026-06-28)
-
-Both axes of the §5 `doneWhen` are met outright, at a full N=15 window, with
-margin. Closing the quest on this evidence.
-
-**Gate `20260628T064848Z`, N=15** (HEAD `04e9103c`, `srcFingerprint
-e746c1633b09f68d`, un-mask `LAGRANGE_PR_SPREAD_REQUIRE_VOTER_READY=true`):
-
-- **SAFETY floor — MET, every run.** `NODE_EXIT = 0/15`, `hardBreaches =
-  CORRUPT = 0/15`. The baseline (`073124Z`) had `NODE_EXIT 1/15`; that binding
-  gap is closed.
-- **CONVERGENCE — MET with margin.** passRate `9/15 = 0.600` (sequence
-  `PPffPPfPPfPPffP`), Wilson 95% CI `[0.357, 0.802]`. Lower bound **0.357 ≥
-  T(5) = 0.109** (3.3×).
-- **Provable improvement.** The new Wilson lower bound `0.357` clears the old
-  `0.109` decisively — by this document's own "did the lever help?" test, the
-  two fixes landed this campaign raised the convergence floor, immune to
-  single-run variance (passRate `0.267 → 0.600`).
-
-**What moved it** (both DT red-on-revert + adversarially safety-verified, no
-gate spent to find them):
-- **A1** (`5cdb1880`) — participation-aware join in-flight gate: a healthy
-  joiner is no longer held out of membership by an in-flight op it neither
-  sources nor targets (was `publication_missing_active_node`).
-- **B1** (`522e3def`) — serve-eligible while spread satisfied in flight: a
-  voter-ready node is serve-eligible while a recovery op merely finishes, gated
-  fail-closed on the durable (voter-ready-sound) spread + a serve-lane
-  reasonCode allowlist (was `restart_recovery_timeout` + `nodeSlotUnavailable`).
-
-All three of those failure heads are absent from every one of the 15 runs.
-
-**Re-seal.** Per §3/§5, the bar re-seals upward to the newly-proven floor:
-**`T(5) = 0.357`** (`q_target = 0.357^(1/5) = 0.812`), superseding the prior
-`0.109`. Future changes are compared against this higher bar.
-
-**Residual (non-blocking).** All 6 fails are the drain/in-flight family (4×
-`convergence_timeout`, 1× `replica_operations_in_flight`, 1× a new singleton
-`publication_epochs_disagree`) — the run4 dead-target REPLACE drain churn, which
-is saturation-entangled and does not block this `doneWhen`. Left as documented
-future work.
-
-**Closure mechanism (honest record).** The Solver harness emits a SOLVED
-terminal only when a `doneWhen` *probe* evaluates done, and no probe expresses
-this Wilson-LB/SAFE aggregate (the quest JSON still carries the legacy
-`scenario-harness consecutive:3` probe, which must not be faked). So this
-closure is **operator-attested**: recorded here, in the quest log
-(`solve/log/rolling-restart-core-stability.ndjson`), and in external memory; the
-Solver machine status is left honestly open. A future `convergence-passrate`
-probe could mechanize it.
-
-## 7. Proxy retired + drain-residual closed (2026-07-01)
-
-Two housekeeping decisions that supersede the loose ends above.
-
-**7a. The consecutive-N scenario-harness probe is RETIRED as a closure signal.**
-The legacy `scenario-harness consecutive:3` (and the run4 quests' later
-`consecutive:15`) probe is **liveness-only** — a cheap "does it still pass
-sometimes" heartbeat, never a convergence verdict. This was already argued in §1
-and flagged at §6 ("must not be faked"); it is now stated as policy: the **only**
-sealed closure for rolling-restart convergence is §5 — SAFETY floor (0 every run)
-+ CONVERGENCE (Wilson-95 lower bound ≥ the sealed `T(5) = 0.357`). Do not author
-or resurrect a rolling-restart `doneWhen` whose goal is "N consecutive PASS";
-any such probe is a liveness signal, and treating it as closure is a goalpost
-violation. A `convergence-passrate` probe (Wilson-LB over a window) is the
-mechanized form of §5 and the only kind that should gate this scenario.
-
-**7b. The run4 drain/in-flight residual (§6 "documented future work") is CLOSED
-— will-not-fix via structural discrimination.** A bounded PASS/FAIL census over
-the existing report corpus (quest `rolling-restart-run4-passfail-discriminator-census`,
-SOLVED `no-separator`; `scripts/census/`, subagent-verified) proved the run4
-`replica_operations_in_flight` / drain residual is **not a structural condition
-that separates PASS from FAIL**: leadership concentration is ~identical in PASS
-(mean 30.74/34) and FAIL (30.89/34), best-split balanced accuracy 0.551 (chance);
-rejoiner-identity and drain-at-terminal likewise chance-level. It is an
-irreducibly-statistical **CPU-latency tail** (PASS 73.2% overlaps FAIL 74.9%),
-exactly the variance §1 built this metric to absorb — not a sealable stricter
-bar. Consequently the drain residual **does not reopen the §6 certification** and
-must not spawn further per-witness `operation_workflow_owner` patching (the ~8h
-whack-a-mole of 2026-06-30 → 07-01, blocker-oscillation=high, confirmed this is a
-dead lever). rolling-restart convergence remains SOLVED against §5.
+Do not put the statistical gate on ordinary push CI. Run deterministic
+falsifiers and focused owner tests first, then spend the live window on release
+or promotion claims that only the real environment can establish.

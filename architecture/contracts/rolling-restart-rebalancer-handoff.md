@@ -51,7 +51,7 @@
     }
   ],
   "knownResiduals": [
-    "Fresh representative evidence is still required after accept_classified_backpressure before this contract can claim release-gate convergence."
+    "The decision table and abstract model do not by themselves certify concrete wake scheduling or live-cluster convergence."
   ],
   "runtimeBindings": [
     {
@@ -80,12 +80,12 @@
   ],
   "metrics": [
     {
-      "name": "representative Quest priority metric",
-      "probe": "npm run solve:probe -- --probe scenario-harness --scenario rolling-restart --reportDir test-output/reports --metric priority"
+      "name": "handoff decision-table check",
+      "probe": "npm run model:decision-tables"
     },
     {
-      "name": "core stability Quest status",
-      "probe": "npm run solve:status -- --id rolling-restart-core-stability"
+      "name": "active-gate model check",
+      "probe": "npm run model:check"
     }
   ],
   "questRefs": [
@@ -145,7 +145,7 @@ bindings for convergence and coupled invariant checks.
 
 ## Operational Analysis
 
-FMEA records the missing scheduler wake and representative rerun risk. STPA
-records the unsafe control action: continuing local patching after unchanged
-frontier feedback. `npm run solve:health -- --id rolling-restart-core-stability`
-is the operator-facing summary of that risk.
+FMEA records the missing scheduler-wake and repeated-rerun risks. STPA records
+the unsafe control action of treating unchanged frontier feedback as permission
+for another local transition. The durable guards are the handoff decision table,
+the active-gate models, and their registered invariants.

@@ -14,12 +14,11 @@ the deterministic substrate itself (virtual clock, seeded RNG, PCT) is mapped
 in
 [deterministic-directed-testing-plan.md](deterministic-directed-testing-plan.md).
 
-The docker rolling-restart stat-gate is the expensive, last-resort verdict: N≥8
-runs × ~400s ≈ 50 minutes, non-deterministic, and convergence fixes have
-repeatedly landed **correct but inert** (the precondition did not recur, costing
-hours of gate wall to discover the fix never engaged — CL-001 variant A).
+The docker rolling-restart stat-gate is an expensive, non-deterministic
+integration verdict. It cannot prove that a changed branch engaged or that a
+design-class defect is absent.
 
-Below it sits a **sub-second, deterministic tier**. The closure-grammar's
+The **sub-second, deterministic tier** supplies that proof. The closure-grammar's
 [reproduced-before-fix rung](../solve/specs/membership-lifecycle-placement-hard-cutover/closure-grammar.md)
 already mandates a deterministic (or recurrence-measured) repro before a record
 enters `fix_in_progress`. This document names the substrate so you author that
@@ -40,7 +39,8 @@ proven in-process with `:memory:` and durable-restart SQLite, zero docker.
 
 ## One discoverable repro per CL
 
-- Land new repros at the convention path **`test/closure/CL-###.repro.test.js`**.
+- Land new repros under **`test/closure/`** using the
+  `CL-###.repro.test.js` naming convention.
 - Existing deterministic tests are referenced in place via
   **`test/closure/registry.json`** (no churn): e.g. CL-035 → its control-plane
   test, CL-038 → its rebalancer test.

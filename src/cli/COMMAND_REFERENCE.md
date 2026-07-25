@@ -1,7 +1,6 @@
 # Lagrange Admin CLI Command Reference
 
-The command is `lagrange-admin` (the pre-rename `ddb-admin` alias was removed
-before the first release).
+The command is `lagrange-admin`.
 
 Complete reference for all keyboard shortcuts, commands, configuration options, and command-line arguments.
 

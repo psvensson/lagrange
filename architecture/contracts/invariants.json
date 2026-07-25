@@ -47,28 +47,6 @@
       "contractRef": "architecture/contracts/rolling-restart-rebalancer-handoff.md"
     },
     {
-      "id": "non_shrinking_window_blocks_rerun",
-      "owner": "representative_evidence_owner",
-      "boundary": "rolling_restart_rerun",
-      "kind": "safety",
-      "statement": "A non-shrinking residual-count window cannot authorize another rolling_restart_rerun; it enters blocked_model_route.",
-      "formalPredicate": "window_non_shrinking => next = blocked_model_route",
-      "coupledWith": ["blocked_route_has_non_rerun_exits"],
-      "modelRef": "docs/specs/representative-rerun-progress-model.json",
-      "contractRef": "architecture/contracts/rolling-restart-representative-rerun-progress.md"
-    },
-    {
-      "id": "blocked_route_has_non_rerun_exits",
-      "owner": "representative_evidence_owner",
-      "boundary": "rolling_restart_rerun",
-      "kind": "liveness",
-      "statement": "A blocked representative rerun route exits only through owner-boundary migration or architecture/causal successor selection before representative evidence runs again.",
-      "formalPredicate": "blocked_model_route => eventually(owner_boundary_migration or architecture_or_causal_successor)",
-      "coupledWith": ["non_shrinking_window_blocks_rerun"],
-      "modelRef": "docs/specs/representative-rerun-progress-model.json",
-      "contractRef": "architecture/contracts/rolling-restart-representative-rerun-progress.md"
-    },
-    {
       "id": "single-semantic-owner",
       "owner": "architecture_owner",
       "boundary": "core_system_logic",

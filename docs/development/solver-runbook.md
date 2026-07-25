@@ -50,9 +50,10 @@ node scripts/solve.js doctor --json
 `doctor` reports Git state, agent-adapter capability, local attribution, and the
 runnable supervised or autonomous mode. A missing config, `enabled: false`, an
 unexecutable command, or the no-op example adapter never masquerades as a live
-autonomous capability. `solve/config.json` is machine-local and ignored by Git.
-Copy [`solve/config.example.json`](../../solve/config.example.json) locally and set
-`enabled: true` only after replacing the placeholder with a live executable.
+autonomous capability. Copy
+[`solve/config.example.json`](../../solve/config.example.json) to the ignored
+machine-local sibling `config.json`, and set `enabled: true` only after
+replacing the placeholder with a live executable.
 
 For component-level diagnosis, inspect the same projection directly:
 
@@ -203,9 +204,10 @@ decide progress and closure.
 - Track authored `solve/quests/`, append-only `solve/log/`, explanatory
   `solve/changes/`, and non-regenerable report evidence.
 - Treat `solve/state/`, ordinary `solve/report/<quest-id>.md`, and
-  `solve/OVERVIEW.generated.md` as regenerable local projections. Use `report`
+  `OVERVIEW.generated.md` as regenerable local projections. Use `report`
   or `overview --write` only when a human wants that view; audit and handoff do
   not require either file.
-- Keep `solve/config.json` local.
+- Keep the machine-local `config.json` beside the tracked example and out of
+  Git.
 - Regenerate the full CLI and steering indexes with
   `npm run steering:llm:pack` after command or steering-source changes.

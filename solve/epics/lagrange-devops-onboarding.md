@@ -386,7 +386,8 @@ D1 (auto-start) is rejected: it loses the lifecycle lesson the onboarding is bui
 ## Service scaling model — "a partition IS a service" (operator-refined 2026-06-28)
 
 Services are **first-class replicated entities** that reuse the existing unified machinery — NOT a
-parallel mechanism (architecture forbids a parallel planner, `architecture/future/activation-cost-aware-placement.md:98-108`).
+parallel mechanism (the planning contract forbids a parallel planner,
+`solve/specs/activation-cost-aware-placement/requirements.md`).
 The code already grains this way: `UnifiedRebalancer` is entity-agnostic (PARTITION/MESSAGE_GROUP/
 RUNTIME_SERVICE) over one `MovePlanner` + one placement kernel. **Partition split/merge (keyspace
 resharding) is the ONLY partition-specific piece and the only thing inapplicable to a stateless service.**

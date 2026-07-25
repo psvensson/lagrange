@@ -9,41 +9,56 @@ Use this index to choose the narrowest architecture domain file before reading i
 New to the system? Read in this order for the shortest path from "what is this?"
 to "I understand how this works":
 
-1. [Architecture Overview](overview.md) — what the system is and its ownership model
-2. [Lagrange Architecture Diagrams](lagrange_architecture_diagrams.md) — the visual mental model
-3. [Bootstrap And Data Flow](bootstrap.md) — how a cluster forms and routes queries
-4. [Query Runtime Architecture](query-runtime.md) — the compute-near-data execution model
-5. [Raft, Rebalancing, And Placement](rebalance.md) — consensus, placement, and read-locality routing
+1. [The Lagrange System Model](system-model.md) — the mental model and diagram legend; start here
+2. [Process: Partitioning](process-partitioning.md) — key ranges, query resolution, split and merge
+3. [Process: Replication](process-replication.md) — the write path, CDC propagation, replica repair
+4. [Process: Rebalancing](process-rebalancing.md) — placement scoring, admission, operation lifecycle
+5. [Process: Request Routing](process-request-routing.md) — how SQL and service requests find their target
+6. [Process: Data Affinity](process-data-affinity.md) — how compute is moved to its data
+7. [Architecture Overview](overview.md) — the single-path ownership contract
 
-The domain-file list below is the full ordered tree.
+The five process documents are the illustrated walkthrough of how the system
+works. The domain-file list below is the full ordered tree.
 
 ## Visual Overview
 
-The system starts from a classical distributed database — logical tables split
-into partitions, each partition replicated across several nodes, with requests
-routed to the right partition and executed in parallel:
+Lagrange layers placed runtime-service Cells over a classical partitioned,
+Raft-replicated data layout. Cells have no per-service Raft log; durable service
+state remains in ordinary tables. The placement scorer keeps each Cell on or
+near replicas of the data it accesses so that compute moves to the data:
 
-![Classical distributed database: logical Orders and Customers tables split into partitions, each replicated across six nodes, with queries routed to the right partition and executed in parallel](../docs/dsitributed_db.png)
+```mermaid
+flowchart LR
+  C1["Service Cell<br/>node-a"]:::cell -. "reads / writes" .-> P1["Data partition P1<br/>Raft replica"]:::data
+  C2["Service Cell<br/>node-c"]:::cell -. "reads / writes" .-> P2["Data partition P2<br/>Raft replica"]:::data
+  C1 -. "persists" .-> S["Durable state<br/>ordinary tables"]:::data
+  C2 -. "persists" .-> S
 
-Lagrange layers a partitioned service tier over that same data layout. Each
-service is partitioned and replicated like the data, and the cluster places
-every service instance on or near the replicas of the data it accesses so that
-compute moves to the data and cross-node traffic is reduced:
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef cell fill:#dcfce7,stroke:#166534,color:#052e16
+```
 
-![Lagrange data + service layer: a partitioned Order Processor service whose instances are co-located across six nodes with the Orders and Customers data partitions they read and write](../docs/distributed_db_and_services.png)
+[The Lagrange System Model](system-model.md) explains this picture and defines
+the colour legend used by every process diagram.
 
 ## Domain Files
 
 <!-- architecture-domain-files:start -->
+- [The Lagrange System Model](system-model.md) - Storage stack, replicated group types, node anatomy, the control loop, and the shared diagram legend.
+- [Process: Partitioning](process-partitioning.md) - Partition keys, key ranges, query-to-partition resolution, and the managed split/merge workflows.
+- [Process: Replication](process-replication.md) - Raft groups, the write path, CDC propagation to read models, and replica loss and repair.
+- [Process: Rebalancing](process-rebalancing.md) - Placement triggers, score dimensions, capacity admission, operation lifecycle, and movement safety guards.
+- [Process: Request Routing](process-request-routing.md) - SQL ingress normalisation, replica candidate selection and retry, and service request routing through Bindings and Cells.
+- [Process: Data Affinity](process-data-affinity.md) - Access attribution feed, affinity weights, placement pull, and read-locality routing.
 - [Architecture Overview](overview.md) - Global architecture role, principles, and single-path ownership contract.
 - [Runtime Lifecycle Architecture](runtime-lifecycle.md) - Runtime readiness, lifecycle ownership, runtime descriptors, and observability contracts.
 - [Control Plane Architecture](control-plane.md) - Control-plane progression, system-table ownership, node state vocabulary, and configuration ownership.
 - [Runtime Components](runtime-components.md) - Node-local components, replicated services, metadata services, and runtime service owners.
-- [PostgreSQL Wire And SQL Compatibility](postgres-wire.md) - PostgreSQL wire service flow, endpoint discovery, SQL compatibility, and planned compatibility extensions.
+- [PostgreSQL Wire And SQL Compatibility](postgres-wire.md) - PostgreSQL wire service flow, endpoint discovery, and implemented SQL compatibility.
 - [Query Runtime Architecture](query-runtime.md) - Programmatic runtime, query bridge, execution-mode dispatch, callback execution, and movement primitives.
 - [Bootstrap And Data Flow](bootstrap.md) - Seed and joining bootstrap, query routing, CDC continuity, and meta-service management flow.
 - [Raft, Rebalancing, And Placement](rebalance.md) - Addressing, Raft consensus, rebalancing, storage placement, and message-group assignment.
-- [Operational Appendices And Archived Patterns](archived-patterns.md) - Error handling, testing, endpoint sync, and discovery appendix material.
+- [Operational Architecture Appendices](operational-appendices.md) - Error handling, testing, endpoint sync, and discovery architecture.
 <!-- architecture-domain-files:end -->
 
 ## Supporting Documents
@@ -53,21 +68,13 @@ compute moves to the data and cross-node traffic is reduced:
 - [Peer Address Resolution And Restart-With-New-IP Recovery](peer-address-resolution.md) - Logical-nodeId-vs-location identity, address resolution order, the three restart-with-new-IP recovery mechanisms, and name-first (hostname) addressing config.
 - [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
 - [Readiness Gating & Owner-Contract Kernels](readiness-and-owner-contracts.md) - Readiness dimensions (repairEligible/serveEligible), membership-health guards, and the shared cross-layer owner-contract kernels.
-- [Runtime Grammar Hierarchy](runtime-grammar-hierarchy.md) - Runtime grammar and boundary hierarchy reference.
 
 ### Service Platform
 
-- [Minimal Deployment Surface](minimal-deployment-surface.md) - Selected Artifact / Binding / Cell contract and owner-aligned migration sequence.
-- [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md) - Kernel platform API contract.
-- [Service Control Transport](service-control-transport.md) - Authenticated lifecycle SQL ingress, security boundary, owner route, and rejected admin-RPC alternative.
-- [OCI Runtime Host Contract](oci-runtime-host-contract.md) - Bounded Docker Compose host-agent provider, authenticated control envelope, production construction route, and downstream live-proof split.
+- [Minimal Deployment Surface](minimal-deployment-surface.md) - Current Artifact / Binding / Cell contract and owner map.
+- [Service Control Transport](service-control-transport.md) - Authenticated lifecycle SQL ingress, security boundary, and owner route.
 - [Lagrange Service Manifest](lagrange-service-manifest.md) - Service manifest format and activation model.
 - [Lagrange Service Registry](lagrange-service-registry.md) - Service registry architecture.
-
-### Diagrams
-
-- [Lagrange Architecture Diagrams](lagrange_architecture_diagrams.md) - Primary visual architecture references.
-- [Lagrange Advanced Architecture Diagrams](lagrange_advanced_architecture_diagrams.md) - Advanced architecture diagrams.
 
 ### Contracts & Invariants
 
@@ -83,8 +90,5 @@ compute moves to the data and cross-node traffic is reduced:
 
 - [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
 
-## Future Architecture
-
-- [Activation-Cost-Aware Placement](future/activation-cost-aware-placement.md) - Planned placement-cost architecture.
-- [Native Artifact Store](future/native-artifact-store.md) - Planned native artifact store architecture.
-- [Metastable Convergence Resilience](future/metastable-convergence-resilience.md) - Rolling-restart non-convergence reframed as metastable failure; three resilience directions + measurement gate.
+Unimplemented designs live under `solve/specs/` and are linked from the
+roadmap rather than from this current-architecture index.

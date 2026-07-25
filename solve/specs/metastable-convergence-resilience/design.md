@@ -7,7 +7,7 @@ This is the historical metastability design model for chronic
 20 evidence in `solve/epics/topology-convergence-hardening.md` is the current
 frontier authority and must be re-established before selecting a mechanism
 below. Full framing, citations, and historical verification status are in
-[architecture/future/metastable-convergence-resilience.md](../../../architecture/future/metastable-convergence-resilience.md).
+[research-input.md](research-input.md).
 The empirical signature (0–4 `missingPublishedCount` swing; retries as the
 dominant sustaining mechanism; admission-throttling proven ineffective) is
 documented in

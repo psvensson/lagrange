@@ -4,7 +4,7 @@ audience: human
 
 # WASM Services Architecture and Current Runtime Guide
 
-This guide covers the two `wasm_component` runtime axes: the landed
+This guide covers the two current `wasm_component` runtime axes: the
 Artifact / Binding / Cell deployment surface, and the older callback rehearsal
 machinery that predates it.
 
@@ -116,10 +116,10 @@ Response shape (`query_result`) includes callback execution metadata:
 }
 ```
 
-## 4. Callback Module Upload (Migration-Input Path)
+## 4. Legacy Callback Module Upload
 
 This path serves the callback axis only. `code`, `module_manifests`, and
-callback registrations are migration inputs, not peers of
+callback registrations are legacy internal substrate, not peers of
 Artifact / Binding / Cell; external service payloads are distributed through
 `INSTALL SERVICE` (section 5) instead.
 
@@ -387,7 +387,7 @@ scaling operation — replica capacity is system-policy output.
 
 Direct writes to `service_definitions`, `services`, or `service_endpoints`
 are internal substrate operations, not a user surface; those tables are
-migration inputs owned by the control-plane owners.
+owned by the control-plane owners.
 
 ## 7. Distributed SQL Examples Packaging and Run Flow
 
@@ -679,5 +679,4 @@ async start(replicaContext) {
 
 1. `docs/component-distribution.md` (package identity, OCI refs, dependency locks)
 2. `docs/admin-api-reference.md` (meta-service owned admin actions and CLI contract)
-3. `docs/runtime-ownership-rollout-runbook.md` (phase rollout and rollback)
-4. `docs/steering/architecture.md` (active ownership model)
+3. `architecture/runtime-lifecycle.md` (active runtime ownership model)

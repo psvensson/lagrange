@@ -262,12 +262,13 @@ const result = validateLockConsistency(existingLock, newDeps);
 // }
 ```
 
-### Explicit Rollout Bypass
+### Explicit Lock Replacement
 
 `validateActivationLock(manifest, existingLock, resolvedDeps,
 isExplicitRollout)` skips drift checks when
-`isExplicitRollout` is `true`, allowing intentional lock
-updates during rollouts.
+`isExplicitRollout` is `true`, allowing intentional lock replacement. Callers
+must set this only for an explicit rollout operation; a normal activation
+cannot use it as a fallback from drift failure.
 
 ### Lock Queries
 

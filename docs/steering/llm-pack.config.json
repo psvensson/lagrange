@@ -303,7 +303,7 @@
       "aliases": [
         {
           "file": "doctrine/state-encoding.md",
-          "line": 90,
+          "line": 107,
           "match": "Never let degraded evidence promote a blocked entity"
         }
       ]
