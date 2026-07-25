@@ -516,6 +516,41 @@ function assignReplicaOperationRepositoryVisibilityMethods(
             .PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_FAILURE,
       };
     }
+    /**
+     * A caller that must prove absence before acting on it (e.g. the
+     * reservation orphan reconcile) receives this outcome when the
+     * authoritative read did not complete: an unconfirmed absence defers the
+     * decision instead of masquerading as an empty read.
+     * @param {Object} options
+     * @return {Object|null}
+     * @private
+     */
+    buildUnconfirmedAbsenceVisibilityOutcome(options = {}) {
+      const operationId =
+      typeof options.operationId === 'string' ?
+        options.operationId :
+        null;
+      if (!operationId) {
+        return null;
+      }
+      return {
+        confirmationState: REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED,
+        completionState: null,
+        reasonCode:
+        REPLICA_OPERATION_VISIBILITY_REASON
+          .ABSENCE_CONFIRMATION_AUTHORITATIVE_READ_UNAVAILABLE,
+        retryAfterMs: Number.isFinite(options.retryAfterMs) ?
+          Math.floor(options.retryAfterMs) :
+          null,
+        queryDurationMs: Number.isFinite(options.queryDurationMs) ?
+          Math.floor(options.queryDurationMs) :
+          null,
+        operationId,
+        source:
+        REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
+          .ABSENCE_CONFIRMATION_READ_FAILURE,
+      };
+    }
     buildOwnerPersistedTransitionDeferredVisibilityOutcome(options = {}) {
       const operationId =
       typeof options.operationId === 'string' ?

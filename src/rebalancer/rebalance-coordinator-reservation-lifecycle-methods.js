@@ -343,11 +343,31 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       typeof this.repository?.getOperationByIdVisibilityObservation ===
       LOCAL_STR_FUNCTION
     ) {
+      const preferredObservation =
+        await this.repository.getOperationByIdVisibilityObservation(
+          operationId,
+          {
+            requireOwnerRpcRead: false,
+            allowPriorityRecoveryDeferredVisibility: true,
+          },
+        );
+      if (
+        preferredObservation?.operation ||
+        preferredObservation?.deferredOutcome
+      ) {
+        return preferredObservation;
+      }
+      // A silent absent from the preferred read may be a transient lagging
+      // local view. Releasing an active reservation requires the absence to
+      // be disproven or confirmed by the owner-RPC-required authority read;
+      // an escalated read that cannot confirm defers the decision.
       return this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
-          requireOwnerRpcRead: false,
+          requireOwnerRpcRead: true,
+          preferOwnerRpcReadLeader: true,
           allowPriorityRecoveryDeferredVisibility: true,
+          requireAbsenceConfirmation: true,
         },
       );
     }

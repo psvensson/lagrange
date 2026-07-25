@@ -246,10 +246,14 @@ const REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE = Object.freeze({
     'owner_persisted_transition_authoritative_operation_visibility_empty_read',
   OWNER_PERSISTED_TRANSITION_STALE_READ:
     'owner_persisted_transition_authoritative_operation_visibility_stale_read',
+  ABSENCE_CONFIRMATION_READ_FAILURE:
+    'absence_confirmation_authoritative_operation_visibility_read_failure',
 });
 const REPLICA_OPERATION_VISIBILITY_REASON = Object.freeze({
   OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION:
     'owner_persisted_transition_pending_authoritative_confirmation',
+  ABSENCE_CONFIRMATION_AUTHORITATIVE_READ_UNAVAILABLE:
+    'absence_confirmation_authoritative_read_unavailable',
 });
 const ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE = Object.freeze({
   PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_READ:

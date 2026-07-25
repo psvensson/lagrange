@@ -54,13 +54,12 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-009 | open | 20260611T052934Z | transport-replication-backpressure |
 
-## Open quests — 19
+## Open quests — 18
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-17 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 | — |
-| formation-reservation-reconcile-premature-orphan-release | product | 0 | 0 | 2026-07-07 ⚠ stale | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 | — |
 | movielens-local-leader-row-visibility-model | product | 1 | 0 | 2026-07-20 | — |
@@ -78,5 +77,5 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-11 ⚠ stale | — |
 
-> 3 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 2 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

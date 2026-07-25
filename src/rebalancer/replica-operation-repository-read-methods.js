@@ -365,6 +365,21 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             source,
           });
         }
+        if (
+          !deferredOutcome &&
+          options?.requireAbsenceConfirmation === true &&
+          !isEmptyRead
+        ) {
+          // The read FAILED rather than returning an empty row set: absence
+          // is unconfirmed, and a caller that demanded confirmation must see
+          // an explicit deferral, never a silent null it cannot distinguish
+          // from a confirmed-empty authoritative read.
+          deferredOutcome = this.buildUnconfirmedAbsenceVisibilityOutcome({
+            retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
+            queryDurationMs,
+            operationId,
+          });
+        }
 
         return Object.freeze({
           operation: null,
@@ -471,6 +486,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           options?.allowPriorityRecoveryDeferredVisibility === true,
           allowOwnerPersistedTransitionDeferredVisibility:
           options?.allowOwnerPersistedTransitionDeferredVisibility !== false,
+          requireAbsenceConfirmation:
+          options?.requireAbsenceConfirmation === true,
         },
       );
       if (authoritativeObservation?.operation) {
