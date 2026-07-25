@@ -240,6 +240,7 @@ export function buildHandoff(root, quest, options = {}) {
       root,
       quest,
       log,
+      {probeReproducibility: Boolean(options.probeReproducibility)},
     ) : null,
   };
 }
@@ -518,6 +519,10 @@ export function runCheckpointCommand(root, args) {
   const handoff = buildHandoff(root, quest, {
     checkpoint: true,
     checkpointReason: reason,
+    // Expensive, so explicit: `--probe-reproducibility` measures, for each
+    // dead-base attempt, whether the recorded artifact bytes reproduce from
+    // reachable commits, reporting the candidate count and never a base.
+    probeReproducibility: Boolean(args['probe-reproducibility']),
   });
   const rendered = renderHandoff(handoff);
   if (args[DRY_RUN_ARGUMENT]) {

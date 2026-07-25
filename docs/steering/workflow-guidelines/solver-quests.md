@@ -734,6 +734,31 @@ attempt or its fingerprint, never for dishonest approval of the rejected one.
 Aggregate verification still covers the final source delta across the complete
 attempt path union.
 
+An attempt whose recorded `workspaceBaseCommit` is a well-formed commit id that
+no longer resolves — an unpushed local commit discarded with its working copy —
+is classified `base_unreachable` by every consumer that resolves the recorded
+base against the repository, and no consumer surfaces raw Git errors for the
+condition. The same-base rule assumes the recorded base still exists; when the
+base is `base_unreachable` the same invariant transfers to a reachable base:
+the rejection is resolved only by a later same-frontier attempt or candidate at
+a reachable base whose paths cover every rejected source path and which carries
+its own later exact independent approval. There is no operator waiver for the
+`base_unreachable` condition — every resolution path runs through fresh
+independent verification of current bytes. A `base_unreachable` receipt leaves
+live recompute and ancestry scope because its exact delta can never be
+recomputed, while the attempt stays visibly reported in the verification
+dossier and never counts as verification. The landing candidate and the
+terminal aggregate anchor at a reachable recorded base while keeping every
+recorded attempt path inside the reviewed union, so dead-base content stays
+under independent review; when no reachable recorded base exists both report a
+typed actionable problem that names the required covering attempt. The
+reproducibility of recorded artifact bytes from reachable commits may be
+measured with `checkpoint --dry-run --probe-reproducibility`, which reports the
+candidate count and scan bound and never names a substitute base, because
+fingerprint reproduction identifies an equivalence class of commits rather
+than a provenance (823 of 2926 reachable commits reproduced one sampled
+attempt's fingerprint on this repository).
+
 At terminal, recompute the aggregate fingerprint from the earliest contracted
 base through current Git content over every version 2 changed path (version 1
 keeps its historical source-path rule). Aggregate approval is always mandatory.

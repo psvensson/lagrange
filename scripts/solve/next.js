@@ -88,6 +88,26 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
   const groups = preflight.replacementGroups.filter(
     (group) => !group.satisfiedAfterRequiredApprovals,
   );
+  // A group anchored at an unresolvable base is satisfied by a reachable-base
+  // covering replacement, so the instruction points there — the step pin
+  // resolves to current HEAD for exactly this case. Printing the recorded dead
+  // base would demand an attempt that can never be recorded.
+  const deadGroups = groups.filter((group) => group.baseUnreachable);
+  if (deadGroups.length > 0 && deadGroups.length === groups.length) {
+    const coveragePaths = [...new Set(
+      deadGroups.flatMap((group) => group.requiredPaths))].sort();
+    return typedNextAction(
+      `record a canonical same-frontier replacement attempt for ${questId} ` +
+      'at a reachable base (the step pin resolves to current HEAD) covering ' +
+      `${coveragePaths.join(', ') || '(no paths)'}, then obtain its own exact ` +
+      `approval; then rerun node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+      {
+        code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
+        payload: {questId, phase: 'begin', bases: [],
+          baseUnreachable: true, requiredPaths: coveragePaths},
+      },
+    );
+  }
   const bases = [...new Set(groups.map((group) => group.baseCommit).filter(Boolean))];
   const paths = [...new Set((groups.length > 0 ?
     groups.flatMap((group) => group.requiredPaths) :

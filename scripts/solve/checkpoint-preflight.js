@@ -8,7 +8,9 @@ import {EVENT_FINDING} from './constants.js';
 import {importClosureGaps} from './import-closure.js';
 import {suggestVerificationTemplates} from './verification-template-suggest.js';
 import {
+  BASE_UNREACHABLE_CODE,
   canonicalSourceDelta,
+  probeBaseReproducibility,
   validVerificationFingerprint,
   VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_SCOPE,
@@ -35,6 +37,10 @@ function attemptPreflightDossier(root, attempt) {
     sourcePaths: [...attempt.sourcePaths].sort(),
     currentFingerprint: live.fingerprint,
     currentMatches: live.ok && live.fingerprint === attempt.fingerprint,
+    // Why the live delta could not be taken, when it could not. Without this a
+    // consumer sees only `currentMatches: false` and infers drift — telling the
+    // operator the source moved when the only broken thing is a commit name.
+    problemCode: live.ok ? null : (live.code || null),
   };
 }
 
@@ -114,14 +120,26 @@ function addReplacementRequirement(groups, attempt, paths, reason) {
 
 function replacementRequirementGroups(root, state) {
   const groups = new Map();
-  for (const {attempt} of state.unresolvedRejectedAttempts) {
+  for (const entry of state.unresolvedRejectedAttempts) {
+    const {attempt} = entry;
+    // A rejection whose base still resolves demands the strict same-base form;
+    // one whose base is gone demands the live-base coverage form. Printing the
+    // same-base instruction for a dead base would demand the impossible.
     addReplacementRequirement(
       groups,
       attempt,
       attempt.sourcePaths,
-      `rejected ${attempt.event.changeRef || MISSING_CHANGE_REF} requires a ` +
-        'same-frontier, same-base source-path superset',
+      entry.baseUnreachable ?
+        `rejected ${attempt.event.changeRef || MISSING_CHANGE_REF} has a ` +
+          `${BASE_UNREACHABLE_CODE} recorded base; requires a same-frontier ` +
+          'source-path superset at a reachable base plus its own exact approval' :
+        `rejected ${attempt.event.changeRef || MISSING_CHANGE_REF} requires a ` +
+          'same-frontier, same-base source-path superset',
     );
+    if (entry.baseUnreachable) {
+      groups.get(`${attempt.event.frontier || ''}\0` +
+        `${attempt.event.workspaceBaseCommit || ''}`).baseUnreachable = true;
+    }
   }
   for (const attempt of approvedUncheckpointedAttempts(state)) {
     const dossier = attemptPreflightDossier(root, attempt);
@@ -137,6 +155,7 @@ function replacementRequirementGroups(root, state) {
   return new Map([...groups].map(([key, group]) => [key, {
     frontier: group.frontier,
     baseCommit: group.baseCommit,
+    baseUnreachable: Boolean(group.baseUnreachable),
     requiredPaths: [...group.requiredPaths].sort(),
     reasons: [...group.reasons].sort(),
   }]));
@@ -209,6 +228,21 @@ export function checkpointVerificationPreflight(root, quest, log, options = {}) 
       ),
     replacementGroups,
     importClosure,
+    // Terminated-receipt visibility: dead-base attempts stay reported even
+    // after their obligations resolve through coverage, so the dossier never
+    // reads clean-by-omission. Reproducibility is opt-in (`checkpoint --dry-run
+    // --probe-reproducibility`) because the scan is expensive; when measured it
+    // reports the candidate count and never a substitute base.
+    baseUnreachableAttempts: (state.baseUnreachableAttempts || []).map((entry) => ({
+      changeRef: entry.attempt.event.changeRef || null,
+      fingerprint: entry.attempt.fingerprint,
+      baseCommit: entry.baseCommit,
+      code: entry.code,
+      liveReceiptVerifiable: entry.liveReceiptVerifiable,
+      countsAsVerification: entry.countsAsVerification,
+      ...(options.probeReproducibility ? probeBaseReproducibility(
+        root, entry.attempt.event, entry.attempt.inspection.changedPaths) : {}),
+    })),
     applicableTemplates: applicablePreflightTemplates(root, [
       ...pendingWithFingerprints,
       ...(state.candidate?.attempts || []),
@@ -306,6 +340,19 @@ export function checkpointVerificationPreflightLines(preflight) {
     'approved uncheckpointed receipt',
     preflight.approvedUncheckpointedReceipts,
   );
+  for (const entry of preflight.baseUnreachableAttempts || []) {
+    lines.push(
+      `${BASE_UNREACHABLE_CODE}: ${entry.changeRef || MISSING_CHANGE_REF} ` +
+      `base ${entry.baseCommit} — live receipt not verifiable, never counted ` +
+      'as verification' +
+      (entry.reproducible === true ?
+        `; recorded bytes reproduce from ${entry.candidatesFound} of ` +
+        `${entry.commitsScanned} scanned commits (no single base identifiable)` :
+        entry.reproducible === false ?
+          `; recorded bytes reproduce from none of ${entry.commitsScanned} ` +
+          'scanned commits' : ''),
+    );
+  }
   appendReplacementGroupLines(lines, preflight.replacementGroups);
   appendImportClosureLines(lines, preflight.importClosure);
   appendAggregatePreflightLines(lines, preflight.aggregate);

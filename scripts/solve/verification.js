@@ -48,6 +48,41 @@ export const VERIFICATION_SCOPE = Object.freeze({
 const HASH_ALGORITHM = 'sha256';
 const FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+
+// A recorded base commit that was well-formed when written but no longer
+// resolves — the signature of an unpushed local commit discarded with its
+// working copy. This is not source drift: the attempt's artifact bytes may be
+// byte-identical to what a verifier approved while the commit that named them
+// is gone. One typed code, following the `code: prose` convention in
+// integrity.js, so every consumer names the condition instead of leaking Git
+// stderr. Resolution is never a waiver: a dead-base rejection or receipt is
+// discharged only by fresh independent verification of current bytes over the
+// same paths at a reachable base.
+export const BASE_UNREACHABLE_CODE = 'base_unreachable';
+// Bound on the reproducibility diagnostic scan. It is a diagnostic, never a
+// gate, so it is capped rather than allowed to walk unbounded history.
+const REPRODUCIBILITY_SCAN_LIMIT = 4000;
+
+export function baseCommitReachable(root, baseCommit) {
+  if (!COMMIT_PATTERN.test(String(baseCommit || ''))) return false;
+  return spawnSync('git', ['cat-file', '-e', `${baseCommit}^{commit}`],
+    {cwd: root, encoding: 'utf8'}).status === 0;
+}
+
+// Deliberately narrower than `!baseCommitReachable`: an absent or malformed
+// base is a different, pre-existing condition ("requires a recorded Git base
+// commit") and keeps its own disposition.
+export function baseRecordedButUnreachable(root, baseCommit) {
+  return COMMIT_PATTERN.test(String(baseCommit || '')) &&
+    !baseCommitReachable(root, baseCommit);
+}
+
+function baseUnreachableProblem(baseCommit) {
+  return `${BASE_UNREACHABLE_CODE}: recorded workspace base commit ` +
+    `${baseCommit} does not resolve; current bytes over the recorded paths ` +
+    'require fresh independent verification at a reachable base';
+}
 const LEGACY_APPROVAL_PATTERN = /source|code|change|quest|intent|guideline|doctrine|verif/iu;
 const VERIFIER_EVIDENCE_PATTERN = /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
 
@@ -157,7 +192,7 @@ function laterRejection(log, attempt, fingerprint) {
   return null;
 }
 
-function rejectionDisposition(log, attempts, attempt) {
+function rejectionDisposition(log, attempts, attempt, options = {}) {
   const rejection = laterRejection(log, attempt, attempt.fingerprint);
   if (!rejection) return null;
   const replacement = findApprovedRejectionReplacement(
@@ -165,6 +200,7 @@ function rejectionDisposition(log, attempts, attempt) {
     attempts,
     attempt,
     rejection.index,
+    options,
   );
   return replacement ?
     {rejection, replacement} :
@@ -208,14 +244,29 @@ export function findApprovedRejectionReplacement(
   attempts,
   rejectedAttempt,
   rejectionIndex,
+  options = {},
 ) {
+  // The same-base rule is a proxy for the real invariant: a rejection clears
+  // only when an independent verifier re-reviews the same content surface.
+  // When the rejected base no longer resolves the exact delta cannot be
+  // reproduced, but the invariant still can be enforced: accept a replacement
+  // at a REACHABLE base whose paths cover every rejected source path and which
+  // carries its own later exact approval. The verifier reviews current bytes
+  // over each rejected path, which is what the base equality guaranteed.
+  const rejectedBaseUnreachable = Boolean(options.root) &&
+    baseRecordedButUnreachable(
+      options.root, rejectedAttempt.event.workspaceBaseCommit);
   for (const candidate of attempts) {
+    const baseAcceptable = rejectedBaseUnreachable ?
+      Boolean(options.root) &&
+        baseCommitReachable(options.root, candidate.event.workspaceBaseCommit) :
+      candidate.event.workspaceBaseCommit ===
+        rejectedAttempt.event.workspaceBaseCommit;
     if (candidate.index <= rejectionIndex ||
         !candidate.contracted ||
         candidate.fingerprint === rejectedAttempt.fingerprint ||
         candidate.event.frontier !== rejectedAttempt.event.frontier ||
-        candidate.event.workspaceBaseCommit !==
-          rejectedAttempt.event.workspaceBaseCommit ||
+        !baseAcceptable ||
         !sourcePathSuperset(candidate, rejectedAttempt)) {
       continue;
     }
@@ -225,7 +276,14 @@ export function findApprovedRejectionReplacement(
       VERIFICATION_SCOPE.ATTEMPT,
       candidate.fingerprint,
     );
-    if (approval) return {attempt: candidate, approval};
+    if (approval) {
+      return {
+        attempt: candidate,
+        approval,
+        resolution: rejectedBaseUnreachable ?
+          'live-base-coverage' : 'same-base',
+      };
+    }
   }
   return null;
 }
@@ -245,6 +303,12 @@ export function canonicalSourceDelta(root, baseCommit, paths) {
   if (!/^[0-9a-f]{40}$/u.test(String(baseCommit || ''))) {
     return {ok: false, fingerprint: null, content: null,
       problem: LOCAL_STR_OWNED_009};
+  }
+  // Name the dead-base condition before spawning the diff, so no consumer ever
+  // sees `fatal: bad object` or mistakes an unresolvable name for source drift.
+  if (!baseCommitReachable(root, baseCommit)) {
+    return {ok: false, fingerprint: null, content: null,
+      code: BASE_UNREACHABLE_CODE, problem: baseUnreachableProblem(baseCommit)};
   }
   if (sortedPaths.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: []};
@@ -283,9 +347,26 @@ export function aggregateSourceFingerprint(root, attempts) {
   if (contracted.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: [], baseCommit: null};
   }
-  const baseCommit = contracted[0].event.workspaceBaseCommit;
+  // The path union always spans every contracted attempt — dead-base attempts
+  // included, so their content surface stays under terminal review — while the
+  // delta anchors at the earliest attempt whose recorded base still resolves.
+  // Anchoring at an unresolvable name would make the terminal obligation
+  // permanently unsatisfiable; anchoring later loses nothing because the union
+  // keeps every recorded path in the reviewed delta.
   const paths = contracted.flatMap((attempt) => attempt.candidateContract ?
     attempt.inspection.changedPaths : attempt.sourcePaths);
+  const anchor = contracted.find((attempt) =>
+    baseCommitReachable(root, attempt.event.workspaceBaseCommit));
+  if (!anchor) {
+    return {ok: false, fingerprint: null, content: null,
+      paths: [...new Set(paths)].sort(), baseCommit: null,
+      code: BASE_UNREACHABLE_CODE,
+      problem: 'terminal aggregate has no reachable recorded base ' +
+        `(${BASE_UNREACHABLE_CODE}); record a fresh same-frontier attempt at ` +
+        'a live base covering the recorded paths, then request aggregate ' +
+        'verification of current bytes'};
+  }
+  const baseCommit = anchor.event.workspaceBaseCommit;
   return {
     ...canonicalSourceDelta(root, baseCommit, paths),
     baseCommit,
@@ -316,8 +397,14 @@ function latestCheckpointCommit(root, questId) {
 }
 
 function attemptIsAfterCheckpoint(root, attempt, checkpointCommit) {
-  if (!checkpointCommit) return true;
   const baseCommit = attempt.event.workspaceBaseCommit;
+  // A dead base leaves live receipt scope before the no-checkpoint shortcut:
+  // its exact receipt can never be recomputed, and the fail-closed branch below
+  // would otherwise hold it in scope forever with no checkpoint able to clear
+  // it. Its content is still guarded — dirty paths demand fresh covering
+  // receipts and the terminal aggregate covers every recorded path.
+  if (baseRecordedButUnreachable(root, baseCommit)) return false;
+  if (!checkpointCommit) return true;
   if (!/^[0-9a-f]{40}$/u.test(String(baseCommit || ''))) return true;
   const result = spawnSync(
     'git', ['merge-base', '--is-ancestor', checkpointCommit, baseCommit],
@@ -382,34 +469,55 @@ function candidateReceiptOf(event) {
 
 function buildLandingCandidate(root, quest, attempts) {
   const checkpointCommit = latestCheckpointCommit(root, quest.id);
+  // Dead-base attempts stay selected. Dropping them would collapse the
+  // candidate and silently discard any standing candidate-scope rejection that
+  // covers them; keeping them means their paths remain in the reviewed union
+  // and their rejections stay inside the candidate's log-scan range. Their
+  // ancestry is unknowable, so they are kept for coverage rather than filtered
+  // by a probe that cannot answer.
   const selected = attempts.filter((attempt) =>
     attempt.candidateContract &&
-    attemptIsAfterCheckpoint(root, attempt, checkpointCommit));
+    (baseRecordedButUnreachable(root, attempt.event.workspaceBaseCommit) ||
+      attemptIsAfterCheckpoint(root, attempt, checkpointCommit)));
   if (selected.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: [],
       sourcePaths: [], baseCommit: null, attempts: [],
       firstAttemptIndex: null, lastAttemptIndex: null};
   }
-  const bases = [...new Set(selected.map((attempt) =>
-    attempt.event.workspaceBaseCommit))];
-  if (bases.length !== 1 || !/^[0-9a-f]{40}$/u.test(String(bases[0] || ''))) {
-    return {ok: false, fingerprint: null, content: null, paths: [],
-      sourcePaths: [], baseCommit: bases[0] || null, attempts: selected,
-      firstAttemptIndex: selected[0].index,
-      lastAttemptIndex: selected[selected.length - 1].index,
-      problem: 'landing candidate requires one recorded common Git base'};
-  }
   const paths = [...new Set(selected.flatMap((attempt) =>
     attempt.inspection.changedPaths))].sort();
   const sourcePaths = [...new Set(selected.flatMap((attempt) =>
     attempt.sourcePaths))].sort();
-  return {
-    ...canonicalSourceDelta(root, bases[0], paths),
-    baseCommit: bases[0],
+  const shared = {
+    paths,
     sourcePaths,
     attempts: selected,
     firstAttemptIndex: selected[0].index,
     lastAttemptIndex: selected[selected.length - 1].index,
+  };
+  // Anchor the delta at the one reachable recorded base. Dead bases cannot
+  // anchor a delta, but the union above keeps every recorded path under the
+  // anchored review, so anchoring at the reachable base loses nothing.
+  const reachableBases = [...new Set(selected
+    .map((attempt) => attempt.event.workspaceBaseCommit)
+    .filter((base) => baseCommitReachable(root, base)))];
+  if (reachableBases.length === 0) {
+    return {ok: false, fingerprint: null, content: null, ...shared,
+      baseCommit: null, code: BASE_UNREACHABLE_CODE,
+      problem: 'landing candidate has no reachable recorded base ' +
+        `(${BASE_UNREACHABLE_CODE}); record a fresh same-frontier attempt at ` +
+        `a live base covering: ${paths.join(', ')}`};
+  }
+  if (reachableBases.length !== 1 ||
+    !/^[0-9a-f]{40}$/u.test(String(reachableBases[0] || ''))) {
+    return {ok: false, fingerprint: null, content: null, ...shared,
+      baseCommit: reachableBases[0] || null,
+      problem: 'landing candidate requires one recorded common Git base'};
+  }
+  return {
+    ...canonicalSourceDelta(root, reachableBases[0], paths),
+    ...shared,
+    baseCommit: reachableBases[0],
   };
 }
 
@@ -433,7 +541,7 @@ function validCandidateReceipt(receipt, fingerprint) {
     receipt.firstAttemptIndex <= receipt.lastAttemptIndex;
 }
 
-function candidateVerificationState(log, candidate) {
+function candidateVerificationState(root, log, candidate) {
   if (!candidate.ok) {
     const anchor = candidate.attempts.at(-1);
     return {
@@ -468,15 +576,30 @@ function candidateVerificationState(log, candidate) {
   if (rejection) {
     const rejectedPaths = new Set(rejection.receipt.paths);
     const replacementPaths = new Set(candidate.paths || []);
-    const replaced = candidate.baseCommit === rejection.receipt.baseCommit &&
+    // Same-base is the strict rule; when the rejected receipt's base no longer
+    // resolves, the equality is unsatisfiable by construction, so the same
+    // invariant is enforced at a reachable base instead: a later, different
+    // candidate covering every rejected path — which still needs its own exact
+    // approval before anything lands. Nothing is waived; the review moves to
+    // current bytes.
+    const rejectedBaseDead = baseRecordedButUnreachable(
+      root, rejection.receipt.baseCommit);
+    const baseAcceptable = rejectedBaseDead ?
+      baseCommitReachable(root, candidate.baseCommit) :
+      candidate.baseCommit === rejection.receipt.baseCommit;
+    const replaced = baseAcceptable &&
       candidate.fingerprint !== rejection.receipt.fingerprint &&
       candidate.lastAttemptIndex > rejection.receipt.lastAttemptIndex &&
       [...rejectedPaths].every((filePath) => replacementPaths.has(filePath));
     if (!replaced) {
       unresolvedRejection = rejection;
       problems.push({
-        message: 'landing candidate rejection requires a later same-base, ' +
-          'changed-fingerprint path-superset candidate',
+        message: rejectedBaseDead ?
+          `landing candidate rejection anchored at a ${BASE_UNREACHABLE_CODE} ` +
+            'base requires a later changed-fingerprint path-superset candidate ' +
+            'at a reachable base' :
+          'landing candidate rejection requires a later same-base, ' +
+            'changed-fingerprint path-superset candidate',
         ts: rejection.event.ts || null,
         frontier: rejection.event.frontier || null,
       });
@@ -512,7 +635,7 @@ export function verificationState(root, quest, log, options = {}) {
       continue;
     }
     if (attempt.candidateContract) continue;
-    const rejection = rejectionDisposition(log, attempts, attempt);
+    const rejection = rejectionDisposition(log, attempts, attempt, {root});
     if (rejection?.replacement) {
       resolvedRejectedAttempts.push({
         attempt,
@@ -523,15 +646,26 @@ export function verificationState(root, quest, log, options = {}) {
       continue;
     }
     if (rejection) {
+      // Direct the operator at the rule that can actually be satisfied: the
+      // same-base form when the rejected base still resolves, the live-base
+      // coverage form when it does not.
+      const deadBase = baseRecordedButUnreachable(
+        root, attempt.event.workspaceBaseCommit);
       attemptProblems.push(attemptProblem(
         attempt,
-        `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
-          LOCAL_STR_OWNED_017 +
-          LOCAL_STR_OWNED_018,
+        deadBase ?
+          `was explicitly rejected at ${attempt.fingerprint} and its recorded ` +
+            `base is ${BASE_UNREACHABLE_CODE}; requires a later same-frontier ` +
+            'source attempt at a reachable base covering every rejected ' +
+            'source path plus its own later exact approval' :
+          `was explicitly rejected at ${attempt.fingerprint}; requires a later ` +
+            LOCAL_STR_OWNED_017 +
+            LOCAL_STR_OWNED_018,
       ));
       unresolvedRejectedAttempts.push({
         attempt,
         rejection: rejection.rejection.event,
+        baseUnreachable: deadBase,
       });
       continue;
     }
@@ -547,7 +681,7 @@ export function verificationState(root, quest, log, options = {}) {
   }
 
   const candidate = buildLandingCandidate(root, quest, attempts);
-  const candidateState = candidateVerificationState(log, candidate);
+  const candidateState = candidateVerificationState(root, log, candidate);
   attemptProblems.push(...candidateState.problems);
 
   const aggregate = aggregateSourceFingerprint(root, attempts);
@@ -567,6 +701,20 @@ export function verificationState(root, quest, log, options = {}) {
       `requires a later aggregate approval for ${aggregate.fingerprint}`,
     ));
   }
+  // Visibility, not behavior: dead-base attempts must stay reported after
+  // their obligations resolve elsewhere, or the Quest would read clean while
+  // an unverifiable receipt sits in its history. Every disposition above is
+  // unchanged by this projection.
+  const baseUnreachableAttempts = attempts
+    .filter((attempt) => attempt.contracted &&
+      baseRecordedButUnreachable(root, attempt.event.workspaceBaseCommit))
+    .map((attempt) => ({
+      attempt,
+      code: BASE_UNREACHABLE_CODE,
+      baseCommit: attempt.event.workspaceBaseCommit,
+      liveReceiptVerifiable: false,
+      countsAsVerification: false,
+    }));
   const state = {
     attempts,
     pendingAttempts,
@@ -576,6 +724,7 @@ export function verificationState(root, quest, log, options = {}) {
     aggregateProblems,
     resolvedRejectedAttempts,
     unresolvedRejectedAttempts,
+    baseUnreachableAttempts,
     candidate,
     candidateApproval: candidateState.approval,
     candidateRejection: candidateState.rejection,
@@ -643,6 +792,55 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
     }
   }
   return problems;
+}
+
+/**
+ * Diagnostic: can any reachable commit reproduce this attempt's recorded
+ * fingerprint against the current tree? Reports how many commits qualify and
+ * the scan bound, and deliberately never names a substitute base: on this
+ * repository 823 of 2926 reachable commits reproduced one sampled attempt's
+ * fingerprint, so naming one would assert a provenance the measurement cannot
+ * support. Unmeasured outcomes report null, never false — a false negative
+ * misleads exactly as much as a false positive.
+ * @param {string} root - repository root.
+ * @param {object} attemptEvent - the recorded attempt event.
+ * @param {string[]} paths - the attempt's recorded changed paths.
+ * @param {object} options - optional scan `limit`.
+ * @returns {{reproducible: boolean|null, candidatesFound: number|null,
+ *   commitsScanned: number, scanTruncated: boolean, unprobedReason: string|null}}
+ */
+export function probeBaseReproducibility(root, attemptEvent, paths, options = {}) {
+  const limit = Number.isInteger(options.limit) ?
+    options.limit : REPRODUCIBILITY_SCAN_LIMIT;
+  const fingerprint = attemptFingerprint(attemptEvent);
+  if (!fingerprint) {
+    return {reproducible: null, candidatesFound: null, commitsScanned: 0,
+      scanTruncated: false, unprobedReason: 'attempt has no sealed fingerprint'};
+  }
+  // Scan every ref, not only HEAD: a reproducing commit may sit on a branch or
+  // a remote-tracking ref, and a HEAD-only walk reported as a complete scan
+  // would understate the search.
+  const listed = spawnSync('git', ['log', '--all', '--format=%H'],
+    {cwd: root, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER_BYTES});
+  if (listed.status !== 0) {
+    return {reproducible: null, candidatesFound: null, commitsScanned: 0,
+      scanTruncated: false, unprobedReason: 'git could not enumerate commits'};
+  }
+  const commits = String(listed.stdout || '')
+    .split(LOCAL_STR_OWNED_007).filter(Boolean);
+  const scanned = commits.slice(0, limit);
+  let candidatesFound = 0;
+  for (const commit of scanned) {
+    const delta = canonicalSourceDelta(root, commit, paths);
+    if (delta.ok && delta.fingerprint === fingerprint) candidatesFound += 1;
+  }
+  return {
+    reproducible: candidatesFound > 0,
+    candidatesFound,
+    commitsScanned: scanned.length,
+    scanTruncated: commits.length > scanned.length,
+    unprobedReason: null,
+  };
 }
 
 export function terminalVerificationProblems(root, quest, log, options = {}) {

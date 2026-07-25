@@ -51,6 +51,7 @@ import {
   unrecordedEvidenceContinuation,
 } from './continuation.js';
 import {
+  baseRecordedButUnreachable,
   resolveWorkspaceBaseCommit,
   verificationState,
 } from './verification.js';
@@ -90,12 +91,21 @@ function resolveHeadPin(root) {
   return resolveWorkspaceBaseCommit(root);
 }
 
-function resolveStepBaseCommit(root, quest, log, frontierId) {
+export function resolveStepBaseCommit(root, quest, log, frontierId) {
   const unresolvedRejection = verificationState(root, quest, log)
     .unresolvedRejectedAttempts
     .find(({attempt}) => attempt.event.frontier === frontierId);
-  return unresolvedRejection?.attempt.event.workspaceBaseCommit ||
-    resolveHeadPin(root);
+  const rejectedBase = unresolvedRejection?.attempt.event.workspaceBaseCommit;
+  // A replacement is pinned to the rejected attempt's base so the rejection
+  // stays binding — but pinning to a base that no longer resolves would refuse
+  // the replacement before it could be recorded. The live-base coverage rule in
+  // findApprovedRejectionReplacement accepts a reachable-base replacement for
+  // exactly this case, so the pin falls back to HEAD only when the recorded
+  // base is a well-formed commit id that cannot resolve.
+  if (rejectedBase && baseRecordedButUnreachable(root, rejectedBase)) {
+    return resolveHeadPin(root);
+  }
+  return rejectedBase || resolveHeadPin(root);
 }
 
 function nextAutoDiffArtifactPath(root, questId) {
